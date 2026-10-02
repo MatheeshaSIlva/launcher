@@ -251,3 +251,14 @@ Device results (8e7a4fa), Matheesha: wallpaper reveal "works great". Problems:
   a window, not a rect inside our window; its View blur gave only fog. The dock uses our own blurred copy, but frost reached
   full strength only past the 30 dp bevel, so most of the short dock stayed clear. Fix: full frost from a thin rim inward,
   stronger blur (box r5 ×3 at 1/8), bevel 18 dp, refraction 24 dp, dispersion 0.45 → 0.22.
+
+Device results (ac44135), Matheesha: dock "worse": far too much blur and the edges not blurred; the wrong app still opens
+sometimes ("make sure you can't click on the closing card again once you swipe up and let go"); closing an app that is not
+on the home screen leaves its icon lingering; a fast swipe throws the card far up before it comes down ("reduce the elastiness").
+Changes (next build):
+- Glass: even frost (0.9) everywhere including the rim (the rim still refracts, now frosted); blur back to ≈20 px.
+- A closing card can no longer be reopened: reversal removed; home ignores taps on the closing app's icon until it lands.
+  The foreground app of a new gesture now comes from the accessibility "window in front" report when it is in the recents.
+- No icon on home: the card fades out while shrinking to the centre (no icon crossfade, no linger).
+- Release velocity: only the component towards the target carries over (12 % of the rest), capped at 5000 px/s; position
+  damping 0.86 → 0.92.

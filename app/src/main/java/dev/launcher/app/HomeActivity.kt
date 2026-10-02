@@ -349,6 +349,8 @@ class HomeActivity : Activity(), HomeBridge.Home {
     }
 
     private fun launch(pkg: String, iconView: ImageView) {
+        // Its card is still flying into this icon after a swipe up: the tap must not reopen it.
+        if (GestureNav.isClosing(pkg)) { AppLog.log("[home] tap on $pkg ignored: its card is still closing"); return }
         val i = packageManager.getLaunchIntentForPackage(pkg) ?: return
         val rect = HomeBridge.iconRect(pkg)
         val start = {
