@@ -236,3 +236,18 @@ Changes (next build):
 - HomeActivity `excludeFromRecents`; our own tasks are left out of switching and "last app" (but still the card when DEV is
   in front).
 - startHome / bring-back startActivity moved off the nav thread.
+
+Device results (8e7a4fa), Matheesha: wallpaper reveal "works great". Problems:
+- Sometimes the wrong app opened from the dock (Chrome → Settings, Calculator → TikTok). Likely causes: a takeover resolved the
+  card's task as "top of recents" (the previous app while the launched one was still starting), and since app starts moved
+  to a worker, a late switch/bring-back could land after the tapped app. Fix: the card's task is looked up by package;
+  bring-back only uses a task of that package; every start/switch/home goes through one ordered queue where a request is
+  dropped if a newer one exists (`[front]` log lines).
+- Switch sometimes showed enlarged icons instead of snapshots: a card that ended inside an icon kept iconMix = 1 and was
+  reused by the next switch. Fix: icon blend reset per session.
+- Clock in the home picture out of date: TextClock stops updating in the background and the picture was only re-recorded
+  while home was resumed. Fix: minute tick for the activity's whole life, clocks forced to refresh before recording.
+- Dock still not blurred ("are you using the Samsung blur API?"): no. Samsung's dim-behind blur covers the whole screen behind
+  a window, not a rect inside our window; its View blur gave only fog. The dock uses our own blurred copy, but frost reached
+  full strength only past the 30 dp bevel, so most of the short dock stayed clear. Fix: full frost from a thin rim inward,
+  stronger blur (box r5 ×3 at 1/8), bevel 18 dp, refraction 24 dp, dispersion 0.45 → 0.22.

@@ -50,6 +50,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
         if (which and android.app.WallpaperManager.FLAG_SYSTEM != 0) { wallpaperDirty = true; if (resumed) loadWallpaper() }
     }
     private val iconViews = LinkedHashMap<String, View>()
+    private val clocks = ArrayList<TextClock>()
     private val ease = PathInterpolator(0.2f, 0f, 0f, 1f)
     private val io = Executors.newSingleThreadExecutor()
     private var resumed = false
@@ -69,6 +70,14 @@ class HomeActivity : Activity(), HomeBridge.Home {
         window.setBackgroundDrawable(ColorDrawable(Color.BLACK))
         buildUi()
         HomeBridge.home = this
+        // For the whole life of home, not only while it is in front: the picture of home shown during launch and close
+        // animations must show the current time even after an app has been open for a while.
+        registerReceiver(tick, IntentFilter().apply {
+            addAction(Intent.ACTION_TIME_TICK)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+            @Suppress("DEPRECATION") addAction(Intent.ACTION_WALLPAPER_CHANGED)
+        })
         try { android.app.WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperColors, android.os.Handler(mainLooper)) } catch (_: Throwable) { }
         Watchdog.start(this)
         if (!SafetyNotification.canPost(this)) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
@@ -91,16 +100,11 @@ class HomeActivity : Activity(), HomeBridge.Home {
         val id = Wallpaper.currentId(this)
         if (wallpaper == null || wallpaperDirty || (id != -1 && id != wallpaper?.id)) loadWallpaper()
         content.postDelayed({ recordPreview() }, 400)
-        registerReceiver(tick, IntentFilter().apply {
-            addAction(Intent.ACTION_TIME_TICK)
-            @Suppress("DEPRECATION") addAction(Intent.ACTION_WALLPAPER_CHANGED)
-        })
     }
 
     override fun onPause() {
         resumed = false
         GestureNav.homeVisible = false
-        try { unregisterReceiver(tick) } catch (_: Throwable) { }
         super.onPause()
     }
 
@@ -113,6 +117,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
     }
 
     override fun onDestroy() {
+        try { unregisterReceiver(tick) } catch (_: Throwable) { }
         try { android.app.WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperColors) } catch (_: Throwable) { }
         if (HomeBridge.home === this) HomeBridge.home = null
         super.onDestroy()
@@ -153,7 +158,9 @@ class HomeActivity : Activity(), HomeBridge.Home {
 
     /** Records home at rest (scale 1, all icons shown) as a picture that gesture nav draws behind closing cards. */
     private fun recordPreview() {
-        if (!resumed || wallpaperView.transitioning || content.width == 0 || content.scaleX != 1f || iconViews.values.any { it.alpha != 1f }) return
+        if (wallpaperView.transitioning || content.width == 0 || content.scaleX != 1f || iconViews.values.any { it.alpha != 1f }) return
+        // TextClock stops updating while home is in the background: make it show the time now before recording.
+        for (c in clocks) c.format24Hour = c.format24Hour
         HomeBridge.preview = record()
         // One per app with its icon left out (toggled only while recording, never drawn on screen like that).
         for ((pkg, v) in iconViews) {
@@ -252,7 +259,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
             orientation = LinearLayout.VERTICAL
             setPadding((28 * dp).toInt(), (72 * dp).toInt(), (28 * dp).toInt(), 0)
         }
-        top.addView(TextClock(this).apply {
+        top.addView(TextClock(this).also { clocks += it }.apply {
             format12Hour = "h:mm"
             format24Hour = "H:mm"
             textSize = 76f
@@ -260,7 +267,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
             typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
             setShadowLayer(12f, 0f, 2f, 0x66000000)
         })
-        top.addView(TextClock(this).apply {
+        top.addView(TextClock(this).also { clocks += it }.apply {
             format12Hour = "EEEE, d MMMM"
             format24Hour = "EEEE, d MMMM"
             textSize = 18f

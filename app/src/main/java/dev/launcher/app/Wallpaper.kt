@@ -40,7 +40,7 @@ class Wallpaper private constructor(val bitmap: Bitmap, val blurred: Bitmap, val
             val scale = 8
             val small = Bitmap.createScaledBitmap(bmp, max(1, bmp.width / scale), max(1, bmp.height / scale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)
-            boxBlur(small, 3, 3)
+            boxBlur(small, 5, 3)   // ≈ 45 px blur at full size: clearly frosted
             AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}")
             Wallpaper(bmp, small, scale, id)
         } catch (t: Throwable) {

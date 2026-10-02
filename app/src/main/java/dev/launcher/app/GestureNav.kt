@@ -387,6 +387,10 @@ object GestureNav {
         prv?.visibility = View.GONE
         nxt?.visibility = View.GONE
         cur?.snapshot = null
+        // A card that ended inside an icon is fully "icon": reused as is, the next switch drew a huge icon over the snapshot.
+        cur?.iconMix = 0f
+        prv?.iconMix = 0f
+        nxt?.iconMix = 0f
         cardPkg = null
         homeStarted = false
         hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
@@ -540,7 +544,8 @@ object GestureNav {
             tasks.take(2).forEach { iconFor(it.pkg) }
             nav.post {
                 if (id != gestureId) return@post
-                if (fresh || fg == null) fg = tasks.getOrNull(0)
+                fg = if (fresh) tasks.getOrNull(0)
+                     else cardPkg?.let { p -> tasks.firstOrNull { it.pkg == p } } ?: fg?.takeIf { it.pkg == cardPkg }
                 prev = tasks.switchable().firstOrNull { it.pkg != fg?.pkg && it.id != fg?.id }
                 recentList = tasks
                 onTasks(fresh)
@@ -730,7 +735,7 @@ object GestureNav {
         homeRequestedAt = SystemClock.uptimeMillis()
         homeVisible = false
         // startActivity is a binder round trip of tens of ms: never on the nav thread, which is drawing the card right now.
-        tasksIo.execute {
+        front("home") {
             try {
                 app.startActivity(Intent(app, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app))
             } catch (t: Throwable) {
@@ -889,7 +894,22 @@ object GestureNav {
         val r = pendingStart ?: return
         pendingStart = null
         appStarted = true
-        main.post(r)
+        front("launch $cardPkg") { r.run() }
+    }
+
+    // Every "bring something to the front" goes through one ordered queue. Each request gets a number; when it is its turn
+    // and a newer request exists, it is dropped. So a late switch or home start can never land on top of the app the user
+    // asked for after it (that is how a tap on one icon could open another app).
+    private val frontIo = Executors.newSingleThreadExecutor()
+    private val frontSeq = java.util.concurrent.atomic.AtomicInteger()
+
+    private fun front(label: String, op: () -> Unit) {
+        val seq = frontSeq.incrementAndGet()
+        frontIo.execute {
+            if (seq != frontSeq.get()) { AppLog.log("[front] dropped '$label' (a newer request came in)"); return@execute }
+            AppLog.log("[front] $label")
+            try { op() } catch (t: Throwable) { AppLog.log("[front] $label failed: ${t.javaClass.simpleName}: ${t.message}") }
+        }
     }
 
     /** A colour for the card behind an icon (like a splash screen): the icon's average colour. */
@@ -948,6 +968,7 @@ object GestureNav {
         }
         older = switchList.getOrNull(switchIndex + 1)
         newer = switchList.getOrNull(switchIndex - 1)
+        cur?.iconMix = 0f
         offset = 0f
         switchScale = 1f
         backdrop?.picture = null
@@ -1081,14 +1102,17 @@ object GestureNav {
     /** Brings [pkg] to the front: its task if known, else its launch intent. */
     private fun bringBack(pkg: String?, task: Task?) {
         val s = ShizukuLink.service
-        if (task != null && s != null) {
-            tasksIo.execute {
+        // Only that app's own task: a task of another app here is how the wrong app came to the front.
+        val t = task?.takeIf { pkg == null || it.pkg == pkg }
+        if (t != null && s != null) {
+            val task = t
+            front("switch to ${task.pkg}") {
                 val start = SystemClock.uptimeMillis()
                 val r = try { s.switchToTaskWithOptions(task.id, noAnimation(app)) } catch (e: Throwable) { "ERROR: ${e.message}" }
                 AppLog.log("[nav] switch to ${task.pkg} (task ${task.id}): $r (${SystemClock.uptimeMillis() - start} ms)")
             }
         } else if (pkg != null) {
-            tasksIo.execute {
+            front("start $pkg") {
                 app.packageManager.getLaunchIntentForPackage(pkg)?.let { i ->
                     try { app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app)) } catch (_: Throwable) { }
                 }
@@ -1098,9 +1122,9 @@ object GestureNav {
 
     private fun returnToLastApp() {
         val s = ShizukuLink.service ?: return
-        tasksIo.execute {
+        front("last app") {
             val target = fg?.takeIf { it.pkg != app.packageName } ?: parseTasks(s.recentTasks(4)).switchable().firstOrNull()
-            if (target == null) { AppLog.log("[nav] no recent app to return to"); return@execute }
+            if (target == null) { AppLog.log("[nav] no recent app to return to"); return@front }
             AppLog.log("[nav] home swipe -> last app ${target.pkg}: ${try { s.switchToTask(target.id) } catch (e: Throwable) { "ERROR: ${e.message}" }}")
         }
     }

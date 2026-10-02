@@ -38,10 +38,10 @@ class GlassDrawable(
         setImages("Old", wallpaper)
         setImages("New", wallpaper)
         shader.setFloatUniform("radius", radius)
-        shader.setFloatUniform("bevel", 30f * density)       // width of the refracting rim
-        shader.setFloatUniform("refraction", 34f * density)  // how far the rim bends the view outward
-        shader.setFloatUniform("dispersion", 0.45f)          // spread between red and blue refraction
-        shader.setFloatUniform("frost", 0.92f)               // 0 = clear glass, 1 = fully frosted body
+        shader.setFloatUniform("bevel", 18f * density)       // width of the refracting rim
+        shader.setFloatUniform("refraction", 24f * density)  // how far the rim bends the view outward
+        shader.setFloatUniform("dispersion", 0.22f)          // spread between red and blue refraction
+        shader.setFloatUniform("frost", 1.0f)               // 0 = clear glass, 1 = fully frosted body
         shader.setFloatUniform("magnify", 0.05f)             // the body is a weak lens: content slightly enlarged
         val o = Reveal.origin(screenW.toFloat(), screenH.toFloat())
         shader.setFloatUniform("origin", o[0], o[1])
@@ -174,8 +174,9 @@ half4 main(float2 coord) {
     float2 sp = dockOrigin + coord;
     // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
     float2 off = n * bend * refraction - p * magnify;
-    // Frosted body, clear rim (so the bending stays crisp).
-    float frostAmt = frost * smoothstep(0.0, 1.0, t);
+    // Fully frosted body; only a thin rim stays clear so the bending stays crisp. (Reaching full frost only past the whole
+    // bevel left most of a dock this short unblurred.)
+    float frostAmt = frost * smoothstep(0.05, 0.4, t);
 
     // Old and new wallpaper meet at the reveal front, exactly where the wallpaper behind changes.
     float rv = revealMix(sp + off);
