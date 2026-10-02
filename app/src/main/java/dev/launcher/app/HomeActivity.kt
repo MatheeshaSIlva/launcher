@@ -116,6 +116,7 @@ class HomeActivity : Activity() {
     private fun breakSystem() {
         val s = ShizukuLink.service ?: run { AppLog.log("[test] not connected"); return }
         SystemRestore.rememberOriginals(this)
+        SystemRestore.markStatusBarHidden(this)
         io.execute {
             val out = s.runShell(
                 "settings put global transition_animation_scale 0; settings put global window_animation_scale 0; " +

@@ -72,8 +72,9 @@ class SafeSettingsActivity : Activity() {
 
     private fun refresh() {
         state.text = "Shizuku: ${ShizukuLink.state().name.lowercase().replace('_', ' ')}\n" +
-            "Restore without Shizuku: ${if (SystemRestore.canWriteSecureSettings(this)) "animations yes, status bar needs restart" else "no (connect Shizuku once)"}\n" +
+            "Status bar: ${if (SystemRestore.statusBarHidden(this)) "hidden by the launcher (Restore needs Shizuku, or restart the phone)" else "normal"}\n" +
             "Animation scales now: ${SystemRestore.currentScales(this)}\n" +
+            "Restore without Shizuku: ${if (SystemRestore.canWriteSecureSettings(this)) "animations only; the status bar always needs Shizuku or a restart" else "not set up (connect Shizuku once)"}\n" +
             "Safety notification: ${if (SafetyNotification.canPost(this)) "allowed" else "blocked"}"
     }
 
