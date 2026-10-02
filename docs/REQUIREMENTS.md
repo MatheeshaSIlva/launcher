@@ -114,6 +114,10 @@ Hiding the stock status bar and turning off system animations means a crash coul
 After a force-stop it restored everything in ≈4 s and the loop survived the app and its Shizuku service dying. In the real app the heartbeat comes from a foreground service.
 A Shizuku-free emergency path is required (persistent notification action + safe-settings screen). A reboot always clears everything.
 
+**USB configuration check (found 2026-10-04):** if Developer options → Default USB configuration enables data functions (e.g. file transfer), Android
+switches USB functions on every lock and unlock, which restarts adbd and kills Shizuku and everything started through it. Onboarding must detect this
+(`mScreenUnlockedFunctions` in `dumpsys usb`) and walk the user to "No data transfer" / "debugging only". See `docs/PROGRESS.md`, task 3.
+
 **Onboarding:** works immediately without Shizuku; guided wireless-debugging + Shizuku setup recommending the thedjchi fork (review its code first); automatic Shizuku restart after reboot, with No-Shizuku fallback.
 
 **Settings:** basic and advanced views with a toggle and search across both; everything adjustable (gesture thresholds, zones, haptics, springs, gaps, offsets) lives in advanced.
