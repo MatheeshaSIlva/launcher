@@ -69,3 +69,8 @@ https://github.com/MatheeshaSIlva/requirementchecks (public). Numbers are from h
 ## Probe version history (condensed)
 v5.x snapshots + strip prototype → v6 launch lab, windowing, own status bar, Shizuku boot → v6.2/6.3 status bar race fix, blur diagnosis →
 v7 close animation, external-open watcher, watchdog, Samsung blur discovery → v7.1–7.4 Samsung blur labs (14a–14g) → v7.5–7.11 updater and watchdog fixes (current).
+
+## Live mirror for app cards (launcher build 2575259, 2026-10-04)
+- Shell-side `IWindowManager.mirrorDisplay(0, SurfaceControl)` handed to the app and reparented into an accessibility-overlay
+  window: **crashed the whole system** (launcher and system restarted). Dead end; the probe and its AIDL codes (14, 15) are
+  removed and must not be reused. Live card content needs another route (to research before any code).

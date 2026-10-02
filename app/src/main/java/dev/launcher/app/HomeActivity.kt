@@ -39,6 +39,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
     private lateinit var content: FrameLayout
     private lateinit var wallpaperView: WallpaperView
     private lateinit var dock: LinearLayout
+    private lateinit var dockShadow: DockShadow
     private var glass: GlassDrawable? = null
     private var wallpaper: Wallpaper? = null
     private var wallpaperTried = false
@@ -122,7 +123,8 @@ class HomeActivity : Activity(), HomeBridge.Home {
     // ------------------------------------------------------------------ HomeBridge.Home
 
     override fun setIconHidden(pkg: String, hidden: Boolean) {
-        iconViews[pkg]?.visibility = if (hidden) View.INVISIBLE else View.VISIBLE
+        // Alpha, not visibility: a hidden icon must stay tappable (re-opening an app while its card flies into the icon).
+        iconViews[pkg]?.alpha = if (hidden) 0f else 1f
     }
 
     /** Gesture nav swaps its picture of home for the real thing only once home has drawn after coming back. */
@@ -141,13 +143,13 @@ class HomeActivity : Activity(), HomeBridge.Home {
 
     /** Records home at rest (scale 1, all icons shown) as a picture that gesture nav draws behind closing cards. */
     private fun recordPreview() {
-        if (!resumed || content.width == 0 || content.scaleX != 1f || iconViews.values.any { it.visibility != View.VISIBLE }) return
+        if (!resumed || content.width == 0 || content.scaleX != 1f || iconViews.values.any { it.alpha != 1f }) return
         HomeBridge.preview = record()
         // One per app with its icon left out (toggled only while recording, never drawn on screen like that).
         for ((pkg, v) in iconViews) {
-            v.visibility = View.INVISIBLE
+            v.alpha = 0f
             HomeBridge.previewWithout[pkg] = record()
-            v.visibility = View.VISIBLE
+            v.alpha = 1f
         }
     }
 
@@ -200,6 +202,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
     }
 
     private fun placeGlass() {
+        dockShadow.place(dock, DOCK_RADIUS * dp)
         val g = glass ?: return
         g.originX = dock.left.toFloat()
         g.originY = dock.top.toFloat()
@@ -253,13 +256,11 @@ class HomeActivity : Activity(), HomeBridge.Home {
             val pad = (14 * dp).toInt()
             setPadding(pad, pad, pad, pad)
             background = GradientDrawable().apply { setColor(0x40FFFFFF); cornerRadius = DOCK_RADIUS * dp }
-            // A real (render-thread) shadow under the pane; the glass is opaque inside its shape, so only the soft edge shows.
-            outlineProvider = object : android.view.ViewOutlineProvider() {
-                override fun getOutline(view: View, outline: android.graphics.Outline) =
-                    outline.setRoundRect(0, 0, view.width, view.height, DOCK_RADIUS * dp)
-            }
-            elevation = 10 * dp
         }
+        // Drawn by us (not elevation): elevation shadows are not part of the recorded picture of home, so they vanished
+        // during launch and close animations.
+        dockShadow = DockShadow(this)
+        content.addView(dockShadow, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
         for (pkg in DOCK) addAppIcon(dock, pkg)
         content.addView(dock, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
             bottomMargin = (40 * dp).toInt()
@@ -316,6 +317,29 @@ class HomeActivity : Activity(), HomeBridge.Home {
         }
         // A card grows out of the icon over a picture of home, and gesture nav starts the app once that covers the screen.
         if (rect == null || !GestureNav.launchApp(pkg, rect, iconView.drawable, start)) start()
+    }
+
+    /** Soft shadow under the dock: a blurred, slightly lowered rounded rectangle at the dock's place. */
+    private class DockShadow(ctx: Context) : View(ctx) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x59000000 }
+        private val rect = RectF()
+        private var radius = 0f
+        private val d = ctx.resources.displayMetrics.density
+
+        init { paint.maskFilter = android.graphics.BlurMaskFilter(18 * d, android.graphics.BlurMaskFilter.Blur.NORMAL) }
+
+        fun place(dock: View, r: Float) {
+            val next = RectF(dock.left + 4 * d, dock.top + 10 * d, dock.right - 4 * d, dock.bottom + 8 * d)
+            if (next == rect && r == radius) return
+            rect.set(next)
+            radius = r
+            invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            if (rect.isEmpty) return
+            canvas.drawRoundRect(rect, radius, radius, paint)
+        }
     }
 
     /** Draws our copy of the wallpaper with the same centre-crop the glass samples with. */

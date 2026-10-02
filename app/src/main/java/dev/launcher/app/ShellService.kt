@@ -112,31 +112,6 @@ class ShellService : IShellService.Stub() {
         return "ERROR: none of $names found"
     }
 
-    // ---------------------------------------------------------------- live mirror (probe)
-
-    private var mirror: android.view.SurfaceControl? = null
-
-    override fun mirrorDisplay(displayId: Int): android.os.Bundle = android.os.Bundle().apply {
-        try {
-            releaseMirror()
-            val wm = systemService("window", "android.view.IWindowManager\$Stub")
-            val ctor = android.view.SurfaceControl::class.java.getDeclaredConstructor().apply { isAccessible = true }
-            val sc = ctor.newInstance()
-            val m = wm.javaClass.methods.first { it.name == "mirrorDisplay" && it.parameterTypes.size == 2 }
-            val ok = m.invoke(wm, displayId, sc) as? Boolean ?: false
-            putBoolean("ok", ok)
-            if (ok && sc.isValid) { mirror = sc; putParcelable("sc", sc) } else putString("error", "mirrorDisplay returned $ok, valid=${sc.isValid}")
-        } catch (t: Throwable) {
-            putBoolean("ok", false)
-            putString("error", describe(t))
-        }
-    }
-
-    override fun releaseMirror() {
-        try { mirror?.release() } catch (_: Throwable) { }
-        mirror = null
-    }
-
     // ---------------------------------------------------------------- tasks
 
     override fun recentTaskIds(max: Int): IntArray = try {

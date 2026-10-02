@@ -27,7 +27,7 @@ class CardView(context: Context) : View(context) {
     var cy = 0f; private set
     var w = 0f; private set
     var h = 0f; private set
-    private var radius = 0f
+    var radius = 0f; private set
     /** 0 = snapshot only, 1 = icon only. */
     var iconMix = 0f
         set(v) { field = v.coerceIn(0f, 1f); invalidate() }

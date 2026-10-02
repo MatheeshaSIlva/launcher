@@ -190,3 +190,15 @@ Rewrite (next build):
   callbacks of interrupted phases.
 - Separate workers for task lookup and snapshots; recent images per app (<10 s) let a card appear immediately.
 - Dock: native elevation shadow under the glass.
+
+Device results (7a540ff), Matheesha: "the app launch and close animations are now really smooth". Remaining problems:
+- Opening the same app very fast: eventually the card went out of frame. Cause: grabbing a card smaller than the drag model's
+  minimum (icon-sized) snapped the scale to the model's minimum while the finger anchor used the real scale. Fix: the grab
+  keeps the card's real scale, aspect, corner radius and icon blend and blends them into the model as the card is pulled
+  back to full size; springs now interpolate corners and icon blend from wherever they start (no snap on release).
+- Sometimes could not reopen until the close finished. Cause: the hidden icon was View.INVISIBLE, which takes no taps.
+  Fix: hidden icons use alpha 0.
+- Dock shadow missing during animations (elevation shadows are not recorded into the Picture). Fix: drawn shadow view.
+- Sideways switching only went right, between two apps. Now runs of quick switches keep their own order: right = older,
+  left = newer, cards on both sides; a run ends after 4 s, a launch or going home.
+- Live mirror probe crashed the system (see PROBE_FINDINGS); removed.

@@ -104,7 +104,6 @@ class DevActivity : Activity() {
         val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row5.addView(button("Gesture nav on/off") { toggleGestures() }, weighted())
         row5.addView(button("Frame report") { frameReport() }, weighted())
-        row5.addView(button("Probe: live mirror") { GestureNav.probeMirror() }, weighted())
         root.addView(row5)
 
         logView = TextView(this).apply {
