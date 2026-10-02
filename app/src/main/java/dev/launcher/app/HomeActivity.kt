@@ -42,7 +42,12 @@ class HomeActivity : Activity(), HomeBridge.Home {
     private lateinit var dockShadow: DockShadow
     private var glass: GlassDrawable? = null
     private var wallpaper: Wallpaper? = null
-    private var wallpaperTried = false
+    private var wallpaperLoading = false
+    private var wallpaperDirty = false
+    // Fires on any wallpaper change, also while home is in the background (the change usually happens in Settings).
+    private val wallpaperColors = android.app.WallpaperManager.OnColorsChangedListener { _, which ->
+        if (which and android.app.WallpaperManager.FLAG_SYSTEM != 0) { wallpaperDirty = true; if (resumed) loadWallpaper() }
+    }
     private val iconViews = LinkedHashMap<String, View>()
     private val ease = PathInterpolator(0.2f, 0f, 0f, 1f)
     private val io = Executors.newSingleThreadExecutor()
@@ -63,6 +68,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
         window.setBackgroundDrawable(ColorDrawable(Color.BLACK))
         buildUi()
         HomeBridge.home = this
+        try { android.app.WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperColors, android.os.Handler(mainLooper)) } catch (_: Throwable) { }
         Watchdog.start(this)
         if (!SafetyNotification.canPost(this)) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
@@ -79,8 +85,10 @@ class HomeActivity : Activity(), HomeBridge.Home {
         content.scaleY = 1f
         GestureNav.onHomeShown()
         reportFirstFrame()
-        // Retried on every return until it works: the permission arrives when Shizuku connects, possibly after the first try.
-        if (wallpaper == null) loadWallpaper()
+        // Retried on every return until it works (the permission arrives when Shizuku connects, possibly after the first try),
+        // and reloaded whenever the system wallpaper changed while we were away.
+        val id = Wallpaper.currentId(this)
+        if (wallpaper == null || wallpaperDirty || (id != -1 && id != wallpaper?.id)) loadWallpaper()
         content.postDelayed({ recordPreview() }, 400)
         registerReceiver(tick, IntentFilter().apply {
             addAction(Intent.ACTION_TIME_TICK)
@@ -104,6 +112,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
     }
 
     override fun onDestroy() {
+        try { android.app.WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperColors) } catch (_: Throwable) { }
         if (HomeBridge.home === this) HomeBridge.home = null
         super.onDestroy()
     }
@@ -115,7 +124,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
     private val tick = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             @Suppress("DEPRECATION")
-            if (intent.action == Intent.ACTION_WALLPAPER_CHANGED) { wallpaperTried = false; loadWallpaper() }
+            if (intent.action == Intent.ACTION_WALLPAPER_CHANGED) { wallpaperDirty = true; loadWallpaper() }
             else recordPreview()   // the clock changed: keep the picture behind closing cards current
         }
     }
@@ -143,7 +152,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
 
     /** Records home at rest (scale 1, all icons shown) as a picture that gesture nav draws behind closing cards. */
     private fun recordPreview() {
-        if (!resumed || content.width == 0 || content.scaleX != 1f || iconViews.values.any { it.alpha != 1f }) return
+        if (!resumed || wallpaperView.transitioning || content.width == 0 || content.scaleX != 1f || iconViews.values.any { it.alpha != 1f }) return
         HomeBridge.preview = record()
         // One per app with its icon left out (toggled only while recording, never drawn on screen like that).
         for ((pkg, v) in iconViews) {
@@ -165,15 +174,30 @@ class HomeActivity : Activity(), HomeBridge.Home {
     // ------------------------------------------------------------------ wallpaper and glass
 
     private fun loadWallpaper() {
-        wallpaperTried = true
+        if (wallpaperLoading) return
+        wallpaperLoading = true
+        wallpaperDirty = false
         io.execute {
             val w = Wallpaper.load(applicationContext)
-            runOnUiThread { applyWallpaper(w) }
+            runOnUiThread { wallpaperLoading = false; applyWallpaper(w) }
         }
     }
 
     private fun applyWallpaper(w: Wallpaper?) {
+        val old = wallpaper
+        if (w != null && old != null && w.id == old.id && w.id != -1) return   // same wallpaper, nothing to do
+        if (w != null && old != null && resumed && Build.VERSION.SDK_INT >= 33) {
+            // Changed while we can be seen: disintegrate into the dot matrix and re-form as the new one.
+            wallpaper = w
+            wallpaperView.transitionTo(old, w) { finishWallpaper(w) }
+            return
+        }
         wallpaper = w
+        finishWallpaper(w)
+    }
+
+    private fun finishWallpaper(w: Wallpaper?) {
+        if (wallpaper !== w) return
         if (w == null) {
             // Fallback: the system draws the wallpaper behind a transparent window (no glass possible).
             window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
@@ -348,7 +372,48 @@ class HomeActivity : Activity(), HomeBridge.Home {
         var wallpaper: Wallpaper? = null
             set(v) { field = v; invalidate() }
 
+        private var transition: WallpaperTransition? = null
+        private var progress = 0f
+        private var time = 0f
+        val transitioning get() = transition != null
+
+        /** Dot-matrix transition from [from] to [to] (≈1.8 s); falls back to a short crossfade if the shader fails. */
+        fun transitionTo(from: Wallpaper, to: Wallpaper, onEnd: () -> Unit) {
+            val t = try {
+                if (Build.VERSION.SDK_INT >= 33) WallpaperTransition(from, to, width, height, 11f * resources.displayMetrics.density) else null
+            } catch (e: Throwable) {
+                AppLog.log("[wallpaper] transition shader failed (${e.javaClass.simpleName}: ${e.message}); crossfading")
+                null
+            }
+            if (t == null) {
+                alpha = 0f
+                wallpaper = to
+                animate().alpha(1f).setDuration(350).withEndAction(onEnd).start()
+                return
+            }
+            transition = t
+            android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 1800
+                interpolator = PathInterpolator(0.45f, 0f, 0.55f, 1f)
+                addUpdateListener {
+                    progress = it.animatedValue as Float
+                    time = it.currentPlayTime / 1000f
+                    invalidate()
+                }
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        transition = null
+                        wallpaper = to
+                        onEnd()
+                    }
+                })
+                start()
+            }
+            AppLog.log("[wallpaper] new wallpaper: dot-matrix transition")
+        }
+
         override fun onDraw(canvas: Canvas) {
+            transition?.let { it.draw(canvas, progress, time); return }
             val w = wallpaper ?: return
             canvas.drawBitmap(w.bitmap, w.matrix(width, height), paint)
         }

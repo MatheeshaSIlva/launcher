@@ -202,3 +202,10 @@ Device results (7a540ff), Matheesha: "the app launch and close animations are no
 - Sideways switching only went right, between two apps. Now runs of quick switches keep their own order: right = older,
   left = newer, cards on both sides; a run ends after 4 s, a launch or going home.
 - Live mirror probe crashed the system (see PROBE_FINDINGS); removed.
+
+Device results (901ee2a), Matheesha: "the animations and everything looks great now". New: the launcher did not follow a
+wallpaper change. Cause: home only listened for ACTION_WALLPAPER_CHANGED while resumed, but the change happens in Settings.
+Fix: on every resume compare `WallpaperManager.getWallpaperId(FLAG_SYSTEM)` with the loaded one, plus an
+OnColorsChangedListener (fires in the background too). Requested: a "disintegrate, glowy dot matrix, fluid" transition:
+`WallpaperTransition.kt`, one AGSL pass over both images (rising ragged front; mosaic → glowing dots on dark; grid carried by
+a curl-noise swirl; colour swap at the peak; dots grow back into the new image), 1.8 s ease-in-out; crossfade fallback.

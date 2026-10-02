@@ -12,7 +12,7 @@ import kotlin.math.max
  * Reading it needs "all files access" on Android 13+ (MANAGE_EXTERNAL_STORAGE, granted via Shizuku appops); without it
  * [load] returns null and the home screen falls back to the system wallpaper window (no glass).
  */
-class Wallpaper private constructor(val bitmap: Bitmap, val blurred: Bitmap, val blurScale: Int) {
+class Wallpaper private constructor(val bitmap: Bitmap, val blurred: Bitmap, val blurScale: Int, val id: Int) {
 
     /** Bitmap -> screen matrix for a [w] x [h] screen: centre-crop, like the system wallpaper on a single page. */
     fun matrix(w: Int, h: Int): Matrix {
@@ -27,7 +27,13 @@ class Wallpaper private constructor(val bitmap: Bitmap, val blurred: Bitmap, val
     fun blurredMatrix(w: Int, h: Int): Matrix = matrix(w, h).apply { preScale(blurScale.toFloat(), blurScale.toFloat()) }
 
     companion object {
+        /** The system wallpaper's id: changes whenever the user sets a new wallpaper (-1 if unknown). */
+        fun currentId(ctx: Context): Int = try {
+            WallpaperManager.getInstance(ctx).getWallpaperId(WallpaperManager.FLAG_SYSTEM)
+        } catch (_: Throwable) { -1 }
+
         fun load(ctx: Context): Wallpaper? = try {
+            val id = currentId(ctx)
             val d = WallpaperManager.getInstance(ctx).drawable as? BitmapDrawable
             val src = d?.bitmap ?: throw IllegalStateException("no bitmap wallpaper")
             val bmp = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
@@ -36,7 +42,7 @@ class Wallpaper private constructor(val bitmap: Bitmap, val blurred: Bitmap, val
                 .copy(Bitmap.Config.ARGB_8888, true)
             boxBlur(small, 3, 3)
             AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}")
-            Wallpaper(bmp, small, scale)
+            Wallpaper(bmp, small, scale, id)
         } catch (t: Throwable) {
             AppLog.log("[wallpaper] not readable (${t.javaClass.simpleName}: ${t.message}); using the system wallpaper window, no glass")
             null
