@@ -253,6 +253,12 @@ class HomeActivity : Activity(), HomeBridge.Home {
             val pad = (14 * dp).toInt()
             setPadding(pad, pad, pad, pad)
             background = GradientDrawable().apply { setColor(0x40FFFFFF); cornerRadius = DOCK_RADIUS * dp }
+            // A real (render-thread) shadow under the pane; the glass is opaque inside its shape, so only the soft edge shows.
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) =
+                    outline.setRoundRect(0, 0, view.width, view.height, DOCK_RADIUS * dp)
+            }
+            elevation = 10 * dp
         }
         for (pkg in DOCK) addAppIcon(dock, pkg)
         content.addView(dock, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {

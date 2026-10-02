@@ -10,7 +10,6 @@ import android.graphics.Canvas
 import android.graphics.Picture
 import android.graphics.PixelFormat
 import android.graphics.RectF
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -25,6 +24,7 @@ import android.view.MotionEvent
 import android.view.RoundedCorner
 import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.FrameLayout
 import java.util.concurrent.ConcurrentHashMap
@@ -36,29 +36,35 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Our bottom-edge gesture navigation and app launch/close animations. A touchable strip over the system gesture area
- * takes the finger; a full-display, non-touchable card window draws app cards ([CardView]) that follow it.
+ * Our bottom-edge gesture navigation and app launch/close animations.
  *
- * - Up: HOME mode. The app becomes a card that shrinks with the finger (ease-out). Behind it we draw our recorded picture
- *   of the home screen ([HomeBridge.preview]), slightly zoomed, so the app itself stays in front and running until the
- *   gesture commits. Commit: the real home starts behind the picture, springs carry the finger's velocity into the app's
- *   icon while the picture's zoom settles, and the picture gives way to the real home once that has drawn. Cancel: the
- *   card springs back; the app never left, so nothing is relaunched.
- * - Sideways: SWITCH mode, horizontal axis only. The previous app's card slides in beside the current one; on release the
- *   real switch happens behind the cards, which go once the system reports the app in front.
- * - [launchApp]: LAUNCH mode. A card grows out of the tapped icon while the app starts underneath.
- * - A HOME animation in flight can be grabbed and continued with the finger.
+ * Windows (created once, kept while gesture nav is on): a full-display, non-touchable card window (picture of home,
+ * previous-app card, current-app card), and above it the touchable gesture strip, so the pill is always visible and the
+ * finger always lands on the strip, whatever is animating.
+ *
+ * Everything is interruptible: a touch during any animation or wait grabs the card where it is ([takeOver]); tapping the
+ * icon of the app whose card is on screen reverses it; tapping another icon replaces it. Springs keep their velocity
+ * across every hand-over.
+ *
+ * - Up: HOME. The app's card shrinks with the finger (ease-out) over our recorded picture of home; the app itself stays in
+ *   front and running until the gesture commits. Commit: real home starts under the picture, springs carry the finger's
+ *   velocity into the app's icon, the picture gives way to the real home once that has drawn. Cancel: springs back.
+ * - Sideways: SWITCH, horizontal only; the previous app's card slides in beside the current one, the real switch happens
+ *   behind the cards on release.
+ * - [launchApp]: LAUNCH. A card grows out of the icon over the picture while the app starts underneath.
  *
  * Windows are TYPE_ACCESSIBILITY_OVERLAY (through [NavAccessibilityService]): Settings and setHideOverlayWindows cannot
  * hide them. Stock gestures are only blocked while that service is connected ([ready]) and our flags are held by the live
- * shell service. Everything here runs on its own UI thread ([nav]), so input, animation and frames never wait for the
- * home screen. Public entry points may be called from any thread.
+ * shell service. All of this runs on its own UI thread ([nav]); binder work runs on two worker threads (task list and
+ * snapshots separately, so a slow snapshot never delays the next gesture's task lookup).
  */
 object GestureNav {
     private lateinit var app: LauncherApp
     private val navThread = HandlerThread("nav-ui", Process.THREAD_PRIORITY_DISPLAY).apply { start() }
     private val nav = Handler(navThread.looper)
-    private val io = Executors.newSingleThreadExecutor()
+    private val main = Handler(Looper.getMainLooper())
+    private val tasksIo = Executors.newSingleThreadExecutor()
+    private val snapIo = Executors.newSingleThreadExecutor()
     private val density get() = app.resources.displayMetrics.density
     private fun dp(v: Int) = v * density
 
@@ -70,13 +76,14 @@ object GestureNav {
         private set
     @Volatile private var locked = false
 
-    /** Set by HomeActivity. */
+    /** Set by HomeActivity (resumed = in front). */
     @Volatile var homeVisible = false
 
     private class Task(val id: Int, val pkg: String)
-    private enum class Mode { NONE, HOME, SWITCH, LAUNCH }
+    private enum class Phase { IDLE, DRAG_HOME, DRAG_SWITCH, ANIM, HOLD }
+    private enum class Anim { NONE, HOME_COMMIT, HOME_CANCEL, LAUNCH, SWITCH_COMMIT, SWITCH_CANCEL }
 
-    // Windows (nav thread)
+    // ------------------------------------------------------------------ windows (nav thread)
     private var strip: View? = null
     private var root: FrameLayout? = null
     private var backdrop: PreviewView? = null
@@ -86,15 +93,24 @@ object GestureNav {
     private var sh = 0f
     private var deviceRadius = 0f
 
-    // Gesture (nav thread)
-    private var mode = Mode.NONE
-    private var downX = 0f
-    private var downY = 0f
-    private var dragging = false
-    private var animating = false
-    private var vt: VelocityTracker? = null
+    // ------------------------------------------------------------------ state (nav thread)
+    private var phase = Phase.IDLE
+    private var anim = Anim.NONE
+    /** Bumped on every hand-over; callbacks from an earlier phase compare it and do nothing. */
+    private var gen = 0
+    private var cardPkg: String? = null          // the app the current card shows
+    private var homeStarted = false              // real home was brought to the front during this card's life
     private var homeRequestedAt = 0L
     private var hiddenIconPkg: String? = null
+    private var pendingFresh = false             // touched down with no card yet; waiting to decide the direction
+    private var grabbedFull = false              // took over a full-size card: direction still open
+    private var pendingStart: Runnable? = null   // a launch whose app has not been started yet
+    private var appStarted = false               // an app was started during this card session (home is not in front)
+
+    // Finger
+    private var downX = 0f
+    private var downY = 0f
+    private var vt: VelocityTracker? = null
 
     // HOME drag model: travel since the card was full size, finger anchor within the card (scaled with it)
     private var travel0 = 0f
@@ -105,20 +121,31 @@ object GestureNav {
     private var offset = 0f
     private var switchScale = 1f
 
-    // Data for the gesture in progress, loaded on ACTION_DOWN (io) and handed to nav
+    // Data for the gesture in progress, loaded on ACTION_DOWN by the workers and handed to nav
     @Volatile private var gestureId = 0
     @Volatile private var fg: Task? = null
     @Volatile private var prev: Task? = null
-    private var fgSnapshot: Bitmap? = null
+    private var fgFresh: Bitmap? = null
+    private var fgFreshDone = false
     private var prvSnapshot: Bitmap? = null
-    private var fgState = "none"            // waiting | shown | unavailable
     private var fgSnapMs = -1L
-    private var prevSnapMs = -1L
     private var dragStartedAt = 0L
     private var cardVisibleAfter = -1L
     private val icons = ConcurrentHashMap<String, Drawable>()
+    /** Last image we have of each app (fresh or cached snapshot): lets a card appear at once, before a fresh one arrives. */
+    private val images = ConcurrentHashMap<String, Bitmap>()
+    private val imagesAt = ConcurrentHashMap<String, Long>()
 
-    // Springs (nav thread)
+    private fun remember(pkg: String, b: Bitmap) { images[pkg] = b; imagesAt[pkg] = SystemClock.uptimeMillis() }
+
+    /** An earlier image of [pkg], only if recent enough that showing it before the fresh one cannot look stale. */
+    private fun recentImage(pkg: String?): Bitmap? {
+        pkg ?: return null
+        val at = imagesAt[pkg] ?: return null
+        return if (SystemClock.uptimeMillis() - at < 10_000) images[pkg] else null
+    }
+
+    // Springs
     private var sCx = Spring(0.5f, 0.86f)
     private var sCy = Spring(0.5f, 0.86f)
     private var sW = Spring(0.44f, 0.9f)
@@ -127,13 +154,12 @@ object GestureNav {
     private var sOff = Spring(0.35f, 1f)
     private var sScale = Spring(0.35f, 1f)
     private var springStartNs = 0L
+    private var animating = false
     private var onSettled: (() -> Unit)? = null
     private var endLabel = ""
-    /** Size the HOME/LAUNCH card is heading for (icon size when closing into an icon, full width when opening/cancelling). */
-    private var cardTargetW = 0f
-    private var cardIconSize = 0f
+    private var cardIconSize = 0f                // > 0 while the card travels to or from an icon of that size
 
-    private val stats by lazy { FrameStats() }   // Choreographer of the nav thread: first used there
+    private val stats by lazy { FrameStats() }
     private val choreographer by lazy { Choreographer.getInstance() }
 
     // Last app window the system reported in front (accessibility events)
@@ -141,14 +167,18 @@ object GestureNav {
     @Volatile private var lastFrontAt = 0L
 
     private const val HOME_ZOOM = 1.08f
+    private const val SCALE_RANGE = 0.62f     // smallest card while dragging = 38 % of the screen
+    private const val SCALE_LENGTH = 0.28f    // travel (in screen heights) for most of the shrink
 
     fun init(app: LauncherApp) { this.app = app }
 
-    /** Shows or removes the strip to match the current state. Any thread. */
+    // ================================================================== public entry points (any thread)
+
+    /** Shows or removes our windows to match the current state. */
     fun update() {
         if (Looper.myLooper() != navThread.looper) { nav.post { update() }; return }
         val want = ready && SystemRestore.gestureFlagsActive && ShizukuLink.service != null && !locked
-        if (want && strip == null) addStrip()
+        if (want && strip == null) { ensureCardWindow(); addStrip() }
         if (!want && strip != null) removeAll()
     }
 
@@ -198,9 +228,22 @@ object GestureNav {
         }
     }
 
+    /**
+     * Opening an app from [iconRect] on home. The card grows out of the icon over our picture of home while the app starts
+     * underneath; [start] (which starts the app, on the main thread) runs once our window covers the screen, because with
+     * system animations off the app's window appears at full size at once. If that app's card is already on screen (it was
+     * just closing), the card reverses from where it is. Returns false if gesture nav cannot animate (caller just starts).
+     */
+    fun launchApp(pkg: String, iconRect: RectF, icon: Drawable?, start: () -> Unit): Boolean {
+        if (!ready) return false
+        val iconCopy = icon?.constantState?.newDrawable()?.mutate() ?: icon
+        nav.post { beginLaunch(pkg, RectF(iconRect), iconCopy, start) }
+        return true
+    }
+
     private fun reapplyFlags() {
         val s = ShizukuLink.service ?: return
-        io.execute { SystemRestore.applyFlags(app, s) }
+        tasksIo.execute { SystemRestore.applyFlags(app, s) }
     }
 
     // The lock screen is left alone: no strip (it would sit on top of the unlock area) while the keyguard is up.
@@ -215,7 +258,7 @@ object GestureNav {
         }
     }
 
-    // ------------------------------------------------------------------ windows (nav thread)
+    // ================================================================== windows (nav thread)
 
     private fun overlayParams(w: Int, h: Int, touchable: Boolean) = WindowManager.LayoutParams(
         w, h,
@@ -246,40 +289,17 @@ object GestureNav {
             title = "LauncherGestureStrip"
         }
         try {
-            wm.addView(stripView, lp)
+            wm.addView(stripView, lp)   // added after the card window, so it stays above it
             strip = stripView
-            AppLog.log("[nav] gesture strip on (${h}px high, own UI thread)")
+            AppLog.log("[nav] gesture strip on (${h}px high, own UI thread, persistent card window)")
         } catch (t: Throwable) {
             AppLog.log("[nav] strip addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
         }
     }
 
-    private fun removeAll() {
-        animating = false
-        dragging = false
-        removeCards()
-        strip?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
-        strip = null
-        AppLog.log("[nav] gesture strip off")
-    }
-
-    private fun removeCards() {
-        root?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
-        root = null
-        backdrop = null
-        cur = null
-        prv = null
-        mode = Mode.NONE
-        hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
-        hiddenIconPkg = null
-    }
-
     @Suppress("DEPRECATION")
-    private fun addCardWindow(picture: Picture?): Boolean {
-        val ctx = a11y ?: return false
-        val wm = wm ?: return false
-        if (root != null) removeCards()
-        // Re-read the display every time so rotation never leaves the cards at the old size.
+    private fun readDisplay() {
+        val wm = wm ?: return
         val dm = android.util.DisplayMetrics()
         val display = wm.defaultDisplay
         display.getRealMetrics(dm)
@@ -288,27 +308,94 @@ object GestureNav {
         deviceRadius = if (Build.VERSION.SDK_INT >= 31) {
             display.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)?.radius?.toFloat() ?: dp(32)
         } else dp(32)
-        val r = FrameLayout(ctx).apply { alpha = 0f }
-        if (picture != null) {
-            backdrop = PreviewView(ctx, picture).also { r.addView(it, FrameLayout.LayoutParams(sw.toInt(), sh.toInt())) }
-        }
+    }
+
+    /** The card window: created once and kept (INVISIBLE when idle), so no gesture ever waits for a window to be added. */
+    private fun ensureCardWindow() {
+        val ctx = a11y ?: return
+        val wm = wm ?: return
+        if (root != null) return
+        readDisplay()
+        val r = FrameLayout(ctx).apply { visibility = View.INVISIBLE }
+        val b = PreviewView(ctx)
+        val p = CardView(ctx).apply { visibility = View.GONE }
         val c = CardView(ctx)
-        r.addView(c, FrameLayout.LayoutParams(sw.toInt(), sh.toInt()))
-        c.setFrame(sw / 2, sh / 2, sw, sh, deviceRadius)
-        // Exact full-display size from the first frame, drawn into the cutout too (the probe saw resizing as a stretch).
+        r.addView(b, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        r.addView(p, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        r.addView(c, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // Exact full-display size, drawn into the cutout too (the probe saw resizing as a stretch).
         val lp = overlayParams(sw.toInt(), sh.toInt(), touchable = false).apply {
             gravity = Gravity.TOP or Gravity.START
             title = "LauncherCards"
         }
-        return try {
+        try {
             wm.addView(r, lp)
-            root = r
-            cur = c
-            true
+            root = r; backdrop = b; prv = p; cur = c
         } catch (t: Throwable) {
-            AppLog.log("[nav] card addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
-            false
+            AppLog.log("[nav] card window FAILED: ${t.javaClass.simpleName}: ${t.message}")
         }
+    }
+
+    /** Re-reads the display before a card session; resizes the card window after a rotation. */
+    private fun prepareCardWindow(): Boolean {
+        val r = root ?: run { ensureCardWindow(); root } ?: return false
+        val oldW = sw
+        val oldH = sh
+        readDisplay()
+        if (sw != oldW || sh != oldH) {
+            val lp = r.layoutParams as WindowManager.LayoutParams
+            lp.width = sw.toInt()
+            lp.height = sh.toInt()
+            try { wm?.updateViewLayout(r, lp) } catch (_: Throwable) { }
+        }
+        return true
+    }
+
+    private fun showCards() {
+        val r = root ?: return
+        r.animate().cancel()
+        r.alpha = 1f
+        if (r.visibility != View.VISIBLE) {
+            r.visibility = View.VISIBLE
+            cardVisibleAfter = SystemClock.uptimeMillis() - dragStartedAt
+        }
+    }
+
+    /** Ends the card session: window invisible (kept), icon back, everything pending forgotten. */
+    private fun hideCards() {
+        gen++
+        animating = false
+        onSettled = null
+        waitingFor = null
+        nav.removeCallbacks(waitTimeout)
+        phase = Phase.IDLE
+        anim = Anim.NONE
+        pendingFresh = false
+        grabbedFull = false
+        pendingStart = null
+        appStarted = false
+        root?.let { r ->
+            r.animate().cancel()
+            r.visibility = View.INVISIBLE
+            r.alpha = 1f
+            r.setBackgroundColor(0)
+        }
+        backdrop?.picture = null
+        prv?.visibility = View.GONE
+        cur?.snapshot = null
+        cardPkg = null
+        homeStarted = false
+        hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
+        hiddenIconPkg = null
+    }
+
+    private fun removeAll() {
+        hideCards()
+        strip?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
+        root?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
+        strip = null
+        root = null; backdrop = null; prv = null; cur = null
+        AppLog.log("[nav] gesture strip off")
     }
 
     private fun systemDimen(name: String): Int {
@@ -316,7 +403,19 @@ object GestureNav {
         return if (id != 0) app.resources.getDimensionPixelSize(id) else 0
     }
 
-    // ------------------------------------------------------------------ touch (nav thread)
+    private fun hideIcon(pkg: String?) {
+        if (pkg == hiddenIconPkg) return
+        hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
+        hiddenIconPkg = pkg
+        pkg?.let { HomeBridge.setIconHidden(it, true) }
+    }
+
+    private fun setCardContent(c: CardView, pkg: String?, bitmap: Bitmap?) {
+        c.snapshot = bitmap
+        c.icon = pkg?.let { iconFor(it) }
+    }
+
+    // ================================================================== touch (nav thread)
 
     private fun onTouch(e: MotionEvent): Boolean {
         val raw = MotionEvent.obtain(e).apply { setLocation(e.rawX, e.rawY) }
@@ -324,28 +423,27 @@ object GestureNav {
             MotionEvent.ACTION_DOWN -> {
                 vt?.recycle()
                 vt = VelocityTracker.obtain().also { it.addMovement(raw) }
-                if (animating || mode == Mode.LAUNCH) {
-                    if (mode == Mode.HOME && animating) grab(e.rawX, e.rawY) else { raw.recycle(); return true }
-                } else {
-                    downX = e.rawX
-                    downY = e.rawY
-                    dragging = false
-                    mode = Mode.NONE
-                    stats.reset()
-                    prefetch()
-                }
+                downX = e.rawX
+                downY = e.rawY
+                stats.reset()
+                if ((phase == Phase.ANIM || phase == Phase.HOLD) && root?.visibility == View.VISIBLE) takeOver(e.rawX, e.rawY)
+                else { hideCards(); pendingFresh = true; prefetch(fresh = true) }
             }
             MotionEvent.ACTION_MOVE -> {
                 vt?.addMovement(raw)
-                if (!dragging && !animating && mode == Mode.NONE && !homeVisible) {
-                    val dx = e.rawX - downX
-                    val dy = downY - e.rawY
-                    if (dy > dp(10) && dy > abs(dx)) beginHome()
-                    else if (abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) beginSwitch()
+                val dx = e.rawX - downX
+                val dy = downY - e.rawY
+                if (pendingFresh && !homeVisible) {
+                    if (dy > dp(10) && dy > abs(dx)) { pendingFresh = false; beginHome() }
+                    else if (abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) { pendingFresh = false; beginSwitch() }
+                } else if (grabbedFull) {
+                    if (dy > dp(8) && dy > abs(dx)) { grabbedFull = false; phase = Phase.DRAG_HOME }
+                    else if (abs(dx) > dp(12) && abs(dx) > abs(dy) * 1.2f) { grabbedFull = false; beginSwitch() }
                 }
-                if (dragging) {
-                    if (mode == Mode.HOME) dragHome(e.rawX, e.rawY) else if (mode == Mode.SWITCH) dragSwitch(e.rawX)
-                    stats.touchEvent(e.eventTime)
+                when (phase) {
+                    Phase.DRAG_HOME -> { dragHome(e.rawX, e.rawY); stats.touchEvent(e.eventTime) }
+                    Phase.DRAG_SWITCH -> { dragSwitch(e.rawX); stats.touchEvent(e.eventTime) }
+                    else -> {}
                 }
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
@@ -354,51 +452,101 @@ object GestureNav {
                 val vx = vt?.xVelocity ?: 0f
                 val vy = vt?.yVelocity ?: 0f
                 val up = e.actionMasked == MotionEvent.ACTION_UP
-                if (dragging) {
-                    dragging = false
-                    if (mode == Mode.HOME) releaseHome(up, vx, vy) else if (mode == Mode.SWITCH) releaseSwitch(up, vx)
-                } else if (homeVisible && up && abs(e.rawX - downX) > dp(40)) {
-                    // On home a sideways swipe returns to the last app (recents comes later).
-                    returnToLastApp()
+                when {
+                    phase == Phase.DRAG_HOME -> releaseHome(up, vx, vy)
+                    phase == Phase.DRAG_SWITCH -> releaseSwitch(up, vx)
+                    grabbedFull -> { grabbedFull = false; releaseHome(false, 0f, 0f) }   // a tap on a full-size card: let it finish
+                    pendingFresh && homeVisible && up && abs(e.rawX - downX) > dp(40) -> returnToLastApp()
                 }
+                pendingFresh = false
             }
         }
         raw.recycle()
         return true
     }
 
-    /** Foreground and previous task, their icons, a fresh snapshot of the foreground app and a cached one of the previous. */
-    private fun prefetch() {
+    /**
+     * A touch while cards are animating or waiting: the card stops exactly where it is and the finger owns it. A switch in
+     * flight is completed in place first (its app is already coming to the front), so the finger holds that app's card.
+     */
+    private fun takeOver(x: Float, y: Float) {
+        gen++
+        val wasAnim = anim
+        animating = false
+        onSettled = null
+        waitingFor = null
+        nav.removeCallbacks(waitTimeout)
+        runPendingStart()   // the finger took over a launching card: the user still opened that app
+        root?.animate()?.cancel()
+        root?.alpha = 1f
+        val c = cur ?: return
+        if (wasAnim == Anim.SWITCH_COMMIT) {
+            // The previous app is the one in front now: its card becomes the current card at full size.
+            val p = prev
+            c.snapshot = prv?.snapshot
+            c.icon = prv?.icon
+            cardPkg = p?.pkg
+            fg = p
+            prev = null
+        }
+        if (wasAnim == Anim.SWITCH_COMMIT || wasAnim == Anim.SWITCH_CANCEL) {
+            prv?.visibility = View.GONE
+            root?.setBackgroundColor(0)
+            c.setFrame(sw / 2, sh / 2, sw, sh, deviceRadius)
+            backdrop?.picture = HomeBridge.previewFor(cardPkg)
+            backdrop?.zoom = HOME_ZOOM
+        }
+        if (backdrop?.picture == null) backdrop?.picture = HomeBridge.previewFor(cardPkg)
+        c.iconMix = 0f
+        val s = c.w / sw
+        travel0 = travelForScale(s)
+        lastTravel = travel0
+        anchorX = (c.cx - x) / s
+        anchorBottom = (c.cy + c.h / 2 - y) / s
+        dragStartedAt = SystemClock.uptimeMillis()
+        // Tasks may have changed (an app was just launched or switched to): look them up again, keep the card's image.
+        prefetch(fresh = false)
+        if (s > 0.97f) { grabbedFull = true; phase = Phase.IDLE }   // direction still open: up = home, sideways = switch
+        else phase = Phase.DRAG_HOME
+        stats.start()
+        AppLog.log("[nav] took over a ${wasAnim.name.lowercase()} card at scale ${"%.2f".format(s)}")
+    }
+
+    /**
+     * Looks up the foreground and previous task, then (on the snapshot worker) a fresh snapshot of the foreground app
+     * (only if [fresh]) and a cached one of the previous app.
+     */
+    private fun prefetch(fresh: Boolean) {
         val s = ShizukuLink.service ?: return
         val id = ++gestureId
         val onHome = homeVisible
-        fg = null
+        fg = if (fresh) null else fg
         prev = null
-        fgSnapshot = null
+        if (fresh) { fgFresh = null; fgFreshDone = false; fgSnapMs = -1 }
         prvSnapshot = null
-        fgState = if (onHome) "none" else "waiting"
-        fgSnapMs = -1
-        prevSnapMs = -1
-        io.execute {
-            try {
-                val tasks = parseTasks(s.recentTasks(3))
-                if (id != gestureId || tasks.isEmpty()) return@execute
-                fg = tasks[0]
-                prev = tasks.getOrNull(1)
-                tasks.take(2).forEach { iconFor(it.pkg) }
-                if (onHome) return@execute
-                var t = SystemClock.uptimeMillis()
-                val fresh = s.taskSnapshot(tasks[0].id, true)
-                val fMs = SystemClock.uptimeMillis() - t
-                nav.post { if (id == gestureId) onFgSnapshot(fresh, fMs) }
+        tasksIo.execute {
+            val tasks = try { parseTasks(s.recentTasks(3)) } catch (_: Throwable) { emptyList() }
+            if (id != gestureId) return@execute
+            tasks.take(2).forEach { iconFor(it.pkg) }
+            nav.post {
+                if (id != gestureId) return@post
+                if (fresh || fg == null) fg = tasks.getOrNull(0)
+                prev = tasks.firstOrNull { it.pkg != fg?.pkg && it.id != fg?.id }
+                onTasks(fresh)
+            }
+            if (onHome || tasks.isEmpty()) return@execute
+            snapIo.execute {
+                if (fresh) {
+                    val t = SystemClock.uptimeMillis()
+                    val b = try { s.taskSnapshot(tasks[0].id, true) } catch (_: Throwable) { null }
+                    val ms = SystemClock.uptimeMillis() - t
+                    b?.let { remember(tasks[0].pkg, it) }
+                    nav.post { if (id == gestureId) onFgFresh(b, ms) }
+                }
                 val p = tasks.getOrNull(1) ?: return@execute
-                t = SystemClock.uptimeMillis()
-                val cached = s.taskSnapshot(p.id, false)
-                val pMs = SystemClock.uptimeMillis() - t
-                nav.post { if (id == gestureId) onPrevSnapshot(cached, pMs) }
-            } catch (t: Throwable) {
-                AppLog.log("[nav] prefetch failed: ${t.javaClass.simpleName}: ${t.message}")
-                nav.post { if (id == gestureId) onFgSnapshot(null, -1) }
+                val pb = try { s.taskSnapshot(p.id, false) } catch (_: Throwable) { null }
+                pb?.let { remember(p.pkg, it) }
+                nav.post { if (id == gestureId) { prvSnapshot = pb ?: images[p.pkg]; if (phase == Phase.DRAG_SWITCH) prv?.snapshot = prvSnapshot } }
             }
         }
     }
@@ -412,51 +560,65 @@ object GestureNav {
         app.packageManager.getApplicationIcon(pkg).also { icons[pkg] = it }
     } catch (_: Throwable) { null }
 
-    private fun onFgSnapshot(b: Bitmap?, ms: Long) {
-        fgSnapMs = ms
-        fgSnapshot = b
-        fgState = if (b != null) "shown" else "unavailable"   // unavailable: secure app etc. -> plain card
-        if (mode == Mode.HOME || mode == Mode.SWITCH) {
-            cur?.let { c -> c.snapshot = b; c.icon = fg?.let { icons[it.pkg] } }
-            revealCards()
+    /** Tasks known. A fresh gesture's card can show at once if we already have an image of that app. */
+    private fun onTasks(fresh: Boolean) {
+        val f = fg ?: return
+        if (!fresh) return
+        if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH) {
+            cardPkg = f.pkg
+            if (fgFresh == null) recentImage(f.pkg)?.let { cur?.let { c -> setCardContent(c, f.pkg, it) } }
+            if (phase == Phase.DRAG_HOME) backdrop?.picture = HomeBridge.previewFor(f.pkg)
+            if (phase == Phase.DRAG_SWITCH) prev?.let { p -> prv?.let { pc -> setCardContent(pc, p.pkg, images[p.pkg]) } }
+            maybeShow()
         }
     }
 
-    private fun onPrevSnapshot(b: Bitmap?, ms: Long) {
-        prevSnapMs = ms
-        prvSnapshot = b
-        prv?.snapshot = b
+    private fun onFgFresh(b: Bitmap?, ms: Long) {
+        fgSnapMs = ms
+        fgFresh = b
+        fgFreshDone = true
+        if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH || anim == Anim.HOME_CANCEL || anim == Anim.HOME_COMMIT) {
+            cur?.let { c -> if (b != null) c.snapshot = b else if (c.snapshot == null) c.icon = fg?.let { iconFor(it.pkg) } }
+            maybeShow()
+        }
     }
 
-    /** The card window stays invisible until the card has something real to show, so no placeholder ever flashes. */
-    private fun revealCards() {
-        val r = root ?: return
-        if (fgState == "waiting" || r.alpha == 1f) return
-        r.alpha = 1f
-        cardVisibleAfter = SystemClock.uptimeMillis() - dragStartedAt
+    /** Shows the cards once the current card has real content (fresh snapshot, an earlier image, or "none available"). */
+    private fun maybeShow() {
+        val c = cur ?: return
+        if (c.snapshot != null || fgFreshDone) showCards()
     }
 
-    // ------------------------------------------------------------------ HOME mode
+    // ================================================================== HOME
 
     private fun beginHome() {
-        if (!addCardWindow(HomeBridge.previewFor(fg?.pkg))) return
-        mode = Mode.HOME
-        dragging = true
+        if (!prepareCardWindow()) return
+        gen++
+        phase = Phase.DRAG_HOME
+        anim = Anim.NONE
+        homeStarted = false
         homeRequestedAt = 0L
         dragStartedAt = SystemClock.uptimeMillis()
         cardVisibleAfter = -1
-        cur?.let { c -> c.snapshot = fgSnapshot; c.icon = fg?.let { icons[it.pkg] } }
+        val c = cur ?: return
+        val f = fg
+        cardPkg = f?.pkg
+        setCardContent(c, f?.pkg, fgFresh ?: recentImage(f?.pkg))
+        c.iconMix = 0f
+        c.setFrame(sw / 2, sh / 2, sw, sh, deviceRadius)
+        prv?.visibility = View.GONE
+        root?.setBackgroundColor(if (HomeBridge.previewFor(f?.pkg) == null) 0xFF101418.toInt() else 0)
+        backdrop?.picture = HomeBridge.previewFor(f?.pkg)
         backdrop?.zoom = HOME_ZOOM
-        if (backdrop == null) root?.setBackgroundColor(0xFF101418.toInt())   // no picture of home yet
         travel0 = 0f
         lastTravel = 0f
         anchorX = sw / 2 - downX
         anchorBottom = sh - downY
-        revealCards()
+        maybeShow()
         stats.start()
     }
 
-    // Card scale for upward travel: ease-out (shrinks quickly first, then slower), never below MIN_SCALE.
+    // Card scale for upward travel: ease-out (shrinks quickly first, then slower).
     private fun homeScale(travel: Float): Float = 1f - SCALE_RANGE * (1f - exp(-max(0f, travel) / (sh * SCALE_LENGTH)))
 
     private fun travelForScale(s: Float): Float {
@@ -466,9 +628,6 @@ object GestureNav {
 
     private fun dScaleDTravel(travel: Float): Float = -SCALE_RANGE / (sh * SCALE_LENGTH) * exp(-max(0f, travel) / (sh * SCALE_LENGTH))
 
-    private const val SCALE_RANGE = 0.62f     // smallest card while dragging = 38 % of the screen
-    private const val SCALE_LENGTH = 0.28f    // travel (in screen heights) for most of the shrink
-
     private fun dragHome(x: Float, y: Float) {
         val c = cur ?: return
         lastTravel = travel0 + (downY - y)
@@ -476,113 +635,98 @@ object GestureNav {
         val w = sw * s
         val h = sh * s
         // The finger keeps its place on the card as it shrinks, so the card visibly comes away from the top edge.
-        val cx = x + anchorX * s
-        val cy = y + anchorBottom * s - h / 2
-        c.setFrame(cx, cy, w, h, deviceRadius)
+        c.setFrame(x + anchorX * s, y + anchorBottom * s - h / 2, w, h, deviceRadius)
         c.iconMix = 0f
     }
 
-    /** Finger lands on a HOME card in flight: continue from where the card is, no jump. */
-    private fun grab(x: Float, y: Float) {
-        val c = cur ?: return
-        animating = false
-        val s = c.w / sw
-        travel0 = travelForScale(s)
-        lastTravel = travel0
-        anchorX = (c.cx - x) / s
-        anchorBottom = (c.cy + c.h / 2 - y) / s
-        downX = x
-        downY = y
-        dragging = true
-        mode = Mode.HOME
-        backdrop?.zoom = HOME_ZOOM
-        stats.reset()
-        stats.start()
-        AppLog.log("[nav] grabbed mid-animation at scale ${"%.2f".format(s)}")
-    }
-
     private fun releaseHome(up: Boolean, vx: Float, vy: Float) {
-        val c = cur ?: run { removeCards(); return }
+        val c = cur ?: run { hideCards(); return }
         val upSpeed = -vy
         val commit = up && ((upSpeed > 350f && lastTravel > dp(30)) || (lastTravel > sh * 0.2f && upSpeed > -250f))
-        // Card velocities from the finger: the centre moves with it, the size changes with upward travel.
         val ds = dScaleDTravel(lastTravel) * upSpeed
         val vW = sw * ds
         val vH = sh * ds
+        val g = gen
         if (commit) {
-            if (homeRequestedAt == 0L) startHome()
-            val pkg = fg?.pkg
+            if (homeVisible && !appStarted) homeRequestedAt = 0L else startHome()
+            val pkg = cardPkg
             val target = pkg?.let { HomeBridge.iconRect(it) }
             val size = target?.width() ?: dp(64)
-            val tx = target?.centerX() ?: sw / 2
-            val ty = target?.centerY() ?: sh / 2
-            if (target != null && pkg != null) { HomeBridge.setIconHidden(pkg, true); hiddenIconPkg = pkg }
-            cardTargetW = size
+            hideIcon(if (target != null) pkg else null)
             cardIconSize = size
-            sCx = Spring(0.5f, 0.86f).apply { start(c.cx, vx, tx) }
-            sCy = Spring(0.5f, 0.86f).apply { start(c.cy, vy, ty) }
+            sCx = Spring(0.5f, 0.86f).apply { start(c.cx, vx, target?.centerX() ?: (sw / 2)) }
+            sCy = Spring(0.5f, 0.86f).apply { start(c.cy, vy, target?.centerY() ?: (sh / 2)) }
             sW = Spring(0.44f, 0.9f).apply { start(c.w, vW, size) }
             sH = Spring(0.44f, 0.9f).apply { start(c.h, vH, size) }
             sZoom = Spring(0.5f, 1f).apply { start(backdrop?.zoom ?: 1f, 0f, 1f) }
+            anim = Anim.HOME_COMMIT
             endLabel = if (target != null) "home (into icon)" else "home (to centre; app not on the home screen)"
             onSettled = {
+                phase = Phase.HOLD
                 // The picture of home is on top of the real one: swap only once the real home has drawn.
-                whenHomeDrawn {
+                whenHomeDrawn(g) {
                     if (target != null && pkg != null) {
-                        // Real icon back first, card window a couple of frames later: never a frame with neither.
+                        // Real icon back first, cards a couple of frames later: never a frame with neither.
                         HomeBridge.setIconHidden(pkg, false)
                         hiddenIconPkg = null
-                        nav.postDelayed({ removeCards() }, 32)
-                    } else fadeOutCards(120)
+                        nav.postDelayed({ if (gen == g) hideCards() }, 32)
+                    } else fadeOutCards(120, g)
                 }
             }
         } else {
-            cardTargetW = sw
             cardIconSize = 0f
             sCx = Spring(0.38f, 1f).apply { start(c.cx, vx, sw / 2) }
             sCy = Spring(0.38f, 1f).apply { start(c.cy, vy, sh / 2) }
             sW = Spring(0.38f, 1f).apply { start(c.w, vW, sw) }
             sH = Spring(0.38f, 1f).apply { start(c.h, vH, sh) }
             sZoom = Spring(0.38f, 1f).apply { start(backdrop?.zoom ?: 1f, 0f, HOME_ZOOM) }
+            anim = Anim.HOME_CANCEL
             endLabel = "back to the app"
-            // The app is still in front (home was never started), so the card can simply go.
-            onSettled = { removeCards() }
+            onSettled = {
+                if (homeStarted) {
+                    // Home came to the front earlier in this card's life (e.g. grabbed while closing): put the app back.
+                    phase = Phase.HOLD
+                    bringBack(cardPkg, fg)
+                    cardPkg?.let { p -> awaitForeground(p, g) { hideCards() } } ?: hideCards()
+                } else if (appStarted && cardPkg != null && lastFrontPkg != cardPkg) {
+                    phase = Phase.HOLD
+                    awaitForeground(cardPkg!!, g) { hideCards() }
+                } else hideCards()
+            }
         }
         startSprings()
     }
 
     private fun startHome() {
+        homeStarted = true
         homeRequestedAt = SystemClock.uptimeMillis()
         homeVisible = false
         try {
             app.startActivity(Intent(app, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         } catch (t: Throwable) {
             AppLog.log("[nav] going home from the app failed (${t.javaClass.simpleName}); using the shell")
-            ShizukuLink.service?.let { s -> io.execute { s.runDetached("am start -a android.intent.action.MAIN -c android.intent.category.HOME") } }
+            ShizukuLink.service?.let { s -> tasksIo.execute { s.runDetached("am start -a android.intent.action.MAIN -c android.intent.category.HOME") } }
         }
     }
 
-    /** Runs [then] once home has drawn a frame after it was requested (or after 700 ms). */
-    private fun whenHomeDrawn(then: () -> Unit) {
+    /** Runs [then] once home has drawn a frame after it was requested (or after 700 ms), unless the session moved on. */
+    private fun whenHomeDrawn(g: Int, then: () -> Unit) {
         val deadline = SystemClock.uptimeMillis() + 700
         fun check() {
-            if (root == null) return
-            if (HomeBridge.homeDrawnAt >= homeRequestedAt || SystemClock.uptimeMillis() > deadline) {
-                if (HomeBridge.homeDrawnAt < homeRequestedAt) AppLog.log("[nav] home did not report a drawn frame within 700 ms")
-                then()
-            } else nav.postDelayed({ check() }, 8)
+            if (gen != g) return
+            if (HomeBridge.homeDrawnAt >= homeRequestedAt || SystemClock.uptimeMillis() > deadline) then()
+            else nav.postDelayed({ check() }, 8)
         }
         check()
     }
 
-    /** Shared by HOME and LAUNCH: frame, corner radius and icon crossfade from the four springs. */
+    /** Shared by HOME and LAUNCH: frame, corners and icon crossfade from the springs. */
     private fun applyCardSprings(t: Double): Boolean {
         val c = cur ?: return true
         val w = sW.value(t)
         val h = sH.value(t)
         val radius: Float
         if (cardIconSize > 0f) {
-            // Towards or away from an icon: corners go between the display's and the icon's, snapshot <-> icon crossfade.
             val icon = cardIconSize
             val k = ((w - icon) / (sw * 0.6f - icon)).coerceIn(0f, 1f)
             val iconRadius = icon * 0.23f
@@ -597,53 +741,73 @@ object GestureNav {
         return sCx.settled(t) && sCy.settled(t) && sW.settled(t) && sH.settled(t)
     }
 
-    // ------------------------------------------------------------------ LAUNCH mode
+    /** Current card frame and velocity: from the springs if they are running, else at rest. */
+    private fun cardMotion(): FloatArray {
+        val c = cur ?: return floatArrayOf(sw / 2, sh / 2, sw, sh, 0f, 0f, 0f, 0f)
+        if (animating && anim != Anim.SWITCH_COMMIT && anim != Anim.SWITCH_CANCEL) {
+            val t = max(0L, System.nanoTime() - springStartNs) / 1e9
+            return floatArrayOf(sCx.value(t), sCy.value(t), sW.value(t), sH.value(t), sCx.velocity(t), sCy.velocity(t), sW.velocity(t), sH.velocity(t))
+        }
+        return floatArrayOf(c.cx, c.cy, c.w, c.h, 0f, 0f, 0f, 0f)
+    }
 
-    /**
-     * Opening an app from [iconRect] on home: a card grows out of the icon to full screen over our picture of home (which
-     * zooms in a little), while the app starts underneath, hidden by that picture. [start] (which starts the app) runs on
-     * the main thread only once the card window is on screen, because with system animations off the app's window appears
-     * at full size at once. The card shows the app's last snapshot if it has one, else its icon on a plain card, and goes
-     * once the app's window is in front. Returns false if gesture nav cannot animate (the caller then just starts the app).
-     */
-    fun launchApp(pkg: String, iconRect: RectF, icon: Drawable?, start: () -> Unit): Boolean {
-        if (!ready) return false
-        val main = Handler(Looper.getMainLooper())
+    // ================================================================== LAUNCH
+
+    private fun beginLaunch(pkg: String, iconRect: RectF, icon: Drawable?, start: () -> Unit) {
+        if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH || !prepareCardWindow()) { main.post(start); return }
+        val c = cur ?: run { main.post(start); return }
+        val reverse = root?.visibility == View.VISIBLE && cardPkg == pkg
+        // Where the card starts and how fast it moves: from where it is if this is the same app (reversal), else the icon.
+        val m = if (reverse) cardMotion() else floatArrayOf(iconRect.centerX(), iconRect.centerY(), iconRect.width(), iconRect.height(), 0f, 0f, 0f, 0f)
+        val zoom0 = if (reverse) backdrop?.zoom ?: 1f else 1f
+        if (!reverse) hideCards()
+        gen++
+        val g = gen
+        animating = false
+        onSettled = null
+        waitingFor = null
         val since = SystemClock.uptimeMillis()
-        val iconCopy = icon?.constantState?.newDrawable()?.mutate() ?: icon
-        nav.post {
-            if (dragging || animating || !addCardWindow(HomeBridge.previewFor(pkg))) { main.post(start); return@post }
-            val c = cur ?: run { main.post(start); return@post }
-            val hasPicture = backdrop != null
-            mode = Mode.LAUNCH
-            dragStartedAt = since
-            c.icon = iconCopy
-            c.placeholderColor = iconCopy?.let { averageColor(it) } ?: 0xFF2A2F3A.toInt()
-            c.setFrame(iconRect.centerX(), iconRect.centerY(), iconRect.width(), iconRect.height(), iconRect.width() * 0.23f)
+        phase = Phase.ANIM
+        anim = Anim.LAUNCH
+        dragStartedAt = since
+        cardPkg = pkg
+        fg = null
+        homeStarted = false
+        val picture = HomeBridge.previewFor(pkg)
+        if (!reverse) {
+            c.icon = icon
+            c.snapshot = images[pkg]
+            c.placeholderColor = icon?.let { averageColor(it) } ?: 0xFF2A2F3A.toInt()
+            c.setFrame(m[0], m[1], m[2], m[3], m[2] * 0.23f)
             c.iconMix = 1f
+            prv?.visibility = View.GONE
+            root?.setBackgroundColor(0)
+            backdrop?.picture = picture
             backdrop?.zoom = 1f
-            root?.alpha = 1f
-            HomeBridge.setIconHidden(pkg, true)
-            hiddenIconPkg = pkg
-            cardTargetW = sw
-            cardIconSize = iconRect.width()
-            sCx = Spring(0.42f, 0.92f).apply { start(iconRect.centerX(), 0f, sw / 2) }
-            sCy = Spring(0.42f, 0.92f).apply { start(iconRect.centerY(), 0f, sh / 2) }
-            sW = Spring(0.42f, 0.92f).apply { start(iconRect.width(), 0f, sw) }
-            sH = Spring(0.42f, 0.92f).apply { start(iconRect.height(), 0f, sh) }
-            sZoom = Spring(0.45f, 1f).apply { start(1f, 0f, HOME_ZOOM) }
-            endLabel = "launch $pkg"
-            var started = false
-            val startApp = { if (!started) { started = true; main.post(start) } }
-            onSettled = {
-                startApp()   // without a picture of home the app is only started now, so it cannot show early
-                if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(90)
-                else awaitForeground(pkg) { fadeOutCards(90) }
-            }
-            if (hasPicture) {
+        }
+        appStarted = false
+        pendingStart = Runnable(start)
+        hideIcon(pkg)
+        cardIconSize = iconRect.width()
+        sCx = Spring(0.42f, 0.92f).apply { start(m[0], m[4], sw / 2) }
+        sCy = Spring(0.42f, 0.92f).apply { start(m[1], m[5], sh / 2) }
+        sW = Spring(0.42f, 0.92f).apply { start(m[2], m[6], sw) }
+        sH = Spring(0.42f, 0.92f).apply { start(m[3], m[7], sh) }
+        sZoom = Spring(0.45f, 1f).apply { start(zoom0, 0f, HOME_ZOOM) }
+        endLabel = "launch $pkg${if (reverse) " (reversed a closing card)" else ""}"
+        val startApp = { runPendingStart() }
+        onSettled = {
+            startApp()   // without a picture of home the app is only started now, so it cannot show early
+            phase = Phase.HOLD
+            if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(90, g) else awaitForeground(pkg, g) { fadeOutCards(90, g) }
+        }
+        showCards()
+        if (picture != null) {
+            if (reverse) startApp()   // the window is already on screen
+            else {
                 // Start the app once our window (picture + icon card) has been drawn, so it covers the app from its first frame.
                 val r = root
-                r?.viewTreeObserver?.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+                r?.viewTreeObserver?.addOnDrawListener(object : ViewTreeObserver.OnDrawListener {
                     override fun onDraw() {
                         nav.post { r.viewTreeObserver.removeOnDrawListener(this) }
                         choreographer.postFrameCallback { startApp() }
@@ -651,18 +815,26 @@ object GestureNav {
                 })
                 nav.postDelayed({ startApp() }, 100)   // never wait longer than this
             }
-            stats.reset()
-            startSprings()
-            stats.start()
-            // A warm app has a snapshot of how it will look: show it as the card grows.
-            val s = ShizukuLink.service ?: return@post
-            io.execute {
-                val task = try { parseTasks(s.recentTasks(12)).firstOrNull { it.pkg == pkg } } catch (_: Throwable) { null } ?: return@execute
-                val b = try { s.taskSnapshot(task.id, false) } catch (_: Throwable) { null } ?: return@execute
-                nav.post { if (mode == Mode.LAUNCH && cur === c) c.snapshot = b }
-            }
         }
-        return true
+        stats.reset()
+        startSprings()
+        stats.start()
+        // A warm app has a snapshot of how it will look: show it as the card grows.
+        val s = ShizukuLink.service ?: return
+        snapIo.execute {
+            val task = try { parseTasks(s.recentTasks(12)).firstOrNull { it.pkg == pkg } } catch (_: Throwable) { null } ?: return@execute
+            val b = try { s.taskSnapshot(task.id, false) } catch (_: Throwable) { null } ?: return@execute
+            remember(pkg, b)
+            nav.post { if (gen == g && cardPkg == pkg) { c.snapshot = b; fg = task } }
+        }
+    }
+
+    /** Starts the app of the current launch, once. */
+    private fun runPendingStart() {
+        val r = pendingStart ?: return
+        pendingStart = null
+        appStarted = true
+        main.post(r)
     }
 
     /** A colour for the card behind an icon (like a splash screen): the icon's average colour. */
@@ -682,29 +854,32 @@ object GestureNav {
         if (n == 0) 0xFF2A2F3A.toInt() else (0xFF shl 24) or ((r / n) shl 16) or ((g / n) shl 8) or (bl / n)
     } catch (_: Throwable) { 0xFF2A2F3A.toInt() }
 
-    // ------------------------------------------------------------------ SWITCH mode
+    // ================================================================== SWITCH
 
     private fun beginSwitch() {
-        if (prev == null && fg == null) return
-        if (!addCardWindow(null)) return
-        val ctx = a11y ?: return
-        mode = Mode.SWITCH
-        dragging = true
-        dragStartedAt = SystemClock.uptimeMillis()
-        cardVisibleAfter = -1
+        if (!prepareCardWindow()) return
+        val fromGrab = root?.visibility == View.VISIBLE
+        gen++
+        phase = Phase.DRAG_SWITCH
+        anim = Anim.NONE
+        if (!fromGrab) {
+            dragStartedAt = SystemClock.uptimeMillis()
+            cardVisibleAfter = -1
+            val f = fg
+            cardPkg = f?.pkg
+            cur?.let { c -> setCardContent(c, f?.pkg, fgFresh ?: recentImage(f?.pkg)) }
+        }
         offset = 0f
         switchScale = 1f
+        backdrop?.picture = null
         root?.setBackgroundColor(0xFF000000.toInt())   // what is revealed beside the cards
-        cur?.let { c -> c.snapshot = fgSnapshot; c.icon = fg?.let { icons[it.pkg] } }
-        prev?.let { p ->
-            prv = CardView(ctx).also { pc ->
-                pc.snapshot = prvSnapshot
-                pc.icon = icons[p.pkg]
-                root?.addView(pc, 0, FrameLayout.LayoutParams(sw.toInt(), sh.toInt()))
-            }
+        prv?.let { pc ->
+            val p = prev
+            setCardContent(pc, p?.pkg, prvSnapshot ?: p?.let { images[it.pkg] })
+            pc.visibility = if (p != null) View.VISIBLE else View.GONE
         }
         layoutSwitch(0f, 1f)
-        revealCards()
+        maybeShow()
         stats.start()
     }
 
@@ -728,21 +903,25 @@ object GestureNav {
 
     private fun releaseSwitch(up: Boolean, vx: Float) {
         val p = prev
+        val g = gen
         val commit = up && p != null && ((offset > sw * 0.3f && vx > -300f) || (vx > 600f && offset > dp(20)))
         if (commit && p != null) {
-            switchTo(p)
+            bringBack(p.pkg, p)
             val since = SystemClock.uptimeMillis()
             sOff = Spring(0.35f, 1f).apply { start(offset, vx, sw + gap()) }
             sScale = Spring(0.35f, 1f).apply { start(switchScale, 0f, 1f) }
+            anim = Anim.SWITCH_COMMIT
             endLabel = "quick switch"
             onSettled = {
-                if (lastFrontPkg == p.pkg && lastFrontAt >= since) removeCards() else awaitForeground(p.pkg) { removeCards() }
+                phase = Phase.HOLD
+                if (lastFrontPkg == p.pkg && lastFrontAt >= since) hideCards() else awaitForeground(p.pkg, g) { hideCards() }
             }
         } else {
             sOff = Spring(0.3f, 1f).apply { start(offset, vx, 0f) }
             sScale = Spring(0.3f, 1f).apply { start(switchScale, 0f, 1f) }
+            anim = Anim.SWITCH_CANCEL
             endLabel = "switch cancelled"
-            onSettled = { removeCards() }
+            onSettled = { hideCards() }
         }
         startSprings()
     }
@@ -752,9 +931,10 @@ object GestureNav {
         return sOff.settled(t) && sScale.settled(t, 0.001f)
     }
 
-    // ------------------------------------------------------------------ animation driver (nav thread)
+    // ================================================================== animation driver (nav thread)
 
     private fun startSprings() {
+        phase = Phase.ANIM
         animating = true
         springStartNs = System.nanoTime()
         choreographer.postFrameCallback(springFrame)
@@ -764,13 +944,14 @@ object GestureNav {
         override fun doFrame(frameTimeNanos: Long) {
             if (!animating) return
             val t = max(0L, frameTimeNanos - springStartNs) / 1e9
-            val done = if (mode == Mode.SWITCH) applySwitchSprings(t) else applyCardSprings(t)
+            val switching = anim == Anim.SWITCH_COMMIT || anim == Anim.SWITCH_CANCEL
+            val done = if (switching) applySwitchSprings(t) else applyCardSprings(t)
             if (done) {
                 animating = false
                 AppLog.log(
                     stats.report("[nav] $endLabel") +
-                        "\n  snapshot ${fgState} after ${fgSnapMs} ms (previous app: ${prevSnapMs} ms); " +
-                        "card visible ${cardVisibleAfter} ms after the drag began; animation ${"%.0f".format(t * 1000)} ms"
+                        "\n  fresh snapshot ${if (fgFreshDone) "${fgSnapMs} ms" else "-"}; card visible ${cardVisibleAfter} ms after the start; " +
+                        "animation ${"%.0f".format(t * 1000)} ms"
                 )
                 val then = onSettled
                 onSettled = null
@@ -781,42 +962,50 @@ object GestureNav {
         }
     }
 
-    private fun fadeOutCards(ms: Long) {
+    private fun fadeOutCards(ms: Long, g: Int) {
         val r = root ?: return
-        r.animate().alpha(0f).setDuration(ms).withEndAction { if (root === r) removeCards() }.start()
+        if (gen != g) return
+        r.animate().alpha(0f).setDuration(ms).withEndAction { if (gen == g) hideCards() }.start()
     }
 
-    // ------------------------------------------------------------------ task switching
+    // ================================================================== task switching
 
     private var waitingFor: Pair<String, Runnable>? = null
     private val waitTimeout = Runnable { val w = waitingFor; waitingFor = null; w?.second?.run() }
 
-    /** Runs [then] once a window of [pkg] is in front (accessibility event), or after 500 ms at the latest. */
-    private fun awaitForeground(pkg: String, then: () -> Unit) {
-        waitingFor = pkg to Runnable(then)
+    /** Runs [then] once a window of [pkg] is in front (accessibility event), or after 500 ms, unless the session moved on. */
+    private fun awaitForeground(pkg: String, g: Int, then: () -> Unit) {
+        waitingFor = pkg to Runnable { if (gen == g) then() }
         nav.removeCallbacks(waitTimeout)
         nav.postDelayed(waitTimeout, 500)
     }
 
-    private fun switchTo(t: Task) {
-        val s = ShizukuLink.service ?: return
-        io.execute {
-            val start = SystemClock.uptimeMillis()
-            val r = try { s.switchToTask(t.id) } catch (e: Throwable) { "ERROR: ${e.message}" }
-            AppLog.log("[nav] switch to ${t.pkg} (task ${t.id}): $r (${SystemClock.uptimeMillis() - start} ms)")
+    /** Brings [pkg] to the front: its task if known, else its launch intent. */
+    private fun bringBack(pkg: String?, task: Task?) {
+        val s = ShizukuLink.service
+        if (task != null && s != null) {
+            tasksIo.execute {
+                val start = SystemClock.uptimeMillis()
+                val r = try { s.switchToTask(task.id) } catch (e: Throwable) { "ERROR: ${e.message}" }
+                AppLog.log("[nav] switch to ${task.pkg} (task ${task.id}): $r (${SystemClock.uptimeMillis() - start} ms)")
+            }
+        } else if (pkg != null) {
+            app.packageManager.getLaunchIntentForPackage(pkg)?.let { i ->
+                try { app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Throwable) { }
+            }
         }
     }
 
     private fun returnToLastApp() {
         val s = ShizukuLink.service ?: return
-        io.execute {
+        tasksIo.execute {
             val target = fg ?: parseTasks(s.recentTasks(1)).firstOrNull()
             if (target == null) { AppLog.log("[nav] no recent app to return to"); return@execute }
             AppLog.log("[nav] home swipe -> last app ${target.pkg}: ${try { s.switchToTask(target.id) } catch (e: Throwable) { "ERROR: ${e.message}" }}")
         }
     }
 
-    // ------------------------------------------------------------------ probe: live mirror
+    // ================================================================== probe: live mirror
 
     /**
      * Probe for live cards: asks the shell service for a mirror of display 0 and shows it at half size in a window in the
@@ -826,7 +1015,7 @@ object GestureNav {
     fun probeMirror() {
         val s = ShizukuLink.service ?: run { AppLog.log("[mirror] not connected"); return }
         if (Build.VERSION.SDK_INT < 33) { AppLog.log("[mirror] needs Android 13+"); return }
-        io.execute {
+        tasksIo.execute {
             val b = try { s.mirrorDisplay(0) } catch (t: Throwable) { AppLog.log("[mirror] call failed: ${t.message}"); return@execute }
             b.classLoader = android.view.SurfaceControl::class.java.classLoader
             val sc = if (b.getBoolean("ok")) b.getParcelable("sc", android.view.SurfaceControl::class.java) else null
@@ -852,13 +1041,13 @@ object GestureNav {
             title = "LauncherMirrorProbe"
         }
         try { wm.addView(v, lp) } catch (t: Throwable) { AppLog.log("[mirror] window failed: ${t.message}"); return }
-        var attached: android.view.SurfaceControl.Transaction? = null
+        var attached = false
         v.post {
             try {
                 val t = v.rootSurfaceControl?.buildReparentTransaction(sc)
                 if (t == null) { AppLog.log("[mirror] no root surface to attach to"); return@post }
                 t.setLayer(sc, 1).setScale(sc, 0.5f, 0.5f).setPosition(sc, 0f, 0f).setVisibility(sc, true).apply()
-                attached = t
+                attached = true
                 AppLog.log("[mirror] attached. Look: is the middle of the screen a LIVE half-size copy (does video move)? " +
                     "Magenta = nothing shown. A tunnel of smaller copies = it mirrors itself.")
             } catch (e: Throwable) {
@@ -869,20 +1058,25 @@ object GestureNav {
             try { android.view.SurfaceControl.Transaction().reparent(sc, null).apply() } catch (_: Throwable) { }
             try { sc.release() } catch (_: Throwable) { }
             try { wm.removeView(v) } catch (_: Throwable) { }
-            io.execute { try { s.releaseMirror() } catch (_: Throwable) { } }
-            AppLog.log("[mirror] probe ended${if (attached == null) " (it was never attached)" else ""}")
+            tasksIo.execute { try { s.releaseMirror() } catch (_: Throwable) { } }
+            AppLog.log("[mirror] probe ended${if (!attached) " (it was never attached)" else ""}")
         }, 8000)
     }
 
-    /** Our recorded picture of the home screen, drawn behind a closing card, zoomed about the centre. */
-    private class PreviewView(ctx: Context, private val picture: Picture) : View(ctx) {
+    // ================================================================== views
+
+    /** Our recorded picture of the home screen, drawn behind cards, zoomed about the centre. */
+    private class PreviewView(ctx: Context) : View(ctx) {
+        var picture: Picture? = null
+            set(v) { if (field !== v) { field = v; invalidate() } }
         var zoom = 1f
             set(v) { if (field != v) { field = v; invalidate() } }
 
         override fun onDraw(canvas: Canvas) {
+            val p = picture ?: return
             canvas.save()
             canvas.scale(zoom, zoom, width / 2f, height / 2f)
-            canvas.drawPicture(picture)
+            canvas.drawPicture(p)
             canvas.restore()
         }
     }
@@ -898,7 +1092,8 @@ object GestureNav {
             override fun doFrame(frameTimeNanos: Long) {
                 if (lastNs != 0L) deltas += (frameTimeNanos - lastNs) / 1e6
                 lastNs = frameTimeNanos
-                if (running && (dragging || animating)) choreographer.postFrameCallback(this) else running = false
+                val active = phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH || animating || grabbedFull
+                if (running && active) choreographer.postFrameCallback(this) else running = false
             }
         }
 

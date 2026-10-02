@@ -174,3 +174,19 @@ Changes (next build):
   dispersion (0.45).
 - Live card content: probe added (DEV → "Probe: live mirror"): shell `IWindowManager.mirrorDisplay(0)` → SurfaceControl in a
   Bundle → reparented into a half-size overlay window for 8 s. Questions: allowed for the shell? live? recursive?
+
+Device results (2575259), Matheesha: launch animation fails when opening several apps quickly; the gesture pill vanishes during
+open/close animations and gestures are sometimes delayed. Requirement: gestures must work at all times, including in the middle
+of any animation; opening and closing the same app at 0.1 s intervals must stay smooth. "Fluidity is something I will NOT
+sacrifice." Dock "a bit better, can still be improved".
+Causes: the card window was added/removed per gesture (costs frames, and it covered the strip because it was added later);
+touches were ignored during animations and the "wait for home / app" holds; one worker thread served both the task lookup and
+slow snapshots.
+Rewrite (next build):
+- One persistent card window (INVISIBLE when idle) created before the strip, so the strip is always on top and touchable.
+- Every phase can be interrupted: a touch takes over the card where it is (velocity continuity through the springs); a switch
+  in flight is completed in place and its app's card is grabbed; tapping the icon of the app whose card is on screen reverses
+  the card from its current position and velocity; tapping another icon replaces the card. Generation counter invalidates
+  callbacks of interrupted phases.
+- Separate workers for task lookup and snapshots; recent images per app (<10 s) let a card appear immediately.
+- Dock: native elevation shadow under the glass.
