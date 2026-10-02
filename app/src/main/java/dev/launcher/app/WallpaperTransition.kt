@@ -97,7 +97,7 @@ half4 main(float2 coord) {
     float zone = exp(-x * x * 0.3) * life;                     // wider sparkle zone around it
 
     // Light ripple: the image is pushed outward a little as the front passes.
-    float2 off = dir * glow * cell * 1.3;
+    float2 off = dir * glow * cell * 0.9;
     half3 oldC = oldImg.eval(coord + off).rgb;
     // The new image settles in from a slight zoom behind the front (and is fully settled by the end).
     float settle = max(clamp(-x * 0.3, 0.0, 1.0), smoothstep(0.7, 1.0, progress));
@@ -105,8 +105,9 @@ half4 main(float2 coord) {
     half3 newC = newImg.eval(origin + (coord - origin) / z + off).rgb;
     half3 col = mix(oldC, newC, half(reveal));
 
-    // Soft bloom in the band, a touch brighter where the new image is just appearing.
-    col += half3(0.2 * glow) + col * half(0.22 * glow);
+    // Soft bloom in the band, in the wallpaper's own colours (a lift of what is there, no white).
+    half3 tint = clamp(col * 1.35 + col * col * 0.4, 0.0, 1.0);
+    col = mix(col, tint, half(0.55 * glow));
 
     // Sparkles: a fine grid where some cells carry a dot that twinkles while the front is near.
     float2 id = floor(coord / cell);
@@ -117,9 +118,10 @@ half4 main(float2 coord) {
     float dotR = cell * (0.09 + 0.11 * rnd) * (0.55 + 0.45 * tw);
     float dl = length(f);
     float dotA = smoothstep(dotR + 0.8, dotR - 0.8, dl) * zone * on * tw;
-    half3 dotCol = mix(half3(1.0), clamp(col * 1.5 + 0.15, 0.0, 1.0), 0.4);
-    col = mix(col, dotCol, half(dotA * 0.85));
-    col += dotCol * half(exp(-dl / (cell * 0.22)) * zone * on * tw * 0.22);
+    // Dots take the colour under them, brightened: sparkles of the wallpaper itself, not white glitter.
+    half3 dotCol = clamp(col * 1.6 + col * col * 0.5, 0.0, 1.0);
+    col = mix(col, dotCol, half(dotA * 0.55));
+    col += dotCol * half(exp(-dl / (cell * 0.22)) * zone * on * tw * 0.12);
 
     return half4(clamp(col, 0.0, 1.0), 1.0);
 }

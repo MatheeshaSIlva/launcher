@@ -1,6 +1,7 @@
 package dev.launcher.app;
 
 import android.graphics.Bitmap;
+import android.os.Bundle;
 
 // Runs in the Shizuku user-service process (uid 2000 via wireless debugging).
 // Transaction codes are explicit so the app and an older still-running service never disagree.
@@ -48,4 +49,7 @@ interface IShellService {
     String[] recentTasks(int max) = 13;
 
     // 14, 15: retired (mirrorDisplay probe; it crashed the system on the S24). Do not reuse these codes.
+
+    // Like switchToTask, with ActivityOptions (e.g. "no animation": our own card animates instead).
+    String switchToTaskWithOptions(int taskId, in Bundle options) = 16;
 }

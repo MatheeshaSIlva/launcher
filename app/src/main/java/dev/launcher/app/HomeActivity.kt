@@ -337,7 +337,8 @@ class HomeActivity : Activity(), HomeBridge.Home {
         val i = packageManager.getLaunchIntentForPackage(pkg) ?: return
         val rect = HomeBridge.iconRect(pkg)
         val start = {
-            try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (t: Throwable) { AppLog.log("[home] launch $pkg failed: ${t.message}") }
+            // No system transition: the launch card is the animation.
+            try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), GestureNav.noAnimation(this)) } catch (t: Throwable) { AppLog.log("[home] launch $pkg failed: ${t.message}") }
         }
         // A card grows out of the icon over a picture of home, and gesture nav starts the app once that covers the screen.
         if (rect == null || !GestureNav.launchApp(pkg, rect, iconView.drawable, start)) start()

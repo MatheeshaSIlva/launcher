@@ -727,7 +727,7 @@ object GestureNav {
         homeRequestedAt = SystemClock.uptimeMillis()
         homeVisible = false
         try {
-            app.startActivity(Intent(app, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            app.startActivity(Intent(app, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app))
         } catch (t: Throwable) {
             AppLog.log("[nav] going home from the app failed (${t.javaClass.simpleName}); using the shell")
             ShizukuLink.service?.let { s -> tasksIo.execute { s.runDetached("am start -a android.intent.action.MAIN -c android.intent.category.HOME") } }
@@ -871,6 +871,12 @@ object GestureNav {
             nav.post { if (gen == g && cardPkg == pkg) { c.snapshot = b; fg = task } }
         }
     }
+
+    /**
+     * "Start this without a system transition": our card is the animation. Per launch, so the system animation scales stay
+     * at the user's values and apps keep all their own transitions (with the scales at 0 every app felt choppy).
+     */
+    fun noAnimation(ctx: Context): android.os.Bundle = android.app.ActivityOptions.makeCustomAnimation(ctx, 0, 0).toBundle()
 
     /** Starts the app of the current launch, once. */
     private fun runPendingStart() {
@@ -1072,12 +1078,12 @@ object GestureNav {
         if (task != null && s != null) {
             tasksIo.execute {
                 val start = SystemClock.uptimeMillis()
-                val r = try { s.switchToTask(task.id) } catch (e: Throwable) { "ERROR: ${e.message}" }
+                val r = try { s.switchToTaskWithOptions(task.id, noAnimation(app)) } catch (e: Throwable) { "ERROR: ${e.message}" }
                 AppLog.log("[nav] switch to ${task.pkg} (task ${task.id}): $r (${SystemClock.uptimeMillis() - start} ms)")
             }
         } else if (pkg != null) {
             app.packageManager.getLaunchIntentForPackage(pkg)?.let { i ->
-                try { app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Throwable) { }
+                try { app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app)) } catch (_: Throwable) { }
             }
         }
     }

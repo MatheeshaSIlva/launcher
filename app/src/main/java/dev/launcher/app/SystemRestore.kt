@@ -57,37 +57,33 @@ object SystemRestore {
     }
 
     /**
-     * Blocking. Gesture nav on: system transition/window animations off (our cards animate instead; the watchdog gets the
-     * plan first), accessibility service on (its overlay windows cannot be hidden by other apps). Stock gestures are then
-     * blocked once the service connects ([GestureNav.attach] re-applies flags). Off: everything back.
+     * Blocking. Gesture nav on: accessibility service on (its overlay windows cannot be hidden by other apps); stock gestures
+     * are then blocked once the service connects ([GestureNav.attach] re-applies flags). Off: everything back.
+     * System animation scales are left alone: our launches ask for "no system transition" one by one
+     * ([GestureNav.noAnimation]), so apps keep their own transitions.
      */
     fun setGesturesWanted(ctx: Context, s: IShellService, on: Boolean): String {
         prefs(ctx).edit().putBoolean(KEY_GESTURES, on).apply()
+        restoreScalesIfChanged(ctx, s)
         if (on) {
-            setSystemAnimations(ctx, s, off = true)
             AppLog.log("[nav] accessibility service: ${NavAccessibilityService.enable(ctx)}")
         }
         val r = applyFlags(ctx, s)
         if (!on) {
             AppLog.log("[nav] accessibility service: ${NavAccessibilityService.disable(ctx)}")
-            setSystemAnimations(ctx, s, off = false)
         }
         return r
     }
 
-    /** Blocking. off=true saves the user's scales (and hands the watchdog its plan) before setting them to 0. */
-    private fun setSystemAnimations(ctx: Context, s: IShellService, off: Boolean) {
+    /** Blocking. Gives back the user's animation scales if we (an older build, or the break test) had changed them. */
+    fun restoreScalesIfChanged(ctx: Context, s: IShellService) {
         val p = prefs(ctx)
-        if (off) {
-            rememberOriginals(ctx)
-            Watchdog.sync(ctx, s)
-            putScales(ctx, s, 0f, 0f)
-        } else if (p.contains(KEY_TRANSITION)) {
+        if (p.contains(KEY_TRANSITION)) {
             putScales(ctx, s, p.getFloat(KEY_TRANSITION, 1f), p.getFloat(KEY_WINDOW, 1f))
             clearAnimationRecords(ctx)
             Watchdog.sync(ctx, s)
+            AppLog.log("[nav] system animations restored: ${currentScales(ctx)}")
         }
-        AppLog.log("[nav] system animations ${if (off) "off" else "restored"}: ${currentScales(ctx)}")
     }
 
     private fun putScales(ctx: Context, s: IShellService, t: Float, w: Float) {

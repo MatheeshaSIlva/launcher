@@ -164,6 +164,14 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
+    override fun switchToTaskWithOptions(taskId: Int, options: android.os.Bundle?): String = try {
+        val atm = systemService("activity_task", ATM_STUB)
+        val m = atm.javaClass.methods.first { it.name == "startActivityFromRecents" }
+        "result ${m.invoke(atm, taskId, options)}"
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
     private fun readInt(o: Any, name: String): Int? = try { o.javaClass.getField(name).get(o) as? Int } catch (_: Throwable) { null }
 
     private fun systemService(name: String, stubClass: String): Any {

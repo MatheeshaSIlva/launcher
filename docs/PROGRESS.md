@@ -214,3 +214,10 @@ a curl-noise swirl; colour swap at the peak; dots grow back into the new image),
   image stays; a soft glowing front expands from slightly above the centre with a wobbling edge, revealing the new image
   behind it; a light outward ripple at the front; a fine twinkling dot field (7 dp grid) in a wide zone around the front; the
   new image settles from a 3 % zoom; 2.8 s, gentle start.
+- Matheesha on 3293e4b: reveal "looks way better"; wants it in the wallpaper's colours and a little more subtle → bloom and
+  sparkles now lift the colour underneath instead of adding white; ripple, sparkle opacity and halos reduced.
+- Matheesha: apps feel choppier because system animations are disabled. Cause: gesture nav set transition/window animation
+  scales to 0 globally, removing every in-app transition. Change (to verify on the phone): scales stay at the user's values;
+  every start our cards cover passes `ActivityOptions.makeCustomAnimation(ctx, 0, 0)` (home on close, dock launches,
+  switches via new `switchToTaskWithOptions`, bring-back). Scales left at 0 by older builds are restored on connect.
+  If One UI ignores per-launch "no animation", fallback = zero the scales only during our own transitions.
