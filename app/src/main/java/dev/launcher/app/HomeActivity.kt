@@ -139,13 +139,17 @@ class HomeActivity : Activity() {
     private fun diagnoseRestarts() {
         val s = ShizukuLink.service ?: run { AppLog.log("[diag] not connected"); return }
         io.execute {
+            AppLog.log("[diag] collecting (up to 40 s)...")
             val settings = s.runShell(
                 "echo adb_wifi_enabled=$(settings get global adb_wifi_enabled) adb_enabled=$(settings get global adb_enabled) " +
-                    "adbd=$(pidof adbd) uptime=$(cut -d' ' -f1 /proc/uptime)"
+                    "adbd=$(pidof adbd) uptime=$(cut -d' ' -f1 /proc/uptime); getprop | grep -iE 'adb|usb'"
             ).trim()
-            val lines = s.runShell(
-                "logcat -d -v time -b main,system,events 2>/dev/null | " +
-                    "grep -iE 'adbd|adb_wifi|AdbDebugging|AdbService|AdbWifi|shizuku|screen_toggled|wireless.?debug' | tail -n 80"
+            // The newest 30000 lines cover the last few minutes; grep keeps what concerns adbd, USB, locking and Shizuku.
+            val lines = s.runShellTimeout(
+                "logcat -d -v time -t 30000 -b main,system,events 2>/dev/null | " +
+                    "grep -iE 'adbd|adb_wifi|AdbDebugging|AdbService|UsbDeviceManager|UsbPort|usb.?config|AutoBlocker|auto.?block|" +
+                    "shizuku|screen_toggled|tcp.?port|keyguard_show|wireless.?debug' | tail -n 120",
+                40000
             ).trim()
             AppLog.log("[diag] $settings\n$lines")
         }

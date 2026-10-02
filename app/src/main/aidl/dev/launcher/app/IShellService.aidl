@@ -23,4 +23,7 @@ interface IShellService {
     String watchdogArm(String restorePlan) = 5;
     oneway void heartbeat() = 6;
     String watchdogStatus() = 7;
+
+    // runShell with a caller-chosen timeout, for slow diagnostics such as logcat dumps.
+    String runShellTimeout(String command, int timeoutMs) = 8;
 }

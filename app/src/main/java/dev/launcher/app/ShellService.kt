@@ -24,6 +24,8 @@ class ShellService : IShellService.Stub() {
 
     override fun runShell(command: String): String = shell(command, 8000)
 
+    override fun runShellTimeout(command: String, timeoutMs: Int): String = shell(command, timeoutMs.toLong())
+
     override fun runDetached(command: String): String = try {
         val devNull = File("/dev/null")
         ProcessBuilder("sh", "-c", command)
