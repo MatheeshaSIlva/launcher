@@ -15,6 +15,12 @@
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Reading the wallpaper bitmap (for glass that refracts it) needs all-files access on Android 13+; granted via
+         Shizuku appops. Play policy: to be justified or replaced before a store build. -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
+
     <!-- A launcher must see every launchable app (icons, labels, launch intents). -->
     <queries>
         <intent>
@@ -37,7 +43,6 @@
             android:resumeWhilePausing="true"
             android:stateNotNeeded="true"
             android:taskAffinity=""
-            android:theme="@android:style/Theme.DeviceDefault.Wallpaper.NoTitleBar"
             android:windowSoftInputMode="adjustPan">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -1,13 +1,16 @@
 package dev.launcher.app
 
+import android.graphics.Picture
 import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * What gesture navigation (nav thread) needs from the home screen (main thread): where each app's icon is on screen,
- * hiding an icon while a card flies into it, and the home zoom that goes with closing an app.
+ * What gesture navigation (nav thread) needs from the home screen (main thread): where each app's icon is, hiding an
+ * icon while a card flies into or out of it, a recorded picture of the home screen to draw behind closing cards, and
+ * when home has actually drawn after coming back.
  */
 object HomeBridge {
     private val main = Handler(Looper.getMainLooper())
@@ -16,25 +19,24 @@ object HomeBridge {
     /** Implemented by HomeActivity while it exists. Called on the main thread. */
     interface Home {
         fun setIconHidden(pkg: String, hidden: Boolean)
-        /** The app is going home for good: settle the zoom. */
-        fun animateReturn()
-        /** The close was cancelled: back to normal without animation. */
-        fun cancelReturn()
     }
 
     @Volatile var home: Home? = null
 
     /**
-     * Set before home is brought up behind a closing app; HomeActivity then starts slightly zoomed in (as if the user is
-     * still "inside" the app) until [animateReturn] or [cancelReturn].
+     * The home screen as drawn at rest (wallpaper, clock, dock), recorded by HomeActivity while it is idle. Gesture nav
+     * draws it behind a closing card, so the app stays in front (and running) until the gesture commits.
      */
-    @Volatile var returnPending = false
+    @Volatile var preview: Picture? = null
+
+    /** uptimeMillis of the last frame home committed after a resume. */
+    @Volatile var homeDrawnAt = 0L
+        private set
+
+    fun onHomeDrawn() { homeDrawnAt = SystemClock.uptimeMillis() }
 
     fun setIconRect(pkg: String, r: RectF) { iconRects[pkg] = r }
-    fun clearIconRects() = iconRects.clear()
     fun iconRect(pkg: String): RectF? = iconRects[pkg]
 
     fun setIconHidden(pkg: String, hidden: Boolean) = main.post { home?.setIconHidden(pkg, hidden) }
-    fun animateReturn() = main.post { home?.animateReturn() }
-    fun cancelReturn() = main.post { home?.cancelReturn() }
 }

@@ -143,3 +143,21 @@ Rework (next build):
 - SWITCH: horizontal axis only; the previous app's card (cached snapshot) slides in beside the current one over black; the real
   switch is issued on release and the cards go when the app is in front.
 - New home screen: wallpaper, clock/date, dock (Settings, Chrome, TikTok, Samsung Calculator); dev panel moved to `DevActivity`.
+
+Device results (a3a98d1), Matheesha: closing at 120 fps but "still feels linear"; wants app opening animations; wants the app
+to stay live during the hold instead of being paused; a split second of unzoomed home before the zoom; corner radius jumped
+up when letting go early (spring back); the card stuck to the top of the screen; asked for a liquid-glass dock.
+Causes and changes (next build):
+- Radius jump: the "icon" radius was computed from the target width, which is the full screen when springing back. Fixed.
+- Stuck to the top / linear: scale was linear in travel with the card's bottom on the finger, so its top edge barely moved.
+  Now ease-out (`1 - 0.62·(1 - e^(-travel/0.28H))`) with the finger anchored in the card; softer springs (position 0.5 s/0.86).
+- Paused app + zoom flash: home was brought to the front at drag start (pausing the app; home's stale unzoomed frame showed).
+  Now HomeActivity records a `Picture` of itself at rest; the card window draws it behind the card (zoom 1.08). The real home
+  starts only on commit, under the picture; the picture's zoom springs to 1, and it is swapped for the real home only after
+  home reports a drawn frame. Cancel = spring back, no relaunch (the app never left).
+- Live card content is NOT done: needs a live mirror of the app (candidate: `IWindowManager.mirrorDisplay`, as the magnifier
+  uses; shell may hold READ_FRAME_BUFFER). To be probed separately.
+- Launch: card grows from the icon (icon colour, warm apps' cached snapshot) while the app starts; home zooms to 1.08.
+- Glass dock: home draws the wallpaper itself (needs MANAGE_EXTERNAL_STORAGE via appops to read it; fallback: system
+  wallpaper window, plain dock). AGSL shader: frosted body, convex-bevel refraction at the rim, per-channel dispersion,
+  rim highlight. Open (Play): all-files access only for the wallpaper.

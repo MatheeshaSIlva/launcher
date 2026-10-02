@@ -127,6 +127,10 @@ object ShizukuLink {
                 AppLog.log("[shizuku] overlay grant failed: ${t.javaClass.simpleName}: ${t.message}")
             }
         }
+        try {
+            // Wallpaper bitmap for the glass dock (all-files access); harmless to repeat.
+            s.runShell("appops set $pkg MANAGE_EXTERNAL_STORAGE allow")
+        } catch (_: Throwable) { }
         val missing = listOf(Manifest.permission.WRITE_SECURE_SETTINGS, Manifest.permission.POST_NOTIFICATIONS)
             .filter { app.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) return
