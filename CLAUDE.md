@@ -1,0 +1,120 @@
+# CLAUDE.md — Launcher (working name)
+
+Read this first. It is the briefing for everything built so far and everything planned. Deeper detail lives in
+`docs/REQUIREMENTS.md` (what we are building) and `docs/PROBE_FINDINGS.md` (what the feasibility probes proved, with numbers).
+
+## What this project is
+
+An Android launcher that merges the **home screen, recents and the notification / quick-settings shade** into one
+themeable interface, with a theme engine and theme builder ("Hyprland-level" control over looks and motion).
+It works **without root**, using **Shizuku** (a helper process with shell rights, uid 2000, started through wireless
+debugging). The app also works without Shizuku as a plain launcher; Shizuku unlocks the advanced features (and those are the paid tier).
+
+Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **Galaxy S24, Android 16, One UI**.
+
+## The two rules that outrank every feature
+
+1. **Perfectly smooth.** Open, close, swipe and panel pulls follow the finger and hold the display's refresh rate
+   (120 Hz). Matheesha's words: "not a single stutter". Measure it (frame logs), do not eyeball it.
+2. **Fully consistent.** One shade, one status bar, one gesture set, everywhere. No stock panel may appear next to ours.
+   Showing our status bar "on the home screen only" was explicitly rejected.
+
+## How we work with Matheesha
+
+- He tests on the phone and pastes logs or describes what he saw. Give him **short, exact steps** and ask for specific
+  results ("paste the log", "did it look like X or Y?"). Do not bury the ask.
+- He prefers direct, honest feedback; say plainly when something failed or when a result is inconclusive.
+- Do not claim something works until a device log or his words confirm it. Several earlier "it works" claims were withdrawn
+  (blur tests that silently drew nothing; a watchdog that never fired). Verify, then state.
+- Builds: GitHub Actions builds every push to `main`; the in-app **UPDATE** button installs the newest build silently
+  through Shizuku. The first line of the app log shows `BUILD <sha7>` — check it matches the commit before trusting a test.
+- Write results and decisions into `docs/` as we go; the spec is a living document.
+
+## Architecture (target)
+
+- **Launcher app** (our process): home canvas, drawer, recents, shade, status bar, theme engine, builder — all our own views/windows.
+- **Shizuku user service** (shell uid): calls hidden framework APIs by reflection (task snapshots, task switching, statusbar
+  disable flags, animation scales, app launch, silent install). Windows created *from* this process do not work, so
+  everything visible lives in the app process.
+- **Overlay windows** (`TYPE_APPLICATION_OVERLAY`, always `FLAG_HARDWARE_ACCELERATED`): gesture strip + full-display card window.
+- **Watchdog** (shell-side loop): restores animation scales and status bar if the app's heartbeat goes stale. Must exist
+  before any feature that hides stock UI.
+- **Glass/blur**: three layers — own snapshot blur (baseline, all phones) → standard cross-window blur where the system enables it
+  → Samsung dim-behind blur upgrade.
+
+## Proven mechanisms (reference implementations are in the probe repo)
+
+Probe repo: https://github.com/MatheeshaSIlva/requirementchecks (public). Clone it next to this project for reference; do not
+copy it wholesale — port the working pieces cleanly. File map:
+
+| Mechanism | Probe file | Notes |
+| --- | --- | --- |
+| Shizuku user service, hidden-API reflection | `ProbeService.kt`, `IProbeService.aidl` | explicit AIDL transaction codes; `runShell`, `runDetached`, `downloadFile` |
+| Gesture strip + card that follows the finger, grab mid-animation, sideways quick switch | `GestureStrip.kt` | card window = exact full-display size, gravity TOP\|START, cutout ALWAYS, `setFitInsetsTypes(0)` |
+| Launch animation (system anims off + own expanding card) | `V6Lab.kt` (`launchLab`, `runLaunch`) | animation scale 0 for transition + window only; animator scale untouched |
+| Close animation (snapshot card shrinks to icon while home starts) | `V7Lab.kt` (`closeLab`, `runClose`) | cached snapshots 1–3 ms |
+| Own status bar, stock bar hidden | `V6Lab.kt` (`statusBarLab`), `ProbeService.statusBarCmd` | `cmd statusbar send-disable-flag clock system-icons notification-icons` |
+| Watchdog with heartbeat | `V7Lab.kt` (`armWatchdog`) | app touches `/data/local/tmp/wd.hb` every second; loop restores after 4 s stale |
+| Blur: snapshot blur | `BlurLab.kt` | `RenderEffect` on our own content |
+| Blur: Samsung dim-behind | `SemBlurLab.kt` (`animated`, `strength(2)`) | see pitfalls |
+| In-app updater | `Updater.kt`, `ProbeService.downloadFile`, `.github/workflows/build.yml` | rolling GitHub release `latest` |
+| Boot / Shizuku-after-reboot logging | `BootReceiver.kt`, `V6Lab.kt` | thedjchi fork recommended |
+
+## Pitfalls we already paid for (do not repeat)
+
+- **Overlay windows without `FLAG_HARDWARE_ACCELERATED`** silently draw no blur/RenderEffect.
+- **`pkill -f X` / `pgrep -f X` match their own shell** (the pattern is in the command line) and kill it, skipping the rest of the
+  command. Use the bracket form: `pkill -f 'wd[.]sh'`.
+- **Name-based process checks (`pidof`, `ps | grep`) are unreliable** for watchdogs. Use a heartbeat file.
+- **Stale detached "restore" timers** (`sleep N; cmd statusbar send-disable-flag none`) later clear newer flags. Kill them before setting flags.
+- **The shell cannot read the app's own external folder**; download the update APK *inside the shell process* to `/data/local/tmp`.
+- **Never copy a hardware snapshot bitmap to a software bitmap inside the shell process** (crashed the service); return hardware bitmaps across Binder.
+- **Windows created from the Shizuku process fail** ("Unknown pid=… uid=2000").
+- **Freeform / split-screen launches from the shell** become stuck overlays after ~5 s. Out of scope (experimental only).
+- **Stock recents animation API does not exist on Android 16**; we draw our own.
+- **Standard cross-window blur is off on this Samsung** (`ro.surface_flinger.supports_background_blur` empty, not changeable without root).
+  Samsung's plain `View.semSetBlurRadius` gives fog. What works: window with `FLAG_DIM_BEHIND` + `semAddExtensionFlags(SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR)`;
+  strength follows `dimAmount`; whole-screen only (never a rectangle). Reflection on `sem*` worked without changing the hidden-API policy.
+- **Stock notification launch animation** (SystemUI) still plays even with animation scales at 0; solved by replacing the shade so taps go through us (re-test).
+- **Status bar race**: a restore-on-start can clear freshly set flags; set flags only after restore has finished.
+- **Everything that changes system state must auto-restore and be recoverable without Shizuku** (notification action + safe-settings screen). A reboot always clears these in-memory flags.
+- **Keystore**: debug builds are signed with a committed keystore so CI builds install over each other. Keep that pattern (new key file for this app).
+- **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
+
+## Build, release, update pipeline (to recreate in this repo)
+
+1. GitHub Actions on push to `main`: `./gradlew assembleDebug -PbuildSha=${GITHUB_SHA}`; `versionName` = first 7 chars of the sha.
+2. Publish a rolling prerelease tagged `latest` with the APK (`gh release delete latest --cleanup-tag -y; gh release create latest …`), release notes = full sha.
+3. App shows `BUILD <sha7>` in its first log line; **UPDATE** compares that to the release, downloads inside the shell process, runs
+   `pm install -r -d /data/local/tmp/update.apk`, then `am start`; if still alive after ~9 s it prints the installer's output.
+4. Publish build logs to an orphan `ci-logs` branch so a cloud session can read failures without log paste.
+5. The repo must be public for the updater (no auth on the phone).
+
+## Local build (Windows dev machine)
+
+- Package / applicationId: `dev.launcher.app` (placeholder, like the name). Source in `app/src/main/java/dev/launcher/app/`.
+- Gradle 8.9 + AGP 8.7.3 + Kotlin 2.0.21 (same as the probe, proven on CI). Gradle 8.9 cannot run on JDK 25 (Android Studio's JBR), so build with JDK 17:
+  `$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot"; .\gradlew.bat assembleDebug`
+- Keystore: `launcher-debug.keystore` (alias `launcher`, password `android`), committed on purpose. Local and CI builds install over each other.
+- `local.properties` (SDK path) is git-ignored; local builds are stamped `BUILD local`, so UPDATE always replaces them with the CI build.
+
+## Plan
+
+Build order (details and gates in `docs/REQUIREMENTS.md`): 1 Foundation → **2 Smooth core** → 3 Home and drawer → 4 Shade → 5 Themes and builder → 6 Glass and polish → 7 Release.
+Phase 2 decides whether the whole idea works.
+
+**First tasks, in order**
+1. Project skeleton: Gradle, CI + keystore + rolling release + updater, `BUILD` stamp, Shizuku link, `HOME` launcher intent filter.
+2. Safe-settings screen + notification "Restore system" action (no Shizuku needed).
+3. Watchdog with heartbeat from a **foreground service**; kill-test it (force-stop the app, expect restore in ≈4 s).
+4. Phase 2 slice: gesture strip, launch and close cards, recents carousel from cached snapshots, own status bar.
+5. Frame-log test screen: a scripted open/close/gesture run that prints dropped frames, so "no visible stutter" is a number.
+
+## Open items (not decided or not verified)
+
+- Play Store policy: downloaded/interpreted theme scripts; Play Billing for the paywall; review risk of self-granting permissions via Shizuku; whether the silent updater may ship in the store build.
+- Longer stress test of Samsung dim-blur (one run dropped to 60 Hz at the strongest level; first use had a 125 ms hitch → pre-warm a zero-dim blur window).
+- Heads-up notifications and in-app links still play stock animations; re-test once our shade exists.
+- Review the thedjchi Shizuku fork's code before recommending it in onboarding.
+- Accessibility requirements need writing. Theme gallery/sharing plan, app name: undecided (placeholder "Launcher").
+- Everything was probed on one S24; re-run the key probes on other devices after phase 2.

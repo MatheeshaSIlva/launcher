@@ -1,0 +1,6 @@
+# CI builds on Linux: gradlew must keep LF endings even when committed from Windows.
+gradlew text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.jar binary
+*.keystore binary
