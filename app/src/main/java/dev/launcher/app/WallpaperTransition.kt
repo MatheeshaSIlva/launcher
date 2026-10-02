@@ -6,15 +6,15 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RuntimeShader
 import android.graphics.Shader
+import kotlin.math.hypot
+import kotlin.math.max
 
 /**
- * Wallpaper change as a "disintegrate into a glowing, fluid dot matrix, re-form as the new image" transition, one AGSL
- * shader over both wallpapers:
- * - a ragged front rises from the bottom of the screen; each cell starts its own transition as the front passes;
- * - the old image breaks into a mosaic of cells, each cell shrinks into a bright dot with a soft glow on a dark field;
- * - while the dots are small the grid is carried by a divergence-free swirl (curl of a noise field), so they flow like a fluid;
- * - at the peak each dot takes the new image's colour, then the dots grow and merge back into the new image.
- * [progress] runs 0 -> 1; [time] (seconds) animates the swirl.
+ * Wallpaper change as a "generated image reveal" (in the spirit of Google Photos' Magic Editor), one AGSL pass over both
+ * wallpapers. The old wallpaper stays as it is; a soft glowing front expands from the middle with a gently wobbling edge
+ * and leaves the new wallpaper behind it. As the front passes, the image is pushed outward a little (a light ripple), a
+ * fine grid of dots twinkles in a wide zone around the front, and the new image settles in from a slight zoom.
+ * [progress] runs 0 -> 1; [time] (seconds) animates the twinkle and the wobble.
  */
 @TargetApi(33)
 class WallpaperTransition(from: Wallpaper, to: Wallpaper, width: Int, height: Int, cellPx: Float) {
@@ -24,10 +24,16 @@ class WallpaperTransition(from: Wallpaper, to: Wallpaper, width: Int, height: In
     private val h = height.toFloat()
 
     init {
+        // The front starts a little above the centre, roughly where the eye rests on a home screen.
+        val ox = w / 2f
+        val oy = h * 0.45f
+        val maxDist = max(max(hypot(ox, oy), hypot(w - ox, oy)), max(hypot(ox, h - oy), hypot(w - ox, h - oy)))
         shader.setInputShader("oldImg", imageShader(from, width, height))
         shader.setInputShader("newImg", imageShader(to, width, height))
         shader.setFloatUniform("size", w, h)
         shader.setFloatUniform("cell", cellPx)
+        shader.setFloatUniform("origin", ox, oy)
+        shader.setFloatUniform("maxDist", maxDist)
         paint.shader = shader
     }
 
@@ -51,6 +57,8 @@ uniform float2 size;
 uniform float progress;
 uniform float time;
 uniform float cell;
+uniform float2 origin;
+uniform float maxDist;
 
 float hash(float2 p) {
     p = fract(p * float2(123.34, 456.21));
@@ -69,50 +77,50 @@ float vnoise(float2 p) {
     return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
 }
 
-// Curl of a noise field: swirls without sources or sinks, so the dots flow like a fluid instead of scattering.
-float2 flow(float2 p, float t) {
-    float e = 0.07;
-    float2 o = float2(t, t * 0.7);
-    float n1 = vnoise(p + float2(0.0, e) + o);
-    float n2 = vnoise(p - float2(0.0, e) + o);
-    float n3 = vnoise(p + float2(e, 0.0) + o);
-    float n4 = vnoise(p - float2(e, 0.0) + o);
-    return float2(n1 - n2, n4 - n3) / (2.0 * e);
-}
-
 half4 main(float2 coord) {
-    float2 uv = coord / size;
-    // The front rises from the bottom with a ragged edge; each point gets its own 0..1 transition ("local").
-    float d = (1.0 - uv.y) * 0.85 + 0.2 * vnoise(uv * 5.0);
-    float spread = 0.75;
-    // d reaches 1.05, so progress is stretched until even the last point has fully finished at progress 1.
-    float local = clamp(progress * (1.0 + spread * 1.05) - d * spread, 0.0, 1.0);
-    float e = sin(3.14159265 * local);           // 0 at both ends, 1 at the peak (smallest, brightest dots)
+    float2 p = coord - origin;
+    float dist = length(p);
+    float2 dir = dist > 0.001 ? p / dist : float2(0.0, 0.0);
 
-    // Fluid: the grid itself is carried by the swirl while the dots are small.
-    float2 q = coord + flow(uv * 2.6, time * 0.55) * e * cell * 5.0;
-    float2 id = floor(q / cell);
-    float2 cc = (id + 0.5) * cell;
-    float2 f = q - cc;
+    // Front: an expanding circle whose edge wobbles slowly (around the circle and across the screen).
+    float ang = atan(p.y, p.x);
+    float wob = (vnoise(float2(ang * 2.5 + 10.0, time * 0.6)) - 0.5) * cell * 7.0
+              + (vnoise(coord / (cell * 10.0) + time * 0.25) - 0.5) * cell * 4.0;
+    float band = cell * 10.0;                                  // width of the glowing front
+    float R = progress * (maxDist + band * 2.0) - band;
+    float x = (dist + wob - R) / band;                         // < 0 behind the front (new), > 0 ahead (old)
+    float reveal = 1.0 - smoothstep(-0.55, 0.55, x);
+
+    // The light only exists while the reveal is under way: no glow before it starts or after it ends.
+    float life = smoothstep(0.0, 0.06, progress) * (1.0 - smoothstep(0.88, 1.0, progress));
+    float glow = exp(-x * x * 2.2) * life;                     // luminous band at the front
+    float zone = exp(-x * x * 0.3) * life;                     // wider sparkle zone around it
+
+    // Light ripple: the image is pushed outward a little as the front passes.
+    float2 off = dir * glow * cell * 1.3;
+    half3 oldC = oldImg.eval(coord + off).rgb;
+    // The new image settles in from a slight zoom behind the front (and is fully settled by the end).
+    float settle = max(clamp(-x * 0.3, 0.0, 1.0), smoothstep(0.7, 1.0, progress));
+    float z = mix(1.03, 1.0, settle);
+    half3 newC = newImg.eval(origin + (coord - origin) / z + off).rgb;
+    half3 col = mix(oldC, newC, half(reveal));
+
+    // Soft bloom in the band, a touch brighter where the new image is just appearing.
+    col += half3(0.2 * glow) + col * half(0.22 * glow);
+
+    // Sparkles: a fine grid where some cells carry a dot that twinkles while the front is near.
+    float2 id = floor(coord / cell);
+    float2 f = coord - (id + 0.5) * cell;
     float rnd = hash(id);
+    float on = step(0.5, hash(id + 7.13));
+    float tw = 0.5 + 0.5 * sin(time * (5.0 + 7.0 * rnd) + rnd * 6.2831);
+    float dotR = cell * (0.09 + 0.11 * rnd) * (0.55 + 0.45 * tw);
+    float dl = length(f);
+    float dotA = smoothstep(dotR + 0.8, dotR - 0.8, dl) * zone * on * tw;
+    half3 dotCol = mix(half3(1.0), clamp(col * 1.5 + 0.15, 0.0, 1.0), 0.4);
+    col = mix(col, dotCol, half(dotA * 0.85));
+    col += dotCol * half(exp(-dl / (cell * 0.22)) * zone * on * tw * 0.22);
 
-    // Each dot's colour: old image, switching to the new one around the peak.
-    half3 oldC = oldImg.eval(cc).rgb;
-    half3 newC = newImg.eval(cc).rgb;
-    half3 cellCol = mix(oldC, newC, half(smoothstep(0.42, 0.58, local)));
-    // Away from the peak the real image shows through: first as a mosaic, then as itself.
-    half3 imgCol = local < 0.5 ? oldImg.eval(coord).rgb : newImg.eval(coord).rgb;
-    half3 base = mix(imgCol, cellCol, half(smoothstep(0.0, 0.3, e)));
-
-    // Dot: covers the whole cell at rest (radius 0.75 > corner distance), a small glowing core at the peak.
-    float r = cell * mix(0.75, 0.14 + 0.1 * rnd, smoothstep(0.0, 0.85, e));
-    float dist = length(f);
-    float cover = smoothstep(r + 1.0, r - 1.0, dist);
-    float halo = exp(-dist / (cell * 0.3)) * e;
-    half3 glowCol = cellCol * (1.0 + 1.3 * e) + half3(0.12 * e);
-
-    half3 col = base * cover * (1.0 + 0.8 * e * cover)
-              + glowCol * halo * (0.5 + 0.5 * rnd) * (1.0 - 0.5 * cover);
     return half4(clamp(col, 0.0, 1.0), 1.0);
 }
 """

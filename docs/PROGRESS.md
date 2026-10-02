@@ -209,3 +209,8 @@ Fix: on every resume compare `WallpaperManager.getWallpaperId(FLAG_SYSTEM)` with
 OnColorsChangedListener (fires in the background too). Requested: a "disintegrate, glowy dot matrix, fluid" transition:
 `WallpaperTransition.kt`, one AGSL pass over both images (rising ragged front; mosaic → glowing dots on dark; grid carried by
 a curl-noise swirl; colour swap at the peak; dots grow back into the new image), 1.8 s ease-in-out; crossfade fallback.
+- Matheesha on d32ee43: "that animation sucked"; it must transition between old and new wallpaper, last long enough, and
+  look like Google Photos' reveal of an AI-edited image. Rebuilt (from memory of that effect, to be corrected by him): the old
+  image stays; a soft glowing front expands from slightly above the centre with a wobbling edge, revealing the new image
+  behind it; a light outward ripple at the front; a fine twinkling dot field (7 dp grid) in a wide zone around the front; the
+  new image settles from a 3 % zoom; 2.8 s, gentle start.

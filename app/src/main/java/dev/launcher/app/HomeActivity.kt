@@ -187,7 +187,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
         val old = wallpaper
         if (w != null && old != null && w.id == old.id && w.id != -1) return   // same wallpaper, nothing to do
         if (w != null && old != null && resumed && Build.VERSION.SDK_INT >= 33) {
-            // Changed while we can be seen: disintegrate into the dot matrix and re-form as the new one.
+            // Changed while we can be seen: reveal the new one behind a glowing, sparkling front.
             wallpaper = w
             wallpaperView.transitionTo(old, w) { finishWallpaper(w) }
             return
@@ -377,10 +377,10 @@ class HomeActivity : Activity(), HomeBridge.Home {
         private var time = 0f
         val transitioning get() = transition != null
 
-        /** Dot-matrix transition from [from] to [to] (≈1.8 s); falls back to a short crossfade if the shader fails. */
+        /** Reveal transition from [from] to [to] (≈2.8 s); falls back to a short crossfade if the shader fails. */
         fun transitionTo(from: Wallpaper, to: Wallpaper, onEnd: () -> Unit) {
             val t = try {
-                if (Build.VERSION.SDK_INT >= 33) WallpaperTransition(from, to, width, height, 11f * resources.displayMetrics.density) else null
+                if (Build.VERSION.SDK_INT >= 33) WallpaperTransition(from, to, width, height, 7f * resources.displayMetrics.density) else null
             } catch (e: Throwable) {
                 AppLog.log("[wallpaper] transition shader failed (${e.javaClass.simpleName}: ${e.message}); crossfading")
                 null
@@ -393,8 +393,8 @@ class HomeActivity : Activity(), HomeBridge.Home {
             }
             transition = t
             android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = 1800
-                interpolator = PathInterpolator(0.45f, 0f, 0.55f, 1f)
+                duration = 2800
+                interpolator = PathInterpolator(0.45f, 0f, 0.3f, 1f)   // starts gently, eases out
                 addUpdateListener {
                     progress = it.animatedValue as Float
                     time = it.currentPlayTime / 1000f
@@ -409,7 +409,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
                 })
                 start()
             }
-            AppLog.log("[wallpaper] new wallpaper: dot-matrix transition")
+            AppLog.log("[wallpaper] new wallpaper: reveal transition")
         }
 
         override fun onDraw(canvas: Canvas) {
