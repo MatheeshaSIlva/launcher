@@ -75,6 +75,23 @@ object SystemRestore {
         return r
     }
 
+    /**
+     * Blocking. Gesture nav never needs the system animation scales at 0 any more (launches ask for no transition one by
+     * one). If they are at 0 with no record of ours, the likeliest cause is an older build that lost its record: set them
+     * back to 1 so apps have their transitions again. Logged either way, so a test can see the real values.
+     */
+    fun ensureScalesOn(ctx: Context, s: IShellService) {
+        val cr = ctx.contentResolver
+        val t = Settings.Global.getFloat(cr, Settings.Global.TRANSITION_ANIMATION_SCALE, 1f)
+        val w = Settings.Global.getFloat(cr, Settings.Global.WINDOW_ANIMATION_SCALE, 1f)
+        val a = Settings.Global.getFloat(cr, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)
+        AppLog.log("[nav] system animation scales: transition $t, window $w, animator $a")
+        if (!prefs(ctx).contains(KEY_TRANSITION) && (t == 0f || w == 0f)) {
+            putScales(ctx, s, if (t == 0f) 1f else t, if (w == 0f) 1f else w)
+            AppLog.log("[nav] they were off (left over from an older build): set back to ${currentScales(ctx)}")
+        }
+    }
+
     /** Blocking. Gives back the user's animation scales if we (an older build, or the break test) had changed them. */
     fun restoreScalesIfChanged(ctx: Context, s: IShellService) {
         val p = prefs(ctx)

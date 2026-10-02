@@ -41,6 +41,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
     private lateinit var dock: LinearLayout
     private lateinit var dockShadow: DockShadow
     private var glass: GlassDrawable? = null
+    private var glassFor: Wallpaper? = null      // the wallpaper the glass currently refracts
     private var wallpaper: Wallpaper? = null
     private var wallpaperLoading = false
     private var wallpaperDirty = false
@@ -189,7 +190,13 @@ class HomeActivity : Activity(), HomeBridge.Home {
         if (w != null && old != null && resumed && Build.VERSION.SDK_INT >= 33) {
             // Changed while we can be seen: reveal the new one behind a glowing, sparkling front.
             wallpaper = w
-            wallpaperView.transitionTo(old, w) { finishWallpaper(w) }
+            // The glass refracts the same change on the same frames, so the dock never lags behind the wallpaper.
+            glass?.beginTransition(old, w)
+            wallpaperView.transitionTo(old, w, onFrame = { p, t -> glass?.setReveal(p, t) }) {
+                glass?.endTransition(w)
+                glassFor = if (glass != null) w else null
+                finishWallpaper(w)
+            }
             return
         }
         wallpaper = w
@@ -209,10 +216,11 @@ class HomeActivity : Activity(), HomeBridge.Home {
         window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
         window.setBackgroundDrawable(ColorDrawable(Color.BLACK))
         wallpaperView.wallpaper = w
-        if (Build.VERSION.SDK_INT >= 33) {
+        if (Build.VERSION.SDK_INT >= 33 && glassFor !== w) {
             val dm = resources.displayMetrics
             try {
-                glass = GlassDrawable(w, content.width.takeIf { it > 0 } ?: dm.widthPixels, content.height.takeIf { it > 0 } ?: dm.heightPixels, DOCK_RADIUS * dp, dp)
+                glass = GlassDrawable(w, content.width.takeIf { it > 0 } ?: dm.widthPixels, content.height.takeIf { it > 0 } ?: dm.heightPixels, DOCK_RADIUS * dp, dp, REVEAL_CELL_DP * dp)
+                glassFor = w
                 dock.background = glass
                 placeGlass()
                 AppLog.log("[home] glass dock on")
@@ -379,9 +387,9 @@ class HomeActivity : Activity(), HomeBridge.Home {
         val transitioning get() = transition != null
 
         /** Reveal transition from [from] to [to] (≈2.8 s); falls back to a short crossfade if the shader fails. */
-        fun transitionTo(from: Wallpaper, to: Wallpaper, onEnd: () -> Unit) {
+        fun transitionTo(from: Wallpaper, to: Wallpaper, onFrame: (Float, Float) -> Unit = { _, _ -> }, onEnd: () -> Unit) {
             val t = try {
-                if (Build.VERSION.SDK_INT >= 33) WallpaperTransition(from, to, width, height, 7f * resources.displayMetrics.density) else null
+                if (Build.VERSION.SDK_INT >= 33) WallpaperTransition(from, to, width, height, REVEAL_CELL_DP * resources.displayMetrics.density) else null
             } catch (e: Throwable) {
                 AppLog.log("[wallpaper] transition shader failed (${e.javaClass.simpleName}: ${e.message}); crossfading")
                 null
@@ -400,6 +408,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
                     progress = it.animatedValue as Float
                     time = it.currentPlayTime / 1000f
                     invalidate()
+                    onFrame(progress, time)
                 }
                 addListener(object : android.animation.AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: android.animation.Animator) {
@@ -422,6 +431,7 @@ class HomeActivity : Activity(), HomeBridge.Home {
 
     private companion object {
         const val DOCK_RADIUS = 34f
+        const val REVEAL_CELL_DP = 7f   // sparkle grid and front wobble scale, shared by wallpaper and glass
         val DOCK = listOf(
             "com.android.settings",
             "com.android.chrome",

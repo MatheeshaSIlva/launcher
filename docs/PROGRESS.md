@@ -221,3 +221,18 @@ a curl-noise swirl; colour swap at the peak; dots grow back into the new image),
   every start our cards cover passes `ActivityOptions.makeCustomAnimation(ctx, 0, 0)` (home on close, dock launches,
   switches via new `switchToTaskWithOptions`, bring-back). Scales left at 0 by older builds are restored on connect.
   If One UI ignores per-launch "no animation", fallback = zero the scales only during our own transitions.
+
+Device results (d0a0f9a), Matheesha: in-app transitions (Samsung Settings) still absent; dock highlight "ugly and too light",
+blur missing; the wallpaper reveal is "amazing" but the dock background changed late, breaking it; sideways swiping must cycle
+recent apps only, never home. Log: no "system animations restored" line (no record of changed scales), so their real values
+were unknown; home commit dropped 2–4 frames at release (startActivity on the nav thread); `dev.launcher.app` tasks (our home
+started explicitly, plus DEV) appeared in the switch list.
+Changes (next build):
+- Logs all three animation scales on connect; if gesture nav is on and transition/window scale is 0 with no record of ours,
+  sets them to 1 (left over from older builds).
+- Glass: highlight, shade and edge line removed; frost 0.92 in the body (rim stays clear and refracting); 3 % lift only.
+- Shared reveal front (`Reveal.kt`) used by both the wallpaper and the glass shader: the dock now changes on exactly the same
+  frame and place as the wallpaper behind it; at the end the glass keeps the new wallpaper (no rebuild).
+- HomeActivity `excludeFromRecents`; our own tasks are left out of switching and "last app" (but still the card when DEV is
+  in front).
+- startHome / bring-back startActivity moved off the nav thread.

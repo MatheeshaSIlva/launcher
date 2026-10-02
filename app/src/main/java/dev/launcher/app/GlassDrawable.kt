@@ -1,5 +1,6 @@
 package dev.launcher.app
 
+import android.annotation.TargetApi
 import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.ColorFilter
@@ -7,49 +8,84 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.RuntimeShader
 import android.graphics.Shader
-import android.annotation.TargetApi
 import android.graphics.drawable.Drawable
 
 /**
  * "Liquid glass" for a rounded rectangle, as an AGSL shader over our own copy of the wallpaper:
- * - frosted body: the blurred wallpaper, slightly brightened and more saturated;
+ * - frosted body: the blurred wallpaper, a little more saturated;
  * - lens rim: towards the edge the surface acts like a thick convex bevel and bends rays outward, so wallpaper from just
- *   outside the shape appears compressed along the inside of the edge (refraction);
- * - dispersion: red, green and blue refract by different amounts, giving coloured fringes along the rim;
- * - light: a specular highlight on the rim facing the light (top-left) and a faint inner shadow opposite.
+ *   outside the shape appears compressed along the inside of the edge (refraction), kept sharp;
+ * - dispersion: red, green and blue refract by different amounts, giving coloured fringes along the rim.
+ * During a wallpaper change it samples the old and the new wallpaper through the same [Reveal] front as the wallpaper,
+ * so the glass changes on exactly the same frame as what is behind it.
  * Draw it with bounds = the glass shape; [originX]/[originY] = where those bounds sit in the wallpaper's (screen) space.
  */
 @TargetApi(33)
-class GlassDrawable(wallpaper: Wallpaper, screenW: Int, screenH: Int, private val radius: Float, density: Float) : Drawable() {
+class GlassDrawable(
+    wallpaper: Wallpaper,
+    private val screenW: Int,
+    private val screenH: Int,
+    radius: Float,
+    density: Float,
+    cellPx: Float,
+) : Drawable() {
     private val shader = RuntimeShader(AGSL)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     var originX = 0f
     var originY = 0f
 
     init {
-        val sharp = BitmapShader(wallpaper.bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-            setLocalMatrix(wallpaper.matrix(screenW, screenH))
-            filterMode = BitmapShader.FILTER_MODE_LINEAR
-        }
-        val blurred = BitmapShader(wallpaper.blurred, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-            setLocalMatrix(wallpaper.blurredMatrix(screenW, screenH))
-            filterMode = BitmapShader.FILTER_MODE_LINEAR
-        }
-        shader.setInputShader("sharp", sharp)
-        shader.setInputShader("frosted", blurred)
+        setImages("Old", wallpaper)
+        setImages("New", wallpaper)
         shader.setFloatUniform("radius", radius)
         shader.setFloatUniform("bevel", 30f * density)       // width of the refracting rim
         shader.setFloatUniform("refraction", 34f * density)  // how far the rim bends the view outward
         shader.setFloatUniform("dispersion", 0.45f)          // spread between red and blue refraction
-        shader.setFloatUniform("frost", 0.22f)               // 0 = clear glass, 1 = fully frosted body
-        shader.setFloatUniform("magnify", 0.06f)             // the body is a weak lens: content slightly enlarged
+        shader.setFloatUniform("frost", 0.92f)               // 0 = clear glass, 1 = fully frosted body
+        shader.setFloatUniform("magnify", 0.05f)             // the body is a weak lens: content slightly enlarged
+        val o = Reveal.origin(screenW.toFloat(), screenH.toFloat())
+        shader.setFloatUniform("origin", o[0], o[1])
+        shader.setFloatUniform("maxDist", Reveal.maxDist(screenW.toFloat(), screenH.toFloat()))
+        shader.setFloatUniform("cell", cellPx)
+        setReveal(1f, 0f)   // at rest: fully the "new" (= current) wallpaper
         paint.shader = shader
+    }
+
+    private fun setImages(which: String, wp: Wallpaper) {
+        shader.setInputShader("sharp$which", BitmapShader(wp.bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+            setLocalMatrix(wp.matrix(screenW, screenH))
+            filterMode = BitmapShader.FILTER_MODE_LINEAR
+        })
+        shader.setInputShader("frost$which", BitmapShader(wp.blurred, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+            setLocalMatrix(wp.blurredMatrix(screenW, screenH))
+            filterMode = BitmapShader.FILTER_MODE_LINEAR
+        })
+    }
+
+    /** A wallpaper change starts: [from] is what the glass showed, [to] what it will show. */
+    fun beginTransition(from: Wallpaper, to: Wallpaper) {
+        setImages("Old", from)
+        setImages("New", to)
+        setReveal(0f, 0f)
+    }
+
+    /** Same progress and time as the wallpaper's reveal, every frame. */
+    fun setReveal(progress: Float, time: Float) {
+        shader.setFloatUniform("progress", progress)
+        shader.setFloatUniform("time", time)
+        invalidateSelf()
+    }
+
+    /** The change is over: only the new wallpaper from now on. */
+    fun endTransition(to: Wallpaper) {
+        setImages("Old", to)
+        setReveal(1f, 0f)
     }
 
     override fun draw(canvas: Canvas) {
         val b = bounds
         shader.setFloatUniform("size", b.width().toFloat(), b.height().toFloat())
-        shader.setFloatUniform("origin", originX, originY)
+        shader.setFloatUniform("dockOrigin", originX, originY)
         canvas.save()
         canvas.translate(b.left.toFloat(), b.top.toFloat())
         canvas.drawRect(0f, 0f, b.width().toFloat(), b.height().toFloat(), paint)
@@ -62,18 +98,25 @@ class GlassDrawable(wallpaper: Wallpaper, screenW: Int, screenH: Int, private va
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 
     private companion object {
-        const val AGSL = """
-uniform shader sharp;
-uniform shader frosted;
+        val AGSL = """
+uniform shader sharpOld;
+uniform shader frostOld;
+uniform shader sharpNew;
+uniform shader frostNew;
 uniform float2 size;
-uniform float2 origin;
+uniform float2 dockOrigin;
 uniform float radius;
 uniform float bevel;
 uniform float refraction;
 uniform float dispersion;
 uniform float frost;
 uniform float magnify;
-
+uniform float2 origin;
+uniform float maxDist;
+uniform float cell;
+uniform float progress;
+uniform float time;
+""" + Reveal.NOISE + Reveal.FRONT + """
 // Signed distance to a rounded rectangle centred at 0 with half-size b (negative inside).
 float sdRoundRect(float2 p, float2 b, float r) {
     float2 q = abs(p) - b + r;
@@ -83,6 +126,32 @@ float sdRoundRect(float2 p, float2 b, float r) {
 half3 saturate3(half3 c, half s) {
     half l = dot(c, half3(0.2126, 0.7152, 0.0722));
     return clamp(mix(half3(l), c, s), 0.0, 1.0);
+}
+
+// A wallpaper seen through the glass at screen point sp with refraction offset off: dispersed clear and frosted samples.
+// (Two copies because child shaders cannot be passed as function arguments.)
+half3 lookOld(float2 sp, float2 off, float frostAmt) {
+    half3 clearCol = half3(
+        sharpOld.eval(sp + off * (1.0 - dispersion)).r,
+        sharpOld.eval(sp + off).g,
+        sharpOld.eval(sp + off * (1.0 + dispersion)).b);
+    half3 frostCol = half3(
+        frostOld.eval(sp + off * (1.0 - dispersion)).r,
+        frostOld.eval(sp + off).g,
+        frostOld.eval(sp + off * (1.0 + dispersion)).b);
+    return mix(clearCol, frostCol, half(frostAmt));
+}
+
+half3 lookNew(float2 sp, float2 off, float frostAmt) {
+    half3 clearCol = half3(
+        sharpNew.eval(sp + off * (1.0 - dispersion)).r,
+        sharpNew.eval(sp + off).g,
+        sharpNew.eval(sp + off * (1.0 + dispersion)).b);
+    half3 frostCol = half3(
+        frostNew.eval(sp + off * (1.0 - dispersion)).r,
+        frostNew.eval(sp + off).g,
+        frostNew.eval(sp + off * (1.0 + dispersion)).b);
+    return mix(clearCol, frostCol, half(frostAmt));
 }
 
 half4 main(float2 coord) {
@@ -102,35 +171,23 @@ half4 main(float2 coord) {
     float t = clamp(-d / bevel, 0.0, 1.0);
     float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
 
-    float2 sp = origin + coord;
+    float2 sp = dockOrigin + coord;
     // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
     float2 off = n * bend * refraction - p * magnify;
+    // Frosted body, clear rim (so the bending stays crisp).
+    float frostAmt = frost * smoothstep(0.0, 1.0, t);
 
-    // Dispersion: red bends least, blue most.
-    half3 clearCol = half3(
-        sharp.eval(sp + off * (1.0 - dispersion)).r,
-        sharp.eval(sp + off).g,
-        sharp.eval(sp + off * (1.0 + dispersion)).b);
-    half3 frostCol = half3(
-        frosted.eval(sp + off * (1.0 - dispersion)).r,
-        frosted.eval(sp + off).g,
-        frosted.eval(sp + off * (1.0 + dispersion)).b);
-    // Mostly clear glass; a light frost in the body, none on the rim so the bending stays crisp.
-    half3 col = mix(clearCol, frostCol, half(frost * t));
+    // Old and new wallpaper meet at the reveal front, exactly where the wallpaper behind changes.
+    float rv = revealMix(sp + off);
+    half3 col = rv >= 0.999 ? lookNew(sp, off, frostAmt)
+              : rv <= 0.001 ? lookOld(sp, off, frostAmt)
+              : mix(lookOld(sp, off, frostAmt), lookNew(sp, off, frostAmt), half(rv));
 
-    col = saturate3(col, 1.25);
-    col = mix(col, half3(1.0), 0.10);
-
-    // Light from the top-left: highlight on the rim facing it, faint shade on the opposite rim.
-    float facing = dot(n, normalize(float2(-0.55, -0.83)));
-    float rim = pow(1.0 - t, 3.0);
-    col += half3(rim * (0.45 * clamp(facing, 0.0, 1.0) + 0.06));
-    col -= half3(rim * 0.12 * clamp(-facing, 0.0, 1.0));
-    // Thin bright edge line.
-    col += half3(0.22 * clamp(1.0 - abs(d + 0.75) / 1.25, 0.0, 1.0));
+    col = saturate3(col, 1.15);
+    col = mix(col, half3(1.0), 0.03);
 
     float a = clamp(0.5 - d, 0.0, 1.0);
-    return half4(clamp(col, 0.0, 1.0) * a, a);
+    return half4(col * a, a);
 }
 """
     }

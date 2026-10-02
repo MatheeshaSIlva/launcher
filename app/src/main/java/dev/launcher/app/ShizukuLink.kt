@@ -56,7 +56,10 @@ object ShizukuLink {
                     }
                     // A fresh service holds no flags: put back what we want (stock bar/gestures show until this runs).
                     // Older builds zeroed the system animation scales while gesture nav was on; give them back.
-                    if (SystemRestore.gesturesWanted(app)) SystemRestore.restoreScalesIfChanged(app, s)
+                    if (SystemRestore.gesturesWanted(app)) {
+                        SystemRestore.restoreScalesIfChanged(app, s)
+                        SystemRestore.ensureScalesOn(app, s)
+                    }
                     SystemRestore.applyFlags(app, s)
                 }
             }

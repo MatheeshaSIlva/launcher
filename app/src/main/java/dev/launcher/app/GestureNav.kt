@@ -541,7 +541,7 @@ object GestureNav {
             nav.post {
                 if (id != gestureId) return@post
                 if (fresh || fg == null) fg = tasks.getOrNull(0)
-                prev = tasks.firstOrNull { it.pkg != fg?.pkg && it.id != fg?.id }
+                prev = tasks.switchable().firstOrNull { it.pkg != fg?.pkg && it.id != fg?.id }
                 recentList = tasks
                 onTasks(fresh)
             }
@@ -566,6 +566,9 @@ object GestureNav {
         val parts = line.split(' ')
         parts.getOrNull(0)?.toIntOrNull()?.let { Task(it, parts.getOrElse(1) { "?" }) }
     }
+
+    /** Our own tasks (home, the dev panel) are not apps to switch between or go back to. */
+    private fun List<Task>.switchable() = filter { it.pkg != app.packageName }
 
     private fun iconFor(pkg: String): Drawable? = icons[pkg] ?: try {
         app.packageManager.getApplicationIcon(pkg).also { icons[pkg] = it }
@@ -726,11 +729,14 @@ object GestureNav {
         homeStarted = true
         homeRequestedAt = SystemClock.uptimeMillis()
         homeVisible = false
-        try {
-            app.startActivity(Intent(app, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app))
-        } catch (t: Throwable) {
-            AppLog.log("[nav] going home from the app failed (${t.javaClass.simpleName}); using the shell")
-            ShizukuLink.service?.let { s -> tasksIo.execute { s.runDetached("am start -a android.intent.action.MAIN -c android.intent.category.HOME") } }
+        // startActivity is a binder round trip of tens of ms: never on the nav thread, which is drawing the card right now.
+        tasksIo.execute {
+            try {
+                app.startActivity(Intent(app, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app))
+            } catch (t: Throwable) {
+                AppLog.log("[nav] going home from the app failed (${t.javaClass.simpleName}); using the shell")
+                ShizukuLink.service?.runDetached("am start -a android.intent.action.MAIN -c android.intent.category.HOME")
+            }
         }
     }
 
@@ -934,7 +940,7 @@ object GestureNav {
         val now = SystemClock.uptimeMillis()
         val runGoesOn = now - switchAt < SWITCH_RUN_MS && switchList.getOrNull(switchIndex)?.pkg == cardPkg
         if (!runGoesOn) {
-            val list = recentList.toMutableList()
+            val list = recentList.switchable().toMutableList()
             val f = fg
             if (f != null && list.firstOrNull()?.pkg != f.pkg) { list.removeAll { it.pkg == f.pkg }; list.add(0, f) }
             switchList = list
@@ -1082,8 +1088,10 @@ object GestureNav {
                 AppLog.log("[nav] switch to ${task.pkg} (task ${task.id}): $r (${SystemClock.uptimeMillis() - start} ms)")
             }
         } else if (pkg != null) {
-            app.packageManager.getLaunchIntentForPackage(pkg)?.let { i ->
-                try { app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app)) } catch (_: Throwable) { }
+            tasksIo.execute {
+                app.packageManager.getLaunchIntentForPackage(pkg)?.let { i ->
+                    try { app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app)) } catch (_: Throwable) { }
+                }
             }
         }
     }
@@ -1091,7 +1099,7 @@ object GestureNav {
     private fun returnToLastApp() {
         val s = ShizukuLink.service ?: return
         tasksIo.execute {
-            val target = fg ?: parseTasks(s.recentTasks(1)).firstOrNull()
+            val target = fg?.takeIf { it.pkg != app.packageName } ?: parseTasks(s.recentTasks(4)).switchable().firstOrNull()
             if (target == null) { AppLog.log("[nav] no recent app to return to"); return@execute }
             AppLog.log("[nav] home swipe -> last app ${target.pkg}: ${try { s.switchToTask(target.id) } catch (e: Throwable) { "ERROR: ${e.message}" }}")
         }

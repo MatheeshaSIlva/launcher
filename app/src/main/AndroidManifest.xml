@@ -38,6 +38,7 @@
         <activity
             android:name=".HomeActivity"
             android:clearTaskOnLaunch="true"
+            android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTask"
             android:resumeWhilePausing="true"
