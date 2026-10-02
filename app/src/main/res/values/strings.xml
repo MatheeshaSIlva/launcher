@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="a11y_label">Launcher gestures</string>
+    <string name="a11y_description">Draws the launcher\'s navigation gesture bar above every app, including screens that hide normal overlays. It does not read screen content.</string>
+</resources>

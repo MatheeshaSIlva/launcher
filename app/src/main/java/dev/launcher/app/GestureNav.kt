@@ -3,7 +3,11 @@ package dev.launcher.app
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Outline
 import android.graphics.PixelFormat
@@ -32,13 +36,22 @@ import kotlin.math.min
  * gesture area takes the finger; a full-display, non-touchable card window draws the app as a card that follows it.
  * Flick up = home, sideways = previous app, otherwise the card springs back. Any animation can be grabbed mid-flight.
  *
+ * Windows are TYPE_ACCESSIBILITY_OVERLAY (through [NavAccessibilityService]), which Settings and setHideOverlayWindows
+ * cannot hide. Stock gestures are only blocked while that service is connected ([ready]).
  * Shown only while the stock home/recents gestures are blocked by flags held by our live service
  * ([SystemRestore.gestureFlagsActive]); if the service dies, the system restores stock gestures and the strip goes away.
  * Main thread only, except [update].
  */
 object GestureNav {
     private lateinit var app: LauncherApp
-    private val wm by lazy { app.getSystemService(WindowManager::class.java) }
+    /** The accessibility service's WindowManager: only it can add TYPE_ACCESSIBILITY_OVERLAY windows. */
+    private var a11y: NavAccessibilityService? = null
+    private var wm: WindowManager? = null
+
+    /** Our windows can be shown (accessibility service connected). Gesture flags are only set while this is true. */
+    @Volatile var ready = false
+        private set
+    private var locked = false
     private val ui = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val interp = PathInterpolator(0.2f, 0f, 0f, 1f)   // emphasized decelerate
@@ -83,9 +96,54 @@ object GestureNav {
     /** Shows or removes the strip to match the current state. Safe from any thread. */
     fun update() {
         if (Looper.myLooper() != Looper.getMainLooper()) { ui.post { update() }; return }
-        val want = SystemRestore.gestureFlagsActive && ShizukuLink.service != null && Settings.canDrawOverlays(app)
+        val want = ready && SystemRestore.gestureFlagsActive && ShizukuLink.service != null && !locked
         if (want && strip == null) addStrip()
         if (!want && strip != null) removeAll()
+    }
+
+    /** NavAccessibilityService connected: windows can be added. Re-applies flags, which then shows the strip. */
+    fun attach(service: NavAccessibilityService) {
+        if (a11y === service) return
+        if (strip != null) removeAll()
+        a11y = service
+        wm = service.getSystemService(WindowManager::class.java)
+        ready = true
+        locked = app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+        val f = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        app.registerReceiver(screenReceiver, f)
+        reapplyFlags()
+    }
+
+    /** Service gone: our windows are invalid and stock gestures must come back at once. */
+    fun detach(service: NavAccessibilityService) {
+        if (a11y !== service) return
+        ready = false
+        removeAll()
+        try { app.unregisterReceiver(screenReceiver) } catch (_: Throwable) { }
+        a11y = null
+        wm = null
+        reapplyFlags()
+    }
+
+    private fun reapplyFlags() {
+        val s = ShizukuLink.service ?: return
+        io.execute { SystemRestore.applyFlags(app, s) }
+    }
+
+    // The lock screen is left alone: no strip (it would sit on top of the unlock area) while the keyguard is up.
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            locked = when (intent.action) {
+                Intent.ACTION_USER_PRESENT -> false
+                Intent.ACTION_SCREEN_OFF -> true
+                else -> app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+            }
+            update()
+        }
     }
 
     /** Called from HomeActivity.onResume: home is on screen, so a card covering it can go. */
@@ -97,22 +155,18 @@ object GestureNav {
     // ------------------------------------------------------------------ windows
 
     private fun addStrip() {
+        val ctx = a11y ?: return
+        val wm = wm ?: return
         val h = max(dp(20), systemDimen("navigation_bar_gesture_height").takeIf { it > 0 } ?: systemDimen("navigation_bar_height"))
-        val root = object : FrameLayout(app) {
-            // Some screens (Settings, apps using setHideOverlayWindows) hide third-party overlays. Log when that happens.
-            override fun onWindowVisibilityChanged(visibility: Int) {
-                super.onWindowVisibilityChanged(visibility)
-                AppLog.log("[nav] strip window ${if (visibility == View.VISIBLE) "visible" else "HIDDEN by the system"}")
-            }
-        }
-        val pill = View(app).apply {
+        val root = FrameLayout(ctx)
+        val pill = View(ctx).apply {
             background = GradientDrawable().apply { setColor(0x99FFFFFF.toInt()); cornerRadius = dp(2).toFloat() }
         }
         root.addView(pill, FrameLayout.LayoutParams(dp(108), dp(4), Gravity.CENTER))
         root.setOnTouchListener { _, e -> onTouch(e) }
         val lp = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, h,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
@@ -138,13 +192,13 @@ object GestureNav {
         dragging = false
         animating = false
         removeCard()
-        strip?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
+        strip?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
         strip = null
         AppLog.log("[nav] gesture strip off")
     }
 
     private fun removeCard() {
-        cardRoot?.let { try { wm.removeView(it) } catch (_: Throwable) { } }
+        cardRoot?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
         cardRoot = null
         card = null
     }
@@ -242,13 +296,15 @@ object GestureNav {
 
     @Suppress("DEPRECATION")
     private fun beginDrag() {
+        val ctx = a11y ?: return
+        val wm = wm ?: return
         // Re-read the display every time so rotation never leaves the card at the old size.
         val dm = android.util.DisplayMetrics()
         wm.defaultDisplay.getRealMetrics(dm)
         screenW = dm.widthPixels
         screenH = dm.heightPixels
-        val root = FrameLayout(app)
-        val c = ImageView(app).apply {
+        val root = FrameLayout(ctx)
+        val c = ImageView(ctx).apply {
             scaleType = ImageView.ScaleType.FIT_XY
             setBackgroundColor(0xFF2A2F3A.toInt())   // secure apps and missing snapshots: plain card
             pendingBitmap?.let { setImageBitmap(it) }
@@ -265,7 +321,7 @@ object GestureNav {
         // status bar and then resized (the probe saw that as a stretch).
         val lp = WindowManager.LayoutParams(
             screenW, screenH,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or

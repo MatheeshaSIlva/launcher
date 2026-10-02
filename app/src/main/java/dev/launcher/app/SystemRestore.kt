@@ -56,10 +56,47 @@ object SystemRestore {
         return applyFlags(ctx, s)
     }
 
-    /** Blocking binder call. Records the wish and applies all flags through [s]. */
+    /**
+     * Blocking. Gesture nav on: system transition/window animations off (our cards animate instead; the watchdog gets the
+     * plan first), accessibility service on (its overlay windows cannot be hidden by other apps). Stock gestures are then
+     * blocked once the service connects ([GestureNav.attach] re-applies flags). Off: everything back.
+     */
     fun setGesturesWanted(ctx: Context, s: IShellService, on: Boolean): String {
         prefs(ctx).edit().putBoolean(KEY_GESTURES, on).apply()
-        return applyFlags(ctx, s)
+        if (on) {
+            setSystemAnimations(ctx, s, off = true)
+            AppLog.log("[nav] accessibility service: ${NavAccessibilityService.enable(ctx)}")
+        }
+        val r = applyFlags(ctx, s)
+        if (!on) {
+            AppLog.log("[nav] accessibility service: ${NavAccessibilityService.disable(ctx)}")
+            setSystemAnimations(ctx, s, off = false)
+        }
+        return r
+    }
+
+    /** Blocking. off=true saves the user's scales (and hands the watchdog its plan) before setting them to 0. */
+    private fun setSystemAnimations(ctx: Context, s: IShellService, off: Boolean) {
+        val p = prefs(ctx)
+        if (off) {
+            rememberOriginals(ctx)
+            Watchdog.sync(ctx, s)
+            putScales(ctx, s, 0f, 0f)
+        } else if (p.contains(KEY_TRANSITION)) {
+            putScales(ctx, s, p.getFloat(KEY_TRANSITION, 1f), p.getFloat(KEY_WINDOW, 1f))
+            clearAnimationRecords(ctx)
+            Watchdog.sync(ctx, s)
+        }
+        AppLog.log("[nav] system animations ${if (off) "off" else "restored"}: ${currentScales(ctx)}")
+    }
+
+    private fun putScales(ctx: Context, s: IShellService, t: Float, w: Float) {
+        if (canWriteSecureSettings(ctx)) {
+            Settings.Global.putFloat(ctx.contentResolver, Settings.Global.TRANSITION_ANIMATION_SCALE, t)
+            Settings.Global.putFloat(ctx.contentResolver, Settings.Global.WINDOW_ANIMATION_SCALE, w)
+        } else {
+            s.runShell("settings put global transition_animation_scale $t; settings put global window_animation_scale $w")
+        }
     }
 
     /**
@@ -68,12 +105,14 @@ object SystemRestore {
      */
     fun applyFlags(ctx: Context, s: IShellService): String {
         val bar = statusBarWanted(ctx)
-        val gestures = gesturesWanted(ctx)
+        // Never block stock gestures unless our strip can actually be shown.
+        val gestures = gesturesWanted(ctx) && GestureNav.ready
         val what1 = (if (bar) DISABLE_CLOCK or DISABLE_NOTIFICATION_ICONS else 0) or (if (gestures) DISABLE_HOME or DISABLE_RECENT else 0)
         val what2 = if (bar) DISABLE2_SYSTEM_ICONS else 0
         val r = try { s.setDisableFlags(what1, what2, ShizukuLink.clientToken) } catch (t: Throwable) { "ERROR: ${t.javaClass.simpleName}: ${t.message}" }
         gestureFlagsActive = gestures && !r.contains("ERROR")
-        AppLog.log("[flags] status bar ${if (bar) "hidden" else "shown"}, stock gestures ${if (gestures) "blocked" else "on"}: $r")
+        val why = if (gesturesWanted(ctx) && !GestureNav.ready) " (gesture nav waits for the accessibility service)" else ""
+        AppLog.log("[flags] status bar ${if (bar) "hidden" else "shown"}, stock gestures ${if (gestures) "blocked" else "on"}$why: $r")
         GestureNav.update()
         return r
     }
@@ -132,8 +171,9 @@ object SystemRestore {
         }
         if (animations != null) clearAnimationRecords(ctx)
 
-        // Safe state: stock status bar and stock gestures.
+        // Safe state: stock status bar and stock gestures, our accessibility service off.
         prefs(ctx).edit().putBoolean(KEY_BAR_HIDDEN, false).putBoolean(KEY_GESTURES, false).apply()
+        AppLog.log("[restore] accessibility service: ${NavAccessibilityService.disable(ctx)}")
         val statusBar = if (svc != null) {
             val r = applyFlags(ctx, svc)
             // Also clears flags an older build may have set with `cmd` (those never clear by themselves).

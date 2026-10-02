@@ -51,6 +51,9 @@ object ShizukuLink {
                 io.execute {
                     grantSelf(s)
                     Watchdog.sync(app, s)
+                    if (SystemRestore.gesturesWanted(app) && !GestureNav.ready) {
+                        AppLog.log("[nav] accessibility service: ${NavAccessibilityService.enable(app)}")
+                    }
                     // A fresh service holds no flags: put back what we want (stock bar/gestures show until this runs).
                     SystemRestore.applyFlags(app, s)
                 }
