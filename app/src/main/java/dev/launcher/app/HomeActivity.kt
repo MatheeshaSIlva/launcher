@@ -1,8 +1,10 @@
 package dev.launcher.app
 
+import android.Manifest
 import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
@@ -38,6 +40,11 @@ class HomeActivity : Activity() {
         AppLog.addListener(onLog)
         ShizukuLink.addListener(onShizuku)
         refreshStatus()
+        if (!SafetyNotification.canPost(this)) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        if (SafetyNotification.canPost(this)) SafetyNotification.show(this)
     }
 
     override fun onDestroy() {
@@ -82,6 +89,10 @@ class HomeActivity : Activity() {
         row2.addView(button("Force update") { Updater.update(app, force = true) }, weighted())
         row2.addView(button("Copy log") { copyLog() }, weighted())
         root.addView(row2)
+        val row3 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row3.addView(button("Safe settings") { startActivity(Intent(this, SafeSettingsActivity::class.java)) }, weighted())
+        row3.addView(button("Test: break system") { breakSystem() }, weighted())
+        root.addView(row3)
 
         logView = TextView(this).apply {
             setTextColor(Color.rgb(200, 220, 200))
@@ -99,6 +110,19 @@ class HomeActivity : Activity() {
     private fun identity() {
         val s = ShizukuLink.service ?: run { AppLog.log("[identity] not connected"); return }
         io.execute { AppLog.log("[identity] ${try { s.identity() } catch (t: Throwable) { "failed: ${t.message}" }}") }
+    }
+
+    /** Recovery test: hides the stock status bar and turns system animations off, with no auto-restore. */
+    private fun breakSystem() {
+        val s = ShizukuLink.service ?: run { AppLog.log("[test] not connected"); return }
+        SystemRestore.rememberOriginals(this)
+        io.execute {
+            val out = s.runShell(
+                "settings put global transition_animation_scale 0; settings put global window_animation_scale 0; " +
+                    "cmd statusbar send-disable-flag clock system-icons notification-icons"
+            ).trim()
+            AppLog.log("[test] stock status bar hidden, animations off ($out). Undo with Restore system.")
+        }
     }
 
     private fun copyLog() {

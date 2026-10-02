@@ -8,6 +8,7 @@ class LauncherApp : Application() {
         // Must stay the first log line: tests are only trusted when this matches the commit under test.
         AppLog.log("BUILD ${buildStamp()}")
         ShizukuLink.init(this)
+        SafetyNotification.show(this)
     }
 
     fun buildStamp(): String =

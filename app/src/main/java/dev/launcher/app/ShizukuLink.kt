@@ -1,5 +1,6 @@
 package dev.launcher.app
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
@@ -7,6 +8,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import rikka.shizuku.Shizuku
+import java.util.concurrent.Executors
 
 /**
  * App-wide connection to Shizuku and our shell-uid user service.
@@ -21,6 +23,7 @@ object ShizukuLink {
         private set
 
     private val main = Handler(Looper.getMainLooper())
+    private val io = Executors.newSingleThreadExecutor()
     private val listeners = mutableListOf<() -> Unit>()
     private lateinit var app: LauncherApp
     private var binding = false
@@ -39,6 +42,7 @@ object ShizukuLink {
             service = if (binder != null && binder.pingBinder()) IShellService.Stub.asInterface(binder) else null
             binding = false
             AppLog.log("[shizuku] service connected: ${service != null}")
+            service?.let { s -> io.execute { grantSelf(s) } }
             changed()
         }
 
@@ -88,6 +92,37 @@ object ShizukuLink {
             }
             service == null -> bind()
         }
+    }
+
+    /**
+     * Grants the permissions that keep the safety path working without Shizuku: WRITE_SECURE_SETTINGS (animation scales)
+     * and POST_NOTIFICATIONS (the Restore notification). Both stay granted until the app is uninstalled.
+     */
+    private fun grantSelf(s: IShellService) {
+        val pkg = app.packageName
+        val missing = listOf(Manifest.permission.WRITE_SECURE_SETTINGS, Manifest.permission.POST_NOTIFICATIONS)
+            .filter { app.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isEmpty()) return
+        try {
+            val out = s.runShell(missing.joinToString("; ") { "pm grant $pkg $it" }).trim()
+            AppLog.log("[shizuku] self-grant ${missing.joinToString { it.substringAfterLast('.') }}: $out")
+            if (Manifest.permission.POST_NOTIFICATIONS in missing) main.post { SafetyNotification.show(app) }
+        } catch (t: Throwable) {
+            AppLog.log("[shizuku] self-grant failed: ${t.javaClass.simpleName}: ${t.message}")
+        }
+    }
+
+    /** Blocking: returns the service, waiting up to [timeoutMs] for it to bind (e.g. right after a process start). */
+    fun awaitService(timeoutMs: Long): IShellService? {
+        service?.let { return it }
+        if (Looper.myLooper() == Looper.getMainLooper()) return null
+        main.post { if (hasPermission()) bind() }
+        val end = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < end) {
+            service?.let { return it }
+            Thread.sleep(100)
+        }
+        return service
     }
 
     private fun bind() {
