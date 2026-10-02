@@ -18,7 +18,7 @@ Results from the real app on the Galaxy S24 (Android 16). Only what a device log
   (cleared by a successful restore or by a reboot). Every future code path that sets disable flags must call `SystemRestore.markStatusBarHidden`.
 - Fix confirmed on the phone (66c0995).
 
-## Task 3: watchdog with foreground-service heartbeat (in test)
+## Task 3: watchdog with foreground-service heartbeat, passed 2026-10-04 (b7198ce)
 
 Ported from the probe with three deliberate changes:
 - **Suspend-safe staleness.** The probe compared wall-clock times (`date +%s` vs. heartbeat mtime). After the phone sleeps, the wall clock jumps but
@@ -69,6 +69,12 @@ The system drops them when that process dies; the service also links to a token 
 force-stop or Shizuku death can strand the stock bar. Cost accepted: after a Shizuku restart the stock bar shows until we reconnect and re-apply
 (≈1–2 s; rare now that the USB setting is fixed). The watchdog loop now only restores animation scales. `cmd` disable flags are no longer used
 (restore still sends `cmd … none` once to clear leftovers from older builds).
+
+Device results (b7198ce), **task 3 passed 2026-10-04:**
+- Binder flags work on One UI 16: `disable: ok via disable; disable2: ok via disable2`, stock clock/icons hidden.
+- Test: kill service → stock bar back immediately, hidden again ≈1 s later after the automatic rebind.
+- Force-stop → stock bar back immediately; animations back ≈5 s later (loop fired at 01:51:12, reported on reopen).
+- Reopen → wish re-applied (bar hidden); Restore system → bar and animations back.
 
 Open: `specialUse` foreground service needs a Play justification; heartbeat writes a tiny file every second (fine for now, revisit for battery/flash).
 
