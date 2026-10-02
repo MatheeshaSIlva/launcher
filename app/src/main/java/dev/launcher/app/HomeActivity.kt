@@ -78,7 +78,8 @@ class HomeActivity : Activity(), HomeBridge.Home {
         content.scaleY = 1f
         GestureNav.onHomeShown()
         reportFirstFrame()
-        if (wallpaper == null && !wallpaperTried) loadWallpaper()
+        // Retried on every return until it works: the permission arrives when Shizuku connects, possibly after the first try.
+        if (wallpaper == null) loadWallpaper()
         content.postDelayed({ recordPreview() }, 400)
         registerReceiver(tick, IntentFilter().apply {
             addAction(Intent.ACTION_TIME_TICK)
