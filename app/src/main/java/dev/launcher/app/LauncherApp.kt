@@ -8,6 +8,7 @@ class LauncherApp : Application() {
         // Must stay the first log line: tests are only trusted when this matches the commit under test.
         AppLog.log("BUILD ${buildStamp()}")
         Watchdog.startHeartbeat()
+        GestureNav.init(this)
         ShizukuLink.init(this)
         SafetyNotification.show(this)
     }

@@ -1,5 +1,7 @@
 package dev.launcher.app
 
+import android.graphics.Bitmap
+import android.hardware.HardwareBuffer
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -61,40 +63,37 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
-    // ---------------------------------------------------------------- status bar
+    // ---------------------------------------------------------------- disable flags (status bar, stock gestures)
 
-    private val statusBarToken: IBinder = Binder()
-    private var statusBarClient: IBinder? = null
+    private val flagsToken: IBinder = Binder()
+    private var flagsClient: IBinder? = null
     private val clientDied = IBinder.DeathRecipient {
-        synchronized(this) { statusBarClient = null }
-        disableStatusBar(false)
+        synchronized(this) { flagsClient = null }
+        applyDisable(0, 0)
     }
 
-    override fun setStatusBarHidden(hidden: Boolean, client: IBinder?): String {
+    override fun setDisableFlags(what1: Int, what2: Int, client: IBinder?): String {
         synchronized(this) {
-            statusBarClient?.let { try { it.unlinkToDeath(clientDied, 0) } catch (_: Throwable) { } }
-            statusBarClient = null
-            if (hidden) {
+            flagsClient?.let { try { it.unlinkToDeath(clientDied, 0) } catch (_: Throwable) { } }
+            flagsClient = null
+            if (what1 != 0 || what2 != 0) {
                 if (client == null) return "ERROR: no client token"
                 try {
                     client.linkToDeath(clientDied, 0)
                 } catch (t: Throwable) {
-                    // The app is already gone: leave the bar alone.
+                    // The app is already gone: set nothing.
                     return "ERROR: client already dead"
                 }
-                statusBarClient = client
+                flagsClient = client
             }
         }
-        return disableStatusBar(hidden)
+        return applyDisable(what1, what2)
     }
 
-    /** Same flags as `cmd statusbar send-disable-flag clock notification-icons system-icons`, but owned by our token. */
-    private fun disableStatusBar(hidden: Boolean): String = try {
+    private fun applyDisable(what1: Int, what2: Int): String = try {
         val sb = systemService("statusbar", "com.android.internal.statusbar.IStatusBarService\$Stub")
-        val what1 = if (hidden) DISABLE_CLOCK or DISABLE_NOTIFICATION_ICONS else 0
-        val what2 = if (hidden) DISABLE2_SYSTEM_ICONS else 0
-        "disable: " + callDisable(sb, listOf("disable", "disableForUser"), what1) +
-            "; disable2: " + callDisable(sb, listOf("disable2", "disable2ForUser"), what2)
+        "disable(0x${what1.toString(16)}): " + callDisable(sb, listOf("disable", "disableForUser"), what1) +
+            "; disable2(0x${what2.toString(16)}): " + callDisable(sb, listOf("disable2", "disable2ForUser"), what2)
     } catch (t: Throwable) {
         "ERROR: ${describe(t)}"
     }
@@ -103,8 +102,8 @@ class ShellService : IShellService.Stub() {
         for (n in names) {
             val m = sb.javaClass.methods.firstOrNull { it.name == n && it.parameterTypes.size in 3..4 } ?: continue
             return try {
-                if (m.parameterTypes.size == 3) m.invoke(sb, what, statusBarToken, SHELL_PKG)
-                else m.invoke(sb, what, statusBarToken, SHELL_PKG, 0)
+                if (m.parameterTypes.size == 3) m.invoke(sb, what, flagsToken, SHELL_PKG)
+                else m.invoke(sb, what, flagsToken, SHELL_PKG, 0)
                 "ok via $n"
             } catch (t: Throwable) {
                 "ERROR in $n: ${describe(t)}"
@@ -112,6 +111,44 @@ class ShellService : IShellService.Stub() {
         }
         return "ERROR: none of $names found"
     }
+
+    // ---------------------------------------------------------------- tasks
+
+    override fun recentTaskIds(max: Int): IntArray = try {
+        val atm = systemService("activity_task", ATM_STUB)
+        val m = atm.javaClass.methods.first { it.name == "getRecentTasks" && it.parameterTypes.size == 3 }
+        // (maxNum, flags = RECENT_IGNORE_UNAVAILABLE, userId = 0)
+        val slice = m.invoke(atm, max.coerceIn(1, 50), 2, 0)
+        val list = slice?.javaClass?.getMethod("getList")?.invoke(slice) as? List<*> ?: emptyList<Any>()
+        list.mapNotNull { t -> t?.let { readInt(it, "taskId") ?: readInt(it, "persistentId") } }.toIntArray()
+    } catch (t: Throwable) {
+        IntArray(0)
+    }
+
+    override fun taskSnapshot(taskId: Int, fresh: Boolean): Bitmap? = try {
+        val atm = systemService("activity_task", ATM_STUB)
+        val ms = atm.javaClass.methods
+        val snap: Any? = if (fresh) {
+            ms.firstOrNull { it.name == "takeTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, false)
+        } else {
+            ms.firstOrNull { it.name == "getTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, false)
+        }
+        val hb = snap?.javaClass?.getMethod("getHardwareBuffer")?.invoke(snap) as? HardwareBuffer
+        // A pure wrap (no GPU readback, which crashed the probe's service); hardware bitmaps can cross Binder.
+        hb?.let { Bitmap.wrapHardwareBuffer(it, null) }
+    } catch (t: Throwable) {
+        null
+    }
+
+    override fun switchToTask(taskId: Int): String = try {
+        val atm = systemService("activity_task", ATM_STUB)
+        val m = atm.javaClass.methods.first { it.name == "startActivityFromRecents" }
+        "result ${m.invoke(atm, taskId, null)}"
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
+    private fun readInt(o: Any, name: String): Int? = try { o.javaClass.getField(name).get(o) as? Int } catch (_: Throwable) { null }
 
     private fun systemService(name: String, stubClass: String): Any {
         val binder = Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java)
@@ -211,10 +248,7 @@ class ShellService : IShellService.Stub() {
 
     private companion object {
         const val SHELL_PKG = "com.android.shell"
-        // android.app.StatusBarManager
-        const val DISABLE_NOTIFICATION_ICONS = 0x00020000
-        const val DISABLE_CLOCK = 0x00800000
-        const val DISABLE2_SYSTEM_ICONS = 1 shl 1
+        const val ATM_STUB = "android.app.IActivityTaskManager\$Stub"
 
         // Counts checks without a heartbeat change instead of comparing clock times: during suspend neither the app nor
         // this loop runs, so waking up never looks like a dead app. 4 missed checks = about 4 s of real running time.

@@ -48,6 +48,17 @@ class HomeActivity : Activity() {
         if (SafetyNotification.canPost(this)) SafetyNotification.show(this)
     }
 
+    override fun onResume() {
+        super.onResume()
+        GestureNav.onHomeShown()
+        refreshStatus()
+    }
+
+    override fun onPause() {
+        GestureNav.homeVisible = false
+        super.onPause()
+    }
+
     override fun onDestroy() {
         AppLog.removeListener(onLog)
         ShizukuLink.removeListener(onShizuku)
@@ -59,7 +70,8 @@ class HomeActivity : Activity() {
     override fun onBackPressed() {}
 
     private fun refreshStatus() {
-        status.text = "BUILD ${app.buildStamp()}   Shizuku: ${ShizukuLink.state().name.lowercase().replace('_', ' ')}"
+        status.text = "BUILD ${app.buildStamp()}   Shizuku: ${ShizukuLink.state().name.lowercase().replace('_', ' ')}\n" +
+            "Gesture nav: ${if (SystemRestore.gesturesWanted(this)) "ON" else "off"}"
     }
 
     private fun buildUi() {
@@ -99,6 +111,10 @@ class HomeActivity : Activity() {
         row4.addView(button("Test: kill service") { killService() }, weighted())
         row4.addView(button("Diagnose Shizuku restarts") { diagnoseRestarts() }, weighted())
         root.addView(row4)
+        val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row5.addView(button("Gesture nav on/off") { toggleGestures() }, weighted())
+        row5.addView(button("Frame report") { frameReport() }, weighted())
+        root.addView(row5)
 
         logView = TextView(this).apply {
             setTextColor(Color.rgb(200, 220, 200))
@@ -135,6 +151,27 @@ class HomeActivity : Activity() {
         val s = ShizukuLink.service ?: run { AppLog.log("[test] not connected"); return }
         AppLog.log("[test] killing the shell service; the stock bar should reappear immediately, then hide again on reconnect")
         io.execute { try { s.destroy() } catch (_: Throwable) { /* it died mid-call, as intended */ } }
+    }
+
+    private fun toggleGestures() {
+        val s = ShizukuLink.service ?: run { AppLog.log("[nav] not connected"); return }
+        val on = !SystemRestore.gesturesWanted(this)
+        io.execute {
+            SystemRestore.setGesturesWanted(applicationContext, s, on)
+            runOnUiThread { refreshStatus() }
+        }
+    }
+
+    /** HWUI's own numbers for every window of this app (strip and cards included) since the last report, then reset. */
+    private fun frameReport() {
+        val s = ShizukuLink.service ?: run { AppLog.log("[frames] not connected"); return }
+        io.execute {
+            val out = s.runShell(
+                "dumpsys gfxinfo $packageName | grep -E 'Total frames|Janky|percentile|Number|Frame deadline'; " +
+                    "dumpsys gfxinfo $packageName reset > /dev/null"
+            ).trim()
+            AppLog.log("[frames] since the last report (counter now reset):\n$out")
+        }
     }
 
     private fun watchdogStatus() {

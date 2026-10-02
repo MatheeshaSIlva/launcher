@@ -8,6 +8,7 @@ import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
 import rikka.shizuku.Shizuku
 import java.util.concurrent.Executors
 
@@ -50,8 +51,8 @@ object ShizukuLink {
                 io.execute {
                     grantSelf(s)
                     Watchdog.sync(app, s)
-                    // A fresh service holds no flags: put back what we want (the stock bar shows until this runs).
-                    if (SystemRestore.statusBarWanted(app)) SystemRestore.applyStatusBar(app, s)
+                    // A fresh service holds no flags: put back what we want (stock bar/gestures show until this runs).
+                    SystemRestore.applyFlags(app, s)
                 }
             }
             changed()
@@ -61,6 +62,7 @@ object ShizukuLink {
             service = null
             binding = false
             AppLog.log("[shizuku] service disconnected")
+            SystemRestore.onServiceLost()
             // If only our service died (Shizuku still up), bring it back. If Shizuku died, binder-received rebinds later.
             main.postDelayed({ if (service == null && hasPermission()) bind() }, 500)
             changed()
@@ -78,6 +80,7 @@ object ShizukuLink {
             service = null
             binding = false
             AppLog.log("[shizuku] binder dead (Shizuku stopped)")
+            SystemRestore.onServiceLost()
             changed()
         }
         Shizuku.addRequestPermissionResultListener { _, result ->
@@ -109,10 +112,18 @@ object ShizukuLink {
 
     /**
      * Grants the permissions that keep the safety path working without Shizuku: WRITE_SECURE_SETTINGS (animation scales)
-     * and POST_NOTIFICATIONS (the Restore notification). Both stay granted until the app is uninstalled.
+     * and POST_NOTIFICATIONS (the Restore notification). Also the overlay permission our gesture strip and cards need.
+     * All stay granted until the app is uninstalled.
      */
     private fun grantSelf(s: IShellService) {
         val pkg = app.packageName
+        if (!Settings.canDrawOverlays(app)) {
+            try {
+                AppLog.log("[shizuku] self-grant overlay: ${s.runShell("appops set $pkg SYSTEM_ALERT_WINDOW allow").trim()}")
+            } catch (t: Throwable) {
+                AppLog.log("[shizuku] overlay grant failed: ${t.javaClass.simpleName}: ${t.message}")
+            }
+        }
         val missing = listOf(Manifest.permission.WRITE_SECURE_SETTINGS, Manifest.permission.POST_NOTIFICATIONS)
             .filter { app.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) return

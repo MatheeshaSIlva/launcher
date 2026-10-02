@@ -1,5 +1,7 @@
 package dev.launcher.app;
 
+import android.graphics.Bitmap;
+
 // Runs in the Shizuku user-service process (uid 2000 via wireless debugging).
 // Transaction codes are explicit so the app and an older still-running service never disagree.
 interface IShellService {
@@ -27,7 +29,18 @@ interface IShellService {
     // runShell with a caller-chosen timeout, for slow diagnostics such as logcat dumps.
     String runShellTimeout(String command, int timeoutMs) = 8;
 
-    // Hides/shows the stock status bar contents through IStatusBarService with a token owned by this process: the system
-    // drops the flags when this process dies. While hidden, the service also clears them when `client` (the app) dies.
-    String setStatusBarHidden(boolean hidden, IBinder client) = 9;
+    // Sets StatusBarManager disable/disable2 flags through IStatusBarService with a token owned by this process: the system
+    // drops them when this process dies. While any flag is set, the service also clears them when `client` (the app) dies.
+    // Used for hiding the stock status bar and for blocking the stock home/recents gestures.
+    String setDisableFlags(int what1, int what2, IBinder client) = 9;
+
+    // Recent task ids, most recent first (the home task is not listed).
+    int[] recentTaskIds(int max) = 10;
+
+    // Snapshot of a task as a HARDWARE bitmap (never copied in this process). fresh=false: cached snapshot (1-3 ms,
+    // may be old); fresh=true: newly taken. Null when none (e.g. secure apps).
+    Bitmap taskSnapshot(int taskId, boolean fresh) = 11;
+
+    // Brings a recent task to the front (IActivityTaskManager.startActivityFromRecents).
+    String switchToTask(int taskId) = 12;
 }
