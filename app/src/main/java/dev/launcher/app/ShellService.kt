@@ -83,6 +83,8 @@ class ShellService : IShellService.Stub() {
     override fun watchdogStatus(): String = try {
         val plan = File(wd, "restore").takeIf { it.exists() }?.readText()?.trim().orEmpty()
         "loop: ${loopPid()?.let { "running (pid $it)" } ?: "NOT running"}\n" +
+            "this service's cgroup: ${File("/proc/self/cgroup").readText().trim().replace("\n", " | ")}\n" +
+            "adbd: ${shell("pidof adbd; getprop init.svc.adbd", 3000).replace("\n", " ")}\n" +
             "restore plan: ${plan.ifEmpty { "(empty, nothing to undo)" }.replace("\n", "; ")}\n" +
             "log:\n" + (File(wd, "log").takeIf { it.exists() }?.readText()?.trimEnd().orEmpty().ifEmpty { "(empty)" })
     } catch (t: Throwable) {
@@ -160,6 +162,16 @@ trap 'fire "got SIGHUP"' HUP
 trap 'fire "got SIGINT"' INT
 echo $$ > ${'$'}D/pid
 echo "$(date +%T) armed, pid $$" >> ${'$'}D/log
+# Started under Shizuku, this loop sits in adbd's cgroup; init SIGKILLs that whole cgroup when adbd stops (Shizuku restart).
+# Try to move into a cgroup of our own next to it, so only adbd's group dies.
+cg=$(sed -n 's/^0:://p' /proc/$$/cgroup)
+echo "  cgroup: ${'$'}cg" >> ${'$'}D/log
+own=/sys/fs/cgroup${'$'}{cg%/*}/pid_$$
+if mkdir -p ${'$'}own 2>> ${'$'}D/log && echo $$ 2>> ${'$'}D/log > ${'$'}own/cgroup.procs; then
+  echo "  moved to own cgroup: $(sed -n 's/^0:://p' /proc/$$/cgroup)" >> ${'$'}D/log
+else
+  echo "  could not move to own cgroup (see errors above)" >> ${'$'}D/log
+fi
 last=""
 miss=0
 while true; do
