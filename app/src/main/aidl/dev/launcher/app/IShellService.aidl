@@ -43,4 +43,7 @@ interface IShellService {
 
     // Brings a recent task to the front (IActivityTaskManager.startActivityFromRecents).
     String switchToTask(int taskId) = 12;
+
+    // Recent tasks as "taskId packageName", most recent first (the home task is not listed).
+    String[] recentTasks(int max) = 13;
 }

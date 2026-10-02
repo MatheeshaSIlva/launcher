@@ -2,44 +2,45 @@ package dev.launcher.app
 
 import android.Manifest
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.RectF
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-import android.widget.Button
+import android.view.WindowManager
+import android.view.animation.PathInterpolator
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
+import android.widget.TextClock
 import android.widget.TextView
-import java.util.concurrent.Executors
 
 /**
- * Home screen. For now a developer panel (Shizuku status, updater, log); the real home canvas replaces it in phase 3.
+ * Home screen (placeholder until the real home canvas in phase 3): system wallpaper, clock and date, and a dock with a few
+ * test apps. The developer panel is behind the small button at the top right.
  */
-class HomeActivity : Activity() {
-    private val io = Executors.newSingleThreadExecutor()
-    private lateinit var status: TextView
-    private lateinit var logView: TextView
-    private lateinit var logScroll: ScrollView
+class HomeActivity : Activity(), HomeBridge.Home {
+    private lateinit var content: FrameLayout
+    private val iconViews = LinkedHashMap<String, View>()
+    private val ease = PathInterpolator(0.2f, 0f, 0f, 1f)
 
-    private val onLog: (String) -> Unit = { line ->
-        logView.append("\n$line")
-        logScroll.post { logScroll.fullScroll(ScrollView.FOCUS_DOWN) }
-    }
-    private val onShizuku: () -> Unit = { refreshStatus() }
-
-    private val app get() = application as LauncherApp
+    private val dp get() = resources.displayMetrics.density
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS }
         buildUi()
-        logView.text = AppLog.text()
-        AppLog.addListener(onLog)
-        ShizukuLink.addListener(onShizuku)
-        refreshStatus()
+        HomeBridge.home = this
         Watchdog.start(this)
         if (!SafetyNotification.canPost(this)) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
@@ -50,8 +51,12 @@ class HomeActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        // Brought up behind a closing app: start zoomed in a little, settled by animateReturn().
+        val z = if (HomeBridge.returnPending) 1.08f else 1f
+        content.animate().cancel()
+        content.scaleX = z
+        content.scaleY = z
         GestureNav.onHomeShown()
-        refreshStatus()
     }
 
     override fun onPause() {
@@ -60,8 +65,7 @@ class HomeActivity : Activity() {
     }
 
     override fun onDestroy() {
-        AppLog.removeListener(onLog)
-        ShizukuLink.removeListener(onShizuku)
+        if (HomeBridge.home === this) HomeBridge.home = null
         super.onDestroy()
     }
 
@@ -69,138 +73,126 @@ class HomeActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {}
 
-    private fun refreshStatus() {
-        status.text = "BUILD ${app.buildStamp()}   Shizuku: ${ShizukuLink.state().name.lowercase().replace('_', ' ')}\n" +
-            "Gesture nav: ${if (SystemRestore.gesturesWanted(this)) "ON" else "off"}"
+    // ------------------------------------------------------------------ HomeBridge.Home
+
+    override fun setIconHidden(pkg: String, hidden: Boolean) {
+        iconViews[pkg]?.visibility = if (hidden) View.INVISIBLE else View.VISIBLE
     }
+
+    override fun animateReturn() {
+        HomeBridge.returnPending = false
+        content.animate().scaleX(1f).scaleY(1f).setDuration(420).setInterpolator(ease).start()
+    }
+
+    override fun cancelReturn() {
+        HomeBridge.returnPending = false
+        content.animate().cancel()
+        content.scaleX = 1f
+        content.scaleY = 1f
+    }
+
+    // ------------------------------------------------------------------ UI
 
     private fun buildUi() {
-        val dp = resources.displayMetrics.density
-        val root = LinearLayout(this).apply {
+        content = FrameLayout(this)
+
+        val top = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.rgb(16, 16, 20))
-            val pad = (16 * dp).toInt()
-            setPadding(pad, (40 * dp).toInt(), pad, pad)
+            setPadding((28 * dp).toInt(), (72 * dp).toInt(), (28 * dp).toInt(), 0)
         }
-        status = TextView(this).apply {
+        top.addView(TextClock(this).apply {
+            format12Hour = "h:mm"
+            format24Hour = "H:mm"
+            textSize = 76f
             setTextColor(Color.WHITE)
-            textSize = 15f
-        }
-        root.addView(status)
+            typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
+            setShadowLayer(12f, 0f, 2f, 0x66000000)
+        })
+        top.addView(TextClock(this).apply {
+            format12Hour = "EEEE, d MMMM"
+            format24Hour = "EEEE, d MMMM"
+            textSize = 18f
+            setTextColor(0xEEFFFFFF.toInt())
+            setShadowLayer(10f, 0f, 1f, 0x66000000)
+        })
+        content.addView(top, FrameLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT, Gravity.TOP))
 
-        fun button(label: String, action: () -> Unit) = Button(this).apply {
-            text = label
-            isAllCaps = false
-            setOnClickListener { action() }
-        }
-        val row1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        row1.addView(button("Connect Shizuku") { ShizukuLink.connect() }, weighted())
-        row1.addView(button("Identity") { identity() }, weighted())
-        root.addView(row1)
-        val row2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row2.addView(button("UPDATE") { Updater.update(app, force = false) }, weighted())
-        row2.addView(button("Force update") { Updater.update(app, force = true) }, weighted())
-        row2.addView(button("Copy log") { copyLog() }, weighted())
-        root.addView(row2)
-        val row3 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row3.addView(button("Safe settings") { startActivity(Intent(this, SafeSettingsActivity::class.java)) }, weighted())
-        row3.addView(button("Test: break system") { breakSystem() }, weighted())
-        row3.addView(button("Watchdog status") { watchdogStatus() }, weighted())
-        root.addView(row3)
-        val row4 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row4.addView(button("Test: kill service") { killService() }, weighted())
-        row4.addView(button("Diagnose Shizuku restarts") { diagnoseRestarts() }, weighted())
-        root.addView(row4)
-        val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        row5.addView(button("Gesture nav on/off") { toggleGestures() }, weighted())
-        row5.addView(button("Frame report") { frameReport() }, weighted())
-        root.addView(row5)
-
-        logView = TextView(this).apply {
-            setTextColor(Color.rgb(200, 220, 200))
+        val dev = TextView(this).apply {
+            text = "DEV"
             textSize = 12f
-            typeface = android.graphics.Typeface.MONOSPACE
-            setTextIsSelectable(true)
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply { setColor(0x33FFFFFF); cornerRadius = 20 * dp }
+            setOnClickListener { startActivity(Intent(this@HomeActivity, DevActivity::class.java)) }
         }
-        logScroll = ScrollView(this).apply { addView(logView) }
-        root.addView(logScroll, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
-        setContentView(root)
-    }
+        content.addView(dev, FrameLayout.LayoutParams((56 * dp).toInt(), (32 * dp).toInt(), Gravity.TOP or Gravity.END).apply {
+            topMargin = (56 * dp).toInt()
+            rightMargin = (20 * dp).toInt()
+        })
 
-    private fun weighted() = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f)
-
-    private fun identity() {
-        val s = ShizukuLink.service ?: run { AppLog.log("[identity] not connected"); return }
-        io.execute { AppLog.log("[identity] ${try { s.identity() } catch (t: Throwable) { "failed: ${t.message}" }}") }
-    }
-
-    /** Recovery test: hides the stock status bar and turns system animations off until Restore system. */
-    private fun breakSystem() {
-        val s = ShizukuLink.service ?: run { AppLog.log("[test] not connected"); return }
-        SystemRestore.rememberOriginals(this)
-        io.execute {
-            Watchdog.sync(applicationContext, s)
-            s.runShell("settings put global transition_animation_scale 0; settings put global window_animation_scale 0")
-            SystemRestore.setStatusBarHidden(applicationContext, s, true)
-            AppLog.log("[test] stock status bar hidden, animations off. Undo with Restore system.")
+        val dock = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            val pad = (14 * dp).toInt()
+            setPadding(pad, pad, pad, pad)
+            background = GradientDrawable().apply { setColor(0x40FFFFFF); cornerRadius = 34 * dp }
         }
+        for (pkg in DOCK) addAppIcon(dock, pkg)
+        content.addView(dock, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply {
+            bottomMargin = (40 * dp).toInt()
+        })
+
+        // Gesture navigation flies closing apps into their icon: keep it told where the icons are.
+        content.viewTreeObserver.addOnGlobalLayoutListener { publishIconRects() }
+        setContentView(content)
     }
 
-    /** Kills only our shell service (as a Shizuku restart would): the system must drop the status bar flags at once. */
-    private fun killService() {
-        val s = ShizukuLink.service ?: run { AppLog.log("[test] not connected"); return }
-        AppLog.log("[test] killing the shell service; the stock bar should reappear immediately, then hide again on reconnect")
-        io.execute { try { s.destroy() } catch (_: Throwable) { /* it died mid-call, as intended */ } }
-    }
-
-    private fun toggleGestures() {
-        val s = ShizukuLink.service ?: run { AppLog.log("[nav] not connected"); return }
-        val on = !SystemRestore.gesturesWanted(this)
-        io.execute {
-            SystemRestore.setGesturesWanted(applicationContext, s, on)
-            runOnUiThread { refreshStatus() }
+    private fun addAppIcon(parent: LinearLayout, pkg: String) {
+        val icon = try { packageManager.getApplicationIcon(pkg) } catch (_: Throwable) { return }   // not installed
+        val size = (60 * dp).toInt()
+        val v = ImageView(this).apply {
+            setImageDrawable(icon)
+            contentDescription = try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)) } catch (_: Throwable) { pkg }
+            setOnClickListener { launch(pkg) }
+            setOnTouchListener { view, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.88f).scaleY(0.88f).setDuration(90).start()
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(160).start()
+                }
+                false
+            }
         }
-    }
-
-    /** HWUI's own numbers for every window of this app (strip and cards included) since the last report, then reset. */
-    private fun frameReport() {
-        val s = ShizukuLink.service ?: run { AppLog.log("[frames] not connected"); return }
-        io.execute {
-            val out = s.runShell(
-                "dumpsys gfxinfo $packageName | grep -E 'Total frames|Janky|percentile|Number|Frame deadline'; " +
-                    "dumpsys gfxinfo $packageName reset > /dev/null"
-            ).trim()
-            AppLog.log("[frames] since the last report (counter now reset):\n$out")
+        val lp = LinearLayout.LayoutParams(size, size).apply {
+            val m = (9 * dp).toInt()
+            setMargins(m, 0, m, 0)
         }
+        parent.addView(v, lp)
+        iconViews[pkg] = v
     }
 
-    private fun watchdogStatus() {
-        val s = ShizukuLink.service ?: run { AppLog.log("[watchdog] not connected"); return }
-        io.execute { AppLog.log("[watchdog] status\n${try { s.watchdogStatus() } catch (t: Throwable) { "failed: ${t.message}" }}") }
-    }
-
-    /** adbd restarts on screen off/on and takes Shizuku with it. Pull the system log lines around those restarts. */
-    private fun diagnoseRestarts() {
-        val s = ShizukuLink.service ?: run { AppLog.log("[diag] not connected"); return }
-        io.execute {
-            AppLog.log("[diag] collecting (up to 40 s)...")
-            val settings = s.runShell(
-                "echo adb_wifi_enabled=$(settings get global adb_wifi_enabled) adb_enabled=$(settings get global adb_enabled) " +
-                    "adbd=$(pidof adbd) uptime=$(cut -d' ' -f1 /proc/uptime); getprop | grep -iE 'adb|usb'"
-            ).trim()
-            // The newest 30000 lines cover the last few minutes; grep keeps what concerns adbd, USB, locking and Shizuku.
-            val lines = s.runShellTimeout(
-                "logcat -d -v time -t 30000 -b main,system,events 2>/dev/null | " +
-                    "grep -iE 'adbd|adb_wifi|AdbDebugging|AdbService|UsbDeviceManager|UsbPort|usb.?config|AutoBlocker|auto.?block|" +
-                    "shizuku|screen_toggled|tcp.?port|keyguard_show|wireless.?debug' | tail -n 120",
-                40000
-            ).trim()
-            AppLog.log("[diag] $settings\n$lines")
+    private fun publishIconRects() {
+        val loc = IntArray(2)
+        for ((pkg, v) in iconViews) {
+            v.getLocationOnScreen(loc)
+            // Unscaled rect: the home zoom settles while the card flies, so aim for where the icon ends up.
+            val s = content.scaleX
+            val cx = content.width / 2f + (loc[0] + v.width * s / 2f - content.width / 2f) / s
+            val cy = content.height / 2f + (loc[1] + v.height * s / 2f - content.height / 2f) / s
+            HomeBridge.setIconRect(pkg, RectF(cx - v.width / 2f, cy - v.height / 2f, cx + v.width / 2f, cy + v.height / 2f))
         }
     }
 
-    private fun copyLog() {
-        getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Launcher log", AppLog.text()))
-        AppLog.log("[log] copied to clipboard")
+    private fun launch(pkg: String) {
+        val i = packageManager.getLaunchIntentForPackage(pkg) ?: return
+        try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (t: Throwable) { AppLog.log("[home] launch $pkg failed: ${t.message}") }
+    }
+
+    private companion object {
+        val DOCK = listOf(
+            "com.android.settings",
+            "com.android.chrome",
+            "com.zhiliaoapp.musically",               // TikTok
+            "com.sec.android.app.popupcalculator",    // Samsung Calculator
+        )
     }
 }

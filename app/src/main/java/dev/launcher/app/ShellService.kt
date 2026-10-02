@@ -115,15 +115,31 @@ class ShellService : IShellService.Stub() {
     // ---------------------------------------------------------------- tasks
 
     override fun recentTaskIds(max: Int): IntArray = try {
+        recentTaskInfos(max).mapNotNull { t -> readInt(t, "taskId") ?: readInt(t, "persistentId") }.toIntArray()
+    } catch (t: Throwable) {
+        IntArray(0)
+    }
+
+    override fun recentTasks(max: Int): Array<String> = try {
+        recentTaskInfos(max).mapNotNull { t ->
+            val id = readInt(t, "taskId") ?: readInt(t, "persistentId") ?: return@mapNotNull null
+            val cn = (readField(t, "baseActivity") ?: readField(t, "realActivity")) as? android.content.ComponentName
+            val pkg = cn?.packageName ?: (readField(t, "baseIntent") as? android.content.Intent)?.component?.packageName ?: "?"
+            "$id $pkg"
+        }.toTypedArray()
+    } catch (t: Throwable) {
+        emptyArray()
+    }
+
+    private fun recentTaskInfos(max: Int): List<Any> {
         val atm = systemService("activity_task", ATM_STUB)
         val m = atm.javaClass.methods.first { it.name == "getRecentTasks" && it.parameterTypes.size == 3 }
         // (maxNum, flags = RECENT_IGNORE_UNAVAILABLE, userId = 0)
         val slice = m.invoke(atm, max.coerceIn(1, 50), 2, 0)
-        val list = slice?.javaClass?.getMethod("getList")?.invoke(slice) as? List<*> ?: emptyList<Any>()
-        list.mapNotNull { t -> t?.let { readInt(it, "taskId") ?: readInt(it, "persistentId") } }.toIntArray()
-    } catch (t: Throwable) {
-        IntArray(0)
+        return (slice?.javaClass?.getMethod("getList")?.invoke(slice) as? List<*>)?.filterNotNull() ?: emptyList()
     }
+
+    private fun readField(o: Any, name: String): Any? = try { o.javaClass.getField(name).get(o) } catch (_: Throwable) { null }
 
     override fun taskSnapshot(taskId: Int, fresh: Boolean): Bitmap? = try {
         val atm = systemService("activity_task", ATM_STUB)

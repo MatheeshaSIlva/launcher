@@ -15,6 +15,14 @@
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- A launcher must see every launchable app (icons, labels, launch intents). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".LauncherApp"
         android:allowBackup="false"
@@ -29,6 +37,7 @@
             android:resumeWhilePausing="true"
             android:stateNotNeeded="true"
             android:taskAffinity=""
+            android:theme="@android:style/Theme.DeviceDefault.Wallpaper.NoTitleBar"
             android:windowSoftInputMode="adjustPan">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -41,6 +50,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Developer panel (status, updater, tests, log), opened from the home screen. -->
+        <activity
+            android:name=".DevActivity"
+            android:exported="false"
+            android:label="Launcher dev" />
 
         <!-- Fixed recovery screen: own task and own app-drawer entry, so it opens even if the home screen is broken. -->
         <activity

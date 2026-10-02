@@ -126,3 +126,20 @@ Device results (8d11dea): accessibility overlay works (strip visible and working
 - Stutter cause (likely): card animation shared the main thread with our home screen, whose first frame after resume lays out the 500-line log.
 - Changes (next build): GestureNav runs on its own UI thread (`HandlerThread` at display priority: own Looper, Choreographer, input and
   animation); fresh snapshot only; the card window stays invisible until the snapshot is there (time logged as "card visible … after").
+
+Device results (5f36928): flash gone; strip hidden on the lock screen and back after unlock (confirmed). Drags 0 dropped.
+Matheesha: flick home "a bit stuttery because it's too fast, didn't feel like 120 Hz" → wants the iOS motion, not an approximation.
+Quick switch "horrible": it still tracked the finger vertically (unclear whether home or switch), and only our overlay moved over the
+current app; the previous app just popped in at the end.
+
+Rework (next build):
+- `Spring.kt`: analytic damped spring (response/damping like UIKit), velocity carried from the finger, re-targetable.
+- `CardView.kt`: card = hardware rounded-outline clip on a full-display view (no relayout per frame), snapshot scaled to cover,
+  crossfade into the app icon; corners from the display's `RoundedCorner` radius to the icon's.
+- HOME: card shrinks with upward travel (rubber band), the finger anchor scales with it. As soon as the card is visible the real home
+  screen is started *behind* it (zoomed 1.08, settles to 1 on commit). Release: springs (0.42 s, 0.9) into the app's icon on home
+  (icon hidden meanwhile), else to the centre and fade. Cancel: spring back, then the app is brought back and the card goes once the
+  accessibility event says it is in front.
+- SWITCH: horizontal axis only; the previous app's card (cached snapshot) slides in beside the current one over black; the real
+  switch is issued on release and the cards go when the app is in front.
+- New home screen: wallpaper, clock/date, dock (Settings, Chrome, TikTok, Samsung Calculator); dev panel moved to `DevActivity`.
