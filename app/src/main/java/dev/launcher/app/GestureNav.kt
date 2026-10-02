@@ -275,7 +275,7 @@ object GestureNav {
     }
 
     @Suppress("DEPRECATION")
-    private fun addCardWindow(withPreview: Boolean): Boolean {
+    private fun addCardWindow(picture: Picture?): Boolean {
         val ctx = a11y ?: return false
         val wm = wm ?: return false
         if (root != null) removeCards()
@@ -289,7 +289,6 @@ object GestureNav {
             display.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)?.radius?.toFloat() ?: dp(32)
         } else dp(32)
         val r = FrameLayout(ctx).apply { alpha = 0f }
-        val picture = if (withPreview) HomeBridge.preview else null
         if (picture != null) {
             backdrop = PreviewView(ctx, picture).also { r.addView(it, FrameLayout.LayoutParams(sw.toInt(), sh.toInt())) }
         }
@@ -440,7 +439,7 @@ object GestureNav {
     // ------------------------------------------------------------------ HOME mode
 
     private fun beginHome() {
-        if (!addCardWindow(withPreview = true)) return
+        if (!addCardWindow(HomeBridge.previewFor(fg?.pkg))) return
         mode = Mode.HOME
         dragging = true
         homeRequestedAt = 0L
@@ -528,7 +527,14 @@ object GestureNav {
             endLabel = if (target != null) "home (into icon)" else "home (to centre; app not on the home screen)"
             onSettled = {
                 // The picture of home is on top of the real one: swap only once the real home has drawn.
-                whenHomeDrawn { if (target != null) removeCards() else fadeOutCards(120) }
+                whenHomeDrawn {
+                    if (target != null && pkg != null) {
+                        // Real icon back first, card window a couple of frames later: never a frame with neither.
+                        HomeBridge.setIconHidden(pkg, false)
+                        hiddenIconPkg = null
+                        nav.postDelayed({ removeCards() }, 32)
+                    } else fadeOutCards(120)
+                }
             }
         } else {
             cardTargetW = sw
@@ -594,24 +600,28 @@ object GestureNav {
     // ------------------------------------------------------------------ LAUNCH mode
 
     /**
-     * Opening an app from [iconRect] on home: a card grows out of the icon to full screen while the app starts underneath
-     * (the caller starts it). The card shows the app's last snapshot if it has one, else its icon on a plain card, and goes
-     * once the app's window is in front. Main thread; returns at once.
+     * Opening an app from [iconRect] on home: a card grows out of the icon to full screen over our picture of home (which
+     * zooms in a little), while the app starts underneath, hidden by that picture. [start] (which starts the app) runs on
+     * the main thread only once the card window is on screen, because with system animations off the app's window appears
+     * at full size at once. The card shows the app's last snapshot if it has one, else its icon on a plain card, and goes
+     * once the app's window is in front. Returns false if gesture nav cannot animate (the caller then just starts the app).
      */
-    fun launchApp(pkg: String, iconRect: RectF, icon: Drawable?) {
-        if (!ready) return
+    fun launchApp(pkg: String, iconRect: RectF, icon: Drawable?, start: () -> Unit): Boolean {
+        if (!ready) return false
+        val main = Handler(Looper.getMainLooper())
         val since = SystemClock.uptimeMillis()
         val iconCopy = icon?.constantState?.newDrawable()?.mutate() ?: icon
         nav.post {
-            if (dragging || animating) return@post
-            if (!addCardWindow(withPreview = false)) return@post
-            val c = cur ?: return@post
+            if (dragging || animating || !addCardWindow(HomeBridge.previewFor(pkg))) { main.post(start); return@post }
+            val c = cur ?: run { main.post(start); return@post }
+            val hasPicture = backdrop != null
             mode = Mode.LAUNCH
             dragStartedAt = since
             c.icon = iconCopy
             c.placeholderColor = iconCopy?.let { averageColor(it) } ?: 0xFF2A2F3A.toInt()
             c.setFrame(iconRect.centerX(), iconRect.centerY(), iconRect.width(), iconRect.height(), iconRect.width() * 0.23f)
             c.iconMix = 1f
+            backdrop?.zoom = 1f
             root?.alpha = 1f
             HomeBridge.setIconHidden(pkg, true)
             hiddenIconPkg = pkg
@@ -621,10 +631,25 @@ object GestureNav {
             sCy = Spring(0.42f, 0.92f).apply { start(iconRect.centerY(), 0f, sh / 2) }
             sW = Spring(0.42f, 0.92f).apply { start(iconRect.width(), 0f, sw) }
             sH = Spring(0.42f, 0.92f).apply { start(iconRect.height(), 0f, sh) }
+            sZoom = Spring(0.45f, 1f).apply { start(1f, 0f, HOME_ZOOM) }
             endLabel = "launch $pkg"
+            var started = false
+            val startApp = { if (!started) { started = true; main.post(start) } }
             onSettled = {
+                startApp()   // without a picture of home the app is only started now, so it cannot show early
                 if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(90)
                 else awaitForeground(pkg) { fadeOutCards(90) }
+            }
+            if (hasPicture) {
+                // Start the app once our window (picture + icon card) has been drawn, so it covers the app from its first frame.
+                val r = root
+                r?.viewTreeObserver?.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+                    override fun onDraw() {
+                        nav.post { r.viewTreeObserver.removeOnDrawListener(this) }
+                        choreographer.postFrameCallback { startApp() }
+                    }
+                })
+                nav.postDelayed({ startApp() }, 100)   // never wait longer than this
             }
             stats.reset()
             startSprings()
@@ -637,6 +662,7 @@ object GestureNav {
                 nav.post { if (mode == Mode.LAUNCH && cur === c) c.snapshot = b }
             }
         }
+        return true
     }
 
     /** A colour for the card behind an icon (like a splash screen): the icon's average colour. */
@@ -660,7 +686,7 @@ object GestureNav {
 
     private fun beginSwitch() {
         if (prev == null && fg == null) return
-        if (!addCardWindow(withPreview = false)) return
+        if (!addCardWindow(null)) return
         val ctx = a11y ?: return
         mode = Mode.SWITCH
         dragging = true
@@ -788,6 +814,64 @@ object GestureNav {
             if (target == null) { AppLog.log("[nav] no recent app to return to"); return@execute }
             AppLog.log("[nav] home swipe -> last app ${target.pkg}: ${try { s.switchToTask(target.id) } catch (e: Throwable) { "ERROR: ${e.message}" }}")
         }
+    }
+
+    // ------------------------------------------------------------------ probe: live mirror
+
+    /**
+     * Probe for live cards: asks the shell service for a mirror of display 0 and shows it at half size in a window in the
+     * middle of the screen for 8 s. Answers: is mirrorDisplay allowed for the shell, does the mirror update live, and does
+     * it contain itself (a tunnel effect)?
+     */
+    fun probeMirror() {
+        val s = ShizukuLink.service ?: run { AppLog.log("[mirror] not connected"); return }
+        if (Build.VERSION.SDK_INT < 33) { AppLog.log("[mirror] needs Android 13+"); return }
+        io.execute {
+            val b = try { s.mirrorDisplay(0) } catch (t: Throwable) { AppLog.log("[mirror] call failed: ${t.message}"); return@execute }
+            b.classLoader = android.view.SurfaceControl::class.java.classLoader
+            val sc = if (b.getBoolean("ok")) b.getParcelable("sc", android.view.SurfaceControl::class.java) else null
+            if (sc == null) { AppLog.log("[mirror] mirrorDisplay failed: ${b.getString("error")}"); return@execute }
+            AppLog.log("[mirror] got a mirror surface (valid=${sc.isValid}); showing it at half size for 8 s")
+            nav.post { showMirror(s, sc) }
+        }
+    }
+
+    @android.annotation.TargetApi(33)
+    private fun showMirror(s: IShellService, sc: android.view.SurfaceControl) {
+        val ctx = a11y ?: run { AppLog.log("[mirror] accessibility service not connected (turn gesture nav on)"); return }
+        val wm = wm ?: return
+        val dm = android.util.DisplayMetrics()
+        @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(dm)
+        val w = dm.widthPixels / 2
+        val h = dm.heightPixels / 2
+        val v = View(ctx).apply { setBackgroundColor(0xFFFF00FF.toInt()) }   // magenta = mirror not visible
+        val lp = overlayParams(w, h, touchable = false).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = w / 2
+            y = h / 2
+            title = "LauncherMirrorProbe"
+        }
+        try { wm.addView(v, lp) } catch (t: Throwable) { AppLog.log("[mirror] window failed: ${t.message}"); return }
+        var attached: android.view.SurfaceControl.Transaction? = null
+        v.post {
+            try {
+                val t = v.rootSurfaceControl?.buildReparentTransaction(sc)
+                if (t == null) { AppLog.log("[mirror] no root surface to attach to"); return@post }
+                t.setLayer(sc, 1).setScale(sc, 0.5f, 0.5f).setPosition(sc, 0f, 0f).setVisibility(sc, true).apply()
+                attached = t
+                AppLog.log("[mirror] attached. Look: is the middle of the screen a LIVE half-size copy (does video move)? " +
+                    "Magenta = nothing shown. A tunnel of smaller copies = it mirrors itself.")
+            } catch (e: Throwable) {
+                AppLog.log("[mirror] attach failed: ${e.javaClass.simpleName}: ${e.message}")
+            }
+        }
+        nav.postDelayed({
+            try { android.view.SurfaceControl.Transaction().reparent(sc, null).apply() } catch (_: Throwable) { }
+            try { sc.release() } catch (_: Throwable) { }
+            try { wm.removeView(v) } catch (_: Throwable) { }
+            io.execute { try { s.releaseMirror() } catch (_: Throwable) { } }
+            AppLog.log("[mirror] probe ended${if (attached == null) " (it was never attached)" else ""}")
+        }, 8000)
     }
 
     /** Our recorded picture of the home screen, drawn behind a closing card, zoomed about the centre. */

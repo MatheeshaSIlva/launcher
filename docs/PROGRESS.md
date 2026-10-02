@@ -161,3 +161,16 @@ Causes and changes (next build):
 - Glass dock: home draws the wallpaper itself (needs MANAGE_EXTERNAL_STORAGE via appops to read it; fallback: system
   wallpaper window, plain dock). AGSL shader: frosted body, convex-bevel refraction at the rim, per-channel dispersion,
   rim highlight. Open (Play): all-files access only for the wallpaper.
+
+Device results (e4807b6), Matheesha: closing "good now". Wallpaper unreadable on the first try, read automatically on the next
+(the retry works). Glass: "blur too high to see any bending". Opening "absolutely sucks": the app appeared instantly, then our card
+animated on top of it. Holding during a close: TikTok's sound kept playing but the card is a still image.
+Changes (next build):
+- Opening: the card window now draws the home picture behind the growing card (zooming 1 → 1.08), and the app is started only
+  after that window has drawn (fallback 100 ms; without a picture, only once the card is full screen). Pictures of home are
+  also recorded with each dock icon left out, so no duplicate icon shows under a launching/closing card; on close the real
+  icon is shown again before the card window goes.
+- Glass: mostly clear body (frost 0.22, none at the rim), lens magnification 6 %, stronger rim refraction (34 dp) and
+  dispersion (0.45).
+- Live card content: probe added (DEV → "Probe: live mirror"): shell `IWindowManager.mirrorDisplay(0)` → SurfaceControl in a
+  Bundle → reparented into a half-size overlay window for 8 s. Questions: allowed for the shell? live? recursive?

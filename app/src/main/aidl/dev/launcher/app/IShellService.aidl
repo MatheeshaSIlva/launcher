@@ -1,6 +1,7 @@
 package dev.launcher.app;
 
 import android.graphics.Bitmap;
+import android.os.Bundle;
 
 // Runs in the Shizuku user-service process (uid 2000 via wireless debugging).
 // Transaction codes are explicit so the app and an older still-running service never disagree.
@@ -46,4 +47,9 @@ interface IShellService {
 
     // Recent tasks as "taskId packageName", most recent first (the home task is not listed).
     String[] recentTasks(int max) = 13;
+
+    // Probe: a live mirror of a display (IWindowManager.mirrorDisplay, as the magnifier uses). Bundle: "ok" (boolean),
+    // "sc" (SurfaceControl, to be reparented into one of the app's windows) or "error" (String). Release with releaseMirror.
+    Bundle mirrorDisplay(int displayId) = 14;
+    void releaseMirror() = 15;
 }

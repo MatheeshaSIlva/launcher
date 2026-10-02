@@ -142,12 +142,22 @@ class HomeActivity : Activity(), HomeBridge.Home {
     /** Records home at rest (scale 1, all icons shown) as a picture that gesture nav draws behind closing cards. */
     private fun recordPreview() {
         if (!resumed || content.width == 0 || content.scaleX != 1f || iconViews.values.any { it.visibility != View.VISIBLE }) return
+        HomeBridge.preview = record()
+        // One per app with its icon left out (toggled only while recording, never drawn on screen like that).
+        for ((pkg, v) in iconViews) {
+            v.visibility = View.INVISIBLE
+            HomeBridge.previewWithout[pkg] = record()
+            v.visibility = View.VISIBLE
+        }
+    }
+
+    private fun record(): Picture {
         val p = Picture()
         val c = p.beginRecording(content.width, content.height)
         if (wallpaper == null) c.drawColor(Color.BLACK)   // the system wallpaper window is not ours to record
         content.draw(c)
         p.endRecording()
-        HomeBridge.preview = p
+        return p
     }
 
     // ------------------------------------------------------------------ wallpaper and glass
@@ -295,10 +305,11 @@ class HomeActivity : Activity(), HomeBridge.Home {
     private fun launch(pkg: String, iconView: ImageView) {
         val i = packageManager.getLaunchIntentForPackage(pkg) ?: return
         val rect = HomeBridge.iconRect(pkg)
-        // The card grows out of the icon while the app starts underneath; home zooms in a little, as if we fly into it.
-        if (rect != null) GestureNav.launchApp(pkg, rect, iconView.drawable)
-        content.animate().scaleX(1.08f).scaleY(1.08f).setDuration(450).setInterpolator(ease).start()
-        try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (t: Throwable) { AppLog.log("[home] launch $pkg failed: ${t.message}") }
+        val start = {
+            try { startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (t: Throwable) { AppLog.log("[home] launch $pkg failed: ${t.message}") }
+        }
+        // A card grows out of the icon over a picture of home, and gesture nav starts the app once that covers the screen.
+        if (rect == null || !GestureNav.launchApp(pkg, rect, iconView.drawable, start)) start()
     }
 
     /** Draws our copy of the wallpaper with the same centre-crop the glass samples with. */

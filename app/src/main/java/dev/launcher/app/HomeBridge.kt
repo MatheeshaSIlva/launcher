@@ -29,6 +29,11 @@ object HomeBridge {
      */
     @Volatile var preview: Picture? = null
 
+    /** The same picture with one app's icon left out: used while that app's card flies into or out of its icon. */
+    val previewWithout = ConcurrentHashMap<String, Picture>()
+
+    fun previewFor(pkg: String?): Picture? = pkg?.let { previewWithout[it] } ?: preview
+
     /** uptimeMillis of the last frame home committed after a resume. */
     @Volatile var homeDrawnAt = 0L
         private set

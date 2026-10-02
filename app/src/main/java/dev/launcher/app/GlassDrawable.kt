@@ -38,9 +38,11 @@ class GlassDrawable(wallpaper: Wallpaper, screenW: Int, screenH: Int, private va
         shader.setInputShader("sharp", sharp)
         shader.setInputShader("frosted", blurred)
         shader.setFloatUniform("radius", radius)
-        shader.setFloatUniform("bevel", 26f * density)       // width of the refracting rim
-        shader.setFloatUniform("refraction", 22f * density)  // how far the rim bends the view outward
-        shader.setFloatUniform("dispersion", 0.32f)          // spread between red and blue refraction
+        shader.setFloatUniform("bevel", 30f * density)       // width of the refracting rim
+        shader.setFloatUniform("refraction", 34f * density)  // how far the rim bends the view outward
+        shader.setFloatUniform("dispersion", 0.45f)          // spread between red and blue refraction
+        shader.setFloatUniform("frost", 0.22f)               // 0 = clear glass, 1 = fully frosted body
+        shader.setFloatUniform("magnify", 0.06f)             // the body is a weak lens: content slightly enlarged
         paint.shader = shader
     }
 
@@ -69,6 +71,8 @@ uniform float radius;
 uniform float bevel;
 uniform float refraction;
 uniform float dispersion;
+uniform float frost;
+uniform float magnify;
 
 // Signed distance to a rounded rectangle centred at 0 with half-size b (negative inside).
 float sdRoundRect(float2 p, float2 b, float r) {
@@ -99,19 +103,20 @@ half4 main(float2 coord) {
     float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
 
     float2 sp = origin + coord;
-    float2 off = n * bend * refraction;
+    // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
+    float2 off = n * bend * refraction - p * magnify;
 
     // Dispersion: red bends least, blue most.
-    half3 col;
-    col.r = frosted.eval(sp + off * (1.0 - dispersion)).r;
-    col.g = frosted.eval(sp + off).g;
-    col.b = frosted.eval(sp + off * (1.0 + dispersion)).b;
-    // A little of the sharp image along the rim keeps the refracted edge crisp, like real glass.
-    half3 rimSharp = half3(
+    half3 clearCol = half3(
         sharp.eval(sp + off * (1.0 - dispersion)).r,
         sharp.eval(sp + off).g,
         sharp.eval(sp + off * (1.0 + dispersion)).b);
-    col = mix(col, rimSharp, half(bend * 0.55));
+    half3 frostCol = half3(
+        frosted.eval(sp + off * (1.0 - dispersion)).r,
+        frosted.eval(sp + off).g,
+        frosted.eval(sp + off * (1.0 + dispersion)).b);
+    // Mostly clear glass; a light frost in the body, none on the rim so the bending stays crisp.
+    half3 col = mix(clearCol, frostCol, half(frost * t));
 
     col = saturate3(col, 1.25);
     col = mix(col, half3(1.0), 0.10);
