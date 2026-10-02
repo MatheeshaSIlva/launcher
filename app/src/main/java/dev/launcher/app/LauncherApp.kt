@@ -7,6 +7,7 @@ class LauncherApp : Application() {
         super.onCreate()
         // Must stay the first log line: tests are only trusted when this matches the commit under test.
         AppLog.log("BUILD ${buildStamp()}")
+        Watchdog.startHeartbeat()
         ShizukuLink.init(this)
         SafetyNotification.show(this)
     }

@@ -40,6 +40,24 @@ object SystemRestore {
 
     private fun bootCount(ctx: Context) = Settings.Global.getInt(ctx.contentResolver, Settings.Global.BOOT_COUNT, 0)
 
+    /** Shell commands that undo exactly what we changed (empty when nothing is changed). The watchdog runs these. */
+    fun restorePlan(ctx: Context): String {
+        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val lines = mutableListOf<String>()
+        if (p.contains(KEY_TRANSITION)) {
+            lines += "settings put global transition_animation_scale ${p.getFloat(KEY_TRANSITION, 1f)}"
+            lines += "settings put global window_animation_scale ${p.getFloat(KEY_WINDOW, 1f)}"
+        }
+        if (statusBarHidden(ctx)) lines += "cmd statusbar send-disable-flag none"
+        return lines.joinToString("\n")
+    }
+
+    /** The watchdog already ran the plan: forget what we had changed. */
+    fun clearRecords(ctx: Context) {
+        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .remove(KEY_TRANSITION).remove(KEY_WINDOW).remove(KEY_BAR_HIDDEN_BOOT).apply()
+    }
+
     fun canWriteSecureSettings(ctx: Context) =
         ctx.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
 
@@ -82,6 +100,7 @@ object SystemRestore {
             null
         }
         if (statusBar != null) p.edit().remove(KEY_BAR_HIDDEN_BOOT).apply()
+        if (svc != null) Watchdog.sync(ctx, svc)
 
         val report = "animations: ${animations ?: "NOT restored (no Shizuku, no permission): Developer options > animation scales"}; " +
             "status bar: ${statusBar ?: if (statusBarHidden(ctx)) "NOT restored (needs Shizuku): restart the phone to clear it" else "not hidden, nothing to do"}"

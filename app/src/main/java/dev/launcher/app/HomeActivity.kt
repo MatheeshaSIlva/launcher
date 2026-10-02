@@ -40,6 +40,7 @@ class HomeActivity : Activity() {
         AppLog.addListener(onLog)
         ShizukuLink.addListener(onShizuku)
         refreshStatus()
+        Watchdog.start(this)
         if (!SafetyNotification.canPost(this)) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
 
@@ -92,6 +93,7 @@ class HomeActivity : Activity() {
         val row3 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row3.addView(button("Safe settings") { startActivity(Intent(this, SafeSettingsActivity::class.java)) }, weighted())
         row3.addView(button("Test: break system") { breakSystem() }, weighted())
+        row3.addView(button("Watchdog status") { watchdogStatus() }, weighted())
         root.addView(row3)
 
         logView = TextView(this).apply {
@@ -118,12 +120,18 @@ class HomeActivity : Activity() {
         SystemRestore.rememberOriginals(this)
         SystemRestore.markStatusBarHidden(this)
         io.execute {
+            Watchdog.sync(applicationContext, s)
             val out = s.runShell(
                 "settings put global transition_animation_scale 0; settings put global window_animation_scale 0; " +
                     "cmd statusbar send-disable-flag clock system-icons notification-icons"
             ).trim()
             AppLog.log("[test] stock status bar hidden, animations off ($out). Undo with Restore system.")
         }
+    }
+
+    private fun watchdogStatus() {
+        val s = ShizukuLink.service ?: run { AppLog.log("[watchdog] not connected"); return }
+        io.execute { AppLog.log("[watchdog] status\n${try { s.watchdogStatus() } catch (t: Throwable) { "failed: ${t.message}" }}") }
     }
 
     private fun copyLog() {

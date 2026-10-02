@@ -56,6 +56,57 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
+    // ---------------------------------------------------------------- watchdog
+
+    private val wd = File("/data/local/tmp/launcher-wd")
+
+    override fun watchdogArm(restorePlan: String): String = try {
+        wd.mkdirs()
+        File(wd, "restore").writeText(restorePlan)
+        heartbeat()
+        val firedFile = File(wd, "fired")
+        val fired = if (firedFile.exists()) firedFile.readText().trim().also { firedFile.delete() } else null
+        val loop = if (loopPid() != null) "loop running" else startLoop()
+        loop + (fired?.let { "; FIRED at $it" } ?: "")
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
+    override fun heartbeat() {
+        // Any change counts; the loop compares values, not clock times, so a suspended phone never looks stale.
+        try { File(wd, "hb").writeText(System.nanoTime().toString()) } catch (_: Throwable) { }
+    }
+
+    override fun watchdogStatus(): String = try {
+        val plan = File(wd, "restore").takeIf { it.exists() }?.readText()?.trim().orEmpty()
+        "loop: ${loopPid()?.let { "running (pid $it)" } ?: "NOT running"}\n" +
+            "restore plan: ${plan.ifEmpty { "(empty, nothing to undo)" }.replace("\n", "; ")}\n" +
+            "log:\n" + (File(wd, "log").takeIf { it.exists() }?.readText()?.trimEnd().orEmpty().ifEmpty { "(empty)" })
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
+    /** Pid from the loop's own pid file, confirmed through /proc so a reused pid never counts. */
+    private fun loopPid(): Int? {
+        val pid = File(wd, "pid").takeIf { it.exists() }?.readText()?.trim()?.toIntOrNull() ?: return null
+        val cmd = try { File("/proc/$pid/cmdline").readText() } catch (_: Throwable) { return null }
+        return if ("wd.sh" in cmd) pid else null
+    }
+
+    private fun startLoop(): String {
+        val script = File(wd, "wd.sh")
+        script.writeText(WATCHDOG_SCRIPT)
+        File(wd, "pid").delete()
+        File(wd, "log").writeText("")
+        runDetached("setsid nohup sh ${script.path} >/dev/null 2>&1 &")
+        // Wait for the pid file so a quick second arm cannot start a second loop.
+        repeat(20) {
+            loopPid()?.let { return "loop started (pid $it)" }
+            Thread.sleep(50)
+        }
+        return "ERROR: loop did not start"
+    }
+
     private fun open(url: String) = (URL(url).openConnection() as HttpURLConnection).apply {
         connectTimeout = 15000
         readTimeout = 60000
@@ -84,4 +135,30 @@ class ShellService : IShellService.Stub() {
     }
 
     private fun describe(t: Throwable) = "${t.javaClass.simpleName}: ${t.message}"
+
+    private companion object {
+        // Counts checks without a heartbeat change instead of comparing clock times: during suspend neither the app nor
+        // this loop runs, so waking up never looks like a dead app. 4 missed checks = about 4 s of real running time.
+        const val WATCHDOG_SCRIPT = """#!/system/bin/sh
+D=/data/local/tmp/launcher-wd
+echo $$ > ${'$'}D/pid
+echo "$(date +%T) armed, pid $$" >> ${'$'}D/log
+last=""
+miss=0
+while true; do
+  cur=""
+  read -r cur 2>/dev/null < ${'$'}D/hb
+  if [ "${'$'}cur" = "${'$'}last" ]; then miss=$((miss + 1)); else miss=0; last=${'$'}cur; fi
+  if [ ${'$'}miss -ge 4 ]; then
+    echo "$(date +%T) heartbeat unchanged for ${'$'}miss checks, running restore plan" >> ${'$'}D/log
+    sh ${'$'}D/restore >> ${'$'}D/log 2>&1
+    : > ${'$'}D/restore
+    date +%T > ${'$'}D/fired
+    rm -f ${'$'}D/pid
+    exit 0
+  fi
+  sleep 1
+done
+"""
+    }
 }

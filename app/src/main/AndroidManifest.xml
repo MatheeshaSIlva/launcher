@@ -5,6 +5,8 @@
     <!-- The updater asks GitHub which build is newest from the app process; the APK itself downloads in the shell process. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Not granted at install. Declared so the shell can grant it once (pm grant); then animation scales can be
          restored without Shizuku. -->
     <uses-permission
@@ -55,6 +57,16 @@
         <receiver
             android:name=".RestoreReceiver"
             android:exported="false" />
+
+        <!-- Keeps the process running so the watchdog heartbeat never stops while the launcher is alive. -->
+        <service
+            android:name=".WatchdogService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Safety watchdog heartbeat: restores the system status bar and animations if the launcher stops." />
+        </service>
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

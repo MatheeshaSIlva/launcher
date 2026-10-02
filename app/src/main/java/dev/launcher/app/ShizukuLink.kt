@@ -42,7 +42,7 @@ object ShizukuLink {
             service = if (binder != null && binder.pingBinder()) IShellService.Stub.asInterface(binder) else null
             binding = false
             AppLog.log("[shizuku] service connected: ${service != null}")
-            service?.let { s -> io.execute { grantSelf(s) } }
+            service?.let { s -> io.execute { grantSelf(s); Watchdog.sync(app, s) } }
             changed()
         }
 

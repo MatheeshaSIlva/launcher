@@ -16,4 +16,11 @@ interface IShellService {
 
     // Downloads inside the shell process so the shell installer can read the file. Returns "OK <bytes>" or "ERROR: ...".
     String downloadFile(String url, String dest) = 4;
+
+    // Watchdog. A shell loop outside both processes runs the restore plan when the heartbeat stops changing for 4 checks.
+    // Arm: stores the plan (shell commands, may be empty), starts the loop if it is not running. Reply contains
+    // "FIRED <time>" once if the loop fired since the last arm.
+    String watchdogArm(String restorePlan) = 5;
+    oneway void heartbeat() = 6;
+    String watchdogStatus() = 7;
 }
