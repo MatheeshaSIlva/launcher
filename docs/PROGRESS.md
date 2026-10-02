@@ -118,3 +118,11 @@ Device results (8a93d7c):
 enabled by the app through WRITE_SECURE_SETTINGS). Stock gestures are blocked only while that service is connected; disconnect → flags dropped.
 Strip removed while the keyguard is up. Gesture nav also turns system transition/window animations off (watchdog plan first).
 **Open (Play):** accessibility API use for a non-accessibility purpose needs a policy justification or a fallback in the store build.
+
+Device results (8d11dea): accessibility overlay works (strip visible and working in Settings; no dialog when the service is enabled).
+- Holding/dragging smooth (mostly 0–2 dropped). Matheesha: "the app close and switch animations suck"; a brief flash of a plain colour over the card.
+- Home end animation: ≈4–6 dropped, worst 33–42 ms, touch→frame p95 ≈38 ms, even with system animations off.
+- Flash cause: the card window showed its placeholder colour until the snapshot arrived (cached call 58–244 ms ran before the fresh one).
+- Stutter cause (likely): card animation shared the main thread with our home screen, whose first frame after resume lays out the 500-line log.
+- Changes (next build): GestureNav runs on its own UI thread (`HandlerThread` at display priority: own Looper, Choreographer, input and
+  animation); fresh snapshot only; the card window stays invisible until the snapshot is there (time logged as "card visible … after").

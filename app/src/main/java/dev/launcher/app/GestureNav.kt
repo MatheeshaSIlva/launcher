@@ -14,9 +14,10 @@ import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.Looper
+import android.os.Process
 import android.os.SystemClock
-import android.provider.Settings
 import android.view.Choreographer
 import android.view.Gravity
 import android.view.MotionEvent
@@ -36,14 +37,21 @@ import kotlin.math.min
  * gesture area takes the finger; a full-display, non-touchable card window draws the app as a card that follows it.
  * Flick up = home, sideways = previous app, otherwise the card springs back. Any animation can be grabbed mid-flight.
  *
- * Windows are TYPE_ACCESSIBILITY_OVERLAY (through [NavAccessibilityService]), which Settings and setHideOverlayWindows
- * cannot hide. Stock gestures are only blocked while that service is connected ([ready]).
- * Shown only while the stock home/recents gestures are blocked by flags held by our live service
- * ([SystemRestore.gestureFlagsActive]); if the service dies, the system restores stock gestures and the strip goes away.
- * Main thread only, except [update].
+ * - Windows are TYPE_ACCESSIBILITY_OVERLAY (through [NavAccessibilityService]), which Settings and setHideOverlayWindows
+ *   cannot hide. Stock gestures are only blocked while that service is connected ([ready]) and our flags are held by the
+ *   live shell service ([SystemRestore.gestureFlagsActive]); if either goes, stock gestures come back and the strip goes.
+ * - Everything here runs on its own UI thread ([nav]): input, layout, animation and frame callbacks never wait for the
+ *   home screen or anything else on the main thread. Public entry points may be called from any thread.
  */
 object GestureNav {
     private lateinit var app: LauncherApp
+    private val navThread = HandlerThread("nav-ui", Process.THREAD_PRIORITY_DISPLAY).apply { start() }
+    private val nav = Handler(navThread.looper)
+    private val io = Executors.newSingleThreadExecutor()
+    private val interp = PathInterpolator(0.2f, 0f, 0f, 1f)   // emphasized decelerate
+    private val density get() = app.resources.displayMetrics.density
+    private fun dp(v: Int) = (v * density).toInt()
+
     /** The accessibility service's WindowManager: only it can add TYPE_ACCESSIBILITY_OVERLAY windows. */
     private var a11y: NavAccessibilityService? = null
     private var wm: WindowManager? = null
@@ -51,16 +59,11 @@ object GestureNav {
     /** Our windows can be shown (accessibility service connected). Gesture flags are only set while this is true. */
     @Volatile var ready = false
         private set
-    private var locked = false
-    private val ui = Handler(Looper.getMainLooper())
-    private val io = Executors.newSingleThreadExecutor()
-    private val interp = PathInterpolator(0.2f, 0f, 0f, 1f)   // emphasized decelerate
-    private val density get() = app.resources.displayMetrics.density
-    private fun dp(v: Int) = (v * density).toInt()
+    @Volatile private var locked = false
 
     /** Set by HomeActivity: a swipe on the home screen has no app card to move. */
     @Volatile var homeVisible = false
-    private var homeShownAt = 0L
+    @Volatile private var homeShownAt = 0L
 
     private var strip: View? = null
     private var cardRoot: FrameLayout? = null
@@ -69,7 +72,7 @@ object GestureNav {
     private var screenH = 0
     private var radius = 0f
 
-    // Gesture state
+    // Gesture state (nav thread)
     private var startX = 0f
     private var startY = 0f
     private var lastDx = 0f
@@ -81,21 +84,23 @@ object GestureNav {
     private var animating = false
     private var anim: ValueAnimator? = null
 
-    // Tasks and snapshots for the gesture in progress (filled on ACTION_DOWN, off the main thread)
+    // Tasks and snapshot for the gesture in progress (fetched on ACTION_DOWN by io, delivered on nav)
     @Volatile private var gestureId = 0
     @Volatile private var fgTask = 0
     @Volatile private var prevTask = 0
-    private var cachedMs = -1L
-    private var freshMs = -1L
-    private var shownSnapshot = "none"
+    private var snapshotMs = -1L
+    private var snapshotState = "none"     // none | waiting | shown | unavailable
+    private var pendingBitmap: Bitmap? = null
+    private var dragStartedAt = 0L
+    private var cardShownAfterMs = -1L
 
-    private val stats by lazy { FrameStats() }   // Choreographer: first used on the main thread
+    private val stats by lazy { FrameStats() }   // Choreographer of the nav thread: first used there
 
     fun init(app: LauncherApp) { this.app = app }
 
-    /** Shows or removes the strip to match the current state. Safe from any thread. */
+    /** Shows or removes the strip to match the current state. Any thread. */
     fun update() {
-        if (Looper.myLooper() != Looper.getMainLooper()) { ui.post { update() }; return }
+        if (Looper.myLooper() != navThread.looper) { nav.post { update() }; return }
         val want = ready && SystemRestore.gestureFlagsActive && ShizukuLink.service != null && !locked
         if (want && strip == null) addStrip()
         if (!want && strip != null) removeAll()
@@ -103,30 +108,41 @@ object GestureNav {
 
     /** NavAccessibilityService connected: windows can be added. Re-applies flags, which then shows the strip. */
     fun attach(service: NavAccessibilityService) {
-        if (a11y === service) return
-        if (strip != null) removeAll()
-        a11y = service
-        wm = service.getSystemService(WindowManager::class.java)
-        ready = true
-        locked = app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
-        val f = IntentFilter().apply {
-            addAction(Intent.ACTION_SCREEN_OFF)
-            addAction(Intent.ACTION_SCREEN_ON)
-            addAction(Intent.ACTION_USER_PRESENT)
+        nav.post {
+            if (a11y === service) return@post
+            if (strip != null) removeAll()
+            a11y = service
+            wm = service.getSystemService(WindowManager::class.java)
+            locked = app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+            val f = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            app.registerReceiver(screenReceiver, f, null, nav)
+            ready = true
+            reapplyFlags()
         }
-        app.registerReceiver(screenReceiver, f)
-        reapplyFlags()
     }
 
     /** Service gone: our windows are invalid and stock gestures must come back at once. */
     fun detach(service: NavAccessibilityService) {
-        if (a11y !== service) return
+        if (a11y !== service && a11y != null) return
         ready = false
-        removeAll()
-        try { app.unregisterReceiver(screenReceiver) } catch (_: Throwable) { }
-        a11y = null
-        wm = null
         reapplyFlags()
+        nav.post {
+            if (a11y !== service) return@post
+            removeAll()
+            try { app.unregisterReceiver(screenReceiver) } catch (_: Throwable) { }
+            a11y = null
+            wm = null
+        }
+    }
+
+    /** Called from HomeActivity.onResume: home is on screen, so a card covering it can go. */
+    fun onHomeShown() {
+        homeVisible = true
+        homeShownAt = SystemClock.uptimeMillis()
     }
 
     private fun reapplyFlags() {
@@ -146,13 +162,21 @@ object GestureNav {
         }
     }
 
-    /** Called from HomeActivity.onResume: home is on screen, so a card covering it can go. */
-    fun onHomeShown() {
-        homeVisible = true
-        homeShownAt = SystemClock.uptimeMillis()
-    }
+    // ------------------------------------------------------------------ windows (nav thread)
 
-    // ------------------------------------------------------------------ windows
+    private fun overlayParams(w: Int, h: Int, touchable: Boolean) = WindowManager.LayoutParams(
+        w, h,
+        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            (if (touchable) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+        PixelFormat.TRANSLUCENT
+    ).apply {
+        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+        if (Build.VERSION.SDK_INT >= 30) setFitInsetsTypes(0)
+    }
 
     private fun addStrip() {
         val ctx = a11y ?: return
@@ -164,23 +188,14 @@ object GestureNav {
         }
         root.addView(pill, FrameLayout.LayoutParams(dp(108), dp(4), Gravity.CENTER))
         root.setOnTouchListener { _, e -> onTouch(e) }
-        val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT, h,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-            PixelFormat.TRANSLUCENT
-        )
-        lp.gravity = Gravity.BOTTOM
-        lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-        if (Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
-        lp.title = "LauncherGestureStrip"
+        val lp = overlayParams(WindowManager.LayoutParams.MATCH_PARENT, h, touchable = true).apply {
+            gravity = Gravity.BOTTOM
+            title = "LauncherGestureStrip"
+        }
         try {
             wm.addView(root, lp)
             strip = root
-            AppLog.log("[nav] gesture strip on (${h}px high)")
+            AppLog.log("[nav] gesture strip on (${h}px high, own UI thread)")
         } catch (t: Throwable) {
             AppLog.log("[nav] strip addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
         }
@@ -208,7 +223,7 @@ object GestureNav {
         return if (id != 0) app.resources.getDimensionPixelSize(id) else 0
     }
 
-    // ------------------------------------------------------------------ touch
+    // ------------------------------------------------------------------ touch (nav thread)
 
     private fun onTouch(e: MotionEvent): Boolean {
         when (e.actionMasked) {
@@ -252,16 +267,18 @@ object GestureNav {
         return true
     }
 
-    /** Finds the foreground and previous task, then loads the cached snapshot (fast) followed by a fresh one. */
+    /**
+     * Finds the foreground and previous task, then takes a fresh snapshot of the foreground app (≈40–90 ms). The cached
+     * snapshot is skipped: for the app in front it was usually missing or old, and slower than expected (58–244 ms).
+     */
     private fun prefetch() {
         val s = ShizukuLink.service ?: return
         val id = ++gestureId
         val onHome = homeVisible
         fgTask = 0
         prevTask = 0
-        cachedMs = -1
-        freshMs = -1
-        shownSnapshot = "none"
+        snapshotMs = -1
+        snapshotState = if (onHome) "none" else "waiting"
         pendingBitmap = null
         io.execute {
             try {
@@ -270,28 +287,32 @@ object GestureNav {
                 fgTask = ids[0]
                 prevTask = ids.getOrElse(1) { 0 }
                 if (onHome) return@execute
-                var t = SystemClock.uptimeMillis()
-                val cached = s.taskSnapshot(ids[0], false)
-                val c = SystemClock.uptimeMillis() - t
-                if (cached != null) ui.post { if (id == gestureId) { cachedMs = c; showSnapshot(cached, "cached") } }
-                t = SystemClock.uptimeMillis()
+                val t = SystemClock.uptimeMillis()
                 val fresh = s.taskSnapshot(ids[0], true)
-                val f = SystemClock.uptimeMillis() - t
-                if (fresh != null) ui.post { if (id == gestureId) { freshMs = f; showSnapshot(fresh, "fresh") } }
+                val ms = SystemClock.uptimeMillis() - t
+                nav.post { if (id == gestureId) onSnapshot(fresh, ms) }
             } catch (t: Throwable) {
                 AppLog.log("[nav] snapshot fetch failed: ${t.javaClass.simpleName}: ${t.message}")
+                nav.post { if (id == gestureId) onSnapshot(null, -1) }
             }
         }
     }
 
-    private var pendingBitmap: Bitmap? = null
-
-    private fun showSnapshot(b: Bitmap, kind: String) {
-        // A fresh snapshot replaces a cached one, never the other way round.
-        if (kind == "cached" && shownSnapshot == "fresh") return
-        shownSnapshot = kind
+    private fun onSnapshot(b: Bitmap?, ms: Long) {
+        snapshotMs = ms
+        snapshotState = if (b != null) "shown" else "unavailable"   // unavailable: secure app etc. -> plain card
         val c = card
-        if (c == null) pendingBitmap = b else c.setImageBitmap(b)
+        if (c == null) { pendingBitmap = b; return }
+        if (b != null) c.setImageBitmap(b)
+        revealCard()
+    }
+
+    /** The card window stays invisible until it has something real to show, so no placeholder colour ever flashes. */
+    private fun revealCard() {
+        val root = cardRoot ?: return
+        if (root.alpha == 1f) return
+        root.alpha = 1f
+        cardShownAfterMs = SystemClock.uptimeMillis() - dragStartedAt
     }
 
     @Suppress("DEPRECATION")
@@ -303,10 +324,10 @@ object GestureNav {
         wm.defaultDisplay.getRealMetrics(dm)
         screenW = dm.widthPixels
         screenH = dm.heightPixels
-        val root = FrameLayout(ctx)
+        val root = FrameLayout(ctx).apply { alpha = 0f }
         val c = ImageView(ctx).apply {
             scaleType = ImageView.ScaleType.FIT_XY
-            setBackgroundColor(0xFF2A2F3A.toInt())   // secure apps and missing snapshots: plain card
+            setBackgroundColor(0xFF2A2F3A.toInt())   // secure apps: plain card
             pendingBitmap?.let { setImageBitmap(it) }
             clipToOutline = true
             outlineProvider = object : ViewOutlineProvider() {
@@ -319,20 +340,10 @@ object GestureNav {
         root.addView(c, FrameLayout.LayoutParams(screenW, screenH))
         // Exact full-display size from the first frame, drawn into the cutout too, so the card is never laid out below the
         // status bar and then resized (the probe saw that as a stretch).
-        val lp = WindowManager.LayoutParams(
-            screenW, screenH,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-            PixelFormat.TRANSLUCENT
-        )
-        lp.gravity = Gravity.TOP or Gravity.START
-        lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
-        if (Build.VERSION.SDK_INT >= 30) lp.setFitInsetsTypes(0)
-        lp.title = "LauncherCard"
+        val lp = overlayParams(screenW, screenH, touchable = false).apply {
+            gravity = Gravity.TOP or Gravity.START
+            title = "LauncherCard"
+        }
         try {
             wm.addView(root, lp)
         } catch (t: Throwable) {
@@ -342,6 +353,9 @@ object GestureNav {
         cardRoot = root
         card = c
         dragging = true
+        dragStartedAt = SystemClock.uptimeMillis()
+        cardShownAfterMs = -1
+        if (snapshotState == "shown" || snapshotState == "unavailable") revealCard()
         stats.start()
     }
 
@@ -366,6 +380,7 @@ object GestureNav {
         anim?.cancel()
         anim = null
         animating = false
+        cardRoot?.animate()?.cancel()
         val p = min(1f, max(0f, (1f - c.scaleX) / 0.5f))
         val dyCur = p * screenH * 0.40f
         val dxCur = c.translationX / 0.9f
@@ -393,6 +408,8 @@ object GestureNav {
         val switched = sideMode && up && abs(lastDx) > screenW * 0.18f && prevTask != 0
         val dirSign = if (lastDx >= 0f) 1f else -1f
         animating = true
+        // Released before the snapshot came: show what we have (the app itself is still underneath) rather than nothing.
+        revealCard()
 
         val s0 = c.scaleX
         val ty0 = c.translationY
@@ -426,7 +443,10 @@ object GestureNav {
                 animating = false
                 anim = null
                 val label = if (goesHome) "home" else if (switched) "quick switch" else "spring back"
-                AppLog.log(stats.report("[nav] $label", dy / density) + "\n  snapshot: $shownSnapshot (cached ${cachedMs} ms, fresh ${freshMs} ms; -1 = none)")
+                AppLog.log(
+                    stats.report("[nav] $label", dy / density) +
+                        "\n  snapshot: $snapshotState after ${snapshotMs} ms; card visible ${cardShownAfterMs} ms after the drag began"
+                )
                 if (goesHome) revealHome(homeRequestedAt) else if (switched) fadeOutCard(60) else removeCard()
             }
         })
@@ -474,11 +494,11 @@ object GestureNav {
                 if (!ready) AppLog.log("[nav] home did not report within 1 s; removing the card anyway")
                 fadeOutCard(120)
             } else {
-                ui.postDelayed({ check() }, 16)
+                nav.postDelayed({ check() }, 16)
             }
         }
         // One extra frame after onResume so home has drawn before the backdrop goes.
-        ui.postDelayed({ check() }, 16)
+        nav.postDelayed({ check() }, 16)
     }
 
     private fun fadeOutCard(ms: Long) {
@@ -488,7 +508,7 @@ object GestureNav {
 
     private const val BACKDROP = 0x101820
 
-    /** Frame pacing (Choreographer) and touch-to-frame latency for one gesture, as in the probe. */
+    /** Frame pacing (nav thread Choreographer) and touch-to-frame latency for one gesture, as in the probe. */
     private class FrameStats {
         private val deltas = ArrayList<Double>()
         private val latencies = ArrayList<Double>()
