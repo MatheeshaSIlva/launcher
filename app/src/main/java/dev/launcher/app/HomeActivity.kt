@@ -95,6 +95,7 @@ class HomeActivity : Activity() {
         row3.addView(button("Test: break system") { breakSystem() }, weighted())
         row3.addView(button("Watchdog status") { watchdogStatus() }, weighted())
         root.addView(row3)
+        root.addView(button("Diagnose Shizuku restarts") { diagnoseRestarts() })
 
         logView = TextView(this).apply {
             setTextColor(Color.rgb(200, 220, 200))
@@ -132,6 +133,22 @@ class HomeActivity : Activity() {
     private fun watchdogStatus() {
         val s = ShizukuLink.service ?: run { AppLog.log("[watchdog] not connected"); return }
         io.execute { AppLog.log("[watchdog] status\n${try { s.watchdogStatus() } catch (t: Throwable) { "failed: ${t.message}" }}") }
+    }
+
+    /** adbd restarts on screen off/on and takes Shizuku with it. Pull the system log lines around those restarts. */
+    private fun diagnoseRestarts() {
+        val s = ShizukuLink.service ?: run { AppLog.log("[diag] not connected"); return }
+        io.execute {
+            val settings = s.runShell(
+                "echo adb_wifi_enabled=$(settings get global adb_wifi_enabled) adb_enabled=$(settings get global adb_enabled) " +
+                    "adbd=$(pidof adbd) uptime=$(cut -d' ' -f1 /proc/uptime)"
+            ).trim()
+            val lines = s.runShell(
+                "logcat -d -v time -b main,system,events 2>/dev/null | " +
+                    "grep -iE 'adbd|adb_wifi|AdbDebugging|AdbService|AdbWifi|shizuku|screen_toggled|wireless.?debug' | tail -n 80"
+            ).trim()
+            AppLog.log("[diag] $settings\n$lines")
+        }
     }
 
     private fun copyLog() {
