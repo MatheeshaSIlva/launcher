@@ -66,8 +66,11 @@ class ShellService : IShellService.Stub() {
         heartbeat()
         val firedFile = File(wd, "fired")
         val fired = if (firedFile.exists()) firedFile.readText().trim().also { firedFile.delete() } else null
+        // The loop deletes its pid file when it fires or catches a signal. A pid file left behind with no live loop
+        // means it was killed in a way it could not catch (SIGKILL), so its restore plan never ran.
+        val vanished = fired == null && File(wd, "pid").exists() && loopPid() == null
         val loop = if (loopPid() != null) "loop running" else startLoop()
-        loop + (fired?.let { "; FIRED at $it" } ?: "")
+        loop + (fired?.let { "; FIRED at $it" } ?: "") + (if (vanished) "; VANISHED (previous loop was killed without running its plan)" else "")
     } catch (t: Throwable) {
         "ERROR: ${describe(t)}"
     }
@@ -97,7 +100,9 @@ class ShellService : IShellService.Stub() {
         val script = File(wd, "wd.sh")
         script.writeText(WATCHDOG_SCRIPT)
         File(wd, "pid").delete()
-        File(wd, "log").writeText("")
+        // Keep earlier loops' logs (they show how the last loop ended), trimmed to the newest part.
+        val log = File(wd, "log")
+        if (log.exists() && log.length() > 16_000) log.writeText(log.readText().takeLast(8_000))
         runDetached("setsid nohup sh ${script.path} >/dev/null 2>&1 &")
         // Wait for the pid file so a quick second arm cannot start a second loop.
         repeat(20) {
@@ -141,6 +146,18 @@ class ShellService : IShellService.Stub() {
         // this loop runs, so waking up never looks like a dead app. 4 missed checks = about 4 s of real running time.
         const val WATCHDOG_SCRIPT = """#!/system/bin/sh
 D=/data/local/tmp/launcher-wd
+fire() {
+  echo "$(date +%T) ${'$'}1, running restore plan" >> ${'$'}D/log
+  sh ${'$'}D/restore >> ${'$'}D/log 2>&1
+  : > ${'$'}D/restore
+  echo "$(date +%T) (${'$'}1)" > ${'$'}D/fired
+  rm -f ${'$'}D/pid
+  exit 0
+}
+# Being killed with a catchable signal (e.g. when Shizuku restarts) still restores the system. SIGKILL cannot be caught.
+trap 'fire "got SIGTERM"' TERM
+trap 'fire "got SIGHUP"' HUP
+trap 'fire "got SIGINT"' INT
 echo $$ > ${'$'}D/pid
 echo "$(date +%T) armed, pid $$" >> ${'$'}D/log
 last=""
@@ -149,14 +166,7 @@ while true; do
   cur=""
   read -r cur 2>/dev/null < ${'$'}D/hb
   if [ "${'$'}cur" = "${'$'}last" ]; then miss=$((miss + 1)); else miss=0; last=${'$'}cur; fi
-  if [ ${'$'}miss -ge 4 ]; then
-    echo "$(date +%T) heartbeat unchanged for ${'$'}miss checks, running restore plan" >> ${'$'}D/log
-    sh ${'$'}D/restore >> ${'$'}D/log 2>&1
-    : > ${'$'}D/restore
-    date +%T > ${'$'}D/fired
-    rm -f ${'$'}D/pid
-    exit 0
-  fi
+  if [ ${'$'}miss -ge 4 ]; then fire "heartbeat unchanged for ${'$'}miss checks"; fi
   sleep 1
 done
 """

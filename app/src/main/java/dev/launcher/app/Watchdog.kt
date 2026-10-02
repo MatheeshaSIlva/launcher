@@ -21,8 +21,9 @@ object Watchdog {
                 // The loop already undid our changes while we were gone.
                 SystemRestore.clearRecords(ctx)
                 s.watchdogArm("")
-                AppLog.log("[watchdog] it fired while the app was gone (${reply.substringAfter("FIRED").trim()}); system was restored")
+                AppLog.log("[watchdog] it fired since the last arm (${reply.substringAfter("FIRED").substringBefore(";").trim()}); system was restored")
             }
+            if ("VANISHED" in reply) AppLog.log("[watchdog] WARNING: the previous loop was killed without running its restore plan")
             AppLog.log("[watchdog] armed: ${reply.substringBefore(";")}")
         } catch (t: Throwable) {
             AppLog.log("[watchdog] arm failed: ${t.javaClass.simpleName}: ${t.message}")
