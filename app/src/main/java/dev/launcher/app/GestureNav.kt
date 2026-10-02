@@ -98,7 +98,13 @@ object GestureNav {
 
     private fun addStrip() {
         val h = max(dp(20), systemDimen("navigation_bar_gesture_height").takeIf { it > 0 } ?: systemDimen("navigation_bar_height"))
-        val root = FrameLayout(app)
+        val root = object : FrameLayout(app) {
+            // Some screens (Settings, apps using setHideOverlayWindows) hide third-party overlays. Log when that happens.
+            override fun onWindowVisibilityChanged(visibility: Int) {
+                super.onWindowVisibilityChanged(visibility)
+                AppLog.log("[nav] strip window ${if (visibility == View.VISIBLE) "visible" else "HIDDEN by the system"}")
+            }
+        }
         val pill = View(app).apply {
             background = GradientDrawable().apply { setColor(0x99FFFFFF.toInt()); cornerRadius = dp(2).toFloat() }
         }
@@ -163,7 +169,7 @@ object GestureNav {
                 dragging = false
                 sideMode = false
                 stats.reset()
-                if (!homeVisible) prefetch()
+                prefetch()
             }
             MotionEvent.ACTION_MOVE -> {
                 if (animating) return true
@@ -185,6 +191,8 @@ object GestureNav {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 if (dragging) endDrag(e.actionMasked == MotionEvent.ACTION_UP, startY - e.rawY)
+                // On home there is no app card yet (recents comes later): a swipe up returns to the last app.
+                else if (homeVisible && e.actionMasked == MotionEvent.ACTION_UP && startY - e.rawY > dp(40)) returnToLastApp()
             }
         }
         return true
@@ -194,6 +202,7 @@ object GestureNav {
     private fun prefetch() {
         val s = ShizukuLink.service ?: return
         val id = ++gestureId
+        val onHome = homeVisible
         fgTask = 0
         prevTask = 0
         cachedMs = -1
@@ -206,6 +215,7 @@ object GestureNav {
                 if (id != gestureId || ids.isEmpty()) return@execute
                 fgTask = ids[0]
                 prevTask = ids.getOrElse(1) { 0 }
+                if (onHome) return@execute
                 var t = SystemClock.uptimeMillis()
                 val cached = s.taskSnapshot(ids[0], false)
                 val c = SystemClock.uptimeMillis() - t
@@ -375,6 +385,16 @@ object GestureNav {
         } catch (t: Throwable) {
             AppLog.log("[nav] going home from the app failed (${t.javaClass.simpleName}); using the shell")
             ShizukuLink.service?.let { s -> io.execute { s.runDetached("am start -a android.intent.action.MAIN -c android.intent.category.HOME") } }
+        }
+    }
+
+    private fun returnToLastApp() {
+        val s = ShizukuLink.service ?: return
+        io.execute {
+            // On home the newest recent task is the app we came from.
+            val target = fgTask.takeIf { it != 0 } ?: s.recentTaskIds(1).firstOrNull() ?: 0
+            if (target == 0) { AppLog.log("[nav] no recent app to return to"); return@execute }
+            AppLog.log("[nav] home swipe up -> last app (task $target): ${try { s.switchToTask(target) } catch (e: Throwable) { "ERROR: ${e.message}" }}")
         }
     }
 

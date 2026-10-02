@@ -60,6 +60,10 @@
             android:name=".RestoreReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".GestureToggleReceiver"
+            android:exported="false" />
+
         <!-- Keeps the process running so the watchdog heartbeat never stops while the launcher is alive. -->
         <service
             android:name=".WatchdogService"

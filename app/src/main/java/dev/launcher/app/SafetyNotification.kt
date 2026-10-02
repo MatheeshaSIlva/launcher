@@ -32,6 +32,7 @@ object SafetyNotification {
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val restore = PendingIntent.getBroadcast(ctx, 0, Intent(ctx, RestoreReceiver::class.java), flags)
         val open = PendingIntent.getActivity(ctx, 0, Intent(ctx, SafeSettingsActivity::class.java), flags)
+        val toggle = PendingIntent.getBroadcast(ctx, 1, Intent(ctx, GestureToggleReceiver::class.java), flags)
         return Notification.Builder(ctx, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_revert)
             .setContentTitle("Launcher safety")
@@ -42,6 +43,7 @@ object SafetyNotification {
             .setShowWhen(false)
             .addAction(Notification.Action.Builder(null, "Restore system", restore).build())
             .addAction(Notification.Action.Builder(null, "Safe settings", open).build())
+            .addAction(Notification.Action.Builder(null, "Gesture nav on/off", toggle).build())
             .build()
     }
 }
@@ -55,6 +57,29 @@ class RestoreReceiver : BroadcastReceiver() {
                 AppLog.log("[restore] requested from notification")
                 val report = SystemRestore.restore(app)
                 SafetyNotification.show(app, "Last restore: $report")
+            } finally {
+                pending.finish()
+            }
+        }.start()
+    }
+}
+
+/** Notification action: switches our gesture navigation on or off from inside any app (development aid). */
+class GestureToggleReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val pending = goAsync()
+        val app = context.applicationContext
+        Thread {
+            try {
+                val s = ShizukuLink.awaitService(3000)
+                if (s == null) {
+                    AppLog.log("[nav] toggle: Shizuku service not connected")
+                    SafetyNotification.show(app, "Gesture nav: Shizuku is not connected")
+                } else {
+                    val on = !SystemRestore.gesturesWanted(app)
+                    SystemRestore.setGesturesWanted(app, s, on)
+                    SafetyNotification.show(app, "Gesture nav is ${if (on) "ON" else "off"}")
+                }
             } finally {
                 pending.finish()
             }

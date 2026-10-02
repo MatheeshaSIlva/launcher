@@ -96,3 +96,11 @@ Port of the probe's `GestureStrip.kt` into `GestureNav.kt`, plus frame measureme
   until HomeActivity has resumed (+1 frame), then the card window fades out (120 ms).
 - Per gesture: Choreographer frame pacing + touch-to-frame latency (as in the probe). "Frame report" = `dumpsys gfxinfo` for all our windows.
 - Not yet: launch/close cards, recents, own status bar; strip over the keyboard; landscape gesture area.
+
+Device results (e765e6a): **failed, user got stuck.**
+- On our home screen the strip ignored swipes by design, but our home has no app list → with stock home/recents blocked there was no way out
+  (escape: shade → Restore system, which works). Fix: on home, swipe up returns to the last app.
+- **The strip disappeared when Settings was in front** (opened from QS), leaving stock gestures blocked → stuck in Settings. Cause (expected):
+  Settings hides non-system overlays (`HIDE_NON_SYSTEM_OVERLAY_WINDOWS`); since Android 12 any app may do the same (`setHideOverlayWindows`,
+  e.g. banking apps). So a `TYPE_APPLICATION_OVERLAY` strip cannot guarantee "one gesture set everywhere". Logging added to confirm.
+- Test aid: the safety notification has a "Gesture nav on/off" action.
