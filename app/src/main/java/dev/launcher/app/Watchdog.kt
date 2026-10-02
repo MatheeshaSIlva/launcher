@@ -18,8 +18,8 @@ object Watchdog {
         try {
             val reply = s.watchdogArm(SystemRestore.restorePlan(ctx))
             if ("FIRED" in reply) {
-                // The loop already undid our changes while we were gone.
-                SystemRestore.clearRecords(ctx)
+                // The loop already restored the animation scales while we were gone.
+                SystemRestore.clearAnimationRecords(ctx)
                 s.watchdogArm("")
                 AppLog.log("[watchdog] it fired since the last arm (${reply.substringAfter("FIRED").substringBefore(";").trim()}); system was restored")
             }

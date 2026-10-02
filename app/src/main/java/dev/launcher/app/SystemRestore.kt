@@ -6,19 +6,24 @@ import android.content.pm.PackageManager
 import android.provider.Settings
 
 /**
- * Gives back everything we change in the system: animation scales and status bar disable flags.
- * Works without Shizuku as far as Android allows: animation scales through WRITE_SECURE_SETTINGS (granted once via
- * Shizuku, kept after that). Status bar flags can only be cleared by the shell; without it a reboot clears them.
+ * Everything we change in the system and how it comes back.
+ *
+ * Status bar: hidden through the binder API by our shell service, with a token from that process. The system clears
+ * the flags by itself when that process dies, and the service also clears them when this app dies. So the stock bar
+ * can never be stranded; [statusBarWanted] is our wish, re-applied after every (re)connect.
+ *
+ * Animation scales: persist in settings, so the watchdog loop restores them if the app dies. Without Shizuku they can be
+ * restored through WRITE_SECURE_SETTINGS (granted once via Shizuku, kept after that).
  */
 object SystemRestore {
     private const val PREFS = "system_state"
     private const val KEY_TRANSITION = "orig_transition_scale"
     private const val KEY_WINDOW = "orig_window_scale"
-    private const val KEY_BAR_HIDDEN_BOOT = "status_bar_hidden_boot"
+    private const val KEY_BAR_HIDDEN = "status_bar_hidden"
 
     /** Call before changing animation scales, so restore returns the user's own values rather than a guess. */
     fun rememberOriginals(ctx: Context) {
-        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val p = prefs(ctx)
         if (p.contains(KEY_TRANSITION)) return
         val cr = ctx.contentResolver
         p.edit()
@@ -27,35 +32,36 @@ object SystemRestore {
             .apply()
     }
 
-    /** Call whenever we set status bar disable flags. The boot count lets us tell that a reboot has cleared them since. */
-    fun markStatusBarHidden(ctx: Context) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt(KEY_BAR_HIDDEN_BOOT, bootCount(ctx)).apply()
+    fun statusBarWanted(ctx: Context) = prefs(ctx).getBoolean(KEY_BAR_HIDDEN, false)
+
+    /** True while our flags are actually in force: we want the bar hidden and the service that holds them is alive. */
+    fun statusBarHidden(ctx: Context) = statusBarWanted(ctx) && ShizukuLink.service != null
+
+    /** Blocking binder call. Records the wish and applies it through [s]. */
+    fun setStatusBarHidden(ctx: Context, s: IShellService, hidden: Boolean): String {
+        prefs(ctx).edit().putBoolean(KEY_BAR_HIDDEN, hidden).apply()
+        return applyStatusBar(ctx, s)
     }
 
-    /** True while flags we set are still in force: not restored by us and not cleared by a reboot. */
-    fun statusBarHidden(ctx: Context): Boolean {
-        val boot = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_BAR_HIDDEN_BOOT, -1)
-        return boot != -1 && boot == bootCount(ctx)
+    /** Blocking binder call. Applies the recorded wish; called after every connect because a new service starts clean. */
+    fun applyStatusBar(ctx: Context, s: IShellService): String {
+        val hidden = statusBarWanted(ctx)
+        val r = try { s.setStatusBarHidden(hidden, ShizukuLink.clientToken) } catch (t: Throwable) { "ERROR: ${t.javaClass.simpleName}: ${t.message}" }
+        AppLog.log("[statusbar] ${if (hidden) "hide" else "show"}: $r")
+        return r
     }
 
-    private fun bootCount(ctx: Context) = Settings.Global.getInt(ctx.contentResolver, Settings.Global.BOOT_COUNT, 0)
-
-    /** Shell commands that undo exactly what we changed (empty when nothing is changed). The watchdog runs these. */
+    /** Shell commands that undo our animation-scale change (empty when unchanged). The watchdog runs these. */
     fun restorePlan(ctx: Context): String {
-        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val lines = mutableListOf<String>()
-        if (p.contains(KEY_TRANSITION)) {
-            lines += "settings put global transition_animation_scale ${p.getFloat(KEY_TRANSITION, 1f)}"
-            lines += "settings put global window_animation_scale ${p.getFloat(KEY_WINDOW, 1f)}"
-        }
-        if (statusBarHidden(ctx)) lines += "cmd statusbar send-disable-flag none"
-        return lines.joinToString("\n")
+        val p = prefs(ctx)
+        if (!p.contains(KEY_TRANSITION)) return ""
+        return "settings put global transition_animation_scale ${p.getFloat(KEY_TRANSITION, 1f)}\n" +
+            "settings put global window_animation_scale ${p.getFloat(KEY_WINDOW, 1f)}"
     }
 
-    /** The watchdog already ran the plan: forget what we had changed. */
-    fun clearRecords(ctx: Context) {
-        ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .remove(KEY_TRANSITION).remove(KEY_WINDOW).remove(KEY_BAR_HIDDEN_BOOT).apply()
+    /** The watchdog already ran the plan: forget the saved animation scales. */
+    fun clearAnimationRecords(ctx: Context) {
+        prefs(ctx).edit().remove(KEY_TRANSITION).remove(KEY_WINDOW).apply()
     }
 
     fun canWriteSecureSettings(ctx: Context) =
@@ -69,7 +75,7 @@ object SystemRestore {
 
     /** Blocking (waits briefly for the Shizuku service); never call on the main thread. Returns a short report. */
     fun restore(ctx: Context): String {
-        val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val p = prefs(ctx)
         val t = p.getFloat(KEY_TRANSITION, 1f)
         val w = p.getFloat(KEY_WINDOW, 1f)
         val svc = ShizukuLink.awaitService(3000)
@@ -91,20 +97,24 @@ object SystemRestore {
             AppLog.log("[restore] animation restore failed: ${t.javaClass.simpleName}: ${t.message}")
             null
         }
-        if (animations != null) p.edit().remove(KEY_TRANSITION).remove(KEY_WINDOW).apply()
+        if (animations != null) clearAnimationRecords(ctx)
 
-        val statusBar = try {
-            svc?.runShell("cmd statusbar send-disable-flag none")?.let { "restored" }
-        } catch (t: Throwable) {
-            AppLog.log("[restore] status bar restore failed: ${t.javaClass.simpleName}: ${t.message}")
-            null
+        val statusBar = if (svc != null) {
+            val r = setStatusBarHidden(ctx, svc, false)
+            // Also clears flags an older build may have set with `cmd` (those never clear by themselves).
+            try { svc.runShell("cmd statusbar send-disable-flag none") } catch (_: Throwable) { }
+            if (r.startsWith("ERROR")) "restore FAILED ($r)" else "restored"
+        } else {
+            prefs(ctx).edit().putBoolean(KEY_BAR_HIDDEN, false).apply()
+            "back already (Shizuku is not running, so the system dropped our flags)"
         }
-        if (statusBar != null) p.edit().remove(KEY_BAR_HIDDEN_BOOT).apply()
         if (svc != null) Watchdog.sync(ctx, svc)
 
         val report = "animations: ${animations ?: "NOT restored (no Shizuku, no permission): Developer options > animation scales"}; " +
-            "status bar: ${statusBar ?: if (statusBarHidden(ctx)) "NOT restored (needs Shizuku): restart the phone to clear it" else "not hidden, nothing to do"}"
+            "status bar: $statusBar"
         AppLog.log("[restore] $report")
         return report
     }
+
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }

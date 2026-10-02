@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.ComponentName
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
+import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -21,6 +22,9 @@ object ShizukuLink {
 
     @Volatile var service: IShellService? = null
         private set
+
+    /** Lives exactly as long as this process; the shell service watches it to clear our status bar flags if we die. */
+    val clientToken: IBinder = Binder()
 
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
@@ -42,7 +46,14 @@ object ShizukuLink {
             service = if (binder != null && binder.pingBinder()) IShellService.Stub.asInterface(binder) else null
             binding = false
             AppLog.log("[shizuku] service connected: ${service != null}")
-            service?.let { s -> io.execute { grantSelf(s); Watchdog.sync(app, s) } }
+            service?.let { s ->
+                io.execute {
+                    grantSelf(s)
+                    Watchdog.sync(app, s)
+                    // A fresh service holds no flags: put back what we want (the stock bar shows until this runs).
+                    if (SystemRestore.statusBarWanted(app)) SystemRestore.applyStatusBar(app, s)
+                }
+            }
             changed()
         }
 
@@ -50,6 +61,8 @@ object ShizukuLink {
             service = null
             binding = false
             AppLog.log("[shizuku] service disconnected")
+            // If only our service died (Shizuku still up), bring it back. If Shizuku died, binder-received rebinds later.
+            main.postDelayed({ if (service == null && hasPermission()) bind() }, 500)
             changed()
         }
     }

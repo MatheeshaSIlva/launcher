@@ -43,7 +43,7 @@ class SafeSettingsActivity : Activity() {
         col.addView(text("Safe settings", 24f))
         col.addView(text(
             "Use this if the status bar is missing, animations are off, or the launcher misbehaves. " +
-                "A phone restart also clears the status bar changes.", 15f))
+                "A phone restart also brings the status bar back.", 15f))
         state = text("", 14f)
         col.addView(state)
         col.addView(button("Restore system") { restore() }, MATCH_PARENT, WRAP_CONTENT)
@@ -72,9 +72,9 @@ class SafeSettingsActivity : Activity() {
 
     private fun refresh() {
         state.text = "Shizuku: ${ShizukuLink.state().name.lowercase().replace('_', ' ')}\n" +
-            "Status bar: ${if (SystemRestore.statusBarHidden(this)) "hidden by the launcher (Restore needs Shizuku, or restart the phone)" else "normal"}\n" +
+            "Status bar: ${if (SystemRestore.statusBarHidden(this)) "hidden by the launcher (comes back by itself if the launcher or Shizuku stops)" else "normal"}\n" +
             "Animation scales now: ${SystemRestore.currentScales(this)}\n" +
-            "Restore without Shizuku: ${if (SystemRestore.canWriteSecureSettings(this)) "animations only; the status bar always needs Shizuku or a restart" else "not set up (connect Shizuku once)"}\n" +
+            "Restore animations without Shizuku: ${if (SystemRestore.canWriteSecureSettings(this)) "yes" else "not set up (connect Shizuku once)"}\n" +
             "Safety notification: ${if (SafetyNotification.canPost(this)) "allowed" else "blocked"}"
     }
 

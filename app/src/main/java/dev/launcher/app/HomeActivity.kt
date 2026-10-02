@@ -95,7 +95,10 @@ class HomeActivity : Activity() {
         row3.addView(button("Test: break system") { breakSystem() }, weighted())
         row3.addView(button("Watchdog status") { watchdogStatus() }, weighted())
         root.addView(row3)
-        root.addView(button("Diagnose Shizuku restarts") { diagnoseRestarts() })
+        val row4 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row4.addView(button("Test: kill service") { killService() }, weighted())
+        row4.addView(button("Diagnose Shizuku restarts") { diagnoseRestarts() }, weighted())
+        root.addView(row4)
 
         logView = TextView(this).apply {
             setTextColor(Color.rgb(200, 220, 200))
@@ -115,19 +118,23 @@ class HomeActivity : Activity() {
         io.execute { AppLog.log("[identity] ${try { s.identity() } catch (t: Throwable) { "failed: ${t.message}" }}") }
     }
 
-    /** Recovery test: hides the stock status bar and turns system animations off, with no auto-restore. */
+    /** Recovery test: hides the stock status bar and turns system animations off until Restore system. */
     private fun breakSystem() {
         val s = ShizukuLink.service ?: run { AppLog.log("[test] not connected"); return }
         SystemRestore.rememberOriginals(this)
-        SystemRestore.markStatusBarHidden(this)
         io.execute {
             Watchdog.sync(applicationContext, s)
-            val out = s.runShell(
-                "settings put global transition_animation_scale 0; settings put global window_animation_scale 0; " +
-                    "cmd statusbar send-disable-flag clock system-icons notification-icons"
-            ).trim()
-            AppLog.log("[test] stock status bar hidden, animations off ($out). Undo with Restore system.")
+            s.runShell("settings put global transition_animation_scale 0; settings put global window_animation_scale 0")
+            SystemRestore.setStatusBarHidden(applicationContext, s, true)
+            AppLog.log("[test] stock status bar hidden, animations off. Undo with Restore system.")
         }
+    }
+
+    /** Kills only our shell service (as a Shizuku restart would): the system must drop the status bar flags at once. */
+    private fun killService() {
+        val s = ShizukuLink.service ?: run { AppLog.log("[test] not connected"); return }
+        AppLog.log("[test] killing the shell service; the stock bar should reappear immediately, then hide again on reconnect")
+        io.execute { try { s.destroy() } catch (_: Throwable) { /* it died mid-call, as intended */ } }
     }
 
     private fun watchdogStatus() {

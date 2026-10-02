@@ -1,8 +1,11 @@
 package dev.launcher.app
 
+import android.os.Binder
 import android.os.Build
+import android.os.IBinder
 import android.os.Process
 import java.io.File
+import java.lang.reflect.InvocationTargetException
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.system.exitProcess
@@ -56,6 +59,64 @@ class ShellService : IShellService.Stub() {
         }
     } catch (t: Throwable) {
         "ERROR: ${describe(t)}"
+    }
+
+    // ---------------------------------------------------------------- status bar
+
+    private val statusBarToken: IBinder = Binder()
+    private var statusBarClient: IBinder? = null
+    private val clientDied = IBinder.DeathRecipient {
+        synchronized(this) { statusBarClient = null }
+        disableStatusBar(false)
+    }
+
+    override fun setStatusBarHidden(hidden: Boolean, client: IBinder?): String {
+        synchronized(this) {
+            statusBarClient?.let { try { it.unlinkToDeath(clientDied, 0) } catch (_: Throwable) { } }
+            statusBarClient = null
+            if (hidden) {
+                if (client == null) return "ERROR: no client token"
+                try {
+                    client.linkToDeath(clientDied, 0)
+                } catch (t: Throwable) {
+                    // The app is already gone: leave the bar alone.
+                    return "ERROR: client already dead"
+                }
+                statusBarClient = client
+            }
+        }
+        return disableStatusBar(hidden)
+    }
+
+    /** Same flags as `cmd statusbar send-disable-flag clock notification-icons system-icons`, but owned by our token. */
+    private fun disableStatusBar(hidden: Boolean): String = try {
+        val sb = systemService("statusbar", "com.android.internal.statusbar.IStatusBarService\$Stub")
+        val what1 = if (hidden) DISABLE_CLOCK or DISABLE_NOTIFICATION_ICONS else 0
+        val what2 = if (hidden) DISABLE2_SYSTEM_ICONS else 0
+        "disable: " + callDisable(sb, listOf("disable", "disableForUser"), what1) +
+            "; disable2: " + callDisable(sb, listOf("disable2", "disable2ForUser"), what2)
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
+    private fun callDisable(sb: Any, names: List<String>, what: Int): String {
+        for (n in names) {
+            val m = sb.javaClass.methods.firstOrNull { it.name == n && it.parameterTypes.size in 3..4 } ?: continue
+            return try {
+                if (m.parameterTypes.size == 3) m.invoke(sb, what, statusBarToken, SHELL_PKG)
+                else m.invoke(sb, what, statusBarToken, SHELL_PKG, 0)
+                "ok via $n"
+            } catch (t: Throwable) {
+                "ERROR in $n: ${describe(t)}"
+            }
+        }
+        return "ERROR: none of $names found"
+    }
+
+    private fun systemService(name: String, stubClass: String): Any {
+        val binder = Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java)
+            .invoke(null, name) as? IBinder ?: throw IllegalStateException("system service '$name' not found")
+        return Class.forName(stubClass).getMethod("asInterface", IBinder::class.java).invoke(null, binder)!!
     }
 
     // ---------------------------------------------------------------- watchdog
@@ -143,9 +204,18 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
-    private fun describe(t: Throwable) = "${t.javaClass.simpleName}: ${t.message}"
+    private fun describe(t: Throwable): String {
+        val c = if (t is InvocationTargetException) (t.targetException ?: t) else t
+        return "${c.javaClass.simpleName}: ${c.message}"
+    }
 
     private companion object {
+        const val SHELL_PKG = "com.android.shell"
+        // android.app.StatusBarManager
+        const val DISABLE_NOTIFICATION_ICONS = 0x00020000
+        const val DISABLE_CLOCK = 0x00800000
+        const val DISABLE2_SYSTEM_ICONS = 1 shl 1
+
         // Counts checks without a heartbeat change instead of comparing clock times: during suspend neither the app nor
         // this loop runs, so waking up never looks like a dead app. 4 missed checks = about 4 s of real running time.
         const val WATCHDOG_SCRIPT = """#!/system/bin/sh

@@ -63,6 +63,13 @@ Device results (9d5cb83):
 - Sleep test passed: break system → screen off ≥ 2 min → bar still hidden on wake (watchdog stayed quiet).
 - Screen-off evidence so far: loop 28960 lived from 00:58:20 to ≈01:00:49 (screen off) without firing, so suspend did not trigger it. Repeat cleanly.
 
+**Decision (2026-10-04, Matheesha): status bar via binder flags (option A).** The shell service hides the stock bar with
+`IStatusBarService.disable/disable2` and a token owned by its own process (same flags as `cmd … clock notification-icons system-icons`).
+The system drops them when that process dies; the service also links to a token from the app and clears them if the app dies. So no crash,
+force-stop or Shizuku death can strand the stock bar. Cost accepted: after a Shizuku restart the stock bar shows until we reconnect and re-apply
+(≈1–2 s; rare now that the USB setting is fixed). The watchdog loop now only restores animation scales. `cmd` disable flags are no longer used
+(restore still sends `cmd … none` once to clear leftovers from older builds).
+
 Open: `specialUse` foreground service needs a Play justification; heartbeat writes a tiny file every second (fine for now, revisit for battery/flash).
 
 Design:

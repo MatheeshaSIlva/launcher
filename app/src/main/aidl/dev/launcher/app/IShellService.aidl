@@ -26,4 +26,8 @@ interface IShellService {
 
     // runShell with a caller-chosen timeout, for slow diagnostics such as logcat dumps.
     String runShellTimeout(String command, int timeoutMs) = 8;
+
+    // Hides/shows the stock status bar contents through IStatusBarService with a token owned by this process: the system
+    // drops the flags when this process dies. While hidden, the service also clears them when `client` (the app) dies.
+    String setStatusBarHidden(boolean hidden, IBinder client) = 9;
 }
