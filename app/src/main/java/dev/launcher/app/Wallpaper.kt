@@ -37,10 +37,10 @@ class Wallpaper private constructor(val bitmap: Bitmap, val blurred: Bitmap, val
             val d = WallpaperManager.getInstance(ctx).drawable as? BitmapDrawable
             val src = d?.bitmap ?: throw IllegalStateException("no bitmap wallpaper")
             val bmp = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
-            val scale = 8
+            val scale = 4
             val small = Bitmap.createScaledBitmap(bmp, max(1, bmp.width / scale), max(1, bmp.height / scale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)
-            boxBlur(small, 3, 2)   // ≈ 20 px blur at full size: frosted, not milky
+            boxBlur(small, 3, 2)   // at 1/4 size: ≈ 10 px blur at full size (half of before), still smooth
             AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}")
             Wallpaper(bmp, small, scale, id)
         } catch (t: Throwable) {

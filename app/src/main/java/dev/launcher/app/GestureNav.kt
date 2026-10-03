@@ -163,12 +163,6 @@ object GestureNav {
     private val stats by lazy { FrameStats() }
     private val choreographer by lazy { Choreographer.getInstance() }
 
-    // The app whose card is closing into its icon right now (home ignores taps on that icon until it has landed).
-    @Volatile private var closingPkg: String? = null
-
-    /** True while [pkg]'s card is flying into its icon after a swipe up: home must not reopen it from under the card. */
-    fun isClosing(pkg: String) = closingPkg == pkg
-
     // Last app window the system reported in front (accessibility events)
     @Volatile private var lastFrontPkg: String? = null
     @Volatile private var lastFrontAt = 0L
@@ -227,6 +221,7 @@ object GestureNav {
     /** From NavAccessibilityService: a window of [pkg] came to the front. */
     fun onWindowStateChanged(pkg: String?) {
         if (pkg == null) return
+        if (pkg != lastFrontPkg) AppLog.log("[front] now in front: $pkg")
         lastFrontPkg = pkg
         lastFrontAt = SystemClock.uptimeMillis()
         nav.post {
@@ -290,6 +285,7 @@ object GestureNav {
             background = GradientDrawable().apply { setColor(0x99FFFFFF.toInt()); cornerRadius = dp(2) }
         }
         stripView.addView(pill, FrameLayout.LayoutParams(dp(108).toInt(), dp(4).toInt(), Gravity.CENTER))
+        pill.translationY = dp(6)   // a little lower than centre, closer to the bottom edge
         stripView.setOnTouchListener { _, e -> onTouch(e) }
         val lp = overlayParams(WindowManager.LayoutParams.MATCH_PARENT, h, touchable = true).apply {
             gravity = Gravity.BOTTOM
@@ -398,7 +394,6 @@ object GestureNav {
         prv?.iconMix = 0f
         nxt?.iconMix = 0f
         cur?.alpha = 1f
-        closingPkg = null
         springFade = false
         cardPkg = null
         homeStarted = false
@@ -494,7 +489,6 @@ object GestureNav {
         waitingFor = null
         nav.removeCallbacks(waitTimeout)
         runPendingStart()   // the finger took over a launching card: the user still opened that app
-        closingPkg = null
         springFade = false
         cur?.alpha = 1f
         root?.animate()?.cancel()
@@ -693,7 +687,8 @@ object GestureNav {
             if (homeVisible && !appStarted) homeRequestedAt = 0L else startHome()
             val pkg = cardPkg
             val target = pkg?.let { HomeBridge.iconRect(it) }
-            val size = target?.width() ?: dp(64)
+            val size = target?.width() ?: (sw * 0.3f)
+            val sizeH = target?.height() ?: (sh * 0.3f)
             switchAt = 0L   // going home ends any run of quick switches
             hideIcon(if (target != null) pkg else null)
             cardIconSize = size
@@ -701,7 +696,6 @@ object GestureNav {
             // Not on the home screen: the card shrinks to the centre and fades out on the way, instead of turning into an icon
             // that would then linger and fade.
             springFade = target == null
-            closingPkg = pkg
             val tx = target?.centerX() ?: (sw / 2)
             val ty = target?.centerY() ?: (sh / 2)
             // Only the part of the fling that points at the target carries over (plus a little): a fast flick up used to throw
@@ -709,7 +703,7 @@ object GestureNav {
             sCx = Spring(0.5f, 0.92f).apply { start(c.cx, towards(vx, c.cx, tx), tx) }
             sCy = Spring(0.5f, 0.92f).apply { start(c.cy, towards(vy, c.cy, ty), ty) }
             sW = Spring(0.44f, 0.9f).apply { start(c.w, vW, size) }
-            sH = Spring(0.44f, 0.9f).apply { start(c.h, vH, size) }
+            sH = Spring(0.44f, 0.9f).apply { start(c.h, vH, sizeH) }
             sZoom = Spring(0.5f, 1f).apply { start(backdrop?.zoom ?: 1f, 0f, 1f) }
             anim = Anim.HOME_COMMIT
             endLabel = if (target != null) "home (into icon)" else "home (to centre; app not on the home screen)"
@@ -817,11 +811,14 @@ object GestureNav {
             radius = springR0 + (deviceRadius - springR0) * q
             c.iconMix = springMix0 * (1f - ((w - springW0) / (max(springW0, dp(40)) * 1.5f)).coerceIn(0f, 1f))
         }
+        var r = radius
         if (springFade) {
+            // The app itself, smaller, with the display's corner shape scaled down, fading away.
             c.iconMix = 0f
-            c.alpha = 1f - ((q - 0.3f) / 0.6f).coerceIn(0f, 1f)
+            c.alpha = 1f - ((q - 0.25f) / 0.6f).coerceIn(0f, 1f)
+            r = deviceRadius * (w / sw)
         }
-        c.setFrame(sCx.value(t), sCy.value(t), w, h, radius)
+        c.setFrame(sCx.value(t), sCy.value(t), w, h, r)
         backdrop?.zoom = sZoom.value(t)
         return sCx.settled(t) && sCy.settled(t) && sW.settled(t) && sH.settled(t)
     }
@@ -841,8 +838,9 @@ object GestureNav {
     private fun beginLaunch(pkg: String, iconRect: RectF, icon: Drawable?, start: () -> Unit) {
         if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH || !prepareCardWindow()) { main.post(start); return }
         val c = cur ?: run { main.post(start); return }
-        // A closing card is never reversed into a launch: home ignores taps on its icon until it lands (isClosing).
-        val reverse = false
+        // Tapping the icon of the app whose card is closing into it reopens it from where the card is (open/close the same
+        // app within 0.1 s must stay smooth).
+        val reverse = root?.visibility == View.VISIBLE && cardPkg == pkg
         // Where the card starts and how fast it moves: from where it is if this is the same app (reversal), else the icon.
         val m = if (reverse) cardMotion() else floatArrayOf(iconRect.centerX(), iconRect.centerY(), iconRect.width(), iconRect.height(), 0f, 0f, 0f, 0f)
         val zoom0 = if (reverse) backdrop?.zoom ?: 1f else 1f
@@ -887,7 +885,15 @@ object GestureNav {
         onSettled = {
             startApp()   // without a picture of home the app is only started now, so it cannot show early
             phase = Phase.HOLD
-            if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(90, g) else awaitForeground(pkg, g) { fadeOutCards(90, g) }
+            if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(90, g)
+            else awaitForeground(pkg, g) {
+                if (lastFrontPkg != pkg) {
+                    // Not the app that was tapped: record what is there instead, and ask for the tapped one again.
+                    AppLog.log("[front] WRONG APP after launching $pkg: $lastFrontPkg is in front; starting $pkg again")
+                    bringBack(pkg, null)
+                }
+                fadeOutCards(90, g)
+            }
         }
         showCards()
         if (picture != null) {

@@ -262,3 +262,12 @@ Changes (next build):
 - No icon on home: the card fades out while shrinking to the centre (no icon crossfade, no linger).
 - Release velocity: only the component towards the target carries over (12 % of the rest), capped at 5000 px/s; position
   damping 0.86 → 0.92.
+
+Matheesha on a0a99fe: blocking taps on a closing app's icon contradicts the 0.1 s open/close requirement: tapping an icon must
+simply open that app. Reversal restored. "Nice job fixing the elasticity". Asked: lower handle, half the dock blur, and for
+apps not on home fade the app preview (not a white card).
+- Wrong app still unexplained from code alone. Added evidence: `[home] tap <pkg>` per dock tap, `[front] now in front: <pkg>`
+  from accessibility window events, and after a launch lands, if another app is in front: `[front] WRONG APP …` plus one
+  more start of the tapped app.
+- Handle 6 dp lower. Blur ≈10 px (blurred copy at 1/4 size, box r3 ×2). No icon on home: the card keeps the app's shape and
+  shrinks to 30 % in the centre with scaled corners while fading (the square crop showed mostly white app background).
