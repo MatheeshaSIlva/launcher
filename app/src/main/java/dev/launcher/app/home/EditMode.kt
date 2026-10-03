@@ -51,6 +51,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         fun editingChanged(active: Boolean)
         /** "Edit" in the edit bar: the edit menu, anchored at [button] (home coordinates). */
         fun showEditMenu(button: RectF)
+        /** The iOS sizes [widget] can take. */
+        fun widgetSizes(widget: HomeItem.Widget): List<WidgetSize>
     }
 
     private val m get() = host.metrics
@@ -152,13 +154,74 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     private var candidate: View? = null
     private var candidateBadge = false
     private var moved = false
+    private var resizing: HomeItem.Widget? = null   // the widget whose resize handle the finger holds
 
     /** Down on home while editing: true if it landed on an item (edit mode takes the touch). */
     fun onDown(x: Float, y: Float): Boolean {
         downX = x; downY = y; moved = false
         candidate = itemViewAt(x, y)
         candidateBadge = candidate?.let { onBadge(it, x, y) } ?: false
+        resizing = candidate?.takeIf { !candidateBadge && onHandle(it, x, y) }?.let { v ->
+            host.pageViews.firstNotNullOfOrNull { it.itemOf(v) } as? HomeItem.Widget
+        }
         return candidate != null
+    }
+
+    private fun onHandle(v: View, x: Float, y: Float): Boolean {
+        if (v !is HomeWidgetView) return false
+        val c = v.handleCenter()
+        val o = screenOrigin(v)
+        return hypot(x - (o[0] + c[0]), y - (o[1] + c[1])) < m.pt(30f)
+    }
+
+    /** The handle follows the finger: the widget takes the allowed size nearest to it. */
+    private fun resizeTowards(x: Float, y: Float) {
+        val w = resizing ?: return
+        val l = host.layout ?: return
+        val pi = l.pages.indexOfFirst { p -> p.any { it === w } }
+        if (pi < 0) return
+        val v = host.pageViews.getOrNull(pi)?.viewFor(w) ?: return
+        val o = screenOrigin(v)
+        val wantX = (x - o[0]) / m.columnPitch
+        val wantY = (y - o[1]) / m.cellHeight
+        val best = host.widgetSizes(w).minByOrNull { s -> (s.spanX - wantX) * (s.spanX - wantX) + (s.spanY - wantY) * (s.spanY - wantY) } ?: return
+        if (best.spanX == w.spanX && best.spanY == w.spanY) return
+        resize(w, best)?.let { resizing = it }
+    }
+
+    /**
+     * [widget] at [size], in its cell (moved left/up as needed to stay on the page); icons in the way move on, another widget
+     * in the way sends it to the first place it fits on the page. Returns the resized widget, or null if it fits nowhere.
+     */
+    fun resize(widget: HomeItem.Widget, size: WidgetSize): HomeItem.Widget? {
+        if (size.spanX == widget.spanX && size.spanY == widget.spanY) return widget
+        val nw = widget.with(spanX = size.spanX, spanY = size.spanY)
+        return replace(widget, nw)?.also { home.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
+    }
+
+    /** The clock's style (glass or solid). */
+    fun restyle(widget: HomeItem.Widget, style: String?) { replace(widget, widget.with(style = style)) }
+
+    private fun replace(old: HomeItem.Widget, nw: HomeItem.Widget): HomeItem.Widget? {
+        val l = host.layout ?: return null
+        val pi = l.pages.indexOfFirst { p -> p.any { it === old } }
+        if (pi < 0) return null
+        val page = l.pages[pi]
+        val cols = m.cfg.columns
+        val rows = m.cfg.rows
+        val col = old.col.coerceIn(0, cols - nw.spanX.coerceAtMost(cols))
+        val row = old.row.coerceIn(0, rows - nw.spanY.coerceAtMost(rows))
+        page.removeAll { it === old }
+        val off = Grid.putAt(page, nw, col, row, cols, rows)
+        if (off == null) {
+            val fit = Grid.firstFree(page, nw.spanX, nw.spanY, cols, rows)
+            if (fit == null) { page += old; return null }
+            nw.col = fit[0]; nw.row = fit[1]
+            page += nw
+        } else if (off.isNotEmpty()) pushOff(pi + 1, off)
+        refreshPages(setOf(pi, pi + 1))
+        host.layoutChanged()
+        return nw
     }
 
     /** The rest of a touch edit mode took. */
@@ -166,6 +229,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         when (e.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
                 if (drag != null) { dragTo(e.x, e.y); return }
+                if (resizing != null) { if (hypot(e.x - downX, e.y - downY) > slop) { moved = true; resizeTowards(e.x, e.y) }; return }
                 if (!moved && hypot(e.x - downX, e.y - downY) > slop) {
                     moved = true
                     candidate?.let { if (!candidateBadge) beginDrag(it, downX, downY) }
@@ -173,10 +237,11 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             }
             MotionEvent.ACTION_UP -> {
                 if (drag != null) { drop(); return }
+                if (resizing != null) { resizing = null; return }
                 val c = candidate
                 if (!moved && c != null && candidateBadge && onBadge(c, e.x, e.y)) remove(c)
             }
-            MotionEvent.ACTION_CANCEL -> if (drag != null) drop()
+            MotionEvent.ACTION_CANCEL -> { resizing = null; if (drag != null) drop() }
         }
     }
 
@@ -238,7 +303,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val page = host.pageViews.firstOrNull { it.itemOf(v) != null } ?: return
             val item = page.itemOf(v) ?: return
             val pi = host.pageViews.indexOf(page)
-            l.pages[pi].remove(item)
+            l.pages[pi].removeAll { it === item }   // its cell stays empty (iOS 18: nothing slides over)
             host.itemRemoved(item)
             v.animate().scaleX(0f).scaleY(0f).alpha(0f).setDuration(200).withEndAction {
                 page.setItems(l.pages[pi], animate = true)
@@ -248,14 +313,46 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         host.layoutChanged()
     }
 
-    /** A new widget (from the gallery) at the top of the page on screen; full pages pass their last items on (iOS). */
+    /**
+     * A new widget (from the gallery) at the top of the page on screen, icons in its way moving on (iOS); if a widget is
+     * there already, the first place it fits on this page or a later one.
+     */
     fun addWidget(widget: HomeItem.Widget) {
         val l = host.layout ?: return
         val pi = host.currentPage().coerceIn(0, l.pages.size - 1)
-        l.pages[pi].add(0, widget)
-        overflowFrom(pi)
+        val cols = m.cfg.columns
+        val rows = m.cfg.rows
+        val off = Grid.putAt(l.pages[pi], widget, 0, 0, cols, rows)
+        var landed = pi
+        if (off != null) pushOff(pi + 1, off)
+        else {
+            var p = pi
+            while (true) {
+                if (p >= l.pages.size) host.appendPage()
+                val fit = Grid.firstFree(l.pages[p], widget.spanX, widget.spanY, cols, rows)
+                if (fit != null) { widget.col = fit[0]; widget.row = fit[1]; l.pages[p] += widget; break }
+                p++
+            }
+            landed = p
+        }
         refreshPages()
         host.layoutChanged()
+        // It went to another page (a widget was in the way here): show it.
+        if (landed != pi) host.turnToPage(landed)
+    }
+
+    /** Icons pushed off a page go to the first free cell from page [start] on (a new page at the end if needed). */
+    private fun pushOff(start: Int, items: List<HomeItem>) {
+        val l = host.layout ?: return
+        for (item in items) {
+            var p = start
+            while (true) {
+                if (p >= l.pages.size) host.appendPage()
+                val fit = Grid.firstFree(l.pages[p], 1, 1, m.cfg.columns, m.cfg.rows)
+                if (fit != null) { item.col = fit[0]; item.row = fit[1]; l.pages[p] += item; break }
+                p++
+            }
+        }
     }
 
     // ------------------------------------------------------------------ dragging
@@ -265,9 +362,11 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     private var drag: Drag? = null
     private var fingerX = 0f
     private var fingerY = 0f
-    private var pendingTarget: Pair<Boolean, Int>? = null    // (into dock, index) waiting for the finger to rest
+    /** Where a dragged item would go: a dock slot, or a cell (index row * columns + col) of the page on screen. */
+    private data class Target(val dock: Boolean, val index: Int)
+    private var pendingTarget: Target? = null    // waiting for the finger to rest
     private val ghost = Ghost(home.context)
-    private val applyTarget = Runnable { pendingTarget?.let { (dock, index) -> moveTo(dock, index) } }
+    private val applyTarget = Runnable { pendingTarget?.let { moveTo(it) } }
     private val edgeTurn = Runnable { turnAtEdge() }
 
     /** The view drawing the lifted copy; home adds it on top of everything. */
@@ -356,7 +455,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
     private fun View.hasCallbacks(r: Runnable) = handler?.hasCallbacks(r) == true
 
-    private fun targetAt(x: Float, y: Float, d: Drag): Pair<Boolean, Int>? {
+    private fun targetAt(x: Float, y: Float, d: Drag): Target? {
         val l = host.layout ?: return null
         val dock = host.dockView
         if (dock != null && d.item is HomeItem.App && y > m.dockTop - m.pt(12f)) {
@@ -370,54 +469,59 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
                 val dd = abs(cx - x)
                 if (dd < bestD) { bestD = dd; best = i }
             }
-            return true to best
+            return Target(true, best)
         }
         val pi = host.currentPage()
-        val page = host.pageViews.getOrNull(pi) ?: return null
-        val idx = page.insertIndexAt(x, y, d.item)
-        return false to idx
+        if (pi !in l.pages.indices) return null
+        val cols = m.cfg.columns
+        val rows = m.cfg.rows
+        val sp = Grid.span(d.item, cols, rows)
+        val col: Int
+        val row: Int
+        if (sp[0] == 1 && sp[1] == 1) {
+            // An icon goes to the cell under the finger.
+            val cell = Grid.cellAt(x, y, m)
+            if (cell < 0) return null
+            col = cell % cols; row = cell / cols
+        } else {
+            // A widget goes where its lifted copy's top-left corner is nearest a cell's.
+            col = kotlin.math.round((x - d.grabX - m.cellLeft(0)) / m.columnPitch).toInt().coerceIn(0, cols - sp[0])
+            row = kotlin.math.round((y - d.grabY - m.gridTop) / m.cellHeight).toInt().coerceIn(0, rows - sp[1])
+        }
+        // Where it is already: nothing to do.
+        if (!d.inDock && d.page == pi && d.item.col == col && d.item.row == row) return null
+        if (!Grid.canPut(l.pages[pi], d.item, col, row, cols, rows)) return null
+        return Target(false, row * cols + col)
     }
 
-    /** Moves the dragged item to the dock at [index], or to the page on screen at [index]. */
-    private fun moveTo(toDock: Boolean, index: Int) {
+    /** Moves the dragged item to a dock slot, or to a cell of the page on screen (icons in the way move on, [Grid.putAt]). */
+    private fun moveTo(t: Target) {
         val d = drag ?: return
         val l = host.layout ?: return
         val pi = host.currentPage().coerceIn(0, l.pages.size - 1)
+        val cols = m.cfg.columns
+        val rows = m.cfg.rows
+        if (!t.dock && !Grid.canPut(l.pages[pi], d.item, t.index % cols, t.index / cols, cols, rows)) return
+        // The cell it leaves on this page (icons between can step back into it).
+        val origin = if (!t.dock && !d.inDock && d.page == pi && d.item.col >= 0) d.item.row * cols + d.item.col else null
         // Out of where it is now (an item from outside home is nowhere yet).
         if (d.inDock) l.dock.remove((d.item as HomeItem.App).key) else if (d.page in l.pages.indices) l.pages[d.page].removeAll { it === d.item }
         val fromPage = d.page
-        if (toDock) {
+        if (t.dock) {
             val key = (d.item as HomeItem.App).key
-            l.dock.add(index.coerceIn(0, l.dock.size), key)
+            l.dock.add(t.index.coerceIn(0, l.dock.size), key)
+            d.item.col = -1; d.item.row = -1
             d.inDock = true
             d.page = -1
         } else {
-            val list = l.pages[pi]
-            list.add(index.coerceIn(0, list.size), d.item)
+            val off = Grid.putAt(l.pages[pi], d.item, t.index % cols, t.index / cols, cols, rows, origin) ?: emptyList()
             d.inDock = false
             d.page = pi
-            overflowFrom(pi)
+            if (off.isNotEmpty()) pushOff(pi + 1, off)
         }
-        refreshPages(setOf(fromPage, pi))
+        refreshPages(setOf(fromPage, pi, pi + 1))
         refreshDock()
         hideDragged()
-    }
-
-    /** A full page pushes its last items onto the next page (a new page if needed). */
-    private fun overflowFrom(start: Int) {
-        val l = host.layout ?: return
-        var i = start
-        while (i < l.pages.size) {
-            val page = l.pages[i]
-            while (HomeModel.capacityLeft(page, m.cfg.columns, m.cfg.rows) < 0 ||
-                HomeModel.place(page, m.cfg.columns, m.cfg.rows).size < page.size) {
-                val moved = page.lastOrNull { it !== drag?.item } ?: break
-                page.remove(moved)
-                if (i + 1 >= l.pages.size) host.appendPage()
-                l.pages[i + 1].add(0, moved)
-            }
-            i++
-        }
     }
 
     private fun refreshPages(only: Set<Int>? = null) {
@@ -467,12 +571,22 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         val d = drag ?: return
         home.removeCallbacks(applyTarget)
         home.removeCallbacks(edgeTurn)
-        // Apply where it was heading; an item from outside that never found a place goes at the end of the page on screen.
-        pendingTarget?.let { (dock, index) -> moveTo(dock, index) }
+        // Apply where it was heading; an item from outside that never found a place takes the first free cell of the page on
+        // screen (or of a later page).
+        pendingTarget?.let { moveTo(it) }
         pendingTarget = null
         if (!d.inDock && d.page < 0) {
             val l = host.layout
-            if (l != null) moveTo(false, l.pages[host.currentPage().coerceIn(0, l.pages.size - 1)].size)
+            if (l != null) {
+                val pi = host.currentPage().coerceIn(0, l.pages.size - 1)
+                val fit = Grid.firstFree(l.pages[pi], 1, 1, m.cfg.columns, m.cfg.rows)
+                if (fit != null) moveTo(Target(false, fit[1] * m.cfg.columns + fit[0]))
+                else {
+                    pushOff(pi + 1, listOf(d.item))
+                    d.page = l.pages.indexOfFirst { p -> p.any { it === d.item } }
+                    refreshPages()
+                }
+            }
         }
         val target = draggedView(d)
         drag = null
@@ -579,7 +693,10 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         private val bh = m.pt(36f)
         val editGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
         val doneGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
-        private val text = LabelPainter(m.pt(16f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600))
+        // A soft shadow keeps the white labels readable over a light wallpaper (the glass itself is clear).
+        private val text = LabelPainter(m.pt(16f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600)).apply {
+            paint.setShadowLayer(m.pt(3f), 0f, m.pt(0.5f), 0x66000000)
+        }
         private var pressedEdit = false
         private var pressedDone = false
 
@@ -591,6 +708,16 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         }
 
         fun glassViews(): List<GlassView> = listOf(editGlass, doneGlass)
+
+        /** The "Edit" capsule as it looks now (it stays sharp above its menu while home blurs). */
+        fun editButtonPicture(): Picture {
+            val p = Picture()
+            val c = p.beginRecording(maxOf(1, editGlass.width), maxOf(1, editGlass.height))
+            editGlass.draw(c)
+            text.draw(c, "Edit", "Edit", editGlass.width / 2f, text.baselineFor(editGlass.height / 2f), editGlass.width.toFloat())
+            p.endRecording()
+            return p
+        }
 
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
             super.onSizeChanged(w, h, oldw, oldh)

@@ -36,14 +36,27 @@ class LiveGlass(style: GlassStyle, private val unitPx: Float) {
     /**
      * Draws the glass [shape] (in [canvas]'s coordinates, corner [radius]) showing what [drawBehind] draws (in screen
      * coordinates), blurred by [blurPx]. [toScreen] maps the canvas's coordinates to the screen's (the shape may be drawn
-     * scaled while it opens; what it shows must still line up with what is behind it). Hardware canvases only.
+     * scaled while it opens; what it shows must still line up with what is behind it). [limit] (canvas coordinates): what
+     * is on screen; the content is recorded within it only. Must not be drawn inside a smaller layer or clip: the effect's
+     * input is cut to it and the lens, which looks outside the shape, would see nothing there (a dark ring). [alpha] fades
+     * the whole glass. Hardware canvases only.
      */
-    fun draw(canvas: Canvas, shape: RectF, radius: Float, blurPx: Float, toScreen: Matrix?, drawBehind: (Canvas) -> Unit) {
-        if (!canvas.isHardwareAccelerated || shape.isEmpty) return
+    fun draw(canvas: Canvas, shape: RectF, radius: Float, blurPx: Float, toScreen: Matrix?, limit: RectF?, alpha: Float = 1f,
+             drawBehind: (Canvas) -> Unit) {
+        if (!canvas.isHardwareAccelerated || shape.isEmpty || alpha <= 0f) return
         val margin = (blurPx * 2f + bevel).coerceAtLeast(unitPx * 8f)
-        val left = shape.left - margin
-        val top = shape.top - margin
-        node.setPosition(left.toInt(), top.toInt(), kotlin.math.ceil(shape.right + margin).toInt(), kotlin.math.ceil(shape.bottom + margin).toInt())
+        var l = shape.left - margin
+        var t = shape.top - margin
+        var r = shape.right + margin
+        var b = shape.bottom + margin
+        if (limit != null) { l = maxOf(l, limit.left); t = maxOf(t, limit.top); r = minOf(r, limit.right); b = minOf(b, limit.bottom) }
+        val left = kotlin.math.floor(l)
+        val top = kotlin.math.floor(t)
+        val w = kotlin.math.ceil(r - left).toInt()
+        val h = kotlin.math.ceil(b - top).toInt()
+        if (w <= 0 || h <= 0) return
+        node.setPosition(left.toInt(), top.toInt(), left.toInt() + w, top.toInt() + h)
+        node.setAlpha(alpha.coerceIn(0f, 1f))
         val c = node.beginRecording()
         try {
             c.translate(-left.toInt().toFloat(), -top.toInt().toFloat())
@@ -53,6 +66,7 @@ class LiveGlass(style: GlassStyle, private val unitPx: Float) {
             node.endRecording()
         }
         shader.setFloatUniform("size", shape.width(), shape.height())
+        shader.setFloatUniform("nodeSize", w.toFloat(), h.toFloat())
         shader.setFloatUniform("offset", shape.left - left.toInt(), shape.top - top.toInt())
         shader.setFloatUniform("radius", radius.coerceAtMost(minOf(shape.width(), shape.height()) / 2f))
         // A shader effect takes the shader's uniforms as they are when it is made: made anew for this frame's shape.
@@ -73,6 +87,7 @@ class LiveGlass(style: GlassStyle, private val unitPx: Float) {
         private val AGSL = """
 uniform shader content;
 uniform float2 size;
+uniform float2 nodeSize;
 uniform float2 offset;
 uniform float radius;
 uniform float bevel;
@@ -82,11 +97,14 @@ uniform float magnify;
 uniform float saturation;
 uniform float tint;
 """ + GlassDrawable.LIGHTING + """
+// What is behind at c bent by off, kept inside what was recorded (beyond it there is nothing to see).
+float2 inNode(float2 q) { return clamp(q, float2(0.5), nodeSize - 0.5); }
+
 half3 seen(float2 c, float2 off) {
     return half3(
-        content.eval(c + off * (1.0 - dispersion)).r,
-        content.eval(c + off).g,
-        content.eval(c + off * (1.0 + dispersion)).b);
+        content.eval(inNode(c + off * (1.0 - dispersion))).r,
+        content.eval(inNode(c + off)).g,
+        content.eval(inNode(c + off * (1.0 + dispersion))).b);
 }
 
 half4 main(float2 coord) {

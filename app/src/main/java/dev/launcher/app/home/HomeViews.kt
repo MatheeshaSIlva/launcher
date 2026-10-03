@@ -71,16 +71,6 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
     fun itemOf(view: View): HomeItem? = viewOf.entries.firstOrNull { it.value === view }?.key
     fun placements(): List<Placed> = placed
 
-    /** Where an item dropped at ([x], [y]) (page coordinates) goes in [items]: before the item on that cell, or at the end. */
-    fun insertIndexAt(x: Float, y: Float, without: HomeItem?): Int {
-        val col = ((x - m.cellLeft(0)) / m.columnPitch).toInt().coerceIn(0, m.cfg.columns - 1)
-        val row = ((y - m.gridTop) / m.cellHeight).toInt().coerceIn(0, m.cfg.rows - 1)
-        val cell = row * m.cfg.columns + col
-        val others = items.filter { it !== without }
-        val placedOthers = HomeModel.place(others, m.cfg.columns, m.cfg.rows)
-        val hit = placedOthers.indexOfFirst { p -> cell < (p.row + p.spanY - 1) * m.cfg.columns + p.col + p.spanX }
-        return if (hit < 0) others.size else others.indexOf(placedOthers[hit].item)
-    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         for ((i, p) in placed.withIndex()) {
@@ -106,6 +96,24 @@ interface HomeWidgetView {
     var editing: Boolean
     /** The remove badge's centre in the widget's view. */
     fun badgeCenter(): FloatArray
+    /** Edit mode's resize handle: the widget's bottom-right corner, in its view. */
+    fun handleCenter(): FloatArray
+}
+
+/** iOS 27's widget resize handle in edit mode: a white arc hugging the widget's bottom-right corner. */
+object ResizeHandle {
+    private val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+    private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x59000000; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+
+    /** Draws the handle for a card whose bottom-right corner is ([x], [y]) with corner radius [r]. */
+    fun draw(c: Canvas, x: Float, y: Float, r: Float, m: HomeMetrics) {
+        val rr = r + m.pt(1f)
+        val rect = RectF(x - 2 * rr, y - 2 * rr, x, y)
+        shadow.strokeWidth = m.pt(6f)
+        arc.strokeWidth = m.pt(4f)
+        c.drawArc(rect, 10f, 70f, false, shadow)
+        c.drawArc(rect, 10f, 70f, false, arc)
+    }
 }
 
 /**
@@ -113,7 +121,10 @@ interface HomeWidgetView {
  * liquid glass that refract the wallpaper behind them (frosted, lit from the top left, a soft shadow). No card, no label,
  * as on the lock screen. 12 or 24 hours as the system is set; no AM/PM.
  */
-class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY: Int) : FrameLayout(ctx), HomeWidgetView {
+class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY: Int, style: String? = null) : FrameLayout(ctx), HomeWidgetView {
+    /** "Solid": plain white numerals instead of glass (the lock screen's other style). */
+    private val solid = style == "solid"
+    private var solidBaseline = 0f
     /** The numerals: glass over the wallpaper, shaped by a mask of the current time. */
     val glass = GlassView(ctx, GlassStyle.IOS_CLOCK, m.u)
     private val boxW = m.widgetWidth(spanX)
@@ -130,8 +141,9 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
     }
     private val digitPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        typeface = dev.launcher.app.theme.Fonts.display(600)
+        typeface = dev.launcher.app.theme.Fonts.display(640)
         textAlign = Paint.Align.CENTER
+        letterSpacing = -0.02f
     }
     private var shownTime = ""
     private var dateText = ""
@@ -157,10 +169,10 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
         val now = java.util.Date()
         val locale = java.util.Locale.getDefault()
         val time = java.text.SimpleDateFormat(if (is24) "H:mm" else "h:mm", locale).format(now)
-        val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "EEEd")
-        val date = java.text.SimpleDateFormat(pattern, locale).format(now)
+        // As on the iOS lock screen: weekday, then day ("Sat 3").
+        val date = java.text.SimpleDateFormat("EEE d", locale).format(now)
         if (date != dateText) { dateText = date; invalidate() }
-        if (time != shownTime && glass.width > 0) { shownTime = time; buildMask(time) }
+        if (time != shownTime && glass.width > 0) { shownTime = time; buildMask(time); invalidate() }
     }
 
     /** The numerals' shape: a sharp mask at the glass's size and its blurred height field (half size) for lens and light. */
@@ -168,17 +180,26 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
         val w = glass.width
         val h = glass.height
         if (w <= 0 || h <= 0) return
-        // As large as the box allows: the digits' height fills it, narrowed like iOS's tall clock, never wider than the box.
+        // As large as the box allows in the font's own proportions (not stretched): the widest time fits the width, the
+        // digits' height fits the box; the numerals sit at the bottom of the box, under the date.
         digitPaint.textScaleX = 1f
         digitPaint.textSize = 100f
         val bounds = android.graphics.Rect()
         digitPaint.getTextBounds("0123456789", 0, 10, bounds)
         val digitH = bounds.height() / 100f
-        digitPaint.textSize = h * 0.94f / digitH
         val widest = if (android.text.format.DateFormat.is24HourFormat(context)) "20:08" else "10:08"
-        val natural = digitPaint.measureText(widest)
-        digitPaint.textScaleX = minOf(0.86f, w * 0.98f / natural)
-        val baseline = h * 0.97f
+        val widthPer100 = digitPaint.measureText(widest) / 100f
+        // Slightly narrowed, as iOS's clock is.
+        digitPaint.textScaleX = 0.9f
+        digitPaint.textSize = minOf(h * 0.94f / digitH, w * 0.96f / (widthPer100 * 0.9f))
+        // Right under the date (as on the lock screen).
+        val baseline = digitH * digitPaint.textSize + h * 0.03f
+        if (solid) {
+            // Drawn directly (onDraw); the glass is not used.
+            solidBaseline = baseline
+            glass.visibility = View.GONE
+            return
+        }
         val mask = maskBmp?.takeIf { it.width == w && it.height == h }
             ?: android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8).also { maskBmp = it }
         mask.eraseColor(0)
@@ -193,7 +214,7 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
         val blurPx = digitPaint.textSize * 0.03f
         boxBlurAlpha(height, maxOf(1, (blurPx * scale).roundToInt()))
         // A new mask object each minute: the glass keeps the bitmaps it was given until it has the next ones.
-        glass.mask = dev.launcher.app.GlassMask(mask, height, scale, blurPx, 0.22f)
+        glass.mask = dev.launcher.app.GlassMask(mask, height, scale, blurPx, 0.10f)
         glass.visibility = View.VISIBLE
         glass.invalidate()
     }
@@ -222,13 +243,31 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
 
     override fun badgeCenter(): FloatArray = floatArrayOf(left + m.pt(4f), m.pt(4f))
 
+    override fun handleCenter(): FloatArray = floatArrayOf(left + boxW, boxH)
+
+    private val solidPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xF2FFFFFF.toInt()
+        textAlign = Paint.Align.CENTER
+        setShadowLayer(m.pt(3f), 0f, m.pt(1f), 0x33000000)
+    }
+
     override fun onDraw(canvas: Canvas) {
         canvas.drawText(dateText, left + boxW / 2f, dateSize * 0.86f, datePaint)
+        if (solid && shownTime.isNotEmpty()) {
+            solidPaint.typeface = digitPaint.typeface
+            solidPaint.textSize = digitPaint.textSize
+            solidPaint.textScaleX = digitPaint.textScaleX
+            solidPaint.letterSpacing = digitPaint.letterSpacing
+            canvas.drawText(shownTime, left + boxW / 2f, digitsTop + solidBaseline, solidPaint)
+        }
     }
 
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
-        if (editing) RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
+        if (editing) {
+            RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
+            ResizeHandle.draw(canvas, handleCenter()[0], handleCenter()[1], m.widgetRadius, m)
+        }
     }
 }
 
@@ -267,6 +306,27 @@ internal fun boxBlurAlpha(b: android.graphics.Bitmap, r: Int) {
     for (y in 0 until h) for (x in 0 until w) arr[y * stride + x] = src[y * w + x].toByte()
     buf.rewind()
     b.copyPixelsFromBuffer(buf)
+}
+
+/** iOS's notification badge: a red capsule with the count in white, over the icon's top-right corner. */
+object CountBadge {
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF3B30.toInt() }
+    private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textAlign = Paint.Align.CENTER }
+    private val r = RectF()
+
+    fun draw(c: Canvas, icon: RectF, count: Int, m: HomeMetrics) {
+        val label = if (count > 999) "999+" else count.toString()
+        val h = m.pt(24f)
+        text.typeface = dev.launcher.app.theme.Fonts.text(500)
+        text.textSize = m.pt(15.5f)
+        val w = maxOf(h, text.measureText(label) + m.pt(14f))
+        // Its top-right a little outside the icon's corner, as on iOS.
+        val right = icon.right + m.pt(5f)
+        val top = icon.top - m.pt(5f)
+        r.set(right - w, top, right, top + h)
+        c.drawRoundRect(r, h / 2f, h / 2f, fill)
+        c.drawText(label, r.centerX(), r.centerY() + text.textSize * 0.36f, text)
+    }
 }
 
 /** iOS edit mode's remove badge: a grey disc with a white minus. */

@@ -62,10 +62,13 @@ data class GlassStyle(
             rimWidth = 1.2f, rimBase = 0.08f, rimLight = 0.40f, rimBack = 0.18f,
             edgeDark = 0.16f, edgeWidth = 1.6f, specPower = 1.8f)
 
-        /** The lock-screen style glass clock: frosted, lighter numerals with a shallow lens at the stroke edges. */
-        val IOS_CLOCK = IOS.copy(refraction = 9f, dispersion = 0.15f, magnify = 0f, saturation = 1.15f, tint = 0.30f,
-            glowWidth = 5f, glow = 0.10f, shade = 0.10f, rimWidth = 1.4f, rimBase = 0.10f, rimLight = 0.45f, rimBack = 0.20f,
-            edgeDark = 0.10f, edgeWidth = 1.4f, specPower = 1.4f)
+        /**
+         * The lock-screen glass clock: thick glass numerals, a light frosted body that still shows what is behind, bright
+         * edges all round (strongest facing the light), a lens at the stroke edges; no dark outline.
+         */
+        val IOS_CLOCK = IOS.copy(refraction = 20f, dispersion = 0.12f, magnify = 0f, saturation = 1.15f, tint = 0.12f,
+            glowWidth = 8f, glow = 0.22f, shade = 0f, rimWidth = 1.6f, rimBase = 0.25f, rimLight = 0.45f, rimBack = 0.26f,
+            edgeDark = 0f, edgeWidth = 1f, specPower = 1.2f)
     }
 }
 

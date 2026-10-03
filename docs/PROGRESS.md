@@ -510,3 +510,26 @@ Round 3 (next build, not yet confirmed on the phone):
   keep holding and move to drag it out: the library or Spotlight gets out of the way and edit mode takes the app.
 - Motion: every edit-mode animation and the menu come from the motion profile; reflow and drag lift are interruptible springs.
 - Wiggle pauses while home is blurred behind a menu or the gallery (it would re-blur all of home every frame).
+
+Device results (3390d7b), Matheesha: pop-up menus broken (dark ring, orange fringe); clock stretched and unlike the other
+glass; icons cannot be placed freely; no widget options, no widget resizing; status bar missing/odd. Asked for an audit of
+every element and for ways to raise productivity and accuracy.
+
+Round 4 (next build; everything below checked on the emulator with screenshots unless marked):
+- Productivity: an emulator (Android 17, GPU, Shizuku started over adb) and scripts (`tools/`) let Claude install, drive and
+  screenshot every change before pushing; `PreviewActivity` shows components on their own; unit tests for the layout grid.
+- Menus: the glass's input was cut to the fading layer it was drawn in, so the lens saw nothing past the panel (dark ring).
+  The glass now draws outside that layer and its samples stay inside what was recorded. Darkened slightly for readable white
+  text; wider for long labels.
+- Clock: the font's own proportions (slightly narrowed, not stretched), glass matching the dock's (bright edges, light body),
+  date "Sat 3"; Glass/Solid style; Small/Medium/Large.
+- Free placement (iOS 18+): items keep their cell; empty cells stay empty; moving within a run reorders, otherwise icons in
+  the way move on until a gap; widgets never move aside (`home/Grid.kt`, `GridTest`). Old layouts keep their order.
+- Widgets: long-press menu with a sizes row, Edit Widget (setup screen again) for Android widgets, Glass/Solid for the clock;
+  edit mode shows iOS 27's corner handle, drag it to resize. A new widget that cannot go on the current page shows its page.
+- Status bar: centred on the camera line; percentage in the battery, bolt + green when charging, yellow Low Power, red low;
+  airplane, No SIM / No Service, Focus moon, VPN. Logs "[statusbar] hidden/shown". **Phone**: why it did not show on the S24.
+- Badges: iOS red counts on home and dock icons (notification access granted through Shizuku).
+- Menus: Delete App (Android's uninstall dialog; not for system apps).
+- Audit of every element and the plan: `docs/AUDIT.md`.
+

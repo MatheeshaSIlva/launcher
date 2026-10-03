@@ -117,6 +117,17 @@ class HomeWidgets(private val activity: Activity) {
 
     fun delete(id: Int) { if (id > 0) try { host.deleteAppWidgetId(id) } catch (_: Throwable) { } }
 
+    fun info(id: Int): AppWidgetProviderInfo? = try { manager.getAppWidgetInfo(id) } catch (_: Throwable) { null }
+
+    /** The widget has a setup screen that can be opened again ("Edit Widget"). */
+    fun isConfigurable(id: Int): Boolean = info(id)?.configure != null
+
+    /** "Edit Widget": the widget's own setup screen for this placed widget. */
+    fun reconfigure(id: Int) {
+        try { host.startAppWidgetConfigureActivityForResult(activity, id, 0, REQ_RECONFIGURE, null) }
+        catch (t: Throwable) { AppLog.log("[widgets] cannot edit widget $id: ${t.message}") }
+    }
+
     /**
      * Adds a widget of [info] at [size]: allocates an id, binds it (asking Shizuku to grant us binding first if needed, else
      * through Android's dialog), runs the provider's configuration screen if it has one, then hands the item to [done]
@@ -174,6 +185,7 @@ class HomeWidgets(private val activity: Activity) {
 
     /** From the activity: true if the result was ours. */
     fun onActivityResult(requestCode: Int, resultCode: Int): Boolean {
+        if (requestCode == REQ_RECONFIGURE) return true
         val p = pending ?: return requestCode == REQ_BIND || requestCode == REQ_CONFIGURE
         when (requestCode) {
             REQ_BIND -> if (resultCode == Activity.RESULT_OK) configure(p) else finish(p, false)
@@ -192,6 +204,7 @@ class HomeWidgets(private val activity: Activity) {
         private const val HOST_ID = 1024
         private const val REQ_BIND = 7101
         private const val REQ_CONFIGURE = 7102
+        private const val REQ_RECONFIGURE = 7103
     }
 }
 
@@ -294,6 +307,8 @@ class AppWidgetFrame(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY
 
     override fun badgeCenter(): FloatArray = floatArrayOf(left + m.pt(4f), m.pt(4f))
 
+    override fun handleCenter(): FloatArray = floatArrayOf(left + cardW, cardH)
+
     override fun onDraw(canvas: Canvas) {
         if (hostView == null) canvas.drawRoundRect(left, 0f, left + cardW, cardH, m.widgetRadius, m.widgetRadius, placeholder)
         canvas.drawText(label, left + cardW / 2f, cardH + m.labelBaseline, labelPaint)
@@ -301,6 +316,9 @@ class AppWidgetFrame(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY
 
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
-        if (editing) RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
+        if (editing) {
+            RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
+            ResizeHandle.draw(canvas, handleCenter()[0], handleCenter()[1], m.widgetRadius, m)
+        }
     }
 }

@@ -41,6 +41,9 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
     /** Edit mode: the remove badge shows at the icon's top-left corner. */
     var editing = false
         set(v) { if (field != v) { field = v; invalidate() } }
+    /** Notifications waiting (iOS's red badge at the top right; 0 = none). */
+    var badge = 0
+        set(v) { if (field != v) { field = v; invalidate() } }
     /** Leave the label out (the lifted copy of a dragged icon shows the icon alone). */
     var labelHidden = false
         set(v) { if (field != v) { field = v; invalidate() } }
@@ -101,6 +104,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             val y = iconRect.bottom + m.labelBaseline
             canvas.drawText(shownLabel, 0, shownLabel.length, width / 2f, y, labelPaint)
         }
+        if (badge > 0 && !iconHidden && !labelHidden) CountBadge.draw(canvas, iconRect, badge, m)
         if (editing) RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
     }
 

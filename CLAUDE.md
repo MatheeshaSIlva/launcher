@@ -96,6 +96,18 @@ copy it wholesale — port the working pieces cleanly. File map:
 4. Publish build logs to an orphan `ci-logs` branch so a cloud session can read failures without log paste.
 5. The repo must be public for the updater (no auth on the phone).
 
+## Checking a build before Matheesha does (required)
+
+Every change is checked on the emulator before it is pushed, with screenshots looked at, not assumed:
+- `tools/build.sh` (errors only), `./gradlew testDebugUnitTest` (logic tests), `DEVICE=emulator-5554 tools/reinstall.sh`.
+- `tools/device.sh shot|tap|long|drag|swipe|log|gfx` drives the device; screenshots land in `tools/shots/` (git-ignored).
+- Emulator `Medium_Phone` (Android 17): start with `emulator -avd Medium_Phone -no-window -gpu host`. Shizuku is installed:
+  start it with `adb shell <shizuku apk dir>/lib/x86_64/libshizuku.so`; enable our accessibility service with
+  `settings put secure enabled_accessibility_services dev.launcher.app/dev.launcher.app.NavAccessibilityService`.
+- `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
+- Do not run `uiautomator dump` while gesture nav is on (it unbinds accessibility services).
+- What only the S24 can show (Samsung blur, One UI quirks, real frame pacing) is reported to Matheesha as unverified.
+
 ## Local build (Windows dev machine)
 
 - Package / applicationId: `dev.launcher.app` (placeholder, like the name). Source in `app/src/main/java/dev/launcher/app/`.

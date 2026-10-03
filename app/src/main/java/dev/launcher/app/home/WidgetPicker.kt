@@ -79,6 +79,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private val glass = LiveGlass.create(GlassStyle.IOS, m.u)
     private val fallbackFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6202024.toInt() }
     private val dimInside = Paint()
+    private val sheetTint = Paint()
     private val capsule = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x26FFFFFF }
     private val capsuleRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(1f) }
     private val separator = Paint().apply { color = 0x26FFFFFF; strokeWidth = max(1f, m.pt(0.5f)) }
@@ -212,9 +213,11 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val g = glass
         if (g != null && c.isHardwareAccelerated) {
             toScreen.reset()
-            g.draw(c, r, sheetRadius, k * Motion.profile.menuBlur * m.u, null) { cc ->
+            g.draw(c, r, sheetRadius, k * Motion.profile.menuBlur * m.u, null, RectF(0f, 0f, width.toFloat(), height.toFloat())) { cc ->
                 host.drawBehindSheet(cc)
-                cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), dimInside)
+                // A sheet is thicker glass than a menu: darker, so its white text reads over any wallpaper.
+                sheetTint.color = ((0x9E * k).toInt() shl 24)
+                cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), sheetTint)
             }
         } else c.drawRoundRect(r, sheetRadius, sheetRadius, fallbackFill)
         c.save()

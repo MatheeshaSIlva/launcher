@@ -13,25 +13,40 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.Executors
 
-/** Something placed on a home page. Pages are flowed in order, like iOS: no gaps, widgets take a block of cells. */
+/**
+ * Something placed on a home page. Each item keeps its own cell ([col], [row]; -1 = not placed yet: it takes the first free
+ * one), so pages can have empty cells (iOS 18+); widgets take a block of cells. See [Grid].
+ */
 sealed class HomeItem {
-    abstract fun toJson(): JSONObject
+    var col = -1
+    var row = -1
+
+    protected abstract fun body(): JSONObject
+    fun toJson(): JSONObject = body().apply { if (col >= 0 && row >= 0) { put("c", col); put("r", row) } }
 
     data class App(val key: String) : HomeItem() {
-        override fun toJson() = JSONObject().put("t", "app").put("k", key)
+        override fun body() = JSONObject().put("t", "app").put("k", key)
     }
 
     /** Folders arrive with edit mode; defined now so saved layouts never need migrating. */
     data class Folder(val id: String, val name: String, val apps: List<String>) : HomeItem() {
-        override fun toJson() = JSONObject().put("t", "folder").put("id", id).put("n", name).put("apps", JSONArray(apps))
+        override fun body() = JSONObject().put("t", "folder").put("id", id).put("n", name).put("apps", JSONArray(apps))
     }
 
-    /** A widget: ours ([kind] "clock") or an Android widget ([APP], with its bound [id] and [provider] component). */
-    data class Widget(val kind: String, val spanX: Int, val spanY: Int, val id: Int = 0, val provider: String? = null) : HomeItem() {
-        override fun toJson() = JSONObject().put("t", "widget").put("w", kind).put("sx", spanX).put("sy", spanY).apply {
+    /**
+     * A widget: ours ([kind] "clock", [style] "solid" or glass) or an Android widget ([APP], with its bound [id] and
+     * [provider] component).
+     */
+    data class Widget(val kind: String, val spanX: Int, val spanY: Int, val id: Int = 0, val provider: String? = null, val style: String? = null) : HomeItem() {
+        override fun body() = JSONObject().put("t", "widget").put("w", kind).put("sx", spanX).put("sy", spanY).apply {
             if (id != 0) put("id", id)
             provider?.let { put("p", it) }
+            style?.let { put("s", it) }
         }
+
+        /** The same widget at another size or style, in the same cell. */
+        fun with(spanX: Int = this.spanX, spanY: Int = this.spanY, style: String? = this.style): Widget =
+            copy(spanX = spanX, spanY = spanY, style = style).also { it.col = col; it.row = row }
 
         companion object {
             const val APP = "app"
@@ -42,9 +57,10 @@ sealed class HomeItem {
         fun fromJson(o: JSONObject): HomeItem? = when (o.optString("t")) {
             "app" -> App(o.getString("k"))
             "folder" -> Folder(o.getString("id"), o.optString("n"), o.getJSONArray("apps").let { a -> List(a.length()) { a.getString(it) } })
-            "widget" -> Widget(o.getString("w"), o.optInt("sx", 1), o.optInt("sy", 1), o.optInt("id", 0), o.optString("p").ifEmpty { null })
+            "widget" -> Widget(o.getString("w"), o.optInt("sx", 1), o.optInt("sy", 1), o.optInt("id", 0), o.optString("p").ifEmpty { null },
+                o.optString("s").ifEmpty { null })
             else -> null
-        }
+        }?.apply { col = o.optInt("c", -1); row = o.optInt("r", -1) }
     }
 }
 
@@ -66,25 +82,10 @@ object HomeModel {
     private val io = Executors.newSingleThreadExecutor()
     private const val FILE = "home_layout.json"
 
-    /** Flows [items] into a [cols] x [rows] grid in order. Items that do not fit are left out (callers keep pages within capacity). */
-    fun place(items: List<HomeItem>, cols: Int, rows: Int): List<Placed> {
-        val used = Array(rows) { BooleanArray(cols) }
-        val out = ArrayList<Placed>()
-        for (item in items) {
-            val (sx, sy) = if (item is HomeItem.Widget) item.spanX.coerceIn(1, cols) to item.spanY.coerceIn(1, rows) else 1 to 1
-            search@ for (r in 0..rows - sy) for (c in 0..cols - sx) {
-                if ((r until r + sy).all { rr -> (c until c + sx).all { cc -> !used[rr][cc] } }) {
-                    for (rr in r until r + sy) for (cc in c until c + sx) used[rr][cc] = true
-                    out += Placed(item, c, r, sx, sy)
-                    break@search
-                }
-            }
-        }
-        return out
-    }
+    /** Where each item is on its page ([Grid.place]). Items that do not fit are left out. */
+    fun place(items: List<HomeItem>, cols: Int, rows: Int): List<Placed> = Grid.place(items, cols, rows)
 
-    fun capacityLeft(items: List<HomeItem>, cols: Int, rows: Int): Int =
-        cols * rows - place(items, cols, rows).sumOf { it.spanX * it.spanY }
+    fun capacityLeft(items: List<HomeItem>, cols: Int, rows: Int): Int = Grid.freeCells(items, cols, rows)
 
     fun load(ctx: Context): HomeLayout? = try {
         val f = File(ctx.filesDir, FILE)
@@ -200,8 +201,9 @@ object HomeModel {
             if (cfg.newAppsOnHome) {
                 for (e in fresh) {
                     var last = l.pages.last()
-                    if (capacityLeft(last, cfg.columns, cfg.rows) == 0) { last = mutableListOf(); l.pages += last }
-                    last += HomeItem.App(e.key)
+                    var cell = Grid.firstFree(last, 1, 1, cfg.columns, cfg.rows)
+                    if (cell == null) { last = mutableListOf(); l.pages += last; cell = intArrayOf(0, 0) }
+                    last += HomeItem.App(e.key).apply { col = cell[0]; row = cell[1] }
                 }
             }
             changed = true

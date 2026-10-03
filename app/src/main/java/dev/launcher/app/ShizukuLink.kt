@@ -137,6 +137,13 @@ object ShizukuLink {
             // Wallpaper bitmap for the glass dock (all-files access); harmless to repeat.
             s.runShell("appops set $pkg MANAGE_EXTERNAL_STORAGE allow")
         } catch (_: Throwable) { }
+        try {
+            // Notification access for the icon badges.
+            val nm = app.getSystemService(android.app.NotificationManager::class.java)
+            val comp = Badges.component(app)
+            if (!nm.isNotificationListenerAccessGranted(comp))
+                AppLog.log("[shizuku] badge access: ${s.runShell("cmd notification allow_listener ${comp.flattenToString()}").trim()}")
+        } catch (t: Throwable) { AppLog.log("[shizuku] badge access failed: ${t.message}") }
         val missing = listOf(Manifest.permission.WRITE_SECURE_SETTINGS, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.READ_PHONE_STATE)
             .filter { app.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) return

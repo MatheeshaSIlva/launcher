@@ -103,6 +103,22 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var sheet = 0f
     private var drawerWasOpen = false
 
+    /** Notification counts changed: every icon on home shows its app's. */
+    private val onBadges: () -> Unit = {
+        for (v in pages.flatMap { it.icons() } + (dock?.icons() ?: emptyList())) v.badge = v.entry?.let { dev.launcher.app.Badges.count(it.pkg) } ?: 0
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        dev.launcher.app.Badges.addListener(onBadges)
+        onBadges()
+    }
+
+    override fun onDetachedFromWindow() {
+        dev.launcher.app.Badges.removeListener(onBadges)
+        super.onDetachedFromWindow()
+    }
+
     init {
         scene.addView(wallpaperView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         scene.addView(fg, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -282,7 +298,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun viewFor(item: HomeItem, metrics: HomeMetrics): View? = when (item) {
         is HomeItem.App -> Apps[item.key]?.let { appIcon(it, metrics, label = cfg.showLabels) }
         is HomeItem.Widget -> when (item.kind) {
-            "clock" -> ClockWidgetView(context, metrics, item.spanX, item.spanY).also { w ->
+            "clock" -> ClockWidgetView(context, metrics, item.spanX, item.spanY, item.style).also { w ->
                 clocks += w
                 pageGlass += w.glass
                 w.glass.setWallpaper(wallpaper, metrics.w, metrics.h, resources.displayMetrics.density * REVEAL_CELL_DP)
@@ -304,6 +320,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun appIcon(e: AppEntry, metrics: HomeMetrics, label: Boolean) = IconView(context, metrics, label).apply {
         bind(e)
+        badge = dev.launcher.app.Badges.count(e.pkg)
         setOnLongClickListener { v -> onIconLongPress(v as IconView, e); true }
         editMode?.adopt(this)
         setOnClickListener { v ->
@@ -907,6 +924,20 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         return items
     }
 
+    /** "Delete App" (iOS): Android's own uninstall confirmation; system apps cannot be deleted, so they do not get it. */
+    private fun deleteItem(e: AppEntry): ContextMenuView.Item? {
+        val system = try {
+            (context.packageManager.getApplicationInfo(e.pkg, 0).flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+        } catch (_: Throwable) { true }
+        if (system || e.pkg == context.packageName) return null
+        return ContextMenuView.Item("Delete App", glyph = ContextMenuView.Glyph.TRASH, destructive = true) {
+            try {
+                context.startActivity(android.content.Intent(android.content.Intent.ACTION_DELETE, android.net.Uri.parse("package:${e.pkg}"))
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (t: Throwable) { AppLog.log("[home] cannot delete ${e.pkg}: ${t.message}") }
+        }
+    }
+
     private fun appInfoItem(e: AppEntry, frame: RectF) = ContextMenuView.Item("App Info", glyph = ContextMenuView.Glyph.INFO) {
         val la = context.getSystemService(android.content.pm.LauncherApps::class.java)
         try { la.startAppDetailsActivity(e.component, e.user, android.graphics.Rect().also { frame.roundOut(it) }, null) } catch (t: Throwable) { AppLog.log("[home] app info failed: ${t.message}") }
@@ -920,6 +951,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val items = ArrayList(shortcutItems(e, frame))
         items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
         items += ContextMenuView.Item("Remove from Home Screen", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
+        deleteItem(e)?.let { items += it }
         items += appInfoItem(e, frame)
         showMenu(v, pic, frame, items)
     }
@@ -938,10 +970,25 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (editMode?.active == true) return
         performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         val (pic, frame) = liftedCopy(v)
-        showMenu(v, pic, frame, listOf(
-            ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() },
-            ContextMenuView.Item("Remove Widget", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) },
-        ))
+        val item = pages.firstNotNullOfOrNull { it.itemOf(v) } as? HomeItem.Widget
+        val items = ArrayList<ContextMenuView.Item>()
+        if (item != null) {
+            // iOS: the sizes this widget comes in, then its own settings.
+            val sizes = editHost.widgetSizes(item)
+            val current = sizes.firstOrNull { it.spanX == item.spanX && it.spanY == item.spanY }
+            if (sizes.size > 1) items += ContextMenuView.Item("Size", sizes = sizes, current = current, onSize = { s -> editMode?.resize(item, s) })
+            if (item.kind == HomeItem.Widget.APP && widgets?.isConfigurable(item.id) == true)
+                items += ContextMenuView.Item("Edit Widget", glyph = ContextMenuView.Glyph.SLIDERS) { widgets?.reconfigure(item.id) }
+            if (item.kind == "clock") {
+                val solid = item.style == "solid"
+                items += ContextMenuView.Item(if (solid) "Glass Style" else "Solid Style", glyph = ContextMenuView.Glyph.STYLE) {
+                    editMode?.restyle(item, if (solid) null else "solid")
+                }
+            }
+        }
+        items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
+        items += ContextMenuView.Item("Remove Widget", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
+        showMenu(v, pic, frame, items)
     }
 
     private fun isOnHome(key: String): Boolean {
@@ -965,6 +1012,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val items = ArrayList(shortcutItems(e, frame))
         val onHome = isOnHome(e.key)
         if (!onHome) items += ContextMenuView.Item("Add to Home Screen", glyph = ContextMenuView.Glyph.PLUS) { addAppToHome(e) }
+        deleteItem(e)?.let { items += it }
         items += appInfoItem(e, frame)
         val mv = menu ?: return
         if (!fromSpotlight) drawer?.setHiddenPkg(e.pkg)
@@ -981,8 +1029,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val metrics = m ?: return
         if (isOnHome(e.key)) return
         val item = HomeItem.App(e.key)
-        if (l.pages.isEmpty() || HomeModel.capacityLeft(l.pages.last(), metrics.cfg.columns, metrics.cfg.rows) < 1) editHost.appendPage()
+        if (l.pages.isEmpty() || Grid.firstFree(l.pages.last(), 1, 1, metrics.cfg.columns, metrics.cfg.rows) == null) editHost.appendPage()
         val pi = l.pages.size - 1
+        Grid.firstFree(l.pages[pi], 1, 1, metrics.cfg.columns, metrics.cfg.rows)?.let { item.col = it[0]; item.row = it[1] }
         l.pages[pi].add(item)
         pages.getOrNull(pi)?.setItems(l.pages[pi], animate = false)
         editHost.layoutChanged()
@@ -1015,7 +1064,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     private fun showEditMenu(button: RectF) {
-        menu?.show(null, button, listOf(
+        menu?.show((editBar as? EditMode.Bar)?.editButtonPicture(), button, listOf(
             ContextMenuView.Item("Add Widget", glyph = ContextMenuView.Glyph.PLUS) { openWidgetPicker() },
         ))
     }
@@ -1069,6 +1118,14 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             }
         }
         override fun showEditMenu(button: RectF) = this@HomeScreen.showEditMenu(button)
+        override fun widgetSizes(widget: HomeItem.Widget): List<WidgetSize> {
+            val metrics = m ?: return emptyList()
+            return when (widget.kind) {
+                "clock" -> listOf(WidgetSize.SMALL, WidgetSize.MEDIUM, WidgetSize.LARGE).filter { it.fits(metrics.cfg) }
+                HomeItem.Widget.APP -> widgets?.info(widget.id)?.let { widgets?.sizesFor(it, metrics) } ?: emptyList()
+                else -> emptyList()
+            }
+        }
     }
 
     // ---- the widget gallery

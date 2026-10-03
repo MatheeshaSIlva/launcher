@@ -66,6 +66,24 @@
             android:exported="false"
             android:label="Launcher dev" />
 
+        <!-- Notification counts for the icon badges (access granted through Shizuku, or in Settings). -->
+        <service
+            android:name=".BadgeListener"
+            android:exported="true"
+            android:label="Launcher badges"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Component previews for visual checks (adb shell am start -n dev.launcher.app/.PreviewActivity). Shows UI only. -->
+        <activity
+            android:name=".PreviewActivity"
+            android:exported="true"
+            android:label="Launcher preview"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
         <!-- Fixed recovery screen: own task and own app-drawer entry, so it opens even if the home screen is broken. -->
         <activity
             android:name=".SafeSettingsActivity"

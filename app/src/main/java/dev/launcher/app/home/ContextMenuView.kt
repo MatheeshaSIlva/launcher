@@ -33,8 +33,14 @@ class ContextMenuView(
     /** Draws home (what the menu floats over) in this view's coordinates, for the glass to blur and bend. */
     private val drawBehind: (Canvas) -> Unit,
 ) : View(ctx) {
-    enum class Glyph { GRID, MINUS, INFO, PLUS }
-    class Item(val label: String, val icon: Drawable? = null, val glyph: Glyph? = null, val destructive: Boolean = false, val action: () -> Unit)
+    enum class Glyph { GRID, MINUS, INFO, PLUS, SLIDERS, STYLE, TRASH }
+    /**
+     * A menu row; with [sizes] it is iOS's row of widget sizes (glyphs shaped like each size, [current] filled) and
+     * [onSize] runs for the one tapped.
+     */
+    class Item(val label: String, val icon: Drawable? = null, val glyph: Glyph? = null, val destructive: Boolean = false,
+               val sizes: List<WidgetSize>? = null, val current: WidgetSize? = null, val onSize: ((WidgetSize) -> Unit)? = null,
+               val action: () -> Unit = {})
 
     private var items: List<Item> = emptyList()
     private var lifted: Picture? = null
@@ -55,9 +61,13 @@ class ContextMenuView(
     private val labels = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400))
     private val r = RectF()
     private val panelMatrix = Matrix()
+    private val panelTint = Paint().apply { color = 0x4D000000 }
+    private val inverse = Matrix()
+    private val visible = RectF()
 
     private val rowH get() = m.pt(44f)
-    private val panelW get() = m.pt(250f)
+    // iOS: 250 pt, wider for a long label (up to the screen's margins).
+    private var panelW = 0f
     private val radius get() = m.pt(22f)
 
     val isShowing get() = visibility == VISIBLE && k.target > 0f
@@ -74,6 +84,8 @@ class ContextMenuView(
         anchor.set(frame)
         items = menu
         labels.clear()
+        val longest = menu.maxOfOrNull { labels.paint.measureText(it.label) } ?: 0f
+        panelW = maxOf(m.pt(250f), longest + m.pt(76f)).coerceAtMost(m.w - 2 * m.libMargin)
         val h = rowH * menu.size
         val gap = m.pt(if (picture == null) 8f else 12f)
         below = anchor.bottom + gap + h < m.h - m.bottomSafe
@@ -147,17 +159,29 @@ class ContextMenuView(
         panelMatrix.postTranslate(px, py)
         c.save()
         c.concat(panelMatrix)
-        val layer = c.saveLayerAlpha(panel.left - 2, panel.top - 2, panel.right + 2, panel.bottom + 2, (255 * kk).toInt())
         val g = glass
         if (g != null && c.isHardwareAccelerated) {
-            // The very glass of the dock, bending home as it is behind the menu: blurred and dimmed by the same amounts.
-            g.draw(c, panel, radius, kk * Motion.profile.menuBlur * m.u, panelMatrix) { cc ->
+            // The very glass of the dock, bending home as it is behind the menu, blurred by the same amount (not dimmed: the
+            // platter reads a little lighter than the dimmed home around it). Drawn outside the fading layer (see LiveGlass).
+            panelMatrix.invert(inverse)
+            visible.set(0f, 0f, width.toFloat(), height.toFloat())
+            inverse.mapRect(visible)
+            g.draw(c, panel, radius, kk * Motion.profile.menuBlur * m.u, panelMatrix, visible, kk) { cc ->
                 drawBehind(cc)
-                cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), dim)
+                // Darkened a little more than home around it: white text stays readable over a light wallpaper.
+                cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), panelTint)
             }
-        } else c.drawRoundRect(panel, radius, radius, fallback)
+        }
+        val layer = c.saveLayerAlpha(panel.left - 2, panel.top - 2, panel.right + 2, panel.bottom + 2, (255 * kk).toInt())
+        if (g == null || !c.isHardwareAccelerated) c.drawRoundRect(panel, radius, radius, fallback)
         for ((i, item) in items.withIndex()) {
             val top = panel.top + i * rowH
+            val sizes = item.sizes
+            if (sizes != null) {
+                drawSizes(c, item, sizes, top)
+                if (i < items.size - 1) c.drawLine(panel.left, top + rowH, panel.right, top + rowH, separator)
+                continue
+            }
             if (i == pressed) {
                 c.save()
                 r.set(panel.left, top, panel.right, top + rowH)
@@ -172,6 +196,27 @@ class ContextMenuView(
         }
         c.restoreToCount(layer)
         c.restore()
+    }
+
+    private val sizeFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val sizeStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x99FFFFFF.toInt(); style = Paint.Style.STROKE }
+
+    private fun sizeSlot(n: Int, i: Int): Float = panel.left + panel.width() * (i + 0.5f) / n
+
+    /** iOS's widget size row: one glyph per size, shaped like it (small square, wide, large square, tall), the current filled. */
+    private fun drawSizes(c: Canvas, item: Item, sizes: List<WidgetSize>, top: Float) {
+        val unit = m.pt(5.2f)
+        sizeStroke.strokeWidth = m.pt(1.6f)
+        for ((j, s) in sizes.withIndex()) {
+            val w = s.spanX * unit
+            val h = s.spanY * unit
+            val cx = sizeSlot(sizes.size, j)
+            val cy = top + rowH / 2f
+            r.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f)
+            val rad = m.pt(2.4f)
+            if (s == item.current) c.drawRoundRect(r, rad, rad, sizeFill)
+            else c.drawRoundRect(r, rad, rad, sizeStroke)
+        }
     }
 
     private fun drawGlyph(c: Canvas, item: Item, cx: Float, cy: Float) {
@@ -207,6 +252,28 @@ class ContextMenuView(
                 glyphPaint.style = Paint.Style.FILL
                 c.drawCircle(cx, cy - g * 0.45f, m.pt(1.1f), glyphPaint)
             }
+            Glyph.SLIDERS -> {
+                glyphPaint.style = Paint.Style.STROKE
+                c.drawLine(cx - g, cy - g * 0.45f, cx + g, cy - g * 0.45f, glyphPaint)
+                c.drawLine(cx - g, cy + g * 0.45f, cx + g, cy + g * 0.45f, glyphPaint)
+                glyphPaint.style = Paint.Style.FILL
+                c.drawCircle(cx + g * 0.35f, cy - g * 0.45f, m.pt(2.4f), glyphPaint)
+                c.drawCircle(cx - g * 0.35f, cy + g * 0.45f, m.pt(2.4f), glyphPaint)
+            }
+            Glyph.STYLE -> {
+                glyphPaint.style = Paint.Style.STROKE
+                c.drawCircle(cx, cy, g, glyphPaint)
+                glyphPaint.style = Paint.Style.FILL
+                r.set(cx - g, cy - g, cx + g, cy + g)
+                c.drawArc(r, 90f, 180f, true, glyphPaint)
+            }
+            Glyph.TRASH -> {
+                glyphPaint.style = Paint.Style.STROKE
+                c.drawLine(cx - g, cy - g * 0.62f, cx + g, cy - g * 0.62f, glyphPaint)
+                c.drawLine(cx - g * 0.3f, cy - g * 0.95f, cx + g * 0.3f, cy - g * 0.95f, glyphPaint)
+                r.set(cx - g * 0.72f, cy - g * 0.62f, cx + g * 0.72f, cy + g)
+                c.drawRoundRect(r, m.pt(2f), m.pt(2f), glyphPaint)
+            }
             Glyph.PLUS -> {
                 glyphPaint.style = Paint.Style.STROKE
                 c.drawRoundRect(cx - g, cy - g, cx + g, cy + g, m.pt(3f), m.pt(3f), glyphPaint)
@@ -225,8 +292,16 @@ class ContextMenuView(
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> if (i != pressed) { pressed = i; invalidate() }
             MotionEvent.ACTION_UP -> {
                 pressed = -1
-                if (i >= 0 && items[i].destructive) liftedFades = true
                 val chosen = items.getOrNull(i)
+                val sizes = chosen?.sizes
+                if (chosen != null && sizes != null) {
+                    // A size: applied at once, the menu stays (the widget behind changes size, as on iOS).
+                    val j = ((e.x - panel.left) / panel.width() * sizes.size).toInt().coerceIn(0, sizes.size - 1)
+                    chosen.onSize?.invoke(sizes[j])
+                    dismiss()
+                    return true
+                }
+                if (chosen != null && chosen.destructive) liftedFades = true
                 dismiss()
                 chosen?.action?.invoke()
             }

@@ -44,4 +44,6 @@ dependencies {
     val shizuku = "13.1.5"
     implementation("dev.rikka.shizuku:api:$shizuku")
     implementation("dev.rikka.shizuku:provider:$shizuku")
+    // Logic tests (layout model) that run on the build machine: ./gradlew testDebugUnitTest
+    testImplementation("junit:junit:4.13.2")
 }
