@@ -294,3 +294,8 @@ going away restores them at once. Log lines: `[nav] system transitions off while
   release, when the card has already chosen "no icon". Next build: our own package no longer counts as the app in front
   (fixes 1, and stops false `WRONG APP` retries), and the close logs which case happened:
   `home (into the icon of <pkg>)` / `app NOT KNOWN yet at release` / `<pkg> has no icon on home`, plus the front report and top task.
+
+Device results (6c55b4a), Matheesha: "everything works great now". Confirmed: taps during a close open the tapped app (open/close
+at 3+ per second), no wrong app, the wallpaper reveal plays again, and closing after the app has loaded flies into its dock icon.
+Step 1 of task 4 (gesture strip, launch and close cards, quick switch) is done. Still open in phase 2: recents carousel (hold
+gesture), own status bar, the scripted frame-log run that turns the phase gate into a number, and the accessibility requirements.

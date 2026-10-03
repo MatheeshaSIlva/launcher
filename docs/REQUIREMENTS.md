@@ -68,7 +68,7 @@ It is the only shade: the stock one is blocked.
 
 Smooth motion = drawing the animation ourselves while the system's animations are off; every launch, close and gesture uses that one mechanism.
 
-**Launching an app:** transition and window animation scales = 0 (animator scale untouched). Our overlay card grows from the icon in ≈320 ms while the app starts underneath.
+**Launching an app:** transition and window animation scales = 0 while our cards animate, back to the user's values ≈1 s after (animator scale untouched). Our overlay card grows from the icon in ≈320 ms while the app starts underneath.
 Warm and cold launches looked smooth (≈1 dropped frame in 62 at 120 Hz). Launch and close animations are theme-defined, spring-based and interruptible.
 
 **Closing an app:** a cached snapshot becomes a card that shrinks toward its icon while home starts. Tested and working.
