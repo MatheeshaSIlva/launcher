@@ -59,8 +59,8 @@ object SystemRestore {
     /**
      * Blocking. Gesture nav on: accessibility service on (its overlay windows cannot be hidden by other apps); stock gestures
      * are then blocked once the service connects ([GestureNav.attach] re-applies flags). Off: everything back.
-     * System animation scales are left alone: our launches ask for "no system transition" one by one
-     * ([GestureNav.noAnimation]), so apps keep their own transitions.
+     * System animation scales are only off while our cards animate ([scalesOffForCards]), so apps keep their own
+     * transitions the rest of the time.
      */
     fun setGesturesWanted(ctx: Context, s: IShellService, on: Boolean): String {
         prefs(ctx).edit().putBoolean(KEY_GESTURES, on).apply()
@@ -76,8 +76,8 @@ object SystemRestore {
     }
 
     /**
-     * Blocking. Gesture nav never needs the system animation scales at 0 any more (launches ask for no transition one by
-     * one). If they are at 0 with no record of ours, the likeliest cause is an older build that lost its record: set them
+     * Blocking. Gesture nav only needs the system animation scales at 0 while cards animate, always with a record of the
+     * user's values. If they are at 0 with no record of ours, the likeliest cause is an older build that lost its record: set them
      * back to 1 so apps have their transitions again. Logged either way, so a test can see the real values.
      */
     fun ensureScalesOn(ctx: Context, s: IShellService) {
@@ -90,6 +90,26 @@ object SystemRestore {
             putScales(ctx, s, if (t == 0f) 1f else t, if (w == 0f) 1f else w)
             AppLog.log("[nav] they were off (left over from an older build): set back to ${currentScales(ctx)}")
         }
+    }
+
+    /**
+     * Blocking. System transitions off while our cards animate: with them on, One UI still plays its own transition when
+     * home comes to the front (it ignores the per-launch "no animation"), and while that runs, taps on home are held back or
+     * land on the neighbouring icon. Records the user's values and arms the watchdog with them first; [restoreScalesIfChanged]
+     * gives them back. Cheap when they are already off.
+     */
+    fun scalesOffForCards(ctx: Context, s: IShellService) {
+        val cr = ctx.contentResolver
+        val p = prefs(ctx)
+        if (p.contains(KEY_TRANSITION) &&
+            Settings.Global.getFloat(cr, Settings.Global.TRANSITION_ANIMATION_SCALE, 1f) == 0f &&
+            Settings.Global.getFloat(cr, Settings.Global.WINDOW_ANIMATION_SCALE, 1f) == 0f) return
+        if (!p.contains(KEY_TRANSITION)) {
+            rememberOriginals(ctx)
+            Watchdog.sync(ctx, s)
+        }
+        putScales(ctx, s, 0f, 0f)
+        AppLog.log("[nav] system transitions off while cards animate")
     }
 
     /** Blocking. Gives back the user's animation scales if we (an older build, or the break test) had changed them. */

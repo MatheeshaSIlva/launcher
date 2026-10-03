@@ -271,3 +271,14 @@ apps not on home fade the app preview (not a white card).
   more start of the tapped app.
 - Handle 6 dp lower. Blur ≈10 px (blurred copy at 1/4 size, box r3 ×2). No icon on home: the card keeps the app's shape and
   shrinks to 30 % in the centre with scaled corners while fading (the square crop showed mostly white app background).
+
+Device result (3de9fbf), Matheesha: taps on the dock during a close animation were held back until it ended, and sometimes
+opened the neighbouring app. **Cause confirmed:** with Window and Transition animation scales set to Off in Developer options, both
+problems were gone. It started when 8e7a4fa set the scales back to 1 (the first wrong-app report came on that build). One UI
+plays its own transition when home comes to the front even though we pass `makeCustomAnimation(0, 0)`. While that transition
+runs, taps on home are held back or hit-tested against home's moving surface, so they land on the icon next to it.
+Fix (next build): the fallback planned in d0a0f9a. Transition and window scales go to 0 at the first touch on the strip and on
+every dock tap, on the same queue as app starts, so they are always off before anything is started. They return to the user's
+values 1 s after the last card session ended (no finger down, no card), so fast open/close runs do not toggle them. Each off
+cycle records the user's values and arms the watchdog with them first (`SystemRestore.scalesOffForCards`); the gesture strip
+going away restores them at once. Log lines: `[nav] system transitions off while cards animate` / `system animations restored`.

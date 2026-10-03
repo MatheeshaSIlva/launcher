@@ -238,6 +238,7 @@ object GestureNav {
      */
     fun launchApp(pkg: String, iconRect: RectF, icon: Drawable?, start: () -> Unit): Boolean {
         if (!ready) return false
+        holdScalesOff()   // queued before the start, so no system transition plays under the card
         val iconCopy = icon?.constantState?.newDrawable()?.mutate() ?: icon
         nav.post { beginLaunch(pkg, RectF(iconRect), iconCopy, start) }
         return true
@@ -399,10 +400,13 @@ object GestureNav {
         homeStarted = false
         hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
         hiddenIconPkg = null
+        releaseScalesLater()
     }
 
     private fun removeAll() {
         hideCards()
+        nav.removeCallbacks(scalesBack)
+        ShizukuLink.service?.let { s -> frontIo.execute { restoreScales(s) } }
         strip?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
         root?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
         strip = null
@@ -437,9 +441,12 @@ object GestureNav {
                 vt = VelocityTracker.obtain().also { it.addMovement(raw) }
                 downX = e.rawX
                 downY = e.rawY
+                fingerDown = true
                 stats.reset()
                 if ((phase == Phase.ANIM || phase == Phase.HOLD) && root?.visibility == View.VISIBLE) takeOver(e.rawX, e.rawY)
                 else { hideCards(); pendingFresh = true; prefetch(fresh = true) }
+                // At the first touch, so they are off well before the gesture commits and home or another app starts.
+                holdScalesOff()
             }
             MotionEvent.ACTION_MOVE -> {
                 vt?.addMovement(raw)
@@ -471,6 +478,8 @@ object GestureNav {
                     pendingFresh && homeVisible && up && abs(e.rawX - downX) > dp(40) -> returnToLastApp()
                 }
                 pendingFresh = false
+                fingerDown = false
+                releaseScalesLater()   // a touch that started no card session; otherwise the session's end reschedules it
             }
         }
         raw.recycle()
@@ -924,8 +933,8 @@ object GestureNav {
     }
 
     /**
-     * "Start this without a system transition": our card is the animation. Per launch, so the system animation scales stay
-     * at the user's values and apps keep all their own transitions (with the scales at 0 every app felt choppy).
+     * "Start this without a system transition": our card is the animation. One UI does not honour this for home coming to
+     * the front, so the animation scales are also off while cards animate ([holdScalesOff]); kept for other vendors.
      */
     fun noAnimation(ctx: Context): android.os.Bundle = android.app.ActivityOptions.makeCustomAnimation(ctx, 0, 0).toBundle()
 
@@ -950,6 +959,36 @@ object GestureNav {
             AppLog.log("[front] $label")
             try { op() } catch (t: Throwable) { AppLog.log("[front] $label failed: ${t.javaClass.simpleName}: ${t.message}") }
         }
+    }
+
+    // System transitions (animation scales) are off from the first touch of a gesture or a dock tap until a second after the
+    // last card session ended: with them on, home's own system transition held back taps or sent them to the neighbouring
+    // icon. The second keeps fast open/close runs from toggling them; after it, apps have their own transitions again.
+    // On the start queue, never dropped, so they are always off before anything is started.
+    private const val SCALES_BACK_MS = 1000L
+    private var fingerDown = false
+
+    private fun holdScalesOff() {
+        nav.removeCallbacks(scalesBack)
+        val s = ShizukuLink.service ?: return
+        frontIo.execute {
+            try { SystemRestore.scalesOffForCards(app, s) } catch (t: Throwable) { AppLog.log("[nav] transitions off failed: ${t.javaClass.simpleName}: ${t.message}") }
+        }
+    }
+
+    private fun releaseScalesLater() {
+        nav.removeCallbacks(scalesBack)
+        nav.postDelayed(scalesBack, SCALES_BACK_MS)
+    }
+
+    private val scalesBack = Runnable {
+        if (fingerDown || phase != Phase.IDLE) return@Runnable   // still in a session: its end schedules this again
+        val s = ShizukuLink.service ?: return@Runnable
+        frontIo.execute { restoreScales(s) }
+    }
+
+    private fun restoreScales(s: IShellService) {
+        try { SystemRestore.restoreScalesIfChanged(app, s) } catch (t: Throwable) { AppLog.log("[nav] transitions back failed: ${t.javaClass.simpleName}: ${t.message}") }
     }
 
     /** A colour for the card behind an icon (like a splash screen): the icon's average colour. */
