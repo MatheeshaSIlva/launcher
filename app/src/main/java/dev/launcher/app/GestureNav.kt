@@ -45,9 +45,10 @@ import dev.launcher.app.motion.Motion
  * previous-app card, current-app card), and above it the touchable gesture strip, so the pill is always visible and the
  * finger always lands on the strip, whatever is animating.
  *
- * Everything is interruptible: a touch during any animation or wait grabs the card where it is ([takeOver]); tapping the
- * icon of the app whose card is on screen reverses it; tapping another icon replaces it. Springs keep their velocity
- * across every hand-over.
+ * Interruptible: a touch on the bar during a launch, a switch or a cancelled close grabs the card where it is ([takeOver]);
+ * a closing card is not grabbed (Matheesha's choice: bar touches during a close are ignored). Tapping the icon of the app
+ * whose card is on screen reverses it; tapping another icon replaces it; touching home moves a closing card aside.
+ * Springs keep their velocity across every hand-over.
  *
  * - Up: HOME. The app's card shrinks with the finger (ease-out) over our recorded picture of home; the app itself stays in
  *   front and running until the gesture commits. Commit: real home starts under the picture, springs carry the finger's
@@ -511,7 +512,18 @@ object GestureNav {
 
     // ================================================================== touch (nav thread)
 
+    // A touch on the bar that landed during a close: ignored until the finger lifts (a closing card is not grabbed).
+    private var ignoringTouch = false
+
+    /** A close is under way (flying into home, settling, or waiting for its late card): the bar does not take it over. */
+    private fun closing() = (anim == Anim.HOME_COMMIT && root?.visibility == View.VISIBLE) || deferredRelease != null
+
     private fun onTouch(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) ignoringTouch = closing()
+        if (ignoringTouch) {
+            if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) ignoringTouch = false
+            return true
+        }
         val raw = MotionEvent.obtain(e).apply { setLocation(e.rawX, e.rawY) }
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {

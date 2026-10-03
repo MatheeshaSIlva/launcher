@@ -451,3 +451,6 @@ Changes (next build, not yet confirmed on the phone):
   the same spring only once it is uncovered (`HomeBridge.homeCovered`), so the work is never done twice.
 - While a card is dragged home, home now comes forward with it (depth 1 → 0.5 as the card shrinks: less zoom, less blur), then
   the release springs on from there; a grabbed card keeps the depth home had when it was grabbed.
+- Matheesha: a closing card must not be grabbable mid-close. Touches on the bar that start during a close (flying, settling, or
+  waiting for a late card) are now ignored until the finger lifts. Still possible during a close: tapping the app's icon on
+  home (reopens it) and touching home (moves the card aside). Launching cards and cancelled closes can still be grabbed.
