@@ -207,7 +207,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         if (Build.VERSION.SDK_INT < 33) return null
         return try {
             val d = resources.displayMetrics.density
-            dev.launcher.app.GlassDrawable(w, m.w, m.h, radius, d, d * 7f, dev.launcher.app.GlassStyle.IOS_LIBRARY, dev.launcher.app.GlassDrawable.Source.BACKDROP)
+            dev.launcher.app.GlassDrawable(w, m.w, m.h, radius, m.u, d * 7f, dev.launcher.app.GlassStyle.IOS, dev.launcher.app.GlassDrawable.Source.BACKDROP)
         } catch (t: Throwable) {
             dev.launcher.app.AppLog.log("[library] glass shader failed, plain tiles instead: ${t.javaClass.simpleName}: ${t.message}")
             null
@@ -308,6 +308,8 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     override fun appsChanged() = rebuild()
 
     override fun setImeInset(px: Int) = listPane.setImeInset(px)
+
+    override fun openSearch() = enterList(focusSearch = true)
 
     override fun setWallpaper(w: dev.launcher.app.Wallpaper?) {
         if (w === wallpaper) return

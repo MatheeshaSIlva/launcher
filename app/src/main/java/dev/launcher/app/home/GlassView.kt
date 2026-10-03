@@ -17,7 +17,7 @@ import dev.launcher.app.Wallpaper
  * parents' positions and translations), so it keeps refracting what is really behind it while it moves; whoever moves it
  * calls [invalidate]. Without a readable wallpaper it is a plain translucent fill.
  */
-class GlassView(ctx: Context, private val style: GlassStyle) : FrameLayout(ctx) {
+class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx: Float) : FrameLayout(ctx) {
     var radius = 0f
         set(v) { if (field != v) { field = v; rebuild() } }
     private var wallpaper: Wallpaper? = null
@@ -47,7 +47,7 @@ class GlassView(ctx: Context, private val style: GlassStyle) : FrameLayout(ctx) 
         val w = wallpaper
         glass = if (w != null && Build.VERSION.SDK_INT >= 33 && screenW > 0) {
             try {
-                GlassDrawable(w, screenW, screenH, radius, resources.displayMetrics.density, cellPx, style)
+                GlassDrawable(w, screenW, screenH, radius, unitPx, cellPx, style)
             } catch (t: Throwable) {
                 // A shader that does not compile on this GPU must never take the home screen down.
                 AppLog.log("[home] glass shader failed, plain glass instead: ${t.javaClass.simpleName}: ${t.message}")

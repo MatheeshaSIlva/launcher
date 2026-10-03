@@ -149,7 +149,13 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (e.internal) { Apps.launch(e, null, null); return }
         val bounds = Rect().also { iconOnScreen.roundOut(it) }
         // No system transition: the launch card is the animation.
-        val start = { try { Apps.launch(e, bounds, GestureNav.noAnimation(this)) } catch (t: Throwable) { AppLog.log("[home] launch ${e.pkg} failed: ${t.message}") } }
+        val start = {
+            try {
+                if (!NoAnimStarts.start(Apps.launchIntent(e, bounds), e.user.hashCode())) Apps.launch(e, bounds, GestureNav.noAnimation(this))
+            } catch (t: Throwable) {
+                AppLog.log("[home] launch ${e.pkg} failed: ${t.message}")
+            }
+        }
         // The card grows out of the icon over a picture of home without that icon (recorded now, before the card appears).
         HomeBridge.putWithout(e.pkg, recordWithout(e.pkg))
         if (!GestureNav.launchApp(e.pkg, iconOnScreen, icon, start)) start()

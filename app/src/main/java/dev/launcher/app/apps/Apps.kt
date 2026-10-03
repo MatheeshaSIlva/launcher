@@ -78,6 +78,13 @@ object Apps {
     fun keyFor(component: ComponentName, user: UserHandle): String =
         "${component.packageName}/${component.className}@${users.getSerialNumberForUser(user)}"
 
+    /** The intent LauncherApps would start for [e] (new task, icon bounds as source bounds). */
+    fun launchIntent(e: AppEntry, bounds: Rect?): Intent = Intent(Intent.ACTION_MAIN)
+        .addCategory(Intent.CATEGORY_LAUNCHER)
+        .setComponent(e.component)
+        .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        .apply { sourceBounds = bounds }
+
     /** Starts [e] as a new task (with [bounds] = where its icon is, and [options] e.g. "no system transition"). */
     fun launch(e: AppEntry, bounds: Rect?, options: Bundle?) {
         if (e.internal) {

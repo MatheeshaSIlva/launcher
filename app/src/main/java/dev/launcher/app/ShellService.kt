@@ -172,6 +172,22 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
+    private val instant by lazy { InstantTransitions(systemService("activity_task", ATM_STUB)) }
+
+    override fun startNoAnim(intent: android.content.Intent, userId: Int): String = try {
+        instant.start(intent, userId)
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
+    override fun switchToTaskNoAnim(taskId: Int): String = try {
+        instant.switchToTask(taskId)
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
+    override fun noAnimStats(): String = try { instant.stats() } catch (t: Throwable) { "ERROR: ${describe(t)}" }
+
     override fun probeLiveTransition(component: String, homeComponent: String): String = try {
         LiveTransitionProbe(systemService("activity_task", ATM_STUB)).run(component, homeComponent)
     } catch (t: Throwable) {

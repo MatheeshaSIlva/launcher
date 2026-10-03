@@ -192,12 +192,13 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         val p = progress
         val k = p.coerceIn(0f, 1f)
 
-        // The library sinks under the same blurred wallpaper that is its background (as iOS blurs it away), slightly darker.
+        // The library sinks completely under the same blurred wallpaper that is its background (nothing of it stays
+        // faintly visible behind an open folder), slightly darker.
         val w = lib.wallpaper
         if (w != null) {
-            backdropPaint.alpha = (240 * k).toInt()
+            backdropPaint.alpha = (255 * k).toInt()
             c.drawBitmap(w.heavy, w.heavyMatrix(m.w, m.h), backdropPaint)
-            dim.color = ((0x22 * k).toInt() shl 24)
+            dim.color = ((0x18 * k).toInt() shl 24)
         } else {
             dim.color = ((0x99 * k).toInt() shl 24)
         }

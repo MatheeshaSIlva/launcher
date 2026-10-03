@@ -60,6 +60,9 @@ interface AppDrawer {
 
     /** Our copy of the wallpaper (null: the system draws it): glass surfaces refract what is behind them. */
     fun setWallpaper(w: dev.launcher.app.Wallpaper?)
+
+    /** Open with search focused and the keyboard up (the home Search pill). */
+    fun openSearch()
 }
 
 /** Where [v]'s top-left corner is on screen from layout positions and translations (scale ignored), cheap enough per frame. */

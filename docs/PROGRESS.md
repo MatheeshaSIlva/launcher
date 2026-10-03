@@ -407,3 +407,21 @@ Causes and changes (next build, not yet confirmed on the phone):
   re-render of the picture, glass shader included, every frame). Meant to help both the camera launch and longer sessions.
 - After a minute in an app: home re-records its picture every minute (clock), which threw away the picture without the open
   app's icon; the close then had to record it on gesture start. Home now re-records that one immediately for the app in front.
+
+Device results (c20b685), Matheesha: closes after a while in an app still stale ("probably the animation scale changes");
+behind an expanded App Library folder the other apps stay faintly visible; glass still inconsistent with the dock; asked for
+the whole theme to follow the iOS design language (references: iOS 26 App Library, glass widgets and dock).
+Changes (next build, not yet confirmed on the phone):
+- No more switching system animation scales around gestures. Every start our cards cover (launch, home on close, switches,
+  bring-backs) goes through the shell with a remote transition of ours that ends at once (`InstantTransitions`,
+  `NoAnimStarts`): the system plays no animation of its own and nothing global is written during a gesture. Basis: the
+  live-card probe's starts showed no system animation at all. Verified on the fly (`[nav] own transitions: requests=… invoked=…`);
+  the old scale switching stays as a safety net until the first confirmation, and comes back for good if the system never
+  hands the transitions over.
+- One glass material for everything (`GlassStyle.IOS`), designed offline against the references with the shader's own maths
+  (`docs/design/glass_proto.py`, `docs/design/glass-material-v4.png`): frosted body (about 9 pt blur), light tint, soft light
+  band inside the edge, thin rim lit from the top left. Dock, widgets, Search pill, App Library tiles, search field and folder
+  panels all use it (library surfaces refract the library's blurred background).
+- Behind an open folder the library is now fully covered by its own blurred background (was 94 %: the faint icons).
+- iOS widget: the clock is a medium (4 x 2) glass widget with day, time and date, sized like iOS widgets, its name below.
+- Search pill (iOS 26) replaces the page dots at rest; dots while pages move; a tap opens App Library search for now.

@@ -845,7 +845,8 @@ object GestureNav {
         // startActivity is a binder round trip of tens of ms: never on the nav thread, which is drawing the card right now.
         front("home") {
             try {
-                app.startActivity(Intent(app, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app))
+                val home = Intent(app, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (!NoAnimStarts.start(home, Process.myUserHandle().hashCode())) app.startActivity(home, noAnimation(app))
             } catch (t: Throwable) {
                 AppLog.log("[nav] going home from the app failed (${t.javaClass.simpleName}); using the shell")
                 ShizukuLink.service?.runDetached("am start -a android.intent.action.MAIN -c android.intent.category.HOME")
@@ -1036,8 +1037,9 @@ object GestureNav {
     }
 
     /**
-     * "Start this without a system transition": our card is the animation. One UI does not honour this for home coming to
-     * the front, so the animation scales are also off while cards animate ([holdScalesOff]); kept for other vendors.
+     * "Start this without a system transition" as an ActivityOptions bundle: only the fallback when our own instant
+     * transitions ([NoAnimStarts]) are not available. One UI ignores it for home coming to the front, which is why the
+     * fallback also switches the animation scales off around gestures ([holdScalesOff]).
      */
     fun noAnimation(ctx: Context): android.os.Bundle = android.app.ActivityOptions.makeCustomAnimation(ctx, 0, 0).toBundle()
 
@@ -1073,6 +1075,9 @@ object GestureNav {
 
     private fun holdScalesOff() {
         nav.removeCallbacks(scalesBack)
+        // Once our own instant transitions are confirmed to work (NoAnimStarts), starts skip the system animation by
+        // themselves: nothing global changes during a gesture. Until then the scales are still switched as a safety net.
+        if (NoAnimStarts.confirmed) return
         val s = ShizukuLink.service ?: return
         frontIo.execute {
             try { SystemRestore.scalesOffForCards(app, s) } catch (t: Throwable) { AppLog.log("[nav] transitions off failed: ${t.javaClass.simpleName}: ${t.message}") }
@@ -1327,13 +1332,17 @@ object GestureNav {
             val task = t
             front("switch to ${task.pkg}") {
                 val start = SystemClock.uptimeMillis()
-                val r = try { s.switchToTaskWithOptions(task.id, noAnimation(app)) } catch (e: Throwable) { "ERROR: ${e.message}" }
+                val r = if (NoAnimStarts.switchToTask(task.id)) "ok (own instant transition)"
+                    else try { s.switchToTaskWithOptions(task.id, noAnimation(app)) } catch (e: Throwable) { "ERROR: ${e.message}" }
                 AppLog.log("[nav] switch to ${task.pkg} (task ${task.id}): $r (${SystemClock.uptimeMillis() - start} ms)")
             }
         } else if (pkg != null) {
             front("start $pkg") {
                 app.packageManager.getLaunchIntentForPackage(pkg)?.let { i ->
-                    try { app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app)) } catch (_: Throwable) { }
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (!NoAnimStarts.start(i, Process.myUserHandle().hashCode())) {
+                        try { app.startActivity(i, noAnimation(app)) } catch (_: Throwable) { }
+                    }
                 }
             }
         }

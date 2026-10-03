@@ -107,8 +107,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         applyGlassWallpaper()
     }
 
-    /** Glass surfaces (dock, indicator), for the wallpaper reveal to drive frame by frame. */
-    fun glassViews(): List<GlassView> = listOfNotNull(dock?.glass, indicator?.glass)
+    /** Glass on the pages (widgets): redrawn while the pages move, so it keeps refracting what is behind it. */
+    private val pageGlass = ArrayList<GlassView>()
+
+    /** Glass surfaces (dock, Search pill, widgets), for the wallpaper reveal to drive frame by frame. */
+    fun glassViews(): List<GlassView> = listOfNotNull(dock?.glass, indicator?.glass) + pageGlass
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
         val top: Int
@@ -182,6 +185,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         pagesLayer.removeAllViews()
         pages.clear()
         clocks.clear()
+        pageGlass.clear()
         for (items in l.pages) {
             val p = PageView(context, metrics) { item -> viewFor(item, metrics) }
             p.bind(items)
@@ -196,9 +200,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 leftMargin = ((metrics.w - width) / 2f).roundToInt()
                 topMargin = metrics.indicatorTop.roundToInt()
             }
-            ind.visibility = if (pages.size > 1) View.VISIBLE else View.INVISIBLE
+            ind.visibility = View.VISIBLE   // the Search pill shows even with a single page (as on iOS)
+            ind.setOnClickListener { openLibrarySearch() }
         }
         pos = pos.coerceIn(minPos(), maxPos())
+        applyGlassWallpaper()   // widgets' glass was just created
         applyPositions()
         // Icons for what is on screen first, then the rest of the library in the background.
         Icons.preload(l.pages.flatten().filterIsInstance<HomeItem.App>().mapNotNull { Apps[it.key] } + l.dock.mapNotNull { Apps[it] }, metrics.iconSize)
@@ -210,7 +216,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun viewFor(item: HomeItem, metrics: HomeMetrics): View? = when (item) {
         is HomeItem.App -> Apps[item.key]?.let { appIcon(it, metrics, label = cfg.showLabels) }
-        is HomeItem.Widget -> if (item.kind == "clock") ClockWidgetView(context, metrics).also { clocks += it.clocks } else null
+        is HomeItem.Widget -> if (item.kind == "clock") ClockWidgetView(context, metrics, item.spanX, item.spanY).also { clocks += it.clocks; pageGlass += it.glass } else null
         is HomeItem.Folder -> null   // edit mode build
     }
 
@@ -285,6 +291,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         for (v in listOf(dock, dockShadow, indicator)) v?.translationX = shift
         dock?.glass?.invalidate()
         indicator?.glass?.invalidate()
+        for (g in pageGlass) g.invalidate()
+        if (pendingSearch && dp > 0.5f) { pendingSearch = false; drawer?.openSearch() }
         indicator?.setPosition(pos.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()))
         drawer?.setOpenProgress(dp)
         if (dp > 0f) drawerWasOpen = true
@@ -378,6 +386,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     // ---- pages
 
     private fun beginPages() {
+        indicator?.setMoving(true)
         drag = Drag.PAGES
         pos0 = pos
         startPage = pos.roundToInt()
@@ -408,6 +417,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     fun animatePages(target: Float, velocityPx: Float = 0f) {
+        if (target != pos) indicator?.setMoving(true)
         val w = metrics.w.toFloat()
         pagerSpring = Motion.profile.pageSnap.spring().apply { start(pos * w, velocityPx, target * w) }
         pagerTarget = target
@@ -489,6 +499,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     private fun onSettled() {
+        indicator?.setMoving(false)
         if (drawerProgress() == 0f && drawerWasOpen) {
             drawerWasOpen = false
             drawer?.onClosed()
@@ -542,6 +553,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val cz = 1f + d * (mp.homeContentZoom - 1f)
         wallpaperView.scaleX = wz; wallpaperView.scaleY = wz
         fg.scaleX = cz; fg.scaleY = cz
+    }
+
+    private var pendingSearch = false
+
+    /** The Search pill: opens the drawer's search (the App Library's, until Spotlight exists), keyboard up. */
+    fun openLibrarySearch() {
+        if (m == null) return
+        pendingSearch = true   // the search field takes focus once the drawer is on screen
+        when (cfg.drawerPlacement) {
+            DrawerPlacement.SWIPE_UP -> animateSheet(1f)
+            DrawerPlacement.PAGE_AFTER_LAST -> animatePages(pages.size.toFloat())
+            DrawerPlacement.PAGE_BEFORE_FIRST -> animatePages(-1f)
+        }
     }
 
     /** Home pressed while home is in front: back to the first page, drawer closed. */

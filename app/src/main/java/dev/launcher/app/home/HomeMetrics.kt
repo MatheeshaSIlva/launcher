@@ -56,6 +56,18 @@ class HomeMetrics(
     fun cellLeft(col: Int) = columnCenterX(col) - columnPitch / 2f
     fun cellTop(row: Int) = gridTop + row * cellHeight
 
+    // ---- widgets (iOS): a widget spans its columns' icons plus 4 pt each side, and its rows from the first icon's top to
+    //      the last icon's bottom; corners 23 pt; its name below like an app label
+    val widgetRadius = 23 * u
+    fun widgetWidth(spanX: Int) = (spanX - 1) * columnPitch + iconSize + 8 * u
+    fun widgetHeight(spanY: Int) = (spanY - 1) * cellHeight + iconSize
+    /** Left edge of a widget starting at [col], relative to that column's cell. */
+    fun widgetInset(col: Int) = columnCenterX(col) - iconSize / 2f - 4 * u - cellLeft(col)
+
+    // ---- Search pill (iOS 26: "Search" at rest, page dots while the pages move)
+    val searchPillWidth = 78 * u
+    val searchPillText = 11.2f * u
+
     // ---- App Library, in the same unit as everything else (iOS points are absolute: one scale for home, library, lists
     //      and folders, so text and icons keep the same proportions everywhere). Measured on iOS (pt): side margin 23.3, gap
     //      between tiles 18.2, tiles fill the rest (166.6 on this 402 pt width); inside a tile: padding 0.0734, gap 0.088 of

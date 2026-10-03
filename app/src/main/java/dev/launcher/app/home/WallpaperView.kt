@@ -80,7 +80,7 @@ class BackdropView(ctx: Context) : View(ctx) {
         val w = wallpaper
         if (w != null) {
             canvas.drawBitmap(w.heavy, w.heavyMatrix(width, height), paint)
-            canvas.drawColor(0x1A000000)
+            canvas.drawColor(0x0D000000)   // barely darker: iOS keeps the library's background bright
         } else {
             canvas.drawColor(0x99000000.toInt())
         }

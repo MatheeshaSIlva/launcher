@@ -41,15 +41,28 @@ The S24's aspect (2340/1080 = 2.167) is almost the iPhone 16 Pro's (2.174), so t
 | Row pitch | 190.7 |
 | Search field | 46.7 tall, 13 below the status bar; tiles start 25.6 below it |
 
-## Liquid Glass (iOS 26), measured on the dock and the Search pill
+## Liquid Glass (iOS 26): one material for every surface
 
-- Body colour vs the wallpaper right outside it: **red drops, blue rises**, i.e. strong saturation (common CSS recreations use
-  `saturate(180%)`), plus a slight lift.
-- Blur: a thin wallpaper line keeps its position but loses about two thirds of its contrast under the dock: Gaussian sigma
-  roughly 6–8 pt. The Search pill is nearly clear (sigma about 1–2 pt).
-- Rim: thin bright edge (about 1–1.5 pt), strongest at the top left and on the right curve; edges refract (lensing).
-- Ours: `GlassStyle.IOS_DOCK` (blur sigma about 6.5 pt via `Wallpaper.blurred`, saturation 1.7, lift 0.04, specular 0.28) and
-  `IOS_CAPSULE` (frost 0.3 = mostly sharp wallpaper).
+Tuned offline (2026-10-03) against Matheesha's iOS 26 references (widgets on a photo, the App Library): `docs/design/glass_proto.py`
+renders the exact maths of our AGSL shader, `docs/design/glass-material-v4.png` is the comparison it was signed off from.
+
+- Every glass surface uses `GlassStyle.IOS`: dock, widgets, Search pill, App Library tiles and search field, folder panels.
+  Surfaces on home refract the wallpaper's blurred copy; surfaces in the App Library refract the library's blurred background
+  (`GlassDrawable.Source.BACKDROP`), so the material is the same while what is behind differs.
+- Body: frosted. iOS widgets keep the shapes behind them recognisable but soft (blur of roughly 9 pt: `Wallpaper.blurred`),
+  white tint 0.16, saturation 1.25.
+- Edge (what reads as "liquid"): a soft light band inside the edge (exponential, 10.5 pt, strength 0.25) and a thin rim
+  (1.8 pt): 0.12 everywhere, +0.45 where it faces the light (top left), +0.25 on the far side; a faint shade (0.03) inside the
+  edge away from the light; a gentle lens band (12 pt, 14 pt bend).
+- Earlier attempts and why they failed: clear glass (dock read as a different material from the frosted widgets/tiles);
+  heavy frosting without the edge light (read as frosted plastic, not glass).
+- Behind an open folder the library is covered completely by its own blurred background (no faint icons).
+
+## Widgets and the Search pill
+
+- Widget frame (measured): spans its columns' icons plus 4 pt each side, from its first row's icon top to its last row's icon
+  bottom; corner radius 23 pt; content padding 16 pt; name below like an app label.
+- Search pill: 78 x 29.6 pt (wider when many page dots need room); "Search" with a magnifier at rest, page dots while pages move.
 
 ## Typeface
 

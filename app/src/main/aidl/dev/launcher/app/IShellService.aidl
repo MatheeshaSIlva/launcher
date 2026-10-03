@@ -1,6 +1,7 @@
 package dev.launcher.app;
 
 import android.graphics.Bitmap;
+import android.content.Intent;
 import android.os.Bundle;
 
 // Runs in the Shizuku user-service process (uid 2000 via wireless debugging).
@@ -57,4 +58,11 @@ interface IShellService {
     // [component] with its window growing from a small card, then starts [homeComponent] with the app's window shrinking
     // away slowly. Returns a report of what the system handed over and how the frames went.
     String probeLiveTransition(String component, String homeComponent) = 17;
+
+    // Starts / switches with a remote transition of ours that ends at once, so the system plays no animation of its own
+    // (our cards are the animation) without touching the system animation scales. Returns "result <code>" or "ERROR: ...".
+    String startNoAnim(in Intent intent, int userId) = 18;
+    String switchToTaskNoAnim(int taskId) = 19;
+    // "requests=N invoked=N consumed=N errors=N": whether the system hands those transitions to us.
+    String noAnimStats() = 20;
 }
