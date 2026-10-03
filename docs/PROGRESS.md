@@ -282,3 +282,8 @@ every dock tap, on the same queue as app starts, so they are always off before a
 values 1 s after the last card session ended (no finger down, no card), so fast open/close runs do not toggle them. Each off
 cycle records the user's values and arms the watchdog with them first (`SystemRestore.scalesOffForCards`); the gesture strip
 going away restores them at once. Log lines: `[nav] system transitions off while cards animate` / `system animations restored`.
+- Matheesha: the wallpaper reveal stopped playing. Cause (ac44135): the time-tick receiver, which also handles
+  ACTION_WALLPAPER_CHANGED, was moved from resumed-only to the activity's whole life, so a change made in Settings loaded the
+  new wallpaper while home was in the background and `applyWallpaper` swapped it in without the reveal; on resume nothing
+  was left to reveal. Fix: like the colours listener, the receiver only marks the wallpaper dirty while home is not resumed;
+  it is loaded (with the reveal) on the next resume.

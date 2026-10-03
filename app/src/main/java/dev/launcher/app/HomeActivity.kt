@@ -130,7 +130,9 @@ class HomeActivity : Activity(), HomeBridge.Home {
     private val tick = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             @Suppress("DEPRECATION")
-            if (intent.action == Intent.ACTION_WALLPAPER_CHANGED) { wallpaperDirty = true; loadWallpaper() }
+            // Loaded only while home can be seen (else on the next resume): loading it in the background swapped it in
+            // without the reveal.
+            if (intent.action == Intent.ACTION_WALLPAPER_CHANGED) { wallpaperDirty = true; if (resumed) loadWallpaper() }
             else recordPreview()   // the clock changed: keep the picture behind closing cards current
         }
     }
