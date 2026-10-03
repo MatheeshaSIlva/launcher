@@ -287,3 +287,10 @@ going away restores them at once. Log lines: `[nav] system transitions off while
   new wallpaper while home was in the background and `applyWallpaper` swapped it in without the reveal; on resume nothing
   was left to reveal. Fix: like the colours listener, the receiver only marks the wallpaper dirty while home is not resumed;
   it is loaded (with the reveal) on the next resume.
+- Matheesha: closing an app after waiting for it to load fades in the centre instead of flying into its dock icon. That path
+  runs when the card's app is unknown or has no home icon. Two suspects for a fresh swipe (one that starts after the launch
+  animation ended): (1) the accessibility "window in front" report (a0a99fe) also fires for our own windows, and our home task can
+  be listed in recents while in front, so the card could be resolved to `dev.launcher.app`; (2) the task lookup answers after
+  release, when the card has already chosen "no icon". Next build: our own package no longer counts as the app in front
+  (fixes 1, and stops false `WRONG APP` retries), and the close logs which case happened:
+  `home (into the icon of <pkg>)` / `app NOT KNOWN yet at release` / `<pkg> has no icon on home`, plus the front report and top task.

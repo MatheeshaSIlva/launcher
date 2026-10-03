@@ -222,6 +222,8 @@ object GestureNav {
     fun onWindowStateChanged(pkg: String?) {
         if (pkg == null) return
         if (pkg != lastFrontPkg) AppLog.log("[front] now in front: $pkg")
+        // Our own windows (home, cards, strip) are never the app a gesture closes or a launch waits for.
+        if (pkg == app.packageName) return
         lastFrontPkg = pkg
         lastFrontAt = SystemClock.uptimeMillis()
         nav.post {
@@ -715,7 +717,11 @@ object GestureNav {
             sH = Spring(0.44f, 0.9f).apply { start(c.h, vH, sizeH) }
             sZoom = Spring(0.5f, 1f).apply { start(backdrop?.zoom ?: 1f, 0f, 1f) }
             anim = Anim.HOME_COMMIT
-            endLabel = if (target != null) "home (into icon)" else "home (to centre; app not on the home screen)"
+            endLabel = when {
+                target != null -> "home (into the icon of $pkg)"
+                pkg == null -> "home (to centre; app NOT KNOWN yet at release: task lookup still running)"
+                else -> "home (to centre; $pkg has no icon on home)"
+            } + "; front report ${lastFrontPkg ?: "-"}, top task ${recentList.firstOrNull()?.pkg ?: "-"}"
             onSettled = {
                 phase = Phase.HOLD
                 // The picture of home is on top of the real one: swap only once the real home has drawn.
