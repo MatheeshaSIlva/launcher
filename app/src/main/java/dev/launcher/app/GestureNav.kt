@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.graphics.Picture
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
@@ -34,6 +33,8 @@ import kotlin.math.exp
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
+import dev.launcher.app.apps.Icons
+import dev.launcher.app.motion.Motion
 
 /**
  * Our bottom-edge gesture navigation and app launch/close animations.
@@ -151,7 +152,7 @@ object GestureNav {
     private var sCy = Spring(0.5f, 0.86f)
     private var sW = Spring(0.44f, 0.9f)
     private var sH = Spring(0.44f, 0.9f)
-    private var sZoom = Spring(0.5f, 1f)
+    private var sDepth = Spring(0.5f, 1f)   // home behind the card: 0 = at rest, 1 = receded (an app is open)
     private var sOff = Spring(0.35f, 1f)
     private var sScale = Spring(0.35f, 1f)
     private var springStartNs = 0L
@@ -167,11 +168,16 @@ object GestureNav {
     @Volatile private var lastFrontPkg: String? = null
     @Volatile private var lastFrontAt = 0L
 
-    private const val HOME_ZOOM = 1.08f
     private const val SCALE_RANGE = 0.62f     // smallest card while dragging = 38 % of the screen
     private const val SCALE_LENGTH = 0.28f    // travel (in screen heights) for most of the shrink
 
-    fun init(app: LauncherApp) { this.app = app }
+    fun init(app: LauncherApp) {
+        this.app = app
+        // A picture of home without the card's icon arrives a moment after a gesture starts: use it as soon as it does.
+        HomeBridge.onPreviewReady = { pkg ->
+            nav.post { if (cardPkg == pkg && backdrop?.picture != null) backdrop?.picture = HomeBridge.previewFor(pkg) }
+        }
+    }
 
     // ================================================================== public entry points (any thread)
 
@@ -520,7 +526,7 @@ object GestureNav {
             root?.setBackgroundColor(0)
             c.setFrame(sw / 2, sh / 2, sw, sh, deviceRadius)
             backdrop?.picture = HomeBridge.previewFor(cardPkg)
-            backdrop?.zoom = HOME_ZOOM
+            backdrop?.depth = 1f
         }
         if (backdrop?.picture == null) backdrop?.picture = HomeBridge.previewFor(cardPkg)
         val s = c.w / sw
@@ -592,7 +598,8 @@ object GestureNav {
     /** Our own tasks (home, the dev panel) are not apps to switch between or go back to. */
     private fun List<Task>.switchable() = filter { it.pkg != app.packageName }
 
-    private fun iconFor(pkg: String): Drawable? = icons[pkg] ?: try {
+    // The home screen's shaped icon when it has one (the card must turn into exactly what home shows), else the system's.
+    private fun iconFor(pkg: String): Drawable? = Icons.drawableFor(pkg) ?: icons[pkg] ?: try {
         app.packageManager.getApplicationIcon(pkg).also { icons[pkg] = it }
     } catch (_: Throwable) { null }
 
@@ -644,7 +651,7 @@ object GestureNav {
         prv?.visibility = View.GONE
         root?.setBackgroundColor(if (HomeBridge.previewFor(f?.pkg) == null) 0xFF101418.toInt() else 0)
         backdrop?.picture = HomeBridge.previewFor(f?.pkg)
-        backdrop?.zoom = HOME_ZOOM
+        backdrop?.depth = 1f
         travel0 = 0f
         lastTravel = 0f
         resetGrab()
@@ -711,11 +718,12 @@ object GestureNav {
             val ty = target?.centerY() ?: (sh / 2)
             // Only the part of the fling that points at the target carries over (plus a little): a fast flick up used to throw
             // the card far above the dock before it came back down into the icon.
-            sCx = Spring(0.5f, 0.92f).apply { start(c.cx, towards(vx, c.cx, tx), tx) }
-            sCy = Spring(0.5f, 0.92f).apply { start(c.cy, towards(vy, c.cy, ty), ty) }
-            sW = Spring(0.44f, 0.9f).apply { start(c.w, vW, size) }
-            sH = Spring(0.44f, 0.9f).apply { start(c.h, vH, sizeH) }
-            sZoom = Spring(0.5f, 1f).apply { start(backdrop?.zoom ?: 1f, 0f, 1f) }
+            val mp = Motion.profile
+            sCx = mp.appClosePosition.spring().apply { start(c.cx, towards(vx, c.cx, tx), tx) }
+            sCy = mp.appClosePosition.spring().apply { start(c.cy, towards(vy, c.cy, ty), ty) }
+            sW = mp.appCloseSize.spring().apply { start(c.w, vW, size) }
+            sH = mp.appCloseSize.spring().apply { start(c.h, vH, sizeH) }
+            sDepth = mp.homeDepthClose.spring().apply { start(depthNow(), 0f, 0f) }
             anim = Anim.HOME_COMMIT
             endLabel = when {
                 target != null -> "home (into the icon of $pkg)"
@@ -737,11 +745,12 @@ object GestureNav {
         } else {
             cardIconSize = 0f
             beginCardSprings(toIcon = false)
-            sCx = Spring(0.38f, 1f).apply { start(c.cx, vx, sw / 2) }
-            sCy = Spring(0.38f, 1f).apply { start(c.cy, vy, sh / 2) }
-            sW = Spring(0.38f, 1f).apply { start(c.w, vW, sw) }
-            sH = Spring(0.38f, 1f).apply { start(c.h, vH, sh) }
-            sZoom = Spring(0.38f, 1f).apply { start(backdrop?.zoom ?: 1f, 0f, HOME_ZOOM) }
+            val sp = Motion.profile.appCancel
+            sCx = sp.spring().apply { start(c.cx, vx, sw / 2) }
+            sCy = sp.spring().apply { start(c.cy, vy, sh / 2) }
+            sW = sp.spring().apply { start(c.w, vW, sw) }
+            sH = sp.spring().apply { start(c.h, vH, sh) }
+            sDepth = sp.spring().apply { start(depthNow(), 0f, 1f) }
             anim = Anim.HOME_CANCEL
             endLabel = "back to the app"
             onSettled = {
@@ -819,7 +828,7 @@ object GestureNav {
         val radius: Float
         if (springToIcon) {
             // Into an icon: corners to the icon's, snapshot crossfades into the icon over the last stretch.
-            radius = springR0 + (target * 0.23f - springR0) * q
+            radius = springR0 + (target * Icons.shape.cornerFraction() - springR0) * q
             c.iconMix = max(springMix0 * (1f - q), 1f - ((w - target) / (target * 1.5f)).coerceIn(0f, 1f))
         } else {
             // To full screen (opening, or springing back): corners to the display's, any icon fades as the card grows.
@@ -834,7 +843,7 @@ object GestureNav {
             r = deviceRadius * (w / sw)
         }
         c.setFrame(sCx.value(t), sCy.value(t), w, h, r)
-        backdrop?.zoom = sZoom.value(t)
+        backdrop?.depth = sDepth.value(t)
         return sCx.settled(t) && sCy.settled(t) && sW.settled(t) && sH.settled(t)
     }
 
@@ -848,6 +857,14 @@ object GestureNav {
         return floatArrayOf(c.cx, c.cy, c.w, c.h, 0f, 0f, 0f, 0f)
     }
 
+    /** Where home's depth is now: from the spring while cards animate, else what the backdrop shows. */
+    private fun depthNow(): Float {
+        if (animating && anim != Anim.SWITCH_COMMIT && anim != Anim.SWITCH_CANCEL) {
+            return sDepth.value(max(0L, System.nanoTime() - springStartNs) / 1e9)
+        }
+        return backdrop?.depth ?: 0f
+    }
+
     // ================================================================== LAUNCH
 
     private fun beginLaunch(pkg: String, iconRect: RectF, icon: Drawable?, start: () -> Unit) {
@@ -858,7 +875,7 @@ object GestureNav {
         val reverse = root?.visibility == View.VISIBLE && cardPkg == pkg
         // Where the card starts and how fast it moves: from where it is if this is the same app (reversal), else the icon.
         val m = if (reverse) cardMotion() else floatArrayOf(iconRect.centerX(), iconRect.centerY(), iconRect.width(), iconRect.height(), 0f, 0f, 0f, 0f)
-        val zoom0 = if (reverse) backdrop?.zoom ?: 1f else 1f
+        val depth0 = if (reverse) depthNow() else 0f
         if (!reverse) hideCards()
         gen++
         val g = gen
@@ -877,12 +894,12 @@ object GestureNav {
             c.icon = icon
             c.snapshot = images[pkg]
             c.placeholderColor = icon?.let { averageColor(it) } ?: 0xFF2A2F3A.toInt()
-            c.setFrame(m[0], m[1], m[2], m[3], m[2] * 0.23f)
+            c.setFrame(m[0], m[1], m[2], m[3], m[2] * Icons.shape.cornerFraction())
             c.iconMix = 1f
             prv?.visibility = View.GONE
             root?.setBackgroundColor(0)
             backdrop?.picture = picture
-            backdrop?.zoom = 1f
+            backdrop?.depth = 0f
         }
         appStarted = false
         pendingStart = Runnable(start)
@@ -890,11 +907,12 @@ object GestureNav {
         cardIconSize = iconRect.width()
         switchAt = 0L   // a launch ends any run of quick switches
         beginCardSprings(toIcon = false)
-        sCx = Spring(0.42f, 0.92f).apply { start(m[0], m[4], sw / 2) }
-        sCy = Spring(0.42f, 0.92f).apply { start(m[1], m[5], sh / 2) }
-        sW = Spring(0.42f, 0.92f).apply { start(m[2], m[6], sw) }
-        sH = Spring(0.42f, 0.92f).apply { start(m[3], m[7], sh) }
-        sZoom = Spring(0.45f, 1f).apply { start(zoom0, 0f, HOME_ZOOM) }
+        val open = Motion.profile.appOpen
+        sCx = open.spring().apply { start(m[0], m[4], sw / 2) }
+        sCy = open.spring().apply { start(m[1], m[5], sh / 2) }
+        sW = open.spring().apply { start(m[2], m[6], sw) }
+        sH = open.spring().apply { start(m[3], m[7], sh) }
+        sDepth = Motion.profile.homeDepthOpen.spring().apply { start(depth0, 0f, 1f) }
         endLabel = "launch $pkg${if (reverse) " (reversed a closing card)" else ""}"
         val startApp = { runPendingStart() }
         onSettled = {
@@ -1111,8 +1129,8 @@ object GestureNav {
             switchIndex += if (toOlder) 1 else -1
             switchAt = SystemClock.uptimeMillis()
             val since = switchAt
-            sOff = Spring(0.35f, 1f).apply { start(offset, vx, if (toOlder) sw + gap() else -(sw + gap())) }
-            sScale = Spring(0.35f, 1f).apply { start(switchScale, 0f, 1f) }
+            sOff = Motion.profile.switchCommit.spring().apply { start(offset, vx, if (toOlder) sw + gap() else -(sw + gap())) }
+            sScale = Motion.profile.switchCommit.spring().apply { start(switchScale, 0f, 1f) }
             anim = Anim.SWITCH_COMMIT
             endLabel = "quick switch to ${if (toOlder) "an older" else "a newer"} app (${target.pkg})"
             onSettled = {
@@ -1121,8 +1139,8 @@ object GestureNav {
                 if (lastFrontPkg == target.pkg && lastFrontAt >= since) hideCards() else awaitForeground(target.pkg, g) { hideCards() }
             }
         } else {
-            sOff = Spring(0.3f, 1f).apply { start(offset, vx, 0f) }
-            sScale = Spring(0.3f, 1f).apply { start(switchScale, 0f, 1f) }
+            sOff = Motion.profile.switchCancel.spring().apply { start(offset, vx, 0f) }
+            sScale = Motion.profile.switchCancel.spring().apply { start(switchScale, 0f, 1f) }
             anim = Anim.SWITCH_CANCEL
             endLabel = "switch cancelled"
             onSettled = { hideCards() }
@@ -1216,19 +1234,28 @@ object GestureNav {
 
     // ================================================================== views
 
-    /** Our recorded picture of the home screen, drawn behind cards, zoomed about the centre. */
+    /**
+     * Our recorded picture of the home screen, drawn behind cards. [depth] 0 = at rest, 1 = receded behind an open app:
+     * the content zooms by MotionProfile.homeContentZoom and the wallpaper by the smaller homeWallpaperZoom, about the
+     * centre (iOS depth).
+     */
     private class PreviewView(ctx: Context) : View(ctx) {
-        var picture: Picture? = null
+        var picture: HomePicture? = null
             set(v) { if (field !== v) { field = v; invalidate() } }
-        var zoom = 1f
+        var depth = 0f
             set(v) { if (field != v) { field = v; invalidate() } }
 
         override fun onDraw(canvas: Canvas) {
             val p = picture ?: return
-            canvas.save()
-            canvas.scale(zoom, zoom, width / 2f, height / 2f)
-            canvas.drawPicture(p)
-            canvas.restore()
+            val mp = Motion.profile
+            val cx = width / 2f
+            val cy = height / 2f
+            p.wallpaper?.let {
+                val z = 1f + depth * (mp.homeWallpaperZoom - 1f)
+                canvas.save(); canvas.scale(z, z, cx, cy); canvas.drawPicture(it); canvas.restore()
+            }
+            val z = 1f + depth * (mp.homeContentZoom - 1f)
+            canvas.save(); canvas.scale(z, z, cx, cy); canvas.drawPicture(p.content); canvas.restore()
         }
     }
 

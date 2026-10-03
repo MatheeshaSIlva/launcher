@@ -8,31 +8,66 @@ import android.os.SystemClock
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * What gesture navigation (nav thread) needs from the home screen (main thread): where each app's icon is, hiding an
- * icon while a card flies into or out of it, a recorded picture of the home screen to draw behind closing cards, and
- * when home has actually drawn after coming back.
+ * The home screen as recorded pictures, in two layers so they can zoom by different amounts (iOS depth: icons recede more
+ * than the wallpaper). [wallpaper] is null when the system draws the wallpaper (then the content layer is opaque black).
+ */
+class HomePicture(val wallpaper: Picture?, val content: Picture)
+
+/**
+ * What gesture navigation (nav thread) needs from the home screen (main thread): where each visible app icon is, hiding
+ * an icon while a card flies into or out of it, recorded pictures of home to draw behind cards, and when home has
+ * actually drawn after coming back.
  */
 object HomeBridge {
     private val main = Handler(Looper.getMainLooper())
-    private val iconRects = ConcurrentHashMap<String, RectF>()
 
     /** Implemented by HomeActivity while it exists. Called on the main thread. */
     interface Home {
         fun setIconHidden(pkg: String, hidden: Boolean)
+        /** Records home with [pkg]'s icon left out (main thread). */
+        fun recordWithout(pkg: String): HomePicture?
     }
 
     @Volatile var home: Home? = null
 
+    /** Home at rest as currently shown (page, drawer, folder), recorded whenever it settles. */
+    @Volatile var preview: HomePicture? = null
+        private set
+    @Volatile private var generation = 0
+    private val without = ConcurrentHashMap<String, HomePicture>()
+    private val requested = ConcurrentHashMap.newKeySet<String>()
+
+    /** Called on the main thread when a picture without [pkg]'s icon becomes available. */
+    @Volatile var onPreviewReady: ((String) -> Unit)? = null
+
+    fun setPreview(p: HomePicture) {
+        preview = p
+        generation++
+        without.clear()
+    }
+
+    /** Stores a picture without [pkg]'s icon recorded right now (a launch records it before its card appears). */
+    fun putWithout(pkg: String, p: HomePicture?) { if (p != null) without[pkg] = p }
+
     /**
-     * The home screen as drawn at rest (wallpaper, clock, dock), recorded by HomeActivity while it is idle. Gesture nav
-     * draws it behind a closing card, so the app stays in front (and running) until the gesture commits.
+     * The picture to draw behind [pkg]'s card: without its icon if recorded, else the plain picture while one without it
+     * is recorded on the main thread (then [onPreviewReady] fires). Any thread.
      */
-    @Volatile var preview: Picture? = null
-
-    /** The same picture with one app's icon left out: used while that app's card flies into or out of its icon. */
-    val previewWithout = ConcurrentHashMap<String, Picture>()
-
-    fun previewFor(pkg: String?): Picture? = pkg?.let { previewWithout[it] } ?: preview
+    fun previewFor(pkg: String?): HomePicture? {
+        if (pkg == null) return preview
+        without[pkg]?.let { return it }
+        if (requested.add(pkg)) {
+            val g = generation
+            main.post {
+                requested.remove(pkg)
+                if (g != generation) return@post
+                val p = home?.recordWithout(pkg) ?: return@post
+                without[pkg] = p
+                onPreviewReady?.invoke(pkg)
+            }
+        }
+        return preview
+    }
 
     /** uptimeMillis of the last frame home committed after a resume. */
     @Volatile var homeDrawnAt = 0L
@@ -40,8 +75,11 @@ object HomeBridge {
 
     fun onHomeDrawn() { homeDrawnAt = SystemClock.uptimeMillis() }
 
-    fun setIconRect(pkg: String, r: RectF) { iconRects[pkg] = r }
-    fun iconRect(pkg: String): RectF? = iconRects[pkg]
+    // Icons a closing card can fly into right now (screen px), published by home whenever it settles.
+    @Volatile private var icons: Map<String, RectF> = emptyMap()
+
+    fun setVisibleIcons(m: Map<String, RectF>) { icons = m }
+    fun iconRect(pkg: String): RectF? = icons[pkg]
 
     fun setIconHidden(pkg: String, hidden: Boolean) = main.post { home?.setIconHidden(pkg, hidden) }
 }

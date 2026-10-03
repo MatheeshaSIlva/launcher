@@ -39,6 +39,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Overlay windows** (`TYPE_APPLICATION_OVERLAY`, always `FLAG_HARDWARE_ACCELERATED`): gesture strip + full-display card window.
 - **Watchdog** (shell-side loop): restores animation scales and status bar if the app's heartbeat goes stale. Must exist
   before any feature that hides stock UI.
+- **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
+  physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
+  Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").
 - **Glass/blur**: three layers — own snapshot blur (baseline, all phones) → standard cross-window blur where the system enables it
   → Samsung dim-behind blur upgrade.
 

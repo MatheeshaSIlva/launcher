@@ -11,11 +11,44 @@ import android.graphics.Shader
 import android.graphics.drawable.Drawable
 
 /**
+ * How a glass surface looks. Part of a theme's colour-and-effects layer; the iOS 26 Liquid Glass variants are below.
+ * Distances in dp.
+ */
+data class GlassStyle(
+    /** 0 = clear glass, 1 = fully frosted (the blurred wallpaper). */
+    val frost: Float,
+    /** Width of the refracting rim and how far it bends the view outward. */
+    val bevelDp: Float,
+    val refractionDp: Float,
+    /** Spread between red and blue refraction at the rim. */
+    val dispersion: Float,
+    /** The body is a weak lens: content slightly enlarged. */
+    val magnify: Float,
+    val saturation: Float,
+    /** White mixed into the body (keeps glass readable over dark wallpapers). */
+    val lift: Float,
+    /** Specular rim: brightness and width of the thin edge highlight facing [lightAngleDeg] (0 = from the right, 90 = from below). */
+    val specular: Float,
+    val specularWidthDp: Float,
+    val lightAngleDeg: Float = 225f,
+) {
+    companion object {
+        /** The dock: frosted (as tuned on the S24), refracting rim, faint specular edge lit from the top left. */
+        val IOS_DOCK = GlassStyle(frost = 0.9f, bevelDp = 18f, refractionDp = 24f, dispersion = 0.22f, magnify = 0.05f,
+            saturation = 1.15f, lift = 0.03f, specular = 0.22f, specularWidthDp = 1.4f)
+        /** Small capsules (page indicator, search pill): clearer, thinner rim. */
+        val IOS_CAPSULE = GlassStyle(frost = 0.85f, bevelDp = 8f, refractionDp = 10f, dispersion = 0.15f, magnify = 0.03f,
+            saturation = 1.2f, lift = 0.06f, specular = 0.25f, specularWidthDp = 1.1f)
+    }
+}
+
+/**
  * "Liquid glass" for a rounded rectangle, as an AGSL shader over our own copy of the wallpaper:
  * - frosted body: the blurred wallpaper, a little more saturated;
  * - lens rim: towards the edge the surface acts like a thick convex bevel and bends rays outward, so wallpaper from just
- *   outside the shape appears compressed along the inside of the edge (refraction), kept sharp;
- * - dispersion: red, green and blue refract by different amounts, giving coloured fringes along the rim.
+ *   outside the shape appears compressed along the inside of the edge (refraction);
+ * - dispersion: red, green and blue refract by different amounts, giving coloured fringes along the rim;
+ * - specular rim: a thin highlight where the edge faces the light, fainter on the opposite side (iOS 26).
  * During a wallpaper change it samples the old and the new wallpaper through the same [Reveal] front as the wallpaper,
  * so the glass changes on exactly the same frame as what is behind it.
  * Draw it with bounds = the glass shape; [originX]/[originY] = where those bounds sit in the wallpaper's (screen) space.
@@ -28,6 +61,7 @@ class GlassDrawable(
     radius: Float,
     density: Float,
     cellPx: Float,
+    style: GlassStyle = GlassStyle.IOS_DOCK,
 ) : Drawable() {
     private val shader = RuntimeShader(AGSL)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -38,11 +72,17 @@ class GlassDrawable(
         setImages("Old", wallpaper)
         setImages("New", wallpaper)
         shader.setFloatUniform("radius", radius)
-        shader.setFloatUniform("bevel", 18f * density)       // width of the refracting rim
-        shader.setFloatUniform("refraction", 24f * density)  // how far the rim bends the view outward
-        shader.setFloatUniform("dispersion", 0.22f)          // spread between red and blue refraction
-        shader.setFloatUniform("frost", 0.9f)               // 0 = clear glass, 1 = fully frosted body
-        shader.setFloatUniform("magnify", 0.05f)             // the body is a weak lens: content slightly enlarged
+        shader.setFloatUniform("bevel", style.bevelDp * density)
+        shader.setFloatUniform("refraction", style.refractionDp * density)
+        shader.setFloatUniform("dispersion", style.dispersion)
+        shader.setFloatUniform("frost", style.frost)
+        shader.setFloatUniform("magnify", style.magnify)
+        shader.setFloatUniform("saturation", style.saturation)
+        shader.setFloatUniform("lift", style.lift)
+        shader.setFloatUniform("specular", style.specular)
+        shader.setFloatUniform("specWidth", style.specularWidthDp * density)
+        val a = Math.toRadians(style.lightAngleDeg.toDouble())
+        shader.setFloatUniform("lightDir", kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
         val o = Reveal.origin(screenW.toFloat(), screenH.toFloat())
         shader.setFloatUniform("origin", o[0], o[1])
         shader.setFloatUniform("maxDist", Reveal.maxDist(screenW.toFloat(), screenH.toFloat()))
@@ -111,6 +151,11 @@ uniform float refraction;
 uniform float dispersion;
 uniform float frost;
 uniform float magnify;
+uniform float saturation;
+uniform float lift;
+uniform float specular;
+uniform float specWidth;
+uniform float2 lightDir;
 uniform float2 origin;
 uniform float maxDist;
 uniform float cell;
@@ -183,8 +228,14 @@ half4 main(float2 coord) {
               : rv <= 0.001 ? lookOld(sp, off, frostAmt)
               : mix(lookOld(sp, off, frostAmt), lookNew(sp, off, frostAmt), half(rv));
 
-    col = saturate3(col, 1.15);
-    col = mix(col, half3(1.0), 0.03);
+    col = saturate3(col, half(saturation));
+    col = mix(col, half3(1.0), half(lift));
+
+    // Specular rim: brightest where the edge faces the light, a fainter echo on the opposite edge.
+    float rim = 1.0 - smoothstep(0.0, specWidth, -d);
+    float facing = dot(n, lightDir);
+    float spec = rim * specular * (max(facing, 0.0) + 0.4 * max(-facing, 0.0));
+    col = min(col + half3(half(spec)), half3(1.0));
 
     float a = clamp(0.5 - d, 0.0, 1.0);
     return half4(col * a, a);

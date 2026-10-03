@@ -299,3 +299,41 @@ Device results (6c55b4a), Matheesha: "everything works great now". Confirmed: ta
 at 3+ per second), no wrong app, the wallpaper reveal plays again, and closing after the app has loaded flies into its dock icon.
 Step 1 of task 4 (gesture strip, launch and close cards, quick switch) is done. Still open in phase 2: recents carousel (hold
 gesture), own status bar, the scripted frame-log run that turns the phase gate into a number, and the accessibility requirements.
+
+## Home experience, iOS profile (phase 3 pulled forward)
+
+Matheesha now uses the launcher as his real home and could not open apps that were not in the test dock. Decision (2026-10-03):
+finish the home experience first, iOS-styled but built so every part can be swapped (drawer style and placement, icon shape,
+motion, glass). Scope chosen: App Library, home pages with edit mode (wiggle, drag, folders), Spotlight, long-press menus, plus
+dock, glass, icons and motion. Delivered in three builds:
+1. App Library, iOS pages and dock, squircle icons, two-layer home depth, drawer placement switch (this build).
+2. Long-press menus and edit mode (wiggle, drag between pages and into the dock, drag from the App Library, folders).
+3. Spotlight (swipe down) and the Search pill above the dock; motion polish from device feedback.
+
+Architecture (new packages under `dev.launcher.app`):
+- `apps/`: `Apps` (every launchable activity for all profiles via LauncherApps, live on install/remove; stable keys
+  `pkg/class@userSerial`), `AppCategory` (iOS App Library categories from a known-app table, the manifest category and package
+  keywords), `LaunchStats` (Suggestions), `Icons` (renders each icon once into the theme's `IconShape`, iOS superellipse by
+  default; LRU cache, mip-mapped; also feeds gesture nav so a closing card turns into exactly the icon home shows).
+- `motion/`: `MotionProfile` holds every animation by role (app open/close/cancel, home depth, page snap, drawer, folder,
+  rubber band, deceleration, icon press); `Motion.IOS` keeps the card springs tuned on the S24. `IosScroller` = UIScrollView
+  physics (0.998/ms deceleration, rubber band 0.55, critically damped bounce), analytic per frame.
+- `drawer/`: `AppDrawer` (style) × `DrawerPlacement` (page after the last = iOS, page before the first, swipe-up sheet).
+  `AppLibraryView`: tiles (custom-drawn), category folder that grows out of its tile with the library blurred behind,
+  search field, A–Z list with index scrubber; pull-down on tiles opens the list.
+- `home/`: `HomeConfig` (grid, dock slots, drawer style/placement, icon shape, labels, new apps on home), `HomeMetrics` (all
+  sizes from iOS proportions: 1 unit = 1/393 of the width), `HomeModel` (pages flowed in order like iOS, dock, folders and
+  widgets in the format already; JSON, atomic writes; seeded once: phone/messages/browser/camera in the dock, clock + system apps
+  and the dev panel on page one, user apps on the next pages), `HomeScreen` (strip of pages, dock, indicator, drawer; every
+  movement a grabbable spring), `GlassView` (glass that tracks its own screen position while it moves).
+- Glass: `GlassStyle` per surface (`IOS_DOCK`, `IOS_CAPSULE`). New: an iOS 26 specular rim (thin edge highlight facing the
+  light at the top left, 40 % echo opposite), deliberately faint (0.22) since an earlier highlight was rejected.
+- Pictures of home are two layers (`HomePicture`: wallpaper + content) so the content recedes more than the wallpaper behind an
+  open app (iOS depth: content ×1.12, wallpaper ×1.04; was ×1.08 for both). Pictures without one icon are recorded on demand
+  for any icon (launch: synchronously at the tap; close: on the main thread at gesture start, swapped in when ready) instead of
+  four precomputed dock pictures. Home publishes the screen rect of every icon a card can fly into (current page + dock, or the
+  App Library's visible tiles/list/folder), so closing returns into the App Library when it was opened from there (as iOS).
+- Icon press = dim (iOS) instead of the 0.88 shrink. Dev panel: "Drawer: …" cycles the placement, "Reset home layout".
+
+Not yet: TalkBack for the custom-drawn App Library (needs virtual nodes), SF-like font (SF Pro is not licensable for Android;
+system sans for now, Inter is an option), live blur behind the library (it uses a heavy blur of our wallpaper copy).

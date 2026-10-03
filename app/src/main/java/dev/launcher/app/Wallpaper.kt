@@ -12,7 +12,15 @@ import kotlin.math.max
  * Reading it needs "all files access" on Android 13+ (MANAGE_EXTERNAL_STORAGE, granted via Shizuku appops); without it
  * [load] returns null and the home screen falls back to the system wallpaper window (no glass).
  */
-class Wallpaper private constructor(val bitmap: Bitmap, val blurred: Bitmap, val blurScale: Int, val id: Int) {
+class Wallpaper private constructor(
+    val bitmap: Bitmap,
+    val blurred: Bitmap,
+    val blurScale: Int,
+    val id: Int,
+    /** Much stronger blur (App Library, folders, search backgrounds), at [heavyScale] of the size. */
+    val heavy: Bitmap,
+    val heavyScale: Int,
+) {
 
     /** Bitmap -> screen matrix for a [w] x [h] screen: centre-crop, like the system wallpaper on a single page. */
     fun matrix(w: Int, h: Int): Matrix {
@@ -25,6 +33,8 @@ class Wallpaper private constructor(val bitmap: Bitmap, val blurred: Bitmap, val
 
     /** Same mapping for the downscaled blurred copy. */
     fun blurredMatrix(w: Int, h: Int): Matrix = matrix(w, h).apply { preScale(blurScale.toFloat(), blurScale.toFloat()) }
+
+    fun heavyMatrix(w: Int, h: Int): Matrix = matrix(w, h).apply { preScale(heavyScale.toFloat(), heavyScale.toFloat()) }
 
     companion object {
         /** The system wallpaper's id: changes whenever the user sets a new wallpaper (-1 if unknown). */
@@ -41,8 +51,12 @@ class Wallpaper private constructor(val bitmap: Bitmap, val blurred: Bitmap, val
             val small = Bitmap.createScaledBitmap(bmp, max(1, bmp.width / scale), max(1, bmp.height / scale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)
             boxBlur(small, 3, 2)   // at 1/4 size: ≈ 10 px blur at full size (half of before), still smooth
+            val heavyScale = 16
+            val heavy = Bitmap.createScaledBitmap(small, max(1, bmp.width / heavyScale), max(1, bmp.height / heavyScale), true)
+                .copy(Bitmap.Config.ARGB_8888, true)
+            boxBlur(heavy, 3, 3)   // at 1/16 size: ≈ 60 px at full size, like iOS's background material
             AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}")
-            Wallpaper(bmp, small, scale, id)
+            Wallpaper(bmp, small, scale, id, heavy, heavyScale)
         } catch (t: Throwable) {
             AppLog.log("[wallpaper] not readable (${t.javaClass.simpleName}: ${t.message}); using the system wallpaper window, no glass")
             null

@@ -1,0 +1,360 @@
+package dev.launcher.app.drawer
+
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.graphics.RenderEffect
+import android.graphics.Shader
+import android.os.Build
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
+import android.util.TypedValue
+import android.view.Gravity
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.TextView
+import dev.launcher.app.apps.AppCategory
+import dev.launcher.app.apps.AppEntry
+import dev.launcher.app.apps.Apps
+import dev.launcher.app.apps.LaunchStats
+import dev.launcher.app.motion.Motion
+import kotlin.math.roundToInt
+
+/** One App Library tile: a title and its apps (best first). Category tiles with more than four apps open as a folder. */
+internal class Tile(val title: String, val apps: List<AppEntry>, val expandable: Boolean)
+
+/**
+ * The iOS App Library: a search field on top; category tiles in two columns (Suggestions and Recently Added first, then
+ * categories by iOS's order). A tile shows up to four large icons, which open their app; with more apps, the fourth slot
+ * is a cluster of small icons that opens the whole category as a folder. Tapping the search field (or pulling the tiles
+ * down) switches to the alphabetical list, which filters as you type.
+ */
+class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), AppDrawer {
+    val m get() = host.metrics
+    internal val iconPainter = IconPainter(m.iconSize) { invalidateAll() }
+
+    internal val tilesPane = TilesPane(ctx, this)
+    internal val listPane = ListPane(ctx, this)
+    internal val searchBar = SearchBar(ctx, this)
+    internal val folder = FolderOverlay(ctx, this)
+    private val cancel = TextView(ctx)
+
+    internal var tiles: List<Tile> = emptyList()
+        private set
+    private var listMode = false
+    private var crossfading = false
+
+    // The one icon hidden while a card flies into or out of it (by package and by where it is drawn).
+    private var hiddenPkg: String? = null
+    private val published = HashMap<String, RectF>()
+
+    override val view: View get() = this
+
+    init {
+        clipChildren = false
+        addView(tilesPane, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(listPane, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        listPane.visibility = View.GONE
+        listPane.alpha = 0f
+        addView(searchBar, LayoutParams((m.w - 2 * m.libMargin).roundToInt(), m.searchHeight.roundToInt()).apply {
+            leftMargin = m.libMargin.roundToInt()
+            topMargin = m.searchTop.roundToInt()
+        })
+        cancel.apply {
+            text = "Cancel"
+            setTextColor(0xFFFFFFFF.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
+            gravity = Gravity.CENTER_VERTICAL or Gravity.END
+            alpha = 0f
+            visibility = View.GONE
+            setOnClickListener { leaveList() }
+        }
+        addView(cancel, LayoutParams(m.pt(76f).roundToInt(), m.searchHeight.roundToInt()).apply {
+            gravity = Gravity.TOP or Gravity.END
+            rightMargin = m.libMargin.roundToInt()
+            topMargin = m.searchTop.roundToInt()
+        })
+        addView(folder, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        folder.visibility = View.GONE
+        rebuild()
+    }
+
+    // ------------------------------------------------------------------ data
+
+    private fun rebuild() {
+        val all = Apps.all
+        val scores = LaunchStats.suggestions(all.size).withIndex().associate { (i, e) -> e.key to i }
+        // Most used first; unused apps keep their alphabetical order (the sort is stable).
+        fun byUse(list: List<AppEntry>) = list.sortedBy { scores[it.key] ?: Int.MAX_VALUE }
+        val out = ArrayList<Tile>()
+        val suggested = LaunchStats.suggestions(4).toMutableList()
+        if (suggested.size < 4) {
+            for (e in all) {
+                if (suggested.size == 4) break
+                if (!e.system && !e.internal && suggested.none { it.key == e.key }) suggested += e
+            }
+        }
+        if (suggested.isNotEmpty()) out += Tile("Suggestions", suggested, false)
+        val recent = all.filter { !it.system && !it.internal && it.installedAt > 0 }.sortedByDescending { it.installedAt }.take(4)
+        if (recent.isNotEmpty()) out += Tile("Recently Added", recent, false)
+        val groups = all.groupBy { it.category }
+        for (cat in AppCategory.entries) {
+            val apps = groups[cat] ?: continue
+            out += Tile(cat.title, byUse(apps), apps.size > 4)
+        }
+        tiles = out
+        tilesPane.dataChanged()
+        listPane.setApps(all)
+    }
+
+    internal fun invalidateAll() {
+        tilesPane.invalidate()
+        listPane.invalidate()
+        folder.invalidate()
+    }
+
+    // ------------------------------------------------------------------ modes
+
+    /** To the alphabetical list (from the search field, or a pull-down on the tiles). */
+    internal fun enterList(focusSearch: Boolean) {
+        if (!listMode) {
+            listMode = true
+            crossfade(toList = true)
+        }
+        searchBar.setEditable(true)
+        if (focusSearch) searchBar.focusAndShowKeyboard()
+    }
+
+    private fun leaveList() {
+        if (!listMode) return
+        listMode = false
+        searchBar.clear()
+        searchBar.setEditable(false)
+        crossfade(toList = false)
+    }
+
+    private fun crossfade(toList: Boolean) {
+        val d = Motion.profile.modeCrossfadeMs
+        crossfading = true
+        val showing = if (toList) listPane else tilesPane
+        val hiding = if (toList) tilesPane else listPane
+        showing.visibility = View.VISIBLE
+        showing.animate().alpha(1f).setDuration(d).start()
+        hiding.animate().alpha(0f).setDuration(d).withEndAction {
+            hiding.visibility = View.GONE
+            crossfading = false
+            host.onDrawerSettled()
+        }.start()
+        cancel.visibility = View.VISIBLE
+        cancel.animate().alpha(if (toList) 1f else 0f).setDuration(d).withEndAction { if (!toList) cancel.visibility = View.GONE }.start()
+        searchBar.animateCancelSpace(if (toList) 1f else 0f, d)
+        if (toList) listPane.scroller.jumpTo(0f)
+    }
+
+    internal fun onQuery(q: String) {
+        listPane.setQuery(q)
+        host.onDrawerSettled()   // results moved: a closing card must find their icons where they are now
+    }
+
+    internal fun launchFirstResult() {
+        val e = listPane.firstResult() ?: return
+        launch(e, listPane.iconRectOf(e) ?: RectF())
+    }
+
+    // ------------------------------------------------------------------ actions from the panes
+
+    internal fun launch(e: AppEntry, rectInView: RectF) {
+        val loc = IntArray(2)
+        getLocationOnScreen(loc)
+        host.launch(e, RectF(rectInView).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
+    }
+
+    internal fun openFolder(tile: Tile, tileRect: RectF) {
+        folder.open(tile, tileRect)
+    }
+
+    /** Blur and dim what is behind an open folder (0..1). */
+    internal fun setBackdropBlur(k: Float) {
+        if (Build.VERSION.SDK_INT < 31) return
+        val r = m.pt(28f) * k
+        val fx = if (r < 0.5f) null else RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP)
+        tilesPane.setRenderEffect(fx)
+        listPane.setRenderEffect(fx)
+        searchBar.setRenderEffect(fx)
+    }
+
+    internal fun settled() = host.onDrawerSettled()
+
+    internal fun haptic() { performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
+
+    /** True if the icon of [e] drawn at [rectInView] is the one a card is flying into (skip drawing it). */
+    internal fun isHidden(e: AppEntry, rectInView: RectF): Boolean {
+        if (e.pkg != hiddenPkg) return false
+        val p = published[e.pkg] ?: return true
+        return kotlin.math.abs(p.centerX() - rectInView.centerX()) < 2f && kotlin.math.abs(p.centerY() - rectInView.centerY()) < 2f
+    }
+
+    // ------------------------------------------------------------------ AppDrawer
+
+    override fun setOpenProgress(p: Float) {}
+
+    override fun onClosed() {
+        folder.closeNow()
+        if (listMode) {
+            listMode = false
+            searchBar.clear()
+            searchBar.setEditable(false)
+            listPane.animate().cancel(); tilesPane.animate().cancel(); cancel.animate().cancel()
+            listPane.alpha = 0f; listPane.visibility = View.GONE
+            tilesPane.alpha = 1f; tilesPane.visibility = View.VISIBLE
+            cancel.alpha = 0f; cancel.visibility = View.GONE
+            searchBar.animateCancelSpace(0f, 0)
+            crossfading = false
+        }
+        tilesPane.scroller.jumpTo(0f)
+        rebuild()   // suggestions follow what was just used
+    }
+
+    override fun capturesGestures() = listMode || folder.isOpen
+
+    override fun canScrollBack() = tilesPane.scroller.position > 0.5f
+
+    override fun onBack(): Boolean {
+        if (folder.isOpen) { folder.close(); return true }
+        if (listMode) { leaveList(); return true }
+        return false
+    }
+
+    override fun visibleIcons(out: MutableMap<String, RectF>) {
+        val loc = IntArray(2)
+        getLocationOnScreen(loc)
+        val local = HashMap<String, RectF>()
+        when {
+            folder.isOpen -> folder.visibleIcons(local)
+            listMode -> listPane.visibleIcons(local)
+            else -> tilesPane.visibleIcons(local)
+        }
+        published.clear()
+        published.putAll(local)
+        for ((pkg, r) in local) out.putIfAbsent(pkg, RectF(r).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
+    }
+
+    override fun setHiddenPkg(pkg: String?) {
+        if (hiddenPkg == pkg) return
+        hiddenPkg = pkg
+        invalidateAll()
+    }
+
+    override val isIdle: Boolean
+        get() = !crossfading && tilesPane.isIdle && listPane.isIdle && folder.isIdle
+
+    override fun appsChanged() = rebuild()
+
+    override fun setImeInset(px: Int) = listPane.setImeInset(px)
+}
+
+/** The search field: a capsule with a magnifier; editable only in list mode (a tap in tile mode switches to the list). */
+internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameLayout(ctx) {
+    private val m = lib.m
+    private val pill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x2EFFFFFF }
+    private val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x24FFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(0.8f) }
+    private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xB3FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND }
+    private val rect = RectF()
+    private val lens = Path()
+    private var cancelSpace = 0f
+    private var editable = false
+    val edit = EditText(ctx)
+
+    init {
+        setWillNotDraw(false)
+        edit.apply {
+            background = null
+            hint = "App Library"
+            setHintTextColor(0x99FFFFFF.toInt())
+            setTextColor(0xFFFFFFFF.toInt())
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            imeOptions = EditorInfo.IME_ACTION_GO or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            setPadding(0, 0, 0, 0)
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = false
+            isFocusableInTouchMode = false
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: Editable?) { lib.onQuery(s?.toString().orEmpty()) }
+            })
+            setOnEditorActionListener { _, _, _ -> lib.launchFirstResult(); true }
+        }
+        addView(edit, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
+            leftMargin = m.pt(38f).roundToInt()
+            rightMargin = m.pt(12f).roundToInt()
+        })
+    }
+
+    fun setEditable(on: Boolean) {
+        editable = on
+        edit.isFocusable = on
+        edit.isFocusableInTouchMode = on
+        if (!on) {
+            edit.clearFocus()
+            context.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(windowToken, 0)
+        }
+    }
+
+    fun focusAndShowKeyboard() {
+        edit.requestFocus()
+        edit.post { context.getSystemService(InputMethodManager::class.java).showSoftInput(edit, 0) }
+    }
+
+    fun clear() { edit.setText("") }
+
+    /** Makes room for "Cancel" on the right (0 = none, 1 = full). */
+    fun animateCancelSpace(to: Float, ms: Long) {
+        val from = cancelSpace
+        if (ms <= 0) { cancelSpace = to; applySpace(); return }
+        android.animation.ValueAnimator.ofFloat(from, to).apply {
+            duration = ms
+            addUpdateListener { cancelSpace = it.animatedValue as Float; applySpace() }
+            start()
+        }
+    }
+
+    private fun applySpace() {
+        (edit.layoutParams as LayoutParams).rightMargin = (m.pt(12f) + cancelSpace * m.pt(84f)).roundToInt()
+        edit.requestLayout()
+        invalidate()
+    }
+
+    override fun onInterceptTouchEvent(ev: MotionEvent) = !editable
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!editable && event.actionMasked == MotionEvent.ACTION_UP) lib.enterList(focusSearch = true)
+        return true
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val right = width - cancelSpace * m.pt(84f)
+        rect.set(0f, 0f, right, height.toFloat())
+        val r = height / 2f
+        canvas.drawRoundRect(rect, r, r, pill)
+        canvas.drawRoundRect(rect, r, r, rim)
+        // Magnifier glyph.
+        val cx = m.pt(20f)
+        val cy = height / 2f - m.pt(1f)
+        val lr = m.pt(6.5f)
+        lens.reset()
+        lens.addCircle(cx, cy, lr, Path.Direction.CW)
+        canvas.drawPath(lens, glyph)
+        canvas.drawLine(cx + lr * 0.72f, cy + lr * 0.72f, cx + lr * 1.45f, cy + lr * 1.45f, glyph)
+    }
+}

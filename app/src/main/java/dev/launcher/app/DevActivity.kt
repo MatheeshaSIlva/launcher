@@ -105,6 +105,25 @@ class DevActivity : Activity() {
         row5.addView(button("Gesture nav on/off") { toggleGestures() }, weighted())
         row5.addView(button("Frame report") { frameReport() }, weighted())
         root.addView(row5)
+        val row6 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val placement = button("") { }
+        fun showPlacement() { placement.text = "Drawer: ${dev.launcher.app.home.HomeConfig.load(this).drawerPlacement.title}" }
+        placement.setOnClickListener {
+            val c = dev.launcher.app.home.HomeConfig.load(this)
+            val all = dev.launcher.app.home.DrawerPlacement.entries
+            c.copy(drawerPlacement = all[(all.indexOf(c.drawerPlacement) + 1) % all.size]).save(this)
+            showPlacement()
+            AppLog.log("[home] drawer placement: ${dev.launcher.app.home.HomeConfig.load(this).drawerPlacement.title}")
+        }
+        showPlacement()
+        row6.addView(placement, weighted())
+        row6.addView(button("Reset home layout") {
+            dev.launcher.app.home.HomeModel.reset(this)
+            AppLog.log("[home] layout reset: a new one is made when home restarts")
+            finishAffinity()
+            Runtime.getRuntime().exit(0)
+        }, weighted())
+        root.addView(row6)
 
         logView = TextView(this).apply {
             setTextColor(Color.rgb(200, 220, 200))
