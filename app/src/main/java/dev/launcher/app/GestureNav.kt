@@ -197,6 +197,76 @@ object GestureNav {
         val want = ready && SystemRestore.gestureFlagsActive && ShizukuLink.service != null && !locked
         if (want && strip == null) { ensureCardWindow(); addStrip() }
         if (!want && strip != null) removeAll()
+        // Our iOS status bar rides on the same overlay windows (above the strip and cards).
+        val wantBar = want && strip != null && SystemRestore.statusBarWanted(app)
+        if (wantBar && statusBar == null) addStatusBar()
+        if (!wantBar && statusBar != null) removeStatusBar()
+    }
+
+    // ================================================================== status bar (nav thread)
+
+    /** Our status bar is on screen: only then are the stock clock and icons hidden (SystemRestore.applyFlags). */
+    @Volatile var statusBarShown = false
+        private set
+    private var statusBar: dev.launcher.app.statusbar.StatusBarView? = null
+    private val appearanceIo = Executors.newSingleThreadExecutor()
+    private var appearanceLogs = 0
+
+    private fun addStatusBar() {
+        val ctx = a11y ?: return
+        val wm = wm ?: return
+        val h = max(systemDimen("status_bar_height"), dp(24).toInt())
+        val v = dev.launcher.app.statusbar.StatusBarView(ctx)
+        val lp = overlayParams(WindowManager.LayoutParams.MATCH_PARENT, h, touchable = false).apply {
+            gravity = Gravity.TOP
+            title = "LauncherStatusBar"
+        }
+        try {
+            wm.addView(v, lp)
+            statusBar = v
+            statusBarShown = true
+            AppLog.log("[statusbar] on (${h}px)")
+            reapplyFlags()   // now the stock clock and icons can go
+            refreshAppearance()
+        } catch (t: Throwable) {
+            AppLog.log("[statusbar] addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
+        }
+    }
+
+    private fun removeStatusBar() {
+        statusBar?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
+        statusBar = null
+        nav.removeCallbacks(appearanceTick)
+        if (statusBarShown) { statusBarShown = false; reapplyFlags() }   // stock clock and icons back
+    }
+
+    private val appearanceTick = Runnable { refreshAppearance() }
+
+    /**
+     * White or black content, as the stock bar would show: on home from the wallpaper under the bar, in apps from what the
+     * app asks the window manager for (light status bar = black content). Again on every window change and every 2.5 s.
+     */
+    private fun refreshAppearance() {
+        val bar = statusBar ?: return
+        nav.removeCallbacks(appearanceTick)
+        nav.postDelayed(appearanceTick, 2500)
+        if (homeVisible) { bar.setDark(HomeBridge.homeStatusDark); return }
+        val s = ShizukuLink.service ?: return
+        appearanceIo.execute {
+            val out = try { s.windowAppearance() } catch (t: Throwable) { "ERROR: ${t.message}" }
+            val dark = parseLightStatusBar(out)
+            if (appearanceLogs < 3) { appearanceLogs++; AppLog.log("[statusbar] appearance (${dark ?: "unknown"}) from: ${out.take(500)}") }
+            if (dark != null) nav.post { if (!homeVisible) statusBar?.setDark(dark) }
+        }
+    }
+
+    /** True if the window in charge of the status bar asks for a light one (black content); null if not found. */
+    private fun parseLightStatusBar(out: String): Boolean? {
+        val lines = out.lines().filter { it.contains("ppearance") }
+        val line = lines.firstOrNull { it.contains("mLastAppearance") } ?: lines.firstOrNull() ?: return null
+        if (line.contains("LIGHT_STATUS_BARS")) return true
+        Regex("""ppearance=0x([0-9a-fA-F]+)""").find(line)?.let { return (it.groupValues[1].toLong(16) and 0x8L) != 0L }
+        return false
     }
 
     /** NavAccessibilityService connected: windows can be added. Re-applies flags, which then shows the strip. */
@@ -232,12 +302,16 @@ object GestureNav {
         }
     }
 
-    fun onHomeShown() { homeVisible = true }
+    fun onHomeShown() {
+        homeVisible = true
+        nav.post { refreshAppearance() }
+    }
 
     /** From NavAccessibilityService: a window of [pkg] came to the front. */
     fun onWindowStateChanged(pkg: String?) {
         if (pkg == null) return
         if (pkg != lastFrontPkg) AppLog.log("[front] now in front: $pkg")
+        nav.post { refreshAppearance() }   // a different window may ask for a different status bar
         // Our own windows (home, cards, strip) are never the app a gesture closes or a launch waits for.
         if (pkg == app.packageName) return
         lastFrontPkg = pkg
@@ -468,6 +542,7 @@ object GestureNav {
     }
 
     private fun removeAll() {
+        removeStatusBar()
         hideCards()
         nav.removeCallbacks(scalesBack)
         ShizukuLink.service?.let { s -> frontIo.execute { restoreScales(s) } }

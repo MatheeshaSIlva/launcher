@@ -65,4 +65,7 @@ interface IShellService {
     String switchToTaskNoAnim(int taskId) = 19;
     // "requests=N invoked=N consumed=N errors=N": whether the system hands those transitions to us.
     String noAnimStats() = 20;
+
+    // The window manager's lines about the system bar appearance (for our status bar's light/dark content).
+    String windowAppearance() = 21;
 }

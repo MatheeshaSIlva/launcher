@@ -43,7 +43,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     internal val iconPainter = IconPainter(m.iconSize) { invalidateAll() }
 
     internal val tilesPane = TilesPane(ctx, this)
-    internal val listPane = ListPane(ctx, this)
+    internal val listPane = SearchList(ctx, m, iconPainter, { e, r -> launch(e, r, "list") }, { e, r -> isHidden(e, r) }, { haptic() }, { settled() })
     internal val searchBar = SearchBar(ctx, this)
     internal val folder = FolderOverlay(ctx, this)
     private val cancel = TextView(ctx)
@@ -307,7 +307,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
 
     override fun appsChanged() = rebuild()
 
-    override fun setImeInset(px: Int) = listPane.setImeInset(px)
+    override fun setImeInset(px: Int) { listPane.bottomSpace = px.toFloat() }
 
     override fun openSearch() = enterList(focusSearch = true)
 

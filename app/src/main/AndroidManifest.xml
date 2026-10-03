@@ -4,6 +4,9 @@
 
     <!-- The updater asks GitHub which build is newest from the app process; the APK itself downloads in the shell process. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Our status bar: Wi-Fi state (normal permission) and the mobile network type (granted through Shizuku). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Gesture strip and card windows (TYPE_APPLICATION_OVERLAY); granted through Shizuku (appops). -->

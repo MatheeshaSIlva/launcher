@@ -40,7 +40,7 @@ import kotlin.math.roundToInt
  * follows a swipe up. Every movement is a spring that a touch can grab mid-flight, keeping its position.
  */
 @SuppressLint("ViewConstructor")
-class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx), DrawerHost {
+class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx), DrawerHost, SpotlightView.Host {
     interface Listener {
         fun launch(e: AppEntry, iconOnScreen: RectF, icon: Drawable?)
         /** Everything came to rest: a good moment to record the picture of home. */
@@ -62,6 +62,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var dock: DockView? = null
     private var indicator: PageIndicator? = null
     private var drawer: AppDrawer? = null
+    private var spotlight: SpotlightView? = null
+    private var imeInset = 0
     private val pages = ArrayList<PageView>()
     val clocks = ArrayList<TextClock>()
 
@@ -80,6 +82,21 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         addView(wallpaperView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(fg, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         fg.clipChildren = false
+        // Search fields ride up with the keyboard frame by frame (not only once it has finished opening).
+        if (Build.VERSION.SDK_INT >= 30) {
+            setWindowInsetsAnimationCallback(object : android.view.WindowInsetsAnimation.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+                override fun onProgress(insets: WindowInsets, running: MutableList<android.view.WindowInsetsAnimation>): WindowInsets {
+                    applyIme(insets.getInsets(WindowInsets.Type.ime()).bottom)
+                    return insets
+                }
+            })
+        }
+    }
+
+    private fun applyIme(ime: Int) {
+        imeInset = ime
+        drawer?.setImeInset(maxOf(0, ime - bottomInset))
+        spotlight?.setInsets(bottomInset, ime)
     }
 
     // ================================================================== setup
@@ -104,6 +121,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         wallpaperView.wallpaper = w
         backdrop.wallpaper = w
         drawer?.setWallpaper(w)
+        spotlight?.setWallpaper(w)
         applyGlassWallpaper()
     }
 
@@ -135,7 +153,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             topInset = top; bottomInset = b; deviceRadius = radius
             build()
         }
-        drawer?.setImeInset(maxOf(0, ime - bottom))
+        applyIme(ime)
         return insets
     }
 
@@ -170,6 +188,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val dr = Drawers.create(cfg.drawerStyle, context, this).also { drawer = it }
         fg.addView(dr.view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         dr.setWallpaper(wallpaper)
+        // Spotlight covers everything above the wallpaper while open.
+        val sp = SpotlightView(context, metrics, this).also { spotlight = it }
+        fg.addView(sp, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        sp.setWallpaper(wallpaper)
+        sp.setInsets(bottomInset, imeInset)
         applyGlassWallpaper()
         bindLayout()
     }
@@ -256,6 +279,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** How far the drawer is open, whatever its placement (0..1). */
     private fun drawerProgress(): Float {
         val li = libIndex ?: return sheet.coerceIn(0f, 1f)
+        // Pulled past its end (the rubber band) the drawer is still fully open: its background keeps its full blur.
+        if (li == pages.size && pos >= li) return 1f
+        if (li == -1 && pos <= -1f) return 1f
         return (1f - abs(li - pos)).coerceIn(0f, 1f)
     }
 
@@ -301,7 +327,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     // ================================================================== touch
 
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
-    private enum class Drag { NONE, PAGES, SHEET, IGNORED }
+    private enum class Drag { NONE, PAGES, SHEET, SEARCH, IGNORED }
     private var drag = Drag.NONE
     private var downX = 0f
     private var downY = 0f
@@ -311,6 +337,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var vt: VelocityTracker? = null
 
     private fun canPage(): Boolean {
+        if (spotlight?.isOpen == true) return false
         if (pages.size <= 1 && libIndex == null) return false
         if (cfg.drawerPlacement == DrawerPlacement.SWIPE_UP && sheet > 0f) return false
         val d = drawer
@@ -325,6 +352,15 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (abs(dx) < slop && abs(dy) < slop) return false
         // From here the content follows the finger 1:1 (it does not jump by the slop it took to decide).
         if (abs(dx) > abs(dy) && canPage()) { downX = e.x; downY = e.y; beginPages(); return true }
+        // Pull down on a home page (below the status bar: the top edge is the system's shade): Spotlight follows the finger.
+        if (abs(dy) > abs(dx) && dy > 0 && drawerProgress() == 0f && sheet == 0f && downY > metrics.gridTop - metrics.pt(40f) &&
+            spotlight?.isOpen != true) {
+            downX = e.x; downY = e.y
+            drag = Drag.SEARCH
+            parent?.requestDisallowInterceptTouchEvent(true)
+            spotlight?.beginDrag()
+            return true
+        }
         if (cfg.drawerPlacement == DrawerPlacement.SWIPE_UP && abs(dy) > abs(dx)) {
             val d = drawer
             if (sheet < 0.5f && dy < 0) { downX = e.x; downY = e.y; beginSheet(); return true }
@@ -346,6 +382,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 downX = e.x; downY = e.y
                 drag = Drag.NONE
                 HomeBridge.onHomeTouched?.invoke()
+                // While Spotlight is open it handles every touch itself.
+                if (spotlight?.isOpen == true) { drag = Drag.IGNORED; return false }
                 // A touch on a moving strip or sheet grabs it where it is (no tap goes through).
                 if (pagerAnimating) { pagerAnimating = false; beginPages(); return true }
                 if (sheetAnimating) { sheetAnimating = false; beginSheet(); return true }
@@ -365,6 +403,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 when (drag) {
                     Drag.PAGES -> dragPages(e.x - downX)
                     Drag.SHEET -> dragSheet(e.y - downY)
+                    Drag.SEARCH -> spotlight?.let { it.dragTo((e.y - downY) / it.pullDistance()) }
                     else -> {}
                 }
             }
@@ -375,6 +414,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 when (drag) {
                     Drag.PAGES -> releasePages(vx)
                     Drag.SHEET -> releaseSheet(vy)
+                    Drag.SEARCH -> spotlight?.release(vy)
                     else -> {}
                 }
                 drag = Drag.NONE
@@ -510,7 +550,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     // ================================================================== state for the launcher and gesture nav
 
-    val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && (drag == Drag.NONE || drag == Drag.IGNORED) && (drawer?.isIdle ?: true)
+    val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && (drag == Drag.NONE || drag == Drag.IGNORED) &&
+        (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true)
 
     // ---- depth: home receding behind an open app (iOS), run here once the real home is on screen
 
@@ -563,20 +604,16 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private var pendingSearch = false
 
-    /** The Search pill: opens the drawer's search (the App Library's, until Spotlight exists), keyboard up. */
+    /** The Search pill: opens Spotlight with the keyboard up (as on iOS). */
     fun openLibrarySearch() {
         if (m == null) return
-        pendingSearch = true   // the search field takes focus once the drawer is on screen
-        when (cfg.drawerPlacement) {
-            DrawerPlacement.SWIPE_UP -> animateSheet(1f)
-            DrawerPlacement.PAGE_AFTER_LAST -> animatePages(pages.size.toFloat())
-            DrawerPlacement.PAGE_BEFORE_FIRST -> animatePages(-1f)
-        }
+        spotlight?.open()
     }
 
     /** Home pressed while home is in front: back to the first page, drawer closed. */
     fun goHome() {
         if (m == null) return
+        spotlight?.takeIf { it.isOpen }?.close()
         if (cfg.drawerPlacement == DrawerPlacement.SWIPE_UP && sheet > 0f) animateSheet(0f)
         if (pos != 0f) animatePages(0f)
         if (drawerProgress() == 0f) drawer?.onClosed()
@@ -584,6 +621,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     /** Back pressed: leaves search or a folder, then closes the drawer. */
     fun onBack() {
+        if (spotlight?.onBack() == true) return
         val d = drawer ?: return
         if (drawerProgress() < 0.5f) return
         if (d.onBack()) return
@@ -658,6 +696,15 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     override fun onIconsMoved() = publishIcons()
+
+    // ================================================================== SpotlightView.Host
+
+    override fun launchFromSpotlight(e: AppEntry, iconOnScreen: RectF) = launch(e, iconOnScreen)
+
+    override fun spotlightSettled() {
+        publishIcons()
+        if (isIdle) listener.onHomeSettled()
+    }
 
     companion object {
         /** Sparkle grid and front wobble scale of the wallpaper reveal, shared by wallpaper and glass. */

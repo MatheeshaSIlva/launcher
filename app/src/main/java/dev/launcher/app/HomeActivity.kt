@@ -257,6 +257,21 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             window.setBackgroundDrawable(ColorDrawable(Color.BLACK))
         }
         screen.setWallpaper(w)
+        HomeBridge.homeStatusDark = w != null && topLuminance(w) > 0.62f
         screen.postDelayed({ recordPreview() }, 100)
+    }
+
+    /** Average brightness of the wallpaper's top band (where the status bar sits), 0..1. */
+    private fun topLuminance(w: Wallpaper): Float {
+        val b = w.heavy
+        val rows = maxOf(1, b.height / 12)
+        var sum = 0.0
+        var n = 0
+        for (y in 0 until rows) for (x in 0 until b.width) {
+            val p = b.getPixel(x, y)
+            sum += (0.2126 * ((p shr 16) and 0xFF) + 0.7152 * ((p shr 8) and 0xFF) + 0.0722 * (p and 0xFF)) / 255.0
+            n++
+        }
+        return if (n == 0) 0f else (sum / n).toFloat()
     }
 }

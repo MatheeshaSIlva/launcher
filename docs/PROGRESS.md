@@ -454,3 +454,17 @@ Changes (next build, not yet confirmed on the phone):
 - Matheesha: a closing card must not be grabbable mid-close. Touches on the bar that start during a close (flying, settling, or
   waiting for a late card) are now ignored until the finger lifts. Still possible during a close: tapping the app's icon on
   home (reopens it) and touching home (moves the card aside). Launching cards and cancelled closes can still be grabbed.
+
+New features, round 1 of 3 (design: `docs/HOME_FEATURES.md`), next build, not yet confirmed on the phone:
+- App Library pulled past its end keeps its full blur (the rubber band counted as "partly closed" and faded the background).
+- Shared `SearchList` (App Library list and Spotlight): glass palette only (white letters, a glass bubble while scrubbing the
+  index; the accent blue is gone); filtering animates (rows glide to new places, new rows fade/rise in, leaving rows fade out).
+- Spotlight: pull down on any home page (below the status bar) opens it with the finger; suggestions at the top, results once
+  typing, glass search field at the bottom riding up with the keyboard frame by frame; tap a result to launch from its icon;
+  tap empty space / swipe up / back to close. The Search pill opens it.
+- iOS status bar (`StatusBarView`, metrics in `docs/HOME_FEATURES.md`): time, cellular bars, Wi-Fi or network type, battery;
+  an overlay above strip and cards, hidden for immersive apps and on the lock screen. The stock clock and icons are hidden
+  only while ours is on screen. White/black content: home from the wallpaper's top band; apps from the window manager
+  (`dumpsys window displays`, appearance lines; the first three readings are logged as `[statusbar] appearance …` because the
+  exact format on One UI is not known yet). On by default with gesture nav (dev panel: "Status bar: …").
+  Note: "Test: break system" now hides the stock bar only while our own is shown.

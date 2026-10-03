@@ -59,6 +59,7 @@ object ShizukuLink {
                     if (SystemRestore.gesturesWanted(app)) {
                         SystemRestore.restoreScalesIfChanged(app, s)
                         SystemRestore.ensureScalesOn(app, s)
+                        SystemRestore.enableOwnStatusBarOnce(app)
                     }
                     SystemRestore.applyFlags(app, s)
                 }
@@ -136,7 +137,7 @@ object ShizukuLink {
             // Wallpaper bitmap for the glass dock (all-files access); harmless to repeat.
             s.runShell("appops set $pkg MANAGE_EXTERNAL_STORAGE allow")
         } catch (_: Throwable) { }
-        val missing = listOf(Manifest.permission.WRITE_SECURE_SETTINGS, Manifest.permission.POST_NOTIFICATIONS)
+        val missing = listOf(Manifest.permission.WRITE_SECURE_SETTINGS, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.READ_PHONE_STATE)
             .filter { app.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) return
         try {

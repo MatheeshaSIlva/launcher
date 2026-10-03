@@ -186,6 +186,9 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
+    override fun windowAppearance(): String =
+        shell("dumpsys window displays | grep -i -E 'appearance|mTopFullscreenOpaqueWindowState|SystemUiControlling' | head -24", 3000)
+
     override fun noAnimStats(): String = try { instant.stats() } catch (t: Throwable) { "ERROR: ${describe(t)}" }
 
     override fun probeLiveTransition(component: String, homeComponent: String): String = try {

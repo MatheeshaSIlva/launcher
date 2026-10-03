@@ -41,6 +41,14 @@ object SystemRestore {
     }
 
     fun statusBarWanted(ctx: Context) = prefs(ctx).getBoolean(KEY_BAR_HIDDEN, false)
+
+    /** Our iOS status bar is part of gesture nav: turned on once by default (it can be switched off in the dev panel). */
+    fun enableOwnStatusBarOnce(ctx: Context) {
+        val p = prefs(ctx)
+        if (p.getBoolean("own_status_bar_default", false)) return
+        p.edit().putBoolean(KEY_BAR_HIDDEN, true).putBoolean("own_status_bar_default", true).apply()
+        AppLog.log("[statusbar] own status bar on (default)")
+    }
     fun gesturesWanted(ctx: Context) = prefs(ctx).getBoolean(KEY_GESTURES, false)
 
     /** True while our flags are actually in force: we want the bar hidden and the service that holds them is alive. */
@@ -137,7 +145,8 @@ object SystemRestore {
      * new service starts clean. Updates the gesture strip afterwards, so it never shows while stock gestures still work.
      */
     fun applyFlags(ctx: Context, s: IShellService): String {
-        val bar = statusBarWanted(ctx)
+        // Hide the stock clock and icons only while our own status bar is really on screen (never no clock at all).
+        val bar = statusBarWanted(ctx) && GestureNav.statusBarShown
         // Never block stock gestures unless our strip can actually be shown.
         val gestures = gesturesWanted(ctx) && GestureNav.ready
         val what1 = (if (bar) DISABLE_CLOCK or DISABLE_NOTIFICATION_ICONS else 0) or (if (gestures) DISABLE_HOME or DISABLE_RECENT else 0)

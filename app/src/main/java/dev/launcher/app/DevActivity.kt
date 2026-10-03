@@ -126,6 +126,18 @@ class DevActivity : Activity() {
         root.addView(row6)
         val row7 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row7.addView(button("Probe: live cards") { probeLiveCards() }, weighted())
+        val bar = button("") { }
+        fun showBar() { bar.text = "Status bar: ${if (SystemRestore.statusBarWanted(this)) "iOS (ours)" else "stock"}" }
+        bar.setOnClickListener {
+            val s = ShizukuLink.service ?: run { AppLog.log("[statusbar] Shizuku not connected"); return@setOnClickListener }
+            val on = !SystemRestore.statusBarWanted(this)
+            io.execute {
+                AppLog.log("[statusbar] ${if (on) "ours" else "stock"}: ${SystemRestore.setStatusBarHidden(this, s, on)}")
+                runOnUiThread { showBar() }
+            }
+        }
+        showBar()
+        row7.addView(bar, weighted())
         root.addView(row7)
 
         logView = TextView(this).apply {
