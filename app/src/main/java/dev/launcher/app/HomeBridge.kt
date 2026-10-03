@@ -108,6 +108,9 @@ object HomeBridge {
     /** Home's wallpaper is light under the status bar: our status bar shows black content on home. */
     @Volatile var homeStatusDark = false
 
+    /** A swipe up on the gesture bar while home is in front (leave edit mode, close Spotlight). Any thread. */
+    fun homeSwipeUp() = main.post { (home as? HomeActivity)?.onHomeSwipeUp() }
+
     /** Set by gesture nav: home was touched (a closing card should get out of the way). Called on the main thread. */
     @Volatile var onHomeTouched: (() -> Unit)? = null
 }

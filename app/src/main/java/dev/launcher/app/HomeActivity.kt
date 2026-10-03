@@ -96,6 +96,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     override fun onPause() {
         resumed = false
         GestureNav.homeVisible = false
+        screen.onHidden()
         super.onPause()
     }
 
@@ -162,6 +163,10 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     }
 
     override fun onHomeSettled() { recordPreview() }
+
+    override fun layoutChanged() { screen.layoutForSaving()?.let { HomeModel.save(this, it) } }
+
+    fun onHomeSwipeUp() = screen.onHomeSwipeUp()
 
     // ------------------------------------------------------------------ HomeBridge.Home
 

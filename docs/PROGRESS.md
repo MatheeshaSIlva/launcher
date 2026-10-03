@@ -478,3 +478,13 @@ Fixes (next build, not yet confirmed on the phone):
 - Spotlight: results show the best match as "Top Hit" in a glass card (home-sized icon, name, category), the others under
   "Apps", titles with dividers; the search field is frosted glass that blurs the results scrolling under it and the background
   (a blurred mirror of what is behind, darkened, slight rim) and has a clear button.
+
+New features, round 2 of 3: edit mode (design and what differs: `docs/HOME_FEATURES.md` §2), next build, not yet confirmed on
+the phone:
+- Long-press an icon: iOS context menu (shortcuts, Edit Home Screen, Remove from Home Screen, App Info) over blurred home; keep
+  holding and move to drag it straight away. Long-press empty space: edit mode.
+- Edit mode: icons and widgets wiggle with "–" badges; drag to reorder (the page flows around on glides), into or out of the
+  dock (up to its slots), across pages (rest at an edge; a new page at the end); "+" adds the clock widget; "Done" / tap on
+  empty space / back / home / swipe up on the bar leaves. Every change is saved at once.
+- While editing, the Search pill shows the page dots and does not open Spotlight; pulling down does not open Spotlight either.
+

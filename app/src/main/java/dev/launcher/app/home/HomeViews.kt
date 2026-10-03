@@ -17,25 +17,67 @@ import kotlin.math.roundToInt
 
 /**
  * One home page: items flowed into the grid in order ([HomeModel.place]). Children are created by [makeView] (apps,
- * widgets, later folders) and laid out on their cells.
+ * widgets, later folders) and laid out on their cells. [setItems] keeps the view of every item that stays, so a reorder
+ * (edit mode) slides items from where they were to their new cells instead of rebuilding the page.
  */
 class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (HomeItem) -> View?) : ViewGroup(ctx) {
     private var placed: List<Placed> = emptyList()
     private val views = ArrayList<View>()
+    private val viewOf = java.util.IdentityHashMap<HomeItem, View>()
+    var items: List<HomeItem> = emptyList()
+        private set
 
-    fun bind(items: List<HomeItem>) {
-        removeAllViews()
-        views.clear()
+    init { clipChildren = false }   // edit mode's remove badges reach past an icon's cell
+
+    fun bind(items: List<HomeItem>) = setItems(items, animate = false)
+
+    fun setItems(newItems: List<HomeItem>, animate: Boolean) {
+        val oldPos = java.util.IdentityHashMap<View, FloatArray>()
+        for (v in views) oldPos[v] = floatArrayOf(v.left + v.translationX, v.top + v.translationY)
+        val keep = java.util.IdentityHashMap<HomeItem, View>()
+        for (it in newItems) viewOf[it]?.let { v -> keep[it] = v }
+        for ((item, v) in viewOf) if (!keep.containsKey(item)) removeView(v)
+        viewOf.clear()
+        viewOf.putAll(keep)
+        items = newItems.toList()
         placed = HomeModel.place(items, m.cfg.columns, m.cfg.rows)
+        views.clear()
         for (p in placed) {
-            val v = makeView(p.item) ?: View(context)
+            val v = viewOf[p.item] ?: (makeView(p.item) ?: View(context)).also { addView(it); viewOf[p.item] = it }
             views += v
-            addView(v)
+            // A kept view starts where it was and glides to its new cell (its new position is known from the grid).
+            val from = oldPos[v]
+            if (animate && from != null) {
+                val dx = from[0] - m.cellLeft(p.col)
+                val dy = from[1] - m.cellTop(p.row)
+                if (abs(dx) > 0.5f || abs(dy) > 0.5f) {
+                    v.animate().cancel()
+                    v.translationX = dx
+                    v.translationY = dy
+                    v.animate().translationX(0f).translationY(0f).setDuration(300)
+                        .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f)).start()
+                }
+            }
         }
         requestLayout()
     }
 
     fun icons(): List<IconView> = views.filterIsInstance<IconView>()
+    fun itemViews(): List<View> = views
+    fun viewFor(item: HomeItem): View? = viewOf[item]
+    fun itemOf(view: View): HomeItem? = viewOf.entries.firstOrNull { it.value === view }?.key
+    fun placements(): List<Placed> = placed
+
+    /** Where an item dropped at ([x], [y]) (page coordinates) goes in [items]: before the item on that cell, or at the end. */
+    fun insertIndexAt(x: Float, y: Float, without: HomeItem?): Int {
+        val col = ((x - m.cellLeft(0)) / m.columnPitch).toInt().coerceIn(0, m.cfg.columns - 1)
+        val row = ((y - m.gridTop) / m.cellHeight).toInt().coerceIn(0, m.cfg.rows - 1)
+        val cell = row * m.cfg.columns + col
+        val others = items.filter { it !== without }
+        val placedOthers = HomeModel.place(others, m.cfg.columns, m.cfg.rows)
+        val hit = placedOthers.indexOfFirst { p -> cell < (p.row + p.spanY - 1) * m.cfg.columns + p.col + p.spanX }
+        return if (hit < 0) others.size else others.indexOf(placedOthers[hit].item)
+    }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         for ((i, p) in placed.withIndex()) {
@@ -101,14 +143,41 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
         glass.addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
+    /** Edit mode: a remove badge at the card's top-left corner. */
+    var editing = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+
+    /** The remove badge's centre in this view. */
+    fun badgeCenter(): FloatArray = floatArrayOf(left + m.pt(4f), m.pt(4f))
+
     override fun onDraw(canvas: Canvas) {
         canvas.drawText("Clock", left + cardW / 2f, cardH + m.labelBaseline, label)
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        if (editing) RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
+    }
+}
+
+/** iOS edit mode's remove badge: a grey disc with a white minus. */
+object RemoveBadge {
+    private val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6747480.toInt() }
+    private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeCap = Paint.Cap.ROUND }
+
+    fun radius(m: HomeMetrics) = m.pt(11f)
+
+    fun draw(c: Canvas, cx: Float, cy: Float, m: HomeMetrics) {
+        val r = radius(m)
+        c.drawCircle(cx, cy, r, disc)
+        bar.strokeWidth = m.pt(2.2f)
+        c.drawLine(cx - r * 0.45f, cy, cx + r * 0.45f, cy, bar)
     }
 }
 
 /**
- * The iOS 26 dock: a floating glass platter with up to [HomeConfig.dockSlots] icons, aligned with the page columns when
- * full, centred when not.
+ * The iOS 26 dock: a floating glass platter with up to [HomeConfig.dockSlots] icons, centred, spaced a little tighter than
+ * the page columns. [bind] with `animate` slides icons that stay to their new places (edit mode).
  */
 class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
     val glass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = m.dockRadius }
@@ -119,19 +188,29 @@ class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
         addView(glass, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
-    fun bind(views: List<IconView>) {
-        icons.forEach { removeView(it) }
+    /** Left edge (in the dock) of slot [i] of [n] icons. */
+    fun slotLeft(i: Int, n: Int): Float = m.w / 2f + (i - (n - 1) / 2f) * m.dockIconPitch - m.iconSize / 2f - m.dockInset
+
+    fun bind(views: List<IconView>, animate: Boolean = false) {
+        val oldLeft = java.util.IdentityHashMap<View, Float>()
+        for (v in icons) oldLeft[v] = v.left + v.translationX
+        for (v in icons) if (views.none { it === v }) removeView(v)
         icons.clear()
         icons += views
         val n = views.size
-        val dockLeft = m.dockInset
         for ((i, v) in views.withIndex()) {
-            // iOS spaces dock icons a little tighter than the page columns (89.4 against 92.5 pt), centred.
-            val cx = m.w / 2f + (i - (n - 1) / 2f) * m.dockIconPitch
-            addView(v, LayoutParams(m.iconSize, m.iconSize).apply {
-                leftMargin = (cx - m.iconSize / 2f - dockLeft).roundToInt()
+            val left = slotLeft(i, n)
+            val lp = LayoutParams(m.iconSize, m.iconSize).apply {
+                leftMargin = left.roundToInt()
                 topMargin = ((m.dockHeight - m.iconSize) / 2f).roundToInt()
-            })
+            }
+            if (v.parent == null) addView(v, lp) else v.layoutParams = lp
+            val from = oldLeft[v]
+            if (animate && from != null && abs(from - left) > 0.5f) {
+                v.animate().cancel()
+                v.translationX = from - left
+                v.animate().translationX(0f).setDuration(300).setInterpolator(android.view.animation.DecelerateInterpolator(1.8f)).start()
+            }
         }
     }
 
@@ -204,8 +283,17 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
     /** Pages started or stopped moving: dots while they move, "Search" again shortly after. */
     fun setMoving(moving: Boolean) {
         removeCallbacks(backToSearch)
+        if (editing) return
         if (moving) { if (pages > 1) fadeTo(0f, 140) } else postDelayed(backToSearch, 650)
     }
+
+    /** Edit mode: the dots stay (as on iOS). */
+    var editing = false
+        set(v) {
+            field = v
+            removeCallbacks(backToSearch)
+            fadeTo(if (v) 0f else 1f, 200)
+        }
 
     private fun fadeTo(target: Float, ms: Long) {
         if (search == target) return

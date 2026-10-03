@@ -45,6 +45,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         fun launch(e: AppEntry, iconOnScreen: RectF, icon: Drawable?)
         /** Everything came to rest: a good moment to record the picture of home. */
         fun onHomeSettled()
+        /** The layout was edited (moved, removed, added): save it. */
+        fun layoutChanged()
     }
 
     var cfg = HomeConfig()
@@ -64,6 +66,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var drawer: AppDrawer? = null
     private var spotlight: SpotlightView? = null
     private var imeInset = 0
+    private var editMode: EditMode? = null
+    private var editBar: View? = null
+    private var menu: ContextMenuView? = null
+    private var editTouch = false
+    private var enteredByPress = false     // this touch's long press started edit mode: its lift does not leave it again
+    private var pendingDragView: View? = null
+    // A long press on empty space enters edit mode (an item's own long press cancels this).
+    private val emptyLongPress = Runnable {
+        if ((drag == Drag.NONE || drag == Drag.IGNORED) && editMode?.active == false && drawerProgress() == 0f && spotlight?.isOpen != true) {
+            enteredByPress = true
+            editMode?.enter()
+        }
+    }
     private val pages = ArrayList<PageView>()
     val clocks = ArrayList<TextClock>()
 
@@ -122,6 +137,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         backdrop.wallpaper = w
         drawer?.setWallpaper(w)
         spotlight?.setWallpaper(w)
+        menu?.glass = menuGlass()
         applyGlassWallpaper()
     }
 
@@ -193,6 +209,15 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         fg.addView(sp, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         sp.setWallpaper(wallpaper)
         sp.setInsets(bottomInset, imeInset)
+        // Edit mode: its bar ("+", "Done") at the top, the long-press menu, and the lifted copy of a dragged item on top.
+        val em = editMode ?: EditMode(this, editHost).also { editMode = it }
+        val bar = em.Bar(context).also { editBar = it; it.visibility = if (em.active) View.VISIBLE else View.GONE }
+        fg.addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (metrics.gridTop - topInset - metrics.pt(6f)).roundToInt().coerceAtLeast(1)).apply { topMargin = topInset })
+        val mv = ContextMenuView(context, metrics) { k -> applyMenuBlur(k) }.also { menu = it }
+        mv.glass = menuGlass()
+        fg.addView(mv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        (em.ghostView.parent as? android.view.ViewGroup)?.removeView(em.ghostView)
+        fg.addView(em.ghostView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         applyGlassWallpaper()
         bindLayout()
     }
@@ -239,12 +264,20 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun viewFor(item: HomeItem, metrics: HomeMetrics): View? = when (item) {
         is HomeItem.App -> Apps[item.key]?.let { appIcon(it, metrics, label = cfg.showLabels) }
-        is HomeItem.Widget -> if (item.kind == "clock") ClockWidgetView(context, metrics, item.spanX, item.spanY).also { clocks += it.clocks; pageGlass += it.glass } else null
-        is HomeItem.Folder -> null   // edit mode build
+        is HomeItem.Widget -> if (item.kind == "clock") ClockWidgetView(context, metrics, item.spanX, item.spanY).also { w ->
+            clocks += w.clocks
+            pageGlass += w.glass
+            w.glass.setWallpaper(wallpaper, metrics.w, metrics.h, resources.displayMetrics.density * REVEAL_CELL_DP)
+            w.setOnLongClickListener { onWidgetLongPress(w); true }
+            editMode?.adopt(w)
+        } else null
+        is HomeItem.Folder -> null   // folders: a later build
     }
 
     private fun appIcon(e: AppEntry, metrics: HomeMetrics, label: Boolean) = IconView(context, metrics, label).apply {
         bind(e)
+        setOnLongClickListener { v -> onIconLongPress(v as IconView, e); true }
+        editMode?.adopt(this)
         setOnClickListener { v ->
             val icon = v as IconView
             // This copy is the one its card returns to (an app can be both in the dock and on a page).
@@ -354,7 +387,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (abs(dx) > abs(dy) && canPage()) { downX = e.x; downY = e.y; beginPages(); return true }
         // Pull down on a home page (below the status bar: the top edge is the system's shade): Spotlight follows the finger.
         if (abs(dy) > abs(dx) && dy > 0 && drawerProgress() == 0f && sheet == 0f && downY > metrics.gridTop - metrics.pt(40f) &&
-            spotlight?.isOpen != true) {
+            spotlight?.isOpen != true && editMode?.active != true) {
             downX = e.x; downY = e.y
             drag = Drag.SEARCH
             parent?.requestDisallowInterceptTouchEvent(true)
@@ -382,19 +415,56 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 downX = e.x; downY = e.y
                 drag = Drag.NONE
                 HomeBridge.onHomeTouched?.invoke()
-                // While Spotlight is open it handles every touch itself.
-                if (spotlight?.isOpen == true) { drag = Drag.IGNORED; return false }
+                pendingDragView = null
+                enteredByPress = false
+                removeCallbacks(emptyLongPress)
+                // While Spotlight or the long-press menu is open, it handles every touch itself.
+                if (spotlight?.isOpen == true || menu?.isShowing == true) { drag = Drag.IGNORED; return false }
+                // Editing: a touch on an item belongs to edit mode (drag it, or its remove badge).
+                val em = editMode
+                if (em != null && em.active && em.onDown(e.x, e.y)) { editTouch = true; return true }
+                // A long press on empty space starts edit mode (on an item, the item's own long press opens its menu).
+                if (em != null && !em.active && drawerProgress() == 0f && sheet == 0f && em.itemAt(e.x, e.y) == null)
+                    postDelayed(emptyLongPress, ViewConfiguration.getLongPressTimeout().toLong())
                 // A touch on a moving strip or sheet grabs it where it is (no tap goes through).
                 if (pagerAnimating) { pagerAnimating = false; beginPages(); return true }
                 if (sheetAnimating) { sheetAnimating = false; beginSheet(); return true }
             }
-            MotionEvent.ACTION_MOVE -> if (drag == Drag.NONE) return decide(e)
+            MotionEvent.ACTION_MOVE -> {
+                if (abs(e.x - downX) > slop || abs(e.y - downY) > slop) removeCallbacks(emptyLongPress)
+                // A long-pressed item that starts moving: the menu goes, edit mode starts, the item is dragged.
+                val v = pendingDragView
+                if (v != null && (abs(e.x - downX) > slop || abs(e.y - downY) > slop)) {
+                    pendingDragView = null
+                    menu?.handOff()
+                    editMode?.let { it.enter(haptic = false); it.beginDragFrom(v, e.x, e.y, fromMenu = true) }
+                    editTouch = true
+                    return true
+                }
+                if (drag == Drag.NONE) return decide(e)
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { removeCallbacks(emptyLongPress); pendingDragView = null }
         }
         return drag == Drag.PAGES || drag == Drag.SHEET
     }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (editTouch) {
+            editMode?.onTouch(e)
+            if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) editTouch = false
+            return true
+        }
+        if (e.actionMasked == MotionEvent.ACTION_MOVE && (abs(e.x - downX) > slop || abs(e.y - downY) > slop)) removeCallbacks(emptyLongPress)
+        if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) removeCallbacks(emptyLongPress)
+        // Editing: a tap on empty space leaves edit mode (as on iOS); not the lift of the long press that started it.
+        if (e.actionMasked == MotionEvent.ACTION_UP && enteredByPress) { enteredByPress = false; drag = Drag.NONE; return true }
+        if (e.actionMasked == MotionEvent.ACTION_UP && editMode?.active == true && (drag == Drag.NONE || drag == Drag.IGNORED) &&
+            abs(e.x - downX) < slop && abs(e.y - downY) < slop) {
+            editMode?.exit()
+            drag = Drag.NONE
+            return true
+        }
         if (e.actionMasked != MotionEvent.ACTION_DOWN) track(e)
         else if (drag == Drag.NONE) { track(e); downX = e.x; downY = e.y }
         when (e.actionMasked) {
@@ -551,7 +621,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     // ================================================================== state for the launcher and gesture nav
 
     val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && (drag == Drag.NONE || drag == Drag.IGNORED) &&
-        (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true)
+        (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true) && editMode?.active != true && menu?.isShowing != true
 
     // ---- depth: home receding behind an open app (iOS), run here once the real home is on screen
 
@@ -606,13 +676,15 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     /** The Search pill: opens Spotlight with the keyboard up (as on iOS). */
     fun openLibrarySearch() {
-        if (m == null) return
+        if (m == null || editMode?.active == true) return
         spotlight?.open()
     }
 
     /** Home pressed while home is in front: back to the first page, drawer closed. */
     fun goHome() {
         if (m == null) return
+        menu?.dismiss()
+        editMode?.exit()
         spotlight?.takeIf { it.isOpen }?.close()
         if (cfg.drawerPlacement == DrawerPlacement.SWIPE_UP && sheet > 0f) animateSheet(0f)
         if (pos != 0f) animatePages(0f)
@@ -621,6 +693,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     /** Back pressed: leaves search or a folder, then closes the drawer. */
     fun onBack() {
+        if (menu?.isShowing == true) { menu?.dismiss(); return }
+        if (editMode?.active == true) { editMode?.exit(); return }
         if (spotlight?.onBack() == true) return
         val d = drawer ?: return
         if (drawerProgress() < 0.5f) return
@@ -696,6 +770,154 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     override fun onIconsMoved() = publishIcons()
+
+    // ================================================================== edit mode and the long-press menu
+
+    private val afterEdit = Runnable {
+        publishIcons()
+        if (isIdle) listener.onHomeSettled()
+    }
+
+    /** Home went out of sight (an app or another screen came over it): menus close, edit mode ends. */
+    fun onHidden() {
+        menu?.dismissNow(runClosed = true)
+        editMode?.exit()
+    }
+
+    /** A swipe up on the gesture bar while home is in front: leaves edit mode, closes Spotlight and menus (as on iOS). */
+    fun onHomeSwipeUp() {
+        menu?.dismiss()
+        editMode?.exit()
+        spotlight?.takeIf { it.isOpen }?.close()
+    }
+
+    private fun applyMenuBlur(k: Float) {
+        if (Build.VERSION.SDK_INT < 31) return
+        val r = k * (m?.pt(18f) ?: 0f)
+        val fx = if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP)
+        for (v in listOf(pagesLayer, dock, dockShadow, indicator)) v?.setRenderEffect(fx)
+    }
+
+    private fun menuGlass(): dev.launcher.app.GlassDrawable? {
+        val metrics = m ?: return null
+        val w = wallpaper ?: return null
+        if (Build.VERSION.SDK_INT < 33) return null
+        return try {
+            dev.launcher.app.GlassDrawable(w, metrics.w, metrics.h, metrics.pt(22f), metrics.u, resources.displayMetrics.density * REVEAL_CELL_DP,
+                dev.launcher.app.GlassStyle.IOS, dev.launcher.app.GlassDrawable.Source.BACKDROP)
+        } catch (_: Throwable) { null }
+    }
+
+    /** A picture of [v] as it looks (an icon without its label), and its frame on screen. */
+    private fun liftedCopy(v: View): Pair<android.graphics.Picture, RectF> {
+        val pic = android.graphics.Picture()
+        val c = pic.beginRecording(v.width, v.height)
+        val rot = v.rotation
+        if (v is IconView) { v.clearPress(); v.labelHidden = true }
+        v.draw(c)
+        if (v is IconView) v.labelHidden = false
+        v.rotation = rot
+        pic.endRecording()
+        val loc = IntArray(2)
+        val me = IntArray(2)
+        v.getLocationOnScreen(loc)
+        getLocationOnScreen(me)
+        val x = (loc[0] - me[0]).toFloat()
+        val y = (loc[1] - me[1]).toFloat()
+        return pic to RectF(x, y, x + v.width, y + v.height)
+    }
+
+    private fun onIconLongPress(v: IconView, e: AppEntry) {
+        removeCallbacks(emptyLongPress)
+        if (editMode?.active == true) return
+        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        val (pic, frame) = liftedCopy(v)
+        val la = context.getSystemService(android.content.pm.LauncherApps::class.java)
+        val items = ArrayList<ContextMenuView.Item>()
+        // The app's own shortcuts first (we are the home app, so we may list and start them).
+        try {
+            if (la.hasShortcutHostPermission()) {
+                val q = android.content.pm.LauncherApps.ShortcutQuery().setPackage(e.pkg).setQueryFlags(
+                    android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_DYNAMIC or
+                        android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_MANIFEST or
+                        android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED)
+                la.getShortcuts(q, e.user)?.sortedBy { it.rank }?.take(4)?.forEach { sc ->
+                    val icon = try { la.getShortcutIconDrawable(sc, resources.displayMetrics.densityDpi) } catch (_: Throwable) { null }
+                    items += ContextMenuView.Item((sc.shortLabel ?: sc.longLabel ?: sc.id).toString(), icon = icon) {
+                        try { la.startShortcut(sc, android.graphics.Rect().also { frame.roundOut(it) }, null) } catch (t: Throwable) { AppLog.log("[home] shortcut failed: ${t.message}") }
+                    }
+                }
+            }
+        } catch (t: Throwable) { AppLog.log("[home] shortcuts unavailable: ${t.message}") }
+        items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
+        items += ContextMenuView.Item("Remove from Home Screen", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
+        items += ContextMenuView.Item("App Info", glyph = ContextMenuView.Glyph.INFO) {
+            try { la.startAppDetailsActivity(e.component, e.user, android.graphics.Rect().also { frame.roundOut(it) }, null) } catch (t: Throwable) { AppLog.log("[home] app info failed: ${t.message}") }
+        }
+        showMenu(v, pic, frame, items)
+    }
+
+    private fun showMenu(v: View, pic: android.graphics.Picture, frame: RectF, items: List<ContextMenuView.Item>) {
+        val mv = menu ?: return
+        mv.show(pic, frame, items)
+        // The lifted copy draws the item above the blur; the real one (blurred, with its label) hides meanwhile.
+        v.alpha = 0f
+        mv.onClosed = { v.alpha = 1f }
+        pendingDragView = v
+    }
+
+    private fun onWidgetLongPress(v: View) {
+        removeCallbacks(emptyLongPress)
+        if (editMode?.active == true) return
+        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        val (pic, frame) = liftedCopy(v)
+        showMenu(v, pic, frame, listOf(
+            ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() },
+            ContextMenuView.Item("Remove Widget", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) },
+        ))
+    }
+
+    private val editHost = object : EditMode.Host {
+        override val metrics: HomeMetrics get() = this@HomeScreen.metrics
+        override val layout: HomeLayout? get() = this@HomeScreen.layout
+        override val pageViews: List<PageView> get() = pages
+        override val dockView: DockView? get() = dock
+        override fun currentPage(): Int = pos.roundToInt().coerceIn(0, maxOf(0, pages.size - 1))
+        override fun turnToPage(i: Int) = animatePages(i.toFloat())
+        override fun appendPage() {
+            val l = layout ?: return
+            val metrics = m ?: return
+            l.pages += mutableListOf<HomeItem>()
+            val p = PageView(context, metrics) { item -> viewFor(item, metrics) }
+            p.bind(emptyList())
+            pages += p
+            pagesLayer.addView(p, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            indicator?.let { ind ->
+                ind.setPages(pages.size)
+                ind.layoutParams = (ind.layoutParams as LayoutParams).apply {
+                    width = ind.widthFor(pages.size)
+                    leftMargin = ((metrics.w - width) / 2f).roundToInt()
+                }
+            }
+            applyPositions()
+        }
+        override fun dockIcon(key: String): IconView? = m?.let { metrics -> Apps[key]?.let { appIcon(it, metrics, label = false) } }
+        override fun layoutChanged() {
+            listener.layoutChanged()
+            removeCallbacks(afterEdit)
+            postDelayed(afterEdit, 450)   // after the reflow glides
+        }
+        override fun editingChanged(active: Boolean) {
+            editBar?.visibility = if (active) View.VISIBLE else View.GONE
+            indicator?.editing = active
+            if (!active) {
+                // Pages emptied while editing are gone from the layout: match the views to it.
+                if (pages.size != (layout?.pages?.size ?: pages.size)) bindLayout()
+                publishIcons()
+                post { if (isIdle) listener.onHomeSettled() }
+            }
+        }
+    }
 
     // ================================================================== SpotlightView.Host
 

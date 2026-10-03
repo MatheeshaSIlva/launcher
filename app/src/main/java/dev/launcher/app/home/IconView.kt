@@ -38,6 +38,15 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
     /** A card is flying into or out of this icon: the image is left out, the label stays. */
     var iconHidden = false
         set(v) { if (field != v) { field = v; invalidate() } }
+    /** Edit mode: the remove badge shows at the icon's top-left corner. */
+    var editing = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+    /** Leave the label out (the lifted copy of a dragged icon shows the icon alone). */
+    var labelHidden = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+
+    /** The remove badge's centre in this view. */
+    fun badgeCenter(): FloatArray = floatArrayOf(iconRect.left + m.pt(4f), iconRect.top + m.pt(4f))
     private var dimAnim: ValueAnimator? = null
 
     init {
@@ -88,10 +97,11 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             } else null
             canvas.drawBitmap(it, null, iconRect, iconPaint)
         }
-        if (showLabel && shownLabel.isNotEmpty()) {
+        if (showLabel && !labelHidden && shownLabel.isNotEmpty()) {
             val y = iconRect.bottom + m.labelBaseline
             canvas.drawText(shownLabel, 0, shownLabel.length, width / 2f, y, labelPaint)
         }
+        if (editing) RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -100,6 +110,13 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> press(false)
         }
         return super.onTouchEvent(event)
+    }
+
+    /** Drops the press dim at once (a long press lifts the icon: its copy must not be dimmed). */
+    fun clearPress() {
+        dimAnim?.cancel()
+        dim = 0f
+        invalidate()
     }
 
     private fun press(down: Boolean) {

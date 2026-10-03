@@ -51,6 +51,19 @@ Dynamic Island's centre (32 of 62); right group right-aligned 35.4 from the edge
   takes up to 4. Widgets move as blocks and push icons aside. Drop: springs into its cell. Saved immediately.
 - From the App Library: long-press a tile icon → drag out onto a home page.
 
+Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences from the plan above:
+- Menu items: up to 4 app shortcuts (LauncherApps, we are the home app), "Edit Home Screen", "Remove from Home Screen" (red;
+  the app stays in the App Library), "App Info". Widgets: "Edit Home Screen", "Remove Widget". Home blurs (18 pt) and dims
+  behind; the item lifts 1.06× above the blur, its label hidden; the glass panel grows from the item's side.
+- Moving the finger after the menu opened hands over to a drag: the menu goes, the blur fades out, the copy keeps its lift.
+- Lift 1.08× (not 1.1), wiggle 1.6° at ~4 Hz (widgets 0.6°). A move is applied after the finger rests 110 ms on a spot (not
+  while just passing over). Page turn after 550 ms at an edge, then every 900 ms.
+- "+" (top left) adds the clock widget to the page on screen (the only widget so far); full pages push their last items onto
+  the next page. Empty pages are dropped when edit mode ends.
+- Leave: "Done", a tap on empty space, back, home pressed, a swipe up on the gesture bar, or home going out of sight.
+- Not yet: folders (hover to make one), dragging out of the App Library, real Android widgets. Shortcuts and App Info open
+  with the stock animation (they are not started through our transitions yet).
+
 ## 3. Overview (hold during a home swipe)
 
 - Trigger: during a home drag, the finger rests (speed < ~120 dp/s) for 150 ms after the card has shrunk below ~70 %: haptic,

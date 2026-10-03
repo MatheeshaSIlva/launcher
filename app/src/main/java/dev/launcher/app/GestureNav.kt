@@ -636,6 +636,10 @@ object GestureNav {
                 if (pendingFresh && !homeVisible) {
                     if (dy > dp(10) && dy > abs(dx)) { pendingFresh = false; beginHome() }
                     else if (abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) { pendingFresh = false; beginSwitch() }
+                } else if (pendingFresh && homeVisible && dy > dp(10) && dy > abs(dx)) {
+                    // On home, a swipe up leaves edit mode and closes Spotlight (as on iOS).
+                    pendingFresh = false
+                    HomeBridge.homeSwipeUp()
                 } else if (pendingFresh && homeVisible && abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) {
                     // On home, sideways brings the last app in beside home, with the finger (home slides away as a card).
                     pendingFresh = false
