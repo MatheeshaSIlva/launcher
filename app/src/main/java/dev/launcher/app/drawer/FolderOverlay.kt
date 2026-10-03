@@ -39,14 +39,14 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
     private val touch = TapOrScroll(ctx)
     private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x38FFFFFF }
     private val dim = Paint()
-    private val title = LabelPainter(m.folderTitleSize, 0xFFFFFFFF.toInt(), Paint.Align.LEFT, bold = true)
-    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER)
+    private val title = LabelPainter(m.folderTitleSize, 0xFFFFFFFF.toInt(), Paint.Align.LEFT, dev.launcher.app.theme.Fonts.display(700))
+    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
     private val r = RectF()
     private var pressed = -1
 
     private val pad get() = m.pt(20f)
     private val cellW get() = (panel.width() - 2 * pad) / m.folderColumns
-    private val rowPitch get() = m.iconSize + m.labelGap + m.labelLine + m.pt(18f)
+    private val rowPitch get() = m.iconSize + m.labelBaseline + m.pt(22f)
 
     /** Open, opening, or still closing: it owns the screen. */
     val isOpen get() = visibility == View.VISIBLE && target > 0f
@@ -120,11 +120,11 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         return out.apply { set(l, t, l + m.iconSize, t + m.iconSize) }
     }
 
-    fun visibleIcons(out: MutableMap<String, RectF>) {
+    fun visibleIcons(out: MutableList<Pair<String, RectF>>) {
         val t = tile ?: return
         for (i in t.apps.indices) {
             val rect = iconRect(i, RectF())
-            if (rect.centerY() > panel.top && rect.centerY() < panel.bottom) out.putIfAbsent(t.apps[i].pkg, rect)
+            if (rect.centerY() > panel.top && rect.centerY() < panel.bottom) out += t.apps[i].pkg to rect
         }
     }
 
@@ -205,10 +205,10 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         val a = (255 * contentAlpha).toInt()
         for (i in t.apps.indices) {
             iconRect(i, r)
-            if (r.bottom < panel.top - m.labelLine || r.top > panel.bottom) continue
+            if (r.bottom < panel.top - m.labelBaseline || r.top > panel.bottom) continue
             val e = t.apps[i]
             if (!lib.isHidden(e, r)) lib.iconPainter.draw(c, e, r, dimmed = i == pressed, alpha = a)
-            labels.draw(c, e.key, e.label, r.centerX(), r.bottom + m.labelGap - labels.paint.fontMetrics.ascent, cellW - m.pt(4f), a)
+            labels.draw(c, e.key, e.label, r.centerX(), r.bottom + m.labelBaseline, cellW - m.pt(4f), a)
         }
         c.restore()
     }

@@ -55,6 +55,9 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     // The one icon hidden while a card flies into or out of it (by package and by where it is drawn).
     private var hiddenPkg: String? = null
     private val published = HashMap<String, RectF>()
+    // The copy of an icon that was tapped: an app shown twice (Suggestions and its category) closes back into the copy it
+    // was opened from, not whichever comes first.
+    private var anchor: Pair<String, RectF>? = null
 
     override val view: View get() = this
 
@@ -72,6 +75,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
             text = "Cancel"
             setTextColor(0xFFFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
+            typeface = dev.launcher.app.theme.Fonts.text(400)
             gravity = Gravity.CENTER_VERTICAL or Gravity.END
             alpha = 0f
             visibility = View.GONE
@@ -161,7 +165,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
 
     internal fun onQuery(q: String) {
         listPane.setQuery(q)
-        host.onDrawerSettled()   // results moved: a closing card must find their icons where they are now
+        host.onIconsMoved()   // results moved: a closing card must find their icons where they are now
     }
 
     internal fun launchFirstResult() {
@@ -172,6 +176,8 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     // ------------------------------------------------------------------ actions from the panes
 
     internal fun launch(e: AppEntry, rectInView: RectF) {
+        anchor = e.pkg to RectF(rectInView)
+        host.onIconsMoved()   // publish this copy before the launch hides it and records home without it
         val loc = IntArray(2)
         getLocationOnScreen(loc)
         host.launch(e, RectF(rectInView).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
@@ -207,6 +213,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     override fun setOpenProgress(p: Float) {}
 
     override fun onClosed() {
+        anchor = null
         folder.closeNow()
         if (listMode) {
             listMode = false
@@ -236,15 +243,23 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     override fun visibleIcons(out: MutableMap<String, RectF>) {
         val loc = IntArray(2)
         getLocationOnScreen(loc)
-        val local = HashMap<String, RectF>()
+        val all = ArrayList<Pair<String, RectF>>()
         when {
-            folder.isOpen -> folder.visibleIcons(local)
-            listMode -> listPane.visibleIcons(local)
-            else -> tilesPane.visibleIcons(local)
+            folder.isOpen -> folder.visibleIcons(all)
+            listMode -> listPane.visibleIcons(all)
+            else -> tilesPane.visibleIcons(all)
+        }
+        // One copy per app: the tapped one if it is visible, else the first.
+        val chosen = LinkedHashMap<String, RectF>()
+        val a = anchor
+        for ((pkg, r) in all) {
+            val isAnchor = a != null && a.first == pkg &&
+                kotlin.math.abs(a.second.centerX() - r.centerX()) < 2f && kotlin.math.abs(a.second.centerY() - r.centerY()) < 2f
+            if (isAnchor || !chosen.containsKey(pkg)) chosen[pkg] = r
         }
         published.clear()
-        published.putAll(local)
-        for ((pkg, r) in local) out.putIfAbsent(pkg, RectF(r).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
+        published.putAll(chosen)
+        for ((pkg, r) in chosen) out.putIfAbsent(pkg, RectF(r).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
     }
 
     override fun setHiddenPkg(pkg: String?) {
@@ -281,6 +296,7 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
             setHintTextColor(0x99FFFFFF.toInt())
             setTextColor(0xFFFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
+            typeface = dev.launcher.app.theme.Fonts.text(400)
             isSingleLine = true
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
             imeOptions = EditorInfo.IME_ACTION_GO or EditorInfo.IME_FLAG_NO_EXTRACT_UI

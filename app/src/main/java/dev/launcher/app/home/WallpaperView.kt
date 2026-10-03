@@ -69,7 +69,10 @@ class WallpaperView(ctx: Context, private val cellPx: Float) : View(ctx) {
  * little as iOS does. Its alpha follows how far the drawer is open. Without our wallpaper copy: a plain dark veil.
  */
 class BackdropView(ctx: Context) : View(ctx) {
-    private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+    // iOS's background material keeps the wallpaper's colours vivid (more saturated, barely darkened).
+    private val paint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
+        colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(1.4f) })
+    }
     var wallpaper: Wallpaper? = null
         set(v) { field = v; invalidate() }
 
@@ -77,7 +80,7 @@ class BackdropView(ctx: Context) : View(ctx) {
         val w = wallpaper
         if (w != null) {
             canvas.drawBitmap(w.heavy, w.heavyMatrix(width, height), paint)
-            canvas.drawColor(0x38000000)
+            canvas.drawColor(0x1A000000)
         } else {
             canvas.drawColor(0x99000000.toInt())
         }

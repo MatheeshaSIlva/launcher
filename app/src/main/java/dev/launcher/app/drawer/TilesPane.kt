@@ -26,7 +26,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     val scroller = dev.launcher.app.motion.IosScroller({ invalidate() }, { lib.settled() })
     private val touch = TapOrScroll(ctx)
     private val tileBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x2EFFFFFF }
-    private val labels = LabelPainter(m.tileLabelSize, 0xE6FFFFFF.toInt(), Paint.Align.CENTER)
+    private val labels = LabelPainter(m.tileLabelSize, 0xE6FFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
     private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val r = RectF()
     private val r2 = RectF()
@@ -69,8 +69,8 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     }
 
     private fun slotRect(i: Int, slot: Int, out: RectF): RectF {
-        val l = m.tileLeft(i % 2) + m.tilePad + (slot % 2) * (m.tileIcon + m.tilePad)
-        val t = tileTop(i) + m.tilePad + (slot / 2) * (m.tileIcon + m.tilePad)
+        val l = m.tileLeft(i % 2) + m.tilePad + (slot % 2) * (m.tileIcon + m.tileIconGap)
+        val t = tileTop(i) + m.tilePad + (slot / 2) * (m.tileIcon + m.tileIconGap)
         return out.apply { set(l, t, l + m.tileIcon, t + m.tileIcon) }
     }
 
@@ -91,11 +91,11 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
         return first..last
     }
 
-    fun visibleIcons(out: MutableMap<String, RectF>) {
+    fun visibleIcons(out: MutableList<Pair<String, RectF>>) {
         val top = m.searchTop + m.searchHeight
         for (i in visibleTiles()) for (s in 0 until largeCount(i)) {
             val rect = slotRect(i, s, RectF())
-            if (rect.centerY() > top && rect.centerY() < height) out.putIfAbsent(lib.tiles[i].apps[s].pkg, rect)
+            if (rect.centerY() > top && rect.centerY() < height) out += lib.tiles[i].apps[s].pkg to rect
         }
     }
 
@@ -105,7 +105,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
             if (!tileRect(i, r).contains(x, y)) continue
             for (s in 0 until 4) {
                 // A little generous: the gaps between icons belong to the nearest icon.
-                slotRect(i, s, r2).inset(-m.tilePad / 2, -m.tilePad / 2)
+                slotRect(i, s, r2).inset(-m.tileIconGap / 2, -m.tileIconGap / 2)
                 if (!r2.contains(x, y)) continue
                 return if (s == 3 && lib.tiles[i].expandable) Target.Cluster(i)
                 else if (s < lib.tiles[i].apps.size) Target.App(i, s) else null
@@ -191,7 +191,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
                 val dim = pressed == Target.Cluster(i)
                 for (j in 0 until min(4, tile.apps.size - 3)) lib.iconPainter.draw(c, tile.apps[3 + j], miniRect(slot, j, r2), dimmed = dim)
             }
-            val baseline = r.bottom + m.tileLabelGap - labels.paint.fontMetrics.ascent
+            val baseline = r.bottom + m.tileLabelBaseline
             labels.draw(c, tile.title, tile.title, r.centerX(), baseline, m.tileSize)
         }
     }

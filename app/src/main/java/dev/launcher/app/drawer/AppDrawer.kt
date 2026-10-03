@@ -16,6 +16,9 @@ interface DrawerHost {
     fun launch(e: AppEntry, iconOnScreen: RectF)
     /** The drawer's content came to rest (scroll, mode or folder change): icon positions may have changed. */
     fun onDrawerSettled()
+
+    /** Icon positions changed (or which copy of an icon a card belongs to): tell gesture nav, without recording anything. */
+    fun onIconsMoved()
 }
 
 /**

@@ -34,12 +34,12 @@ internal class IconPainter(private val size: Int, private val onLoaded: () -> Un
 }
 
 /** Single-line labels, ellipsized once per app and width. */
-internal class LabelPainter(textSize: Float, color: Int, align: Paint.Align, bold: Boolean = false) {
+internal class LabelPainter(textSize: Float, color: Int, align: Paint.Align, typeface: android.graphics.Typeface = dev.launcher.app.theme.Fonts.text(400)) {
     val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         this.textSize = textSize
         this.color = color
         textAlign = align
-        if (bold) typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+        this.typeface = typeface
     }
     private val cache = HashMap<String, CharSequence>()
     private var cacheWidth = -1f

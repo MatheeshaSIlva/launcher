@@ -23,8 +23,13 @@ import kotlin.math.pow
 import kotlin.math.sign
 import kotlin.math.sin
 
-/** Icon masks. Part of a theme's shape layer; the iOS look is [SQUIRCLE]. */
+/**
+ * Icon masks, part of a theme's shape layer. [SYSTEM] (the default) leaves icons exactly as Android draws them; the
+ * others reshape every icon and are chosen in settings.
+ */
 enum class IconShape {
+    /** The system's own mask (One UI's on the S24): icons are drawn as they are. */
+    SYSTEM,
     /** iOS app icon shape: a superellipse (continuous curvature, no visible start of the corner). */
     SQUIRCLE,
     CIRCLE,
@@ -32,6 +37,7 @@ enum class IconShape {
 
     fun path(size: Float): Path = Path().apply {
         when (this@IconShape) {
+            SYSTEM -> addPath(systemMask(size))
             SQUIRCLE -> {
                 val a = size / 2f
                 val n = 5.0
@@ -52,7 +58,33 @@ enum class IconShape {
     }
 
     /** Corner radius of a plain rounded rectangle that reads as this shape (for cards morphing into an icon). */
-    fun cornerFraction(): Float = when (this) { SQUIRCLE -> 0.23f; CIRCLE -> 0.5f; ROUNDED_SQUARE -> 0.2f }
+    fun cornerFraction(): Float = when (this) { SYSTEM -> systemCorner; SQUIRCLE -> 0.23f; CIRCLE -> 0.5f; ROUNDED_SQUARE -> 0.2f }
+
+    private companion object {
+        /** The system's adaptive-icon mask at [size] px. */
+        fun systemMask(size: Float): Path {
+            val d = AdaptiveIconDrawable(android.graphics.drawable.ColorDrawable(Color.WHITE), android.graphics.drawable.ColorDrawable(Color.WHITE))
+            d.setBounds(0, 0, size.toInt(), size.toInt())
+            return Path(d.iconMask)
+        }
+
+        /**
+         * The system mask measured once: the corner radius of the rounded square with the same area (a square with corner
+         * radius r covers 1 - (4 - pi) r^2 of its box). A circle gives 0.5, One UI's squircle about 0.25.
+         */
+        val systemCorner: Float by lazy {
+            try {
+                val n = 128
+                val b = Bitmap.createBitmap(n, n, Bitmap.Config.ALPHA_8)
+                Canvas(b).drawPath(systemMask(n.toFloat()), Paint(Paint.ANTI_ALIAS_FLAG))
+                val px = ByteArray(n * n)
+                b.copyPixelsToBuffer(java.nio.ByteBuffer.wrap(px))
+                b.recycle()
+                val area = px.sumOf { (it.toInt() and 0xFF).toDouble() } / (255.0 * n * n)
+                kotlin.math.sqrt(((1.0 - area) / (4.0 - Math.PI)).coerceIn(0.0, 0.25)).toFloat()
+            } catch (_: Throwable) { 0.23f }
+        }
+    }
 }
 
 /**
@@ -70,7 +102,7 @@ object Icons {
     /** Latest icon per package at the home size: what a closing card turns into (read from the gesture thread). */
     private val byPkg = ConcurrentHashMap<String, Bitmap>()
 
-    @Volatile var shape = IconShape.SQUIRCLE
+    @Volatile var shape = IconShape.SYSTEM
     /** The home screen's icon size in px, set by the layout. */
     @Volatile var homeSize = 0
 
@@ -117,6 +149,13 @@ object Icons {
         d ?: return null
         val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(b)
+        if (shape == IconShape.SYSTEM) {
+            // As Android draws it: adaptive icons in the system mask, legacy icons as they are.
+            d.setBounds(0, 0, size, size)
+            d.draw(c)
+            b.setHasMipMap(true)
+            return b
+        }
         // The shape first (anti-aliased), then the art composited into it: a clipPath would leave jagged edges.
         c.drawPath(shape.path(size.toFloat()), Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK })
         c.saveLayer(0f, 0f, size.toFloat(), size.toFloat(), Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN) })

@@ -163,6 +163,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (hidden) screen.setHiddenPkg(pkg) else if (screen.hiddenPkg == pkg) screen.setHiddenPkg(null)
     }
 
+    override fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long) =
+        screen.animateDepth(from, to, velocity, response, damping, startNanos)
+
     override fun recordWithout(pkg: String): HomePicture? {
         if (screen.width == 0) return null
         return screen.withHidden(pkg) { record() }

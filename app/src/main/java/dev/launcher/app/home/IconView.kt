@@ -30,7 +30,8 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
         color = 0xFFFFFFFF.toInt()
         textSize = m.labelTextSize
         textAlign = Paint.Align.CENTER
-        setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), 0x59000000)
+        typeface = dev.launcher.app.theme.Fonts.text(450)
+        setShadowLayer(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
     }
     private val iconRect = RectF()
     private var dim = 0f
@@ -65,8 +66,8 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         val s = m.iconSize.toFloat()
         val left = (w - s) / 2f
-        // With a label the icon and label sit together in the middle of the cell, as on iOS pages.
-        val top = if (showLabel) (h - (s + m.labelGap + m.labelLine)) / 2f else (h - s) / 2f
+        // On pages the icon sits at the top of its cell with the label below (iOS); in the dock it is centred.
+        val top = if (showLabel) 0f else (h - s) / 2f
         iconRect.set(left, top, left + s, top + s)
         updateLabel()
     }
@@ -85,7 +86,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             canvas.drawBitmap(it, null, iconRect, iconPaint)
         }
         if (showLabel && shownLabel.isNotEmpty()) {
-            val y = iconRect.bottom + m.labelGap - labelPaint.fontMetrics.ascent
+            val y = iconRect.bottom + m.labelBaseline
             canvas.drawText(shownLabel, 0, shownLabel.length, width / 2f, y, labelPaint)
         }
     }

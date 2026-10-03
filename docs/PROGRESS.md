@@ -337,3 +337,24 @@ Architecture (new packages under `dev.launcher.app`):
 
 Not yet: TalkBack for the custom-drawn App Library (needs virtual nodes), SF-like font (SF Pro is not licensable for Android;
 system sans for now, Inter is an option), live blur behind the library (it uses a heavy blur of our wallpaper copy).
+
+Matheesha on 0de908f: icons must keep the system shape unless changed in settings; an app shown twice in the App Library
+(Suggestions + Creativity) closed into the wrong copy; the launch card is a grey block when the app has no snapshot ("draw the
+live app itself"); swiping home pages during a close broke the page transition; spacing and glass blur not iOS enough; SF?
+Changes (next build):
+- `IconShape.SYSTEM` is the default (icons as Android draws them); cards morph into the system mask's corner, measured from the
+  mask's area. Other shapes stay for the settings screen.
+- The tapped copy of an icon is remembered (App Library and dock/page), so the card returns to the copy it came from.
+- Metrics redone from measurements of Apple's press images (`docs/IOS_DESIGN.md`): 64 pt icons, iOS grid and row pitch,
+  labels with SF 11's cap height, dock 101 pt inset 17.5 concentric, App Library tiles, padding and search field.
+- Glass from the same measurements: dock blur sigma about 6.5 pt (was about 4), saturation 1.7, clear capsule; App Library
+  background saturated and barely darkened.
+- Inter for all text (SF Pro is licensed for Apple platforms only).
+- Swiping during a close: the real home now runs the depth spring itself (same spring, same start time) and the picture of
+  home is dropped as soon as home has drawn, so home is live and interactive behind the flying card; touching home during the
+  flight fades the card out where it is.
+- Live app in the cards: the shell holds CONTROL_REMOTE_APP_TRANSITION_ANIMATIONS (probe round 1), so the real app window can
+  in principle be animated through a remote transition (what Pixel's launcher does). DEV → "Probe: live cards" tests it: opens
+  Settings with its real window growing from a card, then goes home with the live window shrinking slowly (try swiping pages
+  during it). The report lists what the system hands over and the frame pacing. If it works, launch and close move to live
+  windows (no more grey cards or pictures of home).

@@ -207,6 +207,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         bind(e)
         setOnClickListener { v ->
             val icon = v as IconView
+            // This copy is the one its card returns to (an app can be both in the dock and on a page).
+            anchors[e.pkg] = icon
+            publishIcons()
             val rect = icon.iconOnScreen(RectF())
             listener.launch(e, rect, Icons.cached(e, metrics.iconSize)?.let { BitmapDrawable(resources, it) })
         }
@@ -323,6 +326,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             MotionEvent.ACTION_DOWN -> {
                 downX = e.x; downY = e.y
                 drag = Drag.NONE
+                HomeBridge.onHomeTouched?.invoke()
                 // A touch on a moving strip or sheet grabs it where it is (no tap goes through).
                 if (pagerAnimating) { pagerAnimating = false; beginPages(); return true }
                 if (sheetAnimating) { sheetAnimating = false; beginSheet(); return true }
@@ -484,7 +488,50 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     // ================================================================== state for the launcher and gesture nav
 
-    val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && (drag == Drag.NONE || drag == Drag.IGNORED) && (drawer?.isIdle ?: true)
+    val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && (drag == Drag.NONE || drag == Drag.IGNORED) && (drawer?.isIdle ?: true)
+
+    // ---- depth: home receding behind an open app (iOS), run here once the real home is on screen
+
+    private var depthSpring: Spring? = null
+    private var depthStart = 0L
+    private var depthTarget = 0f
+    private var depthAnimating = false
+
+    /** Follows gesture nav's depth spring exactly (same parameters and start time). */
+    fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long) {
+        depthSpring = Spring(response, damping).apply { start(from, velocity, to) }
+        depthStart = startNanos
+        depthTarget = to
+        val wasAnimating = depthAnimating
+        depthAnimating = true
+        applyDepth(from)
+        if (!wasAnimating) Choreographer.getInstance().postFrameCallback(depthFrame)
+    }
+
+    private val depthFrame = object : Choreographer.FrameCallback {
+        override fun doFrame(now: Long) {
+            val s = depthSpring ?: return
+            if (!depthAnimating) return
+            val t = maxOf(0L, now - depthStart) / 1e9
+            if (s.settled(t, 0.001f)) {
+                applyDepth(depthTarget)
+                depthAnimating = false
+                publishIcons()
+                listener.onHomeSettled()
+            } else {
+                applyDepth(s.value(t))
+                Choreographer.getInstance().postFrameCallback(this)
+            }
+        }
+    }
+
+    private fun applyDepth(d: Float) {
+        val mp = Motion.profile
+        val wz = 1f + d * (mp.homeWallpaperZoom - 1f)
+        val cz = 1f + d * (mp.homeContentZoom - 1f)
+        wallpaperView.scaleX = wz; wallpaperView.scaleY = wz
+        fg.scaleX = cz; fg.scaleY = cz
+    }
 
     /** Home pressed while home is in front: back to the first page, drawer closed. */
     fun goHome() {
@@ -507,11 +554,20 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     private var published: Map<String, IconView> = emptyMap()
+    private val anchors = HashMap<String, IconView>()
     var hiddenPkg: String? = null
         private set
 
-    /** Tells gesture nav where every icon a closing card could fly into is right now. */
+    /** Tells gesture nav where every icon a closing card could fly into is (at rest: without the depth zoom). */
     fun publishIcons() {
+        // Positions at rest: the depth zoom is taken off while measuring (same frame, never drawn like this).
+        val sx = fg.scaleX
+        val sy = fg.scaleY
+        fg.scaleX = 1f; fg.scaleY = 1f
+        try { publishAtRest() } finally { fg.scaleX = sx; fg.scaleY = sy }
+    }
+
+    private fun publishAtRest() {
         val map = HashMap<String, RectF>()
         val views = HashMap<String, IconView>()
         val dp = drawerProgress()
@@ -520,7 +576,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             val page = pages.getOrNull(pos.roundToInt())
             for (v in (dock?.icons() ?: emptyList()) + (page?.icons() ?: emptyList())) {
                 val e = v.entry ?: continue
-                if (map.containsKey(e.pkg)) continue
+                if (map.containsKey(e.pkg) && anchors[e.pkg] !== v) continue
                 map[e.pkg] = v.iconOnScreen(RectF())
                 views[e.pkg] = v
             }
@@ -556,6 +612,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         publishIcons()
         if (isIdle) listener.onHomeSettled()
     }
+
+    override fun onIconsMoved() = publishIcons()
 
     companion object {
         /** Sparkle grid and front wobble scale of the wallpaper reveal, shared by wallpaper and glass. */

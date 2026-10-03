@@ -34,8 +34,8 @@ internal class ListPane(ctx: Context, private val lib: AppLibraryView) : View(ct
     private var imeInset = 0
 
     private val labels = LabelPainter(m.listText, 0xFFFFFFFF.toInt(), Paint.Align.LEFT)
-    private val headers = LabelPainter(m.listHeaderText, 0x99FFFFFF.toInt(), Paint.Align.LEFT, bold = true)
-    private val index = LabelPainter(m.pt(11f), 0xFF0A84FF.toInt(), Paint.Align.CENTER, bold = true)
+    private val headers = LabelPainter(m.listHeaderText, 0x99FFFFFF.toInt(), Paint.Align.LEFT, dev.launcher.app.theme.Fonts.text(600))
+    private val index = LabelPainter(m.pt(11f), 0xFF0A84FF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(600))
     private val separator = Paint().apply { color = 0x1FFFFFFF; strokeWidth = max(1f, m.pt(0.5f)) }
     private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val r = RectF()
@@ -134,11 +134,11 @@ internal class ListPane(ctx: Context, private val lib: AppLibraryView) : View(ct
         return if (i < 0) null else iconRect(i, RectF())
     }
 
-    fun visibleIcons(out: MutableMap<String, RectF>) {
+    fun visibleIcons(out: MutableList<Pair<String, RectF>>) {
         for (i in visibleRows()) {
             val row = rows[i] as? Row.Item ?: continue
             val rect = iconRect(i, RectF())
-            if (rect.centerY() > m.tilesTop && rect.centerY() < height - imeInset) out.putIfAbsent(row.e.pkg, rect)
+            if (rect.centerY() > m.tilesTop && rect.centerY() < height - imeInset) out += row.e.pkg to rect
         }
     }
 

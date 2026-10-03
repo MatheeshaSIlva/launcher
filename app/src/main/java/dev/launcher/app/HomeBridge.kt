@@ -26,6 +26,8 @@ object HomeBridge {
         fun setIconHidden(pkg: String, hidden: Boolean)
         /** Records home with [pkg]'s icon left out (main thread). */
         fun recordWithout(pkg: String): HomePicture?
+        /** Runs home's own depth (zoom) on the same spring as gesture nav's, from the same start time (main thread). */
+        fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long)
     }
 
     @Volatile var home: Home? = null
@@ -82,4 +84,14 @@ object HomeBridge {
     fun iconRect(pkg: String): RectF? = icons[pkg]
 
     fun setIconHidden(pkg: String, hidden: Boolean) = main.post { home?.setIconHidden(pkg, hidden) }
+
+    /**
+     * The real home takes over the depth animation from the picture: same spring, same start ([startNanos], System.nanoTime
+     * base like Choreographer frame times), so when the picture is dropped nothing jumps. Any thread.
+     */
+    fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long) =
+        main.post { home?.animateDepth(from, to, velocity, response, damping, startNanos) }
+
+    /** Set by gesture nav: home was touched (a closing card should get out of the way). Called on the main thread. */
+    @Volatile var onHomeTouched: (() -> Unit)? = null
 }

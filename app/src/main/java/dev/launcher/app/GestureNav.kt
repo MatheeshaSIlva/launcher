@@ -175,8 +175,9 @@ object GestureNav {
         this.app = app
         // A picture of home without the card's icon arrives a moment after a gesture starts: use it as soon as it does.
         HomeBridge.onPreviewReady = { pkg ->
-            nav.post { if (cardPkg == pkg && backdrop?.picture != null) backdrop?.picture = HomeBridge.previewFor(pkg) }
+            nav.post { if (cardPkg == pkg && backdrop?.picture != null && !pictureDropped) backdrop?.picture = HomeBridge.previewFor(pkg) }
         }
+        HomeBridge.onHomeTouched = { nav.post { homeTouchedDuringClose() } }
     }
 
     // ================================================================== public entry points (any thread)
@@ -395,6 +396,8 @@ object GestureNav {
             r.setBackgroundColor(0)
         }
         backdrop?.picture = null
+        pictureDropped = false
+        closeDepthFrom = -1f
         prv?.visibility = View.GONE
         nxt?.visibility = View.GONE
         cur?.snapshot = null
@@ -529,6 +532,7 @@ object GestureNav {
             backdrop?.depth = 1f
         }
         if (backdrop?.picture == null) backdrop?.picture = HomeBridge.previewFor(cardPkg)
+        pictureDropped = false
         val s = c.w / sw
         travel0 = travelForScale(s)
         lastTravel = travel0
@@ -723,7 +727,9 @@ object GestureNav {
             sCy = mp.appClosePosition.spring().apply { start(c.cy, towards(vy, c.cy, ty), ty) }
             sW = mp.appCloseSize.spring().apply { start(c.w, vW, size) }
             sH = mp.appCloseSize.spring().apply { start(c.h, vH, sizeH) }
-            sDepth = mp.homeDepthClose.spring().apply { start(depthNow(), 0f, 0f) }
+            val depth0 = depthNow()
+            sDepth = mp.homeDepthClose.spring().apply { start(depth0, 0f, 0f) }
+            closeDepthFrom = depth0
             anim = Anim.HOME_COMMIT
             endLabel = when {
                 target != null -> "home (into the icon of $pkg)"
@@ -751,6 +757,7 @@ object GestureNav {
             sW = sp.spring().apply { start(c.w, vW, sw) }
             sH = sp.spring().apply { start(c.h, vH, sh) }
             sDepth = sp.spring().apply { start(depthNow(), 0f, 1f) }
+            closeDepthFrom = -1f
             anim = Anim.HOME_CANCEL
             endLabel = "back to the app"
             onSettled = {
@@ -766,6 +773,27 @@ object GestureNav {
             }
         }
         startSprings()
+        if (closeDepthFrom >= 0f) {
+            // From here the real home runs the same depth spring, so the picture can go as soon as home has drawn.
+            val spec = Motion.profile.homeDepthClose
+            HomeBridge.animateDepth(closeDepthFrom, 0f, 0f, spec.response, spec.damping, springStartNs)
+        }
+    }
+
+    // Depth the close started from (the real home follows it); -1 when not closing.
+    private var closeDepthFrom = -1f
+    // The picture of home was taken away during a close: the real home (interactive, live) is what shows behind the card.
+    private var pictureDropped = false
+
+    /**
+     * Home was touched while a closing card is still flying: the touch belongs to home (swiping pages, opening another
+     * app), so the card gets out of the way at once (fades where it is) and its icon is back.
+     */
+    private fun homeTouchedDuringClose() {
+        if (anim != Anim.HOME_COMMIT || !pictureDropped || root?.visibility != View.VISIBLE) return
+        hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
+        hiddenIconPkg = null
+        fadeOutCards(110, gen)
     }
 
     private fun startHome() {
@@ -844,6 +872,12 @@ object GestureNav {
         }
         c.setFrame(sCx.value(t), sCy.value(t), w, h, r)
         backdrop?.depth = sDepth.value(t)
+        // Closing: once the real home has drawn, it shows itself (with its own, identical depth spring) and stays
+        // interactive; the picture was only needed until then.
+        if (anim == Anim.HOME_COMMIT && !pictureDropped && backdrop?.picture != null && HomeBridge.homeDrawnAt >= homeRequestedAt) {
+            backdrop?.picture = null
+            pictureDropped = true
+        }
         return sCx.settled(t) && sCy.settled(t) && sW.settled(t) && sH.settled(t)
     }
 
@@ -890,6 +924,9 @@ object GestureNav {
         fg = null
         homeStarted = false
         val picture = HomeBridge.previewFor(pkg)
+        // Reopening a closing app whose picture of home was already dropped: cover home again (the app starts at once).
+        if (reverse && backdrop?.picture == null) backdrop?.picture = picture
+        pictureDropped = false
         if (!reverse) {
             c.icon = icon
             c.snapshot = images[pkg]

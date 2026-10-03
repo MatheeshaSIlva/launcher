@@ -172,6 +172,12 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
+    override fun probeLiveTransition(component: String, homeComponent: String): String = try {
+        LiveTransitionProbe(systemService("activity_task", ATM_STUB)).run(component, homeComponent)
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
     private fun readInt(o: Any, name: String): Int? = try { o.javaClass.getField(name).get(o) as? Int } catch (_: Throwable) { null }
 
     private fun systemService(name: String, stubClass: String): Any {

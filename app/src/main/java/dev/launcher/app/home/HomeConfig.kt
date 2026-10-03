@@ -30,7 +30,8 @@ data class HomeConfig(
     val dockSlots: Int = 4,
     val drawerStyle: DrawerStyle = DrawerStyle.APP_LIBRARY,
     val drawerPlacement: DrawerPlacement = DrawerPlacement.PAGE_AFTER_LAST,
-    val iconShape: IconShape = IconShape.SQUIRCLE,
+    /** System (icons as Android draws them) until a shape is picked in settings. */
+    val iconShape: IconShape = IconShape.SYSTEM,
     val showLabels: Boolean = true,
     /** iOS "Add to Home Screen" for newly installed apps (else they only appear in the drawer). */
     val newAppsOnHome: Boolean = true,

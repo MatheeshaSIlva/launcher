@@ -50,7 +50,9 @@ class Wallpaper private constructor(
             val scale = 4
             val small = Bitmap.createScaledBitmap(bmp, max(1, bmp.width / scale), max(1, bmp.height / scale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)
-            boxBlur(small, 3, 2)   // at 1/4 size: ≈ 10 px blur at full size (half of before), still smooth
+            // At 1/4 size, box radius 4 three times: sigma about 18 px at full size, 6.5 iOS points on the S24 (iOS 26's dock
+            // measured 6 to 8 pt).
+            boxBlur(small, 4, 3)
             val heavyScale = 16
             val heavy = Bitmap.createScaledBitmap(small, max(1, bmp.width / heavyScale), max(1, bmp.height / heavyScale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)

@@ -4,9 +4,15 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 /**
- * Every size and position of the home screen, from iOS's proportions scaled to this display: [u] is one iOS point
- * (the reference iPhone is 393 pt wide), so the layout keeps iOS's look on any width. Recomputed when the size, the
- * insets or the config change. All values in px.
+ * Every size and position of the home screen, measured from Apple's own full-resolution press images and scaled to this
+ * display. [u] is one iOS point: home values come from the iOS 26 Home Screen on an iPhone 16 Pro (402 x 874 pt, a
+ * 2.17 aspect like the S24's), App Library values from iOS's App Library on an iPhone 11 Pro (375 pt wide), converted to
+ * fractions of the width. Recomputed when the size, the insets or the config change. All values in px.
+ *
+ * Measured (iPhone 16 Pro, pt): icons 64; first column's icon 30.1 from the edge; column pitch 92.5; first row's icon top
+ * 89.5 from the top; row pitch 100.6; label cap height 7.8 (SF 11) with its baseline 16.4 below the icon; Search pill
+ * 29.6 tall, 19.4 above the dock; dock 101 tall (19 above and below its 64 pt icons), inset 17.5 from the sides and the
+ * bottom, corner radius 39 = display corner radius - inset (concentric), dock icons 89.4 apart.
  */
 class HomeMetrics(
     val w: Int,
@@ -16,59 +22,64 @@ class HomeMetrics(
     deviceRadius: Float,
     val cfg: HomeConfig,
 ) {
-    val u = w / 393f
+    val u = w / 402f
     fun pt(v: Float) = v * u
 
     // ---- home pages
-    val iconSize = (60 * u).roundToInt()
-    private val sideInset = 27 * u
+    val iconSize = (64 * u).roundToInt()
+    private val sideInset = 30.1f * u
     val columnPitch = (w - 2 * sideInset - iconSize) / max(1, cfg.columns - 1)
     fun columnCenterX(col: Int) = sideInset + iconSize / 2f + col * columnPitch
-    val labelTextSize = 12 * u
-    val labelGap = 5 * u
-    val labelLine = labelTextSize * 1.3f
+    /** Inter at this size has SF 11's cap height (Inter's caps are taller: 0.727 em against SF's 0.705). */
+    val labelTextSize = 10.7f * u
+    /** From the icon's bottom edge to the label's baseline. */
+    val labelBaseline = 16.4f * u
 
     // ---- dock (iOS 26: a floating glass platter, concentric with the display's corners)
-    val dockInset = 12 * u
-    val dockHeight = iconSize + 32 * u
-    val dockBottom = h - max(bottomInset + 4 * u, 16 * u)
+    val dockInset = 17.5f * u
+    val dockHeight = iconSize + 37 * u
+    val dockBottom = h - max(17.5f * u, bottomInset * 0.75f)
     val dockTop = dockBottom - dockHeight
-    val dockRadius = (deviceRadius - dockInset).coerceIn(dockHeight * 0.34f, dockHeight * 0.5f)
+    val dockRadius = max(deviceRadius - dockInset, dockHeight * 0.385f).coerceAtMost(dockHeight / 2f)
+    val dockIconPitch = 89.4f * u
 
-    // ---- page indicator (a glass capsule above the dock)
-    val indicatorHeight = 26 * u
-    val indicatorBottom = dockTop - 10 * u
+    // ---- Search pill / page indicator (a clear glass capsule above the dock)
+    val indicatorHeight = 29.6f * u
+    val indicatorBottom = dockTop - 19.4f * u
     val indicatorTop = indicatorBottom - indicatorHeight
     val dotSize = 7 * u
     val dotGap = 9 * u
 
-    // ---- grid
-    val gridTop = max(topInset.toFloat(), 44 * u) + 14 * u
-    val gridBottom = indicatorTop - 6 * u
-    val cellHeight = (gridBottom - gridTop) / cfg.rows
+    // ---- grid: icons sit at the top of evenly spaced rows
+    val gridTop = max(89.5f * u, topInset + 16 * u)
+    val cellHeight = (indicatorTop - 13 * u - gridTop) / cfg.rows
     fun cellLeft(col: Int) = columnCenterX(col) - columnPitch / 2f
     fun cellTop(row: Int) = gridTop + row * cellHeight
 
-    // ---- App Library
-    val libMargin = 20 * u
-    private val libGap = 21 * u
-    val tileSize = (w - 2 * libMargin - libGap) / 2f
+    // ---- App Library (iOS: margin 23.3, tiles 155.4 of 375 pt; inside a tile: padding 11.4, icons 59.2, gap 13.7;
+    //      tile corners 22; search field 46.7 tall, 13 below the status bar; tiles 25.6 below it; rows 190.7 apart)
+    private val lu = w / 375f
+    val libMargin = 23.3f * lu
+    private val libGap = w - 2 * libMargin - 2 * 155.4f * lu
+    val tileSize = 155.4f * lu
     fun tileLeft(col: Int) = libMargin + col * (tileSize + libGap)
-    val tilePad = tileSize * 0.095f
-    val tileIcon = (tileSize - 3 * tilePad) / 2f
-    val tileRadius = tileSize * 0.16f
-    val tileLabelGap = 6 * u
-    val tileLabelSize = 12.5f * u
-    val tileRowPitch = tileSize + tileLabelGap + tileLabelSize * 1.3f + 16 * u
-    val searchTop = max(topInset.toFloat(), 44 * u) + 6 * u
-    val searchHeight = 40 * u
-    val tilesTop = searchTop + searchHeight + 18 * u
-    val listRow = 56 * u
-    val listIcon = 40 * u
-    val listText = 17 * u
-    val listHeader = 30 * u
-    val listHeaderText = 13 * u
-    val listSideIndex = 22 * u
+    val tilePad = tileSize * 0.0734f
+    val tileIconGap = tileSize * 0.088f
+    val tileIcon = (tileSize - 2 * tilePad - tileIconGap) / 2f
+    val tileRadius = tileSize * 0.142f
+    /** SF 13 cap height in Inter, baseline 17 pt below the tile. */
+    val tileLabelSize = 12.6f * lu
+    val tileLabelBaseline = 17f * lu
+    val tileRowPitch = tileSize + 35.3f * lu
+    val searchTop = max(topInset.toFloat(), 44 * lu) + 13 * lu
+    val searchHeight = 46.7f * lu
+    val tilesTop = searchTop + searchHeight + 25.6f * lu
+    val listRow = 56 * lu
+    val listIcon = 40 * lu
+    val listText = 16.5f * lu
+    val listHeader = 30 * lu
+    val listHeaderText = 13 * lu
+    val listSideIndex = 22 * lu
     val bottomSafe = bottomInset + 8 * u
 
     // ---- folder panel (category opened from the App Library)

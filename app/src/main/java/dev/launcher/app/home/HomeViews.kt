@@ -70,7 +70,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics) : LinearLayout(ctx) {
             format24Hour = "H:mm"
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, m.pt(64f))
             setTextColor(Color.WHITE)
-            typeface = android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
+            typeface = dev.launcher.app.theme.Fonts.display(300)
             setShadowLayer(m.pt(10f), 0f, m.pt(1f), 0x55000000)
             includeFontPadding = false
         })
@@ -78,6 +78,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics) : LinearLayout(ctx) {
             format12Hour = "EEEE, d MMMM"
             format24Hour = "EEEE, d MMMM"
             setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, m.pt(16f))
+            typeface = dev.launcher.app.theme.Fonts.text(500)
             setTextColor(0xEEFFFFFF.toInt())
             setShadowLayer(m.pt(8f), 0f, m.pt(1f), 0x55000000)
         })
@@ -104,7 +105,8 @@ class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
         val n = views.size
         val dockLeft = m.dockInset
         for ((i, v) in views.withIndex()) {
-            val cx = if (n == m.cfg.columns) m.columnCenterX(i) else m.w / 2f + (i - (n - 1) / 2f) * m.columnPitch
+            // iOS spaces dock icons a little tighter than the page columns (89.4 against 92.5 pt), centred.
+            val cx = m.w / 2f + (i - (n - 1) / 2f) * m.dockIconPitch
             addView(v, LayoutParams(m.iconSize, m.iconSize).apply {
                 leftMargin = (cx - m.iconSize / 2f - dockLeft).roundToInt()
                 topMargin = ((m.dockHeight - m.iconSize) / 2f).roundToInt()

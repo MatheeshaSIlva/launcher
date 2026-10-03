@@ -52,4 +52,9 @@ interface IShellService {
 
     // Like switchToTask, with ActivityOptions (e.g. "no animation": our own card animates instead).
     String switchToTaskWithOptions(int taskId, in Bundle options) = 16;
+
+    // Probe (blocking, a few seconds): can the shell animate real app windows through a remote transition? Opens
+    // [component] with its window growing from a small card, then starts [homeComponent] with the app's window shrinking
+    // away slowly. Returns a report of what the system handed over and how the frames went.
+    String probeLiveTransition(String component, String homeComponent) = 17;
 }
