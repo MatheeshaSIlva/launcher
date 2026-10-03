@@ -43,19 +43,16 @@ The S24's aspect (2340/1080 = 2.167) is almost the iPhone 16 Pro's (2.174), so t
 
 ## Liquid Glass (iOS 26): one material for every surface
 
-Tuned offline (2026-10-03) against Matheesha's iOS 26 references (widgets on a photo, the App Library): `docs/design/glass_proto.py`
-renders the exact maths of our AGSL shader, `docs/design/glass-material-v4.png` is the comparison it was signed off from.
+Decided with Matheesha (2026-10-03, after comparing builds): iOS glass is **clear** and looks the same in light and dark mode:
+no white tint, almost no blur, a lens at the edge, and **only a slight light rim**. `GlassStyle.IOS` (rendered offline in
+`docs/design/glass-material-v5-clear.png` with `docs/design/glass_proto.py`, the shader's own maths):
 
-- Every glass surface uses `GlassStyle.IOS`: dock, widgets, Search pill, App Library tiles and search field, folder panels.
-  Surfaces on home refract the wallpaper's blurred copy; surfaces in the App Library refract the library's blurred background
-  (`GlassDrawable.Source.BACKDROP`), so the material is the same while what is behind differs.
-- Body: frosted. iOS widgets keep the shapes behind them recognisable but soft (blur of roughly 9 pt: `Wallpaper.blurred`),
-  white tint 0.16, saturation 1.25.
-- Edge (what reads as "liquid"): a soft light band inside the edge (exponential, 10.5 pt, strength 0.25) and a thin rim
-  (1.8 pt): 0.12 everywhere, +0.45 where it faces the light (top left), +0.25 on the far side; a faint shade (0.03) inside the
-  edge away from the light; a gentle lens band (12 pt, 14 pt bend).
-- Earlier attempts and why they failed: clear glass (dock read as a different material from the frosted widgets/tiles);
-  heavy frosting without the edge light (read as frosted plastic, not glass).
+- Body: the backdrop with about 1.5 pt of blur (`Wallpaper.blurred`), saturation 1.4, no tint, no inner glow.
+- Edge: lens band 20 pt bending 30 pt (narrower on small shapes: at most 35 % of the shorter side), dispersion 0.25.
+- Rim: 1.2 pt; 0.14 all round, +0.22 facing the light (top left), +0.10 on the far side.
+- Every glass surface uses it: dock, widgets, Search pill, App Library tiles and search field, folder panels. Surfaces in the
+  App Library refract the library's blurred background (`GlassDrawable.Source.BACKDROP`).
+- Rejected: frosted body with white tint and inner glow (v4, "everything has a white tint"); heavier blur ("frosted, not liquid").
 - Behind an open folder the library is covered completely by its own blurred background (no faint icons).
 
 ## Widgets and the Search pill

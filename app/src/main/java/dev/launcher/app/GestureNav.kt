@@ -68,6 +68,7 @@ object GestureNav {
     private val main = Handler(Looper.getMainLooper())
     private val tasksIo = Executors.newSingleThreadExecutor()
     private val snapIo = Executors.newSingleThreadExecutor()
+    private val cachedIo = Executors.newSingleThreadExecutor()
     private val density get() = app.resources.displayMetrics.density
     private fun dp(v: Int) = v * density
 
@@ -379,6 +380,43 @@ object GestureNav {
         if (r.visibility != View.VISIBLE) {
             r.visibility = View.VISIBLE
             cardVisibleAfter = SystemClock.uptimeMillis() - dragStartedAt
+            onCardShown()
+        }
+    }
+
+    // ---- a home card that appears late: its snapshot takes 50-300 ms; until then the app itself is what the user sees
+
+    private const val CATCH_UP_MS = 120.0
+    private var catchUpAt = 0L          // nanoTime when a late card appeared during a drag (0 = not catching up)
+    private var lastDragX = 0f
+    private var lastDragY = 0f
+    private var deferredRelease: FloatArray? = null   // [vx, vy] of a close released before its card could show
+    private val releaseTimeout = Runnable { if (deferredRelease != null) showCards() }   // never wait longer: show the stand-in
+
+    private fun onCardShown() {
+        if (phase != Phase.DRAG_HOME) return
+        val v = deferredRelease
+        if (v != null) {
+            // Released before the card could show: close now, from full size (exactly where the app is).
+            deferredRelease = null
+            nav.removeCallbacks(releaseTimeout)
+            cur?.setFrame(sw / 2, sh / 2, sw, sh, deviceRadius)
+            releaseHome(true, v[0], v[1])
+            return
+        }
+        // Only a card that is late (the finger has already travelled): one that shows at the start just follows the finger.
+        if (fingerDown && travel0 <= 1f && lastTravel > dp(24)) {
+            catchUpAt = System.nanoTime()
+            dragHome(lastDragX, lastDragY)   // this very frame: full screen, exactly where the app is
+            choreographer.postFrameCallback(catchUpFrame)
+        }
+    }
+
+    private val catchUpFrame = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (catchUpAt == 0L || phase != Phase.DRAG_HOME) { catchUpAt = 0L; return }
+            dragHome(lastDragX, lastDragY)   // advances the blend even while the finger rests
+            if (catchUpAt != 0L) choreographer.postFrameCallback(this)
         }
     }
 
@@ -395,6 +433,9 @@ object GestureNav {
         grabbedFull = false
         pendingStart = null
         appStarted = false
+        catchUpAt = 0L
+        deferredRelease = null
+        nav.removeCallbacks(releaseTimeout)
         root?.let { r ->
             r.animate().cancel()
             r.visibility = View.INVISIBLE
@@ -610,8 +651,6 @@ object GestureNav {
             if (onHome || tasks.isEmpty()) return@execute
             snapIo.execute {
                 if (fresh) {
-                    val cached = try { s.taskSnapshot(tasks[0].id, false) } catch (_: Throwable) { null }
-                    if (cached != null) nav.post { if (id == gestureId) onFgCached(tasks[0].pkg, cached) }
                     val t = SystemClock.uptimeMillis()
                     val b = try { s.taskSnapshot(tasks[0].id, true) } catch (_: Throwable) { null }
                     val ms = SystemClock.uptimeMillis() - t
@@ -622,6 +661,12 @@ object GestureNav {
                 val pb = try { s.taskSnapshot(p.id, false) } catch (_: Throwable) { null }
                 pb?.let { remember(p.pkg, it) }
                 nav.post { if (id == gestureId) prvSnapshot = pb ?: images[p.pkg] }
+            }
+            // The system's last snapshot of the app in front, in parallel with the fresh one (a stand-in for a sideways switch),
+            // on its own worker: it can take a few hundred ms and must delay neither the fresh snapshot nor the next lookup.
+            if (fresh) cachedIo.execute {
+                val cached = try { s.taskSnapshot(tasks[0].id, false) } catch (_: Throwable) { null }
+                if (cached != null) nav.post { if (id == gestureId) onFgCached(tasks[0].pkg, cached) }
             }
         }
     }
@@ -723,6 +768,8 @@ object GestureNav {
 
     private fun dragHome(x: Float, y: Float) {
         val c = cur ?: return
+        lastDragX = x
+        lastDragY = y
         lastTravel = travel0 + (downY - y)
         // 1 at the grab point (and above it), 0 at full size: a grabbed card keeps its look and turns into a plain card
         // only as it is pulled back towards full screen.
@@ -731,7 +778,21 @@ object GestureNav {
         val w = sw * s
         val h = sh * s * (1f + (grabHK - 1f) * b)
         // The finger keeps its place on the card as it shrinks, so the card visibly comes away from the top edge.
-        c.setFrame(x + anchorX * s, y + anchorBottom * s - h / 2, w, h, deviceRadius + (grabR - deviceRadius) * b)
+        var cx = x + anchorX * s
+        var cy = y + anchorBottom * s - h / 2
+        var fw = w
+        var fh = h
+        if (catchUpAt != 0L) {
+            // A late card glides from full screen (where the app is) to the finger.
+            val p = ((System.nanoTime() - catchUpAt) / 1e6 / CATCH_UP_MS).coerceIn(0.0, 1.0).toFloat()
+            val k = 1f - (1f - p) * (1f - p) * (1f - p)
+            cx = sw / 2 + (cx - sw / 2) * k
+            cy = sh / 2 + (cy - sh / 2) * k
+            fw = sw + (fw - sw) * k
+            fh = sh + (fh - sh) * k
+            if (p >= 1f) catchUpAt = 0L
+        }
+        c.setFrame(cx, cy, fw, fh, deviceRadius + (grabR - deviceRadius) * b)
         c.iconMix = grabMix * b
     }
 
@@ -739,6 +800,15 @@ object GestureNav {
         val c = cur ?: run { hideCards(); return }
         val upSpeed = -vy
         val commit = up && ((upSpeed > 350f && lastTravel > dp(30)) || (lastTravel > sh * 0.2f && upSpeed > -250f))
+        catchUpAt = 0L
+        if (phase == Phase.DRAG_HOME && root?.visibility != View.VISIBLE && travel0 <= 1f) {
+            if (!commit) { hideCards(); return }
+            deferredRelease = floatArrayOf(vx, vy)
+            nav.removeCallbacks(releaseTimeout)
+            nav.postDelayed(releaseTimeout, 350)
+            AppLog.log("[nav] home released before the card could show: closing as soon as it is there")
+            return
+        }
         val ds = dScaleDTravel(lastTravel) * upSpeed
         val vW = sw * ds
         val vH = sh * ds

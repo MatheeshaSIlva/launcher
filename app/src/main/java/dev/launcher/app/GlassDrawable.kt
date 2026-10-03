@@ -14,9 +14,9 @@ import android.graphics.drawable.Drawable
  * How a glass surface looks. Part of a theme's colour-and-effects layer. Distances in iOS points (the drawable is given the
  * size of one point in px), so glass matches the rest of the layout on any screen.
  *
- * iOS 26's regular Liquid Glass, tuned offline against Apple's screenshots (docs/design/glass_proto.py renders this exact
- * maths): a frosted body (the backdrop blurred, light white tint, a little more colour), a soft light band inside the edge
- * (the glass's thickness), and a thin rim, brightest where it faces the light, with a fainter echo on the far side.
+ * iOS 26's Liquid Glass as Matheesha wants it: clear (the backdrop barely blurred, no tint, so it looks the same in light
+ * and dark mode), a lens at the edge that bends what is behind it, a little more colour, and only a slight light rim.
+ * docs/design/glass_proto.py renders this exact maths offline.
  */
 data class GlassStyle(
     /** 0 = clear glass (the sharp backdrop), 1 = fully frosted (the blurred copy). */
@@ -45,10 +45,13 @@ data class GlassStyle(
     val lightAngleDeg: Float = 225f,
 ) {
     companion object {
-        /** Every glass surface of the iOS theme: dock, widgets, Search pill, App Library tiles and search field, folders. */
-        val IOS = GlassStyle(frost = 1f, bevel = 12f, refraction = 14f, dispersion = 0.1f, magnify = 0.03f,
-            saturation = 1.25f, tint = 0.16f, glowWidth = 10.5f, glow = 0.25f, shade = 0.03f,
-            rimWidth = 1.8f, rimBase = 0.12f, rimLight = 0.45f, rimBack = 0.25f)
+        /**
+         * Every glass surface of the iOS theme: dock, widgets, Search pill, App Library tiles and search field, folders.
+         * The lens of c20b685 (the look Matheesha preferred) without its white lift, and a quieter rim.
+         */
+        val IOS = GlassStyle(frost = 1f, bevel = 20f, refraction = 30f, dispersion = 0.25f, magnify = 0.05f,
+            saturation = 1.4f, tint = 0f, glowWidth = 8f, glow = 0f, shade = 0f,
+            rimWidth = 1.2f, rimBase = 0.14f, rimLight = 0.22f, rimBack = 0.10f)
     }
 }
 
@@ -242,12 +245,15 @@ half4 main(float2 coord) {
     n = n / max(length(n), 1e-4);
 
     // 0 at the edge, 1 once past the bevel. The bevel is a quarter-circle profile: steepest (strongest bend) at the edge.
-    float t = clamp(-d / bevel, 0.0, 1.0);
+    // Small shapes (the Search pill) get a proportionally narrower bevel, so their lens never fills the whole shape.
+    float bv = min(bevel, 0.35 * min(size.x, size.y));
+    float rf = refraction * bv / bevel;
+    float t = clamp(-d / bv, 0.0, 1.0);
     float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
 
     float2 sp = dockOrigin + coord;
     // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
-    float2 off = n * bend * refraction - p * magnify;
+    float2 off = n * bend * rf - p * magnify;
     // Evenly frosted, rim included: the rim still bends what is behind it, but what it shows is frosted too.
     float frostAmt = frost;
 

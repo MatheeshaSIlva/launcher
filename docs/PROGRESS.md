@@ -425,3 +425,15 @@ Changes (next build, not yet confirmed on the phone):
 - Behind an open folder the library is now fully covered by its own blurred background (was 94 %: the faint icons).
 - iOS widget: the clock is a medium (4 x 2) glass widget with day, time and date, sized like iOS widgets, its name below.
 - Search pill (iOS 26) replaces the page dots at rest; dots while pages move; a tap opens App Library search for now.
+
+Device results (5202ed6), Matheesha: everything looks worse: a white tint on all glass and more blur; iOS glass "only has a
+slight light rim around, consistent across light and dark modes"; c20b685 looked better. Closing after a while still not smooth.
+Changes (next build, not yet confirmed on the phone):
+- Glass back to clear (c20b685's lens and light blur) without any tint or inner glow, with only a slight rim, one style for
+  every surface (`docs/IOS_DESIGN.md`). Lens narrower on small shapes so the Search pill is not all lens.
+- Close after a while: with no recent image of the app (older than 10 s) the card waits for a fresh snapshot, measured at
+  54–309 ms; meanwhile the app does not move, then the card popped in under the finger. Also, since 4c8eec4 a cached-snapshot
+  call (itself up to ~240 ms) ran *before* the fresh one, adding to that wait. Now: the cached call runs on its own worker in
+  parallel; a card that appears late starts exactly where the app is (full screen) and glides to the finger in 120 ms; a close
+  released before its card could show waits for it (max 350 ms, home is not started meanwhile) and then plays from full size.
+  Log: `card visible N ms after the start` and `home released before the card could show`.

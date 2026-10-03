@@ -51,13 +51,12 @@ class Wallpaper private constructor(
             val d = WallpaperManager.getInstance(ctx).drawable as? BitmapDrawable
             val src = d?.bitmap ?: throw IllegalStateException("no bitmap wallpaper")
             val bmp = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
-            // What glass on home sees (dock, widgets, Search pill): 1/8 size, box radius 3 twice, sigma about 23 wallpaper
-            // pixels, roughly 6 to 9 iOS points on screen depending on the wallpaper's resolution (iOS 26's widgets keep the
-            // shapes behind them recognisable but soft; tuned in docs/design/glass_proto.py).
-            val scale = 8
+            // What glass on home sees (dock, widgets, Search pill): half size, box radius 2 twice, about 1.5 iOS points of blur,
+            // just enough to soften fine detail; clear glass keeps the wallpaper's shapes sharp (heavier blur read as frosted).
+            val scale = 2
             val small = Bitmap.createScaledBitmap(bmp, max(1, bmp.width / scale), max(1, bmp.height / scale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)
-            boxBlur(small, 3, 2)
+            boxBlur(small, 2, 2)
             val heavyScale = 16
             val heavy = Bitmap.createScaledBitmap(bmp, max(1, bmp.width / heavyScale), max(1, bmp.height / heavyScale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)
