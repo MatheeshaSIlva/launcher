@@ -46,7 +46,14 @@ object HomeBridge {
         preview = p
         generation++
         without.clear()
+        // Re-record the picture a close is most likely to need right away (main thread, like setPreview's callers), so a
+        // gesture that starts after a while in an app does not wait for it (home re-records every minute for the clock).
+        val pkg = likelyClosing?.invoke() ?: return
+        home?.recordWithout(pkg)?.let { without[pkg] = it }
     }
+
+    /** Set by gesture nav: the app a close would fly into home right now (the app in front), or null. */
+    @Volatile var likelyClosing: (() -> String?)? = null
 
     /** Stores a picture without [pkg]'s icon recorded right now (a launch records it before its card appears). */
     fun putWithout(pkg: String, p: HomePicture?) { if (p != null) without[pkg] = p }

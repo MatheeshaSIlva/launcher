@@ -57,6 +57,23 @@ interface AppDrawer {
 
     /** Height of the on-screen keyboard (0 when hidden), so lists end above it. */
     fun setImeInset(px: Int)
+
+    /** Our copy of the wallpaper (null: the system draws it): glass surfaces refract what is behind them. */
+    fun setWallpaper(w: dev.launcher.app.Wallpaper?)
+}
+
+/** Where [v]'s top-left corner is on screen from layout positions and translations (scale ignored), cheap enough per frame. */
+internal fun screenOffset(v: View, out: FloatArray): FloatArray {
+    var x = 0f
+    var y = 0f
+    var cur: View? = v
+    while (cur != null) {
+        x += cur.left + cur.translationX
+        y += cur.top + cur.translationY
+        cur = cur.parent as? View
+    }
+    out[0] = x; out[1] = y
+    return out
 }
 
 object Drawers {

@@ -25,7 +25,9 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     private val m = lib.m
     val scroller = dev.launcher.app.motion.IosScroller({ invalidate() }, { lib.settled() })
     private val touch = TapOrScroll(ctx)
-    private val tileBg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x2EFFFFFF }
+    /** The tile an open folder grew out of: the folder draws it (as its panel) until it is back in place. */
+    var hiddenTile = -1
+        set(v) { if (field != v) { field = v; invalidate() } }
     private val labels = LabelPainter(m.tileLabelSize, 0xE6FFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
     private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val r = RectF()
@@ -142,7 +144,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
                 } else if (touch.isTap) {
                     when (val t = hit(e.x, e.y)) {
                         is Target.App -> lib.launch(lib.tiles[t.tile].apps[t.slot], slotRect(t.tile, t.slot, RectF()), "tile:${lib.tiles[t.tile].title}")
-                        is Target.Cluster -> lib.openFolder(lib.tiles[t.tile], tileRect(t.tile, RectF()))
+                        is Target.Cluster -> lib.openFolder(lib.tiles[t.tile], tileRect(t.tile, RectF()), t.tile)
                         null -> {}
                     }
                 }
@@ -180,19 +182,38 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
         for (i in visibleTiles()) {
             val tile = tiles[i]
             tileRect(i, r)
-            c.drawRoundRect(r, m.tileRadius, m.tileRadius, tileBg)
-            for (s in 0 until largeCount(i)) {
-                val e = tile.apps[s]
-                slotRect(i, s, r2)
-                if (!lib.isHidden(e, r2)) lib.iconPainter.draw(c, e, r2, dimmed = pressed == Target.App(i, s))
-            }
-            if (tile.expandable) {
-                val slot = slotRect(i, 3, RectF())
-                val dim = pressed == Target.Cluster(i)
-                for (j in 0 until min(4, tile.apps.size - 3)) lib.iconPainter.draw(c, tile.apps[3 + j], miniRect(slot, j, r2), dimmed = dim)
+            if (i != hiddenTile) {
+                // The same liquid glass as the dock, refracting the blurred wallpaper behind the library.
+                lib.drawGlass(c, lib.tileGlass, r, m.tileRadius, this)
+                val p = pressed
+                val dimSlot = when { p is Target.App && p.tile == i -> p.slot; p is Target.Cluster && p.tile == i -> 3; else -> -1 }
+                drawTileIcons(c, tile, r.left, r.top, 1f, 255, skipHidden = true, dimSlot = dimSlot)
             }
             val baseline = r.bottom + m.tileLabelBaseline
             labels.draw(c, tile.title, tile.title, r.centerX(), baseline, m.tileSize)
+        }
+    }
+
+    /**
+     * A tile's icons with the tile's top-left at ([left], [top]), scaled by [scale]: up to four large icons, or three and a
+     * cluster of small ones. Shared with the folder, which draws them while it grows out of the tile or shrinks back.
+     */
+    fun drawTileIcons(c: Canvas, tile: Tile, left: Float, top: Float, scale: Float, alpha: Int, skipHidden: Boolean, dimSlot: Int = -1) {
+        val large = if (tile.expandable) 3 else min(4, tile.apps.size)
+        val step = m.tileIcon + m.tileIconGap
+        fun slot(s: Int, out: RectF): RectF {
+            val l = left + (m.tilePad + (s % 2) * step) * scale
+            val t = top + (m.tilePad + (s / 2) * step) * scale
+            return out.apply { set(l, t, l + m.tileIcon * scale, t + m.tileIcon * scale) }
+        }
+        for (s in 0 until large) {
+            val e = tile.apps[s]
+            slot(s, r2)
+            if (!skipHidden || !lib.isHidden(e, r2)) lib.iconPainter.draw(c, e, r2, dimmed = dimSlot == s, alpha = alpha)
+        }
+        if (tile.expandable) {
+            val sl = slot(3, RectF())
+            for (j in 0 until min(4, tile.apps.size - 3)) lib.iconPainter.draw(c, tile.apps[3 + j], miniRect(sl, j, r2), dimmed = dimSlot == 3, alpha = alpha)
         }
     }
 }

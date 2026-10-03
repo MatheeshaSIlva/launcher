@@ -32,9 +32,13 @@ class Wallpaper private constructor(
     }
 
     /** Same mapping for the downscaled blurred copy. */
-    fun blurredMatrix(w: Int, h: Int): Matrix = matrix(w, h).apply { preScale(blurScale.toFloat(), blurScale.toFloat()) }
+    // The small copies are rounded down in size (width / scale), so they map back by their true ratio: scaling by the nominal
+    // factor left a strip at the right and bottom edges uncovered.
+    fun blurredMatrix(w: Int, h: Int): Matrix =
+        matrix(w, h).apply { preScale(bitmap.width / blurred.width.toFloat(), bitmap.height / blurred.height.toFloat()) }
 
-    fun heavyMatrix(w: Int, h: Int): Matrix = matrix(w, h).apply { preScale(heavyScale.toFloat(), heavyScale.toFloat()) }
+    fun heavyMatrix(w: Int, h: Int): Matrix =
+        matrix(w, h).apply { preScale(bitmap.width / heavy.width.toFloat(), bitmap.height / heavy.height.toFloat()) }
 
     companion object {
         /** The system wallpaper's id: changes whenever the user sets a new wallpaper (-1 if unknown). */

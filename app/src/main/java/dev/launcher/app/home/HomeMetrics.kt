@@ -6,8 +6,8 @@ import kotlin.math.roundToInt
 /**
  * Every size and position of the home screen, measured from Apple's own full-resolution press images and scaled to this
  * display. [u] is one iOS point: home values come from the iOS 26 Home Screen on an iPhone 16 Pro (402 x 874 pt, a
- * 2.17 aspect like the S24's), App Library values from iOS's App Library on an iPhone 11 Pro (375 pt wide), converted to
- * fractions of the width. Recomputed when the size, the insets or the config change. All values in px.
+ * 2.17 aspect like the S24's), App Library values from iOS's App Library (measured on an iPhone 11 Pro) in the same points.
+ * Recomputed when the size, the insets or the config change. All values in px.
  *
  * Measured (iPhone 16 Pro, pt): icons 64; first column's icon 30.1 from the edge; column pitch 92.5; first row's icon top
  * 89.5 from the top; row pitch 100.6; label cap height 7.8 (SF 11) with its baseline 16.4 below the icon; Search pill
@@ -56,30 +56,33 @@ class HomeMetrics(
     fun cellLeft(col: Int) = columnCenterX(col) - columnPitch / 2f
     fun cellTop(row: Int) = gridTop + row * cellHeight
 
-    // ---- App Library (iOS: margin 23.3, tiles 155.4 of 375 pt; inside a tile: padding 11.4, icons 59.2, gap 13.7;
-    //      tile corners 22; search field 46.7 tall, 13 below the status bar; tiles 25.6 below it; rows 190.7 apart)
-    private val lu = w / 375f
-    val libMargin = 23.3f * lu
-    private val libGap = w - 2 * libMargin - 2 * 155.4f * lu
-    val tileSize = 155.4f * lu
+    // ---- App Library, in the same unit as everything else (iOS points are absolute: one scale for home, library, lists
+    //      and folders, so text and icons keep the same proportions everywhere). Measured on iOS (pt): side margin 23.3, gap
+    //      between tiles 18.2, tiles fill the rest (166.6 on this 402 pt width); inside a tile: padding 0.0734, gap 0.088 of
+    //      the tile, icons the rest (63.7 here, the home icon's size); tile corners 0.142 of the tile; label SF 13 with its
+    //      baseline 17 below the tile; 35.3 from a tile's bottom to the next row; search field 46.7 tall, 13 below the
+    //      status bar, tiles 25.6 below it.
+    val libMargin = 23.3f * u
+    private val libGap = 18.2f * u
+    val tileSize = (w - 2 * libMargin - libGap) / 2f
     fun tileLeft(col: Int) = libMargin + col * (tileSize + libGap)
     val tilePad = tileSize * 0.0734f
     val tileIconGap = tileSize * 0.088f
     val tileIcon = (tileSize - 2 * tilePad - tileIconGap) / 2f
     val tileRadius = tileSize * 0.142f
-    /** SF 13 cap height in Inter, baseline 17 pt below the tile. */
-    val tileLabelSize = 12.6f * lu
-    val tileLabelBaseline = 17f * lu
-    val tileRowPitch = tileSize + 35.3f * lu
-    val searchTop = max(topInset.toFloat(), 44 * lu) + 13 * lu
-    val searchHeight = 46.7f * lu
-    val tilesTop = searchTop + searchHeight + 25.6f * lu
-    val listRow = 56 * lu
-    val listIcon = 40 * lu
-    val listText = 16.5f * lu
-    val listHeader = 30 * lu
-    val listHeaderText = 13 * lu
-    val listSideIndex = 22 * lu
+    /** SF 13 cap height in Inter. */
+    val tileLabelSize = 12.6f * u
+    val tileLabelBaseline = 17f * u
+    val tileRowPitch = tileSize + 35.3f * u
+    val searchTop = max(topInset.toFloat(), 44 * u) + 13 * u
+    val searchHeight = 46.7f * u
+    val tilesTop = searchTop + searchHeight + 25.6f * u
+    val listRow = 56 * u
+    val listIcon = 40 * u
+    val listText = 16.5f * u
+    val listHeader = 30 * u
+    val listHeaderText = 13 * u
+    val listSideIndex = 22 * u
     val bottomSafe = bottomInset + 8 * u
 
     // ---- folder panel (category opened from the App Library)

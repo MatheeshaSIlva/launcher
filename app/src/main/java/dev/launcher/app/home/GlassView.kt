@@ -54,8 +54,13 @@ class GlassView(ctx: Context, private val style: GlassStyle) : FrameLayout(ctx) 
                 null
             }
         } else null
+        // The reveal drives the glass through invalidateSelf(): that reaches this view only with the callback set (without it
+        // the dock and indicator showed the new wallpaper only after the reveal had ended).
+        glass?.callback = this
         invalidate()
     }
+
+    override fun verifyDrawable(who: android.graphics.drawable.Drawable): Boolean = who === glass || super.verifyDrawable(who)
 
     override fun draw(canvas: Canvas) {
         val g = glass

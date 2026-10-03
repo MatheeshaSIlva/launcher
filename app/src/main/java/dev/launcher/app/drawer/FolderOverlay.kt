@@ -3,6 +3,8 @@ package dev.launcher.app.drawer
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -17,14 +19,18 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * A category opened from its App Library tile, as an iOS folder: the panel grows out of the tile on a spring while the
- * library behind blurs and dims; its title sits above. Four columns of icons with labels, scrolling when there are many.
- * Interruptible: a tap outside closes it from wherever it is, keeping the spring's velocity.
+ * A category opened from its App Library tile, as an iOS folder. The tile itself becomes the folder: the same glass panel
+ * grows out of the tile on a spring, the tile's icons fade into the folder's grid, and the library behind sinks under the
+ * blurred wallpaper. Closing is the exact reverse, so at the end the panel looks exactly like the tile it returns into
+ * (the tile is not drawn underneath meanwhile: nothing changes when the folder goes). Title above, four columns of icons
+ * with labels, scrolling when there are many. Interruptible: a tap outside closes it from wherever it is, keeping the
+ * spring's velocity.
  */
 @SuppressLint("ViewConstructor")
 internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : View(ctx) {
     private val m = lib.m
     private var tile: Tile? = null
+    private var tileIndex = -1
     private val from = RectF()          // the tile on screen (where the panel grows from and returns to)
     private val panel = RectF()         // the panel when fully open
     private val cur = RectF()
@@ -37,7 +43,9 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
 
     private val scroller = IosScroller({ invalidate() }, { lib.settled() })
     private val touch = TapOrScroll(ctx)
-    private val bg = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x38FFFFFF }
+    private val backdropPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
+        colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.4f) })
+    }
     private val dim = Paint()
     private val title = LabelPainter(m.folderTitleSize, 0xFFFFFFFF.toInt(), Paint.Align.LEFT, dev.launcher.app.theme.Fonts.display(700))
     private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
@@ -52,8 +60,9 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
     val isOpen get() = visibility == View.VISIBLE && target > 0f
     val isIdle get() = !animating && !scroller.isSettling && !scroller.isDragging
 
-    fun open(t: Tile, tileRect: RectF) {
+    fun open(t: Tile, tileRect: RectF, index: Int) {
         tile = t
+        tileIndex = index
         from.set(tileRect)
         val n = t.apps.size
         val content = ceil(n / m.folderColumns.toFloat()) * rowPitch
@@ -65,6 +74,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         scroller.jumpTo(0f)
         title.clear(); labels.clear()
         visibility = View.VISIBLE
+        lib.tilesPane.hiddenTile = index   // the panel is the tile from now until it is back in place
         animateTo(1f, Motion.profile.folderOpen.spring())
     }
 
@@ -75,7 +85,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         progress = 0f
         target = 0f
         visibility = View.GONE
-        lib.setBackdropBlur(0f)
+        lib.tilesPane.hiddenTile = -1
     }
 
     private fun animateTo(to: Float, s: Spring) {
@@ -100,7 +110,6 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
             val s = spring ?: return
             val t = max(0L, now - springStart) / 1e9
             progress = s.value(t) / 1000f
-            lib.setBackdropBlur(progress.coerceIn(0f, 1f))
             invalidate()
             if (s.settled(t)) {
                 animating = false
@@ -156,11 +165,12 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
                 pressed = if (settledOpen && !touch.stoppedMotion) iconAt(e.x, e.y) else -1
                 invalidate()
             }
-            MotionEvent.ACTION_MOVE -> if (touch.scrolling && panel.contains(touch.downX, touch.downY)) scroller.dragBy(-dy)
+            MotionEvent.ACTION_MOVE -> if (touch.scrolling && settledOpen && panel.contains(touch.downX, touch.downY)) scroller.dragBy(-dy)
             MotionEvent.ACTION_UP -> {
-                if (touch.scrolling) scroller.endDrag(-touch.velocityY())
-                else if (touch.isTap) {
-                    val i = if (settledOpen) iconAt(e.x, e.y) else -1
+                if (touch.scrolling && settledOpen && panel.contains(touch.downX, touch.downY)) scroller.endDrag(-touch.velocityY())
+                else if (!touch.scrolling || !panel.contains(touch.downX, touch.downY)) {
+                    // A tap (or any touch that did not scroll the folder) outside the panel, or while it is still moving, closes it.
+                    val i = if (settledOpen && !touch.moved) iconAt(e.x, e.y) else -1
                     val t = tile
                     when {
                         i >= 0 && t != null -> lib.launch(t.apps[i], iconRect(i, RectF()), "folder:${t.title}")
@@ -181,37 +191,61 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         val t = tile ?: return
         val p = progress
         val k = p.coerceIn(0f, 1f)
-        dim.color = ((0x30 * k).toInt() shl 24)
+
+        // The library sinks under the same blurred wallpaper that is its background (as iOS blurs it away), slightly darker.
+        val w = lib.wallpaper
+        if (w != null) {
+            backdropPaint.alpha = (240 * k).toInt()
+            c.drawBitmap(w.heavy, w.heavyMatrix(m.w, m.h), backdropPaint)
+            dim.color = ((0x22 * k).toInt() shl 24)
+        } else {
+            dim.color = ((0x99 * k).toInt() shl 24)
+        }
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dim)
 
-        // The panel's frame grows from the tile; the content is drawn at full size, scaled uniformly and clipped.
+        // The panel's frame grows from the tile; its glass is the tile's glass, its corners go from the tile's to the folder's.
         cur.set(lerp(from.left, panel.left, p), lerp(from.top, panel.top, p), lerp(from.right, panel.right, p), lerp(from.bottom, panel.bottom, p))
         val radius = lerp(m.tileRadius, m.folderRadius, k)
-        c.drawRoundRect(cur, radius, radius, bg)
+        lib.drawGlass(c, lib.panelGlass, cur, radius, this)
 
         val titleY = panel.top - m.pt(18f) + (1f - k) * m.pt(24f)
         title.draw(c, "title", t.title, panel.left + m.pt(6f), titleY, panel.width(), (255 * k).toInt())
 
-        val contentAlpha = ((p - 0.2f) / 0.6f).coerceIn(0f, 1f)
-        if (contentAlpha <= 0f) return
-        val s = cur.width() / panel.width()
         c.save()
         clip.reset()
         clip.addRoundRect(cur, radius, radius, Path.Direction.CW)
         c.clipPath(clip)
-        c.translate(cur.left, cur.top)
-        c.scale(s, s)
-        c.translate(-panel.left, -panel.top)
-        val a = (255 * contentAlpha).toInt()
-        for (i in t.apps.indices) {
-            iconRect(i, r)
-            if (r.bottom < panel.top - m.labelBaseline || r.top > panel.bottom) continue
-            val e = t.apps[i]
-            if (!lib.isHidden(e, r)) lib.iconPainter.draw(c, e, r, dimmed = i == pressed, alpha = a)
-            labels.draw(c, e.key, e.label, r.centerX(), r.bottom + m.labelBaseline, cellW - m.pt(4f), a)
+        // The tile's own icons, at the panel's scale, fading out as the folder opens (and back in as it closes).
+        val tileAlpha = 1f - smooth(0f, 0.45f, p)
+        if (tileAlpha > 0f) {
+            val s = cur.width() / from.width()
+            lib.tilesPane.drawTileIcons(c, t, cur.left, cur.top, s, (255 * tileAlpha).toInt(), skipHidden = false)
+        }
+        // The folder's grid, drawn at full size and scaled uniformly with the panel, fading in.
+        val gridAlpha = smooth(0.3f, 0.85f, p)
+        if (gridAlpha > 0f) {
+            val s = cur.width() / panel.width()
+            c.save()
+            c.translate(cur.left, cur.top)
+            c.scale(s, s)
+            c.translate(-panel.left, -panel.top)
+            val a = (255 * gridAlpha).toInt()
+            for (i in t.apps.indices) {
+                iconRect(i, r)
+                if (r.bottom < panel.top - m.labelBaseline || r.top > panel.bottom) continue
+                val e = t.apps[i]
+                if (!lib.isHidden(e, r)) lib.iconPainter.draw(c, e, r, dimmed = i == pressed, alpha = a)
+                labels.draw(c, e.key, e.label, r.centerX(), r.bottom + m.labelBaseline, cellW - m.pt(4f), a)
+            }
+            c.restore()
         }
         c.restore()
     }
 
     private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+
+    private fun smooth(e0: Float, e1: Float, x: Float): Float {
+        val t = ((x - e0) / (e1 - e0)).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
 }

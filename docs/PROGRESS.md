@@ -381,3 +381,29 @@ Causes found in the code (not yet confirmed on the phone):
   without a colour jump. Colours are resolved in advance for home's apps.
 - Probe: the report is needed to tell whether the system never called us or our surface changes failed; it now also logs the
   options it sent and the leash it animates.
+
+Device results (4c8eec4), Matheesha: launch and close animations better. Open: closing after a minute or more in an app is less
+smooth; the flick's speed should not change the close's speed; some launches stutter (camera); App Library: opening a folder
+also "expands" the search field, closing a folder jumps in opacity at the end, library glass inconsistent with the dock, an
+unblurred strip at the right edge; wallpaper reveal: dock and indicator update only afterwards; inconsistent scaling of fonts
+and elements. New standing rule: never break what works; double-check every touched path before finishing.
+Causes and changes (next build, not yet confirmed on the phone):
+- Unblurred strip: the small blurred wallpaper copies are rounded down in size (width / 16) but were mapped back by the nominal
+  factor, leaving up to 15 source pixels uncovered at the right and bottom. Now mapped by their true ratio.
+- Reveal: since glass is drawn by GlassView (not as a background), the drawable's invalidateSelf() reached nothing, so the glass
+  repainted only when something else did. GlassView is now the drawable's callback.
+- Folder: the search field was blurred with a RenderEffect, whose blur spreads past the shape ("expanding"). RenderEffect is gone;
+  the library sinks under the same blurred wallpaper it sits on. The tile is now the folder: the source tile is not drawn while
+  the folder is open, the panel uses the tile's glass and corner, and the tile's own icons fade into the folder grid (and back),
+  so the closing panel is identical to the tile when it lands. Taps outside close it at any point of the animation.
+- Library glass: tiles, search field and folder panel use the dock's liquid glass (`GlassStyle.IOS_LIBRARY`), refracting the
+  blurred wallpaper behind the library (`GlassDrawable.Source.BACKDROP`); redrawn while the library slides.
+- Scaling: the App Library used its own unit (width / 375) while home used width / 402, so library text and shapes were 7 %
+  larger. One unit everywhere now; library tiles fill the width between iOS's 23.3 pt margins (their icons come out at the home
+  icon's size).
+- Close speed: a close keeps at most 650 px/s of the finger's motion towards the icon (none away from it), so fast and slow
+  flicks look and last the same.
+- Per-frame cost: the picture of home behind cards is rendered once into two GPU layers; depth only scales them (was a full
+  re-render of the picture, glass shader included, every frame). Meant to help both the camera launch and longer sessions.
+- After a minute in an app: home re-records its picture every minute (clock), which threw away the picture without the open
+  app's icon; the close then had to record it on gesture start. Home now re-records that one immediately for the app in front.

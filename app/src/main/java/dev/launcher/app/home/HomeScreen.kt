@@ -103,6 +103,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         wallpaper = w
         wallpaperView.wallpaper = w
         backdrop.wallpaper = w
+        drawer?.setWallpaper(w)
         applyGlassWallpaper()
     }
 
@@ -165,6 +166,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         fg.addView(ind, LayoutParams(ind.widthFor(1), metrics.indicatorHeight.roundToInt()))
         val dr = Drawers.create(cfg.drawerStyle, context, this).also { drawer = it }
         fg.addView(dr.view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        dr.setWallpaper(wallpaper)
         applyGlassWallpaper()
         bindLayout()
     }

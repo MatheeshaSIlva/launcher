@@ -40,6 +40,12 @@ data class GlassStyle(
          */
         val IOS_DOCK = GlassStyle(frost = 1f, bevelDp = 22f, refractionDp = 34f, dispersion = 0.3f, magnify = 0.06f,
             saturation = 1.45f, lift = 0.07f, specular = 0.45f, specularWidthDp = 1.5f)
+        /**
+         * Glass over the App Library's blurred background (tiles, search field, folder panel): the same rim, lensing and
+         * sheen as the dock, refracting the blurred wallpaper that is behind it there ([GlassDrawable.Source.BACKDROP]).
+         */
+        val IOS_LIBRARY = GlassStyle(frost = 1f, bevelDp = 14f, refractionDp = 20f, dispersion = 0.15f, magnify = 0.04f,
+            saturation = 1.6f, lift = 0.1f, specular = 0.4f, specularWidthDp = 1.2f)
         /** Small capsules (Search pill, page indicator): the same clear glass with a thinner rim. */
         val IOS_CAPSULE = GlassStyle(frost = 1f, bevelDp = 9f, refractionDp = 12f, dispersion = 0.2f, magnify = 0.04f,
             saturation = 1.4f, lift = 0.08f, specular = 0.45f, specularWidthDp = 1.2f)
@@ -66,7 +72,11 @@ class GlassDrawable(
     density: Float,
     cellPx: Float,
     style: GlassStyle = GlassStyle.IOS_DOCK,
+    private val source: Source = Source.WALLPAPER,
 ) : Drawable() {
+    /** What the glass sees behind it: the wallpaper itself (home), or the App Library's heavily blurred wallpaper. */
+    enum class Source { WALLPAPER, BACKDROP }
+
     private val shader = RuntimeShader(AGSL)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     var originX = 0f
@@ -96,15 +106,19 @@ class GlassDrawable(
     }
 
     private fun setImages(which: String, wp: Wallpaper) {
-        shader.setInputShader("sharp$which", BitmapShader(wp.bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-            setLocalMatrix(wp.matrix(screenW, screenH))
+        val backdrop = source == Source.BACKDROP
+        shader.setInputShader("sharp$which", BitmapShader(if (backdrop) wp.heavy else wp.bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+            setLocalMatrix(if (backdrop) wp.heavyMatrix(screenW, screenH) else wp.matrix(screenW, screenH))
             filterMode = BitmapShader.FILTER_MODE_LINEAR
         })
-        shader.setInputShader("frost$which", BitmapShader(wp.blurred, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-            setLocalMatrix(wp.blurredMatrix(screenW, screenH))
+        shader.setInputShader("frost$which", BitmapShader(if (backdrop) wp.heavy else wp.blurred, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+            setLocalMatrix(if (backdrop) wp.heavyMatrix(screenW, screenH) else wp.blurredMatrix(screenW, screenH))
             filterMode = BitmapShader.FILTER_MODE_LINEAR
         })
     }
+
+    /** Corner radius in px (a folder panel's corners animate). */
+    fun setRadius(r: Float) { shader.setFloatUniform("radius", r) }
 
     /** A wallpaper change starts: [from] is what the glass showed, [to] what it will show. */
     fun beginTransition(from: Wallpaper, to: Wallpaper) {

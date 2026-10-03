@@ -5,8 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.os.Build
 import android.text.Editable
 import android.text.InputType
@@ -187,18 +185,44 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         host.launch(e, RectF(rectInView).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
     }
 
-    internal fun openFolder(tile: Tile, tileRect: RectF) {
-        folder.open(tile, tileRect)
+    internal fun openFolder(tile: Tile, tileRect: RectF, index: Int) {
+        folder.open(tile, tileRect, index)
     }
 
-    /** Blur and dim what is behind an open folder (0..1). */
-    internal fun setBackdropBlur(k: Float) {
-        if (Build.VERSION.SDK_INT < 31) return
-        val r = m.pt(28f) * k
-        val fx = if (r < 0.5f) null else RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP)
-        tilesPane.setRenderEffect(fx)
-        listPane.setRenderEffect(fx)
-        searchBar.setRenderEffect(fx)
+    // ------------------------------------------------------------------ glass (the dock's liquid glass, over the library's
+    // blurred wallpaper): one drawable per shape, origin set per draw so each surface refracts what is behind it
+
+    internal var wallpaper: dev.launcher.app.Wallpaper? = null
+        private set
+    internal var tileGlass: dev.launcher.app.GlassDrawable? = null
+        private set
+    internal var searchGlass: dev.launcher.app.GlassDrawable? = null
+        private set
+    internal var panelGlass: dev.launcher.app.GlassDrawable? = null
+        private set
+    private val glassFallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x2EFFFFFF }
+    private val offset = FloatArray(2)
+
+    private fun makeGlass(w: dev.launcher.app.Wallpaper, radius: Float): dev.launcher.app.GlassDrawable? {
+        if (Build.VERSION.SDK_INT < 33) return null
+        return try {
+            val d = resources.displayMetrics.density
+            dev.launcher.app.GlassDrawable(w, m.w, m.h, radius, d, d * 7f, dev.launcher.app.GlassStyle.IOS_LIBRARY, dev.launcher.app.GlassDrawable.Source.BACKDROP)
+        } catch (t: Throwable) {
+            dev.launcher.app.AppLog.log("[library] glass shader failed, plain tiles instead: ${t.javaClass.simpleName}: ${t.message}")
+            null
+        }
+    }
+
+    /** Draws a glass surface at [rect] (in [onView]'s coordinates); without our wallpaper copy, a plain translucent fill. */
+    internal fun drawGlass(c: Canvas, g: dev.launcher.app.GlassDrawable?, rect: RectF, radius: Float, onView: View) {
+        if (g == null) { c.drawRoundRect(rect, radius, radius, glassFallback); return }
+        screenOffset(onView, offset)
+        g.setRadius(radius)
+        g.originX = offset[0] + rect.left
+        g.originY = offset[1] + rect.top
+        g.setBounds(rect.left.toInt(), rect.top.toInt(), kotlin.math.ceil(rect.right).toInt(), kotlin.math.ceil(rect.bottom).toInt())
+        g.draw(c)
     }
 
     internal fun settled() = host.onDrawerSettled()
@@ -214,7 +238,14 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
 
     // ------------------------------------------------------------------ AppDrawer
 
-    override fun setOpenProgress(p: Float) {}
+    private var lastProgress = -1f
+
+    override fun setOpenProgress(p: Float) {
+        // While the library slides in or out the glass must keep refracting what is behind it where it is now (a translation
+        // alone does not redraw the tiles).
+        if (p != lastProgress && wallpaper != null) { tilesPane.invalidate(); searchBar.invalidate() }
+        lastProgress = p
+    }
 
     override fun onClosed() {
         anchor = null
@@ -277,13 +308,22 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     override fun appsChanged() = rebuild()
 
     override fun setImeInset(px: Int) = listPane.setImeInset(px)
+
+    override fun setWallpaper(w: dev.launcher.app.Wallpaper?) {
+        if (w === wallpaper) return
+        wallpaper = w
+        tileGlass = w?.let { makeGlass(it, m.tileRadius) }
+        searchGlass = w?.let { makeGlass(it, m.searchHeight / 2f) }
+        panelGlass = w?.let { makeGlass(it, m.folderRadius) }
+        invalidateAll()
+        searchBar.invalidate()
+    }
 }
 
 /** The search field: a capsule with a magnifier; editable only in list mode (a tap in tile mode switches to the list). */
 internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameLayout(ctx) {
     private val m = lib.m
-    private val pill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x2EFFFFFF }
-    private val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x24FFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(0.8f) }
+
     private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xB3FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND }
     private val rect = RectF()
     private val lens = Path()
@@ -364,9 +404,8 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
     override fun onDraw(canvas: Canvas) {
         val right = width - cancelSpace * m.pt(84f)
         rect.set(0f, 0f, right, height.toFloat())
-        val r = height / 2f
-        canvas.drawRoundRect(rect, r, r, pill)
-        canvas.drawRoundRect(rect, r, r, rim)
+        // The same glass as the tiles and the dock (a capsule).
+        lib.drawGlass(canvas, lib.searchGlass, rect, height / 2f, this)
         // Magnifier glyph.
         val cx = m.pt(20f)
         val cy = height / 2f - m.pt(1f)

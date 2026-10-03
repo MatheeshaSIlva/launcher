@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Picture
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
@@ -170,6 +171,7 @@ object GestureNav {
     @Volatile private var lastFrontAt = 0L
 
     private const val DEFAULT_SPLASH = 0xFF1C1C1E.toInt()
+    private const val RELEASE_CARRY = 650f   // px/s of the finger's speed a close keeps at most
     private const val SCALE_RANGE = 0.62f     // smallest card while dragging = 38 % of the screen
     private const val SCALE_LENGTH = 0.28f    // travel (in screen heights) for most of the shrink
 
@@ -180,6 +182,8 @@ object GestureNav {
             nav.post { if (cardPkg == pkg && backdrop?.picture != null && !pictureDropped) backdrop?.picture = HomeBridge.previewFor(pkg) }
         }
         HomeBridge.onHomeTouched = { nav.post { homeTouchedDuringClose() } }
+        // The app in front is the one a close will fly into home: home keeps a picture without its icon ready.
+        HomeBridge.likelyClosing = { if (homeVisible) null else lastFrontPkg }
     }
 
     // ================================================================== public entry points (any thread)
@@ -754,13 +758,13 @@ object GestureNav {
             springFade = target == null
             val tx = target?.centerX() ?: (sw / 2)
             val ty = target?.centerY() ?: (sh / 2)
-            // Only the part of the fling that points at the target carries over (plus a little): a fast flick up used to throw
-            // the card far above the dock before it came back down into the icon.
+            // The close looks and lasts the same however fast the flick was: only a little of the finger's motion towards the
+            // target carries over ([towards]), so the card neither stops dead at the release nor gets thrown.
             val mp = Motion.profile
             sCx = mp.appClosePosition.spring().apply { start(c.cx, towards(vx, c.cx, tx), tx) }
             sCy = mp.appClosePosition.spring().apply { start(c.cy, towards(vy, c.cy, ty), ty) }
-            sW = mp.appCloseSize.spring().apply { start(c.w, vW, size) }
-            sH = mp.appCloseSize.spring().apply { start(c.h, vH, sizeH) }
+            sW = mp.appCloseSize.spring().apply { start(c.w, towards(vW, c.w, size), size) }
+            sH = mp.appCloseSize.spring().apply { start(c.h, towards(vH, c.h, sizeH), sizeH) }
             val depth0 = depthNow()
             sDepth = mp.homeDepthClose.spring().apply { start(depth0, 0f, 0f) }
             closeDepthFrom = depth0
@@ -808,7 +812,8 @@ object GestureNav {
         }
         startSprings()
         if (closeDepthFrom >= 0f) {
-            // From here the real home runs the same depth spring, so the picture can go as soon as home has drawn.
+            // The real home runs the same depth spring underneath, so it matches the picture whenever it takes over (at the end,
+            // or when home is touched during the flight).
             val spec = Motion.profile.homeDepthClose
             HomeBridge.animateDepth(closeDepthFrom, 0f, 0f, spec.response, spec.damping, springStartNs)
         }
@@ -862,10 +867,12 @@ object GestureNav {
     // Card fades out as it shrinks (closing an app that has no icon on the home screen).
     private var springFade = false
 
-    /** Release velocity component that moves [from] towards [to], plus a small share of the rest; capped. */
+    /** The part of a release velocity that a close keeps: towards the target only, at most [RELEASE_CARRY]. */
     private fun towards(v: Float, from: Float, to: Float): Float {
-        val capped = v.coerceIn(-5000f, 5000f)
-        return if ((to - from) * capped > 0f) capped else capped * 0.12f
+        // The close takes the same time however fast the flick was: only a little of the finger's motion towards the target
+        // carries over (enough that the card does not stop dead at the release), none of the motion away from it.
+        val capped = v.coerceIn(-RELEASE_CARRY, RELEASE_CARRY)
+        return if ((to - from) * capped > 0f) capped else 0f
     }
 
     // Where corners and icon blend start when springs begin: they interpolate from there, so no release ever snaps them.
@@ -1339,24 +1346,47 @@ object GestureNav {
      * the content zooms by MotionProfile.homeContentZoom and the wallpaper by the smaller homeWallpaperZoom, about the
      * centre (iOS depth).
      */
-    private class PreviewView(ctx: Context) : View(ctx) {
-        var picture: HomePicture? = null
-            set(v) { if (field !== v) { field = v; invalidate() } }
-        var depth = 0f
-            set(v) { if (field != v) { field = v; invalidate() } }
+    private class PreviewView(ctx: Context) : FrameLayout(ctx) {
+        // Each layer is rendered once into a GPU layer when its picture changes; the depth zoom only scales the layers
+        // (a transform, no re-render), so a closing or opening card costs almost nothing per frame even while a heavy app
+        // starts underneath.
+        private class Layer(ctx: Context) : View(ctx) {
+            var pic: Picture? = null
+                set(v) {
+                    if (field === v) return
+                    field = v
+                    setLayerType(if (v != null) LAYER_TYPE_HARDWARE else LAYER_TYPE_NONE, null)
+                    invalidate()
+                }
 
-        override fun onDraw(canvas: Canvas) {
-            val p = picture ?: return
-            val mp = Motion.profile
-            val cx = width / 2f
-            val cy = height / 2f
-            p.wallpaper?.let {
-                val z = 1f + depth * (mp.homeWallpaperZoom - 1f)
-                canvas.save(); canvas.scale(z, z, cx, cy); canvas.drawPicture(it); canvas.restore()
-            }
-            val z = 1f + depth * (mp.homeContentZoom - 1f)
-            canvas.save(); canvas.scale(z, z, cx, cy); canvas.drawPicture(p.content); canvas.restore()
+            override fun onDraw(canvas: Canvas) { pic?.let { canvas.drawPicture(it) } }
         }
+
+        private val wallpaperLayer = Layer(ctx)
+        private val contentLayer = Layer(ctx)
+
+        init {
+            addView(wallpaperLayer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            addView(contentLayer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        }
+
+        var picture: HomePicture? = null
+            set(v) {
+                if (field === v) return
+                field = v
+                wallpaperLayer.pic = v?.wallpaper
+                contentLayer.pic = v?.content
+            }
+        var depth = 0f
+            set(v) {
+                if (field == v) return
+                field = v
+                val mp = Motion.profile
+                val wz = 1f + v * (mp.homeWallpaperZoom - 1f)
+                val cz = 1f + v * (mp.homeContentZoom - 1f)
+                wallpaperLayer.scaleX = wz; wallpaperLayer.scaleY = wz
+                contentLayer.scaleX = cz; contentLayer.scaleY = cz
+            }
     }
 
     /** Frame pacing (nav thread Choreographer) and touch-to-frame latency for one gesture. */
