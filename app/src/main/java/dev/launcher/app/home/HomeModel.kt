@@ -26,15 +26,23 @@ sealed class HomeItem {
         override fun toJson() = JSONObject().put("t", "folder").put("id", id).put("n", name).put("apps", JSONArray(apps))
     }
 
-    data class Widget(val kind: String, val spanX: Int, val spanY: Int) : HomeItem() {
-        override fun toJson() = JSONObject().put("t", "widget").put("w", kind).put("sx", spanX).put("sy", spanY)
+    /** A widget: ours ([kind] "clock") or an Android widget ([APP], with its bound [id] and [provider] component). */
+    data class Widget(val kind: String, val spanX: Int, val spanY: Int, val id: Int = 0, val provider: String? = null) : HomeItem() {
+        override fun toJson() = JSONObject().put("t", "widget").put("w", kind).put("sx", spanX).put("sy", spanY).apply {
+            if (id != 0) put("id", id)
+            provider?.let { put("p", it) }
+        }
+
+        companion object {
+            const val APP = "app"
+        }
     }
 
     companion object {
         fun fromJson(o: JSONObject): HomeItem? = when (o.optString("t")) {
             "app" -> App(o.getString("k"))
             "folder" -> Folder(o.getString("id"), o.optString("n"), o.getJSONArray("apps").let { a -> List(a.length()) { a.getString(it) } })
-            "widget" -> Widget(o.getString("w"), o.optInt("sx", 1), o.optInt("sy", 1))
+            "widget" -> Widget(o.getString("w"), o.optInt("sx", 1), o.optInt("sy", 1), o.optInt("id", 0), o.optString("p").ifEmpty { null })
             else -> null
         }
     }

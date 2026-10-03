@@ -9,6 +9,7 @@ import android.view.View
 import android.widget.FrameLayout
 import dev.launcher.app.AppLog
 import dev.launcher.app.GlassDrawable
+import dev.launcher.app.GlassMask
 import dev.launcher.app.GlassStyle
 import dev.launcher.app.Wallpaper
 
@@ -20,6 +21,14 @@ import dev.launcher.app.Wallpaper
 class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx: Float) : FrameLayout(ctx) {
     var radius = 0f
         set(v) { if (field != v) { field = v; rebuild() } }
+    /** A shape other than the rounded rectangle (the glass clock's numerals), at this view's size. */
+    var mask: GlassMask? = null
+        set(v) {
+            val wasMasked = field != null
+            field = v
+            val g = glass
+            if (v != null && g != null && wasMasked) { g.setMask(v); invalidate() } else rebuild()
+        }
     private var wallpaper: Wallpaper? = null
     var glass: GlassDrawable? = null
         private set
@@ -47,7 +56,7 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
         val w = wallpaper
         glass = if (w != null && Build.VERSION.SDK_INT >= 33 && screenW > 0) {
             try {
-                GlassDrawable(w, screenW, screenH, radius, unitPx, cellPx, style)
+                GlassDrawable(w, screenW, screenH, radius, unitPx, cellPx, style, mask = mask)
             } catch (t: Throwable) {
                 // A shader that does not compile on this GPU must never take the home screen down.
                 AppLog.log("[home] glass shader failed, plain glass instead: ${t.javaClass.simpleName}: ${t.message}")
@@ -77,10 +86,10 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
             g.originY = y
             g.setBounds(0, 0, width, height)
             g.draw(canvas)
-        } else {
+        } else if (mask == null) {
             rect.set(0f, 0f, width.toFloat(), height.toFloat())
             canvas.drawRoundRect(rect, radius, radius, fallback)
-        }
+        } else mask?.let { canvas.drawBitmap(it.mask, 0f, 0f, fallback) }
         super.draw(canvas)
     }
 }

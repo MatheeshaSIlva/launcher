@@ -48,6 +48,21 @@ data class MotionProfile(
     val homeWallpaperZoom: Float,
     /** Blur of home (pt) when it has fully receded behind an open app; scales with depth (iOS blurs home as an app opens). */
     val homeDepthBlur: Float,
+    // Long-press menu: the item lifts, home blurs and the menu grows on one spring (UIContextMenuInteraction); closing is
+    // quicker and does not bounce. [menuBlur]: home's blur behind it (pt).
+    val menuOpen: SpringSpec,
+    val menuClose: SpringSpec,
+    val menuBlur: Float,
+    // Edit mode: icons making room for a dragged one, the dragged one lifting and dropping into its place.
+    val reflow: SpringSpec,
+    val dragLift: SpringSpec,
+    val dragSettle: SpringSpec,
+    /** Wiggle: amplitude (degrees, widgets get less) and period (s). */
+    val jiggleDegrees: Float,
+    val jigglePeriod: Float,
+    // Sheets (widget gallery): presenting and dismissing, and pushing a page inside one.
+    val sheet: SpringSpec,
+    val navPush: SpringSpec,
 )
 
 object Motion {
@@ -81,6 +96,16 @@ object Motion {
         homeContentZoom = 1.12f,
         homeWallpaperZoom = 1.04f,
         homeDepthBlur = 14f,
+        menuOpen = SpringSpec(0.35f, 0.8f),
+        menuClose = SpringSpec(0.3f, 1f),
+        menuBlur = 18f,
+        reflow = SpringSpec(0.36f, 1f),
+        dragLift = SpringSpec(0.26f, 0.8f),
+        dragSettle = SpringSpec(0.34f, 0.86f),
+        jiggleDegrees = 1.6f,
+        jigglePeriod = 0.26f,
+        sheet = SpringSpec(0.45f, 1f),
+        navPush = SpringSpec(0.42f, 1f),
     )
 
     @Volatile var profile: MotionProfile = IOS

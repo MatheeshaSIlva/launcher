@@ -488,3 +488,25 @@ the phone:
   empty space / back / home / swipe up on the bar leaves. Every change is saved at once.
 - While editing, the Search pill shows the page dots and does not open Spotlight; pulling down does not open Spotlight either.
 
+
+Device results (d286fe3), Matheesha: holding an icon blurred only home's elements, not the wallpaper (the blurred dock and
+Search pill showed hard rectangular edges); the menu looked like the old frosted iOS menu; the edit-mode buttons had no glass.
+Asked for: adding widgets, adding apps from the App Library to home, an animation check against iOS, the iOS 27 look, and a
+lock-screen style glass clock widget.
+
+Round 3 (next build, not yet confirmed on the phone):
+- Long-press blur: home is now one "scene" (wallpaper + content) that blurs as a whole behind menus and the widget gallery;
+  the menu, the gallery and a dragged item's copy live above it (never blurred, never in the picture of home).
+- Menu glass: the dock's glass over what is really behind it (`LiveGlass`), blurred and dimmed like home around it. Menus can
+  also belong to a button (the edit bar's "Edit").
+- iOS 27 glass (research and values: `docs/IOS_DESIGN.md`): darkened edge, brighter corner highlights.
+- Edit bar: "Edit" (menu: Add Widget) and "Done" as glass capsules (iOS 26/27 layout).
+- Widgets: real Android widgets. Gallery sheet (Edit > Add Widget): ours (the clock) first, then every app with widgets; an
+  app's page swipes through its widgets at each iOS size with page dots and "Add Widget". New widgets go to the top of the
+  current page. Binding: Shizuku grants us the bind permission once (`appwidget grantbind`), else Android asks; a widget's
+  setup screen runs if it has one. Widgets keep working (buttons, lists); a long press anywhere on them gives home's menu.
+- Clock widget: the lock screen's glass clock (`docs/IOS_DESIGN.md`).
+- App Library and Spotlight: long press an app for its menu (shortcuts, "Add to Home Screen" if it is not on home, App Info);
+  keep holding and move to drag it out: the library or Spotlight gets out of the way and edit mode takes the app.
+- Motion: every edit-mode animation and the menu come from the motion profile; reflow and drag lift are interruptible springs.
+- Wiggle pauses while home is blurred behind a menu or the gallery (it would re-blur all of home every frame).

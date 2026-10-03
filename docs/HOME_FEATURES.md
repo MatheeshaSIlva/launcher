@@ -61,8 +61,9 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
 - "+" (top left) adds the clock widget to the page on screen (the only widget so far); full pages push their last items onto
   the next page. Empty pages are dropped when edit mode ends.
 - Leave: "Done", a tap on empty space, back, home pressed, a swipe up on the gesture bar, or home going out of sight.
-- Not yet: folders (hover to make one), dragging out of the App Library, real Android widgets. Shortcuts and App Info open
-  with the stock animation (they are not started through our transitions yet).
+- Round 3: "Edit" (menu: Add Widget) replaced "+"; real Android widgets through the gallery sheet; dragging out of the App
+  Library and Spotlight (long press, then move). Not yet: folders (hover to make one), resizing a placed widget (iOS 27's
+  corner handle). Shortcuts, App Info and widget setup screens open with the stock animation.
 
 ## 3. Overview (hold during a home swipe)
 

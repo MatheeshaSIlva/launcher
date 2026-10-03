@@ -55,11 +55,59 @@ no white tint, almost no blur, a lens at the edge, and **only a slight light rim
 - Rejected: frosted body with white tint and inner glow (v4, "everything has a white tint"); heavier blur ("frosted, not liquid").
 - Behind an open folder the library is covered completely by its own blurred background (no faint icons).
 
+### iOS 27 changes (researched 2026-10-03; iOS 27 shipped 2026-09-14 with macOS 27 "Golden Gate")
+
+Sources: MacRumors "Here's How Liquid Glass Is Changing in iOS 27", the MacStories iOS 27 review, iDropNews, Stuff, Ryan
+Thomson's first impressions. What changed in the material: a **darkened edge** around glass elements for separation;
+**brighter, static specular highlights** (no longer gyroscope-driven); stronger diffusion of busy content behind glass;
+crisper refraction; **context menus are glass** (no longer dark); a system slider from "ultra clear" to "fully tinted";
+icons built from layers of glass; an **extra-large 4 x 6 widget** (a whole page in portrait).
+
+What we took (kept within Matheesha's "clear, slight rim" decision):
+- `GlassStyle.IOS`: rim 0.08 all round, +0.40 facing the light, +0.18 opposite, gathered at the corners (`specPower` 1.8),
+  and a darkened edge (16 %, 1.6 pt). On straight edges the rim is as bright as before; corners are brighter, the far side
+  darker. To go back to the iOS 26 look: rimBase 0.14, rimLight 0.22, rimBack 0.10, edgeDark 0, specPower 1.
+- Not taken: the stronger diffusion (Matheesha rejected heavier blur); a clear-to-tinted slider could become a setting.
+- Menus and sheets that float over blurred home use the same glass over live content (`LiveGlass`: what is really behind,
+  blurred by the same radius as home, then the same lens and light), so they match the dock exactly.
+- Glass numerals (the clock): the same shader with a text mask instead of a rounded rectangle; the lens and light come from
+  the slope of the blurred text (`GlassStyle.IOS_CLOCK`: frosted, 30 % white, shallow lens, soft shadow).
+
 ## Widgets and the Search pill
 
 - Widget frame (measured): spans its columns' icons plus 4 pt each side, from its first row's icon top to its last row's icon
   bottom; corner radius 23 pt; content padding 16 pt; name below like an app label.
 - Search pill: 78 x 29.6 pt (wider when many page dots need room); "Search" with a magnifier at rest, page dots while pages move.
+
+- Widget sizes (iOS): small 2 x 2, medium 4 x 2, large 4 x 4, extra large 4 x 6 (iOS 27). Android widgets are shown at the
+  iOS size their minimum size fits (any of them if resizable), clipped to the 23 pt corners, their app's name below.
+- Clock widget: the lock screen's "Glass" clock: the date line (weekday and day, semibold) above the time in tall glass
+  numerals filling the 4 x 2 box; 12 or 24 hours as the system is set, no AM/PM; no card and no label.
+
+## Motion (every animation, checked against iOS)
+
+All roles live in `motion/Motion.kt` (`MotionProfile`); springs are SwiftUI-style (response s, damping fraction).
+
+| Animation | iOS reference | Ours |
+| --- | --- | --- |
+| App open | icon zoom, slight settle | 0.42 / 0.92 (tuned on the S24 with Matheesha) |
+| App close | position and size on separate springs, into the icon | position 0.5 / 0.92, size 0.44 / 0.9 |
+| Home depth on open/close | home zooms and blurs behind the app | depth 0.45 / 1 and 0.5 / 1; icons 1.12, wallpaper 1.04, blur 14 pt |
+| Page snap | UIScrollView paging, no bounce | 0.38 / 1 |
+| Scroll | deceleration 0.998 / ms, rubber band 0.55 | same |
+| App Library page, sheet | critically damped | 0.4 / 1 |
+| Folder open / close | slight overshoot / none | 0.42 / 0.86 and 0.36 / 1 |
+| Long-press menu | one spring for lift, blur and menu: 0.35 / 0.8 (UIContextMenuInteraction) | 0.35 / 0.8 open, 0.3 / 1 close; item lifts 1.06x; home blurs 18 pt and dims 15 % |
+| Edit mode wiggle | about 4 per second, ~1.5 degrees, random phase | 1.6 degrees, 0.26 s period, widgets 0.6 degrees |
+| Icons making room | smooth, no bounce | 0.36 / 1, interruptible (keeps velocity when the target changes) |
+| Drag lift / drop | lift with a little overshoot, drop into the cell | lift 0.26 / 0.8 (1.08x, shadow); drop 0.34 / 0.86 |
+| Sheet (widget gallery) | UIKit sheet spring, follows a pull down | 0.45 / 1; pull down past 30 % or fast closes, carrying the finger's speed |
+| Push inside a sheet | slide in from the right, the page below moves a third and fades | 0.42 / 1 |
+| Icon touch | dims (no shrink) | 32 %, 70 ms in, 220 ms out |
+
+Changed in this pass: the menu, edit-mode reflow (was 300 ms decelerate), drag lift (was 160 ms) and drop now come from the
+profile, and reflow and lift are springs that keep their velocity when interrupted. Still on fixed durations (fine for what
+they are): Spotlight's results cross-fade (220 ms), the status bar's light/dark change (220 ms), icon removal (200 ms).
 
 ## Typeface
 

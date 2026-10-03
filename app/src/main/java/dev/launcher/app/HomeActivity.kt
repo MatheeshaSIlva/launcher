@@ -42,6 +42,23 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     }
     private val io = Executors.newSingleThreadExecutor()
     private var resumed = false
+    private var widgets: dev.launcher.app.home.HomeWidgets? = null
+
+    override fun onStart() {
+        super.onStart()
+        widgets?.start()
+    }
+
+    override fun onStop() {
+        widgets?.stop()
+        super.onStop()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (widgets?.onActivityResult(requestCode, resultCode) == true) return
+        @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
+    }
     private val onApps: () -> Unit = { appsChanged() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,6 +75,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         // The keyboard (App Library search) never resizes or pans home; lists end above it through insets instead.
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         screen = HomeScreen(this, this)
+        widgets = dev.launcher.app.home.HomeWidgets(this).also { screen.widgets = it }
         screen.setConfig(HomeConfig.load(this))
         setContentView(screen)
         HomeBridge.home = this
@@ -200,7 +218,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private fun recordPreview() {
         if (screen.width == 0 || !screen.isIdle || screen.wallpaperView.transitioning || screen.hiddenPkg != null) return
         // TextClock stops updating while home is in the background: make it show the time now before recording.
-        for (c in screen.clocks) c.format24Hour = c.format24Hour
+        for (c in screen.clocks) c.refresh()
         HomeBridge.setPreview(record())
     }
 

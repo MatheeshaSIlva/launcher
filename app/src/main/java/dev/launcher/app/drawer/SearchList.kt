@@ -312,7 +312,12 @@ internal class SearchList(
             MotionEvent.ACTION_DOWN -> {
                 touch.stoppedMotion = scroller.isSettling
                 scroller.stop()
-                if (!touch.stoppedMotion) setPressed(itemAt(e.y)?.first)
+                if (!touch.stoppedMotion) {
+                    val hit = itemAt(e.y)
+                    setPressed(hit?.first)
+                    val lp = onLongPress
+                    if (hit != null && lp != null) touch.armLongPress(this) { setPressed(null); lp(hit.first, hit.second) }
+                }
             }
             MotionEvent.ACTION_MOVE -> if (touch.scrolling) scroller.dragBy(-dy) else if (touch.moved) setPressed(null)
             MotionEvent.ACTION_UP -> {
@@ -324,6 +329,9 @@ internal class SearchList(
         }
         return true
     }
+
+    /** An app row was long-pressed ([AppEntry], its icon in this view's coordinates); null: long presses do nothing. */
+    var onLongPress: ((AppEntry, RectF) -> Unit)? = null
 
     private fun setPressed(e: AppEntry?) { if (pressed?.key != e?.key) { pressed = e; invalidate() } }
 

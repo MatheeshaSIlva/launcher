@@ -163,11 +163,19 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
                 touch.stoppedMotion = scroller.isSettling
                 scroller.stop()
                 pressed = if (settledOpen && !touch.stoppedMotion) iconAt(e.x, e.y) else -1
+                val t = tile
+                val i = pressed
+                if (i >= 0 && t != null) touch.armLongPress(this) {
+                    pressed = -1
+                    invalidate()
+                    lib.longPress(t.apps[i], iconRect(i, RectF()), "folder:${t.title}")
+                }
                 invalidate()
             }
             MotionEvent.ACTION_MOVE -> if (touch.scrolling && settledOpen && panel.contains(touch.downX, touch.downY)) scroller.dragBy(-dy)
             MotionEvent.ACTION_UP -> {
-                if (touch.scrolling && settledOpen && panel.contains(touch.downX, touch.downY)) scroller.endDrag(-touch.velocityY())
+                if (touch.longPressed) { /* the menu handles it */ }
+                else if (touch.scrolling && settledOpen && panel.contains(touch.downX, touch.downY)) scroller.endDrag(-touch.velocityY())
                 else if (!touch.scrolling || !panel.contains(touch.downX, touch.downY)) {
                     // A tap (or any touch that did not scroll the folder) outside the panel, or while it is still moving, closes it.
                     val i = if (settledOpen && !touch.moved) iconAt(e.x, e.y) else -1

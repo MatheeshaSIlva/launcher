@@ -43,7 +43,9 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     internal val iconPainter = IconPainter(m.iconSize) { invalidateAll() }
 
     internal val tilesPane = TilesPane(ctx, this)
-    internal val listPane = SearchList(ctx, m, iconPainter, { e, r -> launch(e, r, "list") }, { e, r -> isHidden(e, r) }, { haptic() }, { settled() })
+    internal val listPane = SearchList(ctx, m, iconPainter, { e, r -> launch(e, r, "list") }, { e, r -> isHidden(e, r) }, { haptic() }, { settled() }).apply {
+        onLongPress = { e, r -> longPress(e, r, "list") }
+    }
     internal val searchBar = SearchBar(ctx, this)
     internal val folder = FolderOverlay(ctx, this)
     private val cancel = TextView(ctx)
@@ -183,6 +185,15 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         val loc = IntArray(2)
         getLocationOnScreen(loc)
         host.launch(e, RectF(rectInView).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
+    }
+
+    /** An app's icon was long-pressed at [rectInView] (this view's coordinates): home shows its menu. */
+    internal fun longPress(e: AppEntry, rectInView: RectF, source: String) {
+        anchor = e.pkg to source
+        host.onIconsMoved()   // this copy is the one to hide while the menu shows
+        val loc = IntArray(2)
+        getLocationOnScreen(loc)
+        host.onAppLongPress(e, RectF(rectInView).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
     }
 
     internal fun openFolder(tile: Tile, tileRect: RectF, index: Int) {

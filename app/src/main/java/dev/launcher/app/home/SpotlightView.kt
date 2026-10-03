@@ -53,10 +53,14 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         fun launchFromSpotlight(e: AppEntry, iconOnScreen: RectF)
         /** Fully closed or opened: a good moment for home to settle (record its picture, publish icons). */
         fun spotlightSettled()
+        /** A result was long-pressed at [iconOnScreen]: its menu, and a drag onto home if the finger moves on. */
+        fun onSpotlightLongPress(e: AppEntry, iconOnScreen: RectF)
     }
 
     private val icons = IconPainter(m.iconSize) { invalidate(); results.invalidate() }
-    private val results: SearchList = SearchList(ctx, m, icons, { e, r -> launch(e, r) }, { _, _ -> false }, { performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK) }, { host.spotlightSettled() })
+    private val results: SearchList = SearchList(ctx, m, icons, { e, r -> launch(e, r) }, { _, _ -> false }, { performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK) }, { host.spotlightSettled() }).apply {
+        onLongPress = { e, r -> longPress(e, r) }
+    }
     private val field = Field(ctx)
     private val backdropPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.4f) })
@@ -297,6 +301,24 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         closeNow()   // the launch recorded home with Spotlight open; it closes underneath the card
     }
 
+    /** A result or suggestion was long-pressed ([rectInView]: its icon here): home shows its menu. */
+    private fun longPress(e: AppEntry, rectInView: RectF) {
+        val loc = IntArray(2)
+        getLocationOnScreen(loc)
+        host.onSpotlightLongPress(e, RectF(rectInView).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
+    }
+
+    private var longPressed = false
+    private val suggestionLongPress = Runnable {
+        val i = pressed
+        if (i < 0 || moved) return@Runnable
+        longPressed = true
+        pressed = -1
+        invalidate()
+        parent?.requestDisallowInterceptTouchEvent(false)
+        longPress(suggestions[i], suggestionRect(i, RectF()))
+    }
+
     // ------------------------------------------------------------------ suggestions (drawn here, under the results)
 
     private fun suggestionRect(i: Int, out: RectF): RectF {
@@ -340,14 +362,22 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         if (!isOpen) return false
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                downX = e.x; downY = e.y; moved = false
+                downX = e.x; downY = e.y; moved = false; longPressed = false
                 pressed = suggestionAt(e.x, e.y)
+                removeCallbacks(suggestionLongPress)
+                if (pressed >= 0) postDelayed(suggestionLongPress, ViewConfiguration.getLongPressTimeout().toLong())
                 invalidate()
             }
-            MotionEvent.ACTION_MOVE -> if (abs(e.x - downX) > slop || abs(e.y - downY) > slop) { moved = true; if (pressed >= 0) { pressed = -1; invalidate() } }
+            MotionEvent.ACTION_MOVE -> if (abs(e.x - downX) > slop || abs(e.y - downY) > slop) {
+                moved = true
+                removeCallbacks(suggestionLongPress)
+                if (pressed >= 0) { pressed = -1; invalidate() }
+            }
             MotionEvent.ACTION_UP -> {
+                removeCallbacks(suggestionLongPress)
                 val i = suggestionAt(e.x, e.y)
                 when {
+                    longPressed -> {}
                     !moved && i >= 0 -> launch(suggestions[i], suggestionRect(i, RectF()))
                     !moved -> close()                                // a tap on empty space
                     downY - e.y > m.pt(60f) -> close()               // swiped up
@@ -355,7 +385,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                 pressed = -1
                 invalidate()
             }
-            MotionEvent.ACTION_CANCEL -> { pressed = -1; invalidate() }
+            MotionEvent.ACTION_CANCEL -> { removeCallbacks(suggestionLongPress); pressed = -1; invalidate() }
         }
         return true
     }

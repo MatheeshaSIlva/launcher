@@ -1,6 +1,7 @@
 package dev.launcher.app
 
 import android.annotation.TargetApi
+import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.ColorFilter
@@ -14,9 +15,10 @@ import android.graphics.drawable.Drawable
  * How a glass surface looks. Part of a theme's colour-and-effects layer. Distances in iOS points (the drawable is given the
  * size of one point in px), so glass matches the rest of the layout on any screen.
  *
- * iOS 26's Liquid Glass as Matheesha wants it: clear (the backdrop barely blurred, no tint, so it looks the same in light
- * and dark mode), a lens at the edge that bends what is behind it, a little more colour, and only a slight light rim.
- * docs/design/glass_proto.py renders this exact maths offline.
+ * iOS 27's Liquid Glass, kept as clear as Matheesha wants it (the backdrop barely blurred, no tint, the same in light and
+ * dark mode): a lens at the edge that bends what is behind it, a little more colour, a darkened edge that separates the
+ * glass from what is behind it, and crisp specular highlights where the edge faces the light (and, fainter, opposite).
+ * docs/design/glass_proto.py renders the iOS 26 version of this maths offline.
  */
 data class GlassStyle(
     /** 0 = clear glass (the sharp backdrop), 1 = fully frosted (the blurred copy). */
@@ -43,25 +45,45 @@ data class GlassStyle(
     val rimBack: Float,
     /** Where the light comes from (0 = from the right, 90 = from below; 225 = top left). */
     val lightAngleDeg: Float = 225f,
+    /** iOS 27: a darkened edge all round (strength 0..1, width in pt). */
+    val edgeDark: Float = 0f,
+    val edgeWidth: Float = 1f,
+    /** How tightly the specular highlights gather at the corners facing the light (1 = spread along the edges). */
+    val specPower: Float = 1f,
 ) {
     companion object {
         /**
-         * Every glass surface of the iOS theme: dock, widgets, Search pill, App Library tiles and search field, folders.
-         * The lens of c20b685 (the look Matheesha preferred) without its white lift, and a quieter rim.
+         * Every glass surface of the iOS theme: dock, widgets, Search pill, App Library, folders, menus, buttons.
+         * The iOS 26 lens Matheesha approved (a0b173e: clear, no white lift, saturation 1.22) with iOS 27's darkened edge and
+         * brighter, corner-gathered specular highlights.
          */
         val IOS = GlassStyle(frost = 1f, bevel = 20f, refraction = 30f, dispersion = 0.25f, magnify = 0.05f,
             saturation = 1.22f, tint = 0f, glowWidth = 8f, glow = 0f, shade = 0f,
-            rimWidth = 1.2f, rimBase = 0.14f, rimLight = 0.22f, rimBack = 0.10f)
+            rimWidth = 1.2f, rimBase = 0.08f, rimLight = 0.40f, rimBack = 0.18f,
+            edgeDark = 0.16f, edgeWidth = 1.6f, specPower = 1.8f)
+
+        /** The lock-screen style glass clock: frosted, lighter numerals with a shallow lens at the stroke edges. */
+        val IOS_CLOCK = IOS.copy(refraction = 9f, dispersion = 0.15f, magnify = 0f, saturation = 1.15f, tint = 0.30f,
+            glowWidth = 5f, glow = 0.10f, shade = 0.10f, rimWidth = 1.4f, rimBase = 0.10f, rimLight = 0.45f, rimBack = 0.20f,
+            edgeDark = 0.10f, edgeWidth = 1.4f, specPower = 1.4f)
     }
 }
 
 /**
- * "Liquid glass" for a rounded rectangle, as an AGSL shader over our own copy of the wallpaper:
+ * A glass shape given as a picture instead of a rounded rectangle (the glass clock's numerals): [mask] is the shape's alpha
+ * at the drawable's size; [height] the same shape blurred by [blurPx] (px of the drawable), stored at [heightScale] of the
+ * drawable's size. Its slope gives the lens and the light; its value outside the shape a soft shadow.
+ */
+class GlassMask(val mask: Bitmap, val height: Bitmap, val heightScale: Float, val blurPx: Float, val shadow: Float)
+
+/**
+ * "Liquid glass" as an AGSL shader over our own copy of the wallpaper:
  * - frosted body: the blurred wallpaper, a little more saturated;
  * - lens rim: towards the edge the surface acts like a thick convex bevel and bends rays outward, so wallpaper from just
  *   outside the shape appears compressed along the inside of the edge (refraction);
  * - dispersion: red, green and blue refract by different amounts, giving coloured fringes along the rim;
- * - thickness and rim: a soft light band inside the edge and a thin rim lit from the top left (iOS 26).
+ * - light: a darkened edge and specular highlights lit from the top left (iOS 27).
+ * The shape is a rounded rectangle, or a [GlassMask] (text).
  * During a wallpaper change it samples the old and the new wallpaper through the same [Reveal] front as the wallpaper,
  * so the glass changes on exactly the same frame as what is behind it.
  * Draw it with bounds = the glass shape; [originX]/[originY] = where those bounds sit in the wallpaper's (screen) space.
@@ -77,11 +99,13 @@ class GlassDrawable(
     cellPx: Float,
     style: GlassStyle = GlassStyle.IOS,
     private val source: Source = Source.WALLPAPER,
+    mask: GlassMask? = null,
 ) : Drawable() {
     /** What the glass sees behind it: the wallpaper itself (home), or the App Library's heavily blurred wallpaper. */
     enum class Source { WALLPAPER, BACKDROP }
 
-    private val shader = RuntimeShader(AGSL)
+    private val masked = mask != null
+    private val shader = RuntimeShader(if (masked) AGSL_MASK else AGSL_RECT)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     var originX = 0f
     var originY = 0f
@@ -89,27 +113,22 @@ class GlassDrawable(
     init {
         setImages("Old", wallpaper)
         setImages("New", wallpaper)
-        shader.setFloatUniform("radius", radius)
-        shader.setFloatUniform("bevel", style.bevel * unitPx)
+        if (!masked) {
+            shader.setFloatUniform("radius", radius)
+            shader.setFloatUniform("bevel", style.bevel * unitPx)
+        }
         shader.setFloatUniform("refraction", style.refraction * unitPx)
         shader.setFloatUniform("dispersion", style.dispersion)
         shader.setFloatUniform("frost", style.frost)
         shader.setFloatUniform("magnify", style.magnify)
         shader.setFloatUniform("saturation", style.saturation)
         shader.setFloatUniform("tint", style.tint)
-        shader.setFloatUniform("glowWidth", style.glowWidth * unitPx)
-        shader.setFloatUniform("glow", style.glow)
-        shader.setFloatUniform("shade", style.shade)
-        shader.setFloatUniform("rimWidth", style.rimWidth * unitPx)
-        shader.setFloatUniform("rimBase", style.rimBase)
-        shader.setFloatUniform("rimLight", style.rimLight)
-        shader.setFloatUniform("rimBack", style.rimBack)
-        val a = Math.toRadians(style.lightAngleDeg.toDouble())
-        shader.setFloatUniform("lightDir", kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
+        setLighting(shader, style, unitPx)
         val o = Reveal.origin(screenW.toFloat(), screenH.toFloat())
         shader.setFloatUniform("origin", o[0], o[1])
         shader.setFloatUniform("maxDist", Reveal.maxDist(screenW.toFloat(), screenH.toFloat()))
         shader.setFloatUniform("cell", cellPx)
+        mask?.let { setMask(it) }
         setReveal(1f, 0f)   // at rest: fully the "new" (= current) wallpaper
         paint.shader = shader
     }
@@ -126,8 +145,21 @@ class GlassDrawable(
         })
     }
 
-    /** Corner radius in px (a folder panel's corners animate). */
-    fun setRadius(r: Float) { shader.setFloatUniform("radius", r) }
+    /** Corner radius in px (a folder panel's corners animate). Rounded rectangles only. */
+    fun setRadius(r: Float) { if (!masked) shader.setFloatUniform("radius", r) }
+
+    /** A new shape for a masked glass (the clock's next minute). */
+    fun setMask(m: GlassMask) {
+        if (!masked) return
+        shader.setInputShader("mask", BitmapShader(m.mask, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP))
+        shader.setInputShader("height", BitmapShader(m.height, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+            filterMode = BitmapShader.FILTER_MODE_LINEAR
+        })
+        shader.setFloatUniform("heightScale", m.heightScale)
+        shader.setFloatUniform("blurPx", m.blurPx)
+        shader.setFloatUniform("shadowAlpha", m.shadow)
+        invalidateSelf()
+    }
 
     /** A wallpaper change starts: [from] is what the glass showed, [to] what it will show. */
     fun beginTransition(from: Wallpaper, to: Wallpaper) {
@@ -164,22 +196,25 @@ class GlassDrawable(
     @Deprecated("Deprecated in Java")
     override fun getOpacity() = PixelFormat.TRANSLUCENT
 
-    private companion object {
-        val AGSL = """
-uniform shader sharpOld;
-uniform shader frostOld;
-uniform shader sharpNew;
-uniform shader frostNew;
-uniform float2 size;
-uniform float2 dockOrigin;
-uniform float radius;
-uniform float bevel;
-uniform float refraction;
-uniform float dispersion;
-uniform float frost;
-uniform float magnify;
-uniform float saturation;
-uniform float tint;
+    companion object {
+        /** The light uniforms of [LIGHTING] from a style. */
+        internal fun setLighting(shader: RuntimeShader, style: GlassStyle, unitPx: Float) {
+            shader.setFloatUniform("glowWidth", style.glowWidth * unitPx)
+            shader.setFloatUniform("glow", style.glow)
+            shader.setFloatUniform("shade", style.shade)
+            shader.setFloatUniform("rimWidth", style.rimWidth * unitPx)
+            shader.setFloatUniform("rimBase", style.rimBase)
+            shader.setFloatUniform("rimLight", style.rimLight)
+            shader.setFloatUniform("rimBack", style.rimBack)
+            shader.setFloatUniform("edgeDark", style.edgeDark)
+            shader.setFloatUniform("edgeWidth", maxOf(0.01f, style.edgeWidth * unitPx))
+            shader.setFloatUniform("specPower", style.specPower)
+            val a = Math.toRadians(style.lightAngleDeg.toDouble())
+            shader.setFloatUniform("lightDir", kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
+        }
+
+        /** Rounded-rectangle distance, colour helpers and the glass's light (shared with [LiveGlass]). */
+        internal const val LIGHTING = """
 uniform float glowWidth;
 uniform float glow;
 uniform float shade;
@@ -187,13 +222,11 @@ uniform float rimWidth;
 uniform float rimBase;
 uniform float rimLight;
 uniform float rimBack;
+uniform float edgeDark;
+uniform float edgeWidth;
+uniform float specPower;
 uniform float2 lightDir;
-uniform float2 origin;
-uniform float maxDist;
-uniform float cell;
-uniform float progress;
-uniform float time;
-""" + Reveal.NOISE + Reveal.FRONT + """
+
 // Signed distance to a rounded rectangle centred at 0 with half-size b (negative inside).
 float sdRoundRect(float2 p, float2 b, float r) {
     float2 q = abs(p) - b + r;
@@ -205,6 +238,41 @@ half3 saturate3(half3 c, half s) {
     return clamp(mix(half3(l), c, s), 0.0, 1.0);
 }
 
+// The glass's light at [inside] px from its edge, outward normal n: a soft light band and a faint shade inside the edge,
+// the darkened edge (iOS 27), and the specular rim, brightest at the corners facing the light, fainter opposite.
+half3 lightGlass(half3 col, float inside, float2 n) {
+    float facing = dot(n, lightDir);
+    float band = exp(-inside / glowWidth);
+    col = mix(col, half3(1.0), half(glow * band));
+    col *= half(1.0 - shade * band * max(-facing, 0.0));
+    col *= half(1.0 - edgeDark * (1.0 - smoothstep(0.0, edgeWidth, inside)));
+    float rim = 1.0 - smoothstep(0.0, rimWidth, inside);
+    float spec = rim * (rimBase + rimLight * pow(max(facing, 0.0), specPower) + rimBack * pow(max(-facing, 0.0), specPower));
+    return min(col + half3(half(spec)), half3(1.0));
+}
+"""
+
+        private const val COMMON = """
+uniform shader sharpOld;
+uniform shader frostOld;
+uniform shader sharpNew;
+uniform shader frostNew;
+uniform float2 size;
+uniform float2 dockOrigin;
+uniform float refraction;
+uniform float dispersion;
+uniform float frost;
+uniform float magnify;
+uniform float saturation;
+uniform float tint;
+uniform float2 origin;
+uniform float maxDist;
+uniform float cell;
+uniform float progress;
+uniform float time;
+"""
+
+        private const val LOOK = """
 // A wallpaper seen through the glass at screen point sp with refraction offset off: dispersed clear and frosted samples.
 // (Two copies because child shaders cannot be passed as function arguments.)
 half3 lookOld(float2 sp, float2 off, float frostAmt) {
@@ -231,6 +299,19 @@ half3 lookNew(float2 sp, float2 off, float frostAmt) {
     return mix(clearCol, frostCol, half(frostAmt));
 }
 
+// Old and new wallpaper meet at the reveal front, exactly where the wallpaper behind changes.
+half3 look(float2 sp, float2 off) {
+    float rv = revealMix(sp + off);
+    return rv >= 0.999 ? lookNew(sp, off, frost)
+         : rv <= 0.001 ? lookOld(sp, off, frost)
+         : mix(lookOld(sp, off, frost), lookNew(sp, off, frost), half(rv));
+}
+"""
+
+        private val AGSL_RECT = COMMON + """
+uniform float radius;
+uniform float bevel;
+""" + Reveal.NOISE + Reveal.FRONT + LIGHTING + LOOK + """
 half4 main(float2 coord) {
     float2 half_size = size * 0.5;
     float2 p = coord - half_size;
@@ -254,32 +335,48 @@ half4 main(float2 coord) {
     float2 sp = dockOrigin + coord;
     // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
     float2 off = n * bend * rf - p * magnify;
-    // Evenly frosted, rim included: the rim still bends what is behind it, but what it shows is frosted too.
-    float frostAmt = frost;
-
-    // Old and new wallpaper meet at the reveal front, exactly where the wallpaper behind changes.
-    float rv = revealMix(sp + off);
-    half3 col = rv >= 0.999 ? lookNew(sp, off, frostAmt)
-              : rv <= 0.001 ? lookOld(sp, off, frostAmt)
-              : mix(lookOld(sp, off, frostAmt), lookNew(sp, off, frostAmt), half(rv));
-
-    col = saturate3(col, half(saturation));
+    half3 col = saturate3(look(sp, off), half(saturation));
     col = mix(col, half3(1.0), half(tint));
-
-    // Thickness: a soft light band just inside the edge, a faint shade on the side away from the light.
-    float inside = max(-d, 0.0);
-    float facing = dot(n, lightDir);
-    float band = exp(-inside / glowWidth);
-    col = mix(col, half3(1.0), half(glow * band));
-    col *= half(1.0 - shade * band * max(-facing, 0.0));
-
-    // Rim: a thin line all round, brightest where it faces the light, with a fainter echo on the far side.
-    float rim = 1.0 - smoothstep(0.0, rimWidth, inside);
-    float spec = rim * (rimBase + rimLight * max(facing, 0.0) + rimBack * max(-facing, 0.0));
-    col = min(col + half3(half(spec)), half3(1.0));
+    col = lightGlass(col, max(-d, 0.0), n);
 
     float a = clamp(0.5 - d, 0.0, 1.0);
     return half4(col * a, a);
+}
+"""
+
+        private val AGSL_MASK = COMMON + """
+uniform shader mask;
+uniform shader height;
+uniform float heightScale;
+uniform float blurPx;
+uniform float shadowAlpha;
+""" + Reveal.NOISE + Reveal.FRONT + LIGHTING + LOOK + """
+half4 main(float2 coord) {
+    float a = mask.eval(coord).a;
+    float2 hc = coord * heightScale;
+    float h = height.eval(hc).a;
+    if (a < 0.003 && h < 0.003) return half4(0.0);
+
+    // The blurred shape is a height field: 0.5 at the edge, rising inside the strokes. Its slope is the lens.
+    float hx = height.eval(hc + float2(1.0, 0.0)).a - height.eval(hc - float2(1.0, 0.0)).a;
+    float hy = height.eval(hc + float2(0.0, 1.0)).a - height.eval(hc - float2(0.0, 1.0)).a;
+    float2 g = float2(hx, hy);
+    float gl = length(g);
+    float2 n = gl > 1e-5 ? -g / gl : float2(0.0, 0.0);
+    float steep = clamp(gl * blurPx * heightScale, 0.0, 1.0);
+
+    // Outside the strokes: a soft shadow from the same height field.
+    half4 shadow = half4(0.0, 0.0, 0.0, half(shadowAlpha * h * h));
+    if (a < 0.003) return shadow;
+
+    float2 sp = dockOrigin + coord;
+    float2 off = n * steep * refraction - (coord - size * 0.5) * magnify;
+    half3 col = saturate3(look(sp, off), half(saturation));
+    col = mix(col, half3(1.0), half(tint));
+    // Distance from the edge, from the height (it rises over about blurPx).
+    float inside = max(h - 0.5, 0.0) * 2.0 * blurPx;
+    col = lightGlass(col, inside, n);
+    return half4(col * a, a) + shadow * half(1.0 - a);
 }
 """
     }

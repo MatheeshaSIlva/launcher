@@ -19,6 +19,9 @@ interface DrawerHost {
 
     /** Icon positions changed (or which copy of an icon a card belongs to): tell gesture nav, without recording anything. */
     fun onIconsMoved()
+
+    /** [e] was long-pressed at [iconOnScreen]: its menu, and a drag onto home if the finger moves on. */
+    fun onAppLongPress(e: AppEntry, iconOnScreen: RectF)
 }
 
 /**

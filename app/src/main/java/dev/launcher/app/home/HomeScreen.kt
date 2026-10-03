@@ -14,7 +14,6 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowInsets
 import android.widget.FrameLayout
-import android.widget.TextClock
 import dev.launcher.app.AppLog
 import dev.launcher.app.HomeBridge
 import dev.launcher.app.Spring
@@ -58,6 +57,17 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     val wallpaperView = WallpaperView(ctx, ctx.resources.displayMetrics.density * REVEAL_CELL_DP)
     /** Everything above the wallpaper; recorded as the content layer of the picture of home. */
     val fg = FrameLayout(ctx)
+    /** Wallpaper and [fg]: what blurs as one behind a menu or the widget gallery. */
+    private val scene = FrameLayout(ctx)
+    /** Above the scene, never blurred or recorded: the long-press menu, the widget gallery, a dragged item's copy. */
+    private val overlay = FrameLayout(ctx)
+    private var picker: WidgetPicker? = null
+    /** Android widgets on home (hosting, binding); set by the activity. */
+    var widgets: HomeWidgets? = null
+    // An app long-pressed in the App Library or Spotlight: moving on drags it out onto home.
+    private var pendingExternal: Pair<AppEntry, RectF>? = null
+    private var pendingFromSpotlight = false
+    private var externalTouch = false
     private val backdrop = BackdropView(ctx)
     private val pagesLayer = FrameLayout(ctx)
     private var dockShadow: DockShadow? = null
@@ -80,7 +90,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         }
     }
     private val pages = ArrayList<PageView>()
-    val clocks = ArrayList<TextClock>()
+    val clocks = ArrayList<ClockWidgetView>()
 
     private var layout: HomeLayout? = null
     private var wallpaper: Wallpaper? = null
@@ -94,8 +104,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var drawerWasOpen = false
 
     init {
-        addView(wallpaperView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-        addView(fg, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        scene.addView(wallpaperView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        scene.addView(fg, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        scene.clipChildren = false
+        addView(scene, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         fg.clipChildren = false
         // Search fields ride up with the keyboard frame by frame (not only once it has finished opening).
         if (Build.VERSION.SDK_INT >= 30) {
@@ -137,7 +150,6 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         backdrop.wallpaper = w
         drawer?.setWallpaper(w)
         spotlight?.setWallpaper(w)
-        menu?.glass = menuGlass()
         applyGlassWallpaper()
     }
 
@@ -145,7 +157,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private val pageGlass = ArrayList<GlassView>()
 
     /** Glass surfaces (dock, Search pill, widgets), for the wallpaper reveal to drive frame by frame. */
-    fun glassViews(): List<GlassView> = listOfNotNull(dock?.glass, indicator?.glass) + pageGlass
+    fun glassViews(): List<GlassView> = listOfNotNull(dock?.glass, indicator?.glass) + pageGlass + ((editBar as? EditMode.Bar)?.glassViews() ?: emptyList())
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
         val top: Int
@@ -209,15 +221,20 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         fg.addView(sp, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         sp.setWallpaper(wallpaper)
         sp.setInsets(bottomInset, imeInset)
-        // Edit mode: its bar ("+", "Done") at the top, the long-press menu, and the lifted copy of a dragged item on top.
+        // Edit mode: its bar ("Edit", "Done") at the top of the scene; above the scene the long-press menu, the widget gallery
+        // and the lifted copy of a dragged item.
         val em = editMode ?: EditMode(this, editHost).also { editMode = it }
-        val bar = em.Bar(context).also { editBar = it; it.visibility = if (em.active) View.VISIBLE else View.GONE }
+        if (em.active) em.exit()
+        val bar = em.Bar(context).also { editBar = it; it.visibility = View.GONE }
         fg.addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (metrics.gridTop - topInset - metrics.pt(6f)).roundToInt().coerceAtLeast(1)).apply { topMargin = topInset })
-        val mv = ContextMenuView(context, metrics) { k -> applyMenuBlur(k) }.also { menu = it }
-        mv.glass = menuGlass()
-        fg.addView(mv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        overlay.removeAllViews()
+        menuK = 0f; pickerK = 0f; applySceneBlur()
+        val mv = ContextMenuView(context, metrics, { k -> menuK = k; applySceneBlur() }, { c -> scene.draw(c) }).also { menu = it }
+        overlay.addView(mv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        val pk = WidgetPicker(context, metrics, pickerHost).also { picker = it }
+        overlay.addView(pk, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         (em.ghostView.parent as? android.view.ViewGroup)?.removeView(em.ghostView)
-        fg.addView(em.ghostView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        overlay.addView(em.ghostView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         applyGlassWallpaper()
         bindLayout()
     }
@@ -264,13 +281,24 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun viewFor(item: HomeItem, metrics: HomeMetrics): View? = when (item) {
         is HomeItem.App -> Apps[item.key]?.let { appIcon(it, metrics, label = cfg.showLabels) }
-        is HomeItem.Widget -> if (item.kind == "clock") ClockWidgetView(context, metrics, item.spanX, item.spanY).also { w ->
-            clocks += w.clocks
-            pageGlass += w.glass
-            w.glass.setWallpaper(wallpaper, metrics.w, metrics.h, resources.displayMetrics.density * REVEAL_CELL_DP)
-            w.setOnLongClickListener { onWidgetLongPress(w); true }
-            editMode?.adopt(w)
-        } else null
+        is HomeItem.Widget -> when (item.kind) {
+            "clock" -> ClockWidgetView(context, metrics, item.spanX, item.spanY).also { w ->
+                clocks += w
+                pageGlass += w.glass
+                w.glass.setWallpaper(wallpaper, metrics.w, metrics.h, resources.displayMetrics.density * REVEAL_CELL_DP)
+                w.setOnLongClickListener { onWidgetLongPress(w); true }
+                editMode?.adopt(w)
+            }
+            HomeItem.Widget.APP -> {
+                val pkg = item.provider?.let { android.content.ComponentName.unflattenFromString(it)?.packageName }
+                val label = pkg?.let { p -> Apps.forPkg(p)?.label } ?: ""
+                AppWidgetFrame(context, metrics, item.spanX, item.spanY, widgets?.createView(item), label).also { f ->
+                    f.setOnLongClickListener { onWidgetLongPress(f); true }
+                    editMode?.adopt(f)
+                }
+            }
+            else -> null
+        }
         is HomeItem.Folder -> null   // folders: a later build
     }
 
@@ -291,6 +319,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** The installed apps changed: prune and add to the layout, refresh the drawer. Returns true if the layout changed. */
     fun appsChanged(): Boolean {
         val l = layout ?: return false
+        // Not in the middle of a drag (the layout is rebuilt): again shortly, saved through layoutChanged.
+        if (editMode?.dragging == true || externalTouch) {
+            postDelayed({ if (appsChanged()) listener.layoutChanged() }, 500)
+            return false
+        }
         val changed = HomeModel.sync(l, Apps.all, cfg)
         if (changed) bindLayout()
         drawer?.appsChanged()
@@ -416,8 +449,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 drag = Drag.NONE
                 HomeBridge.onHomeTouched?.invoke()
                 pendingDragView = null
+                pendingExternal = null
+                externalTouch = false
                 enteredByPress = false
                 removeCallbacks(emptyLongPress)
+                // The widget gallery handles its own touches.
+                if (picker?.isOpen == true) { drag = Drag.IGNORED; return false }
                 // While Spotlight or the long-press menu is open, it handles every touch itself.
                 if (spotlight?.isOpen == true || menu?.isShowing == true) { drag = Drag.IGNORED; return false }
                 // Editing: a touch on an item belongs to edit mode (drag it, or its remove badge).
@@ -441,15 +478,30 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                     editTouch = true
                     return true
                 }
+                // An app long-pressed in the App Library or Spotlight that starts moving: dragged out onto home.
+                val ext = pendingExternal
+                if (ext != null && (abs(e.x - downX) > slop || abs(e.y - downY) > slop)) {
+                    pendingExternal = null
+                    beginExternalDrag(ext.first, ext.second, e.x, e.y)
+                    externalTouch = true
+                    return true
+                }
                 if (drag == Drag.NONE) return decide(e)
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { removeCallbacks(emptyLongPress); pendingDragView = null }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { removeCallbacks(emptyLongPress); pendingDragView = null; pendingExternal = null }
         }
         return drag == Drag.PAGES || drag == Drag.SHEET
     }
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (externalTouch) {
+            when (e.actionMasked) {
+                MotionEvent.ACTION_MOVE -> editMode?.externalMove(e.x, e.y)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { editMode?.externalUp(); externalTouch = false }
+            }
+            return true
+        }
         if (editTouch) {
             editMode?.onTouch(e)
             if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) editTouch = false
@@ -621,7 +673,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     // ================================================================== state for the launcher and gesture nav
 
     val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && (drag == Drag.NONE || drag == Drag.IGNORED) &&
-        (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true) && editMode?.active != true && menu?.isShowing != true
+        (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true) && editMode?.active != true && menu?.isShowing != true &&
+        picker?.isOpen != true && !externalTouch
 
     // ---- depth: home receding behind an open app (iOS), run here once the real home is on screen
 
@@ -684,6 +737,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     fun goHome() {
         if (m == null) return
         menu?.dismiss()
+        picker?.close()
         editMode?.exit()
         spotlight?.takeIf { it.isOpen }?.close()
         if (cfg.drawerPlacement == DrawerPlacement.SWIPE_UP && sheet > 0f) animateSheet(0f)
@@ -694,6 +748,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** Back pressed: leaves search or a folder, then closes the drawer. */
     fun onBack() {
         if (menu?.isShowing == true) { menu?.dismiss(); return }
+        if (picker?.onBack() == true) return
         if (editMode?.active == true) { editMode?.exit(); return }
         if (spotlight?.onBack() == true) return
         val d = drawer ?: return
@@ -771,70 +826,70 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun onIconsMoved() = publishIcons()
 
-    // ================================================================== edit mode and the long-press menu
+    override fun onAppLongPress(e: AppEntry, iconOnScreen: RectF) = onLibraryLongPress(e, toHome(iconOnScreen), fromSpotlight = false)
+
+    // ================================================================== edit mode, menus, widgets
 
     private val afterEdit = Runnable {
         publishIcons()
         if (isIdle) listener.onHomeSettled()
     }
 
-    /** Home went out of sight (an app or another screen came over it): menus close, edit mode ends. */
+    /** Home went out of sight (an app or another screen came over it): menus and the gallery close, edit mode ends. */
     fun onHidden() {
         menu?.dismissNow(runClosed = true)
+        picker?.closeNow()
+        if (editMode?.dragging == true) editMode?.externalUp()
+        externalTouch = false
+        pendingExternal = null
         editMode?.exit()
     }
 
     /** A swipe up on the gesture bar while home is in front: leaves edit mode, closes Spotlight and menus (as on iOS). */
     fun onHomeSwipeUp() {
         menu?.dismiss()
+        picker?.close()
         editMode?.exit()
         spotlight?.takeIf { it.isOpen }?.close()
     }
 
-    private fun applyMenuBlur(k: Float) {
+    // Home's blur behind a menu or the widget gallery: the whole scene (wallpaper included) as one, so nothing behind is
+    // sharp and no blurred element shows its own edges.
+    private var menuK = 0f
+    private var pickerK = 0f
+
+    private fun applySceneBlur() {
         if (Build.VERSION.SDK_INT < 31) return
-        val r = k * (m?.pt(18f) ?: 0f)
-        val fx = if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP)
-        for (v in listOf(pagesLayer, dock, dockShadow, indicator)) v?.setRenderEffect(fx)
+        editMode?.jigglePaused = maxOf(menuK, pickerK) > 0.01f
+        val r = maxOf(menuK, pickerK) * Motion.profile.menuBlur * (m?.u ?: 0f)
+        scene.setRenderEffect(if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP))
     }
 
-    private fun menuGlass(): dev.launcher.app.GlassDrawable? {
-        val metrics = m ?: return null
-        val w = wallpaper ?: return null
-        if (Build.VERSION.SDK_INT < 33) return null
-        return try {
-            dev.launcher.app.GlassDrawable(w, metrics.w, metrics.h, metrics.pt(22f), metrics.u, resources.displayMetrics.density * REVEAL_CELL_DP,
-                dev.launcher.app.GlassStyle.IOS, dev.launcher.app.GlassDrawable.Source.BACKDROP)
-        } catch (_: Throwable) { null }
-    }
-
-    /** A picture of [v] as it looks (an icon without its label), and its frame on screen. */
+    /** A picture of [v] as it looks (an icon without its label), and its frame in home's coordinates. */
     private fun liftedCopy(v: View): Pair<android.graphics.Picture, RectF> {
         val pic = android.graphics.Picture()
-        val c = pic.beginRecording(v.width, v.height)
-        val rot = v.rotation
+        val c = pic.beginRecording(maxOf(1, v.width), maxOf(1, v.height))
         if (v is IconView) { v.clearPress(); v.labelHidden = true }
         v.draw(c)
         if (v is IconView) v.labelHidden = false
-        v.rotation = rot
         pic.endRecording()
+        return pic to frameInHome(v)
+    }
+
+    private fun frameInHome(v: View): RectF {
         val loc = IntArray(2)
         val me = IntArray(2)
         v.getLocationOnScreen(loc)
         getLocationOnScreen(me)
         val x = (loc[0] - me[0]).toFloat()
         val y = (loc[1] - me[1]).toFloat()
-        return pic to RectF(x, y, x + v.width, y + v.height)
+        return RectF(x, y, x + v.width, y + v.height)
     }
 
-    private fun onIconLongPress(v: IconView, e: AppEntry) {
-        removeCallbacks(emptyLongPress)
-        if (editMode?.active == true) return
-        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-        val (pic, frame) = liftedCopy(v)
+    /** The app's own shortcuts (we are the home app, so we may list and start them), at most four. */
+    private fun shortcutItems(e: AppEntry, frame: RectF): List<ContextMenuView.Item> {
         val la = context.getSystemService(android.content.pm.LauncherApps::class.java)
         val items = ArrayList<ContextMenuView.Item>()
-        // The app's own shortcuts first (we are the home app, so we may list and start them).
         try {
             if (la.hasShortcutHostPermission()) {
                 val q = android.content.pm.LauncherApps.ShortcutQuery().setPackage(e.pkg).setQueryFlags(
@@ -849,11 +904,23 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 }
             }
         } catch (t: Throwable) { AppLog.log("[home] shortcuts unavailable: ${t.message}") }
+        return items
+    }
+
+    private fun appInfoItem(e: AppEntry, frame: RectF) = ContextMenuView.Item("App Info", glyph = ContextMenuView.Glyph.INFO) {
+        val la = context.getSystemService(android.content.pm.LauncherApps::class.java)
+        try { la.startAppDetailsActivity(e.component, e.user, android.graphics.Rect().also { frame.roundOut(it) }, null) } catch (t: Throwable) { AppLog.log("[home] app info failed: ${t.message}") }
+    }
+
+    private fun onIconLongPress(v: IconView, e: AppEntry) {
+        removeCallbacks(emptyLongPress)
+        if (editMode?.active == true) return
+        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        val (pic, frame) = liftedCopy(v)
+        val items = ArrayList(shortcutItems(e, frame))
         items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
         items += ContextMenuView.Item("Remove from Home Screen", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
-        items += ContextMenuView.Item("App Info", glyph = ContextMenuView.Glyph.INFO) {
-            try { la.startAppDetailsActivity(e.component, e.user, android.graphics.Rect().also { frame.roundOut(it) }, null) } catch (t: Throwable) { AppLog.log("[home] app info failed: ${t.message}") }
-        }
+        items += appInfoItem(e, frame)
         showMenu(v, pic, frame, items)
     }
 
@@ -875,6 +942,87 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() },
             ContextMenuView.Item("Remove Widget", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) },
         ))
+    }
+
+    private fun isOnHome(key: String): Boolean {
+        val l = layout ?: return false
+        return key in l.dock || l.pages.any { p -> p.any { it is HomeItem.App && it.key == key } }
+    }
+
+    /**
+     * Long press on an app in the App Library or Spotlight ([frame]: its icon, home coordinates): its menu, with "Add to
+     * Home Screen" while it is not on home; moving on drags it out onto a home page (iOS).
+     */
+    private fun onLibraryLongPress(e: AppEntry, frame: RectF, fromSpotlight: Boolean) {
+        val metrics = m ?: return
+        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        val pic = android.graphics.Picture()
+        val c = pic.beginRecording(maxOf(1, frame.width().toInt()), maxOf(1, frame.height().toInt()))
+        Icons.cached(e, metrics.iconSize)?.let { b ->
+            c.drawBitmap(b, null, RectF(0f, 0f, frame.width(), frame.height()), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        }
+        pic.endRecording()
+        val items = ArrayList(shortcutItems(e, frame))
+        val onHome = isOnHome(e.key)
+        if (!onHome) items += ContextMenuView.Item("Add to Home Screen", glyph = ContextMenuView.Glyph.PLUS) { addAppToHome(e) }
+        items += appInfoItem(e, frame)
+        val mv = menu ?: return
+        if (!fromSpotlight) drawer?.setHiddenPkg(e.pkg)
+        mv.show(pic, frame, items)
+        mv.onClosed = { if (!fromSpotlight) drawer?.setHiddenPkg(hiddenPkg) }
+        // An app already on home is not dragged out again (iOS keeps one icon per app).
+        pendingExternal = if (onHome) null else e to RectF(frame)
+        pendingFromSpotlight = fromSpotlight
+    }
+
+    /** "Add to Home Screen": at the end of the last page (a new page if it is full). */
+    private fun addAppToHome(e: AppEntry) {
+        val l = layout ?: return
+        val metrics = m ?: return
+        if (isOnHome(e.key)) return
+        val item = HomeItem.App(e.key)
+        if (l.pages.isEmpty() || HomeModel.capacityLeft(l.pages.last(), metrics.cfg.columns, metrics.cfg.rows) < 1) editHost.appendPage()
+        val pi = l.pages.size - 1
+        l.pages[pi].add(item)
+        pages.getOrNull(pi)?.setItems(l.pages[pi], animate = false)
+        editHost.layoutChanged()
+        AppLog.log("[home] added ${e.pkg} to page ${pi + 1}")
+    }
+
+    /** The drag out of the App Library or Spotlight begins: they get out of the way, edit mode takes the app. */
+    private fun beginExternalDrag(e: AppEntry, frame: RectF, x: Float, y: Float) {
+        val metrics = m ?: return
+        val em = editMode ?: return
+        menu?.handOff()
+        if (pendingFromSpotlight) spotlight?.closeNow() else closeDrawer()
+        em.enter(haptic = false)
+        // A home icon for the app, laid out off screen at a cell's size: its copy is what the finger carries.
+        val icon = appIcon(e, metrics, label = cfg.showLabels)
+        icon.measure(MeasureSpec.makeMeasureSpec(metrics.columnPitch.roundToInt(), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(metrics.cellHeight.roundToInt(), MeasureSpec.EXACTLY))
+        icon.layout(0, 0, icon.measuredWidth, icon.measuredHeight)
+        em.beginExternalDrag(e.key, icon, frame, x, y)
+        drawer?.setHiddenPkg(hiddenPkg)
+    }
+
+    private fun closeDrawer() {
+        if (drawerProgress() == 0f) return
+        when (cfg.drawerPlacement) {
+            DrawerPlacement.SWIPE_UP -> animateSheet(0f)
+            DrawerPlacement.PAGE_AFTER_LAST -> animatePages((pages.size - 1).coerceAtLeast(0).toFloat())
+            DrawerPlacement.PAGE_BEFORE_FIRST -> animatePages(0f)
+        }
+    }
+
+    private fun showEditMenu(button: RectF) {
+        menu?.show(null, button, listOf(
+            ContextMenuView.Item("Add Widget", glyph = ContextMenuView.Glyph.PLUS) { openWidgetPicker() },
+        ))
+    }
+
+    fun openWidgetPicker() {
+        menu?.dismiss()
+        picker?.open()
     }
 
     private val editHost = object : EditMode.Host {
@@ -907,6 +1055,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             removeCallbacks(afterEdit)
             postDelayed(afterEdit, 450)   // after the reflow glides
         }
+        override fun itemRemoved(item: HomeItem) {
+            if (item is HomeItem.Widget && item.kind == HomeItem.Widget.APP) widgets?.delete(item.id)
+        }
         override fun editingChanged(active: Boolean) {
             editBar?.visibility = if (active) View.VISIBLE else View.GONE
             indicator?.editing = active
@@ -917,6 +1068,28 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 post { if (isIdle) listener.onHomeSettled() }
             }
         }
+        override fun showEditMenu(button: RectF) = this@HomeScreen.showEditMenu(button)
+    }
+
+    // ---- the widget gallery
+
+    private val pickerHost = object : WidgetPicker.Host {
+        override fun widgetApps(): List<WidgetApp> = widgets?.apps() ?: emptyList()
+        override fun widgetSizes(info: android.appwidget.AppWidgetProviderInfo): List<WidgetSize> = m?.let { widgets?.sizesFor(info, it) } ?: emptyList()
+        override fun widgetLabel(info: android.appwidget.AppWidgetProviderInfo): String = widgets?.label(info) ?: "Widget"
+        override fun widgetDescription(info: android.appwidget.AppWidgetProviderInfo): String? = widgets?.description(info)
+        override fun widgetPreviewImage(info: android.appwidget.AppWidgetProviderInfo): android.graphics.drawable.Drawable? = widgets?.previewImage(info)
+        override fun widgetPreviewView(info: android.appwidget.AppWidgetProviderInfo, parent: android.view.ViewGroup): View? = widgets?.previewView(info, parent)
+        override fun addClockWidget() {
+            val metrics = m ?: return
+            editMode?.addWidget(HomeItem.Widget("clock", metrics.cfg.columns.coerceAtMost(4), 2))
+        }
+        override fun addAppWidget(info: android.appwidget.AppWidgetProviderInfo, size: WidgetSize) {
+            val w = widgets ?: return
+            w.add(info, size) { item -> if (item != null) editMode?.addWidget(item) }
+        }
+        override fun pickerProgress(k: Float) { pickerK = k; applySceneBlur() }
+        override fun drawBehindSheet(c: android.graphics.Canvas) = scene.draw(c)
     }
 
     // ================================================================== SpotlightView.Host
@@ -926,6 +1099,15 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     override fun spotlightSettled() {
         publishIcons()
         if (isIdle) listener.onHomeSettled()
+    }
+
+    override fun onSpotlightLongPress(e: AppEntry, iconOnScreen: RectF) = onLibraryLongPress(e, toHome(iconOnScreen), fromSpotlight = true)
+
+    /** A rectangle on screen in home's coordinates. */
+    private fun toHome(onScreen: RectF): RectF {
+        val me = IntArray(2)
+        getLocationOnScreen(me)
+        return RectF(onScreen).apply { offset(-me[0].toFloat(), -me[1].toFloat()) }
     }
 
     companion object {

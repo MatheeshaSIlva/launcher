@@ -9,8 +9,6 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
-import android.widget.LinearLayout
-import android.widget.TextClock
 import dev.launcher.app.GlassStyle
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -31,12 +29,18 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
 
     fun bind(items: List<HomeItem>) = setItems(items, animate = false)
 
+    // Where each view's layout puts it, also before the layout pass has run (two reorders can come within one frame).
+    private val laid = java.util.IdentityHashMap<View, IntArray>()
+
     fun setItems(newItems: List<HomeItem>, animate: Boolean) {
         val oldPos = java.util.IdentityHashMap<View, FloatArray>()
-        for (v in views) oldPos[v] = floatArrayOf(v.left + v.translationX, v.top + v.translationY)
+        for (v in views) {
+            val l = laid[v]
+            oldPos[v] = floatArrayOf((l?.get(0) ?: v.left) + v.translationX, (l?.get(1) ?: v.top) + v.translationY)
+        }
         val keep = java.util.IdentityHashMap<HomeItem, View>()
         for (it in newItems) viewOf[it]?.let { v -> keep[it] = v }
-        for ((item, v) in viewOf) if (!keep.containsKey(item)) removeView(v)
+        for ((item, v) in viewOf) if (!keep.containsKey(item)) { removeView(v); laid.remove(v) }
         viewOf.clear()
         viewOf.putAll(keep)
         items = newItems.toList()
@@ -47,16 +51,15 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
             views += v
             // A kept view starts where it was and glides to its new cell (its new position is known from the grid).
             val from = oldPos[v]
+            val nx = m.cellLeft(p.col).roundToInt()
+            val ny = m.cellTop(p.row).roundToInt()
+            laid[v] = intArrayOf(nx, ny)
             if (animate && from != null) {
-                val dx = from[0] - m.cellLeft(p.col)
-                val dy = from[1] - m.cellTop(p.row)
-                if (abs(dx) > 0.5f || abs(dy) > 0.5f) {
-                    v.animate().cancel()
-                    v.translationX = dx
-                    v.translationY = dy
-                    v.animate().translationX(0f).translationY(0f).setDuration(300)
-                        .setInterpolator(android.view.animation.DecelerateInterpolator(1.8f)).start()
-                }
+                // Its layout moves now; it is shown where it was and springs over (keeping any motion it already had).
+                val dx = from[0] - nx
+                val dy = from[1] - ny
+                if (abs(dx - v.translationX) > 0.5f || abs(dy - v.translationY) > 0.5f)
+                    dev.launcher.app.motion.SpringTranslate.of(v).springFrom(dx, dy, dev.launcher.app.motion.Motion.profile.reflow)
             }
         }
         requestLayout()
@@ -98,66 +101,172 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
     }
 }
 
+/** A widget on a home page as edit mode sees it: a remove badge, and a gentler wiggle than an icon's. */
+interface HomeWidgetView {
+    var editing: Boolean
+    /** The remove badge's centre in the widget's view. */
+    fun badgeCenter(): FloatArray
+}
+
 /**
- * A clock as an iOS medium widget (4 x 2): a glass card in the theme's one glass material with the day, the time and the
- * date, and its name below like an app label. Placeholder content until real widgets arrive.
+ * The iOS lock-screen clock as a home widget (4 x 2), its "Glass" style: the date line, and the time in huge numerals of
+ * liquid glass that refract the wallpaper behind them (frosted, lit from the top left, a soft shadow). No card, no label,
+ * as on the lock screen. 12 or 24 hours as the system is set; no AM/PM.
  */
-class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY: Int) : FrameLayout(ctx) {
-    val clocks = ArrayList<TextClock>()
-    val glass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = m.widgetRadius }
-    private val cardW = m.widgetWidth(spanX)
-    private val cardH = m.widgetHeight(spanY)
+class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY: Int) : FrameLayout(ctx), HomeWidgetView {
+    /** The numerals: glass over the wallpaper, shaped by a mask of the current time. */
+    val glass = GlassView(ctx, GlassStyle.IOS_CLOCK, m.u)
+    private val boxW = m.widgetWidth(spanX)
+    private val boxH = m.widgetHeight(spanY)
     private val left = m.widgetInset(0)
-    private val label = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        textSize = m.labelTextSize
+    private val dateSize = m.pt(19f)
+    private val digitsTop = m.pt(25f)
+    private val datePaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xF2FFFFFF.toInt()
+        textSize = dateSize
         textAlign = Paint.Align.CENTER
-        typeface = dev.launcher.app.theme.Fonts.text(450)
-        setShadowLayer(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
+        typeface = dev.launcher.app.theme.Fonts.text(600)
+        setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), 0x33000000)
     }
+    private val digitPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        typeface = dev.launcher.app.theme.Fonts.display(600)
+        textAlign = Paint.Align.CENTER
+    }
+    private var shownTime = ""
+    private var dateText = ""
+    private var maskBmp: android.graphics.Bitmap? = null
+    private var heightBmp: android.graphics.Bitmap? = null
 
     init {
         clipChildren = false
         setWillNotDraw(false)
-        addView(glass, LayoutParams(cardW.roundToInt(), cardH.roundToInt()).apply { leftMargin = left.roundToInt() })
-        val pad = m.pt(16f).roundToInt()
-        val content = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad, pad, pad)
-        }
-        fun clock(f: String, sizePt: Float, weight: Int, color: Int, display: Boolean = false) = TextClock(ctx).also { clocks += it }.apply {
-            format12Hour = f
-            format24Hour = f
-            setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, m.pt(sizePt))
-            typeface = if (display) dev.launcher.app.theme.Fonts.display(weight) else dev.launcher.app.theme.Fonts.text(weight)
-            setTextColor(color)
-            includeFontPadding = false
-        }
-        content.addView(clock("EEEE", 13f, 600, 0xB3FFFFFF.toInt()).apply { isAllCaps = true })
-        content.addView(clock("h:mm", 50f, 400, Color.WHITE, display = true).apply {
-            (this as TextClock).format24Hour = "H:mm"
-        }, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { topMargin = m.pt(2f).roundToInt() })
-        content.addView(clock("d MMMM", 15f, 500, 0xD9FFFFFF.toInt()), LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-            topMargin = m.pt(2f).roundToInt()
+        addView(glass, LayoutParams(boxW.roundToInt(), (boxH - digitsTop).roundToInt()).apply {
+            leftMargin = left.roundToInt()
+            topMargin = digitsTop.roundToInt()
         })
-        glass.addView(content, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        glass.visibility = View.INVISIBLE
+        glass.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+            if (r - l != or - ol || b - t != ob - ot) post { shownTime = ""; refresh() }
+        }
     }
 
-    /** Edit mode: a remove badge at the card's top-left corner. */
-    var editing = false
+    /** Shows the time now (once a minute, and before home is recorded). */
+    fun refresh() {
+        val is24 = android.text.format.DateFormat.is24HourFormat(context)
+        val now = java.util.Date()
+        val locale = java.util.Locale.getDefault()
+        val time = java.text.SimpleDateFormat(if (is24) "H:mm" else "h:mm", locale).format(now)
+        val pattern = android.text.format.DateFormat.getBestDateTimePattern(locale, "EEEd")
+        val date = java.text.SimpleDateFormat(pattern, locale).format(now)
+        if (date != dateText) { dateText = date; invalidate() }
+        if (time != shownTime && glass.width > 0) { shownTime = time; buildMask(time) }
+    }
+
+    /** The numerals' shape: a sharp mask at the glass's size and its blurred height field (half size) for lens and light. */
+    private fun buildMask(time: String) {
+        val w = glass.width
+        val h = glass.height
+        if (w <= 0 || h <= 0) return
+        // As large as the box allows: the digits' height fills it, narrowed like iOS's tall clock, never wider than the box.
+        digitPaint.textScaleX = 1f
+        digitPaint.textSize = 100f
+        val bounds = android.graphics.Rect()
+        digitPaint.getTextBounds("0123456789", 0, 10, bounds)
+        val digitH = bounds.height() / 100f
+        digitPaint.textSize = h * 0.94f / digitH
+        val widest = if (android.text.format.DateFormat.is24HourFormat(context)) "20:08" else "10:08"
+        val natural = digitPaint.measureText(widest)
+        digitPaint.textScaleX = minOf(0.86f, w * 0.98f / natural)
+        val baseline = h * 0.97f
+        val mask = maskBmp?.takeIf { it.width == w && it.height == h }
+            ?: android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8).also { maskBmp = it }
+        mask.eraseColor(0)
+        android.graphics.Canvas(mask).drawText(time, w / 2f, baseline, digitPaint)
+        val scale = 0.5f
+        val hw = maxOf(1, (w * scale).toInt())
+        val hh = maxOf(1, (h * scale).toInt())
+        val height = heightBmp?.takeIf { it.width == hw && it.height == hh }
+            ?: android.graphics.Bitmap.createBitmap(hw, hh, android.graphics.Bitmap.Config.ALPHA_8).also { heightBmp = it }
+        height.eraseColor(0)
+        android.graphics.Canvas(height).apply { scale(scale, scale); drawText(time, w / 2f, baseline, digitPaint) }
+        val blurPx = digitPaint.textSize * 0.03f
+        boxBlurAlpha(height, maxOf(1, (blurPx * scale).roundToInt()))
+        // A new mask object each minute: the glass keeps the bitmaps it was given until it has the next ones.
+        glass.mask = dev.launcher.app.GlassMask(mask, height, scale, blurPx, 0.22f)
+        glass.visibility = View.VISIBLE
+        glass.invalidate()
+    }
+
+    private val tick = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: android.content.Intent?) = refresh()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        context.registerReceiver(tick, android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_TIME_TICK)
+            addAction(android.content.Intent.ACTION_TIME_CHANGED)
+            addAction(android.content.Intent.ACTION_TIMEZONE_CHANGED)
+        })
+        refresh()
+    }
+
+    override fun onDetachedFromWindow() {
+        super.onDetachedFromWindow()
+        try { context.unregisterReceiver(tick) } catch (_: Throwable) { }
+    }
+
+    override var editing = false
         set(v) { if (field != v) { field = v; invalidate() } }
 
-    /** The remove badge's centre in this view. */
-    fun badgeCenter(): FloatArray = floatArrayOf(left + m.pt(4f), m.pt(4f))
+    override fun badgeCenter(): FloatArray = floatArrayOf(left + m.pt(4f), m.pt(4f))
 
     override fun onDraw(canvas: Canvas) {
-        canvas.drawText("Clock", left + cardW / 2f, cardH + m.labelBaseline, label)
+        canvas.drawText(dateText, left + boxW / 2f, dateSize * 0.86f, datePaint)
     }
 
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
         if (editing) RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
     }
+}
+
+/** Three passes of a box blur of [r] px over an ALPHA_8 bitmap, in place (close to a Gaussian). */
+internal fun boxBlurAlpha(b: android.graphics.Bitmap, r: Int) {
+    val w = b.width
+    val h = b.height
+    val stride = b.rowBytes
+    val buf = java.nio.ByteBuffer.allocate(stride * h)
+    b.copyPixelsToBuffer(buf)
+    val arr = buf.array()
+    val src = IntArray(w * h)
+    for (y in 0 until h) for (x in 0 until w) src[y * w + x] = arr[y * stride + x].toInt() and 0xFF
+    val tmp = IntArray(w * h)
+    val n = 2 * r + 1
+    repeat(3) {
+        // Running sums: horizontal into tmp, then vertical back into src.
+        for (y in 0 until h) {
+            val row = y * w
+            var sum = 0
+            for (x in -r..r) sum += src[row + x.coerceIn(0, w - 1)]
+            for (x in 0 until w) {
+                tmp[row + x] = sum / n
+                sum += src[row + (x + r + 1).coerceAtMost(w - 1)] - src[row + (x - r).coerceAtLeast(0)]
+            }
+        }
+        for (x in 0 until w) {
+            var sum = 0
+            for (y in -r..r) sum += tmp[y.coerceIn(0, h - 1) * w + x]
+            for (y in 0 until h) {
+                src[y * w + x] = sum / n
+                sum += tmp[(y + r + 1).coerceAtMost(h - 1) * w + x] - tmp[(y - r).coerceAtLeast(0) * w + x]
+            }
+        }
+    }
+    for (y in 0 until h) for (x in 0 until w) arr[y * stride + x] = src[y * w + x].toByte()
+    buf.rewind()
+    b.copyPixelsFromBuffer(buf)
 }
 
 /** iOS edit mode's remove badge: a grey disc with a white minus. */
@@ -191,10 +300,12 @@ class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
     /** Left edge (in the dock) of slot [i] of [n] icons. */
     fun slotLeft(i: Int, n: Int): Float = m.w / 2f + (i - (n - 1) / 2f) * m.dockIconPitch - m.iconSize / 2f - m.dockInset
 
+    private val laidLeft = java.util.IdentityHashMap<View, Int>()
+
     fun bind(views: List<IconView>, animate: Boolean = false) {
         val oldLeft = java.util.IdentityHashMap<View, Float>()
-        for (v in icons) oldLeft[v] = v.left + v.translationX
-        for (v in icons) if (views.none { it === v }) removeView(v)
+        for (v in icons) oldLeft[v] = (laidLeft[v] ?: v.left) + v.translationX
+        for (v in icons) if (views.none { it === v }) { removeView(v); laidLeft.remove(v) }
         icons.clear()
         icons += views
         val n = views.size
@@ -206,11 +317,10 @@ class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
             }
             if (v.parent == null) addView(v, lp) else v.layoutParams = lp
             val from = oldLeft[v]
-            if (animate && from != null && abs(from - left) > 0.5f) {
-                v.animate().cancel()
-                v.translationX = from - left
-                v.animate().translationX(0f).setDuration(300).setInterpolator(android.view.animation.DecelerateInterpolator(1.8f)).start()
-            }
+            laidLeft[v] = left.roundToInt()
+            val dx = (from ?: 0f) - left.roundToInt()
+            if (animate && from != null && abs(dx - v.translationX) > 0.5f)
+                dev.launcher.app.motion.SpringTranslate.of(v).springFrom(dx, 0f, dev.launcher.app.motion.Motion.profile.reflow)
         }
     }
 

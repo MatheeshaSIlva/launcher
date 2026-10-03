@@ -129,7 +129,14 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
             MotionEvent.ACTION_DOWN -> {
                 touch.stoppedMotion = scroller.isSettling
                 scroller.stop()
-                if (!touch.stoppedMotion) setPressed(hit(e.x, e.y))
+                if (!touch.stoppedMotion) {
+                    val t = hit(e.x, e.y)
+                    setPressed(t)
+                    if (t is Target.App) touch.armLongPress(this) {
+                        setPressed(null)
+                        lib.longPress(lib.tiles[t.tile].apps[t.slot], slotRect(t.tile, t.slot, RectF()), "tile:${lib.tiles[t.tile].title}")
+                    }
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (touch.scrolling) scroller.dragBy(-dy)

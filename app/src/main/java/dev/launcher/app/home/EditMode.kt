@@ -11,7 +11,11 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
-import dev.launcher.app.Spring
+import android.widget.FrameLayout
+import dev.launcher.app.GlassStyle
+import dev.launcher.app.drawer.LabelPainter
+import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.SpringValue
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -19,12 +23,13 @@ import kotlin.math.sin
 
 /**
  * iOS edit mode ("jiggle mode") for the home screen: every icon and widget wiggles, a "–" badge removes it from home (apps
- * stay in the drawer), "+" adds the clock widget back, "Done" (or a tap on empty space, back, home) leaves.
+ * stay in the App Library), "Edit" opens the edit menu (Add Widget), "Done" (or a tap on empty space, back, home) leaves.
  *
  * Dragging: the item lifts (a copy follows the finger, slightly enlarged, with a soft shadow) while its real view stays,
  * hidden, in the grid; resting over a cell for a moment moves it there and the rest of the page flows around it on
  * springs. Over the dock an app joins the dock (up to its slots). Resting at the left or right edge turns the page (past
  * the last page a new one appears). On release the copy springs into the item's cell. The layout is saved at once.
+ * An app dragged out of the App Library or Spotlight arrives the same way, as a new item.
  */
 internal class EditMode(private val home: HomeScreen, private val host: Host) {
     interface Host {
@@ -40,8 +45,12 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         /** A dock icon for an app key (dock views are created by home). */
         fun dockIcon(key: String): IconView?
         fun layoutChanged()
+        /** An item left home (an Android widget's id must be given back). */
+        fun itemRemoved(item: HomeItem)
         /** Edit mode began or ended (indicator dots, edit bar, publishing). */
         fun editingChanged(active: Boolean)
+        /** "Edit" in the edit bar: the edit menu, anchored at [button] (home coordinates). */
+        fun showEditMenu(button: RectF)
     }
 
     private val m get() = host.metrics
@@ -81,7 +90,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     private fun setBadges(on: Boolean) {
         for (v in allItemViews()) when (v) {
             is IconView -> v.editing = on
-            is ClockWidgetView -> v.editing = on
+            is HomeWidgetView -> v.editing = on
         }
     }
 
@@ -90,7 +99,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         if (!active) return
         when (v) {
             is IconView -> v.editing = true
-            is ClockWidgetView -> v.editing = true
+            is HomeWidgetView -> v.editing = true
         }
     }
 
@@ -98,6 +107,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
     private val phases = java.util.WeakHashMap<View, Float>()
     private var jiggling = false
+    /** Home is blurred behind a menu or the widget gallery: the wiggle holds still (it would re-blur home every frame). */
+    var jigglePaused = false
 
     private fun startJiggle() {
         if (jiggling) return
@@ -113,6 +124,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     private val jiggleFrame = object : Choreographer.FrameCallback {
         override fun doFrame(now: Long) {
             if (!jiggling) return
+            if (jigglePaused) { Choreographer.getInstance().postFrameCallback(this); return }
             val t = now / 1e9
             val visible = host.currentPage()
             for ((i, p) in host.pageViews.withIndex()) {
@@ -126,9 +138,10 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
     private fun wiggle(v: View, t: Double) {
         val phase = phases.getOrPut(v) { (Math.random() * Math.PI * 2).toFloat() }
-        // About four wiggles a second, 1.6 degrees each way (widgets less: they are bigger).
-        val amp = if (v is ClockWidgetView) 0.6f else 1.6f
-        v.rotation = amp * sin(t * 2 * Math.PI / 0.26 + phase).toFloat()
+        // About four wiggles a second (widgets less: they are bigger).
+        val mp = Motion.profile
+        val amp = if (v is HomeWidgetView) mp.jiggleDegrees * 0.375f else mp.jiggleDegrees
+        v.rotation = amp * sin(t * 2 * Math.PI / mp.jigglePeriod + phase).toFloat()
     }
 
     // ------------------------------------------------------------------ touches while editing
@@ -188,7 +201,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     }
 
     private fun onBadge(v: View, x: Float, y: Float): Boolean {
-        val c = when (v) { is IconView -> v.badgeCenter(); is ClockWidgetView -> v.badgeCenter(); else -> return false }
+        val c = when (v) { is IconView -> v.badgeCenter(); is HomeWidgetView -> v.badgeCenter(); else -> return false }
         val loc = screenOrigin(v)
         return hypot(x - (loc[0] + c[0]), y - (loc[1] + c[1])) < RemoveBadge.radius(m) * 1.9f
     }
@@ -207,7 +220,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         return out.apply { set(o[0], o[1], o[0] + v.width, o[1] + v.height) }
     }
 
-    // ------------------------------------------------------------------ removing
+    // ------------------------------------------------------------------ removing and adding
 
     /** From the long-press menu ("Remove from Home Screen" / "Remove Widget"), with or without edit mode. */
     fun removeFromHome(v: View) = remove(v)
@@ -218,7 +231,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         if (dock != null && v is IconView && dock.icons().any { it === v }) {
             val key = v.entry?.key ?: return
             l.dock.remove(key)
-            v.animate().scaleX(0f).scaleY(0f).alpha(0f).setDuration(180).withEndAction {
+            v.animate().scaleX(0f).scaleY(0f).alpha(0f).setDuration(200).withEndAction {
                 dock.bind(dock.icons().filter { it !== v }, animate = true)
             }.start()
         } else {
@@ -226,7 +239,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val item = page.itemOf(v) ?: return
             val pi = host.pageViews.indexOf(page)
             l.pages[pi].remove(item)
-            v.animate().scaleX(0f).scaleY(0f).alpha(0f).setDuration(180).withEndAction {
+            host.itemRemoved(item)
+            v.animate().scaleX(0f).scaleY(0f).alpha(0f).setDuration(200).withEndAction {
                 page.setItems(l.pages[pi], animate = true)
             }.start()
         }
@@ -234,12 +248,10 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         host.layoutChanged()
     }
 
-    /** "+": the clock widget at the top of the page on screen (the only widget so far). */
-    fun addClockWidget() {
+    /** A new widget (from the gallery) at the top of the page on screen; full pages pass their last items on (iOS). */
+    fun addWidget(widget: HomeItem.Widget) {
         val l = host.layout ?: return
         val pi = host.currentPage().coerceIn(0, l.pages.size - 1)
-        if (l.pages[pi].any { it is HomeItem.Widget }) return
-        val widget = HomeItem.Widget("clock", m.cfg.columns, 2)
         l.pages[pi].add(0, widget)
         overflowFrom(pi)
         refreshPages()
@@ -248,20 +260,40 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
     // ------------------------------------------------------------------ dragging
 
-    private class Drag(val item: HomeItem, var inDock: Boolean, var page: Int, val picture: Picture, val w: Int, val h: Int,
-                       val grabX: Float, val grabY: Float)
+    private class Drag(val item: HomeItem, var inDock: Boolean, var page: Int, val grabX: Float, val grabY: Float)
 
     private var drag: Drag? = null
     private var fingerX = 0f
     private var fingerY = 0f
     private var pendingTarget: Pair<Boolean, Int>? = null    // (into dock, index) waiting for the finger to rest
-    private var pendingPage = -1
     private val ghost = Ghost(home.context)
     private val applyTarget = Runnable { pendingTarget?.let { (dock, index) -> moveTo(dock, index) } }
     private val edgeTurn = Runnable { turnAtEdge() }
 
     /** The view drawing the lifted copy; home adds it on top of everything. */
     val ghostView: View get() = ghost
+
+    /** A drag is under way. */
+    val dragging get() = drag != null
+
+    /** The lifted copy of [v]: the icon alone (no label, no badge), or the whole widget. */
+    private fun recordLift(v: View): Picture {
+        val pic = Picture()
+        val c = pic.beginRecording(maxOf(1, v.width), maxOf(1, v.height))
+        if (v is IconView) { v.labelHidden = true; v.editing = false }
+        if (v is HomeWidgetView) v.editing = false
+        v.draw(c)
+        if (v is IconView) { v.labelHidden = false; v.editing = active }
+        if (v is HomeWidgetView) v.editing = active
+        pic.endRecording()
+        return pic
+    }
+
+    /** The point the copy scales about: an icon's centre (its label is not part of the copy), a widget's centre. */
+    private fun pivotOf(v: View): FloatArray {
+        if (v is IconView) { val r = v.iconBoundsInView(RectF()); return floatArrayOf(r.centerX(), r.centerY()) }
+        return floatArrayOf(v.width / 2f, v.height / 2f)
+    }
 
     private fun beginDrag(v: View, x: Float, y: Float, startLift: Float = 0f) {
         if (host.layout == null) return
@@ -271,32 +303,39 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val page = host.pageViews.firstOrNull { it.itemOf(v) != null } ?: return
             page.itemOf(v) ?: return
         }
-        // The lifted copy: the icon alone (no label), or the whole widget.
-        val pic = Picture()
-        val c = pic.beginRecording(v.width, v.height)
-        val rot = v.rotation
-        if (v is IconView) v.labelHidden = true
-        if (v is IconView) v.editing = false
-        if (v is ClockWidgetView) v.editing = false
-        v.draw(c)
-        if (v is IconView) { v.labelHidden = false; v.editing = true }
-        if (v is ClockWidgetView) v.editing = true
-        pic.endRecording()
-        v.rotation = rot
+        val pic = recordLift(v)
         val o = screenOrigin(v)
-        drag = Drag(item, inDock, if (inDock) -1 else host.pageViews.indexOfFirst { it.itemOf(v) != null }, pic, v.width, v.height, x - o[0], y - o[1])
-        if (inDock) {
-            // Dock items live in the layout's dock list as keys; while dragged they are tracked as an App item.
-            val key = (item as HomeItem.App).key
-            dockDragKey = key
-        }
+        drag = Drag(item, inDock, if (inDock) -1 else host.pageViews.indexOfFirst { it.itemOf(v) != null }, x - o[0], y - o[1])
         v.alpha = 0f
         fingerX = x; fingerY = y
-        ghost.lift(pic, v.width, v.height, o[0], o[1], startLift)
+        ghost.lift(pic, o[0], o[1], pivotOf(v), startLift, 1f)
         home.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
     }
 
-    private var dockDragKey: String? = null
+    /**
+     * An app from the App Library or Spotlight becomes a new home item under the finger: [icon] is a home icon for it laid
+     * out off screen (its copy is what is dragged), [from] where the app's icon was (home coordinates), so the copy starts
+     * there at that size and grows to a home icon.
+     */
+    fun beginExternalDrag(key: String, icon: IconView, from: RectF, x: Float, y: Float) {
+        if (host.layout == null || drag != null) return
+        val pic = recordLift(icon)
+        val iconRect = icon.iconBoundsInView(RectF())
+        val scale0 = if (iconRect.width() > 0f) from.width() / iconRect.width() else 1f
+        // The copy's top-left such that its icon sits on [from].
+        val sx = from.centerX() - iconRect.centerX()
+        val sy = from.centerY() - iconRect.centerY()
+        drag = Drag(HomeItem.App(key), false, -1, x - sx, y - sy)
+        fingerX = x; fingerY = y
+        ghost.lift(pic, sx, sy, floatArrayOf(iconRect.centerX(), iconRect.centerY()), 0f, scale0)
+        home.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+    }
+
+    /** The finger moved during an external drag that home (not edit mode's own touch) is following. */
+    fun externalMove(x: Float, y: Float) = dragTo(x, y)
+
+    /** The finger lifted (or the touch was taken) during an external drag. */
+    fun externalUp() { if (drag != null) drop() }
 
     private fun dragTo(x: Float, y: Float) {
         val d = drag ?: return
@@ -344,7 +383,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         val d = drag ?: return
         val l = host.layout ?: return
         val pi = host.currentPage().coerceIn(0, l.pages.size - 1)
-        // Out of where it is now.
+        // Out of where it is now (an item from outside home is nowhere yet).
         if (d.inDock) l.dock.remove((d.item as HomeItem.App).key) else if (d.page in l.pages.indices) l.pages[d.page].removeAll { it === d.item }
         val fromPage = d.page
         if (toDock) {
@@ -428,17 +467,22 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         val d = drag ?: return
         home.removeCallbacks(applyTarget)
         home.removeCallbacks(edgeTurn)
-        // Apply where it was heading, then the copy springs into the real view's place.
+        // Apply where it was heading; an item from outside that never found a place goes at the end of the page on screen.
         pendingTarget?.let { (dock, index) -> moveTo(dock, index) }
         pendingTarget = null
+        if (!d.inDock && d.page < 0) {
+            val l = host.layout
+            if (l != null) moveTo(false, l.pages[host.currentPage().coerceIn(0, l.pages.size - 1)].size)
+        }
         val target = draggedView(d)
         drag = null
-        dockDragKey = null
         if (target == null) { ghost.clear(); return }
         target.post {
-            // Where the view will rest once its own reflow glide ends (its translation goes to zero).
+            // Where the view will rest once its own reflow glide ends (its translation goes to zero); the copy's pivot (the
+            // icon's centre) lands on the view's.
             val o = screenOrigin(target)
-            ghost.settle(o[0] - target.translationX, o[1] - target.translationY) {
+            val pv = pivotOf(target)
+            ghost.settle(o[0] - target.translationX + pv[0], o[1] - target.translationY + pv[1]) {
                 target.alpha = 1f
             }
         }
@@ -449,129 +493,146 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
     private inner class Ghost(ctx: Context) : View(ctx) {
         private var pic: Picture? = null
-        private var pw = 0
-        private var ph = 0
         private var x = 0f
         private var y = 0f
-        private var lift = 0f      // 0 = in place, 1 = lifted (scale and shadow)
-        private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0x40000000
-            maskFilter = android.graphics.BlurMaskFilter(m.pt(14f), android.graphics.BlurMaskFilter.Blur.NORMAL)
-        }
-        private var settleSpring: Spring? = null
-        private var settleStart = 0L
+        private var pivotX0 = 0f
+        private var pivotY0 = 0f
+        private var size0 = 1f     // scale the copy starts at (an App Library icon is smaller), reaching 1 as it lifts
+        // 0 = in place, 1 = lifted (scale and shadow).
+        private val liftK = SpringValue(0f, 100f, { invalidate() })
+        private val settleK = SpringValue(0f, 1000f, { k -> place(k) }, { onSettleEnd() })
         private var fromX = 0f
         private var fromY = 0f
         private var toX = 0f
         private var toY = 0f
         private var onSettled: (() -> Unit)? = null
+        private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0x40000000
+            maskFilter = android.graphics.BlurMaskFilter(m.pt(14f), android.graphics.BlurMaskFilter.Blur.NORMAL)
+        }
 
         init { setWillNotDraw(false); isClickable = false }
 
-        fun lift(p: Picture, w: Int, h: Int, sx: Float, sy: Float, from: Float) {
+        fun lift(p: Picture, sx: Float, sy: Float, pivot: FloatArray, from: Float, startScale: Float) {
+            // A copy still settling from the last drop lands at once (its view must show again).
             onSettled?.invoke()
             onSettled = null
-            pic = p; pw = w; ph = h; x = sx; y = sy
-            lift = from
-            settleSpring = null
+            settleK.stop()
+            pic = p; x = sx; y = sy
+            pivotX0 = pivot[0]; pivotY0 = pivot[1]
+            size0 = startScale
+            liftK.snapTo(from)
             visibility = VISIBLE
-            animateLift(1f)
+            liftK.animateTo(1f, Motion.profile.dragLift)
         }
 
         fun moveTo(nx: Float, ny: Float) { x = nx; y = ny; invalidate() }
 
-        fun settle(tx: Float, ty: Float, then: () -> Unit) {
-            fromX = x; fromY = y; toX = tx; toY = ty
+        /** Springs the copy so that its pivot lands on ([px], [py]). */
+        fun settle(px: Float, py: Float, then: () -> Unit) {
+            fromX = x; fromY = y; toX = px - pivotX0; toY = py - pivotY0
+            size0 = 1f
             onSettled = then
-            settleSpring = Spring(0.32f, 0.86f).apply { start(0f, 0f, 1000f) }
-            settleStart = System.nanoTime()
-            Choreographer.getInstance().postFrameCallback(settleFrame)
-            animateLift(0f)
+            settleK.snapTo(0f)
+            settleK.animateTo(1f, Motion.profile.dragSettle)
+            liftK.animateTo(0f, Motion.profile.dragSettle)
         }
 
-        fun clear() { pic = null; visibility = GONE }
-
-        private var liftAnim: android.animation.ValueAnimator? = null
-
-        private fun animateLift(to: Float) {
-            liftAnim?.cancel()
-            liftAnim = android.animation.ValueAnimator.ofFloat(lift, to).apply {
-                duration = 160
-                addUpdateListener { lift = it.animatedValue as Float; invalidate() }
-                start()
-            }
+        private fun place(k: Float) {
+            x = fromX + (toX - fromX) * k
+            y = fromY + (toY - fromY) * k
+            invalidate()
         }
 
-        private val settleFrame = object : Choreographer.FrameCallback {
-            override fun doFrame(now: Long) {
-                val s = settleSpring ?: return
-                val t = (now - settleStart) / 1e9
-                val k = s.value(t) / 1000f
-                x = fromX + (toX - fromX) * k
-                y = fromY + (toY - fromY) * k
-                invalidate()
-                if (s.settled(t)) {
-                    settleSpring = null
-                    onSettled?.invoke()
-                    onSettled = null
-                    clear()
-                } else Choreographer.getInstance().postFrameCallback(this)
-            }
+        private fun onSettleEnd() {
+            if (settleK.value < 1f) return
+            onSettled?.invoke()
+            onSettled = null
+            clear()
         }
+
+        fun clear() { pic = null; liftK.stop(); visibility = GONE }
 
         override fun onDraw(c: Canvas) {
             val p = pic ?: return
-            val scale = 1f + 0.08f * lift
+            val lift = liftK.value
+            val grow = size0 + (1f - size0) * lift.coerceIn(0f, 1f)
+            val scale = grow * (1f + 0.08f * lift)
             c.save()
-            c.translate(x + pw / 2f, y + ph / 2f)
+            c.translate(x + pivotX0, y + pivotY0)
             c.scale(scale, scale)
-            c.translate(-pw / 2f, -ph / 2f)
+            c.translate(-pivotX0, -pivotY0)
             if (lift > 0f) {
-                shadow.alpha = (0x40 * lift).toInt()
+                shadow.alpha = (0x40 * lift.coerceIn(0f, 1f)).toInt()
                 val s = m.iconSize * 0.9f
-                c.drawRoundRect(pw / 2f - s / 2f, m.pt(8f), pw / 2f + s / 2f, m.pt(8f) + s, s * 0.25f, s * 0.25f, shadow)
+                c.drawRoundRect(pivotX0 - s / 2f, pivotY0 - s / 2f + m.pt(8f), pivotX0 + s / 2f, pivotY0 + s / 2f + m.pt(8f), s * 0.25f, s * 0.25f, shadow)
             }
             c.drawPicture(p)
             c.restore()
         }
     }
 
-    // ------------------------------------------------------------------ the edit bar ("+" and "Done")
+    // ------------------------------------------------------------------ the edit bar ("Edit" and "Done")
 
-    /** Top of the screen while editing: "+" on the left, "Done" on the right, glass capsules. */
-    inner class Bar(ctx: Context) : View(ctx) {
-        private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x3DFFFFFF }
-        private val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x40FFFFFF; style = Paint.Style.STROKE }
-        private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; typeface = Fonts.text(600); textAlign = Paint.Align.CENTER }
-        private val plus = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeCap = Paint.Cap.ROUND }
-        val done = RectF()
-        val add = RectF()
+    /** Top of the screen while editing: "Edit" on the left (its menu adds widgets), "Done" on the right; liquid glass capsules. */
+    inner class Bar(ctx: Context) : FrameLayout(ctx) {
+        private val bh = m.pt(36f)
+        val editGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
+        val doneGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
+        private val text = LabelPainter(m.pt(16f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600))
+        private var pressedEdit = false
+        private var pressedDone = false
 
-        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-            val cy = h / 2f
-            val bh = m.pt(34f)
-            done.set(w - m.libMargin - m.pt(72f), cy - bh / 2f, w - m.libMargin, cy + bh / 2f)
-            add.set(m.libMargin, cy - bh / 2f, m.libMargin + bh, cy + bh / 2f)
+        init {
+            setWillNotDraw(false)
+            clipChildren = false
+            addView(editGlass, LayoutParams(m.pt(66f).toInt(), bh.toInt()))
+            addView(doneGlass, LayoutParams(m.pt(70f).toInt(), bh.toInt()))
         }
 
-        override fun onDraw(c: Canvas) {
-            rim.strokeWidth = m.pt(1f)
-            for (r in listOf(done, add)) {
-                c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, fill)
-                c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, rim)
-            }
-            text.textSize = m.pt(15f)
-            c.drawText("Done", done.centerX(), done.centerY() - (text.fontMetrics.ascent + text.fontMetrics.descent) / 2f, text)
-            plus.strokeWidth = m.pt(2.2f)
-            val k = m.pt(7f)
-            c.drawLine(add.centerX() - k, add.centerY(), add.centerX() + k, add.centerY(), plus)
-            c.drawLine(add.centerX(), add.centerY() - k, add.centerX(), add.centerY() + k, plus)
+        fun glassViews(): List<GlassView> = listOf(editGlass, doneGlass)
+
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            super.onSizeChanged(w, h, oldw, oldh)
+            val top = ((h - bh) / 2f).toInt()
+            editGlass.layoutParams = (editGlass.layoutParams as LayoutParams).apply { leftMargin = m.libMargin.toInt(); topMargin = top }
+            doneGlass.layoutParams = (doneGlass.layoutParams as LayoutParams).apply { leftMargin = (w - m.libMargin - m.pt(70f)).toInt(); topMargin = top }
+        }
+
+        override fun dispatchDraw(canvas: Canvas) {
+            super.dispatchDraw(canvas)
+            drawLabel(canvas, editGlass, "Edit", pressedEdit)
+            drawLabel(canvas, doneGlass, "Done", pressedDone)
+        }
+
+        private fun drawLabel(canvas: Canvas, g: View, label: String, pressed: Boolean) {
+            if (g.width == 0) return
+            text.draw(canvas, label, label, g.left + g.width / 2f, text.baselineFor(g.top + g.height / 2f), g.width.toFloat(), if (pressed) 0x80 else 0xFF)
+        }
+
+        private fun hit(g: View, e: MotionEvent): Boolean {
+            val s = m.pt(6f)
+            return e.x >= g.left - s && e.x <= g.right + s && e.y >= g.top - s && e.y <= g.bottom + s
         }
 
         override fun onTouchEvent(e: MotionEvent): Boolean {
-            if (e.actionMasked == MotionEvent.ACTION_DOWN) return done.contains(e.x, e.y) || add.contains(e.x, e.y)
-            if (e.actionMasked == MotionEvent.ACTION_UP) {
-                if (done.contains(e.x, e.y)) exit() else if (add.contains(e.x, e.y)) addClockWidget()
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    pressedEdit = hit(editGlass, e)
+                    pressedDone = hit(doneGlass, e)
+                    invalidate()
+                    return pressedEdit || pressedDone
+                }
+                MotionEvent.ACTION_UP -> {
+                    val edit = pressedEdit && hit(editGlass, e)
+                    val done = pressedDone && hit(doneGlass, e)
+                    pressedEdit = false; pressedDone = false
+                    invalidate()
+                    if (done) exit()
+                    if (edit) host.showEditMenu(RectF(left + editGlass.left.toFloat(), top + editGlass.top.toFloat(),
+                        left + editGlass.right.toFloat(), top + editGlass.bottom.toFloat()))
+                }
+                MotionEvent.ACTION_CANCEL -> { pressedEdit = false; pressedDone = false; invalidate() }
             }
             return true
         }

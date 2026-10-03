@@ -70,25 +70,52 @@ internal class TapOrScroll(ctx: Context) {
     var scrolling = false; private set
     var moved = false; private set
     var stoppedMotion = false
+    /** The finger stayed down and still for the long-press time: the pane neither taps nor scrolls for the rest of it. */
+    var longPressed = false
+        private set
+    private var lpView: android.view.View? = null
+    private var lpAction: (() -> Unit)? = null
+    private val lpRun = Runnable {
+        longPressed = true
+        // Home must see the rest of this touch (a long-pressed app can be dragged out onto a home page).
+        lpView?.parent?.requestDisallowInterceptTouchEvent(false)
+        lpAction?.invoke()
+    }
+
+    /** Call on ACTION_DOWN over something long-pressable: [action] runs if the finger stays put long enough. */
+    fun armLongPress(v: android.view.View, action: () -> Unit) {
+        cancelLongPress()
+        lpView = v
+        lpAction = action
+        v.postDelayed(lpRun, ViewConfiguration.getLongPressTimeout().toLong())
+    }
+
+    private fun cancelLongPress() {
+        lpView?.removeCallbacks(lpRun)
+        lpView = null
+        lpAction = null
+    }
 
     /** Returns the vertical distance moved since the last event while scrolling (content moves the other way). */
     fun onEvent(e: MotionEvent, onScrollStart: () -> Unit): Float {
         var dy = 0f
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                cancelLongPress()
                 vt?.recycle(); vt = VelocityTracker.obtain()
                 downX = e.x; downY = e.y; lastY = e.y
-                scrolling = false; moved = false
+                scrolling = false; moved = false; longPressed = false
             }
             MotionEvent.ACTION_MOVE -> {
-                if (!moved && (abs(e.x - downX) > slop || abs(e.y - downY) > slop)) moved = true
-                if (!scrolling && abs(e.y - downY) > slop && abs(e.y - downY) > abs(e.x - downX)) {
+                if (!moved && (abs(e.x - downX) > slop || abs(e.y - downY) > slop)) { moved = true; cancelLongPress() }
+                if (!scrolling && !longPressed && abs(e.y - downY) > slop && abs(e.y - downY) > abs(e.x - downX)) {
                     scrolling = true
                     lastY = e.y
                     onScrollStart()
                 }
                 if (scrolling) { dy = e.y - lastY; lastY = e.y }
             }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> cancelLongPress()
         }
         vt?.addMovement(e)
         return dy
@@ -101,5 +128,5 @@ internal class TapOrScroll(ctx: Context) {
         return t.yVelocity
     }
 
-    val isTap get() = !moved && !stoppedMotion
+    val isTap get() = !moved && !stoppedMotion && !longPressed
 }
