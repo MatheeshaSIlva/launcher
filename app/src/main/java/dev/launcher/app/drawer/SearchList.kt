@@ -45,6 +45,18 @@ internal class SearchList(
         set(v) { field = v; updateFade(); invalidate() }
     var bottomSpace = 0f
         set(v) { field = v; updateBounds(); invalidate() }
+    /** Extra room after the last row (rows scroll up from under something drawn over the list, e.g. a search field). */
+    var bottomPadding = 0f
+        set(v) { field = v; updateBounds() }
+    /**
+     * Spotlight's presentation of results: the best match highlighted in a card ("Top Hit"), the other apps under an "Apps"
+     * title; no sections or index. The App Library uses the plain A–Z list.
+     */
+    var spotlight = false
+    /** Draws a glass card (the Top Hit's) at a rect in this view's coordinates. */
+    var drawCard: ((Canvas, RectF) -> Unit)? = null
+    /** Called after every draw (something mirroring the list, e.g. a frosted field over it, redraws too). */
+    var onDrawn: (() -> Unit)? = null
 
     val scroller = dev.launcher.app.motion.IosScroller({ invalidate() }, { settled() })
     private val touch = TapOrScroll(ctx)
@@ -53,6 +65,15 @@ internal class SearchList(
         abstract val key: String
         data class Header(val letter: Char) : Row() { override val key get() = "h:$letter" }
         data class Item(val e: AppEntry) : Row() { override val key get() = e.key }
+        data class Title(val text: String) : Row() { override val key get() = "t:$text" }
+        data class TopHit(val e: AppEntry) : Row() { override val key get() = "top:${e.key}" }
+    }
+
+    private fun heightOf(row: Row) = when (row) {
+        is Row.Header -> m.listHeader
+        is Row.Item -> m.listRow
+        is Row.Title -> m.pt(44f)
+        is Row.TopHit -> m.pt(96f)
     }
 
     /** A row on screen: glides from (y0, a0) to (y1, a1) starting at [start] (content coordinates, px). */
@@ -96,7 +117,7 @@ internal class SearchList(
         rebuild(animate = true)
     }
 
-    fun firstResult(): AppEntry? = rows.firstNotNullOfOrNull { (it.row as? Row.Item)?.e }
+    fun firstResult(): AppEntry? = rows.firstNotNullOfOrNull { (it.row as? Row.TopHit)?.e ?: (it.row as? Row.Item)?.e }
 
     // ------------------------------------------------------------------ data
 
@@ -112,9 +133,15 @@ internal class SearchList(
             }
         } else {
             val q = query.lowercase()
-            apps.mapNotNull { e -> rank(e.label.lowercase(), q)?.let { e to it } }
-                .sortedBy { it.second }
-                .forEach { out += Row.Item(it.first) }
+            val found = apps.mapNotNull { e -> rank(e.label.lowercase(), q)?.let { e to it } }.sortedBy { it.second }.map { it.first }
+            if (spotlight && found.isNotEmpty()) {
+                out += Row.Title("Top Hit")
+                out += Row.TopHit(found[0])
+                if (found.size > 1) {
+                    out += Row.Title("Apps")
+                    found.drop(1).forEach { out += Row.Item(it) }
+                }
+            } else found.forEach { out += Row.Item(it) }
         }
         val now = System.nanoTime()
         val old = rows.associateBy { it.row.key }
@@ -128,7 +155,7 @@ internal class SearchList(
                 prev != null -> Shown(row, prev.y(now), y, prev.a(now), 1f, now)    // glides to its new place
                 else -> Shown(row, y + m.pt(12f), y, 0f, 1f, now)                    // fades and rises in
             }
-            y += if (row is Row.Header) m.listHeader else m.listRow
+            y += heightOf(row)
         }
         ghosts.clear()
         if (animate) {
@@ -175,7 +202,7 @@ internal class SearchList(
     private fun updateBounds() {
         if (height == 0) return
         val visible = height - bottomSpace - contentTop
-        scroller.setBounds(0f, max(0f, contentHeight + m.bottomSafe - visible), height.toFloat())
+        scroller.setBounds(0f, max(0f, contentHeight + m.bottomSafe + bottomPadding - visible), height.toFloat())
     }
 
     private fun updateFade() {
@@ -193,20 +220,38 @@ internal class SearchList(
         return out.apply { set(m.libMargin, t, m.libMargin + m.listIcon, t + m.listIcon) }
     }
 
+    // The Top Hit card and its (home-sized) icon.
+    private fun cardRect(top: Float, out: RectF) = out.apply { set(m.libMargin - m.pt(6f), top + m.pt(4f), m.w - m.libMargin + m.pt(6f), top + m.pt(88f)) }
+    private fun topIconRect(top: Float, out: RectF): RectF {
+        val card = cardRect(top, RectF())
+        val l = card.left + m.pt(14f)
+        val t = card.centerY() - m.iconSize / 2f
+        return out.apply { set(l, t, l + m.iconSize, t + m.iconSize) }
+    }
+
     private fun onScreen(top: Float) = top + m.listRow > contentTop - m.listRow && top < height - bottomSpace
 
     fun iconRectOf(e: AppEntry): RectF? {
         val now = System.nanoTime()
-        val s = rows.firstOrNull { (it.row as? Row.Item)?.e?.key == e.key } ?: return null
-        return iconRect(screenY(s, now), RectF())
+        for (s in rows) {
+            val row = s.row
+            if (row is Row.TopHit && row.e.key == e.key) return topIconRect(screenY(s, now), RectF())
+            if (row is Row.Item && row.e.key == e.key) return iconRect(screenY(s, now), RectF())
+        }
+        return null
     }
 
     fun visibleIcons(out: MutableList<IconSpot>) {
         val now = System.nanoTime()
         for (s in rows) {
-            val item = s.row as? Row.Item ?: continue
-            val rect = iconRect(screenY(s, now), RectF())
-            if (rect.centerY() > contentTop && rect.centerY() < height - bottomSpace) out += IconSpot(item.e.pkg, rect, "list")
+            val row = s.row
+            val rect = when (row) {
+                is Row.Item -> iconRect(screenY(s, now), RectF())
+                is Row.TopHit -> topIconRect(screenY(s, now), RectF())
+                else -> continue
+            }
+            val e = (row as? Row.Item)?.e ?: (row as Row.TopHit).e
+            if (rect.centerY() > contentTop && rect.centerY() < height - bottomSpace) out += IconSpot(e.pkg, rect, "list")
         }
     }
 
@@ -214,9 +259,12 @@ internal class SearchList(
         if (y < contentTop || y > height - bottomSpace) return null
         val now = System.nanoTime()
         for (s in rows) {
-            val item = s.row as? Row.Item ?: continue
             val t = screenY(s, now)
-            if (y >= t && y < t + m.listRow) return item.e to iconRect(t, RectF())
+            when (val row = s.row) {
+                is Row.Item -> if (y >= t && y < t + m.listRow) return row.e to iconRect(t, RectF())
+                is Row.TopHit -> if (y >= t && y < t + heightOf(row)) return row.e to topIconRect(t, RectF())
+                else -> {}
+            }
         }
         return null
     }
@@ -279,6 +327,10 @@ internal class SearchList(
 
     private fun setPressed(e: AppEntry?) { if (pressed?.key != e?.key) { pressed = e; invalidate() } }
 
+    private val titles = LabelPainter(m.pt(15f), 0xD9FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600))
+    private val hitName = LabelPainter(m.pt(17f), 0xFFFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600))
+    private val hitSub = LabelPainter(m.pt(14.5f), 0x99FFFFFF.toInt(), Paint.Align.LEFT)
+
     // ------------------------------------------------------------------ drawing
 
     override fun onDraw(c: Canvas) {
@@ -293,6 +345,7 @@ internal class SearchList(
         drawRows(c, now)
         c.restore()
         drawIndex(c)
+        onDrawn?.invoke()
     }
 
     private fun drawRows(c: Canvas, now: Long) {
@@ -304,11 +357,30 @@ internal class SearchList(
 
     private fun drawRow(c: Canvas, s: Shown, now: Long, textX: Float, rightEdge: Float, next: Shown?) {
         val t = screenY(s, now)
-        if (!onScreen(t)) return
+        if (t + heightOf(s.row) < contentTop - m.listRow || t > height - bottomSpace) return
         val alpha = (255 * s.a(now)).toInt().coerceIn(0, 255)
         if (alpha == 0) return
         when (val row = s.row) {
             is Row.Header -> headers.draw(c, "h${row.letter}", row.letter.toString(), m.libMargin, headers.baselineFor(t + m.listHeader * 0.62f), m.w.toFloat(), (alpha * 0.6f).toInt())
+            is Row.Title -> {
+                titles.draw(c, row.key, row.text, m.libMargin, t + m.pt(28f), m.w.toFloat(), alpha)
+                separator.alpha = (0x2E * s.a(now)).toInt()
+                c.drawLine(m.libMargin, t + m.pt(40f), m.w - m.libMargin, t + m.pt(40f), separator)
+            }
+            is Row.TopHit -> {
+                // The best match, highlighted in a glass card (iOS Spotlight's Top Hit).
+                cardRect(t, r)
+                val save = c.saveLayerAlpha(r.left - 1, r.top - 1, r.right + 1, r.bottom + 1, alpha)
+                drawCard?.invoke(c, RectF(r)) ?: c.drawRoundRect(r, m.pt(26f), m.pt(26f), PRESS)
+                if (pressed?.key == row.e.key) { PRESS.alpha = 0x1A; c.drawRoundRect(r, m.pt(26f), m.pt(26f), PRESS) }
+                val icon = topIconRect(t, RectF())
+                if (!isHidden(row.e, icon)) icons.draw(c, row.e, icon)
+                val tx = icon.right + m.pt(14f)
+                val maxW = r.right - m.pt(14f) - tx
+                hitName.draw(c, "n" + row.e.key, row.e.label, tx, icon.centerY() - m.pt(3f), maxW)
+                hitSub.draw(c, "s" + row.e.key, row.e.category.title, tx, icon.centerY() + m.pt(17f), maxW)
+                c.restoreToCount(save)
+            }
             is Row.Item -> {
                 if (pressed?.key == row.e.key) { r.set(0f, t, width.toFloat(), t + m.listRow); PRESS.alpha = (0x1A * s.a(now)).toInt(); c.drawRect(r, PRESS) }
                 iconRect(t, r)

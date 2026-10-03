@@ -60,11 +60,23 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private val tm get() = context.getSystemService(TelephonyManager::class.java)
 
     init {
-        // Immersive apps hide the status bar: so do we.
-        setOnApplyWindowInsetsListener { v, insets ->
-            if (Build.VERSION.SDK_INT >= 30) v.visibility = if (insets.isVisible(WindowInsets.Type.statusBars())) VISIBLE else INVISIBLE
+        // Not from our own window's insets: an overlay above the status bar is never told the bar is visible (that hid this
+        // bar for good). Whether an app hides the status bar comes from the window manager instead ([setHiddenByApp]).
+        setOnApplyWindowInsetsListener { _, insets ->
+            if (!loggedInsets && Build.VERSION.SDK_INT >= 30) {
+                loggedInsets = true
+                AppLog.log("[statusbar] own window insets: status bar visible=${insets.isVisible(WindowInsets.Type.statusBars())} (ignored)")
+            }
             insets
         }
+    }
+
+    private var loggedInsets = false
+
+    /** The app in front hides the status bar (immersive): so do we. */
+    fun setHiddenByApp(hidden: Boolean) {
+        val v = if (hidden) INVISIBLE else VISIBLE
+        if (visibility != v) visibility = v
     }
 
     /** Black content (the app asks for a light status bar, or home's wallpaper is light under it). */

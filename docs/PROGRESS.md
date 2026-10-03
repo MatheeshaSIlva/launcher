@@ -468,3 +468,13 @@ New features, round 1 of 3 (design: `docs/HOME_FEATURES.md`), next build, not ye
   (`dumpsys window displays`, appearance lines; the first three readings are logged as `[statusbar] appearance …` because the
   exact format on One UI is not known yet). On by default with gesture nav (dev panel: "Status bar: …").
   Note: "Test: break system" now hides the stock bar only while our own is shown.
+
+Device results (42699ab), Matheesha: stock status bar gone but ours not visible; Spotlight not like iOS (reference: Top Hit in a
+highlighted glass card, section titles with dividers, a glass search field that blurs what is behind it).
+Fixes (next build, not yet confirmed on the phone):
+- Status bar: it hid itself from its own window's insets; an overlay above the status bar is apparently never told the bar is
+  visible, so it stayed hidden. Now immersive apps are detected through the shell (the status bar insets source in
+  `dumpsys window displays`), and the own-insets reading is only logged once.
+- Spotlight: results show the best match as "Top Hit" in a glass card (home-sized icon, name, category), the others under
+  "Apps", titles with dividers; the search field is frosted glass that blurs the results scrolling under it and the background
+  (a blurred mirror of what is behind, darkened, slight rim) and has a clear button.

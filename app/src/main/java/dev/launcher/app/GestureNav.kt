@@ -250,13 +250,29 @@ object GestureNav {
         val bar = statusBar ?: return
         nav.removeCallbacks(appearanceTick)
         nav.postDelayed(appearanceTick, 2500)
-        if (homeVisible) { bar.setDark(HomeBridge.homeStatusDark); return }
+        if (homeVisible) { bar.setDark(HomeBridge.homeStatusDark); bar.setHiddenByApp(false); return }
         val s = ShizukuLink.service ?: return
         appearanceIo.execute {
             val out = try { s.windowAppearance() } catch (t: Throwable) { "ERROR: ${t.message}" }
             val dark = parseLightStatusBar(out)
-            if (appearanceLogs < 3) { appearanceLogs++; AppLog.log("[statusbar] appearance (${dark ?: "unknown"}) from: ${out.take(500)}") }
-            if (dark != null) nav.post { if (!homeVisible) statusBar?.setDark(dark) }
+            val hidden = parseStatusBarHidden(out)
+            if (appearanceLogs < 3) { appearanceLogs++; AppLog.log("[statusbar] appearance (dark ${dark ?: "unknown"}, hidden ${hidden ?: "unknown"}) from: ${out.take(700)}") }
+            nav.post {
+                val b = statusBar ?: return@post
+                if (homeVisible) return@post
+                if (dark != null) b.setDark(dark)
+                if (hidden != null) b.setHiddenByApp(hidden)
+            }
+        }
+    }
+
+    /** True if the status bar's insets source is not visible (an immersive app hid it); null if not found. */
+    private fun parseStatusBarHidden(out: String): Boolean? {
+        val line = out.lines().firstOrNull { it.contains("mType=statusBars") } ?: return null
+        return when {
+            line.contains("mVisible=false") -> true
+            line.contains("mVisible=true") -> false
+            else -> null
         }
     }
 

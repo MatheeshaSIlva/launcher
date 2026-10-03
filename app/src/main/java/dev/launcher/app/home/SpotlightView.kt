@@ -93,6 +93,10 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         results.visibility = View.INVISIBLE
         results.contentTop = m.gridTop - m.pt(8f)
         results.fadeTop = m.gridTop - m.pt(30f)
+        results.spotlight = true
+        results.drawCard = { c, rect -> drawCard(c, rect) }
+        // The frosted field mirrors the results under it: redraw it whenever they move.
+        results.onDrawn = { if (!mirroring) field.frost.invalidate() }
         addView(field, LayoutParams((m.w - 2 * m.libMargin).roundToInt(), m.searchHeight.roundToInt()).apply {
             leftMargin = m.libMargin.roundToInt()
         })
@@ -120,8 +124,38 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         val lp = field.layoutParams as LayoutParams
         lp.topMargin = fieldTop().roundToInt()
         field.layoutParams = lp
-        results.bottomSpace = m.h - fieldTop() + m.pt(8f)
+        // Results run on under the frosted field (down to the keyboard) and can be scrolled up from beneath it.
+        results.bottomSpace = max(imeInset.toFloat(), 0f)
+        results.bottomPadding = m.h - max(imeInset.toFloat(), 0f) - fieldTop() + m.pt(16f)
         applyProgress()
+    }
+
+    /** The Top Hit card: the theme's glass, refracting the blurred background behind Spotlight. */
+    private fun drawCard(c: Canvas, rect: RectF) {
+        val g = glass
+        val rad = m.pt(26f)
+        if (g == null) { c.drawRoundRect(rect, rad, rad, cardFallback); return }
+        screenOffset(results, offset)
+        g.setRadius(rad)
+        g.originX = offset[0] + rect.left
+        g.originY = offset[1] + rect.top
+        g.setBounds(rect.left.toInt(), rect.top.toInt(), kotlin.math.ceil(rect.right).toInt(), kotlin.math.ceil(rect.bottom).toInt())
+        g.draw(c)
+    }
+
+    private val cardFallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x24FFFFFF }
+    private val offset = FloatArray(2)
+    private var mirroring = false
+
+    /** Spotlight's background (the blurred wallpaper, darkened a little), also what the frosted field blurs. */
+    private fun drawBackground(c: Canvas, p: Float) {
+        val w = wallpaper
+        if (w != null) {
+            backdropPaint.alpha = (255 * p).toInt()
+            c.drawBitmap(w.heavy, w.heavyMatrix(m.w, m.h), backdropPaint)
+            dim.color = ((0x2E * p).toInt() shl 24)
+        } else dim.color = ((0x99 * p).toInt() shl 24)
+        c.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), dim)
     }
 
     // ------------------------------------------------------------------ opening and closing
@@ -220,6 +254,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         // Field rises from below, content comes down from above, both fading in with the pull.
         field.translationY = (1f - p) * m.pt(60f)
         field.alpha = p
+        field.frost.invalidate()   // it shows what is behind it, which changes as it moves
         val contentShift = (1f - p) * -m.pt(30f) + max(0f, progress - 1f) * m.pt(40f)
         results.translationY = contentShift
         results.alpha = p * resultsShown
@@ -281,13 +316,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
 
     override fun onDraw(c: Canvas) {
         val p = progress.coerceIn(0f, 1f)
-        val w = wallpaper
-        if (w != null) {
-            backdropPaint.alpha = (255 * p).toInt()
-            c.drawBitmap(w.heavy, w.heavyMatrix(m.w, m.h), backdropPaint)
-            dim.color = ((0x18 * p).toInt() shl 24)
-        } else dim.color = ((0x99 * p).toInt() shl 24)
-        c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dim)
+        drawBackground(c, p)
         val a = (255 * p * (1f - resultsShown)).toInt()
         if (a <= 0 || suggestions.isEmpty()) return
         val shift = -(1f - p) * m.pt(30f)
@@ -331,18 +360,25 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         return true
     }
 
-    // ------------------------------------------------------------------ the search field (glass capsule)
+    // ------------------------------------------------------------------ the search field (frosted glass capsule)
 
+    /**
+     * iOS 26's search field: a glass capsule that blurs what is really behind it (the results scrolling under it and the
+     * background), darkened a little, with a slight light rim; a magnifier, the text, and a clear button while there is text.
+     */
     private inner class Field(ctx: Context) : FrameLayout(ctx) {
         val edit = EditText(ctx)
-        private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xB3FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND }
-        private val fallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x2EFFFFFF }
+        val frost = Frost(ctx)
+        private val clearButton = ClearButton(ctx)
+        private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND }
+        private val tint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x47000000 }
+        private val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x38FFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(1f) }
         private val rect = RectF()
         private val lens = Path()
-        private val off = FloatArray(2)
 
         init {
             setWillNotDraw(false)
+            addView(frost, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
             edit.apply {
                 background = null
                 hint = "Search"
@@ -358,7 +394,10 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                 addTextChangedListener(object : TextWatcher {
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-                    override fun afterTextChanged(s: Editable?) { onQuery(s?.toString().orEmpty()) }
+                    override fun afterTextChanged(s: Editable?) {
+                        clearButton.visibility = if (s.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
+                        onQuery(s?.toString().orEmpty())
+                    }
                 })
                 setOnEditorActionListener { _, _, _ ->
                     results.firstResult()?.let { first -> launch(first, results.iconRectOf(first) ?: RectF()) }
@@ -366,30 +405,88 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                 }
             }
             addView(edit, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
-                leftMargin = m.pt(38f).roundToInt()
-                rightMargin = m.pt(12f).roundToInt()
+                leftMargin = m.pt(42f).roundToInt()
+                rightMargin = m.pt(44f).roundToInt()
             })
+            val cb = m.pt(32f).roundToInt()
+            addView(clearButton, LayoutParams(cb, cb).apply {
+                gravity = Gravity.END or Gravity.CENTER_VERTICAL
+                rightMargin = m.pt(8f).roundToInt()
+            })
+            clearButton.visibility = View.INVISIBLE
+            clearButton.setOnClickListener { clear() }
         }
 
         fun clear() { edit.setText("") }
 
-        override fun onDraw(canvas: Canvas) {
+        override fun dispatchDraw(canvas: Canvas) {
+            super.dispatchDraw(canvas)   // frost first (it is the first child), then text and clear button
+        }
+
+        override fun onDraw(canvas: Canvas) {}
+
+        override fun draw(canvas: Canvas) {
+            super.draw(canvas)
             rect.set(0f, 0f, width.toFloat(), height.toFloat())
             val rad = height / 2f
-            val g = glass
-            if (g != null) {
-                screenOffset(this, off)
-                g.originX = off[0]; g.originY = off[1]
-                g.setBounds(0, 0, width, height)
-                g.draw(canvas)
-            } else canvas.drawRoundRect(rect, rad, rad, fallback)
-            val cx = m.pt(20f)
+            canvas.drawRoundRect(rect.left + rim.strokeWidth / 2, rect.top + rim.strokeWidth / 2, rect.right - rim.strokeWidth / 2, rect.bottom - rim.strokeWidth / 2, rad, rad, rim)
+            val cx = m.pt(22f)
             val cy = height / 2f - m.pt(1f)
-            val lr = m.pt(6.5f)
+            val lr = m.pt(6.8f)
             lens.reset()
             lens.addCircle(cx, cy, lr, Path.Direction.CW)
             canvas.drawPath(lens, glyph)
             canvas.drawLine(cx + lr * 0.72f, cy + lr * 0.72f, cx + lr * 1.45f, cy + lr * 1.45f, glyph)
+        }
+
+        /** The blurred copy of what is behind the field, clipped to the capsule, darkened. */
+        inner class Frost(ctx: Context) : View(ctx) {
+            init {
+                clipToOutline = true
+                outlineProvider = object : android.view.ViewOutlineProvider() {
+                    override fun getOutline(view: View, outline: android.graphics.Outline) {
+                        outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= 31) {
+                    val b = m.pt(16f)
+                    setRenderEffect(android.graphics.RenderEffect.createBlurEffect(b, b, android.graphics.Shader.TileMode.CLAMP))
+                }
+            }
+
+            override fun onDraw(c: Canvas) {
+                val f = this@Field
+                c.save()
+                c.translate(-f.left.toFloat(), -(f.top + f.translationY))
+                drawBackground(c, 1f)
+                if (results.visibility == View.VISIBLE && results.alpha > 0f) {
+                    c.translate(0f, results.translationY)
+                    val layer = c.saveLayerAlpha(0f, 0f, m.w.toFloat(), m.h.toFloat(), (255 * results.alpha).toInt())
+                    mirroring = true
+                    try { results.draw(c) } finally { mirroring = false }
+                    c.restoreToCount(layer)
+                }
+                c.restore()
+                c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), tint)
+            }
+        }
+    }
+
+    /** iOS's clear button: a light disc with a dark cross. */
+    private inner class ClearButton(ctx: Context) : View(ctx) {
+        private val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xD9FFFFFF.toInt() }
+        private val cross = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1C1C1E.toInt(); strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND }
+
+        init { isClickable = true; contentDescription = "Clear" }
+
+        override fun onDraw(c: Canvas) {
+            val cx = width / 2f
+            val cy = height / 2f
+            val rr = m.pt(9f)
+            c.drawCircle(cx, cy, rr, disc)
+            val k = rr * 0.42f
+            c.drawLine(cx - k, cy - k, cx + k, cy + k, cross)
+            c.drawLine(cx - k, cy + k, cx + k, cy - k, cross)
         }
     }
 }
