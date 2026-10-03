@@ -99,6 +99,12 @@ object HomeBridge {
     fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long) =
         main.post { home?.animateDepth(from, to, velocity, response, damping, startNanos) }
 
+    /**
+     * True while gesture nav's picture of home covers the real home (cards on screen): home then skips its depth blur,
+     * which nobody would see (its zoom still runs, so it matches whenever it is uncovered).
+     */
+    @Volatile var homeCovered = false
+
     /** Set by gesture nav: home was touched (a closing card should get out of the way). Called on the main thread. */
     @Volatile var onHomeTouched: (() -> Unit)? = null
 }

@@ -46,6 +46,8 @@ data class MotionProfile(
     // Home behind an open app: icons zoom more than the wallpaper, which gives the iOS sense of depth.
     val homeContentZoom: Float,
     val homeWallpaperZoom: Float,
+    /** Blur of home (pt) when it has fully receded behind an open app; scales with depth (iOS blurs home as an app opens). */
+    val homeDepthBlur: Float,
 )
 
 object Motion {
@@ -78,6 +80,7 @@ object Motion {
         iconPressOutMs = 220,
         homeContentZoom = 1.12f,
         homeWallpaperZoom = 1.04f,
+        homeDepthBlur = 14f,
     )
 
     @Volatile var profile: MotionProfile = IOS

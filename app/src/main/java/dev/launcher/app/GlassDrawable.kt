@@ -50,7 +50,7 @@ data class GlassStyle(
          * The lens of c20b685 (the look Matheesha preferred) without its white lift, and a quieter rim.
          */
         val IOS = GlassStyle(frost = 1f, bevel = 20f, refraction = 30f, dispersion = 0.25f, magnify = 0.05f,
-            saturation = 1.4f, tint = 0f, glowWidth = 8f, glow = 0f, shade = 0f,
+            saturation = 1.22f, tint = 0f, glowWidth = 8f, glow = 0f, shade = 0f,
             rimWidth = 1.2f, rimBase = 0.14f, rimLight = 0.22f, rimBack = 0.10f)
     }
 }

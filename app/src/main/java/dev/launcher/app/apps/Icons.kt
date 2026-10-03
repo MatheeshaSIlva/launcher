@@ -60,6 +60,12 @@ enum class IconShape {
     /** Corner radius of a plain rounded rectangle that reads as this shape (for cards morphing into an icon). */
     fun cornerFraction(): Float = when (this) { SYSTEM -> systemCorner; SQUIRCLE -> 0.23f; CIRCLE -> 0.5f; ROUNDED_SQUARE -> 0.2f }
 
+    /**
+     * Corner of the card's clip once it is icon-sized: well inside the shape, so the clip never cuts the icon (the rendered
+     * icon carries its exact mask). A clip at [cornerFraction] cut the system squircle's corners rounder than the real icon.
+     */
+    fun clipFraction(): Float = cornerFraction() * 0.6f
+
     private companion object {
         /** The system's adaptive-icon mask at [size] px. */
         fun systemMask(size: Float): Path {

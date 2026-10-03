@@ -35,6 +35,9 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
     }
     private val iconRect = RectF()
     private var dim = 0f
+    /** A card is flying into or out of this icon: the image is left out, the label stays. */
+    var iconHidden = false
+        set(v) { if (field != v) { field = v; invalidate() } }
     private var dimAnim: ValueAnimator? = null
 
     init {
@@ -78,7 +81,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
     }
 
     override fun onDraw(canvas: Canvas) {
-        bitmap?.let {
+        bitmap?.takeIf { !iconHidden }?.let {
             iconPaint.colorFilter = if (dim > 0f) {
                 val k = (255 * (1f - dim)).toInt()
                 LightingColorFilter((0xFF shl 24) or (k shl 16) or (k shl 8) or k, 0)

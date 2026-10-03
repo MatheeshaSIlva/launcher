@@ -553,6 +553,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val cz = 1f + d * (mp.homeContentZoom - 1f)
         wallpaperView.scaleX = wz; wallpaperView.scaleY = wz
         fg.scaleX = cz; fg.scaleY = cz
+        // The same blur as the picture of home behind the cards (GestureNav), so taking over from it changes nothing; skipped
+        // while that picture covers home (the work would be invisible).
+        if (Build.VERSION.SDK_INT >= 31) {
+            val r = if (HomeBridge.homeCovered) 0f else d.coerceIn(0f, 1f) * mp.homeDepthBlur * resources.displayMetrics.density
+            setRenderEffect(if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP))
+        }
     }
 
     private var pendingSearch = false
@@ -620,12 +626,15 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         HomeBridge.setVisibleIcons(map)
     }
 
-    /** Hides the icon a card flies into or out of (null = show all). Alpha only: a hidden icon stays tappable. */
+    /**
+     * Hides the icon a card flies into or out of (null = show all): only the icon's image, its label stays (as on iOS), and
+     * the view stays tappable (reopening an app while its card is still closing).
+     */
     fun setHiddenPkg(pkg: String?) {
         if (pkg == hiddenPkg) return
-        hiddenPkg?.let { published[it]?.alpha = 1f }
+        hiddenPkg?.let { published[it]?.iconHidden = false }
         hiddenPkg = pkg
-        pkg?.let { published[it]?.alpha = 0f }
+        pkg?.let { published[it]?.iconHidden = true }
         drawer?.setHiddenPkg(pkg)
     }
 

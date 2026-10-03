@@ -437,3 +437,17 @@ Changes (next build, not yet confirmed on the phone):
   parallel; a card that appears late starts exactly where the app is (full screen) and glides to the finger in 120 ms; a close
   released before its card could show waits for it (max 350 ms, home is not started meanwhile) and then plays from full size.
   Log: `card visible N ms after the start` and `home released before the card could show`.
+
+Device results (a0b173e), Matheesha: "looks great"; glass a bit too saturated. Asked for iOS's blur during app open/close.
+Close glitch: at the end the icon has a larger corner radius and no label for a moment, then the real icon with its label appears.
+Changes (next build, not yet confirmed on the phone):
+- Glass saturation 1.4 → 1.22.
+- Close glitch, two causes: the card's clip at icon size used the system mask's *average* corner (from its area), which cuts the
+  One UI squircle's corners rounder than the real icon; and the hidden home icon was hidden with alpha, label included. Now the
+  icon-sized clip sits well inside the shape (0.6 of that corner: the rendered icon carries its exact mask), and hiding an icon
+  leaves its label (`IconView.iconHidden`), as on iOS. The picture of home without the icon keeps the label too.
+- Depth blur (iOS): home blurs as it recedes behind an opening app and sharpens as the app closes (`MotionProfile.homeDepthBlur`,
+  14 pt at full depth). In the picture of home it is one blur of the cached layers' composite per frame; the real home blurs on
+  the same spring only once it is uncovered (`HomeBridge.homeCovered`), so the work is never done twice.
+- While a card is dragged home, home now comes forward with it (depth 1 → 0.5 as the card shrinks: less zoom, less blur), then
+  the release springs on from there; a grabbed card keeps the depth home had when it was grabbed.

@@ -173,6 +173,7 @@ object GestureNav {
 
     private const val DEFAULT_SPLASH = 0xFF1C1C1E.toInt()
     private const val RELEASE_CARRY = 650f   // px/s of the finger's speed a close keeps at most
+    private const val DRAG_DEPTH_RANGE = 0.5f  // how far home comes forward while a card is dragged down to its smallest
     private const val SCALE_RANGE = 0.62f     // smallest card while dragging = 38 % of the screen
     private const val SCALE_LENGTH = 0.28f    // travel (in screen heights) for most of the shrink
 
@@ -375,6 +376,7 @@ object GestureNav {
 
     private fun showCards() {
         val r = root ?: return
+        if (backdrop?.picture != null) HomeBridge.homeCovered = true
         r.animate().cancel()
         r.alpha = 1f
         if (r.visibility != View.VISIBLE) {
@@ -443,6 +445,7 @@ object GestureNav {
             r.setBackgroundColor(0)
         }
         backdrop?.picture = null
+        HomeBridge.homeCovered = false
         pictureDropped = false
         closeDepthFrom = -1f
         prv?.visibility = View.GONE
@@ -612,6 +615,7 @@ object GestureNav {
         grabHK = (c.h / c.w) / (sh / sw)
         grabR = c.radius
         grabMix = c.iconMix
+        grabDepth = backdrop?.depth ?: 1f
         anchorX = (c.cx - x) / s
         anchorBottom = (c.cy + c.h / 2 - y) / s
         dragStartedAt = SystemClock.uptimeMillis()
@@ -763,8 +767,9 @@ object GestureNav {
     private var grabHK = 1f
     private var grabR = 0f
     private var grabMix = 0f
+    private var grabDepth = 1f
 
-    private fun resetGrab() { grabK = 1f; grabHK = 1f; grabR = deviceRadius; grabMix = 0f }
+    private fun resetGrab() { grabK = 1f; grabHK = 1f; grabR = deviceRadius; grabMix = 0f; grabDepth = 1f }
 
     private fun dragHome(x: Float, y: Float) {
         val c = cur ?: return
@@ -794,6 +799,10 @@ object GestureNav {
         }
         c.setFrame(cx, cy, fw, fh, deviceRadius + (grabR - deviceRadius) * b)
         c.iconMix = grabMix * b
+        // Home comes forward as the card shrinks (less zoom, less blur), as on iOS; release springs on from here. A grabbed card
+        // keeps the depth home had when it was grabbed and blends into this as it is pulled back (like its size and corners).
+        val dragDepth = 1f - DRAG_DEPTH_RANGE * ((1f - homeScale(lastTravel)) / SCALE_RANGE).coerceIn(0f, 1f)
+        backdrop?.depth = dragDepth + (grabDepth - dragDepth) * b
     }
 
     private fun releaseHome(up: Boolean, vx: Float, vy: Float) {
@@ -902,6 +911,7 @@ object GestureNav {
         if (anim != Anim.HOME_COMMIT || root?.visibility != View.VISIBLE) return
         // Touches only reach home once it is the window in front: the real home (running the same depth spring) can show.
         backdrop?.picture = null
+        HomeBridge.homeCovered = false
         pictureDropped = true
         hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
         hiddenIconPkg = null
@@ -971,7 +981,7 @@ object GestureNav {
         val radius: Float
         if (springToIcon) {
             // Into an icon: corners to the icon's, snapshot crossfades into the icon over the last stretch.
-            radius = springR0 + (target * Icons.shape.cornerFraction() - springR0) * q
+            radius = springR0 + (target * Icons.shape.clipFraction() - springR0) * q
             c.iconMix = max(springMix0 * (1f - q), 1f - ((w - target) / (target * 1.5f)).coerceIn(0f, 1f))
         } else {
             // To full screen (opening, or springing back): corners to the display's, any icon fades as the card grows.
@@ -1044,7 +1054,7 @@ object GestureNav {
             // The app's own launch-screen colour (resolved ahead of time for home's apps), else the icon's colour.
             c.placeholderColor = SplashColors.cached(pkg) ?: icon?.let { averageColor(it) } ?: DEFAULT_SPLASH
             if (SplashColors.cached(pkg) == null) SplashColors.resolve(app, pkg) { col -> nav.post { if (cardPkg == pkg) c.placeholderColor = col } }
-            c.setFrame(m[0], m[1], m[2], m[3], m[2] * Icons.shape.cornerFraction())
+            c.setFrame(m[0], m[1], m[2], m[3], m[2] * Icons.shape.clipFraction())
             c.iconMix = 1f
             prv?.visibility = View.GONE
             root?.setBackgroundColor(0)
@@ -1465,6 +1475,12 @@ object GestureNav {
                 val cz = 1f + v * (mp.homeContentZoom - 1f)
                 wallpaperLayer.scaleX = wz; wallpaperLayer.scaleY = wz
                 contentLayer.scaleX = cz; contentLayer.scaleY = cz
+                // iOS: home blurs as it recedes behind an opening app and sharpens as the app closes into it. The layers
+                // stay cached; only the blur of their composite is redone per frame.
+                if (Build.VERSION.SDK_INT >= 31) {
+                    val r = v.coerceIn(0f, 1f) * mp.homeDepthBlur * resources.displayMetrics.density
+                    setRenderEffect(if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP))
+                }
             }
     }
 
