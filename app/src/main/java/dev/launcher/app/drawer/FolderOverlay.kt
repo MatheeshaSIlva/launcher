@@ -120,11 +120,11 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         return out.apply { set(l, t, l + m.iconSize, t + m.iconSize) }
     }
 
-    fun visibleIcons(out: MutableList<Pair<String, RectF>>) {
+    fun visibleIcons(out: MutableList<IconSpot>) {
         val t = tile ?: return
         for (i in t.apps.indices) {
             val rect = iconRect(i, RectF())
-            if (rect.centerY() > panel.top && rect.centerY() < panel.bottom) out += t.apps[i].pkg to rect
+            if (rect.centerY() > panel.top && rect.centerY() < panel.bottom) out += IconSpot(t.apps[i].pkg, rect, "folder:${t.title}")
         }
     }
 
@@ -163,7 +163,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
                     val i = if (settledOpen) iconAt(e.x, e.y) else -1
                     val t = tile
                     when {
-                        i >= 0 && t != null -> lib.launch(t.apps[i], iconRect(i, RectF()))
+                        i >= 0 && t != null -> lib.launch(t.apps[i], iconRect(i, RectF()), "folder:${t.title}")
                         !panel.contains(e.x, e.y) || !settledOpen -> close()
                     }
                 }

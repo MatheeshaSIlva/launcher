@@ -91,11 +91,11 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
         return first..last
     }
 
-    fun visibleIcons(out: MutableList<Pair<String, RectF>>) {
+    fun visibleIcons(out: MutableList<IconSpot>) {
         val top = m.searchTop + m.searchHeight
         for (i in visibleTiles()) for (s in 0 until largeCount(i)) {
             val rect = slotRect(i, s, RectF())
-            if (rect.centerY() > top && rect.centerY() < height) out += lib.tiles[i].apps[s].pkg to rect
+            if (rect.centerY() > top && rect.centerY() < height) out += IconSpot(lib.tiles[i].apps[s].pkg, rect, "tile:${lib.tiles[i].title}")
         }
     }
 
@@ -141,7 +141,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
                     if (pulled > m.pt(70f) && lib.host.placement.isPage) lib.enterList(focusSearch = false)
                 } else if (touch.isTap) {
                     when (val t = hit(e.x, e.y)) {
-                        is Target.App -> lib.launch(lib.tiles[t.tile].apps[t.slot], slotRect(t.tile, t.slot, RectF()))
+                        is Target.App -> lib.launch(lib.tiles[t.tile].apps[t.slot], slotRect(t.tile, t.slot, RectF()), "tile:${lib.tiles[t.tile].title}")
                         is Target.Cluster -> lib.openFolder(lib.tiles[t.tile], tileRect(t.tile, RectF()))
                         null -> {}
                     }

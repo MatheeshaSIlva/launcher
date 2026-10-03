@@ -15,6 +15,7 @@ import android.view.ViewConfiguration
 import android.view.WindowInsets
 import android.widget.FrameLayout
 import android.widget.TextClock
+import dev.launcher.app.AppLog
 import dev.launcher.app.HomeBridge
 import dev.launcher.app.Spring
 import dev.launcher.app.Wallpaper
@@ -113,8 +114,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val bottom: Int
         var ime = 0
         if (Build.VERSION.SDK_INT >= 30) {
-            top = insets.getInsets(WindowInsets.Type.statusBars()).top
-            bottom = insets.getInsets(WindowInsets.Type.navigationBars()).bottom
+            // Ignoring visibility: a full-screen app hiding the status bar must not change home's layout (it used to rebuild
+            // home, losing the App Library's state, while a closing card was flying).
+            top = insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top
+            bottom = insets.getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars()).bottom
             ime = insets.getInsets(WindowInsets.Type.ime()).bottom
         } else {
             @Suppress("DEPRECATION") top = insets.systemWindowInsetTop
@@ -124,6 +127,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val minBottom = (20 * resources.displayMetrics.density).roundToInt()   // our gesture strip is at least this tall
         val b = maxOf(bottom, minBottom)
         if (top != topInset || b != bottomInset || radius != deviceRadius) {
+            if (m != null) AppLog.log("[home] insets changed (top $topInset->$top, bottom $bottomInset->$b, corner $deviceRadius->$radius): rebuilding")
             topInset = top; bottomInset = b; deviceRadius = radius
             build()
         }
@@ -133,7 +137,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        if (w != oldw || h != oldh) post { build() }
+        if (w != oldw || h != oldh) {
+            if (oldw != 0) AppLog.log("[home] size changed (${oldw}x$oldh -> ${w}x$h): rebuilding")
+            post { build() }
+        }
     }
 
     /** (Re)creates everything above the wallpaper for the current size, insets and config. */
@@ -194,6 +201,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         // Icons for what is on screen first, then the rest of the library in the background.
         Icons.preload(l.pages.flatten().filterIsInstance<HomeItem.App>().mapNotNull { Apps[it.key] } + l.dock.mapNotNull { Apps[it] }, metrics.iconSize)
         Icons.preload(Apps.all, metrics.iconSize)
+        // Launch screens for the apps on home, so a cold launch has the app's own colour from its first frame.
+        dev.launcher.app.apps.SplashColors.warm(context, l.pages.flatten().filterIsInstance<HomeItem.App>().mapNotNull { Apps[it.key]?.pkg } + l.dock.mapNotNull { Apps[it]?.pkg })
         post { publishIcons() }
     }
 

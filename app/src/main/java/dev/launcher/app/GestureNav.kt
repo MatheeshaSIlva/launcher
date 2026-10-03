@@ -34,6 +34,7 @@ import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
 import dev.launcher.app.apps.Icons
+import dev.launcher.app.apps.SplashColors
 import dev.launcher.app.motion.Motion
 
 /**
@@ -168,6 +169,7 @@ object GestureNav {
     @Volatile private var lastFrontPkg: String? = null
     @Volatile private var lastFrontAt = 0L
 
+    private const val DEFAULT_SPLASH = 0xFF1C1C1E.toInt()
     private const val SCALE_RANGE = 0.62f     // smallest card while dragging = 38 % of the screen
     private const val SCALE_LENGTH = 0.28f    // travel (in screen heights) for most of the shrink
 
@@ -401,6 +403,8 @@ object GestureNav {
         prv?.visibility = View.GONE
         nxt?.visibility = View.GONE
         cur?.snapshot = null
+        cur?.homePicture = null
+        switchFromHome = false
         // A card that ended inside an icon is fully "icon": reused as is, the next switch drew a huge icon over the snapshot.
         cur?.iconMix = 0f
         prv?.iconMix = 0f
@@ -438,8 +442,23 @@ object GestureNav {
     }
 
     private fun setCardContent(c: CardView, pkg: String?, bitmap: Bitmap?) {
+        c.homePicture = null
         c.snapshot = bitmap
         c.icon = pkg?.let { iconFor(it) }
+        c.minIconSize = Icons.homeSize.toFloat()
+        // Without a snapshot the card shows the app's launch screen: its splash colour behind its icon.
+        if (pkg != null) {
+            c.placeholderColor = SplashColors.cached(pkg) ?: DEFAULT_SPLASH
+            if (SplashColors.cached(pkg) == null) SplashColors.resolve(app, pkg) { col -> nav.post { if (cardPkgFor(c) == pkg) c.placeholderColor = col } }
+        }
+    }
+
+    /** Which app a card currently shows (to drop late splash colours that arrive after the card moved on). */
+    private fun cardPkgFor(c: CardView): String? = when (c) {
+        cur -> cardPkg
+        prv -> older?.pkg
+        nxt -> newer?.pkg
+        else -> null
     }
 
     // ================================================================== touch (nav thread)
@@ -454,7 +473,7 @@ object GestureNav {
                 downY = e.rawY
                 fingerDown = true
                 stats.reset()
-                if ((phase == Phase.ANIM || phase == Phase.HOLD) && root?.visibility == View.VISIBLE) takeOver(e.rawX, e.rawY)
+                if ((phase == Phase.ANIM || phase == Phase.HOLD) && root?.visibility == View.VISIBLE && !(switchFromHome && anim == Anim.SWITCH_CANCEL)) takeOver(e.rawX, e.rawY)
                 else { hideCards(); pendingFresh = true; prefetch(fresh = true) }
                 // At the first touch, so they are off well before the gesture commits and home or another app starts.
                 holdScalesOff()
@@ -466,6 +485,10 @@ object GestureNav {
                 if (pendingFresh && !homeVisible) {
                     if (dy > dp(10) && dy > abs(dx)) { pendingFresh = false; beginHome() }
                     else if (abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) { pendingFresh = false; beginSwitch() }
+                } else if (pendingFresh && homeVisible && abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) {
+                    // On home, sideways brings the last app in beside home, with the finger (home slides away as a card).
+                    pendingFresh = false
+                    beginSwitch(fromHome = true)
                 } else if (grabbedFull) {
                     if (dy > dp(8) && dy > abs(dx)) { grabbedFull = false; phase = Phase.DRAG_HOME }
                     else if (abs(dx) > dp(12) && abs(dx) > abs(dy) * 1.2f) { grabbedFull = false; beginSwitch() }
@@ -486,7 +509,6 @@ object GestureNav {
                     phase == Phase.DRAG_HOME -> releaseHome(up, vx, vy)
                     phase == Phase.DRAG_SWITCH -> releaseSwitch(up, vx)
                     grabbedFull -> { grabbedFull = false; releaseHome(false, 0f, 0f) }   // a tap on a full-size card: let it finish
-                    pendingFresh && homeVisible && up && abs(e.rawX - downX) > dp(40) -> returnToLastApp()
                 }
                 pendingFresh = false
                 fingerDown = false
@@ -517,8 +539,11 @@ object GestureNav {
         if (wasAnim == Anim.SWITCH_COMMIT) {
             // The app being switched to is the one coming to the front: its card becomes the current card at full size.
             val from = if (switchTargetIsOlder) prv else nxt
+            c.homePicture = null
             c.snapshot = from?.snapshot
             c.icon = from?.icon
+            c.placeholderColor = from?.placeholderColor ?: DEFAULT_SPLASH
+            switchFromHome = false
             cardPkg = switchTarget?.pkg
             fg = switchTarget
             prev = null
@@ -576,10 +601,13 @@ object GestureNav {
                 prev = tasks.switchable().firstOrNull { it.pkg != fg?.pkg && it.id != fg?.id }
                 recentList = tasks
                 onTasks(fresh)
+                if (phase == Phase.DRAG_SWITCH && switchFromHome) refreshHomeSwitch()
             }
             if (onHome || tasks.isEmpty()) return@execute
             snapIo.execute {
                 if (fresh) {
+                    val cached = try { s.taskSnapshot(tasks[0].id, false) } catch (_: Throwable) { null }
+                    if (cached != null) nav.post { if (id == gestureId) onFgCached(tasks[0].pkg, cached) }
                     val t = SystemClock.uptimeMillis()
                     val b = try { s.taskSnapshot(tasks[0].id, true) } catch (_: Throwable) { null }
                     val ms = SystemClock.uptimeMillis() - t
@@ -610,13 +638,19 @@ object GestureNav {
     /** Tasks known. A fresh gesture's card can show at once if we already have an image of that app. */
     private fun onTasks(fresh: Boolean) {
         val f = fg ?: return
-        if (!fresh) return
+        if (!fresh || switchFromHome) return   // a switch from home keeps home as its card
         if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH) {
             cardPkg = f.pkg
             if (fgFresh == null) recentImage(f.pkg)?.let { cur?.let { c -> setCardContent(c, f.pkg, it) } }
             if (phase == Phase.DRAG_HOME) backdrop?.picture = HomeBridge.previewFor(f.pkg)
             maybeShow()
         }
+    }
+
+    /** The system's last snapshot of the app in front: a stand-in until the fresh one arrives (only for a sideways switch). */
+    private fun onFgCached(pkg: String, b: Bitmap) {
+        if (fgFresh != null || phase != Phase.DRAG_SWITCH || cardPkg != pkg) return
+        cur?.let { c -> if (c.snapshot == null) { c.snapshot = b; maybeShow() } }
     }
 
     private fun onFgFresh(b: Bitmap?, ms: Long) {
@@ -732,7 +766,7 @@ object GestureNav {
             closeDepthFrom = depth0
             anim = Anim.HOME_COMMIT
             endLabel = when {
-                target != null -> "home (into the icon of $pkg)"
+                target != null -> "home (into the icon of $pkg at ${target.centerX().toInt()},${target.centerY().toInt()})"
                 pkg == null -> "home (to centre; app NOT KNOWN yet at release: task lookup still running)"
                 else -> "home (to centre; $pkg has no icon on home)"
             } + "; front report ${lastFrontPkg ?: "-"}, top task ${recentList.firstOrNull()?.pkg ?: "-"}"
@@ -790,7 +824,10 @@ object GestureNav {
      * app), so the card gets out of the way at once (fades where it is) and its icon is back.
      */
     private fun homeTouchedDuringClose() {
-        if (anim != Anim.HOME_COMMIT || !pictureDropped || root?.visibility != View.VISIBLE) return
+        if (anim != Anim.HOME_COMMIT || root?.visibility != View.VISIBLE) return
+        // Touches only reach home once it is the window in front: the real home (running the same depth spring) can show.
+        backdrop?.picture = null
+        pictureDropped = true
         hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
         hiddenIconPkg = null
         fadeOutCards(110, gen)
@@ -872,12 +909,6 @@ object GestureNav {
         }
         c.setFrame(sCx.value(t), sCy.value(t), w, h, r)
         backdrop?.depth = sDepth.value(t)
-        // Closing: once the real home has drawn, it shows itself (with its own, identical depth spring) and stays
-        // interactive; the picture was only needed until then.
-        if (anim == Anim.HOME_COMMIT && !pictureDropped && backdrop?.picture != null && HomeBridge.homeDrawnAt >= homeRequestedAt) {
-            backdrop?.picture = null
-            pictureDropped = true
-        }
         return sCx.settled(t) && sCy.settled(t) && sW.settled(t) && sH.settled(t)
     }
 
@@ -928,9 +959,13 @@ object GestureNav {
         if (reverse && backdrop?.picture == null) backdrop?.picture = picture
         pictureDropped = false
         if (!reverse) {
+            c.homePicture = null
             c.icon = icon
             c.snapshot = images[pkg]
-            c.placeholderColor = icon?.let { averageColor(it) } ?: 0xFF2A2F3A.toInt()
+            c.minIconSize = iconRect.width()
+            // The app's own launch-screen colour (resolved ahead of time for home's apps), else the icon's colour.
+            c.placeholderColor = SplashColors.cached(pkg) ?: icon?.let { averageColor(it) } ?: DEFAULT_SPLASH
+            if (SplashColors.cached(pkg) == null) SplashColors.resolve(app, pkg) { col -> nav.post { if (cardPkg == pkg) c.placeholderColor = col } }
             c.setFrame(m[0], m[1], m[2], m[3], m[2] * Icons.shape.cornerFraction())
             c.iconMix = 1f
             prv?.visibility = View.GONE
@@ -1083,12 +1118,34 @@ object GestureNav {
     private var switchTargetIsOlder = true
     private const val SWITCH_RUN_MS = 4000L
 
-    private fun beginSwitch() {
+    // A switch that started on the home screen: home itself is the current card, the recent apps are to its left.
+    private var switchFromHome = false
+    private val homeTask by lazy { Task(-1, app.packageName) }
+
+    private fun beginSwitch(fromHome: Boolean = false) {
         if (!prepareCardWindow()) return
         val fromGrab = root?.visibility == View.VISIBLE
         gen++
         phase = Phase.DRAG_SWITCH
         anim = Anim.NONE
+        switchFromHome = fromHome
+        if (fromHome) {
+            dragStartedAt = SystemClock.uptimeMillis()
+            cardVisibleAfter = -1
+            cardPkg = null
+            fg = null
+            cur?.let { c -> c.snapshot = null; c.icon = null; c.homePicture = HomeBridge.preview }
+            refreshHomeSwitch()
+            cur?.iconMix = 0f
+            offset = 0f
+            switchScale = 1f
+            backdrop?.picture = null
+            root?.setBackgroundColor(0xFF000000.toInt())
+            layoutSwitch(0f, 1f)
+            if (HomeBridge.preview != null) showCards()
+            stats.start()
+            return
+        }
         if (!fromGrab) {
             dragStartedAt = SystemClock.uptimeMillis()
             cardVisibleAfter = -1
@@ -1107,7 +1164,8 @@ object GestureNav {
             switchIndex = 0
         }
         older = switchList.getOrNull(switchIndex + 1)
-        newer = switchList.getOrNull(switchIndex - 1)
+        // Sideways only ever goes through apps, never back to home (a run that started on home keeps it out).
+        newer = switchList.getOrNull(switchIndex - 1)?.takeIf { it !== homeTask }
         cur?.iconMix = 0f
         offset = 0f
         switchScale = 1f
@@ -1119,6 +1177,18 @@ object GestureNav {
         layoutSwitch(0f, 1f)
         maybeShow()
         stats.start()
+    }
+
+    /** Home switch: the run is home followed by the recent apps (known once the task list has arrived). */
+    private fun refreshHomeSwitch() {
+        switchList = listOf(homeTask) + recentList.switchable()
+        switchIndex = 0
+        older = switchList.getOrNull(1)
+        newer = null
+        prv?.let { pc -> setCardContent(pc, older?.pkg, older?.let { images[it.pkg] }); pc.visibility = if (older != null) View.VISIBLE else View.GONE }
+        nxt?.visibility = View.GONE
+        loadNeighbourImages()
+        layoutSwitch(offset, switchScale)
     }
 
     /** Cached snapshots of the neighbours (how they look when they come back), if we do not have them yet. */
@@ -1156,6 +1226,8 @@ object GestureNav {
 
     private fun releaseSwitch(up: Boolean, vx: Float) {
         val g = gen
+        // A quick flick can end before the current app's image arrived: animate anyway (its launch screen stands in).
+        showCards()
         val toOlder = up && older != null && ((offset > sw * 0.3f && vx > -300f) || (vx > 600f && offset > dp(20)))
         val toNewer = up && newer != null && ((offset < -sw * 0.3f && vx < 300f) || (vx < -600f && offset < -dp(20)))
         val target = if (toOlder) older else if (toNewer) newer else null
@@ -1257,15 +1329,6 @@ object GestureNav {
                     try { app.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), noAnimation(app)) } catch (_: Throwable) { }
                 }
             }
-        }
-    }
-
-    private fun returnToLastApp() {
-        val s = ShizukuLink.service ?: return
-        front("last app") {
-            val target = fg?.takeIf { it.pkg != app.packageName } ?: parseTasks(s.recentTasks(4)).switchable().firstOrNull()
-            if (target == null) { AppLog.log("[nav] no recent app to return to"); return@front }
-            AppLog.log("[nav] home swipe -> last app ${target.pkg}: ${try { s.switchToTask(target.id) } catch (e: Throwable) { "ERROR: ${e.message}" }}")
         }
     }
 

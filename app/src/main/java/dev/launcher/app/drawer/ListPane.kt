@@ -134,11 +134,11 @@ internal class ListPane(ctx: Context, private val lib: AppLibraryView) : View(ct
         return if (i < 0) null else iconRect(i, RectF())
     }
 
-    fun visibleIcons(out: MutableList<Pair<String, RectF>>) {
+    fun visibleIcons(out: MutableList<IconSpot>) {
         for (i in visibleRows()) {
             val row = rows[i] as? Row.Item ?: continue
             val rect = iconRect(i, RectF())
-            if (rect.centerY() > m.tilesTop && rect.centerY() < height - imeInset) out += row.e.pkg to rect
+            if (rect.centerY() > m.tilesTop && rect.centerY() < height - imeInset) out += IconSpot(row.e.pkg, rect, "list")
         }
     }
 
@@ -186,7 +186,7 @@ internal class ListPane(ctx: Context, private val lib: AppLibraryView) : View(ct
                 if (touch.scrolling) scroller.endDrag(-touch.velocityY())
                 else if (touch.isTap) {
                     val i = rowAt(e.y)
-                    (rows.getOrNull(i) as? Row.Item)?.let { lib.launch(it.e, iconRect(i, RectF())) }
+                    (rows.getOrNull(i) as? Row.Item)?.let { lib.launch(it.e, iconRect(i, RectF()), "list") }
                 }
                 setPressed(-1)
             }

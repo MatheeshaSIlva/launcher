@@ -358,3 +358,26 @@ Changes (next build):
   Settings with its real window growing from a card, then goes home with the live window shrinking slowly (try swiping pages
   during it). The report lists what the system hands over and the frame pacing. If it works, launch and close move to live
   windows (no more grey cards or pictures of home).
+
+Device results (a74caa2), Matheesha: "literally nothing was fixed … it made everything worse". Close animation flickers the app
+full screen; App Library duplicate icon unchanged; first sideways swipe has no animation; cold launches still look bad; the
+glass looks frosted, not liquid; the live-card probe showed no animation at all (app popped up and closed).
+Causes found in the code (not yet confirmed on the phone):
+- Flicker: a74caa2 dropped the picture of home as soon as home had *drawn*. Drawn is not on screen: the app was still showing
+  for a few frames, and the card window's backdrop was gone. Reverted; the picture now goes only when home is touched (touches
+  reach home only once it really is in front), so swiping during a close still works.
+- Duplicate icon: likely home being rebuilt when a full-screen app hid the status bar (insets were read with visibility, the
+  rebuild recreated the App Library and lost which copy was tapped). Insets are now read ignoring visibility, and every rebuild
+  is logged (`[home] insets changed …` / `size changed`). The tapped copy is also remembered by its tile, not its position
+  (position broke if the Suggestions tile re-sorted). Logs: `[library] open <pkg> from tile:<name> at x,y` and the close's
+  `home (into the icon of <pkg> at x,y)`.
+- First sideways swipe: on home, a sideways swipe used to switch with no animation at all (`returnToLastApp`); in an app, the
+  cards waited for a fresh snapshot (~100 ms), so a quick flick ended before they appeared. Now: on home, home itself slides away
+  as a card while the last app comes in; in an app, the system's cached snapshot shows at once and the switch always animates.
+- Glass: misread measurement. Under the iOS dock a thin wallpaper line keeps its width and only loses contrast: that is tint,
+  not blur. Back to clear glass: light blur (about 1.5 pt), stronger lensing rim, brighter thin rim, light sheen.
+- Cold launch: the card now becomes the app's own launch screen (splash colour from the app's theme,
+  windowSplashScreenBackground / windowBackground, with the icon at launch-screen size), so it hands over to the app's splash
+  without a colour jump. Colours are resolved in advance for home's apps.
+- Probe: the report is needed to tell whether the system never called us or our surface changes failed; it now also logs the
+  options it sent and the leash it animates.

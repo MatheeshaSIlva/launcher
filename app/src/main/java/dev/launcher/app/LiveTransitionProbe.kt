@@ -72,7 +72,9 @@ class LiveTransitionProbe(private val atm: Any) {
         }
         val start = SystemClock.uptimeMillis()
         runner.requestedAt = start
-        log("start result: ${startActivity(intent, options.toBundle())}")
+        val bundle = options.toBundle()
+        log("options carry: ${bundle.keySet().joinToString()}")
+        log("start result: ${startActivity(intent, bundle)}")
         if (!done.await(5, TimeUnit.SECONDS)) log("no finish within 5 s (startAnimation called: ${runner.started})")
     }
 
@@ -159,6 +161,7 @@ class LiveTransitionProbe(private val atm: Any) {
                 val duration = if (opening) 450L else 1500L
                 val frames = ArrayList<Long>()
                 val ch = Choreographer.getInstance()
+                log("  animating ${if (opening) "the opening" else "the closing"} leash, bounds $bounds")
                 var begin = 0L
                 ch.postFrameCallback(object : Choreographer.FrameCallback {
                     override fun doFrame(now: Long) {

@@ -47,14 +47,14 @@ class Wallpaper private constructor(
             val d = WallpaperManager.getInstance(ctx).drawable as? BitmapDrawable
             val src = d?.bitmap ?: throw IllegalStateException("no bitmap wallpaper")
             val bmp = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
-            val scale = 4
+            // Light copy for clear glass: half size, box radius 2 twice, about 1.5 iOS points of blur (just enough to soften
+            // fine detail; iOS 26's dock keeps the wallpaper's shapes sharp).
+            val scale = 2
             val small = Bitmap.createScaledBitmap(bmp, max(1, bmp.width / scale), max(1, bmp.height / scale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)
-            // At 1/4 size, box radius 4 three times: sigma about 18 px at full size, 6.5 iOS points on the S24 (iOS 26's dock
-            // measured 6 to 8 pt).
-            boxBlur(small, 4, 3)
+            boxBlur(small, 2, 2)
             val heavyScale = 16
-            val heavy = Bitmap.createScaledBitmap(small, max(1, bmp.width / heavyScale), max(1, bmp.height / heavyScale), true)
+            val heavy = Bitmap.createScaledBitmap(bmp, max(1, bmp.width / heavyScale), max(1, bmp.height / heavyScale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)
             boxBlur(heavy, 3, 3)   // at 1/16 size: ≈ 60 px at full size, like iOS's background material
             AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}")

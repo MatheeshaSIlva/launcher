@@ -31,6 +31,9 @@ import kotlin.math.roundToInt
 /** One App Library tile: a title and its apps (best first). Category tiles with more than four apps open as a folder. */
 internal class Tile(val title: String, val apps: List<AppEntry>, val expandable: Boolean)
 
+/** One drawn copy of an app's icon: where it is and which part of the library shows it ("tile:Social", "list", ...). */
+internal class IconSpot(val pkg: String, val rect: RectF, val source: String)
+
 /**
  * The iOS App Library: a search field on top; category tiles in two columns (Suggestions and Recently Added first, then
  * categories by iOS's order). A tile shows up to four large icons, which open their app; with more apps, the fourth slot
@@ -55,9 +58,9 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     // The one icon hidden while a card flies into or out of it (by package and by where it is drawn).
     private var hiddenPkg: String? = null
     private val published = HashMap<String, RectF>()
-    // The copy of an icon that was tapped: an app shown twice (Suggestions and its category) closes back into the copy it
-    // was opened from, not whichever comes first.
-    private var anchor: Pair<String, RectF>? = null
+    // Where the tapped copy of an icon lives (its tile, the list, a folder): an app shown twice (Suggestions and its
+    // category) closes back into the copy it was opened from, even if tiles re-sorted meanwhile.
+    private var anchor: Pair<String, String>? = null
 
     override val view: View get() = this
 
@@ -170,13 +173,14 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
 
     internal fun launchFirstResult() {
         val e = listPane.firstResult() ?: return
-        launch(e, listPane.iconRectOf(e) ?: RectF())
+        launch(e, listPane.iconRectOf(e) ?: RectF(), "list")
     }
 
     // ------------------------------------------------------------------ actions from the panes
 
-    internal fun launch(e: AppEntry, rectInView: RectF) {
-        anchor = e.pkg to RectF(rectInView)
+    internal fun launch(e: AppEntry, rectInView: RectF, source: String) {
+        anchor = e.pkg to source
+        dev.launcher.app.AppLog.log("[library] open ${e.pkg} from $source at ${rectInView.centerX().toInt()},${rectInView.centerY().toInt()}")
         host.onIconsMoved()   // publish this copy before the launch hides it and records home without it
         val loc = IntArray(2)
         getLocationOnScreen(loc)
@@ -243,19 +247,18 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     override fun visibleIcons(out: MutableMap<String, RectF>) {
         val loc = IntArray(2)
         getLocationOnScreen(loc)
-        val all = ArrayList<Pair<String, RectF>>()
+        val all = ArrayList<IconSpot>()
         when {
             folder.isOpen -> folder.visibleIcons(all)
             listMode -> listPane.visibleIcons(all)
             else -> tilesPane.visibleIcons(all)
         }
-        // One copy per app: the tapped one if it is visible, else the first.
+        // One copy per app: the one in the part of the library it was opened from, if visible; else the first.
         val chosen = LinkedHashMap<String, RectF>()
         val a = anchor
-        for ((pkg, r) in all) {
-            val isAnchor = a != null && a.first == pkg &&
-                kotlin.math.abs(a.second.centerX() - r.centerX()) < 2f && kotlin.math.abs(a.second.centerY() - r.centerY()) < 2f
-            if (isAnchor || !chosen.containsKey(pkg)) chosen[pkg] = r
+        for (spot in all) {
+            val isAnchor = a != null && a.first == spot.pkg && a.second == spot.source
+            if (isAnchor || !chosen.containsKey(spot.pkg)) chosen[spot.pkg] = spot.rect
         }
         published.clear()
         published.putAll(chosen)

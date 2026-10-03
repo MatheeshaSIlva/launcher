@@ -34,15 +34,15 @@ data class GlassStyle(
 ) {
     companion object {
         /**
-         * The dock, as measured on iOS 26: the wallpaper's shapes stay readable through it (blur sigma about 6.5 pt, see
-         * [Wallpaper]), colours come out much more saturated (as the usual saturate(180%) recreations), a slight lift,
-         * and a thin bright rim lit from the top left.
+         * The dock, as on iOS 26: clear glass. A thin line of the wallpaper keeps its width under the iOS dock and only loses
+         * contrast, so there is almost no blur (the light copy in [Wallpaper], about 1.5 pt): what makes it glass is the
+         * lensing rim (the view bends strongly near the edge), stronger colour, a light sheen and a bright thin rim.
          */
-        val IOS_DOCK = GlassStyle(frost = 1f, bevelDp = 18f, refractionDp = 22f, dispersion = 0.2f, magnify = 0.05f,
-            saturation = 1.7f, lift = 0.04f, specular = 0.28f, specularWidthDp = 1.3f)
-        /** Small capsules (Search pill, page indicator): nearly clear glass (iOS shows the wallpaper sharp through it). */
-        val IOS_CAPSULE = GlassStyle(frost = 0.3f, bevelDp = 8f, refractionDp = 10f, dispersion = 0.15f, magnify = 0.03f,
-            saturation = 1.5f, lift = 0.06f, specular = 0.3f, specularWidthDp = 1.1f)
+        val IOS_DOCK = GlassStyle(frost = 1f, bevelDp = 22f, refractionDp = 34f, dispersion = 0.3f, magnify = 0.06f,
+            saturation = 1.45f, lift = 0.07f, specular = 0.45f, specularWidthDp = 1.5f)
+        /** Small capsules (Search pill, page indicator): the same clear glass with a thinner rim. */
+        val IOS_CAPSULE = GlassStyle(frost = 1f, bevelDp = 9f, refractionDp = 12f, dispersion = 0.2f, magnify = 0.04f,
+            saturation = 1.4f, lift = 0.08f, specular = 0.45f, specularWidthDp = 1.2f)
     }
 }
 
