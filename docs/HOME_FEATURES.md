@@ -96,8 +96,10 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
   tap a card to open it (it grows to full screen, its app comes to the front meanwhile; the app the swipe started in is still
   there underneath, so it returns at once); flick a card up to close its app (IActivityTaskManager.removeTask through the
   shell), the cards beside it close the gap on springs; tap empty space or swipe up from the bottom edge to go home.
-  A card a finger lifts is drawn above its neighbours (it used to slide up under the newer card's edge, then jump on top
-  when let go); dropped back, it settles under the newer card again with that card fading back over it.
+  A card lifted or flicked away keeps its place in the stack: every newer card stays in front of it, also while it flies
+  off (it used to jump on top when let go). Going home, the cards on screen slide out to the left by just enough to clear
+  the edge; cards off screen stay out of sight (a fixed distance made the newer cards of a deck scrolled to older apps slide
+  in from the right and stop mid-screen).
 - Touches: a full-screen invisible input window, added on its own thread only while the deck is open (adding windows or
   changing their flags re-lays them out, 6-80 ms, never on the thread that draws the cards; an idle window would still be a
   layer to compose every frame). It lies over the bar, so the bottom edge is handled there.

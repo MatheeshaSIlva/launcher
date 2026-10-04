@@ -677,3 +677,14 @@ all the apps that are open?"):
 - Emulator, 20 recent apps: all 20 in the deck (full list 7-14 ms), lift / drop back / flick checked on screenshots and a
   recording, scrolling to the oldest apps asked for pictures as cards came into view. Not measured yet on the S24: frame
   stats while scrolling a long deck, and the full list's time ("full list in N ms" in the switcher log).
+
+Round 13 (Matheesha: a swiped-up card should stay behind the cards in front of it; deep in the deck, tapping outside made the
+cards slide, get stuck and vanish):
+- Round 12's "lifted card on top" reverted: a lifted or flying card keeps its place in the stack (drawn between its older
+  and newer neighbours until it is gone).
+- Going home slid every card by one fixed distance, right only when the newest card is focused. Scrolled to older apps, the
+  newer cards waiting off screen to the right slid in across the screen and stopped mid-screen until home was reached.
+  Now the distance is what clears the cards on screen, and cards off screen at that moment are not drawn. Emulator
+  recordings: deep in the deck (scroll 9), from home and from an app, by tap and by bar swipe.
+- Seen on the emulator only, right after a reinstall: the first switcher use had no picture of home yet, and choosing home
+  rendered it then (a ~230 ms stall). Not seen otherwise; to watch on the phone after an UPDATE.

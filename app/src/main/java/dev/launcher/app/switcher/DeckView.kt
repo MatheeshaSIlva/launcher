@@ -70,17 +70,15 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         internal var asked = 0                      // the level of a fetch on its way (0 none)
         internal var shader: BitmapShader? = null
         internal var lift: SpringValue? = null      // vertical offset while dragged or flicked up (px, negative = up)
-        // 1 while a finger lifts the card: drawn above its neighbours (the newer card to its right used to cover its edge
-        // as it went up, then it jumped on top when let go). Back to 0 once it is level again, the newer card fading back.
-        internal var raise: SpringValue? = null
-        internal val raiseK get() = raise?.value ?: 0f
         internal var shift: SpringValue? = null     // horizontal offset closing the gap a removed card left (px)
         internal val frozen = RectF()               // where a card flying away was when it was let go
         internal var frozenRadius = 0f
+        internal var flyingAt = 0                   // flying away: drawn just above the card now at this index (its place)
+        internal var offForHome = false             // off screen when going home began: stays out of sight
     }
 
     private val cards = ArrayList<Card>()
-    private val flying = ArrayList<Card>()          // flicked away, drawn on top until off screen
+    private val flying = ArrayList<Card>()          // flicked away, drawn in their place in the stack until off screen
     val count get() = cards.size
 
     private val density = resources.displayMetrics.density
@@ -115,7 +113,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     /** Something in the deck is moving (frame logs measure while it is). */
     val moving get() = scrollAnim.isAnimating || enterAnim.isAnimating || openAnim.isAnimating || homeAnim.isAnimating ||
-        flying.isNotEmpty() || cards.any { it.lift?.isAnimating == true || it.shift?.isAnimating == true || it.raise?.isAnimating == true } || dragging
+        flying.isNotEmpty() || cards.any { it.lift?.isAnimating == true || it.shift?.isAnimating == true } || dragging
 
     /** Whether the deck takes touches: shown, and neither opening an app nor going home. */
     val interactive get() = visibility == VISIBLE && openCard == null && homeK == 0f
@@ -176,8 +174,25 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
             lerp(out, tmp, openK, out)
             radius += (deviceRadius - radius) * openK
         }
-        if (homeK > 0f) out.offset(-homeK * deckWidth(), 0f)
+        if (homeK > 0f) out.offset(-homeK * homeDistance, 0f)
         return radius
+    }
+
+    // Going home: the cards on screen slide out to the left by just enough to clear the edge. (A fixed distance only fit the
+    // deck focused on its newest card: scrolled to older apps, the newer cards waiting off screen to the right slid in
+    // across the screen and stopped in the middle, then vanished.)
+    private var homeDistance = 0f
+
+    private fun prepareHomeSlide() {
+        var right = 0f
+        for (i in cards.indices) {
+            frame(i, box)
+            val off = box.right <= 0f || box.left >= sw
+            cards[i].offForHome = off
+            if (!off) right = max(right, box.right)
+        }
+        for (c in flying) right = max(right, c.frozen.right)
+        homeDistance = max(right, sw * 0.5f) + shadowPad
     }
 
     /**
@@ -213,13 +228,13 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     private val above = RectF()
 
-    private val raisedAt = IntArray(4)
-
     override fun onDraw(canvas: Canvas) {
-        // Oldest first: newer cards lie on top. A card a finger lifts (or that is settling back) comes last, above them all.
-        var raised = 0
+        // Oldest first: newer cards lie on top. A card lifted by a finger or flying away keeps its place: every newer card
+        // stays in front of it (it never jumps on top).
+        drawFlying(canvas, cards.size, Int.MAX_VALUE)
         for (i in cards.indices.reversed()) {
-            if (cards[i].raiseK > 0f && raised < raisedAt.size) { raisedAt[raised++] = i; continue }
+            drawFlying(canvas, i + 1, i + 1)
+            if (homeK > 0f && cards[i].offForHome) continue
             val a = alphaOf(i)
             if (a <= 0.004f) continue
             val radius = frame(i, box)
@@ -238,45 +253,21 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
             } else drawCard(canvas, cards[i], box, radius, a)
             drawLabel(canvas, cards[i], i - scroll, box, labelAlpha(a))
         }
-        for (n in raised - 1 downTo 0) drawRaised(canvas, raisedAt[n])
-        // Cards flicked away, on top, fading as they leave.
+        drawFlying(canvas, 0, 0)
+    }
+
+    /** Cards flicked away whose place is above the card now at an index in [from]..[to], fading as they leave. */
+    private fun drawFlying(canvas: Canvas, from: Int, to: Int) {
         for (c in flying) {
+            if (c.flyingAt < from || c.flyingAt > to) continue
             box.set(c.frozen)
             val y = c.lift?.value ?: 0f
             box.offset(0f, y)
             val radius = c.frozenRadius
-            if (homeK > 0f) box.offset(-homeK * deckWidth(), 0f)
+            if (homeK > 0f) box.offset(-homeK * homeDistance, 0f)
             val a = (1f + y / (c.frozen.bottom + dp(40f))).coerceIn(0f, 1f)
             if (a > 0.004f) drawCard(canvas, c, box, radius, a)
         }
-    }
-
-    /**
-     * Card [i] above its neighbours. Once it is level again ([Card.raiseK] going to 0) the newer card fades back over the
-     * part it covers, so the stack order returns without a jump.
-     */
-    private fun drawRaised(canvas: Canvas, i: Int) {
-        val c = cards[i]
-        val a = alphaOf(i)
-        if (a <= 0.004f) return
-        val radius = frame(i, box)
-        if (box.right < 0f || box.left > sw) return
-        drawShadow(canvas, box, radius, a)
-        drawCard(canvas, c, box, radius, a)
-        drawLabel(canvas, c, i - scroll, box, labelAlpha(a))
-        val back = 1f - c.raiseK
-        if (back <= 0.004f || i == 0) return
-        val aboveA = alphaOf(i - 1)
-        if (aboveA <= 0.004f) return
-        val aboveRadius = frame(i - 1, above)
-        // What the newer card covers of this one, up to where the card after it covers the newer card in turn.
-        val right = min(box.right, coveredFrom(i - 1, above))
-        if (above.left >= right || above.top >= box.bottom || above.bottom <= box.top) return
-        canvas.save()
-        canvas.clipRect(box.left, box.top, right, box.bottom)
-        drawShadow(canvas, above, aboveRadius, aboveA * back)
-        drawCard(canvas, cards[i - 1], above, aboveRadius, aboveA * back)
-        canvas.restore()
     }
 
     // A soft shadow all round each card (iOS), from one blurred rounded rectangle drawn once at a quarter of the card's size
@@ -324,6 +315,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         if (i == 0 || alphaOf(i) < 0.999f) return Float.MAX_VALUE
         val c = cards[i - 1]
         if (alphaOf(i - 1) < 0.999f || c === openCard || cards[i].lift?.value?.let { it != 0f } == true || c.lift?.value?.let { it != 0f } == true) return Float.MAX_VALUE
+        if (homeK > 0f && c.offForHome) return Float.MAX_VALUE   // not drawn while going home
         val radius = frame(i - 1, above)
         if (above.top > r.top + 0.5f || above.bottom < r.bottom - 0.5f) return Float.MAX_VALUE
         return above.left + radius
@@ -521,6 +513,8 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     fun goHome() {
         if (openCard != null || homeK > 0f) return
+        scrollAnim.stop()   // the cards leave from where they are
+        prepareHomeSlide()
         listener.onHomeStart()
         homeAnim.animateTo(1f, profile.home, 0f)
     }
@@ -574,7 +568,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
                 val dy = e.rawY - downY
                 if (mode == 0) {
                     if (abs(dx) > slop && abs(dx) > abs(dy)) mode = 1
-                    else if (dy < -slop && abs(dy) > abs(dx) && touched != null) { mode = 2; touched?.let { raiseOf(it).snapTo(1f) } }
+                    else if (dy < -slop && abs(dy) > abs(dx) && touched != null) mode = 2
                 }
                 when (mode) {
                     1 -> setScrollFromDrag(downScroll + dx / pxPerCard)
@@ -624,11 +618,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         scrollAnim.animateTo(target, profile.scroll, v)
     }
 
-    private fun liftOf(c: Card): SpringValue = c.lift ?: SpringValue(0f, 1f, onChange = { invalidate() },
-        // Level again (let go without flying away): back into the stack.
-        onRest = { if (abs(c.lift?.value ?: 0f) < 0.5f && c.raiseK > 0f) raiseOf(c).animateTo(0f, profile.reflow, 0f) }).also { c.lift = it }
-
-    private fun raiseOf(c: Card): SpringValue = c.raise ?: SpringValue(0f, 1f, onChange = { invalidate() }).also { c.raise = it }
+    private fun liftOf(c: Card): SpringValue = c.lift ?: SpringValue(0f, 1f, onChange = { invalidate() }).also { c.lift = it }
 
     private fun releaseLift(c: Card, vy: Float, up: Boolean) {
         val lift = liftOf(c)
@@ -651,6 +641,8 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         for (j in cards.indices) if (j != i) { frame(j, box); before[cards[j]] = box.left }
         val focus = scroll.roundToInt()
         cards.removeAt(i)
+        for (f in flying) if (f.flyingAt > i) f.flyingAt--
+        c.flyingAt = i
         flying.add(c)
         liftOf(c).animateTo(-(c.frozen.bottom + dp(40f)), profile.flick, min(vy, -dp(800f)))
         postDelayed({ flying.remove(c); invalidate() }, 600)
