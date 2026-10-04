@@ -144,7 +144,14 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         slot(i, scroll, out)
         c.shift?.let { out.offset(it.value, 0f) }
         var radius = cardRadius
-        if (enterK < 1f) {
+        if (enterK < 1f && risingIn) {
+            val k = riseOf(i)
+            val s = RISE_SCALE + (1f - RISE_SCALE) * k
+            val cx = out.centerX()
+            val cy = out.centerY() + (1f - k) * sh * RISE_DISTANCE
+            out.set(cx - out.width() * s / 2, cy - out.height() * s / 2, cx + out.width() * s / 2, cy + out.height() * s / 2)
+            radius *= s
+        } else if (enterK < 1f) {
             if (i == 0) {
                 lerp(from, out, enterK, out)
                 radius = fromRadius + (radius - fromRadius) * enterK
@@ -170,7 +177,10 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     private fun alphaOf(i: Int): Float {
         val c = cards[i]
         var a = 1f
-        if (enterK < 1f && i != 0) a *= enterK
+        if (enterK < 1f) {
+            if (risingIn) a *= (riseOf(i) / 0.45f).coerceIn(0f, 1f)
+            else if (i != 0) a *= enterK
+        }
         if (openCard != null && c !== openCard) a *= 1f - openK
         if (homeK > 0f) a *= 1f - homeK
         return a
@@ -332,6 +342,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
      */
     fun enter(list: List<Card>, fromFrame: RectF, fromCornerRadius: Float) {
         releaseFocus = 1
+        risingIn = false
         start(list, fromFrame, fromCornerRadius)
     }
 
@@ -341,11 +352,19 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
      */
     fun enterFromHome(list: List<Card>) {
         releaseFocus = 0
-        val r = slot(0, 0f, RectF())
-        val s = 0.9f
-        val f = RectF(r.centerX() - r.width() * s / 2, r.centerY() - r.height() * s / 2, r.centerX() + r.width() * s / 2, r.centerY() + r.height() * s / 2)
-        f.offset(0f, sh * 0.3f)
-        start(list, f, cardRadius * s)
+        risingIn = true
+        start(list, RectF(), cardRadius)
+    }
+
+    // Entering from home: no card under the finger, so every card rises into its slot the same way (newest first, the
+    // older ones a moment later), growing a little and fading in. (Card 0 rising while the others slid in from the left
+    // read as two different motions.)
+    private var risingIn = false
+
+    /** How far card [i] is into the rise (0..1, overshoots with the spring): newer cards a little ahead. */
+    private fun riseOf(i: Int): Float {
+        val d = RISE_STAGGER * min(i, 4)
+        return ((enterK - d) / (1f - d)).coerceAtLeast(0f)
     }
 
     private var releaseFocus = 1   // where the focus goes when the opening swipe lifts without moving sideways
@@ -362,6 +381,14 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         enterAnim.animateTo(1f, profile.enter, 0f)
         heldMoved = false
         visibility = VISIBLE
+        invalidate()
+    }
+
+    /** A newer picture of the app in task [taskId] arrived while the deck is shown. */
+    fun updateSnapshot(taskId: Int, b: Bitmap) {
+        val c = cards.firstOrNull { it.taskId == taskId } ?: return
+        if (c.snapshot === b) return
+        c.snapshot = b
         invalidate()
     }
 
@@ -530,6 +557,10 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         const val STEP_NEWER = 1.0f
         const val STEP_OLDER = 0.08f
         const val STEP_SHARPNESS = 3f
+        // Entering from home: cards rise this far (of the screen height), from this scale, each older one this much later.
+        const val RISE_DISTANCE = 0.22f
+        const val RISE_SCALE = 0.9f
+        const val RISE_STAGGER = 0.06f
         const val SHADOW_BLUR_DP = 26f
         const val SHADOW_ALPHA = 0.45f
     }

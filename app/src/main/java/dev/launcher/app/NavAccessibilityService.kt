@@ -31,7 +31,12 @@ class NavAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Tells gesture navigation when a switched-to app is really in front, so its card can go without a gap.
-        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) GestureNav.onWindowStateChanged(event.packageName?.toString(), event.className?.toString())
+        when (event?.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> GestureNav.onWindowStateChanged(event.packageName?.toString(), event.className?.toString())
+            // The app in front changed what it shows: our picture of it (cards, App Switcher) is taken again once it settles.
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_VIEW_SCROLLED -> GestureNav.onContentChanged(event.packageName?.toString())
+            else -> {}
+        }
     }
     override fun onInterrupt() {}
 

@@ -149,7 +149,65 @@ object GestureNav {
     private val leftFrontAt = ConcurrentHashMap<String, Long>()
     private val systemPictureAt = ConcurrentHashMap<String, Long>()
 
-    private fun remember(pkg: String, b: Bitmap) { images[pkg] = b; imagesAt[pkg] = SystemClock.uptimeMillis() }
+    private fun remember(pkg: String, b: Bitmap, takenAt: Long = SystemClock.uptimeMillis()) { images[pkg] = b; imagesAt[pkg] = takenAt }
+
+    // The task of the app in front, once looked up (a gesture's fresh picture can then start at the touch).
+    @Volatile private var frontTask: Task? = null
+
+    // When the app in front last changed what it shows (accessibility events): a picture taken before that is out of date.
+    private val contentChangedAt = ConcurrentHashMap<String, Long>()
+
+    /** Our latest picture of [pkg] was taken before its screen last changed (it would show the app as it was). */
+    private fun keptIsStale(pkg: String?): Boolean = pkg != null && (contentChangedAt[pkg] ?: 0L) > (imagesAt[pkg] ?: 0L)
+
+    /** From NavAccessibilityService: the window of [pkg] changed its content or scrolled. */
+    fun onContentChanged(pkg: String?) {
+        if (pkg == null || pkg != lastFrontPkg) return   // only the app in front (not our windows, not the keyboard)
+        contentChangedAt[pkg] = SystemClock.uptimeMillis()
+        nav.post { if (phase == Phase.SWITCHER) refreshSwitcherCard() else refreshSoon() }
+    }
+
+    /**
+     * The App Switcher is open over the app the swipe started in, and that app changed its screen after its card's picture
+     * was taken (often the last tap before the swipe, reported a moment late): a new picture for its card, once it settles.
+     */
+    private fun refreshSwitcherCard() {
+        val t = fg ?: return
+        if (homeStarted || !keptIsStale(t.pkg)) return
+        nav.removeCallbacks(switcherRefresh)
+        nav.postDelayed(switcherRefresh, SWITCHER_REFRESH_SETTLE_MS)
+    }
+
+    private val switcherRefresh = Runnable {
+        val t = fg ?: return@Runnable
+        val s = ShizukuLink.service ?: return@Runnable
+        if (phase != Phase.SWITCHER) return@Runnable
+        val g = gen
+        snapIo.execute {
+            val t0 = SystemClock.uptimeMillis()
+            val b = try { snapshot(s, t.id, true) } catch (_: Throwable) { null } ?: return@execute
+            nav.post {
+                if (gen != g || phase != Phase.SWITCHER) return@post
+                remember(t.pkg, b, t0)
+                deck?.updateSnapshot(t.id, b)
+                AppLog.log("[switcher] ${t.pkg.substringAfterLast('.')} changed its screen: its card was taken again")
+            }
+        }
+    }
+
+    // A new picture of the app in front once its screen has settled (KEEP_FRESH_SETTLE_MS after the last change), at most
+    // every KEEP_FRESH_MIN_GAP_MS: a home swipe or the App Switcher then shows the app as it is, not as it was seconds ago.
+    private var keptAt = 0L
+
+    private fun refreshSoon() {
+        if (phase != Phase.IDLE || homeVisible) return
+        val now = SystemClock.uptimeMillis()
+        // Never later than the regular refresh: a screen that keeps changing (a running timer) would otherwise put it off
+        // for good.
+        val delay = min(max(KEEP_FRESH_SETTLE_MS, keptAt + KEEP_FRESH_MIN_GAP_MS - now), max(0L, keptAt + KEEP_FRESH_MS - now))
+        nav.removeCallbacks(keepFresh)
+        nav.postDelayed(keepFresh, delay)
+    }
 
     /**
      * A task's snapshot as a hardware bitmap, wrapped here around the buffer the shell sends: a Bitmap sent over Binder
@@ -187,18 +245,20 @@ object GestureNav {
             val s = ShizukuLink.service
             val pkg = lastFrontPkg
             if (!ready || locked || homeVisible || s == null || pkg == null) return
+            keptAt = SystemClock.uptimeMillis()
             // An app is in front: the card window stays ready for a close (see windowOff), with home's picture for it rendered.
             if (phase == Phase.IDLE) { setWindowShown(true); backdrop?.prewarm(HomeBridge.previewFor(pkg)) }
             if (phase == Phase.IDLE) tasksIo.execute {
                 val tasks = try { parseTasks(s.recentTasks(3)) } catch (_: Throwable) { emptyList() }
                 val task = tasks.firstOrNull { it.pkg == pkg } ?: return@execute
+                frontTask = task
                 val prevPkg = tasks.switchable().firstOrNull { it.pkg != pkg }?.pkg
                 nav.post { if (phase == Phase.IDLE) warm?.second = prevPkg?.let { images[it] } }
                 snapIo.execute {
                     val t0 = SystemClock.uptimeMillis()
                     val b = try { snapshot(s, task.id, true) } catch (_: Throwable) { null }
                     if (keepFreshLogs < 3) { keepFreshLogs++; AppLog.log("[nav] kept a recent picture of $pkg (${SystemClock.uptimeMillis() - t0} ms, ${b?.config})") }
-                    if (b != null) nav.post { if (lastFrontPkg == pkg) { remember(pkg, b); if (phase == Phase.IDLE) warm?.bitmap = b } }
+                    if (b != null) nav.post { if (lastFrontPkg == pkg) { remember(pkg, b, t0); if (phase == Phase.IDLE) warm?.bitmap = b } }
                 }
             }
             nav.postDelayed(this, KEEP_FRESH_MS)
@@ -374,6 +434,8 @@ object GestureNav {
 
     fun onHomeShown() {
         homeVisible = true
+        // The app that was in front has just left it: the system's snapshot of it (taken as it left) is newer than ours.
+        lastFrontPkg?.let { leftFrontAt[it] = SystemClock.uptimeMillis() }
         nav.post { refreshAppearance() }
     }
 
@@ -638,6 +700,9 @@ object GestureNav {
     // A picture of the app in front younger than this is shown at once by a home gesture; kept that young in the background.
     private const val RECENT_MS = 10_000L
     private const val KEEP_FRESH_MS = 6_000L
+    private const val KEEP_FRESH_SETTLE_MS = 400L
+    private const val SWITCHER_REFRESH_SETTLE_MS = 150L
+    private const val KEEP_FRESH_MIN_GAP_MS = 1_200L
     private var catchUpAt = 0L          // nanoTime when a late card appeared during a drag (0 = not catching up)
     private var lastDragX = 0f
     private var lastDragY = 0f
@@ -925,6 +990,15 @@ object GestureNav {
         prev = null
         if (fresh) { fgFresh = null; fgFreshDone = false; fgSnapMs = -1 }
         prvSnapshot = null
+        // The app in front changed its screen since our latest picture of it: its fresh picture is taken right now, from the
+        // task we already know, instead of after the recent-tasks lookup (~50 ms later).
+        val known = frontTask?.takeIf { fresh && !onHome && it.pkg == lastFrontPkg && keptIsStale(it.pkg) }
+        if (known != null) snapIo.execute {
+            val t = SystemClock.uptimeMillis()
+            val b = try { snapshot(s, known.id, true) } catch (_: Throwable) { null }
+            val ms = SystemClock.uptimeMillis() - t
+            nav.post { if (id == gestureId) onFgFresh(known.pkg, b, ms) else b?.let { remember(known.pkg, it, t) } }
+        }
         tasksIo.execute {
             val tasks = try { parseTasks(s.recentTasks(8)) } catch (_: Throwable) { emptyList() }
             if (id != gestureId) return@execute
@@ -947,6 +1021,8 @@ object GestureNav {
                     if (images[t.pkg] != null && (systemPictureAt[t.pkg] ?: 0L) > (leftFrontAt[t.pkg] ?: Long.MAX_VALUE)) continue
                     val b = try { snapshot(s, t.id, false) } catch (_: Throwable) { null } ?: continue
                     remember(t.pkg, b); systemPictureAt[t.pkg] = SystemClock.uptimeMillis()
+                    val tid = t.id
+                    nav.post { if (phase == Phase.SWITCHER) deck?.updateSnapshot(tid, b) }
                 }
             }
             if (onHome || tasks.isEmpty()) return@execute
@@ -956,17 +1032,19 @@ object GestureNav {
             // of closes (S24 log: "NativeAlloc concurrent mark compact GC ... paused 5.3ms"). A fresh capture also kept the
             // GPU busy (the system renders it) during the gesture's first frames.
             val fgPkg = tasks[0].pkg
-            val haveFg = recentImage(fgPkg) != null
+            frontTask = tasks[0]
+            val haveFg = known?.pkg == fgPkg || (recentImage(fgPkg) != null && !keptIsStale(fgPkg))
             val p = tasks.getOrNull(1)
             val havePrev = p != null && (systemPictureAt[p.pkg] ?: 0L) > (leftFrontAt[p.pkg] ?: Long.MAX_VALUE)
             snapIo.execute {
-                if (fresh) {
-                    if (haveFg) nav.post { if (id == gestureId) onFgFresh(fgPkg, null, 0L) }
-                    else {
+                if (fresh) when {
+                    known?.pkg == fgPkg -> {}   // its fresh picture is already on its way (started at the touch)
+                    haveFg -> nav.post { if (id == gestureId) onFgFresh(fgPkg, null, 0L) }
+                    else -> {
                         val t = SystemClock.uptimeMillis()
                         val b = try { snapshot(s, tasks[0].id, true) } catch (_: Throwable) { null }
                         val ms = SystemClock.uptimeMillis() - t
-                        nav.post { if (id == gestureId) onFgFresh(fgPkg, b, ms) else b?.let { remember(fgPkg, it) } }
+                        nav.post { if (id == gestureId) onFgFresh(fgPkg, b, ms) else b?.let { remember(fgPkg, it, t) } }
                     }
                 }
                 p ?: return@execute
@@ -1002,6 +1080,8 @@ object GestureNav {
         if (!fresh || switchFromHome) return   // a switch from home keeps home as its card
         if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH) {
             cardPkg = f.pkg
+            // The latest picture at once, even if the app changed since: the card follows the finger from the first frame and
+            // the fresh picture replaces it as soon as it arrives (onFgFresh). Waiting for it left the card ~80 ms late.
             if (fgFresh == null) recentImage(f.pkg)?.let { cur?.let { c -> setCardContent(c, f.pkg, it) } }
             if (phase == Phase.DRAG_HOME) backdrop?.picture = HomeBridge.previewFor(f.pkg)
             maybeShow()
@@ -1022,12 +1102,14 @@ object GestureNav {
         // was reversed: the check always failed and every card swapped pictures mid-motion).
         // [b] null with [ms] 0: no capture was taken because a recent picture is kept (see prefetch).
         val showsKept = cur?.snapshot?.let { it === recentImage(pkg) } == true
-        b?.let { remember(pkg, it) }
+        val keptStale = keptIsStale(pkg)
+        b?.let { remember(pkg, it, SystemClock.uptimeMillis() - ms) }
+        if (phase == Phase.SWITCHER && b != null) fg?.let { t -> deck?.updateSnapshot(t.id, b) }
         if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH || anim == Anim.HOME_CANCEL || anim == Anim.HOME_COMMIT) {
             cur?.let { c ->
-                // A card already showing a picture of this app from the last few seconds keeps it: a new picture's first draw
-                // costs a GPU import in the middle of the motion.
-                if (b != null && !showsKept) c.snapshot = b
+                // A card already showing an up-to-date picture of this app keeps it (a new picture's first draw costs a GPU
+                // import in the middle of the motion); an out-of-date one is replaced.
+                if (b != null && (!showsKept || keptStale)) c.snapshot = b
                 else if (b == null && c.snapshot == null) {
                     val kept = recentImage(pkg)
                     if (kept != null) c.snapshot = kept else c.icon = fg?.let { iconFor(it.pkg) }
@@ -1870,8 +1952,9 @@ object GestureNav {
                 nav.post { if (gen == g && phase == Phase.SWITCHER) { card.snapshot = b; deck?.invalidate() } }
             }
         }
+        refreshSwitcherCard()
         stats.reset(); stats.start()
-        AppLog.log("[switcher] open: ${cards.size} apps (${cards.joinToString { it.pkg.substringAfterLast('.') }})")
+        AppLog.log("[switcher] open: ${cards.size} apps (${cards.joinToString { it.pkg.substringAfterLast('.') }}); ${pictureAges(cards)}")
     }
 
     /**
@@ -1918,7 +2001,17 @@ object GestureNav {
             }
         }
         stats.reset(); stats.start()
-        AppLog.log("[switcher] open from home: ${cards.size} apps (${cards.joinToString { it.pkg.substringAfterLast('.') }})")
+        AppLog.log("[switcher] open from home: ${cards.size} apps (${cards.joinToString { it.pkg.substringAfterLast('.') }}); ${pictureAges(cards)}")
+    }
+
+    /** For the log: how old the pictures of the first two cards are, and whether their app changed its screen since. */
+    private fun pictureAges(cards: List<dev.launcher.app.switcher.DeckView.Card>): String {
+        val now = SystemClock.uptimeMillis()
+        return cards.take(2).joinToString { c ->
+            val at = imagesAt[c.pkg]
+            val age = if (c.snapshot == null || at == null) "no picture yet" else "${"%.1f".format((now - at) / 1000.0)} s old"
+            "${c.pkg.substringAfterLast('.')} $age${if (keptIsStale(c.pkg)) ", OUT OF DATE" else ""}"
+        }
     }
 
     private fun labelFor(pkg: String): String =

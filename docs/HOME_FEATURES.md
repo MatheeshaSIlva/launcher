@@ -73,6 +73,14 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
 - From the home screen too: a swipe up that rests the same way opens the deck with the most recent app focused (its card
   rises into place from below, the others slide in); lifting without a rest is still the Home button (page 1, Spotlight
   closed). Home stays the window in front until an app is chosen; "home" from this deck just brings the picture forward.
+  Every card rises into its slot the same way (newest first, the others a moment later, growing a little and fading in):
+  card 0 rising while the others slid in from the left read as two motions (Matheesha).
+- Up-to-date pictures (round 9): the app in front's picture is taken again ~0.4 s after its screen last changed
+  (accessibility "content changed"/"scrolled" events, only the package is read; at most every 1.2 s, never later than the
+  regular 6 s refresh); a gesture that starts within that window takes a fresh one at the touch (the card shows the latest
+  picture at once and the fresh one replaces it ~10-20 ms later); the open deck re-takes the card of the app behind it if
+  that app changes its screen; an app that goes to the background counts as changed, so home's deck fetches the system's
+  snapshot taken as it left.
 - Layout from Apple's iOS 27 App Switcher illustration: cards at 68 % of the screen, vertical centre at 51.5 %; the focused
   card's left edge at 22.5 % of the width; newer cards spread to the right (step 1.0 card widths), older ones stack tightly
   to the left (step 0.08), joined by a smooth curve so cards change speed without a jump as they pass the focus. Newer cards

@@ -626,3 +626,19 @@ hold counts once the finger is 56 dp above where it started instead of "card bel
 with screenshots: from home (short swipe, Contacts focused), tap to open, short hold inside an app, tap empty space = home,
 plain swipe up on home = no switcher. S24 frame stats (two runs, missed refreshes): short hold in an app 1/0, opening an app
 from it 0/1, home from it 0/0; short hold on home 0/0, opening an app from that deck 0/0.
+
+Round 9 (Matheesha: the deck from home moved two ways; previews out of date, "especially the most recent one"):
+- From home every card rises the same way (cascade, newest first). Checked on the emulator (recording).
+- Out-of-date previews had three causes: (1) going from an app to home never marked it as having left the front, so its
+  old picture counted as current and the system's newer snapshot was never fetched; (2) our kept picture refreshed only
+  every 6 s; (3) a change just before the swipe. Now: content-change events refresh the kept picture once the screen settles;
+  a stale picture makes the gesture take a fresh one at the touch (from the known task, ~10-20 ms, replacing the shown one);
+  the open deck re-takes a card whose app changed. Verified on the S24 through the log ("[switcher] open ... N s old, OUT OF
+  DATE" / "... its card was taken again"): home deck after leaving Calculator 0.4 s old and current; deck 2 s after typing
+  1.9 s old and current; typing then swiping at once: out of date at open, re-taken moments later. Recorded (Calculator):
+  typed "9", closed at once: the card shows "9" from its first frame.
+- First attempt waited for the fresh picture before showing the card: card 80 ms late (fluidity rule): reverted to "show at
+  once, replace when it arrives"; with the capture starting at the touch the card shows in 0-2 ms.
+- S24 frame stats: switcher in/open/home/from home/open from home 0/0/0/0/1; type-and-close 0/0/2; launches 0,1,0 / 1,0,0;
+  closes 2,1,4 / 0,2,0 (the recurring flagged frame #2 has an intended time before the gesture: the card window's last
+  frame of the previous session, not the swipe).
