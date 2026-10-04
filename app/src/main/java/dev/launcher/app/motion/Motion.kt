@@ -63,6 +63,33 @@ data class MotionProfile(
     // Sheets (widget gallery): presenting and dismissing, and pushing a page inside one.
     val sheet: SpringSpec,
     val navPush: SpringSpec,
+    val switcher: SwitcherProfile,
+)
+
+/**
+ * The App Switcher (hold during a home swipe): the deck's geometry and motion. Geometry as fractions of the screen, from
+ * Apple's illustration of the iOS 27 App Switcher.
+ */
+data class SwitcherProfile(
+    /** Card size (of the screen), vertical centre (of its height), the focused card's left edge (of its width). */
+    val cardScale: Float,
+    val cardCenterY: Float,
+    val focusLeft: Float,
+    /** The hold that opens the deck: the finger rests (slower than [holdSpeedDp] dp/s) for [holdMs] with the card already
+     *  below [holdMaxScale] of the screen. */
+    val holdMs: Long,
+    val holdSpeedDp: Float,
+    val holdMaxScale: Float,
+    val enter: SpringSpec,
+    /** Scrolling to rest on a card; how far ahead (s) a throw is projected to choose that card. */
+    val scroll: SpringSpec,
+    val flingProjection: Float,
+    val open: SpringSpec,
+    val home: SpringSpec,
+    /** A card flicked up and away (faster than [flickSpeedDp] dp/s, or a third of its height), and the gap closing. */
+    val flick: SpringSpec,
+    val flickSpeedDp: Float,
+    val reflow: SpringSpec,
 )
 
 object Motion {
@@ -106,6 +133,22 @@ object Motion {
         jigglePeriod = 0.26f,
         sheet = SpringSpec(0.45f, 1f),
         navPush = SpringSpec(0.42f, 1f),
+        switcher = SwitcherProfile(
+            cardScale = 0.68f,
+            cardCenterY = 0.515f,
+            focusLeft = 0.225f,
+            holdMs = 150,
+            holdSpeedDp = 120f,
+            holdMaxScale = 0.72f,
+            enter = SpringSpec(0.38f, 0.9f),
+            scroll = SpringSpec(0.4f, 1f),
+            flingProjection = 0.22f,
+            open = SpringSpec(0.42f, 0.92f),
+            home = SpringSpec(0.42f, 1f),
+            flick = SpringSpec(0.35f, 1f),
+            flickSpeedDp = 900f,
+            reflow = SpringSpec(0.38f, 0.92f),
+        ),
     )
 
     @Volatile var profile: MotionProfile = IOS

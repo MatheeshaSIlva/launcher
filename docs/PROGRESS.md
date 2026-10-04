@@ -602,3 +602,21 @@ Causes found (Perfetto with scheduler data) and changes:
 Found but not fixable from the app: at a gesture's start our render thread runs on a small core at ~1.1 GHz for the first
 ~100 ms (the touch boost goes to the app in front); the public performance-hint API cannot ask for a boost. Remaining late
 frames are mostly at the start of a gesture or of an app's own start (GPU busy with the app).
+
+Round 8: the App Switcher (hold during a home swipe), design and behaviour in HOME_FEATURES.md §3. Checked on the emulator with
+screenshots (layout, scroll direction, flick to close: "closed ... (task N): ok", tap to open, tap empty / swipe up from the
+bottom to go home) and on the S24 by frame stats only (`tools/scenario_switcher.sh`; no screenshots there, the deck shows the
+snapshots of other apps, messaging included). Missed refreshes on the S24, three runs: opening the deck 0/0/0 (worst frame
+16.7 ms), opening an app from it 1-2/1/0 (while the app starts), going home 0/0/0.
+Found and fixed while measuring:
+- The hold timer only re-armed on fast finger motion, and the velocity estimate reads 0 between sparse touch events: an early
+  check (card still large) failed and never came back. The hold is now "within 12 dp for 150 ms".
+- Swapping the picture of home behind the deck on its first frame re-rendered home's layers (4.4 ms): the swipe's picture
+  stays; the full one (every icon) only when home is chosen, when only the small blurred copy is visible.
+- Removing the input window while home came to the front stalled the compositor ~90 ms: it now goes after the animation.
+- Every card was drawn whole though older ones are mostly covered: now only the visible strip.
+- The card shadow was rebuilt (CPU blur + GPU copy) each time the deck opened: a 175 ms first frame. Built once per size.
+- A swipe that started before home had ever been recorded showed the app through the dimmed deck background: a picture is
+  taken when the deck opens, else a plain dark ground.
+- framestats.py counted gaps where we drew nothing (sparse injected touches, pauses between animations) as missed refreshes;
+  a miss now needs frames drawn for consecutive refreshes. Earlier rounds' numbers re-checked: unchanged.

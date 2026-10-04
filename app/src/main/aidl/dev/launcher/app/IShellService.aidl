@@ -74,4 +74,7 @@ interface IShellService {
     // a Bitmap (taskSnapshot) made Binder read the hardware bitmap back into a 10 MB software copy in this process, which the
     // app then uploaded to the GPU at its first draw (5+ ms, traced on the S24) and scanned on its UI thread. Null when none.
     HardwareBuffer taskSnapshotBuffer(int taskId, boolean fresh) = 22;
+
+    // Closes a recent task (IActivityTaskManager.removeTask; the App Switcher's flick up). "ok", "not removed" or "ERROR: ...".
+    String removeTask(int taskId) = 23;
 }

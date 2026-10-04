@@ -65,11 +65,25 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
   Library and Spotlight (long press, then move). Not yet: folders (hover to make one), resizing a placed widget (iOS 27's
   corner handle). Shortcuts, App Info and widget setup screens open with the stock animation.
 
-## 3. Overview (hold during a home swipe)
+## 3. App Switcher (hold during a home swipe) — built (round 8)
 
-- Trigger: during a home drag, the finger rests (speed < ~120 dp/s) for 150 ms after the card has shrunk below ~70 %: haptic,
-  the other recent apps' cards slide in from the left (cached snapshots, 1–3 ms each).
-- Layout (iOS): cards at about 62 % size in a horizontal deck, overlapping, the most recent on the right; horizontal scroll with
-  iOS physics; the card under the finger keeps following it until release.
-- In overview: tap a card to open it (it grows to full screen), flick a card up to close the app (removes the task), tap empty
-  space or swipe up from the bar to go home. The card window becomes touchable only while overview is open.
+- Trigger: during a home drag, the finger stays within 12 dp for 150 ms with the card already below 72 % of the screen (by
+  distance, not a velocity estimate): haptic tick, the deck opens around the held card (`switcher/DeckView.kt`, geometry and
+  springs in `MotionProfile.switcher`).
+- Layout from Apple's iOS 27 App Switcher illustration: cards at 68 % of the screen, vertical centre at 51.5 %; the focused
+  card's left edge at 22.5 % of the width; newer cards spread to the right (step 1.0 card widths), older ones stack tightly
+  to the left (step 0.08), joined by a smooth curve so cards change speed without a jump as they pass the focus. Newer cards
+  lie on top and cast a soft shadow onto the card below. Each card has its icon above its left edge; the focused card also
+  its name. Home behind: the picture of home, receded, blurred and darkened (28 %).
+- While the opening swipe is still down the deck stays focused on the held card and follows the finger sideways; on release
+  the focus moves to the previous app (iOS), or a flick up goes home.
+- Open deck: sideways drag scrolls (rubber band at the ends), a throw is projected 0.22 s ahead and comes to rest on a card;
+  tap a card to open it (it grows to full screen, its app comes to the front meanwhile; the app the swipe started in is still
+  there underneath, so it returns at once); flick a card up to close its app (IActivityTaskManager.removeTask through the
+  shell), the cards beside it close the gap on springs; tap empty space or swipe up from the bottom edge to go home.
+- Touches: a full-screen invisible input window, added on its own thread only while the deck is open (adding windows or
+  changing their flags re-lays them out, 6-80 ms, never on the thread that draws the cards; an idle window would still be a
+  layer to compose every frame). It lies over the bar, so the bottom edge is handled there.
+- Cards show the system's snapshots, fetched at the start of a home swipe only for apps used since we last fetched theirs.
+  Only the visible strip of each covered card is drawn.
+- Not yet: opening the switcher from home (hold during a swipe up on home); the iOS "slow release mid-screen" trigger.

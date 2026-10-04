@@ -116,7 +116,8 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
   `scenario_switch.sh` run launches/closes/switches N times and print per-animation missed refreshes and GPU/CPU per frame
   (`tools/framestats.py` on `dumpsys gfxinfo framestats`). Compare against the previous build (`git stash`, build, install,
   run, `git stash pop`) before calling a change an improvement. `tools/find_icon.py` finds an icon on a screenshot
-  (template in `tools/shots/`) so a script never taps a guessed position.
+  (template in `tools/shots/`) so a script never taps a guessed position. The App Switcher (`scenario_switcher.sh`) is
+  measured on the phone by frame stats only: it shows other apps' snapshots, so it is looked at on the emulator.
 - When the S24 is connected (USB or wireless adb, `DEVICE=<serial>`): animations are checked frame by frame with
   `tools/device.sh rec NAME [SECS]` … `recpull NAME [WAIT]` (screenrecord captures every composed frame, 120 fps; contact
   sheets and frame times land in `tools/shots/NAME/`; needs `pip install imageio-ffmpeg`). Frame logs give the numbers.

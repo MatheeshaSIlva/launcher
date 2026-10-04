@@ -149,6 +149,14 @@ class ShellService : IShellService.Stub() {
         null
     }
 
+    override fun removeTask(taskId: Int): String = try {
+        val atm = systemService("activity_task", ATM_STUB)
+        val m = atm.javaClass.methods.first { it.name == "removeTask" && it.parameterTypes.size == 1 }
+        if (m.invoke(atm, taskId) == true) "ok" else "not removed"
+    } catch (t: Throwable) {
+        "ERROR: ${(t.cause ?: t).javaClass.simpleName}: ${(t.cause ?: t).message}"
+    }
+
     override fun taskSnapshotBuffer(taskId: Int, fresh: Boolean): HardwareBuffer? = try {
         snapshotBuffer(taskId, fresh)
     } catch (t: Throwable) {

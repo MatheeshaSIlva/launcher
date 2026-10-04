@@ -21,7 +21,7 @@ Legend: **done** = built and checked on the emulator in this round; **phone** = 
 | Widget gallery | done: app list, per-app pager with sizes, Add Widget; darker sheet glass for readability | search (P2) |
 | Dock | fine | folders in the dock (with home folders, P1) |
 | App open/close | works (checked on the emulator: our own transitions 2/2) | — |
-| App switcher (hold during a home swipe) | — | **P1, next round** (design in HOME_FEATURES.md §3) |
+| App switcher (hold during a home swipe) | done (round 8): iOS 27 deck, scroll, open, flick to close, home; phone measured by frame stats only (it shows other apps' snapshots) | open it from home (P2); slow-release trigger (P3) |
 | Shade (notifications, controls) | — | the project's phase 4 (P1, large) |
 | Launcher settings | dev panel only | an iOS-style settings page: icon shape, labels, glass clear↔tinted, wallpaper dimming (P1) |
 | Accessibility | — | TalkBack labels for the custom-drawn views (P2) |

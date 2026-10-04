@@ -54,7 +54,10 @@ def main():
     if len(ok) > 2:
         gaps = [(b['DisplayPresentTime'] - a['DisplayPresentTime']) / 1e6 for a, b in zip(ok, ok[1:])]
         period = sorted(gaps)[len(gaps) // 4]   # the display's refresh period (most gaps are one period)
-        late = [(i + 1, g) for i, g in enumerate(gaps) if period * 1.5 < g < 200]
+        # Late only if we drew this frame for the very next refresh after the previous one and the screen still skipped
+        # one: gaps where we drew nothing (no input moved the card, an animation had not started) are not misses.
+        late = [(i + 1, g) for i, g in enumerate(gaps)
+                if period * 1.5 < g < 200 and (ok[i + 1]['IntendedVsync'] - ok[i]['IntendedVsync']) / 1e6 < period * 1.5]
         print(f'  shown: {len(ok)} frames, refresh {period:.2f} ms, late {len(late)} (missed refreshes ~{sum(round(g / period) - 1 for _, g in late)})')
         t0 = ok[0]['IntendedVsync']
         for i, g in late[:6]:
