@@ -859,7 +859,12 @@ object GestureNav {
                 fingerDown = true
                 stats.reset()
                 if ((phase == Phase.ANIM || phase == Phase.HOLD) && root?.visibility == View.VISIBLE && !(switchFromHome && anim == Anim.SWITCH_CANCEL)) takeOver(e.rawX, e.rawY)
-                else { hideCards(); pendingFresh = true; prefetch(fresh = true) }
+                else {
+                    finishHomePull()
+                    hideCards(); pendingFresh = true; prefetch(fresh = true)
+                    // On home: its picture is rendered now, so a swipe up can show it receding from its first frame.
+                    if (homeVisible) backdrop?.prewarm(HomeBridge.preview)
+                }
                 // The card window becomes visible to the compositor now, while the finger is still starting its swipe: the
                 // window manager takes ~32 ms for it on the S24, which used to land on the card's first frame.
                 setWindowShown(true)
@@ -877,10 +882,7 @@ object GestureNav {
                     // On home, a swipe up: a hold opens the App Switcher; lifting does what the Home button does (leaves edit
                     // mode, closes Spotlight, first page), as on iOS.
                     pendingFresh = false
-                    phase = Phase.HOME_PULL
-                    holdSince = 0L
-                    // The switcher shows home's picture behind its cards: rendered now, while nothing is on screen yet.
-                    if (root?.visibility != View.VISIBLE) backdrop?.prewarm(HomeBridge.preview)
+                    beginHomePull()
                 } else if (pendingFresh && homeVisible && abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) {
                     // On home, sideways brings the last app in beside home, with the finger (home slides away as a card).
                     pendingFresh = false
@@ -892,7 +894,7 @@ object GestureNav {
                 when (phase) {
                     Phase.DRAG_HOME -> { dragHome(e.rawX, e.rawY); stats.touchEvent(e.eventTime); watchForHold() }
                     Phase.DRAG_SWITCH -> { dragSwitch(e.rawX); stats.touchEvent(e.eventTime) }
-                    Phase.HOME_PULL -> { lastDragX = e.rawX; lastDragY = e.rawY; watchForHold() }
+                    Phase.HOME_PULL -> { lastDragX = e.rawX; lastDragY = e.rawY; pullHome(); watchForHold() }
                     else -> {}
                 }
             }
@@ -904,7 +906,7 @@ object GestureNav {
                 val up = e.actionMasked == MotionEvent.ACTION_UP
                 nav.removeCallbacks(holdCheck)
                 when {
-                    phase == Phase.HOME_PULL -> { phase = Phase.IDLE; if (up) HomeBridge.homeSwipeUp() }
+                    phase == Phase.HOME_PULL -> releaseHomePull(up)
                     phase == Phase.DRAG_HOME -> releaseHome(up, vx, vy)
                     phase == Phase.DRAG_SWITCH -> releaseSwitch(up, vx)
                     grabbedFull -> { grabbedFull = false; releaseHome(false, 0f, 0f) }   // a tap on a full-size card: let it finish
@@ -1957,6 +1959,58 @@ object GestureNav {
         AppLog.log("[switcher] open: ${cards.size} apps (${cards.joinToString { it.pkg.substringAfterLast('.') }}); ${pictureAges(cards)}")
     }
 
+    // ---- a swipe up on home: home recedes with the finger (iOS); a rest opens the switcher, a release springs home back
+
+    private var pulling = false                // the picture of home is shown receding (a swipe up on home)
+    private var pullReleaseUp = false
+    private val pullBack = dev.launcher.app.motion.SpringValue(0f, 300f,
+        onChange = { backdrop?.depth = it },
+        onRest = { if (pulling && phase == Phase.HOME_PULL) finishHomePull() })
+
+    private fun beginHomePull() {
+        phase = Phase.HOME_PULL
+        holdSince = 0L
+        pullReleaseUp = false
+        val pic = HomeBridge.preview ?: return   // never recorded: the swipe still works, without the motion
+        if (!prepareCardWindow()) return
+        pulling = true
+        dragStartedAt = SystemClock.uptimeMillis()
+        cur?.alpha = 0f
+        prv?.visibility = View.GONE
+        nxt?.visibility = View.GONE
+        root?.setBackgroundColor(0)
+        backdrop?.picture = pic   // the one rendered at the touch
+        pullBack.snapTo(0f)
+        showCards()
+        stats.reset(); stats.start()
+    }
+
+    /** How far home has receded for a swipe up of [travel] px (gives way quickly, then slower). */
+    private fun pullDepth(travel: Float) = HOME_PULL_DEPTH * (1f - exp(-max(0f, travel) / (sh * 0.25f)))
+
+    private fun pullHome() {
+        if (pulling) pullBack.snapTo(pullDepth(downY - lastDragY))
+    }
+
+    private fun releaseHomePull(up: Boolean) {
+        pullReleaseUp = up
+        if (!pulling) { finishHomePull(); return }
+        // Home comes forward again, then the swipe does what the Home button does.
+        pullBack.animateTo(0f, Motion.profile.appCancel, 0f)
+    }
+
+    /** The pull is over (sprung back, or a new touch): home as it was, then the Home button's action for a released swipe. */
+    private fun finishHomePull() {
+        if (phase != Phase.HOME_PULL) return
+        val up = pullReleaseUp
+        pullBack.stop()
+        pulling = false
+        pullReleaseUp = false
+        phase = Phase.IDLE
+        hideCards()
+        if (up) HomeBridge.homeSwipeUp()
+    }
+
     /**
      * The App Switcher from the home screen (a swipe up that rests): no card under the finger; the recent apps rise in over
      * the picture of home, which recedes, blurs and dims behind them. Home stays the window in front until an app is chosen.
@@ -1980,10 +2034,12 @@ object GestureNav {
         cur?.alpha = 0f   // no app card in this session
         prv?.visibility = View.GONE
         nxt?.visibility = View.GONE
-        backdrop?.picture = HomeBridge.preview   // the one rendered when the swipe began
-        backdrop?.depth = 0f
+        // Home keeps receding from where the swipe had it.
+        pullBack.stop()
+        pulling = false
+        if (backdrop?.picture == null) { backdrop?.picture = HomeBridge.preview; backdrop?.depth = 0f }
         switcherGround = if (backdrop?.picture == null) 0xFF101418.toInt() else 0
-        depthAtSwitcher = 0f
+        depthAtSwitcher = backdrop?.depth ?: 0f
         d.setScreen(sw, sh, deviceRadius)
         d.enterFromHome(cards)
         d.heldStart(lastDragX)
@@ -2131,6 +2187,7 @@ object GestureNav {
     }
 
     private const val HOLD_RADIUS_DP = 12f
+    private const val HOME_PULL_DEPTH = 0.6f   // how far home recedes at most while a swipe up on it goes on
     private const val SWITCHER_DIM = 0.28f              // home behind the deck: darkened by this much
     private const val SWITCHER_MAX_CARDS = 12
     private const val SWITCHER_HOME_FLICK_DP = 900f     // a flick up faster than this after the hold goes home
@@ -2300,7 +2357,7 @@ object GestureNav {
                 if (lastNs != 0L) deltas += (frameTimeNanos - lastNs) / 1e6
                 lastNs = frameTimeNanos
                 val active = phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH || animating || grabbedFull ||
-                    (phase == Phase.SWITCHER && (switcherHeld || deck?.moving == true))
+                    (phase == Phase.SWITCHER && (switcherHeld || deck?.moving == true)) || (phase == Phase.HOME_PULL && pulling)
                 if (running && active) choreographer.postFrameCallback(this) else running = false
             }
         }

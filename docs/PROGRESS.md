@@ -642,3 +642,8 @@ Round 9 (Matheesha: the deck from home moved two ways; previews out of date, "es
 - S24 frame stats: switcher in/open/home/from home/open from home 0/0/0/0/1; type-and-close 0/0/2; launches 0,1,0 / 1,0,0;
   closes 2,1,4 / 0,2,0 (the recurring flagged frame #2 has an intended time before the gesture: the card window's last
   frame of the previous session, not the swipe).
+
+Round 10 (Matheesha: "I don't like the swipe from home to recents animation", replicate iOS): home recedes with the finger
+during a swipe up on it; a rest slides the deck in from the left as one; going home from a deck slides it out to the left
+while home comes forward; a released swipe springs home back. Checked on the emulator (recording) and on the S24 by frame
+stats: switcher from an app in/open/home 1/1/0, from home in/open 0/0, released swipes on home 0/0/0 missed refreshes.

@@ -144,13 +144,8 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         slot(i, scroll, out)
         c.shift?.let { out.offset(it.value, 0f) }
         var radius = cardRadius
-        if (enterK < 1f && risingIn) {
-            val k = riseOf(i)
-            val s = RISE_SCALE + (1f - RISE_SCALE) * k
-            val cx = out.centerX()
-            val cy = out.centerY() + (1f - k) * sh * RISE_DISTANCE
-            out.set(cx - out.width() * s / 2, cy - out.height() * s / 2, cx + out.width() * s / 2, cy + out.height() * s / 2)
-            radius *= s
+        if (enterK < 1f && slidingIn) {
+            out.offset(-(1f - enterK) * deckWidth(), 0f)
         } else if (enterK < 1f) {
             if (i == 0) {
                 lerp(from, out, enterK, out)
@@ -163,26 +158,21 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
             lerp(out, tmp, openK, out)
             radius += (deviceRadius - radius) * openK
         }
-        if (homeK > 0f) radius = shrinkTowardsCentre(out, radius)
+        if (homeK > 0f) out.offset(-homeK * deckWidth(), 0f)
         return radius
     }
 
-    // Towards home every card shrinks a little about the screen centre while it fades.
-    private fun shrinkTowardsCentre(out: RectF, radius: Float): Float {
-        val s = 1f - 0.08f * homeK
-        out.set(sw / 2 + (out.left - sw / 2) * s, sh / 2 + (out.top - sh / 2) * s, sw / 2 + (out.right - sw / 2) * s, sh / 2 + (out.bottom - sh / 2) * s)
-        return radius * s
-    }
+    /**
+     * How far the deck travels to come in from, or leave to, the left edge (iOS: the recent apps lie to the left of home):
+     * far enough that the card furthest right is off screen.
+     */
+    private fun deckWidth() = focusLeft + cardW * (1f + STEP_NEWER) + dp(24f)
 
     private fun alphaOf(i: Int): Float {
         val c = cards[i]
         var a = 1f
-        if (enterK < 1f) {
-            if (risingIn) a *= (riseOf(i) / 0.45f).coerceIn(0f, 1f)
-            else if (i != 0) a *= enterK
-        }
+        if (enterK < 1f && !slidingIn && i != 0) a *= enterK
         if (openCard != null && c !== openCard) a *= 1f - openK
-        if (homeK > 0f) a *= 1f - homeK
         return a
     }
 
@@ -231,9 +221,9 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
             box.set(c.frozen)
             val y = c.lift?.value ?: 0f
             box.offset(0f, y)
-            var radius = c.frozenRadius
-            if (homeK > 0f) radius = shrinkTowardsCentre(box, radius)
-            val a = (1f + y / (c.frozen.bottom + dp(40f))).coerceIn(0f, 1f) * (1f - homeK)
+            val radius = c.frozenRadius
+            if (homeK > 0f) box.offset(-homeK * deckWidth(), 0f)
+            val a = (1f + y / (c.frozen.bottom + dp(40f))).coerceIn(0f, 1f)
             if (a > 0.004f) drawCard(canvas, c, box, radius, a)
         }
     }
@@ -342,30 +332,21 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
      */
     fun enter(list: List<Card>, fromFrame: RectF, fromCornerRadius: Float) {
         releaseFocus = 1
-        risingIn = false
+        slidingIn = false
         start(list, fromFrame, fromCornerRadius)
     }
 
     /**
-     * Shows [list] from the home screen (no card under the finger): the newest card rises into its slot from below and stays
-     * focused when the finger lifts (the app you most likely want); the others slide in from the left.
+     * Shows [list] from the home screen (no card under the finger), as iOS does: the whole deck slides in from the left (the
+     * recent apps lie to the left of home), as one, and the newest app stays focused when the finger lifts.
      */
     fun enterFromHome(list: List<Card>) {
         releaseFocus = 0
-        risingIn = true
+        slidingIn = true
         start(list, RectF(), cardRadius)
     }
 
-    // Entering from home: no card under the finger, so every card rises into its slot the same way (newest first, the
-    // older ones a moment later), growing a little and fading in. (Card 0 rising while the others slid in from the left
-    // read as two different motions.)
-    private var risingIn = false
-
-    /** How far card [i] is into the rise (0..1, overshoots with the spring): newer cards a little ahead. */
-    private fun riseOf(i: Int): Float {
-        val d = RISE_STAGGER * min(i, 4)
-        return ((enterK - d) / (1f - d)).coerceAtLeast(0f)
-    }
+    private var slidingIn = false
 
     private var releaseFocus = 1   // where the focus goes when the opening swipe lifts without moving sideways
 
@@ -557,10 +538,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         const val STEP_NEWER = 1.0f
         const val STEP_OLDER = 0.08f
         const val STEP_SHARPNESS = 3f
-        // Entering from home: cards rise this far (of the screen height), from this scale, each older one this much later.
-        const val RISE_DISTANCE = 0.22f
-        const val RISE_SCALE = 0.9f
-        const val RISE_STAGGER = 0.06f
+
         const val SHADOW_BLUR_DP = 26f
         const val SHADOW_ALPHA = 0.45f
     }

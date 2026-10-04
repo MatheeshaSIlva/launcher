@@ -73,8 +73,12 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
 - From the home screen too: a swipe up that rests the same way opens the deck with the most recent app focused (its card
   rises into place from below, the others slide in); lifting without a rest is still the Home button (page 1, Spotlight
   closed). Home stays the window in front until an app is chosen; "home" from this deck just brings the picture forward.
-  Every card rises into its slot the same way (newest first, the others a moment later, growing a little and fading in):
-  card 0 rising while the others slid in from the left read as two motions (Matheesha).
+  As on iOS (round 10): while the swipe up on home goes on, home recedes with the finger (the picture of home, zoom and
+  blur, up to depth 0.6); a rest slides the whole deck in from the left as one (the recent apps lie to the left of home:
+  a swipe right on the bar from home brings the last app in from the left; "app cards will appear from the left of the
+  display", iPhone Life), home receding the rest of the way and dimming; a release without a rest springs home back, then
+  does what the Home button does. Going home from any deck slides it back out to the left while home comes forward.
+  (Round 9's rise-in cascade was replaced: Matheesha did not like it.)
 - Up-to-date pictures (round 9): the app in front's picture is taken again ~0.4 s after its screen last changed
   (accessibility "content changed"/"scrolled" events, only the package is read; at most every 1.2 s, never later than the
   regular 6 s refresh); a gesture that starts within that window takes a fresh one at the touch (the card shows the latest
