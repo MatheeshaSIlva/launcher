@@ -72,6 +72,7 @@ object GestureNav {
     private val tasksIo = Executors.newSingleThreadExecutor()
     private val snapIo = Executors.newSingleThreadExecutor()
     private val cachedIo = Executors.newSingleThreadExecutor()
+    private val deckIo = Executors.newSingleThreadExecutor()   // the App Switcher's pictures, as its cards come into view
     private val density get() = app.resources.displayMetrics.density
     private fun dp(v: Int) = v * density
 
@@ -149,7 +150,14 @@ object GestureNav {
     private val leftFrontAt = ConcurrentHashMap<String, Long>()
     private val systemPictureAt = ConcurrentHashMap<String, Long>()
 
-    private fun remember(pkg: String, b: Bitmap, takenAt: Long = SystemClock.uptimeMillis()) { images[pkg] = b; imagesAt[pkg] = takenAt }
+    private fun remember(pkg: String, b: Bitmap, takenAt: Long = SystemClock.uptimeMillis()) {
+        images[pkg] = b; imagesAt[pkg] = takenAt
+        // Bounded (each picture is ~10 MB): the App Switcher reaches every recent app. The app in front keeps its own.
+        while (images.size > IMAGES_MAX) {
+            val oldest = imagesAt.entries.filter { it.key != lastFrontPkg && it.key != pkg }.minByOrNull { it.value }?.key ?: break
+            images.remove(oldest); imagesAt.remove(oldest)
+        }
+    }
 
     // The task of the app in front, once looked up (a gesture's fresh picture can then start at the touch).
     @Volatile private var frontTask: Task? = null
@@ -221,6 +229,15 @@ object GestureNav {
             return try { Bitmap.wrapHardwareBuffer(hb, null) } catch (_: Throwable) { null } finally { hb.close() }
         }
         return try { s.taskSnapshot(taskId, fresh) } catch (_: Throwable) { null }
+    }
+
+    /**
+     * The system's reduced copy of a task's last picture (half size when it has to be read from storage; the full one when
+     * the system still holds it), for the cards stacked in the App Switcher. Falls back to the full one (older service).
+     */
+    private fun snapshotLow(s: IShellService, taskId: Int): Bitmap? {
+        val hb = try { s.taskSnapshotBufferLow(taskId) } catch (_: Throwable) { null } ?: return snapshot(s, taskId, false)
+        return try { Bitmap.wrapHardwareBuffer(hb, null) } catch (_: Throwable) { null } finally { hb.close() }
     }
 
     /** An earlier image of [pkg], only if recent enough that showing it before the fresh one cannot look stale. */
@@ -1032,7 +1049,7 @@ object GestureNav {
             // the two fetched below, only for apps used since we last fetched theirs (see havePrev), so a long run of
             // gestures fetches nothing new.
             if (fresh) snapIo.execute {
-                for (t in tasks.switchable().drop(if (onHome) 0 else 2).take(SWITCHER_MAX_CARDS)) {
+                for (t in tasks.switchable().drop(if (onHome) 0 else 2).take(SWITCHER_PREFETCH)) {
                     if (id != gestureId) return@execute
                     if (images[t.pkg] != null && (systemPictureAt[t.pkg] ?: 0L) > (leftFrontAt[t.pkg] ?: Long.MAX_VALUE)) continue
                     val b = try { snapshot(s, t.id, false) } catch (_: Throwable) { null } ?: continue
@@ -1073,6 +1090,20 @@ object GestureNav {
             if (fresh && !haveFg) cachedIo.execute {
                 val cached = try { snapshot(s, tasks[0].id, false) } catch (_: Throwable) { null }
                 if (cached != null) nav.post { if (id == gestureId) onFgCached(tasks[0].pkg, cached) }
+            }
+        }
+        // Every recent app, for the App Switcher (a hold may follow): after the quick lookup above, on the same worker (the
+        // gesture itself needs only the first few).
+        if (fresh) tasksIo.execute {
+            if (id != gestureId) return@execute
+            val t0 = SystemClock.uptimeMillis()
+            val all = try { parseTasks(s.recentTasks(SWITCHER_MAX_CARDS)) } catch (_: Throwable) { emptyList() }
+            val ms = SystemClock.uptimeMillis() - t0
+            nav.post {
+                if (all.isEmpty()) return@post
+                recentAll = all
+                recentAllMs = ms
+                if (phase == Phase.SWITCHER) addOlderCards()
             }
         }
     }
@@ -1639,6 +1670,17 @@ object GestureNav {
     private var switchIndex = 0
     private var switchAt = 0L                  // last switch of the run; the run ends after a pause, a launch or going home
     private var recentList: List<Task> = emptyList()
+    private var recentAll: List<Task> = emptyList()   // every recent app (fetched after the quick lookup of the first few)
+    private var recentAllMs = -1L
+    private var picturesAsked = 0   // the open switcher's picture requests (for the log)
+    private var picturesFull = 0
+    private var picturesGot = 0
+
+    /** The recent apps for the App Switcher: the quick lookup's (newest), then the older ones from the full list. */
+    private fun switcherRecents(): List<Task> {
+        val ids = recentList.mapTo(HashSet()) { it.id }
+        return recentList + recentAll.filter { it.id !in ids }
+    }
     private var older: Task? = null
     private var newer: Task? = null
     private var switchTarget: Task? = null
@@ -1930,7 +1972,7 @@ object GestureNav {
         val d = deck ?: return
         if (!prepareCardWindow()) return
         val fromHome = phase == Phase.HOME_PULL
-        val tasks = recentList.switchable()
+        val tasks = switcherRecents().switchable()
         val first = if (fromHome) null else tasks.firstOrNull { it.pkg == cardPkg } ?: fg?.takeIf { it.pkg == cardPkg }
         val list = (listOfNotNull(first) + tasks.filter { it.id != first?.id }).take(SWITCHER_MAX_CARDS)
         if (list.isEmpty()) return
@@ -1940,11 +1982,8 @@ object GestureNav {
         switcherHomeAsked = false
         nav.removeCallbacks(holdCheck)
         strip?.performHapticFeedback(if (Build.VERSION.SDK_INT >= 34) android.view.HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE else android.view.HapticFeedbackConstants.CONTEXT_CLICK)
-        val cards = list.map { t ->
-            dev.launcher.app.switcher.DeckView.Card(t.id, t.pkg, labelFor(t.pkg), iconFor(t.pkg), SplashColors.cached(t.pkg) ?: DEFAULT_SPLASH).apply {
-                snapshot = if (t === first) c.snapshot else images[t.pkg]
-            }
-        }
+        picturesAsked = 0; picturesFull = 0; picturesGot = 0
+        val cards = list.map { t -> if (t === first) newCard(t).apply { snapshot = c.snapshot; have = 2 } else newCard(t) }
         d.setScreen(sw, sh, deviceRadius)   // unchanged size: nothing to do (the card window set it up when it was created)
         d.enter(cards, android.graphics.RectF(c.cx - c.w / 2, c.cy - c.h / 2, c.cx + c.w / 2, c.cy + c.h / 2), c.radius)
         d.heldStart(lastDragX)
@@ -1959,20 +1998,10 @@ object GestureNav {
         depthAtSwitcher = backdrop?.depth ?: 1f
         switcherBg.snapTo(0f)
         switcherBg.animateTo(1f, Motion.profile.switcher.enter, 0f)
-        // How each app looks now (the system's last snapshot), for the cards that do not have one yet.
-        val s = ShizukuLink.service
-        val g = gen
-        if (s != null) for (card in cards.drop(1)) {
-            if (card.snapshot != null && (systemPictureAt[card.pkg] ?: 0L) > (leftFrontAt[card.pkg] ?: Long.MAX_VALUE)) continue
-            snapIo.execute {
-                val b = snapshot(s, card.taskId, false) ?: return@execute
-                remember(card.pkg, b); systemPictureAt[card.pkg] = SystemClock.uptimeMillis()
-                nav.post { if (gen == g && phase == Phase.SWITCHER) { card.snapshot = b; deck?.invalidate() } }
-            }
-        }
+        // Pictures for the cards without an up-to-date one come as each card comes into view (deckListener.onWantPicture).
         refreshSwitcherCard()
         stats.reset(); stats.start()
-        AppLog.log("[switcher] open: ${cards.size} apps (${cards.joinToString { it.pkg.substringAfterLast('.') }}); ${pictureAges(cards)}")
+        AppLog.log("[switcher] open: ${cards.size} apps${listNote()} (${cards.take(8).joinToString { it.pkg.substringAfterLast('.') }}); ${pictureAges(cards)}")
     }
 
     // ---- a swipe up on home: home recedes with the finger (iOS); a rest opens the switcher, a release springs home back
@@ -2047,11 +2076,8 @@ object GestureNav {
         cardPkg = null
         fg = null
         dragStartedAt = SystemClock.uptimeMillis()
-        val cards = list.map { t ->
-            dev.launcher.app.switcher.DeckView.Card(t.id, t.pkg, labelFor(t.pkg), iconFor(t.pkg), SplashColors.cached(t.pkg) ?: DEFAULT_SPLASH).apply {
-                snapshot = images[t.pkg]
-            }
-        }
+        picturesAsked = 0; picturesFull = 0; picturesGot = 0
+        val cards = list.map { newCard(it) }
         cur?.alpha = 0f   // no app card in this session
         prv?.visibility = View.GONE
         nxt?.visibility = View.GONE
@@ -2067,19 +2093,31 @@ object GestureNav {
         showCards()
         switcherBg.snapTo(0f)
         switcherBg.animateTo(1f, Motion.profile.switcher.enter, 0f)
-        val s = ShizukuLink.service
-        val g = gen
-        if (s != null) for (card in cards) {
-            if (card.snapshot != null && (systemPictureAt[card.pkg] ?: 0L) > (leftFrontAt[card.pkg] ?: Long.MAX_VALUE)) continue
-            snapIo.execute {
-                val b = snapshot(s, card.taskId, false) ?: return@execute
-                remember(card.pkg, b); systemPictureAt[card.pkg] = SystemClock.uptimeMillis()
-                nav.post { if (gen == g && phase == Phase.SWITCHER) { card.snapshot = b; deck?.invalidate() } }
-            }
-        }
         stats.reset(); stats.start()
-        AppLog.log("[switcher] open from home: ${cards.size} apps (${cards.joinToString { it.pkg.substringAfterLast('.') }}); ${pictureAges(cards)}")
+        AppLog.log("[switcher] open from home: ${cards.size} apps${listNote()} (${cards.take(8).joinToString { it.pkg.substringAfterLast('.') }}); ${pictureAges(cards)}")
     }
+
+    /**
+     * A card for task [t], with the picture we keep of its app: counted as up to date only if fetched after the app last
+     * left the front (else the deck asks for the system's, showing ours meanwhile).
+     */
+    private fun newCard(t: Task) =
+        dev.launcher.app.switcher.DeckView.Card(t.id, t.pkg, labelFor(t.pkg), iconFor(t.pkg), SplashColors.cached(t.pkg) ?: DEFAULT_SPLASH).apply {
+            snapshot = images[t.pkg]
+            have = if (snapshot != null && (systemPictureAt[t.pkg] ?: 0L) > (leftFrontAt[t.pkg] ?: Long.MAX_VALUE)) 2 else 0
+        }
+
+    /** The full list arrived while the switcher is open: its older apps join the deck (on the left, mostly off screen). */
+    private fun addOlderCards() {
+        val d = deck ?: return
+        if (d.count == 0) return
+        val more = recentAll.switchable().filter { !d.has(it.id) }.take((SWITCHER_MAX_CARDS - d.count).coerceAtLeast(0))
+        if (more.isEmpty()) return
+        d.append(more.map { newCard(it) })
+        AppLog.log("[switcher] ${more.size} older apps added (${d.count} in all; full list in $recentAllMs ms)")
+    }
+
+    private fun listNote() = if (recentAllMs >= 0) " of ${recentAll.switchable().size} recent (full list in $recentAllMs ms)" else ""
 
     /** For the log: how old the pictures of the first two cards are, and whether their app changed its screen since. */
     private fun pictureAges(cards: List<dev.launcher.app.switcher.DeckView.Card>): String {
@@ -2194,6 +2232,7 @@ object GestureNav {
 
         override fun onRemove(card: dev.launcher.app.switcher.DeckView.Card) {
             recentList = recentList.filter { it.id != card.taskId }
+            recentAll = recentAll.filter { it.id != card.taskId }
             images.remove(card.pkg)
             val s = ShizukuLink.service ?: return
             tasksIo.execute {
@@ -2203,7 +2242,26 @@ object GestureNav {
         }
 
         override fun onSettled(what: String) {
-            if (phase == Phase.SWITCHER) AppLog.log(stats.report("[switcher] $what"))
+            if (phase != Phase.SWITCHER) return
+            AppLog.log(stats.report("[switcher] $what") + "; pictures asked $picturesAsked ($picturesFull full), got $picturesGot")
+        }
+
+        override fun onWantPicture(card: dev.launcher.app.switcher.DeckView.Card, full: Boolean) {
+            val s = ShizukuLink.service ?: return   // without the service, launch screens stand in
+            val g = gen
+            val level = if (full) 2 else 1
+            picturesAsked++
+            if (full) picturesFull++
+            deckIo.execute {
+                val wanted = gen == g && card.want >= level
+                val b = if (!wanted) null else if (full) snapshot(s, card.taskId, false) else snapshotLow(s, card.taskId)
+                nav.post {
+                    if (gen != g) return@post
+                    if (b != null) picturesGot++
+                    if (full && b != null) { remember(card.pkg, b); systemPictureAt[card.pkg] = SystemClock.uptimeMillis() }
+                    deck?.setPicture(card, b, full, fetched = wanted)
+                }
+            }
         }
     }
 
@@ -2211,7 +2269,9 @@ object GestureNav {
     private const val HOME_PULL_DEPTH = 0.6f   // how far home recedes at most while a swipe up on it goes on
     private const val PULL_FADE_MS = 140L      // a released swipe on home: the picture fades into the live home
     private const val SWITCHER_DIM = 0.28f              // home behind the deck: darkened by this much
-    private const val SWITCHER_MAX_CARDS = 12
+    private const val SWITCHER_MAX_CARDS = 50   // every recent app (the system keeps about this many)
+    private const val SWITCHER_PREFETCH = 3     // pictures fetched at the touch (the rest as the deck shows their cards)
+    private const val IMAGES_MAX = 16          // pictures kept between gestures
     private const val SWITCHER_HOME_FLICK_DP = 900f     // a flick up faster than this after the hold goes home
 
     // ================================================================== views

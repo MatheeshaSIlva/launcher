@@ -163,13 +163,20 @@ class ShellService : IShellService.Stub() {
         null
     }
 
-    private fun snapshotBuffer(taskId: Int, fresh: Boolean): HardwareBuffer? {
+    override fun taskSnapshotBufferLow(taskId: Int): HardwareBuffer? = try {
+        snapshotBuffer(taskId, fresh = false, low = true)
+    } catch (t: Throwable) {
+        null
+    }
+
+    private fun snapshotBuffer(taskId: Int, fresh: Boolean, low: Boolean = false): HardwareBuffer? {
         val atm = systemService("activity_task", ATM_STUB)
         val ms = atm.javaClass.methods
         val snap: Any? = if (fresh) {
             ms.firstOrNull { it.name == "takeTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, false)
         } else {
-            ms.firstOrNull { it.name == "getTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, false)
+            // (taskId, isLowResolution): the reduced copy is read when the snapshot is only in storage.
+            ms.firstOrNull { it.name == "getTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, low)
         }
         return snap?.javaClass?.getMethod("getHardwareBuffer")?.invoke(snap) as? HardwareBuffer
     }

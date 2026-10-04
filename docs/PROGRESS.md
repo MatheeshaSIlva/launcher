@@ -667,3 +667,13 @@ from an expanded folder). Found and fixed, checked on the emulator (the S24 was 
 - Checked on the emulator: switcher from the open folder (tap empty space or swipe up: back to the open folder), from the
   scrolled library (pixel-identical before/after), card taps, closes, sideways switch. The emulator returns no task
   snapshots, so its cards show placeholders. Not measured yet: frame stats on the S24.
+
+Round 12 (Matheesha: a card swiped up clips with the card in front of it; only a limited number of cards, "should there be
+all the apps that are open?"):
+- A lifted card is drawn above its neighbours, and a card dropped back settles under the newer card with a fade (no jump).
+- The switcher used the gesture's quick lookup of 8 recent tasks: at most ~7 apps. Now the full list (up to 50) is fetched
+  after the quick one and every app gets a card; pictures load as cards come into view (full size near the focus, the
+  system's reduced copy for the stacked slivers, let go far off screen). New shell call `taskSnapshotBufferLow` (code 24).
+- Emulator, 20 recent apps: all 20 in the deck (full list 7-14 ms), lift / drop back / flick checked on screenshots and a
+  recording, scrolling to the oldest apps asked for pictures as cards came into view. Not measured yet on the S24: frame
+  stats while scrolling a long deck, and the full list's time ("full list in N ms" in the switcher log).

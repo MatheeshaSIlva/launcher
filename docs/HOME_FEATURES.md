@@ -96,9 +96,15 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
   tap a card to open it (it grows to full screen, its app comes to the front meanwhile; the app the swipe started in is still
   there underneath, so it returns at once); flick a card up to close its app (IActivityTaskManager.removeTask through the
   shell), the cards beside it close the gap on springs; tap empty space or swipe up from the bottom edge to go home.
+  A card a finger lifts is drawn above its neighbours (it used to slide up under the newer card's edge, then jump on top
+  when let go); dropped back, it settles under the newer card again with that card fading back over it.
 - Touches: a full-screen invisible input window, added on its own thread only while the deck is open (adding windows or
   changing their flags re-lays them out, 6-80 ms, never on the thread that draws the cards; an idle window would still be a
   layer to compose every frame). It lies over the bar, so the bottom edge is handled there.
-- Cards show the system's snapshots, fetched at the start of a home swipe only for apps used since we last fetched theirs.
-  Only the visible strip of each covered card is drawn.
+- Every recent app has a card (up to 50, the system's own limit): the gesture's quick lookup gets the newest 8, the full
+  list follows on the same worker and joins the deck (older apps, on the left).
+- Cards show the system's snapshots. At the touch only the first 3 are fetched; the rest as each card comes into view: full
+  size for the focused card and its neighbours, the system's reduced copy for the stacked slivers on the left, and cards far
+  off screen let theirs go (each full-size picture is ~10 MB; it is the native-memory count that set off GC pauses). Kept
+  pictures between gestures: at most 16. Only the visible strip of each covered card is drawn.
 - Not yet: the iOS "slow release mid-screen" trigger.

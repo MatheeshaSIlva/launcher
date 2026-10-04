@@ -77,4 +77,7 @@ interface IShellService {
 
     // Closes a recent task (IActivityTaskManager.removeTask; the App Switcher's flick up). "ok", "not removed" or "ERROR: ...".
     String removeTask(int taskId) = 23;
+    // The system's last picture of a task, reduced (half size) when it has to be read from storage; the full one when the
+    // system still holds it. For the App Switcher's stacked cards. Null when none.
+    HardwareBuffer taskSnapshotBufferLow(int taskId) = 24;
 }
