@@ -67,9 +67,12 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
 
 ## 3. App Switcher (hold during a home swipe) — built (round 8)
 
-- Trigger: during a home drag, the finger stays within 12 dp for 150 ms with the card already below 72 % of the screen (by
-  distance, not a velocity estimate): haptic tick, the deck opens around the held card (`switcher/DeckView.kt`, geometry and
-  springs in `MotionProfile.switcher`).
+- Trigger: during a home swipe, the finger stays within 12 dp for 150 ms once it is at least 56 dp above where it started
+  (close to the bar; it was "card below 72 %", ~150 dp, which Matheesha found too far): haptic tick, the deck opens around
+  the held card (`switcher/DeckView.kt`, geometry and springs in `MotionProfile.switcher`).
+- From the home screen too: a swipe up that rests the same way opens the deck with the most recent app focused (its card
+  rises into place from below, the others slide in); lifting without a rest is still the Home button (page 1, Spotlight
+  closed). Home stays the window in front until an app is chosen; "home" from this deck just brings the picture forward.
 - Layout from Apple's iOS 27 App Switcher illustration: cards at 68 % of the screen, vertical centre at 51.5 %; the focused
   card's left edge at 22.5 % of the width; newer cards spread to the right (step 1.0 card widths), older ones stack tightly
   to the left (step 0.08), joined by a smooth curve so cards change speed without a jump as they pass the focus. Newer cards
@@ -86,4 +89,4 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
   layer to compose every frame). It lies over the bar, so the bottom edge is handled there.
 - Cards show the system's snapshots, fetched at the start of a home swipe only for apps used since we last fetched theirs.
   Only the visible strip of each covered card is drawn.
-- Not yet: opening the switcher from home (hold during a swipe up on home); the iOS "slow release mid-screen" trigger.
+- Not yet: the iOS "slow release mid-screen" trigger.

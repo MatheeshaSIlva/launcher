@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The App Switcher on a phone, measured without looking at it (the deck shows other apps' snapshots: no screenshots).
 # Opens Calculator (App Library) then Clock (Spotlight); holds a home swipe in Clock (switcher), taps the focused card
-# (Calculator); holds again and taps empty space (home). Prints frame logs and what the screen showed for each step.
+# (Calculator); holds again and taps empty space (home); holds on home and taps the focused card (Calculator). Prints frame logs and what the screen showed for each step.
 # Every tap is gated: on the focused window, or on the log saying the switcher opened.
 #   DEVICE=<serial> tools/scenario_switcher.sh
 cd "$(dirname "$0")/.."
@@ -15,11 +15,11 @@ measure() {
   echo "== $1"; tools/device.sh log 12 | grep -A2 "\[switcher\]" | grep -E "switcher\]|frames" | tail -4 | sed 's/.*Launcher: *//'
   python tools/framestats.py "tools/shots/fs_$1.txt" LauncherCards | grep -E "GPU ms|shown|frame #"
 }
-hold() {   # a slow swipe up from the bar that rests: the switcher (checked in the log)
-  local before; before=$(tools/device.sh log 400 | grep -c "\[switcher\] open:")
-  "$ADB" "${D[@]}" shell "input motionevent DOWN 540 2330; for y in 2290 2230 2150 2050 1950 1850 1750 1650 1600 1580; do input motionevent MOVE 530 \$y; done; sleep 0.6; input motionevent UP 530 1580"
+hold() {   # a short swipe up from the bar that rests: the switcher (checked in the log)
+  local before; before=$(tools/device.sh log 400 | grep -c "\[switcher\] open")
+  "$ADB" "${D[@]}" shell "input motionevent DOWN 540 2330; for y in 2310 2280 2240 2200 2160 2140 2130; do input motionevent MOVE 540 \$y; done; sleep 0.6; input motionevent UP 540 2130"
   sleep 1.2
-  [ "$(tools/device.sh log 400 | grep -c "\[switcher\] open:")" -gt "$before" ] || stop "the switcher did not open"
+  [ "$(tools/device.sh log 400 | grep -c "\[switcher\] open")" -gt "$before" ] || stop "the switcher did not open"
 }
 focus | grep -q HomeActivity || stop "home is not in front"
 # Calculator from the App Library, back home, Clock from Spotlight.
@@ -47,3 +47,9 @@ measure switcher_open
 reset; hold; reset; tools/device.sh tap 540 260; sleep 1.5
 focus | grep -q HomeActivity || stop "home is not in front after tapping empty space"
 measure switcher_home
+# 4: from home: hold a swipe up on home, tap the focused card (the most recent app, Calculator).
+reset; hold; measure switcher_in_home
+reset; tools/device.sh tap 610 1205; sleep 2
+focus | grep -q popupcalculator || stop "Calculator not in front after tapping its card (from home)"
+measure switcher_open_home
+tools/device.sh swipe 540 2330 540 1500 180; sleep 1.5

@@ -75,11 +75,10 @@ data class SwitcherProfile(
     val cardScale: Float,
     val cardCenterY: Float,
     val focusLeft: Float,
-    /** The hold that opens the deck: the finger rests (slower than [holdSpeedDp] dp/s) for [holdMs] with the card already
-     *  below [holdMaxScale] of the screen. */
+    /** The hold that opens the deck: the finger rests (stays within a few dp) for [holdMs], at least [holdMinTravelDp]
+     *  above where the swipe started (close to the bar, as on iOS). */
     val holdMs: Long,
-    val holdSpeedDp: Float,
-    val holdMaxScale: Float,
+    val holdMinTravelDp: Float,
     val enter: SpringSpec,
     /** Scrolling to rest on a card; how far ahead (s) a throw is projected to choose that card. */
     val scroll: SpringSpec,
@@ -138,8 +137,7 @@ object Motion {
             cardCenterY = 0.515f,
             focusLeft = 0.225f,
             holdMs = 150,
-            holdSpeedDp = 120f,
-            holdMaxScale = 0.72f,
+            holdMinTravelDp = 56f,
             enter = SpringSpec(0.38f, 0.9f),
             scroll = SpringSpec(0.4f, 1f),
             flingProjection = 0.22f,

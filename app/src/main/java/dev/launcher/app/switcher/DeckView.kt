@@ -331,6 +331,26 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
      * older app (the one you most likely want back), as on iOS.
      */
     fun enter(list: List<Card>, fromFrame: RectF, fromCornerRadius: Float) {
+        releaseFocus = 1
+        start(list, fromFrame, fromCornerRadius)
+    }
+
+    /**
+     * Shows [list] from the home screen (no card under the finger): the newest card rises into its slot from below and stays
+     * focused when the finger lifts (the app you most likely want); the others slide in from the left.
+     */
+    fun enterFromHome(list: List<Card>) {
+        releaseFocus = 0
+        val r = slot(0, 0f, RectF())
+        val s = 0.9f
+        val f = RectF(r.centerX() - r.width() * s / 2, r.centerY() - r.height() * s / 2, r.centerX() + r.width() * s / 2, r.centerY() + r.height() * s / 2)
+        f.offset(0f, sh * 0.3f)
+        start(list, f, cardRadius * s)
+    }
+
+    private var releaseFocus = 1   // where the focus goes when the opening swipe lifts without moving sideways
+
+    private fun start(list: List<Card>, fromFrame: RectF, fromCornerRadius: Float) {
         cards.clear(); cards.addAll(list)
         flying.clear()
         openCard = null; openAnim.snapTo(0f)
@@ -379,9 +399,11 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         if (heldMoved) setScrollFromDrag(heldScroll + (x - heldX) / pxPerCard)   // right = towards older apps
     }
 
-    /** The opening swipe ended without going home: the focus moves to the previous app, or wherever the finger threw it. */
+    /** The opening swipe ended without going home: the focus moves to the previous app (from an app), or wherever the
+     *  finger threw it. */
     fun heldRelease(vx: Float) {
-        if (!heldMoved && cards.size > 1) scrollAnim.animateTo(1f, profile.scroll, 0f) else settle(vx)
+        if (!heldMoved) scrollAnim.animateTo(releaseFocus.coerceAtMost(cards.size - 1).coerceAtLeast(0).toFloat(), profile.scroll, 0f)
+        else settle(vx)
     }
 
     // ------------------------------------------------------------------ touch (input window, deck open)

@@ -620,3 +620,8 @@ Found and fixed while measuring:
   taken when the deck opens, else a plain dark ground.
 - framestats.py counted gaps where we drew nothing (sparse injected touches, pauses between animations) as missed refreshes;
   a miss now needs frames drawn for consecutive refreshes. Earlier rounds' numbers re-checked: unchanged.
+Round 8b (Matheesha: "can't use the recents menu from home", "the trigger is too far from the gesture bar"): the switcher now
+also opens from the home screen (a swipe up that rests; the most recent app focused, its card rising from below), and the
+hold counts once the finger is 56 dp above where it started instead of "card below 72 %" (~150 dp). Checked on the emulator
+with screenshots: from home (short swipe, Contacts focused), tap to open, short hold inside an app, tap empty space = home,
+plain swipe up on home = no switcher. Not yet measured on the S24 (the phone left adb during the run).

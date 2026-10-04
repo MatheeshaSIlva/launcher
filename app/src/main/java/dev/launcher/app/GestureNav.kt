@@ -87,7 +87,8 @@ object GestureNav {
     @Volatile var homeVisible = false
 
     private class Task(val id: Int, val pkg: String)
-    private enum class Phase { IDLE, DRAG_HOME, DRAG_SWITCH, ANIM, HOLD, SWITCHER }
+    // HOME_PULL: a swipe up on the home screen (no card); a hold opens the App Switcher, a release is the Home button.
+    private enum class Phase { IDLE, DRAG_HOME, DRAG_SWITCH, ANIM, HOLD, SWITCHER, HOME_PULL }
     private enum class Anim { NONE, HOME_COMMIT, HOME_CANCEL, LAUNCH, SWITCH_COMMIT, SWITCH_CANCEL }
 
     // ------------------------------------------------------------------ windows (nav thread)
@@ -808,9 +809,13 @@ object GestureNav {
                     if (dy > dp(10) && dy > abs(dx)) { pendingFresh = false; beginHome() }
                     else if (abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) { pendingFresh = false; beginSwitch() }
                 } else if (pendingFresh && homeVisible && dy > dp(10) && dy > abs(dx)) {
-                    // On home, a swipe up leaves edit mode and closes Spotlight (as on iOS).
+                    // On home, a swipe up: a hold opens the App Switcher; lifting does what the Home button does (leaves edit
+                    // mode, closes Spotlight, first page), as on iOS.
                     pendingFresh = false
-                    HomeBridge.homeSwipeUp()
+                    phase = Phase.HOME_PULL
+                    holdSince = 0L
+                    // The switcher shows home's picture behind its cards: rendered now, while nothing is on screen yet.
+                    if (root?.visibility != View.VISIBLE) backdrop?.prewarm(HomeBridge.preview)
                 } else if (pendingFresh && homeVisible && abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) {
                     // On home, sideways brings the last app in beside home, with the finger (home slides away as a card).
                     pendingFresh = false
@@ -822,6 +827,7 @@ object GestureNav {
                 when (phase) {
                     Phase.DRAG_HOME -> { dragHome(e.rawX, e.rawY); stats.touchEvent(e.eventTime); watchForHold() }
                     Phase.DRAG_SWITCH -> { dragSwitch(e.rawX); stats.touchEvent(e.eventTime) }
+                    Phase.HOME_PULL -> { lastDragX = e.rawX; lastDragY = e.rawY; watchForHold() }
                     else -> {}
                 }
             }
@@ -833,6 +839,7 @@ object GestureNav {
                 val up = e.actionMasked == MotionEvent.ACTION_UP
                 nav.removeCallbacks(holdCheck)
                 when {
+                    phase == Phase.HOME_PULL -> { phase = Phase.IDLE; if (up) HomeBridge.homeSwipeUp() }
                     phase == Phase.DRAG_HOME -> releaseHome(up, vx, vy)
                     phase == Phase.DRAG_SWITCH -> releaseSwitch(up, vx)
                     grabbedFull -> { grabbedFull = false; releaseHome(false, 0f, 0f) }   // a tap on a full-size card: let it finish
@@ -931,6 +938,17 @@ object GestureNav {
                 onTasks(fresh)
                 if (phase == Phase.DRAG_SWITCH && switchFromHome) refreshHomeSwitch()
             }
+            // The App Switcher's cards (a hold may follow, also on home): the system's snapshots of the recent apps beyond
+            // the two fetched below, only for apps used since we last fetched theirs (see havePrev), so a long run of
+            // gestures fetches nothing new.
+            if (fresh) snapIo.execute {
+                for (t in tasks.switchable().drop(if (onHome) 0 else 2).take(SWITCHER_MAX_CARDS)) {
+                    if (id != gestureId) return@execute
+                    if (images[t.pkg] != null && (systemPictureAt[t.pkg] ?: 0L) > (leftFrontAt[t.pkg] ?: Long.MAX_VALUE)) continue
+                    val b = try { snapshot(s, t.id, false) } catch (_: Throwable) { null } ?: continue
+                    remember(t.pkg, b); systemPictureAt[t.pkg] = SystemClock.uptimeMillis()
+                }
+            }
             if (onHome || tasks.isEmpty()) return@execute
             // Only pictures we do not have yet. Every snapshot counts as ~10 MB of native memory to the runtime: fetching
             // three per gesture (a fresh one of the app in front though the card keeps its recent one, the system's copy of
@@ -955,16 +973,6 @@ object GestureNav {
                 val pb = if (havePrev) null else try { snapshot(s, p.id, false) } catch (_: Throwable) { null }
                 if (pb != null) { remember(p.pkg, pb); systemPictureAt[p.pkg] = SystemClock.uptimeMillis() }
                 nav.post { if (id == gestureId) prvSnapshot = pb ?: images[p.pkg] }
-            }
-            // The App Switcher's other cards (a hold may follow): the system's snapshots of the next recent apps, fetched only
-            // for apps used since we last fetched theirs (see havePrev), so a long run of gestures fetches nothing new.
-            if (fresh) snapIo.execute {
-                for (t in tasks.switchable().drop(2).take(SWITCHER_MAX_CARDS - 2)) {
-                    if (id != gestureId) return@execute
-                    if (images[t.pkg] != null && (systemPictureAt[t.pkg] ?: 0L) > (leftFrontAt[t.pkg] ?: Long.MAX_VALUE)) continue
-                    val b = try { snapshot(s, t.id, false) } catch (_: Throwable) { null } ?: continue
-                    remember(t.pkg, b); systemPictureAt[t.pkg] = SystemClock.uptimeMillis()
-                }
             }
             // The system's last snapshot of the app in front (a stand-in for a sideways switch until the fresh one arrives),
             // on its own worker: it can take a few hundred ms and must delay neither the fresh snapshot nor the next lookup.
@@ -1790,11 +1798,13 @@ object GestureNav {
     private var holdAnchorY = 0f
     private var holdSince = 0L
 
+    /** How far the swipe has come up from where it started (px). */
+    private fun swipeTravel() = if (phase == Phase.HOME_PULL) downY - lastDragY else lastTravel
+
     private fun watchForHold() {
-        val c = cur ?: return
         val now = SystemClock.uptimeMillis()
         val moved = hypot(lastDragX - holdAnchorX, lastDragY - holdAnchorY) > HOLD_RADIUS_DP * density
-        if (moved || holdSince == 0L || c.w > sw * Motion.profile.switcher.holdMaxScale) {
+        if (moved || holdSince == 0L || swipeTravel() < Motion.profile.switcher.holdMinTravelDp * density) {
             holdAnchorX = lastDragX; holdAnchorY = lastDragY; holdSince = now
         }
         nav.removeCallbacks(holdCheck)
@@ -1802,9 +1812,10 @@ object GestureNav {
     }
 
     private fun maybeEnterSwitcher() {
-        val c = cur ?: return
-        if (phase != Phase.DRAG_HOME || !fingerDown || root?.visibility != View.VISIBLE || catchUpAt != 0L) return
-        if (c.w > sw * Motion.profile.switcher.holdMaxScale) return   // re-armed by the next move
+        if (!fingerDown) return
+        if (phase == Phase.DRAG_HOME) { if (root?.visibility != View.VISIBLE || catchUpAt != 0L) return }
+        else if (phase != Phase.HOME_PULL) return
+        if (swipeTravel() < Motion.profile.switcher.holdMinTravelDp * density) return   // re-armed by the next move
         val left = holdSince + Motion.profile.switcher.holdMs - SystemClock.uptimeMillis()
         if (left > 0L) { nav.postDelayed(holdCheck, left); return }
         enterSwitcher()
@@ -1817,10 +1828,13 @@ object GestureNav {
     private fun enterSwitcher() {
         val c = cur ?: return
         val d = deck ?: return
+        if (!prepareCardWindow()) return
+        val fromHome = phase == Phase.HOME_PULL
         val tasks = recentList.switchable()
-        val first = tasks.firstOrNull { it.pkg == cardPkg } ?: fg?.takeIf { it.pkg == cardPkg }
+        val first = if (fromHome) null else tasks.firstOrNull { it.pkg == cardPkg } ?: fg?.takeIf { it.pkg == cardPkg }
         val list = (listOfNotNull(first) + tasks.filter { it.id != first?.id }).take(SWITCHER_MAX_CARDS)
         if (list.isEmpty()) return
+        if (fromHome) { enterSwitcherFromHome(list); return }
         phase = Phase.SWITCHER
         switcherHeld = true
         switcherHomeAsked = false
@@ -1858,6 +1872,53 @@ object GestureNav {
         }
         stats.reset(); stats.start()
         AppLog.log("[switcher] open: ${cards.size} apps (${cards.joinToString { it.pkg.substringAfterLast('.') }})")
+    }
+
+    /**
+     * The App Switcher from the home screen (a swipe up that rests): no card under the finger; the recent apps rise in over
+     * the picture of home, which recedes, blurs and dims behind them. Home stays the window in front until an app is chosen.
+     */
+    private fun enterSwitcherFromHome(list: List<Task>) {
+        val d = deck ?: return
+        gen++
+        phase = Phase.SWITCHER
+        switcherHeld = true
+        switcherHomeAsked = false
+        nav.removeCallbacks(holdCheck)
+        strip?.performHapticFeedback(if (Build.VERSION.SDK_INT >= 34) android.view.HapticFeedbackConstants.GESTURE_THRESHOLD_ACTIVATE else android.view.HapticFeedbackConstants.CONTEXT_CLICK)
+        cardPkg = null
+        fg = null
+        dragStartedAt = SystemClock.uptimeMillis()
+        val cards = list.map { t ->
+            dev.launcher.app.switcher.DeckView.Card(t.id, t.pkg, labelFor(t.pkg), iconFor(t.pkg), SplashColors.cached(t.pkg) ?: DEFAULT_SPLASH).apply {
+                snapshot = images[t.pkg]
+            }
+        }
+        cur?.alpha = 0f   // no app card in this session
+        prv?.visibility = View.GONE
+        nxt?.visibility = View.GONE
+        backdrop?.picture = HomeBridge.preview   // the one rendered when the swipe began
+        backdrop?.depth = 0f
+        switcherGround = if (backdrop?.picture == null) 0xFF101418.toInt() else 0
+        depthAtSwitcher = 0f
+        d.setScreen(sw, sh, deviceRadius)
+        d.enterFromHome(cards)
+        d.heldStart(lastDragX)
+        showCards()
+        switcherBg.snapTo(0f)
+        switcherBg.animateTo(1f, Motion.profile.switcher.enter, 0f)
+        val s = ShizukuLink.service
+        val g = gen
+        if (s != null) for (card in cards) {
+            if (card.snapshot != null && (systemPictureAt[card.pkg] ?: 0L) > (leftFrontAt[card.pkg] ?: Long.MAX_VALUE)) continue
+            snapIo.execute {
+                val b = snapshot(s, card.taskId, false) ?: return@execute
+                remember(card.pkg, b); systemPictureAt[card.pkg] = SystemClock.uptimeMillis()
+                nav.post { if (gen == g && phase == Phase.SWITCHER) { card.snapshot = b; deck?.invalidate() } }
+            }
+        }
+        stats.reset(); stats.start()
+        AppLog.log("[switcher] open from home: ${cards.size} apps (${cards.joinToString { it.pkg.substringAfterLast('.') }})")
     }
 
     private fun labelFor(pkg: String): String =
@@ -1921,7 +1982,7 @@ object GestureNav {
             // compositor change windows in the middle of the animation.
             openedAt = SystemClock.uptimeMillis()
             // The app the swipe started in is still in front underneath unless home was asked for or it was closed.
-            val stillInFront = card.taskId == recentList.switchable().firstOrNull()?.id && !homeStarted && lastFrontPkg == card.pkg
+            val stillInFront = !homeVisible && card.taskId == recentList.switchable().firstOrNull()?.id && !homeStarted && lastFrontPkg == card.pkg
             cardPkg = card.pkg
             if (!stillInFront) bringBack(card.pkg, Task(card.taskId, card.pkg))
             stats.reset(); stats.start()
@@ -1937,13 +1998,15 @@ object GestureNav {
         override fun onHomeStart() {
             if (switcherHomeAsked) return
             switcherHomeAsked = true
-            startHome()
             // Home with every icon now that it will sharpen (only the small blurred copy shows yet: cheap to re-render).
             HomeBridge.preview?.let { backdrop?.picture = it }
-            // The real home runs the same depth spring underneath, so it matches the picture when that goes.
-            val spec = Motion.profile.switcher.home
             depthAtSwitcher = 0f
-            HomeBridge.animateDepth(backdrop?.depth ?: 1f, 0f, 0f, spec.response, spec.damping, System.nanoTime())
+            if (!homeVisible) {
+                startHome()
+                // The real home runs the same depth spring underneath, so it matches the picture when that goes.
+                val spec = Motion.profile.switcher.home
+                HomeBridge.animateDepth(backdrop?.depth ?: 1f, 0f, 0f, spec.response, spec.damping, System.nanoTime())
+            }   // (opened from home: home is in front at rest already; the picture of it just comes forward again)
             stats.reset(); stats.start()
             AppLog.log("[switcher] home")
         }
