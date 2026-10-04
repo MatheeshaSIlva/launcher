@@ -282,6 +282,12 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
 
     override fun hideKeyboard() = searchBar.hideKeyboard()
 
+    override fun closeTop(): Boolean {
+        if (!folder.isOpen) return false
+        folder.close()
+        return true
+    }
+
     override fun capturesGestures() = listMode || folder.isOpen
 
     override fun canScrollBack() = tilesPane.scroller.position > 0.5f

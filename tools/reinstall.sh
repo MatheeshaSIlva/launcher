@@ -5,5 +5,7 @@ ADB="${ADB:-$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe}"
 D=(); [ -n "$DEVICE" ] && D=(-s "$DEVICE")
 tools/device.sh install >/dev/null
 "$ADB" "${D[@]}" shell am force-stop dev.launcher.app
-"$ADB" "${D[@]}" shell am start -W -n dev.launcher.app/.HomeActivity >/dev/null
+# As home (MAIN + HOME, our package, no component): started by component it lands in an ordinary task, not the home task.
+# The package picks us even when another launcher is the default.
+"$ADB" "${D[@]}" shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME -p dev.launcher.app >/dev/null
 sleep "${1:-5}"

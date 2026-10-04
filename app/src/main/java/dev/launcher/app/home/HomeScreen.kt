@@ -883,6 +883,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
      * App Library and its search closed.
      */
     fun onHomeSwipeUp() {
+        // An open App Library folder is on top too: the swipe closes it, as iOS closes an expanded category.
+        if (drawerProgress() > 0.5f && drawer?.closeTop() == true) return
         val onTop = menu?.isShowing == true || picker?.isOpen == true || editMode?.active == true || spotlight?.isOpen == true
         if (!onTop) { goHome(); return }
         menu?.dismiss()

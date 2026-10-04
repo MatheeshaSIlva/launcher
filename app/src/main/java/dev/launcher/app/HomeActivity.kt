@@ -196,6 +196,12 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     override fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long) =
         screen.animateDepth(from, to, velocity, response, damping, startNanos)
 
+    override fun recordAsShown(): HomePicture? {
+        if (screen.width == 0) return null
+        for (c in screen.clocks) c.refresh()
+        return screen.withHidden(null) { record() }
+    }
+
     override fun recordWithout(pkg: String): HomePicture? {
         if (screen.width == 0) return null
         return screen.withHidden(pkg) { record() }

@@ -85,6 +85,10 @@ copy it wholesale — port the working pieces cleanly. File map:
   strength follows `dimAmount`; whole-screen only (never a rectangle). Reflection on `sem*` worked without changing the hidden-API policy.
 - **Stock notification launch animation** (SystemUI) still plays even with animation scales at 0; solved by replacing the shade so taps go through us (re-test).
 - **Status bar race**: a restore-on-start can clear freshly set flags; set flags only after restore has finished.
+- **Our remote transition must not finish before its start transaction is committed.** SystemUI applies the finish
+  transaction from its own process; transactions from two processes are not ordered, so an early finish let home end up
+  inside a removed transition container (black home, "no focused window" ANR, survives reinstalls). Finish from
+  `addTransactionCommittedListener` (`InstantTransitions`).
 - **adbd restarts kill everything started through Shizuku** (SIGKILL of adbd's cgroup; escaping it is denied). On the S24 this happened on every
   lock/unlock because Default USB configuration had data functions; fixed by "debugging only"/"No data transfer". Hence: status bar flags are set
   through the binder API with a token owned by our service (system drops them when it dies), never with `cmd` (those persist until reboot).

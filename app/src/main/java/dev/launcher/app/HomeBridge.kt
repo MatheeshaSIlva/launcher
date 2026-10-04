@@ -28,6 +28,8 @@ object HomeBridge {
         fun recordWithout(pkg: String): HomePicture?
         /** Runs home's own depth (zoom) on the same spring as gesture nav's, from the same start time (main thread). */
         fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long)
+        /** Records home exactly as it shows now (every icon; open folder, scroll, page as they are). Main thread. */
+        fun recordAsShown(): HomePicture?
     }
 
     @Volatile var home: Home? = null
@@ -109,6 +111,15 @@ object HomeBridge {
 
     /** Home's wallpaper is light under the status bar: our status bar shows black content on home. */
     @Volatile var homeStatusDark = false
+
+    /**
+     * A swipe on the bar began on home: home is recorded as it shows right now (the picture "at rest" can be seconds old: a
+     * folder opened since, the library scrolled), then [then] runs. Any thread; [then] runs on the main thread.
+     */
+    fun recordForGesture(then: () -> Unit) = main.post {
+        home?.recordAsShown()?.let { setPreview(it) }
+        then()
+    }
 
     /** A swipe up on the gesture bar while home is in front (leave edit mode, close Spotlight). Any thread. */
     fun homeSwipeUp() = main.post { (home as? HomeActivity)?.onHomeSwipeUp() }

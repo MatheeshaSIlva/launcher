@@ -647,3 +647,23 @@ Round 10 (Matheesha: "I don't like the swipe from home to recents animation", re
 during a swipe up on it; a rest slides the deck in from the left as one; going home from a deck slides it out to the left
 while home comes forward; a released swipe springs home back. Checked on the emulator (recording) and on the S24 by frame
 stats: switcher from an app in/open/home 1/1/0, from home in/open 0/0, released swipes on home 0/0/0 missed refreshes.
+
+Round 11 (Matheesha: the switcher from the App Library "is weird at times, especially from an expanded folder"; going home
+from an expanded folder). Found and fixed, checked on the emulator (the S24 was not connected):
+- Home's picture behind the pull and the deck was the one recorded when home last came to rest, so it could be seconds old
+  (a folder opened since, the library scrolled). Now home is recorded as it shows at the touch (`HomeBridge.recordForGesture`).
+- A released swipe up on an open folder closes the folder at once (as iOS closes an expanded category); the receding picture
+  fades into the live home doing it (it used to spring back first, then the folder popped back and slid away with the page).
+  A second swipe goes to page 1.
+- **Black home after a close (real bug, likely behind the "at times").** Our instant transition applied the system's start
+  transaction from the shell process and called the finish callback straight away. SystemUI applies the finish transaction
+  (windows back to their parents, the transition's container removed) from its own process, and transactions from two
+  processes are not ordered: when ours waited on a frame not yet drawn (home redrawing behind the blurred folder), theirs
+  landed first and ours then moved home into the removed container. Home stayed off screen (SurfaceFlinger: the home task
+  under an offscreen "Transition Root"; input: "no focused window" ANR) until another transition, even across a reinstall.
+  Now the finish is called when our transaction is committed (`addTransactionCommittedListener`, 1 s fallback). Emulator:
+  the old timing went black on the first folder close; the fix 10/10 clean (folder icon and switcher card alternating),
+  commit 8-31 ms. This was also the cause of the earlier "black home on the emulator" (not the task type).
+- Checked on the emulator: switcher from the open folder (tap empty space or swipe up: back to the open folder), from the
+  scrolled library (pixel-identical before/after), card taps, closes, sideways switch. The emulator returns no task
+  snapshots, so its cards show placeholders. Not measured yet: frame stats on the S24.

@@ -38,10 +38,9 @@ object Updater {
                 AppLog.log("[update] download: $r")
                 if (!r.startsWith("OK")) return@execute
                 AppLog.log("[update] installing; if it works the app closes and reopens by itself")
-                val component = "${app.packageName}/.HomeActivity"
                 s.runShell(
                     "rm -f $INSTALL_LOG; setsid nohup sh -c 'sleep 1; pm install -r -d $DEST > $INSTALL_LOG 2>&1; " +
-                        "am start -n $component >> $INSTALL_LOG 2>&1' >/dev/null 2>&1 &"
+                        "am start -a android.intent.action.MAIN -c android.intent.category.HOME -p ${app.packageName} >> $INSTALL_LOG 2>&1' >/dev/null 2>&1 &"
                 )
                 // A successful install kills this process. Still alive after a few seconds means it failed: show why.
                 Thread.sleep(9000)

@@ -72,6 +72,9 @@ interface AppDrawer {
 
     /** Keyboard down at once (the drawer is being left; search itself ends in [onClosed]). */
     fun hideKeyboard()
+
+    /** Closes what lies on top of the drawer (an open folder), animated. True if there was something to close. */
+    fun closeTop(): Boolean
 }
 
 /** Where [v]'s top-left corner is on screen from layout positions and translations (scale ignored), cheap enough per frame. */
