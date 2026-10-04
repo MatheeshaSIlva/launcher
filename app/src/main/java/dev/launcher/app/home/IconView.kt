@@ -104,7 +104,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             val y = iconRect.bottom + m.labelBaseline
             canvas.drawText(shownLabel, 0, shownLabel.length, width / 2f, y, labelPaint)
         }
-        if (badge > 0 && !iconHidden && !labelHidden) CountBadge.draw(canvas, iconRect, badge, m)
+        if (badge > 0 && !iconHidden) CountBadge.draw(canvas, iconRect, badge, m)
         if (editing) RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
     }
 

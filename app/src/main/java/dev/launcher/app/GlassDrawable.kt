@@ -50,6 +50,11 @@ data class GlassStyle(
     val edgeWidth: Float = 1f,
     /** How tightly the specular highlights gather at the corners facing the light (1 = spread along the edges). */
     val specPower: Float = 1f,
+    /**
+     * Shaped glass only (the clock): how much it adapts to a bright backdrop to stay readable, as iOS glass does: a darker
+     * body, a darkened edge and a deeper shadow where what is behind is light (0 = never).
+     */
+    val adapt: Float = 0f,
 ) {
     companion object {
         /**
@@ -68,7 +73,7 @@ data class GlassStyle(
          */
         val IOS_CLOCK = IOS.copy(refraction = 20f, dispersion = 0.12f, magnify = 0f, saturation = 1.15f, tint = 0.12f,
             glowWidth = 8f, glow = 0.22f, shade = 0f, rimWidth = 1.6f, rimBase = 0.25f, rimLight = 0.45f, rimBack = 0.26f,
-            edgeDark = 0f, edgeWidth = 1f, specPower = 1.2f)
+            edgeDark = 0f, edgeWidth = 1f, specPower = 1.2f, adapt = 1f)
     }
 }
 
@@ -126,6 +131,7 @@ class GlassDrawable(
         shader.setFloatUniform("magnify", style.magnify)
         shader.setFloatUniform("saturation", style.saturation)
         shader.setFloatUniform("tint", style.tint)
+        if (masked) shader.setFloatUniform("adapt", style.adapt)
         setLighting(shader, style, unitPx)
         val o = Reveal.origin(screenW.toFloat(), screenH.toFloat())
         shader.setFloatUniform("origin", o[0], o[1])
@@ -353,7 +359,14 @@ uniform shader height;
 uniform float heightScale;
 uniform float blurPx;
 uniform float shadowAlpha;
+uniform float adapt;
 """ + Reveal.NOISE + Reveal.FRONT + LIGHTING + LOOK + """
+// How light the backdrop is here (0 = dark .. 1 = light), from its blurred copy.
+float brightAt(float2 sp) {
+    float l = dot(float3(look(sp, float2(0.0))), float3(0.2126, 0.7152, 0.0722));
+    return smoothstep(0.45, 0.85, l) * adapt;
+}
+
 half4 main(float2 coord) {
     float a = mask.eval(coord).a;
     float2 hc = coord * heightScale;
@@ -368,17 +381,22 @@ half4 main(float2 coord) {
     float2 n = gl > 1e-5 ? -g / gl : float2(0.0, 0.0);
     float steep = clamp(gl * blurPx * heightScale, 0.0, 1.0);
 
-    // Outside the strokes: a soft shadow from the same height field.
-    half4 shadow = half4(0.0, 0.0, 0.0, half(shadowAlpha * h * h));
+    float2 sp = dockOrigin + coord;
+    float bright = brightAt(sp);
+    // Outside the strokes: a soft shadow from the same height field, deeper over a light backdrop.
+    half4 shadow = half4(0.0, 0.0, 0.0, half(shadowAlpha * (1.0 + 2.5 * bright) * h * h));
     if (a < 0.003) return shadow;
 
-    float2 sp = dockOrigin + coord;
     float2 off = n * steep * refraction - (coord - size * 0.5) * magnify;
     half3 col = saturate3(look(sp, off), half(saturation));
-    col = mix(col, half3(1.0), half(tint));
+    col = mix(col, half3(1.0), half(tint * (1.0 - bright)));
+    // Over a light backdrop the body darkens a little (readable), as iOS glass does.
+    col *= half(1.0 - 0.30 * bright);
     // Distance from the edge, from the height (it rises over about blurPx).
     float inside = max(h - 0.5, 0.0) * 2.0 * blurPx;
     col = lightGlass(col, inside, n);
+    // ...and its edge darkens, so the bright rim still separates from a white background.
+    col *= half(1.0 - 0.28 * bright * (1.0 - smoothstep(0.0, blurPx * 0.6, inside)));
     return half4(col * a, a) + shadow * half(1.0 - a);
 }
 """

@@ -10,28 +10,28 @@
 set -e
 ADB="${ADB:-$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe}"
 [ -x "$ADB" ] || ADB=adb
-DEV=${DEVICE:+-s $DEVICE}
+DEV=(); [ -n "$DEVICE" ] && DEV=(-s "$DEVICE")
 PKG=dev.launcher.app
 here="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$here/shots"
 cmd=$1; shift || true
 case "$cmd" in
   install)
-    "$ADB" $DEV install -r -d "$here/../app/build/outputs/apk/debug/app-debug.apk" | tail -1
-    "$ADB" $DEV shell cmd package set-home-activity $PKG/.HomeActivity >/dev/null
-    "$ADB" $DEV shell am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null ;;
-  home) "$ADB" $DEV shell input keyevent KEYCODE_HOME ;;
-  shot) "$ADB" $DEV exec-out screencap -p > "$here/shots/$1.png"; echo "$here/shots/$1.png" ;;
-  tap) "$ADB" $DEV shell input tap "$1" "$2" ;;
-  long) "$ADB" $DEV shell input swipe "$1" "$2" "$1" "$2" "${3:-900}" ;;
-  swipe) "$ADB" $DEV shell input swipe "$1" "$2" "$3" "$4" "${5:-300}" ;;
+    "$ADB" "${DEV[@]}" install -r -d "$here/../app/build/outputs/apk/debug/app-debug.apk" | tail -1
+    "$ADB" "${DEV[@]}" shell cmd package set-home-activity $PKG/.HomeActivity >/dev/null
+    "$ADB" "${DEV[@]}" shell am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null ;;
+  home) "$ADB" "${DEV[@]}" shell input keyevent KEYCODE_HOME ;;
+  shot) "$ADB" "${DEV[@]}" exec-out screencap -p > "$here/shots/$1.png"; echo "$here/shots/$1.png" ;;
+  tap) "$ADB" "${DEV[@]}" shell input tap "$1" "$2" ;;
+  long) "$ADB" "${DEV[@]}" shell input swipe "$1" "$2" "$1" "$2" "${3:-900}" ;;
+  swipe) "$ADB" "${DEV[@]}" shell input swipe "$1" "$2" "$3" "$4" "${5:-300}" ;;
   drag)
     # Press at X1 Y1, hold HOLD ms (default 700: past a long press), move to X2 Y2 in steps, rest, lift.
     x1=$1; y1=$2; x2=$3; y2=$4; hold=${5:-700}
-    "$ADB" $DEV shell "input motionevent DOWN $x1 $y1; sleep $(awk "BEGIN{print $hold/1000}");       for i in 1 2 3 4 5 6 7 8; do input motionevent MOVE \$(( $x1 + ($x2 - $x1) * i / 8 )) \$(( $y1 + ($y2 - $y1) * i / 8 )); done;       sleep 0.5; input motionevent UP $x2 $y2" ;;
+    "$ADB" "${DEV[@]}" shell "input motionevent DOWN $x1 $y1; sleep $(awk "BEGIN{print $hold/1000}");       for i in 1 2 3 4 5 6 7 8; do input motionevent MOVE \$(( $x1 + ($x2 - $x1) * i / 8 )) \$(( $y1 + ($y2 - $y1) * i / 8 )); done;       sleep 0.5; input motionevent UP $x2 $y2" ;;
   log)
-    pid=$("$ADB" $DEV shell pidof $PKG | tr -d '\r')
-    "$ADB" $DEV logcat -d --pid="$pid" | grep -E " Launcher|AndroidRuntime|FATAL" | tail -"${1:-60}" ;;
-  gfx) "$ADB" $DEV shell dumpsys gfxinfo $PKG | grep -E "Total frames|Janky|percentile" ; "$ADB" $DEV shell dumpsys gfxinfo $PKG reset >/dev/null ;;
+    pid=$("$ADB" "${DEV[@]}" shell pidof $PKG | tr -d '\r')
+    "$ADB" "${DEV[@]}" logcat -d --pid="$pid" | grep -E " Launcher|AndroidRuntime|FATAL" | tail -"${1:-60}" ;;
+  gfx) "$ADB" "${DEV[@]}" shell dumpsys gfxinfo $PKG | grep -E "Total frames|Janky|percentile" ; "$ADB" "${DEV[@]}" shell dumpsys gfxinfo $PKG reset >/dev/null ;;
   *) sed -n 2,10p "$0" ;;
 esac

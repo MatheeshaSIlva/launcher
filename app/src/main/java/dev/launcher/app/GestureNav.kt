@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Picture
 import android.graphics.PixelFormat
 import android.graphics.RectF
@@ -148,7 +149,40 @@ object GestureNav {
     private fun recentImage(pkg: String?): Bitmap? {
         pkg ?: return null
         val at = imagesAt[pkg] ?: return null
-        return if (SystemClock.uptimeMillis() - at < 10_000) images[pkg] else null
+        return if (SystemClock.uptimeMillis() - at < RECENT_MS) images[pkg] else null
+    }
+
+    /**
+     * Keeps a picture of the app in front that is never older than [RECENT_MS], so a home gesture's card shows at once even
+     * after the app has been open a while. Measured on the S24: a fresh capture at the start of a gesture takes ~30 ms right
+     * after a launch but 70-130 ms after a minute in the app, and the card waited for it (~4-10 dropped frames). The fresh
+     * capture still runs at every gesture and replaces this one when it arrives. Not while home is in front, the screen is
+     * off, or cards are moving.
+     */
+    private var keepFreshLogs = 0
+
+    private val keepFresh = object : Runnable {
+        override fun run() {
+            nav.removeCallbacks(this)
+            val s = ShizukuLink.service
+            val pkg = lastFrontPkg
+            if (!ready || locked || homeVisible || s == null || pkg == null) return
+            // An app is in front: the card window stays ready for a close (see windowOff), with home's picture for it rendered.
+            if (phase == Phase.IDLE) { setWindowShown(true); backdrop?.prewarm(HomeBridge.previewFor(pkg)) }
+            if (phase == Phase.IDLE) tasksIo.execute {
+                val tasks = try { parseTasks(s.recentTasks(3)) } catch (_: Throwable) { emptyList() }
+                val task = tasks.firstOrNull { it.pkg == pkg } ?: return@execute
+                val prevPkg = tasks.switchable().firstOrNull { it.pkg != pkg }?.pkg
+                nav.post { if (phase == Phase.IDLE) warm?.second = prevPkg?.let { images[it] } }
+                snapIo.execute {
+                    val t0 = SystemClock.uptimeMillis()
+                    val b = try { s.taskSnapshot(task.id, true) } catch (_: Throwable) { null }
+                    if (keepFreshLogs < 3) { keepFreshLogs++; AppLog.log("[nav] kept a recent picture of $pkg (${SystemClock.uptimeMillis() - t0} ms)") }
+                    if (b != null) nav.post { if (lastFrontPkg == pkg) { remember(pkg, b); if (phase == Phase.IDLE) warm?.bitmap = b } }
+                }
+            }
+            nav.postDelayed(this, KEEP_FRESH_MS)
+        }
     }
 
     // Springs
@@ -184,7 +218,7 @@ object GestureNav {
         HomeBridge.onPreviewReady = { pkg ->
             nav.post { if (cardPkg == pkg && backdrop?.picture != null && !pictureDropped) backdrop?.picture = HomeBridge.previewFor(pkg) }
         }
-        HomeBridge.onHomeTouched = { nav.post { homeTouchedDuringClose() } }
+        HomeBridge.onHomeTouched = { nav.post { homeTouchedDuringClose(); readyForLaunch() } }
         // The app in front is the one a close will fly into home: home keeps a picture without its icon ready.
         HomeBridge.likelyClosing = { if (homeVisible) null else lastFrontPkg }
     }
@@ -332,6 +366,9 @@ object GestureNav {
         if (pkg == app.packageName) return
         lastFrontPkg = pkg
         lastFrontAt = SystemClock.uptimeMillis()
+        // A first picture once the app has drawn, then one every few seconds while it stays in front.
+        nav.removeCallbacks(keepFresh)
+        nav.postDelayed(keepFresh, 1500)
         nav.post {
             val w = waitingFor ?: return@post
             if (w.first == pkg) { waitingFor = null; nav.removeCallbacks(waitTimeout); nav.postDelayed(w.second, 16) }
@@ -428,12 +465,23 @@ object GestureNav {
         val wm = wm ?: return
         if (root != null) return
         readDisplay()
-        val r = FrameLayout(ctx).apply { visibility = View.INVISIBLE }
+        // The window itself stays shown for good (at window alpha 0 while idle, which the compositor skips): showing or hiding
+        // it made the window manager re-lay it out and Android rebuild its buffers, measured at 50-80 ms on the nav thread on
+        // the S24 at the start of every gesture (the card's first frames came late). Cards show and hide inside it ([root]).
+        val host = FrameLayout(ctx)
+        val r = Stage(ctx).apply { visibility = View.INVISIBLE }
+        warm = WarmView(ctx).also { host.addView(it, FrameLayout.LayoutParams(1, 1)) }
         val b = PreviewView(ctx)
         val p = CardView(ctx).apply { visibility = View.GONE }
         val n = CardView(ctx).apply { visibility = View.GONE }
         val c = CardView(ctx)
-        r.addView(b, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // The picture of home sits under the cards but outside their container, always in the drawing tree (at alpha 0 while
+        // no card shows): a view that leaves the tree loses its GPU layers, and re-allocating them cost ~12-20 ms of the
+        // first frame of every gesture (traced on the S24). The container mirrors its visibility and fade onto it.
+        b.alpha = 0f
+        host.addView(b, 0, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        host.addView(r, 1, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        r.mirror = b
         r.addView(p, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         r.addView(n, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         r.addView(c, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -441,9 +489,11 @@ object GestureNav {
         val lp = overlayParams(sw.toInt(), sh.toInt(), touchable = false).apply {
             gravity = Gravity.TOP or Gravity.START
             title = "LauncherCards"
+            alpha = 0f
         }
         try {
-            wm.addView(r, lp)
+            wm.addView(host, lp)
+            cardWindow = host; windowShown = false
             root = r; backdrop = b; prv = p; nxt = n; cur = c
         } catch (t: Throwable) {
             AppLog.log("[nav] card window FAILED: ${t.javaClass.simpleName}: ${t.message}")
@@ -456,13 +506,70 @@ object GestureNav {
         val oldW = sw
         val oldH = sh
         readDisplay()
+        val host = cardWindow ?: return true
         if (sw != oldW || sh != oldH) {
-            val lp = r.layoutParams as WindowManager.LayoutParams
+            val lp = host.layoutParams as WindowManager.LayoutParams
             lp.width = sw.toInt()
             lp.height = sh.toInt()
-            try { wm?.updateViewLayout(r, lp) } catch (_: Throwable) { }
+            try { wm?.updateViewLayout(host, lp) } catch (_: Throwable) { }
         }
         return true
+    }
+
+    // The card window (always added) and whether it is at window alpha 1.
+    private var cardWindow: FrameLayout? = null
+    private var warm: WarmView? = null
+
+    /**
+     * Draws the latest kept picture of the app in front into one pixel, while idle: the first draw of a new snapshot imports
+     * it into the GPU, which a trace on the S24 measured at ~17 ms (allocation + upload) inside the card's first frame.
+     */
+    /** The cards' container: its visibility and alpha also apply to the picture of home under it ([mirror]). */
+    private class Stage(ctx: Context) : FrameLayout(ctx) {
+        var mirror: View? = null
+            set(v) { field = v; sync() }
+
+        private fun sync() { mirror?.alpha = if (visibility == VISIBLE) alpha else 0f }
+
+        override fun setVisibility(visibility: Int) { super.setVisibility(visibility); sync() }
+        override fun setAlpha(alpha: Float) { super.setAlpha(alpha); sync() }
+    }
+
+    private class WarmView(ctx: Context) : View(ctx) {
+        private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        private val dst = android.graphics.RectF(0f, 0f, 1f, 1f)
+        var bitmap: Bitmap? = null
+            set(v) { if (field !== v) { field = v; invalidate() } }
+        /** The previous app's last picture (a sideways switch shows it). */
+        var second: Bitmap? = null
+            set(v) { if (field !== v) { field = v; invalidate() } }
+
+        override fun onDraw(canvas: Canvas) {
+            bitmap?.let { canvas.drawBitmap(it, null, dst, paint) }
+            second?.let { canvas.drawBitmap(it, null, dst, paint) }
+        }
+    }
+    private var windowShown = false
+
+    /** Window alpha 1 (cards about to show) or 0 (idle: the compositor skips the window). */
+    private fun setWindowShown(shown: Boolean) {
+        nav.removeCallbacks(windowOff)
+        if (shown == windowShown) return
+        val host = cardWindow ?: return
+        val lp = host.layoutParams as? WindowManager.LayoutParams ?: return
+        lp.alpha = if (shown) 1f else 0f
+        try { wm?.updateViewLayout(host, lp); windowShown = shown } catch (_: Throwable) { }
+    }
+
+    // Idle on home: window alpha back to 0 a little later (a new gesture or a launch often follows at once). While an app is
+    // in front it stays at 1: changing it costs the window manager 6-50 ms on the S24 (traced), which must never land at the
+    // start of a gesture; a transparent window at alpha 1 costs the compositor one more plain layer meanwhile.
+    private val windowOff = Runnable { if (root?.visibility != View.VISIBLE && homeVisible) setWindowShown(false) }
+
+    /** Home was touched: a launch may follow, so the card window gets ready now (idle again in a moment if not). */
+    private fun readyForLaunch() {
+        setWindowShown(true)
+        if (root?.visibility != View.VISIBLE) { nav.removeCallbacks(windowOff); nav.postDelayed(windowOff, 1500) }
     }
 
     private fun showCards() {
@@ -470,6 +577,7 @@ object GestureNav {
         if (backdrop?.picture != null) HomeBridge.homeCovered = true
         r.animate().cancel()
         r.alpha = 1f
+        setWindowShown(true)
         if (r.visibility != View.VISIBLE) {
             r.visibility = View.VISIBLE
             cardVisibleAfter = SystemClock.uptimeMillis() - dragStartedAt
@@ -480,6 +588,9 @@ object GestureNav {
     // ---- a home card that appears late: its snapshot takes 50-300 ms; until then the app itself is what the user sees
 
     private const val CATCH_UP_MS = 120.0
+    // A picture of the app in front younger than this is shown at once by a home gesture; kept that young in the background.
+    private const val RECENT_MS = 10_000L
+    private const val KEEP_FRESH_MS = 6_000L
     private var catchUpAt = 0L          // nanoTime when a late card appeared during a drag (0 = not catching up)
     private var lastDragX = 0f
     private var lastDragY = 0f
@@ -535,6 +646,8 @@ object GestureNav {
             r.alpha = 1f
             r.setBackgroundColor(0)
         }
+        nav.removeCallbacks(windowOff)
+        nav.postDelayed(windowOff, 400)
         backdrop?.picture = null
         HomeBridge.homeCovered = false
         pictureDropped = false
@@ -563,8 +676,10 @@ object GestureNav {
         nav.removeCallbacks(scalesBack)
         ShizukuLink.service?.let { s -> frontIo.execute { restoreScales(s) } }
         strip?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
-        root?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
+        nav.removeCallbacks(windowOff)
+        cardWindow?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
         strip = null
+        cardWindow = null; windowShown = false; warm = null
         root = null; backdrop = null; prv = null; nxt = null; cur = null
         AppLog.log("[nav] gesture strip off")
     }
@@ -626,6 +741,9 @@ object GestureNav {
                 stats.reset()
                 if ((phase == Phase.ANIM || phase == Phase.HOLD) && root?.visibility == View.VISIBLE && !(switchFromHome && anim == Anim.SWITCH_CANCEL)) takeOver(e.rawX, e.rawY)
                 else { hideCards(); pendingFresh = true; prefetch(fresh = true) }
+                // The card window becomes visible to the compositor now, while the finger is still starting its swipe: the
+                // window manager takes ~32 ms for it on the S24, which used to land on the card's first frame.
+                setWindowShown(true)
                 // At the first touch, so they are off well before the gesture commits and home or another app starts.
                 holdScalesOff()
             }
@@ -818,7 +936,13 @@ object GestureNav {
         fgFresh = b
         fgFreshDone = true
         if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH || anim == Anim.HOME_CANCEL || anim == Anim.HOME_COMMIT) {
-            cur?.let { c -> if (b != null) c.snapshot = b else if (c.snapshot == null) c.icon = fg?.let { iconFor(it.pkg) } }
+            cur?.let { c ->
+                // A card already showing a picture of this app from the last few seconds keeps it: the first draw of a new
+                // snapshot imports it into the GPU (~17 ms, traced on the S24), a dropped frame in the middle of the motion.
+                val keep = c.snapshot != null && fg?.pkg?.let { recentImage(it) } === c.snapshot
+                if (b != null && !keep) c.snapshot = b
+                else if (b == null && c.snapshot == null) c.icon = fg?.let { iconFor(it.pkg) }
+            }
             maybeShow()
         }
     }
@@ -1495,7 +1619,7 @@ object GestureNav {
     private fun fadeOutCards(ms: Long, g: Int) {
         val r = root ?: return
         if (gen != g) return
-        r.animate().alpha(0f).setDuration(ms).withEndAction { if (gen == g) hideCards() }.start()
+        r.animate().alpha(0f).setDuration(ms).setUpdateListener { backdrop?.alpha = r.alpha }.withEndAction { if (gen == g) hideCards() }.start()
     }
 
     // ================================================================== task switching
@@ -1545,13 +1669,16 @@ object GestureNav {
     private class PreviewView(ctx: Context) : FrameLayout(ctx) {
         // Each layer is rendered once into a GPU layer when its picture changes; the depth zoom only scales the layers
         // (a transform, no re-render), so a closing or opening card costs almost nothing per frame even while a heavy app
-        // starts underneath.
+        // starts underneath. The GPU layers are kept for good, and so is the last picture while no card shows: a trace on
+        // the S24 showed every gesture re-allocating both full-screen layers and re-rendering home into them (~25 ms of the
+        // first frame), though home had usually not changed.
         private class Layer(ctx: Context) : View(ctx) {
+            init { setLayerType(LAYER_TYPE_HARDWARE, null) }
+
             var pic: Picture? = null
                 set(v) {
                     if (field === v) return
                     field = v
-                    setLayerType(if (v != null) LAYER_TYPE_HARDWARE else LAYER_TYPE_NONE, null)
                     invalidate()
                 }
 
@@ -1566,12 +1693,31 @@ object GestureNav {
             addView(contentLayer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         }
 
+        /**
+         * While no card shows: renders [p] into the layers ahead of time (the next close will show it), so the gesture's
+         * first frame does not have to.
+         */
+        fun prewarm(p: HomePicture?) {
+            if (p == null || picture != null) return
+            wallpaperLayer.pic = p.wallpaper
+            contentLayer.pic = p.content
+        }
+
+        /** What home looked like (null: nothing shows here). The layers keep the last picture while hidden. */
         var picture: HomePicture? = null
             set(v) {
                 if (field === v) return
                 field = v
-                wallpaperLayer.pic = v?.wallpaper
-                contentLayer.pic = v?.content
+                // Hidden by alpha, not visibility: an invisible view leaves the drawing tree and loses its GPU layer.
+                if (v == null) {
+                    wallpaperLayer.alpha = 0f
+                    contentLayer.alpha = 0f
+                    return
+                }
+                wallpaperLayer.pic = v.wallpaper
+                contentLayer.pic = v.content
+                wallpaperLayer.alpha = 1f
+                contentLayer.alpha = 1f
             }
         var depth = 0f
             set(v) {

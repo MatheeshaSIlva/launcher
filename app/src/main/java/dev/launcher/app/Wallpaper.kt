@@ -20,6 +20,8 @@ class Wallpaper private constructor(
     /** Much stronger blur (App Library, folders, search backgrounds), at [heavyScale] of the size. */
     val heavy: Bitmap,
     val heavyScale: Int,
+    /** Average brightness (0..1) of the wallpaper's top band, where the status bar sits. */
+    val topLuminance: Float,
 ) {
 
     /** Bitmap -> screen matrix for a [w] x [h] screen: centre-crop, like the system wallpaper on a single page. */
@@ -61,11 +63,29 @@ class Wallpaper private constructor(
             val heavy = Bitmap.createScaledBitmap(bmp, max(1, bmp.width / heavyScale), max(1, bmp.height / heavyScale), true)
                 .copy(Bitmap.Config.ARGB_8888, true)
             boxBlur(heavy, 3, 3)   // at 1/16 size: ≈ 60 px at full size, like iOS's background material
+            val top = topLuminance(heavy)
             AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}")
-            Wallpaper(bmp, small, scale, id, heavy, heavyScale)
+            // Kept on the GPU (hardware bitmaps): with ordinary bitmaps Android re-uploaded all three whenever home had been in
+            // the background a while (it trims GPU memory then), which stalled the first frame of a home gesture's card (it
+            // draws the picture of home) by 20-45 ms on the S24. Nothing reads their pixels after this point.
+            Wallpaper(gpu(bmp), gpu(small), scale, id, gpu(heavy), heavyScale, top)
         } catch (t: Throwable) {
             AppLog.log("[wallpaper] not readable (${t.javaClass.simpleName}: ${t.message}); using the system wallpaper window, no glass")
             null
+        }
+
+        private fun gpu(b: Bitmap): Bitmap = try { b.copy(Bitmap.Config.HARDWARE, false) ?: b } catch (_: Throwable) { b }
+
+        private fun topLuminance(b: Bitmap): Float {
+            val rows = maxOf(1, b.height / 12)
+            var sum = 0.0
+            var n = 0
+            for (y in 0 until rows) for (x in 0 until b.width) {
+                val p = b.getPixel(x, y)
+                sum += (0.2126 * ((p shr 16) and 0xFF) + 0.7152 * ((p shr 8) and 0xFF) + 0.0722 * (p and 0xFF)) / 255.0
+                n++
+            }
+            return if (n == 0) 0f else (sum / n).toFloat()
         }
 
         /** Separable box blur, [passes] times (≈ gaussian). In place, on a small bitmap. */

@@ -137,7 +137,8 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
         textSize = dateSize
         textAlign = Paint.Align.CENTER
         typeface = dev.launcher.app.theme.Fonts.text(600)
-        setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), 0x33000000)
+        // Readable over a light wallpaper too.
+        setShadowLayer(m.pt(5f), 0f, m.pt(1f), 0x66000000)
     }
     private val digitPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE

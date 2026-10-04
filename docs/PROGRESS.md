@@ -533,3 +533,25 @@ Round 4 (next build; everything below checked on the emulator with screenshots u
 - Menus: Delete App (Android's uninstall dialog; not for system apps).
 - Audit of every element and the plan: `docs/AUDIT.md`.
 
+Round 5: smoothness measured on the S24 itself (wireless adb from the dev PC; frame logs, gfxinfo, Perfetto traces).
+Before → after (dropped frames per animation, worst frame):
+- Close after a minute in an app: ~4-10 dropped, card 58-125 ms late → 0-1 dropped, card visible after 1 ms.
+- Close into a home icon (Telegram), right away and after 8 s: 0-3 → 0 (worst 8.7 ms at 120 Hz).
+- Launch: 0-2 → 0. Sideways switch: 1-3 → 0.
+- Close of an app without a home icon (fades to the centre): 5-8 at 16.7 ms each → 1-4. Still open: the GPU needs ~8 ms
+  per frame there (the full-screen depth blur behind a fading card), right at the 8.3 ms budget.
+Causes found in the traces and what changed (GestureNav, CardView, Wallpaper):
+- A picture of the app in front was reused only if under 10 s old, so after a while every close waited for a fresh capture
+  (70-130 ms then): one is now kept in the background (every 6 s while an app is in front, ~50-130 ms of shell time each,
+  off our threads) and imported into the GPU while idle (a 1-pixel view), so the card shows it at once.
+- Showing/hiding the card window made the window manager re-lay it out (50-80 ms, buffers rebuilt): the window now stays
+  added; cards show inside it; only its window alpha changes (6-50 ms), and only when home is in front and idle, never at
+  the start of a gesture (made ready at the first touch on home or on the bar, kept ready while an app is in front).
+- The picture-of-home layers were destroyed whenever the cards hid (a view leaving the drawing tree loses its GPU layer)
+  and re-allocated/re-rendered at every gesture: they now stay in the tree at alpha 0, and home's picture for the app in
+  front is rendered into them ahead of time.
+- A fresh snapshot arriving mid-animation replaced a recent one (another GPU import, a dropped frame): no longer.
+- A fading card was drawn through a full-screen offscreen layer every frame: no longer (single image, no overlap).
+- The wallpaper and its blurred copies are hardware bitmaps (never re-uploaded after home was in the background).
+- The clock's glass adapts to a light wallpaper (darker body and edge, deeper shadow) so it stays readable.
+
