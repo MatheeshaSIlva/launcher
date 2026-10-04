@@ -78,6 +78,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         widgets = dev.launcher.app.home.HomeWidgets(this).also { screen.widgets = it }
         screen.setConfig(HomeConfig.load(this))
         setContentView(screen)
+        screen.viewTreeObserver.addOnDrawListener(drawWatch)
         HomeBridge.home = this
         Apps.addListener(onApps)
         if (Apps.loaded) appsChanged()
@@ -141,7 +142,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             // without the reveal.
             @Suppress("DEPRECATION")
             if (intent.action == Intent.ACTION_WALLPAPER_CHANGED) { wallpaperDirty = true; if (resumed) loadWallpaper() }
-            else recordPreview()   // the clock changed: keep the picture behind closing cards current
+            else recordPreviewSoon()   // the clock changed: keep the picture behind closing cards current
         }
     }
 
@@ -181,7 +182,17 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (!GestureNav.launchApp(e.pkg, iconOnScreen, icon, start)) start()
     }
 
-    override fun onHomeSettled() { recordPreview() }
+    override fun onHomeSettled() = recordPreviewSoon()
+
+    // Recording home takes ~20 ms of the main thread (the library with an open folder, on the S24). Called from inside the
+    // last frame of a settling animation (or at the minute tick, maybe mid-animation), it made that frame late: done a moment
+    // later instead, when nothing moves (recordPreview skips it while home is moving; the next settle records).
+    private val recordPreviewLater = Runnable { recordPreview() }
+
+    private fun recordPreviewSoon() {
+        screen.removeCallbacks(recordPreviewLater)
+        screen.postDelayed(recordPreviewLater, 120)
+    }
 
     override fun layoutChanged() { screen.layoutForSaving()?.let { HomeModel.save(this, it) } }
 
@@ -198,8 +209,22 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun recordAsShown(): HomePicture? {
         if (screen.width == 0) return null
+        // Nothing drawn since the last picture: it is exactly what shows (a new one would make gesture nav render its layers
+        // of home again at the start of the gesture: 11-15 ms GPU frames at the start of a pull, traced on the S24).
+        if (!drawnSinceRecord) HomeBridge.preview?.let { return it }
         for (c in screen.clocks) c.refresh()
-        return screen.withHidden(null) { record() }
+        return screen.withHidden(null) { record() }.also { recorded() }
+    }
+
+    // Whether home has drawn a frame since its picture for gesture nav was recorded (a draw in the same frame as the
+    // recording shows what was recorded and does not count).
+    private var drawnSinceRecord = true
+    private var recordedAt = 0L
+
+    private fun recorded() { drawnSinceRecord = false; recordedAt = android.os.SystemClock.uptimeMillis() }
+
+    private val drawWatch = ViewTreeObserver.OnDrawListener {
+        if (android.os.SystemClock.uptimeMillis() - recordedAt > 6) drawnSinceRecord = true
     }
 
     override fun recordWithout(pkg: String): HomePicture? {
@@ -238,6 +263,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         screen.publishIcons()   // the icon a close flies into may be a different copy now (a tile, not a search result)
         for (c in screen.clocks) c.refresh()
         HomeBridge.setPreview(screen.withHidden(null) { record() })
+        recorded()
         val pkg = lastLaunched ?: return
         if (!HomeBridge.hasWithout(pkg)) HomeBridge.putWithout(pkg, recordWithout(pkg))
         AppLog.log("[home] search ended behind $pkg: pictures of home recorded again")
@@ -249,6 +275,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         // TextClock stops updating while home is in the background: make it show the time now before recording.
         for (c in screen.clocks) c.refresh()
         HomeBridge.setPreview(record())
+        recorded()
     }
 
     // The wallpaper's picture changes only with the wallpaper (or the screen size). Recorded anew at every record(), it was a

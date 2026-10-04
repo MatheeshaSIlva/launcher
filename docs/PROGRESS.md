@@ -688,3 +688,31 @@ cards slide, get stuck and vanish):
   recordings: deep in the deck (scroll 9), from home and from an app, by tap and by bar swipe.
 - Seen on the emulator only, right after a reinstall: the first switcher use had no picture of home yet, and choosing home
   rendered it then (a ~230 ms stall). Not seen otherwise; to watch on the phone after an UPDATE.
+
+Round 14: smoothness audit of everything built so far (S24, phase 2 gate). New `tools/scenario_more.sh` covers what the other
+scenarios did not (page <-> library, library scroll, A-Z list, folder open/close/launch/close, Spotlight open/close, the pull on
+home, dock launch/close, a launch grabbed midway, a cancelled close, sideways from home, a long switcher deck, a flick);
+`tools/trace_slices.py` lists long slices in a Perfetto trace with touch markers. Found and fixed:
+- `framestats.py` counted frames whose present time was not filled in yet (seconds before their own vsync) as misses: a
+  switcher flick read 14-19 missed refreshes that were never on screen. Such frames are dropped now (earlier numbers in this
+  file may include a few of these).
+- The card window went to window alpha 0 after 1.5 s idle on home and back to 1 at the next touch: a 10-15 ms window manager
+  re-layout on the nav thread at the start of the folder-close, the pull and launches. It stays at 1 now (it always did while
+  an app is in front).
+- Every bar touch on home recorded a new picture of home (since round 11), so the card window re-rendered its layers of home
+  at the start of the pull (11-15 ms GPU frames). Home's picture is reused unless home drew since it was recorded, and a
+  new one is rendered into the layers while idle.
+- Home recorded its picture (~20 ms of main thread) inside the last frame of a settling animation and at the minute tick:
+  now 120 ms later, when nothing moves.
+- Icons are uploaded to the GPU as they are made (`prepareToDraw`): a folder's first frame uploaded 6 icons with the main
+  thread waiting, Spotlight's opening 50.
+- Glass shader: the wallpaper-change front (two noise functions per pixel) is skipped when no change runs, and the library's
+  glass samples its backdrop once instead of twice (its sharp and frosted images are the same). Folder open GPU 15.9 -> ~8 ms
+  per frame; library tiles pixel-identical (compared on screenshots).
+- A folder keeps the library behind it in a GPU layer while it animates, and does not draw it once covered.
+- Apps flicked away in the switcher are closed once the deck is still (not the cause of the flick "misses" after all, but
+  closing a task mid-animation is work the screen does not need then).
+Results after (missed refreshes per step, two runs): every step 0-1 (folder open 0/0 in the quick re-test, flick 0, switcher
+0/0/0/0/0, launches/closes 0-2, sideways 0-1). GPU times vary with the phone's temperature (SoC 52 C after an hour of runs).
+Seen on recordings and not fixed yet: our own screens (the dev panel; a future settings page) open with the stock slide, not
+our card; Spotlight's keyboard rises after the search has opened (two steps), not with it.

@@ -263,7 +263,7 @@ object GestureNav {
             val pkg = lastFrontPkg
             if (!ready || locked || homeVisible || s == null || pkg == null) return
             keptAt = SystemClock.uptimeMillis()
-            // An app is in front: the card window stays ready for a close (see windowOff), with home's picture for it rendered.
+            // An app is in front: the card window stays ready for a close (see readyForLaunch), with home's picture for it rendered.
             if (phase == Phase.IDLE) { setWindowShown(true); backdrop?.prewarm(HomeBridge.previewFor(pkg)) }
             if (phase == Phase.IDLE) tasksIo.execute {
                 val tasks = try { parseTasks(s.recentTasks(3)) } catch (_: Throwable) { emptyList() }
@@ -316,6 +316,10 @@ object GestureNav {
             nav.post { if (cardPkg == pkg && backdrop?.picture != null && !pictureDropped) backdrop?.picture = HomeBridge.previewFor(pkg) }
         }
         HomeBridge.onHomeTouched = { nav.post { homeTouchedDuringClose(); readyForLaunch() } }
+        // Home settled into a new look: rendered into the layers now, while nothing moves, not at the next gesture's start.
+        HomeBridge.onPreviewChanged = { p ->
+            nav.post { if (phase == Phase.IDLE && root?.visibility != View.VISIBLE && homeVisible) backdrop?.prewarm(p) }
+        }
         // The app in front is the one a close will fly into home: home keeps a picture without its icon ready.
         HomeBridge.likelyClosing = { if (homeVisible) null else lastFrontPkg }
     }
@@ -583,7 +587,7 @@ object GestureNav {
         val wm = wm ?: return
         if (root != null) return
         readDisplay()
-        // The window itself stays shown for good (at window alpha 0 while idle, which the compositor skips): showing or hiding
+        // The window itself stays shown for good (window alpha 1 from its first use; see readyForLaunch): showing or hiding
         // it made the window manager re-lay it out and Android rebuild its buffers, measured at 50-80 ms on the nav thread on
         // the S24 at the start of every gesture (the card's first frames came late). Cards show and hide inside it ([root]).
         val host = FrameLayout(ctx)
@@ -679,7 +683,6 @@ object GestureNav {
 
     /** Window alpha 1 (cards about to show) or 0 (idle: the compositor skips the window). */
     private fun setWindowShown(shown: Boolean) {
-        nav.removeCallbacks(windowOff)
         if (shown == windowShown) return
         val host = cardWindow ?: return
         val lp = host.layoutParams as? WindowManager.LayoutParams ?: return
@@ -687,16 +690,13 @@ object GestureNav {
         try { wm?.updateViewLayout(host, lp); windowShown = shown } catch (_: Throwable) { }
     }
 
-    // Idle on home: window alpha back to 0 a little later (a new gesture or a launch often follows at once). While an app is
-    // in front it stays at 1: changing it costs the window manager 6-50 ms on the S24 (traced), which must never land at the
-    // start of a gesture; a transparent window at alpha 1 costs the compositor one more plain layer meanwhile.
-    private val windowOff = Runnable { if (root?.visibility != View.VISIBLE && homeVisible) setWindowShown(false) }
+    // The window stays at alpha 1 once shown, on home too (it always did while an app is in front): every change costs the
+    // window manager a re-layout of 6-50 ms on the nav thread (traced on the S24), and going back to 0 on home after a pause
+    // put the next change at the touch that starts a gesture (folder closed by the bar, the pull on home, a launch: their
+    // first frames came late). A transparent window at alpha 1 costs the compositor one more plain layer.
 
-    /** Home was touched: a launch may follow, so the card window gets ready now (idle again in a moment if not). */
-    private fun readyForLaunch() {
-        setWindowShown(true)
-        if (root?.visibility != View.VISIBLE) { nav.removeCallbacks(windowOff); nav.postDelayed(windowOff, 1500) }
-    }
+    /** Home was touched: a launch may follow, so the card window must be ready (it stays so). */
+    private fun readyForLaunch() = setWindowShown(true)
 
     private fun showCards() {
         val r = root ?: return
@@ -775,8 +775,6 @@ object GestureNav {
             r.alpha = 1f
             r.setBackgroundColor(0)
         }
-        nav.removeCallbacks(windowOff)
-        nav.postDelayed(windowOff, 400)
         backdrop?.picture = null
         HomeBridge.homeCovered = false
         pictureDropped = false
@@ -797,6 +795,7 @@ object GestureNav {
         nav.removeCallbacks(holdCheck)
         switcherHeld = false
         switcherBg.snapTo(0f)
+        if (pendingRemovals.isNotEmpty()) { nav.removeCallbacks(removeNow); removeNow.run() }   // the switcher is gone
         pullBack.stop()
         pulling = false
         deck?.clear()
@@ -812,7 +811,6 @@ object GestureNav {
         nav.removeCallbacks(scalesBack)
         ShizukuLink.service?.let { s -> frontIo.execute { restoreScales(s) } }
         strip?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
-        nav.removeCallbacks(windowOff)
         cardWindow?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
         input?.quit()
         strip = null
@@ -2184,6 +2182,25 @@ object GestureNav {
         d.onTouch(e)
     }
 
+    private val pendingRemovals = ArrayList<dev.launcher.app.switcher.DeckView.Card>()
+
+    /** Closes the apps flicked away (see deckListener.onRemove); at once when the switcher goes away. */
+    private val removeNow: Runnable = object : Runnable {
+        override fun run() {
+            if (pendingRemovals.isEmpty()) return
+            if (deck?.moving == true && phase == Phase.SWITCHER) { nav.postDelayed(this, 150); return }
+            val list = ArrayList(pendingRemovals)
+            pendingRemovals.clear()
+            val s = ShizukuLink.service ?: return
+            tasksIo.execute {
+                for (card in list) {
+                    val r = try { s.removeTask(card.taskId) } catch (t: Throwable) { "ERROR: ${t.message}" }
+                    AppLog.log("[switcher] closed ${card.pkg} (task ${card.taskId}): $r")
+                }
+            }
+        }
+    }
+
     private val deckListener = object : dev.launcher.app.switcher.DeckView.Listener {
         override fun onOpenStart(card: dev.launcher.app.switcher.DeckView.Card) {
             // The input window stays until the cards are gone (hideCards): removing it now made the window manager and the
@@ -2234,11 +2251,11 @@ object GestureNav {
             recentList = recentList.filter { it.id != card.taskId }
             recentAll = recentAll.filter { it.id != card.taskId }
             images.remove(card.pkg)
-            val s = ShizukuLink.service ?: return
-            tasksIo.execute {
-                val r = try { s.removeTask(card.taskId) } catch (t: Throwable) { "ERROR: ${t.message}" }
-                AppLog.log("[switcher] closed ${card.pkg} (task ${card.taskId}): $r")
-            }
+            // The app is closed once the deck is still (the card has flown off, the gap has closed): closing it at the flick
+            // held the screen for ~110 ms in the middle of the card's flight on the S24 (our frame on time, shown late).
+            pendingRemovals.add(card)
+            nav.removeCallbacks(removeNow)
+            nav.postDelayed(removeNow, REMOVE_AFTER_MS)
         }
 
         override fun onSettled(what: String) {
@@ -2270,6 +2287,7 @@ object GestureNav {
     private const val PULL_FADE_MS = 140L      // a released swipe on home: the picture fades into the live home
     private const val SWITCHER_DIM = 0.28f              // home behind the deck: darkened by this much
     private const val SWITCHER_MAX_CARDS = 50   // every recent app (the system keeps about this many)
+    private const val REMOVE_AFTER_MS = 650L    // a flicked card's app is closed once the deck is still
     private const val SWITCHER_PREFETCH = 3     // pictures fetched at the touch (the rest as the deck shows their cards)
     private const val IMAGES_MAX = 16          // pictures kept between gestures
     private const val SWITCHER_HOME_FLICK_DP = 900f     // a flick up faster than this after the hold goes home

@@ -127,6 +127,9 @@ object Icons {
         val density = ctx.resources.displayMetrics.densityDpi
         io.execute {
             val b = try { render(e.loadIcon(ctx, density), size) } catch (_: Throwable) { null } ?: blank(size)
+            // Uploaded to the GPU now, in the background: otherwise its first draw does it, inside a frame (traced on the S24:
+            // a library folder's first opening frame uploaded six icons, 3 ms with the main thread waiting; Spotlight's 50).
+            b.prepareToDraw()
             cache.put(k, b)
             if (size == homeSize) byPkg[e.pkg] = b
             main.post { pending.remove(k)?.forEach { it(b) } }

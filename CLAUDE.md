@@ -85,6 +85,10 @@ copy it wholesale — port the working pieces cleanly. File map:
   strength follows `dimAmount`; whole-screen only (never a rectangle). Reflection on `sem*` worked without changing the hidden-API policy.
 - **Stock notification launch animation** (SystemUI) still plays even with animation scales at 0; solved by replacing the shade so taps go through us (re-test).
 - **Status bar race**: a restore-on-start can clear freshly set flags; set flags only after restore has finished.
+- **Never change an overlay window's layout params at the start of a gesture** (alpha, flags, size): each change is a
+  10-50 ms window manager re-layout on that window's thread. The card window stays at alpha 1.
+- **Recording home into a Picture costs ~20 ms of main thread**: never inside an animation frame (settle callbacks run inside
+  the last frame); reuse the last picture when home has not drawn since.
 - **Our remote transition must not finish before its start transaction is committed.** SystemUI applies the finish
   transaction from its own process; transactions from two processes are not ordered, so an early finish let home end up
   inside a removed transition container (black home, "no focused window" ANR, survives reinstalls). Finish from
@@ -118,7 +122,10 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - What only the S24 can show (Samsung blur, One UI quirks, real frame pacing) is reported to Matheesha as unverified.
 - Smoothness on the S24 is measured from what the screen showed: `tools/scenario_spotlight_close.sh`, `scenario_library.sh`,
   `scenario_switch.sh` run launches/closes/switches N times and print per-animation missed refreshes and GPU/CPU per frame
-  (`tools/framestats.py` on `dumpsys gfxinfo framestats`). Compare against the previous build (`git stash`, build, install,
+  (`tools/framestats.py` on `dumpsys gfxinfo framestats`; frames whose present time is before their own vsync are not real
+  and are dropped). `tools/scenario_more.sh` covers every other animation (home's own motion, folders, Spotlight, dock, grab,
+  cancel, long deck, flick). For a late frame, record a Perfetto trace on the phone and list our long slices with touch
+  markers: `tools/trace_slices.py TRACE [MIN_MS]`. Compare against the previous build (`git stash`, build, install,
   run, `git stash pop`) before calling a change an improvement. `tools/find_icon.py` finds an icon on a screenshot
   (template in `tools/shots/`) so a script never taps a guessed position. The App Switcher (`scenario_switcher.sh`) is
   measured on the phone by frame stats only: it shows other apps' snapshots, so it is looked at on the emulator.

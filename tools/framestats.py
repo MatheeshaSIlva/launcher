@@ -50,7 +50,9 @@ def main():
     print(f'  CPU ms: median {p(cpu, .5):.2f}  p90 {p(cpu, .9):.2f}  max {cpu[-1]:.2f}')
     # What the screen showed: intervals between consecutive frames' present times. Our own frame log times the drawing
     # thread, so a frame the GPU finished late (shown a refresh later) only appears here.
-    ok = sorted((f for f in fs if f.get('DisplayPresentTime', 0) > 0), key=lambda f: f['DisplayPresentTime'])
+    # A present time before the frame's own vsync is not real (the system had not filled it in yet: the last frames of a
+    # dump can carry an old slot's time, seconds earlier). Counted, they made an App Switcher flick look like ~15 misses.
+    ok = sorted((f for f in fs if f.get('DisplayPresentTime', 0) > f['IntendedVsync']), key=lambda f: f['DisplayPresentTime'])
     if len(ok) > 2:
         gaps = [(b['DisplayPresentTime'] - a['DisplayPresentTime']) / 1e6 for a, b in zip(ok, ok[1:])]
         period = sorted(gaps)[len(gaps) // 4]   # the display's refresh period (most gaps are one period)

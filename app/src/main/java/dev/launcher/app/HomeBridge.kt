@@ -48,6 +48,7 @@ object HomeBridge {
         preview = p
         generation++
         without.clear()
+        onPreviewChanged?.invoke(p)
         // Re-record the picture a close is most likely to need right away (main thread, like setPreview's callers), so a
         // gesture that starts after a while in an app does not wait for it (home re-records every minute for the clock).
         val pkg = likelyClosing?.invoke() ?: return
@@ -117,9 +118,12 @@ object HomeBridge {
      * folder opened since, the library scrolled), then [then] runs. Any thread; [then] runs on the main thread.
      */
     fun recordForGesture(then: () -> Unit) = main.post {
-        home?.recordAsShown()?.let { setPreview(it) }
+        home?.recordAsShown()?.let { if (it !== preview) setPreview(it) }
         then()
     }
+
+    /** Set by gesture nav: a new picture of home (main thread), to render ahead while no card shows. */
+    @Volatile var onPreviewChanged: ((HomePicture) -> Unit)? = null
 
     /** A swipe up on the gesture bar while home is in front (leave edit mode, close Spotlight). Any thread. */
     fun homeSwipeUp() = main.post { (home as? HomeActivity)?.onHomeSwipeUp() }

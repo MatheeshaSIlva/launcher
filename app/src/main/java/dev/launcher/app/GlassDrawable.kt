@@ -113,7 +113,11 @@ class GlassDrawable(
     enum class Source { WALLPAPER, BACKDROP }
 
     private val masked = mask != null
-    private val shader = RuntimeShader(if (masked) AGSL_MASK else AGSL_RECT)
+    private val shader = RuntimeShader(when {
+        masked -> AGSL_MASK
+        source == Source.BACKDROP -> AGSL_RECT_BACKDROP
+        else -> AGSL_RECT
+    })
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     var originX = 0f
     var originY = 0f
@@ -281,6 +285,27 @@ uniform float progress;
 uniform float time;
 """
 
+        private const val LOOK_BACKDROP = """
+half3 lookOld(float2 sp, float2 off, float frostAmt) {
+    return half3(
+        frostOld.eval(sp + off * (1.0 - dispersion)).r,
+        frostOld.eval(sp + off).g,
+        frostOld.eval(sp + off * (1.0 + dispersion)).b);
+}
+half3 lookNew(float2 sp, float2 off, float frostAmt) {
+    return half3(
+        frostNew.eval(sp + off * (1.0 - dispersion)).r,
+        frostNew.eval(sp + off).g,
+        frostNew.eval(sp + off * (1.0 + dispersion)).b);
+}
+half3 look(float2 sp, float2 off) {
+    if (progress >= 1.0) return lookNew(sp, off, frost);
+    float rv = revealMix(sp + off);
+    return rv >= 0.999 ? lookNew(sp, off, frost)
+         : rv <= 0.001 ? lookOld(sp, off, frost)
+         : mix(lookOld(sp, off, frost), lookNew(sp, off, frost), half(rv));
+}
+"""
         private const val LOOK = """
 // A wallpaper seen through the glass at screen point sp with refraction offset off: dispersed clear and frosted samples.
 // (Two copies because child shaders cannot be passed as function arguments.)
@@ -308,8 +333,11 @@ half3 lookNew(float2 sp, float2 off, float frostAmt) {
     return mix(clearCol, frostCol, half(frostAmt));
 }
 
-// Old and new wallpaper meet at the reveal front, exactly where the wallpaper behind changes.
+// Old and new wallpaper meet at the reveal front, exactly where the wallpaper behind changes. With no change running
+// (progress 1: old and new are the same image) the front's noise is not evaluated at all: it ran for every pixel of every
+// glass in every frame, a large share of the GPU time of the App Library and its folders on the S24.
 half3 look(float2 sp, float2 off) {
+    if (progress >= 1.0) return lookNew(sp, off, frost);
     float rv = revealMix(sp + off);
     return rv >= 0.999 ? lookNew(sp, off, frost)
          : rv <= 0.001 ? lookOld(sp, off, frost)
@@ -321,6 +349,44 @@ half3 look(float2 sp, float2 off) {
 uniform float radius;
 uniform float bevel;
 """ + Reveal.NOISE + Reveal.FRONT + LIGHTING + LOOK + """
+half4 main(float2 coord) {
+    float2 half_size = size * 0.5;
+    float2 p = coord - half_size;
+    float d = sdRoundRect(p, half_size, radius);
+    if (d > 1.0) return half4(0.0);
+
+    // Outward surface normal from the distance field's gradient.
+    float e = 0.75;
+    float2 n = float2(
+        sdRoundRect(p + float2(e, 0.0), half_size, radius) - sdRoundRect(p - float2(e, 0.0), half_size, radius),
+        sdRoundRect(p + float2(0.0, e), half_size, radius) - sdRoundRect(p - float2(0.0, e), half_size, radius));
+    n = n / max(length(n), 1e-4);
+
+    // 0 at the edge, 1 once past the bevel. The bevel is a quarter-circle profile: steepest (strongest bend) at the edge.
+    // Small shapes (the Search pill) get a proportionally narrower bevel, so their lens never fills the whole shape.
+    float bv = min(bevel, 0.35 * min(size.x, size.y));
+    float rf = refraction * bv / bevel;
+    float t = clamp(-d / bv, 0.0, 1.0);
+    float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
+
+    float2 sp = dockOrigin + coord;
+    // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
+    float2 off = n * bend * rf - p * magnify;
+    half3 col = saturate3(look(sp, off), half(saturation));
+    col = mix(col, half3(1.0), half(tint));
+    col = lightGlass(col, max(-d, 0.0), n);
+
+    float a = clamp(0.5 - d, 0.0, 1.0);
+    return half4(col * a, a);
+}
+"""
+
+        // The App Library's glass sees its heavily blurred wallpaper, which is both its "sharp" and its "frosted" image: one set
+        // of samples instead of two (the result is the same).
+        private val AGSL_RECT_BACKDROP = COMMON + """
+uniform float radius;
+uniform float bevel;
+""" + Reveal.NOISE + Reveal.FRONT + LIGHTING + LOOK_BACKDROP + """
 half4 main(float2 coord) {
     float2 half_size = size * 0.5;
     float2 p = coord - half_size;

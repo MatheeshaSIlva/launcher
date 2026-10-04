@@ -75,10 +75,29 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         title.clear(); labels.clear()
         visibility = View.VISIBLE
         lib.tilesPane.hiddenTile = index   // the panel is the tile from now until it is back in place
+        coverLibrary(true)
         animateTo(1f, Motion.profile.folderOpen.spring())
     }
 
-    fun close() = animateTo(0f, Motion.profile.folderClose.spring())
+    fun close() {
+        lib.tilesPane.visibility = View.VISIBLE
+        animateTo(0f, Motion.profile.folderClose.spring())
+    }
+
+    /**
+     * The library behind does not move while a folder is open: it is drawn into a GPU layer once instead of every frame
+     * (each tile's glass is a shader over its whole area: re-running them all under the growing folder cost the GPU 15+ ms
+     * per frame on the S24), and not at all once the folder's backdrop covers it.
+     */
+    private fun coverLibrary(on: Boolean) {
+        val t = lib.tilesPane
+        if (on) {
+            if (t.layerType != View.LAYER_TYPE_HARDWARE) t.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        } else {
+            t.setLayerType(View.LAYER_TYPE_NONE, null)
+            t.visibility = View.VISIBLE
+        }
+    }
 
     fun closeNow() {
         animating = false
@@ -86,6 +105,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         target = 0f
         visibility = View.GONE
         lib.tilesPane.hiddenTile = -1
+        coverLibrary(false)
     }
 
     private fun animateTo(to: Float, s: Spring) {
@@ -114,7 +134,11 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
             if (s.settled(t)) {
                 animating = false
                 progress = target
-                if (target == 0f) closeNow() else lib.settled()
+                if (target == 0f) closeNow() else {
+                    // Open: the backdrop covers the library completely (when there is one to cover it with).
+                    if (lib.wallpaper != null) lib.tilesPane.visibility = View.INVISIBLE
+                    lib.settled()
+                }
             } else Choreographer.getInstance().postFrameCallback(this)
         }
     }
