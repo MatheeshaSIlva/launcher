@@ -142,6 +142,20 @@ class ShellService : IShellService.Stub() {
     private fun readField(o: Any, name: String): Any? = try { o.javaClass.getField(name).get(o) } catch (_: Throwable) { null }
 
     override fun taskSnapshot(taskId: Int, fresh: Boolean): Bitmap? = try {
+        // A pure wrap here, but Binder reads a hardware bitmap back into a software copy when it is sent: the app uses
+        // taskSnapshotBuffer and keeps this only as the fallback for an app/service pair from different builds.
+        snapshotBuffer(taskId, fresh)?.let { Bitmap.wrapHardwareBuffer(it, null) }
+    } catch (t: Throwable) {
+        null
+    }
+
+    override fun taskSnapshotBuffer(taskId: Int, fresh: Boolean): HardwareBuffer? = try {
+        snapshotBuffer(taskId, fresh)
+    } catch (t: Throwable) {
+        null
+    }
+
+    private fun snapshotBuffer(taskId: Int, fresh: Boolean): HardwareBuffer? {
         val atm = systemService("activity_task", ATM_STUB)
         val ms = atm.javaClass.methods
         val snap: Any? = if (fresh) {
@@ -149,11 +163,7 @@ class ShellService : IShellService.Stub() {
         } else {
             ms.firstOrNull { it.name == "getTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, false)
         }
-        val hb = snap?.javaClass?.getMethod("getHardwareBuffer")?.invoke(snap) as? HardwareBuffer
-        // A pure wrap (no GPU readback, which crashed the probe's service); hardware bitmaps can cross Binder.
-        hb?.let { Bitmap.wrapHardwareBuffer(it, null) }
-    } catch (t: Throwable) {
-        null
+        return snap?.javaClass?.getMethod("getHardwareBuffer")?.invoke(snap) as? HardwareBuffer
     }
 
     override fun switchToTask(taskId: Int): String = try {

@@ -71,7 +71,12 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Name-based process checks (`pidof`, `ps | grep`) are unreliable** for watchdogs. Use a heartbeat file.
 - **Stale detached "restore" timers** (`sleep N; cmd statusbar send-disable-flag none`) later clear newer flags. Kill them before setting flags.
 - **The shell cannot read the app's own external folder**; download the update APK *inside the shell process* to `/data/local/tmp`.
-- **Never copy a hardware snapshot bitmap to a software bitmap inside the shell process** (crashed the service); return hardware bitmaps across Binder.
+- **Never copy a hardware snapshot bitmap to a software bitmap inside the shell process** (crashed the service). And a hardware
+  Bitmap sent over Binder is *read back into a 10 MB software copy* by Binder itself: send the `HardwareBuffer`
+  (`taskSnapshotBuffer`) and wrap it in the app. The software copies cost a 5+ ms GPU upload at first draw and native-memory
+  GCs (5 ms pauses of the whole process) mid-gesture.
+- **Our own frame log ("frames N ... dropped ~K") times the drawing thread, not the screen.** A frame the GPU finishes late is
+  shown a refresh later and the log does not see it. What the screen showed: `tools/framestats.py` (present times).
 - **Windows created from the Shizuku process fail** ("Unknown pid=… uid=2000").
 - **Freeform / split-screen launches from the shell** become stuck overlays after ~5 s. Out of scope (experimental only).
 - **Stock recents animation API does not exist on Android 16**; we draw our own.
@@ -107,6 +112,11 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
 - Do not run `uiautomator dump` while gesture nav is on (it unbinds accessibility services).
 - What only the S24 can show (Samsung blur, One UI quirks, real frame pacing) is reported to Matheesha as unverified.
+- Smoothness on the S24 is measured from what the screen showed: `tools/scenario_spotlight_close.sh`, `scenario_library.sh`,
+  `scenario_switch.sh` run launches/closes/switches N times and print per-animation missed refreshes and GPU/CPU per frame
+  (`tools/framestats.py` on `dumpsys gfxinfo framestats`). Compare against the previous build (`git stash`, build, install,
+  run, `git stash pop`) before calling a change an improvement. `tools/find_icon.py` finds an icon on a screenshot
+  (template in `tools/shots/`) so a script never taps a guessed position.
 - When the S24 is connected (USB or wireless adb, `DEVICE=<serial>`): animations are checked frame by frame with
   `tools/device.sh rec NAME [SECS]` … `recpull NAME [WAIT]` (screenrecord captures every composed frame, 120 fps; contact
   sheets and frame times land in `tools/shots/NAME/`; needs `pip install imageio-ffmpeg`). Frame logs give the numbers.

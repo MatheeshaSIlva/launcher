@@ -245,8 +245,20 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         HomeBridge.setPreview(record())
     }
 
+    // The wallpaper's picture changes only with the wallpaper (or the screen size). Recorded anew at every record(), it was a
+    // new picture each time, and gesture nav re-rendered its layers (sharp and blurred) at every launch for nothing.
+    private var wallpaperPicture: Picture? = null
+    private var wallpaperPictureKey: Triple<Wallpaper?, Int, Int>? = null
+
     private fun record(): HomePicture {
-        val wp = if (wallpaper != null) recordView(screen.wallpaperView, null) else null
+        val key = Triple(wallpaper, screen.width, screen.height)
+        val wp = when {
+            wallpaper == null -> null
+            !screen.wallpaperView.transitioning && key == wallpaperPictureKey -> wallpaperPicture
+            else -> recordView(screen.wallpaperView, null).also {
+                if (!screen.wallpaperView.transitioning) { wallpaperPicture = it; wallpaperPictureKey = key }
+            }
+        }
         // Without our wallpaper copy the system draws it, which we cannot record: the content layer gets a black ground.
         val content = recordView(screen.fg, if (wallpaper == null) Color.BLACK else null)
         return HomePicture(wp, content)

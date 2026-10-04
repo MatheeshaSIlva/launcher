@@ -1,6 +1,7 @@
 package dev.launcher.app;
 
 import android.graphics.Bitmap;
+import android.hardware.HardwareBuffer;
 import android.content.Intent;
 import android.os.Bundle;
 
@@ -68,4 +69,9 @@ interface IShellService {
 
     // The window manager's lines about the system bar appearance (for our status bar's light/dark content).
     String windowAppearance() = 21;
+
+    // A task's snapshot as its graphics buffer (fresh as in taskSnapshot); the app wraps it into a hardware bitmap. Returning
+    // a Bitmap (taskSnapshot) made Binder read the hardware bitmap back into a 10 MB software copy in this process, which the
+    // app then uploaded to the GPU at its first draw (5+ ms, traced on the S24) and scanned on its UI thread. Null when none.
+    HardwareBuffer taskSnapshotBuffer(int taskId, boolean fresh) = 22;
 }

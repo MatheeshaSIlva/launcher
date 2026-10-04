@@ -571,3 +571,34 @@ Round 6: bugs Matheesha reported on c00a9f4, each reproduced and checked on the 
 - Keyboard windows were taken for the app in front (seen in the log after App Library search); they are ignored now.
 - Library-search launches after the change: 5 runs, 0 dropped frames; their closes 0-2.
 - Not fixed: at the start of a launch from a search, the keyboard disappears at once (our picture of home cannot contain it).
+
+Round 7: smoothness measured from what the screen showed (present times in `dumpsys gfxinfo framestats`, `tools/framestats.py`;
+scenario scripts in `tools/`). Our own frame log had been reporting 0 dropped for closes that the screen showed 1-2 refreshes
+late. Missed refreshes per animation on the S24, previous build (54a326f) → this build, same scripts, same session:
+- Launch from an App Library tile: 3, 3, 3 → 1, 1, 2 (card GPU per frame: median ~11 ms → 2.5-5 ms).
+- Close into its icon: 2, 2, 2 → 1, 1, 1 (one run of the round before: 0, 0, 1).
+- Close to the centre (app opened from Spotlight): 0-13 (two runs with 80 ms stalls) → 0, 0, 0, 1.
+- Sideways switch: 0, 3, 4, 8, 5 → 2, 1, 2, 5 / 0, 2, 1, 1.
+Causes found (Perfetto with scheduler data) and changes:
+- Every app snapshot arrived as a 10 MB *software* bitmap: Binder reads a hardware Bitmap back when it is sent. Its first draw
+  uploaded it to the GPU (5.3 ms in a gesture's second frame) and scanned it on the drawing thread; each one also counted as
+  10 MB of native memory, and the runtime collected garbage mid-gesture ("NativeAlloc ... GC paused 5.3ms"). The shell now
+  sends the graphics buffer (`taskSnapshotBuffer`), wrapped into a hardware bitmap in the app (log: "kept a recent picture
+  ... HARDWARE"); capture time 27-80 → 23 ms.
+- A gesture fetched three snapshots at its start: a fresh one of the app in front (which the card did not even use, see
+  next), the system's copy of it, and the previous app's again. Now only missing ones: none when a recent picture is kept
+  and the previous app's was fetched after it left the front.
+- The card meant to keep its recent picture instead of swapping in the fresh one mid-motion, but the check ran after the
+  fresh picture had replaced the kept one, so it always swapped. Fixed.
+- Home's picture behind the cards was blurred at full size every frame (GPU ~4-8 ms at 120 Hz) with a full-size offscreen
+  allocated at each gesture start. It is now blurred from a quarter-size copy (1/16 of the pixels) kept in its own small
+  layer, faded over the sharp picture for the first few pixels of blur. Checked on screen recordings: same look.
+- Home itself redrew everything at every step of its zoom during a close, under our picture (GPU ~2.6 ms per frame): it is
+  drawn from a GPU layer while the zoom runs (~1.45 ms).
+- The wallpaper's picture was re-recorded at every tap (new picture → its layers re-rendered at every launch): reused until
+  the wallpaper changes. A new picture is rendered into the layers that show first and into the others a frame later.
+- Launch "wrong app" check: a window of another package in the tapped app's own task (Settings showing Samsung's wallpaper
+  picker) no longer counts as the wrong app (it started Settings again).
+Found but not fixable from the app: at a gesture's start our render thread runs on a small core at ~1.1 GHz for the first
+~100 ms (the touch boost goes to the app in front); the public performance-hint API cannot ask for a boost. Remaining late
+frames are mostly at the start of a gesture or of an app's own start (GPU busy with the app).

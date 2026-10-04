@@ -707,6 +707,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         depthTarget = to
         val wasAnimating = depthAnimating
         depthAnimating = true
+        // While the zoom runs, home is drawn from a GPU layer, so each frame only scales a cached image: redrawing all of home
+        // at every step of the zoom cost ~2.6 ms of GPU per frame during every close (framestats on the S24), on the same
+        // GPU as the closing card, though the picture of home covered it. Back to normal drawing when the zoom settles.
+        if (fg.layerType != View.LAYER_TYPE_HARDWARE) fg.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         applyDepth(from)
         if (!wasAnimating) Choreographer.getInstance().postFrameCallback(depthFrame)
     }
@@ -719,6 +723,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             if (s.settled(t, 0.001f)) {
                 applyDepth(depthTarget)
                 depthAnimating = false
+                fg.setLayerType(View.LAYER_TYPE_NONE, null)
                 publishIcons()
                 listener.onHomeSettled()
             } else {

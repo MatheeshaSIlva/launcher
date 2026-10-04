@@ -142,8 +142,26 @@ object GestureNav {
     /** Last image we have of each app (fresh or cached snapshot): lets a card appear at once, before a fresh one arrives. */
     private val images = ConcurrentHashMap<String, Bitmap>()
     private val imagesAt = ConcurrentHashMap<String, Long>()
+    // When each app last stopped being the app in front, and when we last got the system's snapshot of it: the system takes
+    // one as an app goes to the background, so one fetched after that is as good as it gets until the app is in front again.
+    private val leftFrontAt = ConcurrentHashMap<String, Long>()
+    private val systemPictureAt = ConcurrentHashMap<String, Long>()
 
     private fun remember(pkg: String, b: Bitmap) { images[pkg] = b; imagesAt[pkg] = SystemClock.uptimeMillis() }
+
+    /**
+     * A task's snapshot as a hardware bitmap, wrapped here around the buffer the shell sends: a Bitmap sent over Binder
+     * arrived as a 10 MB software copy (read back from the GPU in the shell), which had to be uploaded to the GPU at its first
+     * draw (5+ ms inside a gesture's first frames, traced on the S24). The old call is the fallback for a shell service from
+     * another build.
+     */
+    private fun snapshot(s: IShellService, taskId: Int, fresh: Boolean): Bitmap? {
+        val hb = try { s.taskSnapshotBuffer(taskId, fresh) } catch (_: Throwable) { null }
+        if (hb != null) {
+            return try { Bitmap.wrapHardwareBuffer(hb, null) } catch (_: Throwable) { null } finally { hb.close() }
+        }
+        return try { s.taskSnapshot(taskId, fresh) } catch (_: Throwable) { null }
+    }
 
     /** An earlier image of [pkg], only if recent enough that showing it before the fresh one cannot look stale. */
     private fun recentImage(pkg: String?): Bitmap? {
@@ -176,8 +194,8 @@ object GestureNav {
                 nav.post { if (phase == Phase.IDLE) warm?.second = prevPkg?.let { images[it] } }
                 snapIo.execute {
                     val t0 = SystemClock.uptimeMillis()
-                    val b = try { s.taskSnapshot(task.id, true) } catch (_: Throwable) { null }
-                    if (keepFreshLogs < 3) { keepFreshLogs++; AppLog.log("[nav] kept a recent picture of $pkg (${SystemClock.uptimeMillis() - t0} ms)") }
+                    val b = try { snapshot(s, task.id, true) } catch (_: Throwable) { null }
+                    if (keepFreshLogs < 3) { keepFreshLogs++; AppLog.log("[nav] kept a recent picture of $pkg (${SystemClock.uptimeMillis() - t0} ms, ${b?.config})") }
                     if (b != null) nav.post { if (lastFrontPkg == pkg) { remember(pkg, b); if (phase == Phase.IDLE) warm?.bitmap = b } }
                 }
             }
@@ -367,6 +385,7 @@ object GestureNav {
         nav.post { refreshAppearance() }   // a different window may ask for a different status bar
         // Our own windows (home, cards, strip) are never the app a gesture closes or a launch waits for.
         if (pkg == app.packageName) return
+        lastFrontPkg?.takeIf { it != pkg }?.let { leftFrontAt[it] = SystemClock.uptimeMillis() }
         lastFrontPkg = pkg
         lastFrontAt = SystemClock.uptimeMillis()
         // A first picture once the app has drawn, then one every few seconds while it stays in front.
@@ -896,23 +915,34 @@ object GestureNav {
                 if (phase == Phase.DRAG_SWITCH && switchFromHome) refreshHomeSwitch()
             }
             if (onHome || tasks.isEmpty()) return@execute
+            // Only pictures we do not have yet. Every snapshot counts as ~10 MB of native memory to the runtime: fetching
+            // three per gesture (a fresh one of the app in front though the card keeps its recent one, the system's copy of
+            // it, the previous app's again) set off garbage collections that paused the whole process for ~5 ms in the middle
+            // of closes (S24 log: "NativeAlloc concurrent mark compact GC ... paused 5.3ms"). A fresh capture also kept the
+            // GPU busy (the system renders it) during the gesture's first frames.
+            val fgPkg = tasks[0].pkg
+            val haveFg = recentImage(fgPkg) != null
+            val p = tasks.getOrNull(1)
+            val havePrev = p != null && (systemPictureAt[p.pkg] ?: 0L) > (leftFrontAt[p.pkg] ?: Long.MAX_VALUE)
             snapIo.execute {
                 if (fresh) {
-                    val t = SystemClock.uptimeMillis()
-                    val b = try { s.taskSnapshot(tasks[0].id, true) } catch (_: Throwable) { null }
-                    val ms = SystemClock.uptimeMillis() - t
-                    b?.let { remember(tasks[0].pkg, it) }
-                    nav.post { if (id == gestureId) onFgFresh(b, ms) }
+                    if (haveFg) nav.post { if (id == gestureId) onFgFresh(fgPkg, null, 0L) }
+                    else {
+                        val t = SystemClock.uptimeMillis()
+                        val b = try { snapshot(s, tasks[0].id, true) } catch (_: Throwable) { null }
+                        val ms = SystemClock.uptimeMillis() - t
+                        nav.post { if (id == gestureId) onFgFresh(fgPkg, b, ms) else b?.let { remember(fgPkg, it) } }
+                    }
                 }
-                val p = tasks.getOrNull(1) ?: return@execute
-                val pb = try { s.taskSnapshot(p.id, false) } catch (_: Throwable) { null }
-                pb?.let { remember(p.pkg, it) }
+                p ?: return@execute
+                val pb = if (havePrev) null else try { snapshot(s, p.id, false) } catch (_: Throwable) { null }
+                if (pb != null) { remember(p.pkg, pb); systemPictureAt[p.pkg] = SystemClock.uptimeMillis() }
                 nav.post { if (id == gestureId) prvSnapshot = pb ?: images[p.pkg] }
             }
-            // The system's last snapshot of the app in front, in parallel with the fresh one (a stand-in for a sideways switch),
+            // The system's last snapshot of the app in front (a stand-in for a sideways switch until the fresh one arrives),
             // on its own worker: it can take a few hundred ms and must delay neither the fresh snapshot nor the next lookup.
-            if (fresh) cachedIo.execute {
-                val cached = try { s.taskSnapshot(tasks[0].id, false) } catch (_: Throwable) { null }
+            if (fresh && !haveFg) cachedIo.execute {
+                val cached = try { snapshot(s, tasks[0].id, false) } catch (_: Throwable) { null }
                 if (cached != null) nav.post { if (id == gestureId) onFgCached(tasks[0].pkg, cached) }
             }
         }
@@ -949,17 +979,24 @@ object GestureNav {
         cur?.let { c -> if (c.snapshot == null) { c.snapshot = b; maybeShow() } }
     }
 
-    private fun onFgFresh(b: Bitmap?, ms: Long) {
+    private fun onFgFresh(pkg: String, b: Bitmap?, ms: Long) {
         fgSnapMs = ms
         fgFresh = b
         fgFreshDone = true
+        // Whether the card shows the kept picture, decided before the fresh one replaces it as the app's latest (that order
+        // was reversed: the check always failed and every card swapped pictures mid-motion).
+        // [b] null with [ms] 0: no capture was taken because a recent picture is kept (see prefetch).
+        val showsKept = cur?.snapshot?.let { it === recentImage(pkg) } == true
+        b?.let { remember(pkg, it) }
         if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH || anim == Anim.HOME_CANCEL || anim == Anim.HOME_COMMIT) {
             cur?.let { c ->
-                // A card already showing a picture of this app from the last few seconds keeps it: the first draw of a new
-                // snapshot imports it into the GPU (~17 ms, traced on the S24), a dropped frame in the middle of the motion.
-                val keep = c.snapshot != null && fg?.pkg?.let { recentImage(it) } === c.snapshot
-                if (b != null && !keep) c.snapshot = b
-                else if (b == null && c.snapshot == null) c.icon = fg?.let { iconFor(it.pkg) }
+                // A card already showing a picture of this app from the last few seconds keeps it: a new picture's first draw
+                // costs a GPU import in the middle of the motion.
+                if (b != null && !showsKept) c.snapshot = b
+                else if (b == null && c.snapshot == null) {
+                    val kept = recentImage(pkg)
+                    if (kept != null) c.snapshot = kept else c.icon = fg?.let { iconFor(it.pkg) }
+                }
             }
             maybeShow()
         }
@@ -1330,12 +1367,23 @@ object GestureNav {
             phase = Phase.HOLD
             if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(90, g)
             else awaitForeground(pkg, g) {
-                if (lastFrontPkg != pkg) {
-                    // Not the app that was tapped: record what is there instead, and ask for the tapped one again.
-                    AppLog.log("[front] WRONG APP after launching $pkg: $lastFrontPkg is in front; starting $pkg again")
-                    bringBack(pkg, null)
+                if (lastFrontPkg == pkg) { fadeOutCards(90, g); return@awaitForeground }
+                // A window of another package can belong to the tapped app's own task (Settings showing Samsung's wallpaper
+                // picker, seen on the S24): only another task in front is the wrong app.
+                val s = ShizukuLink.service
+                val other = lastFrontPkg
+                tasksIo.execute {
+                    val top = try { s?.let { parseTasks(it.recentTasks(1)).firstOrNull()?.pkg } } catch (_: Throwable) { null }
+                    nav.post {
+                        if (gen != g) return@post
+                        if (top != pkg) {
+                            // Not the app that was tapped: ask for the tapped one again.
+                            AppLog.log("[front] WRONG APP after launching $pkg: $other is in front (top task $top); starting $pkg again")
+                            bringBack(pkg, null)
+                        }
+                        fadeOutCards(90, g)
+                    }
                 }
-                fadeOutCards(90, g)
             }
         }
         showCards()
@@ -1360,7 +1408,7 @@ object GestureNav {
         val s = ShizukuLink.service ?: return
         snapIo.execute {
             val task = try { parseTasks(s.recentTasks(12)).firstOrNull { it.pkg == pkg } } catch (_: Throwable) { null } ?: return@execute
-            val b = try { s.taskSnapshot(task.id, false) } catch (_: Throwable) { null } ?: return@execute
+            val b = try { snapshot(s, task.id, false) } catch (_: Throwable) { null } ?: return@execute
             remember(pkg, b)
             nav.post { if (gen == g && cardPkg == pkg) { c.snapshot = b; fg = task } }
         }
@@ -1540,7 +1588,7 @@ object GestureNav {
         for ((task, card) in listOf(older to prv, newer to nxt)) {
             task ?: continue
             snapIo.execute {
-                val b = try { s.taskSnapshot(task.id, false) } catch (_: Throwable) { null } ?: return@execute
+                val b = try { snapshot(s, task.id, false) } catch (_: Throwable) { null } ?: return@execute
                 remember(task.pkg, b)
                 nav.post { if (gen == g && phase == Phase.DRAG_SWITCH) card?.snapshot = b }
             }
@@ -1693,7 +1741,7 @@ object GestureNav {
     /**
      * Our recorded picture of the home screen, drawn behind cards. [depth] 0 = at rest, 1 = receded behind an open app:
      * the content zooms by MotionProfile.homeContentZoom and the wallpaper by the smaller homeWallpaperZoom, about the
-     * centre (iOS depth).
+     * centre (iOS depth), and the whole picture blurs by up to MotionProfile.homeDepthBlur.
      */
     private class PreviewView(ctx: Context) : FrameLayout(ctx) {
         // Each layer is rendered once into a GPU layer when its picture changes; the depth zoom only scales the layers
@@ -1701,7 +1749,7 @@ object GestureNav {
         // starts underneath. The GPU layers are kept for good, and so is the last picture while no card shows: a trace on
         // the S24 showed every gesture re-allocating both full-screen layers and re-rendering home into them (~25 ms of the
         // first frame), though home had usually not changed.
-        private class Layer(ctx: Context) : View(ctx) {
+        private class Layer(ctx: Context, private val scale: () -> Float = { 1f }) : View(ctx) {
             init { setLayerType(LAYER_TYPE_HARDWARE, null) }
 
             var pic: Picture? = null
@@ -1711,15 +1759,52 @@ object GestureNav {
                     invalidate()
                 }
 
-            override fun onDraw(canvas: Canvas) { pic?.let { canvas.drawPicture(it) } }
+            override fun onDraw(canvas: Canvas) {
+                val p = pic ?: return
+                val s = scale()
+                if (s != 1f) canvas.scale(s, s)
+                canvas.drawPicture(p)
+            }
         }
 
         private val wallpaperLayer = Layer(ctx)
         private val contentLayer = Layer(ctx)
 
+        // The blur is done on a quarter-size copy of the picture and scaled up: blurring the full-size composite every frame
+        // (the radius follows the depth) cost the GPU ~4-8 ms per frame at 120 Hz on the S24, plus a full-size offscreen
+        // allocated at each gesture's first frame. A blur looks the same from a quarter-size image, at 1/16 of the pixels.
+        // [low] keeps the blurred result in its own (small) layer, so the blur is evaluated at that size and not at the
+        // scaled-up size; it fades over the sharp layers for the first few pixels of blur, where the low resolution would show.
+        private var lowScale = 0.25f
+        private val lowWallpaper = Layer(ctx) { lowScale }
+        private val lowContent = Layer(ctx) { lowScale }
+        private val lowBlur = FrameLayout(ctx)
+        private val low = FrameLayout(ctx).apply { setLayerType(LAYER_TYPE_HARDWARE, null); pivotX = 0f; pivotY = 0f; alpha = 0f }
+        private var shown = false
+
         init {
             addView(wallpaperLayer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
             addView(contentLayer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            lowBlur.addView(lowWallpaper, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            lowBlur.addView(lowContent, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            low.addView(lowBlur, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            addView(low, LayoutParams(1, 1))
+        }
+
+        // The quarter-size copy is measured here, in the same pass as everything else (its size follows ours; set from
+        // onSizeChanged instead, it stayed 1 x 1 because that runs during layout).
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            val w = measuredWidth
+            val h = measuredHeight
+            if (w == 0 || h == 0) return
+            val lw = (w + 3) / 4
+            val lh = (h + 3) / 4
+            low.measure(MeasureSpec.makeMeasureSpec(lw, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(lh, MeasureSpec.EXACTLY))
+            val s = lw.toFloat() / w
+            if (s != lowScale) { lowScale = s; lowWallpaper.invalidate(); lowContent.invalidate() }
+            low.scaleX = w.toFloat() / lw
+            low.scaleY = h.toFloat() / lh
         }
 
         /**
@@ -1728,8 +1813,31 @@ object GestureNav {
          */
         fun prewarm(p: HomePicture?) {
             if (p == null || picture != null) return
-            wallpaperLayer.pic = p.wallpaper
-            contentLayer.pic = p.content
+            setPics(p, staggered = false)
+        }
+
+        // A new picture is rendered into the layers that show on this frame (decided when it is drawn) and into the others a
+        // frame later: both at once made a launch's first frame render home four times (~10 ms on the render thread, traced
+        // on the S24). A launch starts sharp and a close fully blurred, so only half of them show at first.
+        private var pendingSharp: HomePicture? = null
+        private var pendingLow: HomePicture? = null
+        private val applyPending = Runnable { applySharp(); applyLow() }
+
+        private fun applySharp() { pendingSharp?.let { wallpaperLayer.pic = it.wallpaper; contentLayer.pic = it.content }; pendingSharp = null }
+        private fun applyLow() { pendingLow?.let { lowWallpaper.pic = it.wallpaper; lowContent.pic = it.content }; pendingLow = null }
+
+        private fun setPics(p: HomePicture, staggered: Boolean) {
+            removeCallbacks(applyPending)
+            pendingSharp = p; pendingLow = p
+            if (!staggered) { applySharp(); applyLow(); return }
+            postOnAnimation(applyPending)
+            invalidate()
+        }
+
+        override fun dispatchDraw(canvas: Canvas) {
+            if (pendingSharp != null && wallpaperLayer.alpha > 0f) applySharp()
+            if (pendingLow != null && low.alpha > 0f) applyLow()
+            super.dispatchDraw(canvas)
         }
 
         /** What home looked like (null: nothing shows here). The layers keep the last picture while hidden. */
@@ -1738,32 +1846,47 @@ object GestureNav {
                 if (field === v) return
                 field = v
                 // Hidden by alpha, not visibility: an invisible view leaves the drawing tree and loses its GPU layer.
-                if (v == null) {
-                    wallpaperLayer.alpha = 0f
-                    contentLayer.alpha = 0f
-                    return
-                }
-                wallpaperLayer.pic = v.wallpaper
-                contentLayer.pic = v.content
-                wallpaperLayer.alpha = 1f
-                contentLayer.alpha = 1f
+                shown = v != null
+                if (v != null) setPics(v, staggered = true)
+                applyDepth()
             }
+
         var depth = 0f
             set(v) {
                 if (field == v) return
                 field = v
-                val mp = Motion.profile
-                val wz = 1f + v * (mp.homeWallpaperZoom - 1f)
-                val cz = 1f + v * (mp.homeContentZoom - 1f)
-                wallpaperLayer.scaleX = wz; wallpaperLayer.scaleY = wz
-                contentLayer.scaleX = cz; contentLayer.scaleY = cz
-                // iOS: home blurs as it recedes behind an opening app and sharpens as the app closes into it. The layers
-                // stay cached; only the blur of their composite is redone per frame.
-                if (Build.VERSION.SDK_INT >= 31) {
-                    val r = v.coerceIn(0f, 1f) * mp.homeDepthBlur * resources.displayMetrics.density
-                    setRenderEffect(if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP))
-                }
+                applyDepth()
             }
+
+        private fun applyDepth() {
+            val v = depth
+            val mp = Motion.profile
+            val wz = 1f + v * (mp.homeWallpaperZoom - 1f)
+            val cz = 1f + v * (mp.homeContentZoom - 1f)
+            wallpaperLayer.scaleX = wz; wallpaperLayer.scaleY = wz
+            contentLayer.scaleX = cz; contentLayer.scaleY = cz
+            lowWallpaper.scaleX = wz; lowWallpaper.scaleY = wz
+            lowContent.scaleX = cz; lowContent.scaleY = cz
+            // iOS: home blurs as it recedes behind an opening app and sharpens as the app closes into it.
+            val r = v.coerceIn(0f, 1f) * mp.homeDepthBlur * resources.displayMetrics.density
+            val minBlur = MIN_LOW_BLUR_DP * resources.displayMetrics.density
+            val mix = if (Build.VERSION.SDK_INT >= 31) (r / minBlur).coerceIn(0f, 1f) else 0f
+            if (Build.VERSION.SDK_INT >= 31 && mix > 0f) {
+                val lr = max(r, minBlur) * lowScale
+                lowBlur.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(lr, lr, android.graphics.Shader.TileMode.CLAMP))
+            }
+            low.alpha = if (shown) mix else 0f
+            // Under a fully opaque blurred copy the sharp layers are not drawn at all.
+            val sharp = if (shown && mix < 1f) 1f else 0f
+            wallpaperLayer.alpha = sharp
+            contentLayer.alpha = sharp
+        }
+
+        private companion object {
+            // Below this blur (dp, at full size) the quarter-size copy would look soft rather than blurred: up to it the
+            // blurred copy (at this radius) fades in over the sharp picture.
+            const val MIN_LOW_BLUR_DP = 3f
+        }
     }
 
     /** Frame pacing (nav thread Choreographer) and touch-to-frame latency for one gesture. */
