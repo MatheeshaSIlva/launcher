@@ -66,6 +66,12 @@ interface AppDrawer {
 
     /** Open with search focused and the keyboard up (the home Search pill). */
     fun openSearch()
+
+    /** Leaves search at once (an app opened from it is in front now): back to the tiles, keyboard down. True if it was searching. */
+    fun endSearchNow(): Boolean
+
+    /** Keyboard down at once (the drawer is being left; search itself ends in [onClosed]). */
+    fun hideKeyboard()
 }
 
 /** Where [v]'s top-left corner is on screen from layout positions and translations (scale ignored), cheap enough per frame. */

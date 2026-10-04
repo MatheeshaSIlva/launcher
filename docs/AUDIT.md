@@ -34,3 +34,5 @@ Legend: **done** = built and checked on the emulator in this round; **phone** = 
   nav, the status bar and open/close run on it too.
 - `PreviewActivity`: components on their own (status bar in every state, icons with badges), for checks without the full stack.
 - Avoid `uiautomator dump` while gesture nav runs: it unbinds accessibility services (that left the emulator with a black home once).
+- `tools/device.sh rec NAME` / `recpull NAME`: screen recording of the phone at 120 fps, turned into contact sheets with frame
+  times; how the launch flicker and the stale Spotlight picture (round 6) were found and their fixes confirmed.

@@ -261,20 +261,26 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     override fun onClosed() {
         anchor = null
         folder.closeNow()
-        if (listMode) {
-            listMode = false
-            searchBar.clear()
-            searchBar.setEditable(false)
-            listPane.animate().cancel(); tilesPane.animate().cancel(); cancel.animate().cancel()
-            listPane.alpha = 0f; listPane.visibility = View.GONE
-            tilesPane.alpha = 1f; tilesPane.visibility = View.VISIBLE
-            cancel.alpha = 0f; cancel.visibility = View.GONE
-            searchBar.animateCancelSpace(0f, 0)
-            crossfading = false
-        }
+        endSearchNow()
         tilesPane.scroller.jumpTo(0f)
         rebuild()   // suggestions follow what was just used
     }
+
+    override fun endSearchNow(): Boolean {
+        if (!listMode) return false
+        listMode = false
+        searchBar.clear()
+        searchBar.setEditable(false)
+        listPane.animate().cancel(); tilesPane.animate().cancel(); cancel.animate().cancel()
+        listPane.alpha = 0f; listPane.visibility = View.GONE
+        tilesPane.alpha = 1f; tilesPane.visibility = View.VISIBLE
+        cancel.alpha = 0f; cancel.visibility = View.GONE
+        searchBar.animateCancelSpace(0f, 0)
+        crossfading = false
+        return true
+    }
+
+    override fun hideKeyboard() = searchBar.hideKeyboard()
 
     override fun capturesGestures() = listMode || folder.isOpen
 
@@ -381,6 +387,11 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
             edit.clearFocus()
             context.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(windowToken, 0)
         }
+    }
+
+    fun hideKeyboard() {
+        edit.clearFocus()
+        context.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(windowToken, 0)
     }
 
     fun focusAndShowKeyboard() {

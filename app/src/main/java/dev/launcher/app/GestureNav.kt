@@ -358,8 +358,11 @@ object GestureNav {
     }
 
     /** From NavAccessibilityService: a window of [pkg] came to the front. */
-    fun onWindowStateChanged(pkg: String?) {
+    fun onWindowStateChanged(pkg: String?, className: String? = null) {
         if (pkg == null) return
+        // The keyboard is not the app in front: taken for it, a close aimed at the keyboard's package and a launch that showed
+        // the keyboard looked like the wrong app had come up (seen on the S24 after App Library search).
+        if (isKeyboard(pkg, className)) return
         if (pkg != lastFrontPkg) AppLog.log("[front] now in front: $pkg")
         nav.post { refreshAppearance() }   // a different window may ask for a different status bar
         // Our own windows (home, cards, strip) are never the app a gesture closes or a launch waits for.
@@ -373,6 +376,21 @@ object GestureNav {
             val w = waitingFor ?: return@post
             if (w.first == pkg) { waitingFor = null; nav.removeCallbacks(waitTimeout); nav.postDelayed(w.second, 16) }
         }
+    }
+
+    private var keyboards: Set<String> = emptySet()
+    private var keyboardsAt = 0L
+
+    private fun isKeyboard(pkg: String, className: String?): Boolean {
+        if (className?.startsWith("android.inputmethodservice.") == true) return true
+        val now = SystemClock.uptimeMillis()
+        if (keyboardsAt == 0L || now - keyboardsAt > 60_000) {
+            keyboardsAt = now
+            keyboards = try {
+                app.getSystemService(android.view.inputmethod.InputMethodManager::class.java).enabledInputMethodList.map { it.packageName }.toSet()
+            } catch (_: Throwable) { keyboards }
+        }
+        return pkg in keyboards
     }
 
     /**
@@ -1146,7 +1164,8 @@ object GestureNav {
         pictureDropped = true
         hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
         hiddenIconPkg = null
-        fadeOutCards(110, gen)
+        AppLog.log("[nav] home touched during the close: the card fades where it is")
+        fadeOutCards(110, gen, overHome = true)
     }
 
     private fun startHome() {
@@ -1616,10 +1635,20 @@ object GestureNav {
         }
     }
 
-    private fun fadeOutCards(ms: Long, g: Int) {
+    /**
+     * Fades the cards out over [ms]. [overHome]: the card is small over the picture of home, which fades with it (the real
+     * home under it looks the same). Otherwise (the end of a launch) the card covers the whole screen and the picture goes at
+     * once: fading it with the card let it show through the half-transparent card, a grey flash at the end of every launch
+     * (screen-recorded on the S24 at 120 fps).
+     */
+    private fun fadeOutCards(ms: Long, g: Int, overHome: Boolean = false) {
         val r = root ?: return
         if (gen != g) return
-        r.animate().alpha(0f).setDuration(ms).setUpdateListener { backdrop?.alpha = r.alpha }.withEndAction { if (gen == g) hideCards() }.start()
+        if (!overHome) backdrop?.alpha = 0f
+        // Set (or cleared) every time: a view's animator keeps its update listener from one animation to the next.
+        r.animate().alpha(0f).setDuration(ms)
+            .setUpdateListener(if (overHome) android.animation.ValueAnimator.AnimatorUpdateListener { backdrop?.alpha = r.alpha } else null)
+            .withEndAction { if (gen == g) hideCards() }.start()
     }
 
     // ================================================================== task switching

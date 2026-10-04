@@ -757,6 +757,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         picker?.close()
         editMode?.exit()
         spotlight?.takeIf { it.isOpen }?.close()
+        drawer?.hideKeyboard()   // App Library search ends once the library has slid away (onClosed)
         if (cfg.drawerPlacement == DrawerPlacement.SWIPE_UP && sheet > 0f) animateSheet(0f)
         if (pos != 0f) animatePages(0f)
         if (drawerProgress() == 0f) drawer?.onClosed()
@@ -822,8 +823,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         drawer?.setHiddenPkg(pkg)
     }
 
-    /** Runs [block] with [pkg]'s icon hidden (to record a picture without it), then restores what was hidden. */
-    fun <T> withHidden(pkg: String, block: () -> T): T {
+    /** Runs [block] with [pkg]'s icon hidden (null: every icon shown), to record a picture, then restores what was hidden. */
+    fun <T> withHidden(pkg: String?, block: () -> T): T {
         val before = hiddenPkg
         setHiddenPkg(pkg)
         try { return block() } finally { setHiddenPkg(before) }
@@ -852,18 +853,33 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (isIdle) listener.onHomeSettled()
     }
 
-    /** Home went out of sight (an app or another screen came over it): menus and the gallery close, edit mode ends. */
-    fun onHidden() {
+    /**
+     * Home went out of sight (an app or another screen came over it): menus and the gallery close, edit mode ends, and
+     * Spotlight and App Library search end, at once and unseen (as on iOS, an app opened from them comes back to home, or
+     * to the library, without the search and its keyboard). Returns true if a search ended: home looks different now, so
+     * the pictures of it that a close shows behind its card must be recorded again.
+     */
+    fun onHidden(): Boolean {
         menu?.dismissNow(runClosed = true)
         picker?.closeNow()
         if (editMode?.dragging == true) editMode?.externalUp()
         externalTouch = false
         pendingExternal = null
         editMode?.exit()
+        var searchEnded = false
+        spotlight?.takeIf { it.visibility == View.VISIBLE }?.let { it.closeNow(); searchEnded = true }
+        if (drawer?.endSearchNow() == true) searchEnded = true
+        return searchEnded
     }
 
-    /** A swipe up on the gesture bar while home is in front: leaves edit mode, closes Spotlight and menus (as on iOS). */
+    /**
+     * A swipe up on the gesture bar while home is in front. As on iOS it first closes what is on top (a menu, the widget
+     * gallery, edit mode, Spotlight); with nothing on top it does what the Home button does: back to the first page, the
+     * App Library and its search closed.
+     */
     fun onHomeSwipeUp() {
+        val onTop = menu?.isShowing == true || picker?.isOpen == true || editMode?.active == true || spotlight?.isOpen == true
+        if (!onTop) { goHome(); return }
         menu?.dismiss()
         picker?.close()
         editMode?.exit()

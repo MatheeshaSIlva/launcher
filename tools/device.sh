@@ -6,6 +6,7 @@
 #   tools/device.sh tap X Y | long X Y [MS] | swipe X1 Y1 X2 Y2 [MS] | drag X1 Y1 X2 Y2 [HOLD_MS]
 #   tools/device.sh log [N]                 last N lines of our log (default 60)
 #   tools/device.sh gfx                     frame stats of the launcher since the last reset (then resets)
+#   tools/device.sh rec NAME [SECS] ... recpull NAME [WAIT]   screen recording -> tools/shots/NAME/ contact sheets + frame times
 # Coordinates are device pixels. DEVICE selects the target (default: the first one adb lists).
 set -e
 ADB="${ADB:-$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe}"
@@ -33,5 +34,20 @@ case "$cmd" in
     pid=$("$ADB" "${DEV[@]}" shell pidof $PKG | tr -d '\r')
     "$ADB" "${DEV[@]}" logcat -d --pid="$pid" | grep -E " Launcher|AndroidRuntime|FATAL" | tail -"${1:-60}" ;;
   gfx) "$ADB" "${DEV[@]}" shell dumpsys gfxinfo $PKG | grep -E "Total frames|Janky|percentile" ; "$ADB" "${DEV[@]}" shell dumpsys gfxinfo $PKG reset >/dev/null ;;
-  *) sed -n 2,10p "$0" ;;
+  rec)
+    # Screen recording in the background (every composed frame, 120 fps on the S24), for frame-by-frame checks.
+    (MSYS_NO_PATHCONV=1 "$ADB" "${DEV[@]}" shell screenrecord --time-limit "${2:-6}" --bit-rate 30000000 "/sdcard/$1.mp4" >/dev/null 2>&1 &)
+    sleep 0.8 ;;
+  recpull)
+    # Pulls a recording and writes contact sheets: tools/shots/NAME/tileNN.png (14 x 3 frames each) and frames.txt (times).
+    sleep "${2:-0}"
+    while [ -n "$("$ADB" "${DEV[@]}" shell pidof screenrecord | tr -d '\r')" ]; do sleep 0.3; done   # until the file is complete
+    MSYS_NO_PATHCONV=1 "$ADB" "${DEV[@]}" pull "/sdcard/$1.mp4" "$(cygpath -m "$here/shots/$1.mp4")" >/dev/null
+    ff=$(python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())")   # pip install imageio-ffmpeg
+    rm -rf "$here/shots/$1"; mkdir -p "$here/shots/$1"
+    "$ff" -loglevel error -i "$here/shots/$1.mp4" -fps_mode passthrough -vf "scale=150:-1,tile=14x3" "$here/shots/$1/tile%02d.png" 2>/dev/null
+    "$ff" -i "$here/shots/$1.mp4" -fps_mode passthrough -vf showinfo -f null - 2>&1 | grep -o "n: *[0-9]* pts: *[0-9]* pts_time:[0-9.]*" \
+      | awk '{print $2, substr($NF, 10)}' > "$here/shots/$1/frames.txt"
+    echo "$here/shots/$1 ($(wc -l < "$here/shots/$1/frames.txt") frames)" ;;
+  *) sed -n 2,11p "$0" ;;
 esac

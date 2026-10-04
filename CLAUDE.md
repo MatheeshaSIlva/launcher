@@ -107,6 +107,12 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
 - Do not run `uiautomator dump` while gesture nav is on (it unbinds accessibility services).
 - What only the S24 can show (Samsung blur, One UI quirks, real frame pacing) is reported to Matheesha as unverified.
+- When the S24 is connected (USB or wireless adb, `DEVICE=<serial>`): animations are checked frame by frame with
+  `tools/device.sh rec NAME [SECS]` … `recpull NAME [WAIT]` (screenrecord captures every composed frame, 120 fps; contact
+  sheets and frame times land in `tools/shots/NAME/`; needs `pip install imageio-ffmpeg`). Frame logs give the numbers.
+- On the phone, every scripted tap is gated on a checked state (focused window, keyboard shown, or a screenshot looked at):
+  the Home key is blocked while our gestures run, and a tap on the wrong screen once opened a private app. Never record or
+  screenshot inside private apps (messaging); delete any recording that caught one without viewing it.
 
 ## Local build (Windows dev machine)
 

@@ -297,8 +297,9 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
     private fun launch(e: AppEntry, rectInView: RectF) {
         val loc = IntArray(2)
         getLocationOnScreen(loc)
+        // Spotlight stays as it is until home is out of sight (HomeScreen.onHidden closes it then): closed here, home could
+        // show without it for a frame before the launch card's first frame covers the screen.
         host.launchFromSpotlight(e, RectF(rectInView).apply { offset(loc[0].toFloat(), loc[1].toFloat()) })
-        closeNow()   // the launch recorded home with Spotlight open; it closes underneath the card
     }
 
     /** A result or suggestion was long-pressed ([rectInView]: its icon here): home shows its menu. */

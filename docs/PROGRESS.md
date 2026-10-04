@@ -555,3 +555,19 @@ Causes found in the traces and what changed (GestureNav, CardView, Wallpaper):
 - The wallpaper and its blurred copies are hardware bitmaps (never re-uploaded after home was in the background).
 - The clock's glass adapts to a light wallpaper (darker body and edge, deeper shadow) so it stays readable.
 
+
+Round 6: bugs Matheesha reported on c00a9f4, each reproduced and checked on the S24 with screen recordings
+(`tools/device.sh rec` / `recpull`: every composed frame at 120 fps, as contact sheets).
+- A flicker at the end of every launch: the picture of home under the card faded out together with the card, so it showed
+  through the half-transparent card (a grey wash over ~10 frames). A launch now hides the picture at once when its card
+  starts fading (the card covers it entirely); only a close interrupted on home still fades both.
+- Back home from an app opened in Spotlight, the close showed Spotlight (then home snapped back without it); from App Library
+  search, the keyboard popped up after the close. The pictures a close shows were recorded at the launch, with the search open.
+  Now Spotlight and App Library search end when home goes behind the app (out of sight, so nothing can show early; as on
+  iOS, you come back to home or to the library without the search), and the pictures are recorded again right then.
+  Checked: Spotlight → Calculator → home and library search → Calculator → library close onto the right screen, no keyboard.
+- A swipe up did nothing in App Library search. With nothing on top (menu, gallery, edit mode, Spotlight), a swipe up on home
+  now does what the Home button does: back to the first page, keyboard down, library and search closed.
+- Keyboard windows were taken for the app in front (seen in the log after App Library search); they are ignored now.
+- Library-search launches after the change: 5 runs, 0 dropped frames; their closes 0-2.
+- Not fixed: at the start of a launch from a search, the keyboard disappears at once (our picture of home cannot contain it).

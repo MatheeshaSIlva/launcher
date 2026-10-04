@@ -114,7 +114,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     override fun onPause() {
         resumed = false
         GestureNav.homeVisible = false
-        screen.onHidden()
+        if (screen.onHidden()) recordAfterSearchEnded()
         super.onPause()
     }
 
@@ -165,6 +165,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     override fun launch(e: AppEntry, iconOnScreen: RectF, icon: Drawable?) {
         AppLog.log("[home] tap ${e.pkg}")
         LaunchStats.record(e.key)
+        lastLaunched = e.pkg
         if (e.internal) { Apps.launch(e, null, null); return }
         val bounds = Rect().also { iconOnScreen.roundOut(it) }
         // No system transition: the launch card is the animation.
@@ -212,6 +213,28 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
         vto.addOnDrawListener(listener)
         screen.invalidate()
+    }
+
+    private var lastLaunched: String? = null
+
+    /**
+     * Spotlight or App Library search ended behind an app opened from it: the pictures of home a close shows were recorded
+     * at the launch, with the search open (the close showed Spotlight, then home snapped back without it). Recorded again as
+     * home looks now, laid out here first (a window going to the background gets no more layout passes).
+     */
+    private fun recordAfterSearchEnded() {
+        if (screen.width == 0) return
+        screen.measure(
+            View.MeasureSpec.makeMeasureSpec(screen.width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(screen.height, View.MeasureSpec.EXACTLY)
+        )
+        screen.layout(screen.left, screen.top, screen.right, screen.bottom)
+        screen.publishIcons()   // the icon a close flies into may be a different copy now (a tile, not a search result)
+        for (c in screen.clocks) c.refresh()
+        HomeBridge.setPreview(screen.withHidden(null) { record() })
+        val pkg = lastLaunched ?: return
+        if (!HomeBridge.hasWithout(pkg)) HomeBridge.putWithout(pkg, recordWithout(pkg))
+        AppLog.log("[home] search ended behind $pkg: pictures of home recorded again")
     }
 
     /** Records home at rest (nothing moving, no icon hidden) as the picture gesture nav draws behind cards. */

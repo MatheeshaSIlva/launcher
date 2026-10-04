@@ -55,6 +55,8 @@ object HomeBridge {
     /** Set by gesture nav: the app a close would fly into home right now (the app in front), or null. */
     @Volatile var likelyClosing: (() -> String?)? = null
 
+    fun hasWithout(pkg: String) = without.containsKey(pkg)
+
     /** Stores a picture without [pkg]'s icon recorded right now (a launch records it before its card appears). */
     fun putWithout(pkg: String, p: HomePicture?) { if (p != null) without[pkg] = p }
 
