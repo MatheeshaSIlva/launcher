@@ -203,8 +203,8 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     private var shownTime = ""
     private var dateText = ""
     private var tickAnim: android.animation.ValueAnimator? = null
-    /** The numerals are crossfading (minute change) or the size animates: home is not at rest. */
-    val animating get() = tickAnim != null || resizing
+    /** The numerals are being built or crossfading (minute change), or the size animates: home is not at rest. */
+    val animating get() = tickAnim != null || building || resizing
     /** Called when a crossfade ends (home may record itself). */
     var onSettled: (() -> Unit)? = null
 
@@ -227,12 +227,17 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     override fun glassViews(): List<GlassView> = if (solid) emptyList() else listOf(layerA.glass, layerB.glass)
 
     override fun onSpanChanged() {
+        tickAnim?.cancel()
+        tickAnim = null
         for (n in listOf(layerA, layerB)) {
             n.glass.layoutParams = (n.glass.layoutParams as LayoutParams).apply {
                 width = cardW.roundToInt(); height = (cardH - digitsTop).roundToInt(); leftMargin = left.roundToInt()
             }
+            // The old shape would be drawn at the new size: hidden until the new one is built, then it fades in (the old
+            // look crossfades out over it meanwhile).
+            n.glass.alpha = 0f
         }
-        shownTime = ""   // the numerals are rebuilt for the new size once the glass has its new layout
+        shownTime = ""
     }
 
     /** No card to clip the old look with: the whole widget crossfades. */
@@ -250,34 +255,53 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         if (time == shownTime) return
         if (solid) { shownTime = time; layoutDigits(); invalidate(); return }
         if (front.glass.width <= 0) return
-        // A first showing (or a new size) appears at once; a minute change crossfades into the other layer.
-        val crossfade = animate && shownTime.isNotEmpty() && !resizing && isAttachedToWindow
+        // A minute change crossfades into the other layer once its shape is built; a first showing (or a new size) fades
+        // the numerals in, never popping them.
+        val crossfade = animate && shownTime.isNotEmpty() && front.glass.alpha > 0.99f && !resizing && isAttachedToWindow
         shownTime = time
         if (!crossfade) {
-            tickAnim?.cancel()
-            buildMask(front, time)
-            front.glass.alpha = 1f
-            (if (front === layerA) layerB else layerA).glass.alpha = 0f
+            val target = front
+            val other = if (front === layerA) layerB else layerA
+            buildMask(target, time) {
+                tickAnim?.cancel()
+                other.glass.alpha = 0f
+                fadeIn(target)
+            }
             return
         }
         val back = if (front === layerA) layerB else layerA
-        buildMask(back, time)
-        tickAnim?.cancel()
         val from = front
-        tickAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = dev.launcher.app.motion.Motion.profile.clockTickMs
-            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
-            addUpdateListener { a -> val k = a.animatedValue as Float; back.glass.alpha = k; from.glass.alpha = 1f - k }
+        buildMask(back, time) {
+            tickAnim?.cancel()
+            tickAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = dev.launcher.app.motion.Motion.profile.clockTickMs
+                interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+                addUpdateListener { a -> val k = a.animatedValue as Float; back.glass.alpha = k; from.glass.alpha = 1f - k }
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        back.glass.alpha = 1f; from.glass.alpha = 0f
+                        tickAnim = null
+                        onSettled?.invoke()
+                    }
+                })
+                start()
+            }
+            front = back
+        }
+    }
+
+    /** The numerals of [n] fade in (a first showing, a new size). */
+    private fun fadeIn(n: Numerals) {
+        val from = n.glass.alpha
+        if (from >= 1f) { onSettled?.invoke(); return }
+        tickAnim = android.animation.ValueAnimator.ofFloat(from, 1f).apply {
+            duration = dev.launcher.app.motion.Motion.profile.appearMs + 60
+            addUpdateListener { a -> n.glass.alpha = a.animatedValue as Float }
             addListener(object : android.animation.AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: android.animation.Animator) {
-                    back.glass.alpha = 1f; from.glass.alpha = 0f
-                    tickAnim = null
-                    onSettled?.invoke()
-                }
+                override fun onAnimationEnd(animation: android.animation.Animator) { tickAnim = null; onSettled?.invoke() }
             })
             start()
         }
-        front = back
     }
 
     /** The digits' size for the box (the font's own proportions, slightly narrowed as iOS's clock is), and their baseline. */
@@ -287,19 +311,26 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         return baseline
     }
 
-    /** The numerals' shape: a sharp mask at the glass's size and its blurred height field (half size) for lens and light. */
-    private fun buildMask(n: Numerals, time: String) {
+    // Shapes are built off the main thread; a newer request makes an older result void.
+    private var buildGen = 0
+    private var building = false
+
+    /** Builds the numerals' shape for [n] off the main thread, then hands it to the glass and runs [then]. */
+    private fun buildMask(n: Numerals, time: String, then: () -> Unit) {
         val w = n.glass.width
         val h = n.glass.height
         if (w <= 0 || h <= 0) return
         val baseline = layoutDigits()
-        val gm = ClockNumerals.mask(digitPaint, w, h, baseline, time, n.mask, n.height)
-        n.mask = gm.mask
-        n.height = gm.height
-        // A new mask object each time: the glass keeps the bitmaps it was given until it has the next ones.
-        n.glass.mask = gm
-        n.glass.invalidate()
-        n.time = time
+        val gen = ++buildGen
+        building = true
+        ClockNumerals.buildAsync(digitPaint, w, h, baseline, time) { gm ->
+            if (gen != buildGen || n.glass.width != w || n.glass.height != h) return@buildAsync
+            building = false
+            n.glass.mask = gm
+            n.glass.invalidate()
+            n.time = time
+            then()
+        }
     }
 
     private val tick = object : android.content.BroadcastReceiver() {
@@ -361,28 +392,111 @@ object ClockNumerals {
         return digitH * paint.textSize + h * 0.03f
     }
 
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** [build] on a worker thread (the distance transform takes some tens of ms); [done] runs on the main thread. */
+    fun buildAsync(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, done: (dev.launcher.app.GlassMask) -> Unit) {
+        val p = android.text.TextPaint(paint)   // a copy: the caller's paint keeps changing on the main thread
+        worker.execute {
+            val gm = try { build(p, w, h, baseline, time) } catch (t: Throwable) {
+                dev.launcher.app.AppLog.log("[clock] numerals failed: ${t.javaClass.simpleName}: ${t.message}"); null
+            }
+            if (gm != null) main.post { done(gm) }
+        }
+    }
+
     /**
-     * [time] drawn with [paint] into a sharp ALPHA_8 mask of [w] x [h] and a blurred half-size height field (the lens and
-     * the light come from its slope: a wide, soft bevel, so they reach well into each stroke as thick glass does).
-     * [reuseMask] / [reuseHeight] of the right size are drawn into again.
+     * [time] drawn with [paint] as a glass shape of [w] x [h]: its coverage (full size, anti-aliased) and its signed
+     * distance field (half size, exact Euclidean distance transform, lightly smoothed so the normals are clean). Fresh
+     * bitmaps every time (the glass may still be drawing the previous ones). Any thread.
      */
-    fun mask(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String,
-             reuseMask: android.graphics.Bitmap? = null, reuseHeight: android.graphics.Bitmap? = null): dev.launcher.app.GlassMask {
-        val mask = reuseMask?.takeIf { it.width == w && it.height == h }
-            ?: android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8)
-        mask.eraseColor(0)
+    fun build(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String): dev.launcher.app.GlassMask {
+        val mask = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8)
         android.graphics.Canvas(mask).drawText(time, w / 2f, baseline, paint)
         val scale = 0.5f
         val hw = maxOf(1, (w * scale).toInt())
         val hh = maxOf(1, (h * scale).toInt())
-        val height = reuseHeight?.takeIf { it.width == hw && it.height == hh }
-            ?: android.graphics.Bitmap.createBitmap(hw, hh, android.graphics.Bitmap.Config.ALPHA_8)
-        height.eraseColor(0)
-        android.graphics.Canvas(height).apply { scale(scale, scale); drawText(time, w / 2f, baseline, paint) }
-        val blurPx = paint.textSize * 0.09f
-        boxBlurAlpha(height, maxOf(1, (blurPx * scale).roundToInt()))
-        return dev.launcher.app.GlassMask(mask, height, scale, blurPx, 0.2f)
+        val small = android.graphics.Bitmap.createBitmap(hw, hh, android.graphics.Bitmap.Config.ALPHA_8)
+        android.graphics.Canvas(small).apply { scale(scale, scale); drawText(time, w / 2f, baseline, paint) }
+        val cov = readAlpha(small)
+        val n = hw * hh
+        // Distance (half-size px) from each inside pixel to the nearest outside one, and from each outside pixel to the shape.
+        val inside = BooleanArray(n) { cov[it] >= 128 }
+        val dIn = Edt.distances(hw, hh) { !inside[it] }
+        val dOut = Edt.distances(hw, hh) { inside[it] }
+        val toFull = 1f / scale
+        val signed = FloatArray(n) { i -> (if (inside[i]) dIn[i] - 0.5f else -(dOut[i] - 0.5f)) * toFull }
+        // The bevel spans about the strokes' half width (the inside distances near the middle of the strokes).
+        val ins = signed.filter { it > 0f }.sorted()
+        val half = if (ins.isEmpty()) 10f else ins[(ins.size * 0.95f).toInt().coerceAtMost(ins.size - 1)]
+        val bevel = half * 0.9f
+        val range = maxOf(half, paint.textSize * 0.07f) + 6f
+        val bytes = ByteArray(n) { i -> ((0.5f + signed[i] / (2f * range)).coerceIn(0f, 1f) * 255f).roundToInt().toByte() }
+        val sdf = android.graphics.Bitmap.createBitmap(hw, hh, android.graphics.Bitmap.Config.ALPHA_8)
+        writeAlpha(sdf, bytes)
+        boxBlurAlpha(sdf, 1)
+        return dev.launcher.app.GlassMask(mask, sdf, scale, range, bevel, 0.16f)
     }
+
+    private fun readAlpha(b: android.graphics.Bitmap): IntArray {
+        val buf = java.nio.ByteBuffer.allocate(b.rowBytes * b.height)
+        b.copyPixelsToBuffer(buf)
+        val a = buf.array()
+        return IntArray(b.width * b.height) { i -> a[(i / b.width) * b.rowBytes + i % b.width].toInt() and 0xFF }
+    }
+
+    private fun writeAlpha(b: android.graphics.Bitmap, v: ByteArray) {
+        val stride = b.rowBytes
+        val out = ByteArray(stride * b.height)
+        for (y in 0 until b.height) System.arraycopy(v, y * b.width, out, y * stride, b.width)
+        b.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(out))
+    }
+}
+
+/** Exact Euclidean distance transform (Felzenszwalb and Huttenlocher), for glass shapes made from text. */
+object Edt {
+    private const val FAR = 1e9f
+
+    /** For every pixel of a [w] x [h] grid, the distance to the nearest pixel where [target] is true (0 on one). */
+    fun distances(w: Int, h: Int, target: (Int) -> Boolean): FloatArray {
+        val g = FloatArray(w * h) { if (target(it)) 0f else FAR }
+        val m = maxOf(w, h)
+        val f = FloatArray(m); val d = FloatArray(m); val v = IntArray(m); val z = FloatArray(m + 1)
+        for (x in 0 until w) {
+            for (y in 0 until h) f[y] = g[y * w + x]
+            pass(f, h, d, v, z)
+            for (y in 0 until h) g[y * w + x] = d[y]
+        }
+        for (y in 0 until h) {
+            for (x in 0 until w) f[x] = g[y * w + x]
+            pass(f, w, d, v, z)
+            for (x in 0 until w) g[y * w + x] = kotlin.math.sqrt(d[x])
+        }
+        return g
+    }
+
+    /** One dimension: squared distances [d] from the sampled function [f] of [n] values (lower envelope of parabolas). */
+    private fun pass(f: FloatArray, n: Int, d: FloatArray, v: IntArray, z: FloatArray) {
+        var k = 0
+        v[0] = 0; z[0] = -Float.MAX_VALUE; z[1] = Float.MAX_VALUE
+        for (q in 1 until n) {
+            var s = intersect(f, q, v[k])
+            while (s <= z[k]) { k--; s = intersect(f, q, v[k]) }   // z[0] is -inf: stops at k = 0
+            k++
+            v[k] = q; z[k] = s; z[k + 1] = Float.MAX_VALUE
+        }
+        k = 0
+        for (q in 0 until n) {
+            while (z[k + 1] < q) k++
+            val p = v[k]
+            d[q] = (q - p).toFloat() * (q - p) + f[p]
+        }
+    }
+
+    /** Where the parabolas rooted at [q] and [p] intersect. */
+    private fun intersect(f: FloatArray, q: Int, p: Int): Float =
+        ((f[q] + q.toFloat() * q) - (f[p] + p.toFloat() * p)) / (2f * q - 2f * p)
 }
 
 /** Three passes of a box blur of [r] px over an ALPHA_8 bitmap, in place (close to a Gaussian). */

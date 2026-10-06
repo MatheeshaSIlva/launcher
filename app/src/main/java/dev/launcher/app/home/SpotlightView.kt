@@ -100,8 +100,6 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         results.spotlight = true
         results.drawCard = { c, rect -> drawCard(c, rect) }
         results.drawGlass = { c, rect, rad -> drawCard(c, rect, rad) }
-        // The frosted field mirrors the results under it: redraw it whenever they move.
-        results.onDrawn = { if (!mirroring) field.frost.invalidate() }
         addView(field, LayoutParams((m.w - 2 * m.libMargin).roundToInt(), m.searchHeight.roundToInt()).apply {
             leftMargin = m.libMargin.roundToInt()
         })
@@ -149,7 +147,6 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
 
     private val cardFallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x24FFFFFF }
     private val offset = FloatArray(2)
-    private var mirroring = false
 
     /** Spotlight's background (the blurred wallpaper, darkened a little), also what the frosted field blurs. */
     private fun drawBackground(c: Canvas, p: Float) {
@@ -402,9 +399,6 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         val frost = Frost(ctx)
         private val clearButton = ClearButton(ctx)
         private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND }
-        private val tint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x47000000 }
-        private val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x38FFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(1f) }
-        private val rect = RectF()
         private val lens = Path()
 
         init {
@@ -458,9 +452,6 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
 
         override fun draw(canvas: Canvas) {
             super.draw(canvas)
-            rect.set(0f, 0f, width.toFloat(), height.toFloat())
-            val rad = height / 2f
-            canvas.drawRoundRect(rect.left + rim.strokeWidth / 2, rect.top + rim.strokeWidth / 2, rect.right - rim.strokeWidth / 2, rect.bottom - rim.strokeWidth / 2, rad, rad, rim)
             val cx = m.pt(22f)
             val cy = height / 2f - m.pt(1f)
             val lr = m.pt(6.8f)
@@ -471,49 +462,25 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         }
 
         /**
-         * What is behind the field (the background and the results scrolling under it) seen through the dock's glass:
-         * blurred, bent at the rim and lit like every other glass ([dev.launcher.app.LiveGlass]), darkened for the text.
+         * The field's glass: the same material and lens as the App Library's search field (the dock's glass over the blurred
+         * background), so the two search fields are one design. (A live glass of what is behind, clipped to the capsule,
+         * cut the lens's input at the clip: the edges came out broken.)
          */
         inner class Frost(ctx: Context) : View(ctx) {
-            private val live = dev.launcher.app.LiveGlass.create(GlassStyle.IOS, m.u)
             private val shape = RectF()
-
-            init {
-                clipToOutline = true
-                outlineProvider = object : android.view.ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: android.graphics.Outline) {
-                        outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
-                    }
-                }
-                // Without the shader (older Android): a plain blur of the mirror.
-                if (live == null && Build.VERSION.SDK_INT >= 31) {
-                    val b = m.pt(16f)
-                    setRenderEffect(android.graphics.RenderEffect.createBlurEffect(b, b, android.graphics.Shader.TileMode.CLAMP))
-                }
-            }
-
-            private fun drawMirror(c: Canvas) {
-                val f = this@Field
-                c.save()
-                c.translate(-f.left.toFloat(), -(f.top + f.translationY))
-                drawBackground(c, 1f)
-                if (results.visibility == View.VISIBLE && results.alpha > 0f) {
-                    c.translate(0f, results.translationY)
-                    val layer = c.saveLayerAlpha(0f, 0f, m.w.toFloat(), m.h.toFloat(), (255 * results.alpha).toInt())
-                    mirroring = true
-                    try { results.draw(c) } finally { mirroring = false }
-                    c.restoreToCount(layer)
-                }
-                c.restore()
-            }
+            private val at = FloatArray(2)
 
             override fun onDraw(c: Canvas) {
-                val l = live
-                if (l != null && c.isHardwareAccelerated) {
-                    shape.set(0f, 0f, width.toFloat(), height.toFloat())
-                    l.draw(c, shape, height / 2f, m.pt(16f), null, null) { cc -> drawMirror(cc) }
-                } else drawMirror(c)
-                c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), tint)
+                shape.set(0f, 0f, width.toFloat(), height.toFloat())
+                val rad = height / 2f
+                val g = glass
+                if (g == null || !c.isHardwareAccelerated) { c.drawRoundRect(shape, rad, rad, cardFallback); return }
+                screenOffset(this, at)
+                g.setRadius(rad)
+                g.originX = at[0]
+                g.originY = at[1]
+                g.setBounds(0, 0, width, height)
+                g.draw(c)
             }
         }
     }

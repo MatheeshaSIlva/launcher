@@ -97,6 +97,10 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Recording home into a Picture costs ~20 ms of main thread**: never inside an animation frame (settle callbacks run inside
   the last frame); reuse the last picture when home has not drawn since. **No GPU layer on any view inside home** (only on
   the recorded root): a layered child is drawn in software inside the recording and the glass shader crashes the app.
+- **`LiveGlass` must never be drawn inside a clip or a smaller layer** (clipToOutline, a parent's clip, view alpha < 1):
+  the effect's input is cut there and the edges break. Use `GlassDrawable` (samples our wallpaper copy) for anything clipped.
+- **Text-shaped glass needs a distance field, not a blurred mask**: a blur wide enough for a lens turns a whole thin stroke
+  into "edge". Judge glass offline only with the app's own pipeline at the device's real size (`docs/design/clock_proto.py`).
 - **Touchable region of an overlay** (`rootSurfaceControl.setTouchableRegion`, API 34): set it from the view's attach
   callback (before that it is dropped), and never as an empty Region (not sent: the whole window stays touchable); use an
   off-screen pixel for "nowhere".

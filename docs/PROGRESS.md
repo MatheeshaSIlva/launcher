@@ -823,3 +823,19 @@ Round 18 (Matheesha on 23f0999; fixed from the code, offline render for the cloc
   that glass now instead of flat fills; Spotlight's search field is the dock's lensed glass over what is behind it
   (`LiveGlass`) instead of a plain blur.
 
+Round 19 (Matheesha on 511d8e6: "the widget looks like absolute trash"; Spotlight's search bar has glitched edges).
+- Clock, root cause: the numerals' bevel came from a blurred copy of the text (a height field). A digit's stem is 50 px
+  wide on the S24 (Inter 640 at 377 px), and the last rounds blurred by up to ~34 px to deepen the lens, so the whole
+  stroke became "edge": the rim highlight and edge darkening covered every stroke end to end. The offline renders that
+  looked fine used another font at another scale, so they hid it. Now the numerals are built like the dock: an exact
+  distance transform of the text (`Edt`, Felzenszwalb; `EdtTest` checks it against brute force) gives the distance to
+  the edge, and the shader uses the dock's own lens law and light on it (bevel = 0.9 x the strokes' half width, 19 px;
+  bend scaled as the dock's), a thin rim, a frosted body (sharp wallpaper and its heavy blur half and half) lifted
+  towards white over dark wallpaper and darkened over light, and a soft shadow 2 pt below. The shapes are built off the
+  main thread (tens of ms) and fade in; the minute change crossfades once the next shape is ready.
+  `docs/design/clock_proto.py` is now a faithful port (same steps, Inter, S24 size) and `clock-glass.png` its render.
+- Spotlight's field, root cause: round 18 drew it with `LiveGlass` inside a view clipped to its rounded outline; the
+  clip cuts the effect's input, the same "dark ring" bug the menus had in round 4. It is now the App Library field's
+  glass (`GlassDrawable`, backdrop source), so both search fields are one design; results no longer show through it.
+- `IOS_LIBRARY` lens toned down slightly (refraction 60, dispersion 0.35) against colour fringes on small capsules.
+

@@ -198,6 +198,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         pressed = null
         pressK.snapTo(0f)
         clockGlass = null
+        clockBuilding = null
         updateListBounds()
         visibility = VISIBLE
         edit.visibility = VISIBLE
@@ -225,6 +226,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         previews.clear()
         previewShownAt.clear()
         clockGlass = null
+        clockBuilding = null
         sheetGlass = null
         // The preview layouts added as children go; the field stays.
         for (i in childCount - 1 downTo 0) { val c = getChildAt(i); if (c !== edit) removeViewAt(i) }
@@ -532,6 +534,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     // blurred wallpaper behind the sheet); plain numerals when there is no wallpaper copy.
     private var clockGlass: GlassDrawable? = null
     private var clockGlassSize = 0 to 0
+    private var clockGlassAt = 0L
+    private var clockBuilding: Pair<Int, Int>? = null
 
     private fun drawClockPreview(c: Canvas, box: RectF, boxScreenY: Float) {
         val dateTop = box.top + m.pt(10f)
@@ -542,22 +546,32 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         if (w <= 0 || h <= 0) return
         val baseline = ClockNumerals.layout(clockPaint, w.toFloat(), h.toFloat(), android.text.format.DateFormat.is24HourFormat(context))
         val wp = host.wallpaper()
-        var g = clockGlass
-        if (wp != null && android.os.Build.VERSION.SDK_INT >= 33 && (g == null || clockGlassSize != (w to h))) {
-            g = try {
-                val mask = ClockNumerals.mask(clockPaint, w, h, baseline, "9:41")
-                GlassDrawable(wp, m.w, m.h, 0f, m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_CLOCK,
-                    GlassDrawable.Source.FROSTED, mask)
-            } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] clock preview glass failed: ${t.message}"); null }
-            clockGlass = g
-            clockGlassSize = w to h
+        val g = clockGlass?.takeIf { clockGlassSize == (w to h) }
+        if (wp != null && android.os.Build.VERSION.SDK_INT >= 33 && g == null && clockBuilding != (w to h)) {
+            // The shape is built off the main thread (a distance transform); the numerals fade in once it is there.
+            clockBuilding = w to h
+            val gen = generation
+            ClockNumerals.buildAsync(clockPaint, w, h, baseline, "9:41") { mask ->
+                if (gen != generation || clockBuilding != (w to h)) return@buildAsync
+                clockBuilding = null
+                clockGlass = try {
+                    GlassDrawable(wp, m.w, m.h, 0f, m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_CLOCK,
+                        GlassDrawable.Source.FROSTED, mask)
+                } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] clock preview glass failed: ${t.message}"); null }
+                clockGlassSize = w to h
+                clockGlassAt = SystemClock.uptimeMillis()
+                invalidate()
+            }
         }
         if (g != null && c.isHardwareAccelerated) {
+            val k = ((SystemClock.uptimeMillis() - clockGlassAt).toFloat() / PREVIEW_FADE_MS).coerceIn(0f, 1f)
+            g.alpha = (255 * k).toInt()
             g.originX = box.left
             g.originY = boxScreenY + numTop
             g.setBounds(box.left.roundToInt(), numTop.roundToInt(), box.left.roundToInt() + w, numTop.roundToInt() + h)
             g.draw(c)
-        } else {
+            if (k < 1f) postInvalidateOnAnimation()
+        } else if (wp == null || android.os.Build.VERSION.SDK_INT < 33) {
             clockPaint.alpha = 0xE6
             c.drawText("9:41", box.centerX(), numTop + baseline, clockPaint)
         }
