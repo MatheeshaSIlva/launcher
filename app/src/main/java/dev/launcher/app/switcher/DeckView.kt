@@ -221,8 +221,9 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         color = 0xFFFFFFFF.toInt()
         typeface = Typeface.create(Typeface.DEFAULT, 600, false)
         textSize = dp(15f)
-        setShadowLayer(dp(3f), 0f, dp(0.5f), 0x66000000)
     }
+    // Fades with the name (cards away from the focus, opening): FadingShadow.
+    private val labelShadow = dev.launcher.app.theme.FadingShadow(dp(3f), 0f, dp(0.5f), 0x66000000)
     private val shaderMatrix = Matrix()
     private val box = RectF()
 
@@ -266,17 +267,20 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
             val radius = c.frozenRadius
             if (homeK > 0f) box.offset(-homeK * homeDistance, 0f)
             val a = (1f + y / (c.frozen.bottom + dp(40f))).coerceIn(0f, 1f)
-            if (a > 0.004f) drawCard(canvas, c, box, radius, a)
+            if (a > 0.004f) { drawShadow(canvas, box, radius, a); drawCard(canvas, c, box, radius, a) }
         }
     }
 
     // A soft shadow all round each card (iOS), from one blurred rounded rectangle drawn once at a quarter of the card's size
-    // and scaled up; the part under the card itself is not drawn.
+    // and scaled up. Drawn as four strips round the card (each a scissor clip, so the GPU only fills the shadow's area): the
+    // middle, under the card, is never filled. (Only the left strip was drawn: above and below the card the shadow stopped
+    // at a hard vertical edge, and a card lifted or flicked away had none on its right.)
     private var shadow: Bitmap? = null
     private var shadowFor = 0f
     private val shadowPad get() = dp(SHADOW_BLUR_DP)
     private val shadowPaint = Paint(Paint.FILTER_BITMAP_FLAG)
     private val shadowDst = RectF()
+    private val cutout = android.graphics.Path()
 
     private fun makeShadow() {
         val q = 0.25f
@@ -298,8 +302,33 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         shadowPaint.alpha = (a * SHADOW_ALPHA * 255).roundToInt()
         // Only its left part: what falls on the card underneath (the rest lies under this card or barely shows). A plain
         // rectangle clip: cutting out the card's middle instead cost the GPU noticeably on every card.
+        if (a < 0.999f) {
+            // A see-through card (flying away, fading in): the shadow must not show through it, so the card's exact shape
+            // is cut out (one or two such cards at a time; the strips below are for the many opaque ones).
+            canvas.save()
+            cutout.reset()
+            cutout.addRoundRect(r, radius, radius, android.graphics.Path.Direction.CW)
+            canvas.clipOutPath(cutout)
+            canvas.drawBitmap(sb, null, shadowDst, shadowPaint)
+            canvas.restore()
+            return
+        }
+        val inL = r.left + radius
+        val inR = r.right - radius
+        val inT = r.top + radius
+        val inB = r.bottom - radius
+        strip(canvas, sb, shadowDst.left, shadowDst.top, inL, shadowDst.bottom)
+        strip(canvas, sb, inR, shadowDst.top, shadowDst.right, shadowDst.bottom)
+        if (inR > inL) {
+            strip(canvas, sb, inL, shadowDst.top, inR, inT)
+            strip(canvas, sb, inL, inB, inR, shadowDst.bottom)
+        }
+    }
+
+    private fun strip(canvas: Canvas, sb: Bitmap, l: Float, t: Float, r: Float, b: Float) {
+        if (r <= l || b <= t) return
         canvas.save()
-        canvas.clipRect(shadowDst.left, shadowDst.top, r.left + radius, shadowDst.bottom)
+        canvas.clipRect(l, t, r, b)
         canvas.drawBitmap(sb, null, shadowDst, shadowPaint)
         canvas.restore()
     }
@@ -362,6 +391,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         val nameA = a * (1f - abs(t) * 1.6f).coerceIn(0f, 1f)
         if (nameA > 0.004f && c.label.isNotEmpty()) {
             labelPaint.alpha = (nameA * 255).roundToInt()
+            labelShadow.apply(labelPaint)
             canvas.drawText(c.label, left + iconPx + dp(8f), cy + labelPaint.textSize * 0.36f, labelPaint)
         }
     }

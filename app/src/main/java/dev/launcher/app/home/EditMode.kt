@@ -712,7 +712,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         // A soft shadow keeps the white labels readable over a light wallpaper (the glass itself is clear).
         // The dock's glass (nothing laid over it); the label dark or white for what is behind the capsule, as iOS's glass
         // buttons ([Appearance.labelOnGlass]).
-        private val text = LabelPainter(m.pt(16f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600))
+        private val text = LabelPainter(m.pt(16f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600)).shadowed(m.pt(3f), 0x66000000)
         private var pressedEdit = false
         private var pressedDone = false
         // Presses dim the label and the capsule a little, in and out on a spring (not at once).
@@ -737,8 +737,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val c = p.beginRecording(maxOf(1, editGlass.width), maxOf(1, editGlass.height))
             editGlass.draw(c)
             val col = labelColorFor(editGlass)
-            text.paint.setShadowLayer(m.pt(3f), 0f, m.pt(0.5f), ((0x66 * dev.launcher.app.theme.Appearance.shadowFor(col)).toInt() shl 24))
-            text.draw(c, "Edit", "Edit", editGlass.width / 2f, text.baselineFor(editGlass.height / 2f), editGlass.width.toFloat(), color = col)
+            text.draw(c, "Edit", "Edit", editGlass.width / 2f, text.baselineFor(editGlass.height / 2f), editGlass.width.toFloat(), color = col,
+                shadowStrength = dev.launcher.app.theme.Appearance.shadowFor(col))
             p.endRecording()
             return p
         }
@@ -783,8 +783,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             tintRect.set(g.left.toFloat(), g.top.toFloat(), g.right.toFloat(), g.bottom.toFloat())
             if (k > 0f) { setPress(k); canvas.drawRoundRect(tintRect, bh / 2f, bh / 2f, tint) }
             val col = labelColorFor(g)
-            text.paint.setShadowLayer(m.pt(3f), 0f, m.pt(0.5f), ((0x66 * dev.launcher.app.theme.Appearance.shadowFor(col)).toInt() shl 24))
-            text.draw(canvas, label, label, g.left + g.width / 2f, text.baselineFor(g.top + g.height / 2f), g.width.toFloat(), (255 - 0x60 * k).toInt(), color = col)
+            text.draw(canvas, label, label, g.left + g.width / 2f, text.baselineFor(g.top + g.height / 2f), g.width.toFloat(), (255 - 0x60 * k).toInt(), color = col,
+                shadowStrength = dev.launcher.app.theme.Appearance.shadowFor(col))
         }
 
         /** Pressed ([k]): a touch of the press colour over the capsule. */

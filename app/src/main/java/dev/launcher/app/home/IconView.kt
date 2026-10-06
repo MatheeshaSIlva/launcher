@@ -31,8 +31,9 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
         textSize = m.labelTextSize
         textAlign = Paint.Align.CENTER
         typeface = dev.launcher.app.theme.Fonts.text(450)
-        setShadowLayer(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
     }
+    // Fades with the label (names switched off, the arrival): see FadingShadow.
+    private val labelShadow = dev.launcher.app.theme.FadingShadow(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
     private val iconRect = RectF()
     private var dim = 0f
     /** A card is flying into or out of this icon: the image is left out, the label stays. */
@@ -141,6 +142,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
         if (showLabel && !labelHidden && labelK > 0f && shownLabel.isNotEmpty()) {
             val y = iconRect.bottom + m.labelBaseline
             labelPaint.alpha = (255 * labelK).toInt()
+            labelShadow.apply(labelPaint)
             canvas.drawText(shownLabel, 0, shownLabel.length, width / 2f, y, labelPaint)
         }
         if (shownBadge > 0 && !iconHidden) CountBadge.draw(canvas, iconRect, shownBadge, m, scale = badgeScale.value.coerceAtLeast(0f))

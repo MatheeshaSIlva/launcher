@@ -105,6 +105,9 @@ copy it wholesale — port the working pieces cleanly. File map:
   it. GlassView re-checks its real place before every frame. Never count a transform of a view drawn through a GPU layer
   (home's depth zoom of `fg`, tagged `glass_root`): the layer scales the glass again (e9401f1 showed the wrong wallpaper in the
   dock after every close). Contact sheets at 1/3 size hide thin glass rims: judge glass at full resolution.
+- **Text shadows with a translucent colour do not fade with the paint's alpha** (Android draws them at the colour's own
+  alpha): a label faded through its paint leaves its shadow behind. Use `theme/FadingShadow.apply(paint)` before each draw
+  (LabelPainter does). View alpha (a layer) is fine.
 - **Touchable region of an overlay** (`rootSurfaceControl.setTouchableRegion`, API 34): set it from the view's attach
   callback (before that it is dropped), and never as an empty Region (not sent: the whole window stays touchable); use an
   off-screen pixel for "nowhere".

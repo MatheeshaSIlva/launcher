@@ -341,8 +341,17 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         val radius = lerp(m.tileRadius, m.folderRadius, k)
         lib.drawGlass(c, lib.panelGlass, cur, radius, this)
 
-        val titleY = panel.top - m.pt(18f) + (1f - k) * m.pt(24f)
-        title.draw(c, "t:${t.title}", t.title, panel.left + m.pt(6f), titleY, panel.width(), (255 * k).toInt())
+        // The title belongs to the panel: it rides on its frame (scaled with it) into and out of the tile, fading out early,
+        // so it never stays above the library's other tiles while the panel shrinks away from under it.
+        val titleA = smooth(0.5f, 1f, p)
+        if (titleA > 0f) {
+            val ts = cur.width() / panel.width()
+            c.save()
+            c.translate(cur.left, cur.top)
+            c.scale(ts, ts)
+            title.draw(c, "t:${t.title}", t.title, m.pt(6f), -m.pt(18f) + (1f - k) * m.pt(12f), panel.width(), (255 * titleA).toInt())
+            c.restore()
+        }
 
         c.save()
         clip.reset()

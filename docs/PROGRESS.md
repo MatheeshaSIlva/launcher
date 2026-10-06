@@ -962,3 +962,24 @@ to every element, the clock included). Unlock: his unlocks on 88a667e played the
   preview is exactly the widget as it will look on home.
 - Debug (adb, DUMP): TEST_RECORD also writes the clock's last field and mask (files/clock_field.png, clock_mask.png).
 Frame stats: every step 0-1 missed refreshes. Folder open GPU 12-16 ms median (pipelined, no misses).
+
+Round 24 (Matheesha on 75d1ea7: shadow bugs across the launcher: Spotlight's label shadows take an extra second to go; an
+expanded App Library folder's labels go behind the other tiles, rest, then vanish; the App Switcher's card shadows; the
+clock's shadow is massive).
+- **Text shadows** (root cause of the first two): Android draws the shadow of a translucent shadow colour at that colour's
+  own alpha, whatever the paint's alpha. Every label faded through its paint (Spotlight's suggestions, a folder's names,
+  the A-Z list's rows, the switcher's titles, the Search pill's text giving way to the dots, icon and widget names switched
+  off) kept a full-strength shadow until it stopped being drawn. `theme/FadingShadow` sets the shadow at its colour's alpha
+  times the paint's alpha before every draw; LabelPainter, IconView, the widget frame, the Search pill, the clock's solid
+  style, the edit buttons and the switcher's titles use it. Recorded on the S24: Spotlight's names fade with their icons.
+- **Folder title**: it stayed where the open folder was while the panel shrank back to its tile, fading on top of the other
+  tiles. It now rides on the panel's frame (scaled with it) and is gone by halfway. Recorded on the S24.
+- **Switcher card shadows**: only a left strip was drawn (above and below each card the shadow ended at a hard vertical edge;
+  a lifted card had none on its right) and flicked cards had none. Now four strips all round (the area under the card is
+  never filled); a see-through card (flying away, fading in) gets its exact shape cut out instead. Checked on the emulator
+  (the phone's switcher shows other apps, not recorded). S24 flick: 0 missed, max 9-11 ms GPU (one 82 ms frame on the first
+  flick after the install: a one-time shader compile of the path clip).
+- **Clock shadow**: the dock's 18 dp shadow around thin strokes read as a dark haze. Now a small contact shadow
+  (`ClockShadow`: 5 dp blur, 1.5 dp down, 14 %).
+Frame stats: every step 0-1 missed except the scripted cancelled close (2: its injected touches come every ~50 ms, the
+card only draws on them; framestats then misreads the refresh as 50 ms; that path did not change).

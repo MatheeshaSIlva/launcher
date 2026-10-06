@@ -47,10 +47,8 @@ internal class LabelPainter(textSize: Float, private val color: Int, align: Pain
     private val cache = HashMap<String, CharSequence>()
     private var cacheWidth = -1f
     private var tone: (() -> Int)? = null
-    private var shadowPx = 0f
-    private var shadowColor = 0
+    private var shadow: dev.launcher.app.theme.FadingShadow? = null
     private var shadowFollows = false
-    private var shadowK = -1f
 
     /** The colour follows the appearance: [t] is read at every draw. */
     fun toned(t: () -> Int): LabelPainter = apply { tone = t }
@@ -61,28 +59,22 @@ internal class LabelPainter(textSize: Float, private val color: Int, align: Pain
      * text in light mode needs none).
      */
     fun shadowed(px: Float, color: Int = 0x59000000): LabelPainter = apply {
-        shadowPx = px
-        shadowColor = color
+        shadow = dev.launcher.app.theme.FadingShadow(px, 0f, px * 0.3f, color)
         shadowFollows = tone != null
-        shadowK = -1f
-        if (!shadowFollows) paint.setShadowLayer(px, 0f, px * 0.3f, color)
     }
 
-    /** Draws [text] (ellipsized to [maxWidth], cached by [key]); [color] overrides the painter's colour for this draw. */
-    fun draw(c: Canvas, key: String, text: String, x: Float, baseline: Float, maxWidth: Float, alpha: Int = 255, color: Int? = null) {
+    /**
+     * Draws [text] (ellipsized to [maxWidth], cached by [key]); [color] overrides the painter's colour for this draw. The
+     * shadow fades with the text ([alpha]) and, [shadowStrength] times, with what the text needs (none under dark text).
+     */
+    fun draw(c: Canvas, key: String, text: String, x: Float, baseline: Float, maxWidth: Float, alpha: Int = 255, color: Int? = null,
+             shadowStrength: Float = 1f) {
         if (maxWidth != cacheWidth) { cache.clear(); cacheWidth = maxWidth }
         val s = cache.getOrPut(key) { TextUtils.ellipsize(text, paint, maxWidth, TextUtils.TruncateAt.END) }
         val col = color ?: tone?.invoke() ?: this.color
         paint.color = col
         paint.alpha = (android.graphics.Color.alpha(col) * alpha.coerceIn(0, 255)) / 255
-        if (shadowFollows && shadowPx > 0f) {
-            val k = dev.launcher.app.theme.Appearance.textShadowStrength
-            if (k != shadowK) {
-                shadowK = k
-                val a = (android.graphics.Color.alpha(shadowColor) * k).toInt()
-                if (a <= 0) paint.clearShadowLayer() else paint.setShadowLayer(shadowPx, 0f, shadowPx * 0.3f, (a shl 24) or (shadowColor and 0xFFFFFF))
-            }
-        }
+        shadow?.apply(paint, shadowStrength * (if (shadowFollows) dev.launcher.app.theme.Appearance.textShadowStrength else 1f))
         c.drawText(s, 0, s.length, x, baseline, paint)
     }
 

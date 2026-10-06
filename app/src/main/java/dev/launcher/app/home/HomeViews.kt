@@ -377,8 +377,8 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     private val solidPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xF2FFFFFF.toInt()
         textAlign = Paint.Align.CENTER
-        setShadowLayer(m.pt(3f), 0f, m.pt(1f), 0x33000000)
     }
+    private val solidShadow = dev.launcher.app.theme.FadingShadow(m.pt(3f), 0f, m.pt(1f), 0x33000000)
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawText(dateText, left + shownW / 2f, dateSize * 0.86f, datePaint)
@@ -388,6 +388,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
             solidPaint.textScaleX = digitPaint.textScaleX
             solidPaint.letterSpacing = digitPaint.letterSpacing
             solidPaint.alpha = (0xF2 * contentK).toInt()
+            solidShadow.apply(solidPaint)
             canvas.drawText(shownTime, left + cardW / 2f, digitsTop + solidBaseline, solidPaint)
         }
     }
@@ -415,8 +416,9 @@ object ClockNumerals {
 
     private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
 
-    /** How far below the numerals their shadow reaches (the dock's: 9 dp down, 18 dp of blur), px. */
-    fun shadowRoom(ctx: Context): Float = 29f * ctx.resources.displayMetrics.density
+    /** How far below the numerals their shadow reaches, px. */
+    @Suppress("UNUSED_PARAMETER")
+    fun shadowRoom(ctx: Context): Float = dev.launcher.app.ClockShadow.reach
 
     /** The last shape built (debug: written out by HomeActivity's test hook). */
     @Volatile var lastBuilt: dev.launcher.app.GlassMask? = null
@@ -460,8 +462,7 @@ object ClockNumerals {
         val half = if (ins.isEmpty()) 10f else ins[(ins.size * 0.95f).toInt().coerceAtMost(ins.size - 1)]
         val bevel = 20f * unitPx
         // The field reaches as far outside as the shadow does (it is a blur of the shape moved down).
-        val shadowReach = 27f * android.content.res.Resources.getSystem().displayMetrics.density
-        val range = maxOf(half, paint.textSize * 0.07f, shadowReach) + 8f
+        val range = maxOf(half, paint.textSize * 0.07f, dev.launcher.app.ClockShadow.reach) + 8f
         // The outward normal (the distance's gradient), from the distance smoothed so the pixel steps of the transform do not
         // show, and kept unnormalised: across the middle of a stroke, where the nearest edge switches sides, it fades to zero
         // instead of flipping, so the two halves of the lens meet without a crease.
@@ -483,8 +484,7 @@ object ClockNumerals {
             (0xFF shl 24) or (sd shl 16) or (ex shl 8) or ey
         }
         val field = android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
-        // The dock's shadow (its 0x47 black, mostly hidden under the platter there; around thin strokes it all shows: less).
-        return dev.launcher.app.GlassMask(mask, field, 1f, range, bevel, 0.16f).also { lastBuilt = it }
+        return dev.launcher.app.GlassMask(mask, field, 1f, range, bevel, 0.14f).also { lastBuilt = it }
     }
 
     /** [passes] box blurs of radius [r] over a [w] x [h] float image, in place. */
@@ -704,12 +704,13 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
         color = Color.WHITE
         textSize = m.searchPillText
         typeface = dev.launcher.app.theme.Fonts.text(500)
-        setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), 0x59000000)
     }
     private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = m.pt(1.5f); strokeCap = Paint.Cap.ROUND
-        setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), 0x59000000)
     }
+    // Fade with "Search" as it gives way to the page dots (FadingShadow).
+    private val textShadow = dev.launcher.app.theme.FadingShadow(m.pt(2f), 0f, m.pt(0.5f), 0x59000000)
+    private val glyphShadow = dev.launcher.app.theme.FadingShadow(m.pt(2f), 0f, m.pt(0.5f), 0x59000000)
     var pages = 1
         private set
     private var position = 0f
@@ -766,9 +767,9 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
     private fun drawContent(c: Canvas) {
         val cy = height / 2f
         val col = labelColor()
-        val sh = ((0x59 * dev.launcher.app.theme.Appearance.shadowFor(col)).toInt() shl 24)
-        text.color = col; text.setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), sh)
-        glyph.color = col; glyph.setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), sh)
+        val shadowK = dev.launcher.app.theme.Appearance.shadowFor(col)
+        text.color = col
+        glyph.color = col
         if (search < 1f) {
             val start = (width - (pages * m.dotSize + (pages - 1) * m.dotGap)) / 2f
             for (i in 0 until pages) {
@@ -788,6 +789,8 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
             val a = (255 * search).roundToInt()
             glyph.alpha = a
             text.alpha = a
+            glyphShadow.apply(glyph, shadowK)
+            textShadow.apply(text, shadowK)
             val gx = x0 + lens
             val gy = cy - m.pt(0.6f)
             c.drawCircle(gx, gy, lens, glyph)

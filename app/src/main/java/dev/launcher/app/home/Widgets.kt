@@ -326,8 +326,8 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
         textSize = m.labelTextSize
         textAlign = Paint.Align.CENTER
         typeface = dev.launcher.app.theme.Fonts.text(450)
-        setShadowLayer(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
     }
+    private val labelShadow = dev.launcher.app.theme.FadingShadow(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
     private val oldClip = android.graphics.Path()
     /** True while the frame records its own look (badges, label and the crossfade are left out). */
     protected var recordingLook = false
@@ -438,6 +438,7 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
         val label = labelText
         if (label != null && labelK > 0f) {
             labelPaint.alpha = (255 * labelK).toInt()
+            labelShadow.apply(labelPaint)
             canvas.drawText(label, left + shownW / 2f, shownH + m.labelBaseline, labelPaint)
         }
         val ek = editK.value

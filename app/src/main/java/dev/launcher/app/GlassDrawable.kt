@@ -74,6 +74,14 @@ data class GlassStyle(
     }
 }
 
+/** The shaped glass's contact shadow (px): blur and offset down; its reach below the shape is [reach]. */
+object ClockShadow {
+    private val density get() = android.content.res.Resources.getSystem().displayMetrics.density
+    val radius get() = 5f * density
+    val dy get() = 1.5f * density
+    val reach get() = radius + dy + 2f * density
+}
+
 /**
  * Home's depth zoom as glass on the wallpaper sees it ([HomeScreen.applyDepth]): home's content zooms by more than the
  * wallpaper, so the wallpaper behind a glass surface is at [cx], [cy] + (its place - centre) x [k] (k = content zoom /
@@ -164,10 +172,10 @@ class GlassDrawable(
         if (masked) {
             // The lens law of the rounded rectangle (bend scales with the bevel), its reference bevel, and the shadow.
             shader.setFloatUniform("bevelRef", style.bevel * unitPx)
-            // The dock's shadow (DockShadow: 18 dp of blur, about 9 dp below), for shapes that cast one.
-            val density = android.content.res.Resources.getSystem().displayMetrics.density
-            shader.setFloatUniform("shadowR", 18f * density)
-            shader.setFloatUniform("shadowDy", 9f * density)
+            // A small, soft contact shadow (the dock's 18 dp one around thin strokes read as a dark haze): it only lifts the
+            // glass off the wallpaper. [GlassMask.shadow] is its strength.
+            shader.setFloatUniform("shadowR", ClockShadow.radius)
+            shader.setFloatUniform("shadowDy", ClockShadow.dy)
         }
         shader.setFloatUniform("dispersion", style.dispersion)
         shader.setFloatUniform("frost", style.frost)
