@@ -1009,3 +1009,9 @@ scrolling behind them; Spotlight showed the App Library's A-Z index for a few fr
   fade out, and an empty query has no rows (typing makes results rise in).
 Not checked on the phone by me: the unlock itself (secure lock screen). Emulator (swipe lock screen): held at sleep, the
 unlock shows home zoomed in, then it zooms out; no frame of home at rest.
+
+Round 26 (Matheesha: Spotlight's magnifier was dark in dark mode and light in light mode).
+- The glyph faded with Spotlight's opening by multiplying its paint's alpha by the open fraction, read back from the same
+  paint: it compounded every frame of the opening until the glyph was gone and only its shadow (dark, unscaled) was left.
+  Now its colour comes from the appearance and the alpha is set from that at each draw; the shadow is a `FadingShadow`.
+  On the S24: light grey in dark mode, dark grey in light mode, the same tone as the "Search" placeholder.

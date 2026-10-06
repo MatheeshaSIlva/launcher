@@ -461,11 +461,16 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
             color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND
         }
 
+        // The magnifier's colour for the appearance (light in dark mode, dark in light mode), and its shadow, which fades with
+        // it (FadingShadow). Its alpha is set from this at every draw: multiplied into the paint itself, the fade compounded
+        // frame after frame until the glyph was gone and only its shadow showed, a dark magnifier.
+        private var glyphColor = Appearance.secondaryLabel
+        private val glyphShadow = dev.launcher.app.theme.FadingShadow(m.pt(2f), 0f, m.pt(0.6f), 0x59000000)
+
         /** The appearance's colours for the field's text, placeholder, magnifier and clear button. */
         fun onAppearance() {
             val shadow = ((0x59 * Appearance.textShadowStrength).toInt() shl 24)
-            glyph.color = Appearance.secondaryLabel
-            glyph.setShadowLayer(m.pt(2f), 0f, m.pt(0.6f), shadow)
+            glyphColor = Appearance.secondaryLabel
             edit.setTextColor(Appearance.label)
             edit.setHintTextColor(Appearance.tertiaryLabel)
             edit.setShadowLayer(m.pt(2f), 0f, m.pt(0.6f), shadow)
@@ -533,7 +538,9 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
             val lr = m.pt(6.8f)
             lens.reset()
             lens.addCircle(cx, cy, lr, Path.Direction.CW)
-            glyph.alpha = (Color.alpha(glyph.color) * fade).toInt()
+            glyph.color = glyphColor
+            glyph.alpha = (Color.alpha(glyphColor) * fade).toInt()
+            glyphShadow.apply(glyph, Appearance.textShadowStrength)
             canvas.drawPath(lens, glyph)
             canvas.drawLine(cx + lr * 0.72f, cy + lr * 0.72f, cx + lr * 1.45f, cy + lr * 1.45f, glyph)
         }
