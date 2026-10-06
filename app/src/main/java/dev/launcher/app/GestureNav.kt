@@ -611,10 +611,21 @@ object GestureNav {
         val d = dev.launcher.app.switcher.DeckView(ctx, deckListener).apply { visibility = View.GONE }
         r.addView(d, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         // Exact full-display size, drawn into the cutout too (the probe saw resizing as a stretch).
-        val lp = overlayParams(sw.toInt(), sh.toInt(), touchable = false).apply {
+        val lp = overlayParams(sw.toInt(), sh.toInt(), touchable = CAN_CATCH_TOUCHES).apply {
             gravity = Gravity.TOP or Gravity.START
             title = "LauncherCards"
             alpha = 0f
+            // Touches outside its touchable region (empty unless a close is under way) go to the windows below.
+            if (CAN_CATCH_TOUCHES) flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        }
+        if (CAN_CATCH_TOUCHES) {
+            host.setOnTouchListener { _, e -> onCardWindowTouch(e); true }
+            // Its window exists only from its first layout pass (attach runs early in it, before the touchable area is sent):
+            // set right after addView, the region was dropped and the whole window took touches.
+            host.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: View) { v.rootSurfaceControl?.setTouchableRegion(if (catching) fullRegion() else NO_TOUCH) }
+                override fun onViewDetachedFromWindow(v: View) {}
+            })
         }
         try {
             wm.addView(host, lp)
@@ -755,6 +766,7 @@ object GestureNav {
 
     /** Ends the card session: window invisible (kept), icon back, everything pending forgotten. */
     private fun hideCards() {
+        catchTouchesForHome(false)
         gen++
         animating = false
         onSettled = null
@@ -986,9 +998,13 @@ object GestureNav {
             backdrop?.picture = HomeBridge.previewFor(cardPkg)
             backdrop?.depth = 1f
         }
+        val s = c.w / sw
+        // A launch card that already covers the screen: home behind it is shown as it is now, not as it was at the tap
+        // (opened from Spotlight, the search has ended behind the app since: the close showed Spotlight, then home snapped
+        // to the first page). Unseen while the card covers everything.
+        if (wasAnim == Anim.LAUNCH && s > 0.97f) HomeBridge.previewFor(cardPkg)?.let { backdrop?.picture = it }
         if (backdrop?.picture == null) backdrop?.picture = HomeBridge.previewFor(cardPkg)
         pictureDropped = false
-        val s = c.w / sw
         travel0 = travelForScale(s)
         lastTravel = travel0
         // The card may be smaller, squarer, rounder or more "icon" than the drag model can produce (e.g. grabbed while
@@ -1298,6 +1314,7 @@ object GestureNav {
             sDepth = mp.homeDepthClose.spring().apply { start(depth0, 0f, 0f) }
             closeDepthFrom = depth0
             anim = Anim.HOME_COMMIT
+            catchTouchesForHome(true)
             endLabel = when {
                 target != null -> "home (into the icon of $pkg at ${target.centerX().toInt()},${target.centerY().toInt()})"
                 pkg == null -> "home (to centre; app NOT KNOWN yet at release: task lookup still running)"
@@ -1367,6 +1384,49 @@ object GestureNav {
         hiddenIconPkg = null
         AppLog.log("[nav] home touched during the close: the card fades where it is")
         fadeOutCards(110, gen, overHome = true)
+    }
+
+    // ---- touches during a close
+    //
+    // For ~80 ms after a close is released home is not yet the window in front (the system starts it, it draws, the
+    // transition commits: traced on the S24), and a gesture that starts then belongs to the closing app for its whole
+    // length: invisible under the card, a drag on the App Library right after a close did nothing at all (and a tap could
+    // press something in the app). While a close is under way the card window takes every touch instead and hands it to
+    // home, which runs in this process. Its touchable region (no window re-layout) is the whole screen only then.
+
+    private var catching = false     // the card window's touchable region is the whole screen
+    private var forwarding = false   // the gesture under way started while catching: all of it goes to home
+
+    private fun catchTouchesForHome(on: Boolean) {
+        if (!CAN_CATCH_TOUCHES || catching == on || !cardTouchable) return
+        val host = cardWindow ?: return
+        catching = on
+        host.rootSurfaceControl?.setTouchableRegion(if (on) fullRegion() else NO_TOUCH)
+    }
+
+    private fun fullRegion() = android.graphics.Region(0, 0, sw.toInt(), sh.toInt())
+
+    private fun onCardWindowTouch(e: MotionEvent) {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+            forwarding = catching
+            // A touch outside a close: the empty touchable region did not hold. Never eat touches: untouchable for good.
+            if (!catching) { makeCardWindowUntouchable(); return }
+        }
+        if (forwarding) HomeBridge.forwardTouch(e)
+        if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) forwarding = false
+    }
+
+    private var cardTouchable = true
+
+    private fun makeCardWindowUntouchable() {
+        if (!cardTouchable) return
+        cardTouchable = false
+        catching = false
+        AppLog.log("[nav] the card window took a touch outside a close: it is untouchable from now on")
+        val host = cardWindow ?: return
+        val lp = host.layoutParams as? WindowManager.LayoutParams ?: return
+        lp.flags = lp.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        try { wm?.updateViewLayout(host, lp) } catch (_: Throwable) { }
     }
 
     private fun startHome() {
@@ -2287,6 +2347,11 @@ object GestureNav {
     private const val PULL_FADE_MS = 140L      // a released swipe on home: the picture fades into the live home
     private const val SWITCHER_DIM = 0.28f              // home behind the deck: darkened by this much
     private const val SWITCHER_MAX_CARDS = 50   // every recent app (the system keeps about this many)
+    // A window's touchable region can change without a re-layout from Android 14 (AttachedSurfaceControl).
+    private val CAN_CATCH_TOUCHES = Build.VERSION.SDK_INT >= 34
+    // "Nowhere": one pixel just off screen. An empty region is never sent to the window manager (it equals the initial
+    // "previous" region), which leaves the whole window touchable.
+    private val NO_TOUCH = android.graphics.Region(-2, -2, -1, -1)
     private const val REMOVE_AFTER_MS = 650L    // a flicked card's app is closed once the deck is still
     private const val SWITCHER_PREFETCH = 3     // pictures fetched at the touch (the rest as the deck shows their cards)
     private const val IMAGES_MAX = 16          // pictures kept between gestures

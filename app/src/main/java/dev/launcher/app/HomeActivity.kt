@@ -19,6 +19,7 @@ import android.view.Choreographer
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
+import android.view.MotionEvent
 import dev.launcher.app.apps.AppEntry
 import dev.launcher.app.apps.Apps
 import dev.launcher.app.apps.LaunchStats
@@ -198,6 +199,16 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     fun onHomeSwipeUp() = screen.onHomeSwipeUp()
 
+    private val decorOnScreen = IntArray(2)
+
+    /** A touch caught by gesture nav's card window during a close (screen coordinates): handled as if home had it. */
+    fun forwardTouch(e: MotionEvent) {
+        val d = window.decorView
+        d.getLocationOnScreen(decorOnScreen)
+        e.setLocation(e.rawX - decorOnScreen[0], e.rawY - decorOnScreen[1])
+        d.dispatchTouchEvent(e)
+    }
+
     // ------------------------------------------------------------------ HomeBridge.Home
 
     override fun setIconHidden(pkg: String, hidden: Boolean) {
@@ -213,7 +224,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         // of home again at the start of the gesture: 11-15 ms GPU frames at the start of a pull, traced on the S24).
         if (!drawnSinceRecord) HomeBridge.preview?.let { return it }
         for (c in screen.clocks) c.refresh()
-        return screen.withHidden(null) { record() }.also { recorded() }
+        return screen.withHidden(null) { record() }?.also { recorded() }
     }
 
     // Whether home has drawn a frame since its picture for gesture nav was recorded (a draw in the same frame as the
@@ -262,7 +273,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         screen.layout(screen.left, screen.top, screen.right, screen.bottom)
         screen.publishIcons()   // the icon a close flies into may be a different copy now (a tile, not a search result)
         for (c in screen.clocks) c.refresh()
-        HomeBridge.setPreview(screen.withHidden(null) { record() })
+        val p = screen.withHidden(null) { record() } ?: return
+        HomeBridge.setPreview(p)
         recorded()
         val pkg = lastLaunched ?: return
         if (!HomeBridge.hasWithout(pkg)) HomeBridge.putWithout(pkg, recordWithout(pkg))
@@ -274,7 +286,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (screen.width == 0 || !screen.isIdle || screen.wallpaperView.transitioning || screen.hiddenPkg != null) return
         // TextClock stops updating while home is in the background: make it show the time now before recording.
         for (c in screen.clocks) c.refresh()
-        HomeBridge.setPreview(record())
+        HomeBridge.setPreview(record() ?: return)
         recorded()
     }
 
@@ -283,7 +295,18 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private var wallpaperPicture: Picture? = null
     private var wallpaperPictureKey: Triple<Wallpaper?, Int, Int>? = null
 
-    private fun record(): HomePicture {
+    /**
+     * Home as a picture, or null if recording failed (the last picture stays in use; never a crash: a view drawn in software
+     * inside the recording, e.g. one with a GPU layer, cannot run the glass shader).
+     */
+    private fun record(): HomePicture? = try {
+        recordNow()
+    } catch (t: Throwable) {
+        AppLog.log("[home] recording home failed (${t.javaClass.simpleName}: ${t.message}): the last picture stays")
+        null
+    }
+
+    private fun recordNow(): HomePicture {
         val key = Triple(wallpaper, screen.width, screen.height)
         val wp = when {
             wallpaper == null -> null
@@ -300,9 +323,12 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private fun recordView(v: View, ground: Int?): Picture {
         val p = Picture()
         val c: Canvas = p.beginRecording(screen.width, screen.height)
-        ground?.let { c.drawColor(it) }
-        v.draw(c)
-        p.endRecording()
+        try {
+            ground?.let { c.drawColor(it) }
+            v.draw(c)
+        } finally {
+            p.endRecording()
+        }
         return p
     }
 

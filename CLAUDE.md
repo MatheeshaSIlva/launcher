@@ -88,7 +88,11 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Never change an overlay window's layout params at the start of a gesture** (alpha, flags, size): each change is a
   10-50 ms window manager re-layout on that window's thread. The card window stays at alpha 1.
 - **Recording home into a Picture costs ~20 ms of main thread**: never inside an animation frame (settle callbacks run inside
-  the last frame); reuse the last picture when home has not drawn since.
+  the last frame); reuse the last picture when home has not drawn since. **No GPU layer on any view inside home** (only on
+  the recorded root): a layered child is drawn in software inside the recording and the glass shader crashes the app.
+- **Touchable region of an overlay** (`rootSurfaceControl.setTouchableRegion`, API 34): set it from the view's attach
+  callback (before that it is dropped), and never as an empty Region (not sent: the whole window stays touchable); use an
+  off-screen pixel for "nowhere".
 - **Our remote transition must not finish before its start transaction is committed.** SystemUI applies the finish
   transaction from its own process; transactions from two processes are not ordered, so an early finish let home end up
   inside a removed transition container (black home, "no focused window" ANR, survives reinstalls). Finish from

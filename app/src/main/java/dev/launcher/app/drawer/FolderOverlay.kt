@@ -85,18 +85,13 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
     }
 
     /**
-     * The library behind does not move while a folder is open: it is drawn into a GPU layer once instead of every frame
-     * (each tile's glass is a shader over its whole area: re-running them all under the growing folder cost the GPU 15+ ms
-     * per frame on the S24), and not at all once the folder's backdrop covers it.
+     * The library behind is not drawn once the folder's backdrop covers it (each tile's glass is a shader over its whole
+     * area). No GPU layer on it while the folder animates: home is recorded into a Picture for gesture nav, and a view
+     * with a GPU layer inside that recording is drawn in software, where the glass shader cannot run (the app crashed when a
+     * swipe home was recorded mid-close).
      */
     private fun coverLibrary(on: Boolean) {
-        val t = lib.tilesPane
-        if (on) {
-            if (t.layerType != View.LAYER_TYPE_HARDWARE) t.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        } else {
-            t.setLayerType(View.LAYER_TYPE_NONE, null)
-            t.visibility = View.VISIBLE
-        }
+        if (!on) lib.tilesPane.visibility = View.VISIBLE
     }
 
     fun closeNow() {

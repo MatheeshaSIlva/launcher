@@ -5,6 +5,7 @@ import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.MotionEvent
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -127,6 +128,15 @@ object HomeBridge {
 
     /** A swipe up on the gesture bar while home is in front (leave edit mode, close Spotlight). Any thread. */
     fun homeSwipeUp() = main.post { (home as? HomeActivity)?.onHomeSwipeUp() }
+
+    /** A touch the card window caught during a close: home handles it as its own (any thread; a copy is posted). */
+    fun forwardTouch(e: MotionEvent) {
+        val ev = MotionEvent.obtain(e)
+        main.post {
+            (home as? HomeActivity)?.forwardTouch(ev)
+            ev.recycle()
+        }
+    }
 
     /** Set by gesture nav: home was touched (a closing card should get out of the way). Called on the main thread. */
     @Volatile var onHomeTouched: (() -> Unit)? = null

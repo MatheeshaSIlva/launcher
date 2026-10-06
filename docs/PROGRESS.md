@@ -716,3 +716,20 @@ Results after (missed refreshes per step, two runs): every step 0-1 (folder open
 0/0/0/0/0, launches/closes 0-2, sideways 0-1). GPU times vary with the phone's temperature (SoC 52 C after an hour of runs).
 Seen on recordings and not fixed yet: our own screens (the dev panel; a future settings page) open with the stock slide, not
 our card; Spotlight's keyboard rises after the search has opened (two steps), not with it.
+
+Round 15 (Matheesha: swiping home from an expanded App Library folder crashed the app; swiping home right after an app
+opened from Spotlight was wrong; touches did nothing during closes from the App Library):
+- Crash (round 14's own regression): the library behind an opening folder had a GPU layer; recording home into a Picture
+  drew that view in software, where the glass shader cannot run ("Software rendering doesn't support RuntimeShader").
+  The layer is gone (the shader fix was the real saving), and a failed recording now keeps the last picture instead of
+  crashing. S24: open folder + two quick swipes home x3, no crash.
+- Spotlight: a swipe that took over the launch card closed onto the picture recorded at the tap (Spotlight open), though
+  the search had ended behind the app; home then snapped to the first page. A full-size launch card now takes home's
+  current picture. Recorded on the S24: the close shows page 1 from its first frame.
+- Touches during a close: for ~80 ms after the release home is not the window in front yet (traced: start, resume, first
+  frame, transition committed at +77 ms), and a gesture begun then belonged to the closing app for its whole length (a
+  drag on the library did nothing; a tap could press something in the hidden app). The card window now takes touches while
+  a close runs and hands them to home in-process; its touchable region (AttachedSurfaceControl.setTouchableRegion, no
+  re-layout) is "nowhere" otherwise, with a failsafe that makes it untouchable if it ever takes a touch outside a close.
+  S24: a drag right after a close scrolls the library (it did nothing before); in-app taps, library scrolls, launches and
+  closes unaffected; no failsafe line in any run. Launches unchanged: touches during an opening animation go to the app.
