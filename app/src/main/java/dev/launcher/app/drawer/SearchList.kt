@@ -60,6 +60,8 @@ internal class SearchList(
     var spotlight = false
     /** Draws a glass card (the Top Hit's) at a rect in this view's coordinates. */
     var drawCard: ((Canvas, RectF) -> Unit)? = null
+    /** Draws the theme's glass (the dock's material) at a rect with a corner radius, in this view's coordinates: the index's capsule and bubble. */
+    var drawGlass: ((Canvas, RectF, Float) -> Unit)? = null
     /** Called after every draw (something mirroring the list, e.g. a frosted field over it, redraws too). */
     var onDrawn: (() -> Unit)? = null
 
@@ -451,10 +453,17 @@ internal class SearchList(
             // A capsule lights up behind the column while it is touched.
             val pad = m.pt(6f)
             r.set(x - m.listSideIndex / 2f, top - pad, x + m.listSideIndex / 2f, indexBottom() + pad)
-            indexCapsule.alpha = (0x24 * lit).toInt()
-            indexCapsuleRim.alpha = (0x30 * lit).toInt()
-            c.drawRoundRect(r, r.width() / 2f, r.width() / 2f, indexCapsule)
-            c.drawRoundRect(r, r.width() / 2f, r.width() / 2f, indexCapsuleRim)
+            val dg = drawGlass
+            if (dg != null) {
+                val layer = c.saveLayerAlpha(r.left - 2, r.top - 2, r.right + 2, r.bottom + 2, (255 * lit).toInt())
+                dg(c, r, r.width() / 2f)
+                c.restoreToCount(layer)
+            } else {
+                indexCapsule.alpha = (0x24 * lit).toInt()
+                indexCapsuleRim.alpha = (0x30 * lit).toInt()
+                c.drawRoundRect(r, r.width() / 2f, r.width() / 2f, indexCapsule)
+                c.drawRoundRect(r, r.width() / 2f, r.width() / 2f, indexCapsuleRim)
+            }
         }
         for ((k, l) in LETTERS.withIndex()) {
             val cy = top + step * (k + 0.5f)
@@ -481,10 +490,19 @@ internal class SearchList(
             c.scale(0.55f + 0.45f * b, 0.55f + 0.45f * b, bx, fingerY)
             bubbleShadow.alpha = (0x40 * a).toInt()
             c.drawCircle(bx, fingerY + m.pt(4f), rad, bubbleShadow)
-            bubbleFill.alpha = (0x3D * a).toInt()
-            bubbleRim.alpha = (0x59 * a).toInt()
-            c.drawCircle(bx, fingerY, rad, bubbleFill)
-            c.drawCircle(bx, fingerY, rad, bubbleRim)
+            val dg = drawGlass
+            if (dg != null) {
+                // The dock's glass as a disc, bending the backdrop behind it.
+                r.set(bx - rad, fingerY - rad, bx + rad, fingerY + rad)
+                val layer = c.saveLayerAlpha(r.left - 2, r.top - 2, r.right + 2, r.bottom + 2, (255 * a).toInt())
+                dg(c, r, rad)
+                c.restoreToCount(layer)
+            } else {
+                bubbleFill.alpha = (0x3D * a).toInt()
+                bubbleRim.alpha = (0x59 * a).toInt()
+                c.drawCircle(bx, fingerY, rad, bubbleFill)
+                c.drawCircle(bx, fingerY, rad, bubbleRim)
+            }
             bubbleText.draw(c, "b$scrubLetter", scrubLetter.toString(), bx, bubbleText.baselineFor(fingerY), rad * 2, (255 * a).toInt())
             c.restore()
         }

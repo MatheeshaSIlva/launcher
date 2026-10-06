@@ -421,9 +421,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         dv?.visibility = if (dp > 0f) View.VISIBLE else View.INVISIBLE
         backdrop.alpha = dp
         backdrop.visibility = if (dp > 0f) View.VISIBLE else View.INVISIBLE
-        for (v in listOf(dock, dockShadow, indicator)) v?.translationX = shift
+        for (v in listOf(dock, dockShadow, indicator, editBar)) v?.translationX = shift
         dock?.glass?.invalidate()
         indicator?.glass?.invalidate()
+        (editBar as? EditMode.Bar)?.glassViews()?.forEach { it.invalidate() }
         for (g in pageGlass()) g.invalidate()
         if (pendingSearch && dp > 0.5f) { pendingSearch = false; drawer?.openSearch() }
         indicator?.setPosition(pos.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()))
@@ -715,13 +716,15 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             drawerWasOpen = false
             drawer?.onClosed()
         }
+        // Reaching the App Library ends edit mode (as on iOS); its bar slid away with the pages on the way.
+        if (drawerProgress() >= 0.999f && editMode?.active == true) editMode?.exit()
         publishIcons()
         listener.onHomeSettled()
     }
 
     // ================================================================== state for the launcher and gesture nav
 
-    val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && !arrivalAnimating && (drag == Drag.NONE || drag == Drag.IGNORED) &&
+    val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && !arrivalAnimating && !arrivalHeld && (drag == Drag.NONE || drag == Drag.IGNORED) &&
         (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true) && editMode?.active != true && menu?.isShowing != true &&
         picker?.isOpen != true && !externalTouch && clocks.none { it.animating } && widgetViews().none { it.resizing }
 
@@ -741,15 +744,48 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var arrivalMaxDelay = 0.0
     private var arrivalCold = false
 
-    /** Plays the arrival now, or as soon as home has a layout ([cold]: from black). */
+    private var arrivalHeld = false
+
+    /**
+     * Puts home into the arrival's first frame right away (items hidden) without playing it: for a resume under the lock
+     * screen, so the first frame the unlock reveals is already the arrival's and nothing visible is reset when it plays.
+     */
+    fun holdArrival() {
+        if (arrivalAnimating || arrivalHeld) return
+        if (!prepareArrival(cold = false)) return
+        arrivalHeld = true
+        applyArrival(0.0)
+    }
+
+    /** Lets a held arrival go without playing it (home is being left before the unlock came). */
+    fun releaseArrival() {
+        if (!arrivalHeld) return
+        arrivalHeld = false
+        finishArrival()
+    }
+
+    /** Plays the arrival now (from the held frame if there is one), or as soon as home has a layout ([cold]: from black). */
     fun playArrival(cold: Boolean) {
+        if (!arrivalHeld || cold) {
+            if (arrivalAnimating) finishArrival()
+            if (!prepareArrival(cold)) return
+        }
+        arrivalHeld = false
+        arrivalStart = System.nanoTime()
+        arrivalAnimating = true
+        applyArrival(0.0)
+        Choreographer.getInstance().postFrameCallback(arrivalFrame)
+        AppLog.log("[home] arrival (${if (cold) "cold start" else "unlock"}): ${arriving.size} items")
+    }
+
+    /** Collects what arrives and sets up the springs; false if home cannot play one now (deferred when it has no layout). */
+    private fun prepareArrival(cold: Boolean): Boolean {
         val metrics = m
-        if (metrics == null || pages.isEmpty() || width == 0) { pendingArrival = cold; return }
+        if (metrics == null || pages.isEmpty() || width == 0) { pendingArrival = cold; return false }
         if (drawerProgress() > 0f || spotlight?.isOpen == true || menu?.isShowing == true || picker?.isOpen == true ||
-            editMode?.active == true || depthAnimating || HomeBridge.homeCovered) return
-        val page = pages.getOrNull(pos.roundToInt()) ?: return
+            editMode?.active == true || depthAnimating || HomeBridge.homeCovered) return false
+        val page = pages.getOrNull(pos.roundToInt()) ?: return false
         val mp = Motion.profile
-        if (arrivalAnimating) finishArrival()
         arriving.clear()
         val cx = metrics.w / 2f
         val cy = metrics.h / 2f
@@ -757,7 +793,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val stagger = mp.arrivalStaggerMs / 1000.0
         for (v in page.itemViews()) {
             val d = hypot(v.left + v.width / 2f - cx, v.top + v.height / 2f - cy)
-            arriving += Arriving(v, (d / maxD) * stagger)
+            arriving += Arriving(v, (d / maxD) * stagger * (if (cold) 1.0 else 0.6))
         }
         // The dock and the Search pill come last, as one (they are the furthest down).
         indicator?.let { arriving += Arriving(it, stagger * 0.85) }
@@ -765,13 +801,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         dockShadow?.let { arriving += Arriving(it, stagger) }
         arrivalMaxDelay = arriving.maxOfOrNull { it.delay } ?: 0.0
         arrivalCold = cold
-        arrivalSpring = mp.arrival.spring().apply { start(mp.arrivalScale, 0f, 1f) }
-        arrivalWallpaper = mp.arrivalWallpaper.spring().apply { start(mp.arrivalWallpaperZoom, 0f, 1f) }
-        arrivalStart = System.nanoTime()
-        arrivalAnimating = true
-        applyArrival(0.0)
-        Choreographer.getInstance().postFrameCallback(arrivalFrame)
-        AppLog.log("[home] arrival (${if (cold) "cold start" else "unlock"}): ${arriving.size} items")
+        // The bloom starts moving on its first frame (a little initial speed), never from a standstill that reads as a freeze.
+        arrivalSpring = mp.arrival.spring().apply { start(mp.arrivalScale, 1.2f, 1f) }
+        // The wallpaper settles from a zoom only on a cold start: after an unlock the system has already shown it at rest
+        // on the lock screen, and zooming it again played the zoom twice.
+        arrivalWallpaper = if (cold) mp.arrivalWallpaper.spring().apply { start(mp.arrivalWallpaperZoom, 0f, 1f) } else null
+        return true
     }
 
     private val arrivalFrame = object : Choreographer.FrameCallback {
@@ -798,6 +833,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val wz = arrivalWallpaper?.value(t) ?: 1f
         wallpaperView.scaleX = wz; wallpaperView.scaleY = wz
         if (arrivalCold) wallpaperView.alpha = (t / 0.35).coerceIn(0.0, 1.0).toFloat()
+        // The light travels around the glass (clock numerals, dock, pill) from the left to its resting top-left, as Apple's
+        // material does on unlock, over the first 0.7 s (eased).
+        val lk = (t / 0.7).coerceIn(0.0, 1.0).let { it * it * (3 - 2 * it) }.toFloat()
+        val angle = 165f + 60f * lk
+        for (g in glassViews()) g.setLightAngle(angle)
+        if (!arrivalAnimating) return   // held: the first frame only
         dock?.glass?.invalidate(); indicator?.glass?.invalidate()
         for (g in pageGlass()) g.invalidate()
     }
@@ -806,7 +847,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         for (a in arriving) { a.v.scaleX = 1f; a.v.scaleY = 1f; a.v.alpha = 1f }
         arriving.clear()
         wallpaperView.scaleX = 1f; wallpaperView.scaleY = 1f; wallpaperView.alpha = 1f
+        for (g in glassViews()) g.setLightAngle(225f)
         arrivalAnimating = false
+        arrivalHeld = false
         publishIcons()
         listener.onHomeSettled()
     }

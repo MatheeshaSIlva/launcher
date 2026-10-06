@@ -99,6 +99,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         results.fadeTop = m.gridTop - m.pt(30f)
         results.spotlight = true
         results.drawCard = { c, rect -> drawCard(c, rect) }
+        results.drawGlass = { c, rect, rad -> drawCard(c, rect, rad) }
         // The frosted field mirrors the results under it: redraw it whenever they move.
         results.onDrawn = { if (!mirroring) field.frost.invalidate() }
         addView(field, LayoutParams((m.w - 2 * m.libMargin).roundToInt(), m.searchHeight.roundToInt()).apply {
@@ -111,7 +112,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         if (w === wallpaper) return
         wallpaper = w
         glass = if (w != null && Build.VERSION.SDK_INT >= 33) try {
-            GlassDrawable(w, m.w, m.h, m.searchHeight / 2f, m.u, resources.displayMetrics.density * 7f, GlassStyle.IOS, GlassDrawable.Source.BACKDROP)
+            GlassDrawable(w, m.w, m.h, m.searchHeight / 2f, m.u, resources.displayMetrics.density * 7f, GlassStyle.IOS_LIBRARY, GlassDrawable.Source.BACKDROP)
         } catch (t: Throwable) { AppLog.log("[spotlight] glass failed: ${t.message}"); null } else null
         invalidate(); field.invalidate()
     }
@@ -135,9 +136,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
     }
 
     /** The Top Hit card: the theme's glass, refracting the blurred background behind Spotlight. */
-    private fun drawCard(c: Canvas, rect: RectF) {
+    private fun drawCard(c: Canvas, rect: RectF, rad: Float = m.pt(26f)) {
         val g = glass
-        val rad = m.pt(26f)
         if (g == null) { c.drawRoundRect(rect, rad, rad, cardFallback); return }
         screenOffset(results, offset)
         g.setRadius(rad)
@@ -470,8 +470,14 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
             canvas.drawLine(cx + lr * 0.72f, cy + lr * 0.72f, cx + lr * 1.45f, cy + lr * 1.45f, glyph)
         }
 
-        /** The blurred copy of what is behind the field, clipped to the capsule, darkened. */
+        /**
+         * What is behind the field (the background and the results scrolling under it) seen through the dock's glass:
+         * blurred, bent at the rim and lit like every other glass ([dev.launcher.app.LiveGlass]), darkened for the text.
+         */
         inner class Frost(ctx: Context) : View(ctx) {
+            private val live = dev.launcher.app.LiveGlass.create(GlassStyle.IOS, m.u)
+            private val shape = RectF()
+
             init {
                 clipToOutline = true
                 outlineProvider = object : android.view.ViewOutlineProvider() {
@@ -479,13 +485,14 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                         outline.setRoundRect(0, 0, view.width, view.height, view.height / 2f)
                     }
                 }
-                if (Build.VERSION.SDK_INT >= 31) {
+                // Without the shader (older Android): a plain blur of the mirror.
+                if (live == null && Build.VERSION.SDK_INT >= 31) {
                     val b = m.pt(16f)
                     setRenderEffect(android.graphics.RenderEffect.createBlurEffect(b, b, android.graphics.Shader.TileMode.CLAMP))
                 }
             }
 
-            override fun onDraw(c: Canvas) {
+            private fun drawMirror(c: Canvas) {
                 val f = this@Field
                 c.save()
                 c.translate(-f.left.toFloat(), -(f.top + f.translationY))
@@ -498,6 +505,14 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                     c.restoreToCount(layer)
                 }
                 c.restore()
+            }
+
+            override fun onDraw(c: Canvas) {
+                val l = live
+                if (l != null && c.isHardwareAccelerated) {
+                    shape.set(0f, 0f, width.toFloat(), height.toFloat())
+                    l.draw(c, shape, height / 2f, m.pt(16f), null, null) { cc -> drawMirror(cc) }
+                } else drawMirror(c)
                 c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), tint)
             }
         }

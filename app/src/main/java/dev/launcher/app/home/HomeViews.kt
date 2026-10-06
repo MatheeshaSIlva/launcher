@@ -356,8 +356,8 @@ object ClockNumerals {
         val digitH = bounds.height() / 100f
         val widest = if (is24) "20:08" else "10:08"
         val widthPer100 = paint.measureText(widest) / 100f
-        paint.textScaleX = 0.9f
-        paint.textSize = minOf(h * 0.94f / digitH, w * 0.96f / (widthPer100 * 0.9f))
+        paint.textScaleX = 0.95f
+        paint.textSize = minOf(h * 0.94f / digitH, w * 0.96f / (widthPer100 * 0.95f))
         return digitH * paint.textSize + h * 0.03f
     }
 
@@ -379,7 +379,7 @@ object ClockNumerals {
             ?: android.graphics.Bitmap.createBitmap(hw, hh, android.graphics.Bitmap.Config.ALPHA_8)
         height.eraseColor(0)
         android.graphics.Canvas(height).apply { scale(scale, scale); drawText(time, w / 2f, baseline, paint) }
-        val blurPx = paint.textSize * 0.07f
+        val blurPx = paint.textSize * 0.09f
         boxBlurAlpha(height, maxOf(1, (blurPx * scale).roundToInt()))
         return dev.launcher.app.GlassMask(mask, height, scale, blurPx, 0.2f)
     }

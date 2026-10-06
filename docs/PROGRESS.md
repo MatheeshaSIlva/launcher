@@ -797,3 +797,29 @@ Round 17 (Matheesha on the branch build ee24807; fixed from the code, no phone r
   cleared one shrinks away, a changed count bounces) so a count arriving while home shows never just appears.
 - Rule 3 added to CLAUDE.md and REQUIREMENTS.md: attention to detail, every change on screen animated.
 
+Round 18 (Matheesha on 23f0999; fixed from the code, offline render for the clock):
+- Clock, researched against Apple's own description of Liquid Glass and the lock screen time (WWDC25 "Meet Liquid Glass":
+  lensing defines the material; it concentrates light; its tint is a range of tones mapped to the brightness behind;
+  highlights respond to a light that moves on unlock; large elements have deeper shadows and more pronounced lensing;
+  the iOS 26 "Glass" clock has a clear-to-frosted slider, default in between, and glints that travel on tilt): the
+  numerals are now semi-frosted (sharp wallpaper and its heavy blur mixed 40/60), lifted towards white over dark
+  wallpaper and darkened over light ones, with a deep lens along the strokes, a slight light concentration just inside
+  the edge, thickness shade, the dock's edge and brighter corner highlights, a wider bevel and a soft shadow; the digits
+  are narrowed less (0.95). The light sweeps around every glass (numerals, dock, pill) as home arrives
+  (`GlassDrawable.setLightAngle`), as Apple's material does on unlock. `docs/design/clock-glass-old-vs-new.png`.
+- Add Widget push: the pages are glass, not opaque, so the list kept 30 % and vanished the moment the push ended. The list
+  now fades fully out under the incoming page and the page's content fades in.
+- Edit mode: the Edit/Done bar now slides away with the pages (it was fixed on screen over the App Library), and reaching
+  the library ends edit mode, as on iOS.
+- Unlock: the wallpaper no longer zooms on unlock (the system had already shown it at rest on the lock screen, so the zoom
+  played twice) and the bloom starts with motion on its first frame. Under the lock screen home takes the arrival's first
+  frame at the resume (`holdArrival`), so what the unlock reveals is already it, and it plays at USER_PRESENT (1.5 s
+  fallback). A cold start keeps its zoom from black.
+- App Library rubber band past its end: the tiles slid but their glass kept showing the old spot (the open progress
+  stayed at 1, so nothing redrew). The library's glass now follows its own translation.
+- Glass consistency: everything over the heavily blurred backdrop (library tiles, search field, folders, Spotlight's Top
+  Hit card) uses `GlassStyle.IOS_LIBRARY`, the dock's light with a wider, stronger lens so the bend shows in a blur; the
+  A-Z index's capsule and bubble, and the widget gallery's search capsule, buttons, featured card and widget cards are
+  that glass now instead of flat fills; Spotlight's search field is the dock's lensed glass over what is behind it
+  (`LiveGlass`) instead of a plain blur.
+

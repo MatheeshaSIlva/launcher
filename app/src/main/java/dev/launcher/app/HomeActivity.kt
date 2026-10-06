@@ -111,7 +111,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 Intent.ACTION_SCREEN_OFF -> { sleptSinceResume = true; arrivalOnUnlock = false }
-                Intent.ACTION_USER_PRESENT -> if (arrivalOnUnlock && resumed) { arrivalOnUnlock = false; screen.playArrival(cold = false) }
+                Intent.ACTION_USER_PRESENT -> if (arrivalOnUnlock && resumed) { arrivalOnUnlock = false; screen.removeCallbacks(unlockFallback); screen.playArrival(cold = false) }
             }
         }
     }
@@ -131,8 +131,17 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (!sleptSinceResume) return
         sleptSinceResume = false
         val locked = try { getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked } catch (_: Throwable) { false }
-        if (locked) arrivalOnUnlock = true else screen.playArrival(cold = false)
+        if (locked) {
+            // Under the lock screen: home takes the arrival's first frame now, so what the unlock reveals is already it,
+            // and it plays at the unlock (USER_PRESENT), or after 1.5 s should that never come.
+            screen.holdArrival()
+            arrivalOnUnlock = true
+            screen.removeCallbacks(unlockFallback)
+            screen.postDelayed(unlockFallback, 1500)
+        } else screen.playArrival(cold = false)
     }
+
+    private val unlockFallback = Runnable { if (arrivalOnUnlock && resumed) { arrivalOnUnlock = false; screen.playArrival(cold = false) } }
 
     override fun onResume() {
         super.onResume()
@@ -150,6 +159,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun onPause() {
         resumed = false
+        arrivalOnUnlock = false
+        screen.removeCallbacks(unlockFallback)
+        screen.releaseArrival()
         GestureNav.homeVisible = false
         if (screen.onHidden()) recordAfterSearchEnded()
         super.onPause()

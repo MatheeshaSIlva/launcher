@@ -45,6 +45,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     internal val tilesPane = TilesPane(ctx, this)
     internal val listPane = SearchList(ctx, m, iconPainter, { e, r -> launch(e, r, "list") }, { e, r -> isHidden(e, r) }, { haptic() }, { settled() }).apply {
         onLongPress = { e, r -> longPress(e, r, "list") }
+        drawGlass = { c, rect, radius -> drawGlass(c, tileGlass, rect, radius, this) }
     }
     internal val searchBar = SearchBar(ctx, this)
     internal val folder = FolderOverlay(ctx, this)
@@ -222,7 +223,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         if (Build.VERSION.SDK_INT < 33) return null
         return try {
             val d = resources.displayMetrics.density
-            dev.launcher.app.GlassDrawable(w, m.w, m.h, radius, m.u, d * 7f, dev.launcher.app.GlassStyle.IOS, dev.launcher.app.GlassDrawable.Source.BACKDROP)
+            dev.launcher.app.GlassDrawable(w, m.w, m.h, radius, m.u, d * 7f, dev.launcher.app.GlassStyle.IOS_LIBRARY, dev.launcher.app.GlassDrawable.Source.BACKDROP)
         } catch (t: Throwable) {
             dev.launcher.app.AppLog.log("[library] glass shader failed, plain tiles instead: ${t.javaClass.simpleName}: ${t.message}")
             null
@@ -254,12 +255,20 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     // ------------------------------------------------------------------ AppDrawer
 
     private var lastProgress = -1f
+    private var lastShift = Float.NaN
 
     override fun setOpenProgress(p: Float) {
         // While the library slides in or out the glass must keep refracting what is behind it where it is now (a translation
-        // alone does not redraw the tiles).
-        if (p != lastProgress && wallpaper != null) { tilesPane.invalidate(); searchBar.invalidate() }
+        // alone does not redraw the tiles). Also when the progress stays at 1 but the view still moves: the rubber band past
+        // the last page slid the tiles while their glass kept showing the old spot.
+        val shift = translationX + translationY
+        if ((p != lastProgress || shift != lastShift) && wallpaper != null) {
+            tilesPane.invalidate(); searchBar.invalidate()
+            if (folder.visibility == View.VISIBLE) folder.invalidate()
+            if (listPane.visibility == View.VISIBLE) listPane.invalidate()
+        }
         lastProgress = p
+        lastShift = shift
     }
 
     override fun onClosed() {

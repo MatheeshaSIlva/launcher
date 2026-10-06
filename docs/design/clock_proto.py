@@ -69,7 +69,7 @@ def render(wp, style, text='9:41'):
     frost = blur(wp, 18 * PT) if style.get('heavy') else blur(wp, 1.5 * PT)
     size = int(H * 0.94 * 1.05)
     mask = text_mask(W, H, text, size)
-    blur_px = size * 0.07
+    blur_px = size * 0.09
     hs = 0.5
     small = np.asarray(Image.fromarray((mask * 255).astype(np.uint8)).resize((int(W * hs), int(H * hs)))).astype(np.float32) / 255
     height = box_blur_alpha(small, max(1, int(round(blur_px * hs))))
@@ -102,7 +102,7 @@ def render(wp, style, text='9:41'):
 
     col = saturate(look(offx, offy), style['saturation'])
     col = col + (1 - col) * (style['tint'] * (1 - bright))[..., None]
-    col = col * (1 - 0.22 * bright)[..., None]
+    col = col * (1 - 0.3 * bright)[..., None]
     inside = np.maximum(hfull - 0.5, 0) * 2 * blur_px
     # lightGlass
     ldir = np.array([np.cos(np.radians(225)), np.sin(np.radians(225))])
@@ -123,8 +123,8 @@ def render(wp, style, text='9:41'):
 
 OLD = dict(refraction=20, dispersion=0.12, frost=1.0, saturation=1.15, tint=0.12, glowWidth=8, glow=0.22, shade=0,
            rimWidth=1.6, rimBase=0.25, rimLight=0.45, rimBack=0.26, edgeDark=0, edgeWidth=1, specPower=1.2, adapt=1)
-NEW = dict(refraction=30, dispersion=0.3, frost=0.82, saturation=1.3, tint=0.1, glowWidth=6, glow=0, shade=0.3,
-           rimWidth=1.4, rimBase=0.12, rimLight=0.6, rimBack=0.22, edgeDark=0.32, edgeWidth=1.8, specPower=1.8, adapt=1, heavy=True)
+NEW = dict(refraction=34, dispersion=0.25, frost=0.6, saturation=1.25, tint=0.2, glowWidth=4, glow=0.08, shade=0.35,
+           rimWidth=1.6, rimBase=0.14, rimLight=0.7, rimBack=0.25, edgeDark=0.25, edgeWidth=1.6, specPower=1.6, adapt=1, heavy=True)
 
 rows = []
 for kind in ['dark', 'light']:

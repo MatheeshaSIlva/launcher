@@ -68,16 +68,26 @@ data class GlassStyle(
             edgeDark = 0.16f, edgeWidth = 1.6f, specPower = 1.8f)
 
         /**
-         * The lock-screen glass clock (iOS 26/27 "Glass"): the dock's material shaped like the digits, but thick: its body
-         * is the wallpaper seen through frosted glass (the heavy blur, [Source.FROSTED], mostly) so the numerals read over
-         * any wallpaper, with the sharp wallpaper bent along the strokes by a deep lens, a darkening on the side away from
-         * the light (thickness), a darkened edge and the dock's crisp corner-gathered highlights, and a soft shadow
-         * underneath. No inner glow and barely any white (an earlier white-lit version read as frosted highlights); a
-         * clear version was barely visible on the S24. Adapts to a light wallpaper (darker body and edge).
+         * The lock-screen glass clock (iOS 26/27 "Glass", the slider at its default, between clear and frosted). What Apple
+         * describes for Liquid Glass and the lock screen time (WWDC25 "Meet Liquid Glass"): the material defines itself by
+         * lensing at its edges, concentrates light rather than scattering it, its tint is a range of tones mapped to the
+         * brightness behind it, highlights respond to a light that moves on unlock, and large elements cast deeper shadows
+         * with more pronounced lensing. So: a semi-frosted body ([Source.FROSTED], the sharp wallpaper and its heavy blur
+         * mixed 40/60) lifted towards white over dark wallpaper and darkened over light ones (adapt), a deep lens along the
+         * strokes, a slight concentration of light just inside the edge, thickness shade away from the light, the dock's
+         * edge and corner-gathered highlights (brighter here: thick glass), and a soft shadow. The light sweeps around the
+         * numerals as home arrives ([setLightAngle]).
          */
-        val IOS_CLOCK = IOS.copy(frost = 0.82f, refraction = 30f, dispersion = 0.3f, magnify = 0f, saturation = 1.3f, tint = 0.1f,
-            glowWidth = 6f, glow = 0f, shade = 0.3f, rimWidth = 1.4f, rimBase = 0.12f, rimLight = 0.6f, rimBack = 0.22f,
-            edgeDark = 0.32f, edgeWidth = 1.8f, specPower = 1.8f, adapt = 1f)
+        val IOS_CLOCK = IOS.copy(frost = 0.6f, refraction = 34f, dispersion = 0.25f, magnify = 0f, saturation = 1.25f, tint = 0.2f,
+            glowWidth = 4f, glow = 0.08f, shade = 0.35f, rimWidth = 1.6f, rimBase = 0.14f, rimLight = 0.7f, rimBack = 0.25f,
+            edgeDark = 0.25f, edgeWidth = 1.6f, specPower = 1.6f, adapt = 1f)
+
+        /**
+         * Glass over a heavily blurred backdrop (App Library tiles, search field, folders, Spotlight's cards, the widget
+         * gallery's buttons): behind it there is nothing sharp to bend, so the lens is wider and bends further, and the
+         * dispersion is stronger, for the bend to read at all. Same light as the dock.
+         */
+        val IOS_LIBRARY = IOS.copy(bevel = 26f, refraction = 70f, dispersion = 0.5f, magnify = 0.07f)
     }
 }
 
@@ -168,6 +178,13 @@ class GlassDrawable(
 
     /** Corner radius in px (a folder panel's corners animate). Rounded rectangles only. */
     fun setRadius(r: Float) { if (!masked) shader.setFloatUniform("radius", r) }
+
+    /** Where the light comes from (degrees; 225 = top left, the rest position). Moved while home arrives: the highlights travel. */
+    fun setLightAngle(deg: Float) {
+        val a = Math.toRadians(deg.toDouble())
+        shader.setFloatUniform("lightDir", kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
+        invalidateSelf()
+    }
 
     /** A new shape for a masked glass (the clock's next minute). */
     fun setMask(m: GlassMask) {
@@ -464,8 +481,8 @@ half4 main(float2 coord) {
     float2 off = n * steep * refraction - (coord - size * 0.5) * magnify;
     half3 col = saturate3(look(sp, off), half(saturation));
     col = mix(col, half3(1.0), half(tint * (1.0 - bright)));
-    // Over a light backdrop the body darkens a little (readable), as iOS glass does.
-    col *= half(1.0 - 0.22 * bright);
+    // Over a light backdrop the body darkens (readable), as iOS glass does: its tones follow what is behind.
+    col *= half(1.0 - 0.3 * bright);
     // Distance from the edge, from the height (it rises over about blurPx).
     float inside = max(h - 0.5, 0.0) * 2.0 * blurPx;
     col = lightGlass(col, inside, n);

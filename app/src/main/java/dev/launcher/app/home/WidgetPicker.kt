@@ -225,6 +225,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         previews.clear()
         previewShownAt.clear()
         clockGlass = null
+        sheetGlass = null
         // The preview layouts added as children go; the field stays.
         for (i in childCount - 1 downTo 0) { val c = getChildAt(i); if (c !== edit) removeViewAt(i) }
         host.pickerProgress(0f)
@@ -352,17 +353,23 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         r.set(m.w / 2f - m.pt(18f), m.pt(7f), m.w / 2f + m.pt(18f), m.pt(12f))
         c.drawRoundRect(r, m.pt(2.5f), m.pt(2.5f), grabber)
         val p = push.value.coerceIn(0f, 1f)
-        // iOS navigation: the pushed page slides in from the right edge, the list moves a third of the way left and fades.
-        if (p < 1f) {
+        // iOS navigation: the pushed page slides in from the right edge while the list moves a third of the way left. The
+        // pages are glass, not opaque: the list fades all the way out under the incoming page (it used to keep 30 % and
+        // vanish the moment the push ended) and the page's content fades in as it arrives.
+        val listA = 1f - smooth((p / 0.8f).coerceIn(0f, 1f))
+        if (listA > 0f) {
             c.save()
             c.translate(-p * m.w * 0.3f, 0f)
-            drawList(c, (255 * (1f - p * 0.7f)).toInt())
+            drawList(c, (255 * listA).toInt())
             c.restore()
         }
-        if (p > 0f) {
+        val pageA = smooth(((p - 0.1f) / 0.6f).coerceIn(0f, 1f))
+        if (pageA > 0f) {
             c.save()
             c.translate((1f - p) * m.w, 0f)
+            val layer = if (pageA < 1f) c.saveLayerAlpha(0f, 0f, m.w.toFloat(), m.h.toFloat(), (255 * pageA).toInt()) else -1
             drawAppPage(c)
+            if (layer >= 0) c.restoreToCount(layer)
             c.restore()
         }
         c.restore()
@@ -376,15 +383,50 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         return previewShownAt.values.any { now - it < PREVIEW_FADE_MS }
     }
 
+    // The sheet's buttons and cards: the dock's glass, bending the blurred wallpaper (what the sheet shows, near enough),
+    // darkened a little for the white text on them. Built once the sheet is open; without a wallpaper copy, plain fills.
+    private var sheetGlass: GlassDrawable? = null
+    private val glassTint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x30000000 }
+
+    private fun sheetGlass(): GlassDrawable? {
+        sheetGlass?.let { return it }
+        val wp = host.wallpaper() ?: return null
+        if (android.os.Build.VERSION.SDK_INT < 33) return null
+        return try {
+            GlassDrawable(wp, m.w, m.h, m.pt(18f), m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_LIBRARY,
+                GlassDrawable.Source.BACKDROP).also { sheetGlass = it }
+        } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] sheet glass failed: ${t.message}"); null }
+    }
+
+    /**
+     * A glass shape at [rect] (canvas coordinates; [dy] = the canvas's y offset from the screen) with corner [radius],
+     * [down] 0..1 pressed (a little darker). Falls back to a translucent fill.
+     */
+    private fun glassShape(c: Canvas, rect: RectF, radius: Float, dy: Float, down: Float = 0f, fallback: Paint = capsule, fallbackAlpha: Int = 0x26) {
+        val g = sheetGlass()
+        if (g == null || !c.isHardwareAccelerated) {
+            fallback.alpha = (fallbackAlpha + 0x27 * down).toInt()
+            c.drawRoundRect(rect, radius, radius, fallback)
+            capsuleRim.alpha = 0x33
+            c.drawRoundRect(rect, radius, radius, capsuleRim)
+            return
+        }
+        g.setRadius(radius)
+        g.originX = rect.left
+        g.originY = rect.top + dy
+        g.setBounds(rect.left.toInt(), rect.top.toInt(), kotlin.math.ceil(rect.right).toInt(), kotlin.math.ceil(rect.bottom).toInt())
+        g.draw(c)
+        glassTint.alpha = (0x30 + 0x30 * down).toInt()
+        c.drawRoundRect(rect, radius, radius, glassTint)
+    }
+
     private fun drawCircleButton(c: Canvas, cx: Float, cy: Float, key: String) {
         val rr = m.pt(18f)
         val down = if (pressed == key) pressK.value.coerceIn(0f, 1f) else 0f
         c.save()
         c.scale(1f - 0.08f * down, 1f - 0.08f * down, cx, cy)
-        capsule.alpha = (0x26 + 0x27 * down).toInt()
-        c.drawCircle(cx, cy, rr, capsule)
-        capsuleRim.alpha = 0x33
-        c.drawCircle(cx, cy, rr - capsuleRim.strokeWidth / 2f, capsuleRim)
+        r.set(cx - rr, cy - rr, cx + rr, cy + rr)
+        glassShape(c, r, rr, sheetY(), down)
         c.restore()
     }
 
@@ -400,7 +442,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         c.drawLine(bx - q, by + q, bx + q, by - q, glyph)
         // The search field's capsule (the text itself is the field laid over it).
         r.set(m.libMargin, headerH, m.w - m.libMargin, headerH + fieldH)
-        c.drawRoundRect(r, fieldH / 2f, fieldH / 2f, fieldFill)
+        glassShape(c, r, fieldH / 2f, sheetY(), fallback = fieldFill, fallbackAlpha = 0x1F)
         val lx = m.libMargin + m.pt(18f)
         val ly = headerH + fieldH / 2f - m.pt(1f)
         val lr = m.pt(6f)
@@ -419,9 +461,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             val down = if (pressed == "clock") pressK.value.coerceIn(0f, 1f) else 0f
             c.save()
             c.scale(1f - 0.03f * down, 1f - 0.03f * down, r.centerX(), r.centerY())
-            cardFill.alpha = (0x1F + 0x21 * down).toInt()
-            c.drawRoundRect(r, m.widgetRadius, m.widgetRadius, cardFill)
-            c.drawRoundRect(r, m.widgetRadius, m.widgetRadius, cardRim)
+            glassShape(c, r, m.widgetRadius, listTop - list.position + sheetY(), down, cardFill, 0x1F)
             drawClockPreview(c, r, listTop - list.position + sheetY())
             c.restore()
             sub.draw(c, "clock", "Clock", m.w / 2f, r.bottom + m.pt(26f), m.w * 0.6f)
@@ -574,10 +614,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val down = if (pressed == "add") pressK.value.coerceIn(0f, 1f) else 0f
         c.save()
         c.scale(1f - 0.04f * down, 1f - 0.04f * down, addButton.centerX(), addButton.centerY())
-        capsule.alpha = (0x2E + 0x1F * down).toInt()
-        c.drawRoundRect(addButton, bh / 2f, bh / 2f, capsule)
-        capsuleRim.alpha = 0x40
-        c.drawRoundRect(addButton, bh / 2f, bh / 2f, capsuleRim)
+        glassShape(c, addButton, bh / 2f, sheetY(), down, capsule, 0x2E)
         val tw = buttonText.paint.measureText("Add Widget")
         val pcx = addButton.centerX() - tw / 2f - m.pt(14f)
         val pk = m.pt(6f)
@@ -591,11 +628,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
 
     private fun drawEntryCard(c: Canvas, e: Entry, box: RectF, s: Float) {
         val rad = m.widgetRadius * s
-        // A soft shadow lifts the card off the sheet.
+        // A soft shadow lifts the card off the sheet; the card itself is glass.
         c.drawRoundRect(box.left + m.pt(6f), box.top + m.pt(14f), box.right - m.pt(6f), box.bottom + m.pt(10f), rad, rad, cardShadow)
-        cardFill.alpha = 0x1F
-        c.drawRoundRect(box, rad, rad, cardFill)
-        c.drawRoundRect(box, rad, rad, cardRim)
+        glassShape(c, box, rad, sheetY(), 0f, cardFill, 0x1F)
         val info = e.info
         if (info == null) { drawClockPreview(c, box, sheetY()); return }
         val pv = previews[info]
@@ -791,6 +826,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         super.onLayout(changed, left, top, right, bottom)
         placeField()
     }
+
+    private fun smooth(t: Float) = t * t * (3f - 2f * t)
 
     private companion object {
         const val ROW_STAGGER_MS = 28L

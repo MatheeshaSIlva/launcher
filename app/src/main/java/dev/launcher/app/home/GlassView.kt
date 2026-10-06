@@ -52,6 +52,16 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
     /** The glass keeps sampling [w] without being rebuilt (end of a wallpaper reveal). */
     fun adoptWallpaper(w: Wallpaper) { wallpaper = w }
 
+    private var lightAngle = 225f
+
+    /** Where the light comes from (225 = top left, at rest); the highlights move with it. */
+    fun setLightAngle(deg: Float) {
+        if (deg == lightAngle) return
+        lightAngle = deg
+        glass?.setLightAngle(deg)
+        invalidate()
+    }
+
     private fun rebuild() {
         val w = wallpaper
         glass = if (w != null && Build.VERSION.SDK_INT >= 33 && screenW > 0) {
@@ -67,6 +77,7 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
         // The reveal drives the glass through invalidateSelf(): that reaches this view only with the callback set (without it
         // the dock and indicator showed the new wallpaper only after the reveal had ended).
         glass?.callback = this
+        if (lightAngle != 225f) glass?.setLightAngle(lightAngle)
         invalidate()
     }
 
