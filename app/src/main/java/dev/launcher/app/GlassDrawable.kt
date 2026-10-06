@@ -93,6 +93,24 @@ data class GlassStyle(
 }
 
 /**
+ * Home's depth zoom as glass on the wallpaper sees it ([HomeScreen.applyDepth]): home's content zooms by more than the
+ * wallpaper, so the wallpaper behind a glass surface is at [cx], [cy] + (its place - centre) x [k] (k = content zoom /
+ * wallpaper zoom; 1 at rest). Main thread.
+ */
+object GlassDepth {
+    var k = 1f
+    var cx = 0f
+    var cy = 0f
+
+    /** Runs [block] with home at rest (recording a picture of home: it is shown zoomed by gesture nav as a whole). */
+    fun <T> atRest(block: () -> T): T {
+        val saved = k
+        k = 1f
+        try { return block() } finally { k = saved }
+    }
+}
+
+/**
  * A glass shape given as a picture instead of a rounded rectangle (the glass clock's numerals). [mask] is the shape's
  * coverage at the drawable's size (anti-aliased edges). [sdf] is its signed distance field at [sdfScale] of that size:
  * alpha 0.5 on the edge, rising inside, falling outside, by 0.5 per [rangePx] (px of the drawable). The glass is the
@@ -141,6 +159,14 @@ class GlassDrawable(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     var originX = 0f
     var originY = 0f
+
+    /** What the glass is part of, for its look in light and dark mode ([Appearance]). */
+    enum class Role { HOME, MATERIAL, SHEET, CLOCK }
+    var role: Role = when {
+        mask != null -> Role.CLOCK
+        source == Source.BACKDROP -> Role.MATERIAL
+        else -> Role.HOME
+    }
     /** How much the glass is scaled on screen (a view blooming in, home's depth zoom): its samples spread by as much. */
     var scale = 1f
 
@@ -238,10 +264,49 @@ class GlassDrawable(
         shader.setFloatUniform("size", b.width().toFloat(), b.height().toFloat())
         shader.setFloatUniform("dockOrigin", originX, originY)
         shader.setFloatUniform("placeScale", scale)
+        // Only glass on the wallpaper inside home's zoom sees the parallax (the library's glass sees its own backdrop,
+        // which zooms with it).
+        val k = if (role == Role.HOME || role == Role.CLOCK) GlassDepth.k else 1f
+        if (k != depthKAt || GlassDepth.cx != depthCxAt || GlassDepth.cy != depthCyAt) {
+            depthKAt = k; depthCxAt = GlassDepth.cx; depthCyAt = GlassDepth.cy
+            shader.setFloatUniform("depthC", GlassDepth.cx, GlassDepth.cy)
+            shader.setFloatUniform("depthK", k)
+        }
+        applyAppearance()
         canvas.save()
         canvas.translate(b.left.toFloat(), b.top.toFloat())
         canvas.drawRect(0f, 0f, b.width().toFloat(), b.height().toFloat(), paint)
         canvas.restore()
+    }
+
+    private var depthKAt = Float.NaN
+    private var depthCxAt = Float.NaN
+    private var depthCyAt = Float.NaN
+
+    // The veil and tint for the current appearance (read at every draw: a change crossfades on the same frames as the rest).
+    private var veilAt = Int.MIN_VALUE
+    private var tintAt = Int.MIN_VALUE
+
+    private fun applyAppearance() {
+        val a = dev.launcher.app.theme.Appearance
+        val dim = (a.wallpaperDim * 255).toInt() shl 24   // black at the wallpaper's dim
+        val veil = when (role) {
+            Role.HOME, Role.CLOCK -> dim
+            Role.MATERIAL -> a.backdropVeil
+            Role.SHEET -> a.sheetVeil
+        }
+        val tint = when (role) {
+            Role.HOME -> a.homeGlassTint
+            Role.MATERIAL, Role.SHEET -> a.materialGlassTint
+            Role.CLOCK -> 0
+        }
+        if (veil != veilAt) { veilAt = veil; setColorUniform("veil", veil) }
+        // (The clock's shader does not use a theme tint: an unused uniform may be compiled out and could not be set.)
+        if (role != Role.CLOCK && tint != tintAt) { tintAt = tint; setColorUniform("themeTint", tint) }
+    }
+
+    private fun setColorUniform(name: String, argb: Int) {
+        shader.setFloatUniform(name, ((argb shr 16) and 0xFF) / 255f, ((argb shr 8) and 0xFF) / 255f, (argb and 0xFF) / 255f, ((argb ushr 24) and 0xFF) / 255f)
     }
 
     override fun setAlpha(alpha: Int) { paint.alpha = alpha }
@@ -324,6 +389,14 @@ uniform float maxDist;
 uniform float cell;
 uniform float progress;
 uniform float time;
+// The appearance (light / dark): a veil laid over what the glass sees (dark mode's wallpaper dim, the library's light or dark
+// veil: the glass sees what is really behind it), and the glass's own tint (rgb, a = amount).
+uniform half4 veil;
+uniform half4 themeTint;
+// Home's depth (zoomed while an app opens or closes): what is behind the glass is the wallpaper zoomed less than the glass
+// itself, so the glass samples about [depthC] scaled by [depthK] (1 at rest).
+uniform float2 depthC;
+uniform float depthK;
 """
 
         // [bend] 0 = the glass's flat body (no rim bend): there the colours would part by a few px of an already blurred
@@ -425,11 +498,13 @@ half4 main(float2 coord) {
     float t = clamp(-d / bv, 0.0, 1.0);
     float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
 
-    float2 sp = dockOrigin + coord * placeScale;
+    float2 sp = depthC + (dockOrigin + coord * placeScale - depthC) * depthK;
     // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
     float2 off = n * bend * rf - p * magnify;
     half3 col = saturate3(look(sp, off, bend), half(saturation));
+    col = mix(col, veil.rgb, veil.a);
     col = mix(col, half3(1.0), half(tint));
+    col = mix(col, themeTint.rgb, themeTint.a);
     col = lightGlass(col, max(-d, 0.0), n);
 
     float a = clamp(0.5 - d, 0.0, 1.0);
@@ -462,11 +537,13 @@ half4 main(float2 coord) {
     float t = clamp(-d / bv, 0.0, 1.0);
     float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
 
-    float2 sp = dockOrigin + coord * placeScale;
+    float2 sp = depthC + (dockOrigin + coord * placeScale - depthC) * depthK;
     // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
     float2 off = n * bend * rf - p * magnify;
     half3 col = saturate3(look(sp, off, bend), half(saturation));
+    col = mix(col, veil.rgb, veil.a);
     col = mix(col, half3(1.0), half(tint));
+    col = mix(col, themeTint.rgb, themeTint.a);
     col = lightGlass(col, max(-d, 0.0), n);
 
     float a = clamp(0.5 - d, 0.0, 1.0);
@@ -491,7 +568,7 @@ float sd(float2 c) { return (sdf.eval(c * sdfScale).a - 0.5) * 2.0 * rangePx; }
 
 // How light the backdrop is here (0 = dark .. 1 = light).
 float brightAt(float2 sp) {
-    float l = dot(float3(look(sp, float2(0.0), 0.0)), float3(0.2126, 0.7152, 0.0722));
+    float l = dot(float3(mix(look(sp, float2(0.0), 0.0), veil.rgb, veil.a)), float3(0.2126, 0.7152, 0.0722));
     return smoothstep(0.45, 0.85, l) * adapt;
 }
 
@@ -500,7 +577,7 @@ half4 main(float2 coord) {
     // A soft shadow a little below the shape (from the same distance field).
     float ds = sd(coord - float2(0.0, shadowDy));
     if (a < 0.003 && ds < -shadowR) return half4(0.0);
-    float2 sp = dockOrigin + coord * placeScale;
+    float2 sp = depthC + (dockOrigin + coord * placeScale - depthC) * depthK;
     float bright = brightAt(sp);
     float sh = 1.0 - clamp(-ds / shadowR, 0.0, 1.0);
     half4 shadow = half4(0.0, 0.0, 0.0, half(shadowAlpha * (1.0 + 0.8 * bright) * sh * sh));
@@ -520,6 +597,7 @@ half4 main(float2 coord) {
     float rf = refraction * min(1.0, bevelPx / bevelRef);
     float2 off = n * bend * rf - (coord - size * 0.5) * magnify;
     half3 col = saturate3(look(sp, off, bend), half(saturation));
+    col = mix(col, veil.rgb, veil.a);
     // Tinted glass: lifted towards white over a dark backdrop, darker over a light one (its tones follow what is behind).
     col = mix(col, half3(1.0), half(tint * (1.0 - bright)));
     col *= half(1.0 - 0.3 * bright);

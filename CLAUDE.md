@@ -101,6 +101,10 @@ copy it wholesale — port the working pieces cleanly. File map:
   the effect's input is cut there and the edges break. Use `GlassDrawable` (samples our wallpaper copy) for anything clipped.
 - **Text-shaped glass needs a distance field, not a blurred mask**: a blur wide enough for a lens turns a whole thin stroke
   into "edge". Judge glass offline only with the app's own pipeline at the device's real size (`docs/design/clock_proto.py`).
+- **Glass and transforms**: a glass surface's uniforms are recorded into its display list; a parent moving it does not redraw
+  it. GlassView re-checks its real place before every frame. Never count a transform of a view drawn through a GPU layer
+  (home's depth zoom of `fg`, tagged `glass_root`): the layer scales the glass again (e9401f1 showed the wrong wallpaper in the
+  dock after every close). Contact sheets at 1/3 size hide thin glass rims: judge glass at full resolution.
 - **Touchable region of an overlay** (`rootSurfaceControl.setTouchableRegion`, API 34): set it from the view's attach
   callback (before that it is dropped), and never as an empty Region (not sent: the whole window stays touchable); use an
   off-screen pixel for "nowhere".

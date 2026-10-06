@@ -61,6 +61,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         @Suppress("DEPRECATION") super.onActivityResult(requestCode, resultCode, data)
     }
     private val onApps: () -> Unit = { appsChanged() }
+    private var testRecord: BroadcastReceiver? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,6 +85,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         screen.viewTreeObserver.addOnDrawListener(drawWatch)
         HomeBridge.home = this
         Apps.addListener(onApps)
+        dev.launcher.app.theme.Appearance.addListener(onAppearance)
         if (Apps.loaded) appsChanged()
         // For the whole life of home, not only while it is in front: the picture of home shown during launch and close
         // animations must show the current time even after an app has been open for a while.
@@ -94,28 +96,59 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             @Suppress("DEPRECATION") addAction(Intent.ACTION_WALLPAPER_CHANGED)
         })
         try { android.app.WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperColors, android.os.Handler(mainLooper)) } catch (_: Throwable) { }
-        registerReceiver(screenState, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) })
+        // Debug (adb only): renders the picture of home gesture nav would show into files/home_picture.png.
+        //   adb shell am broadcast -a dev.launcher.app.TEST_RECORD -p dev.launcher.app
+        testRecord = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                val p = record() ?: return
+                val pic = Picture()
+                val cv = pic.beginRecording(screen.width, screen.height)
+                p.wallpaper?.let { cv.drawPicture(it) }
+                cv.drawPicture(p.content)
+                pic.endRecording()
+                val b = android.graphics.Bitmap.createBitmap(pic, screen.width, screen.height, android.graphics.Bitmap.Config.ARGB_8888)
+                java.io.File(filesDir, "home_picture.png").outputStream().use { b.copy(android.graphics.Bitmap.Config.ARGB_8888, false).compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                AppLog.log("[home] test: picture of home written")
+            }
+        }
+        // Senders must hold DUMP: adb's shell does, other apps cannot.
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(testRecord!!, IntentFilter("dev.launcher.app.TEST_RECORD"), Manifest.permission.DUMP, null, RECEIVER_EXPORTED)
+        else registerReceiver(testRecord!!, IntentFilter("dev.launcher.app.TEST_RECORD"), Manifest.permission.DUMP, null)
+        registerReceiver(screenState, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_USER_PRESENT) })
         Watchdog.start(this)
         if (!SafetyNotification.canPost(this)) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
+
+    // Dark mode switched (Quick Settings, a schedule): home is not recreated (the manifest keeps uiMode), it crossfades.
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        dev.launcher.app.theme.Appearance.onConfiguration(newConfig)
+    }
+
+    // The status bar's content over home follows what is under it (see HomeScreen.updateStatusDark).
+    private val onAppearance: () -> Unit = { updateStatusDark() }
+
+    private fun updateStatusDark() = screen.updateStatusDark()
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         if (SafetyNotification.canPost(this)) SafetyNotification.show(this)
     }
 
     // Home arrives animated after the screen was off (unlock) and on a cold start (boot, an update, a crash): see
-    // HomeScreen.playArrival. After a screen-off the arrival waits for the unlock (USER_PRESENT) when there is a lock screen,
-    // so it is seen, not played under the keyguard.
+    // HomeScreen.playArrival. "Due" is set when home was in front as the screen went off; it is used up only when the arrival
+    // is actually seen: the screen on and the keyguard gone. Until then home holds the arrival's first frame (items hidden,
+    // nothing visible while the screen is off or the lock screen covers home). One UI resumes home for a moment while the
+    // screen is going off, before the keyguard locks: an arrival started then played in the dark and the unlock showed
+    // home static.
     private var coldStart = true
-    private var sleptSinceResume = false
-    private var arrivalOnUnlock = false
+    private var arrivalDue = false
     private val screenState = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 // Only when home was in front as the screen went off: if an app was, the unlock goes back to that app, and
-                // an arrival must not play later when home comes back from it.
-                Intent.ACTION_SCREEN_OFF -> { if (resumed) sleptSinceResume = true; arrivalOnUnlock = false }
-                Intent.ACTION_USER_PRESENT -> if (arrivalOnUnlock && resumed) { arrivalOnUnlock = false; screen.removeCallbacks(unlockFallback); screen.playArrival(cold = false) }
+                // an arrival must not play later when home comes back from it. (onPause marks it too: it can come first.)
+                Intent.ACTION_SCREEN_OFF -> if (resumed && !arrivalDue) { arrivalDue = true; AppLog.log("[home] arrival due: the screen went off with home in front") }
+                Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> arriveIfDue()
             }
         }
     }
@@ -124,28 +157,31 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private var coldArrivalPending = false
     private val coldArrival = Runnable { if (coldArrivalPending) { coldArrivalPending = false; screen.playArrival(cold = true) } }
 
+    private fun screenOn() = try { getSystemService(android.os.PowerManager::class.java).isInteractive } catch (_: Throwable) { true }
+    private fun keyguardUp() = try { getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked } catch (_: Throwable) { false }
+
     private fun arriveIfDue() {
+        screen.removeCallbacks(unlockCheck)
         if (coldStart) {
             coldStart = false
-            sleptSinceResume = false
+            arrivalDue = false
             coldArrivalPending = true
             screen.postDelayed(coldArrival, 500)
             return
         }
-        if (!sleptSinceResume) return
-        sleptSinceResume = false
-        val locked = try { getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked } catch (_: Throwable) { false }
-        if (locked) {
-            // Under the lock screen: home takes the arrival's first frame now, so what the unlock reveals is already it,
-            // and it plays at the unlock (USER_PRESENT), or after 1.5 s should that never come.
+        if (!arrivalDue || !resumed) return
+        if (!screenOn() || keyguardUp()) {
+            // Not seen yet: hold the first frame, and look again shortly while the screen is on (USER_PRESENT does not come
+            // for every kind of unlock).
             screen.holdArrival()
-            arrivalOnUnlock = true
-            screen.removeCallbacks(unlockFallback)
-            screen.postDelayed(unlockFallback, 1500)
-        } else screen.playArrival(cold = false)
+            if (screenOn()) screen.postDelayed(unlockCheck, 250)
+            return
+        }
+        arrivalDue = false
+        screen.playArrival(cold = false)
     }
 
-    private val unlockFallback = Runnable { if (arrivalOnUnlock && resumed) { arrivalOnUnlock = false; screen.playArrival(cold = false) } }
+    private val unlockCheck = Runnable { arriveIfDue() }
 
     override fun onResume() {
         super.onResume()
@@ -163,14 +199,17 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun onPause() {
         // Paused because the screen went off (the broadcast may come after this): home was in front, the arrival is due.
-        val interactive = try { getSystemService(android.os.PowerManager::class.java).isInteractive } catch (_: Throwable) { true }
-        if (!interactive) sleptSinceResume = true
+        val sleeping = !screenOn()
+        if (sleeping && !arrivalDue) { arrivalDue = true; AppLog.log("[home] arrival due: the screen went off with home in front") }
         resumed = false
-        arrivalOnUnlock = false
-        screen.removeCallbacks(unlockFallback)
-        screen.releaseArrival()
+        screen.removeCallbacks(unlockCheck)
         GestureNav.homeVisible = false
         if (screen.onHidden()) recordAfterSearchEnded()
+        // Going to sleep: home already takes the arrival's first frame (items hidden, unseen with the screen off), so the
+        // first frame the unlock reveals is it, whenever home resumes (before or after the keyguard goes). After onHidden:
+        // Spotlight or a menu has closed by then, and pictures of home are recorded with every item shown. Leaving home for
+        // an app lets a held arrival go.
+        if (sleeping) screen.holdArrival() else screen.releaseArrival()
         super.onPause()
     }
 
@@ -182,8 +221,10 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun onDestroy() {
         Apps.removeListener(onApps)
+        dev.launcher.app.theme.Appearance.removeListener(onAppearance)
         try { unregisterReceiver(tick) } catch (_: Throwable) { }
         try { unregisterReceiver(screenState) } catch (_: Throwable) { }
+        testRecord?.let { try { unregisterReceiver(it) } catch (_: Throwable) { } }
         try { android.app.WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperColors) } catch (_: Throwable) { }
         if (HomeBridge.home === this) HomeBridge.home = null
         super.onDestroy()
@@ -363,26 +404,29 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     // The wallpaper's picture changes only with the wallpaper (or the screen size). Recorded anew at every record(), it was a
     // new picture each time, and gesture nav re-rendered its layers (sharp and blurred) at every launch for nothing.
     private var wallpaperPicture: Picture? = null
-    private var wallpaperPictureKey: Triple<Wallpaper?, Int, Int>? = null
+    private var wallpaperPictureKey: List<Any?>? = null
 
     /**
      * Home as a picture, or null if recording failed (the last picture stays in use; never a crash: a view drawn in software
      * inside the recording, e.g. one with a GPU layer, cannot run the glass shader).
      */
     private fun record(): HomePicture? = try {
-        recordNow()
+        // At rest: gesture nav zooms the picture as a whole (its glass must not carry home's current zoom).
+        GlassDepth.atRest { recordNow() }
     } catch (t: Throwable) {
         AppLog.log("[home] recording home failed (${t.javaClass.simpleName}: ${t.message}): the last picture stays")
         null
     }
 
     private fun recordNow(): HomePicture {
-        val key = Triple(wallpaper, screen.width, screen.height)
+        // Also keyed by the appearance (dark mode dims the wallpaper); not kept while either changes.
+        val key = listOf(wallpaper, screen.width, screen.height, dev.launcher.app.theme.Appearance.dark)
+        val stable = !screen.wallpaperView.transitioning && !dev.launcher.app.theme.Appearance.changing
         val wp = when {
             wallpaper == null -> null
-            !screen.wallpaperView.transitioning && key == wallpaperPictureKey -> wallpaperPicture
+            stable && key == wallpaperPictureKey -> wallpaperPicture
             else -> recordView(screen.wallpaperView, null).also {
-                if (!screen.wallpaperView.transitioning) { wallpaperPicture = it; wallpaperPictureKey = key }
+                if (stable) { wallpaperPicture = it; wallpaperPictureKey = key }
             }
         }
         // Without our wallpaper copy the system draws it, which we cannot record: the content layer gets a black ground.
@@ -444,7 +488,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             window.setBackgroundDrawable(ColorDrawable(Color.BLACK))
         }
         screen.setWallpaper(w)
-        HomeBridge.homeStatusDark = w != null && w.topLuminance > 0.62f
+        updateStatusDark()
         if (coldArrivalPending) { screen.removeCallbacks(coldArrival); coldArrival.run() }
         screen.postDelayed({ recordPreview() }, 100)
     }

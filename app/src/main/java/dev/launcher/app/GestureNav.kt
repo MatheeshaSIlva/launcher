@@ -320,6 +320,8 @@ object GestureNav {
         HomeBridge.onPreviewChanged = { p ->
             nav.post { if (phase == Phase.IDLE && root?.visibility != View.VISIBLE && homeVisible) backdrop?.prewarm(p) }
         }
+        // What is under the status bar on home changed (the App Library opened, the appearance changed): follow at once.
+        HomeBridge.onStatusDarkChanged = { nav.post { if (homeVisible) refreshAppearance() } }
         // The app in front is the one a close will fly into home: home keeps a picture without its icon ready.
         HomeBridge.likelyClosing = { if (homeVisible) null else lastFrontPkg }
     }
@@ -613,6 +615,8 @@ object GestureNav {
         r.addView(p, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         r.addView(n, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         r.addView(c, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // The current card's notification badge, above it and unclipped (it reaches past the icon's corner).
+        r.addView(CardBadgeView(ctx, c), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         // The App Switcher's deck: above the cards (it takes over the current one when it opens).
         val d = dev.launcher.app.switcher.DeckView(ctx, deckListener).apply { visibility = View.GONE }
         r.addView(d, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))

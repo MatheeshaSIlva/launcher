@@ -144,10 +144,55 @@ class CardView(context: Context) : View(context) {
         d.setBounds((cx - size / 2).roundToInt(), (cy - size / 2).roundToInt(), (cx + size / 2).roundToInt(), (cy + size / 2).roundToInt())
         d.alpha = alpha
         d.draw(canvas)
-        // The badge belongs to the icon on home: it fades in with the icon so it is there when the real icon takes over.
-        if (badge > 0 && alpha > 0 && size <= minIconSize * 1.6f) {
-            iconRect.set(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
-            dev.launcher.app.home.CountBadge.draw(canvas, iconRect, badge, unitPx * (size / minIconSize.coerceAtLeast(1f)).coerceIn(0.5f, 1f), alpha)
-        }
     }
+
+    /**
+     * The app's badge, as the card turns into its icon (it fades in with the icon so it is there when the real icon takes
+     * over). Drawn by [badgeLayer], a view above the card that is not clipped to the card's outline: the badge reaches past
+     * the icon's corner, and drawn here it was cut off at the card's edge during every launch and close.
+     */
+    fun drawBadge(canvas: Canvas) {
+        if (badge <= 0 || visibility != VISIBLE || alpha <= 0f || homePicture != null || icon == null) return
+        val full = min(w, h)
+        val size: Float
+        val a: Int
+        if (snapshot != null) {
+            if (iconMix <= 0f) return
+            size = full
+            a = (iconMix * 255).roundToInt()
+        } else {
+            val splash = max(minIconSize, full * 0.3f).coerceAtMost(full)
+            size = splash + (full - splash) * iconMix
+            a = 255
+        }
+        if (size > minIconSize * 1.6f) return
+        val alphaNow = (a * alpha).roundToInt()
+        if (alphaNow <= 0) return
+        iconRect.set(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
+        dev.launcher.app.home.CountBadge.draw(canvas, iconRect, badge, unitPx * (size / minIconSize.coerceAtLeast(1f)).coerceIn(0.5f, 1f), alphaNow)
+    }
+
+    /** The unclipped view above this card that draws its badge ([drawBadge]); redrawn whenever this card is. */
+    var badgeLayer: View? = null
+
+    override fun invalidate() {
+        super.invalidate()
+        badgeLayer?.invalidate()
+    }
+
+    override fun setAlpha(alpha: Float) {
+        super.setAlpha(alpha)
+        badgeLayer?.invalidate()
+    }
+
+    override fun setVisibility(visibility: Int) {
+        super.setVisibility(visibility)
+        badgeLayer?.invalidate()
+    }
+}
+
+/** Draws [card]'s badge outside the card's clip (see [CardView.drawBadge]). */
+class CardBadgeView(context: Context, private val card: CardView) : View(context) {
+    init { card.badgeLayer = this }
+    override fun onDraw(canvas: Canvas) = card.drawBadge(canvas)
 }

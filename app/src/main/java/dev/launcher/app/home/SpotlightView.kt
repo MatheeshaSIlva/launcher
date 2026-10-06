@@ -35,6 +35,7 @@ import dev.launcher.app.drawer.LabelPainter
 import dev.launcher.app.drawer.SearchList
 import dev.launcher.app.drawer.screenOffset
 import dev.launcher.app.motion.Motion
+import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.max
@@ -55,6 +56,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         fun spotlightSettled()
         /** A result was long-pressed at [iconOnScreen]: its menu, and a drag onto home if the finger moves on. */
         fun onSpotlightLongPress(e: AppEntry, iconOnScreen: RectF)
+        /** It moved (a frame of opening or closing): what is under the status bar may have changed. */
+        fun spotlightMoved() {}
     }
 
     private val icons = IconPainter(m.iconSize) { invalidate(); results.invalidate() }
@@ -66,8 +69,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.4f) })
     }
     private val dim = Paint()
-    private val header = LabelPainter(m.listHeaderText, 0xCCFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).shadowed(m.pt(2f))
-    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(450)).shadowed(m.pt(2f))
+    private val header = LabelPainter(m.listHeaderText, 0xCCFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).toned { Appearance.secondaryLabel }.shadowed(m.pt(2f))
+    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(450)).toned { Appearance.label }.shadowed(m.pt(2f))
     private var wallpaper: Wallpaper? = null
     private var glass: GlassDrawable? = null
     private var suggestions: List<AppEntry> = emptyList()
@@ -104,6 +107,15 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
             leftMargin = m.libMargin.roundToInt()
         })
         layoutField()
+        onAppearance()
+    }
+
+    /** The appearance changed (a frame of its crossfade). */
+    fun onAppearance() {
+        field.onAppearance()
+        field.frost.invalidate()
+        results.invalidate()
+        invalidate()
     }
 
     fun setWallpaper(w: Wallpaper?) {
@@ -136,7 +148,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
     /** The Top Hit card: the theme's glass, refracting the blurred background behind Spotlight. */
     private fun drawCard(c: Canvas, rect: RectF, rad: Float = m.pt(26f)) {
         val g = glass
-        if (g == null) { c.drawRoundRect(rect, rad, rad, cardFallback); return }
+        if (g == null) { cardFallback.color = Appearance.pressFill; c.drawRoundRect(rect, rad, rad, cardFallback); return }
         screenOffset(results, offset)
         g.setRadius(rad)
         g.originX = offset[0] + rect.left
@@ -154,7 +166,10 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         if (w != null) {
             backdropPaint.alpha = (255 * p).toInt()
             c.drawBitmap(w.heavy, w.heavyMatrix(m.w, m.h), backdropPaint)
-            dim.color = ((0x2E * p).toInt() shl 24)
+            // The App Library's material (the appearance's veil): the glass on it sees the same.
+            val veil = Appearance.backdropVeil
+            dim.color = veil
+            dim.alpha = (android.graphics.Color.alpha(veil) * p).toInt()
         } else dim.color = ((0x99 * p).toInt() shl 24)
         c.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), dim)
     }
@@ -267,6 +282,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         results.translationY = contentShift
         results.alpha = p * resultsShown
         invalidate()
+        host.spotlightMoved()
     }
 
     private fun setResultsShown(k: Float) {
@@ -410,7 +426,18 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         private val clearButton = ClearButton(ctx)
         private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND
-            setShadowLayer(m.pt(2f), 0f, m.pt(0.6f), 0x59000000)
+        }
+
+        /** The appearance's colours for the field's text, placeholder, magnifier and clear button. */
+        fun onAppearance() {
+            val shadow = ((0x59 * Appearance.textShadowStrength).toInt() shl 24)
+            glyph.color = Appearance.secondaryLabel
+            glyph.setShadowLayer(m.pt(2f), 0f, m.pt(0.6f), shadow)
+            edit.setTextColor(Appearance.label)
+            edit.setHintTextColor(Appearance.tertiaryLabel)
+            edit.setShadowLayer(m.pt(2f), 0f, m.pt(0.6f), shadow)
+            clearButton.invalidate()
+            invalidate()
         }
         private val lens = Path()
 
@@ -421,7 +448,6 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                 background = null
                 hint = "Search"
                 setHintTextColor(0xB3FFFFFF.toInt())
-                setShadowLayer(m.pt(2f), 0f, m.pt(0.6f), 0x59000000)
                 setTextColor(0xFFFFFFFF.toInt())
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
                 typeface = Fonts.text(400)
@@ -524,6 +550,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         }
 
         override fun onDraw(c: Canvas) {
+            disc.color = Appearance.mix(0x993C3C43.toInt(), 0xD9FFFFFF.toInt())
+            cross.color = Appearance.mix(0xFFFFFFFF.toInt(), 0xFF1C1C1E.toInt())
             val cx = width / 2f
             val cy = height / 2f
             val rr = m.pt(9f)

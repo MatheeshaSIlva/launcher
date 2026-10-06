@@ -77,10 +77,8 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         })
         cancel.apply {
             text = "Cancel"
-            setTextColor(0xFFFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
             typeface = dev.launcher.app.theme.Fonts.text(500)
-            setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), 0x66000000)
             gravity = Gravity.CENTER_VERTICAL or Gravity.END
             alpha = 0f
             visibility = View.GONE
@@ -94,6 +92,16 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         addView(folder, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         folder.visibility = View.GONE
         rebuild()
+        onAppearance()
+    }
+
+    override fun onAppearance() {
+        val a = dev.launcher.app.theme.Appearance
+        cancel.setTextColor(a.label)
+        cancel.setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), shadowFor(0x66000000))
+        searchBar.onAppearance()
+        invalidateAll()
+        searchBar.invalidate()
     }
 
     // ------------------------------------------------------------------ data
@@ -218,6 +226,9 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     internal var panelGlass: dev.launcher.app.GlassDrawable? = null
         private set
     private val glassFallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x2EFFFFFF }
+
+    /** A text shadow colour faded with the appearance (white text on the dark material has one, dark text none). */
+    internal fun shadowFor(color: Int): Int = ((android.graphics.Color.alpha(color) * dev.launcher.app.theme.Appearance.textShadowStrength).toInt() shl 24) or (color and 0xFFFFFF)
     private val offset = FloatArray(2)
 
     private fun makeGlass(w: dev.launcher.app.Wallpaper, radius: Float): dev.launcher.app.GlassDrawable? {
@@ -233,7 +244,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
 
     /** Draws a glass surface at [rect] (in [onView]'s coordinates); without our wallpaper copy, a plain translucent fill. */
     internal fun drawGlass(c: Canvas, g: dev.launcher.app.GlassDrawable?, rect: RectF, radius: Float, onView: View) {
-        if (g == null) { c.drawRoundRect(rect, radius, radius, glassFallback); return }
+        if (g == null) { glassFallback.color = dev.launcher.app.theme.Appearance.pressFill; c.drawRoundRect(rect, radius, radius, glassFallback); return }
         screenOffset(onView, offset)
         g.setRadius(radius)
         g.originX = offset[0] + rect.left
@@ -364,10 +375,19 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
 internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameLayout(ctx) {
     private val m = lib.m
 
-    // White over clear glass: a soft shadow keeps the magnifier and the hint readable over a light wallpaper.
+    // In the appearance's colours; white ones get a soft shadow (readable over a light wallpaper behind the dark material).
     private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND
-        setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), 0x66000000)
+    }
+
+    fun onAppearance() {
+        val a = dev.launcher.app.theme.Appearance
+        glyph.color = a.secondaryLabel
+        glyph.setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), lib.shadowFor(0x66000000))
+        edit.setTextColor(a.label)
+        edit.setHintTextColor(a.tertiaryLabel)
+        edit.setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), lib.shadowFor(0x66000000))
+        invalidate()
     }
     private val rect = RectF()
     private val lens = Path()
@@ -381,7 +401,6 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
             background = null
             hint = "App Library"
             setHintTextColor(0xCCFFFFFF.toInt())
-            setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), 0x66000000)
             setTextColor(0xFFFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
             typeface = dev.launcher.app.theme.Fonts.text(400)

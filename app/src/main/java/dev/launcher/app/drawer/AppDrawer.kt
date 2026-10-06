@@ -22,6 +22,12 @@ interface DrawerHost {
 
     /** [e] was long-pressed at [iconOnScreen]: its menu, and a drag onto home if the finger moves on. */
     fun onAppLongPress(e: AppEntry, iconOnScreen: RectF)
+
+    /**
+     * The drawer draws the whole background itself for now (an open folder covers the screen with the same material): the
+     * host can skip drawing its own underneath (a full-screen pass less per frame).
+     */
+    fun setBackgroundCovered(covered: Boolean) {}
 }
 
 /**
@@ -75,6 +81,9 @@ interface AppDrawer {
 
     /** Closes what lies on top of the drawer (an open folder), animated. True if there was something to close. */
     fun closeTop(): Boolean
+
+    /** The appearance changed (a frame of its crossfade): views that hold colours (text fields) take the new ones. */
+    fun onAppearance() {}
 }
 
 /** Where [v]'s top-left corner is on screen from layout positions and translations (scale ignored), cheap enough per frame. */

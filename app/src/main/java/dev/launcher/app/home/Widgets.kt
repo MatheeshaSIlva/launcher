@@ -59,6 +59,9 @@ class HomeWidgets(private val activity: Activity) {
     private class Pending(val id: Int, val info: AppWidgetProviderInfo, val size: WidgetSize, val done: (HomeItem.Widget?) -> Unit)
     private var pending: Pending? = null
 
+    /** A widget is being added (bind permission or its setup screen is up): home keeps edit mode meanwhile. */
+    val busy get() = pending != null
+
     fun start() { try { host.startListening() } catch (t: Throwable) { AppLog.log("[widgets] host start failed: ${t.message}") } }
     fun stop() { try { host.stopListening() } catch (_: Throwable) { } }
 
@@ -97,11 +100,8 @@ class HomeWidgets(private val activity: Activity) {
                 out += WidgetApp(label, pkg, user, icon, list)
             }
         }
-        // One row per app name and profile: a system app can come as two packages (Samsung's Calendar and its widget
-        // provider) that showed as two identical "Calendar" rows.
-        return out.groupBy { it.label.lowercase() to it.user }.values.map { same ->
-            if (same.size == 1) same[0] else same[0].let { f -> WidgetApp(f.label, f.pkg, f.user, f.icon, same.flatMap { it.widgets }) }
-        }.sortedBy { it.label.lowercase() }
+        // One row per app, also when two apps share a name (Google's and Samsung's Calendar): they are different apps.
+        return out.sortedBy { it.label.lowercase() }
     }
 
     /** The iOS sizes [info] can be shown at: those at least its minimum size, any of them if it can be resized. */
@@ -518,7 +518,11 @@ class AppWidgetFrame(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, val h
         pushSize()
     }
 
-    override fun onShownChanged() { card.invalidateOutline() }
+    override fun onShownChanged() {
+        card.invalidateOutline()
+        // The new content fades in as the old look fades out (a crossfade, not one image over the other).
+        card.alpha = contentK
+    }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)

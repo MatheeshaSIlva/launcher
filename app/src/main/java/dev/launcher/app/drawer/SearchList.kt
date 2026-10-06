@@ -16,6 +16,7 @@ import dev.launcher.app.apps.AppEntry
 import dev.launcher.app.home.HomeMetrics
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.max
@@ -99,11 +100,16 @@ internal class SearchList(
     private var animating = false
 
     // White text over the blurred wallpaper: a soft shadow keeps it readable where the wallpaper is light.
-    private val labels = LabelPainter(m.listText, 0xFFFFFFFF.toInt(), Paint.Align.LEFT).shadowed(m.pt(2f))
-    private val headers = LabelPainter(m.listHeaderText, 0xCCFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).shadowed(m.pt(2f))
-    private val index = LabelPainter(m.pt(11f), 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(600)).shadowed(m.pt(1.5f), 0x66000000)
-    private val bubbleText = LabelPainter(m.pt(24f), 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.display(600)).shadowed(m.pt(2f))
+    // Text in the appearance's colours (dark on the light material, white on the dark one, with a soft shadow there).
+    private val labels = LabelPainter(m.listText, 0xFFFFFFFF.toInt(), Paint.Align.LEFT).toned { Appearance.label }.shadowed(m.pt(2f))
+    private val headers = LabelPainter(m.listHeaderText, 0xCCFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).toned { Appearance.secondaryLabel }.shadowed(m.pt(2f))
+    private val index = LabelPainter(m.pt(11f), 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(600)).toned { Appearance.label }.shadowed(m.pt(1.5f), 0x66000000)
+    private val bubbleText = LabelPainter(m.pt(24f), 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.display(600)).toned { Appearance.label }.shadowed(m.pt(2f))
     private val separator = Paint().apply { color = 0x1FFFFFFF; strokeWidth = max(1f, m.pt(0.5f)) }
+
+    /** A separator line's paint at [k] of its strength (rows fading in and out). */
+    private fun sep(k: Float): Paint = separator.apply { val c = Appearance.separator; color = c; alpha = (android.graphics.Color.alpha(c) * k).toInt() }
+    private fun press(k: Float): Paint = PRESS.apply { val c = Appearance.pressFill; color = c; alpha = (android.graphics.Color.alpha(c) * k).toInt() }
     private val bubbleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFFFFF }
     private val bubbleRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x4DFFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(1f) }
     private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
@@ -376,9 +382,9 @@ internal class SearchList(
 
     private fun setPressed(e: AppEntry?) { if (pressed?.key != e?.key) { pressed = e; invalidate() } }
 
-    private val titles = LabelPainter(m.pt(15f), 0xE6FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).shadowed(m.pt(2f))
-    private val hitName = LabelPainter(m.pt(17f), 0xFFFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).shadowed(m.pt(2f))
-    private val hitSub = LabelPainter(m.pt(14.5f), 0xB3FFFFFF.toInt(), Paint.Align.LEFT).shadowed(m.pt(2f))
+    private val titles = LabelPainter(m.pt(15f), 0xE6FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).toned { Appearance.label }.shadowed(m.pt(2f))
+    private val hitName = LabelPainter(m.pt(17f), 0xFFFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).toned { Appearance.label }.shadowed(m.pt(2f))
+    private val hitSub = LabelPainter(m.pt(14.5f), 0xB3FFFFFF.toInt(), Paint.Align.LEFT).toned { Appearance.secondaryLabel }.shadowed(m.pt(2f))
 
     // ------------------------------------------------------------------ drawing
 
@@ -416,15 +422,14 @@ internal class SearchList(
             is Row.Header -> headers.draw(c, "h${row.letter}", row.letter.toString(), m.libMargin, headers.baselineFor(t + m.listHeader * 0.62f), m.w.toFloat(), alpha)
             is Row.Title -> {
                 titles.draw(c, row.key, row.text, m.libMargin, t + m.pt(28f), m.w.toFloat(), alpha)
-                separator.alpha = (0x2E * s.a(now)).toInt()
-                c.drawLine(m.libMargin, t + m.pt(40f), m.w - m.libMargin, t + m.pt(40f), separator)
+                c.drawLine(m.libMargin, t + m.pt(40f), m.w - m.libMargin, t + m.pt(40f), sep(s.a(now)))
             }
             is Row.TopHit -> {
                 // The best match, highlighted in a glass card (iOS Spotlight's Top Hit).
                 cardRect(t, r)
                 val save = c.saveLayerAlpha(r.left - 1, r.top - 1, r.right + 1, r.bottom + 1, alpha)
-                drawCard?.invoke(c, RectF(r)) ?: c.drawRoundRect(r, m.pt(26f), m.pt(26f), PRESS)
-                if (pressed?.key == row.e.key) { PRESS.alpha = 0x1A; c.drawRoundRect(r, m.pt(26f), m.pt(26f), PRESS) }
+                drawCard?.invoke(c, RectF(r)) ?: c.drawRoundRect(r, m.pt(26f), m.pt(26f), press(1f))
+                if (pressed?.key == row.e.key) c.drawRoundRect(r, m.pt(26f), m.pt(26f), press(1f))
                 val icon = topIconRect(t, RectF())
                 if (!isHidden(row.e, icon)) icons.draw(c, row.e, icon)
                 val tx = icon.right + m.pt(14f)
@@ -434,13 +439,12 @@ internal class SearchList(
                 c.restoreToCount(save)
             }
             is Row.Item -> {
-                if (pressed?.key == row.e.key) { r.set(0f, t, width.toFloat(), t + m.listRow); PRESS.alpha = (0x1A * s.a(now)).toInt(); c.drawRect(r, PRESS) }
+                if (pressed?.key == row.e.key) { r.set(0f, t, width.toFloat(), t + m.listRow); c.drawRect(r, press(s.a(now))) }
                 iconRect(t, r)
                 if (!isHidden(row.e, r)) icons.draw(c, row.e, r, alpha = alpha)
                 labels.draw(c, row.e.key, row.e.label, textX, labels.baselineFor(t + m.listRow / 2f), rightEdge - textX, alpha)
                 if (next?.row is Row.Item) {
-                    separator.alpha = (0x1F * s.a(now)).toInt()
-                    c.drawLine(textX, t + m.listRow, rightEdge, t + m.listRow, separator)
+                    c.drawLine(textX, t + m.listRow, rightEdge, t + m.listRow, sep(s.a(now)))
                 }
             }
         }
@@ -463,8 +467,8 @@ internal class SearchList(
                 dg(c, r, r.width() / 2f)
                 c.restoreToCount(layer)
             } else {
-                indexCapsule.alpha = (0x24 * lit).toInt()
-                indexCapsuleRim.alpha = (0x30 * lit).toInt()
+                indexCapsule.color = Appearance.pressFill; indexCapsule.alpha = (0x24 * lit).toInt()
+                indexCapsuleRim.color = Appearance.separator; indexCapsuleRim.alpha = (0x30 * lit).toInt()
                 c.drawRoundRect(r, r.width() / 2f, r.width() / 2f, indexCapsule)
                 c.drawRoundRect(r, r.width() / 2f, r.width() / 2f, indexCapsuleRim)
             }
@@ -475,7 +479,7 @@ internal class SearchList(
             val near = if (lit > 0f) (1f - abs(cy - fingerY) / (step * 3f)).coerceIn(0f, 1f) else 0f
             val bump = near * near * lit
             val scale = 1f + 0.5f * bump
-            val alpha = (204 + (255 - 204) * maxOf(bump, if (scrubbing && l == scrubLetter) 1f else 0f)).toInt().coerceIn(0, 255)
+            val alpha = (200 + (255 - 200) * maxOf(bump, if (scrubbing && l == scrubLetter) 1f else 0f)).toInt().coerceIn(0, 255)
             if (scale != 1f) {
                 c.save()
                 c.scale(scale, scale, x - m.pt(2f) * bump, cy)
@@ -502,8 +506,8 @@ internal class SearchList(
                 dg(c, r, rad)
                 c.restoreToCount(layer)
             } else {
-                bubbleFill.alpha = (0x3D * a).toInt()
-                bubbleRim.alpha = (0x59 * a).toInt()
+                bubbleFill.color = Appearance.pressFill; bubbleFill.alpha = (0x3D * a).toInt()
+                bubbleRim.color = Appearance.separator; bubbleRim.alpha = (0x59 * a).toInt()
                 c.drawCircle(bx, fingerY, rad, bubbleFill)
                 c.drawCircle(bx, fingerY, rad, bubbleRim)
             }

@@ -9,10 +9,18 @@ class LauncherApp : Application() {
         AppLog.log("BUILD ${buildStamp()}")
         Watchdog.startHeartbeat()
         dev.launcher.app.theme.Fonts.init(this)
+        dev.launcher.app.theme.Appearance.init(this)
+        // Dark mode switched anywhere (also while an app is in front): home crossfades at once, so it is already in the new
+        // appearance (and its picture behind closing cards too) when it is next seen.
+        registerComponentCallbacks(object : android.content.ComponentCallbacks {
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) = dev.launcher.app.theme.Appearance.onConfiguration(newConfig)
+            @Deprecated("Deprecated in Java") override fun onLowMemory() {}
+        })
         dev.launcher.app.apps.Icons.init(this)
         dev.launcher.app.apps.LaunchStats.init(this)
         dev.launcher.app.apps.Apps.init(this)
         GestureNav.init(this)
+        Badges.testHook(this)
         ShizukuLink.init(this)
         SafetyNotification.show(this)
     }

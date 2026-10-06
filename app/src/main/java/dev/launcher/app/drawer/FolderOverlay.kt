@@ -136,8 +136,10 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.4f) })
     }
     private val dim = Paint()
-    private val title = LabelPainter(m.folderTitleSize, 0xFFFFFFFF.toInt(), Paint.Align.LEFT, dev.launcher.app.theme.Fonts.display(700)).shadowed(m.pt(4f), 0x40000000)
-    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450)).shadowed(m.pt(2f))
+    private val title = LabelPainter(m.folderTitleSize, 0xFFFFFFFF.toInt(), Paint.Align.LEFT, dev.launcher.app.theme.Fonts.display(700))
+        .toned { dev.launcher.app.theme.Appearance.label }.shadowed(m.pt(4f), 0x40000000)
+    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
+        .toned { dev.launcher.app.theme.Appearance.label }.shadowed(m.pt(2f))
     private val r = RectF()
     private var pressed = -1
     // This touch is the second tap of a double tap on the tile that just opened the folder: it does nothing (it used to land
@@ -164,6 +166,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         visibility = View.VISIBLE
         lib.tilesPane.setTileHidden(index, true)   // the panel is the tile from now until it is back in place
         lib.tilesPane.visibility = View.VISIBLE
+        lib.host.setBackgroundCovered(false)
         p.openedAt = android.os.SystemClock.uptimeMillis()
         p.animateTo(1f, Motion.profile.folderOpen.spring())
         startFrames()
@@ -179,6 +182,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         if (active === p) active = null
         pressed = -1
         lib.tilesPane.visibility = View.VISIBLE
+        lib.host.setBackgroundCovered(false)
         closing += p
         p.animateTo(0f, Motion.profile.folderClose.spring())
         startFrames()
@@ -191,6 +195,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         closing.clear()
         visibility = View.GONE
         lib.tilesPane.visibility = View.VISIBLE
+        lib.host.setBackgroundCovered(false)
     }
 
     private fun startFrames() {
@@ -209,7 +214,10 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
                     // Open: the backdrop covers the library completely (when there is one to cover it with), so it is not
                     // drawn for nothing. (No GPU layer on the library: home is recorded into a Picture for gesture nav, and a
                     // view with a GPU layer inside that recording is drawn in software, where the glass shader cannot run.)
-                    if (a.target == 1f && closing.isEmpty() && lib.wallpaper != null) lib.tilesPane.visibility = View.INVISIBLE
+                    if (a.target == 1f && closing.isEmpty() && lib.wallpaper != null) {
+                        lib.tilesPane.visibility = View.INVISIBLE
+                        lib.host.setBackgroundCovered(true)
+                    }
                 } else moving = true
             }
             val it = closing.iterator()
@@ -309,7 +317,12 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         if (w != null) {
             backdropPaint.alpha = (255 * k).toInt()
             c.drawBitmap(w.heavy, w.heavyMatrix(m.w, m.h), backdropPaint)
-            dim.color = ((0x18 * k).toInt() shl 24)
+            // The library's own material (the appearance's veil), a touch darker: the folder is a level above it.
+            val veil = dev.launcher.app.theme.Appearance.backdropVeil
+            dim.color = veil
+            dim.alpha = (android.graphics.Color.alpha(veil) * k).toInt()
+            c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dim)
+            dim.color = ((0x14 * k).toInt() shl 24)
         } else {
             dim.color = ((0x99 * k).toInt() shl 24)
         }

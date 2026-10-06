@@ -32,6 +32,7 @@ import dev.launcher.app.drawer.LabelPainter
 import dev.launcher.app.motion.IosScroller
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.max
@@ -125,17 +126,39 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         maskFilter = android.graphics.BlurMaskFilter(m.pt(18f), android.graphics.BlurMaskFilter.Blur.NORMAL)
     }
     private val iconClip = Path()
-    private val clockDate = LabelPainter(m.pt(12f), 0xF2FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(600))
+    // Text in the appearance's colours (dark on the light sheet, white on the dark one).
+    private val clockDate = LabelPainter(m.pt(12f), 0xF2FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(600)).toned { Appearance.label }
     private val clockPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6FFFFFF.toInt(); typeface = Fonts.display(640); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f }
-    private val title = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600))
-    private val rowText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400))
-    private val rowSub = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(400))
-    private val sectionText = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600))
-    private val bigTitle = LabelPainter(m.pt(22f), Color.WHITE, Paint.Align.CENTER, Fonts.display(700))
-    private val sub = LabelPainter(m.pt(15f), 0x99FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(400))
-    private val sizeText = LabelPainter(m.pt(14f), 0xB3FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(500))
-    private val buttonText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600))
-    private val emptyText = LabelPainter(m.pt(15f), 0x80FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(400))
+    private val title = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600)).toned { Appearance.label }
+    private val rowText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.label }
+    private val rowSub = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.secondaryLabel }
+    private val sectionText = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).toned { Appearance.secondaryLabel }
+    private val bigTitle = LabelPainter(m.pt(22f), Color.WHITE, Paint.Align.CENTER, Fonts.display(700)).toned { Appearance.label }
+    private val sub = LabelPainter(m.pt(15f), 0x99FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(400)).toned { Appearance.secondaryLabel }
+    private val sizeText = LabelPainter(m.pt(14f), 0xB3FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(500)).toned { Appearance.secondaryLabel }
+    private val buttonText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600)).toned { Appearance.label }
+    private val emptyText = LabelPainter(m.pt(15f), 0x80FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(400)).toned { Appearance.tertiaryLabel }
+
+    /** The sheet's lines, glyphs and fills for the current appearance (set at every draw: a change crossfades). */
+    private fun syncColors() {
+        val a = Appearance
+        val label = a.label
+        fallbackFill.color = a.mix(0xF2F2F2F7.toInt(), 0xE6202024.toInt())
+        grabber.color = a.mix(0x4D000000, 0x59FFFFFF)
+        capsule.color = label
+        capsuleRim.color = label
+        fieldFill.color = label
+        cardFill.color = label
+        separator.color = a.separator
+        glyph.color = label
+        chevron.color = a.tertiaryLabel
+        lensGlyph.color = a.secondaryLabel
+        clockPaint.color = label
+        if (edit.currentTextColor != label) {
+            edit.setTextColor(label)
+            edit.setHintTextColor(a.tertiaryLabel)
+        }
+    }
     private val r = RectF()
     private val path = Path()
     private val toScreen = Matrix()
@@ -364,10 +387,11 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     // ------------------------------------------------------------------ drawing
 
     override fun onDraw(c: Canvas) {
+        syncColors()
         val y = sheetY()
         val k = ((m.h - y) / (m.h - sheetTop)).coerceIn(0f, 1f)
         // Home behind the sheet: blurred (by home) and dimmed a little, inside the glass the same as around it.
-        dimInside.color = ((0x40 * k).toInt() shl 24)
+        dimInside.color = ((Appearance.mix(0x26, 0x40) * k).toInt() shl 24)
         c.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), dimInside)
         r.set(0f, y, m.w.toFloat(), m.h + sheetRadius)
         val g = glass
@@ -375,8 +399,10 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             toScreen.reset()
             g.draw(c, r, sheetRadius, host.sceneBlur() * Motion.profile.menuBlur * m.u, null, RectF(0f, 0f, width.toFloat(), height.toFloat())) { cc ->
                 host.drawBehindSheet(cc)
-                // A sheet is thicker glass than a menu: darker, so its white text reads over any wallpaper.
-                sheetTint.color = ((0x9E * k).toInt() shl 24)
+                // A sheet is thicker glass than a menu: the appearance's veil, strong, so its text reads over any wallpaper.
+                val veil = Appearance.sheetVeil
+                sheetTint.color = veil
+                sheetTint.alpha = (android.graphics.Color.alpha(veil) * k).toInt()
                 cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), sheetTint)
             }
         } else c.drawRoundRect(r, sheetRadius, sheetRadius, fallbackFill)
@@ -429,7 +455,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         if (android.os.Build.VERSION.SDK_INT < 33) return null
         return try {
             GlassDrawable(wp, m.w, m.h, m.pt(18f), m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_LIBRARY,
-                GlassDrawable.Source.BACKDROP).also { sheetGlass = it }
+                GlassDrawable.Source.BACKDROP).also { it.role = GlassDrawable.Role.SHEET; sheetGlass = it }
         } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] sheet glass failed: ${t.message}"); null }
     }
 
@@ -451,7 +477,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         g.originY = rect.top + dy
         g.setBounds(rect.left.toInt(), rect.top.toInt(), kotlin.math.ceil(rect.right).toInt(), kotlin.math.ceil(rect.bottom).toInt())
         g.draw(c)
-        glassTint.alpha = (0x30 + 0x30 * down).toInt()
+        val t = Appearance.sheetControlTint
+        glassTint.color = t
+        glassTint.alpha = (android.graphics.Color.alpha(t) * (1f + down)).toInt().coerceAtMost(255)
         c.drawRoundRect(rect, radius, radius, glassTint)
     }
 
@@ -664,7 +692,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             for (j in 0 until n) {
                 // The dot of the card on screen is white; the others dim, and the one being swiped to brightens with the swipe.
                 val near = (1f - abs(pos - j)).coerceIn(0f, 1f)
-                dot.color = Color.argb((0x59 + (0xFF - 0x59) * near).roundToInt(), 255, 255, 255)
+                val lc = Appearance.label
+                dot.color = lc
+                dot.alpha = (0x59 + (0xFF - 0x59) * near).roundToInt()
                 c.drawCircle(m.w / 2f + (j - (n - 1) / 2f) * gap, dy, m.pt(3.6f), dot)
             }
         }

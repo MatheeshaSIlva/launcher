@@ -34,7 +34,6 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
         private set
     private val fallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x40FFFFFF }
     private val rect = RectF()
-    private val pts = FloatArray(4)
     private var screenW = 0
     private var screenH = 0
     private var cellPx = 0f
@@ -87,24 +86,75 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
     /** One draw of one drawable: a fade (the clock's minute crossfade) needs no offscreen layer. */
     override fun hasOverlappingRendering(): Boolean = false
 
+    // Where this view's top-left is on screen and how much it is scaled there (the arrival's bloom, a widget gliding after a
+    // reflow), as last drawn. The glass's uniforms are recorded into its display list, which a parent's movement does not
+    // redraw: so before every frame the glass checks where it really is and redraws itself only if that changed (a stale
+    // record showed the backdrop from the wrong place, e.g. the dock after home's zoom back from a closing app).
+    private val placed = FloatArray(3)
+    private var drawnDepth = 1f
+    private var drawnDark = -1f
+    private val now = FloatArray(3)
+    private val pts = FloatArray(4)
+
+    /**
+     * This view's top-left on screen and its scale, into [out]. Transforms of a view tagged [R.id.glass_root] and above it
+     * (home's depth zoom of all its content) are left out: those draw the content (glass included) through a layer that is
+     * transformed as a whole, so they never change what the glass itself shows. Rotation (the wiggle) is left out too.
+     */
+    private fun placement(out: FloatArray) {
+        pts[0] = 0f; pts[1] = 0f; pts[2] = 1f; pts[3] = 0f
+        var v: View? = this
+        var whole = false
+        while (v != null) {
+            if (!whole && v.getTag(dev.launcher.app.R.id.glass_root) == true) whole = true
+            if (!whole) {
+                val sx = v.scaleX
+                val sy = v.scaleY
+                if (sx != 1f || sy != 1f) for (i in 0..2 step 2) {
+                    pts[i] = v.pivotX + (pts[i] - v.pivotX) * sx
+                    pts[i + 1] = v.pivotY + (pts[i + 1] - v.pivotY) * sy
+                }
+            }
+            val parent = v.parent as? View
+            val dx = v.left - (parent?.scrollX ?: 0) + (if (whole) 0f else v.translationX)
+            val dy = v.top - (parent?.scrollY ?: 0) + (if (whole) 0f else v.translationY)
+            pts[0] += dx; pts[1] += dy; pts[2] += dx; pts[3] += dy
+            v = parent
+        }
+        out[0] = pts[0]
+        out[1] = pts[1]
+        out[2] = kotlin.math.hypot(pts[2] - pts[0], pts[3] - pts[1])
+    }
+
+    private val moved = android.view.ViewTreeObserver.OnPreDrawListener {
+        if (glass != null) {
+            placement(now)
+            if (kotlin.math.abs(now[0] - placed[0]) > 0.25f || kotlin.math.abs(now[1] - placed[1]) > 0.25f || kotlin.math.abs(now[2] - placed[2]) > 0.001f ||
+                (dev.launcher.app.GlassDepth.k != drawnDepth && !dev.launcher.app.HomeBridge.homeCovered) ||
+                dev.launcher.app.theme.Appearance.dark != drawnDark) invalidate()
+        }
+        true
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        viewTreeObserver.addOnPreDrawListener(moved)
+    }
+
+    override fun onDetachedFromWindow() {
+        viewTreeObserver.removeOnPreDrawListener(moved)
+        super.onDetachedFromWindow()
+    }
+
     override fun draw(canvas: Canvas) {
         val g = glass
         if (g != null) {
-            // Where this view's top-left is on screen and how much it is scaled there, through every transform on the way up
-            // (a widget blooming in on arrival, the wiggle, home's depth zoom): with only positions added up, the glass
-            // showed the wallpaper from the wrong place while anything was scaled, and "slid" when it settled.
-            pts[0] = 0f; pts[1] = 0f; pts[2] = 1f; pts[3] = 0f
-            var v: View? = this
-            while (v != null) {
-                if (!v.matrix.isIdentity) v.matrix.mapPoints(pts)
-                val dx = (v.left - ((v.parent as? View)?.scrollX ?: 0)).toFloat()
-                val dy = (v.top - ((v.parent as? View)?.scrollY ?: 0)).toFloat()
-                pts[0] += dx; pts[1] += dy; pts[2] += dx; pts[3] += dy
-                v = v.parent as? View
-            }
-            g.originX = pts[0]
-            g.originY = pts[1]
-            g.scale = kotlin.math.hypot(pts[2] - pts[0], pts[3] - pts[1])
+            placement(placed)
+            drawnDepth = dev.launcher.app.GlassDepth.k
+            drawnDark = dev.launcher.app.theme.Appearance.dark
+            g.originX = placed[0]
+            g.originY = placed[1]
+            g.scale = placed[2]
             g.setBounds(0, 0, width, height)
             g.draw(canvas)
         } else if (mask == null) {

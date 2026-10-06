@@ -131,7 +131,9 @@ object Icons {
             // a library folder's first opening frame uploaded six icons, 3 ms with the main thread waiting; Spotlight's 50).
             b.prepareToDraw()
             cache.put(k, b)
-            if (size == homeSize) byPkg[e.pkg] = b
+            // By package for gesture nav's cards: the package's main entry only (ours has two, the dev panel and safe
+            // settings; whichever rendered last won, and a closing card turned into the wrong icon, or none).
+            if (size == homeSize && (Apps.forPkg(e.pkg)?.key ?: e.key) == e.key) byPkg[e.pkg] = b
             main.post { pending.remove(k)?.forEach { it(b) } }
         }
     }

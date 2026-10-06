@@ -599,7 +599,10 @@ object RemoveBadge {
         if (k <= 0f) return
         val r = radius(m) * k
         val a = k.coerceIn(0f, 1f)
-        disc.alpha = (0xE6 * a).toInt()
+        val dc = dev.launcher.app.theme.Appearance.removeDisc
+        disc.color = dc
+        disc.alpha = (android.graphics.Color.alpha(dc) * a).toInt()
+        bar.color = dev.launcher.app.theme.Appearance.removeMinus
         bar.alpha = (255 * a).toInt()
         c.drawCircle(cx, cy, r, disc)
         bar.strokeWidth = m.pt(2.2f) * k
@@ -687,13 +690,16 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
         override fun onDraw(canvas: Canvas) = drawContent(canvas)
     }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    // White on clear glass over the wallpaper, with the soft shadow home's icon labels have (readable over a light one).
     private val text = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = m.searchPillText
         typeface = dev.launcher.app.theme.Fonts.text(500)
+        setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), 0x59000000)
     }
     private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = m.pt(1.5f); strokeCap = Paint.Cap.ROUND
+        setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), 0x59000000)
     }
     var pages = 1
         private set

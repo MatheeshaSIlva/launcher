@@ -33,8 +33,11 @@ internal class IconPainter(private val size: Int, private val onLoaded: () -> Un
     }
 }
 
-/** Single-line labels, ellipsized once per app and width. */
-internal class LabelPainter(textSize: Float, color: Int, align: Paint.Align, typeface: android.graphics.Typeface = dev.launcher.app.theme.Fonts.text(400)) {
+/**
+ * Single-line labels, ellipsized once per app and width. The colour is fixed, or follows the appearance ([toned]: a
+ * colour read at every draw, e.g. Appearance.label); a draw's alpha multiplies the colour's own.
+ */
+internal class LabelPainter(textSize: Float, private val color: Int, align: Paint.Align, typeface: android.graphics.Typeface = dev.launcher.app.theme.Fonts.text(400)) {
     val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         this.textSize = textSize
         this.color = color
@@ -43,21 +46,47 @@ internal class LabelPainter(textSize: Float, color: Int, align: Paint.Align, typ
     }
     private val cache = HashMap<String, CharSequence>()
     private var cacheWidth = -1f
+    private var tone: (() -> Int)? = null
+    private var shadowPx = 0f
+    private var shadowColor = 0
+    private var shadowFollows = false
+    private var shadowK = -1f
 
-    fun draw(c: Canvas, key: String, text: String, x: Float, baseline: Float, maxWidth: Float, alpha: Int = 255) {
+    /** The colour follows the appearance: [t] is read at every draw. */
+    fun toned(t: () -> Int): LabelPainter = apply { tone = t }
+
+    /**
+     * A soft dark shadow under the text (as home's icon labels have), so white text stays readable where the glass or the
+     * blurred wallpaper behind it is light. [px]: its blur radius. On a [toned] painter it fades with the appearance (dark
+     * text in light mode needs none).
+     */
+    fun shadowed(px: Float, color: Int = 0x59000000): LabelPainter = apply {
+        shadowPx = px
+        shadowColor = color
+        shadowFollows = tone != null
+        shadowK = -1f
+        if (!shadowFollows) paint.setShadowLayer(px, 0f, px * 0.3f, color)
+    }
+
+    /** Draws [text] (ellipsized to [maxWidth], cached by [key]); [color] overrides the painter's colour for this draw. */
+    fun draw(c: Canvas, key: String, text: String, x: Float, baseline: Float, maxWidth: Float, alpha: Int = 255, color: Int? = null) {
         if (maxWidth != cacheWidth) { cache.clear(); cacheWidth = maxWidth }
         val s = cache.getOrPut(key) { TextUtils.ellipsize(text, paint, maxWidth, TextUtils.TruncateAt.END) }
-        paint.alpha = alpha
+        val col = color ?: tone?.invoke() ?: this.color
+        paint.color = col
+        paint.alpha = (android.graphics.Color.alpha(col) * alpha.coerceIn(0, 255)) / 255
+        if (shadowFollows && shadowPx > 0f) {
+            val k = dev.launcher.app.theme.Appearance.textShadowStrength
+            if (k != shadowK) {
+                shadowK = k
+                val a = (android.graphics.Color.alpha(shadowColor) * k).toInt()
+                if (a <= 0) paint.clearShadowLayer() else paint.setShadowLayer(shadowPx, 0f, shadowPx * 0.3f, (a shl 24) or (shadowColor and 0xFFFFFF))
+            }
+        }
         c.drawText(s, 0, s.length, x, baseline, paint)
     }
 
     fun clear() = cache.clear()
-
-    /**
-     * A soft dark shadow under the text (as home's icon labels have), so white text stays readable where the glass or the
-     * blurred wallpaper behind it is light. [px]: its blur radius.
-     */
-    fun shadowed(px: Float, color: Int = 0x59000000): LabelPainter = apply { paint.setShadowLayer(px, 0f, px * 0.3f, color) }
 
     /** Baseline that centres a line of this text vertically on [cy]. */
     fun baselineFor(cy: Float): Float = cy - (paint.fontMetrics.ascent + paint.fontMetrics.descent) / 2f

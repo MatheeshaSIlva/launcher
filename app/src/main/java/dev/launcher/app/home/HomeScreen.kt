@@ -110,14 +110,35 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         for (v in pages.flatMap { it.icons() } + (dock?.icons() ?: emptyList())) v.badge = v.entry?.let { dev.launcher.app.Badges.count(it.pkg) } ?: 0
     }
 
+    /**
+     * The appearance changed (every frame of its crossfade): everything redraws in the new colours (text fields take them),
+     * and once it has settled home is recorded again for gesture nav's picture of it.
+     */
+    private val onAppearance: () -> Unit = {
+        drawer?.onAppearance()
+        spotlight?.onAppearance()
+        updateStatusDark()
+        // The Edit button lifted above its menu is a picture: taken again in the new colours.
+        if (menu?.isShowing == true && editMode?.active == true) (editBar as? EditMode.Bar)?.let { menu?.replaceLifted(it.editButtonPicture()) }
+        invalidateTree(this)
+        if (!dev.launcher.app.theme.Appearance.changing) post { if (isIdle) listener.onHomeSettled() }
+    }
+
+    private fun invalidateTree(v: View) {
+        v.invalidate()
+        if (v is android.view.ViewGroup) for (i in 0 until v.childCount) invalidateTree(v.getChildAt(i))
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         dev.launcher.app.Badges.addListener(onBadges)
+        dev.launcher.app.theme.Appearance.addListener(onAppearance)
         onBadges()
     }
 
     override fun onDetachedFromWindow() {
         dev.launcher.app.Badges.removeListener(onBadges)
+        dev.launcher.app.theme.Appearance.removeListener(onAppearance)
         super.onDetachedFromWindow()
     }
 
@@ -128,6 +149,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         addView(scene, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         fg.clipChildren = false
+        // Home's depth zoom scales everything above the wallpaper as one (through a GPU layer): glass inside it keeps sampling
+        // where it is laid out (see GlassView.placement).
+        fg.setTag(dev.launcher.app.R.id.glass_root, true)
         // Search fields ride up with the keyboard frame by frame (not only once it has finished opening).
         if (Build.VERSION.SDK_INT >= 30) {
             setWindowInsetsAnimationCallback(object : android.view.WindowInsetsAnimation.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
@@ -276,6 +300,18 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         overlay.addView(em.ghostView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         applyGlassWallpaper()
         bindLayout()
+    }
+
+    /**
+     * Black or white content for our status bar on home, as what is under it now: the App Library's or Spotlight's material
+     * once it mostly covers home (light in light mode, dark in dark mode), else the wallpaper at the top (dimmed in dark mode).
+     */
+    fun updateStatusDark() {
+        val a = dev.launcher.app.theme.Appearance
+        val material = maxOf(drawerProgress(), spotlight?.progress ?: 0f)
+        val w = wallpaper
+        HomeBridge.homeStatusDark = if (material > 0.5f) a.dark < 0.5f
+            else w != null && w.topLuminance * (1f - a.wallpaperDim) > 0.62f
     }
 
     private fun applyGlassWallpaper() {
@@ -440,7 +476,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         }
         dv?.visibility = if (dp > 0f) View.VISIBLE else View.INVISIBLE
         backdrop.alpha = dp
-        backdrop.visibility = if (dp > 0f) View.VISIBLE else View.INVISIBLE
+        backdrop.visibility = if (dp > 0f && !(backgroundCovered && dp >= 1f)) View.VISIBLE else View.INVISIBLE
         for (v in listOf(dock, dockShadow, indicator, editBar)) v?.translationX = shift
         dock?.glass?.invalidate()
         indicator?.glass?.invalidate()
@@ -450,6 +486,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         indicator?.setPosition(pos.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()))
         drawer?.setOpenProgress(dp)
         if (dp > 0f) drawerWasOpen = true
+        updateStatusDark()
     }
 
     // ================================================================== touch
@@ -746,7 +783,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && !arrivalAnimating && !arrivalHeld && (drag == Drag.NONE || drag == Drag.IGNORED) &&
         (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true) && editMode?.active != true && menu?.isShowing != true &&
-        picker?.isOpen != true && !externalTouch && clocks.none { it.animating } && widgetViews().none { it.resizing }
+        picker?.isOpen != true && !externalTouch && clocks.none { it.animating } && widgetViews().none { it.resizing } &&
+        !dev.launcher.app.theme.Appearance.changing
 
     // ---- arrival: home after unlock, and after a cold start (boot, update, crash)
     //
@@ -775,6 +813,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (!prepareArrival(cold = false)) return
         arrivalHeld = true
         applyArrival(0.0)
+        AppLog.log("[home] arrival held until home is seen (screen off or lock screen up)")
     }
 
     /** Lets a held arrival go without playing it (home is being left before the unlock came). */
@@ -920,6 +959,16 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val cz = 1f + d * (mp.homeContentZoom - 1f)
         wallpaperView.scaleX = wz; wallpaperView.scaleY = wz
         fg.scaleX = cz; fg.scaleY = cz
+        // The glass on the wallpaper (dock, Search pill, widgets) keeps showing exactly what is behind it while home zooms:
+        // the wallpaper zooms less than the glass. Only those small views are redrawn (inside home's GPU layer, a redraw of a
+        // child only re-renders its own area).
+        val k = cz / wz
+        if (k != dev.launcher.app.GlassDepth.k) {
+            dev.launcher.app.GlassDepth.k = k
+            dev.launcher.app.GlassDepth.cx = width / 2f
+            dev.launcher.app.GlassDepth.cy = height / 2f
+            if (!HomeBridge.homeCovered) for (g in glassViews()) g.invalidate()
+        }
         // The same blur as the picture of home behind the cards (GestureNav), so taking over from it changes nothing; skipped
         // while that picture covers home (the work would be invisible).
         if (Build.VERSION.SDK_INT >= 31) {
@@ -1034,6 +1083,14 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun onIconsMoved() = publishIcons()
 
+    private var backgroundCovered = false
+
+    override fun setBackgroundCovered(covered: Boolean) {
+        if (covered == backgroundCovered) return
+        backgroundCovered = covered
+        applyPositions()
+    }
+
     override fun onAppLongPress(e: AppEntry, iconOnScreen: RectF) = onLibraryLongPress(e, toHome(iconOnScreen), fromSpotlight = false)
 
     // ================================================================== edit mode, menus, widgets
@@ -1055,7 +1112,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (editMode?.dragging == true) editMode?.externalUp()
         externalTouch = false
         pendingExternal = null
-        editMode?.exit()
+        // A widget's setup screen (adding it from the gallery) is part of editing: home comes back still editing, as iOS.
+        if (widgets?.busy != true) editMode?.exit()
         var searchEnded = false
         spotlight?.takeIf { it.visibility == View.VISIBLE }?.let { it.closeNow(); searchEnded = true }
         if (drawer?.endSearchNow() == true) searchEnded = true
@@ -1209,11 +1267,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 }
             }
         }
-        // Only widgets that have a name under them (the glass clock has none: the choice would do nothing visible there).
-        if (item?.kind == HomeItem.Widget.APP) {
-            items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) {
-                setWidgetLabelsShown(!cfg.showWidgetLabels)
-            }
+        items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) {
+            setWidgetLabelsShown(!cfg.showWidgetLabels)
         }
         items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
         items += ContextMenuView.Item("Remove Widget", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
@@ -1315,9 +1370,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             ContextMenuView.Item("Add Widget", glyph = ContextMenuView.Glyph.PLUS) { openWidgetPicker() },
             ContextMenuView.Item(if (cfg.showLabels) "Hide App Names" else "Show App Names", glyph = ContextMenuView.Glyph.LABEL) { setAppLabelsShown(!cfg.showLabels) },
         )
-        // Widget names only matter with a widget that has one on home (the glass clock has none).
-        if (layout?.pages?.any { p -> p.any { it is HomeItem.Widget && it.kind == HomeItem.Widget.APP } } == true)
-            items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) }
+        items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) }
+        // Light or dark appearance (iOS: Customize); the menu stays open and everything crossfades behind it.
+        val modes = dev.launcher.app.theme.Appearance.Mode.entries
+        items += ContextMenuView.Item("Appearance", choices = modes.map { it.title }, chosen = modes.indexOf(dev.launcher.app.theme.Appearance.mode),
+            onChoice = { i -> dev.launcher.app.theme.Appearance.setMode(context, modes[i]) })
         menu?.show((editBar as? EditMode.Bar)?.editButtonPicture(), button, items)
     }
 
@@ -1415,7 +1472,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun launchFromSpotlight(e: AppEntry, iconOnScreen: RectF) = launch(e, iconOnScreen)
 
+    override fun spotlightMoved() = updateStatusDark()
+
     override fun spotlightSettled() {
+        updateStatusDark()
         publishIcons()
         if (isIdle) listener.onHomeSettled()
     }

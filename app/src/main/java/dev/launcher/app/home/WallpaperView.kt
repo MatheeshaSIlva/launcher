@@ -64,9 +64,15 @@ class WallpaperView(ctx: Context, private val cellPx: Float) : View(ctx) {
     }
 
     override fun onDraw(canvas: Canvas) {
-        transition?.let { it.draw(canvas, progress, time); return }
-        val w = wallpaper ?: return
-        canvas.drawBitmap(w.bitmap, w.matrix(width, height), paint)
+        val t = transition
+        if (t != null) t.draw(canvas, progress, time)
+        else {
+            val w = wallpaper ?: return
+            canvas.drawBitmap(w.bitmap, w.matrix(width, height), paint)
+        }
+        // Dark mode dims the wallpaper a little (iOS); the glass on home sees the same dim.
+        val dim = dev.launcher.app.theme.Appearance.wallpaperDim
+        if (dim > 0f) canvas.drawColor((255 * dim).toInt() shl 24)
     }
 }
 
@@ -86,7 +92,8 @@ class BackdropView(ctx: Context) : View(ctx) {
         val w = wallpaper
         if (w != null) {
             canvas.drawBitmap(w.heavy, w.heavyMatrix(width, height), paint)
-            canvas.drawColor(0x0D000000)   // barely darker: iOS keeps the library's background bright
+            // The appearance's material: light (a white veil) or dark (a dark one); the glass on it sees the same veil.
+            canvas.drawColor(dev.launcher.app.theme.Appearance.backdropVeil)
         } else {
             canvas.drawColor(0x99000000.toInt())
         }

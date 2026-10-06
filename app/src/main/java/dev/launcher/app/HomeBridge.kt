@@ -128,8 +128,15 @@ object HomeBridge {
      */
     @Volatile var homeCovered = false
 
-    /** Home's wallpaper is light under the status bar: our status bar shows black content on home. */
+    /**
+     * What is under the status bar on home is light (the wallpaper, or the light App Library or Spotlight): our status bar
+     * shows black content on home. Gesture nav is told at once ([onStatusDarkChanged]).
+     */
     @Volatile var homeStatusDark = false
+        set(v) { if (field != v) { field = v; onStatusDarkChanged?.invoke() } }
+
+    /** Set by gesture nav: [homeStatusDark] changed (any thread). */
+    @Volatile var onStatusDarkChanged: (() -> Unit)? = null
 
     /**
      * A swipe on the bar began on home: home is recorded as it shows right now (the picture "at rest" can be seconds old: a

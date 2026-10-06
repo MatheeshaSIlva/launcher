@@ -710,9 +710,9 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         val editGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
         val doneGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
         // A soft shadow keeps the white labels readable over a light wallpaper (the glass itself is clear).
-        private val text = LabelPainter(m.pt(16f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600)).apply {
-            paint.setShadowLayer(m.pt(3f), 0f, m.pt(0.5f), 0x66000000)
-        }
+        // The label in the appearance's colour on a capsule tinted to match (light with dark text, dark with white text).
+        private val text = LabelPainter(m.pt(16f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600))
+            .toned { dev.launcher.app.theme.Appearance.label }.shadowed(m.pt(3f), 0x66000000)
         private var pressedEdit = false
         private var pressedDone = false
         // Presses dim the label and the capsule a little, in and out on a spring (not at once).
@@ -736,7 +736,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val p = Picture()
             val c = p.beginRecording(maxOf(1, editGlass.width), maxOf(1, editGlass.height))
             editGlass.draw(c)
-            tint.alpha = 0x2E
+            setTint(0f)
             c.drawRoundRect(0f, 0f, editGlass.width.toFloat(), editGlass.height.toFloat(), bh / 2f, bh / 2f, tint)
             text.draw(c, "Edit", "Edit", editGlass.width / 2f, text.baselineFor(editGlass.height / 2f), editGlass.width.toFloat())
             p.endRecording()
@@ -781,9 +781,16 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             if (g.width == 0) return
             val k = press.coerceIn(0f, 1f)
             tintRect.set(g.left.toFloat(), g.top.toFloat(), g.right.toFloat(), g.bottom.toFloat())
-            tint.alpha = (0x2E + 0x1A * k).toInt()
+            setTint(k)
             canvas.drawRoundRect(tintRect, bh / 2f, bh / 2f, tint)
             text.draw(canvas, label, label, g.left + g.width / 2f, text.baselineFor(g.top + g.height / 2f), g.width.toFloat(), (255 - 0x60 * k).toInt())
+        }
+
+        /** The capsules' tint for the appearance, a little stronger while pressed ([k]). */
+        private fun setTint(k: Float) {
+            val t = dev.launcher.app.theme.Appearance.buttonTint
+            tint.color = t
+            tint.alpha = (android.graphics.Color.alpha(t) * (1f + 0.4f * k)).toInt().coerceAtMost(255)
         }
 
         private fun setPressed(edit: Boolean, done: Boolean) {

@@ -16,6 +16,7 @@ import dev.launcher.app.LiveGlass
 import dev.launcher.app.drawer.LabelPainter
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts
 import kotlin.math.max
 
@@ -40,6 +41,8 @@ class ContextMenuView(
      */
     class Item(val label: String, val icon: Drawable? = null, val glyph: Glyph? = null, val destructive: Boolean = false,
                val sizes: List<WidgetSize>? = null, val current: WidgetSize? = null, val onSize: ((WidgetSize) -> Unit)? = null,
+               /** A segmented row of [choices] ([chosen] highlighted): [onChoice] runs for the one tapped; the menu stays open. */
+               val choices: List<String>? = null, var chosen: Int = 0, val onChoice: ((Int) -> Unit)? = null,
                val action: () -> Unit = {})
 
     private var items: List<Item> = emptyList()
@@ -58,7 +61,11 @@ class ContextMenuView(
     private val separator = Paint().apply { color = 0x26FFFFFF; strokeWidth = max(1f, m.pt(0.5f)) }
     private val press = Paint().apply { color = 0x1FFFFFFF }
     private val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = m.pt(1.6f); strokeCap = Paint.Cap.ROUND }
-    private val labels = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400))
+    private val labels = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.label }
+    private val choiceText = LabelPainter(m.pt(14f), Color.WHITE, Paint.Align.CENTER, Fonts.text(500)).toned { Appearance.label }
+    private val choiceFill = Paint(Paint.ANTI_ALIAS_FLAG)
+    // Where the highlight of a choice row sits (index, fractional while it glides to a newly chosen one).
+    private val choiceAt = SpringValue(0f, 100f, { invalidate() })
     private val r = RectF()
     private val panelMatrix = Matrix()
     private val panelTint = Paint().apply { color = 0x4D000000 }
@@ -97,11 +104,15 @@ class ContextMenuView(
         val left = if (picture == null && anchor.centerX() < m.w / 2f) anchor.left.coerceIn(m.libMargin, m.w - m.libMargin - panelW)
                    else (anchor.centerX() - panelW / 2f).coerceIn(m.libMargin, m.w - m.libMargin - panelW)
         panel.set(left, top, left + panelW, top + h)
+        menu.firstOrNull { it.choices != null }?.let { choiceAt.snapTo(it.chosen.toFloat()) }
         visibility = VISIBLE
         k.animateTo(1f, Motion.profile.menuOpen)
     }
 
     fun dismiss() { if (k.target > 0f) k.animateTo(0f, Motion.profile.menuClose) }
+
+    /** The lifted item's look changed while the menu shows (the Edit button in a new appearance). */
+    fun replaceLifted(p: Picture?) { if (lifted != null && p != null) { lifted = p; invalidate() } }
 
     /**
      * A drag takes the item over: the lifted copy and the menu go at once (the drag draws its own copy), the blur and dim
@@ -136,8 +147,14 @@ class ContextMenuView(
     override fun onDraw(c: Canvas) {
         val kv = k.value
         val kk = kv.coerceIn(0f, 1f)
-        dim.color = ((0x26 * kk).toInt() shl 24)
+        val md = Appearance.menuDim
+        dim.color = md
+        dim.alpha = (android.graphics.Color.alpha(md) * kk).toInt()
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dim)
+        panelTint.color = Appearance.menuVeil
+        separator.color = Appearance.separator
+        press.color = Appearance.pressFill
+        fallback.color = Appearance.mix(0xF2F2F2F7.toInt(), 0xD92C2C2E.toInt())
         // The pressed item, lifted (slightly bigger), above the blur.
         lifted?.let { p ->
             val s = if (liftedFades) 0.6f + 0.46f * kk else 1f + 0.06f * kv
@@ -172,7 +189,7 @@ class ContextMenuView(
             inverse.mapRect(visible)
             g.draw(c, panel, radius, kk * Motion.profile.menuBlur * m.u, panelMatrix, visible, kk) { cc ->
                 drawBehind(cc)
-                // Darkened a little more than home around it: white text stays readable over a light wallpaper.
+                // The appearance's veil (light glass with dark text, or darker glass with white text): readable over any wallpaper.
                 cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), panelTint)
             }
         }
@@ -180,6 +197,12 @@ class ContextMenuView(
         if (g == null || !c.isHardwareAccelerated) c.drawRoundRect(panel, radius, radius, fallback)
         for ((i, item) in items.withIndex()) {
             val top = panel.top + i * rowH
+            val choices = item.choices
+            if (choices != null) {
+                drawChoices(c, item, choices, top)
+                if (i < items.size - 1) c.drawLine(panel.left, top + rowH, panel.right, top + rowH, separator)
+                continue
+            }
             val sizes = item.sizes
             if (sizes != null) {
                 drawSizes(c, item, sizes, top)
@@ -193,8 +216,8 @@ class ContextMenuView(
                 c.drawRoundRect(panel, radius, radius, press)
                 c.restore()
             }
-            labels.paint.color = if (item.destructive) 0xFFFF453A.toInt() else Color.WHITE
-            labels.draw(c, item.label, item.label, panel.left + m.pt(16f), labels.baselineFor(top + rowH / 2f), panelW - m.pt(60f))
+            labels.draw(c, item.label, item.label, panel.left + m.pt(16f), labels.baselineFor(top + rowH / 2f), panelW - m.pt(60f),
+                color = if (item.destructive) Appearance.destructive else null)
             drawGlyph(c, item, panel.right - m.pt(26f), top + rowH / 2f)
             if (i < items.size - 1) c.drawLine(panel.left + m.pt(16f), top + rowH, panel.right, top + rowH, separator)
         }
@@ -207,6 +230,24 @@ class ContextMenuView(
 
     private fun sizeSlot(n: Int, i: Int): Float = panel.left + panel.width() * (i + 0.5f) / n
 
+    /** A segmented row: the choices side by side, the chosen one on a capsule that glides to a new choice. */
+    private fun drawChoices(c: Canvas, item: Item, choices: List<String>, top: Float) {
+        val n = choices.size
+        val inset = m.pt(6f)
+        val segW = (panel.width() - 2 * inset) / n
+        val pos = choiceAt.value.coerceIn(0f, (n - 1).toFloat())
+        r.set(panel.left + inset + pos * segW, top + inset, panel.left + inset + (pos + 1) * segW, top + rowH - inset)
+        val pf = Appearance.pressFill
+        choiceFill.color = pf
+        choiceFill.alpha = (android.graphics.Color.alpha(pf) * 2.2f).toInt().coerceAtMost(255)
+        c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, choiceFill)
+        for ((j, label) in choices.withIndex()) {
+            val cx = panel.left + inset + (j + 0.5f) * segW
+            val near = (1f - kotlin.math.abs(pos - j)).coerceIn(0f, 1f)
+            choiceText.draw(c, "c$label", label, cx, choiceText.baselineFor(top + rowH / 2f), segW - m.pt(4f), (150 + 105 * near).toInt())
+        }
+    }
+
     /** iOS's widget size row: one glyph per size, shaped like it (small square, wide, large square, tall), the current filled. */
     private fun drawSizes(c: Canvas, item: Item, sizes: List<WidgetSize>, top: Float) {
         val unit = m.pt(5.2f)
@@ -218,6 +259,8 @@ class ContextMenuView(
             val cy = top + rowH / 2f
             r.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f)
             val rad = m.pt(2.4f)
+            sizeFill.color = Appearance.label
+            sizeStroke.color = Appearance.secondaryLabel
             if (s == item.current) c.drawRoundRect(r, rad, rad, sizeFill)
             else c.drawRoundRect(r, rad, rad, sizeStroke)
         }
@@ -231,7 +274,7 @@ class ContextMenuView(
             icon.draw(c)
             return
         }
-        glyphPaint.color = if (item.destructive) 0xFFFF453A.toInt() else Color.WHITE
+        glyphPaint.color = if (item.destructive) Appearance.destructive else Appearance.label
         val g = m.pt(9f)
         when (item.glyph) {
             Glyph.GRID -> {
@@ -303,6 +346,19 @@ class ContextMenuView(
             MotionEvent.ACTION_UP -> {
                 pressed = -1
                 val chosen = items.getOrNull(i)
+                val choices = chosen?.choices
+                if (chosen != null && choices != null) {
+                    // A choice: applied at once, the menu stays open (the change shows behind it); the highlight glides over.
+                    val j = ((e.x - panel.left) / panel.width() * choices.size).toInt().coerceIn(0, choices.size - 1)
+                    if (j != chosen.chosen) {
+                        chosen.chosen = j
+                        choiceAt.animateTo(j.toFloat(), Motion.profile.reflow)
+                        performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                        chosen.onChoice?.invoke(j)
+                    }
+                    invalidate()
+                    return true
+                }
                 val sizes = chosen?.sizes
                 if (chosen != null && sizes != null) {
                     // A size: applied at once and the menu closes onto the widget, which is already growing or shrinking

@@ -877,3 +877,33 @@ Frame stats after (missed refreshes): folder open 0-1 / close by bar 0 (was 4+1)
 home with an open folder is still 9-12 ms (over budget but pipelined, no misses); the released swipe on home now blurs the
 live home for ~0.4 s (16 ms GPU frames, no misses). Not checked on the phone: the unlock arrival (needs an unlock), PiP
 holes, widget resizing. The Samsung keyboard still starts ~0.1 s after a fast pull opens Spotlight (its own start-up).
+
+Round 21 (Matheesha on e9401f1: light and dark mode; unlock-to-home was static; the blur behind the dock broken; badges
+clipped during opens and closes; the widget names toggle gone; "a thorough sweep once again"). On the S24 and the emulator:
+- **Light and dark mode** (`theme/Appearance.kt`). Follows the system (or Automatic / Light / Dark from Edit > Appearance, a
+  segmented row that keeps the menu open while everything crossfades behind it, 450 ms, every colour blended per frame).
+  As iOS: the materials (App Library, folders, A-Z list, Spotlight, menus, widget gallery) are light with dark text or dark
+  with white text; glass over them sees the same veil as the material around it; in dark mode the wallpaper is dimmed
+  14 % and glass on home is tinted darker; edit-mode remove badges light/dark; status bar content follows what is under it
+  (the light library gives black). Home is not recreated on a system dark-mode switch (configChanges uiMode, and an
+  app-level callback so home has already crossfaded when it is next seen); its recorded pictures are taken again.
+- **Unlock arrival**: One UI resumes home for a moment while the screen goes off; the arrival played then, in the dark, and
+  the unlock showed home static. Now "due" is used up only when home is seen (screen on, keyguard gone; SCREEN_ON,
+  USER_PRESENT, or a 250 ms check while the lock screen is up); home holds the arrival's first frame from the moment it goes
+  to sleep. Checked on the emulator (held at sleep, played at wake); the S24's unlock is to be checked by Matheesha.
+- **Dock glass**: e9401f1 counted home's depth zoom twice in the glass (its new on-screen scale included the zoom of home's
+  GPU layer, which scales the glass again): after every close the dock showed the wrong part of the wallpaper until the zoom
+  ended, then snapped. Transforms of the zoomed root are left out now; the glass redraws itself whenever its real place,
+  home's depth or the appearance changes (pre-draw check), and during home's zoom it samples the wallpaper where it really
+  is behind it (the wallpaper zooms less than home: `GlassDepth`, k = content zoom / wallpaper zoom).
+- **Badges** are drawn by a view above the card, unclipped (they reach past the icon's corner): checked on the S24, launch
+  and close. A closing card of our own screens took the icon of whichever of our entries rendered last (Icons by package).
+- **Widget names**: Show/Hide Widget Names is back in the widget menu and the Edit menu.
+- Sweep: widget resize crossfades (the new content was at full strength under the fading old look); a widget's setup screen
+  keeps edit mode; the Search pill's text has the labels' shadow; the library's background is not drawn under a fully open
+  folder; the wallpaper picture cache is keyed by the appearance; a Galaxy duplicate-Calendar merge from round 20 reverted
+  (Google's and Samsung's Calendar are two apps). Debug hooks for checks (adb only, senders need DUMP):
+  `am broadcast -a dev.launcher.app.TEST_BADGE -p dev.launcher.app --es pkg <pkg> --ei n <n>` and `... TEST_RECORD`
+  (writes the picture of home gesture nav would show to files/home_picture.png).
+S24 frame stats after (missed refreshes): folder open/close 0/0, library to page 1 0, Spotlight open/close 0/0, folder and
+dock launch/close 0 (dock launch 0-1 over three runs), grab 0, cancel 0, sideways 1, switcher 0/0/0/0.

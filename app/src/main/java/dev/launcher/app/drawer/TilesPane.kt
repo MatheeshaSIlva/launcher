@@ -33,7 +33,8 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     fun setTileHidden(index: Int, hidden: Boolean) {
         if (if (hidden) hiddenTiles.add(index) else hiddenTiles.remove(index)) invalidate()
     }
-    private val labels = LabelPainter(m.tileLabelSize, 0xF2FFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450)).shadowed(m.pt(2f))
+    private val labels = LabelPainter(m.tileLabelSize, 0xF2FFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
+        .toned { dev.launcher.app.theme.Appearance.label }.shadowed(m.pt(2f))
     private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val r = RectF()
     private val r2 = RectF()
