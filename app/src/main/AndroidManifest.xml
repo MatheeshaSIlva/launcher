@@ -39,7 +39,9 @@
     <application
         android:name=".LauncherApp"
         android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
         android:label="Launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity
@@ -68,6 +70,7 @@
         <activity
             android:name=".DevActivity"
             android:exported="false"
+            android:icon="@mipmap/ic_dev"
             android:label="Launcher dev" />
 
         <!-- Notification counts for the icon badges (access granted through Shizuku, or in Settings). -->
@@ -92,6 +95,7 @@
         <activity
             android:name=".SafeSettingsActivity"
             android:exported="true"
+            android:icon="@mipmap/ic_safe"
             android:label="Launcher safe settings"
             android:launchMode="singleTask"
             android:taskAffinity="dev.launcher.app.safe"

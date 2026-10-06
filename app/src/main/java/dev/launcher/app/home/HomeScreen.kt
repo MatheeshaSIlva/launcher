@@ -77,6 +77,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var drawer: AppDrawer? = null
     private var spotlight: SpotlightView? = null
     private var imeInset = 0
+    private var imeAnimating = false
     private var editMode: EditMode? = null
     private var editBar: View? = null
     private var menu: ContextMenuView? = null
@@ -130,9 +131,21 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         // Search fields ride up with the keyboard frame by frame (not only once it has finished opening).
         if (Build.VERSION.SDK_INT >= 30) {
             setWindowInsetsAnimationCallback(object : android.view.WindowInsetsAnimation.Callback(DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+                // While the keyboard animates, its final height arrives first (as ordinary insets, before the first step):
+                // applied, the search field jumped to its end position for a frame and dropped back. Only the steps count then.
+                override fun onPrepare(animation: android.view.WindowInsetsAnimation) {
+                    if (animation.typeMask and WindowInsets.Type.ime() != 0) imeAnimating = true
+                }
+
                 override fun onProgress(insets: WindowInsets, running: MutableList<android.view.WindowInsetsAnimation>): WindowInsets {
-                    applyIme(insets.getInsets(WindowInsets.Type.ime()).bottom)
+                    if (running.any { it.typeMask and WindowInsets.Type.ime() != 0 }) applyIme(insets.getInsets(WindowInsets.Type.ime()).bottom)
                     return insets
+                }
+
+                override fun onEnd(animation: android.view.WindowInsetsAnimation) {
+                    if (animation.typeMask and WindowInsets.Type.ime() == 0) return
+                    imeAnimating = false
+                    rootWindowInsets?.let { applyIme(it.getInsets(WindowInsets.Type.ime()).bottom) }
                 }
             })
         }
@@ -207,7 +220,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             topInset = top; bottomInset = b; deviceRadius = radius
             build()
         }
-        applyIme(ime)
+        if (!imeAnimating) applyIme(ime)
         return insets
     }
 
@@ -299,8 +312,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         // Icons for what is on screen first, then the rest of the library in the background.
         Icons.preload(l.pages.flatten().filterIsInstance<HomeItem.App>().mapNotNull { Apps[it.key] } + l.dock.mapNotNull { Apps[it] }, metrics.iconSize)
         Icons.preload(Apps.all, metrics.iconSize)
-        // Launch screens for the apps on home, so a cold launch has the app's own colour from its first frame.
+        // Launch screens, so a cold launch has the app's own colour from its first frame: the apps on home first, then every
+        // other app (the App Library, its folders and Spotlight launch them too; a late colour switched mid-launch).
         dev.launcher.app.apps.SplashColors.warm(context, l.pages.flatten().filterIsInstance<HomeItem.App>().mapNotNull { Apps[it.key]?.pkg } + l.dock.mapNotNull { Apps[it]?.pkg })
+        dev.launcher.app.apps.SplashColors.warm(context, Apps.all.map { it.pkg }.distinct())
         post { publishIcons() }
         if (pendingArrival != null) post { pendingArrival?.let { cold -> pendingArrival = null; playArrival(cold) } }
     }
@@ -368,6 +383,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             } else bindLayout()
         }
         drawer?.appsChanged()
+        widgets?.appsChanged()
+        dev.launcher.app.apps.SplashColors.warm(context, Apps.all.map { it.pkg }.distinct())   // new installs
         return changed
     }
 
@@ -386,6 +403,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** How far the drawer is open, whatever its placement (0..1). */
     private fun drawerProgress(): Float {
         val li = libIndex ?: return sheet.coerceIn(0f, 1f)
+        // No pages yet (a cold start before the app list is read): the strip's position 0 would be the App Library, which
+        // showed, empty, for over a second before home's pages arrived. Home shows its wallpaper and dock meanwhile.
+        if (pages.isEmpty()) return 0f
         // Pulled past its end (the rubber band) the drawer is still fully open: its background keeps its full blur.
         if (li == pages.size && pos >= li) return 1f
         if (li == -1 && pos <= -1f) return 1f
@@ -1063,10 +1083,18 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var menuK = 0f
     private var pickerK = 0f
 
+    // The gallery opened from a menu: home stays as blurred as the menu had it until the rising sheet blurs it more (the
+    // menu's blur used to fall faster than the sheet's rose: blurred, sharp, blurred again).
+    private var blurHold = 0f
+
+    /** How blurred home is now behind a menu or the gallery (0..1 of the menu blur). */
+    private fun sceneBlurK() = maxOf(menuK, pickerK, blurHold)
+
     private fun applySceneBlur() {
         if (Build.VERSION.SDK_INT < 31) return
-        editMode?.jigglePaused = maxOf(menuK, pickerK) > 0.01f
-        val r = maxOf(menuK, pickerK) * Motion.profile.menuBlur * (m?.u ?: 0f)
+        if (blurHold > 0f && pickerK >= blurHold) blurHold = 0f
+        editMode?.jigglePaused = sceneBlurK() > 0.01f
+        val r = sceneBlurK() * Motion.profile.menuBlur * (m?.u ?: 0f)
         scene.setRenderEffect(if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP))
     }
 
@@ -1181,8 +1209,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 }
             }
         }
-        items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) {
-            setWidgetLabelsShown(!cfg.showWidgetLabels)
+        // Only widgets that have a name under them (the glass clock has none: the choice would do nothing visible there).
+        if (item?.kind == HomeItem.Widget.APP) {
+            items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) {
+                setWidgetLabelsShown(!cfg.showWidgetLabels)
+            }
         }
         items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
         items += ContextMenuView.Item("Remove Widget", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
@@ -1280,14 +1311,18 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     private fun showEditMenu(button: RectF) {
-        menu?.show((editBar as? EditMode.Bar)?.editButtonPicture(), button, listOf(
+        val items = arrayListOf(
             ContextMenuView.Item("Add Widget", glyph = ContextMenuView.Glyph.PLUS) { openWidgetPicker() },
             ContextMenuView.Item(if (cfg.showLabels) "Hide App Names" else "Show App Names", glyph = ContextMenuView.Glyph.LABEL) { setAppLabelsShown(!cfg.showLabels) },
-            ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) },
-        ))
+        )
+        // Widget names only matter with a widget that has one on home (the glass clock has none).
+        if (layout?.pages?.any { p -> p.any { it is HomeItem.Widget && it.kind == HomeItem.Widget.APP } } == true)
+            items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) }
+        menu?.show((editBar as? EditMode.Bar)?.editButtonPicture(), button, items)
     }
 
     fun openWidgetPicker() {
+        blurHold = menuK
         menu?.dismiss()
         picker?.open()
     }
@@ -1326,6 +1361,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             if (item is HomeItem.Widget && item.kind == HomeItem.Widget.APP) widgets?.delete(item.id)
         }
         override fun editingChanged(active: Boolean) {
+            if (active) widgets?.prewarmApps()   // "Add Widget" is a tap away
             (editBar as? EditMode.Bar)?.let { if (active) it.show() else it.hide() }
             indicator?.editing = active
             if (!active) {
@@ -1363,7 +1399,14 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             val w = widgets ?: return
             w.add(info, size) { item -> if (item != null) editMode?.addWidget(item) }
         }
-        override fun pickerProgress(k: Float) { pickerK = k; applySceneBlur() }
+        override fun pickerProgress(k: Float) {
+            // Closing: the hold lets go, home sharpens with the sheet. (Not on a 0 that opening reports before the sheet
+            // starts rising: that cleared the hold at once.)
+            if (k < pickerK) blurHold = 0f
+            pickerK = k
+            applySceneBlur()
+        }
+        override fun sceneBlur(): Float = sceneBlurK()
         override fun drawBehindSheet(c: android.graphics.Canvas) = scene.draw(c)
         override fun wallpaper(): Wallpaper? = this@HomeScreen.wallpaper
     }

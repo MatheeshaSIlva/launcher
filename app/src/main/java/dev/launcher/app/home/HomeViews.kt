@@ -132,6 +132,8 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
 /** A widget on a home page as home and edit mode see it: a remove badge and resize handle, a size, a name, glass. */
 interface HomeWidgetView {
     var editing: Boolean
+    /** Leaves the edit controls out of what is drawn (the lifted copy of a dragged widget), without animating them. */
+    var editBadgeHidden: Boolean
     /** The remove badge's centre in the widget's view. */
     fun badgeCenter(): FloatArray
     /** Edit mode's resize handle: the widget's bottom-right corner (as shown now), in its view. */
@@ -152,13 +154,20 @@ object ResizeHandle {
     private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x59000000; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
 
     /** Draws the handle for a card whose bottom-right corner is ([x], [y]) with corner radius [r]. */
-    fun draw(c: Canvas, x: Float, y: Float, r: Float, m: HomeMetrics) {
+    fun draw(c: Canvas, x: Float, y: Float, r: Float, m: HomeMetrics, k: Float = 1f) {
+        if (k <= 0f) return
+        val a = k.coerceIn(0f, 1f)
         val rr = r + m.pt(1f)
         val rect = RectF(x - 2 * rr, y - 2 * rr, x, y)
         shadow.strokeWidth = m.pt(6f)
         arc.strokeWidth = m.pt(4f)
-        c.drawArc(rect, 10f, 70f, false, shadow)
-        c.drawArc(rect, 10f, 70f, false, arc)
+        shadow.alpha = (0x59 * a).toInt()
+        arc.alpha = (255 * a).toInt()
+        // It grows along the corner from its middle as it pops in.
+        val sweep = 70f * k.coerceAtMost(1.15f)
+        val start = 45f - sweep / 2f
+        c.drawArc(rect, start, sweep, false, shadow)
+        c.drawArc(rect, start, sweep, false, arc)
     }
 }
 
@@ -243,6 +252,9 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     /** No card to clip the old look with: the whole widget crossfades. */
     override fun oldCornerRadius(): Float = 0f
 
+    /** No card of its own: edit mode outlines where it is, so its badge and handle have something to sit on. */
+    override val frameless: Boolean get() = true
+
     /** Shows the time now (once a minute; before home is recorded, with [animate] false: at once, no crossfade). */
     fun refresh(animate: Boolean = true) {
         val is24 = android.text.format.DateFormat.is24HourFormat(context)
@@ -311,9 +323,12 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         return baseline
     }
 
-    // Shapes are built off the main thread; a newer request makes an older result void.
+    // Shapes are built off the main thread; a newer request makes an older result void. [building] counts the builds under
+    // way and every one of them reports back (also a failed or outdated one): a build that never reported left the clock
+    // "animating" for good, and home never idle again (its picture behind closing cards went stale).
     private var buildGen = 0
-    private var building = false
+    private var buildsPending = 0
+    private val building get() = buildsPending > 0
 
     /** Builds the numerals' shape for [n] off the main thread, then hands it to the glass and runs [then]. */
     private fun buildMask(n: Numerals, time: String, then: () -> Unit) {
@@ -322,10 +337,13 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         if (w <= 0 || h <= 0) return
         val baseline = layoutDigits()
         val gen = ++buildGen
-        building = true
+        buildsPending++
         ClockNumerals.buildAsync(digitPaint, w, h, baseline, time) { gm ->
-            if (gen != buildGen || n.glass.width != w || n.glass.height != h) return@buildAsync
-            building = false
+            buildsPending = (buildsPending - 1).coerceAtLeast(0)
+            if (gm == null || gen != buildGen || n.glass.width != w || n.glass.height != h) {
+                if (!building) onSettled?.invoke()
+                return@buildAsync
+            }
             n.glass.mask = gm
             n.glass.invalidate()
             n.time = time
@@ -395,14 +413,17 @@ object ClockNumerals {
     private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
 
-    /** [build] on a worker thread (the distance transform takes some tens of ms); [done] runs on the main thread. */
-    fun buildAsync(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, done: (dev.launcher.app.GlassMask) -> Unit) {
+    /**
+     * [build] on a worker thread (the distance transform takes some tens of ms); [done] runs on the main thread, always (with
+     * null if building failed).
+     */
+    fun buildAsync(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, done: (dev.launcher.app.GlassMask?) -> Unit) {
         val p = android.text.TextPaint(paint)   // a copy: the caller's paint keeps changing on the main thread
         worker.execute {
             val gm = try { build(p, w, h, baseline, time) } catch (t: Throwable) {
                 dev.launcher.app.AppLog.log("[clock] numerals failed: ${t.javaClass.simpleName}: ${t.message}"); null
             }
-            if (gm != null) main.post { done(gm) }
+            main.post { done(gm) }
         }
     }
 
@@ -573,10 +594,15 @@ object RemoveBadge {
 
     fun radius(m: HomeMetrics) = m.pt(11f)
 
-    fun draw(c: Canvas, cx: Float, cy: Float, m: HomeMetrics) {
-        val r = radius(m)
+    /** [k]: how far it has popped in (0..1, a spring that may overshoot): its size, and its opacity up to 1. */
+    fun draw(c: Canvas, cx: Float, cy: Float, m: HomeMetrics, k: Float = 1f) {
+        if (k <= 0f) return
+        val r = radius(m) * k
+        val a = k.coerceIn(0f, 1f)
+        disc.alpha = (0xE6 * a).toInt()
+        bar.alpha = (255 * a).toInt()
         c.drawCircle(cx, cy, r, disc)
-        bar.strokeWidth = m.pt(2.2f)
+        bar.strokeWidth = m.pt(2.2f) * k
         c.drawLine(cx - r * 0.45f, cy, cx + r * 0.45f, cy, bar)
     }
 }
@@ -602,7 +628,12 @@ class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
     fun bind(views: List<IconView>, animate: Boolean = false) {
         val oldLeft = java.util.IdentityHashMap<View, Float>()
         for (v in icons) oldLeft[v] = (laidLeft[v] ?: v.left) + v.translationX
-        for (v in icons) if (views.none { it === v }) { removeView(v); laidLeft.remove(v) }
+        for (v in icons) if (views.none { it === v }) {
+            laidLeft.remove(v)
+            // Leaving the dock: shrinks away where it was (as on the pages), unless it is already invisible.
+            if (animate && v.alpha > 0f) dev.launcher.app.motion.Appear.vanish(v) { removeView(v) } else removeView(v)
+        }
+        val arriving = ArrayList<View>()
         icons.clear()
         icons += views
         val n = views.size
@@ -612,13 +643,15 @@ class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
                 leftMargin = left.roundToInt()
                 topMargin = ((m.dockHeight - m.iconSize) / 2f).roundToInt()
             }
-            if (v.parent == null) addView(v, lp) else v.layoutParams = lp
+            if (v.parent == null) { addView(v, lp); if (animate && oldLeft[v] == null && v.alpha > 0f) arriving += v } else v.layoutParams = lp
             val from = oldLeft[v]
             laidLeft[v] = left.roundToInt()
             val dx = (from ?: 0f) - left.roundToInt()
             if (animate && from != null && abs(dx - v.translationX) > 0.5f)
                 dev.launcher.app.motion.SpringTranslate.of(v).springFrom(dx, 0f, dev.launcher.app.motion.Motion.profile.reflow)
         }
+        // New in the dock (an install, Add to Home Screen): grows into its slot once laid out.
+        for (v in arriving) { v.alpha = 0f; v.post { if (v.parent === this) dev.launcher.app.motion.Appear.grow(v) } }
     }
 
     fun icons(): List<IconView> = icons

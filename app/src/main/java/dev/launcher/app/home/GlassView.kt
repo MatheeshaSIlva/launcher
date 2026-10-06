@@ -34,6 +34,7 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
         private set
     private val fallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x40FFFFFF }
     private val rect = RectF()
+    private val pts = FloatArray(4)
     private var screenW = 0
     private var screenH = 0
     private var cellPx = 0f
@@ -89,16 +90,21 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
     override fun draw(canvas: Canvas) {
         val g = glass
         if (g != null) {
-            var x = 0f
-            var y = 0f
+            // Where this view's top-left is on screen and how much it is scaled there, through every transform on the way up
+            // (a widget blooming in on arrival, the wiggle, home's depth zoom): with only positions added up, the glass
+            // showed the wallpaper from the wrong place while anything was scaled, and "slid" when it settled.
+            pts[0] = 0f; pts[1] = 0f; pts[2] = 1f; pts[3] = 0f
             var v: View? = this
             while (v != null) {
-                x += v.left + v.translationX
-                y += v.top + v.translationY
+                if (!v.matrix.isIdentity) v.matrix.mapPoints(pts)
+                val dx = (v.left - ((v.parent as? View)?.scrollX ?: 0)).toFloat()
+                val dy = (v.top - ((v.parent as? View)?.scrollY ?: 0)).toFloat()
+                pts[0] += dx; pts[1] += dy; pts[2] += dx; pts[3] += dy
                 v = v.parent as? View
             }
-            g.originX = x
-            g.originY = y
+            g.originX = pts[0]
+            g.originY = pts[1]
+            g.scale = kotlin.math.hypot(pts[2] - pts[0], pts[3] - pts[1])
             g.setBounds(0, 0, width, height)
             g.draw(canvas)
         } else if (mask == null) {

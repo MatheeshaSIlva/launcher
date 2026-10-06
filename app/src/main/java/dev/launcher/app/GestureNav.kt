@@ -468,8 +468,9 @@ object GestureNav {
         if (isKeyboard(pkg, className)) return
         if (pkg != lastFrontPkg) AppLog.log("[front] now in front: $pkg")
         nav.post { refreshAppearance() }   // a different window may ask for a different status bar
-        // Our own windows (home, cards, strip) are never the app a gesture closes or a launch waits for.
-        if (pkg == app.packageName) return
+        // Our own windows (home, cards, strip) are never the app a gesture closes or a launch waits for; our own screens
+        // (developer panel, safe settings) are: else closing one flew the previous app's card to the centre.
+        if (pkg == app.packageName && !isOwnScreen(className)) return
         lastFrontPkg?.takeIf { it != pkg }?.let { leftFrontAt[it] = SystemClock.uptimeMillis() }
         lastFrontPkg = pkg
         lastFrontAt = SystemClock.uptimeMillis()
@@ -481,6 +482,11 @@ object GestureNav {
             if (w.first == pkg) { waitingFor = null; nav.removeCallbacks(waitTimeout); nav.postDelayed(w.second, 16) }
         }
     }
+
+    /** One of our own full-screen activities other than home (an accessibility window event's class name). */
+    private fun isOwnScreen(className: String?): Boolean =
+        className != null && className.startsWith(app.packageName + ".") && className.endsWith("Activity") &&
+            !className.endsWith(".HomeActivity") && '$' !in className
 
     private var keyboards: Set<String> = emptySet()
     private var keyboardsAt = 0L
@@ -913,6 +919,21 @@ object GestureNav {
         return if (id != 0) app.resources.getDimensionPixelSize(id) else 0
     }
 
+    /** Runs [then] (nav thread) once the card window has drawn a frame and that frame has been queued, unless the session moved on. */
+    private fun afterCardFrame(g: Int, then: () -> Unit) {
+        val r = root ?: return then()
+        var done = false
+        val run = { if (!done) { done = true; if (gen == g) then() } }
+        r.viewTreeObserver.addOnDrawListener(object : ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                nav.post { r.viewTreeObserver.removeOnDrawListener(this) }
+                choreographer.postFrameCallback { run() }
+            }
+        })
+        r.invalidate()
+        nav.postDelayed({ run() }, 100)   // never later than this
+    }
+
     private fun hideIcon(pkg: String?) {
         if (pkg == hiddenIconPkg) return
         hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
@@ -930,7 +951,7 @@ object GestureNav {
         // Without a snapshot the card shows the app's launch screen: its splash colour behind its icon.
         if (pkg != null) {
             c.placeholderColor = SplashColors.cached(pkg) ?: DEFAULT_SPLASH
-            if (SplashColors.cached(pkg) == null) SplashColors.resolve(app, pkg) { col -> nav.post { if (cardPkgFor(c) == pkg) c.placeholderColor = col } }
+            if (SplashColors.cached(pkg) == null) SplashColors.resolve(app, pkg) { col -> nav.post { if (cardPkgFor(c) == pkg) c.fadePlaceholderTo(col) } }
         }
     }
 
@@ -1651,7 +1672,7 @@ object GestureNav {
             c.minIconSize = iconRect.width()
             // The app's own launch-screen colour (resolved ahead of time for home's apps), else the icon's colour.
             c.placeholderColor = SplashColors.cached(pkg) ?: icon?.let { averageColor(it) } ?: DEFAULT_SPLASH
-            if (SplashColors.cached(pkg) == null) SplashColors.resolve(app, pkg) { col -> nav.post { if (cardPkg == pkg) c.placeholderColor = col } }
+            if (SplashColors.cached(pkg) == null) SplashColors.resolve(app, pkg) { col -> nav.post { if (cardPkg == pkg) c.fadePlaceholderTo(col) } }
             c.setFrame(m[0], m[1], m[2], m[3], m[2] * Icons.shape.clipFraction())
             c.iconMix = 1f
             prv?.visibility = View.GONE
@@ -1661,7 +1682,9 @@ object GestureNav {
         }
         appStarted = false
         pendingStart = Runnable(start)
-        hideIcon(pkg)
+        // The icon on home goes only once the card (drawing that icon) is on screen: hidden at once, home's next frame came a
+        // refresh before the card window's first one and the icon blinked out (seen in folder launches on the S24).
+        if (reverse) hideIcon(pkg) else afterCardFrame(g) { if (cardPkg == pkg) hideIcon(pkg) }
         cardIconSize = iconRect.width()
         switchAt = 0L   // a launch ends any run of quick switches
         beginCardSprings(toIcon = false)
@@ -1678,7 +1701,8 @@ object GestureNav {
             phase = Phase.HOLD
             if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(90, g)
             else awaitForeground(pkg, g) {
-                if (lastFrontPkg == pkg) { fadeOutCards(90, g); return@awaitForeground }
+                // Our own screens (the developer panel, safe settings) say when they have drawn (ownScreenDrawn).
+                if (lastFrontPkg == pkg || pkg == app.packageName) { fadeOutCards(90, g); return@awaitForeground }
                 // A window of another package can belong to the tapped app's own task (Settings showing Samsung's wallpaper
                 // picker, seen on the S24): only another task in front is the wrong app.
                 val s = ShizukuLink.service
@@ -2033,6 +2057,18 @@ object GestureNav {
         nav.postDelayed(waitTimeout, 500)
     }
 
+    /**
+     * One of our own screens (developer panel, safe settings) has drawn its first frame: a launch card waiting for it can
+     * go (accessibility events of our own package are not "an app in front"). Any thread.
+     */
+    fun ownScreenDrawn() = nav.post {
+        val w = waitingFor ?: return@post
+        if (w.first != app.packageName) return@post
+        waitingFor = null
+        nav.removeCallbacks(waitTimeout)
+        w.second.run()
+    }
+
     /** Brings [pkg] to the front: its task if known, else its launch intent. */
     private fun bringBack(pkg: String?, task: Task?) {
         val s = ShizukuLink.service
@@ -2185,14 +2221,21 @@ object GestureNav {
 
     /**
      * The swipe up on home ended without a rest: it does what the Home button does at once (closes a folder, Spotlight,
-     * goes to the first page), and the receding picture comes forward and fades into the live home doing it. (Waiting for
+     * goes to the first page). The live home takes over the depth the picture had (same zoom and blur, same spring back),
+     * and the picture goes as soon as home has drawn that frame: one home on screen at every moment. (Fading the picture
+     * into the live home showed two of everything for a moment, e.g. the A-Z list in place and sliding away; waiting for
      * the picture to spring back first left an open folder popping back, then sliding away with the page.)
      */
     private fun releaseHomePull(up: Boolean) {
         if (up) HomeBridge.homeSwipeUp()
         if (!pulling) { finishHomePull(); return }
-        pullBack.animateTo(0f, Motion.profile.appCancel, 0f)
-        fadeOutCards(PULL_FADE_MS, gen, overHome = true)
+        val d = pullBack.value
+        pullBack.stop()
+        val g = gen
+        val spec = Motion.profile.appCancel
+        HomeBridge.homeCovered = false   // home blurs with its depth from now on: it is about to be what shows
+        HomeBridge.animateDepth(d, 0f, 0f, spec.response, spec.damping, System.nanoTime())
+        HomeBridge.afterHomeDraw { nav.post { if (gen == g && phase == Phase.HOME_PULL) finishHomePull() } }
     }
 
     /** A pull still showing when a new touch arrives: gone at once. */
@@ -2429,7 +2472,6 @@ object GestureNav {
 
     private const val HOLD_RADIUS_DP = 12f
     private const val HOME_PULL_DEPTH = 0.6f   // how far home recedes at most while a swipe up on it goes on
-    private const val PULL_FADE_MS = 140L      // a released swipe on home: the picture fades into the live home
     private const val SWITCHER_DIM = 0.28f              // home behind the deck: darkened by this much
     private const val SWITCHER_MAX_CARDS = 50   // every recent app (the system keeps about this many)
     // A window's touchable region can change without a re-layout from Android 14 (AttachedSurfaceControl).

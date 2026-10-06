@@ -79,6 +79,10 @@ class ContextMenuView(
 
     /** Opens for the item drawn by [picture] at [frame] (this view's coordinates); no picture: a menu for a button at [frame]. */
     fun show(picture: Picture?, frame: RectF, menu: List<Item>) {
+        // The previous menu may still be closing: its item shows again now (its "closed" would be replaced and lost, leaving
+        // that item invisible on home).
+        onClosed?.invoke()
+        onClosed = null
         lifted = picture
         liftedFades = false
         anchor.set(frame)
@@ -301,7 +305,8 @@ class ContextMenuView(
                 val chosen = items.getOrNull(i)
                 val sizes = chosen?.sizes
                 if (chosen != null && sizes != null) {
-                    // A size: applied at once, the menu stays (the widget behind changes size, as on iOS).
+                    // A size: applied at once and the menu closes onto the widget, which is already growing or shrinking
+                    // to it (the lifted copy shows the old size: kept open, the menu would hide the change).
                     val j = ((e.x - panel.left) / panel.width() * sizes.size).toInt().coerceIn(0, sizes.size - 1)
                     chosen.onSize?.invoke(sizes[j])
                     dismiss()

@@ -77,6 +77,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         screen = HomeScreen(this, this)
         widgets = dev.launcher.app.home.HomeWidgets(this).also { screen.widgets = it }
+        // The widget gallery's list, built once in the background while nothing else is going on, so it opens filled.
+        screen.postDelayed({ widgets?.prewarmApps() }, 4000)
         screen.setConfig(HomeConfig.load(this))
         setContentView(screen)
         screen.viewTreeObserver.addOnDrawListener(drawWatch)
@@ -110,7 +112,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private val screenState = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> { sleptSinceResume = true; arrivalOnUnlock = false }
+                // Only when home was in front as the screen went off: if an app was, the unlock goes back to that app, and
+                // an arrival must not play later when home comes back from it.
+                Intent.ACTION_SCREEN_OFF -> { if (resumed) sleptSinceResume = true; arrivalOnUnlock = false }
                 Intent.ACTION_USER_PRESENT -> if (arrivalOnUnlock && resumed) { arrivalOnUnlock = false; screen.removeCallbacks(unlockFallback); screen.playArrival(cold = false) }
             }
         }
@@ -158,6 +162,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     }
 
     override fun onPause() {
+        // Paused because the screen went off (the broadcast may come after this): home was in front, the arrival is due.
+        val interactive = try { getSystemService(android.os.PowerManager::class.java).isInteractive } catch (_: Throwable) { true }
+        if (!interactive) sleptSinceResume = true
         resumed = false
         arrivalOnUnlock = false
         screen.removeCallbacks(unlockFallback)
@@ -216,12 +223,12 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         AppLog.log("[home] tap ${e.pkg}")
         LaunchStats.record(e.key)
         lastLaunched = e.pkg
-        if (e.internal) { Apps.launch(e, null, null); return }
         val bounds = Rect().also { iconOnScreen.roundOut(it) }
-        // No system transition: the launch card is the animation.
+        // No system transition: the launch card is the animation (also for our own screens, which used the stock slide).
         val start = {
             try {
-                if (!NoAnimStarts.start(Apps.launchIntent(e, bounds), e.user.hashCode())) Apps.launch(e, bounds, GestureNav.noAnimation(this))
+                if (e.internal) Apps.launch(e, bounds, GestureNav.noAnimation(this))
+                else if (!NoAnimStarts.start(Apps.launchIntent(e, bounds), e.user.hashCode())) Apps.launch(e, bounds, GestureNav.noAnimation(this))
             } catch (t: Throwable) {
                 AppLog.log("[home] launch ${e.pkg} failed: ${t.message}")
             }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Our own icons' backgrounds: deep blue (home), graphite (developer panel), green (safe settings). -->
+    <color name="icon_bg_launcher">#FF2B4C7E</color>
+    <color name="icon_bg_dev">#FF3A3A3C</color>
+    <color name="icon_bg_safe">#FF2E7D5B</color>
+</resources>

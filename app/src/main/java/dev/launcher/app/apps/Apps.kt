@@ -38,8 +38,20 @@ class AppEntry(
     val pkg: String get() = component.packageName
 
     fun loadIcon(ctx: Context, density: Int): Drawable? = try {
-        info?.getIcon(density) ?: ctx.packageManager.getApplicationIcon(pkg)
+        ownIcon(ctx, density) ?: info?.getIcon(density) ?: ctx.packageManager.getApplicationIcon(pkg)
     } catch (_: Throwable) { null }
+
+    /**
+     * Our own screens' icons straight from our resources: through the package manager a system icon theme (One UI themes,
+     * icon packs) replaced them with Android's placeholder.
+     */
+    private fun ownIcon(ctx: Context, density: Int): Drawable? {
+        if (pkg != ctx.packageName) return null
+        val res = try { ctx.packageManager.getActivityInfo(component, 0).iconResource } catch (_: Throwable) { 0 }
+        val id = if (res != 0) res else ctx.applicationInfo.icon
+        if (id == 0) return null
+        return try { ctx.resources.getDrawableForDensity(id, density, ctx.theme) } catch (_: Throwable) { null }
+    }
 }
 
 /**
@@ -88,7 +100,7 @@ object Apps {
     /** Starts [e] as a new task (with [bounds] = where its icon is, and [options] e.g. "no system transition"). */
     fun launch(e: AppEntry, bounds: Rect?, options: Bundle?) {
         if (e.internal) {
-            ctx.startActivity(Intent().setComponent(e.component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            ctx.startActivity(Intent().setComponent(e.component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options)
             return
         }
         try {

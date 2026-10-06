@@ -312,21 +312,18 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     private fun remove(v: View) {
         val l = host.layout ?: return
         val dock = host.dockView
+        // It shrinks away where it is (the same leave as everywhere on home) while the others close the gap in the dock.
         if (dock != null && v is IconView && dock.icons().any { it === v }) {
             val key = v.entry?.key ?: return
             l.dock.remove(key)
-            v.animate().scaleX(0f).scaleY(0f).alpha(0f).setDuration(200).withEndAction {
-                dock.bind(dock.icons().filter { it !== v }, animate = true)
-            }.start()
+            dock.bind(dock.icons().filter { it !== v }, animate = true)
         } else {
             val page = host.pageViews.firstOrNull { it.itemOf(v) != null } ?: return
             val item = page.itemOf(v) ?: return
             val pi = host.pageViews.indexOf(page)
             l.pages[pi].removeAll { it === item }   // its cell stays empty (iOS 18: nothing slides over)
             host.itemRemoved(item)
-            v.animate().scaleX(0f).scaleY(0f).alpha(0f).setDuration(200).withEndAction {
-                page.setItems(l.pages[pi], animate = true)
-            }.start()
+            page.setItems(l.pages[pi], animate = true)
         }
         home.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
         host.layoutChanged()
@@ -398,11 +395,11 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     private fun recordLift(v: View): Picture {
         val pic = Picture()
         val c = pic.beginRecording(maxOf(1, v.width), maxOf(1, v.height))
-        if (v is IconView) { v.labelHidden = true; v.editing = false }
-        if (v is HomeWidgetView) v.editing = false
+        if (v is IconView) { v.labelHidden = true; v.editBadgeHidden = true }
+        if (v is HomeWidgetView) v.editBadgeHidden = true
         v.draw(c)
-        if (v is IconView) { v.labelHidden = false; v.editing = active }
-        if (v is HomeWidgetView) v.editing = active
+        if (v is IconView) { v.labelHidden = false; v.editBadgeHidden = false }
+        if (v is HomeWidgetView) v.editBadgeHidden = false
         pic.endRecording()
         return pic
     }
@@ -718,6 +715,12 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         }
         private var pressedEdit = false
         private var pressedDone = false
+        // Presses dim the label and the capsule a little, in and out on a spring (not at once).
+        private val editPress = SpringValue(0f, 100f, { invalidate() })
+        private val donePress = SpringValue(0f, 100f, { invalidate() })
+        // The capsules are clear glass: over a light wallpaper the white labels need a slightly darker capsule to sit on.
+        private val tint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
+        private val tintRect = RectF()
 
         init {
             setWillNotDraw(false)
@@ -733,6 +736,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val p = Picture()
             val c = p.beginRecording(maxOf(1, editGlass.width), maxOf(1, editGlass.height))
             editGlass.draw(c)
+            tint.alpha = 0x2E
+            c.drawRoundRect(0f, 0f, editGlass.width.toFloat(), editGlass.height.toFloat(), bh / 2f, bh / 2f, tint)
             text.draw(c, "Edit", "Edit", editGlass.width / 2f, text.baselineFor(editGlass.height / 2f), editGlass.width.toFloat())
             p.endRecording()
             return p
@@ -768,13 +773,23 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
         override fun dispatchDraw(canvas: Canvas) {
             super.dispatchDraw(canvas)
-            drawLabel(canvas, editGlass, "Edit", pressedEdit)
-            drawLabel(canvas, doneGlass, "Done", pressedDone)
+            drawLabel(canvas, editGlass, "Edit", editPress.value)
+            drawLabel(canvas, doneGlass, "Done", donePress.value)
         }
 
-        private fun drawLabel(canvas: Canvas, g: View, label: String, pressed: Boolean) {
+        private fun drawLabel(canvas: Canvas, g: View, label: String, press: Float) {
             if (g.width == 0) return
-            text.draw(canvas, label, label, g.left + g.width / 2f, text.baselineFor(g.top + g.height / 2f), g.width.toFloat(), if (pressed) 0x80 else 0xFF)
+            val k = press.coerceIn(0f, 1f)
+            tintRect.set(g.left.toFloat(), g.top.toFloat(), g.right.toFloat(), g.bottom.toFloat())
+            tint.alpha = (0x2E + 0x1A * k).toInt()
+            canvas.drawRoundRect(tintRect, bh / 2f, bh / 2f, tint)
+            text.draw(canvas, label, label, g.left + g.width / 2f, text.baselineFor(g.top + g.height / 2f), g.width.toFloat(), (255 - 0x60 * k).toInt())
+        }
+
+        private fun setPressed(edit: Boolean, done: Boolean) {
+            pressedEdit = edit; pressedDone = done
+            editPress.animateTo(if (edit) 1f else 0f, if (edit) PRESS_IN else PRESS_OUT)
+            donePress.animateTo(if (done) 1f else 0f, if (done) PRESS_IN else PRESS_OUT)
         }
 
         private fun hit(g: View, e: MotionEvent): Boolean {
@@ -785,25 +800,27 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         override fun onTouchEvent(e: MotionEvent): Boolean {
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    pressedEdit = hit(editGlass, e)
-                    pressedDone = hit(doneGlass, e)
-                    invalidate()
+                    setPressed(hit(editGlass, e), hit(doneGlass, e))
                     return pressedEdit || pressedDone
                 }
                 MotionEvent.ACTION_UP -> {
                     val edit = pressedEdit && hit(editGlass, e)
                     val done = pressedDone && hit(doneGlass, e)
-                    pressedEdit = false; pressedDone = false
-                    invalidate()
+                    setPressed(edit = false, done = false)
                     if (done) exit()
                     if (edit) host.showEditMenu(RectF(left + editGlass.left.toFloat(), top + editGlass.top.toFloat(),
                         left + editGlass.right.toFloat(), top + editGlass.bottom.toFloat()))
                 }
-                MotionEvent.ACTION_CANCEL -> { pressedEdit = false; pressedDone = false; invalidate() }
+                MotionEvent.ACTION_CANCEL -> setPressed(edit = false, done = false)
             }
             return true
         }
     }
 
     init { ghost.visibility = View.GONE }
+
+    private companion object {
+        val PRESS_IN = dev.launcher.app.motion.SpringSpec(0.12f, 1f)
+        val PRESS_OUT = dev.launcher.app.motion.SpringSpec(0.3f, 1f)
+    }
 }

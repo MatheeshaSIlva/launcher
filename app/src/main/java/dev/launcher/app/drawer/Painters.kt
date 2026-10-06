@@ -53,6 +53,12 @@ internal class LabelPainter(textSize: Float, color: Int, align: Paint.Align, typ
 
     fun clear() = cache.clear()
 
+    /**
+     * A soft dark shadow under the text (as home's icon labels have), so white text stays readable where the glass or the
+     * blurred wallpaper behind it is light. [px]: its blur radius.
+     */
+    fun shadowed(px: Float, color: Int = 0x59000000): LabelPainter = apply { paint.setShadowLayer(px, 0f, px * 0.3f, color) }
+
     /** Baseline that centres a line of this text vertically on [cy]. */
     fun baselineFor(cy: Float): Float = cy - (paint.fontMetrics.ascent + paint.fontMetrics.descent) / 2f
 }

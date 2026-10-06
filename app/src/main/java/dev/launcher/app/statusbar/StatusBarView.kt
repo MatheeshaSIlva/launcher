@@ -95,12 +95,20 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     /** The app in front hides the status bar (immersive): so do we. */
     fun setHiddenByApp(hidden: Boolean) {
-        val v = if (hidden) INVISIBLE else VISIBLE
-        if (visibility != v) {
-            visibility = v
-            AppLog.log("[statusbar] ${if (hidden) "hidden (the app in front is full screen)" else "shown"}")
+        if (hidden == hiddenByApp) return
+        hiddenByApp = hidden
+        AppLog.log("[statusbar] ${if (hidden) "hidden (the app in front is full screen)" else "shown"}")
+        // Fades (and slides a touch upward) like the stock bar does, instead of vanishing or appearing in one frame.
+        animate().cancel()
+        if (hidden) {
+            animate().alpha(0f).translationY(-height * 0.25f).setDuration(160).withEndAction { visibility = INVISIBLE }.start()
+        } else {
+            visibility = VISIBLE
+            animate().alpha(1f).translationY(0f).setDuration(200).start()
         }
     }
+
+    private var hiddenByApp = false
 
     /** Black content (the app asks for a light status bar, or home's wallpaper is light under it). */
     fun setDark(d: Boolean) {

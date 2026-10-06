@@ -98,10 +98,11 @@ internal class SearchList(
     private var contentHeight = 0f
     private var animating = false
 
-    private val labels = LabelPainter(m.listText, 0xFFFFFFFF.toInt(), Paint.Align.LEFT)
-    private val headers = LabelPainter(m.listHeaderText, 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600))
-    private val index = LabelPainter(m.pt(11f), 0x99FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(600))
-    private val bubbleText = LabelPainter(m.pt(24f), 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.display(600))
+    // White text over the blurred wallpaper: a soft shadow keeps it readable where the wallpaper is light.
+    private val labels = LabelPainter(m.listText, 0xFFFFFFFF.toInt(), Paint.Align.LEFT).shadowed(m.pt(2f))
+    private val headers = LabelPainter(m.listHeaderText, 0xCCFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).shadowed(m.pt(2f))
+    private val index = LabelPainter(m.pt(11f), 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(600)).shadowed(m.pt(1.5f), 0x66000000)
+    private val bubbleText = LabelPainter(m.pt(24f), 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.display(600)).shadowed(m.pt(2f))
     private val separator = Paint().apply { color = 0x1FFFFFFF; strokeWidth = max(1f, m.pt(0.5f)) }
     private val bubbleFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFFFFF }
     private val bubbleRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x4DFFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(1f) }
@@ -375,32 +376,35 @@ internal class SearchList(
 
     private fun setPressed(e: AppEntry?) { if (pressed?.key != e?.key) { pressed = e; invalidate() } }
 
-    private val titles = LabelPainter(m.pt(15f), 0xD9FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600))
-    private val hitName = LabelPainter(m.pt(17f), 0xFFFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600))
-    private val hitSub = LabelPainter(m.pt(14.5f), 0x99FFFFFF.toInt(), Paint.Align.LEFT)
+    private val titles = LabelPainter(m.pt(15f), 0xE6FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).shadowed(m.pt(2f))
+    private val hitName = LabelPainter(m.pt(17f), 0xFFFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).shadowed(m.pt(2f))
+    private val hitSub = LabelPainter(m.pt(14.5f), 0xB3FFFFFF.toInt(), Paint.Align.LEFT).shadowed(m.pt(2f))
 
     // ------------------------------------------------------------------ drawing
 
     override fun onDraw(c: Canvas) {
         val now = System.nanoTime()
         // Scroll edge: rows fade out above the content (a layer over that band only).
+        // Only rows reaching into the band are drawn into it (every row was drawn a second time, every frame).
         val band = c.saveLayer(0f, 0f, width.toFloat(), contentTop, null)
-        drawRows(c, now)
+        drawRows(c, now, maxTop = contentTop)
         c.drawRect(0f, 0f, width.toFloat(), contentTop, fade)
         c.restoreToCount(band)
         c.save()
         c.clipRect(0f, contentTop, width.toFloat(), height - bottomSpace)
-        drawRows(c, now)
+        drawRows(c, now, minBottom = contentTop)
         c.restore()
         drawIndex(c)
         onDrawn?.invoke()
     }
 
-    private fun drawRows(c: Canvas, now: Long) {
+    /** Rows whose top is above [maxTop] and whose bottom is below [minBottom] (screen y). */
+    private fun drawRows(c: Canvas, now: Long, maxTop: Float = Float.MAX_VALUE, minBottom: Float = -Float.MAX_VALUE) {
         val textX = m.libMargin + m.listIcon + m.pt(14f)
         val rightEdge = width - m.libMargin - (if (query.isEmpty()) m.listSideIndex else 0f)
-        for (s in ghosts) drawRow(c, s, now, textX, rightEdge, null)
-        for ((i, s) in rows.withIndex()) drawRow(c, s, now, textX, rightEdge, rows.getOrNull(i + 1))
+        fun wanted(s: Shown): Boolean { val t = screenY(s, now); return t < maxTop && t + heightOf(s.row) > minBottom }
+        for (s in ghosts) if (wanted(s)) drawRow(c, s, now, textX, rightEdge, null)
+        for ((i, s) in rows.withIndex()) if (wanted(s)) drawRow(c, s, now, textX, rightEdge, rows.getOrNull(i + 1))
     }
 
     private fun drawRow(c: Canvas, s: Shown, now: Long, textX: Float, rightEdge: Float, next: Shown?) {
@@ -409,7 +413,7 @@ internal class SearchList(
         val alpha = (255 * s.a(now)).toInt().coerceIn(0, 255)
         if (alpha == 0) return
         when (val row = s.row) {
-            is Row.Header -> headers.draw(c, "h${row.letter}", row.letter.toString(), m.libMargin, headers.baselineFor(t + m.listHeader * 0.62f), m.w.toFloat(), (alpha * 0.6f).toInt())
+            is Row.Header -> headers.draw(c, "h${row.letter}", row.letter.toString(), m.libMargin, headers.baselineFor(t + m.listHeader * 0.62f), m.w.toFloat(), alpha)
             is Row.Title -> {
                 titles.draw(c, row.key, row.text, m.libMargin, t + m.pt(28f), m.w.toFloat(), alpha)
                 separator.alpha = (0x2E * s.a(now)).toInt()
@@ -471,7 +475,7 @@ internal class SearchList(
             val near = if (lit > 0f) (1f - abs(cy - fingerY) / (step * 3f)).coerceIn(0f, 1f) else 0f
             val bump = near * near * lit
             val scale = 1f + 0.5f * bump
-            val alpha = (153 + (255 - 153) * maxOf(bump, if (scrubbing && l == scrubLetter) 1f else 0f)).toInt().coerceIn(0, 255)
+            val alpha = (204 + (255 - 204) * maxOf(bump, if (scrubbing && l == scrubLetter) 1f else 0f)).toInt().coerceIn(0, 255)
             if (scale != 1f) {
                 c.save()
                 c.scale(scale, scale, x - m.pt(2f) * bump, cy)

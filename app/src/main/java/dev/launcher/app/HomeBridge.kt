@@ -112,6 +112,9 @@ object HomeBridge {
         h.afterNextDraw(then)
     }
 
+    /** Runs [then] (main thread) once home has drawn its next frame and it has been queued, or after 150 ms. Any thread. */
+    fun afterHomeDraw(then: () -> Unit) = main.post { home?.afterNextDraw(then) ?: then() }
+
     /**
      * The real home takes over the depth animation from the picture: same spring, same start ([startNanos], System.nanoTime
      * base like Choreographer frame times), so when the picture is dropped nothing jumps. Any thread.

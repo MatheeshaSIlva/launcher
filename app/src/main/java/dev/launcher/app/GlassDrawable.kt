@@ -141,6 +141,8 @@ class GlassDrawable(
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     var originX = 0f
     var originY = 0f
+    /** How much the glass is scaled on screen (a view blooming in, home's depth zoom): its samples spread by as much. */
+    var scale = 1f
 
     init {
         setImages("Old", wallpaper)
@@ -235,6 +237,7 @@ class GlassDrawable(
         val b = bounds
         shader.setFloatUniform("size", b.width().toFloat(), b.height().toFloat())
         shader.setFloatUniform("dockOrigin", originX, originY)
+        shader.setFloatUniform("placeScale", scale)
         canvas.save()
         canvas.translate(b.left.toFloat(), b.top.toFloat())
         canvas.drawRect(0f, 0f, b.width().toFloat(), b.height().toFloat(), paint)
@@ -309,6 +312,7 @@ uniform shader sharpNew;
 uniform shader frostNew;
 uniform float2 size;
 uniform float2 dockOrigin;
+uniform float placeScale;
 uniform float refraction;
 uniform float dispersion;
 uniform float frost;
@@ -322,48 +326,64 @@ uniform float progress;
 uniform float time;
 """
 
+        // [bend] 0 = the glass's flat body (no rim bend): there the colours would part by a few px of an already blurred
+        // image, nothing visible, so one sample does instead of three (most of a tile's area; the S24's GPU time per frame).
         private const val LOOK_BACKDROP = """
-half3 lookOld(float2 sp, float2 off, float frostAmt) {
+half3 lookOld(float2 sp, float2 off, float frostAmt, float bend) {
+    if (bend < 0.001) return frostOld.eval(sp + off).rgb;
     return half3(
         frostOld.eval(sp + off * (1.0 - dispersion)).r,
         frostOld.eval(sp + off).g,
         frostOld.eval(sp + off * (1.0 + dispersion)).b);
 }
-half3 lookNew(float2 sp, float2 off, float frostAmt) {
+half3 lookNew(float2 sp, float2 off, float frostAmt, float bend) {
+    if (bend < 0.001) return frostNew.eval(sp + off).rgb;
     return half3(
         frostNew.eval(sp + off * (1.0 - dispersion)).r,
         frostNew.eval(sp + off).g,
         frostNew.eval(sp + off * (1.0 + dispersion)).b);
 }
-half3 look(float2 sp, float2 off) {
-    if (progress >= 1.0) return lookNew(sp, off, frost);
+half3 look(float2 sp, float2 off, float bend) {
+    if (progress >= 1.0) return lookNew(sp, off, frost, bend);
     float rv = revealMix(sp + off);
-    return rv >= 0.999 ? lookNew(sp, off, frost)
-         : rv <= 0.001 ? lookOld(sp, off, frost)
-         : mix(lookOld(sp, off, frost), lookNew(sp, off, frost), half(rv));
+    return rv >= 0.999 ? lookNew(sp, off, frost, bend)
+         : rv <= 0.001 ? lookOld(sp, off, frost, bend)
+         : mix(lookOld(sp, off, frost, bend), lookNew(sp, off, frost, bend), half(rv));
 }
 """
         private const val LOOK = """
 // A wallpaper seen through the glass at screen point sp with refraction offset off: dispersed clear and frosted samples.
 // (Two copies because child shaders cannot be passed as function arguments.)
-half3 lookOld(float2 sp, float2 off, float frostAmt) {
-    half3 clearCol = half3(
+// Only the images that contribute are sampled (fully frosted glass, the dock's, never needs the sharp one), and the flat body
+// ([bend] 0: no rim bend, so no colour fringes to resolve) takes one sample per image instead of three.
+half3 lookOld(float2 sp, float2 off, float frostAmt, float bend) {
+    if (bend < 0.001) {
+        if (frostAmt >= 0.999) return frostOld.eval(sp + off).rgb;
+        if (frostAmt <= 0.001) return sharpOld.eval(sp + off).rgb;
+        return mix(sharpOld.eval(sp + off).rgb, frostOld.eval(sp + off).rgb, half(frostAmt));
+    }
+    half3 clearCol = frostAmt >= 0.999 ? half3(0.0) : half3(
         sharpOld.eval(sp + off * (1.0 - dispersion)).r,
         sharpOld.eval(sp + off).g,
         sharpOld.eval(sp + off * (1.0 + dispersion)).b);
-    half3 frostCol = half3(
+    half3 frostCol = frostAmt <= 0.001 ? half3(0.0) : half3(
         frostOld.eval(sp + off * (1.0 - dispersion)).r,
         frostOld.eval(sp + off).g,
         frostOld.eval(sp + off * (1.0 + dispersion)).b);
     return mix(clearCol, frostCol, half(frostAmt));
 }
 
-half3 lookNew(float2 sp, float2 off, float frostAmt) {
-    half3 clearCol = half3(
+half3 lookNew(float2 sp, float2 off, float frostAmt, float bend) {
+    if (bend < 0.001) {
+        if (frostAmt >= 0.999) return frostNew.eval(sp + off).rgb;
+        if (frostAmt <= 0.001) return sharpNew.eval(sp + off).rgb;
+        return mix(sharpNew.eval(sp + off).rgb, frostNew.eval(sp + off).rgb, half(frostAmt));
+    }
+    half3 clearCol = frostAmt >= 0.999 ? half3(0.0) : half3(
         sharpNew.eval(sp + off * (1.0 - dispersion)).r,
         sharpNew.eval(sp + off).g,
         sharpNew.eval(sp + off * (1.0 + dispersion)).b);
-    half3 frostCol = half3(
+    half3 frostCol = frostAmt <= 0.001 ? half3(0.0) : half3(
         frostNew.eval(sp + off * (1.0 - dispersion)).r,
         frostNew.eval(sp + off).g,
         frostNew.eval(sp + off * (1.0 + dispersion)).b);
@@ -373,12 +393,12 @@ half3 lookNew(float2 sp, float2 off, float frostAmt) {
 // Old and new wallpaper meet at the reveal front, exactly where the wallpaper behind changes. With no change running
 // (progress 1: old and new are the same image) the front's noise is not evaluated at all: it ran for every pixel of every
 // glass in every frame, a large share of the GPU time of the App Library and its folders on the S24.
-half3 look(float2 sp, float2 off) {
-    if (progress >= 1.0) return lookNew(sp, off, frost);
+half3 look(float2 sp, float2 off, float bend) {
+    if (progress >= 1.0) return lookNew(sp, off, frost, bend);
     float rv = revealMix(sp + off);
-    return rv >= 0.999 ? lookNew(sp, off, frost)
-         : rv <= 0.001 ? lookOld(sp, off, frost)
-         : mix(lookOld(sp, off, frost), lookNew(sp, off, frost), half(rv));
+    return rv >= 0.999 ? lookNew(sp, off, frost, bend)
+         : rv <= 0.001 ? lookOld(sp, off, frost, bend)
+         : mix(lookOld(sp, off, frost, bend), lookNew(sp, off, frost, bend), half(rv));
 }
 """
 
@@ -392,12 +412,11 @@ half4 main(float2 coord) {
     float d = sdRoundRect(p, half_size, radius);
     if (d > 1.0) return half4(0.0);
 
-    // Outward surface normal from the distance field's gradient.
-    float e = 0.75;
-    float2 n = float2(
-        sdRoundRect(p + float2(e, 0.0), half_size, radius) - sdRoundRect(p - float2(e, 0.0), half_size, radius),
-        sdRoundRect(p + float2(0.0, e), half_size, radius) - sdRoundRect(p - float2(0.0, e), half_size, radius));
-    n = n / max(length(n), 1e-4);
+    // Outward surface normal: the rounded rectangle's gradient, worked out directly (four extra distance evaluations per
+    // pixel did the same): along a corner's radius, else straight out of the nearer side.
+    float2 q = abs(p) - half_size + radius;
+    float2 sg = float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+    float2 n = (q.x > 0.0 && q.y > 0.0) ? normalize(q) * sg : (q.x > q.y ? float2(sg.x, 0.0) : float2(0.0, sg.y));
 
     // 0 at the edge, 1 once past the bevel. The bevel is a quarter-circle profile: steepest (strongest bend) at the edge.
     // Small shapes (the Search pill) get a proportionally narrower bevel, so their lens never fills the whole shape.
@@ -406,10 +425,10 @@ half4 main(float2 coord) {
     float t = clamp(-d / bv, 0.0, 1.0);
     float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
 
-    float2 sp = dockOrigin + coord;
+    float2 sp = dockOrigin + coord * placeScale;
     // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
     float2 off = n * bend * rf - p * magnify;
-    half3 col = saturate3(look(sp, off), half(saturation));
+    half3 col = saturate3(look(sp, off, bend), half(saturation));
     col = mix(col, half3(1.0), half(tint));
     col = lightGlass(col, max(-d, 0.0), n);
 
@@ -430,12 +449,11 @@ half4 main(float2 coord) {
     float d = sdRoundRect(p, half_size, radius);
     if (d > 1.0) return half4(0.0);
 
-    // Outward surface normal from the distance field's gradient.
-    float e = 0.75;
-    float2 n = float2(
-        sdRoundRect(p + float2(e, 0.0), half_size, radius) - sdRoundRect(p - float2(e, 0.0), half_size, radius),
-        sdRoundRect(p + float2(0.0, e), half_size, radius) - sdRoundRect(p - float2(0.0, e), half_size, radius));
-    n = n / max(length(n), 1e-4);
+    // Outward surface normal: the rounded rectangle's gradient, worked out directly (four extra distance evaluations per
+    // pixel did the same): along a corner's radius, else straight out of the nearer side.
+    float2 q = abs(p) - half_size + radius;
+    float2 sg = float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+    float2 n = (q.x > 0.0 && q.y > 0.0) ? normalize(q) * sg : (q.x > q.y ? float2(sg.x, 0.0) : float2(0.0, sg.y));
 
     // 0 at the edge, 1 once past the bevel. The bevel is a quarter-circle profile: steepest (strongest bend) at the edge.
     // Small shapes (the Search pill) get a proportionally narrower bevel, so their lens never fills the whole shape.
@@ -444,10 +462,10 @@ half4 main(float2 coord) {
     float t = clamp(-d / bv, 0.0, 1.0);
     float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
 
-    float2 sp = dockOrigin + coord;
+    float2 sp = dockOrigin + coord * placeScale;
     // Rim: bent outward (shows what is just outside the shape). Body: a weak lens pulling samples towards the centre.
     float2 off = n * bend * rf - p * magnify;
-    half3 col = saturate3(look(sp, off), half(saturation));
+    half3 col = saturate3(look(sp, off, bend), half(saturation));
     col = mix(col, half3(1.0), half(tint));
     col = lightGlass(col, max(-d, 0.0), n);
 
@@ -473,7 +491,7 @@ float sd(float2 c) { return (sdf.eval(c * sdfScale).a - 0.5) * 2.0 * rangePx; }
 
 // How light the backdrop is here (0 = dark .. 1 = light).
 float brightAt(float2 sp) {
-    float l = dot(float3(look(sp, float2(0.0))), float3(0.2126, 0.7152, 0.0722));
+    float l = dot(float3(look(sp, float2(0.0), 0.0)), float3(0.2126, 0.7152, 0.0722));
     return smoothstep(0.45, 0.85, l) * adapt;
 }
 
@@ -482,7 +500,7 @@ half4 main(float2 coord) {
     // A soft shadow a little below the shape (from the same distance field).
     float ds = sd(coord - float2(0.0, shadowDy));
     if (a < 0.003 && ds < -shadowR) return half4(0.0);
-    float2 sp = dockOrigin + coord;
+    float2 sp = dockOrigin + coord * placeScale;
     float bright = brightAt(sp);
     float sh = 1.0 - clamp(-ds / shadowR, 0.0, 1.0);
     half4 shadow = half4(0.0, 0.0, 0.0, half(shadowAlpha * (1.0 + 0.8 * bright) * sh * sh));
@@ -501,7 +519,7 @@ half4 main(float2 coord) {
     float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
     float rf = refraction * min(1.0, bevelPx / bevelRef);
     float2 off = n * bend * rf - (coord - size * 0.5) * magnify;
-    half3 col = saturate3(look(sp, off), half(saturation));
+    half3 col = saturate3(look(sp, off, bend), half(saturation));
     // Tinted glass: lifted towards white over a dark backdrop, darker over a light one (its tones follow what is behind).
     col = mix(col, half3(1.0), half(tint * (1.0 - bright)));
     col *= half(1.0 - 0.3 * bright);

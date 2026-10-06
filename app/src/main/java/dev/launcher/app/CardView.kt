@@ -26,7 +26,24 @@ class CardView(context: Context) : View(context) {
         set(v) { field = v; invalidate() }
     /** Background of the launch screen when there is no snapshot (the app's splash colour). */
     var placeholderColor = 0xFF2A2F3A.toInt()
-        set(v) { field = v; invalidate() }
+        set(v) { colorAnim?.cancel(); colorAnim = null; field = v; shownColor = v; invalidate() }
+    // What is drawn: the placeholder colour, or a blend on its way to it.
+    private var shownColor = placeholderColor
+    private var colorAnim: android.animation.ValueAnimator? = null
+
+    /** The app's real launch-screen colour arrived while the card shows a guess: it blends over, never switches in a frame. */
+    fun fadePlaceholderTo(color: Int) {
+        if (color == placeholderColor) return
+        val from = shownColor
+        placeholderColor = color   // ends any blend under way
+        shownColor = from
+        colorAnim = android.animation.ValueAnimator.ofArgb(from, color).apply {
+            duration = 180
+            addUpdateListener { a -> shownColor = a.animatedValue as Int; invalidate() }
+            start()
+        }
+    }
+
     /** The icon's size at rest on home: the launch screen's icon never gets smaller than this. */
     var minIconSize = 0f
     /** Home as a card (switching away from the home screen); drawn instead of a snapshot. */
@@ -110,7 +127,7 @@ class CardView(context: Context) : View(context) {
         // No snapshot: the app's launch screen. Its colour fades in behind the icon as the card grows; the icon goes from
         // filling the card to its launch-screen size in the middle (about a third of the width, never below home size).
         if (contentAlpha > 0) {
-            paint.color = placeholderColor
+            paint.color = shownColor
             paint.alpha = contentAlpha
             canvas.drawRect(l, t, l + w, t + h, paint)
         }

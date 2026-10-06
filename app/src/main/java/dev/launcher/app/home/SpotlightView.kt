@@ -66,8 +66,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.4f) })
     }
     private val dim = Paint()
-    private val header = LabelPainter(m.listHeaderText, 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600))
-    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(450))
+    private val header = LabelPainter(m.listHeaderText, 0xCCFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).shadowed(m.pt(2f))
+    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(450)).shadowed(m.pt(2f))
     private var wallpaper: Wallpaper? = null
     private var glass: GlassDrawable? = null
     private var suggestions: List<AppEntry> = emptyList()
@@ -172,7 +172,12 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         progress = if (p > 1f) 1f + Motion.rubberBand((p - 1f) * h, h) / h else p.coerceAtLeast(0f)
         target = 1f
         applyProgress()
+        // The keyboard is asked for while the pull is still under way (it takes a few hundred ms to start): asked for at the
+        // release, Spotlight opened first and the keyboard came up after it, in two steps. A pull let go goes away with it.
+        if (progress > KEYBOARD_AT && !keyboardAsked) { keyboardAsked = true; focusField() }
     }
+
+    private var keyboardAsked = false
 
     /** Finger lifted with [velocityY] px/s (down positive). */
     fun release(velocityY: Float) {
@@ -187,16 +192,18 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
     fun open(velocity: Float = 0f) {
         if (visibility != View.VISIBLE) prepare()
         animateTo(1f, velocity)
-        focusField()
+        if (!keyboardAsked) { keyboardAsked = true; focusField() }
     }
 
     fun close(velocity: Float = 0f) {
+        keyboardAsked = false
         hideKeyboard()
         animateTo(0f, velocity)
     }
 
     /** At once (a result was launched: the launch card covers this). */
     fun closeNow() {
+        keyboardAsked = false
         hideKeyboard()
         animating = false
         target = 0f
@@ -273,13 +280,16 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         results.setQuery(t)
         val want = if (t.isEmpty()) 0f else 1f
         if (want == resultsShown) return
-        // Suggestions and results cross-fade.
-        android.animation.ValueAnimator.ofFloat(resultsShown, want).apply {
-            duration = Motion.profile.modeCrossfadeMs
+        // Suggestions and results cross-fade (from where a crossfade under way is: typing then deleting at once reverses it).
+        resultsAnim?.cancel()
+        resultsAnim = android.animation.ValueAnimator.ofFloat(resultsShown, want).apply {
+            duration = (Motion.profile.modeCrossfadeMs * kotlin.math.abs(want - resultsShown)).toLong().coerceAtLeast(1)
             addUpdateListener { setResultsShown(it.animatedValue as Float) }
             start()
         }
     }
+
+    private var resultsAnim: android.animation.ValueAnimator? = null
 
     private fun focusField() {
         field.edit.requestFocus()
@@ -340,7 +350,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         val a = (255 * p * (1f - resultsShown)).toInt()
         if (a <= 0 || suggestions.isEmpty()) return
         val shift = -(1f - p) * m.pt(30f)
-        header.draw(c, "h", "Suggestions", m.libMargin, m.gridTop - m.pt(6f) + shift, m.w.toFloat(), (a * 0.6f).toInt())
+        header.draw(c, "h", "Suggestions", m.libMargin, m.gridTop - m.pt(6f) + shift, m.w.toFloat(), a)
         for ((i, e) in suggestions.withIndex()) {
             suggestionRect(i, r)
             icons.draw(c, e, r, dimmed = i == pressed, alpha = a)
@@ -398,7 +408,10 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         val edit = EditText(ctx)
         val frost = Frost(ctx)
         private val clearButton = ClearButton(ctx)
-        private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND }
+        private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND
+            setShadowLayer(m.pt(2f), 0f, m.pt(0.6f), 0x59000000)
+        }
         private val lens = Path()
 
         init {
@@ -407,7 +420,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
             edit.apply {
                 background = null
                 hint = "Search"
-                setHintTextColor(0x99FFFFFF.toInt())
+                setHintTextColor(0xB3FFFFFF.toInt())
+                setShadowLayer(m.pt(2f), 0f, m.pt(0.6f), 0x59000000)
                 setTextColor(0xFFFFFFFF.toInt())
                 setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
                 typeface = Fonts.text(400)
@@ -420,7 +434,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                     override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
                     override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                     override fun afterTextChanged(s: Editable?) {
-                        clearButton.visibility = if (s.isNullOrEmpty()) View.INVISIBLE else View.VISIBLE
+                        clearButton.show(!s.isNullOrEmpty())
                         onQuery(s?.toString().orEmpty())
                     }
                 })
@@ -439,6 +453,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                 rightMargin = m.pt(8f).roundToInt()
             })
             clearButton.visibility = View.INVISIBLE
+            clearButton.alpha = 0f
             clearButton.setOnClickListener { clear() }
         }
 
@@ -492,6 +507,22 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
 
         init { isClickable = true; contentDescription = "Clear" }
 
+        /** Pops in (a little overshoot) with the first character, shrinks away when the field is empty again. */
+        private var shown = false
+
+        fun show(on: Boolean) {
+            if (on == shown) return
+            shown = on
+            animate().cancel()
+            if (on) {
+                if (visibility != View.VISIBLE) { visibility = View.VISIBLE; alpha = 0f; scaleX = 0.5f; scaleY = 0.5f }
+                animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(android.view.animation.OvershootInterpolator(1.6f)).start()
+            } else {
+                animate().alpha(0f).scaleX(0.5f).scaleY(0.5f).setDuration(160).setInterpolator(android.view.animation.AccelerateInterpolator())
+                    .withEndAction { visibility = View.INVISIBLE }.start()
+            }
+        }
+
         override fun onDraw(c: Canvas) {
             val cx = width / 2f
             val cy = height / 2f
@@ -501,5 +532,10 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
             c.drawLine(cx - k, cy - k, cx + k, cy + k, cross)
             c.drawLine(cx - k, cy + k, cx + k, cy - k, cross)
         }
+    }
+
+    private companion object {
+        /** How far a pull goes before the keyboard is asked for (of the full pull). */
+        const val KEYBOARD_AT = 0.12f
     }
 }

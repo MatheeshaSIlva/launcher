@@ -839,3 +839,41 @@ Round 19 (Matheesha on 511d8e6: "the widget looks like absolute trash"; Spotligh
   glass (`GlassDrawable`, backdrop source), so both search fields are one design; results no longer show through it.
 - `IOS_LIBRARY` lens toned down slightly (refraction 60, dispersion 0.35) against colour fringes on small capsules.
 
+
+Round 20 (full audit on the S24 of the branch build b38770e, then fixes; branch merged into main). Measured and recorded on
+the S24 (screen recordings frame by frame, `tools/scenario_more.sh` frame stats), local builds installed over adb:
+- Launches: the tapped icon blinked out one frame before the card drew it (it is now hidden once the card window has drawn);
+  a card started with the icon's average colour and switched to the app's launch-screen colour in one frame (every app's
+  colour is resolved in the background now, a late one blends over 180 ms); a quick double tap on a library folder opened
+  the app under the finger in the growing folder (the second tap on the tile is ignored).
+- Swipe home from the A-Z list or a folder showed two of them (the picture fading in place over the live library sliding
+  away): the live home now takes over the picture's depth (same spring) and the picture goes once home has drawn.
+- Spotlight: the search field jumped to its final height for a frame before riding up with the keyboard (the final IME
+  inset arrives before the animation; only its steps are applied now); the keyboard is asked for early in the pull; the
+  results crossfade reverses from where it is; the clear button pops in and out.
+- Widget gallery: home's blur went blurred-sharp-blurred when opened from a menu (the menu's blur is held until the sheet's
+  takes over, and the sheet's glass blurs as much); the list took 2+ s to fill ("Looking for widgets…"): built in the
+  background and kept (343 ms, ahead of time); the clock preview shows today and now (not "Mon 9", 9:41); search results
+  glide and fade instead of popping; two packages of one app (Samsung Calendar) are one row.
+- Edit mode: "–" badges, resize handles and Edit/Done presses animate (spring); the frameless clock gets a faint outline in
+  edit mode so its controls sit on something; dock icons leave and arrive like page items (shrink away, grow in); "Widget
+  Names" only where a widget has a name. Badge count changes push from their size (no jump to 130 %).
+- Readability over light wallpapers: Edit/Done capsules slightly tinted; App Library field hint, magnifier and "Cancel",
+  A-Z letters and section headers, folder labels and title, tile labels, Spotlight texts all with a soft shadow and
+  stronger white.
+- Own screens: the dev panel and safe settings open and close with our card (they used the stock slide; closing the dev
+  panel flew the previous app's card to the centre). Real icons for Launcher, Launcher Dev and safe settings (loaded from our
+  resources: One UI's icon theme replaced them with the Android placeholder).
+- Logic: the clock's "building" could stick on a failed build (home never idle, stale picture); a menu shown while the
+  last one closed left that item invisible; the unlock arrival could play on a later plain return home (only when home
+  itself went to sleep in front now); the library field's Cancel animation laid out every frame (once now); a cold start
+  showed the empty App Library for ~1.5 s until the app list arrived (home shows its wallpaper and dock meanwhile); our
+  status bar fades for full-screen apps; glass knows its on-screen scale (refraction no longer drifts during the arrival
+  bloom, the wiggle or home's depth zoom).
+- GPU: glass shaders sample only what contributes (one sample in the flat body, no sharp image for fully frosted glass,
+  analytic normals); tiles and list rows are drawn a second time only where they reach into the scroll-edge fade.
+Frame stats after (missed refreshes): folder open 0-1 / close by bar 0 (was 4+1) / library to page 1 0 / Spotlight open 0
+(was 2) / close 0 / list close 0 (was 2+2) / folder, dock launch and close 0 / sideways 1 / switcher 0. GPU per frame on
+home with an open folder is still 9-12 ms (over budget but pipelined, no misses); the released swipe on home now blurs the
+live home for ~0.4 s (16 ms GPU frames, no misses). Not checked on the phone: the unlock arrival (needs an unlock), PiP
+holes, widget resizing. The Samsung keyboard still starts ~0.1 s after a fast pull opens Spotlight (its own start-up).

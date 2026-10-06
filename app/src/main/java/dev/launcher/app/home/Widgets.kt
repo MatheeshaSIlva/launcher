@@ -62,8 +62,28 @@ class HomeWidgets(private val activity: Activity) {
     fun start() { try { host.startListening() } catch (t: Throwable) { AppLog.log("[widgets] host start failed: ${t.message}") } }
     fun stop() { try { host.stopListening() } catch (_: Throwable) { } }
 
-    /** Every app with widgets, by name. */
+    // The gallery's list takes a while to build (every provider's app name and icon: over 2 s on the S24 with ~30 apps):
+    // built ahead of time in the background and kept until the installed apps change.
+    @Volatile private var appsCache: List<WidgetApp>? = null
+    private val listIo = Executors.newSingleThreadExecutor()
+
+    /** Builds the gallery's list in the background if it is not ready (home calls this early, e.g. when editing starts). */
+    fun prewarmApps() { if (appsCache == null) listIo.execute { apps() } }
+
+    /** The installed apps changed: the list is built again (in the background). */
+    fun appsChanged() { appsCache = null; prewarmApps() }
+
+    /** Every app with widgets, by name (from the kept list when ready). Any thread. */
     fun apps(): List<WidgetApp> {
+        appsCache?.let { return it }
+        val t0 = android.os.SystemClock.uptimeMillis()
+        return buildApps().also {
+            appsCache = it
+            AppLog.log("[widgets] ${it.size} apps with widgets listed in ${android.os.SystemClock.uptimeMillis() - t0} ms")
+        }
+    }
+
+    private fun buildApps(): List<WidgetApp> {
         val um = activity.getSystemService(UserManager::class.java)
         val users = try { um.userProfiles } catch (_: Throwable) { listOf(Process.myUserHandle()) }
         val pm = activity.packageManager
@@ -77,7 +97,11 @@ class HomeWidgets(private val activity: Activity) {
                 out += WidgetApp(label, pkg, user, icon, list)
             }
         }
-        return out.sortedBy { it.label.lowercase() }
+        // One row per app name and profile: a system app can come as two packages (Samsung's Calendar and its widget
+        // provider) that showed as two identical "Calendar" rows.
+        return out.groupBy { it.label.lowercase() to it.user }.values.map { same ->
+            if (same.size == 1) same[0] else same[0].let { f -> WidgetApp(f.label, f.pkg, f.user, f.icon, same.flatMap { it.widgets }) }
+        }.sortedBy { it.label.lowercase() }
     }
 
     /** The iOS sizes [info] can be shown at: those at least its minimum size, any of them if it can be resized. */
@@ -315,7 +339,18 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
     }
 
     override var editing = false
+        set(v) {
+            if (field == v) return
+            field = v
+            editK.animateTo(if (v) 1f else 0f, if (v) Motion.profile.appear else Motion.profile.menuClose)
+        }
+    private val editK = SpringValue(0f, 100f, { invalidate() })
+    override var editBadgeHidden = false
         set(v) { if (field != v) { field = v; invalidate() } }
+    /** True for a widget drawn without a card (the glass clock): edit mode shows its outline. */
+    protected open val frameless: Boolean get() = false
+    private val outlineFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+    private val outlineRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE }
 
     override fun badgeCenter(): FloatArray = floatArrayOf(left + m.pt(4f), m.pt(4f))
 
@@ -405,9 +440,20 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
             labelPaint.alpha = (255 * labelK).toInt()
             canvas.drawText(label, left + shownW / 2f, shownH + m.labelBaseline, labelPaint)
         }
-        if (editing) {
-            RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
-            ResizeHandle.draw(canvas, handleCenter()[0], handleCenter()[1], m.widgetRadius, m)
+        val ek = editK.value
+        if (ek > 0.01f && !editBadgeHidden) {
+            if (frameless) {
+                // Where the widget is, as a faint card (it has none of its own), fading in with the controls.
+                val a = ek.coerceIn(0f, 1f)
+                shownRect(r)
+                outlineFill.alpha = (0x1A * a).toInt()
+                outlineRim.alpha = (0x4D * a).toInt()
+                outlineRim.strokeWidth = maxOf(1f, m.pt(1f))
+                canvas.drawRoundRect(r, m.widgetRadius, m.widgetRadius, outlineFill)
+                canvas.drawRoundRect(r, m.widgetRadius, m.widgetRadius, outlineRim)
+            }
+            RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m, ek)
+            ResizeHandle.draw(canvas, handleCenter()[0], handleCenter()[1], m.widgetRadius, m, ek)
         }
     }
 

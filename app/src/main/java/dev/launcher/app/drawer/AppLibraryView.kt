@@ -79,7 +79,8 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
             text = "Cancel"
             setTextColor(0xFFFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
-            typeface = dev.launcher.app.theme.Fonts.text(400)
+            typeface = dev.launcher.app.theme.Fonts.text(500)
+            setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), 0x66000000)
             gravity = Gravity.CENTER_VERTICAL or Gravity.END
             alpha = 0f
             visibility = View.GONE
@@ -363,7 +364,11 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
 internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameLayout(ctx) {
     private val m = lib.m
 
-    private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xB3FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND }
+    // White over clear glass: a soft shadow keeps the magnifier and the hint readable over a light wallpaper.
+    private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND
+        setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), 0x66000000)
+    }
     private val rect = RectF()
     private val lens = Path()
     private var cancelSpace = 0f
@@ -375,7 +380,8 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
         edit.apply {
             background = null
             hint = "App Library"
-            setHintTextColor(0x99FFFFFF.toInt())
+            setHintTextColor(0xCCFFFFFF.toInt())
+            setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), 0x66000000)
             setTextColor(0xFFFFFFFF.toInt())
             setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(17f))
             typeface = dev.launcher.app.theme.Fonts.text(400)
@@ -421,21 +427,23 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
 
     fun clear() { edit.setText("") }
 
-    /** Makes room for "Cancel" on the right (0 = none, 1 = full). */
+    private var spaceAnim: android.animation.ValueAnimator? = null
+
+    /**
+     * Makes room for "Cancel" on the right (0 = none, 1 = full): the capsule animates (drawn), the text field takes its end
+     * width at once (one layout, not one per frame). A new call (Cancel tapped while it opens) goes on from where it is.
+     */
     fun animateCancelSpace(to: Float, ms: Long) {
-        val from = cancelSpace
-        if (ms <= 0) { cancelSpace = to; applySpace(); return }
-        android.animation.ValueAnimator.ofFloat(from, to).apply {
+        spaceAnim?.cancel()
+        spaceAnim = null
+        (edit.layoutParams as LayoutParams).rightMargin = (m.pt(12f) + to * m.pt(84f)).roundToInt()
+        edit.requestLayout()
+        if (ms <= 0) { cancelSpace = to; invalidate(); return }
+        spaceAnim = android.animation.ValueAnimator.ofFloat(cancelSpace, to).apply {
             duration = ms
-            addUpdateListener { cancelSpace = it.animatedValue as Float; applySpace() }
+            addUpdateListener { cancelSpace = it.animatedValue as Float; invalidate() }
             start()
         }
-    }
-
-    private fun applySpace() {
-        (edit.layoutParams as LayoutParams).rightMargin = (m.pt(12f) + cancelSpace * m.pt(84f)).roundToInt()
-        edit.requestLayout()
-        invalidate()
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent) = !editable

@@ -44,6 +44,8 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         var spring: Spring? = null
         var springStart = 0L
         var animating = false
+        /** When it was last asked to open (uptimeMillis): a second tap on the tile right after is a double tap, not a tap inside. */
+        var openedAt = 0L
         val scroller = IosScroller({ invalidate() }, { lib.settled() })
 
         init {
@@ -134,10 +136,13 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         colorFilter = ColorMatrixColorFilter(ColorMatrix().apply { setSaturation(1.4f) })
     }
     private val dim = Paint()
-    private val title = LabelPainter(m.folderTitleSize, 0xFFFFFFFF.toInt(), Paint.Align.LEFT, dev.launcher.app.theme.Fonts.display(700))
-    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
+    private val title = LabelPainter(m.folderTitleSize, 0xFFFFFFFF.toInt(), Paint.Align.LEFT, dev.launcher.app.theme.Fonts.display(700)).shadowed(m.pt(4f), 0x40000000)
+    private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450)).shadowed(m.pt(2f))
     private val r = RectF()
     private var pressed = -1
+    // This touch is the second tap of a double tap on the tile that just opened the folder: it does nothing (it used to land
+    // on whatever icon of the growing folder was under the finger and open that app).
+    private var ignoring = false
 
     private val pad get() = m.pt(20f)
     private val rowPitch get() = m.iconSize + m.labelBaseline + m.pt(22f)
@@ -159,6 +164,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         visibility = View.VISIBLE
         lib.tilesPane.setTileHidden(index, true)   // the panel is the tile from now until it is back in place
         lib.tilesPane.visibility = View.VISIBLE
+        p.openedAt = android.os.SystemClock.uptimeMillis()
         p.animateTo(1f, Motion.profile.folderOpen.spring())
         startFrames()
     }
@@ -238,6 +244,13 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
     override fun onTouchEvent(e: MotionEvent): Boolean {
         // Only a closing folder on screen: it takes no touches, the library under it does (another tile, the same tile).
         val a = active ?: return false
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+            ignoring = android.os.SystemClock.uptimeMillis() - a.openedAt < DOUBLE_TAP_MS && a.from.contains(e.x, e.y)
+        }
+        if (ignoring) {
+            if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) ignoring = false
+            return true
+        }
         val dy = touch.onEvent(e) {
             parent?.requestDisallowInterceptTouchEvent(true)
             a.scroller.beginDrag()
@@ -354,5 +367,10 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
     private fun smooth(e0: Float, e1: Float, x: Float): Float {
         val t = ((x - e0) / (e1 - e0)).coerceIn(0f, 1f)
         return t * t * (3f - 2f * t)
+    }
+
+    private companion object {
+        /** A tap on the tile within this long after it opened the folder is the second half of a double tap. */
+        const val DOUBLE_TAP_MS = 350L
     }
 }

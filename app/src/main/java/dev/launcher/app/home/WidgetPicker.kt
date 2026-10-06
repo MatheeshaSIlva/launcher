@@ -63,6 +63,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         fun addAppWidget(info: AppWidgetProviderInfo, size: WidgetSize)
         /** How far the sheet is up (0..1): home blurs and dims behind it by as much. */
         fun pickerProgress(k: Float)
+        /** How blurred home is now behind the sheet (0..1 of the menu blur): the sheet's glass blurs what it shows as much. */
+        fun sceneBlur(): Float
         /** Draws what is behind the sheet (home), in screen coordinates, for the sheet's glass. */
         fun drawBehindSheet(c: Canvas)
         /** Our copy of the wallpaper (the clock preview's glass refracts it), or null. */
@@ -199,6 +201,11 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         pressK.snapTo(0f)
         clockGlass = null
         clockBuilding = null
+        // The featured clock shows today and the time now (a made-up date next to the real one on home looked wrong).
+        val now = java.util.Date()
+        val locale = java.util.Locale.getDefault()
+        previewDate = java.text.SimpleDateFormat("EEE d", locale).format(now)
+        previewTime = java.text.SimpleDateFormat(if (android.text.format.DateFormat.is24HourFormat(context)) "H:mm" else "h:mm", locale).format(now)
         updateListBounds()
         visibility = VISIBLE
         edit.visibility = VISIBLE
@@ -283,18 +290,43 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val t = q.trim()
         if (t == query) return
         query = t
-        applyFilter()
+        applyFilter(animate = true)
         list.jumpTo(0f)
         invalidate()
     }
 
-    private fun applyFilter() {
+    private fun applyFilter(animate: Boolean = false) {
         val q = query.lowercase()
+        val before = shownApps
         shownApps = if (q.isEmpty()) apps else apps.filter { a ->
             a.label.lowercase().contains(q) || a.widgets.any { host.widgetLabel(it).lowercase().contains(q) }
         }
+        // Typing never makes the list jump: rows that stay glide from where they were to their new place, new rows fade
+        // and rise in (the first listing has its own staggered arrival).
+        if (animate && listArrivedAt != 0L) {
+            val now = SystemClock.uptimeMillis()
+            val oldTop = rowsTop(before.isNotEmpty() && lastQueryEmpty)
+            val oldIndex = before.withIndex().associate { (i, a) -> rowKey(a) to i }
+            rowMotion.clear()
+            for (a in shownApps) {
+                val i = oldIndex[rowKey(a)]
+                rowMotion[rowKey(a)] = RowMotion(if (i != null) oldTop + i * rowH else Float.NaN, now)
+            }
+            // The featured clock fades out as a query starts (and back in when it is cleared) instead of vanishing.
+            if (q.isEmpty() != lastQueryEmpty) featuredChangedAt = now
+        }
+        lastQueryEmpty = q.isEmpty()
         updateListBounds()
     }
+
+    /** Where a row comes from (list content y, NaN = new) and when its move began. */
+    private class RowMotion(val fromY: Float, val start: Long)
+    private val rowMotion = HashMap<String, RowMotion>()
+    private var lastQueryEmpty = true
+    private var featuredChangedAt = 0L
+    private fun rowKey(a: WidgetApp) = a.pkg + "/" + a.user.hashCode()
+    /** Content y of the first app row (below the featured clock without a query). */
+    private fun rowsTop(queryEmpty: Boolean) = (if (queryEmpty) featuredH else m.pt(10f)) + m.pt(36f)
 
     // ------------------------------------------------------------------ pages
 
@@ -341,7 +373,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val g = glass
         if (g != null && c.isHardwareAccelerated) {
             toScreen.reset()
-            g.draw(c, r, sheetRadius, k * Motion.profile.menuBlur * m.u, null, RectF(0f, 0f, width.toFloat(), height.toFloat())) { cc ->
+            g.draw(c, r, sheetRadius, host.sceneBlur() * Motion.profile.menuBlur * m.u, null, RectF(0f, 0f, width.toFloat(), height.toFloat())) { cc ->
                 host.drawBehindSheet(cc)
                 // A sheet is thicker glass than a menu: darker, so its white text reads over any wallpaper.
                 sheetTint.color = ((0x9E * k).toInt() shl 24)
@@ -382,6 +414,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private fun animatingArrivals(): Boolean {
         val now = SystemClock.uptimeMillis()
         if (listArrivedAt != 0L && now - listArrivedAt < ROW_STAGGER_MS * 8 + ROW_FADE_MS) return true
+        if (rowMotion.values.any { now - it.start < ROW_FADE_MS } || now - featuredChangedAt < ROW_FADE_MS) return true
         return previewShownAt.values.any { now - it < PREVIEW_FADE_MS }
     }
 
@@ -454,7 +487,10 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         c.clipRect(0f, listTop, m.w.toFloat(), m.h.toFloat())
         c.translate(0f, listTop - list.position)
         var top = 0f
-        if (query.isEmpty()) {
+        val featuredK = ((SystemClock.uptimeMillis() - featuredChangedAt).toFloat() / ROW_FADE_MS).coerceIn(0f, 1f)
+        val featuredA = if (query.isEmpty()) featuredK else 1f - featuredK
+        if (featuredA > 0f) {
+            val fl = if (featuredA < 1f) c.saveLayerAlpha(0f, 0f, m.w.toFloat(), featuredH, (255 * featuredA).toInt()) else -1
             // Ours first: the glass clock, as a featured card with its real glass numerals.
             sectionText.draw(c, "sug", "SUGGESTIONS", m.libMargin, top + m.pt(20f), m.w * 0.5f)
             val cardW = m.w - 2 * m.libMargin
@@ -467,8 +503,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             drawClockPreview(c, r, listTop - list.position + sheetY())
             c.restore()
             sub.draw(c, "clock", "Clock", m.w / 2f, r.bottom + m.pt(26f), m.w * 0.6f)
-            top = featuredH
-        } else top = m.pt(10f)
+            if (fl >= 0) c.restoreToCount(fl)
+        }
+        top = if (query.isEmpty()) featuredH else m.pt(10f)
         sectionText.draw(c, "apps", "APPS", m.libMargin, top + m.pt(22f), m.w * 0.5f)
         top += m.pt(36f)
         if (shownApps.isEmpty()) {
@@ -482,7 +519,13 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             // The rows settle in one after another when the list arrives (fading, rising a little).
             var rowAlpha = 1f
             var rise = 0f
-            if (listArrivedAt != 0L && query.isEmpty()) {
+            val mo = rowMotion[rowKey(a)]
+            if (mo != null && now - mo.start < ROW_FADE_MS) {
+                val f = ((now - mo.start).toFloat() / ROW_FADE_MS).coerceIn(0f, 1f)
+                val e = 1f - (1f - f) * (1f - f) * (1f - f)
+                if (mo.fromY.isNaN()) { rowAlpha = e; rise = (1f - e) * m.pt(10f) }
+                else rise = (mo.fromY - rt) * (1f - e)   // glides from its old place
+            } else if (listArrivedAt != 0L && query.isEmpty()) {
                 val t = now - listArrivedAt - min(i, 8) * ROW_STAGGER_MS
                 val f = (t.toFloat() / ROW_FADE_MS).coerceIn(0f, 1f)
                 rowAlpha = f
@@ -530,16 +573,18 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         c.drawPath(path, paint)
     }
 
-    // The clock preview: the date line and "9:41" in the clock's real glass (built for the card's size, refracting the
+    // The clock preview: the date line and the time (as the gallery opened) in the clock's real glass (built for the card's size, refracting the
     // blurred wallpaper behind the sheet); plain numerals when there is no wallpaper copy.
     private var clockGlass: GlassDrawable? = null
     private var clockGlassSize = 0 to 0
     private var clockGlassAt = 0L
     private var clockBuilding: Pair<Int, Int>? = null
+    private var previewDate = ""
+    private var previewTime = "9:41"
 
     private fun drawClockPreview(c: Canvas, box: RectF, boxScreenY: Float) {
         val dateTop = box.top + m.pt(10f)
-        clockDate.draw(c, "date", "Mon 9", box.centerX(), dateTop + m.pt(10f), box.width())
+        clockDate.draw(c, "date:$previewDate", previewDate, box.centerX(), dateTop + m.pt(10f), box.width())
         val numTop = box.top + m.pt(22f)
         val w = box.width().roundToInt()
         val h = (box.bottom - numTop).roundToInt()
@@ -551,9 +596,10 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             // The shape is built off the main thread (a distance transform); the numerals fade in once it is there.
             clockBuilding = w to h
             val gen = generation
-            ClockNumerals.buildAsync(clockPaint, w, h, baseline, "9:41") { mask ->
+            ClockNumerals.buildAsync(clockPaint, w, h, baseline, previewTime) { mask ->
                 if (gen != generation || clockBuilding != (w to h)) return@buildAsync
                 clockBuilding = null
+                if (mask == null) return@buildAsync
                 clockGlass = try {
                     GlassDrawable(wp, m.w, m.h, 0f, m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_CLOCK,
                         GlassDrawable.Source.FROSTED, mask)
@@ -573,7 +619,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             if (k < 1f) postInvalidateOnAnimation()
         } else if (wp == null || android.os.Build.VERSION.SDK_INT < 33) {
             clockPaint.alpha = 0xE6
-            c.drawText("9:41", box.centerX(), numTop + baseline, clockPaint)
+            c.drawText(previewTime, box.centerX(), numTop + baseline, clockPaint)
         }
     }
 

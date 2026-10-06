@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <!-- The App Library's tiles: four rounded squares, fading toward the corner. -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M39.5,35 h7.0 a4.5,4.5 0 0 1 4.5,4.5 v7.0 a4.5,4.5 0 0 1 -4.5,4.5 h-7.0 a4.5,4.5 0 0 1 -4.5,-4.5 v-7.0 a4.5,4.5 0 0 1 4.5,-4.5 z" />
+    <path android:fillColor="#C8FFFFFF" android:pathData="M61.5,35 h7.0 a4.5,4.5 0 0 1 4.5,4.5 v7.0 a4.5,4.5 0 0 1 -4.5,4.5 h-7.0 a4.5,4.5 0 0 1 -4.5,-4.5 v-7.0 a4.5,4.5 0 0 1 4.5,-4.5 z" />
+    <path android:fillColor="#C8FFFFFF" android:pathData="M39.5,57 h7.0 a4.5,4.5 0 0 1 4.5,4.5 v7.0 a4.5,4.5 0 0 1 -4.5,4.5 h-7.0 a4.5,4.5 0 0 1 -4.5,-4.5 v-7.0 a4.5,4.5 0 0 1 4.5,-4.5 z" />
+    <path android:fillColor="#8CFFFFFF" android:pathData="M61.5,57 h7.0 a4.5,4.5 0 0 1 4.5,4.5 v7.0 a4.5,4.5 0 0 1 -4.5,4.5 h-7.0 a4.5,4.5 0 0 1 -4.5,-4.5 v-7.0 a4.5,4.5 0 0 1 4.5,-4.5 z" />
+</vector>

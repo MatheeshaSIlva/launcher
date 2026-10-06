@@ -33,7 +33,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     fun setTileHidden(index: Int, hidden: Boolean) {
         if (if (hidden) hiddenTiles.add(index) else hiddenTiles.remove(index)) invalidate()
     }
-    private val labels = LabelPainter(m.tileLabelSize, 0xE6FFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
+    private val labels = LabelPainter(m.tileLabelSize, 0xF2FFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450)).shadowed(m.pt(2f))
     private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val r = RectF()
     private val r2 = RectF()
@@ -181,21 +181,27 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     override fun onDraw(c: Canvas) {
         if (lib.tiles.isEmpty()) return
         // Scroll edge: under the search field the content fades out (a layer over that band only).
-        val band = c.saveLayer(0f, 0f, width.toFloat(), m.tilesTop, null)
-        drawTiles(c)
-        c.drawRect(0f, 0f, width.toFloat(), m.tilesTop, fade)
-        c.restoreToCount(band)
+        // Only the tiles reaching into that band are drawn into it (all of them were, a second time, every frame).
+        if (tileTop(visibleTiles().first) < m.tilesTop) {
+            val band = c.saveLayer(0f, 0f, width.toFloat(), m.tilesTop, null)
+            drawTiles(c, bandOnly = true)
+            c.drawRect(0f, 0f, width.toFloat(), m.tilesTop, fade)
+            c.restoreToCount(band)
+        }
         c.save()
         c.clipRect(0f, m.tilesTop, width.toFloat(), height.toFloat())
-        drawTiles(c)
+        drawTiles(c, bandOnly = false)
         c.restore()
     }
 
-    private fun drawTiles(c: Canvas) {
+    private fun drawTiles(c: Canvas, bandOnly: Boolean) {
         val tiles = lib.tiles
         for (i in visibleTiles()) {
             val tile = tiles[i]
             tileRect(i, r)
+            // Above the band (fade pass) or below its top edge (normal pass): nothing of this tile shows in this pass.
+            if (bandOnly && r.top >= m.tilesTop) continue
+            if (!bandOnly && r.bottom + m.tileLabelBaseline + m.tileLabelSize <= m.tilesTop) continue
             if (i !in hiddenTiles) {
                 // The same liquid glass as the dock, refracting the blurred wallpaper behind the library.
                 lib.drawGlass(c, lib.tileGlass, r, m.tileRadius, this)

@@ -63,7 +63,21 @@ class SafeSettingsActivity : Activity() {
     override fun onResume() {
         super.onResume()
         refresh()
+        reportDrawn()
     }
+
+    // A launch card covering this screen goes once it has drawn (the card is the opening animation, not the stock slide).
+    private fun reportDrawn() {
+        val v = window.decorView
+        v.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                v.post { v.viewTreeObserver.removeOnDrawListener(this) }
+                android.view.Choreographer.getInstance().postFrameCallback { GestureNav.ownScreenDrawn() }
+            }
+        })
+        v.invalidate()
+    }
+
 
     override fun onDestroy() {
         ShizukuLink.removeListener(onShizuku)
