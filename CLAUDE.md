@@ -151,6 +151,10 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - When the S24 is connected (USB or wireless adb, `DEVICE=<serial>`): animations are checked frame by frame with
   `tools/device.sh rec NAME [SECS]` … `recpull NAME [WAIT]` (screenrecord captures every composed frame, 120 fps; contact
   sheets and frame times land in `tools/shots/NAME/`; needs `pip install imageio-ffmpeg`). Frame logs give the numbers.
+- `tools/frame_glitch.py REC.mp4 X Y W H [THR] [OUTDIR]` finds 1-4 frame flickers in a region of a recording (how the dock's
+  one-frame glitch at the end of a grabbed close was found); `tools/appearance_tour.sh PREFIX` screenshots every surface.
+- On home, "HomeActivity focused" is not a checked state: a sheet, menu or folder may be open inside it. Start every block
+  of scripted taps with two swipes up on the bar (a dock tap once hit the widget gallery's Add Widget button).
 - On the phone, every scripted tap is gated on a checked state (focused window, keyboard shown, or a screenshot looked at):
   the Home key is blocked while our gestures run, and a tap on the wrong screen once opened a private app. Never record or
   screenshot inside private apps (messaging); delete any recording that caught one without viewing it.

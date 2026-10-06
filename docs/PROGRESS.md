@@ -907,3 +907,36 @@ clipped during opens and closes; the widget names toggle gone; "a thorough sweep
   (writes the picture of home gesture nav would show to files/home_picture.png).
 S24 frame stats after (missed refreshes): folder open/close 0/0, library to page 1 0, Spotlight open/close 0/0, folder and
 dock launch/close 0 (dock launch 0-1 over three runs), grab 0, cancel 0, sideways 1, switcher 0/0/0/0.
+
+Round 22 (Matheesha on c6f343c: still no unlock animation; the dock background flickers and breaks sometimes; light/dark
+consistent with iOS? the dock the same in both; light too light; the clock low quality, cramped in Add Widget; the Add
+Widget panel darker than the rest). On the S24:
+- **Unlock**: the log of Matheesha's unlocks showed the arrival starting ~100 ms after "held", while the screen was going off:
+  One UI resumes home then and still reports it on and unlocked. Now the arrival needs a wake-up after it went due
+  (SCREEN_ON / USER_PRESENT), the screen on, the keyguard gone and home's window focused; until then the first frame is held.
+  Every step is logged ("arrival due", "woke", "home is seen, playing", "arrival not now: <why>", "ended after N frames").
+  Emulator: held at sleep, played 140 ms after the wake, 19 frames. The S24 unlock itself needs Matheesha (secure lock).
+- **Dock flicker, found**: Matheesha's log showed a launch from the dock grabbed straight back ("took over a launch card").
+  Reproduced with the dev panel and `tools/frame_glitch.py` (finds 1-4 frame bursts in a screen region of a recording): one
+  frame at the end of the close showed the dock's glass sampling the wallpaper from the wrong place. Home's glass skips
+  redrawing while gesture nav's picture covers it (GPU saved during launches and closes), and nothing brought it up to date
+  before the picture went. Now home refreshes stale glass in the frame gesture nav uncovers it on (`afterNextDraw`), and
+  every close and the switcher's "home" take the picture away only after that frame. Five grab-and-close cycles: 0 glitches
+  (before: 1 in 3). The dock is also no longer clear in both modes: it has iOS's light or dark glass body.
+- **Light and dark like iOS**: one family of materials. The App Library, its folders and Spotlight are one material; menus and
+  the widget gallery the same material, stronger (the gallery used its own, much darker veil: why it looked darker). The
+  veils adapt to the wallpaper's brightness so each material lands on the same luminance whatever is behind it (light:
+  library background 0.73 -> 0.57 on Matheesha's wallpaper; dark 0.33 -> 0.23). Glass on home (dock, Search pill, widget
+  platters, edit buttons) is light glass in light mode and dark glass in dark mode; home's labels, the clock and badges stay
+  as on the wallpaper (iOS does the same). Not matched: the system keyboard follows the system's dark mode, not our choice.
+- **Clock**: rebuilt as lit 3D glass. The distance field is now full-size and exact, the strokes are rounded over at their
+  edges (flat, clear middle) and the surface normals are computed in full precision on the worker (an 8-bit height in the
+  shader came out streaky); the shader lights it (refraction towards the edges, gloss, Fresnel, shading of slopes, a crisp
+  rim on the lit side, darker far rim, soft shadow), milky over a dark backdrop. One texture read per pixel for the shape
+  instead of five. In Add Widget the preview is the widget itself scaled into the card with margins (18 x 16 pt), on the
+  card's material, with today's date and time; the clock's own page uses the same.
+- Tests run on my side: an accidental second clock widget on Matheesha's home (my scripted dock tap landed on the gallery's
+  Add Widget button: home was "in front" with the gallery open) was removed again; scripts now start from two swipes home.
+  `tools/appearance_tour.sh PREFIX` takes every surface in one appearance for side-by-side checks.
+Frame stats after: every step 0-1 missed refreshes (folder, library, Spotlight, pull, launches, closes, grab, cancel,
+sideways, switcher). `docs/design/clock_proto.py` still renders the previous clock pipeline (not updated).

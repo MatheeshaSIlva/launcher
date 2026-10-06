@@ -135,22 +135,34 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     }
 
     // Home arrives animated after the screen was off (unlock) and on a cold start (boot, an update, a crash): see
-    // HomeScreen.playArrival. "Due" is set when home was in front as the screen went off; it is used up only when the arrival
-    // is actually seen: the screen on and the keyguard gone. Until then home holds the arrival's first frame (items hidden,
-    // nothing visible while the screen is off or the lock screen covers home). One UI resumes home for a moment while the
-    // screen is going off, before the keyguard locks: an arrival started then played in the dark and the unlock showed
-    // home static.
+    // HomeScreen.playArrival. "Due" is set when home was in front as the screen went off. It plays only once home can really
+    // be seen: after a wake-up that came after it went due (SCREEN_ON or USER_PRESENT), with the screen on, the keyguard
+    // gone and home's window focused (the lock screen's exit has handed the screen to home). Until then home holds the
+    // arrival's first frame. On the S24 One UI resumes home for a moment while the screen is going off and still reports
+    // it as on and unlocked: an arrival started then played in the dark, and the unlock showed home static.
     private var coldStart = true
     private var arrivalDue = false
+    private var wokeSinceDue = false
+    private var arrivalTries = 0
     private val screenState = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 // Only when home was in front as the screen went off: if an app was, the unlock goes back to that app, and
                 // an arrival must not play later when home comes back from it. (onPause marks it too: it can come first.)
-                Intent.ACTION_SCREEN_OFF -> if (resumed && !arrivalDue) { arrivalDue = true; AppLog.log("[home] arrival due: the screen went off with home in front") }
-                Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> arriveIfDue()
+                Intent.ACTION_SCREEN_OFF -> if (resumed) markArrivalDue("screen off")
+                Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> {
+                    if (arrivalDue && !wokeSinceDue) { wokeSinceDue = true; AppLog.log("[home] arrival: woke (${intent.action?.substringAfterLast('.')})") }
+                    arriveIfDue()
+                }
             }
         }
+    }
+
+    private fun markArrivalDue(why: String) {
+        if (!arrivalDue) AppLog.log("[home] arrival due ($why): the screen went off with home in front")
+        arrivalDue = true
+        wokeSinceDue = false
+        arrivalTries = 0
     }
 
     // A cold start arrives once the wallpaper is read (so it comes up with it), or after 500 ms at the latest.
@@ -170,18 +182,32 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             return
         }
         if (!arrivalDue || !resumed) return
-        if (!screenOn() || keyguardUp()) {
-            // Not seen yet: hold the first frame, and look again shortly while the screen is on (USER_PRESENT does not come
-            // for every kind of unlock).
+        val on = screenOn()
+        if (!wokeSinceDue || !on || keyguardUp() || !hasWindowFocus()) {
+            // Not seen yet: hold the first frame, and look again shortly while the screen is on (not every unlock sends
+            // USER_PRESENT at the moment home shows; focus arrives through onWindowFocusChanged).
             screen.holdArrival()
-            if (screenOn()) screen.postDelayed(unlockCheck, 250)
+            if (on && wokeSinceDue) screen.postDelayed(unlockCheck, 120)
             return
         }
-        arrivalDue = false
-        screen.playArrival(cold = false)
+        if (screen.playArrival(cold = false)) {
+            arrivalDue = false
+            AppLog.log("[home] arrival: home is seen, playing")
+        } else if (++arrivalTries < 20) {
+            // Home is busy for a moment (a card still over it, its zoom settling): again shortly, never dropped silently.
+            screen.postDelayed(unlockCheck, 50)
+        } else {
+            arrivalDue = false
+            AppLog.log("[home] arrival dropped: home stayed busy")
+        }
     }
 
     private val unlockCheck = Runnable { arriveIfDue() }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) arriveIfDue()
+    }
 
     override fun onResume() {
         super.onResume()
@@ -200,7 +226,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     override fun onPause() {
         // Paused because the screen went off (the broadcast may come after this): home was in front, the arrival is due.
         val sleeping = !screenOn()
-        if (sleeping && !arrivalDue) { arrivalDue = true; AppLog.log("[home] arrival due: the screen went off with home in front") }
+        if (sleeping) markArrivalDue("paused")
         resumed = false
         screen.removeCallbacks(unlockCheck)
         GestureNav.homeVisible = false
@@ -335,6 +361,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     }
 
     override fun afterNextDraw(then: () -> Unit) {
+        // This frame is the one gesture nav uncovers home on: its glass must be current in it.
+        screen.refreshGlass()
         var done = false
         val run = Runnable { if (!done) { done = true; then() } }
         val vto = screen.viewTreeObserver
@@ -479,6 +507,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     private fun finishWallpaper(w: Wallpaper?) {
         if (wallpaper !== w) return
+        // The materials' strength follows how light the wallpaper is (see Appearance's veils).
+        w?.let { dev.launcher.app.theme.Appearance.wallpaperLuma = it.meanLuminance }
         if (w == null) {
             // Fallback: the system draws the wallpaper behind a transparent window (glass becomes a plain fill).
             window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))

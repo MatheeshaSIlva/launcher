@@ -1434,7 +1434,10 @@ object GestureNav {
                         // never a frame with neither (a fixed delay left a gap whenever home's draw came late).
                         hiddenIconPkg = null
                         HomeBridge.showIconThen(pkg) { nav.post { if (gen == g) hideCards() } }
-                    } else hideCards()   // already faded out on the way
+                    } else {
+                        // Already faded out on the way; the picture of home goes once home has drawn a current frame.
+                        HomeBridge.afterHomeDraw { nav.post { if (gen == g) hideCards() } }
+                    }
                 }
             }
         } else {
@@ -2436,7 +2439,7 @@ object GestureNav {
         override fun onHomeDone() {
             AppLog.log(stats.report("[switcher] home reached"))
             val g = gen
-            whenHomeDrawn(g) { hideCards() }
+            whenHomeDrawn(g) { HomeBridge.afterHomeDraw { nav.post { if (gen == g) hideCards() } } }
         }
 
         override fun onRemove(card: dev.launcher.app.switcher.DeckView.Card) {

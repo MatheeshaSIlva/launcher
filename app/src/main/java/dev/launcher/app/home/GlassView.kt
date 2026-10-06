@@ -127,13 +127,19 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
     }
 
     private val moved = android.view.ViewTreeObserver.OnPreDrawListener {
-        if (glass != null) {
-            placement(now)
-            if (kotlin.math.abs(now[0] - placed[0]) > 0.25f || kotlin.math.abs(now[1] - placed[1]) > 0.25f || kotlin.math.abs(now[2] - placed[2]) > 0.001f ||
-                (dev.launcher.app.GlassDepth.k != drawnDepth && !dev.launcher.app.HomeBridge.homeCovered) ||
-                dev.launcher.app.theme.Appearance.dark != drawnDark) invalidate()
-        }
+        // While gesture nav's picture covers home, home's zoom does not redraw the glass (unseen work on the GPU a launch or
+        // close needs); [refreshIfStale] brings it up to date before home is uncovered.
+        refreshIfStale(skipDepthWhileCovered = true)
         true
+    }
+
+    /** Redraws if what this glass shows is out of date (its place, home's depth, the appearance). */
+    fun refreshIfStale(skipDepthWhileCovered: Boolean = false) {
+        if (glass == null) return
+        placement(now)
+        val depthStale = dev.launcher.app.GlassDepth.k != drawnDepth && !(skipDepthWhileCovered && dev.launcher.app.HomeBridge.homeCovered)
+        if (kotlin.math.abs(now[0] - placed[0]) > 0.25f || kotlin.math.abs(now[1] - placed[1]) > 0.25f || kotlin.math.abs(now[2] - placed[2]) > 0.001f ||
+            depthStale || dev.launcher.app.theme.Appearance.dark != drawnDark) invalidate()
     }
 
     override fun onAttachedToWindow() {

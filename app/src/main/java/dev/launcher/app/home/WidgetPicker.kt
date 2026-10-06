@@ -92,7 +92,11 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     /** Where the list's content starts, below the header and the search field. */
     private val listTop get() = headerH + fieldH + m.pt(14f)
     private val rowH get() = m.pt(62f)
-    private val featuredCardH get() = m.widgetHeight(2) * 0.78f
+    // The featured clock card: the medium clock widget exactly as on home, scaled to sit inside the card with iOS's margins.
+    private val featuredPadH get() = m.pt(18f)
+    private val featuredPadV get() = m.pt(16f)
+    private val featuredScale get() = min(1f, (m.w - 2 * m.libMargin - 2 * featuredPadH) / m.widgetWidth(4))
+    private val featuredCardH get() = m.widgetHeight(2) * featuredScale + 2 * featuredPadV
     private val featuredH get() = m.pt(30f) + featuredCardH + m.pt(44f)
 
     // 0 = down (hidden), 1 = up. Dragging the sheet down moves [drop] (px).
@@ -127,7 +131,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     }
     private val iconClip = Path()
     // Text in the appearance's colours (dark on the light sheet, white on the dark one).
-    private val clockDate = LabelPainter(m.pt(12f), 0xF2FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(600)).toned { Appearance.label }
+    // The clock preview's date line, as the widget's (its size is set per draw: the preview is the widget, scaled).
+    private val clockDate = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); textAlign = Paint.Align.CENTER }
     private val clockPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6FFFFFF.toInt(); typeface = Fonts.display(640); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f }
     private val title = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600)).toned { Appearance.label }
     private val rowText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.label }
@@ -222,8 +227,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         list.jumpTo(0f)
         pressed = null
         pressK.snapTo(0f)
-        clockGlass = null
-        clockBuilding = null
+        clockGlasses.clear()
+        clockBuilding.clear()
         // The featured clock shows today and the time now (a made-up date next to the real one on home looked wrong).
         val now = java.util.Date()
         val locale = java.util.Locale.getDefault()
@@ -255,8 +260,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         drop.snapTo(0f)
         previews.clear()
         previewShownAt.clear()
-        clockGlass = null
-        clockBuilding = null
+        clockGlasses.clear()
+        clockBuilding.clear()
         sheetGlass = null
         // The preview layouts added as children go; the field stays.
         for (i in childCount - 1 downTo 0) { val c = getChildAt(i); if (c !== edit) removeViewAt(i) }
@@ -391,7 +396,10 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val y = sheetY()
         val k = ((m.h - y) / (m.h - sheetTop)).coerceIn(0f, 1f)
         // Home behind the sheet: blurred (by home) and dimmed a little, inside the glass the same as around it.
-        dimInside.color = ((Appearance.mix(0x26, 0x40) * k).toInt() shl 24)
+        // The same dim around it as around a menu (one material family for menus and sheets).
+        val md = Appearance.menuDim
+        dimInside.color = md
+        dimInside.alpha = (android.graphics.Color.alpha(md) * k).toInt()
         c.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), dimInside)
         r.set(0f, y, m.w.toFloat(), m.h + sheetRadius)
         val g = glass
@@ -528,7 +536,11 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             c.save()
             c.scale(1f - 0.03f * down, 1f - 0.03f * down, r.centerX(), r.centerY())
             glassShape(c, r, m.widgetRadius, listTop - list.position + sheetY(), down, cardFill, 0x1F)
-            drawClockPreview(c, r, listTop - list.position + sheetY())
+            val fs = featuredScale
+            val bw = m.widgetWidth(4) * fs
+            val bh = m.widgetHeight(2) * fs
+            val box = RectF(r.centerX() - bw / 2f, r.centerY() - bh / 2f, r.centerX() + bw / 2f, r.centerY() + bh / 2f)
+            drawClockPreview(c, box, fs, listTop - list.position + sheetY())
             c.restore()
             sub.draw(c, "clock", "Clock", m.w / 2f, r.bottom + m.pt(26f), m.w * 0.6f)
             if (fl >= 0) c.restoreToCount(fl)
@@ -603,47 +615,54 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
 
     // The clock preview: the date line and the time (as the gallery opened) in the clock's real glass (built for the card's size, refracting the
     // blurred wallpaper behind the sheet); plain numerals when there is no wallpaper copy.
-    private var clockGlass: GlassDrawable? = null
-    private var clockGlassSize = 0 to 0
-    private var clockGlassAt = 0L
-    private var clockBuilding: Pair<Int, Int>? = null
+    // The clock preview's glass numerals, one per size shown (the featured card and the clock's own page can be on screen
+    // together during the push): built off the main thread, fading in once there.
+    private val clockGlasses = HashMap<Pair<Int, Int>, Pair<GlassDrawable, Long>>()
+    private val clockBuilding = HashSet<Pair<Int, Int>>()
     private var previewDate = ""
     private var previewTime = "9:41"
 
-    private fun drawClockPreview(c: Canvas, box: RectF, boxScreenY: Float) {
-        val dateTop = box.top + m.pt(10f)
-        clockDate.draw(c, "date:$previewDate", previewDate, box.centerX(), dateTop + m.pt(10f), box.width())
-        val numTop = box.top + m.pt(22f)
+    /**
+     * The clock widget as it looks on home (date line and glass numerals in the widget's own proportions), scaled by [s] into
+     * [box] (a medium widget's size times [s], canvas coordinates; [boxScreenY]: the canvas's y offset from the screen).
+     */
+    private fun drawClockPreview(c: Canvas, box: RectF, s: Float, boxScreenY: Float) {
+        // Exactly the widget's geometry (ClockWidgetView): the date at 19 pt, the numerals' box from 25 pt to the bottom.
+        val dateSize = m.pt(19f) * s
+        clockDate.textSize = dateSize
+        clockDate.color = Appearance.label
+        clockDate.setShadowLayer(m.pt(4f) * s, 0f, m.pt(1f) * s, ((0x55 * Appearance.textShadowStrength).toInt() shl 24))
+        c.drawText(previewDate, box.centerX(), box.top + dateSize * 0.86f, clockDate)
+        val numTop = box.top + m.pt(25f) * s
         val w = box.width().roundToInt()
         val h = (box.bottom - numTop).roundToInt()
         if (w <= 0 || h <= 0) return
         val baseline = ClockNumerals.layout(clockPaint, w.toFloat(), h.toFloat(), android.text.format.DateFormat.is24HourFormat(context))
         val wp = host.wallpaper()
-        val g = clockGlass?.takeIf { clockGlassSize == (w to h) }
-        if (wp != null && android.os.Build.VERSION.SDK_INT >= 33 && g == null && clockBuilding != (w to h)) {
-            // The shape is built off the main thread (a distance transform); the numerals fade in once it is there.
-            clockBuilding = w to h
+        val key = w to h
+        val g = clockGlasses[key]
+        if (wp != null && android.os.Build.VERSION.SDK_INT >= 33 && g == null && key !in clockBuilding) {
+            clockBuilding += key
             val gen = generation
             ClockNumerals.buildAsync(clockPaint, w, h, baseline, previewTime) { mask ->
-                if (gen != generation || clockBuilding != (w to h)) return@buildAsync
-                clockBuilding = null
-                if (mask == null) return@buildAsync
-                clockGlass = try {
+                clockBuilding -= key
+                if (gen != generation || mask == null) return@buildAsync
+                val glass = try {
                     GlassDrawable(wp, m.w, m.h, 0f, m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_CLOCK,
-                        GlassDrawable.Source.FROSTED, mask)
+                        GlassDrawable.Source.FROSTED, mask).also { it.role = GlassDrawable.Role.SHEET }   // it sits on the sheet's card: sees that material
                 } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] clock preview glass failed: ${t.message}"); null }
-                clockGlassSize = w to h
-                clockGlassAt = SystemClock.uptimeMillis()
+                if (glass != null) clockGlasses[key] = glass to SystemClock.uptimeMillis()
                 invalidate()
             }
         }
         if (g != null && c.isHardwareAccelerated) {
-            val k = ((SystemClock.uptimeMillis() - clockGlassAt).toFloat() / PREVIEW_FADE_MS).coerceIn(0f, 1f)
-            g.alpha = (255 * k).toInt()
-            g.originX = box.left
-            g.originY = boxScreenY + numTop
-            g.setBounds(box.left.roundToInt(), numTop.roundToInt(), box.left.roundToInt() + w, numTop.roundToInt() + h)
-            g.draw(c)
+            val k = ((SystemClock.uptimeMillis() - g.second).toFloat() / PREVIEW_FADE_MS).coerceIn(0f, 1f)
+            val gl = g.first
+            gl.alpha = (255 * k).toInt()
+            gl.originX = box.left
+            gl.originY = boxScreenY + numTop
+            gl.setBounds(box.left.roundToInt(), numTop.roundToInt(), box.left.roundToInt() + w, numTop.roundToInt() + h)
+            gl.draw(c)
             if (k < 1f) postInvalidateOnAnimation()
         } else if (wp == null || android.os.Build.VERSION.SDK_INT < 33) {
             clockPaint.alpha = 0xE6
@@ -722,7 +741,16 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         c.drawRoundRect(box.left + m.pt(6f), box.top + m.pt(14f), box.right - m.pt(6f), box.bottom + m.pt(10f), rad, rad, cardShadow)
         glassShape(c, box, rad, sheetY(), 0f, cardFill, 0x1F)
         val info = e.info
-        if (info == null) { drawClockPreview(c, box, sheetY()); return }
+        if (info == null) {
+            // Our clock: the widget inside its card with the featured card's margins, scaled as the card is.
+            val padH = featuredPadH * s
+            val padV = featuredPadV * s
+            val fs = min((box.width() - 2 * padH) / m.widgetWidth(e.size.spanX), (box.height() - 2 * padV) / m.widgetHeight(e.size.spanY)) * (m.widgetWidth(e.size.spanX) / m.widgetWidth(4))
+            val bw = m.widgetWidth(4) * fs
+            val bh = m.widgetHeight(2) * fs
+            drawClockPreview(c, RectF(box.centerX() - bw / 2f, box.centerY() - bh / 2f, box.centerX() + bw / 2f, box.centerY() + bh / 2f), fs, sheetY())
+            return
+        }
         val pv = previews[info]
         val shownAt = previewShownAt[info] ?: 0L
         val fade = if (shownAt == 0L) 1f else ((SystemClock.uptimeMillis() - shownAt).toFloat() / PREVIEW_FADE_MS).coerceIn(0f, 1f)

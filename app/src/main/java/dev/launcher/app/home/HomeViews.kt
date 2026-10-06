@@ -428,36 +428,76 @@ object ClockNumerals {
     }
 
     /**
-     * [time] drawn with [paint] as a glass shape of [w] x [h]: its coverage (full size, anti-aliased) and its signed
-     * distance field (half size, exact Euclidean distance transform, lightly smoothed so the normals are clean). Fresh
-     * bitmaps every time (the glass may still be drawing the previous ones). Any thread.
+     * [time] drawn with [paint] as a glass shape of [w] x [h]: its coverage (anti-aliased) and its field at full size (an exact
+     * Euclidean distance transform, no smoothing needed at full size): the signed distance to the edge, and a dome-shaped
+     * height across every stroke that the shader lights in 3D. Fresh bitmaps every time (the glass may still be drawing the
+     * previous ones). Any thread; some tens of ms.
      */
     fun build(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String): dev.launcher.app.GlassMask {
         val mask = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8)
         android.graphics.Canvas(mask).drawText(time, w / 2f, baseline, paint)
-        val scale = 0.5f
-        val hw = maxOf(1, (w * scale).toInt())
-        val hh = maxOf(1, (h * scale).toInt())
-        val small = android.graphics.Bitmap.createBitmap(hw, hh, android.graphics.Bitmap.Config.ALPHA_8)
-        android.graphics.Canvas(small).apply { scale(scale, scale); drawText(time, w / 2f, baseline, paint) }
-        val cov = readAlpha(small)
-        val n = hw * hh
-        // Distance (half-size px) from each inside pixel to the nearest outside one, and from each outside pixel to the shape.
+        val cov = readAlpha(mask)
+        val n = w * h
         val inside = BooleanArray(n) { cov[it] >= 128 }
-        val dIn = Edt.distances(hw, hh) { !inside[it] }
-        val dOut = Edt.distances(hw, hh) { inside[it] }
-        val toFull = 1f / scale
-        val signed = FloatArray(n) { i -> (if (inside[i]) dIn[i] - 0.5f else -(dOut[i] - 0.5f)) * toFull }
-        // The bevel spans about the strokes' half width (the inside distances near the middle of the strokes).
-        val ins = signed.filter { it > 0f }.sorted()
+        val dIn = Edt.distances(w, h) { !inside[it] }
+        val dOut = Edt.distances(w, h) { inside[it] }
+        // Sub-pixel edge from the anti-aliased coverage (half a pixel either way), so the field is smooth along curves.
+        val signed = FloatArray(n) { i -> if (inside[i]) dIn[i] - 0.5f + (cov[i] - 128) / 255f else -(dOut[i] - 0.5f) + (cov[i] - 127) / 255f }
+        // The edge is rounded over about half of the strokes' half width; the middle of each stroke is flat, clear glass
+        // (a whole stroke rounded over read as chiselled plastic).
+        val ins = ArrayList<Float>()
+        for (i in 0 until n) if (signed[i] > 0f) ins += signed[i]
+        ins.sort()
         val half = if (ins.isEmpty()) 10f else ins[(ins.size * 0.95f).toInt().coerceAtMost(ins.size - 1)]
-        val bevel = half * 0.9f
-        val range = maxOf(half, paint.textSize * 0.07f) + 6f
-        val bytes = ByteArray(n) { i -> ((0.5f + signed[i] / (2f * range)).coerceIn(0f, 1f) * 255f).roundToInt().toByte() }
-        val sdf = android.graphics.Bitmap.createBitmap(hw, hh, android.graphics.Bitmap.Config.ALPHA_8)
-        writeAlpha(sdf, bytes)
-        boxBlurAlpha(sdf, 1)
-        return dev.launcher.app.GlassMask(mask, sdf, scale, range, bevel, 0.16f)
+        val bevel = half * 0.6f
+        val range = maxOf(half, paint.textSize * 0.07f) + 8f
+        // Height 0 at the edge to 1 past the bevel (a quarter-round: steep at the edge, flat inside), smoothed a little so the
+        // distance field's pixel steps and its creases at corners do not show in the light.
+        val hgt = FloatArray(n) { i -> val t = (signed[i] / bevel).coerceIn(0f, 1f); 1f - (1f - t) * (1f - t) }
+        boxBlur(hgt, w, h, maxOf(1, (bevel * 0.12f).roundToInt()), 2)
+        // The surface normal's x and y (z follows), worked out here in full precision: in the shader, from an 8-bit height,
+        // the slopes came out streaky.
+        val tilt = bevel * 0.85f
+        val px = IntArray(n) { i ->
+            val x = i % w
+            val y = i / w
+            val gx = (hgt[if (x < w - 1) i + 1 else i] - hgt[if (x > 0) i - 1 else i]) * 0.5f
+            val gy = (hgt[if (y < h - 1) i + w else i] - hgt[if (y > 0) i - w else i]) * 0.5f
+            val nx = -gx * tilt
+            val ny = -gy * tilt
+            val len = kotlin.math.sqrt(nx * nx + ny * ny + 1f)
+            val sd = ((0.5f + signed[i] / (2f * range)).coerceIn(0f, 1f) * 255f).roundToInt()
+            val ex = ((nx / len * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
+            val ey = ((ny / len * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
+            (0xFF shl 24) or (sd shl 16) or (ex shl 8) or ey
+        }
+        val field = android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        return dev.launcher.app.GlassMask(mask, field, 1f, range, bevel, 0.22f)
+    }
+
+    /** [passes] box blurs of radius [r] over a [w] x [h] float image, in place. */
+    private fun boxBlur(v: FloatArray, w: Int, h: Int, r: Int, passes: Int) {
+        val tmp = FloatArray(v.size)
+        val n = 2 * r + 1
+        repeat(passes) {
+            for (y in 0 until h) {
+                val row = y * w
+                var sum = 0f
+                for (x in -r..r) sum += v[row + x.coerceIn(0, w - 1)]
+                for (x in 0 until w) {
+                    tmp[row + x] = sum / n
+                    sum += v[row + (x + r + 1).coerceAtMost(w - 1)] - v[row + (x - r).coerceAtLeast(0)]
+                }
+            }
+            for (x in 0 until w) {
+                var sum = 0f
+                for (y in -r..r) sum += tmp[y.coerceIn(0, h - 1) * w + x]
+                for (y in 0 until h) {
+                    v[y * w + x] = sum / n
+                    sum += tmp[(y + r + 1).coerceAtMost(h - 1) * w + x] - tmp[(y - r).coerceAtLeast(0) * w + x]
+                }
+            }
+        }
     }
 
     private fun readAlpha(b: android.graphics.Bitmap): IntArray {
@@ -467,12 +507,6 @@ object ClockNumerals {
         return IntArray(b.width * b.height) { i -> a[(i / b.width) * b.rowBytes + i % b.width].toInt() and 0xFF }
     }
 
-    private fun writeAlpha(b: android.graphics.Bitmap, v: ByteArray) {
-        val stride = b.rowBytes
-        val out = ByteArray(stride * b.height)
-        for (y in 0 until b.height) System.arraycopy(v, y * b.width, out, y * stride, b.width)
-        b.copyPixelsFromBuffer(java.nio.ByteBuffer.wrap(out))
-    }
 }
 
 /** Exact Euclidean distance transform (Felzenszwalb and Huttenlocher), for glass shapes made from text. */
@@ -518,43 +552,6 @@ object Edt {
     /** Where the parabolas rooted at [q] and [p] intersect. */
     private fun intersect(f: FloatArray, q: Int, p: Int): Float =
         ((f[q] + q.toFloat() * q) - (f[p] + p.toFloat() * p)) / (2f * q - 2f * p)
-}
-
-/** Three passes of a box blur of [r] px over an ALPHA_8 bitmap, in place (close to a Gaussian). */
-internal fun boxBlurAlpha(b: android.graphics.Bitmap, r: Int) {
-    val w = b.width
-    val h = b.height
-    val stride = b.rowBytes
-    val buf = java.nio.ByteBuffer.allocate(stride * h)
-    b.copyPixelsToBuffer(buf)
-    val arr = buf.array()
-    val src = IntArray(w * h)
-    for (y in 0 until h) for (x in 0 until w) src[y * w + x] = arr[y * stride + x].toInt() and 0xFF
-    val tmp = IntArray(w * h)
-    val n = 2 * r + 1
-    repeat(3) {
-        // Running sums: horizontal into tmp, then vertical back into src.
-        for (y in 0 until h) {
-            val row = y * w
-            var sum = 0
-            for (x in -r..r) sum += src[row + x.coerceIn(0, w - 1)]
-            for (x in 0 until w) {
-                tmp[row + x] = sum / n
-                sum += src[row + (x + r + 1).coerceAtMost(w - 1)] - src[row + (x - r).coerceAtLeast(0)]
-            }
-        }
-        for (x in 0 until w) {
-            var sum = 0
-            for (y in -r..r) sum += tmp[y.coerceIn(0, h - 1) * w + x]
-            for (y in 0 until h) {
-                src[y * w + x] = sum / n
-                sum += tmp[(y + r + 1).coerceAtMost(h - 1) * w + x] - tmp[(y - r).coerceAtLeast(0) * w + x]
-            }
-        }
-    }
-    for (y in 0 until h) for (x in 0 until w) arr[y * stride + x] = src[y * w + x].toByte()
-    buf.rewind()
-    b.copyPixelsFromBuffer(buf)
 }
 
 /** iOS's notification badge: a red capsule with the count in white, over the icon's top-right corner. */

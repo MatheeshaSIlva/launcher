@@ -214,6 +214,13 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** Glass on the pages (widgets): redrawn while the pages move, so it keeps refracting what is behind it. */
     private fun pageGlass(): List<GlassView> = widgetViews().flatMap { it.glassViews() }
 
+    /**
+     * Home is about to be uncovered (gesture nav's picture goes once home has drawn its next frame): glass that skipped
+     * redrawing while covered is brought up to date in that frame (a stale dock showed the wallpaper from the wrong place
+     * for one frame at the end of a close, seen on the S24).
+     */
+    fun refreshGlass() { for (g in glassViews()) g.refreshIfStale() }
+
     /** Glass surfaces (dock, Search pill, widgets), for the wallpaper reveal to drive frame by frame. */
     fun glassViews(): List<GlassView> = listOfNotNull(dock?.glass, indicator?.glass) + pageGlass() + ((editBar as? EditMode.Bar)?.glassViews() ?: emptyList())
 
@@ -810,7 +817,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
      */
     fun holdArrival() {
         if (arrivalAnimating || arrivalHeld) return
-        if (!prepareArrival(cold = false)) return
+        if (!prepareArrival(cold = false, log = false)) return
         arrivalHeld = true
         applyArrival(0.0)
         AppLog.log("[home] arrival held until home is seen (screen off or lock screen up)")
@@ -823,26 +830,42 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         finishArrival()
     }
 
-    /** Plays the arrival now (from the held frame if there is one), or as soon as home has a layout ([cold]: from black). */
-    fun playArrival(cold: Boolean) {
+    /**
+     * Plays the arrival now (from the held frame if there is one), or as soon as home has a layout ([cold]: from black).
+     * False if home cannot play one right now (the reason is logged).
+     */
+    fun playArrival(cold: Boolean): Boolean {
         if (!arrivalHeld || cold) {
             if (arrivalAnimating) finishArrival()
-            if (!prepareArrival(cold)) return
+            if (!prepareArrival(cold)) return pendingArrival != null
         }
         arrivalHeld = false
         arrivalStart = System.nanoTime()
         arrivalAnimating = true
         applyArrival(0.0)
         Choreographer.getInstance().postFrameCallback(arrivalFrame)
+        arrivalFrames = 0
         AppLog.log("[home] arrival (${if (cold) "cold start" else "unlock"}): ${arriving.size} items")
+        return true
     }
 
+    private var arrivalFrames = 0
+
     /** Collects what arrives and sets up the springs; false if home cannot play one now (deferred when it has no layout). */
-    private fun prepareArrival(cold: Boolean): Boolean {
+    private fun prepareArrival(cold: Boolean, log: Boolean = true): Boolean {
         val metrics = m
         if (metrics == null || pages.isEmpty() || width == 0) { pendingArrival = cold; return false }
-        if (drawerProgress() > 0f || spotlight?.isOpen == true || menu?.isShowing == true || picker?.isOpen == true ||
-            editMode?.active == true || depthAnimating || HomeBridge.homeCovered) return false
+        val busy = when {
+            drawerProgress() > 0f -> "the App Library is open"
+            spotlight?.isOpen == true -> "Spotlight is open"
+            menu?.isShowing == true -> "a menu is open"
+            picker?.isOpen == true -> "the widget gallery is open"
+            editMode?.active == true -> "editing"
+            depthAnimating -> "home's zoom is running"
+            HomeBridge.homeCovered -> "a card covers home"
+            else -> null
+        }
+        if (busy != null) { if (log) AppLog.log("[home] arrival not now: $busy"); return false }
         val page = pages.getOrNull(pos.roundToInt()) ?: return false
         val mp = Motion.profile
         arriving.clear()
@@ -872,6 +895,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         override fun doFrame(now: Long) {
             if (!arrivalAnimating) return
             val t = maxOf(0L, now - arrivalStart) / 1e9
+            arrivalFrames++
             applyArrival(t)
             val s = arrivalSpring ?: return
             if (t > arrivalMaxDelay && s.settled(t - arrivalMaxDelay, 0.002f)) finishArrival() else Choreographer.getInstance().postFrameCallback(this)
@@ -903,6 +927,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     private fun finishArrival() {
+        if (arrivalAnimating) AppLog.log("[home] arrival ended after $arrivalFrames frames (${(System.nanoTime() - arrivalStart) / 1_000_000} ms)")
         for (a in arriving) { a.v.scaleX = 1f; a.v.scaleY = 1f; a.v.alpha = 1f }
         arriving.clear()
         wallpaperView.scaleX = 1f; wallpaperView.scaleY = 1f; wallpaperView.alpha = 1f

@@ -22,6 +22,8 @@ class Wallpaper private constructor(
     val heavyScale: Int,
     /** Average brightness (0..1) of the wallpaper's top band, where the status bar sits. */
     val topLuminance: Float,
+    /** Mean luminance of the whole wallpaper (0..1, from the heavily blurred copy): how light the materials over it are. */
+    val meanLuminance: Float = 0.5f,
 ) {
 
     /** Bitmap -> screen matrix for a [w] x [h] screen: centre-crop, like the system wallpaper on a single page. */
@@ -64,17 +66,29 @@ class Wallpaper private constructor(
                 .copy(Bitmap.Config.ARGB_8888, true)
             boxBlur(heavy, 3, 3)   // at 1/16 size: ≈ 60 px at full size, like iOS's background material
             val top = topLuminance(heavy)
+            val mean = meanLuminance(heavy)
             AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}")
             // Kept on the GPU (hardware bitmaps): with ordinary bitmaps Android re-uploaded all three whenever home had been in
             // the background a while (it trims GPU memory then), which stalled the first frame of a home gesture's card (it
             // draws the picture of home) by 20-45 ms on the S24. Nothing reads their pixels after this point.
-            Wallpaper(gpu(bmp), gpu(small), scale, id, gpu(heavy), heavyScale, top)
+            Wallpaper(gpu(bmp), gpu(small), scale, id, gpu(heavy), heavyScale, top, mean)
         } catch (t: Throwable) {
             AppLog.log("[wallpaper] not readable (${t.javaClass.simpleName}: ${t.message}); using the system wallpaper window, no glass")
             null
         }
 
         private fun gpu(b: Bitmap): Bitmap = try { b.copy(Bitmap.Config.HARDWARE, false) ?: b } catch (_: Throwable) { b }
+
+        private fun meanLuminance(b: Bitmap): Float {
+            var sum = 0.0
+            var n = 0
+            for (y in 0 until b.height) for (x in 0 until b.width) {
+                val p = b.getPixel(x, y)
+                sum += (0.2126 * ((p shr 16) and 0xFF) + 0.7152 * ((p shr 8) and 0xFF) + 0.0722 * (p and 0xFF)) / 255.0
+                n++
+            }
+            return if (n == 0) 0.5f else (sum / n).toFloat()
+        }
 
         private fun topLuminance(b: Bitmap): Float {
             val rows = maxOf(1, b.height / 12)
