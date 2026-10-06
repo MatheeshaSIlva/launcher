@@ -33,6 +33,11 @@ data class MotionProfile(
     val folderOpen: SpringSpec,
     val folderClose: SpringSpec,
     val modeCrossfadeMs: Long,
+    // The A-Z index: the list gliding to a letter's section, the letter bubble popping in and out, and following the finger.
+    val indexScroll: SpringSpec,
+    val indexBubbleIn: SpringSpec,
+    val indexBubbleOut: SpringSpec,
+    val indexFollow: SpringSpec,
     // Scrolling: back from past the end, and how a fling slows down.
     val overscrollReturn: SpringSpec,
     val rubberBand: Float,
@@ -63,6 +68,23 @@ data class MotionProfile(
     // Sheets (widget gallery): presenting and dismissing, and pushing a page inside one.
     val sheet: SpringSpec,
     val navPush: SpringSpec,
+    // A widget changing size (its card grows or shrinks to the new size, the content crossfades).
+    val widgetResize: SpringSpec,
+    // Something new on home (a widget added, a new app's icon) growing into its place; something leaving shrinking away.
+    val appear: SpringSpec,
+    val appearMs: Long,
+    val disappearMs: Long,
+    // The edit bar sliding in from the top and out again.
+    val editBar: SpringSpec,
+    // Home arriving: after unlock, and after a cold start (boot, update, crash). Items bloom from [arrivalScale] with a
+    // stagger of up to [arrivalStaggerMs] by distance from the centre; the wallpaper settles from [arrivalWallpaperZoom].
+    val arrival: SpringSpec,
+    val arrivalWallpaper: SpringSpec,
+    val arrivalScale: Float,
+    val arrivalStaggerMs: Long,
+    val arrivalWallpaperZoom: Float,
+    // The clock's numerals crossfading at the minute change.
+    val clockTickMs: Long,
     val switcher: SwitcherProfile,
 )
 
@@ -112,6 +134,10 @@ object Motion {
         folderOpen = SpringSpec(0.42f, 0.86f),
         folderClose = SpringSpec(0.36f, 1f),
         modeCrossfadeMs = 220,
+        indexScroll = SpringSpec(0.32f, 1f),
+        indexBubbleIn = SpringSpec(0.3f, 0.72f),
+        indexBubbleOut = SpringSpec(0.22f, 1f),
+        indexFollow = SpringSpec(0.16f, 1f),
         overscrollReturn = SpringSpec(0.42f, 1f),
         rubberBand = 0.55f,
         decelerationRate = 0.998f,
@@ -132,6 +158,17 @@ object Motion {
         jigglePeriod = 0.26f,
         sheet = SpringSpec(0.45f, 1f),
         navPush = SpringSpec(0.42f, 1f),
+        widgetResize = SpringSpec(0.4f, 0.86f),
+        appear = SpringSpec(0.42f, 0.78f),
+        appearMs = 180,
+        disappearMs = 200,
+        editBar = SpringSpec(0.4f, 0.9f),
+        arrival = SpringSpec(0.55f, 0.86f),
+        arrivalWallpaper = SpringSpec(0.7f, 1f),
+        arrivalScale = 0.8f,
+        arrivalStaggerMs = 140,
+        arrivalWallpaperZoom = 1.06f,
+        clockTickMs = 420,
         switcher = SwitcherProfile(
             cardScale = 0.68f,
             cardCenterY = 0.515f,

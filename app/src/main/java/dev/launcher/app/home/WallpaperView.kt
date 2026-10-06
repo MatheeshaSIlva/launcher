@@ -14,7 +14,13 @@ import dev.launcher.app.WallpaperTransition
 class WallpaperView(ctx: Context, private val cellPx: Float) : View(ctx) {
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     var wallpaper: Wallpaper? = null
-        set(v) { field = v; invalidate() }
+        set(v) {
+            val arrived = field == null && v != null && isAttachedToWindow && width > 0
+            field = v
+            // Read after home is on screen (the first start, a retry): fades in over the black ground instead of popping.
+            if (arrived && transition == null) { alpha = 0f; animate().alpha(1f).setDuration(320).start() }
+            invalidate()
+        }
 
     private var transition: WallpaperTransition? = null
     private var progress = 0f

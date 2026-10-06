@@ -733,3 +733,47 @@ opened from Spotlight was wrong; touches did nothing during closes from the App 
   re-layout) is "nowhere" otherwise, with a failsafe that makes it untouchable if it ever takes a touch outside a close.
   S24: a drag right after a close scrolls the library (it did nothing before); in-app taps, library scrolls, launches and
   closes unaffected; no failsafe line in any run. Launches unchanged: touches during an opening animation go to the app.
+
+Round 16 (Matheesha: six things; none of this is confirmed on a phone yet, every change was type-checked against the
+Android framework classes and the clock's shader was rendered offline, the sandbox has no emulator):
+1. **A-Z index.** Scrubbing the index was a jump (`scroller.jumpTo`) with a static bubble. Now: the list springs to each
+   letter's section carrying its motion from the last one (`IosScroller.animateTo(target, spec)`, new `velocity`), the
+   column lights up under the finger (a capsule behind it, the letters near the finger magnified like a fisheye), the
+   glass bubble pops in with a little overshoot, glides along with the finger on its own spring and pops away on release.
+   Roles in the motion profile: `indexScroll`, `indexBubbleIn/Out`, `indexFollow`.
+2. **The App Library never makes you wait.** `FolderOverlay` is now a set of panels: a closing folder takes no touches, so
+   the tile under it (or any other) can be tapped at once: another folder grows while the first still shrinks back, and the
+   same tile reopens its folder from wherever it is, keeping its speed; an icon can be opened while its folder is still
+   growing (hit-testing goes through the panel's current transform). The pane fading out behind "Cancel" no longer eats
+   taps (`acceptsTouches`); a touch on the last, invisible part of a page snap or scroll settle is an ordinary tap instead
+   of a grab (`IosScroller.isMovingVisibly`, HomeScreen's intercept).
+3. **Arrival and state changes.** Home arrives animated after unlock (waits for USER_PRESENT when there is a lock screen)
+   and on every cold start (boot, an UPDATE, a crash): icons, widgets, dock and Search pill bloom from 0.8 and fade in,
+   staggered outward from the centre, the wallpaper settles from a 6 % zoom (a cold start first brings the wallpaper up from
+   black, once it is read or after 500 ms). Nothing waits for it. Also animated now: the edit bar slides in and out; new
+   icons/widgets grow into their cells and removed ones shrink away (installs, uninstalls, Add Widget, Remove); the clock's
+   minute change crossfades the numerals (two glass layers take turns); a wallpaper read after home is up fades in.
+   Home's picture for gesture nav is never recorded mid-animation (`isIdle` covers all of these).
+4. **Clock.** `GlassStyle.IOS_CLOCK` was a lit, white-tinted variant (tint 0.12, inner glow 0.22, a bright rim all round):
+   the "weird white highlights". It is now the dock's own material shaped like the digits (no tint, no glow, the darkened
+   edge and corner-gathered highlights of `IOS`), with a deeper lens (refraction 26, a 7 %-of-size bevel instead of 3 %)
+   so the strokes read as thick glass, and a slight thickness shade. `docs/design/clock_proto.py` renders old and new
+   side by side (`clock-glass-old-vs-new.png`); a numpy port of the mask shader, not the GPU: to be judged on the S24.
+5. **Widgets.** Resizing is animated: the item changes in place (`HomeItem.Widget` spans are mutable; `WidgetFrameView`),
+   the card springs to the new size while the old look crossfades into the new content laid out at its final size
+   (nothing stretches), from the handle and from the Size row. Options: Hide/Show Widget Names and Hide/Show App Names
+   (iOS 18's large icons; both saved in `HomeConfig`, names fade; in the widget menu and the Edit menu), and a "Glass
+   Background" platter for Android widgets that come without one (`style = "glass"`). The gallery (`WidgetPicker`) was
+   rebuilt: grabber, title, close button, a working search field, the clock featured with its real glass numerals, app
+   rows with icon/name/"N widgets"/chevron settling in one after another, the app page's carousel with smaller dimmer
+   neighbours and shadows, previews fading in, animated presses on rows and buttons, size under the title.
+6. **Floating windows.** Picture-in-picture and pop-up (freeform) windows sit above every app but under our overlay, so
+   every launch, close, switch and the App Switcher hid them for their whole length. The card window now leaves holes
+   where they are (`CardHost.holes`, rounded; the window shows through, live) and never takes their touches during a
+   close. Their bounds come from the shell (`floatingWindows`, code 25: `IActivityTaskManager.getTasks`, windowing modes
+   pinned/freeform), looked up every 1.5 s while idle, at every card session's start and every 300 ms while cards show.
+   The log line `[nav] floating windows: …` says what was found. Needs the new service build (UPDATE restarts it).
+To check on the S24: the arrival after unlock and after UPDATE; the clock over the real wallpaper (light and dark); a PiP
+video during a launch/close and in the switcher; resizing a widget from the handle; the gallery's search field with the
+keyboard; `tools/scenario_more.sh` for the library's folder and index numbers.
+

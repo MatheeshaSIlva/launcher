@@ -35,21 +35,30 @@ sealed class HomeItem {
 
     /**
      * A widget: ours ([kind] "clock", [style] "solid" or glass) or an Android widget ([APP], with its bound [id] and
-     * [provider] component).
+     * [provider] component; [style] [GLASS] puts a glass platter behind it). Size and style change in place, so the
+     * widget's view stays and can animate the change.
      */
-    data class Widget(val kind: String, val spanX: Int, val spanY: Int, val id: Int = 0, val provider: String? = null, val style: String? = null) : HomeItem() {
+    class Widget(val kind: String, spanX: Int, spanY: Int, val id: Int = 0, val provider: String? = null, style: String? = null) : HomeItem() {
+        var spanX = spanX
+        var spanY = spanY
+        var style = style
+
         override fun body() = JSONObject().put("t", "widget").put("w", kind).put("sx", spanX).put("sy", spanY).apply {
             if (id != 0) put("id", id)
             provider?.let { put("p", it) }
             style?.let { put("s", it) }
         }
 
-        /** The same widget at another size or style, in the same cell. */
+        /** A copy at another size or style, in the same cell (the layout tests build variants this way). */
         fun with(spanX: Int = this.spanX, spanY: Int = this.spanY, style: String? = this.style): Widget =
-            copy(spanX = spanX, spanY = spanY, style = style).also { it.col = col; it.row = row }
+            Widget(kind, spanX, spanY, id, provider, style).also { it.col = col; it.row = row }
+
+        override fun toString() = "Widget($kind ${spanX}x$spanY id=$id style=$style)"
 
         companion object {
             const val APP = "app"
+            /** An Android widget on a platter of the theme's glass. */
+            const val GLASS = "glass"
         }
     }
 

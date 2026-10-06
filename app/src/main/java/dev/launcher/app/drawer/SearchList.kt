@@ -14,13 +14,18 @@ import android.view.MotionEvent
 import android.view.View
 import dev.launcher.app.apps.AppEntry
 import dev.launcher.app.home.HomeMetrics
+import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.SpringValue
 import dev.launcher.app.theme.Fonts
+import kotlin.math.abs
 import kotlin.math.max
 
 /**
  * The searchable app list shared by the App Library and Spotlight: section letters, a row per app, and an index on the right
- * edge to jump between letters (a tick per letter, a glass bubble showing it). With a query it shows only the matches, best
- * first, without sections.
+ * edge to jump between letters. Scrubbing the index is animated as on iOS: the column lights up under the finger (a capsule
+ * behind it, the letters near the finger magnified), a glass bubble with the letter pops in and glides along with the
+ * finger, and the list springs to each letter's section carrying its motion from the last one (never a jump). With a query
+ * it shows only the matches, best first, without sections.
  *
  * Changes animate: rows that stay glide to their new place, new rows fade and rise in, rows that leave fade out where they
  * were (section headers too), so typing never makes the list jump. Everything is in the glass palette (white at various
@@ -103,9 +108,18 @@ internal class SearchList(
     private var pressed: AppEntry? = null
     private var scrubbing = false
     private var scrubLetter = ' '
-    private var scrubY = 0f
+    // The index while scrubbed: how lit it is (capsule, magnified letters), the bubble's presence and where it glides.
+    private val indexK = SpringValue(0f, 1000f, { invalidate() })
+    private val bubbleK: SpringValue = SpringValue(0f, 1000f, { invalidate() }, { if (!scrubbing) settled() })
+    private val bubbleY = SpringValue(0f, 1f, { invalidate() })
+    private val bubbleShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x40000000
+        maskFilter = android.graphics.BlurMaskFilter(m.pt(10f), android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    private val indexCapsule = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x24FFFFFF }
+    private val indexCapsuleRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x30FFFFFF; style = Paint.Style.STROKE; strokeWidth = max(1f, m.pt(0.7f)) }
 
-    val isIdle get() = !scroller.isSettling && !scroller.isDragging && !animating
+    val isIdle get() = !scroller.isSettling && !scroller.isDragging && !animating && !scrubbing && !bubbleK.isAnimating && !indexK.isAnimating
 
     fun setApps(list: List<AppEntry>) { apps = list; rebuild(animate = false) }
 
@@ -275,32 +289,55 @@ internal class SearchList(
     private fun indexBottom() = height - bottomSpace - m.bottomSafe
     private fun inIndex(x: Float) = query.isEmpty() && sections.isNotEmpty() && x > width - m.listSideIndex * 1.6f
 
-    private fun scrubTo(y: Float) {
+    /** Centre y of [letter]'s tick in the index. */
+    private fun letterY(letter: Char) = indexTop() + (indexBottom() - indexTop()) * ((LETTERS.indexOf(letter) + 0.5f) / LETTERS.size)
+
+    private fun scrubTo(y: Float, first: Boolean) {
         val k = ((y - indexTop()) / (indexBottom() - indexTop())).coerceIn(0f, 0.999f)
         val letter = LETTERS[(k * LETTERS.size).toInt()]
-        scrubY = indexTop() + (indexBottom() - indexTop()) * ((LETTERS.indexOf(letter) + 0.5f) / LETTERS.size)
-        invalidate()
+        // The bubble glides to the letter under the finger (it is there at once when the finger lands).
+        if (first) bubbleY.snapTo(letterY(letter)) else bubbleY.animateTo(letterY(letter), Motion.profile.indexFollow)
         if (letter == scrubLetter) return
         scrubLetter = letter
-        val target = sections.firstOrNull { it.first >= letter } ?: sections.last()
-        scroller.jumpTo(target.second)
+        // '#' (apps starting with a digit or symbol) sits at the end of the index; its section may not exist.
+        val target = if (letter == '#') sections.firstOrNull { it.first == '#' } ?: sections.last()
+                     else sections.firstOrNull { it.first >= letter && it.first != '#' } ?: sections.last()
+        // The list springs to the section, keeping the motion it has: scrubbing across letters flows instead of jumping.
+        scroller.animateTo(target.second, Motion.profile.indexScroll)
         haptic()
     }
 
+    private fun beginScrub(y: Float) {
+        scrubbing = true
+        scrubLetter = ' '
+        scroller.stop()
+        setPressed(null)
+        indexK.animateTo(1f, Motion.profile.indexBubbleIn)
+        bubbleK.animateTo(1f, Motion.profile.indexBubbleIn)
+        scrubTo(y, first = true)
+    }
+
+    private fun endScrub() {
+        scrubbing = false
+        indexK.animateTo(0f, Motion.profile.indexBubbleOut)
+        bubbleK.animateTo(0f, Motion.profile.indexBubbleOut)   // settled() once it is gone
+        invalidate()
+    }
+
+    /** False while this list is fading out behind another pane: touches go to what is underneath. */
+    var acceptsTouches = true
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN && !acceptsTouches) return false
         if (e.actionMasked == MotionEvent.ACTION_DOWN && inIndex(e.x)) {
-            scrubbing = true
-            scrubLetter = ' '
             parent?.requestDisallowInterceptTouchEvent(true)
+            beginScrub(e.y)
+            return true
         }
         if (scrubbing) {
-            scrubTo(e.y)
-            if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) {
-                scrubbing = false
-                invalidate()
-                settled()
-            }
+            scrubTo(e.y, first = false)
+            if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) endScrub()
             return true
         }
         val dy = touch.onEvent(e) {
@@ -310,7 +347,7 @@ internal class SearchList(
         }
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                touch.stoppedMotion = scroller.isSettling
+                touch.stoppedMotion = scroller.isMovingVisibly()
                 scroller.stop()
                 if (!touch.stoppedMotion) {
                     val hit = itemAt(e.y)
@@ -407,18 +444,48 @@ internal class SearchList(
         val top = indexTop()
         val step = (indexBottom() - top) / LETTERS.size
         val x = width - m.listSideIndex / 2f - m.pt(4f)
+        val lit = indexK.value.coerceIn(0f, 1f)
+        val fingerY = bubbleY.value
+        if (lit > 0f) {
+            // A capsule lights up behind the column while it is touched.
+            val pad = m.pt(6f)
+            r.set(x - m.listSideIndex / 2f, top - pad, x + m.listSideIndex / 2f, indexBottom() + pad)
+            indexCapsule.alpha = (0x24 * lit).toInt()
+            indexCapsuleRim.alpha = (0x30 * lit).toInt()
+            c.drawRoundRect(r, r.width() / 2f, r.width() / 2f, indexCapsule)
+            c.drawRoundRect(r, r.width() / 2f, r.width() / 2f, indexCapsuleRim)
+        }
         for ((k, l) in LETTERS.withIndex()) {
             val cy = top + step * (k + 0.5f)
-            val active = scrubbing && l == scrubLetter
-            index.draw(c, "i$l", l.toString(), x, index.baselineFor(cy), m.listSideIndex, if (active) 255 else 153)
+            // Letters near the finger grow and brighten (a fisheye over about three letters), fading with the capsule.
+            val near = if (lit > 0f) (1f - abs(cy - fingerY) / (step * 3f)).coerceIn(0f, 1f) else 0f
+            val bump = near * near * lit
+            val scale = 1f + 0.5f * bump
+            val alpha = (153 + (255 - 153) * maxOf(bump, if (scrubbing && l == scrubLetter) 1f else 0f)).toInt().coerceIn(0, 255)
+            if (scale != 1f) {
+                c.save()
+                c.scale(scale, scale, x - m.pt(2f) * bump, cy)
+                index.draw(c, "i$l", l.toString(), x, index.baselineFor(cy), m.listSideIndex, alpha)
+                c.restore()
+            } else index.draw(c, "i$l", l.toString(), x, index.baselineFor(cy), m.listSideIndex, alpha)
         }
-        if (scrubbing && scrubLetter != ' ') {
-            // A small glass bubble beside the index showing the letter under the finger.
-            val bx = width - m.listSideIndex * 1.6f - m.pt(34f)
+        val b = bubbleK.value
+        if (b > 0.005f && scrubLetter != ' ') {
+            // A glass bubble beside the index with the letter under the finger: pops in (a little overshoot), glides along
+            // with the finger, and pops away when it lifts.
+            val bx = width - m.listSideIndex * 1.6f - m.pt(34f) - m.pt(6f) * (1f - b.coerceIn(0f, 1f))
             val rad = m.pt(26f)
-            c.drawCircle(bx, scrubY, rad, bubbleFill)
-            c.drawCircle(bx, scrubY, rad, bubbleRim)
-            bubbleText.draw(c, "b$scrubLetter", scrubLetter.toString(), bx, bubbleText.baselineFor(scrubY), rad * 2)
+            val a = b.coerceIn(0f, 1f)
+            c.save()
+            c.scale(0.55f + 0.45f * b, 0.55f + 0.45f * b, bx, fingerY)
+            bubbleShadow.alpha = (0x40 * a).toInt()
+            c.drawCircle(bx, fingerY + m.pt(4f), rad, bubbleShadow)
+            bubbleFill.alpha = (0x3D * a).toInt()
+            bubbleRim.alpha = (0x59 * a).toInt()
+            c.drawCircle(bx, fingerY, rad, bubbleFill)
+            c.drawCircle(bx, fingerY, rad, bubbleRim)
+            bubbleText.draw(c, "b$scrubLetter", scrubLetter.toString(), bx, bubbleText.baselineFor(fingerY), rad * 2, (255 * a).toInt())
+            c.restore()
         }
     }
 

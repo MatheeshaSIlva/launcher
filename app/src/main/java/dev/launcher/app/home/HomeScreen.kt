@@ -28,6 +28,7 @@ import dev.launcher.app.motion.Motion
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 /**
@@ -141,6 +142,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         imeInset = ime
         drawer?.setImeInset(maxOf(0, ime - bottomInset))
         spotlight?.setInsets(bottomInset, ime)
+        picker?.setImeInset(ime)
     }
 
     // ================================================================== setup
@@ -169,11 +171,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         applyGlassWallpaper()
     }
 
+    /** Every widget on the pages. */
+    private fun widgetViews(): List<HomeWidgetView> = pages.flatMap { p -> p.itemViews().filterIsInstance<HomeWidgetView>() }
+
     /** Glass on the pages (widgets): redrawn while the pages move, so it keeps refracting what is behind it. */
-    private val pageGlass = ArrayList<GlassView>()
+    private fun pageGlass(): List<GlassView> = widgetViews().flatMap { it.glassViews() }
 
     /** Glass surfaces (dock, Search pill, widgets), for the wallpaper reveal to drive frame by frame. */
-    fun glassViews(): List<GlassView> = listOfNotNull(dock?.glass, indicator?.glass) + pageGlass + ((editBar as? EditMode.Bar)?.glassViews() ?: emptyList())
+    fun glassViews(): List<GlassView> = listOfNotNull(dock?.glass, indicator?.glass) + pageGlass() + ((editBar as? EditMode.Bar)?.glassViews() ?: emptyList())
+
+    private fun giveWallpaper(g: GlassView) {
+        val metrics = m ?: return
+        g.setWallpaper(wallpaper, metrics.w, metrics.h, resources.displayMetrics.density * REVEAL_CELL_DP)
+    }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
         val top: Int
@@ -266,7 +276,6 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         pagesLayer.removeAllViews()
         pages.clear()
         clocks.clear()
-        pageGlass.clear()
         for (items in l.pages) {
             val p = PageView(context, metrics) { item -> viewFor(item, metrics) }
             p.bind(items)
@@ -293,22 +302,27 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         // Launch screens for the apps on home, so a cold launch has the app's own colour from its first frame.
         dev.launcher.app.apps.SplashColors.warm(context, l.pages.flatten().filterIsInstance<HomeItem.App>().mapNotNull { Apps[it.key]?.pkg } + l.dock.mapNotNull { Apps[it]?.pkg })
         post { publishIcons() }
+        if (pendingArrival != null) post { pendingArrival?.let { cold -> pendingArrival = null; playArrival(cold) } }
     }
 
     private fun viewFor(item: HomeItem, metrics: HomeMetrics): View? = when (item) {
-        is HomeItem.App -> Apps[item.key]?.let { appIcon(it, metrics, label = cfg.showLabels) }
+        is HomeItem.App -> Apps[item.key]?.let { appIcon(it, metrics, label = true) }
         is HomeItem.Widget -> when (item.kind) {
             "clock" -> ClockWidgetView(context, metrics, item.spanX, item.spanY, item.style).also { w ->
                 clocks += w
-                pageGlass += w.glass
-                w.glass.setWallpaper(wallpaper, metrics.w, metrics.h, resources.displayMetrics.density * REVEAL_CELL_DP)
+                w.glassViews().forEach { giveWallpaper(it) }
+                w.onSettled = { if (isIdle) listener.onHomeSettled() }
+                w.setLabelShown(cfg.showWidgetLabels, animate = false)
                 w.setOnLongClickListener { onWidgetLongPress(w); true }
                 editMode?.adopt(w)
             }
             HomeItem.Widget.APP -> {
                 val pkg = item.provider?.let { android.content.ComponentName.unflattenFromString(it)?.packageName }
                 val label = pkg?.let { p -> Apps.forPkg(p)?.label } ?: ""
-                AppWidgetFrame(context, metrics, item.spanX, item.spanY, widgets?.createView(item), label).also { f ->
+                AppWidgetFrame(context, metrics, item.spanX, item.spanY, widgets?.createView(item), label, glassBacking = item.style == HomeItem.Widget.GLASS).also { f ->
+                    f.onGlassCreated = { g -> giveWallpaper(g) }
+                    f.glassViews().forEach { giveWallpaper(it) }
+                    f.setLabelShown(cfg.showWidgetLabels, animate = false)
                     f.setOnLongClickListener { onWidgetLongPress(f); true }
                     editMode?.adopt(f)
                 }
@@ -320,6 +334,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun appIcon(e: AppEntry, metrics: HomeMetrics, label: Boolean) = IconView(context, metrics, label).apply {
         bind(e)
+        setLabelShown(cfg.showLabels, animate = false)
         badge = dev.launcher.app.Badges.count(e.pkg)
         setOnLongClickListener { v -> onIconLongPress(v as IconView, e); true }
         editMode?.adopt(this)
@@ -342,7 +357,16 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             return false
         }
         val changed = HomeModel.sync(l, Apps.all, cfg)
-        if (changed) bindLayout()
+        if (changed) {
+            // The pages are kept when there are still as many: new icons grow into their cells, gone ones shrink away,
+            // the rest glide; a different number of pages (one emptied, one added) rebuilds them.
+            if (l.pages.size == pages.size && isAttachedToWindow) {
+                for ((i, p) in pages.withIndex()) p.setItems(l.pages[i], animate = true)
+                dock?.bind(l.dock.mapNotNull { key -> dock?.icons()?.firstOrNull { it.entry?.key == key } ?: Apps[key]?.let { appIcon(it, metrics, label = false) } }, animate = true)
+                removeCallbacks(afterEdit)
+                postDelayed(afterEdit, 450)
+            } else bindLayout()
+        }
         drawer?.appsChanged()
         return changed
     }
@@ -400,7 +424,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         for (v in listOf(dock, dockShadow, indicator)) v?.translationX = shift
         dock?.glass?.invalidate()
         indicator?.glass?.invalidate()
-        for (g in pageGlass) g.invalidate()
+        for (g in pageGlass()) g.invalidate()
         if (pendingSearch && dp > 0.5f) { pendingSearch = false; drawer?.openSearch() }
         indicator?.setPosition(pos.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()))
         drawer?.setOpenProgress(dp)
@@ -480,9 +504,17 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 // A long press on empty space starts edit mode (on an item, the item's own long press opens its menu).
                 if (em != null && !em.active && drawerProgress() == 0f && sheet == 0f && em.itemAt(e.x, e.y) == null)
                     postDelayed(emptyLongPress, ViewConfiguration.getLongPressTimeout().toLong())
-                // A touch on a moving strip or sheet grabs it where it is (no tap goes through).
-                if (pagerAnimating) { pagerAnimating = false; beginPages(); return true }
-                if (sheetAnimating) { sheetAnimating = false; beginSheet(); return true }
+                // A touch on a moving strip or sheet grabs it where it is (no tap goes through). On the last, invisible part of
+                // a settle (under a pixel from rest) the motion just ends and the touch is an ordinary tap: a swipe to the
+                // App Library followed at once by a tap on a tile must open it, not grab the page.
+                if (pagerAnimating) {
+                    if (abs(pos - pagerTarget) * metrics.w < 1f) { pagerAnimating = false; pos = pagerTarget; applyPositions(); if (!sheetAnimating) onSettled() }
+                    else { pagerAnimating = false; beginPages(); return true }
+                }
+                if (sheetAnimating) {
+                    if (abs(sheet - sheetTarget) * metrics.h < 1f) { sheetAnimating = false; sheet = sheetTarget; applyPositions(); onSettled() }
+                    else { sheetAnimating = false; beginSheet(); return true }
+                }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (abs(e.x - downX) > slop || abs(e.y - downY) > slop) removeCallbacks(emptyLongPress)
@@ -689,9 +721,95 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     // ================================================================== state for the launcher and gesture nav
 
-    val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && (drag == Drag.NONE || drag == Drag.IGNORED) &&
+    val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && !arrivalAnimating && (drag == Drag.NONE || drag == Drag.IGNORED) &&
         (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true) && editMode?.active != true && menu?.isShowing != true &&
-        picker?.isOpen != true && !externalTouch
+        picker?.isOpen != true && !externalTouch && clocks.none { it.animating } && widgetViews().none { it.resizing }
+
+    // ---- arrival: home after unlock, and after a cold start (boot, update, crash)
+    //
+    // The icons, widgets, dock and Search pill bloom from a little smaller as they fade in, staggered outward from the
+    // centre of the screen, while the wallpaper settles from a slight zoom (iOS's unlock). A cold start first brings the
+    // wallpaper up from black. Nothing waits for it: the items are tappable from their first frame.
+
+    private var arrivalAnimating = false
+    private var arrivalStart = 0L
+    private var pendingArrival: Boolean? = null
+    private class Arriving(val v: View, val delay: Double)
+    private val arriving = ArrayList<Arriving>()
+    private var arrivalSpring: Spring? = null
+    private var arrivalWallpaper: Spring? = null
+    private var arrivalMaxDelay = 0.0
+    private var arrivalCold = false
+
+    /** Plays the arrival now, or as soon as home has a layout ([cold]: from black). */
+    fun playArrival(cold: Boolean) {
+        val metrics = m
+        if (metrics == null || pages.isEmpty() || width == 0) { pendingArrival = cold; return }
+        if (drawerProgress() > 0f || spotlight?.isOpen == true || menu?.isShowing == true || picker?.isOpen == true ||
+            editMode?.active == true || depthAnimating || HomeBridge.homeCovered) return
+        val page = pages.getOrNull(pos.roundToInt()) ?: return
+        val mp = Motion.profile
+        if (arrivalAnimating) finishArrival()
+        arriving.clear()
+        val cx = metrics.w / 2f
+        val cy = metrics.h / 2f
+        val maxD = hypot(cx, cy)
+        val stagger = mp.arrivalStaggerMs / 1000.0
+        for (v in page.itemViews()) {
+            val d = hypot(v.left + v.width / 2f - cx, v.top + v.height / 2f - cy)
+            arriving += Arriving(v, (d / maxD) * stagger)
+        }
+        // The dock and the Search pill come last, as one (they are the furthest down).
+        indicator?.let { arriving += Arriving(it, stagger * 0.85) }
+        dock?.let { arriving += Arriving(it, stagger) }
+        dockShadow?.let { arriving += Arriving(it, stagger) }
+        arrivalMaxDelay = arriving.maxOfOrNull { it.delay } ?: 0.0
+        arrivalCold = cold
+        arrivalSpring = mp.arrival.spring().apply { start(mp.arrivalScale, 0f, 1f) }
+        arrivalWallpaper = mp.arrivalWallpaper.spring().apply { start(mp.arrivalWallpaperZoom, 0f, 1f) }
+        arrivalStart = System.nanoTime()
+        arrivalAnimating = true
+        applyArrival(0.0)
+        Choreographer.getInstance().postFrameCallback(arrivalFrame)
+        AppLog.log("[home] arrival (${if (cold) "cold start" else "unlock"}): ${arriving.size} items")
+    }
+
+    private val arrivalFrame = object : Choreographer.FrameCallback {
+        override fun doFrame(now: Long) {
+            if (!arrivalAnimating) return
+            val t = maxOf(0L, now - arrivalStart) / 1e9
+            applyArrival(t)
+            val s = arrivalSpring ?: return
+            if (t > arrivalMaxDelay && s.settled(t - arrivalMaxDelay, 0.002f)) finishArrival() else Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
+    private fun applyArrival(t: Double) {
+        val s = arrivalSpring ?: return
+        val mp = Motion.profile
+        for (a in arriving) {
+            val ti = t - a.delay
+            val v = a.v
+            if (ti <= 0.0) { v.scaleX = mp.arrivalScale; v.scaleY = mp.arrivalScale; v.alpha = 0f; continue }
+            val k = s.value(ti)
+            v.scaleX = k; v.scaleY = k
+            v.alpha = (ti / 0.2).coerceIn(0.0, 1.0).toFloat()
+        }
+        val wz = arrivalWallpaper?.value(t) ?: 1f
+        wallpaperView.scaleX = wz; wallpaperView.scaleY = wz
+        if (arrivalCold) wallpaperView.alpha = (t / 0.35).coerceIn(0.0, 1.0).toFloat()
+        dock?.glass?.invalidate(); indicator?.glass?.invalidate()
+        for (g in pageGlass()) g.invalidate()
+    }
+
+    private fun finishArrival() {
+        for (a in arriving) { a.v.scaleX = 1f; a.v.scaleY = 1f; a.v.alpha = 1f }
+        arriving.clear()
+        wallpaperView.scaleX = 1f; wallpaperView.scaleY = 1f; wallpaperView.alpha = 1f
+        arrivalAnimating = false
+        publishIcons()
+        listener.onHomeSettled()
+    }
 
     // ---- depth: home receding behind an open app (iOS), run here once the real home is on screen
 
@@ -1008,10 +1126,38 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                     editMode?.restyle(item, if (solid) null else "solid")
                 }
             }
+            if (item.kind == HomeItem.Widget.APP) {
+                // A platter of the theme's glass behind a widget that comes without a background of its own.
+                val glass = item.style == HomeItem.Widget.GLASS
+                items += ContextMenuView.Item(if (glass) "No Background" else "Glass Background", glyph = ContextMenuView.Glyph.STYLE) {
+                    editMode?.restyle(item, if (glass) null else HomeItem.Widget.GLASS)
+                }
+            }
+        }
+        items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) {
+            setWidgetLabelsShown(!cfg.showWidgetLabels)
         }
         items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
         items += ContextMenuView.Item("Remove Widget", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
         showMenu(v, pic, frame, items)
+    }
+
+    /** Widget names under the widgets, on or off (saved; the names fade). */
+    fun setWidgetLabelsShown(shown: Boolean) {
+        if (cfg.showWidgetLabels == shown) return
+        cfg = cfg.copy(showWidgetLabels = shown)
+        cfg.save(context)
+        for (w in widgetViews()) w.setLabelShown(shown, animate = true)
+        postDelayed(afterEdit, 400)
+    }
+
+    /** App names under the icons on the pages, on or off (saved; the names fade). iOS 18's large-icon look when off. */
+    fun setAppLabelsShown(shown: Boolean) {
+        if (cfg.showLabels == shown) return
+        cfg = cfg.copy(showLabels = shown)
+        cfg.save(context)
+        for (p in pages) for (v in p.icons()) v.setLabelShown(shown, animate = true)
+        postDelayed(afterEdit, 400)
     }
 
     private fun isOnHome(key: String): Boolean {
@@ -1069,7 +1215,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (pendingFromSpotlight) spotlight?.closeNow() else closeDrawer()
         em.enter(haptic = false)
         // A home icon for the app, laid out off screen at a cell's size: its copy is what the finger carries.
-        val icon = appIcon(e, metrics, label = cfg.showLabels)
+        val icon = appIcon(e, metrics, label = true)
         icon.measure(MeasureSpec.makeMeasureSpec(metrics.columnPitch.roundToInt(), MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(metrics.cellHeight.roundToInt(), MeasureSpec.EXACTLY))
         icon.layout(0, 0, icon.measuredWidth, icon.measuredHeight)
@@ -1089,6 +1235,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun showEditMenu(button: RectF) {
         menu?.show((editBar as? EditMode.Bar)?.editButtonPicture(), button, listOf(
             ContextMenuView.Item("Add Widget", glyph = ContextMenuView.Glyph.PLUS) { openWidgetPicker() },
+            ContextMenuView.Item(if (cfg.showLabels) "Hide App Names" else "Show App Names", glyph = ContextMenuView.Glyph.LABEL) { setAppLabelsShown(!cfg.showLabels) },
+            ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) },
         ))
     }
 
@@ -1131,7 +1279,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             if (item is HomeItem.Widget && item.kind == HomeItem.Widget.APP) widgets?.delete(item.id)
         }
         override fun editingChanged(active: Boolean) {
-            editBar?.visibility = if (active) View.VISIBLE else View.GONE
+            (editBar as? EditMode.Bar)?.let { if (active) it.show() else it.hide() }
             indicator?.editing = active
             if (!active) {
                 // Pages emptied while editing are gone from the layout: match the views to it.
@@ -1170,6 +1318,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         }
         override fun pickerProgress(k: Float) { pickerK = k; applySceneBlur() }
         override fun drawBehindSheet(c: android.graphics.Canvas) = scene.draw(c)
+        override fun wallpaper(): Wallpaper? = this@HomeScreen.wallpaper
     }
 
     // ================================================================== SpotlightView.Host

@@ -40,14 +40,23 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
         }
         val keep = java.util.IdentityHashMap<HomeItem, View>()
         for (it in newItems) viewOf[it]?.let { v -> keep[it] = v }
-        for ((item, v) in viewOf) if (!keep.containsKey(item)) { removeView(v); laid.remove(v) }
+        for ((item, v) in viewOf) if (!keep.containsKey(item)) {
+            laid.remove(v)
+            // Something leaving home shrinks away where it was (an uninstalled app, a removed widget).
+            if (animate && v.alpha > 0f) dev.launcher.app.motion.Appear.vanish(v) { removeView(v) } else removeView(v)
+        }
         viewOf.clear()
         viewOf.putAll(keep)
         items = newItems.toList()
         placed = HomeModel.place(items, m.cfg.columns, m.cfg.rows)
         views.clear()
+        val fresh = ArrayList<View>()
         for (p in placed) {
-            val v = viewOf[p.item] ?: (makeView(p.item) ?: View(context)).also { addView(it); viewOf[p.item] = it }
+            val v = viewOf[p.item] ?: (makeView(p.item) ?: View(context)).also {
+                addView(it); viewOf[p.item] = it
+                // Something new on home grows into its cell once it is laid out (hidden until then).
+                if (animate) { it.alpha = 0f; fresh += it }
+            }
             views += v
             // A kept view starts where it was and glides to its new cell (its new position is known from the grid).
             val from = oldPos[v]
@@ -63,6 +72,35 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
             }
         }
         requestLayout()
+        if (fresh.isNotEmpty()) viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                viewTreeObserver.removeOnPreDrawListener(this)
+                for (v in fresh) if (v.parent === this@PageView) dev.launcher.app.motion.Appear.grow(v)
+                return true
+            }
+        })
+    }
+
+    /** Recreates the view of [item] (its look changed in a way the view cannot follow, e.g. the clock's style). */
+    fun rebuildItem(item: HomeItem) {
+        val old = viewOf[item] ?: return
+        val i = views.indexOf(old)
+        if (i < 0) return
+        removeView(old)
+        laid.remove(old)
+        val v = makeView(item) ?: View(context)
+        addView(v)
+        viewOf[item] = v
+        views[i] = v
+        v.alpha = 0f
+        requestLayout()
+        viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                viewTreeObserver.removeOnPreDrawListener(this)
+                if (v.parent === this@PageView) v.animate().alpha(1f).setDuration(dev.launcher.app.motion.Motion.profile.appearMs).start()
+                return true
+            }
+        })
     }
 
     fun icons(): List<IconView> = views.filterIsInstance<IconView>()
@@ -91,13 +129,21 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
     }
 }
 
-/** A widget on a home page as edit mode sees it: a remove badge, and a gentler wiggle than an icon's. */
+/** A widget on a home page as home and edit mode see it: a remove badge and resize handle, a size, a name, glass. */
 interface HomeWidgetView {
     var editing: Boolean
     /** The remove badge's centre in the widget's view. */
     fun badgeCenter(): FloatArray
-    /** Edit mode's resize handle: the widget's bottom-right corner, in its view. */
+    /** Edit mode's resize handle: the widget's bottom-right corner (as shown now), in its view. */
     fun handleCenter(): FloatArray
+    /** A new size: the content is laid out for it; [animate] grows or shrinks the card there on a spring. */
+    fun setSpan(spanX: Int, spanY: Int, animate: Boolean)
+    /** The widget's name under it, shown or hidden (fading when [animate]). */
+    fun setLabelShown(shown: Boolean, animate: Boolean)
+    /** Glass surfaces of this widget (they refract the wallpaper: given it, redrawn as the pages move). */
+    fun glassViews(): List<GlassView>
+    /** True while its size animates (home is not at rest). */
+    val resizing: Boolean
 }
 
 /** iOS 27's widget resize handle in edit mode: a white arc hugging the widget's bottom-right corner. */
@@ -117,19 +163,16 @@ object ResizeHandle {
 }
 
 /**
- * The iOS lock-screen clock as a home widget (4 x 2), its "Glass" style: the date line, and the time in huge numerals of
- * liquid glass that refract the wallpaper behind them (frosted, lit from the top left, a soft shadow). No card, no label,
- * as on the lock screen. 12 or 24 hours as the system is set; no AM/PM.
+ * The iOS lock-screen clock as a home widget, its "Glass" style: the date line, and the time in huge numerals of liquid
+ * glass that refract the wallpaper behind them (the dock's material shaped like the digits: clear, a lens at the stroke
+ * edges, a crisp highlight where the edge faces the light, a soft shadow). No card, no label, as on the lock screen. 12 or
+ * 24 hours as the system is set; no AM/PM. The minute change crossfades the numerals (two glass layers take turns) instead
+ * of swapping them; a change of size crossfades the whole look ([WidgetFrameView]).
  */
-class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY: Int, style: String? = null) : FrameLayout(ctx), HomeWidgetView {
+class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, style: String? = null) : WidgetFrameView(ctx, m, spanX, spanY) {
     /** "Solid": plain white numerals instead of glass (the lock screen's other style). */
     private val solid = style == "solid"
     private var solidBaseline = 0f
-    /** The numerals: glass over the wallpaper, shaped by a mask of the current time. */
-    val glass = GlassView(ctx, GlassStyle.IOS_CLOCK, m.u)
-    private val boxW = m.widgetWidth(spanX)
-    private val boxH = m.widgetHeight(spanY)
-    private val left = m.widgetInset(0)
     private val dateSize = m.pt(19f)
     private val digitsTop = m.pt(25f)
     private val datePaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -146,26 +189,57 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
         textAlign = Paint.Align.CENTER
         letterSpacing = -0.02f
     }
+
+    /** One glass layer of numerals with its own mask bitmaps (two take turns at the minute change). */
+    private inner class Numerals {
+        val glass = GlassView(context, GlassStyle.IOS_CLOCK, m.u)
+        var mask: android.graphics.Bitmap? = null
+        var height: android.graphics.Bitmap? = null
+        var time = ""
+    }
+    private val layerA = Numerals()
+    private val layerB = Numerals()
+    private var front = layerA
     private var shownTime = ""
     private var dateText = ""
-    private var maskBmp: android.graphics.Bitmap? = null
-    private var heightBmp: android.graphics.Bitmap? = null
+    private var tickAnim: android.animation.ValueAnimator? = null
+    /** The numerals are crossfading (minute change) or the size animates: home is not at rest. */
+    val animating get() = tickAnim != null || resizing
+    /** Called when a crossfade ends (home may record itself). */
+    var onSettled: (() -> Unit)? = null
+
+    override val labelText: String? get() = null
 
     init {
-        clipChildren = false
-        setWillNotDraw(false)
-        addView(glass, LayoutParams(boxW.roundToInt(), (boxH - digitsTop).roundToInt()).apply {
-            leftMargin = left.roundToInt()
-            topMargin = digitsTop.roundToInt()
-        })
-        glass.visibility = View.INVISIBLE
-        glass.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+        for (n in listOf(layerA, layerB)) {
+            addView(n.glass, LayoutParams(cardW.roundToInt(), (cardH - digitsTop).roundToInt()).apply {
+                leftMargin = left.roundToInt()
+                topMargin = digitsTop.roundToInt()
+            })
+            n.glass.alpha = 0f
+            if (solid) n.glass.visibility = View.GONE
+        }
+        layerA.glass.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
             if (r - l != or - ol || b - t != ob - ot) post { shownTime = ""; refresh() }
         }
     }
 
-    /** Shows the time now (once a minute, and before home is recorded). */
-    fun refresh() {
+    override fun glassViews(): List<GlassView> = if (solid) emptyList() else listOf(layerA.glass, layerB.glass)
+
+    override fun onSpanChanged() {
+        for (n in listOf(layerA, layerB)) {
+            n.glass.layoutParams = (n.glass.layoutParams as LayoutParams).apply {
+                width = cardW.roundToInt(); height = (cardH - digitsTop).roundToInt(); leftMargin = left.roundToInt()
+            }
+        }
+        shownTime = ""   // the numerals are rebuilt for the new size once the glass has its new layout
+    }
+
+    /** No card to clip the old look with: the whole widget crossfades. */
+    override fun oldCornerRadius(): Float = 0f
+
+    /** Shows the time now (once a minute; before home is recorded, with [animate] false: at once, no crossfade). */
+    fun refresh(animate: Boolean = true) {
         val is24 = android.text.format.DateFormat.is24HourFormat(context)
         val now = java.util.Date()
         val locale = java.util.Locale.getDefault()
@@ -173,51 +247,59 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
         // As on the iOS lock screen: weekday, then day ("Sat 3").
         val date = java.text.SimpleDateFormat("EEE d", locale).format(now)
         if (date != dateText) { dateText = date; invalidate() }
-        if (time != shownTime && glass.width > 0) { shownTime = time; buildMask(time); invalidate() }
+        if (time == shownTime) return
+        if (solid) { shownTime = time; layoutDigits(); invalidate(); return }
+        if (front.glass.width <= 0) return
+        // A first showing (or a new size) appears at once; a minute change crossfades into the other layer.
+        val crossfade = animate && shownTime.isNotEmpty() && !resizing && isAttachedToWindow
+        shownTime = time
+        if (!crossfade) {
+            tickAnim?.cancel()
+            buildMask(front, time)
+            front.glass.alpha = 1f
+            (if (front === layerA) layerB else layerA).glass.alpha = 0f
+            return
+        }
+        val back = if (front === layerA) layerB else layerA
+        buildMask(back, time)
+        tickAnim?.cancel()
+        val from = front
+        tickAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = dev.launcher.app.motion.Motion.profile.clockTickMs
+            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+            addUpdateListener { a -> val k = a.animatedValue as Float; back.glass.alpha = k; from.glass.alpha = 1f - k }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    back.glass.alpha = 1f; from.glass.alpha = 0f
+                    tickAnim = null
+                    onSettled?.invoke()
+                }
+            })
+            start()
+        }
+        front = back
+    }
+
+    /** The digits' size for the box (the font's own proportions, slightly narrowed as iOS's clock is), and their baseline. */
+    private fun layoutDigits(): Float {
+        val baseline = ClockNumerals.layout(digitPaint, cardW, cardH - digitsTop, android.text.format.DateFormat.is24HourFormat(context))
+        solidBaseline = baseline
+        return baseline
     }
 
     /** The numerals' shape: a sharp mask at the glass's size and its blurred height field (half size) for lens and light. */
-    private fun buildMask(time: String) {
-        val w = glass.width
-        val h = glass.height
+    private fun buildMask(n: Numerals, time: String) {
+        val w = n.glass.width
+        val h = n.glass.height
         if (w <= 0 || h <= 0) return
-        // As large as the box allows in the font's own proportions (not stretched): the widest time fits the width, the
-        // digits' height fits the box; the numerals sit at the bottom of the box, under the date.
-        digitPaint.textScaleX = 1f
-        digitPaint.textSize = 100f
-        val bounds = android.graphics.Rect()
-        digitPaint.getTextBounds("0123456789", 0, 10, bounds)
-        val digitH = bounds.height() / 100f
-        val widest = if (android.text.format.DateFormat.is24HourFormat(context)) "20:08" else "10:08"
-        val widthPer100 = digitPaint.measureText(widest) / 100f
-        // Slightly narrowed, as iOS's clock is.
-        digitPaint.textScaleX = 0.9f
-        digitPaint.textSize = minOf(h * 0.94f / digitH, w * 0.96f / (widthPer100 * 0.9f))
-        // Right under the date (as on the lock screen).
-        val baseline = digitH * digitPaint.textSize + h * 0.03f
-        if (solid) {
-            // Drawn directly (onDraw); the glass is not used.
-            solidBaseline = baseline
-            glass.visibility = View.GONE
-            return
-        }
-        val mask = maskBmp?.takeIf { it.width == w && it.height == h }
-            ?: android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8).also { maskBmp = it }
-        mask.eraseColor(0)
-        android.graphics.Canvas(mask).drawText(time, w / 2f, baseline, digitPaint)
-        val scale = 0.5f
-        val hw = maxOf(1, (w * scale).toInt())
-        val hh = maxOf(1, (h * scale).toInt())
-        val height = heightBmp?.takeIf { it.width == hw && it.height == hh }
-            ?: android.graphics.Bitmap.createBitmap(hw, hh, android.graphics.Bitmap.Config.ALPHA_8).also { heightBmp = it }
-        height.eraseColor(0)
-        android.graphics.Canvas(height).apply { scale(scale, scale); drawText(time, w / 2f, baseline, digitPaint) }
-        val blurPx = digitPaint.textSize * 0.03f
-        boxBlurAlpha(height, maxOf(1, (blurPx * scale).roundToInt()))
-        // A new mask object each minute: the glass keeps the bitmaps it was given until it has the next ones.
-        glass.mask = dev.launcher.app.GlassMask(mask, height, scale, blurPx, 0.10f)
-        glass.visibility = View.VISIBLE
-        glass.invalidate()
+        val baseline = layoutDigits()
+        val gm = ClockNumerals.mask(digitPaint, w, h, baseline, time, n.mask, n.height)
+        n.mask = gm.mask
+        n.height = gm.height
+        // A new mask object each time: the glass keeps the bitmaps it was given until it has the next ones.
+        n.glass.mask = gm
+        n.glass.invalidate()
+        n.time = time
     }
 
     private val tick = object : android.content.BroadcastReceiver() {
@@ -236,15 +318,9 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        tickAnim?.cancel()
         try { context.unregisterReceiver(tick) } catch (_: Throwable) { }
     }
-
-    override var editing = false
-        set(v) { if (field != v) { field = v; invalidate() } }
-
-    override fun badgeCenter(): FloatArray = floatArrayOf(left + m.pt(4f), m.pt(4f))
-
-    override fun handleCenter(): FloatArray = floatArrayOf(left + boxW, boxH)
 
     private val solidPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xF2FFFFFF.toInt()
@@ -253,22 +329,59 @@ class ClockWidgetView(ctx: Context, private val m: HomeMetrics, spanX: Int, span
     }
 
     override fun onDraw(canvas: Canvas) {
-        canvas.drawText(dateText, left + boxW / 2f, dateSize * 0.86f, datePaint)
+        canvas.drawText(dateText, left + shownW / 2f, dateSize * 0.86f, datePaint)
         if (solid && shownTime.isNotEmpty()) {
             solidPaint.typeface = digitPaint.typeface
             solidPaint.textSize = digitPaint.textSize
             solidPaint.textScaleX = digitPaint.textScaleX
             solidPaint.letterSpacing = digitPaint.letterSpacing
-            canvas.drawText(shownTime, left + boxW / 2f, digitsTop + solidBaseline, solidPaint)
+            solidPaint.alpha = (0xF2 * contentK).toInt()
+            canvas.drawText(shownTime, left + cardW / 2f, digitsTop + solidBaseline, solidPaint)
         }
     }
+}
 
-    override fun dispatchDraw(canvas: Canvas) {
-        super.dispatchDraw(canvas)
-        if (editing) {
-            RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
-            ResizeHandle.draw(canvas, handleCenter()[0], handleCenter()[1], m.widgetRadius, m)
-        }
+/** The glass clock's numerals as a glass shape: shared by the widget and the gallery's preview of it. */
+object ClockNumerals {
+    /**
+     * Sets [paint]'s size for a [w] x [h] box (as large as the box allows in the font's own proportions, slightly narrowed
+     * as iOS's clock is; the widest time fits the width, the digits' height fits the box) and returns the baseline that
+     * puts the numerals at the bottom of the box.
+     */
+    fun layout(paint: android.text.TextPaint, w: Float, h: Float, is24: Boolean): Float {
+        paint.textScaleX = 1f
+        paint.textSize = 100f
+        val bounds = android.graphics.Rect()
+        paint.getTextBounds("0123456789", 0, 10, bounds)
+        val digitH = bounds.height() / 100f
+        val widest = if (is24) "20:08" else "10:08"
+        val widthPer100 = paint.measureText(widest) / 100f
+        paint.textScaleX = 0.9f
+        paint.textSize = minOf(h * 0.94f / digitH, w * 0.96f / (widthPer100 * 0.9f))
+        return digitH * paint.textSize + h * 0.03f
+    }
+
+    /**
+     * [time] drawn with [paint] into a sharp ALPHA_8 mask of [w] x [h] and a blurred half-size height field (the lens and
+     * the light come from its slope: a wide, soft bevel, so they reach well into each stroke as thick glass does).
+     * [reuseMask] / [reuseHeight] of the right size are drawn into again.
+     */
+    fun mask(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String,
+             reuseMask: android.graphics.Bitmap? = null, reuseHeight: android.graphics.Bitmap? = null): dev.launcher.app.GlassMask {
+        val mask = reuseMask?.takeIf { it.width == w && it.height == h }
+            ?: android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8)
+        mask.eraseColor(0)
+        android.graphics.Canvas(mask).drawText(time, w / 2f, baseline, paint)
+        val scale = 0.5f
+        val hw = maxOf(1, (w * scale).toInt())
+        val hh = maxOf(1, (h * scale).toInt())
+        val height = reuseHeight?.takeIf { it.width == hw && it.height == hh }
+            ?: android.graphics.Bitmap.createBitmap(hw, hh, android.graphics.Bitmap.Config.ALPHA_8)
+        height.eraseColor(0)
+        android.graphics.Canvas(height).apply { scale(scale, scale); drawText(time, w / 2f, baseline, paint) }
+        val blurPx = paint.textSize * 0.07f
+        boxBlurAlpha(height, maxOf(1, (blurPx * scale).roundToInt()))
+        return dev.launcher.app.GlassMask(mask, height, scale, blurPx, 0.14f)
     }
 }
 

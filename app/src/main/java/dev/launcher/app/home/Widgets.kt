@@ -12,6 +12,8 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Outline
 import android.graphics.Paint
+import android.graphics.Picture
+import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.Bundle
@@ -25,7 +27,10 @@ import android.view.ViewConfiguration
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
 import dev.launcher.app.AppLog
+import dev.launcher.app.GlassStyle
 import dev.launcher.app.ShizukuLink
+import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.SpringValue
 import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -256,16 +261,42 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
 }
 
 /**
- * A placed Android widget at an iOS size: the widget inside a card with iOS's corner radius (spanning its columns' icons
- * plus 4 pt each side, as iOS widgets do), its app's name below like an app label, and edit mode's remove badge.
+ * The frame every home widget sits in (an Android widget's card, the glass clock): the iOS geometry for its span (a card
+ * spanning its columns' icons plus 4 pt each side, corners 23 pt), its name below like an app label (hideable, fading),
+ * edit mode's remove badge and resize handle, and an animated change of size: the card springs from the old size to the
+ * new one while the old look crossfades into the new content laid out at its final size (nothing stretches), as iOS resizes
+ * a widget. Subclasses lay out their content for [cardW] x [cardH] and draw within the card as shown now ([shownW], [shownH]).
  */
-@SuppressLint("ViewConstructor")
-class AppWidgetFrame(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY: Int, val hostView: LauncherWidgetHostView?, private val label: String) :
-    FrameLayout(ctx), HomeWidgetView {
-    private val cardW = m.widgetWidth(spanX)
-    private val cardH = m.widgetHeight(spanY)
-    private val left = m.widgetInset(0)
-    private val card = FrameLayout(ctx)
+abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX: Int, spanY: Int) : FrameLayout(ctx), HomeWidgetView {
+    var spanX = spanX
+        private set
+    var spanY = spanY
+        private set
+    /** The card's size for the current span (where a resize ends up). */
+    protected var cardW = m.widgetWidth(spanX)
+    protected var cardH = m.widgetHeight(spanY)
+    /** The card's left edge in this view. */
+    protected val left = m.widgetInset(0)
+    /** The card as drawn now: during a resize it springs from the old size to the new. */
+    var shownW = cardW
+        private set
+    var shownH = cardH
+        private set
+    private var fromW = 0f
+    private var fromH = 0f
+    private var oldLook: Picture? = null
+    private var oldW = 0f
+    private var oldH = 0f
+    /** How far the new content has faded in during a resize (1 when none runs). */
+    protected var contentK = 1f
+        private set
+    private val resizeK = SpringValue(0f, 1000f, { k -> onResizeFrame(k) }, { onResizeDone() })
+    override val resizing: Boolean get() = resizeK.isAnimating
+
+    /** The widget's name under the card (null: none, as the lock-screen clock). */
+    protected open val labelText: String? = null
+    private var labelK = 1f
+    private val labelSpring = SpringValue(1f, 1000f, { labelK = it.coerceIn(0f, 1f); invalidate() })
     private val labelPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = m.labelTextSize
@@ -273,16 +304,142 @@ class AppWidgetFrame(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY
         typeface = dev.launcher.app.theme.Fonts.text(450)
         setShadowLayer(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
     }
-    private val placeholder = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFFFFF }
+    private val oldClip = android.graphics.Path()
+    /** True while the frame records its own look (badges, label and the crossfade are left out). */
+    protected var recordingLook = false
+        private set
 
     init {
         clipChildren = false
         setWillNotDraw(false)
+    }
+
+    override var editing = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+
+    override fun badgeCenter(): FloatArray = floatArrayOf(left + m.pt(4f), m.pt(4f))
+
+    override fun handleCenter(): FloatArray = floatArrayOf(left + shownW, shownH)
+
+    override fun setLabelShown(shown: Boolean, animate: Boolean) {
+        val to = if (shown) 1f else 0f
+        if (animate) labelSpring.animateTo(to, Motion.profile.appear) else { labelSpring.snapTo(to); labelK = to; invalidate() }
+    }
+
+    override fun setSpan(spanX: Int, spanY: Int, animate: Boolean) {
+        if (spanX == this.spanX && spanY == this.spanY) return
+        if (animate && width > 0) {
+            oldLook = recordLook()
+            oldW = shownW; oldH = shownH
+            fromW = shownW; fromH = shownH
+        }
+        this.spanX = spanX
+        this.spanY = spanY
+        cardW = m.widgetWidth(spanX)
+        cardH = m.widgetHeight(spanY)
+        onSpanChanged()
+        if (oldLook != null) {
+            resizeK.snapTo(0f)
+            resizeK.animateTo(1f, Motion.profile.widgetResize)
+        } else onResizeDone()
+    }
+
+    /** The content is laid out for the new [cardW] x [cardH] (the card itself still shows at the old size and grows). */
+    protected abstract fun onSpanChanged()
+
+    /** The shown size changed (a frame of the resize, or its end): clips and outlines follow it. */
+    protected open fun onShownChanged() {}
+
+    private fun onResizeFrame(k: Float) {
+        shownW = fromW + (cardW - fromW) * k
+        shownH = fromH + (cardH - fromH) * k
+        // The new content fades in over the first part of the motion, the old look fades out with it.
+        val t = ((k - 0.05f) / 0.6f).coerceIn(0f, 1f)
+        contentK = t * t * (3f - 2f * t)
+        onShownChanged()
+        invalidate()
+    }
+
+    private fun onResizeDone() {
+        oldLook = null
+        shownW = cardW
+        shownH = cardH
+        contentK = 1f
+        onShownChanged()
+        invalidate()
+    }
+
+    /** This view as it looks now (content only): what the resize crossfades away from. */
+    private fun recordLook(): Picture {
+        val p = Picture()
+        val c = p.beginRecording(maxOf(1, width), maxOf(1, height))
+        recordingLook = true
+        try { draw(c) } finally { recordingLook = false; p.endRecording() }
+        return p
+    }
+
+    /** The card's rounded rectangle as shown now, in this view's coordinates. */
+    protected fun shownRect(out: RectF): RectF = out.apply { set(left, 0f, left + shownW, shownH) }
+
+    private val r = RectF()
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        if (recordingLook) return
+        oldLook?.let { p ->
+            // The old look fades out over the new content, clipped to the card as it is now, anchored at its top-left (what
+            // the card shows never stretches; the card's edge simply moves).
+            val a = (255 * (1f - contentK)).toInt()
+            if (a > 0) {
+                shownRect(r)
+                val layer = canvas.saveLayerAlpha(r.left - 1, r.top - 1, r.right + 1, r.bottom + 1, a)
+                oldClip.reset()
+                oldClip.addRoundRect(r, oldCornerRadius(), oldCornerRadius(), android.graphics.Path.Direction.CW)
+                canvas.clipPath(oldClip)
+                canvas.drawPicture(p)
+                canvas.restoreToCount(layer)
+            }
+        }
+        val label = labelText
+        if (label != null && labelK > 0f) {
+            labelPaint.alpha = (255 * labelK).toInt()
+            canvas.drawText(label, left + shownW / 2f, shownH + m.labelBaseline, labelPaint)
+        }
+        if (editing) {
+            RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
+            ResizeHandle.draw(canvas, handleCenter()[0], handleCenter()[1], m.widgetRadius, m)
+        }
+    }
+
+    /** Corner radius the old look is clipped with during a resize (the card's; a frameless widget uses none). */
+    protected open fun oldCornerRadius(): Float = m.widgetRadius
+}
+
+/**
+ * A placed Android widget at an iOS size: the widget inside a card with iOS's corner radius, optionally on a platter of
+ * the theme's liquid glass (for widgets that come with a transparent background), its app's name below like an app label.
+ */
+@SuppressLint("ViewConstructor")
+class AppWidgetFrame(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, val hostView: LauncherWidgetHostView?, private val label: String,
+                     glassBacking: Boolean) : WidgetFrameView(ctx, m, spanX, spanY) {
+    private val card = FrameLayout(ctx)
+    private var glass: GlassView? = null
+    /** Home gives a newly made glass platter its wallpaper. */
+    var onGlassCreated: ((GlassView) -> Unit)? = null
+    private val placeholder = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFFFFF }
+
+    override val labelText: String get() = label
+
+    init {
         card.clipToOutline = true
         card.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(view: View, outline: Outline) { outline.setRoundRect(0, 0, view.width, view.height, m.widgetRadius) }
+            override fun getOutline(view: View, outline: Outline) {
+                // The card is laid out at its final size; what shows is the card as it is now (a resize grows or shrinks it).
+                outline.setRoundRect(0, 0, shownW.roundToInt().coerceAtMost(view.width), shownH.roundToInt().coerceAtMost(view.height), m.widgetRadius)
+            }
         }
         addView(card, LayoutParams(cardW.roundToInt(), cardH.roundToInt()).apply { leftMargin = left.roundToInt() })
+        setGlassBacking(glassBacking)
         hostView?.let { hv ->
             hv.setPadding(0, 0, 0, 0)
             card.addView(hv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -290,8 +447,40 @@ class AppWidgetFrame(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY
         }
     }
 
+    val hasGlassBacking get() = glass != null
+
+    /** A platter of the theme's glass behind the widget (for widgets with a transparent background), or none. */
+    fun setGlassBacking(on: Boolean) {
+        if (on == (glass != null)) return
+        if (on) {
+            val g = GlassView(context, GlassStyle.IOS, m.u).apply { radius = m.widgetRadius; alpha = 0f }
+            card.addView(g, 0, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+            glass = g
+            onGlassCreated?.invoke(g)
+            g.animate().alpha(1f).setDuration(Motion.profile.appearMs).start()
+        } else {
+            val g = glass ?: return
+            glass = null
+            g.animate().alpha(0f).setDuration(Motion.profile.disappearMs).withEndAction { card.removeView(g) }.start()
+        }
+    }
+
+    override fun glassViews(): List<GlassView> = listOfNotNull(glass)
+
+    override fun onSpanChanged() {
+        card.layoutParams = (card.layoutParams as LayoutParams).apply { width = cardW.roundToInt(); height = cardH.roundToInt(); leftMargin = left.roundToInt() }
+        pushSize()
+    }
+
+    override fun onShownChanged() { card.invalidateOutline() }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        pushSize()
+    }
+
+    /** Tells the widget the size it is shown at (iOS size, in dp). */
+    private fun pushSize() {
         val hv = hostView ?: return
         val d = resources.displayMetrics.density
         val wDp = cardW / d
@@ -302,23 +491,7 @@ class AppWidgetFrame(ctx: Context, private val m: HomeMetrics, spanX: Int, spanY
         } catch (_: Throwable) { }
     }
 
-    override var editing = false
-        set(v) { if (field != v) { field = v; invalidate() } }
-
-    override fun badgeCenter(): FloatArray = floatArrayOf(left + m.pt(4f), m.pt(4f))
-
-    override fun handleCenter(): FloatArray = floatArrayOf(left + cardW, cardH)
-
     override fun onDraw(canvas: Canvas) {
-        if (hostView == null) canvas.drawRoundRect(left, 0f, left + cardW, cardH, m.widgetRadius, m.widgetRadius, placeholder)
-        canvas.drawText(label, left + cardW / 2f, cardH + m.labelBaseline, labelPaint)
-    }
-
-    override fun dispatchDraw(canvas: Canvas) {
-        super.dispatchDraw(canvas)
-        if (editing) {
-            RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
-            ResizeHandle.draw(canvas, handleCenter()[0], handleCenter()[1], m.widgetRadius, m)
-        }
+        if (hostView == null) canvas.drawRoundRect(left, 0f, left + shownW, shownH, m.widgetRadius, m.widgetRadius, placeholder)
     }
 }

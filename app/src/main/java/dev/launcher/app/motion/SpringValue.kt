@@ -85,3 +85,19 @@ class SpringTranslate(private val view: View) {
             ?: SpringTranslate(v).also { v.setTag(dev.launcher.app.R.id.spring_translate, it) }
     }
 }
+
+/** Something entering or leaving home: a new item grows into its place on a spring, a removed one shrinks away. */
+object Appear {
+    /** [v] grows from [from] of its size to full size (a little overshoot) while it fades in. */
+    fun grow(v: View, spec: SpringSpec = Motion.profile.appear, from: Float = 0.7f, fadeMs: Long = Motion.profile.appearMs) {
+        v.scaleX = from; v.scaleY = from
+        v.alpha = 0f
+        SpringValue(from, 100f, { k -> v.scaleX = k; v.scaleY = k }).animateTo(1f, spec)
+        v.animate().alpha(1f).setDuration(fadeMs).start()
+    }
+
+    /** [v] shrinks and fades away, then [then] runs (removing it). */
+    fun vanish(v: View, ms: Long = Motion.profile.disappearMs, then: () -> Unit) {
+        v.animate().scaleX(0.6f).scaleY(0.6f).alpha(0f).setDuration(ms).withEndAction(then).start()
+    }
+}

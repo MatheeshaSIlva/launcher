@@ -71,6 +71,9 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
 
     override fun verifyDrawable(who: android.graphics.drawable.Drawable): Boolean = who === glass || super.verifyDrawable(who)
 
+    /** One draw of one drawable: a fade (the clock's minute crossfade) needs no offscreen layer. */
+    override fun hasOverlappingRendering(): Boolean = false
+
     override fun draw(canvas: Canvas) {
         val g = glass
         if (g != null) {

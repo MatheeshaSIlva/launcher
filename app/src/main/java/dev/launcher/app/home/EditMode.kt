@@ -191,37 +191,56 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
     /**
      * [widget] at [size], in its cell (moved left/up as needed to stay on the page); icons in the way move on, another widget
-     * in the way sends it to the first place it fits on the page. Returns the resized widget, or null if it fits nowhere.
+     * in the way sends it to the first place it fits on the page. The widget's card springs to the new size while its
+     * content crossfades (the view stays: the item changes in place). Returns the widget, or null if it fits nowhere.
      */
     fun resize(widget: HomeItem.Widget, size: WidgetSize): HomeItem.Widget? {
         if (size.spanX == widget.spanX && size.spanY == widget.spanY) return widget
-        val nw = widget.with(spanX = size.spanX, spanY = size.spanY)
-        return replace(widget, nw)?.also { home.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK) }
-    }
-
-    /** The clock's style (glass or solid). */
-    fun restyle(widget: HomeItem.Widget, style: String?) { replace(widget, widget.with(style = style)) }
-
-    private fun replace(old: HomeItem.Widget, nw: HomeItem.Widget): HomeItem.Widget? {
         val l = host.layout ?: return null
-        val pi = l.pages.indexOfFirst { p -> p.any { it === old } }
+        val pi = l.pages.indexOfFirst { p -> p.any { it === widget } }
         if (pi < 0) return null
         val page = l.pages[pi]
         val cols = m.cfg.columns
         val rows = m.cfg.rows
-        val col = old.col.coerceIn(0, cols - nw.spanX.coerceAtMost(cols))
-        val row = old.row.coerceIn(0, rows - nw.spanY.coerceAtMost(rows))
-        page.removeAll { it === old }
-        val off = Grid.putAt(page, nw, col, row, cols, rows)
+        val oldSx = widget.spanX
+        val oldSy = widget.spanY
+        val oldCol = widget.col
+        val oldRow = widget.row
+        val col = widget.col.coerceIn(0, cols - size.spanX.coerceAtMost(cols))
+        val row = widget.row.coerceIn(0, rows - size.spanY.coerceAtMost(rows))
+        page.removeAll { it === widget }
+        widget.spanX = size.spanX
+        widget.spanY = size.spanY
+        val off = Grid.putAt(page, widget, col, row, cols, rows)
         if (off == null) {
-            val fit = Grid.firstFree(page, nw.spanX, nw.spanY, cols, rows)
-            if (fit == null) { page += old; return null }
-            nw.col = fit[0]; nw.row = fit[1]
-            page += nw
+            val fit = Grid.firstFree(page, size.spanX, size.spanY, cols, rows)
+            if (fit == null) {
+                // Fits nowhere at this size: back as it was.
+                widget.spanX = oldSx; widget.spanY = oldSy; widget.col = oldCol; widget.row = oldRow
+                page += widget
+                return null
+            }
+            widget.col = fit[0]; widget.row = fit[1]
+            page += widget
         } else if (off.isNotEmpty()) pushOff(pi + 1, off)
+        (host.pageViews.getOrNull(pi)?.viewFor(widget) as? HomeWidgetView)?.setSpan(size.spanX, size.spanY, animate = true)
         refreshPages(setOf(pi, pi + 1))
         host.layoutChanged()
-        return nw
+        home.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        return widget
+    }
+
+    /** A widget's style (the clock: glass or solid; an Android widget: a glass platter behind it or none), in place. */
+    fun restyle(widget: HomeItem.Widget, style: String?) {
+        val l = host.layout ?: return
+        val pi = l.pages.indexOfFirst { p -> p.any { it === widget } }
+        if (pi < 0) return
+        widget.style = style
+        val page = host.pageViews.getOrNull(pi)
+        val v = page?.viewFor(widget)
+        if (v is AppWidgetFrame) v.setGlassBacking(style == HomeItem.Widget.GLASS)
+        else page?.rebuildItem(widget)
+        host.layoutChanged()
     }
 
     /** The rest of a touch edit mode took. */
@@ -724,6 +743,27 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val top = ((h - bh) / 2f).toInt()
             editGlass.layoutParams = (editGlass.layoutParams as LayoutParams).apply { leftMargin = m.libMargin.toInt(); topMargin = top }
             doneGlass.layoutParams = (doneGlass.layoutParams as LayoutParams).apply { leftMargin = (w - m.libMargin - m.pt(70f)).toInt(); topMargin = top }
+        }
+
+        // 0 = away (above the screen's edge, faded), 1 = in place. The capsules slide down into place as editing begins
+        // and back up as it ends, on a spring that a quick Done can reverse midway.
+        private val shown: SpringValue = SpringValue(0f, 1000f, { k -> place(k) }, { if (alpha <= 0.001f) visibility = View.GONE })
+
+        private fun place(k: Float) {
+            val kk = k.coerceIn(0f, 1.2f)
+            translationY = -(1f - kk) * (bh + m.pt(24f))
+            alpha = kk.coerceIn(0f, 1f)
+            editGlass.invalidate(); doneGlass.invalidate()   // the glass refracts what is under it where it is now
+        }
+
+        fun show() {
+            if (visibility != View.VISIBLE) { visibility = View.VISIBLE; place(shown.value) }
+            shown.animateTo(1f, Motion.profile.editBar)
+        }
+
+        fun hide() {
+            if (visibility != View.VISIBLE) return
+            shown.animateTo(0f, Motion.profile.editBar)
         }
 
         override fun dispatchDraw(canvas: Canvas) {

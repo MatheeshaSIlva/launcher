@@ -10,13 +10,24 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
+import android.os.SystemClock
+import android.text.Editable
+import android.text.InputType
+import android.text.TextWatcher
+import android.util.TypedValue
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.FrameLayout
+import dev.launcher.app.GlassDrawable
 import dev.launcher.app.GlassStyle
 import dev.launcher.app.LiveGlass
+import dev.launcher.app.Wallpaper
 import dev.launcher.app.drawer.LabelPainter
 import dev.launcher.app.motion.IosScroller
 import dev.launcher.app.motion.Motion
@@ -28,11 +39,14 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * iOS's widget gallery: a glass sheet rising over blurred home. Its first page lists the widgets: ours (the clock) at the
- * top, then every app with widgets; an app opens its page (pushed in from the right) where its widgets, at every size they
- * come in, are swiped through with page dots, and "Add Widget" places the one on screen at the top of the current home
- * page. The sheet follows a pull down (from its header, or from the list's top) and closes from there; a tap above it closes
- * it too.
+ * iOS 26's widget gallery: a glass sheet rising over blurred home, with a grabber, "Add Widget", a close button and a
+ * search field. Its first page shows our clock as a featured card (the real glass numerals), then every app with widgets
+ * (icon, name, how many widgets, a chevron); the rows settle in one after another when the list arrives. An app's page
+ * pushes in from the right: its widgets at every size they come in, swiped through as cards (the neighbours smaller and
+ * dimmer), with page dots, the widget's name, size and description, and a glass "Add Widget" button that places the one
+ * on screen at the top of the current home page (the sheet drops and the widget grows into its place). The sheet follows
+ * a pull down (from its header, or from the list's top) and closes from there; a tap above it closes it too. Every press
+ * is shown (rows highlight, buttons shrink a little) and every change is a spring that a new touch can take over.
  */
 @SuppressLint("ViewConstructor")
 class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: Host) : FrameLayout(ctx) {
@@ -51,21 +65,32 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         fun pickerProgress(k: Float)
         /** Draws what is behind the sheet (home), in screen coordinates, for the sheet's glass. */
         fun drawBehindSheet(c: Canvas)
+        /** Our copy of the wallpaper (the clock preview's glass refracts it), or null. */
+        fun wallpaper(): Wallpaper?
     }
 
     /** One page of an app's widgets: a widget at one size ([info] null = our clock). */
     private class Entry(val info: AppWidgetProviderInfo?, val size: WidgetSize, val title: String, val description: String?)
 
     private var apps: List<WidgetApp> = emptyList()
+    private var shownApps: List<WidgetApp> = emptyList()   // after the search filter
+    private var query = ""
     private var app: WidgetApp? = null          // the app whose page is pushed (null: ours, when [entries] is the clock)
     private var entries: List<Entry> = emptyList()
     private val previews = HashMap<AppWidgetProviderInfo, Any?>()
+    private val previewShownAt = HashMap<AppWidgetProviderInfo, Long>()
+    private var listArrivedAt = 0L
 
     private val sheetTop get() = max(m.pt(54f), m.searchTop - m.pt(4f))
     private val sheetRadius get() = max(m.pt(38f), m.dockRadius + m.dockInset * 0.5f)
-    private val headerH get() = m.pt(64f)
+    private val grabberH get() = m.pt(18f)
+    private val headerH get() = grabberH + m.pt(44f)
+    private val fieldH get() = m.pt(36f)
+    /** Where the list's content starts, below the header and the search field. */
+    private val listTop get() = headerH + fieldH + m.pt(14f)
     private val rowH get() = m.pt(62f)
-    private val featuredH get() = m.widgetHeight(2) * 0.82f + m.pt(56f)
+    private val featuredCardH get() = m.widgetHeight(2) * 0.78f
+    private val featuredH get() = m.pt(30f) + featuredCardH + m.pt(44f)
 
     // 0 = down (hidden), 1 = up. Dragging the sheet down moves [drop] (px).
     private val shown: SpringValue = SpringValue(0f, 1000f, { onMoved() }, { if (shown.value == 0f) finishClose() })
@@ -75,35 +100,77 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     // An app's page: which entry is centred (fractional while swiping).
     private val pager = SpringValue(0f, 1000f, { invalidate() })
     private val list = IosScroller({ invalidate() })
+    // Pressed things shrink a little (buttons) or highlight (rows); released ones spring back.
+    private val pressK = SpringValue(0f, 1000f, { invalidate() })
 
     private val glass = LiveGlass.create(GlassStyle.IOS, m.u)
     private val fallbackFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6202024.toInt() }
     private val dimInside = Paint()
     private val sheetTint = Paint()
+    private val grabber = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x59FFFFFF }
     private val capsule = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x26FFFFFF }
     private val capsuleRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x33FFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(1f) }
+    private val fieldFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x1FFFFFFF }
     private val separator = Paint().apply { color = 0x26FFFFFF; strokeWidth = max(1f, m.pt(0.5f)) }
     private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = m.pt(2.2f); strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
     private val chevron = Paint(glyph).apply { color = 0x66FFFFFF; strokeWidth = m.pt(2f) }
+    private val lensGlyph = Paint(glyph).apply { color = 0x99FFFFFF.toInt(); strokeWidth = m.pt(1.7f) }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
     private val cardFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x1FFFFFFF }
-    private val clockPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6FFFFFF.toInt(); typeface = Fonts.display(600); textAlign = Paint.Align.CENTER }
+    private val cardRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x26FFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(0.8f) }
+    private val cardShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x4D000000
+        maskFilter = android.graphics.BlurMaskFilter(m.pt(18f), android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    private val iconClip = Path()
+    private val clockDate = LabelPainter(m.pt(12f), 0xF2FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(600))
+    private val clockPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6FFFFFF.toInt(); typeface = Fonts.display(640); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f }
     private val title = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600))
     private val rowText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400))
+    private val rowSub = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(400))
     private val sectionText = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600))
     private val bigTitle = LabelPainter(m.pt(22f), Color.WHITE, Paint.Align.CENTER, Fonts.display(700))
     private val sub = LabelPainter(m.pt(15f), 0x99FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(400))
+    private val sizeText = LabelPainter(m.pt(14f), 0xB3FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(500))
     private val buttonText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600))
+    private val emptyText = LabelPainter(m.pt(15f), 0x80FFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(400))
     private val r = RectF()
     private val path = Path()
     private val toScreen = Matrix()
     private var pressed: String? = null
+    private var imeInset = 0
+
+    // The search field: a real text field laid over the drawn capsule (it moves with the sheet).
+    private val edit = EditText(ctx)
 
     val isOpen get() = visibility == VISIBLE && shown.target > 0f
 
     init {
         visibility = GONE
         setWillNotDraw(false)
+        edit.apply {
+            background = null
+            hint = "Search Widgets"
+            setHintTextColor(0x80FFFFFF.toInt())
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, m.pt(16f))
+            typeface = Fonts.text(400)
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            imeOptions = EditorInfo.IME_ACTION_SEARCH or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            setPadding(0, 0, 0, 0)
+            gravity = Gravity.CENTER_VERTICAL
+            visibility = INVISIBLE
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: Editable?) { setQuery(s?.toString().orEmpty()) }
+            })
+            setOnEditorActionListener { _, _, _ -> hideKeyboard(); true }
+        }
+        addView(edit, LayoutParams((m.w - 2 * m.libMargin - m.pt(76f)).roundToInt(), fieldH.roundToInt()).apply {
+            leftMargin = (m.libMargin + m.pt(38f)).roundToInt()
+        })
     }
 
     // ------------------------------------------------------------------ opening and closing
@@ -112,25 +179,35 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private var generation = 0
 
     fun open() {
-        // Listing providers and their labels and icons takes a while: the sheet rises at once, the list fills in when ready.
+        // Listing providers and their labels and icons takes a while: the sheet rises at once, the rows settle in when ready.
         apps = emptyList()
+        shownApps = emptyList()
+        query = ""
+        edit.setText("")
+        listArrivedAt = 0L
         val gen = ++generation
         io.execute {
-            val list = try { host.widgetApps() } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] listing failed: ${t.message}"); emptyList() }
-            post { if (gen == generation) { apps = list; updateListBounds(); invalidate() } }
+            val found = try { host.widgetApps() } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] listing failed: ${t.message}"); emptyList() }
+            post { if (gen == generation) { apps = found; listArrivedAt = SystemClock.uptimeMillis(); applyFilter(); invalidate() } }
         }
         app = null
         entries = emptyList()
         push.snapTo(0f)
         drop.snapTo(0f)
         list.jumpTo(0f)
+        pressed = null
+        pressK.snapTo(0f)
+        clockGlass = null
         updateListBounds()
         visibility = VISIBLE
+        edit.visibility = VISIBLE
+        placeField()
         shown.animateTo(1f, Motion.profile.sheet)
     }
 
     fun close() {
         if (visibility != VISIBLE) return
+        hideKeyboard()
         shown.animateTo(0f, Motion.profile.sheet)
     }
 
@@ -141,10 +218,15 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
 
     private fun finishClose() {
         generation++
+        hideKeyboard()
         visibility = GONE
+        edit.visibility = INVISIBLE
         drop.snapTo(0f)
         previews.clear()
-        removeAllViews()
+        previewShownAt.clear()
+        clockGlass = null
+        // The preview layouts added as children go; the field stays.
+        for (i in childCount - 1 downTo 0) { val c = getChildAt(i); if (c !== edit) removeViewAt(i) }
         host.pickerProgress(0f)
     }
 
@@ -155,27 +237,69 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         return true
     }
 
+    /** Height of the on-screen keyboard (0 when hidden), so the list ends above it. */
+    fun setImeInset(px: Int) {
+        if (px == imeInset) return
+        imeInset = px
+        updateListBounds()
+        invalidate()
+    }
+
+    private fun hideKeyboard() {
+        if (edit.hasFocus()) edit.clearFocus()
+        try { context.getSystemService(InputMethodManager::class.java).hideSoftInputFromWindow(windowToken, 0) } catch (_: Throwable) { }
+    }
+
     private fun sheetY(): Float = sheetTop + (1f - shown.value) * (m.h - sheetTop) + drop.value
 
     private fun onMoved() {
         val travel = m.h - sheetTop
         val k = ((m.h - sheetY()) / travel).coerceIn(0f, 1f)
         host.pickerProgress(k)
+        placeField()
         invalidate()
     }
 
+    /** The text field rides on the sheet, over the drawn capsule, and slides away with the list when a page is pushed. */
+    private fun placeField() {
+        val y = sheetY()
+        val p = push.value.coerceIn(0f, 1f)
+        edit.translationY = y + headerH + (fieldH - edit.height) / 2f
+        edit.translationX = -p * m.w * 0.3f
+        edit.alpha = (1f - p * 1.6f).coerceIn(0f, 1f)
+        edit.visibility = if (visibility == VISIBLE && edit.alpha > 0f) VISIBLE else INVISIBLE
+    }
+
     private fun updateListBounds() {
-        val content = featuredH + m.pt(36f) + apps.size * rowH + m.bottomSafe + m.pt(24f)
-        val viewport = m.h - sheetTop - headerH
+        val content = (if (query.isEmpty()) featuredH else m.pt(10f)) + m.pt(36f) + max(1, shownApps.size) * rowH + m.bottomSafe + m.pt(24f)
+        val viewport = m.h - sheetTop - listTop - max(0f, imeInset - m.bottomSafe)
         list.setBounds(0f, max(0f, content - viewport), viewport)
+    }
+
+    private fun setQuery(q: String) {
+        val t = q.trim()
+        if (t == query) return
+        query = t
+        applyFilter()
+        list.jumpTo(0f)
+        invalidate()
+    }
+
+    private fun applyFilter() {
+        val q = query.lowercase()
+        shownApps = if (q.isEmpty()) apps else apps.filter { a ->
+            a.label.lowercase().contains(q) || a.widgets.any { host.widgetLabel(it).lowercase().contains(q) }
+        }
+        updateListBounds()
     }
 
     // ------------------------------------------------------------------ pages
 
     private fun openApp(a: WidgetApp?) {
+        hideKeyboard()
         app = a
         pager.snapTo(0f)
-        entries = if (a == null) listOf(Entry(null, WidgetSize.MEDIUM, "Clock", "The time in glass numerals, as on the lock screen."))
+        entries = if (a == null) listOf(Entry(null, WidgetSize.MEDIUM, "Clock", "The time in liquid glass numerals, as on the lock screen."))
         else a.widgets.flatMap { info ->
             val t = host.widgetLabel(info)
             val d = host.widgetDescription(info)
@@ -188,7 +312,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             val images = infos.associateWith { host.widgetPreviewImage(it) }
             post {
                 if (gen != generation) return@post
-                for ((info, img) in images) previews[info] = img ?: host.widgetPreviewView(info, this)
+                val now = SystemClock.uptimeMillis()
+                for ((info, img) in images) { previews[info] = img ?: host.widgetPreviewView(info, this); previewShownAt[info] = now }
                 invalidate()
             }
         }
@@ -223,6 +348,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         c.save()
         c.clipRect(0f, y, m.w.toFloat(), m.h.toFloat())
         c.translate(0f, y)
+        // The grabber (a drag handle, as on every iOS sheet).
+        r.set(m.w / 2f - m.pt(18f), m.pt(7f), m.w / 2f + m.pt(18f), m.pt(12f))
+        c.drawRoundRect(r, m.pt(2.5f), m.pt(2.5f), grabber)
         val p = push.value.coerceIn(0f, 1f)
         // iOS navigation: the pushed page slides in from the right edge, the list moves a third of the way left and fades.
         if (p < 1f) {
@@ -238,54 +366,115 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             c.restore()
         }
         c.restore()
+        if (animatingArrivals()) postInvalidateOnAnimation()
+    }
+
+    /** Rows and previews are still settling in. */
+    private fun animatingArrivals(): Boolean {
+        val now = SystemClock.uptimeMillis()
+        if (listArrivedAt != 0L && now - listArrivedAt < ROW_STAGGER_MS * 8 + ROW_FADE_MS) return true
+        return previewShownAt.values.any { now - it < PREVIEW_FADE_MS }
     }
 
     private fun drawCircleButton(c: Canvas, cx: Float, cy: Float, key: String) {
         val rr = m.pt(18f)
-        capsule.alpha = if (pressed == key) 0x4D else 0x26
+        val down = if (pressed == key) pressK.value.coerceIn(0f, 1f) else 0f
+        c.save()
+        c.scale(1f - 0.08f * down, 1f - 0.08f * down, cx, cy)
+        capsule.alpha = (0x26 + 0x27 * down).toInt()
         c.drawCircle(cx, cy, rr, capsule)
+        capsuleRim.alpha = 0x33
         c.drawCircle(cx, cy, rr - capsuleRim.strokeWidth / 2f, capsuleRim)
+        c.restore()
     }
 
     private fun drawList(c: Canvas, alpha: Int) {
         val layer = if (alpha < 255) c.saveLayerAlpha(0f, 0f, m.w.toFloat(), m.h.toFloat(), alpha) else -1
-        // Header: a close button and the title.
-        val bx = m.libMargin + m.pt(18f)
-        val by = headerH / 2f
+        // Header: the title and a close button.
+        val by = grabberH + m.pt(22f)
+        title.draw(c, "t", "Add Widget", m.w / 2f, title.baselineFor(by), m.w * 0.5f)
+        val bx = m.w - m.libMargin - m.pt(18f)
         drawCircleButton(c, bx, by, "close")
         val q = m.pt(5.5f)
         c.drawLine(bx - q, by - q, bx + q, by + q, glyph)
         c.drawLine(bx - q, by + q, bx + q, by - q, glyph)
-        title.draw(c, "t", "Add Widget", m.w / 2f, title.baselineFor(by), m.w * 0.5f)
+        // The search field's capsule (the text itself is the field laid over it).
+        r.set(m.libMargin, headerH, m.w - m.libMargin, headerH + fieldH)
+        c.drawRoundRect(r, fieldH / 2f, fieldH / 2f, fieldFill)
+        val lx = m.libMargin + m.pt(18f)
+        val ly = headerH + fieldH / 2f - m.pt(1f)
+        val lr = m.pt(6f)
+        c.drawCircle(lx, ly, lr, lensGlyph)
+        c.drawLine(lx + lr * 0.72f, ly + lr * 0.72f, lx + lr * 1.45f, ly + lr * 1.45f, lensGlyph)
         c.save()
-        c.clipRect(0f, headerH, m.w.toFloat(), m.h.toFloat())
-        c.translate(0f, headerH - list.position)
-        // Ours first: the glass clock, shown as a card.
-        val cardW = m.widgetWidth(4) * 0.82f
-        val cardH = m.widgetHeight(2) * 0.82f
-        r.set((m.w - cardW) / 2f, m.pt(8f), (m.w + cardW) / 2f, m.pt(8f) + cardH)
-        cardFill.alpha = if (pressed == "clock") 0x40 else 0x1F
-        c.drawRoundRect(r, m.widgetRadius * 0.82f, m.widgetRadius * 0.82f, cardFill)
-        drawClockPreview(c, r)
-        sub.draw(c, "clock", "Clock", m.w / 2f, r.bottom + m.pt(26f), m.w * 0.6f)
-        var top = featuredH
+        c.clipRect(0f, listTop, m.w.toFloat(), m.h.toFloat())
+        c.translate(0f, listTop - list.position)
+        var top = 0f
+        if (query.isEmpty()) {
+            // Ours first: the glass clock, as a featured card with its real glass numerals.
+            sectionText.draw(c, "sug", "SUGGESTIONS", m.libMargin, top + m.pt(20f), m.w * 0.5f)
+            val cardW = m.w - 2 * m.libMargin
+            val cardH = featuredCardH
+            r.set(m.libMargin, top + m.pt(30f), m.libMargin + cardW, top + m.pt(30f) + cardH)
+            val down = if (pressed == "clock") pressK.value.coerceIn(0f, 1f) else 0f
+            c.save()
+            c.scale(1f - 0.03f * down, 1f - 0.03f * down, r.centerX(), r.centerY())
+            cardFill.alpha = (0x1F + 0x21 * down).toInt()
+            c.drawRoundRect(r, m.widgetRadius, m.widgetRadius, cardFill)
+            c.drawRoundRect(r, m.widgetRadius, m.widgetRadius, cardRim)
+            drawClockPreview(c, r, listTop - list.position + sheetY())
+            c.restore()
+            sub.draw(c, "clock", "Clock", m.w / 2f, r.bottom + m.pt(26f), m.w * 0.6f)
+            top = featuredH
+        } else top = m.pt(10f)
         sectionText.draw(c, "apps", "APPS", m.libMargin, top + m.pt(22f), m.w * 0.5f)
         top += m.pt(36f)
+        if (shownApps.isEmpty()) {
+            emptyText.draw(c, "none", if (apps.isEmpty() && query.isEmpty()) "Looking for widgets…" else "No widgets match", m.w / 2f, top + m.pt(40f), m.w * 0.8f)
+        }
         val iconS = m.pt(36f)
-        for ((i, a) in apps.withIndex()) {
+        val now = SystemClock.uptimeMillis()
+        for ((i, a) in shownApps.withIndex()) {
             val rt = top + i * rowH
             if (rt + rowH < list.position - m.pt(10f) || rt > list.position + m.h) continue
-            if (pressed == "app:$i") { r.set(0f, rt, m.w.toFloat(), rt + rowH); c.drawRect(r, capsule) }
+            // The rows settle in one after another when the list arrives (fading, rising a little).
+            var rowAlpha = 1f
+            var rise = 0f
+            if (listArrivedAt != 0L && query.isEmpty()) {
+                val t = now - listArrivedAt - min(i, 8) * ROW_STAGGER_MS
+                val f = (t.toFloat() / ROW_FADE_MS).coerceIn(0f, 1f)
+                rowAlpha = f
+                rise = (1f - f) * (1f - f) * m.pt(10f)
+            }
+            if (rowAlpha <= 0f) continue
+            val rowLayer = if (rowAlpha < 1f) c.saveLayerAlpha(0f, rt, m.w.toFloat(), rt + rowH, (255 * rowAlpha).toInt()) else -1
+            c.save()
+            c.translate(0f, rise)
+            if (pressed == "app:$i") {
+                r.set(0f, rt, m.w.toFloat(), rt + rowH)
+                capsule.alpha = (0x26 * pressK.value.coerceIn(0f, 1f)).toInt()
+                c.drawRect(r, capsule)
+            }
             a.icon?.let { ic ->
+                // App icons in a rounded square (iOS lists them so), whatever shape the system draws them in.
                 val l = m.libMargin
                 val t = rt + (rowH - iconS) / 2f
+                c.save()
+                iconClip.reset()
+                iconClip.addRoundRect(l, t, l + iconS, t + iconS, iconS * 0.225f, iconS * 0.225f, Path.Direction.CW)
+                c.clipPath(iconClip)
                 ic.setBounds(l.toInt(), t.toInt(), (l + iconS).toInt(), (t + iconS).toInt())
                 ic.draw(c)
+                c.restore()
             }
             val tx = m.libMargin + iconS + m.pt(14f)
-            rowText.draw(c, a.pkg + a.user.hashCode(), a.label, tx, rowText.baselineFor(rt + rowH / 2f), m.w - tx - m.pt(48f))
+            val n = a.widgets.size
+            rowText.draw(c, a.pkg + a.user.hashCode(), a.label, tx, rowText.baselineFor(rt + rowH / 2f - m.pt(9f)), m.w - tx - m.pt(48f))
+            rowSub.draw(c, "n$n", if (n == 1) "1 widget" else "$n widgets", tx, rowSub.baselineFor(rt + rowH / 2f + m.pt(10f)), m.w - tx - m.pt(48f))
             drawChevron(c, m.w - m.libMargin - m.pt(6f), rt + rowH / 2f, right = true, paint = chevron)
-            if (i < apps.size - 1) c.drawLine(tx, rt + rowH, m.w.toFloat(), rt + rowH, separator)
+            if (i < shownApps.size - 1) c.drawLine(tx, rt + rowH, m.w.toFloat(), rt + rowH, separator)
+            c.restore()
+            if (rowLayer >= 0) c.restoreToCount(rowLayer)
         }
         c.restore()
         if (layer >= 0) c.restoreToCount(layer)
@@ -299,14 +488,43 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         c.drawPath(path, paint)
     }
 
-    private fun drawClockPreview(c: Canvas, box: RectF) {
-        clockPaint.textSize = box.height() * 0.62f
-        clockPaint.textScaleX = 0.86f
-        c.drawText("9:41", box.centerX(), box.bottom - box.height() * 0.16f, clockPaint)
+    // The clock preview: the date line and "9:41" in the clock's real glass (built for the card's size, refracting the
+    // blurred wallpaper behind the sheet); plain numerals when there is no wallpaper copy.
+    private var clockGlass: GlassDrawable? = null
+    private var clockGlassSize = 0 to 0
+
+    private fun drawClockPreview(c: Canvas, box: RectF, boxScreenY: Float) {
+        val dateTop = box.top + m.pt(10f)
+        clockDate.draw(c, "date", "Mon 9", box.centerX(), dateTop + m.pt(10f), box.width())
+        val numTop = box.top + m.pt(22f)
+        val w = box.width().roundToInt()
+        val h = (box.bottom - numTop).roundToInt()
+        if (w <= 0 || h <= 0) return
+        val baseline = ClockNumerals.layout(clockPaint, w.toFloat(), h.toFloat(), android.text.format.DateFormat.is24HourFormat(context))
+        val wp = host.wallpaper()
+        var g = clockGlass
+        if (wp != null && android.os.Build.VERSION.SDK_INT >= 33 && (g == null || clockGlassSize != (w to h))) {
+            g = try {
+                val mask = ClockNumerals.mask(clockPaint, w, h, baseline, "9:41")
+                GlassDrawable(wp, m.w, m.h, 0f, m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_CLOCK,
+                    GlassDrawable.Source.BACKDROP, mask)
+            } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] clock preview glass failed: ${t.message}"); null }
+            clockGlass = g
+            clockGlassSize = w to h
+        }
+        if (g != null && c.isHardwareAccelerated) {
+            g.originX = box.left
+            g.originY = boxScreenY + numTop
+            g.setBounds(box.left.roundToInt(), numTop.roundToInt(), box.left.roundToInt() + w, numTop.roundToInt() + h)
+            g.draw(c)
+        } else {
+            clockPaint.alpha = 0xE6
+            c.drawText("9:41", box.centerX(), numTop + baseline, clockPaint)
+        }
     }
 
     private fun drawAppPage(c: Canvas) {
-        val by = headerH / 2f
+        val by = grabberH + m.pt(22f)
         val bx = m.libMargin + m.pt(18f)
         drawCircleButton(c, bx, by, "back")
         drawChevron(c, bx - m.pt(1f), by, right = false, paint = glyph)
@@ -314,39 +532,51 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         if (entries.isEmpty()) return
         val areaTop = headerH + m.pt(16f)
         val maxW = m.w - 2 * m.pt(44f)
-        val maxH = m.h - sheetTop - areaTop - m.pt(240f) - m.bottomSafe
+        val maxH = m.h - sheetTop - areaTop - m.pt(250f) - m.bottomSafe
         val pos = pager.value
         val i0 = pos.toInt().coerceIn(0, entries.size - 1)
         for (i in max(0, i0 - 1)..min(entries.size - 1, i0 + 2)) {
             val e = entries[i]
             val w = m.widgetWidth(e.size.spanX)
             val h = m.widgetHeight(e.size.spanY)
-            val s = min(1f, min(maxW / w, maxH / h))
+            val fit = min(1f, min(maxW / w, maxH / h))
+            // The card on screen at full size; its neighbours a little smaller and dimmer (iOS's carousel).
+            val away = abs(i - pos).coerceIn(0f, 1f)
+            val s = fit * (1f - 0.08f * away)
             val cx = m.w / 2f + (i - pos) * m.w * 0.82f
             val cardTop = areaTop + (maxH - h * s) / 2f
             r.set(cx - w * s / 2f, cardTop, cx + w * s / 2f, cardTop + h * s)
+            val layer = if (away > 0f) c.saveLayerAlpha(r.left - m.pt(30f), r.top - m.pt(30f), r.right + m.pt(30f), r.bottom + m.pt(40f), (255 * (1f - 0.45f * away)).toInt()) else -1
             drawEntryCard(c, e, r, s)
+            if (layer >= 0) c.restoreToCount(layer)
         }
-        // Title, description, dots and the button for the entry on screen.
+        // Name, size, description, dots and the button for the entry on screen.
         val cur = entries[pos.roundToInt().coerceIn(0, entries.size - 1)]
         val textTop = areaTop + maxH + m.pt(36f)
-        val label = if (cur.info == null) cur.title else "${cur.title} · ${cur.size.title}"
-        bigTitle.draw(c, "e$label", label, m.w / 2f, textTop, m.w - 2 * m.libMargin)
-        cur.description?.let { sub.draw(c, "d" + it, it, m.w / 2f, textTop + m.pt(26f), m.w - 2 * m.libMargin) }
+        bigTitle.draw(c, "e" + cur.title, cur.title, m.w / 2f, textTop, m.w - 2 * m.libMargin)
+        val sizeLabel = "${cur.size.title} · ${cur.size.spanX} × ${cur.size.spanY}"
+        sizeText.draw(c, "s$sizeLabel", sizeLabel, m.w / 2f, textTop + m.pt(24f), m.w - 2 * m.libMargin)
+        cur.description?.let { sub.draw(c, "d" + it, it, m.w / 2f, textTop + m.pt(48f), m.w - 2 * m.libMargin) }
         if (entries.size > 1) {
             val n = entries.size
             val gap = m.pt(16f)
-            val dy = textTop + m.pt(58f)
+            val dy = textTop + m.pt(78f)
             for (j in 0 until n) {
-                dot.color = if (j == pos.roundToInt()) Color.WHITE else 0x59FFFFFF
+                // The dot of the card on screen is white; the others dim, and the one being swiped to brightens with the swipe.
+                val near = (1f - abs(pos - j)).coerceIn(0f, 1f)
+                dot.color = Color.argb((0x59 + (0xFF - 0x59) * near).roundToInt(), 255, 255, 255)
                 c.drawCircle(m.w / 2f + (j - (n - 1) / 2f) * gap, dy, m.pt(3.6f), dot)
             }
         }
         val bh = m.pt(50f)
         val bt = m.h - sheetTop - m.bottomSafe - bh - m.pt(18f)
         addButton.set(m.libMargin + m.pt(8f), bt, m.w - m.libMargin - m.pt(8f), bt + bh)
-        capsule.alpha = if (pressed == "add") 0x4D else 0x2E
+        val down = if (pressed == "add") pressK.value.coerceIn(0f, 1f) else 0f
+        c.save()
+        c.scale(1f - 0.04f * down, 1f - 0.04f * down, addButton.centerX(), addButton.centerY())
+        capsule.alpha = (0x2E + 0x1F * down).toInt()
         c.drawRoundRect(addButton, bh / 2f, bh / 2f, capsule)
+        capsuleRim.alpha = 0x40
         c.drawRoundRect(addButton, bh / 2f, bh / 2f, capsuleRim)
         val tw = buttonText.paint.measureText("Add Widget")
         val pcx = addButton.centerX() - tw / 2f - m.pt(14f)
@@ -354,20 +584,28 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         c.drawLine(pcx - pk, addButton.centerY(), pcx + pk, addButton.centerY(), glyph)
         c.drawLine(pcx, addButton.centerY() - pk, pcx, addButton.centerY() + pk, glyph)
         buttonText.draw(c, "add", "Add Widget", addButton.centerX() + m.pt(8f), buttonText.baselineFor(addButton.centerY()), m.w.toFloat())
+        c.restore()
     }
 
     private val addButton = RectF()
 
     private fun drawEntryCard(c: Canvas, e: Entry, box: RectF, s: Float) {
         val rad = m.widgetRadius * s
+        // A soft shadow lifts the card off the sheet.
+        c.drawRoundRect(box.left + m.pt(6f), box.top + m.pt(14f), box.right - m.pt(6f), box.bottom + m.pt(10f), rad, rad, cardShadow)
+        cardFill.alpha = 0x1F
         c.drawRoundRect(box, rad, rad, cardFill)
+        c.drawRoundRect(box, rad, rad, cardRim)
         val info = e.info
-        if (info == null) { drawClockPreview(c, box); return }
+        if (info == null) { drawClockPreview(c, box, sheetY()); return }
         val pv = previews[info]
+        val shownAt = previewShownAt[info] ?: 0L
+        val fade = if (shownAt == 0L) 1f else ((SystemClock.uptimeMillis() - shownAt).toFloat() / PREVIEW_FADE_MS).coerceIn(0f, 1f)
         c.save()
         path.reset()
         path.addRoundRect(box, rad, rad, Path.Direction.CW)
         c.clipPath(path)
+        val layer = if (fade < 1f) c.saveLayerAlpha(box, (255 * fade).toInt()) else -1
         when (pv) {
             is Drawable -> {
                 // Fit inside the card, centred.
@@ -392,11 +630,13 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
                 try { pv.draw(c) } catch (_: Throwable) { }
             }
             else -> app?.icon?.let { ic ->
+                // No preview from the app: its icon in the middle of the card.
                 val isz = m.iconSize * s
                 ic.setBounds((box.centerX() - isz / 2).toInt(), (box.centerY() - isz / 2).toInt(), (box.centerX() + isz / 2).toInt(), (box.centerY() + isz / 2).toInt())
                 ic.draw(c)
             }
         }
+        if (layer >= 0) c.restoreToCount(layer)
         c.restore()
     }
 
@@ -411,6 +651,21 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private var pager0 = 0f
     private var vt: VelocityTracker? = null
 
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+        // The text field keeps its own touches (so it can be focused and edited); everything else is ours.
+        if (visibility != VISIBLE || shown.target == 0f) return false
+        val y0 = sheetY()
+        val inField = ev.y - y0 >= headerH && ev.y - y0 <= headerH + fieldH && ev.x >= m.libMargin && ev.x <= m.w - m.libMargin && push.value < 0.5f
+        return !inField
+    }
+
+    private fun setPressed(key: String?) {
+        if (pressed == key) return
+        pressed = key
+        if (key != null) { pressK.snapTo(0f); pressK.animateTo(1f, Motion.profile.dragLift) } else pressK.animateTo(0f, Motion.profile.menuClose)
+        invalidate()
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (visibility != VISIBLE) return false
@@ -422,30 +677,29 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
                 if (shown.target == 0f) { gesture = Gesture.IGNORE; return false }
                 gesture = Gesture.TAP
                 list.stop()
-                pressed = hitKey(e.x, e.y - y0)
-                invalidate()
+                setPressed(hitKey(e.x, e.y - y0))
             }
             MotionEvent.ACTION_MOVE -> {
                 vt?.addMovement(e)
                 val dx = e.x - downX
                 val dy = e.y - downY
                 if (gesture == Gesture.TAP && (abs(dx) > slop || abs(dy) > slop)) {
-                    pressed = null
-                    val inHeader = downY - y0 < headerH
+                    setPressed(null)
+                    val inHeader = downY - y0 < listTop
                     val onPage = push.value > 0.5f
                     gesture = when {
                         downY < y0 -> Gesture.IGNORE
                         abs(dy) > abs(dx) && dy > 0 && (inHeader || (!onPage && list.position <= 0.5f)) -> Gesture.SHEET
                         onPage && abs(dx) > abs(dy) -> { pager0 = pager.value; pager.stop(); Gesture.PAGER }
-                        !onPage && abs(dy) > abs(dx) -> { list.beginDrag(); Gesture.LIST }
+                        !onPage && abs(dy) > abs(dx) -> { list.beginDrag(); hideKeyboard(); Gesture.LIST }
                         else -> Gesture.IGNORE
                     }
-                    if (gesture == Gesture.SHEET) { shown.snapTo(shown.value); drop.stop() }
+                    if (gesture == Gesture.SHEET) { shown.snapTo(shown.value); drop.stop(); hideKeyboard() }
                     lastY = e.y
                     invalidate()
                 }
                 when (gesture) {
-                    Gesture.SHEET -> drop.snapTo(max(0f, drop.value + (e.y - lastY)).let { if (it < 0f) 0f else it })
+                    Gesture.SHEET -> drop.snapTo(max(0f, drop.value + (e.y - lastY)))
                     Gesture.LIST -> list.dragBy(lastY - e.y)
                     Gesture.PAGER -> pager.snapTo(band(pager0 - (e.x - downX) / (m.w * 0.82f), 0f, (entries.size - 1).toFloat()))
                     else -> {}
@@ -483,8 +737,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
                     else -> {}
                 }
                 gesture = Gesture.NONE
-                pressed = null
-                invalidate()
+                setPressed(null)
             }
         }
         return true
@@ -503,14 +756,23 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     /** What a touch at ([x], [ys]) (ys: from the sheet's top) would press. */
     private fun hitKey(x: Float, ys: Float): String? {
         if (ys < 0f) return null
-        val bx = m.libMargin + m.pt(18f)
-        if (ys < headerH) return if (abs(x - bx) < m.pt(26f)) (if (push.value > 0.5f) "back" else "close") else null
+        val by = grabberH + m.pt(22f)
+        if (ys < headerH) {
+            val onPage = push.value > 0.5f
+            val bx = if (onPage) m.libMargin + m.pt(18f) else m.w - m.libMargin - m.pt(18f)
+            return if (abs(x - bx) < m.pt(26f) && abs(ys - by) < m.pt(26f)) (if (onPage) "back" else "close") else null
+        }
         if (push.value > 0.5f) return if (addButton.contains(x, ys)) "add" else null
-        val cy = ys - headerH + list.position
-        val cardW = m.widgetWidth(4) * 0.82f
-        if (cy in m.pt(8f)..(m.pt(8f) + m.widgetHeight(2) * 0.82f) && abs(x - m.w / 2f) < cardW / 2f) return "clock"
-        val i = ((cy - featuredH - m.pt(36f)) / rowH).toInt()
-        return if (cy > featuredH + m.pt(36f) && i in apps.indices) "app:$i" else null
+        if (ys < listTop) return null
+        val cy = ys - listTop + list.position
+        var top = 0f
+        if (query.isEmpty()) {
+            if (cy in m.pt(30f)..(m.pt(30f) + featuredCardH) && x >= m.libMargin && x <= m.w - m.libMargin) return "clock"
+            top = featuredH
+        } else top = m.pt(10f)
+        top += m.pt(36f)
+        val i = ((cy - top) / rowH).toInt()
+        return if (cy > top && i in shownApps.indices) "app:$i" else null
     }
 
     private fun tap(x: Float, y: Float, y0: Float) {
@@ -521,7 +783,18 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             "add" -> addCurrent()
             "clock" -> openApp(null)
             null -> {}
-            else -> if (k.startsWith("app:")) apps.getOrNull(k.removePrefix("app:").toInt())?.let { openApp(it) }
+            else -> if (k.startsWith("app:")) shownApps.getOrNull(k.removePrefix("app:").toInt())?.let { openApp(it) }
         }
+    }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        super.onLayout(changed, left, top, right, bottom)
+        placeField()
+    }
+
+    private companion object {
+        const val ROW_STAGGER_MS = 28L
+        const val ROW_FADE_MS = 240L
+        const val PREVIEW_FADE_MS = 260L
     }
 }

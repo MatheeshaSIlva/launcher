@@ -33,7 +33,7 @@ class ContextMenuView(
     /** Draws home (what the menu floats over) in this view's coordinates, for the glass to blur and bend. */
     private val drawBehind: (Canvas) -> Unit,
 ) : View(ctx) {
-    enum class Glyph { GRID, MINUS, INFO, PLUS, SLIDERS, STYLE, TRASH }
+    enum class Glyph { GRID, MINUS, INFO, PLUS, SLIDERS, STYLE, TRASH, LABEL }
     /**
      * A menu row; with [sizes] it is iOS's row of widget sizes (glyphs shaped like each size, [current] filled) and
      * [onSize] runs for the one tapped.
@@ -279,6 +279,12 @@ class ContextMenuView(
                 c.drawRoundRect(cx - g, cy - g, cx + g, cy + g, m.pt(3f), m.pt(3f), glyphPaint)
                 c.drawLine(cx - g * 0.5f, cy, cx + g * 0.5f, cy, glyphPaint)
                 c.drawLine(cx, cy - g * 0.5f, cx, cy + g * 0.5f, glyphPaint)
+            }
+            Glyph.LABEL -> {
+                // A small icon with a text line under it (names under icons).
+                glyphPaint.style = Paint.Style.STROKE
+                c.drawRoundRect(cx - g * 0.55f, cy - g, cx + g * 0.55f, cy + g * 0.1f, m.pt(2.5f), m.pt(2.5f), glyphPaint)
+                c.drawLine(cx - g * 0.8f, cy + g * 0.7f, cx + g * 0.8f, cy + g * 0.7f, glyphPaint)
             }
             null -> {}
         }

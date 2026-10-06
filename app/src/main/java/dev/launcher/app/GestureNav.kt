@@ -590,7 +590,7 @@ object GestureNav {
         // The window itself stays shown for good (window alpha 1 from its first use; see readyForLaunch): showing or hiding
         // it made the window manager re-lay it out and Android rebuild its buffers, measured at 50-80 ms on the nav thread on
         // the S24 at the start of every gesture (the card's first frames came late). Cards show and hide inside it ([root]).
-        val host = FrameLayout(ctx)
+        val host = CardHost(ctx)
         val r = Stage(ctx).apply { visibility = View.INVISIBLE }
         warm = WarmView(ctx).also { host.addView(it, FrameLayout.LayoutParams(1, 1)) }
         val b = PreviewView(ctx)
@@ -631,6 +631,8 @@ object GestureNav {
             wm.addView(host, lp)
             cardWindow = host; windowShown = false
             root = r; backdrop = b; prv = p; nxt = n; cur = c; deck = d
+            host.holeRadius = dp(16)
+            pollFloating()
             d.setScreen(sw, sh, deviceRadius)
             input = dev.launcher.app.switcher.SwitcherInput { e -> nav.post { onSwitcherTouch(e); e.recycle() } }
                 .also { it.attach(ctx, wm, sw.toInt(), sh.toInt()) }
@@ -658,8 +660,81 @@ object GestureNav {
     }
 
     // The card window (always added) and whether it is at window alpha 1.
-    private var cardWindow: FrameLayout? = null
+    private var cardWindow: CardHost? = null
     private var warm: WarmView? = null
+
+    /**
+     * The card window's content view. Floating windows (picture-in-picture, pop-up windows) lie above every app but under
+     * our overlay: whatever we draw over them hides them, so a video vanished for the length of every launch and close.
+     * The window leaves [holes] where they are (nothing drawn there: the floating window shows through, live), with their
+     * rounded corners.
+     */
+    private class CardHost(ctx: Context) : FrameLayout(ctx) {
+        var holes: List<RectF> = emptyList()
+            set(v) { if (field != v) { field = v; invalidate() } }
+        var holeRadius = 0f
+        private val path = android.graphics.Path()
+
+        override fun dispatchDraw(canvas: Canvas) {
+            if (holes.isEmpty()) { super.dispatchDraw(canvas); return }
+            canvas.save()
+            for (h in holes) {
+                path.reset()
+                path.addRoundRect(h, holeRadius, holeRadius, android.graphics.Path.Direction.CW)
+                canvas.clipOutPath(path)
+            }
+            super.dispatchDraw(canvas)
+            canvas.restore()
+        }
+    }
+
+    // ---- floating windows (nav thread): where they are, asked of the shell every FLOATING_POLL_MS (a few ms of a worker's
+    // time), at the start of every card session, and every FLOATING_BUSY_MS while cards show (a PiP window can be dragged).
+    private var floating: List<RectF> = emptyList()
+    private var floatingLogged = ""
+
+    private val floatingPoll = object : Runnable {
+        override fun run() {
+            nav.removeCallbacks(this)
+            if (cardWindow == null || !ready) return
+            if (!locked) refreshFloating()   // nothing to look up under the lock screen
+            nav.postDelayed(this, if (root?.visibility == View.VISIBLE) FLOATING_BUSY_MS else FLOATING_POLL_MS)
+        }
+    }
+
+    private fun pollFloating() { nav.removeCallbacks(floatingPoll); nav.post(floatingPoll) }
+
+    private fun refreshFloating() {
+        val s = ShizukuLink.service ?: return
+        tasksIo.execute {
+            val lines = try { s.floatingWindows() } catch (_: Throwable) { emptyArray() }
+            val rects = lines.mapNotNull { line ->
+                val p = line.split(' ')
+                if (p.size < 7) return@mapNotNull null
+                val l = p[3].toFloatOrNull() ?: return@mapNotNull null
+                val t = p[4].toFloatOrNull() ?: return@mapNotNull null
+                val r = p[5].toFloatOrNull() ?: return@mapNotNull null
+                val b = p[6].toFloatOrNull() ?: return@mapNotNull null
+                // A pop-up window the size of the screen is not floating over anything.
+                if (r - l >= sw - 1f && b - t >= sh - 1f) return@mapNotNull null
+                RectF(l, t, r, b)
+            }
+            nav.post {
+                if (rects != floating) {
+                    floating = rects
+                    val note = lines.joinToString("; ")
+                    if (note != floatingLogged) { floatingLogged = note; AppLog.log("[nav] floating windows: ${note.ifEmpty { "none" }}") }
+                    applyFloating()
+                }
+            }
+        }
+    }
+
+    /** The holes and the touchable region (during a close) leave the floating windows alone. */
+    private fun applyFloating() {
+        cardWindow?.holes = floating
+        if (catching) cardWindow?.rootSurfaceControl?.setTouchableRegion(fullRegion())
+    }
 
     /**
      * Draws the latest kept picture of the app in front into one pixel, while idle: the first draw of a new snapshot imports
@@ -718,6 +793,7 @@ object GestureNav {
         if (r.visibility != View.VISIBLE) {
             r.visibility = View.VISIBLE
             cardVisibleAfter = SystemClock.uptimeMillis() - dragStartedAt
+            pollFloating()   // the holes for floating windows: the kept answer shows at once, a fresh one follows
             onCardShown()
         }
     }
@@ -822,6 +898,7 @@ object GestureNav {
         hideCards()
         nav.removeCallbacks(scalesBack)
         ShizukuLink.service?.let { s -> frontIo.execute { restoreScales(s) } }
+        nav.removeCallbacks(floatingPoll)
         strip?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
         cardWindow?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
         input?.quit()
@@ -1404,7 +1481,10 @@ object GestureNav {
         host.rootSurfaceControl?.setTouchableRegion(if (on) fullRegion() else NO_TOUCH)
     }
 
-    private fun fullRegion() = android.graphics.Region(0, 0, sw.toInt(), sh.toInt())
+    /** The whole screen except the floating windows (their touches stay theirs). */
+    private fun fullRegion() = android.graphics.Region(0, 0, sw.toInt(), sh.toInt()).apply {
+        for (h in floating) op(h.left.toInt(), h.top.toInt(), h.right.toInt(), h.bottom.toInt(), android.graphics.Region.Op.DIFFERENCE)
+    }
 
     private fun onCardWindowTouch(e: MotionEvent) {
         if (e.actionMasked == MotionEvent.ACTION_DOWN) {
@@ -2353,6 +2433,8 @@ object GestureNav {
     // "previous" region), which leaves the whole window touchable.
     private val NO_TOUCH = android.graphics.Region(-2, -2, -1, -1)
     private const val REMOVE_AFTER_MS = 650L    // a flicked card's app is closed once the deck is still
+    private const val FLOATING_POLL_MS = 2500L  // floating windows (PiP, pop-ups) are looked up this often while idle
+    private const val FLOATING_BUSY_MS = 300L   // ... and this often while cards show (a PiP window can be dragged)
     private const val SWITCHER_PREFETCH = 3     // pictures fetched at the touch (the rest as the deck shows their cards)
     private const val IMAGES_MAX = 16          // pictures kept between gestures
     private const val SWITCHER_HOME_FLICK_DP = 900f     // a flick up faster than this after the hold goes home

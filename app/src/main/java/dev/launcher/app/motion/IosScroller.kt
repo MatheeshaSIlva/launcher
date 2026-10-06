@@ -36,6 +36,29 @@ class IosScroller(private val onScroll: (Float) -> Unit, private val onSettle: (
     val isSettling get() = mode == Mode.FLING || mode == Mode.SPRING
     val isDragging get() = mode == Mode.DRAG
 
+    /** Current velocity in px/s (positive = towards [maxPos]); 0 when idle or dragging. */
+    val velocity: Float
+        get() {
+            val t = maxOf(0L, System.nanoTime() - startNs) / 1e9
+            return when (mode) {
+                Mode.FLING -> (v0 * Motion.profile.decelerationRate.toDouble().pow(t * 1000.0)).toFloat()
+                Mode.SPRING -> spring?.velocity(t) ?: 0f
+                else -> 0f
+            }
+        }
+
+    /**
+     * Still visibly moving: faster than [minSpeed] px/s or further than a pixel from where it will rest. A touch that
+     * lands on the last, invisible part of a settle is an ordinary tap (iOS lets it through too); one on real motion stops
+     * the motion and taps nothing.
+     */
+    fun isMovingVisibly(minSpeed: Float = 60f): Boolean {
+        if (!isSettling) return false
+        if (abs(velocity) > minSpeed) return true
+        val rest = when (mode) { Mode.SPRING -> spring?.target ?: position; else -> position.coerceIn(minPos, maxPos) }
+        return abs(rest - position) > 1f
+    }
+
     fun setBounds(min: Float, max: Float, viewportSize: Float) {
         minPos = min
         maxPos = maxOf(min, max)
@@ -73,6 +96,17 @@ class IosScroller(private val onScroll: (Float) -> Unit, private val onSettle: (
 
     /** Animates to [target] (clamped) on the overscroll spring. */
     fun animateTo(target: Float, velocity: Float = 0f) = springTo(target.coerceIn(minPos, maxPos), velocity)
+
+    /**
+     * Animates to [target] (clamped) on [spec], carrying the motion it has now (so a run of retargets, e.g. a finger
+     * scrubbing an index, flows instead of restarting at every letter).
+     */
+    fun animateTo(target: Float, spec: SpringSpec, velocity: Float = this.velocity) {
+        mode = Mode.SPRING
+        spring = spec.spring().apply { start(position, velocity, target.coerceIn(minPos, maxPos)) }
+        startNs = System.nanoTime()
+        post()
+    }
 
     fun stop() { mode = Mode.IDLE }
 

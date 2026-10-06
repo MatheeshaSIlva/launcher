@@ -47,6 +47,20 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
     /** Leave the label out (the lifted copy of a dragged icon shows the icon alone). */
     var labelHidden = false
         set(v) { if (field != v) { field = v; invalidate() } }
+    /** The label's presence (0..1): app names can be switched off in the settings, fading. */
+    private var labelK = 1f
+    private var labelAnim: ValueAnimator? = null
+
+    fun setLabelShown(shown: Boolean, animate: Boolean) {
+        val to = if (shown) 1f else 0f
+        labelAnim?.cancel()
+        if (!animate || !showLabel) { labelK = to; invalidate(); return }
+        labelAnim = ValueAnimator.ofFloat(labelK, to).apply {
+            duration = Motion.profile.appearMs
+            addUpdateListener { labelK = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
 
     /** The remove badge's centre in this view. */
     fun badgeCenter(): FloatArray = floatArrayOf(iconRect.left + m.pt(4f), iconRect.top + m.pt(4f))
@@ -84,6 +98,9 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
         // On pages the icon sits at the top of its cell with the label below (iOS); in the dock it is centred.
         val top = if (showLabel) 0f else (h - s) / 2f
         iconRect.set(left, top, left + s, top + s)
+        // Scaling (arrival) and the wiggle happen about the icon, not the cell with its label.
+        pivotX = iconRect.centerX()
+        pivotY = iconRect.centerY()
         updateLabel()
     }
 
@@ -100,8 +117,9 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             } else null
             canvas.drawBitmap(it, null, iconRect, iconPaint)
         }
-        if (showLabel && !labelHidden && shownLabel.isNotEmpty()) {
+        if (showLabel && !labelHidden && labelK > 0f && shownLabel.isNotEmpty()) {
             val y = iconRect.bottom + m.labelBaseline
+            labelPaint.alpha = (255 * labelK).toInt()
             canvas.drawText(shownLabel, 0, shownLabel.length, width / 2f, y, labelPaint)
         }
         if (badge > 0 && !iconHidden) CountBadge.draw(canvas, iconRect, badge, m)

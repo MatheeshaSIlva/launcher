@@ -68,12 +68,16 @@ data class GlassStyle(
             edgeDark = 0.16f, edgeWidth = 1.6f, specPower = 1.8f)
 
         /**
-         * The lock-screen glass clock: thick glass numerals, a light frosted body that still shows what is behind, bright
-         * edges all round (strongest facing the light), a lens at the stroke edges; no dark outline.
+         * The lock-screen glass clock (iOS 26/27 "Glass"): the very same material as the dock, shaped like the digits.
+         * Clear body (no white tint, no inner glow: an earlier white-lit version read as frosted highlights and did not
+         * match the other glass), a deep lens along the strokes that bends the wallpaper inside them (thick glass), a
+         * slight darkening on the side away from the light (thickness), the darkened edge and the crisp corner-gathered
+         * specular highlight of the dock, and a soft shadow underneath. Adapts a little to a light wallpaper (darker body
+         * and edge) so the numerals stay readable without any white.
          */
-        val IOS_CLOCK = IOS.copy(refraction = 20f, dispersion = 0.12f, magnify = 0f, saturation = 1.15f, tint = 0.12f,
-            glowWidth = 8f, glow = 0.22f, shade = 0f, rimWidth = 1.6f, rimBase = 0.25f, rimLight = 0.45f, rimBack = 0.26f,
-            edgeDark = 0f, edgeWidth = 1f, specPower = 1.2f, adapt = 1f)
+        val IOS_CLOCK = IOS.copy(refraction = 26f, dispersion = 0.3f, magnify = 0f, saturation = 1.22f, tint = 0f,
+            glowWidth = 6f, glow = 0f, shade = 0.22f, rimWidth = 1.3f, rimBase = 0.06f, rimLight = 0.5f, rimBack = 0.14f,
+            edgeDark = 0.22f, edgeWidth = 1.4f, specPower = 1.8f, adapt = 0.85f)
     }
 }
 
@@ -457,7 +461,7 @@ half4 main(float2 coord) {
     half3 col = saturate3(look(sp, off), half(saturation));
     col = mix(col, half3(1.0), half(tint * (1.0 - bright)));
     // Over a light backdrop the body darkens a little (readable), as iOS glass does.
-    col *= half(1.0 - 0.30 * bright);
+    col *= half(1.0 - 0.22 * bright);
     // Distance from the edge, from the height (it rises over about blurPx).
     float inside = max(h - 0.5, 0.0) * 2.0 * blurPx;
     col = lightGlass(col, inside, n);

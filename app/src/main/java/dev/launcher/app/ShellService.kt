@@ -222,6 +222,33 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
+    override fun floatingWindows(): Array<String> = try {
+        val atm = systemService("activity_task", ATM_STUB)
+        val ms = atm.javaClass.methods.filter { it.name == "getTasks" }
+        val m = ms.firstOrNull { it.parameterTypes.size == 4 } ?: ms.firstOrNull { it.parameterTypes.size == 3 } ?: ms.firstOrNull { it.parameterTypes.size == 1 }
+        // (maxNum, filterOnlyVisibleRecents, keepIntentExtra, displayId) on recent Android; shorter forms on older ones.
+        val list = when (m?.parameterTypes?.size) {
+            4 -> m.invoke(atm, 40, false, false, 0)
+            3 -> m.invoke(atm, 40, false, false)
+            1 -> m.invoke(atm, 40)
+            else -> null
+        } as? List<*> ?: emptyList<Any>()
+        list.filterNotNull().mapNotNull { t ->
+            if (readField(t, "isVisible") == false) return@mapNotNull null
+            val conf = readField(t, "configuration") as? android.content.res.Configuration ?: return@mapNotNull null
+            val wc = readField(conf, "windowConfiguration") ?: return@mapNotNull null
+            val mode = wc.javaClass.getMethod("getWindowingMode").invoke(wc) as? Int ?: return@mapNotNull null
+            if (mode != WINDOWING_MODE_PINNED && mode != WINDOWING_MODE_FREEFORM) return@mapNotNull null
+            val b = wc.javaClass.getMethod("getBounds").invoke(wc) as? android.graphics.Rect ?: return@mapNotNull null
+            if (b.isEmpty) return@mapNotNull null
+            val id = readInt(t, "taskId") ?: -1
+            val cn = (readField(t, "topActivity") ?: readField(t, "baseActivity")) as? android.content.ComponentName
+            "$id ${cn?.packageName ?: "?"} $mode ${b.left} ${b.top} ${b.right} ${b.bottom}"
+        }.toTypedArray()
+    } catch (t: Throwable) {
+        emptyArray()
+    }
+
     private fun readInt(o: Any, name: String): Int? = try { o.javaClass.getField(name).get(o) as? Int } catch (_: Throwable) { null }
 
     private fun systemService(name: String, stubClass: String): Any {
@@ -323,6 +350,9 @@ class ShellService : IShellService.Stub() {
     private companion object {
         const val SHELL_PKG = "com.android.shell"
         const val ATM_STUB = "android.app.IActivityTaskManager\$Stub"
+        // WindowConfiguration windowing modes (hidden constants).
+        const val WINDOWING_MODE_PINNED = 2
+        const val WINDOWING_MODE_FREEFORM = 5
 
         // Counts checks without a heartbeat change instead of comparing clock times: during suspend neither the app nor
         // this loop runs, so waking up never looks like a dead app. 4 missed checks = about 4 s of real running time.

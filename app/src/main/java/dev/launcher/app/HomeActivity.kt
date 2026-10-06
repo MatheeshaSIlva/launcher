@@ -92,6 +92,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             @Suppress("DEPRECATION") addAction(Intent.ACTION_WALLPAPER_CHANGED)
         })
         try { android.app.WallpaperManager.getInstance(this).addOnColorsChangedListener(wallpaperColors, android.os.Handler(mainLooper)) } catch (_: Throwable) { }
+        registerReceiver(screenState, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_OFF); addAction(Intent.ACTION_USER_PRESENT) })
         Watchdog.start(this)
         if (!SafetyNotification.canPost(this)) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
@@ -100,11 +101,45 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (SafetyNotification.canPost(this)) SafetyNotification.show(this)
     }
 
+    // Home arrives animated after the screen was off (unlock) and on a cold start (boot, an update, a crash): see
+    // HomeScreen.playArrival. After a screen-off the arrival waits for the unlock (USER_PRESENT) when there is a lock screen,
+    // so it is seen, not played under the keyguard.
+    private var coldStart = true
+    private var sleptSinceResume = false
+    private var arrivalOnUnlock = false
+    private val screenState = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> { sleptSinceResume = true; arrivalOnUnlock = false }
+                Intent.ACTION_USER_PRESENT -> if (arrivalOnUnlock && resumed) { arrivalOnUnlock = false; screen.playArrival(cold = false) }
+            }
+        }
+    }
+
+    // A cold start arrives once the wallpaper is read (so it comes up with it), or after 500 ms at the latest.
+    private var coldArrivalPending = false
+    private val coldArrival = Runnable { if (coldArrivalPending) { coldArrivalPending = false; screen.playArrival(cold = true) } }
+
+    private fun arriveIfDue() {
+        if (coldStart) {
+            coldStart = false
+            sleptSinceResume = false
+            coldArrivalPending = true
+            screen.postDelayed(coldArrival, 500)
+            return
+        }
+        if (!sleptSinceResume) return
+        sleptSinceResume = false
+        val locked = try { getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked } catch (_: Throwable) { false }
+        if (locked) arrivalOnUnlock = true else screen.playArrival(cold = false)
+    }
+
     override fun onResume() {
         super.onResume()
         resumed = true
         GestureNav.onHomeShown()
         reportFirstFrame()
+        arriveIfDue()
         screen.setConfig(HomeConfig.load(this))   // the dev panel may have changed it
         // Retried on every return until it works (the permission arrives when Shizuku connects, possibly after the first try),
         // and reloaded whenever the system wallpaper changed while we were away.
@@ -129,6 +164,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     override fun onDestroy() {
         Apps.removeListener(onApps)
         try { unregisterReceiver(tick) } catch (_: Throwable) { }
+        try { unregisterReceiver(screenState) } catch (_: Throwable) { }
         try { android.app.WallpaperManager.getInstance(this).removeOnColorsChangedListener(wallpaperColors) } catch (_: Throwable) { }
         if (HomeBridge.home === this) HomeBridge.home = null
         super.onDestroy()
@@ -223,7 +259,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         // Nothing drawn since the last picture: it is exactly what shows (a new one would make gesture nav render its layers
         // of home again at the start of the gesture: 11-15 ms GPU frames at the start of a pull, traced on the S24).
         if (!drawnSinceRecord) HomeBridge.preview?.let { return it }
-        for (c in screen.clocks) c.refresh()
+        for (c in screen.clocks) c.refresh(animate = false)
         return screen.withHidden(null) { record() }?.also { recorded() }
     }
 
@@ -272,7 +308,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         )
         screen.layout(screen.left, screen.top, screen.right, screen.bottom)
         screen.publishIcons()   // the icon a close flies into may be a different copy now (a tile, not a search result)
-        for (c in screen.clocks) c.refresh()
+        for (c in screen.clocks) c.refresh(animate = false)
         val p = screen.withHidden(null) { record() } ?: return
         HomeBridge.setPreview(p)
         recorded()
@@ -284,8 +320,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     /** Records home at rest (nothing moving, no icon hidden) as the picture gesture nav draws behind cards. */
     private fun recordPreview() {
         if (screen.width == 0 || !screen.isIdle || screen.wallpaperView.transitioning || screen.hiddenPkg != null) return
-        // TextClock stops updating while home is in the background: make it show the time now before recording.
-        for (c in screen.clocks) c.refresh()
+        // The clock stops updating while home is in the background: make it show the time now before recording.
+        for (c in screen.clocks) c.refresh(animate = false)
         HomeBridge.setPreview(record() ?: return)
         recorded()
     }
@@ -375,6 +411,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
         screen.setWallpaper(w)
         HomeBridge.homeStatusDark = w != null && w.topLuminance > 0.62f
+        if (coldArrivalPending) { screen.removeCallbacks(coldArrival); coldArrival.run() }
         screen.postDelayed({ recordPreview() }, 100)
     }
 

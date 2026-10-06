@@ -65,6 +65,14 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
   Library and Spotlight (long press, then move). Not yet: folders (hover to make one), resizing a placed widget (iOS 27's
   corner handle). Shortcuts, App Info and widget setup screens open with the stock animation.
 
+- Round 16: widgets resize in place with an animated card (handle or Size row); "Glass Background" for Android widgets;
+  Hide/Show Widget Names and Hide/Show App Names (saved, fading); the edit bar slides in and out; new items grow into
+  their cells, removed ones shrink away. The gallery: grabber, search field, featured glass clock, rows with widget counts,
+  carousel with dimmer neighbours, animated presses. A closing App Library folder takes no touches (another can open at
+  once); an icon can be opened while its folder still grows; the A-Z index animates (bubble, magnified letters, list on
+  a spring). Home arrives animated after unlock and on a cold start. Floating windows (PiP, pop-ups) stay visible
+  through holes in the card window.
+
 ## 3. App Switcher (hold during a home swipe) — built (round 8)
 
 - Trigger: during a home swipe, the finger stays within 12 dp for 150 ms once it is at least 56 dp above where it started

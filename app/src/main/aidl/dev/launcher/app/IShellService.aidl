@@ -80,4 +80,9 @@ interface IShellService {
     // The system's last picture of a task, reduced (half size) when it has to be read from storage; the full one when the
     // system still holds it. For the App Switcher's stacked cards. Null when none.
     HardwareBuffer taskSnapshotBufferLow(int taskId) = 24;
+
+    // Visible tasks floating over the others (picture-in-picture, pop-up/freeform windows) as
+    // "taskId package windowingMode left top right bottom" (display px). Our card window leaves holes for them, so a video
+    // keeps playing in front of launch and close animations instead of vanishing under them.
+    String[] floatingWindows() = 25;
 }

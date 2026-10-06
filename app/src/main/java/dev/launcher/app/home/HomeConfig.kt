@@ -32,7 +32,10 @@ data class HomeConfig(
     val drawerPlacement: DrawerPlacement = DrawerPlacement.PAGE_AFTER_LAST,
     /** System (icons as Android draws them) until a shape is picked in settings. */
     val iconShape: IconShape = IconShape.SYSTEM,
+    /** App names under the icons on the pages (off = iOS 18's "large icons" look). */
     val showLabels: Boolean = true,
+    /** Widget names under the widgets. */
+    val showWidgetLabels: Boolean = true,
     /** iOS "Add to Home Screen" for newly installed apps (else they only appear in the drawer). */
     val newAppsOnHome: Boolean = true,
 ) {
@@ -41,6 +44,8 @@ data class HomeConfig(
             .putString("drawer_placement", drawerPlacement.name)
             .putString("drawer_style", drawerStyle.name)
             .putBoolean("new_apps_on_home", newAppsOnHome)
+            .putBoolean("show_labels", showLabels)
+            .putBoolean("show_widget_labels", showWidgetLabels)
             .apply()
     }
 
@@ -55,6 +60,8 @@ data class HomeConfig(
                 drawerStyle = p.getString("drawer_style", null)?.let { n -> DrawerStyle.entries.firstOrNull { it.name == n } }
                     ?: DrawerStyle.APP_LIBRARY,
                 newAppsOnHome = p.getBoolean("new_apps_on_home", true),
+                showLabels = p.getBoolean("show_labels", true),
+                showWidgetLabels = p.getBoolean("show_widget_labels", true),
             )
         }
     }

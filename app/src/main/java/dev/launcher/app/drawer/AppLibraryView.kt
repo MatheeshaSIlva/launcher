@@ -155,6 +155,10 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         val hiding = if (toList) tilesPane else listPane
         showing.visibility = View.VISIBLE
         showing.animate().alpha(1f).setDuration(d).start()
+        // The pane coming in takes touches from its first frame; the one fading out takes none (a tap on a tile right
+        // after "Cancel" must open it, not land on the vanishing list).
+        tilesPane.acceptsTouches = !toList
+        listPane.acceptsTouches = toList
         hiding.animate().alpha(0f).setDuration(d).withEndAction {
             hiding.visibility = View.GONE
             crossfading = false
@@ -274,6 +278,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         listPane.animate().cancel(); tilesPane.animate().cancel(); cancel.animate().cancel()
         listPane.alpha = 0f; listPane.visibility = View.GONE
         tilesPane.alpha = 1f; tilesPane.visibility = View.VISIBLE
+        tilesPane.acceptsTouches = true; listPane.acceptsTouches = false
         cancel.alpha = 0f; cancel.visibility = View.GONE
         searchBar.animateCancelSpace(0f, 0)
         crossfading = false

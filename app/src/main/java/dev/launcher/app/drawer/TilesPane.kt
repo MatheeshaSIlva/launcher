@@ -25,9 +25,14 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     private val m = lib.m
     val scroller = dev.launcher.app.motion.IosScroller({ invalidate() }, { lib.settled() })
     private val touch = TapOrScroll(ctx)
-    /** The tile an open folder grew out of: the folder draws it (as its panel) until it is back in place. */
-    var hiddenTile = -1
-        set(v) { if (field != v) { field = v; invalidate() } }
+    /** Tiles whose folder is on screen (open, opening or shrinking back): the folder draws them (as its panel) until they are back in place. */
+    private val hiddenTiles = HashSet<Int>()
+    /** False while this pane is fading out behind the list: touches go to what is underneath. */
+    var acceptsTouches = true
+
+    fun setTileHidden(index: Int, hidden: Boolean) {
+        if (if (hidden) hiddenTiles.add(index) else hiddenTiles.remove(index)) invalidate()
+    }
     private val labels = LabelPainter(m.tileLabelSize, 0xE6FFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
     private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val r = RectF()
@@ -120,6 +125,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN && !acceptsTouches) return false
         val dy = touch.onEvent(e) {
             parent?.requestDisallowInterceptTouchEvent(true)
             scroller.beginDrag()
@@ -127,7 +133,8 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
         }
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                touch.stoppedMotion = scroller.isSettling
+                // A touch on the invisible tail of a settle is an ordinary tap; one on real motion stops it and taps nothing.
+                touch.stoppedMotion = scroller.isMovingVisibly()
                 scroller.stop()
                 if (!touch.stoppedMotion) {
                     val t = hit(e.x, e.y)
@@ -189,7 +196,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
         for (i in visibleTiles()) {
             val tile = tiles[i]
             tileRect(i, r)
-            if (i != hiddenTile) {
+            if (i !in hiddenTiles) {
                 // The same liquid glass as the dock, refracting the blurred wallpaper behind the library.
                 lib.drawGlass(c, lib.tileGlass, r, m.tileRadius, this)
                 val p = pressed
