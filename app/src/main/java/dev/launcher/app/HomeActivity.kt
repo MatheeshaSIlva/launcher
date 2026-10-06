@@ -274,6 +274,21 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (android.os.SystemClock.uptimeMillis() - recordedAt > 6) drawnSinceRecord = true
     }
 
+    override fun afterNextDraw(then: () -> Unit) {
+        var done = false
+        val run = Runnable { if (!done) { done = true; then() } }
+        val vto = screen.viewTreeObserver
+        val listener = object : ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                screen.post { screen.viewTreeObserver.removeOnDrawListener(this) }
+                Choreographer.getInstance().postFrameCallback { run.run() }
+            }
+        }
+        vto.addOnDrawListener(listener)
+        screen.invalidate()
+        screen.postDelayed({ screen.viewTreeObserver.removeOnDrawListener(listener); run.run() }, 150)
+    }
+
     override fun recordWithout(pkg: String): HomePicture? {
         if (screen.width == 0) return null
         return screen.withHidden(pkg) { record() }

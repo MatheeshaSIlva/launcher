@@ -295,8 +295,9 @@ internal class SearchList(
     private fun scrubTo(y: Float, first: Boolean) {
         val k = ((y - indexTop()) / (indexBottom() - indexTop())).coerceIn(0f, 0.999f)
         val letter = LETTERS[(k * LETTERS.size).toInt()]
-        // The bubble glides to the letter under the finger (it is there at once when the finger lands).
-        if (first) bubbleY.snapTo(letterY(letter)) else bubbleY.animateTo(letterY(letter), Motion.profile.indexFollow)
+        // The bubble and the magnified letters sit exactly under the finger (within the index), every event: following
+        // the finger through a spring read as a lag.
+        bubbleY.snapTo(y.coerceIn(indexTop(), indexBottom()))
         if (letter == scrubLetter) return
         scrubLetter = letter
         // '#' (apps starting with a digit or symbol) sits at the end of the index; its section may not exist.

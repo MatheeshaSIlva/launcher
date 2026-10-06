@@ -41,6 +41,11 @@ class CardView(context: Context) : View(context) {
     /** 0 = card content only, 1 = icon only. */
     var iconMix = 0f
         set(v) { field = v.coerceIn(0f, 1f); invalidate() }
+    /** The app's notification count: drawn on the icon as the card turns into it (home shows the same badge). */
+    var badge = 0
+        set(v) { if (field != v) { field = v; invalidate() } }
+    /** One iOS point in px, for the badge's size. */
+    var unitPx = 2.7f
 
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
 
@@ -116,9 +121,16 @@ class CardView(context: Context) : View(context) {
         }
     }
 
+    private val iconRect = android.graphics.RectF()
+
     private fun drawIcon(canvas: Canvas, d: Drawable, size: Float, alpha: Int) {
         d.setBounds((cx - size / 2).roundToInt(), (cy - size / 2).roundToInt(), (cx + size / 2).roundToInt(), (cy + size / 2).roundToInt())
         d.alpha = alpha
         d.draw(canvas)
+        // The badge belongs to the icon on home: it fades in with the icon so it is there when the real icon takes over.
+        if (badge > 0 && alpha > 0 && size <= minIconSize * 1.6f) {
+            iconRect.set(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
+            dev.launcher.app.home.CountBadge.draw(canvas, iconRect, badge, unitPx * (size / minIconSize.coerceAtLeast(1f)).coerceIn(0.5f, 1f), alpha)
+        }
     }
 }

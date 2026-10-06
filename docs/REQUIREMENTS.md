@@ -12,6 +12,7 @@ Two rules outrank every feature:
 
 - **Perfectly smooth.** Every open, close, swipe and panel pull follows the finger and holds the display's full refresh rate (120 Hz on the test phone). No visible stutter, flash or double animation.
 - **Fully consistent.** One shade, one status bar, one gesture set, everywhere. No stock panel ever appears alongside ours, and nothing is themed on the home screen only.
+- **Attention to detail, always.** Every change on screen is animated, fluidly and cleverly (springs that follow the finger, interruptible, never a pop or a jump, never a wait), down to a badge count or a label toggle; the frames between two states are designed, not left to chance.
 
 The goal is "every good feature from the best launchers, working together", with Hyprland-level control over looks and motion through a theme engine
 and a theme builder. First target: one phone (Galaxy S24, Android 16, One UI); other phones come after the core is proven. A free base launcher works with no

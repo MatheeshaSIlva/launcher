@@ -906,6 +906,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private val anchors = HashMap<String, IconView>()
     var hiddenPkg: String? = null
         private set
+    // The very view that was hidden: the published copy for a package can change meanwhile (a page turned, the dock), and
+    // unhiding "the icon of pkg" then left the hidden one hidden until something else rebound it.
+    private var hiddenView: IconView? = null
 
     /** Tells gesture nav where every icon a closing card could fly into is (at rest: without the depth zoom). */
     fun publishIcons() {
@@ -940,9 +943,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
      */
     fun setHiddenPkg(pkg: String?) {
         if (pkg == hiddenPkg) return
-        hiddenPkg?.let { published[it]?.iconHidden = false }
+        hiddenView?.iconHidden = false
+        hiddenView = null
         hiddenPkg = pkg
-        pkg?.let { published[it]?.iconHidden = true }
+        pkg?.let { p -> published[p]?.let { v -> v.iconHidden = true; hiddenView = v } }
         drawer?.setHiddenPkg(pkg)
     }
 

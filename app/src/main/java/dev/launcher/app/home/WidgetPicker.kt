@@ -96,7 +96,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private val shown: SpringValue = SpringValue(0f, 1000f, { onMoved() }, { if (shown.value == 0f) finishClose() })
     private val drop = SpringValue(0f, 1f, { onMoved() })
     // 0 = the list, 1 = an app's page.
-    private val push: SpringValue = SpringValue(0f, 1000f, { invalidate() }, { if (push.value == 0f) { app = null; entries = emptyList() } })
+    private val push: SpringValue = SpringValue(0f, 1000f, { placeField(); invalidate() }, { if (push.value == 0f) { app = null; entries = emptyList() } })
     // An app's page: which entry is centred (fractional while swiping).
     private val pager = SpringValue(0f, 1000f, { invalidate() })
     private val list = IosScroller({ invalidate() })
@@ -507,7 +507,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             g = try {
                 val mask = ClockNumerals.mask(clockPaint, w, h, baseline, "9:41")
                 GlassDrawable(wp, m.w, m.h, 0f, m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_CLOCK,
-                    GlassDrawable.Source.BACKDROP, mask)
+                    GlassDrawable.Source.FROSTED, mask)
             } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] clock preview glass failed: ${t.message}"); null }
             clockGlass = g
             clockGlassSize = w to h

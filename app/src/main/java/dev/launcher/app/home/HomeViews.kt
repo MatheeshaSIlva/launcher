@@ -381,7 +381,7 @@ object ClockNumerals {
         android.graphics.Canvas(height).apply { scale(scale, scale); drawText(time, w / 2f, baseline, paint) }
         val blurPx = paint.textSize * 0.07f
         boxBlurAlpha(height, maxOf(1, (blurPx * scale).roundToInt()))
-        return dev.launcher.app.GlassMask(mask, height, scale, blurPx, 0.14f)
+        return dev.launcher.app.GlassMask(mask, height, scale, blurPx, 0.2f)
     }
 }
 
@@ -428,18 +428,27 @@ object CountBadge {
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textAlign = Paint.Align.CENTER }
     private val r = RectF()
 
-    fun draw(c: Canvas, icon: RectF, count: Int, m: HomeMetrics) {
+    fun draw(c: Canvas, icon: RectF, count: Int, m: HomeMetrics, alpha: Int = 255, scale: Float = 1f) = draw(c, icon, count, m.u, alpha, scale)
+
+    /** With [u] = one iOS point in px; [scale] grows or shrinks the badge about its centre (its pop-in animation). */
+    fun draw(c: Canvas, icon: RectF, count: Int, u: Float, alpha: Int = 255, scale: Float = 1f) {
+        if (alpha <= 0 || scale <= 0f) return
         val label = if (count > 999) "999+" else count.toString()
-        val h = m.pt(24f)
+        val h = 24f * u
         text.typeface = dev.launcher.app.theme.Fonts.text(500)
-        text.textSize = m.pt(15.5f)
-        val w = maxOf(h, text.measureText(label) + m.pt(14f))
+        text.textSize = 15.5f * u
+        val w = maxOf(h, text.measureText(label) + 14f * u)
         // Its top-right a little outside the icon's corner, as on iOS.
-        val right = icon.right + m.pt(5f)
-        val top = icon.top - m.pt(5f)
+        val right = icon.right + 5f * u
+        val top = icon.top - 5f * u
         r.set(right - w, top, right, top + h)
+        fill.alpha = alpha
+        text.alpha = alpha
+        val save = c.save()
+        if (scale != 1f) c.scale(scale, scale, r.centerX(), r.centerY())
         c.drawRoundRect(r, h / 2f, h / 2f, fill)
         c.drawText(label, r.centerX(), r.centerY() + text.textSize * 0.36f, text)
+        c.restoreToCount(save)
     }
 }
 

@@ -56,7 +56,8 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
         val w = wallpaper
         glass = if (w != null && Build.VERSION.SDK_INT >= 33 && screenW > 0) {
             try {
-                GlassDrawable(w, screenW, screenH, radius, unitPx, cellPx, style, mask = mask)
+                GlassDrawable(w, screenW, screenH, radius, unitPx, cellPx, style,
+                    source = if (mask != null) GlassDrawable.Source.FROSTED else GlassDrawable.Source.WALLPAPER, mask = mask)
             } catch (t: Throwable) {
                 // A shader that does not compile on this GPU must never take the home screen down.
                 AppLog.log("[home] glass shader failed, plain glass instead: ${t.javaClass.simpleName}: ${t.message}")

@@ -777,3 +777,23 @@ To check on the S24: the arrival after unlock and after UPDATE; the clock over t
 video during a launch/close and in the switcher; resizing a widget from the handle; the gallery's search field with the
 keyboard; `tools/scenario_more.sh` for the library's folder and index numbers.
 
+Round 17 (Matheesha on the branch build ee24807; fixed from the code, no phone reachable from this session):
+- Clock barely visible: the clear body had too little presence over a real wallpaper. The numerals are now thick frosted
+  glass: a new `GlassDrawable.Source.FROSTED` sees the sharp wallpaper at the rim and the App Library's heavy blur as the
+  body (frost 0.82, a touch of tint, deeper lens 30, stronger thickness shade, darker edge 0.32, deeper shadow). The dock's
+  edge and highlights stay; no inner glow. `docs/design/clock-glass-old-vs-new.png` re-rendered.
+- Add Widget: pushing an app's page left the search field standing still while the list slid away (the field is a real
+  text view over the drawn capsule and was only placed on sheet moves). It now slides and fades with the list.
+- A-Z index: the bubble springed to each letter's centre, which read as lag and as choppiness when letters changed
+  quickly. The bubble and the magnified letters now sit exactly under the finger on every event; only the pop in and out
+  are springs, and the list still springs to the section.
+- Icon missing at the end of a close: two causes. The hidden icon was unhidden by package through the published map, so
+  when that map had changed meanwhile (a page turned, the dock copy chosen) the hidden view stayed hidden until something
+  rebound it; home now unhides the very view it hid. And the card was taken away 32 ms after asking home to show the icon,
+  a fixed delay that lost when home's draw came late: `HomeBridge.showIconThen` takes the card away only once home has
+  drawn a frame with the icon (150 ms fallback).
+- Badges: the card never drew the app's badge, so the count popped in with the real icon. The card now draws the badge on
+  the icon as it turns into it (`CardView.badge`), and `IconView` animates every badge change (a new one pops in, a
+  cleared one shrinks away, a changed count bounces) so a count arriving while home shows never just appears.
+- Rule 3 added to CLAUDE.md and REQUIREMENTS.md: attention to detail, every change on screen animated.
+

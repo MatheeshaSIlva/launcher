@@ -924,6 +924,8 @@ object GestureNav {
         c.homePicture = null
         c.snapshot = bitmap
         c.icon = pkg?.let { iconFor(it) }
+        c.badge = pkg?.let { Badges.count(it) } ?: 0
+        c.unitPx = sw / 402f
         c.minIconSize = Icons.homeSize.toFloat()
         // Without a snapshot the card shows the app's launch screen: its splash colour behind its icon.
         if (pkg != null) {
@@ -1372,6 +1374,7 @@ object GestureNav {
             val size = target?.width() ?: (sw * 0.3f)
             val sizeH = target?.height() ?: (sh * 0.3f)
             switchAt = 0L   // going home ends any run of quick switches
+            c.badge = pkg?.let { Badges.count(it) } ?: 0   // as it will show on home (it may have changed while the app was open)
             hideIcon(if (target != null) pkg else null)
             cardIconSize = size
             beginCardSprings(toIcon = target != null)
@@ -1402,10 +1405,10 @@ object GestureNav {
                 // The picture of home is on top of the real one: swap only once the real home has drawn.
                 whenHomeDrawn(g) {
                     if (target != null && pkg != null) {
-                        // Real icon back first, cards a couple of frames later: never a frame with neither.
-                        HomeBridge.setIconHidden(pkg, false)
+                        // The real icon back first; the card (now the icon) goes only once home has drawn a frame with it:
+                        // never a frame with neither (a fixed delay left a gap whenever home's draw came late).
                         hiddenIconPkg = null
-                        nav.postDelayed({ if (gen == g) hideCards() }, 32)
+                        HomeBridge.showIconThen(pkg) { nav.post { if (gen == g) hideCards() } }
                     } else hideCards()   // already faded out on the way
                 }
             }
@@ -1642,6 +1645,8 @@ object GestureNav {
         if (!reverse) {
             c.homePicture = null
             c.icon = icon
+            c.badge = Badges.count(pkg)
+            c.unitPx = sw / 402f
             c.snapshot = images[pkg]
             c.minIconSize = iconRect.width()
             // The app's own launch-screen colour (resolved ahead of time for home's apps), else the icon's colour.

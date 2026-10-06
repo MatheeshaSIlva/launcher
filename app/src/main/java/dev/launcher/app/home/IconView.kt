@@ -41,9 +41,21 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
     /** Edit mode: the remove badge shows at the icon's top-left corner. */
     var editing = false
         set(v) { if (field != v) { field = v; invalidate() } }
-    /** Notifications waiting (iOS's red badge at the top right; 0 = none). */
+    /** Notifications waiting (iOS's red badge at the top right; 0 = none). A new badge pops in, a cleared one shrinks away, a changed count bounces. */
     var badge = 0
-        set(v) { if (field != v) { field = v; invalidate() } }
+        set(v) {
+            if (field == v) return
+            val was = field
+            field = v
+            when {
+                was == 0 -> { shownBadge = v; badgeScale.snapTo(0.3f); badgeScale.animateTo(1f, Motion.profile.appear) }
+                v == 0 -> badgeScale.animateTo(0f, Motion.profile.menuClose)   // the old count stays on it while it shrinks
+                else -> { shownBadge = v; badgeScale.snapTo(1.3f); badgeScale.animateTo(1f, Motion.profile.appear) }
+            }
+            invalidate()
+        }
+    private var shownBadge = 0
+    private val badgeScale = dev.launcher.app.motion.SpringValue(1f, 100f, { invalidate() }, { if (badge == 0) { shownBadge = 0; invalidate() } })
     /** Leave the label out (the lifted copy of a dragged icon shows the icon alone). */
     var labelHidden = false
         set(v) { if (field != v) { field = v; invalidate() } }
@@ -122,7 +134,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             labelPaint.alpha = (255 * labelK).toInt()
             canvas.drawText(shownLabel, 0, shownLabel.length, width / 2f, y, labelPaint)
         }
-        if (badge > 0 && !iconHidden) CountBadge.draw(canvas, iconRect, badge, m)
+        if (shownBadge > 0 && !iconHidden) CountBadge.draw(canvas, iconRect, shownBadge, m, scale = badgeScale.value.coerceAtLeast(0f))
         if (editing) RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m)
     }
 

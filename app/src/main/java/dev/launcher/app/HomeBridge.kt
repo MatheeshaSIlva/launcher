@@ -31,6 +31,8 @@ object HomeBridge {
         fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long)
         /** Records home exactly as it shows now (every icon; open folder, scroll, page as they are). Main thread. */
         fun recordAsShown(): HomePicture?
+        /** Runs [then] once home has drawn its next frame (a frame later, when it has been queued), or after 150 ms. */
+        fun afterNextDraw(then: () -> Unit)
     }
 
     @Volatile var home: Home? = null
@@ -97,6 +99,18 @@ object HomeBridge {
     fun iconRect(pkg: String): RectF? = icons[pkg]
 
     fun setIconHidden(pkg: String, hidden: Boolean) = main.post { home?.setIconHidden(pkg, hidden) }
+
+    /**
+     * Shows [pkg]'s icon again and runs [then] (main thread) once home has drawn a frame with it, or after 150 ms: the
+     * card that turned into the icon is taken away only then, so no frame shows neither (the icon "went missing for a
+     * moment" when the card went on a timer while home's draw was late).
+     */
+    fun showIconThen(pkg: String, then: () -> Unit) = main.post {
+        val h = home
+        if (h == null) { then(); return@post }
+        h.setIconHidden(pkg, false)
+        h.afterNextDraw(then)
+    }
 
     /**
      * The real home takes over the depth animation from the picture: same spring, same start ([startNanos], System.nanoTime

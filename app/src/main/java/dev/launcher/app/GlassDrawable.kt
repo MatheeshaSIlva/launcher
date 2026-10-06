@@ -68,16 +68,16 @@ data class GlassStyle(
             edgeDark = 0.16f, edgeWidth = 1.6f, specPower = 1.8f)
 
         /**
-         * The lock-screen glass clock (iOS 26/27 "Glass"): the very same material as the dock, shaped like the digits.
-         * Clear body (no white tint, no inner glow: an earlier white-lit version read as frosted highlights and did not
-         * match the other glass), a deep lens along the strokes that bends the wallpaper inside them (thick glass), a
-         * slight darkening on the side away from the light (thickness), the darkened edge and the crisp corner-gathered
-         * specular highlight of the dock, and a soft shadow underneath. Adapts a little to a light wallpaper (darker body
-         * and edge) so the numerals stay readable without any white.
+         * The lock-screen glass clock (iOS 26/27 "Glass"): the dock's material shaped like the digits, but thick: its body
+         * is the wallpaper seen through frosted glass (the heavy blur, [Source.FROSTED], mostly) so the numerals read over
+         * any wallpaper, with the sharp wallpaper bent along the strokes by a deep lens, a darkening on the side away from
+         * the light (thickness), a darkened edge and the dock's crisp corner-gathered highlights, and a soft shadow
+         * underneath. No inner glow and barely any white (an earlier white-lit version read as frosted highlights); a
+         * clear version was barely visible on the S24. Adapts to a light wallpaper (darker body and edge).
          */
-        val IOS_CLOCK = IOS.copy(refraction = 26f, dispersion = 0.3f, magnify = 0f, saturation = 1.22f, tint = 0f,
-            glowWidth = 6f, glow = 0f, shade = 0.22f, rimWidth = 1.3f, rimBase = 0.06f, rimLight = 0.5f, rimBack = 0.14f,
-            edgeDark = 0.22f, edgeWidth = 1.4f, specPower = 1.8f, adapt = 0.85f)
+        val IOS_CLOCK = IOS.copy(frost = 0.82f, refraction = 30f, dispersion = 0.3f, magnify = 0f, saturation = 1.3f, tint = 0.1f,
+            glowWidth = 6f, glow = 0f, shade = 0.3f, rimWidth = 1.4f, rimBase = 0.12f, rimLight = 0.6f, rimBack = 0.22f,
+            edgeDark = 0.32f, edgeWidth = 1.8f, specPower = 1.8f, adapt = 1f)
     }
 }
 
@@ -113,8 +113,11 @@ class GlassDrawable(
     private val source: Source = Source.WALLPAPER,
     mask: GlassMask? = null,
 ) : Drawable() {
-    /** What the glass sees behind it: the wallpaper itself (home), or the App Library's heavily blurred wallpaper. */
-    enum class Source { WALLPAPER, BACKDROP }
+    /**
+     * What the glass sees behind it: the wallpaper itself (home), the App Library's heavily blurred wallpaper, or (the
+     * clock) the sharp wallpaper at the rim and the heavily blurred one as its frosted body.
+     */
+    enum class Source { WALLPAPER, BACKDROP, FROSTED }
 
     private val masked = mask != null
     private val shader = RuntimeShader(when {
@@ -152,12 +155,13 @@ class GlassDrawable(
 
     private fun setImages(which: String, wp: Wallpaper) {
         val backdrop = source == Source.BACKDROP
+        val heavyFrost = source != Source.WALLPAPER
         shader.setInputShader("sharp$which", BitmapShader(if (backdrop) wp.heavy else wp.bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
             setLocalMatrix(if (backdrop) wp.heavyMatrix(screenW, screenH) else wp.matrix(screenW, screenH))
             filterMode = BitmapShader.FILTER_MODE_LINEAR
         })
-        shader.setInputShader("frost$which", BitmapShader(if (backdrop) wp.heavy else wp.blurred, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-            setLocalMatrix(if (backdrop) wp.heavyMatrix(screenW, screenH) else wp.blurredMatrix(screenW, screenH))
+        shader.setInputShader("frost$which", BitmapShader(if (heavyFrost) wp.heavy else wp.blurred, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+            setLocalMatrix(if (heavyFrost) wp.heavyMatrix(screenW, screenH) else wp.blurredMatrix(screenW, screenH))
             filterMode = BitmapShader.FILTER_MODE_LINEAR
         })
     }

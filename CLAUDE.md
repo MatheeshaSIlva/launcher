@@ -12,12 +12,19 @@ debugging). The app also works without Shizuku as a plain launcher; Shizuku unlo
 
 Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **Galaxy S24, Android 16, One UI**.
 
-## The two rules that outrank every feature
+## The three rules that outrank every feature
 
 1. **Perfectly smooth.** Open, close, swipe and panel pulls follow the finger and hold the display's refresh rate
    (120 Hz). Matheesha's words: "not a single stutter". Measure it (frame logs), do not eyeball it.
 2. **Fully consistent.** One shade, one status bar, one gesture set, everywhere. No stock panel may appear next to ours.
    Showing our status bar "on the home screen only" was explicitly rejected.
+3. **Attention to detail, always.** Every single change on screen is animated, fluidly and cleverly: nothing pops, snaps,
+   jumps or "just appears". That includes the small things (a badge count, a label toggle, a list arriving, a minute
+   change, a bar sliding in) and the states between states (home after unlock or a cold start, a handover from a card to
+   the real icon, a folder closing while another opens). Every animation is a spring or an ease that follows the finger
+   where there is one, can be interrupted and retargeted without a jump, and never makes the user wait for it to finish
+   before the next thing can be tapped. Before calling a screen done, go through every element on it and every way it can
+   change, and ask "how does this move, and what shows on the frame in between?". Matheesha reviews at this level.
 
 ## How we work with Matheesha
 

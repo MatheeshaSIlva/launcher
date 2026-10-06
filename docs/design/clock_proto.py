@@ -65,7 +65,8 @@ def saturate(c, s):
 
 def render(wp, style, text='9:41'):
     sharp = wp
-    frost = blur(wp, 1.5 * PT)          # Wallpaper.blurred: about 1.5 pt
+    # Wallpaper.blurred (about 1.5 pt) for the WALLPAPER source; Wallpaper.heavy (the App Library's blur) for FROSTED.
+    frost = blur(wp, 18 * PT) if style.get('heavy') else blur(wp, 1.5 * PT)
     size = int(H * 0.94 * 1.05)
     mask = text_mask(W, H, text, size)
     blur_px = size * 0.07
@@ -115,15 +116,15 @@ def render(wp, style, text='9:41'):
     spec = rim * (style['rimBase'] + style['rimLight'] * np.maximum(facing, 0) ** style['specPower'] + style['rimBack'] * np.maximum(-facing, 0) ** style['specPower'])
     col = np.minimum(col + spec[..., None], 1)
     col = col * (1 - 0.28 * bright * (1 - np.clip(inside / (blur_px * 0.6), 0, 1)))[..., None]
-    shadow_a = 0.14 * (1 + 2.5 * bright) * hfull * hfull
+    shadow_a = 0.2 * (1 + 2.5 * bright) * hfull * hfull
     out = wp * (1 - shadow_a[..., None]) * (1 - mask[..., None]) + col * mask[..., None]
     return np.clip(out, 0, 1)
 
 
 OLD = dict(refraction=20, dispersion=0.12, frost=1.0, saturation=1.15, tint=0.12, glowWidth=8, glow=0.22, shade=0,
            rimWidth=1.6, rimBase=0.25, rimLight=0.45, rimBack=0.26, edgeDark=0, edgeWidth=1, specPower=1.2, adapt=1)
-NEW = dict(refraction=26, dispersion=0.3, frost=1.0, saturation=1.22, tint=0, glowWidth=6, glow=0, shade=0.22,
-           rimWidth=1.3, rimBase=0.06, rimLight=0.5, rimBack=0.14, edgeDark=0.2, edgeWidth=1.4, specPower=1.8, adapt=0.7)
+NEW = dict(refraction=30, dispersion=0.3, frost=0.82, saturation=1.3, tint=0.1, glowWidth=6, glow=0, shade=0.3,
+           rimWidth=1.4, rimBase=0.12, rimLight=0.6, rimBack=0.22, edgeDark=0.32, edgeWidth=1.8, specPower=1.8, adapt=1, heavy=True)
 
 rows = []
 for kind in ['dark', 'light']:
