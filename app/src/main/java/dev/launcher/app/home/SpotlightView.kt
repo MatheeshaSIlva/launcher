@@ -3,6 +3,7 @@ package dev.launcher.app.home
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
@@ -103,6 +104,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         results.spotlight = true
         results.drawCard = { c, rect -> drawCard(c, rect) }
         results.drawGlass = { c, rect, rad -> drawCard(c, rect, rad) }
+        results.mirror = field.frost   // the field shows the results scrolling under it
         addView(field, LayoutParams((m.w - 2 * m.libMargin).roundToInt(), m.searchHeight.roundToInt()).apply {
             leftMargin = m.libMargin.roundToInt()
         })
@@ -159,6 +161,26 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
 
     private val cardFallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x24FFFFFF }
     private val offset = FloatArray(2)
+
+    // ------------------------------------------------------------------ what is behind the search field (screen coordinates)
+
+    private val fieldGlass = dev.launcher.app.drawer.FieldGlass(m)
+    private val wallPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val at2 = FloatArray(2)
+
+    /** The wallpaper (as home shows it), Spotlight's background as far as it is open, then the results scrolling under it. */
+    private fun drawBehindField(c: Canvas) {
+        val w = wallpaper ?: return
+        c.drawBitmap(w.bitmap, w.matrix(m.w, m.h), wallPaint)
+        val dim = Appearance.wallpaperDim
+        if (dim > 0f) c.drawColor((255 * dim).toInt() shl 24)
+        screenOffset(this, at2)
+        c.save()
+        c.translate(at2[0], at2[1])
+        drawBackground(c, progress.coerceIn(0f, 1f))
+        c.restore()
+        fieldGlass.drawPane(c, results)
+    }
 
     /** Spotlight's background (the blurred wallpaper, darkened a little), also what the frosted field blurs. */
     private fun drawBackground(c: Canvas, p: Float) {
@@ -276,7 +298,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         val p = progress.coerceIn(0f, 1f)
         // Field rises from below, content comes down from above, both fading in with the pull.
         field.translationY = (1f - p) * m.pt(60f)
-        field.alpha = p
+        // Faded through its own drawing, never the view's alpha (live glass inside a view with alpha is cut at its edge).
+        field.fade = p
         field.frost.invalidate()   // it shows what is behind it, which changes as it moves
         val contentShift = (1f - p) * -m.pt(30f) + max(0f, progress - 1f) * m.pt(40f)
         results.translationY = contentShift
@@ -424,6 +447,16 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         val edit = EditText(ctx)
         val frost = Frost(ctx)
         private val clearButton = ClearButton(ctx)
+
+        /** How far Spotlight is open (0..1): the field's glass, glyph, text and clear button fade with it. */
+        var fade = 1f
+            set(v) {
+                if (field == v) return
+                field = v
+                edit.alpha = v
+                clearButton.invalidate()
+                invalidate()
+            }
         private val glyph = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND
         }
@@ -443,6 +476,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
 
         init {
             setWillNotDraw(false)
+            // The glass reaches past the capsule (its lens looks outside it): never clipped to the field.
+            clipChildren = false
             addView(frost, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
             edit.apply {
                 background = null
@@ -498,14 +533,15 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
             val lr = m.pt(6.8f)
             lens.reset()
             lens.addCircle(cx, cy, lr, Path.Direction.CW)
+            glyph.alpha = (Color.alpha(glyph.color) * fade).toInt()
             canvas.drawPath(lens, glyph)
             canvas.drawLine(cx + lr * 0.72f, cy + lr * 0.72f, cx + lr * 1.45f, cy + lr * 1.45f, glyph)
         }
 
         /**
-         * The field's glass: the same material and lens as the App Library's search field (the dock's glass over the blurred
-         * background), so the two search fields are one design. (A live glass of what is behind, clipped to the capsule,
-         * cut the lens's input at the clip: the edges came out broken.)
+         * The field's glass: the App Library field's (the dock's glass over what is really behind it): the results scrolling
+         * up under the field show through it. Never clipped (its parents do not clip it) and never inside a view alpha.
+         * In a recorded picture of home: the dock's glass over the blurred background.
          */
         inner class Frost(ctx: Context) : View(ctx) {
             private val shape = RectF()
@@ -514,14 +550,20 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
             override fun onDraw(c: Canvas) {
                 shape.set(0f, 0f, width.toFloat(), height.toFloat())
                 val rad = height / 2f
+                if (fade <= 0.004f) return
+                if (fieldGlass.draw(c, this, shape, rad, fade) { cc -> drawBehindField(cc) }) return
+                val layer = if (fade < 1f) c.saveLayerAlpha(shape, (255 * fade).toInt()) else -1
                 val g = glass
-                if (g == null || !c.isHardwareAccelerated) { c.drawRoundRect(shape, rad, rad, cardFallback); return }
-                screenOffset(this, at)
-                g.setRadius(rad)
-                g.originX = at[0]
-                g.originY = at[1]
-                g.setBounds(0, 0, width, height)
-                g.draw(c)
+                if (g == null) c.drawRoundRect(shape, rad, rad, cardFallback)
+                else {
+                    screenOffset(this, at)
+                    g.setRadius(rad)
+                    g.originX = at[0]
+                    g.originY = at[1]
+                    g.setBounds(0, 0, width, height)
+                    g.draw(c)
+                }
+                if (layer >= 0) c.restoreToCount(layer)
             }
         }
     }
@@ -552,6 +594,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         override fun onDraw(c: Canvas) {
             disc.color = Appearance.mix(0x993C3C43.toInt(), 0xD9FFFFFF.toInt())
             cross.color = Appearance.mix(0xFFFFFFFF.toInt(), 0xFF1C1C1E.toInt())
+            disc.alpha = (Color.alpha(disc.color) * field.fade).toInt()
+            cross.alpha = (Color.alpha(cross.color) * field.fade).toInt()
             val cx = width / 2f
             val cy = height / 2f
             val rr = m.pt(9f)

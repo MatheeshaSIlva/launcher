@@ -76,12 +76,11 @@ data class MotionProfile(
     val disappearMs: Long,
     // The edit bar sliding in from the top and out again.
     val editBar: SpringSpec,
-    // Home arriving: after unlock, and after a cold start (boot, update, crash). Items bloom from [arrivalScale] with a
-    // stagger of up to [arrivalStaggerMs] by distance from the centre; the wallpaper settles from [arrivalWallpaperZoom].
+    // Home arriving: after unlock, and after a cold start (boot, update, crash). Home zooms out from [arrivalZoom] (every
+    // element scaled about the screen's centre) to rest; on a cold start the wallpaper settles from [arrivalWallpaperZoom].
     val arrival: SpringSpec,
     val arrivalWallpaper: SpringSpec,
-    val arrivalScale: Float,
-    val arrivalStaggerMs: Long,
+    val arrivalZoom: Float,
     val arrivalWallpaperZoom: Float,
     // The clock's numerals crossfading at the minute change.
     val clockTickMs: Long,
@@ -163,10 +162,9 @@ object Motion {
         appearMs = 180,
         disappearMs = 200,
         editBar = SpringSpec(0.4f, 0.9f),
-        arrival = SpringSpec(0.55f, 0.86f),
+        arrival = SpringSpec(0.62f, 1f),
         arrivalWallpaper = SpringSpec(0.7f, 1f),
-        arrivalScale = 0.8f,
-        arrivalStaggerMs = 140,
+        arrivalZoom = 1.18f,
         arrivalWallpaperZoom = 1.06f,
         clockTickMs = 420,
         switcher = SwitcherProfile(

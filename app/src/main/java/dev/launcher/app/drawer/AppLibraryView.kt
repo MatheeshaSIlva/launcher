@@ -91,8 +91,36 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         })
         addView(folder, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         folder.visibility = View.GONE
+        // The tiles and the list scroll on behind the search field, which shows them through its glass: it redraws with them.
+        tilesPane.mirror = searchBar
+        listPane.mirror = searchBar
+        listPane.fadeTop = m.searchTop - m.pt(14f)
+        listPane.fadeEnd = m.searchTop + m.pt(4f)
         rebuild()
         onAppearance()
+    }
+
+    // ------------------------------------------------------------------ what is behind the search field (screen coordinates)
+
+    internal val fieldGlass = FieldGlass(m)
+    private val fieldPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val fieldBackdrop = Paint(Paint.FILTER_BITMAP_FLAG).apply {
+        colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(1.4f) })
+    }
+
+    /** Home under the library as far as it is open (the wallpaper, its blurred backdrop), then the tiles or the list. */
+    internal fun drawBehindField(c: Canvas) {
+        val w = wallpaper ?: return
+        val a = dev.launcher.app.theme.Appearance
+        c.drawBitmap(w.bitmap, w.matrix(m.w, m.h), fieldPaint)
+        if (a.wallpaperDim > 0f) c.drawColor((255 * a.wallpaperDim).toInt() shl 24)
+        val k = lastProgress.coerceIn(0f, 1f)
+        fieldBackdrop.alpha = (255 * k).toInt()
+        c.drawBitmap(w.heavy, w.heavyMatrix(m.w, m.h), fieldBackdrop)
+        val veil = a.backdropVeil
+        c.drawColor(((android.graphics.Color.alpha(veil) * k).toInt() shl 24) or (veil and 0xFFFFFF))
+        fieldGlass.drawPane(c, tilesPane)
+        fieldGlass.drawPane(c, listPane)
     }
 
     override fun onAppearance() {
@@ -475,8 +503,10 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
     override fun onDraw(canvas: Canvas) {
         val right = width - cancelSpace * m.pt(84f)
         rect.set(0f, 0f, right, height.toFloat())
-        // The same glass as the tiles and the dock (a capsule).
-        lib.drawGlass(canvas, lib.searchGlass, rect, height / 2f, this)
+        // The dock's glass over what is behind it, the tiles scrolling under it included; in a recorded picture of home,
+        // the same glass over the library's backdrop.
+        if (!lib.fieldGlass.draw(canvas, this, rect, height / 2f) { c -> lib.drawBehindField(c) })
+            lib.drawGlass(canvas, lib.searchGlass, rect, height / 2f, this)
         // Magnifier glyph.
         val cx = m.pt(20f)
         val cy = height / 2f - m.pt(1f)

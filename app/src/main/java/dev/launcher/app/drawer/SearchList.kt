@@ -49,6 +49,21 @@ internal class SearchList(
         set(v) { field = v; updateBounds(); updateFade(); invalidate() }
     var fadeTop = m.searchTop + m.searchHeight * 0.6f
         set(v) { field = v; updateFade(); invalidate() }
+    /**
+     * Where the scroll-edge fade ends (fully visible below): by default just above the first row; the App Library sets it
+     * at its search field's top, so rows scroll on behind the field (seen through its glass).
+     */
+    var fadeEnd = Float.NaN
+        set(v) { field = v; updateFade(); invalidate() }
+    private val fadeBottom get() = if (fadeEnd.isNaN()) contentTop - m.pt(2f) else fadeEnd
+
+    /** Asked to redraw with this list (a search field over it shows what scrolls behind it). */
+    var mirror: View? = null
+
+    override fun invalidate() {
+        super.invalidate()
+        mirror?.invalidate()
+    }
     var bottomSpace = 0f
         set(v) { field = v; updateBounds(); invalidate() }
     /** Extra room after the last row (rows scroll up from under something drawn over the list, e.g. a search field). */
@@ -136,11 +151,14 @@ internal class SearchList(
         val t = q.trim()
         if (t == query) return
         query = t
+        // Spotlight with the query cleared: the last results stay as they are while Spotlight fades them out (rebuilt into
+        // the full A-Z list they showed its letters and index for a few frames). Spotlight has no A-Z list.
+        if (spotlight && t.isEmpty()) return
         scroller.jumpTo(0f)
         rebuild(animate = true)
     }
 
-    fun firstResult(): AppEntry? = rows.firstNotNullOfOrNull { (it.row as? Row.TopHit)?.e ?: (it.row as? Row.Item)?.e }
+    fun firstResult(): AppEntry? = if (spotlight && query.isEmpty()) null else rows.firstNotNullOfOrNull { (it.row as? Row.TopHit)?.e ?: (it.row as? Row.Item)?.e }
 
     // ------------------------------------------------------------------ data
 
@@ -148,11 +166,14 @@ internal class SearchList(
         val out = ArrayList<Row>()
         val secs = ArrayList<Pair<Char, Float>>()
         if (query.isEmpty()) {
-            var current = '\u0000'
-            for (e in apps) {
-                val c = sectionOf(e.label)
-                if (c != current) { current = c; out += Row.Header(c) }
-                out += Row.Item(e)
+            // The App Library's A-Z list; Spotlight shows suggestions without a query, not a list: no rows.
+            if (!spotlight) {
+                var current = '\u0000'
+                for (e in apps) {
+                    val c = sectionOf(e.label)
+                    if (c != current) { current = c; out += Row.Header(c) }
+                    out += Row.Item(e)
+                }
             }
         } else {
             val q = query.lowercase()
@@ -229,7 +250,7 @@ internal class SearchList(
     }
 
     private fun updateFade() {
-        fade.shader = LinearGradient(0f, fadeTop, 0f, contentTop - m.pt(2f), 0x00000000, 0xFF000000.toInt(), Shader.TileMode.CLAMP)
+        fade.shader = LinearGradient(0f, fadeTop, 0f, fadeBottom, 0x00000000, 0xFF000000.toInt(), Shader.TileMode.CLAMP)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { updateBounds(); updateFade() }
@@ -296,7 +317,10 @@ internal class SearchList(
 
     private fun indexTop() = contentTop
     private fun indexBottom() = height - bottomSpace - m.bottomSafe
-    private fun inIndex(x: Float) = query.isEmpty() && sections.isNotEmpty() && x > width - m.listSideIndex * 1.6f
+    /** The A-Z index (the App Library's list only: Spotlight has none, as on iOS). */
+    private val hasIndex get() = !spotlight && query.isEmpty() && sections.isNotEmpty()
+
+    private fun inIndex(x: Float) = hasIndex && x > width - m.listSideIndex * 1.6f
 
     /** Centre y of [letter]'s tick in the index. */
     private fun letterY(letter: Char) = indexTop() + (indexBottom() - indexTop()) * ((LETTERS.indexOf(letter) + 0.5f) / LETTERS.size)
@@ -392,13 +416,14 @@ internal class SearchList(
         val now = System.nanoTime()
         // Scroll edge: rows fade out above the content (a layer over that band only).
         // Only rows reaching into the band are drawn into it (every row was drawn a second time, every frame).
-        val band = c.saveLayer(0f, 0f, width.toFloat(), contentTop, null)
-        drawRows(c, now, maxTop = contentTop)
-        c.drawRect(0f, 0f, width.toFloat(), contentTop, fade)
+        val edge = fadeBottom
+        val band = c.saveLayer(0f, 0f, width.toFloat(), edge, null)
+        drawRows(c, now, maxTop = edge)
+        c.drawRect(0f, 0f, width.toFloat(), edge, fade)
         c.restoreToCount(band)
         c.save()
-        c.clipRect(0f, contentTop, width.toFloat(), height - bottomSpace)
-        drawRows(c, now, minBottom = contentTop)
+        c.clipRect(0f, edge, width.toFloat(), height - bottomSpace)
+        drawRows(c, now, minBottom = edge)
         c.restore()
         drawIndex(c)
         onDrawn?.invoke()
@@ -407,7 +432,7 @@ internal class SearchList(
     /** Rows whose top is above [maxTop] and whose bottom is below [minBottom] (screen y). */
     private fun drawRows(c: Canvas, now: Long, maxTop: Float = Float.MAX_VALUE, minBottom: Float = -Float.MAX_VALUE) {
         val textX = m.libMargin + m.listIcon + m.pt(14f)
-        val rightEdge = width - m.libMargin - (if (query.isEmpty()) m.listSideIndex else 0f)
+        val rightEdge = width - m.libMargin - (if (hasIndex) m.listSideIndex else 0f)
         fun wanted(s: Shown): Boolean { val t = screenY(s, now); return t < maxTop && t + heightOf(s.row) > minBottom }
         for (s in ghosts) if (wanted(s)) drawRow(c, s, now, textX, rightEdge, null)
         for ((i, s) in rows.withIndex()) if (wanted(s)) drawRow(c, s, now, textX, rightEdge, rows.getOrNull(i + 1))
@@ -415,7 +440,7 @@ internal class SearchList(
 
     private fun drawRow(c: Canvas, s: Shown, now: Long, textX: Float, rightEdge: Float, next: Shown?) {
         val t = screenY(s, now)
-        if (t + heightOf(s.row) < contentTop - m.listRow || t > height - bottomSpace) return
+        if (t + heightOf(s.row) < minOf(contentTop, fadeTop) - m.listRow || t > height - bottomSpace) return
         val alpha = (255 * s.a(now)).toInt().coerceIn(0, 255)
         if (alpha == 0) return
         when (val row = s.row) {
@@ -451,7 +476,7 @@ internal class SearchList(
     }
 
     private fun drawIndex(c: Canvas) {
-        if (query.isNotEmpty() || sections.isEmpty()) return
+        if (!hasIndex) return
         val top = indexTop()
         val step = (indexBottom() - top) / LETTERS.size
         val x = width - m.listSideIndex / 2f - m.pt(4f)

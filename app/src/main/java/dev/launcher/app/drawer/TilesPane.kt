@@ -61,10 +61,22 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
         scroller.setBounds(0f, max(0f, contentHeight() - height), height.toFloat())
     }
 
+    // Scroll edge: the tiles scroll on behind the search field (seen through its glass) and fade out only above it, under
+    // the status bar.
+    private val fadeStart get() = m.searchTop - m.pt(14f)
+    private val fadeEnd get() = m.searchTop + m.pt(4f)
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         updateBounds()
-        fade.shader = LinearGradient(0f, m.searchTop + m.searchHeight * 0.6f, 0f, m.tilesTop - m.pt(2f),
-            0x00000000, 0xFF000000.toInt(), Shader.TileMode.CLAMP)
+        fade.shader = LinearGradient(0f, fadeStart, 0f, fadeEnd, 0x00000000, 0xFF000000.toInt(), Shader.TileMode.CLAMP)
+    }
+
+    /** Asked to redraw with this pane (the search field over it shows what scrolls behind it). */
+    var mirror: View? = null
+
+    override fun invalidate() {
+        super.invalidate()
+        mirror?.invalidate()
     }
 
     // ------------------------------------------------------------------ geometry
@@ -181,16 +193,16 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
 
     override fun onDraw(c: Canvas) {
         if (lib.tiles.isEmpty()) return
-        // Scroll edge: under the search field the content fades out (a layer over that band only).
-        // Only the tiles reaching into that band are drawn into it (all of them were, a second time, every frame).
-        if (tileTop(visibleTiles().first) < m.tilesTop) {
-            val band = c.saveLayer(0f, 0f, width.toFloat(), m.tilesTop, null)
+        // Scroll edge: above the search field the content fades out (a layer over that band only). Only the tiles reaching
+        // into that band are drawn into it.
+        if (tileTop(visibleTiles().first) < fadeEnd) {
+            val band = c.saveLayer(0f, 0f, width.toFloat(), fadeEnd, null)
             drawTiles(c, bandOnly = true)
-            c.drawRect(0f, 0f, width.toFloat(), m.tilesTop, fade)
+            c.drawRect(0f, 0f, width.toFloat(), fadeEnd, fade)
             c.restoreToCount(band)
         }
         c.save()
-        c.clipRect(0f, m.tilesTop, width.toFloat(), height.toFloat())
+        c.clipRect(0f, fadeEnd, width.toFloat(), height.toFloat())
         drawTiles(c, bandOnly = false)
         c.restore()
     }
@@ -201,8 +213,8 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
             val tile = tiles[i]
             tileRect(i, r)
             // Above the band (fade pass) or below its top edge (normal pass): nothing of this tile shows in this pass.
-            if (bandOnly && r.top >= m.tilesTop) continue
-            if (!bandOnly && r.bottom + m.tileLabelBaseline + m.tileLabelSize <= m.tilesTop) continue
+            if (bandOnly && r.top >= fadeEnd) continue
+            if (!bandOnly && r.bottom + m.tileLabelBaseline + m.tileLabelSize <= fadeEnd) continue
             if (i !in hiddenTiles) {
                 // The same liquid glass as the dock, refracting the blurred wallpaper behind the library.
                 lib.drawGlass(c, lib.tileGlass, r, m.tileRadius, this)

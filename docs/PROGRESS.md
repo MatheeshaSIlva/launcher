@@ -983,3 +983,29 @@ clock's shadow is massive).
   (`ClockShadow`: 5 dp blur, 1.5 dp down, 14 %).
 Frame stats: every step 0-1 missed except the scripted cancelled close (2: its injected touches come every ~50 ms, the
 card only draws on them; framestats then misreads the refresh as 50 ms; that path did not change).
+
+Round 25 (Matheesha on 1a78d76: during the unlock animation the whole home showed for a single frame, then the elements
+faded in; wants the elements zooming out instead of fading and zooming in; search fields translucent with the content
+scrolling behind them; Spotlight showed the App Library's A-Z index for a few frames after erasing a query).
+- **Unlock flash**, from his unlock logs: home took the arrival's first frame only once it was back in front (or at the
+  screen-off broadcast only as "due"), so the last frame it had drawn before the screen went off (home at rest) was what the
+  unlock showed first. Now the first frame is taken the moment the screen goes off (broadcast and onPause) and again at
+  wake-up; a pause with the screen on (One UI's biometric screen) no longer lets it go; home no longer gives the system a
+  snapshot of itself (`setRecentsScreenshotEnabled(false)`: a stale one could stand in for it). It plays as soon as the lock
+  screen is gone (no wait for focus); if home is first seen more than 4 s after the unlock (the unlock went to an app) it is
+  dropped, before home shows.
+- **Zoom out**: every element (icons, widgets, Search pill, dock) starts as if home were seen 18 % closer, spread out from
+  the screen's centre, and they settle as one camera pulling back (critically damped, 0.62 s). No fade on unlock; a cold
+  start fades in with the wallpaper from black. A swipe during it keeps the dock and pill on the strip (no jump).
+- Cold start: home showed itself at rest over black while the wallpaper was read, then hid and faded in; it now holds the
+  arrival's first frame from its first layout, and waits up to 1 s for the clock's numerals (they arrived ~0.7 s late).
+- **Search fields over the content** (App Library tiles and A-Z list, Spotlight's results, the widget gallery's list): the
+  content scrolls on behind the field and only fades out above it (scroll edge); the field is the dock's glass over what is
+  really behind it (`drawer/FieldGlass`: LiveGlass with the backdrop and the content drawn behind, the dock's 1.5 pt blur).
+  The gallery's field sees the sheet's own material (home blurred under the scrim, saturated and tinted as the sheet's
+  glass) under the list. Spotlight's field fades through its own drawing, never the view's alpha (a cut live glass), and
+  is not clipped. Library scroll 0 missed (GPU 7.7 ms median); Spotlight open/close 0-1 over four runs.
+- **Spotlight index**: Spotlight has no A-Z list or index now (as iOS); a cleared query keeps the last results while they
+  fade out, and an empty query has no rows (typing makes results rise in).
+Not checked on the phone by me: the unlock itself (secure lock screen). Emulator (swipe lock screen): held at sleep, the
+unlock shows home zoomed in, then it zooms out; no frame of home at rest.

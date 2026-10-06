@@ -512,17 +512,99 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val q = m.pt(5.5f)
         c.drawLine(bx - q, by - q, bx + q, by + q, glyph)
         c.drawLine(bx - q, by + q, bx + q, by - q, glyph)
-        // The search field's capsule (the text itself is the field laid over it).
+        // The list scrolls on up behind the search field (seen through its glass) and fades out above it, before the title.
+        drawContentFaded(c)
+        // The search field: the dock's glass over the sheet and the list behind it (the text itself is the field laid over it).
         r.set(m.libMargin, headerH, m.w - m.libMargin, headerH + fieldH)
-        glassShape(c, r, fieldH / 2f, sheetY(), fallback = fieldFill, fallbackAlpha = 0x1F)
+        val pushX = -push.value.coerceIn(0f, 1f) * m.w * 0.3f
+        val fieldShape = RectF(r)
+        if (!fieldGlass.drawAt(c, pushX, sheetY(), fieldShape, fieldH / 2f) { cc -> drawBehindField(cc, pushX, fieldShape) })
+            glassShape(c, r, fieldH / 2f, sheetY(), fallback = fieldFill, fallbackAlpha = 0x1F)
         val lx = m.libMargin + m.pt(18f)
         val ly = headerH + fieldH / 2f - m.pt(1f)
         val lr = m.pt(6f)
         c.drawCircle(lx, ly, lr, lensGlyph)
         c.drawLine(lx + lr * 0.72f, ly + lr * 0.72f, lx + lr * 1.45f, ly + lr * 1.45f, lensGlyph)
+        if (layer >= 0) c.restoreToCount(layer)
+    }
+
+    // The scroll edge above the search field: the content fades out between these (sheet coordinates).
+    private val contentFadeTop get() = headerH - m.pt(2f)
+    private val contentFadeEnd get() = headerH + m.pt(10f)
+    private val contentFade = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN) }
+    private var contentFadeAt = Float.NaN
+
+    /** The list's content in sheet coordinates, fading out above the search field (a layer over that band only). */
+    private fun drawContentFaded(c: Canvas) {
+        val ft = contentFadeTop
+        val fe = contentFadeEnd
+        if (contentFadeAt != ft) {
+            contentFadeAt = ft
+            contentFade.shader = android.graphics.LinearGradient(0f, ft, 0f, fe, 0x00000000, 0xFF000000.toInt(), android.graphics.Shader.TileMode.CLAMP)
+        }
+        if (list.position > listTop - fe) {
+            val band = c.saveLayer(0f, ft, m.w.toFloat(), fe, null)
+            c.save()
+            c.translate(0f, listTop - list.position)
+            drawListContent(c)
+            c.restore()
+            c.drawRect(0f, ft, m.w.toFloat(), fe, contentFade)
+            c.restoreToCount(band)
+        }
         c.save()
-        c.clipRect(0f, listTop, m.w.toFloat(), m.h.toFloat())
+        c.clipRect(0f, fe, m.w.toFloat(), m.h.toFloat())
         c.translate(0f, listTop - list.position)
+        drawListContent(c)
+        c.restore()
+    }
+
+    // ---- what is behind the search field (screen coordinates): the sheet's own material, then the list
+
+    private val fieldGlass = dev.launcher.app.drawer.FieldGlass(m)
+    private val sheetBack = android.graphics.RenderNode("sheetBehindField")
+    private val sheetBackTint = Paint()
+    private val satFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(GlassStyle.IOS.saturation) })
+
+    /**
+     * The sheet as it looks behind the field (home under the scrim, blurred and tinted as the sheet's glass does it), then the
+     * list scrolling under the field. [pushX]: the list page's slide when an app's page is pushed; [field]: the field in the
+     * sheet's coordinates.
+     */
+    private fun drawBehindField(c: Canvas, pushX: Float, field: RectF) {
+        val y = sheetY()
+        val k = ((m.h - y) / (m.h - sheetTop)).coerceIn(0f, 1f)
+        val blur = host.sceneBlur() * Motion.profile.menuBlur * m.u
+        val pad = blur * 3f + m.pt(40f)
+        val l = (field.left + pushX - pad).toInt()
+        val t = (field.top + y - pad).toInt()
+        val rgt = (field.right + pushX + pad).toInt()
+        val btm = (field.bottom + y + pad).toInt()
+        sheetBack.setPosition(l, t, rgt, btm)
+        val rc = sheetBack.beginRecording()
+        try {
+            rc.translate(-l.toFloat(), -t.toFloat())
+            host.drawBehindSheet(rc)
+            val sc = Appearance.scrim
+            sheetTint.color = sc
+            sheetTint.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
+            rc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), sheetTint)
+        } finally {
+            sheetBack.endRecording()
+        }
+        val colour = android.graphics.RenderEffect.createColorFilterEffect(satFilter)
+        sheetBack.setRenderEffect(if (blur >= 0.5f) android.graphics.RenderEffect.createChainEffect(colour,
+            android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.CLAMP)) else colour)
+        c.drawRenderNode(sheetBack)
+        sheetBackTint.color = Appearance.glassTint
+        c.drawRect(l.toFloat(), t.toFloat(), rgt.toFloat(), btm.toFloat(), sheetBackTint)
+        c.save()
+        c.translate(pushX, y)
+        drawContentFaded(c)
+        c.restore()
+    }
+
+    /** The list's content (the featured clock, the titles, the app rows), the canvas at the content's origin. */
+    private fun drawListContent(c: Canvas) {
         var top = 0f
         val featuredK = ((SystemClock.uptimeMillis() - featuredChangedAt).toFloat() / ROW_FADE_MS).coerceIn(0f, 1f)
         val featuredA = if (query.isEmpty()) featuredK else 1f - featuredK
@@ -602,8 +684,6 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             c.restore()
             if (rowLayer >= 0) c.restoreToCount(rowLayer)
         }
-        c.restore()
-        if (layer >= 0) c.restoreToCount(layer)
     }
 
     private fun drawChevron(c: Canvas, x: Float, cy: Float, right: Boolean, paint: Paint) {

@@ -372,6 +372,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         dev.launcher.app.apps.SplashColors.warm(context, Apps.all.map { it.pkg }.distinct())
         post { publishIcons() }
         if (pendingArrival != null) post { pendingArrival?.let { cold -> pendingArrival = null; playArrival(cold) } }
+        else if (coldHoldWanted) post { holdCold() }
     }
 
     private fun viewFor(item: HomeItem, metrics: HomeMetrics): View? = when (item) {
@@ -495,7 +496,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         dv?.visibility = if (dp > 0f) View.VISIBLE else View.INVISIBLE
         backdrop.alpha = dp
         backdrop.visibility = if (dp > 0f && !(backgroundCovered && dp >= 1f)) View.VISIBLE else View.INVISIBLE
+        stripShift = shift
         for (v in listOf(dock, dockShadow, indicator, editBar)) v?.translationX = shift
+        // The arrival's zoom moves the dock and pill too: kept on top of the strip's shift (a swipe during it never jumps).
+        if (arriving.isNotEmpty()) applyArrivalZoom(arrivalZ)
         dock?.glass?.invalidate()
         indicator?.glass?.invalidate()
         (editBar as? EditMode.Bar)?.glassViews()?.forEach { it.invalidate() }
@@ -806,25 +810,24 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     // ---- arrival: home after unlock, and after a cold start (boot, update, crash)
     //
-    // The icons, widgets, dock and Search pill bloom from a little smaller as they fade in, staggered outward from the
-    // centre of the screen, while the wallpaper settles from a slight zoom (iOS's unlock). A cold start first brings the
-    // wallpaper up from black. Nothing waits for it: the items are tappable from their first frame.
-
+    // iOS's unlock: home zooms out into place. Every element (icons, widgets, the Search pill, the dock) starts as if the
+    // whole home were seen a little closer, larger and spread out from the screen's centre, and they settle back together
+    // as one camera pulling back. No fade: the elements are there from the first frame (on a cold start they come up with
+    // the wallpaper from black). Nothing waits for it: the items are tappable from their first frame.
     private var arrivalAnimating = false
     private var arrivalStart = 0L
     private var pendingArrival: Boolean? = null
-    private class Arriving(val v: View, val delay: Double)
+    /** An element and where its pivot is in home's coordinates (it is scaled about the screen's centre through it). */
+    private class Arriving(val v: View, val px: Float, val py: Float)
     private val arriving = ArrayList<Arriving>()
     private var arrivalSpring: Spring? = null
     private var arrivalWallpaper: Spring? = null
-    private var arrivalMaxDelay = 0.0
     private var arrivalCold = false
-
     private var arrivalHeld = false
 
     /**
-     * Puts home into the arrival's first frame right away (items hidden) without playing it: for a resume under the lock
-     * screen, so the first frame the unlock reveals is already the arrival's and nothing visible is reset when it plays.
+     * Puts home into the arrival's first frame right away (zoomed in) without playing it: from the moment the screen goes
+     * off, so whatever frame of home the unlock reveals first is already the arrival's.
      */
     fun holdArrival() {
         if (arrivalAnimating || arrivalHeld) return
@@ -832,6 +835,26 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         arrivalHeld = true
         applyArrival(0.0)
         AppLog.log("[home] arrival held until home is seen (screen off or lock screen up)")
+    }
+
+    // A cold start: home takes the arrival's first frame (black, the items zoomed in and hidden) from its first layout, so it
+    // never shows itself at rest first (it did, over black, while the wallpaper was read); the arrival waits for the
+    // clock's numerals too (they are built in the background), 1 s at most.
+    private var coldHoldWanted = false
+    private var coldWaitSince = 0L
+    private val coldRetry = Runnable { playArrival(cold = true) }
+
+    /** From a cold start's first moment: hold the arrival's first frame until [playArrival] (now, or once laid out). */
+    fun holdColdArrival() {
+        coldHoldWanted = true
+        holdCold()
+    }
+
+    private fun holdCold() {
+        if (!coldHoldWanted || arrivalHeld || arrivalAnimating || m == null || pages.isEmpty() || width == 0) return
+        if (!prepareArrival(cold = true, log = false)) return
+        arrivalHeld = true
+        applyArrival(0.0)
     }
 
     /** Lets a held arrival go without playing it (home is being left before the unlock came). */
@@ -846,6 +869,17 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
      * False if home cannot play one right now (the reason is logged).
      */
     fun playArrival(cold: Boolean): Boolean {
+        if (cold && m != null && pages.isNotEmpty()) {
+            val now = android.os.SystemClock.uptimeMillis()
+            if (coldWaitSince == 0L) coldWaitSince = now
+            if (clocks.any { !it.numeralsReady } && now - coldWaitSince < 1000) {
+                holdCold()
+                removeCallbacks(coldRetry)
+                postDelayed(coldRetry, 30)
+                return true
+            }
+        }
+        if (cold) { coldHoldWanted = false; removeCallbacks(coldRetry) }
         if (!arrivalHeld || cold) {
             if (arrivalAnimating) finishArrival()
             if (!prepareArrival(cold)) return pendingArrival != null
@@ -880,22 +914,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val page = pages.getOrNull(pos.roundToInt()) ?: return false
         val mp = Motion.profile
         arriving.clear()
-        val cx = metrics.w / 2f
-        val cy = metrics.h / 2f
-        val maxD = hypot(cx, cy)
-        val stagger = mp.arrivalStaggerMs / 1000.0
-        for (v in page.itemViews()) {
-            val d = hypot(v.left + v.width / 2f - cx, v.top + v.height / 2f - cy)
-            arriving += Arriving(v, (d / maxD) * stagger * (if (cold) 1.0 else 0.6))
-        }
-        // The dock and the Search pill come last, as one (they are the furthest down).
-        indicator?.let { arriving += Arriving(it, stagger * 0.85) }
-        dock?.let { arriving += Arriving(it, stagger) }
-        dockShadow?.let { arriving += Arriving(it, stagger) }
-        arrivalMaxDelay = arriving.maxOfOrNull { it.delay } ?: 0.0
+        // Pivots in home's coordinates (fg's: pages, dock and pill are its children; a page's items are the page's).
+        for (v in page.itemViews()) arriving += Arriving(v, page.translationX + v.left + v.pivotX, page.top + v.top + v.pivotY)
+        for (v in listOfNotNull(indicator, dock, dockShadow)) arriving += Arriving(v, v.left + v.pivotX, v.top + v.pivotY)
         arrivalCold = cold
-        // The bloom starts moving on its first frame (a little initial speed), never from a standstill that reads as a freeze.
-        arrivalSpring = mp.arrival.spring().apply { start(mp.arrivalScale, 1.2f, 1f) }
+        // One zoom for everything, from a little closer to at rest; it starts moving on its first frame.
+        arrivalSpring = mp.arrival.spring().apply { start(mp.arrivalZoom, -0.4f, 1f) }
         // The wallpaper settles from a zoom only on a cold start: after an unlock the system has already shown it at rest
         // on the lock screen, and zooming it again played the zoom twice.
         arrivalWallpaper = if (cold) mp.arrivalWallpaper.spring().apply { start(mp.arrivalWallpaperZoom, 0f, 1f) } else null
@@ -909,21 +933,34 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             arrivalFrames++
             applyArrival(t)
             val s = arrivalSpring ?: return
-            if (t > arrivalMaxDelay && s.settled(t - arrivalMaxDelay, 0.002f)) finishArrival() else Choreographer.getInstance().postFrameCallback(this)
+            if (s.settled(t, 0.0005f) && (arrivalWallpaper?.settled(t, 0.0005f) != false)) finishArrival()
+            else Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
+    // The strip's horizontal shift of the dock and pill (applyPositions), and the arrival's current zoom.
+    private var stripShift = 0f
+    private var arrivalZ = 1f
+
+    /** Each element scaled by [z] about the screen's centre: about its own pivot, moved out by (pivot - centre) x (z - 1). */
+    private fun applyArrivalZoom(z: Float) {
+        arrivalZ = z
+        val ox = width / 2f
+        val oy = height / 2f
+        for (a in arriving) {
+            val v = a.v
+            val onStrip = v === dock || v === dockShadow || v === indicator
+            v.scaleX = z; v.scaleY = z
+            v.translationX = (a.px - ox) * (z - 1f) + (if (onStrip) stripShift else 0f)
+            v.translationY = (a.py - oy) * (z - 1f)
         }
     }
 
     private fun applyArrival(t: Double) {
         val s = arrivalSpring ?: return
-        val mp = Motion.profile
-        for (a in arriving) {
-            val ti = t - a.delay
-            val v = a.v
-            if (ti <= 0.0) { v.scaleX = mp.arrivalScale; v.scaleY = mp.arrivalScale; v.alpha = 0f; continue }
-            val k = s.value(ti)
-            v.scaleX = k; v.scaleY = k
-            v.alpha = (ti / 0.2).coerceIn(0.0, 1.0).toFloat()
-        }
+        applyArrivalZoom(s.value(t))
+        val fade = if (arrivalCold) (t / 0.35).coerceIn(0.0, 1.0).toFloat() else 1f
+        for (a in arriving) a.v.alpha = fade
         val wz = arrivalWallpaper?.value(t) ?: 1f
         wallpaperView.scaleX = wz; wallpaperView.scaleY = wz
         if (arrivalCold) wallpaperView.alpha = (t / 0.35).coerceIn(0.0, 1.0).toFloat()
@@ -932,19 +969,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val lk = (t / 0.7).coerceIn(0.0, 1.0).let { it * it * (3 - 2 * it) }.toFloat()
         val angle = 165f + 60f * lk
         for (g in glassViews()) g.setLightAngle(angle)
-        if (!arrivalAnimating) return   // held: the first frame only
-        dock?.glass?.invalidate(); indicator?.glass?.invalidate()
-        for (g in pageGlass()) g.invalidate()
     }
 
     private fun finishArrival() {
         if (arrivalAnimating) AppLog.log("[home] arrival ended after $arrivalFrames frames (${(System.nanoTime() - arrivalStart) / 1_000_000} ms)")
-        for (a in arriving) { a.v.scaleX = 1f; a.v.scaleY = 1f; a.v.alpha = 1f }
+        for (a in arriving) { a.v.scaleX = 1f; a.v.scaleY = 1f; a.v.alpha = 1f; a.v.translationX = 0f; a.v.translationY = 0f }
         arriving.clear()
+        arrivalZ = 1f
         wallpaperView.scaleX = 1f; wallpaperView.scaleY = 1f; wallpaperView.alpha = 1f
         for (g in glassViews()) g.setLightAngle(225f)
         arrivalAnimating = false
         arrivalHeld = false
+        // The dock's and pill's positions on the strip (they follow the drawer's slide): applied again.
+        applyPositions()
         publishIcons()
         listener.onHomeSettled()
     }

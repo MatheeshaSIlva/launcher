@@ -216,6 +216,8 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     val animating get() = tickAnim != null || building || resizing
     /** Called when a crossfade ends (home may record itself). */
     var onSettled: (() -> Unit)? = null
+    /** The numerals have been built (a cold start waits a moment for them, so they arrive with everything else). */
+    val numeralsReady get() = solid || (shownTime.isNotEmpty() && !building)
 
     override val labelText: String? get() = null
 

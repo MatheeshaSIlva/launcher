@@ -65,6 +65,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // No system snapshot of home: one shown as a placeholder when home came back (the unlock) showed home as it was
+        // before the screen went off, for a frame. Our own pictures of home (gesture nav) do not use it.
+        if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
             View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
@@ -140,23 +143,28 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     }
 
     // Home arrives animated after the screen was off (unlock) and on a cold start (boot, an update, a crash): see
-    // HomeScreen.playArrival. "Due" is set when home was in front as the screen went off. It plays only once home can really
-    // be seen: after a wake-up that came after it went due (SCREEN_ON or USER_PRESENT), with the screen on, the keyguard
-    // gone and home's window focused (the lock screen's exit has handed the screen to home). Until then home holds the
-    // arrival's first frame. On the S24 One UI resumes home for a moment while the screen is going off and still reports
-    // it as on and unlocked: an arrival started then played in the dark, and the unlock showed home static.
+    // HomeScreen.playArrival. "Due" is set when home was in front as the screen went off, and from that moment home holds
+    // the arrival's first frame (zoomed in): whatever frame of home the unlock reveals first is already the arrival's. (It
+    // used to take that frame only once home was back in front, and the unlock showed the last frame drawn before the
+    // screen went off, home at rest, for a frame: Matheesha saw "the whole home for a single frame", then the animation.)
+    // It plays once home can really be seen: after a wake-up that came after it went due (SCREEN_ON or USER_PRESENT), with
+    // the screen on and the keyguard gone. If home is first seen long after the unlock (the unlock
+    // went to an app, home came later), it does not play: the held frame is let go before home shows.
     private var coldStart = true
     private var arrivalDue = false
     private var wokeSinceDue = false
     private var arrivalTries = 0
+    private var lastWakeAt = 0L
     private val screenState = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                // Only when home was in front as the screen went off: if an app was, the unlock goes back to that app, and
-                // an arrival must not play later when home comes back from it. (onPause marks it too: it can come first.)
-                Intent.ACTION_SCREEN_OFF -> if (resumed) markArrivalDue("screen off")
+                // Only when home was in front as the screen went off: if an app was, the unlock goes back to that app.
+                // (onPause marks it too: it can come first.)
+                Intent.ACTION_SCREEN_OFF -> if (resumed) { markArrivalDue("screen off"); screen.holdArrival() }
                 Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> {
+                    lastWakeAt = android.os.SystemClock.uptimeMillis()
                     if (arrivalDue && !wokeSinceDue) { wokeSinceDue = true; AppLog.log("[home] arrival: woke (${intent.action?.substringAfterLast('.')})") }
+                    if (arrivalDue) screen.holdArrival()
                     arriveIfDue()
                 }
             }
@@ -170,7 +178,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         arrivalTries = 0
     }
 
-    // A cold start arrives once the wallpaper is read (so it comes up with it), or after 500 ms at the latest.
+    // A cold start arrives once the wallpaper is read (so it comes up with it), or after 500 ms at the latest; home holds
+    // the arrival's first frame meanwhile and waits for the clock's numerals (HomeScreen.playArrival).
     private var coldArrivalPending = false
     private val coldArrival = Runnable { if (coldArrivalPending) { coldArrivalPending = false; screen.playArrival(cold = true) } }
 
@@ -183,16 +192,27 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             coldStart = false
             arrivalDue = false
             coldArrivalPending = true
+            screen.holdColdArrival()
             screen.postDelayed(coldArrival, 500)
             return
         }
-        if (!arrivalDue || !resumed) return
+        if (!arrivalDue) return
         val on = screenOn()
-        if (!wokeSinceDue || !on || keyguardUp() || !hasWindowFocus()) {
+        val unlocked = wokeSinceDue && on && !keyguardUp()
+        // Seen only long after the unlock (it went to an app first): no arrival; the held frame goes before home shows.
+        if (unlocked && android.os.SystemClock.uptimeMillis() - lastWakeAt > ARRIVAL_WINDOW_MS) {
+            arrivalDue = false
+            screen.releaseArrival()
+            AppLog.log("[home] arrival dropped: home was seen ${android.os.SystemClock.uptimeMillis() - lastWakeAt} ms after the unlock")
+            return
+        }
+        if (!resumed) return
+        if (!unlocked) {
             // Not seen yet: hold the first frame, and look again shortly while the screen is on (not every unlock sends
-            // USER_PRESENT at the moment home shows; focus arrives through onWindowFocusChanged).
+            // USER_PRESENT at the moment home shows). It starts as soon as the lock screen is gone: waiting for home's focus
+            // left the zoomed frame standing still for a moment.
             screen.holdArrival()
-            if (on && wokeSinceDue) screen.postDelayed(unlockCheck, 120)
+            if (on && wokeSinceDue) screen.postDelayed(unlockCheck, 50)
             return
         }
         if (screen.playArrival(cold = false)) {
@@ -203,6 +223,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             screen.postDelayed(unlockCheck, 50)
         } else {
             arrivalDue = false
+            screen.releaseArrival()
             AppLog.log("[home] arrival dropped: home stayed busy")
         }
     }
@@ -236,11 +257,10 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         screen.removeCallbacks(unlockCheck)
         GestureNav.homeVisible = false
         if (screen.onHidden()) recordAfterSearchEnded()
-        // Going to sleep: home already takes the arrival's first frame (items hidden, unseen with the screen off), so the
-        // first frame the unlock reveals is it, whenever home resumes (before or after the keyguard goes). After onHidden:
-        // Spotlight or a menu has closed by then, and pictures of home are recorded with every item shown. Leaving home for
-        // an app lets a held arrival go.
-        if (sleeping) screen.holdArrival() else screen.releaseArrival()
+        // Going to sleep: home takes the arrival's first frame now (unseen with the screen off), so the first frame the unlock
+        // reveals is it. After onHidden: Spotlight or a menu has closed by then. A pause with the screen on keeps a held frame
+        // (One UI pauses home for its biometric screen during the unlock); arriveIfDue lets it go if home is seen too late.
+        if (sleeping) screen.holdArrival()
         super.onPause()
     }
 
@@ -528,4 +548,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         screen.postDelayed({ recordPreview() }, 100)
     }
 
+
+    private companion object {
+        /** The arrival plays only if home is seen within this long of the wake-up or unlock (ms). */
+        const val ARRIVAL_WINDOW_MS = 4000L
+    }
 }
