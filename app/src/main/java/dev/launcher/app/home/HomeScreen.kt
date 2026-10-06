@@ -214,6 +214,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** Glass on the pages (widgets): redrawn while the pages move, so it keeps refracting what is behind it. */
     private fun pageGlass(): List<GlassView> = widgetViews().flatMap { it.glassViews() }
 
+    /** How light the wallpaper is under [rectOnScreen] (0..1; 0.5 without our copy of it). */
+    fun wallpaperLuminanceUnder(rectOnScreen: RectF): Float {
+        val w = wallpaper ?: return 0.5f
+        return w.luminanceUnder(rectOnScreen, width, height)
+    }
+
     /**
      * Home is about to be uncovered (gesture nav's picture goes once home has drawn its next frame): glass that skipped
      * redrawing while covered is brought up to date in that frame (a stale dock showed the wallpaper from the wrong place
@@ -282,6 +288,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             topMargin = metrics.dockTop.roundToInt()
         })
         val ind = PageIndicator(context, metrics).also { indicator = it }
+        ind.labelColor = {
+            val o = IntArray(2)
+            ind.getLocationOnScreen(o)
+            dev.launcher.app.theme.Appearance.labelOnGlass(wallpaperLuminanceUnder(RectF(o[0].toFloat(), o[1].toFloat(), o[0] + ind.width.toFloat(), o[1] + ind.height.toFloat())))
+        }
         fg.addView(ind, LayoutParams(ind.widthFor(1), metrics.indicatorHeight.roundToInt()))
         val dr = Drawers.create(cfg.drawerStyle, context, this).also { drawer = it }
         fg.addView(dr.view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))

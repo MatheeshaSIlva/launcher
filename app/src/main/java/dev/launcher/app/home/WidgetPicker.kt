@@ -395,11 +395,10 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         syncColors()
         val y = sheetY()
         val k = ((m.h - y) / (m.h - sheetTop)).coerceIn(0f, 1f)
-        // Home behind the sheet: blurred (by home) and dimmed a little, inside the glass the same as around it.
-        // The same dim around it as around a menu (one material family for menus and sheets).
-        val md = Appearance.menuDim
-        dimInside.color = md
-        dimInside.alpha = (android.graphics.Color.alpha(md) * k).toInt()
+        // Home behind the sheet: blurred (by home) under the scrim, as behind a menu; the sheet's glass sees exactly this.
+        val sc = Appearance.scrim
+        dimInside.color = sc
+        dimInside.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
         c.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), dimInside)
         r.set(0f, y, m.w.toFloat(), m.h + sheetRadius)
         val g = glass
@@ -407,10 +406,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             toScreen.reset()
             g.draw(c, r, sheetRadius, host.sceneBlur() * Motion.profile.menuBlur * m.u, null, RectF(0f, 0f, width.toFloat(), height.toFloat())) { cc ->
                 host.drawBehindSheet(cc)
-                // A sheet is thicker glass than a menu: the appearance's veil, strong, so its text reads over any wallpaper.
-                val veil = Appearance.sheetVeil
-                sheetTint.color = veil
-                sheetTint.alpha = (android.graphics.Color.alpha(veil) * k).toInt()
+                // The same scrim as around it; the sheet is the dock's glass (its tint only), like a menu.
+                sheetTint.color = sc
+                sheetTint.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
                 cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), sheetTint)
             }
         } else c.drawRoundRect(r, sheetRadius, sheetRadius, fallbackFill)
@@ -485,10 +483,13 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         g.originY = rect.top + dy
         g.setBounds(rect.left.toInt(), rect.top.toInt(), kotlin.math.ceil(rect.right).toInt(), kotlin.math.ceil(rect.bottom).toInt())
         g.draw(c)
-        val t = Appearance.sheetControlTint
-        glassTint.color = t
-        glassTint.alpha = (android.graphics.Color.alpha(t) * (1f + down)).toInt().coerceAtMost(255)
-        c.drawRoundRect(rect, radius, radius, glassTint)
+        // Pressed: a touch of the label colour over it (the glass itself is the dock's, untinted beyond its own tint).
+        if (down > 0f) {
+            val pf = Appearance.pressFill
+            glassTint.color = pf
+            glassTint.alpha = (android.graphics.Color.alpha(pf) * down).toInt()
+            c.drawRoundRect(rect, radius, radius, glassTint)
+        }
     }
 
     private fun drawCircleButton(c: Canvas, cx: Float, cy: Float, key: String) {
@@ -535,12 +536,12 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             val down = if (pressed == "clock") pressK.value.coerceIn(0f, 1f) else 0f
             c.save()
             c.scale(1f - 0.03f * down, 1f - 0.03f * down, r.centerX(), r.centerY())
-            glassShape(c, r, m.widgetRadius, listTop - list.position + sheetY(), down, cardFill, 0x1F)
+            drawWallpaperWindow(c, r, m.widgetRadius, listTop - list.position + sheetY(), down)
             val fs = featuredScale
             val bw = m.widgetWidth(4) * fs
             val bh = m.widgetHeight(2) * fs
             val box = RectF(r.centerX() - bw / 2f, r.centerY() - bh / 2f, r.centerX() + bw / 2f, r.centerY() + bh / 2f)
-            drawClockPreview(c, box, fs, listTop - list.position + sheetY())
+            drawClockPreview(c, box, fs, listTop - list.position + sheetY(), r)
             c.restore()
             sub.draw(c, "clock", "Clock", m.w / 2f, r.bottom + m.pt(26f), m.w * 0.6f)
             if (fl >= 0) c.restoreToCount(fl)
@@ -626,30 +627,62 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
      * The clock widget as it looks on home (date line and glass numerals in the widget's own proportions), scaled by [s] into
      * [box] (a medium widget's size times [s], canvas coordinates; [boxScreenY]: the canvas's y offset from the screen).
      */
-    private fun drawClockPreview(c: Canvas, box: RectF, s: Float, boxScreenY: Float) {
-        // Exactly the widget's geometry (ClockWidgetView): the date at 19 pt, the numerals' box from 25 pt to the bottom.
+    private val windowPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val windowClip = Path()
+    private val windowRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+
+    /**
+     * A card that is a window onto home's wallpaper, exactly where it is on screen ([screenY]: the canvas's y offset from the
+     * screen), dimmed as home is in dark mode: the clock preview sits on it and looks exactly as it will on home (its glass
+     * refracts that very wallpaper). [down]: pressed.
+     */
+    private fun drawWallpaperWindow(c: Canvas, rect: RectF, radius: Float, screenY: Float, down: Float) {
+        val wp = host.wallpaper()
+        if (wp == null) { glassShape(c, rect, radius, screenY, down, cardFill, 0x1F); return }
+        c.save()
+        windowClip.reset()
+        windowClip.addRoundRect(rect, radius, radius, Path.Direction.CW)
+        c.clipPath(windowClip)
+        c.translate(0f, -screenY)
+        c.drawBitmap(wp.bitmap, wp.matrix(m.w, m.h), windowPaint)
+        c.translate(0f, screenY)
+        val dim = Appearance.wallpaperDim + 0.12f * down
+        if (dim > 0f) c.drawColor((255 * dim).toInt() shl 24)
+        c.restore()
+        // A hairline so the window reads as a card on the sheet.
+        windowRim.strokeWidth = maxOf(1f, m.pt(0.7f))
+        windowRim.color = Appearance.separator
+        c.drawRoundRect(rect, radius, radius, windowRim)
+    }
+
+    /** [window]: the wallpaper window it is on (its shadow stays inside it). */
+    private fun drawClockPreview(c: Canvas, box: RectF, s: Float, boxScreenY: Float, window: RectF) {
+        // Exactly the widget's geometry and look (ClockWidgetView): the date at 19 pt in white with its shadow, the numerals'
+        // box from 25 pt to the bottom, on the wallpaper.
         val dateSize = m.pt(19f) * s
         clockDate.textSize = dateSize
-        clockDate.color = Appearance.label
-        clockDate.setShadowLayer(m.pt(4f) * s, 0f, m.pt(1f) * s, ((0x55 * Appearance.textShadowStrength).toInt() shl 24))
+        clockDate.color = 0xF2FFFFFF.toInt()
+        clockDate.setShadowLayer(m.pt(5f) * s, 0f, m.pt(1f) * s, 0x66000000)
         c.drawText(previewDate, box.centerX(), box.top + dateSize * 0.86f, clockDate)
         val numTop = box.top + m.pt(25f) * s
         val w = box.width().roundToInt()
-        val h = (box.bottom - numTop).roundToInt()
-        if (w <= 0 || h <= 0) return
-        val baseline = ClockNumerals.layout(clockPaint, w.toFloat(), h.toFloat(), android.text.format.DateFormat.is24HourFormat(context))
+        val boxH = (box.bottom - numTop).roundToInt()
+        if (w <= 0 || boxH <= 0) return
+        val baseline = ClockNumerals.layout(clockPaint, w.toFloat(), boxH.toFloat(), android.text.format.DateFormat.is24HourFormat(context))
+        // As on home: the glass reaches below the numerals for their shadow (kept inside the window here).
+        val h = boxH + (ClockNumerals.shadowRoom(context) * s).roundToInt()
         val wp = host.wallpaper()
         val key = w to h
         val g = clockGlasses[key]
         if (wp != null && android.os.Build.VERSION.SDK_INT >= 33 && g == null && key !in clockBuilding) {
             clockBuilding += key
             val gen = generation
-            ClockNumerals.buildAsync(clockPaint, w, h, baseline, previewTime) { mask ->
+            ClockNumerals.buildAsync(clockPaint, w, h, baseline, previewTime, m.u * s) { mask ->
                 clockBuilding -= key
                 if (gen != generation || mask == null) return@buildAsync
                 val glass = try {
                     GlassDrawable(wp, m.w, m.h, 0f, m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_CLOCK,
-                        GlassDrawable.Source.FROSTED, mask).also { it.role = GlassDrawable.Role.SHEET }   // it sits on the sheet's card: sees that material
+                        GlassDrawable.Source.FROSTED, mask)   // on the wallpaper window: exactly the home clock's glass
                 } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] clock preview glass failed: ${t.message}"); null }
                 if (glass != null) clockGlasses[key] = glass to SystemClock.uptimeMillis()
                 invalidate()
@@ -662,7 +695,12 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             gl.originX = box.left
             gl.originY = boxScreenY + numTop
             gl.setBounds(box.left.roundToInt(), numTop.roundToInt(), box.left.roundToInt() + w, numTop.roundToInt() + h)
+            c.save()
+            windowClip.reset()
+            windowClip.addRoundRect(window, m.widgetRadius * s, m.widgetRadius * s, Path.Direction.CW)
+            c.clipPath(windowClip)
             gl.draw(c)
+            c.restore()
             if (k < 1f) postInvalidateOnAnimation()
         } else if (wp == null || android.os.Build.VERSION.SDK_INT < 33) {
             clockPaint.alpha = 0xE6
@@ -739,8 +777,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val rad = m.widgetRadius * s
         // A soft shadow lifts the card off the sheet; the card itself is glass.
         c.drawRoundRect(box.left + m.pt(6f), box.top + m.pt(14f), box.right - m.pt(6f), box.bottom + m.pt(10f), rad, rad, cardShadow)
-        glassShape(c, box, rad, sheetY(), 0f, cardFill, 0x1F)
         val info = e.info
+        // Our clock is shown on a window onto the wallpaper (as it will look on home); Android widgets on glass cards.
+        if (info == null) drawWallpaperWindow(c, box, rad, sheetY(), 0f) else glassShape(c, box, rad, sheetY(), 0f, cardFill, 0x1F)
         if (info == null) {
             // Our clock: the widget inside its card with the featured card's margins, scaled as the card is.
             val padH = featuredPadH * s
@@ -748,7 +787,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             val fs = min((box.width() - 2 * padH) / m.widgetWidth(e.size.spanX), (box.height() - 2 * padV) / m.widgetHeight(e.size.spanY)) * (m.widgetWidth(e.size.spanX) / m.widgetWidth(4))
             val bw = m.widgetWidth(4) * fs
             val bh = m.widgetHeight(2) * fs
-            drawClockPreview(c, RectF(box.centerX() - bw / 2f, box.centerY() - bh / 2f, box.centerX() + bw / 2f, box.centerY() + bh / 2f), fs, sheetY())
+            drawClockPreview(c, RectF(box.centerX() - bw / 2f, box.centerY() - bh / 2f, box.centerX() + bw / 2f, box.centerY() + bh / 2f), fs, sheetY(), box)
             return
         }
         val pv = previews[info]

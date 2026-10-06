@@ -940,3 +940,25 @@ Widget panel darker than the rest). On the S24:
   `tools/appearance_tour.sh PREFIX` takes every surface in one appearance for side-by-side checks.
 Frame stats after: every step 0-1 missed refreshes (folder, library, Spotlight, pull, launches, closes, grab, cancel,
 sideways, switcher). `docs/design/clock_proto.py` still renders the previous clock pipeline (not updated).
+
+Round 23 (Matheesha on 88a667e: the clock looks worse, "just embossed with some shadows": give it the dock's material and
+refraction; the edit buttons and menus lost their liquid glass and look frosted; carry the dock's opacity, colour and blur
+to every element, the clock included). Unlock: his unlocks on 88a667e played the arrival (64 frames), no longer reported.
+- **One glass** (`GlassStyle.IOS`, the dock's): the clock, the Search pill, widget platters, the edit buttons, menus, the
+  widget gallery and its controls, App Library tiles, folders, search fields and Spotlight's card. `IOS_CLOCK` and
+  `IOS_LIBRARY` are now `IOS`. One tint for all (`Appearance.glassTint`: the dock's, light or dark), nothing laid over it
+  (the edit capsules' extra tint, the sheet's control tint and the menus' and sheet's heavy veils inside the glass are gone).
+- What made menus and the sheet look frosted was a strong veil drawn into what their glass saw. Now home behind a menu or a
+  sheet is blurred under one adaptive scrim (`Appearance.scrim`, the same inside and outside the glass) and the glass on it is
+  clear with the dock's tint, so it bends what is behind it and catches the light exactly as the dock does.
+- **Clock**: the dock's shader with the digits' distance field in place of the rounded rectangle: the dock's 20 pt bevel and
+  30 pt bend (the strokes are narrower than the bevel, so each stroke is lens, as thick glass digits are), the dock's edge,
+  rim light and tint, and the dock's soft shadow (18 dp blur, 9 dp down; faded out towards its drawable's edges, which first
+  cut it into a faint box). The lens direction fades to zero along the middle of a stroke instead of flipping (no crease).
+  The 3D height, Fresnel and gloss of round 22 are gone.
+- Labels on glass straight on the wallpaper (Edit/Done, the Search pill) take dark or white for what is behind them, as
+  iOS's glass controls (`Appearance.labelOnGlass`, from the wallpaper's luminance under the capsule, one colour for the pair).
+- Add Widget: the clock's card is a window onto the wallpaper where the card is (dimmed as home is in dark mode), so the
+  preview is exactly the widget as it will look on home.
+- Debug (adb, DUMP): TEST_RECORD also writes the clock's last field and mask (files/clock_field.png, clock_mask.png).
+Frame stats: every step 0-1 missed refreshes. Folder open GPU 12-16 ms median (pipelined, no misses).

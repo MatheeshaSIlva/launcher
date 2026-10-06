@@ -24,7 +24,27 @@ class Wallpaper private constructor(
     val topLuminance: Float,
     /** Mean luminance of the whole wallpaper (0..1, from the heavily blurred copy): how light the materials over it are. */
     val meanLuminance: Float = 0.5f,
+    /** Luminance (0..1) of every pixel of [heavy] (row by row): how light the wallpaper is under a part of the screen. */
+    private val lumGrid: FloatArray = FloatArray(0),
 ) {
+    /** Mean luminance of the (blurred) wallpaper under [r] (screen px, a [w] x [h] screen); 0.5 if unknown. */
+    fun luminanceUnder(r: android.graphics.RectF, w: Int, h: Int): Float {
+        if (lumGrid.isEmpty()) return 0.5f
+        val inv = Matrix()
+        if (!heavyMatrix(w, h).invert(inv)) return 0.5f
+        val q = android.graphics.RectF(r)
+        inv.mapRect(q)
+        val gw = heavy.width
+        val gh = heavy.height
+        val x0 = q.left.toInt().coerceIn(0, gw - 1)
+        val x1 = q.right.toInt().coerceIn(x0, gw - 1)
+        val y0 = q.top.toInt().coerceIn(0, gh - 1)
+        val y1 = q.bottom.toInt().coerceIn(y0, gh - 1)
+        var sum = 0f
+        var n = 0
+        for (y in y0..y1) for (x in x0..x1) { sum += lumGrid[y * gw + x]; n++ }
+        return if (n == 0) 0.5f else sum / n
+    }
 
     /** Bitmap -> screen matrix for a [w] x [h] screen: centre-crop, like the system wallpaper on a single page. */
     fun matrix(w: Int, h: Int): Matrix {
@@ -71,7 +91,11 @@ class Wallpaper private constructor(
             // Kept on the GPU (hardware bitmaps): with ordinary bitmaps Android re-uploaded all three whenever home had been in
             // the background a while (it trims GPU memory then), which stalled the first frame of a home gesture's card (it
             // draws the picture of home) by 20-45 ms on the S24. Nothing reads their pixels after this point.
-            Wallpaper(gpu(bmp), gpu(small), scale, id, gpu(heavy), heavyScale, top, mean)
+            val grid = FloatArray(heavy.width * heavy.height) { i ->
+                val p = heavy.getPixel(i % heavy.width, i / heavy.width)
+                ((0.2126 * ((p shr 16) and 0xFF) + 0.7152 * ((p shr 8) and 0xFF) + 0.0722 * (p and 0xFF)) / 255.0).toFloat()
+            }
+            Wallpaper(gpu(bmp), gpu(small), scale, id, gpu(heavy), heavyScale, top, mean, grid)
         } catch (t: Throwable) {
             AppLog.log("[wallpaper] not readable (${t.javaClass.simpleName}: ${t.message}); using the system wallpaper window, no glass")
             null

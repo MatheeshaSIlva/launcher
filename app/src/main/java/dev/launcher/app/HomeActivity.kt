@@ -109,6 +109,11 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
                 val b = android.graphics.Bitmap.createBitmap(pic, screen.width, screen.height, android.graphics.Bitmap.Config.ARGB_8888)
                 java.io.File(filesDir, "home_picture.png").outputStream().use { b.copy(android.graphics.Bitmap.Config.ARGB_8888, false).compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
                 AppLog.log("[home] test: picture of home written")
+                dev.launcher.app.home.ClockNumerals.lastBuilt?.let { gm ->
+                    java.io.File(filesDir, "clock_field.png").outputStream().use { gm.sdf.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    java.io.File(filesDir, "clock_mask.png").outputStream().use { gm.mask.copy(android.graphics.Bitmap.Config.ARGB_8888, false).compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                    AppLog.log("[home] test: clock field ${gm.sdf.width}x${gm.sdf.height} range ${gm.rangePx} bevel ${gm.bevelPx}")
+                }
             }
         }
         // Senders must hold DUMP: adb's shell does, other apps cannot.

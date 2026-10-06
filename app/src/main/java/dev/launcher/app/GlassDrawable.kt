@@ -50,11 +50,6 @@ data class GlassStyle(
     val edgeWidth: Float = 1f,
     /** How tightly the specular highlights gather at the corners facing the light (1 = spread along the edges). */
     val specPower: Float = 1f,
-    /**
-     * Shaped glass only (the clock): how much it adapts to a bright backdrop to stay readable, as iOS glass does: a darker
-     * body, a darkened edge and a deeper shadow where what is behind is light (0 = never).
-     */
-    val adapt: Float = 0f,
 ) {
     companion object {
         /**
@@ -68,22 +63,14 @@ data class GlassStyle(
             edgeDark = 0.16f, edgeWidth = 1.6f, specPower = 1.8f)
 
         /**
-         * The lock-screen glass clock (iOS 26/27 "Glass"): thick, clear glass shaped like the digits, lit in 3D. The edge of
-         * every stroke is rounded over (about half its half width; the middle is flat), so the glass refracts what is behind
-         * it towards the edges, a glossy highlight and a crisp rim catch the light on the lit side, the far slopes and rim go
-         * a little darker, and a soft shadow lifts it off the wallpaper. The body is mostly clear (a touch frosted) and
-         * gathers light over a dark backdrop (milky, luminous glass), less over a light one, where its shading and a deeper
-         * shadow define it instead. The light sweeps around the numerals as home arrives ([setLightAngle]).
+         * The glass clock: the dock's glass itself, shaped like the digits (Matheesha: "the same material look as the dock").
+         * Its lens follows the dock's own law for small shapes: the bevel is the dock's 20 pt, or 35 % of the stroke's width
+         * where that is less, and the bend shrinks with it ([GlassMask.bevelPx]).
          */
-        val IOS_CLOCK = IOS.copy(frost = 0.3f, refraction = 22f, dispersion = 0.2f, magnify = 0f, saturation = 1.15f, tint = 0.3f,
-            rimWidth = 1.3f, adapt = 1f)
+        val IOS_CLOCK = IOS
 
-        /**
-         * Glass over a heavily blurred backdrop (App Library tiles, search field, folders, Spotlight's cards, the widget
-         * gallery's buttons): behind it there is nothing sharp to bend, so the lens is wider and bends further, and the
-         * dispersion is stronger, for the bend to read at all. Same light as the dock.
-         */
-        val IOS_LIBRARY = IOS.copy(bevel = 26f, refraction = 60f, dispersion = 0.35f, magnify = 0.06f)
+        /** Glass over the App Library's blurred backdrop, Spotlight's, a sheet's: the same glass as the dock. */
+        val IOS_LIBRARY = IOS
     }
 }
 
@@ -108,9 +95,10 @@ object GlassDepth {
 /**
  * A glass shape given as a picture instead of a rounded rectangle (the glass clock's numerals). [mask] is the shape's
  * coverage at the drawable's size (anti-aliased edges). [sdf] is its field at [sdfScale] of that size, opaque: red = the
- * signed distance to the edge (0.5 on it, rising inside, falling outside, by 0.5 per [rangePx] px of the drawable), green =
- * the glass's height (0 at the edge, 1 along the middle of the strokes: a dome across each stroke [bevelPx] wide). The
- * shader lights that surface in 3D (lens, gloss, shading, a rim on the lit edge) and casts a soft shadow outside it.
+ * signed distance to the edge (0.5 on it, rising inside, falling outside, by 0.5 per [rangePx] px of the drawable), green
+ * and blue = the outward normal of the nearest edge. The shader is the dock's, with this distance in place of the rounded
+ * rectangle's: the same lens over [bevelPx] (the dock's bevel, or 35 % of the strokes' width where that is less), the same
+ * edge and light. [shadow]: alpha of an optional soft shadow (0: none).
  */
 class GlassMask(val mask: Bitmap, val sdf: Bitmap, val sdfScale: Float, val rangePx: Float, val bevelPx: Float, val shadow: Float)
 
@@ -176,20 +164,17 @@ class GlassDrawable(
         if (masked) {
             // The lens law of the rounded rectangle (bend scales with the bevel), its reference bevel, and the shadow.
             shader.setFloatUniform("bevelRef", style.bevel * unitPx)
-            shader.setFloatUniform("shadowR", 7f * unitPx)
-            shader.setFloatUniform("shadowDy", 2f * unitPx)
+            // The dock's shadow (DockShadow: 18 dp of blur, about 9 dp below), for shapes that cast one.
+            val density = android.content.res.Resources.getSystem().displayMetrics.density
+            shader.setFloatUniform("shadowR", 18f * density)
+            shader.setFloatUniform("shadowDy", 9f * density)
         }
         shader.setFloatUniform("dispersion", style.dispersion)
         shader.setFloatUniform("frost", style.frost)
         shader.setFloatUniform("magnify", style.magnify)
         shader.setFloatUniform("saturation", style.saturation)
         shader.setFloatUniform("tint", style.tint)
-        if (masked) {
-            shader.setFloatUniform("adapt", style.adapt)
-            shader.setFloatUniform("rimWidth", style.rimWidth * unitPx)
-            val la = Math.toRadians(style.lightAngleDeg.toDouble())
-            shader.setFloatUniform("lightDir", kotlin.math.cos(la).toFloat(), kotlin.math.sin(la).toFloat())
-        } else setLighting(shader, style, unitPx)
+        setLighting(shader, style, unitPx)
         val o = Reveal.origin(screenW.toFloat(), screenH.toFloat())
         shader.setFloatUniform("origin", o[0], o[1])
         shader.setFloatUniform("maxDist", Reveal.maxDist(screenW.toFloat(), screenH.toFloat()))
@@ -290,18 +275,16 @@ class GlassDrawable(
         val a = dev.launcher.app.theme.Appearance
         val dim = (a.wallpaperDim * 255).toInt() shl 24   // black at the wallpaper's dim
         val veil = when (role) {
+            // On home: the wallpaper (dimmed in dark mode).
             Role.HOME, Role.CLOCK -> dim
+            // Over the App Library, its folders, Spotlight: their backdrop.
             Role.MATERIAL -> a.backdropVeil
-            Role.SHEET -> a.sheetVeil
+            // On a sheet: the blurred home under the scrim, seen through the sheet's own glass (its tint).
+            Role.SHEET -> a.overlay(a.scrim, a.glassTint)
         }
-        val tint = when (role) {
-            Role.HOME -> a.homeGlassTint
-            Role.MATERIAL, Role.SHEET -> a.materialGlassTint
-            Role.CLOCK -> 0
-        }
+        val tint = a.glassTint
         if (veil != veilAt) { veilAt = veil; setColorUniform("veil", veil) }
-        // (The masked shader has no theme tint: an unused uniform may be compiled out and could not be set.)
-        if (!masked && tint != tintAt) { tintAt = tint; setColorUniform("themeTint", tint) }
+        if (tint != tintAt) { tintAt = tint; setColorUniform("themeTint", tint) }
     }
 
     private fun setColorUniform(name: String, argb: Int) {
@@ -560,64 +543,46 @@ uniform float bevelRef;
 uniform float shadowAlpha;
 uniform float shadowR;
 uniform float shadowDy;
-uniform float adapt;
-uniform float rimWidth;
-uniform float2 lightDir;
-""" + Reveal.NOISE + Reveal.FRONT + """
-half3 saturate3(half3 c, half s) {
-    half l = dot(c, half3(0.2126, 0.7152, 0.0722));
-    return clamp(mix(half3(l), c, s), 0.0, 1.0);
-}
-""" + LOOK + """
+""" + Reveal.NOISE + Reveal.FRONT + LIGHTING + LOOK + """
 // The shape's field at c (drawable px): r = signed distance to the edge (0.5 on it, positive inside, 0.5 per [rangePx]),
-// g and b = the surface normal's x and y (0.5 = 0): rounded over at the edge, flat along the middle of the strokes.
+// g and b = the outward normal of the edge nearest (0.5 = 0).
 float sd(float2 c) { return (sdf.eval(c * sdfScale).r - 0.5) * 2.0 * rangePx; }
 
 half4 main(float2 coord) {
     float a = mask.eval(coord).a;
-    float2 sp = depthC + (dockOrigin + coord * placeScale - depthC) * depthK;
-    // How light what is behind is (0..1): over a light wallpaper the numerals are defined by their shading and a deeper
-    // shadow, never by turning their body grey.
-    float lb = dot(float3(mix(look(sp, float2(0.0), 0.0), veil.rgb, veil.a)), float3(0.2126, 0.7152, 0.0722));
-    float bright = smoothstep(0.35, 0.85, lb) * adapt;
-    // A soft shadow a little below the shape.
-    float ds = sd(coord - float2(0.0, shadowDy));
-    float sh = 1.0 - clamp(-ds / shadowR, 0.0, 1.0);
-    half4 shadow = half4(0.0, 0.0, 0.0, half(shadowAlpha * (0.7 + 1.1 * bright) * sh * sh));
+    // The dock's soft shadow below the shape: a blur of the shape moved down (no hard edge anywhere: a crisp offset copy
+    // read as an emboss).
+    half4 shadow = half4(0.0);
+    if (shadowAlpha > 0.0) {
+        // Above the field there is nothing (sampling there would repeat its top row: a band with a hard edge).
+        float2 q = coord - float2(0.0, shadowDy);
+        float ds = q.y < 0.0 ? -1e4 : sd(q);
+        float sh = smoothstep(-shadowR, 0.6 * shadowR, ds);
+        // It fades out towards the drawable's top and sides (it would be cut there: a hard edge, a faint box).
+        float edge = min(min(coord.x, size.x - coord.x), coord.y);
+        sh *= smoothstep(0.0, shadowR, edge);
+        shadow = half4(0.0, 0.0, 0.0, half(shadowAlpha * sh));
+    }
     if (a < 0.003) return shadow;
 
     half4 f = sdf.eval(coord * sdfScale);
-    float2 nxy = (float2(f.g, f.b) - 0.5) * 2.0;
-    float3 N = float3(nxy, sqrt(max(1.0 - dot(nxy, nxy), 0.0)));
-    float d = max(sd(coord), 0.0);
+    float d = max((f.r - 0.5) * 2.0 * rangePx, 0.0);
+    // The lens's direction and strength (fading to nothing along the middle of a stroke), and the edge's normal for the light.
+    float2 g = (float2(f.g, f.b) - 0.5) * 2.0;
+    float2 n = g / max(length(g), 1e-4);
 
-    // Refraction: a thick lens; rays bend towards the edges, so near them the glass shows what is just outside, compressed.
+    // Exactly the dock's lens: a quarter-circle bevel, steepest at the edge, bending what is behind outward by [refraction]
+    // scaled with the bevel (the dock's law for small shapes), and its weak magnifying body.
+    float t = clamp(d / bevelPx, 0.0, 1.0);
+    float bend = 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t));
     float rf = refraction * min(1.0, bevelPx / bevelRef);
-    float2 off = N.xy * rf;
-    half3 col = saturate3(look(sp, off, length(N.xy)), half(saturation));
+    float2 sp = depthC + (dockOrigin + coord * placeScale - depthC) * depthK;
+    float2 off = g * bend * rf - (coord - size * 0.5) * magnify;
+    half3 col = saturate3(look(sp, off, bend), half(saturation));
     col = mix(col, veil.rgb, veil.a);
-    // A clear body that gathers a little light over a dark backdrop, and is a touch deeper over a light one.
-    col = mix(col, half3(1.0), half(tint * (1.0 - bright)));
-    col *= half(1.0 - 0.1 * bright);
-
-    // Light from [lightDir] (towards the light, top left at rest), raised above the glass; the viewer straight in front.
-    float3 L = normalize(float3(lightDir, 1.1));
-    float3 H = normalize(L + float3(0.0, 0.0, 1.0));
-    // Slopes facing the light brighten, those facing away darken (relative to a flat face): the glass reads as thick.
-    float shade = dot(N, L) - L.z;
-    col *= half(1.0 + 0.4 * shade);
-    // Edges at a grazing angle reflect more (Fresnel), then a glossy highlight on the slopes facing the light.
-    float fres = pow(1.0 - N.z, 2.0);
-    col = mix(col, half3(1.0), half(0.22 * fres * (1.0 - 0.5 * bright)));
-    float spec = pow(max(dot(N, H), 0.0), 70.0);
-    col += half3(half(0.45 * spec * (1.0 - 0.5 * bright)));
-    // A crisp rim right at the edge on the lit side, and a faint dark line on the far side: one clean edge, no outline.
-    float rim = 1.0 - smoothstep(0.0, rimWidth, d);
-    float2 n2 = length(N.xy) > 1e-4 ? normalize(N.xy) : float2(0.0);
-    float facing = dot(n2, lightDir);
-    col += half3(half(rim * (0.10 + 0.55 * max(facing, 0.0))));
-    col *= half(1.0 - rim * (0.18 + 0.25 * bright) * max(-facing, 0.0));
-    col = clamp(col, 0.0, 1.0);
+    col = mix(col, half3(1.0), half(tint));
+    col = mix(col, themeTint.rgb, themeTint.a);
+    col = lightGlass(col, d, n);
     return half4(col * a, a) + shadow * half(1.0 - a);
 }
 """

@@ -219,9 +219,12 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
 
     override val labelText: String? get() = null
 
+    /** Room below the numerals for their soft shadow (the glass views reach past the widget's bottom; nothing clips them). */
+    private val shadowRoom = ClockNumerals.shadowRoom(ctx)
+
     init {
         for (n in listOf(layerA, layerB)) {
-            addView(n.glass, LayoutParams(cardW.roundToInt(), (cardH - digitsTop).roundToInt()).apply {
+            addView(n.glass, LayoutParams(cardW.roundToInt(), (cardH - digitsTop + shadowRoom).roundToInt()).apply {
                 leftMargin = left.roundToInt()
                 topMargin = digitsTop.roundToInt()
             })
@@ -240,7 +243,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         tickAnim = null
         for (n in listOf(layerA, layerB)) {
             n.glass.layoutParams = (n.glass.layoutParams as LayoutParams).apply {
-                width = cardW.roundToInt(); height = (cardH - digitsTop).roundToInt(); leftMargin = left.roundToInt()
+                width = cardW.roundToInt(); height = (cardH - digitsTop + shadowRoom).roundToInt(); leftMargin = left.roundToInt()
             }
             // The old shape would be drawn at the new size: hidden until the new one is built, then it fades in (the old
             // look crossfades out over it meanwhile).
@@ -338,7 +341,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         val baseline = layoutDigits()
         val gen = ++buildGen
         buildsPending++
-        ClockNumerals.buildAsync(digitPaint, w, h, baseline, time) { gm ->
+        ClockNumerals.buildAsync(digitPaint, w, h, baseline, time, m.u) { gm ->
             buildsPending = (buildsPending - 1).coerceAtLeast(0)
             if (gm == null || gen != buildGen || n.glass.width != w || n.glass.height != h) {
                 if (!building) onSettled?.invoke()
@@ -411,16 +414,22 @@ object ClockNumerals {
     }
 
     private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    /** How far below the numerals their shadow reaches (the dock's: 9 dp down, 18 dp of blur), px. */
+    fun shadowRoom(ctx: Context): Float = 29f * ctx.resources.displayMetrics.density
+
+    /** The last shape built (debug: written out by HomeActivity's test hook). */
+    @Volatile var lastBuilt: dev.launcher.app.GlassMask? = null
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
 
     /**
      * [build] on a worker thread (the distance transform takes some tens of ms); [done] runs on the main thread, always (with
      * null if building failed).
      */
-    fun buildAsync(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, done: (dev.launcher.app.GlassMask?) -> Unit) {
+    fun buildAsync(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, unitPx: Float, done: (dev.launcher.app.GlassMask?) -> Unit) {
         val p = android.text.TextPaint(paint)   // a copy: the caller's paint keeps changing on the main thread
         worker.execute {
-            val gm = try { build(p, w, h, baseline, time) } catch (t: Throwable) {
+            val gm = try { build(p, w, h, baseline, time, unitPx) } catch (t: Throwable) {
                 dev.launcher.app.AppLog.log("[clock] numerals failed: ${t.javaClass.simpleName}: ${t.message}"); null
             }
             main.post { done(gm) }
@@ -433,7 +442,7 @@ object ClockNumerals {
      * height across every stroke that the shader lights in 3D. Fresh bitmaps every time (the glass may still be drawing the
      * previous ones). Any thread; some tens of ms.
      */
-    fun build(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String): dev.launcher.app.GlassMask {
+    fun build(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, unitPx: Float): dev.launcher.app.GlassMask {
         val mask = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8)
         android.graphics.Canvas(mask).drawText(time, w / 2f, baseline, paint)
         val cov = readAlpha(mask)
@@ -443,36 +452,39 @@ object ClockNumerals {
         val dOut = Edt.distances(w, h) { inside[it] }
         // Sub-pixel edge from the anti-aliased coverage (half a pixel either way), so the field is smooth along curves.
         val signed = FloatArray(n) { i -> if (inside[i]) dIn[i] - 0.5f + (cov[i] - 128) / 255f else -(dOut[i] - 0.5f) + (cov[i] - 127) / 255f }
-        // The edge is rounded over about half of the strokes' half width; the middle of each stroke is flat, clear glass
-        // (a whole stroke rounded over read as chiselled plastic).
+        // The lens is the dock's own: its 20 pt bevel and 30 pt bend (the strokes are narrower than the bevel, so the whole
+        // stroke is lens, as a thick glass digit is).
         val ins = ArrayList<Float>()
         for (i in 0 until n) if (signed[i] > 0f) ins += signed[i]
         ins.sort()
         val half = if (ins.isEmpty()) 10f else ins[(ins.size * 0.95f).toInt().coerceAtMost(ins.size - 1)]
-        val bevel = half * 0.6f
-        val range = maxOf(half, paint.textSize * 0.07f) + 8f
-        // Height 0 at the edge to 1 past the bevel (a quarter-round: steep at the edge, flat inside), smoothed a little so the
-        // distance field's pixel steps and its creases at corners do not show in the light.
-        val hgt = FloatArray(n) { i -> val t = (signed[i] / bevel).coerceIn(0f, 1f); 1f - (1f - t) * (1f - t) }
-        boxBlur(hgt, w, h, maxOf(1, (bevel * 0.12f).roundToInt()), 2)
-        // The surface normal's x and y (z follows), worked out here in full precision: in the shader, from an 8-bit height,
-        // the slopes came out streaky.
-        val tilt = bevel * 0.85f
+        val bevel = 20f * unitPx
+        // The field reaches as far outside as the shadow does (it is a blur of the shape moved down).
+        val shadowReach = 27f * android.content.res.Resources.getSystem().displayMetrics.density
+        val range = maxOf(half, paint.textSize * 0.07f, shadowReach) + 8f
+        // The outward normal (the distance's gradient), from the distance smoothed so the pixel steps of the transform do not
+        // show, and kept unnormalised: across the middle of a stroke, where the nearest edge switches sides, it fades to zero
+        // instead of flipping, so the two halves of the lens meet without a crease.
+        val sm = signed.copyOf()
+        boxBlur(sm, w, h, maxOf(2, (half * 0.25f).roundToInt()), 2)
         val px = IntArray(n) { i ->
             val x = i % w
             val y = i / w
-            val gx = (hgt[if (x < w - 1) i + 1 else i] - hgt[if (x > 0) i - 1 else i]) * 0.5f
-            val gy = (hgt[if (y < h - 1) i + w else i] - hgt[if (y > 0) i - w else i]) * 0.5f
-            val nx = -gx * tilt
-            val ny = -gy * tilt
-            val len = kotlin.math.sqrt(nx * nx + ny * ny + 1f)
+            val gx = (sm[if (x < w - 1) i + 1 else i] - sm[if (x > 0) i - 1 else i]) * 0.5f
+            val gy = (sm[if (y < h - 1) i + w else i] - sm[if (y > 0) i - w else i]) * 0.5f
+            // The distance rises inwards: the outward normal points against its gradient (length 1 near the edges).
+            val len = kotlin.math.sqrt(gx * gx + gy * gy)
+            val k = if (len > 1f) 1f / len else 1f
+            val nx = -gx * k
+            val ny = -gy * k
             val sd = ((0.5f + signed[i] / (2f * range)).coerceIn(0f, 1f) * 255f).roundToInt()
-            val ex = ((nx / len * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
-            val ey = ((ny / len * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
+            val ex = ((nx * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
+            val ey = ((ny * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
             (0xFF shl 24) or (sd shl 16) or (ex shl 8) or ey
         }
         val field = android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
-        return dev.launcher.app.GlassMask(mask, field, 1f, range, bevel, 0.22f)
+        // The dock's shadow (its 0x47 black, mostly hidden under the platter there; around thin strokes it all shows: less).
+        return dev.launcher.app.GlassMask(mask, field, 1f, range, bevel, 0.16f).also { lastBuilt = it }
     }
 
     /** [passes] box blurs of radius [r] over a [w] x [h] float image, in place. */
@@ -748,13 +760,21 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
         }
     }
 
+    /** Its text, glyph and dots: dark or white for what is behind the pill (set by home). */
+    var labelColor: () -> Int = { Color.WHITE }
+
     private fun drawContent(c: Canvas) {
         val cy = height / 2f
+        val col = labelColor()
+        val sh = ((0x59 * dev.launcher.app.theme.Appearance.shadowFor(col)).toInt() shl 24)
+        text.color = col; text.setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), sh)
+        glyph.color = col; glyph.setShadowLayer(m.pt(2f), 0f, m.pt(0.5f), sh)
         if (search < 1f) {
             val start = (width - (pages * m.dotSize + (pages - 1) * m.dotGap)) / 2f
             for (i in 0 until pages) {
                 val k = (1f - abs(position - i)).coerceIn(0f, 1f)
-                paint.color = Color.argb(((90 + 165 * k) * (1f - search)).roundToInt(), 255, 255, 255)
+                paint.color = col
+                paint.alpha = ((90 + 165 * k) * (1f - search) * Color.alpha(col) / 255f).roundToInt()
                 c.drawCircle(start + i * (m.dotSize + m.dotGap) + m.dotSize / 2f, cy, m.dotSize / 2f, paint)
             }
         }

@@ -65,6 +65,9 @@ class LiveGlass(style: GlassStyle, private val unitPx: Float) {
         } finally {
             node.endRecording()
         }
+        // The glass's own tint, the dock's (light or dark with the appearance).
+        val gt = dev.launcher.app.theme.Appearance.glassTint
+        shader.setFloatUniform("themeTint", ((gt shr 16) and 0xFF) / 255f, ((gt shr 8) and 0xFF) / 255f, (gt and 0xFF) / 255f, ((gt ushr 24) and 0xFF) / 255f)
         shader.setFloatUniform("size", shape.width(), shape.height())
         shader.setFloatUniform("nodeSize", w.toFloat(), h.toFloat())
         shader.setFloatUniform("offset", shape.left - left.toInt(), shape.top - top.toInt())
@@ -96,6 +99,7 @@ uniform float dispersion;
 uniform float magnify;
 uniform float saturation;
 uniform float tint;
+uniform half4 themeTint;
 """ + GlassDrawable.LIGHTING + """
 // What is behind at c bent by off, kept inside what was recorded (beyond it there is nothing to see).
 float2 inNode(float2 q) { return clamp(q, float2(0.5), nodeSize - 0.5); }
@@ -124,6 +128,7 @@ half4 main(float2 coord) {
     float2 off = n * bend * rf - p * magnify;
     half3 col = saturate3(seen(coord, off), half(saturation));
     col = mix(col, half3(1.0), half(tint));
+    col = mix(col, themeTint.rgb, themeTint.a);
     col = lightGlass(col, max(-d, 0.0), n);
     float a = clamp(0.5 - d, 0.0, 1.0);
     return half4(col * a, a);

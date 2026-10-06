@@ -147,11 +147,13 @@ class ContextMenuView(
     override fun onDraw(c: Canvas) {
         val kv = k.value
         val kk = kv.coerceIn(0f, 1f)
-        val md = Appearance.menuDim
-        dim.color = md
-        dim.alpha = (android.graphics.Color.alpha(md) * kk).toInt()
+        // Home behind: blurred (by home) under the scrim; the menu's glass sees exactly this, and adds only the dock's tint.
+        val sc = Appearance.scrim
+        dim.color = sc
+        dim.alpha = (android.graphics.Color.alpha(sc) * kk).toInt()
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dim)
-        panelTint.color = Appearance.menuVeil
+        panelTint.color = sc
+        panelTint.alpha = (android.graphics.Color.alpha(sc) * kk).toInt()
         separator.color = Appearance.separator
         press.color = Appearance.pressFill
         fallback.color = Appearance.mix(0xF2F2F2F7.toInt(), 0xD92C2C2E.toInt())
@@ -189,7 +191,7 @@ class ContextMenuView(
             inverse.mapRect(visible)
             g.draw(c, panel, radius, kk * Motion.profile.menuBlur * m.u, panelMatrix, visible, kk) { cc ->
                 drawBehind(cc)
-                // The appearance's veil (light glass with dark text, or darker glass with white text): readable over any wallpaper.
+                // The same scrim as around it: the glass is the dock's (clear, its tint only), over what is really behind it.
                 cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), panelTint)
             }
         }

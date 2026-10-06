@@ -710,9 +710,9 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         val editGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
         val doneGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
         // A soft shadow keeps the white labels readable over a light wallpaper (the glass itself is clear).
-        // The label in the appearance's colour on a capsule tinted to match (light with dark text, dark with white text).
+        // The dock's glass (nothing laid over it); the label dark or white for what is behind the capsule, as iOS's glass
+        // buttons ([Appearance.labelOnGlass]).
         private val text = LabelPainter(m.pt(16f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600))
-            .toned { dev.launcher.app.theme.Appearance.label }.shadowed(m.pt(3f), 0x66000000)
         private var pressedEdit = false
         private var pressedDone = false
         // Presses dim the label and the capsule a little, in and out on a spring (not at once).
@@ -736,9 +736,9 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val p = Picture()
             val c = p.beginRecording(maxOf(1, editGlass.width), maxOf(1, editGlass.height))
             editGlass.draw(c)
-            setTint(0f)
-            c.drawRoundRect(0f, 0f, editGlass.width.toFloat(), editGlass.height.toFloat(), bh / 2f, bh / 2f, tint)
-            text.draw(c, "Edit", "Edit", editGlass.width / 2f, text.baselineFor(editGlass.height / 2f), editGlass.width.toFloat())
+            val col = labelColorFor(editGlass)
+            text.paint.setShadowLayer(m.pt(3f), 0f, m.pt(0.5f), ((0x66 * dev.launcher.app.theme.Appearance.shadowFor(col)).toInt() shl 24))
+            text.draw(c, "Edit", "Edit", editGlass.width / 2f, text.baselineFor(editGlass.height / 2f), editGlass.width.toFloat(), color = col)
             p.endRecording()
             return p
         }
@@ -781,16 +781,32 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             if (g.width == 0) return
             val k = press.coerceIn(0f, 1f)
             tintRect.set(g.left.toFloat(), g.top.toFloat(), g.right.toFloat(), g.bottom.toFloat())
-            setTint(k)
-            canvas.drawRoundRect(tintRect, bh / 2f, bh / 2f, tint)
-            text.draw(canvas, label, label, g.left + g.width / 2f, text.baselineFor(g.top + g.height / 2f), g.width.toFloat(), (255 - 0x60 * k).toInt())
+            if (k > 0f) { setPress(k); canvas.drawRoundRect(tintRect, bh / 2f, bh / 2f, tint) }
+            val col = labelColorFor(g)
+            text.paint.setShadowLayer(m.pt(3f), 0f, m.pt(0.5f), ((0x66 * dev.launcher.app.theme.Appearance.shadowFor(col)).toInt() shl 24))
+            text.draw(canvas, label, label, g.left + g.width / 2f, text.baselineFor(g.top + g.height / 2f), g.width.toFloat(), (255 - 0x60 * k).toInt(), color = col)
         }
 
-        /** The capsules' tint for the appearance, a little stronger while pressed ([k]). */
-        private fun setTint(k: Float) {
-            val t = dev.launcher.app.theme.Appearance.buttonTint
-            tint.color = t
-            tint.alpha = (android.graphics.Color.alpha(t) * (1f + 0.4f * k)).toInt().coerceAtMost(255)
+        /** Pressed ([k]): a touch of the press colour over the capsule. */
+        private fun setPress(k: Float) {
+            val pf = dev.launcher.app.theme.Appearance.pressFill
+            tint.color = pf
+            tint.alpha = (android.graphics.Color.alpha(pf) * k).toInt()
+        }
+
+        /**
+         * The labels' colour for what is behind the capsules (the wallpaper there, through the glass's tint): one colour for
+         * both ("Edit" and "Done" are a pair), from the wallpaper under the two together.
+         */
+        @Suppress("UNUSED_PARAMETER")
+        private fun labelColorFor(g: View): Int {
+            val a = IntArray(2)
+            val b = IntArray(2)
+            editGlass.getLocationOnScreen(a)
+            doneGlass.getLocationOnScreen(b)
+            val la = home.wallpaperLuminanceUnder(RectF(a[0].toFloat(), a[1].toFloat(), a[0] + editGlass.width.toFloat(), a[1] + editGlass.height.toFloat()))
+            val lb = home.wallpaperLuminanceUnder(RectF(b[0].toFloat(), b[1].toFloat(), b[0] + doneGlass.width.toFloat(), b[1] + doneGlass.height.toFloat()))
+            return dev.launcher.app.theme.Appearance.labelOnGlass((la + lb) / 2f)
         }
 
         private fun setPressed(edit: Boolean, done: Boolean) {

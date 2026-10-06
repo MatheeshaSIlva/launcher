@@ -122,12 +122,17 @@ object Appearance {
     /** A soft dark shadow under white text keeps it readable over light parts of a dark material; dark text needs none. */
     val textShadowStrength get() = dark
 
-    // ------------------------------------------------------------------ materials
+    // ------------------------------------------------------------------ the glass, and what it floats over
     //
-    // One family of materials, as iOS has: what sits over a blurred backdrop (the App Library and its folders, Spotlight)
-    // and what floats over home (menus, the widget gallery) are the same light or dark material at two strengths. Their veil
-    // adapts to the wallpaper, so each lands on the same brightness whatever is behind it: light mode is never washed out over
-    // a light wallpaper (only a touch of white) and dark text stays readable over a dark one; likewise for dark mode.
+    // One glass everywhere, the dock's (iOS's Liquid Glass): clear, it shows what is behind it (only softened a touch, as the
+    // dock sees the wallpaper), bends it at its edges and catches the light on its rim, with one tint: light in light mode,
+    // dark in dark mode. The dock, the Search pill, the clock's numerals, widget platters, the edit buttons, menus, the widget
+    // gallery and its controls, App Library tiles, folders, search fields and Spotlight's card are all this glass.
+    //
+    // What changes is what is behind it. On home that is the wallpaper. Behind the App Library, Spotlight, a menu or a sheet
+    // it is home blurred, under a scrim that brings it to a set brightness whatever the wallpaper (white in light mode, black
+    // in dark mode, as iOS's backgrounds): that is what keeps dark text readable on light-mode glass and white text on
+    // dark-mode glass, with the glass itself as clear as the dock.
 
     /** Mean luminance of the wallpaper (0..1): set when it is read. */
     var wallpaperLuma = 0.5f
@@ -140,28 +145,51 @@ object Appearance {
         return mix(((wa * 255).toInt() shl 24) or 0xFFFFFF, (ba * 255).toInt() shl 24)
     }
 
-    /** Behind the App Library, its folders and Spotlight: the heavily blurred wallpaper under this veil. */
+    /** Behind the App Library, its folders and Spotlight: the heavily blurred wallpaper under this scrim. */
     val backdropVeil get() = veil(0.60f, 0.26f, 0.08f, 0.50f, 0.22f, 0.58f)
-    /** Inside a menu's or a sheet's glass (the blurred home behind it): one material for both, stronger for their text. */
-    val menuVeil get() = veil(0.74f, 0.20f, 0.22f, 0.70f, 0.30f, 0.70f)
-    val sheetVeil get() = menuVeil
-    /** Home darkened around a menu or a sheet (the same for both). */
-    val menuDim get() = mix(0x14000000, 0x29000000)
+    /** Home behind a menu or a sheet (blurred): the same scrim, slightly stronger (text sits right over it). */
+    val scrim get() = veil(0.58f, 0.24f, 0.10f, 0.55f, 0.24f, 0.62f)
     /** Dark mode dims the wallpaper a little (iOS: "Dark Appearance Dims Wallpaper"). */
     val wallpaperDim get() = mix(0f, 0.14f)
 
+    /** The glass's tint (the dock's): light in light mode, dark in dark mode. ARGB, alpha = amount. */
+    val glassTint get() = mix(0x30FFFFFF, 0x52000000)
+
+    /** [over] laid on top of [under] (two ARGB veils as one). */
+    fun overlay(under: Int, over: Int): Int {
+        val ua = ((under ushr 24) and 0xFF) / 255f
+        val oa = ((over ushr 24) and 0xFF) / 255f
+        val a = 1f - (1f - ua) * (1f - oa)
+        if (a <= 0f) return 0
+        fun ch(shift: Int): Int {
+            val u = ((under shr shift) and 0xFF) * ua * (1f - oa)
+            val o = ((over shr shift) and 0xFF) * oa
+            return ((u + o) / a).toInt().coerceIn(0, 255) shl shift
+        }
+        return ((a * 255).toInt() shl 24) or ch(16) or ch(8) or ch(0)
+    }
+
     /**
-     * The body of glass straight on the wallpaper (dock, Search pill, widget platters, the edit buttons), as iOS's Liquid
-     * Glass: a light glass in light mode, a dark one in dark mode. Enough body that it stays a soft visible platter when home
-     * is blurred behind a menu or an opening app (clear glass vanished into the blur and came back: a flicker).
+     * Text and symbols on glass straight on the wallpaper (the edit buttons, the Search pill), whose brightness behind is
+     * [wallpaperLum] (0..1): dark where the tinted glass is light, white (with a shadow) where it is dark, as iOS's glass
+     * controls do. Blended across the middle, so a change never snaps.
      */
-    val homeGlassTint get() = mix(0x30FFFFFF, 0x52000000)
-    /** Glass over a material (library tiles, search fields, folder panels, Spotlight's card): a step lighter than it. */
-    val materialGlassTint get() = mix(0x2EFFFFFF, 0x17FFFFFF)
-    /** The edit bar's capsules: a little more body, for their label. */
-    val buttonTint get() = mix(0x73FFFFFF, 0x5C000000)
-    /** Controls on a sheet (its buttons, search field, cards): set off from the sheet a little. */
-    val sheetControlTint get() = mix(0x0F000000, 0x1FFFFFFF)
+    fun labelOnGlass(wallpaperLum: Float): Int {
+        val t = glassTint
+        val ta = ((t ushr 24) and 0xFF) / 255f
+        val tl = (0.2126f * ((t shr 16) and 0xFF) + 0.7152f * ((t shr 8) and 0xFF) + 0.0722f * (t and 0xFF)) / 255f
+        val behind = wallpaperLum * (1f - wallpaperDim)
+        val eff = behind * (1f - ta) + tl * ta
+        // Equal contrast for white and black text at about 0.46 (sRGB): blended across 0.40-0.52.
+        val k = ((eff - 0.40f) / 0.12f).coerceIn(0f, 1f)   // 0 = white text, 1 = dark text
+        fun ch(a: Int, b: Int, shift: Int) = ((((a shr shift) and 0xFF) + (((b shr shift) and 0xFF) - ((a shr shift) and 0xFF)) * k) + 0.5f).toInt() shl shift
+        val white = 0xFFFFFFFF.toInt()
+        val darkText = 0xE6000000.toInt()
+        return ch(white, darkText, 24) or ch(white, darkText, 16) or ch(white, darkText, 8) or ch(white, darkText, 0)
+    }
+
+    /** How much of a text shadow [labelOnGlass]'s colour wants (white text: full, dark text: none). */
+    fun shadowFor(label: Int): Float = (((label shr 16) and 0xFF) / 255f)
 
     /** The edit-mode remove badge: a light disc with a dark minus in light mode, as iOS. */
     val removeDisc get() = mix(0xF2E5E5EA.toInt(), 0xE6747480.toInt())
