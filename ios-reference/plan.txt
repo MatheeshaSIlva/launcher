@@ -1,1 +1,3 @@
-normal: all
+normal: test00_setupControls test98_calibrate test30_ccHoldRelease test31_ncHoldRelease test32_bannerHoldRelease test16_appOpenClose test23_folder
+setup reduce-transparency
+normal@rt: test98_calibrate test30_ccHoldRelease test31_ncHoldRelease test32_bannerHoldRelease test16_appOpenClose test23_folder

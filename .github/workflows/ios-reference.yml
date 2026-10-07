@@ -84,7 +84,17 @@ jobs:
             # Simulator's Slow Animations on (F: the factor every pause in the tests is stretched by).
             while IFS= read -r line; do
               case "$line" in
-                normal:*) t=${line#normal:}; [ "$(echo $t)" = all ] && t=""; ios-reference/capture.sh "$UDID" "$XCTESTRUN" out $t ;;
+                "setup reduce-transparency")
+                  # Solid materials instead of blur: far less rendering on a CI machine without a GPU, so the recorder
+                  # drops fewer frames; motion is not changed by it. Takes effect after a reboot of the simulator.
+                  xcrun simctl spawn "$UDID" defaults write com.apple.Accessibility EnhancedBackgroundContrastEnabled -bool true
+                  xcrun simctl shutdown "$UDID"; xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+                  xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3                     --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100 || true ;;
+                normal*)
+                  # "normal: tests" or "normal@tag: tests" (results in out/tag/...)
+                  head=${line%%:*}; t=${line#*:}; [ "$(echo $t)" = all ] && t=""
+                  o=out; case "$head" in *@*) o="out/${head#*@}";; esac
+                  ios-reference/capture.sh "$UDID" "$XCTESTRUN" "$o" $t ;;
                 slow*)
                   f=$(echo "$line" | cut -d: -f1 | awk '{print $2}'); t=${line#*:}
                   xcrun swift ios-reference/cadebug.swift "$UDID" debug_slow_animations 1
@@ -101,8 +111,8 @@ jobs:
         if: always()
         run: |
           which ffmpeg > /dev/null || brew install ffmpeg > /dev/null
-          for d in out/*/ out/slow/*/; do
-            [ "$(basename "$d")" = slow ] && continue
+          for d in $(find out -name video.mp4 -exec dirname {} \;); do
+            d="$d/"
             t=${d#out/}; t=${t%/}; s="small/$t"; mkdir -p "$s"
             cp "$d"/*.txt "$d"/*.log "$s"/ 2>/dev/null || true
             if [ -f "$d/video.mp4" ]; then

@@ -537,6 +537,42 @@ final class Scenarios: XCTestCase {
         wait(2)
     }
 
+    // MARK: - Releases from a standstill (the finger rests before it lets go: the spring starts at speed 0)
+
+    func test30_ccHoldRelease() {
+        for i in 1...5 {
+            drag("cc-open-hold-\(i)", CGPoint(x: w - 36, y: 2), CGPoint(x: w - 36, y: h * 0.30), velocity: 800, hold: 0.7)
+            wait(2)
+            drag("cc-close-hold-\(i)", CGPoint(x: w / 2, y: h - 4), CGPoint(x: w / 2, y: h * 0.75), velocity: 800, hold: 0.7)
+            wait(2)
+            home()
+        }
+    }
+
+    func test31_ncHoldRelease() {
+        for i in 1...5 {
+            drag("nc-open-hold-\(i)", CGPoint(x: 70, y: 2), CGPoint(x: 70, y: h * 0.55), velocity: 800, hold: 0.7)
+            wait(2)
+            drag("nc-close-hold-\(i)", CGPoint(x: w / 2, y: h - 4), CGPoint(x: w / 2, y: h * 0.45), velocity: 800, hold: 0.7)
+            wait(2)
+            home()
+        }
+    }
+
+    func test32_bannerHoldRelease() {
+        // A banner pulled down a little, held, let go: it springs back from a standstill.
+        for i in 1...3 {
+            post("one", in: 5)
+            if let f = waitBanner() {
+                wait(0.8)
+                drag("banner-pull-hold-\(i)", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: f.midY + 40), velocity: 300, hold: 0.7)
+                wait(2)
+                drag("banner-up-hold-\(i)", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: f.midY - 30), velocity: 300, hold: 0.7)
+            }
+            wait(3)
+        }
+    }
+
     // MARK: - Calibration
 
     /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the

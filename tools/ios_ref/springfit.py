@@ -95,3 +95,52 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+def fit_joint(runs, target=None):
+    """
+    One spring (response, damping and, unless given, target) shared by several runs of the same motion, each run with
+    its own start time, start position and start velocity: [(t, x), ...]. Runs that drop different frames fill each
+    other's gaps. Returns dict(response, damping, target, rms, starts=[(t0, x0, v0), ...]).
+    """
+    runs = [(np.asarray(t, float), np.asarray(x, float)) for t, x in runs if len(t) >= 3]
+    span = max(max(abs(x.max() - x.min()) for _, x in runs), 1e-6)
+    free_target = target is None
+    tgt0 = float(np.median([x[-1] for _, x in runs])) if free_target else target
+    n = len(runs)
+
+    def unpack(p):
+        r, z = p[0], p[1]
+        tg = p[2] if free_target else tgt0
+        k = 3 if free_target else 2
+        starts = [(p[k + 3 * i], p[k + 3 * i + 1], p[k + 3 * i + 2]) for i in range(n)]
+        return r, z, tg, starts
+
+    def resid(p):
+        r, z, tg, starts = unpack(p)
+        out = []
+        for (t, x), (ts, x0, v0) in zip(runs, starts):
+            out.append((spring(t - ts, x0, v0, tg, r, z) - x) / span)
+        return np.concatenate(out)
+
+    best = None
+    for r_init in (0.3, 0.45, 0.6):
+        for z_init in (0.75, 0.9, 1.0):
+            p0 = [r_init, z_init] + ([tgt0] if free_target else [])
+            lo = [0.05, 0.1] + ([tgt0 - span] if free_target else [])
+            hi = [3.0, 3.0] + ([tgt0 + span] if free_target else [])
+            for t, x in runs:
+                v = (x[1] - x[0]) / max(t[1] - t[0], 1e-3)
+                p0 += [t[0] - 0.01, x[0], v]
+                lo += [t[0] - 0.25, x[0] - span, -1e5]
+                hi += [t[0] + 0.02, x[0] + span, 1e5]
+            p0 = [min(max(v, l + 1e-9), h - 1e-9) for v, l, h in zip(p0, lo, hi)]
+            try:
+                res = least_squares(resid, p0, bounds=(lo, hi))
+            except ValueError:
+                continue
+            if best is None or res.cost < best.cost:
+                best = res
+    r, z, tg, starts = unpack(best.x)
+    rms = float(np.sqrt(np.mean(resid(best.x) ** 2))) * span
+    return dict(response=r, damping=z, target=tg, rms=rms, starts=starts, settle=settling_time(r, z))
