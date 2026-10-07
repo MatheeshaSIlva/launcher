@@ -74,10 +74,46 @@ jobs:
           ios-reference/capture.sh "${{ steps.sim.outputs.udid }}" "$XCTESTRUN" out ${{ github.event.inputs.tests }}
           du -sh out/*
 
-      - name: Upload
+      # The full recordings are ~500 MB a run and the download to the dev machine is slow: a small copy for analysis
+      # (video at 1 px per point with every frame's own time kept, stills at 1.5 px per point), the originals apart.
+      - name: Shrink
+        if: always()
+        run: |
+          which ffmpeg > /dev/null || brew install ffmpeg > /dev/null
+          for d in out/*/; do
+            t=$(basename "$d"); s="small/$t"; mkdir -p "$s"
+            cp "$d"/*.txt "$d"/*.log "$s"/ 2>/dev/null || true
+            if [ -f "$d/video.mp4" ]; then
+              ffmpeg -nostdin -loglevel error -i "$d/video.mp4" -fps_mode passthrough -vf "scale=402:-2" \
+                -c:v libx264 -crf 24 -preset medium -pix_fmt yuv420p "$s/video.mp4" || true
+              ffprobe -v error -select_streams v:0 -show_entries frame=pts_time -of csv=p=0 "$d/video.mp4" > "$s/video_times.txt" || true
+            fi
+            for p in "$d"/*.png; do
+              [ -f "$p" ] && ffmpeg -nostdin -loglevel error -i "$p" -vf "scale=603:-2" "$s/$(basename "$p")" || true
+            done
+            if [ -d "$d/attachments" ]; then
+              mkdir -p "$s/attachments"
+              cp "$d"/attachments/*.json "$d"/attachments/*.txt "$s/attachments/" 2>/dev/null || true
+              for p in "$d"/attachments/*.png; do
+                [ -f "$p" ] && ffmpeg -nostdin -loglevel error -i "$p" -vf "scale=603:-2" "$s/attachments/$(basename "$p")" || true
+              done
+            fi
+          done
+          cp out/sim.env small/ 2>/dev/null || true
+          du -sh small
+
+      - name: Upload (small)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-reference-${{ github.run_number }}
-          path: out/
+          name: ios-ref-small-${{ github.run_number }}
+          path: small/
           retention-days: 30
+
+      - name: Upload (originals)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ref-full-${{ github.run_number }}
+          path: out/
+          retention-days: 14
