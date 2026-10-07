@@ -37,6 +37,14 @@ final class Scenarios: XCTestCase {
         wait(1.2)
         XCUIDevice.shared.press(.home)
         wait(1.5)
+        // Spotlight's search (and its keyboard) outlived the home button in pass 4: swipe it away.
+        if sb.keyboards.firstMatch.exists {
+            mark("keyboard still up: swiping it away")
+            pt(w / 2, h - 4).press(forDuration: 0.05, thenDragTo: pt(w / 2, h * 0.45), withVelocity: XCUIGestureVelocity(rawValue: 1500), thenHoldForDuration: 0)
+            wait(1.5)
+            XCUIDevice.shared.press(.home)
+            wait(1.5)
+        }
     }
 
     private func pt(_ x: CGFloat, _ y: CGFloat) -> XCUICoordinate {
@@ -100,7 +108,7 @@ final class Scenarios: XCTestCase {
 
     /// Waits for a banner; logs and returns its frame.
     @discardableResult
-    private func waitBanner(_ timeout: Double = 12) -> CGRect? {
+    private func waitBanner(_ timeout: Double = 30) -> CGRect? {
         guard banner.waitForExistence(timeout: timeout * slow) else { mark("no banner"); return nil }
         let f = banner.frame
         mark("banner at \(f) '\(banner.label)'")
@@ -281,9 +289,9 @@ final class Scenarios: XCTestCase {
     }
 
     func test10_ncStacks() {
-        post("stack", in: 5)
+        post("stack", in: 20)
         // Let every banner pass (sending each shown one away), then look at the list.
-        waitBanner(12)
+        waitBanner(30)
         var quiet = 0.0
         let t0 = Date()
         while quiet < 4 && Date().timeIntervalSince(t0) < 60 {
@@ -327,7 +335,7 @@ final class Scenarios: XCTestCase {
 
     func test11_bannerTimeout() {
         for i in 1...3 {
-            post("one", in: 5)
+            post("one", in: 20)
             if waitBanner() != nil {
                 if i == 1 { shot("banner"); tree("banner") }
                 // Until it has gone by itself.
@@ -341,7 +349,7 @@ final class Scenarios: XCTestCase {
 
     func test12_bannerSwipeUp() {
         for i in 1...4 {
-            post("one", in: 5)
+            post("one", in: 20)
             if let f = waitBanner() {
                 wait(1.0)
                 drag("banner-up-\(i)", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: 5), velocity: i <= 2 ? 800 : 2000)
@@ -351,13 +359,13 @@ final class Scenarios: XCTestCase {
     }
 
     func test13_bannerReplace() {
-        post("two", in: 5)
+        post("two", in: 20)
         waitBanner()
         wait(10)
     }
 
     func test14_bannerPullDown() {
-        post("one", in: 5)
+        post("one", in: 20)
         if let f = waitBanner() {
             wait(1.0)
             drag("banner-down", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: f.midY + 250), velocity: 500, hold: 0.8)
@@ -370,7 +378,7 @@ final class Scenarios: XCTestCase {
     }
 
     func test15_bannerLong() {
-        post("long", in: 5)
+        post("long", in: 20)
         if waitBanner() != nil {
             shot("banner-long")
             tree("banner-long")
@@ -562,7 +570,7 @@ final class Scenarios: XCTestCase {
     func test32_bannerHoldRelease() {
         // A banner pulled down a little, held, let go: it springs back from a standstill.
         for i in 1...3 {
-            post("one", in: 5)
+            post("one", in: 20)
             if let f = waitBanner() {
                 wait(0.8)
                 drag("banner-pull-hold-\(i)", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: f.midY + 40), velocity: 300, hold: 0.7)
@@ -570,6 +578,29 @@ final class Scenarios: XCTestCase {
                 drag("banner-up-hold-\(i)", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: f.midY - 30), velocity: 300, hold: 0.7)
             }
             wait(3)
+        }
+    }
+
+    func test33_pageHoldRelease() {
+        // Half a page, held still, let go: the snap from a standstill (both directions).
+        for i in 1...4 {
+            drag("page-hold-left-\(i)", CGPoint(x: w * 0.8, y: h * 0.5), CGPoint(x: w * 0.3, y: h * 0.5), velocity: 600, hold: 0.7)
+            wait(1.5)
+            drag("page-hold-right-\(i)", CGPoint(x: w * 0.2, y: h * 0.5), CGPoint(x: w * 0.7, y: h * 0.5), velocity: 600, hold: 0.7)
+            wait(1.5)
+        }
+    }
+
+    func test34_iconMenuClean() {
+        let settings = sb.icons["Settings"]
+        guard settings.waitForExistence(timeout: 3) else { mark("no Settings icon"); return }
+        let f = settings.frame
+        for i in 1...4 {
+            longPress("icon-menu-\(i)", f.midX, f.midY, 0.9)
+            wait(2)
+            if i == 1 { shot("icon-menu"); tree("icon-menu") }
+            tap("icon-menu-out-\(i)", w / 2, 40)
+            wait(2)
         }
     }
 

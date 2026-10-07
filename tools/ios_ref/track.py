@@ -34,11 +34,13 @@ def ncc(img, tpl):
     s1 = fftconvolve(img, ones, mode="valid")
     s2 = fftconvolve(img * img, ones, mode="valid")
     n = tpl.size
-    var = np.maximum(s2 - s1 * s1 / n, 1e-9)
+    # A flat window (blur, sky) has almost no variance: without a floor its score blows up past 1.
+    var = np.maximum(s2 - s1 * s1 / n, 0.002 * n)
     return num / (np.sqrt(var) * tn)
 
 
-def track(frames_dir, ref_index, rect, scales, t0=None, t1=None):
+def track(frames_dir, ref_index, rect, scales, t0=None, t1=None, window=None):
+    """window: (x0, y0, x1, y1) where the element's centre may be (default: anywhere)."""
     frames = [tuple(l.split()) for l in open(os.path.join(frames_dir, "frames.txt")) if l.strip()]
     frames = [(int(i), float(t)) for i, t in frames]
     ref = load(os.path.join(frames_dir, "f%04d.png" % ref_index))
@@ -60,6 +62,15 @@ def track(frames_dir, ref_index, rect, scales, t0=None, t1=None):
             m = ncc(img, tpl)
             if m is None:
                 continue
+            if window is not None:
+                x0, y0, x1, y1 = window
+                mask = np.full(m.shape, -9.0)
+                ys0, ys1 = max(0, int(y0 - th / 2)), min(m.shape[0], int(y1 - th / 2) + 1)
+                xs0, xs1 = max(0, int(x0 - tw / 2)), min(m.shape[1], int(x1 - tw / 2) + 1)
+                if ys1 <= ys0 or xs1 <= xs0:
+                    continue
+                mask[ys0:ys1, xs0:xs1] = m[ys0:ys1, xs0:xs1]
+                m = mask
             k = int(np.argmax(m))
             py, px = divmod(k, m.shape[1])
             if m[py, px] > best[0]:
@@ -82,10 +93,12 @@ def main():
     ap.add_argument("--from", dest="t0", type=float)
     ap.add_argument("--to", dest="t1", type=float)
     ap.add_argument("--out")
+    ap.add_argument("--window", help="x0,y0,x1,y1: where the centre may be")
     a = ap.parse_args()
     lo, hi, st = map(float, a.scales.split(":"))
     scales = list(np.round(np.arange(lo, hi + st / 2, st), 4))
-    rows = track(a.frames, a.ref, (a.x, a.y, a.w, a.h), scales, a.t0, a.t1)
+    win = tuple(map(float, a.window.split(","))) if a.window else None
+    rows = track(a.frames, a.ref, (a.x, a.y, a.w, a.h), scales, a.t0, a.t1, win)
     lines = ["%.4f %.1f %.1f %.3f %.3f" % r for r in rows]
     print("# t cx cy scale score")
     print("\n".join(lines))

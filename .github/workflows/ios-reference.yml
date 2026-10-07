@@ -103,7 +103,7 @@ jobs:
               esac
             done < ios-reference/plan.txt
           fi
-          du -sh out/* out/slow/* 2>/dev/null
+          du -sh out/* 2>/dev/null || true
 
       # The full recordings are ~500 MB a run and the download to the dev machine is slow: a small copy for analysis
       # (video at 1 px per point with every frame's own time kept, stills at 1.5 px per point), the originals apart.
