@@ -345,6 +345,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val stack = SpringValue(0f, 100f, inv)
         var removing = false
         var placed = false
+        /** Cleared by a swipe or its Clear button: it flies off with its actions (from [clearFrom], how far it was revealed). */
+        var clearing = false
+        var clearFrom = 0f
         /** What it shows, without its glass (see [drawLayered]); faded per draw, never through an offscreen layer. */
         val node = android.graphics.RenderNode("nc").apply { setHasOverlappingRendering(false) }
         var key = Long.MIN_VALUE
@@ -382,8 +385,11 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     /** Groups by app (as iOS by default), most important group first (the system's ranking), newest first in a group. */
     private fun readNotifs(animate: Boolean) {
+        // Cleared here and confirmed by the system since: forgotten.
+        cleared.keys.retainAll(Notifs.items.mapTo(HashSet()) { it.key })
         val items = Notifs.items.filter { !it.summary || Notifs.items.none { o -> o !== it && o.groupKey == it.groupKey && !o.summary } }
             .filter { !it.media || it.contentIntent != null && !host.media.active }
+            .filter { it.key !in cleared }
         val byApp = LinkedHashMap<String, MutableList<Notifs.Item>>()
         for (it in items) byApp.getOrPut(it.pkg) { ArrayList() } += it
         groups = byApp.map { (pkg, list) -> pkg to list.sortedByDescending { it.postTime } }
@@ -494,7 +500,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             b.visible = false
             if (!animate) b.appear.snapTo(0f)
             else if (abs(b.swipe.value) < 1f) b.appear.animateTo(0f, LEAVE)
-            else b.swipe.animateTo(-width.toFloat(), SWIPE_OUT, b.swipe.velocity.coerceAtMost(-1500f))
+            else if (!b.clearing) b.swipe.animateTo(-width.toFloat(), SWIPE_OUT, b.swipe.velocity.coerceAtMost(-1500f))
         }
         if (!animate) blocks.entries.removeAll { it.value.removing }
         contentH = y
@@ -922,16 +928,26 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             platter = true, stacked = if (b.stackH != b.fullH) st else 0f)
     }
 
-    private fun drawSwipeActions(c: Canvas, b: Block, y: Float, h: Float, alpha: Float, sheetY: Float) {
+    private fun drawSwipeActions(c: Canvas, b: Block, y: Float, h: Float, alphaIn: Float, sheetY: Float) {
         val item = b.item ?: return
-        val reveal = -b.swipe.value
+        // Cleared: the actions keep the shape they had then and leave with the platter, sliding left and fading out.
+        var reveal = -b.swipe.value
+        var shift = 0f
+        var alpha = alphaIn
+        if (b.clearing) {
+            val gone = ((reveal - b.clearFrom) / max(1f, width - b.clearFrom)).coerceIn(0f, 1f)
+            shift = reveal - b.clearFrom
+            reveal = b.clearFrom
+            alpha *= 1f - gone
+            if (alpha <= 0.003f) return
+        }
         val bw = 78f * u
         val right = width - margin
         val clearable = groupItems(b).any { it.clearable }
         val names = if (clearable) listOf("Options", if (b.count > 1 && b.stack.value > 0.5f) "Clear All" else "Clear") else listOf("Options")
         // Buttons grow out from the right edge as the platter moves aside; a long swipe stretches Clear over the whole width.
         val long = (reveal - names.size * (bw + gap)) / (width * 0.3f)
-        var x1 = right
+        var x1 = right - shift
         for ((i, name) in names.reversed().withIndex()) {
             val avail = (reveal - gap) / names.size
             var bwNow = min(bw, avail).coerceAtLeast(0f)
@@ -1531,7 +1547,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 val g = b?.group ?: return
                 val s = confirmGroup.getOrPut(g) { SpringValue(0f, 100f, inv) }
                 if (s.target < 0.5f) { s.animateTo(1f, CONFIRM); hnd().postDelayed({ s.animateTo(0f, CONFIRM) }, 3000) }
-                else { groups.firstOrNull { it.first == g }?.second?.forEach { Notifs.cancel(it) }; expanded.remove(g) }
+                else { expanded.remove(g); clearItems(groups.firstOrNull { it.first == g }?.second ?: emptyList()) }
             }
             "showLess" -> { val g = b?.group ?: return; expanded.remove(g); relayout(animate = true) }
             "swipe" -> {
@@ -1549,6 +1565,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val clearable = groupItems(b).any { it.clearable }
         val buttons = (if (clearable) 2 else 1) * (78f * u + gap) + gap
         val s = b.swipe.value
+        if (swipeLogs++ < 20) AppLog.log("[nc] swipe let go at ${s.roundToInt()} px, ${vx.roundToInt()} px/s (clearable $clearable, clear past ${(-width * 0.62f).roundToInt()} or ${(-buttons).roundToInt()} at < -2200 px/s)")
         when {
             clearable && (s < -width * 0.62f || (s < -buttons && vx < -2200f)) -> clearBlock(b, vx)
             s < -min(buttons * 0.3f, 60f * u) || vx < -500f -> { b.swipe.animateTo(-buttons, SWIPE_BACK, vx); revealed = b }
@@ -1556,16 +1573,42 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
     }
 
-    /** Clears [b] (a stack: all of it): it flies off to the left, the rest closes up when the system confirms. */
+    private var swipeLogs = 0
+
+    /**
+     * Clears [b] (a stack: all of it): it flies off to the left with its actions while the rest closes up on the same
+     * frames (not when the system confirms, a moment later).
+     */
     private fun clearBlock(b: Block, vx: Float = -2500f) {
         performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         if (revealed === b) revealed = null
+        b.clearing = true
+        b.clearFrom = -b.swipe.value
         b.swipe.animateTo(-width.toFloat(), SWIPE_OUT, min(vx, -1500f))
-        for (it in groupItems(b)) Notifs.cancel(it)
+        clearItems(groupItems(b))
+    }
+
+    /** Notifications cleared here: out of the list now; asked of the system, which confirms them a moment later. */
+    private val cleared = HashMap<String, Long>()
+
+    private fun clearItems(items: List<Notifs.Item>) {
+        val now = android.os.SystemClock.uptimeMillis()
+        val keys = items.filter { it.clearable }.map { it.key }
+        if (keys.isEmpty()) return
+        for (k in keys) cleared[k] = now
+        for (it in items) Notifs.cancel(it)
+        readNotifs(animate = true)
+        // Refused (or never confirmed): back in the list.
+        hnd().postDelayed({
+            val still = Notifs.items.mapTo(HashSet()) { it.key }
+            if (keys.any { it in still && cleared.remove(it) != null }) { AppLog.log("[nc] a clear was not confirmed: back in the list"); readNotifs(animate = true) }
+        }, CLEAR_CONFIRM_MS)
     }
 
     private companion object {
         const val MAX_LINES = 4
+        /** How long a clear may wait for the system's confirmation before the notification comes back. */
+        const val CLEAR_CONFIRM_MS = 3000L
         const val LONG_MS = 480L
         /** How far the list scrolls up before the clock under it has faded out (pt). */
         const val CLOCK_FADE_PT = 140f

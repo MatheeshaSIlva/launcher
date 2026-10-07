@@ -155,6 +155,9 @@ copy it wholesale — port the working pieces cleanly. File map:
   way such a notification shows; they stay until it stops ringing, also over an open panel.
 - **Never screenshot or record Notification Center or banners on Matheesha's phone** (they show his messages). Measure them
   with framestats only (`tools/scenario_shade.sh` never captures them; its test banner is our own text).
+- **A PendingIntent sent by the Shizuku shell starts its activity behind everything** (Android 15+: the sender must itself be
+  allowed to start activities; the shell is not a visible app). Notification taps are sent from our process (its windows
+  are on screen), never through the shell; check `adb logcat | grep "would be moved to the foreground"`.
 - **A focusable overlay becomes the keyboard's target** and the system lifts an open keyboard above it: the shade's
   window takes `FLAG_ALT_FOCUSABLE_IM` together with focus (never without it: on a non-focusable window it inverts).
 - **Changing the touchable region of a window that holds a touch is fine, changing its flags is not**: making the shade

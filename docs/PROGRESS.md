@@ -1262,3 +1262,21 @@ for it). What a banner sees: over home, the wallpaper blurred to the glass's fro
 an app, which we cannot see, an app's usual background in this appearance (`comp.banner.behind`: white / black). Text
 in the label colours; a call's buttons the kit's red and green; action capsules the kit's tertiary fill. Checked on the
 emulator over home and over an app, in light and dark. The long look moved in step 2a.
+
+## Fixes reported on the S24 (2026-10-08, second round)
+
+- **No app opened from a notification** (the card grew, froze, went). Notification taps were sent from the Shizuku shell
+  (it can run our own instant transition). Since Android 15 a PendingIntent's sender must itself be allowed to start
+  activities from the background, and the shell is not a visible app: the system started the activity but left it
+  behind (logged: "Without Android 15 BAL hardening this activity would be moved to the foreground ... the sender does
+  not allow BAL"); the card waited 2.5 s for the app and went. Now our own process sends them (the shade's window is on
+  screen; logged as BAL_ALLOW_HOME_APP on the emulator, BAL_ALLOW_ALLOWLISTED_COMPONENT on the S24) with "no animation"
+  options; the card covers the start. The test notification is now made like a current app's (its creator does not lend
+  the right), and `TEST_SHADE --es do nc_open --es title T` opens one of ours without a tap. Checked on the emulator
+  (recorded) and on the S24 (Settings in front 0.4 s after the tap; log only).
+- **Clearing was not animated properly.** After Clear (or a long swipe) the platter flew off but its Options / Clear
+  buttons stayed, stretched across the row; the next notification slid up under them, and they vanished in one frame;
+  the gap only closed when the system confirmed, a moment later. Now the buttons leave with the platter (sliding and
+  fading) and the list closes up at once; a clear the system does not confirm within 3 s comes back. Checked on the
+  emulator frame by frame. (The emulator's synthetic swipes report no speed: only a swipe past 62 % of the width clears
+  there; a real flick clears from the button's width.)

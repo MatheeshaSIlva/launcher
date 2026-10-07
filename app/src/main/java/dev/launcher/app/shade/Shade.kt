@@ -193,6 +193,16 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (testHook == null) testHook = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
                 if (i.getStringExtra("do") == "nc_expand") handler.post { if (panel == Panel.NC) nc.expandList() }
+                // Opens one of OUR test notifications (by its title) as a tap on its platter would: a script never taps the
+                // list on the phone (it holds the owner's own notifications).
+                if (i.getStringExtra("do") == "nc_open") handler.post {
+                    val title = i.getStringExtra("title")
+                    val item = Notifs.items.firstOrNull { it.pkg == ctx.packageName && it.title?.toString() == title }
+                    if (panel == Panel.NC && item != null) {
+                        val u = u()
+                        openFrom(item, android.graphics.RectF(14f * u, root.height * 0.6f, root.width - 14f * u, root.height * 0.6f + 66f * u))
+                    } else AppLog.log("[shade] test open: ${if (item == null) "no test notification \"$title\"" else "Notification Center is not open"}")
+                }
             }
         }.also {
             val f = android.content.IntentFilter("dev.launcher.app.TEST_SHADE")
@@ -785,8 +795,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         handler.removeCallbacks(launchTimeout)
         handler.postDelayed(launchTimeout, LAUNCH_TIMEOUT_MS)
         launchIo.execute {
-            val ok = dev.launcher.app.NoAnimStarts.send(pi) ||
-                Notifs.send(ctx, pi, android.app.ActivityOptions.makeCustomAnimation(ctx, 0, 0))
+            // Sent by our own process: since Android 15 only a visible sender may bring the app to the front (our shade's
+            // window is), and the shell is not one. The shell's start (no system animation, a transition of ours) started
+            // the activity behind everything: the card waited, froze and went. "No animation" options instead; the card
+            // covers the start.
+            val ok = Notifs.send(ctx, pi, android.app.ActivityOptions.makeCustomAnimation(ctx, 0, 0)) ||
+                dev.launcher.app.NoAnimStarts.send(pi)
             if (ok && item.autoCancel) Notifs.cancel(item)
             if (!ok) handler.post { if (launchPkg == pkg) endLaunch() }
         }

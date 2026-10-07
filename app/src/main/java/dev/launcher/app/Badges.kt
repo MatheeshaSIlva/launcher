@@ -50,8 +50,12 @@ object Badges {
                     .setAutoCancel(true)
                     .apply {
                         val open = i.getStringExtra("open")?.let { c.packageManager.getLaunchIntentForPackage(it) }
+                        // Made like a current app's (target SDK 35+): its creator does not lend the right to start
+                        // activities from the background, so a test shows whether our tap alone brings the app forward.
+                        val noLend = if (android.os.Build.VERSION.SDK_INT >= 34) android.app.ActivityOptions.makeBasic()
+                            .setPendingIntentCreatorBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_DENIED).toBundle() else null
                         if (open != null) setContentIntent(android.app.PendingIntent.getActivity(c, i.getIntExtra("id", 0), open,
-                            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
+                            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT, noLend))
                     }
                     .build()
                 nm.notify(1000 + i.getIntExtra("id", 0), n)
