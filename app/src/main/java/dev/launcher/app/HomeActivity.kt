@@ -76,6 +76,10 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         @Suppress("DEPRECATION")
         window.navigationBarColor = Color.TRANSPARENT
         window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS }
+        // Bars that "show transiently by swipe" (nothing is hidden on home, so nothing changes on screen): with the default
+        // behaviour the window manager hands a pull from the top edge over to the stock status bar after 24 dp
+        // (DisplayPolicy.requestTransientBars), and our shade would lose the finger. With this it keeps it on home.
+        if (Build.VERSION.SDK_INT >= 30) window.insetsController?.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         window.setBackgroundDrawable(ColorDrawable(Color.BLACK))
         // The keyboard (App Library search) never resizes or pans home; lists end above it through insets instead.
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
@@ -532,6 +536,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     private fun finishWallpaper(w: Wallpaper?) {
         if (wallpaper !== w) return
+        Wallpaper.current = w
         // The materials' strength follows how light the wallpaper is (see Appearance's veils).
         w?.let { dev.launcher.app.theme.Appearance.wallpaperLuma = it.meanLuminance }
         if (w == null) {

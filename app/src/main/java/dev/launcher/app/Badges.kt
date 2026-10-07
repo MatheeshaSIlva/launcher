@@ -35,11 +35,35 @@ object Badges {
                 listeners.toList().forEach { it() }
             }
         }
+        // A notification that alerts (high importance), for checking banners:
+        //   adb shell am broadcast -a dev.launcher.app.TEST_NOTIFY -p dev.launcher.app --es title T --es text X [--ei id N]
+        //   (... --ei id N --ez cancel true: removes it again)
+        val notify = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: android.content.Intent) {
+                val nm = c.getSystemService(android.app.NotificationManager::class.java)
+                if (i.getBooleanExtra("cancel", false)) { nm.cancel(1000 + i.getIntExtra("id", 0)); return }
+                nm.createNotificationChannel(android.app.NotificationChannel(TEST_CHANNEL, "Test", android.app.NotificationManager.IMPORTANCE_HIGH))
+                val n = android.app.Notification.Builder(c, TEST_CHANNEL)
+                    .setSmallIcon(android.R.drawable.ic_dialog_email)
+                    .setContentTitle(i.getStringExtra("title") ?: "Test")
+                    .setContentText(i.getStringExtra("text") ?: "A notification that alerts.")
+                    .setAutoCancel(true)
+                    .build()
+                nm.notify(1000 + i.getIntExtra("id", 0), n)
+                AppLog.log("[badges] test notification posted")
+            }
+        }
+        val nf = android.content.IntentFilter("dev.launcher.app.TEST_NOTIFY")
+        if (android.os.Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(notify, nf, android.Manifest.permission.DUMP, null, Context.RECEIVER_EXPORTED)
+        else ctx.registerReceiver(notify, nf, android.Manifest.permission.DUMP, null)
         val f = android.content.IntentFilter("dev.launcher.app.TEST_BADGE")
         // Senders must hold DUMP: adb's shell does, other apps cannot.
         if (android.os.Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(r, f, android.Manifest.permission.DUMP, null, Context.RECEIVER_EXPORTED)
         else ctx.registerReceiver(r, f, android.Manifest.permission.DUMP, null)
     }
+
+    /** The channel of the adb test notifications (the only notifications of ours that show banners). */
+    const val TEST_CHANNEL = "test"
 
     fun addListener(l: () -> Unit) { listeners += l }
     fun removeListener(l: () -> Unit) { listeners -= l }
@@ -77,11 +101,27 @@ object Badges {
     }
 }
 
-/** Receives the notifications for [Badges] (access is granted through Shizuku, or by the user in Settings). */
+/**
+ * Receives the notifications for [Badges] and for our shade and status bar ([dev.launcher.app.shade.Notifs]). Access is
+ * granted through Shizuku, or by the user in Settings; the class keeps its name because that access is granted to it by name.
+ */
 class BadgeListener : NotificationListenerService() {
-    override fun onListenerConnected() { AppLog.log("[badges] connected"); Badges.recount(this) }
-    override fun onListenerDisconnected() { Badges.clear() }
-    override fun onNotificationPosted(sbn: StatusBarNotification?) = Badges.recount(this)
-    override fun onNotificationRemoved(sbn: StatusBarNotification?) = Badges.recount(this)
-    override fun onNotificationRankingUpdate(rankingMap: RankingMap?) = Badges.recount(this)
+    override fun onListenerConnected() {
+        AppLog.log("[badges] connected")
+        dev.launcher.app.shade.Notifs.service = this
+        changed()
+    }
+    override fun onListenerDisconnected() {
+        if (dev.launcher.app.shade.Notifs.service === this) dev.launcher.app.shade.Notifs.service = null
+        Badges.clear()
+        dev.launcher.app.shade.Notifs.clear()
+    }
+    override fun onNotificationPosted(sbn: StatusBarNotification?) = changed()
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) = changed()
+    override fun onNotificationRankingUpdate(rankingMap: RankingMap?) = changed()
+
+    private fun changed() {
+        Badges.recount(this)
+        dev.launcher.app.shade.Notifs.rebuild(this)
+    }
 }

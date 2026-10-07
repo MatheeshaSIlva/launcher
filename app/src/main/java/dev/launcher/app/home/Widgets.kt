@@ -286,7 +286,7 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
 
 /**
  * The frame every home widget sits in (an Android widget's card, the glass clock): the iOS geometry for its span (a card
- * spanning its columns' icons plus 4 pt each side, corners 23 pt), its name below like an app label (hideable, fading),
+ * spanning its columns' icons plus 4 pt each side, corners 28 pt), its name below like an app label (hideable, fading),
  * edit mode's remove badge and resize handle, and an animated change of size: the card springs from the old size to the
  * new one while the old look crossfades into the new content laid out at its final size (nothing stretches), as iOS resizes
  * a widget. Subclasses lay out their content for [cardW] x [cardH] and draw within the card as shown now ([shownW], [shownH]).

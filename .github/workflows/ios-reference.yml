@@ -1,0 +1,151 @@
+name: iOS reference capture
+# Records iOS 27's own system UI (Control Center, Notification Center, banners, home) in the Simulator, driven by
+# ios-reference/RefUITests, so its motion and layout can be measured instead of guessed. Runs on pushes to the
+# ios-reference branch (it never touches the Android build on main) or by hand.
+on:
+  push:
+    branches: [ios-reference]
+    paths: ["ios-reference/**", ".github/workflows/ios-reference.yml"]
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: "Scenario names to run (space separated); empty = all"
+        required: false
+        default: ""
+
+# One run per commit (a push was seen to start three).
+concurrency:
+  group: ios-ref-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: xcode-27
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools and versions
+        run: |
+          brew install xcodegen > /dev/null
+          xcodebuild -version
+          sw_vers
+          xcrun simctl list runtimes
+
+      - name: Simulator (newest iPhone Pro on the newest iOS)
+        id: sim
+        run: |
+          python3 - <<'EOF' > sim.env
+          import json, re, subprocess
+          d = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "-j"]))
+          rts = [r for r in d["runtimes"] if r.get("platform") == "iOS" and r.get("isAvailable")]
+          rt = max(rts, key=lambda r: [int(x) for x in r["version"].split(".")])
+          def num(t):
+              m = re.match(r"iPhone (\d+) Pro$", t["name"])
+              return int(m.group(1)) if m else -1
+          types = [t for t in rt.get("supportedDeviceTypes", []) if num(t) > 0]
+          ty = max(types, key=num)
+          print(f"RUNTIME='{rt['identifier']}'")
+          print(f"RUNTIME_NAME='{rt['name']}'")
+          print(f"TYPE='{ty['identifier']}'")
+          print(f"TYPE_NAME='{ty['name']}'")
+          EOF
+          cat sim.env
+          . ./sim.env
+          UDID=$(xcrun simctl create Ref "$TYPE" "$RUNTIME")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          # A calm, repeatable status bar and light appearance (dark is a later pass).
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100 || true
+          xcrun simctl ui "$UDID" appearance light || true
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "$TYPE_NAME on $RUNTIME_NAME ($UDID)"
+
+      - name: Build the host app and the UI tests
+        working-directory: ios-reference
+        run: |
+          xcodegen generate
+          set -o pipefail
+          xcodebuild build-for-testing -project IOSReference.xcodeproj -scheme RefUITests \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath ../dd | tail -n 40
+
+      - name: Capture
+        run: |
+          chmod +x ios-reference/capture.sh
+          XCTESTRUN=$(ls dd/Build/Products/*.xctestrun | head -1)
+          mkdir -p out
+          cp sim.env out/
+          UDID="${{ steps.sim.outputs.udid }}"
+          if [ -n "${{ github.event.inputs.tests }}" ]; then
+            ios-reference/capture.sh "$UDID" "$XCTESTRUN" out ${{ github.event.inputs.tests }}
+          else
+            # ios-reference/plan.txt: "normal: tests..." (or "all") and "slow F: tests..." lines; slow runs with the
+            # Simulator's Slow Animations on (F: the factor every pause in the tests is stretched by).
+            while IFS= read -r line; do
+              case "$line" in
+                "setup reduce-transparency")
+                  # Solid materials instead of blur: far less rendering on a CI machine without a GPU, so the recorder
+                  # drops fewer frames; motion is not changed by it. Takes effect after a reboot of the simulator.
+                  xcrun simctl spawn "$UDID" defaults write com.apple.Accessibility EnhancedBackgroundContrastEnabled -bool true
+                  xcrun simctl shutdown "$UDID"; xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
+                  xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3                     --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100 || true ;;
+                normal*)
+                  # "normal: tests" or "normal@tag: tests" (results in out/tag/...)
+                  head=${line%%:*}; t=${line#*:}; [ "$(echo $t)" = all ] && t=""
+                  o=out; case "$head" in *@*) o="out/${head#*@}";; esac
+                  ios-reference/capture.sh "$UDID" "$XCTESTRUN" "$o" $t ;;
+                slow*)
+                  f=$(echo "$line" | cut -d: -f1 | awk '{print $2}'); t=${line#*:}
+                  xcrun swift ios-reference/cadebug.swift "$UDID" debug_slow_animations 1
+                  SLOW=$f ios-reference/capture.sh "$UDID" "$XCTESTRUN" out/slow $t
+                  xcrun swift ios-reference/cadebug.swift "$UDID" debug_slow_animations 0 ;;
+              esac
+            done < ios-reference/plan.txt
+          fi
+          du -sh out/* 2>/dev/null || true
+
+      # The full recordings are ~500 MB a run and the download to the dev machine is slow: a small copy for analysis
+      # (video at 1 px per point with every frame's own time kept, stills at 1.5 px per point), the originals apart.
+      - name: Shrink
+        if: always()
+        run: |
+          which ffmpeg > /dev/null || brew install ffmpeg > /dev/null
+          for d in $(find out -name video.mp4 -exec dirname {} \;); do
+            d="$d/"
+            t=${d#out/}; t=${t%/}; s="small/$t"; mkdir -p "$s"
+            cp "$d"/*.txt "$d"/*.log "$s"/ 2>/dev/null || true
+            if [ -f "$d/video.mp4" ]; then
+              ffmpeg -nostdin -loglevel error -i "$d/video.mp4" -fps_mode passthrough -vf "scale=402:-2" \
+                -c:v libx264 -crf 24 -preset medium -pix_fmt yuv420p "$s/video.mp4" || true
+              ffprobe -v error -select_streams v:0 -show_entries frame=pts_time -of csv=p=0 "$d/video.mp4" > "$s/video_times.txt" || true
+            fi
+            for p in "$d"/*.png; do
+              [ -f "$p" ] && ffmpeg -nostdin -loglevel error -i "$p" -vf "scale=603:-2" "$s/$(basename "$p")" || true
+            done
+            if [ -d "$d/attachments" ]; then
+              mkdir -p "$s/attachments"
+              cp "$d"/attachments/*.json "$d"/attachments/*.txt "$s/attachments/" 2>/dev/null || true
+              for p in "$d"/attachments/*.png; do
+                [ -f "$p" ] && ffmpeg -nostdin -loglevel error -i "$p" -vf "scale=603:-2" "$s/attachments/$(basename "$p")" || true
+              done
+            fi
+          done
+          cp out/sim.env small/ 2>/dev/null || true
+          du -sh small
+
+      - name: Upload (small)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ref-small-${{ github.run_number }}
+          path: small/
+          retention-days: 30
+
+      - name: Upload (originals)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ref-full-${{ github.run_number }}
+          path: out/
+          retention-days: 14

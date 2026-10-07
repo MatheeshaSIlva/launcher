@@ -342,39 +342,95 @@ object GestureNav {
 
     // ================================================================== status bar (nav thread)
 
-    /** Our status bar is on screen: only then are the stock clock and icons hidden (SystemRestore.applyFlags). */
+    /**
+     * Our status bar is on screen: only then are the stock clock and icons hidden, and the stock shade blocked
+     * (SystemRestore.applyFlags). The bar lives in the shade's window (shade/Shade.kt) with Notification Center and
+     * Control Center.
+     */
     @Volatile var statusBarShown = false
         private set
-    private var statusBar: dev.launcher.app.statusbar.StatusBarView? = null
+    private var shade: dev.launcher.app.shade.Shade? = null
+    private val statusBar: dev.launcher.app.statusbar.StatusBarView? get() = shade?.takeIf { statusBarShown }?.bar
     private val appearanceIo = Executors.newSingleThreadExecutor()
     private var appearanceLogs = 0
+    private var stripHeight = 0
+    private var shadeLogs = 0
 
     private fun addStatusBar() {
         val ctx = a11y ?: return
         val wm = wm ?: return
         val h = max(systemDimen("status_bar_height"), dp(24).toInt())
-        val v = dev.launcher.app.statusbar.StatusBarView(ctx)
-        val lp = overlayParams(WindowManager.LayoutParams.MATCH_PARENT, h, touchable = false).apply {
-            gravity = Gravity.TOP
-            title = "LauncherStatusBar"
-        }
-        try {
-            wm.addView(v, lp)
-            statusBar = v
+        val s = shade ?: dev.launcher.app.shade.Shade(ctx, wm, nav, shadeLink).also { shade = it }
+        if (s.attach(h)) {
             statusBarShown = true
-            AppLog.log("[statusbar] on (${h}px)")
-            reapplyFlags()   // now the stock clock and icons can go
+            AppLog.log("[statusbar] on (${h}px), with our shade")
+            reapplyFlags()   // now the stock clock and icons can go, and the stock shade
             refreshAppearance()
-        } catch (t: Throwable) {
-            AppLog.log("[statusbar] addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
         }
     }
 
     private fun removeStatusBar() {
-        statusBar?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
-        statusBar = null
+        shade?.detach()
         nav.removeCallbacks(appearanceTick)
-        if (statusBarShown) { statusBarShown = false; reapplyFlags() }   // stock clock and icons back
+        if (statusBarShown) { statusBarShown = false; reapplyFlags() }   // stock clock, icons and shade back
+    }
+
+    /** True while our shade has a panel open (nav thread). */
+    val shadeOpen get() = shade?.isOpen == true
+
+    private val shadeLink = object : dev.launcher.app.shade.Shade.NavLink {
+        override fun backdrop(then: (dev.launcher.app.shade.BackdropSource?) -> Unit) = shadeBackdrop(then)
+        override fun stripHeight(): Int = if (stripHeight > 0) stripHeight else dp(20).toInt()
+        override fun shadeChanged(open: Boolean) { if (!open) refreshAppearance() }
+        override fun frontPackage(): String? = frontNow
+        override fun frontClass(): String? = frontNowClass
+        override fun frontSince(): Long = frontNowAt
+    }
+
+    /**
+     * The package whose window came to the front last and when (uptime ms), home included (ours); SystemUI's and the
+     * system's own windows (the volume panel a ringing call is silenced with, the "Viewing full screen" hint a call's screen
+     * brings) and keyboards are not the front. The shade's ringing banners ask it.
+     */
+    @Volatile private var frontNow: String? = null
+    @Volatile private var frontNowClass: String? = null
+    @Volatile private var frontNowAt = 0L
+
+    /**
+     * What is behind the shade: on home, home as it shows (recorded now: the picture at rest can be out of date); over an
+     * app, our latest picture of it at once, then a fresh one if that was stale (its screen changed since, or none).
+     */
+    private fun shadeBackdrop(then: (dev.launcher.app.shade.BackdropSource?) -> Unit) {
+        if (homeVisible) {
+            HomeBridge.preview?.let { then(dev.launcher.app.shade.BackdropSource.Home(it)) }
+            HomeBridge.recordForGesture {
+                val p = HomeBridge.preview ?: return@recordForGesture
+                nav.post { then(dev.launcher.app.shade.BackdropSource.Home(p)) }
+            }
+            return
+        }
+        val pkg = lastFrontPkg
+        val kept = pkg?.let { images[it] }
+        if (shadeLogs < 6) { shadeLogs++; AppLog.log("[shade] behind: $pkg, kept picture ${if (kept != null) "${SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L)} ms old" else "none"}${if (pkg != null && keptIsStale(pkg)) " (stale)" else ""}") }
+        if (kept != null) then(dev.launcher.app.shade.BackdropSource.App(kept))
+        val fresh = kept == null || pkg == null || keptIsStale(pkg) || SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L) > 2_000L
+        val s = ShizukuLink.service ?: run { if (kept == null) then(null); return }
+        if (!fresh) return
+        tasksIo.execute {
+            // The app in front by its package, or (not reported yet: just after a restart) the most recent task.
+            val tasks = try { parseTasks(s.recentTasks(3)) } catch (_: Throwable) { emptyList() }
+            val task = if (pkg != null) frontTask?.takeIf { it.pkg == pkg } ?: tasks.firstOrNull { it.pkg == pkg } else tasks.firstOrNull()
+            if (task == null) { AppLog.log("[shade] no task for $pkg"); if (kept == null) nav.post { then(null) }; return@execute }
+            snapIo.execute {
+                val t0 = SystemClock.uptimeMillis()
+                val b = try { snapshot(s, task.id, true) } catch (_: Throwable) { null }
+                if (shadeLogs < 12) { shadeLogs++; AppLog.log("[shade] fresh picture of $pkg: ${if (b != null) "${SystemClock.uptimeMillis() - t0} ms" else "none"}") }
+                nav.post {
+                    if (b != null) { remember(task.pkg, b, t0); then(dev.launcher.app.shade.BackdropSource.App(b)) }
+                    else if (kept == null) then(null)
+                }
+            }
+        }
     }
 
     private val appearanceTick = Runnable { refreshAppearance() }
@@ -468,8 +524,14 @@ object GestureNav {
         // The keyboard is not the app in front: taken for it, a close aimed at the keyboard's package and a launch that showed
         // the keyboard looked like the wrong app had come up (seen on the S24 after App Library search).
         if (isKeyboard(pkg, className)) return
-        if (pkg != lastFrontPkg) AppLog.log("[front] now in front: $pkg")
+        if (pkg != lastFrontPkg) AppLog.log("[front] now in front: $pkg ($className)")
         nav.post { refreshAppearance() }   // a different window may ask for a different status bar
+        if (pkg != "com.android.systemui" && pkg != "android" && (pkg != app.packageName || className?.endsWith(".HomeActivity") == true || isOwnScreen(className))) {
+            frontNow = pkg
+            frontNowClass = className
+            frontNowAt = SystemClock.uptimeMillis()
+            nav.post { shade?.frontChanged() }
+        }
         // Our own windows (home, cards, strip) are never the app a gesture closes or a launch waits for; our own screens
         // (developer panel, safe settings) are: else closing one flew the previous app's card to the centre.
         if (pkg == app.packageName && !isOwnScreen(className)) return
@@ -570,6 +632,7 @@ object GestureNav {
         try {
             wm.addView(stripView, lp)   // added after the card window, so it stays above it
             strip = stripView
+            stripHeight = h
             AppLog.log("[nav] gesture strip on (${h}px high, own UI thread, persistent card window)")
         } catch (t: Throwable) {
             AppLog.log("[nav] strip addView FAILED: ${t.javaClass.simpleName}: ${t.message}")

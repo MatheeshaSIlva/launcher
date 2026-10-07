@@ -158,9 +158,22 @@ class ShellService : IShellService.Stub() {
     }
 
     override fun taskSnapshotBuffer(taskId: Int, fresh: Boolean): HardwareBuffer? = try {
-        snapshotBuffer(taskId, fresh)
+        snapshotBuffer(taskId, fresh).also { if (it == null) snapshotNote("null result for task $taskId (fresh $fresh)") }
     } catch (t: Throwable) {
+        snapshotNote("${(t.cause ?: t).javaClass.simpleName}: ${(t.cause ?: t).message}")
         null
+    }
+
+    private var snapshotNotes = 0
+
+    /** Why a snapshot failed, with the snapshot calls this Android has (a few times per service, for the log). */
+    private fun snapshotNote(why: String) {
+        if (snapshotNotes++ >= 3) return
+        val sigs = try {
+            systemService("activity_task", ATM_STUB).javaClass.methods.filter { it.name == "takeTaskSnapshot" || it.name == "getTaskSnapshot" }
+                .joinToString { m -> m.name + m.parameterTypes.joinToString(",", "(", ")") { it.simpleName } }
+        } catch (_: Throwable) { "?" }
+        android.util.Log.i("Launcher", "[snapshot] failed: $why; available: $sigs")
     }
 
     override fun taskSnapshotBufferLow(taskId: Int): HardwareBuffer? = try {
@@ -174,11 +187,35 @@ class ShellService : IShellService.Stub() {
         val ms = atm.javaClass.methods
         val snap: Any? = if (fresh) {
             ms.firstOrNull { it.name == "takeTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, false)
+                ?: callWithDefaults(atm, ms.firstOrNull { it.name == "takeTaskSnapshot" && it.parameterTypes.size > 2 }, taskId, false)
         } else {
             // (taskId, isLowResolution): the reduced copy is read when the snapshot is only in storage.
             ms.firstOrNull { it.name == "getTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, low)
+                ?: callWithDefaults(atm, ms.firstOrNull { it.name == "getTaskSnapshot" && it.parameterTypes.size > 2 }, taskId, low)
         }
         return snap?.javaClass?.getMethod("getHardwareBuffer")?.invoke(snap) as? HardwareBuffer
+    }
+
+    /**
+     * Calls [m] (taskId, flag, ...) with neutral values for the parameters newer Android versions added (false, 0, null):
+     * Android 17 gave the snapshot calls another parameter, and the two-parameter lookups found nothing.
+     */
+    private fun callWithDefaults(target: Any, m: java.lang.reflect.Method?, taskId: Int, flag: Boolean): Any? {
+        m ?: return null
+        val types = m.parameterTypes
+        if (types.isEmpty() || types[0] != Int::class.javaPrimitiveType) return null
+        var flagUsed = false
+        val args = Array<Any?>(types.size) { i ->
+            when {
+                i == 0 -> taskId
+                types[i] == Boolean::class.javaPrimitiveType -> if (!flagUsed) { flagUsed = true; flag } else false
+                types[i] == Int::class.javaPrimitiveType -> 0
+                types[i] == Long::class.javaPrimitiveType -> 0L
+                types[i] == Float::class.javaPrimitiveType -> 0f
+                else -> null
+            }
+        }
+        return m.invoke(target, *args)
     }
 
     override fun switchToTask(taskId: Int): String = try {
@@ -250,6 +287,47 @@ class ShellService : IShellService.Stub() {
     }
 
     private fun readInt(o: Any, name: String): Int? = try { o.javaClass.getField(name).get(o) as? Int } catch (_: Throwable) { null }
+
+    // ---------------------------------------------------------------- raw touch (a shade pull the system took over)
+
+    private val touchStream = TouchStream()
+
+    override fun watchTouch(listener: ITouchStream) = touchStream.watch(listener)
+
+    override fun stopTouch() = touchStream.stop()
+
+    // ---------------------------------------------------------------- brightness (Control Center's slider)
+
+    private val display: Any? by lazy { try { systemService("display", "android.hardware.display.IDisplayManager\$Stub") } catch (_: Throwable) { null } }
+
+    private fun brightnessInfo(): Any? = try {
+        val d = display ?: return null
+        d.javaClass.methods.firstOrNull { it.name == "getBrightnessInfo" && it.parameterTypes.size == 1 }?.invoke(d, 0)
+    } catch (_: Throwable) { null }
+
+    private fun readFloat(o: Any, name: String): Float? = try { o.javaClass.getField(name).get(o) as? Float } catch (_: Throwable) { null }
+
+    override fun brightness(): Float = try {
+        brightnessInfo()?.let { readFloat(it, "brightness") }
+            ?: (display?.let { d -> d.javaClass.methods.firstOrNull { it.name == "getBrightness" && it.parameterTypes.size == 1 }?.invoke(d, 0) as? Float })
+            ?: -1f
+    } catch (_: Throwable) { -1f }
+
+    override fun brightnessRange(): FloatArray = try {
+        val info = brightnessInfo()
+        val min = info?.let { readFloat(it, "brightnessMinimum") } ?: 0f
+        val max = info?.let { readFloat(it, "brightnessMaximum") } ?: 1f
+        // The slider's range is the normal one; a maximum above 1 is the high-brightness headroom, which the slider never uses.
+        floatArrayOf(min, max.coerceAtMost(1f))
+    } catch (_: Throwable) { floatArrayOf(0f, 1f) }
+
+    override fun setBrightness(value: Float, commit: Boolean) {
+        try {
+            val d = display ?: return
+            val name = if (commit) "setBrightness" else "setTemporaryBrightness"
+            d.javaClass.methods.firstOrNull { it.name == name && it.parameterTypes.size == 2 }?.invoke(d, 0, value)
+        } catch (_: Throwable) { }
+    }
 
     private fun systemService(name: String, stubClass: String): Any {
         val binder = Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java)

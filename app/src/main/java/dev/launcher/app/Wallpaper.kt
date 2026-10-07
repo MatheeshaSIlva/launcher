@@ -65,6 +65,12 @@ class Wallpaper private constructor(
         matrix(w, h).apply { preScale(bitmap.width / heavy.width.toFloat(), bitmap.height / heavy.height.toFloat()) }
 
     companion object {
+        /**
+         * The wallpaper home shows now (set by HomeActivity whenever it changes; null if it could not be read). Notification
+         * Center draws it and its glass refracts it. Any thread (the bitmaps are immutable hardware bitmaps).
+         */
+        @Volatile var current: Wallpaper? = null
+
         /** The system wallpaper's id: changes whenever the user sets a new wallpaper (-1 if unknown). */
         fun currentId(ctx: Context): Int = try {
             WallpaperManager.getInstance(ctx).getWallpaperId(WallpaperManager.FLAG_SYSTEM)

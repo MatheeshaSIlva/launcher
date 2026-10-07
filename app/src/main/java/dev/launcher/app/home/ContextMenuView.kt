@@ -18,13 +18,18 @@ import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.SpringValue
 import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts
-import kotlin.math.max
 
 /**
  * iOS's long-press menu for a home icon, widget or button: home blurs and dims behind (the blur is applied by home through
- * [onProgress]), the pressed item lifts above it, sharp, and a menu of the theme's liquid glass (the dock's material,
- * refracting the blurred home behind it: [drawBehind]) grows from the item's side. A tap on an item runs it, a tap anywhere
- * else closes the menu. One spring drives the lift, the blur and the menu together (as UIContextMenuInteraction does).
+ * [onProgress]), the pressed item lifts above it, sharp, and a menu of liquid glass (refracting the blurred home behind it:
+ * [drawBehind]) grows from the item's side. A tap on an item runs it, a tap anywhere else closes the menu. One spring drives
+ * the lift, the blur and the menu together (as UIContextMenuInteraction does).
+ *
+ * Laid out as iOS 27's Home Screen Quick Actions (Apple's UI kit, docs/IOS27_KIT.md): 250 pt wide (wider for a long label),
+ * corners 30, 10 pt above the first row and 8 below the last; rows 42 pt with the symbol first (a 20 pt column 26 pt in)
+ * and the label 14 pt after it in 17 pt type; no lines between rows; the widget sizes in a row of their own at the bottom.
+ * Its material is the kit's Regular glass: the blurred home bent at the edge, under white 70 % "lighten" and grey 10 %
+ * "darken" (dark: the home's colours at #1a1a1a's brightness), with a deep soft shadow (8 pt down, blur 48, 25 % / 45 %).
  */
 @SuppressLint("ViewConstructor")
 class ContextMenuView(
@@ -57,8 +62,13 @@ class ContextMenuView(
 
     private val glass = LiveGlass.create(GlassStyle.IOS, m.u)
     private val dim = Paint()
+    // The kit's Regular glass over the bent, blurred home: light and dark fills by their blend modes, and its shadow.
+    private val lightLift = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; blendMode = android.graphics.BlendMode.LIGHTEN }
+    private val lightDarken = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFBFBFBF.toInt(); blendMode = android.graphics.BlendMode.DARKEN }
+    private val darkLuma = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1A1A1A.toInt(); blendMode = android.graphics.BlendMode.LUMINOSITY }
+    private val darkLift = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF1A1A1A.toInt(); blendMode = android.graphics.BlendMode.LIGHTEN }
+    private val shadow = Paint(Paint.ANTI_ALIAS_FLAG)
     private val fallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xD92C2C2E.toInt() }
-    private val separator = Paint().apply { color = 0x26FFFFFF; strokeWidth = max(1f, m.pt(0.5f)) }
     private val press = Paint().apply { color = 0x1FFFFFFF }
     private val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = m.pt(1.6f); strokeCap = Paint.Cap.ROUND }
     private val labels = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.label }
@@ -72,10 +82,16 @@ class ContextMenuView(
     private val inverse = Matrix()
     private val visible = RectF()
 
-    private val rowH get() = m.pt(44f)
+    private val rowH get() = m.pt(42f)
+    private val sizesH get() = m.pt(44f)
+    private val padTop get() = m.pt(10f)
+    private val padBottom get() = m.pt(8f)
     // iOS: 250 pt, wider for a long label (up to the screen's margins).
     private var panelW = 0f
-    private val radius get() = m.pt(22f)
+    private val radius get() = m.pt(30f)
+    /** Each row's top (from the panel's top) and height (px). */
+    private var rowTop = FloatArray(0)
+    private var rowHeight = FloatArray(0)
 
     val isShowing get() = visibility == VISIBLE && k.target > 0f
 
@@ -96,8 +112,16 @@ class ContextMenuView(
         items = menu
         labels.clear()
         val longest = menu.maxOfOrNull { labels.paint.measureText(it.label) } ?: 0f
-        panelW = maxOf(m.pt(250f), longest + m.pt(76f)).coerceAtMost(m.w - 2 * m.libMargin)
-        val h = rowH * menu.size
+        panelW = maxOf(m.pt(250f), longest + m.pt(86f)).coerceAtMost(m.w - 2 * m.libMargin)
+        rowTop = FloatArray(menu.size)
+        rowHeight = FloatArray(menu.size)
+        var y = padTop
+        for ((i, it) in menu.withIndex()) {
+            rowTop[i] = y
+            rowHeight[i] = if (it.sizes != null) sizesH else rowH
+            y += rowHeight[i]
+        }
+        val h = y + padBottom
         val gap = m.pt(if (picture == null) 8f else 12f)
         below = anchor.bottom + gap + h < m.h - m.bottomSafe
         val top = if (below) anchor.bottom + gap else anchor.top - gap - h
@@ -154,7 +178,6 @@ class ContextMenuView(
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dim)
         panelTint.color = sc
         panelTint.alpha = (android.graphics.Color.alpha(sc) * kk).toInt()
-        separator.color = Appearance.separator
         press.color = Appearance.pressFill
         fallback.color = Appearance.mix(0xF2F2F2F7.toInt(), 0xD92C2C2E.toInt())
         // The pressed item, lifted (slightly bigger), above the blur.
@@ -183,45 +206,52 @@ class ContextMenuView(
         c.save()
         c.concat(panelMatrix)
         val g = glass
+        val dark = Appearance.dark
+        // Its deep, soft shadow (the kit: 8 pt down, blur 48: about a 24 pt spread), under the glass.
+        shadow.color = 0x01000000
+        shadow.setShadowLayer(m.pt(40f), 0f, m.pt(8f), android.graphics.Color.argb((255 * kk * (0.25f + 0.2f * dark)).toInt(), 0, 0, 0))
+        c.drawRoundRect(panel, radius, radius, shadow)
         if (g != null && c.isHardwareAccelerated) {
-            // The very glass of the dock, bending home as it is behind the menu, blurred by the same amount (not dimmed: the
-            // platter reads a little lighter than the dimmed home around it). Drawn outside the fading layer (see LiveGlass).
+            // Liquid glass bending home as it is behind the menu, blurred by the same amount (not dimmed: the platter reads
+            // a little lighter than the dimmed home around it). Drawn outside the fading layer (see LiveGlass).
             panelMatrix.invert(inverse)
             visible.set(0f, 0f, width.toFloat(), height.toFloat())
             inverse.mapRect(visible)
             g.draw(c, panel, radius, kk * Motion.profile.menuBlur * m.u, panelMatrix, visible, kk) { cc ->
                 drawBehind(cc)
-                // The same scrim as around it: the glass is the dock's (clear, its tint only), over what is really behind it.
                 cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), panelTint)
             }
+            // The kit's Regular glass fills over it, by their blend modes (light and dark cross-fade with the appearance).
+            lightLift.alpha = (255 * 0.7f * kk * (1f - dark)).toInt()
+            lightDarken.alpha = (255 * 0.1f * kk * (1f - dark)).toInt()
+            darkLuma.alpha = (255 * 0.97f * kk * dark).toInt()
+            darkLift.alpha = (255 * kk * dark).toInt()
+            if (dark < 1f) { c.drawRoundRect(panel, radius, radius, lightLift); c.drawRoundRect(panel, radius, radius, lightDarken) }
+            if (dark > 0f) { c.drawRoundRect(panel, radius, radius, darkLuma); c.drawRoundRect(panel, radius, radius, darkLift) }
         }
         val layer = c.saveLayerAlpha(panel.left - 2, panel.top - 2, panel.right + 2, panel.bottom + 2, (255 * kk).toInt())
         if (g == null || !c.isHardwareAccelerated) c.drawRoundRect(panel, radius, radius, fallback)
         for ((i, item) in items.withIndex()) {
-            val top = panel.top + i * rowH
+            val top = panel.top + rowTop[i]
+            val rh = rowHeight[i]
             val choices = item.choices
             if (choices != null) {
-                drawChoices(c, item, choices, top)
-                if (i < items.size - 1) c.drawLine(panel.left, top + rowH, panel.right, top + rowH, separator)
+                drawChoices(c, item, choices, top, rh)
                 continue
             }
             val sizes = item.sizes
             if (sizes != null) {
-                drawSizes(c, item, sizes, top)
-                if (i < items.size - 1) c.drawLine(panel.left, top + rowH, panel.right, top + rowH, separator)
+                drawSizes(c, item, sizes, top, rh)
                 continue
             }
             if (i == pressed) {
-                c.save()
-                r.set(panel.left, top, panel.right, top + rowH)
-                c.clipRect(r)
-                c.drawRoundRect(panel, radius, radius, press)
-                c.restore()
+                r.set(panel.left + m.pt(8f), top, panel.right - m.pt(8f), top + rh)
+                c.drawRoundRect(r, m.pt(14f), m.pt(14f), press)
             }
-            labels.draw(c, item.label, item.label, panel.left + m.pt(16f), labels.baselineFor(top + rowH / 2f), panelW - m.pt(60f),
+            // iOS 27: the symbol first (a 20 pt column 26 pt in), the label 14 pt after it.
+            drawGlyph(c, item, panel.left + m.pt(36f), top + rh / 2f)
+            labels.draw(c, item.label, item.label, panel.left + m.pt(60f), labels.baselineFor(top + rh / 2f), panelW - m.pt(86f),
                 color = if (item.destructive) Appearance.destructive else null)
-            drawGlyph(c, item, panel.right - m.pt(26f), top + rowH / 2f)
-            if (i < items.size - 1) c.drawLine(panel.left + m.pt(16f), top + rowH, panel.right, top + rowH, separator)
         }
         c.restoreToCount(layer)
         c.restore()
@@ -230,15 +260,19 @@ class ContextMenuView(
     private val sizeFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
     private val sizeStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x99FFFFFF.toInt(); style = Paint.Style.STROKE }
 
-    private fun sizeSlot(n: Int, i: Int): Float = panel.left + panel.width() * (i + 0.5f) / n
+    /** The widget sizes spread over the row 17 pt in from each side (iOS 27's widget row). */
+    private fun sizeSlot(n: Int, i: Int): Float {
+        val inset = m.pt(17f) + m.pt(19f)
+        return if (n <= 1) panel.centerX() else panel.left + inset + (panel.width() - 2 * inset) * i / (n - 1)
+    }
 
     /** A segmented row: the choices side by side, the chosen one on a capsule that glides to a new choice. */
-    private fun drawChoices(c: Canvas, item: Item, choices: List<String>, top: Float) {
+    private fun drawChoices(c: Canvas, item: Item, choices: List<String>, top: Float, rh: Float) {
         val n = choices.size
         val inset = m.pt(6f)
         val segW = (panel.width() - 2 * inset) / n
         val pos = choiceAt.value.coerceIn(0f, (n - 1).toFloat())
-        r.set(panel.left + inset + pos * segW, top + inset, panel.left + inset + (pos + 1) * segW, top + rowH - inset)
+        r.set(panel.left + inset + pos * segW, top + inset, panel.left + inset + (pos + 1) * segW, top + rh - inset)
         val pf = Appearance.pressFill
         choiceFill.color = pf
         choiceFill.alpha = (android.graphics.Color.alpha(pf) * 2.2f).toInt().coerceAtMost(255)
@@ -246,19 +280,19 @@ class ContextMenuView(
         for ((j, label) in choices.withIndex()) {
             val cx = panel.left + inset + (j + 0.5f) * segW
             val near = (1f - kotlin.math.abs(pos - j)).coerceIn(0f, 1f)
-            choiceText.draw(c, "c$label", label, cx, choiceText.baselineFor(top + rowH / 2f), segW - m.pt(4f), (150 + 105 * near).toInt())
+            choiceText.draw(c, "c$label", label, cx, choiceText.baselineFor(top + rh / 2f), segW - m.pt(4f), (150 + 105 * near).toInt())
         }
     }
 
     /** iOS's widget size row: one glyph per size, shaped like it (small square, wide, large square, tall), the current filled. */
-    private fun drawSizes(c: Canvas, item: Item, sizes: List<WidgetSize>, top: Float) {
+    private fun drawSizes(c: Canvas, item: Item, sizes: List<WidgetSize>, top: Float, rh: Float) {
         val unit = m.pt(5.2f)
         sizeStroke.strokeWidth = m.pt(1.6f)
         for ((j, s) in sizes.withIndex()) {
             val w = s.spanX * unit
             val h = s.spanY * unit
             val cx = sizeSlot(sizes.size, j)
-            val cy = top + rowH / 2f
+            val cy = top + rh / 2f
             r.set(cx - w / 2f, cy - h / 2f, cx + w / 2f, cy + h / 2f)
             val rad = m.pt(2.4f)
             sizeFill.color = Appearance.label
@@ -339,10 +373,16 @@ class ContextMenuView(
         }
     }
 
+    /** The row at [y] (from the panel's top), the nearest one in the padding above or below. */
+    private fun rowAt(y: Float): Int {
+        for (i in rowTop.indices) if (y < rowTop[i] + rowHeight[i]) return i
+        return (items.size - 1).coerceAtLeast(0)
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (!isShowing) return false
-        val i = if (panel.contains(e.x, e.y)) ((e.y - panel.top) / rowH).toInt().coerceIn(0, items.size - 1) else -1
+        val i = if (panel.contains(e.x, e.y)) rowAt(e.y - panel.top) else -1
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> if (i != pressed) { pressed = i; invalidate() }
             MotionEvent.ACTION_UP -> {
@@ -365,7 +405,7 @@ class ContextMenuView(
                 if (chosen != null && sizes != null) {
                     // A size: applied at once and the menu closes onto the widget, which is already growing or shrinking
                     // to it (the lifted copy shows the old size: kept open, the menu would hide the change).
-                    val j = ((e.x - panel.left) / panel.width() * sizes.size).toInt().coerceIn(0, sizes.size - 1)
+                    val j = (0 until sizes.size).minByOrNull { kotlin.math.abs(sizeSlot(sizes.size, it) - e.x) } ?: 0
                     chosen.onSize?.invoke(sizes[j])
                     dismiss()
                     return true

@@ -51,6 +51,11 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").
 - **Glass/blur**: three layers — own snapshot blur (baseline, all phones) → standard cross-window blur where the system enables it
   → Samsung dim-behind blur upgrade.
+- **Shade (iOS 27 profile)**: `statusbar/` (the bar: springs for every slot, notification icons) and `shade/`: one full-screen
+  overlay window (`Shade`) holding the bar, Notification Center (`NotificationCenterView`), Control Center
+  (`ControlCenterView`, `CcLayout`, `CcGallery`, `Controls`), banners (`BannerView`) and `PanelGlass` (the dock's glass over a
+  baked backdrop). Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
+  shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
 
 ## Proven mechanisms (reference implementations are in the probe repo)
 
@@ -119,6 +124,30 @@ copy it wholesale — port the working pieces cleanly. File map:
   lock/unlock because Default USB configuration had data functions; fixed by "debugging only"/"No data transfer". Hence: status bar flags are set
   through the binder API with a token owned by our service (system drops them when it dies), never with `cmd` (those persist until reboot).
 - **Everything that changes system state must auto-restore and be recoverable without Shizuku** (notification action + safe-settings screen). A reboot always clears these in-memory flags.
+- **The window manager takes a pull from the top edge away from us.** After 24 dp (within 500 ms) of a pull that starts in the
+  top band, `DisplayPolicy.requestTransientBars` transfers the touch to SystemUI's status bar (`transferTouch`) unless the
+  focused window shows its bars transiently: our shade window gets ACTION_CANCEL mid-pull. It cannot be blocked from an app
+  (spy windows, providing insets, FLAG_SLIPPERY all need signature permissions). Home sets
+  `BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE` (no transfer there); over apps the shade follows the finger from the touchscreen's
+  raw events, read by the shell service (`TouchStream`, `/dev/input`) only while a pull lasts.
+- **`adb shell input` never reaches `/dev/input`** (injected after the kernel): the raw stream sees nothing, so scripted pulls
+  over apps always end at the handover. On the emulator `tools/kswipe.sh` sends real touchscreen events through the console.
+- **Blocking the stock shade also blocks heads-up notifications** (SystemUI: "No heads up: disabled panel"); sound and
+  vibration still play. Our banners (`shade/BannerView.kt`) replace them; never ship DISABLE_EXPAND without them. With the
+  heads-up suppressed, SystemUI does not open a call's or an alarm's full screen either while the phone is unlocked (it expects
+  the heads-up to show it): our ringing banners (Answer/Decline from the call's own intents, an alarm's actions) are the only
+  way such a notification shows; they stay until it stops ringing, also over an open panel.
+- **Never screenshot or record Notification Center or banners on Matheesha's phone** (they show his messages). Measure them
+  with framestats only (`tools/scenario_shade.sh` never captures them; its test banner is our own text).
+- **Changing the touchable region of a window that holds a touch is fine, changing its flags is not**: making the shade
+  focusable (for back) is a relayout (16.7 ms of its thread on the S24); it happens only 300 ms after a panel came to rest.
+- **iOS reference capture** (`ios-reference/`, `tools/ios_ref/`, results in `docs/IOS27_KIT.md` and `docs/IOS27_MOTION.md`):
+  the CI Simulator has no GPU, so the recorder misses frames while SpringBoard animates heavy layers: use frame times,
+  never counts; repeat a motion and fit one spring over the runs; release from a standstill (hold before lifting), since
+  XCUITest lifts while still moving. Synthesized touches start ~1 s late and `XCUIApplication.launch()` waits ~10 s for
+  the app to idle (post notifications 20 s ahead, wait for `NotificationShortLookView`). The Simulator's Slow Animations
+  switch does nothing on iOS 27. Each run is a fresh simulator: Control Center starts empty (`test00_setupControls`).
+  Download the run's small artifact only (the originals are ~1 GB and this connection gets ~75 KB/s).
 - **Keystore**: debug builds are signed with a committed keystore so CI builds install over each other. Keep that pattern (new key file for this app).
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
 
@@ -151,6 +180,10 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
   run, `git stash pop`) before calling a change an improvement. `tools/find_icon.py` finds an icon on a screenshot
   (template in `tools/shots/`) so a script never taps a guessed position. The App Switcher (`scenario_switcher.sh`) is
   measured on the phone by frame stats only: it shows other apps' snapshots, so it is looked at on the emulator.
+  The shade: `scenario_shade.sh` (Control Center open/close/edit, Notification Center, a test banner; window
+  `LauncherStatusBar`). Test notifications and banners: `am broadcast -a dev.launcher.app.TEST_NOTIFY -p dev.launcher.app
+  --es title T --es text X --ei id N` (`--ez cancel true` removes it). The emulator (Android 17) hides the task snapshot calls
+  from the shell, so Control Center over an app shows its dark fallback there; over home it is real.
 - When the S24 is connected (USB or wireless adb, `DEVICE=<serial>`): animations are checked frame by frame with
   `tools/device.sh rec NAME [SECS]` … `recpull NAME [WAIT]` (screenrecord captures every composed frame, 120 fps; contact
   sheets and frame times land in `tools/shots/NAME/`; needs `pip install imageio-ffmpeg`). Frame logs give the numbers.
@@ -189,7 +222,12 @@ Phase 2 decides whether the whole idea works.
 
 - Play Store policy: downloaded/interpreted theme scripts; Play Billing for the paywall; review risk of self-granting permissions via Shizuku; whether the silent updater may ship in the store build.
 - Longer stress test of Samsung dim-blur (one run dropped to 60 Hz at the strongest level; first use had a 125 ms hitch → pre-warm a zero-dim blur window).
-- Heads-up notifications and in-app links still play stock animations; re-test once our shade exists.
+- Our shade replaces the stock one (and its heads-up, by our banners). Still stock: in-app links' animations; launching from a
+  notification uses the app's own transition (no card from the platter yet); replying in place (the keyboard sits under our
+  overlay).
+- Stock status bar chips ignore the disable flags on the Android 17 emulator (modern SystemUI): an incoming call's grey chip
+  and a call in progress's timer chip draw under our time; the mic/camera privacy chip (a system safeguard, it must stay)
+  draws over our battery. Not checked on the S24 (One UI's own chips). Our bar does not yet make room for them.
 - Review the thedjchi Shizuku fork's code before recommending it in onboarding.
 - Accessibility requirements need writing. Theme gallery/sharing plan, app name: undecided (placeholder "Launcher").
 - Everything was probed on one S24; re-run the key probes on other devices after phase 2.

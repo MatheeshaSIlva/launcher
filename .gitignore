@@ -5,3 +5,8 @@ build/
 local.properties
 *.iml
 tools/shots/
+
+# iOS reference capture: downloaded results and Xcode output
+ios-reference/out/
+ios-reference/*.xcodeproj/
+dd/

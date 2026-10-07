@@ -57,8 +57,9 @@ class HomeMetrics(
     fun cellTop(row: Int) = gridTop + row * cellHeight
 
     // ---- widgets (iOS): a widget spans its columns' icons plus 4 pt each side, and its rows from the first icon's top to
-    //      the last icon's bottom; corners 23 pt; its name below like an app label
-    val widgetRadius = 23 * u
+    //      the last icon's bottom; corners 28 pt (Apple's iOS 27 kit: a small widget is 164.67 pt, radius 28); its name
+    //      below like an app label
+    val widgetRadius = 28 * u
     fun widgetWidth(spanX: Int) = (spanX - 1) * columnPitch + iconSize + 8 * u
     fun widgetHeight(spanY: Int) = (spanY - 1) * cellHeight + iconSize
     /** Left edge of a widget starting at [col], relative to that column's cell. */

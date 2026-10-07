@@ -4,6 +4,7 @@ import android.graphics.Bitmap;
 import android.hardware.HardwareBuffer;
 import android.content.Intent;
 import android.os.Bundle;
+import dev.launcher.app.ITouchStream;
 
 // Runs in the Shizuku user-service process (uid 2000 via wireless debugging).
 // Transaction codes are explicit so the app and an older still-running service never disagree.
@@ -85,4 +86,18 @@ interface IShellService {
     // "taskId package windowingMode left top right bottom" (display px). Our card window leaves holes for them, so a video
     // keeps playing in front of launch and close animations instead of vanishing under them.
     String[] floatingWindows() = 25;
+
+    // Display brightness for Control Center's slider (default display): the current value (linear float, as the display
+    // manager holds it, -1 if unknown), its range [min, max], and setting it: temporary while the finger moves (not
+    // saved, as SystemUI's slider does), committed on release (saved). Oneway: called on every frame of a drag.
+    float brightness() = 26;
+    float[] brightnessRange() = 27;
+    oneway void setBrightness(float value, boolean commit) = 28;
+
+    // Streams the touchscreen's raw first-finger position to [listener] until every finger is up (read from /dev/input,
+    // which the shell may read). For a pull from the status bar: the window manager hands a pull from the top edge over
+    // to the stock status bar after 24 dp (DisplayPolicy.requestTransientBars: transferTouch), so our window stops
+    // receiving it; the shade keeps following the finger from this stream. Starts at once; a second call replaces the first.
+    void watchTouch(in ITouchStream listener) = 29;
+    void stopTouch() = 30;
 }

@@ -1,0 +1,41 @@
+# XcodeGen spec for the iOS reference capture (built on GitHub's macOS runner; see README.md).
+name: IOSReference
+options:
+  bundleIdPrefix: dev.launcher.ref
+  deploymentTarget:
+    iOS: "26.0"
+settings:
+  base:
+    CODE_SIGNING_ALLOWED: "NO"
+    CODE_SIGN_IDENTITY: ""
+    SWIFT_VERSION: "5.0"
+    GENERATE_INFOPLIST_FILE: "YES"
+targets:
+  RefHost:
+    type: application
+    platform: iOS
+    sources: [RefHost]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.launcher.ref.host
+        INFOPLIST_KEY_CFBundleDisplayName: Ref
+        INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
+  RefUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [RefUITests]
+    dependencies:
+      - target: RefHost
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.launcher.ref.uitests
+        TEST_TARGET_NAME: RefHost
+schemes:
+  RefUITests:
+    build:
+      targets:
+        RefHost: all
+        RefUITests: [test]
+    test:
+      targets: [RefUITests]

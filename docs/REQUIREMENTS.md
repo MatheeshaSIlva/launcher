@@ -167,6 +167,8 @@ To verify before release: Play policy on downloaded theme scripts; Play Billing 
 2. **Smooth core** — gesture strip, launch and close cards, recents carousel, own status bar. *Gate: no visible stutter, frame logs clean at 120 Hz.* (Decides whether the idea works.)
 3. **Home and drawer** — canvas, dock, folders, drawer, widgets, icon packs, long-press menu. *Gate: usable as a daily launcher without Shizuku.*
 4. **Shade** — grouped notifications, inline reply, quick settings, media, brightness. *Gate: no stock panel can appear anywhere.*
+   (First slice built 2026-10-07, see PROGRESS.md: everything but inline reply; the gate is not met yet: stock status bar
+   chips showed on the Android 17 emulator.)
 5. **Themes and builder** — profiles, colour sources, theme files, quick edit and full builder. *Gate: a shipped theme restyles everything, settings included.*
 6. **Glass and polish** — blur layers, haptics, search, accessibility, schedules. *Gate: a longer blur stress run holds 120 Hz.*
 7. **Release** — paywall, backup and sync, store review checks, website. *Gate: Play policy items cleared.*

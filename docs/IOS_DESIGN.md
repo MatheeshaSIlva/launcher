@@ -76,11 +76,11 @@ What we took (kept within Matheesha's "clear, slight rim" decision):
 ## Widgets and the Search pill
 
 - Widget frame (measured): spans its columns' icons plus 4 pt each side, from its first row's icon top to its last row's icon
-  bottom; corner radius 23 pt; content padding 16 pt; name below like an app label.
+  bottom; corner radius 28 pt (iOS 27 kit; was 23 measured from a picture); content padding 16 pt; name below like an app label.
 - Search pill: 78 x 29.6 pt (wider when many page dots need room); "Search" with a magnifier at rest, page dots while pages move.
 
 - Widget sizes (iOS): small 2 x 2, medium 4 x 2, large 4 x 4, extra large 4 x 6 (iOS 27). Android widgets are shown at the
-  iOS size their minimum size fits (any of them if resizable), clipped to the 23 pt corners, their app's name below.
+  iOS size their minimum size fits (any of them if resizable), clipped to the 28 pt corners, their app's name below.
 - Clock widget: the lock screen's "Glass" clock: the date line (weekday and day, semibold) above the time in tall glass
   numerals filling the 4 x 2 box; 12 or 24 hours as the system is set, no AM/PM; no card and no label.
 
@@ -115,3 +115,21 @@ SF Pro may not be used outside Apple platforms (its licence covers mock-ups of s
 The iOS theme uses **Inter** 4.1 (SIL Open Font License, `assets/fonts/InterVariable.ttf` + licence), whose optical-size axis
 stands in for SF Text/Display. Inter's caps are taller (0.727 em vs SF's 0.705), so sizes are set to match SF's cap height
 (SF 11 → Inter 10.7).
+
+## Shade: Control Center, Notification Center, banners (iOS 27 profile)
+
+Values the shade is built from (pt of the 402 pt layout, iPhone 16/17 Pro proportions, scaled by width on the S24). Since
+2026-10-07 from Apple's iOS 27 UI kit and the running iOS 27 (docs/IOS27_KIT.md, docs/IOS27_MOTION.md).
+
+| Item | Value |
+| --- | --- |
+| Status bar | time 15 (tabular digits), notification icons 14.5 high, 4.5 apart, up to 5; both groups 34 from the edges |
+| Control Center grid | cells 70 on an 85.33 pitch from 38 (the running iOS 27); grid top 132.3 (86 in edit mode) |
+| Control Center top | + and power buttons 29 at (38, 23) and (335, 23); status row centred 104.2 |
+| Control Center motion | iOS 27, measured: blur and controls in over ~110 pt of pull (0.3 / 1 after release); the controls pulled down 100 x (1 - e^(-d/270)) pt and settling on 0.42 / 0.68 (they overshoot a little); close 0.28 / 1 with the controls lifting 8 pt; backdrop blur 26, dim 36 % |
+| Notification Center | slides down as a sheet (its bottom edge under the finger); open 0.44 / 1, close 0.38 / 1 |
+| Notification platter | (iOS 27 kit) margins 14, radius 24, 8 apart; icon 38.33 at 14; text from 62.33; 15 pt text on 17-18 pt lines; min 66.33 tall; stacks show 8 pt shelves, 10 / 20 narrower per side |
+| Notification Center clock | date and glass numerals in (36, 110)-(W-36, 206); flashlight and camera buttons 50 round, 71 from the sides, 78 above the bottom |
+| Banner | 8 from the sides, top at half the status bar + 16 (iOS: just under the status bar), platter as Notification Center's (radius 24); iOS 27, measured: out of the camera (the island) on 0.64 / 0.61, overshooting a little, 7 s, back into it on 0.3 / 1 |
+| Call banner (compact incoming call) | 76 tall, radius 30, photo 50, name 17 semibold, Decline / Answer 46 round (system red / green), 12 apart |
+| Alarm and other ringing banners | the notification's actions as capsules 40 tall, 8 apart, under the text |

@@ -1015,3 +1015,102 @@ Round 26 (Matheesha: Spotlight's magnifier was dark in dark mode and light in li
   paint: it compounded every frame of the opening until the glyph was gone and only its shadow (dark, unscaled) was left.
   Now its colour comes from the appearance and the alpha is set from that at each draw; the shadow is a `FadingShadow`.
   On the S24: light grey in dark mode, dark grey in light mode, the same tone as the "Search" placeholder.
+
+## Phase 4 slice: status bar, Control Center, Notification Center, banners (2026-10-07, in test)
+
+Matheesha (2026-10-06): finish the status bar (the clock looked big next to the icons, the left gap was bigger than the
+right, no notification icons), then recreate iOS 27's editable, polished, animated Control Center and Notification Center.
+
+**Status bar** (`statusbar/StatusBarView.kt`, rewritten)
+- Equal side margins (34 pt of the 402 pt layout, both groups); time 15 pt with tabular digits, the icons' visual weight.
+- Notification icons after the time (one per app, from notifications that would alert; never ours, never a group summary),
+  14.5 pt, up to 5, then a dot; never into the camera cutout. Every slot sits on springs: an icon arriving slides the
+  others over, levels (battery, signal, Wi-Fi) glide, digits roll (minute changes).
+- With Control Center open the right group moves down onto Control Center's status row ("NN%" beside the battery, network
+  icons glide left); Notification Center takes the bar's colour for its light or dark content.
+
+**Shade** (`shade/`): one full-screen accessibility overlay (`Shade`) that holds the bar, Control Center, Notification
+Center, the Control Center gallery and banners. Pull down from the left of the camera = Notification Center, right of it =
+Control Center (iOS); the panel follows the finger (rubber band past open), a fling or 40 % decides, a swipe up from the
+bottom bar or Back closes it. Disable flags now also block the stock shade (DISABLE_EXPAND, disable2 QS + shade).
+- **Pulls over apps**: the window manager hands a pull from the top edge to SystemUI after 24 dp (`transferTouch`), which
+  cancels ours. Home now shows its bars transiently (no transfer there); over apps the shell service streams the
+  touchscreen's raw positions (`TouchStream`, `/dev/input`, only while a pull lasts) and the panel follows those after the
+  cancel. On the emulator only with real touchscreen events (`tools/kswipe.sh`); **not yet confirmed with a finger on the S24.**
+- **Control Center** (`ControlCenterView`, `Controls`, `CcLayout`, `CcGallery`, `Media`): iOS 27 grid (68.5 pt cells, 17 pt
+  gaps), connectivity module (Wi-Fi, Bluetooth, cellular, airplane, hotspot, location...), media module, Focus, brightness
+  and volume sliders (stretch past their ends), flashlight, timer, calculator, camera, rotation lock, ringer, dark mode,
+  screen mirroring, QR. Toggles act at once (own APIs or shell commands); long press opens the setting. Edit mode (+ at the
+  top left or a long press on empty space): controls show remove badges and resize handles, drag to
+  move (the others make room), the gallery sheet adds controls; the layout is saved. Glass: one baked, blurred picture of
+  what is behind (home's or the app's last snapshot) shared by every control, each control in its own GPU layer.
+- **Notification Center** (`NotificationCenterView`, `NotifPainter`, `Notifs`): the lock screen's date and glass clock over
+  the wallpaper, the player when media plays, notifications grouped into stacks per app (tap to expand, "N more"), swipe left
+  for Options / Clear (a long swipe clears), Clear All with an X → Clear confirm, a long press lifts a notification with its
+  menu, flashlight and camera buttons at the bottom (hold to use). Taps open the notification's own intent.
+- **Banners** (`BannerView`), replacing the heads-up that blocking the stock shade suppresses: swoop in from the top-left
+  corner, 5 s, swipe up or sideways away, pull down for Notification Center, tap to open.
+- **Calls and alarms** (found while testing: with the heads-up suppressed, SystemUI does not open a call's full screen
+  either while the phone is unlocked, so a call would ring with nothing on screen): a ringing notification's banner stays
+  until it stops ringing, also over an open panel. Calls look like iOS's compact call (caller, red Decline, green Answer, from
+  the call's own intents); alarms show their actions (Snooze, Stop). A tap or pull down opens the full screen; swiped away it
+  stays in Notification Center while it rings. It steps aside while the call's own screen is in front and comes back when
+  that screen goes. Emulator (Google Phone, `adb emu gsm call`; Clock alarm): Decline, Answer, Stop, tap to full screen,
+  over Control Center, swipe away, the Phone app open when the call comes, an app restart while ringing: all as described.
+
+**Smoothness** (S24, `tools/scenario_shade.sh`, framestats, last three runs): every step 0-2 missed refreshes (one close-by-tap
+run 4); GPU medians 2-9 ms, p90 under 10 ms except one edit-mode exit at 15 ms. What made it: Notification Center as one
+GPU layer moved by translation (was 7-9 ms GPU), every notification, control and banner in its own layer recorded at rest,
+at most three layers re-recorded per frame when only their place changed, the shade made focusable (for Back) only 300 ms
+after a panel rests (the window change cost a 16.7 ms frame), the blurred backdrop baked at quarter size off the UI thread
+(6-13 ms after the first, 82 ms the first time).
+
+**Not verified on the S24** (ask Matheesha): a pull over apps with a finger (the raw stream); real heads-up replacement
+(messages); an incoming call and an alarm with the phone unlocked (One UI's call screen class names are logged as
+"[shade] in front while ringing"); opening apps from notifications; media controls with real playback.
+
+**Found, not solved**: on the Android 17 emulator SystemUI's status bar chips ignore the disable flags (an incoming call's
+chip and a call in progress's timer draw under our time; the mic privacy chip over our battery). One UI may differ.
+A stock heads-up that appears while our flags are briefly off (the app starting or updating while a call rings) stays.
+
+## iOS 27 reference: measured instead of guessed (2026-10-07)
+
+Matheesha: motion matters most; nobody here has a Mac or an iPhone; use the iOS 27 Simulator and Apple's UI kit, derive
+the design system and the motion, then carry them over.
+
+- **Design system**: Apple's iOS 27 Figma kit read through the Figma API (his copy of the kit's examples: Control Center,
+  home, Quick Actions, notifications, lock screen) and the running system's own accessibility frames:
+  `docs/IOS27_KIT.md`. The kit's raw SVG exports carry the materials' exact recipes (fills with blend modes, the 0.5 pt
+  rim, inner highlights, the 8 pt drop shadow); `ios-reference/figma/`.
+- **Motion**: `ios-reference/` (an XcodeGen project, UI tests that drive SpringBoard with exact touches, a host app that
+  posts notifications and plays calibration springs) runs on GitHub's `xcode-27` runner (free for this public repo) from
+  the `ios-reference` branch; `tools/ios_ref/` turns the recordings into frames, tracks elements and fits springs.
+  The chain was checked on known springs (within 3 %). Results and choreography: `docs/IOS27_MOTION.md`.
+- **Found** (not in any article): Control Center's controls are not dropped in: they fade in at their own size, are
+  pulled down with the finger (an ease-out of its travel) and spring back up past their place (0.42 / 0.68); "+" and
+  power stay put; closing, the blur clears before the controls finish fading. Notification Center is the lock screen's
+  cover sheet sliding down over a still wallpaper with a liquid edge that bends toward the finger. Folders: 0.49 / 0.92.
+- **Carried over** (working tree, not yet pushed): Control Center geometry (70 pt controls on an 85.33 pitch, rows from 132.3, edit
+  mode 86, status row 104.2, buttons at 38 / 335) and its pull, settle and close motion; notification platters (kit:
+  14 pt margins, radius 24, 38.33 pt icon at 14, text at 62.33, 66.33 minimum, 8 pt stack shelves inset 10 / 20); banner
+  radius 24; folder springs; banners out of the camera (0.64 / 0.61, 7 s, back on 0.3 / 1). Checked on the emulator (held pull: controls 57 pt low with the finger 258 pt down, as the
+  formula; rest positions as iOS 27). Not yet on the S24.
+- **Not settled yet**: the app launch spring (the CI recorder misses the fast first frames and the screen's edge clips
+  the card), Notification Center's open (the recorder stalls while the cover sheet moves; its liquid edge is not built),
+  the long-press menu (pass 6's clean run is still to be measured), banner swipe-away speeds.
+- **Full kit** (Matheesha's copy of all 46 pages, read through the Figma plugin API, which loads every page): Liquid
+  Glass is Figma's native glass effect with Apple's own parameters (clear glass: frost 6, refraction 0.7, depth 30,
+  dispersion 0.2, light 0.4; dock: frost 3, light 0.2; menus: frost 16 on a white lighten fill), the classic materials'
+  exact recipes, context menus (250 wide, radius 34, 40 pt rows, symbols on the leading side, 23 % dim), the long look,
+  sheets, status bar groups, widgets (radius **28**, now ours too). All in `docs/IOS27_KIT.md`.
+- Then, at Matheesha's word, three more carried over (checked on the emulator, not yet on the S24):
+  - **Glass to the kit's numbers**: the lens 30 pt deep (was 20), dispersion 0.2 (was 0.25); the dock family's light at
+    the kit's dock value (rim 0.20 / 0.09, half of before) and a clear-glass style at the kit's 0.4 for the shade's
+    controls and notifications (`GlassStyle.IOS_CLEAR`). The frost already matched (the kit's dock frost 3 = sigma 1.5 pt).
+  - **Long-press menu as iOS 27's Quick Actions**: symbol first (20 pt column, 26 in), label 14 after, 42 pt rows, 10 / 8
+    padding, radius 30, no lines between rows, the widget sizes as the last row; the kit's Regular glass fills by their
+    blend modes over the bent, blurred home (light: white 70 % lighten + grey 10 % darken; dark: luminosity #1a1a1a) and
+    its deep shadow.
+  - **The long look in Notification Center**: held, a notification grows into a solid card (16 pt from the sides, radius
+    26, its whole text under the same header) with a 250 pt clear-glass menu under it (17 pt symbol and label rows, 20
+    apart); a tap on the card opens it.

@@ -53,18 +53,27 @@ data class GlassStyle(
 ) {
     companion object {
         /**
-         * Every glass surface of the iOS theme: dock, widgets, Search pill, App Library, folders, menus, buttons.
+         * The dock's glass and everything made of it on home: dock, widgets, Search pill, App Library, folders, buttons.
          * The iOS 26 lens Matheesha approved (a0b173e: clear, no white lift, saturation 1.22) with iOS 27's darkened edge and
-         * brighter, corner-gathered specular highlights.
+         * corner-gathered specular highlights, set to Apple's iOS 27 kit (its Liquid Glass is Figma's glass effect,
+         * docs/IOS27_KIT.md): the lens 30 pt deep ("depth" 30), dispersion 0.2, and the dock's light at half the clear
+         * glass's (0.2 against 0.4). Its frost is the kit's dock frost 3 (Figma's blur value is twice the Gaussian sigma:
+         * 1.5 pt, the wallpaper's light blur [Wallpaper.blurred]).
          */
-        val IOS = GlassStyle(frost = 1f, bevel = 20f, refraction = 30f, dispersion = 0.25f, magnify = 0.05f,
+        val IOS = GlassStyle(frost = 1f, bevel = 30f, refraction = 30f, dispersion = 0.2f, magnify = 0.05f,
             saturation = 1.22f, tint = 0f, glowWidth = 8f, glow = 0f, shade = 0f,
-            rimWidth = 1.2f, rimBase = 0.08f, rimLight = 0.40f, rimBack = 0.18f,
+            rimWidth = 1.2f, rimBase = 0.08f, rimLight = 0.20f, rimBack = 0.09f,
             edgeDark = 0.16f, edgeWidth = 1.6f, specPower = 1.8f)
 
         /**
+         * Clear glass (the kit's "Clear Glass": Control Center's controls, notifications, banners): the same lens, with the
+         * kit's light 0.4 (twice the dock's).
+         */
+        val IOS_CLEAR = IOS.copy(rimLight = 0.40f, rimBack = 0.18f)
+
+        /**
          * The glass clock: the dock's glass itself, shaped like the digits (Matheesha: "the same material look as the dock").
-         * Its lens follows the dock's own law for small shapes: the bevel is the dock's 20 pt, or 35 % of the stroke's width
+         * Its lens follows the dock's own law for small shapes: the bevel is the dock's 30 pt, or 35 % of the stroke's width
          * where that is less, and the bend shrinks with it ([GlassMask.bevelPx]).
          */
         val IOS_CLOCK = IOS
@@ -160,6 +169,9 @@ class GlassDrawable(
     }
     /** How much the glass is scaled on screen (a view blooming in, home's depth zoom): its samples spread by as much. */
     var scale = 1f
+
+    /** False for glass outside home (Notification Center's clock): home's depth zoom ([GlassDepth]) is not behind it. */
+    var followsHomeDepth = true
 
     init {
         setImages("Old", wallpaper)
@@ -258,7 +270,7 @@ class GlassDrawable(
         shader.setFloatUniform("placeScale", scale)
         // Only glass on the wallpaper inside home's zoom sees the parallax (the library's glass sees its own backdrop,
         // which zooms with it).
-        val k = if (role == Role.HOME || role == Role.CLOCK) GlassDepth.k else 1f
+        val k = if ((role == Role.HOME || role == Role.CLOCK) && followsHomeDepth) GlassDepth.k else 1f
         if (k != depthKAt || GlassDepth.cx != depthCxAt || GlassDepth.cy != depthCyAt) {
             depthKAt = k; depthCxAt = GlassDepth.cx; depthCyAt = GlassDepth.cy
             shader.setFloatUniform("depthC", GlassDepth.cx, GlassDepth.cy)

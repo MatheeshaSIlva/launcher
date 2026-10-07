@@ -35,7 +35,9 @@ Dynamic Island's centre (32 of 62); right group right-aligned 35.4 from the edge
 (3 arcs), battery 27 x 12.6 (body + nub), 7.5 apart. Scaled with the layout unit, centred in the S24's status bar.
 - Our own overlay (accessibility overlay, like the gesture strip), non-touchable; the stock clock and icons are hidden with the
   service-held disable flags (as tested in task 2), so the system clears them if our service dies.
-- Content: time, cellular bars, Wi-Fi bars, battery (with charging bolt). No notification icons (iOS shows none).
+- Content: time, notification icons (one per app, as Android shows them; up to 5 and a dot, never into the camera),
+  cellular bars, Wi-Fi bars, battery (with charging bolt). Since the shade (phase 4): time 15 pt and equal 34 pt margins on
+  both sides (the clock had looked big and the left gap wider); every icon arrives and leaves on springs.
 - Colour: white or black like iOS, following the app's own light/dark status bar request (read through the shell from the
   window manager), and on home from our wallpaper's brightness under the bar.
 - Hidden when the app hides the status bar (immersive), on the lock screen, and while gesture nav is off.

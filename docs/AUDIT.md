@@ -8,21 +8,21 @@ Legend: **done** = built and checked on the emulator in this round; **phone** = 
 
 | Element | State | Still missing (priority) |
 | --- | --- | --- |
-| Long-press menus | done: real glass over blurred home (the dark ring was the glass's input being cut to its fading layer), wider for long labels, sizes row for widgets, Delete App | menu "morph" out of the icon (P3) |
+| Long-press menus | done: iOS 27 Quick Actions layout from Apple's kit (2026-10-07: leading symbols, 42 pt rows, radius 30, Regular glass fills, sizes as the last row), real glass over blurred home, Delete App | menu "morph" out of the icon (P3) |
 | Home grid | done: free placement (empty cells allowed, iOS 18+), 11 unit tests | drag several icons at once (P3) |
 | Home folders | — | make a folder by dropping an icon on another, open/close animation, rename (P1) |
 | Notification badges | done: iOS red counts on home and dock icons; access granted through Shizuku | badges in the App Library and Spotlight (P2) |
 | Widgets | done: Android widgets, gallery sheet, sizes in the long-press menu, corner resize handle in edit mode, Edit Widget (setup screen) | gallery search (P2); Smart Stack (P3); our own widgets beyond the clock: weather, battery, calendar (P2); animated resize (P3) |
 | Clock widget | done: lock-screen glass numerals in their own proportions, date "Sat 3", Glass/Solid style, three sizes | iOS's font and colour choices (P3) |
 | Edit mode | done: glass Edit/Done (readable on light wallpapers), Edit menu with Add Widget, Edit button stays sharp over its menu | Edit menu "Customize" (dark/tinted icons, large icons) and "Edit Pages" (P2) |
-| Status bar | done (emulator, live and preview): iOS layout on the camera line; battery percentage inside the battery, green + bolt charging, yellow Low Power, red low; airplane, No SIM / No Service, Focus moon, VPN | **phone**: it did not show on the S24 (log lines asked for); privacy dots, location arrow, hotspot/recording pills (P3) |
+| Status bar | done: iOS layout on the camera line, equal margins, 15 pt time; notification icons (2026-10-07); battery percentage inside the battery, green + bolt charging, yellow Low Power, red low; airplane, No SIM / No Service, Focus moon, VPN; moves onto Control Center's status row | make room for the system's privacy chip and stock call chips (P1, found on the emulator); location arrow, call / recording pills of our own (P2) |
 | App Library | looks right; long press → menu, Add to Home Screen, drag out onto a page (done) | badges (P2) |
 | Spotlight | suggestions, Top Hit, glass field; long press → menu, drag out (done) | results beyond apps: web search, settings, contacts (P2) |
 | Widget gallery | done: app list, per-app pager with sizes, Add Widget; darker sheet glass for readability | search (P2) |
 | Dock | fine | folders in the dock (with home folders, P1) |
 | App open/close | works (checked on the emulator: our own transitions 2/2) | — |
 | App switcher (hold during a home swipe) | done (round 8): iOS 27 deck, from apps and from home (rest 56 dp up), scroll, open, flick to close, home; phone measured by frame stats only (it shows other apps' snapshots) | slow-release trigger (P3) |
-| Shade (notifications, controls) | — | the project's phase 4 (P1, large) |
+| Shade (notifications, controls) | built (phase 4 slice, 2026-10-07): Control Center with edit mode and gallery, Notification Center with stacks, swipe actions and menus, banners incl. calls and alarms; S24 frame stats 0-2 missed | **phone**: pulls over apps with a finger, real calls/alarms/messages; inline reply (P1); multi-page Control Center and expanded modules (P2); launch card from a notification (P2) |
 | Launcher settings | dev panel only | an iOS-style settings page: icon shape, labels, glass clear↔tinted, wallpaper dimming (P1) |
 | Accessibility | — | TalkBack labels for the custom-drawn views (P2) |
 

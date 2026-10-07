@@ -30,7 +30,11 @@ class PreviewActivity : Activity() {
             return v
         }
         col.addView(bar(), ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h))
-        col.addView(bar { it.preview(busy = true, level = 64, isCharging = false) }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h))
+        // Stand-ins for notification icons (any monochrome drawable; apps' small icons are tinted the same way).
+        val fakeIcons = listOf(R.drawable.sym_bell, R.drawable.sym_camera, R.drawable.sym_music, R.drawable.sym_heart, R.drawable.sym_alarm, R.drawable.sym_note, R.drawable.sym_wifi)
+            .map { getDrawable(it)!!.mutate() }
+        col.addView(bar { it.preview(busy = true, level = 64, isCharging = false, icons = fakeIcons.take(3)) }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h))
+        col.addView(bar { it.preview(busy = false, level = 64, isCharging = false, icons = fakeIcons) }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h))
         col.addView(bar { it.preview(busy = false, level = 82, isCharging = true) }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h))
         col.addView(bar { it.preview(busy = false, level = 12, isCharging = false) }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h))
         col.addView(bar(light = true) { it.preview(busy = false, level = 100, isCharging = false) }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, h))

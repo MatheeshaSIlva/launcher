@@ -1319,11 +1319,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val (pic, frame) = liftedCopy(v)
         val item = pages.firstNotNullOfOrNull { it.itemOf(v) } as? HomeItem.Widget
         val items = ArrayList<ContextMenuView.Item>()
+        var sizeRow: ContextMenuView.Item? = null
         if (item != null) {
-            // iOS: the sizes this widget comes in, then its own settings.
+            // iOS 27: its own settings first, the sizes it comes in as the menu's last row.
             val sizes = editHost.widgetSizes(item)
             val current = sizes.firstOrNull { it.spanX == item.spanX && it.spanY == item.spanY }
-            if (sizes.size > 1) items += ContextMenuView.Item("Size", sizes = sizes, current = current, onSize = { s -> editMode?.resize(item, s) })
+            if (sizes.size > 1) sizeRow = ContextMenuView.Item("Size", sizes = sizes, current = current, onSize = { s -> editMode?.resize(item, s) })
             if (item.kind == HomeItem.Widget.APP && widgets?.isConfigurable(item.id) == true)
                 items += ContextMenuView.Item("Edit Widget", glyph = ContextMenuView.Glyph.SLIDERS) { widgets?.reconfigure(item.id) }
             if (item.kind == "clock") {
@@ -1345,6 +1346,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         }
         items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
         items += ContextMenuView.Item("Remove Widget", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
+        sizeRow?.let { items += it }
         showMenu(v, pic, frame, items)
     }
 

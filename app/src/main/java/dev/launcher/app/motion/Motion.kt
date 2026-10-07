@@ -130,8 +130,9 @@ object Motion {
         switchCancel = SpringSpec(0.3f, 1f),
         pageSnap = SpringSpec(0.38f, 1f),
         drawer = SpringSpec(0.4f, 1f),
-        folderOpen = SpringSpec(0.42f, 0.86f),
-        folderClose = SpringSpec(0.36f, 1f),
+        // Measured in iOS 27 (docs/IOS27_MOTION.md): the folder's icons grow out on 0.49 / 0.92, go back on ~0.37 / 0.97.
+        folderOpen = SpringSpec(0.49f, 0.92f),
+        folderClose = SpringSpec(0.37f, 0.97f),
         modeCrossfadeMs = 220,
         indexScroll = SpringSpec(0.32f, 1f),
         indexBubbleIn = SpringSpec(0.3f, 0.72f),

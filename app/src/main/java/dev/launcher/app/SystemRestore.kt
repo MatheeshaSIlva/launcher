@@ -23,11 +23,14 @@ object SystemRestore {
     private const val KEY_GESTURES = "gesture_nav"
 
     // android.app.StatusBarManager
+    private const val DISABLE_EXPAND = 0x00010000
     private const val DISABLE_NOTIFICATION_ICONS = 0x00020000
     private const val DISABLE_HOME = 0x00200000
     private const val DISABLE_CLOCK = 0x00800000
     private const val DISABLE_RECENT = 0x01000000
+    private const val DISABLE2_QUICK_SETTINGS = 1
     private const val DISABLE2_SYSTEM_ICONS = 1 shl 1
+    private const val DISABLE2_NOTIFICATION_SHADE = 1 shl 2
 
     /** Call before changing animation scales, so restore returns the user's own values rather than a guess. */
     fun rememberOriginals(ctx: Context) {
@@ -145,16 +148,17 @@ object SystemRestore {
      * new service starts clean. Updates the gesture strip afterwards, so it never shows while stock gestures still work.
      */
     fun applyFlags(ctx: Context, s: IShellService): String {
-        // Hide the stock clock and icons only while our own status bar is really on screen (never no clock at all).
+        // Hide the stock clock and icons, and block the stock shade, only while our own status bar (with our shade) is really
+        // on screen: never no clock at all, never no shade at all.
         val bar = statusBarWanted(ctx) && GestureNav.statusBarShown
         // Never block stock gestures unless our strip can actually be shown.
         val gestures = gesturesWanted(ctx) && GestureNav.ready
-        val what1 = (if (bar) DISABLE_CLOCK or DISABLE_NOTIFICATION_ICONS else 0) or (if (gestures) DISABLE_HOME or DISABLE_RECENT else 0)
-        val what2 = if (bar) DISABLE2_SYSTEM_ICONS else 0
+        val what1 = (if (bar) DISABLE_CLOCK or DISABLE_NOTIFICATION_ICONS or DISABLE_EXPAND else 0) or (if (gestures) DISABLE_HOME or DISABLE_RECENT else 0)
+        val what2 = if (bar) DISABLE2_SYSTEM_ICONS or DISABLE2_QUICK_SETTINGS or DISABLE2_NOTIFICATION_SHADE else 0
         val r = try { s.setDisableFlags(what1, what2, ShizukuLink.clientToken) } catch (t: Throwable) { "ERROR: ${t.javaClass.simpleName}: ${t.message}" }
         gestureFlagsActive = gestures && !r.contains("ERROR")
         val why = if (gesturesWanted(ctx) && !GestureNav.ready) " (gesture nav waits for the accessibility service)" else ""
-        AppLog.log("[flags] status bar ${if (bar) "hidden" else "shown"}, stock gestures ${if (gestures) "blocked" else "on"}$why: $r")
+        AppLog.log("[flags] status bar and shade ${if (bar) "ours" else "stock"}, stock gestures ${if (gestures) "blocked" else "on"}$why: $r")
         GestureNav.update()
         return r
     }

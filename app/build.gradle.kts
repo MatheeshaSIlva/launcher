@@ -46,4 +46,6 @@ dependencies {
     implementation("dev.rikka.shizuku:provider:$shizuku")
     // Logic tests (layout model) that run on the build machine: ./gradlew testDebugUnitTest
     testImplementation("junit:junit:4.13.2")
+    // The real org.json for logic tests (Android's copy is a stub on the build machine).
+    testImplementation("org.json:json:20240303")
 }
