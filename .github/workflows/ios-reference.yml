@@ -40,10 +40,10 @@ jobs:
               return int(m.group(1)) if m else -1
           types = [t for t in rt.get("supportedDeviceTypes", []) if num(t) > 0]
           ty = max(types, key=num)
-          print(f"RUNTIME={rt['identifier']}")
-          print(f"RUNTIME_NAME={rt['name']}")
-          print(f"TYPE={ty['identifier']}")
-          print(f"TYPE_NAME={ty['name']}")
+          print(f"RUNTIME='{rt['identifier']}'")
+          print(f"RUNTIME_NAME='{rt['name']}'")
+          print(f"TYPE='{ty['identifier']}'")
+          print(f"TYPE_NAME='{ty['name']}'")
           EOF
           cat sim.env
           . ./sim.env
