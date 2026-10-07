@@ -25,16 +25,24 @@ def frame_times(video):
     return [float(m.group(1)) for m in re.finditer(r"pts_time:([0-9.]+)", r.stderr)]
 
 
-def extract(video, out, scale=0.5, t0=None, t1=None):
+def read_times(path):
+    """Frame times from ffprobe's csv (one per line, maybe with a trailing comma)."""
+    return [float(l.strip().strip(",")) for l in open(path) if l.strip().strip(",")]
+
+
+def extract(video, out, scale=0.5, t0=None, t1=None, times_file=None):
     os.makedirs(out, exist_ok=True)
     for f in os.listdir(out):
         if re.match(r"f\d+\.png$", f):
             os.remove(os.path.join(out, f))
-    times = frame_times(video)
+    # The capture's small copies are re-encoded (their own timestamps are unreliable): the original's times, by index.
+    if times_file is None and os.path.exists(os.path.join(os.path.dirname(video), "video_times.txt")):
+        times_file = os.path.join(os.path.dirname(video), "video_times.txt")
+    times = read_times(times_file) if times_file else frame_times(video)
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     vf = "scale=iw*%s:-2" % scale if scale != 1 else "null"
-    subprocess.run([ff, "-hide_banner", "-loglevel", "error", "-i", video, "-fps_mode", "passthrough", "-vf", vf,
-                    os.path.join(out, "f%04d.png")], check=True)
+    subprocess.run([ff, "-hide_banner", "-loglevel", "fatal", "-i", video, "-fps_mode", "passthrough", "-vf", vf,
+                    "-frame_pts", "0", os.path.join(out, "f%04d.png")], check=True)
     keep = []
     for i, t in enumerate(times):
         p = os.path.join(out, "f%04d.png" % (i + 1))
@@ -76,8 +84,9 @@ def main():
     ap.add_argument("--from", dest="t0", type=float)
     ap.add_argument("--to", dest="t1", type=float)
     ap.add_argument("--sheet", help="COLSxROWS")
+    ap.add_argument("--times", help="frame times file (default: video_times.txt next to the video, if any)")
     a = ap.parse_args()
-    frames = extract(a.video, a.out, a.scale, a.t0, a.t1)
+    frames = extract(a.video, a.out, a.scale, a.t0, a.t1, a.times)
     print("%d frames" % len(frames))
     if len(frames) > 1:
         dts = [b[1] - a_[1] for a_, b in zip(frames, frames[1:])]
