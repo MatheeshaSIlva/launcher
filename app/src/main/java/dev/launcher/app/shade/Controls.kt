@@ -393,6 +393,8 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
         }
         if (ShizukuLink.service == null) return false
         set(c, to)
+        // Our own surfaces cross-fade at once; the system (and every other app) follows when the command has run.
+        if (c == Control.DARK_MODE) android.os.Handler(android.os.Looper.getMainLooper()).post { dev.launcher.app.theme.Appearance.expectSystem(ctx, to) }
         shell(cmd)
         return true
     }

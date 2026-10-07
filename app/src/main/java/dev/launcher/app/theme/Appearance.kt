@@ -62,6 +62,22 @@ object Appearance {
         apply()
     }
 
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var confirm: Runnable? = null
+
+    /**
+     * Our own control switched the system to [dark] (Control Center's Dark Mode): the cross-fade starts now, not when the
+     * system's new configuration reaches us (the shell command and the system's own change take a second or more). If
+     * the system does not confirm within a few seconds, it shows what the system really is.
+     */
+    fun expectSystem(ctx: Context, dark: Boolean) {
+        confirm?.let { main.removeCallbacks(it) }
+        confirm = Runnable { confirm = null; onConfiguration(ctx.applicationContext.resources.configuration) }.also { main.postDelayed(it, 5000) }
+        if (dark == systemDark) return
+        systemDark = dark
+        apply()
+    }
+
     private fun isSystemDark(c: Configuration) = (c.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
     private fun target(): Float = when (mode) { Mode.LIGHT -> 0f; Mode.DARK -> 1f; Mode.AUTO -> if (systemDark) 1f else 0f }

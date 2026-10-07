@@ -1233,3 +1233,21 @@ own "radius" (sigma = 0.577 x radius + 0.5 px): those blurs were about a quarter
 Checked on the emulator over the kit's wallpaper next to the kit's own render (light and dark), the expanded
 Connectivity and Brightness modules, edit mode, the gallery; Notification Center again after the blur fix. Not measured
 for smoothness (decided: one performance pass at the end).
+
+## Fixes reported on the S24 (2026-10-08)
+
+- **The keyboard popped over a panel, then hid.** Once a panel rests, the shade's window becomes focusable (Back closes
+  it); a focusable window becomes the keyboard's target, and the system lifts the keyboard above its target. Now the
+  window takes `FLAG_ALT_FOCUSABLE_IM` together with focus (never without: on a window that cannot take focus it means
+  the opposite). Checked on the emulator, frame by frame over Settings' search: before, the keyboard showed bright over
+  Control Center for 4 frames and then hid; now it stays dimmed under the panel, and is still there when it closes.
+- **The clock sometimes missing in Notification Center after a light/dark switch** (not reproduced on the emulator).
+  A new wallpaper (One UI may reload it with dark mode) threw the glass numerals away at once, and a build that went out
+  of date while it ran was dropped without another. Now the numerals on screen stay until the new ones are made and then
+  cross-fade; a stale build is followed by another; every failure is logged (`[shade] clock: ...`).
+- **Light/dark felt delayed, most in the panels.** The panels did not follow the cross-fade at all (home did): they
+  caught up later in one step. Now they redraw on every frame of it. And Control Center's Dark Mode starts our
+  cross-fade as it is tapped, not when the system's new configuration arrives (the shell command and the system's own
+  change take a second or more); if the system does not confirm within 5 s, we go back to what it says.
+- Floating windows (picture in picture, a call's bubble) are covered by the panels: as under the stock shade and on
+  iOS. Kept.

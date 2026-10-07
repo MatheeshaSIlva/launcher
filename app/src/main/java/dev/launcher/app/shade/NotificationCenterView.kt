@@ -248,39 +248,62 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun clockBox(out: RectF): RectF = out.apply { set(36f * u, 110f * u, width - 36f * u, 206f * u) }
 
     private var building = false
+    /** Asked to build while a build ran: built again once it is done. */
+    private var buildAgain = false
+    /** What the glass numerals on screen were made for (a new minute or a new wallpaper makes them again). */
+    private var clockMadeFor: Wallpaper? = null
+    private var clockMadeText = ""
+    private var clockLogs = 0
 
+    private fun clockLog(msg: String) { if (clockLogs++ < 12) AppLog.log("[shade] clock: $msg") }
+
+    /**
+     * The glass numerals for this minute and this wallpaper, made off the UI threads (the numerals' distance field). The
+     * ones on screen stay until the new ones are there, then cross-fade into them; a build that went out of date while it
+     * ran (the wallpaper changed, the minute turned) is followed by another. Until the first build is done, the numerals
+     * are drawn as plain text.
+     */
     private fun refreshClock() {
         val now = java.util.Date()
         val locale = java.util.Locale.getDefault()
         val is24 = android.text.format.DateFormat.is24HourFormat(context)
         dateText = java.text.SimpleDateFormat("EEE d MMM", locale).format(now)
         val t = java.text.SimpleDateFormat(if (is24) "H:mm" else "h:mm", locale).format(now)
-        if (t == clockText && clockGlass != null) return
         clockText = t
         val wp = wallpaper ?: return
-        if (width == 0 || building) return
+        if (clockGlass != null && clockMadeText == t && clockMadeFor === wp) return
+        if (width == 0) return
+        if (building) { buildAgain = true; return }
         val box = clockBox(RectF())
         val w = box.width().roundToInt()
         val h = box.height().roundToInt() + dev.launcher.app.ClockShadow.reach.roundToInt()
         val baseline = dev.launcher.app.home.ClockNumerals.layout(digitPaint, box.width(), box.height(), is24)
         building = true
+        buildAgain = false
         val paint = TextPaint(digitPaint)
+        val vw = width
+        val vh = height
         clockIo.execute {
             val gm = try { dev.launcher.app.home.ClockNumerals.build(paint, w, h, baseline, t, u) } catch (e: Throwable) {
-                AppLog.log("[shade] clock failed: ${e.message}"); null
+                clockLog("numerals failed: ${e.javaClass.simpleName}: ${e.message}"); null
             }
             post {
                 building = false
-                if (gm == null || wallpaper !== wp) return@post
-                val g = try {
-                    GlassDrawable(wp, width, height, 0f, u, 0f, GlassStyle.IOS_CLOCK, GlassDrawable.Source.FROSTED, gm).apply { followsHomeDepth = false }
-                } catch (e: Throwable) { null }
-                // A new minute cross-fades from the old numerals.
-                clockGlassOld = clockGlass
-                clockGlass = g
-                if (clockGlassOld != null && progress > 0f) { clockFade.snapTo(0f); clockFade.animateTo(1f, CLOCK_TICK) } else { clockFade.snapTo(1f); clockGlassOld = null }
-                invalidate()
-                if (clockText != t) refreshClock()
+                val g = if (gm == null) null else try {
+                    GlassDrawable(wp, vw, vh, 0f, u, 0f, GlassStyle.IOS_CLOCK, GlassDrawable.Source.FROSTED, gm).apply { followsHomeDepth = false }
+                } catch (e: Throwable) { clockLog("glass failed: ${e.javaClass.simpleName}: ${e.message}"); null }
+                if (g != null) {
+                    // The new numerals cross-fade from the old ones (a minute, a wallpaper): never a frame without a clock.
+                    val old = clockGlass
+                    clockGlass = g
+                    clockMadeFor = wp
+                    clockMadeText = t
+                    if (old != null && progress > 0f) { clockGlassOld = old; clockFade.snapTo(0f); clockFade.animateTo(1f, CLOCK_TICK) }
+                    else { clockGlassOld = null; clockFade.snapTo(1f) }
+                    invalidate()
+                }
+                if (wallpaper !== wp) clockLog("wallpaper changed while the numerals were made: made again")
+                if (buildAgain || clockText != t || wallpaper !== wp) refreshClock()
             }
         }
     }
@@ -604,7 +627,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             wallpaper = Wallpaper.current
             frosts.clear()
             warmFrost()
-            clockGlass = null; clockGlassOld = null; clockText = ""
+            // The numerals on screen stay until the new wallpaper's are made (they cross-fade then).
             refreshClock()
         }
     }
@@ -711,7 +734,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val baseline = dev.launcher.app.home.ClockNumerals.layout(solidDigits, clockRect.width(), clockRect.height(), android.text.format.DateFormat.is24HourFormat(context))
             solidDigits.alpha = (0xF2 * k).roundToInt()
             c.drawText(clockText, clockRect.centerX(), clockRect.top + baseline, solidDigits)
-        }
+        } else clockLog("nothing to draw (no numerals, no time yet)")
     }
 
     private fun drawClockGlass(c: Canvas, g: GlassDrawable, a: Float) {

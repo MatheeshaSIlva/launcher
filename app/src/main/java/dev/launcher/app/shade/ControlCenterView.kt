@@ -536,7 +536,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun contentKey(a: Anim, w: Float, h: Float): Long {
         var k = 17L
         fun mixIn(v: Int) { k = k * 31 + v }
-        mixIn(Math.round(w * 2f)); mixIn(Math.round(h * 2f)); mixIn(Design.version); mixIn(Math.round(dev.launcher.app.theme.Appearance.dark * 64f))
+        mixIn(Math.round(w * 2f)); mixIn(Math.round(h * 2f)); mixIn(Design.version); mixIn(Math.round(dev.launcher.app.theme.Appearance.dark))   // only the accents differ: no layer redrawn every frame
         mixIn(Math.round(a.active.value * 255f)); mixIn(Math.round(a.press.value * 255f)); mixIn(Math.round(a.lift.value * 64f))
         mixIn(Math.round(a.value.value * 1000f)); mixIn(Math.round(a.subPress.value * 255f)); mixIn(a.sub?.hashCode() ?: 0)
         when (a.item.control.kind) {

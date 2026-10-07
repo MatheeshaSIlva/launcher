@@ -92,6 +92,15 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private val notifsListener: () -> Unit = { onNotifs() }
 
+    /** Main thread, every frame of a light/dark change: one redraw of the panels on this thread per frame (coalesced). */
+    private val appearancePending = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val onAppearance: () -> Unit = {
+        if (!appearancePending.getAndSet(true)) handler.post {
+            appearancePending.set(false)
+            cc.invalidate(); nc.invalidate(); gallery.invalidate(); bar.invalidate(); banner.invalidate()
+        }
+    }
+
     init {
         cc = ControlCenterView(ctx, object : ControlCenterView.Host {
             override val state get() = this@Shade.state
@@ -145,6 +154,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         cc.alpha = 1f
         bar.onHiddenChanged = { updateTouchable() }
         state.addListener { cc.syncActive(); cc.syncSubs(); nc.invalidate() }
+        // Light and dark cross-fade (Appearance, on the main thread): the panels draw every frame of it, as home does (they
+        // did not listen, and caught up late in one step).
+        android.os.Handler(android.os.Looper.getMainLooper()).post { dev.launcher.app.theme.Appearance.addListener(onAppearance) }
         media.addListener { cc.invalidate(); nc.mediaChanged() }
         root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) { updateTouchable() }
@@ -212,6 +224,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         testHook = null
         detach()
         Notifs.removeListener(notifsListener)
+        android.os.Handler(android.os.Looper.getMainLooper()).post { dev.launcher.app.theme.Appearance.removeListener(onAppearance) }
         liveBlur.release()
     }
 
@@ -876,12 +889,19 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (panel != null && !progress.isAnimating && progress.value >= 0.999f && touch == Touch.NONE) setFocusable(true)
     }
 
-    /** Focusable while a panel rests open (back closes it); not while anything moves (a window change costs a relayout). */
+    /**
+     * Focusable while a panel rests open (back closes it); not while anything moves (a window change costs a relayout).
+     * Focusable, it must not become the keyboard's target: then the system lifts an open keyboard above it for a moment
+     * (it popped over the panel, then hid). FLAG_ALT_FOCUSABLE_IM keeps it out (and above the keyboard); it is only set
+     * with focus, since on a window that cannot take focus the same flag means the opposite.
+     */
     private fun setFocusable(on: Boolean) {
         if (on == focusable || !attached) return
         val lp = root.layoutParams as? WindowManager.LayoutParams ?: return
         focusable = on
-        lp.flags = if (on) lp.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv() else lp.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        val nf = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        val alt = WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
+        lp.flags = if (on) (lp.flags and nf.inv()) or alt else (lp.flags or nf) and alt.inv()
         try { wm.updateViewLayout(root, lp) } catch (_: Throwable) { }
     }
 

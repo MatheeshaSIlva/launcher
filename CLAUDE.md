@@ -156,6 +156,8 @@ copy it wholesale — port the working pieces cleanly. File map:
   way such a notification shows; they stay until it stops ringing, also over an open panel.
 - **Never screenshot or record Notification Center or banners on Matheesha's phone** (they show his messages). Measure them
   with framestats only (`tools/scenario_shade.sh` never captures them; its test banner is our own text).
+- **A focusable overlay becomes the keyboard's target** and the system lifts an open keyboard above it: the shade's
+  window takes `FLAG_ALT_FOCUSABLE_IM` together with focus (never without it: on a non-focusable window it inverts).
 - **Changing the touchable region of a window that holds a touch is fine, changing its flags is not**: making the shade
   focusable (for back) is a relayout (16.7 ms of its thread on the S24); it happens only 300 ms after a panel came to rest.
 - **iOS reference capture** (`ios-reference/`, `tools/ios_ref/`, results in `docs/IOS27_KIT.md` and `docs/IOS27_MOTION.md`):
