@@ -31,10 +31,10 @@ def frames_of(d):
 
 
 def row_y(img, tpl):
-    m = ncc(img[60:470, :], tpl)
+    m = ncc(img[40:470, :], tpl)
     k = int(np.argmax(m))
     py, px = divmod(k, m.shape[1])
-    return float(m[py, px]), 60 + py + tpl.shape[0] / 2.0, px + tpl.shape[1] / 2.0
+    return float(m[py, px]), 40 + py + tpl.shape[0] / 2.0, px + tpl.shape[1] / 2.0
 
 
 def series(d, tpl):
@@ -47,13 +47,13 @@ def series(d, tpl):
     return out
 
 
-def releases(rows, rest):
+def releases(rows, rest, drop=20.0):
     """From each lowest point (well below rest) to where it rests again: the release, repeated frames dropped."""
     out = []
     k = 0
     while k < len(rows):
         t, y = rows[k]
-        if y is None or y < rest + 20:
+        if y is None or y < rest + drop:
             k += 1
             continue
         # walk to the lowest point of this excursion
@@ -76,12 +76,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dirs", nargs="+")
     ap.add_argument("--rest", type=float, default=167.0)
+    ap.add_argument("--template", default="cc_row.png", help="in templates/: cc_row.png (controls, rest 167) or cc_status.png (status row, rest 104)")
+    ap.add_argument("--drop", type=float, default=20.0, help="how far below rest a release must start")
     a = ap.parse_args()
-    tpl = np.asarray(Image.open(os.path.join(HERE, "templates", "cc_row.png")).convert("L"), dtype=np.float32) / 255.0
+    tpl = np.asarray(Image.open(os.path.join(HERE, "templates", a.template)).convert("L"), dtype=np.float32) / 255.0
     runs = []
     for d in a.dirs:
         rows = series(d, tpl)
-        for seg in releases(rows, a.rest):
+        for seg in releases(rows, a.rest, a.drop):
             runs.append(seg)
             over = a.rest - min(p[1] for p in seg)
             print("%s: release from %.0f at %.3f, %d frames, overshoot %.1f pt" % (os.path.basename(d.rstrip("/")), seg[0][1], seg[0][0], len(seg), over))
