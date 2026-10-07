@@ -7,7 +7,7 @@ set -u
 UDID=$1; XCTESTRUN=$2; OUT=$3; shift 3
 TESTS=("$@")
 if [ ${#TESTS[@]} -eq 0 ]; then
-  TESTS=($(grep -o 'func test[0-9A-Za-z_]*' "$(dirname "$0")/RefUITests/Scenarios.swift" | sed 's/func //'))
+  TESTS=($(grep -o 'func test[0-9A-Za-z_]*' "$(dirname "$0")/RefUITests/Scenarios.swift" | sed 's/func //' | sort))
 fi
 now() { python3 -c 'import time; print("%.3f" % time.time())'; }
 

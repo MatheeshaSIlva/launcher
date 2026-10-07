@@ -305,8 +305,158 @@ final class Scenarios: XCTestCase {
             shot("settings")
             closeFromBottom("app-home", velocity: 2000)
             wait(2)
+            // A slow, held swipe up: the app as a card under the finger, then let go.
+            settings.tap()
+            wait(2.5)
+            drag("app-card-hold", CGPoint(x: w / 2, y: h - 4), CGPoint(x: w / 2, y: h * 0.7), velocity: 300, hold: 0.8)
+            wait(2)
+            shot("after-card-hold")
+            XCUIDevice.shared.press(.home)
+            wait(1.5)
         } else {
             mark("no Settings icon")
         }
+    }
+
+    // MARK: - Home screen
+
+    func test17_pages() {
+        tree("home-pages")
+        // To the next page (or the App Library) and back: page snap.
+        drag("page-left", CGPoint(x: w * 0.85, y: h * 0.45), CGPoint(x: w * 0.25, y: h * 0.45), velocity: 1500)
+        wait(1.5)
+        shot("page-next")
+        drag("page-right", CGPoint(x: w * 0.15, y: h * 0.45), CGPoint(x: w * 0.75, y: h * 0.45), velocity: 1500)
+        wait(1.5)
+        // A slow half drag, released: does it go or come back?
+        drag("page-half", CGPoint(x: w * 0.8, y: h * 0.45), CGPoint(x: w * 0.45, y: h * 0.45), velocity: 250, hold: 0.5)
+        wait(1.5)
+        shot("page-after-half")
+    }
+
+    func test18_appLibrary() {
+        // Swipe left until the App Library shows (it is the last page).
+        for i in 0..<4 {
+            drag("page-\(i)", CGPoint(x: w * 0.85, y: h * 0.45), CGPoint(x: w * 0.2, y: h * 0.45), velocity: 2000)
+            wait(1.2)
+        }
+        shot("library")
+        tree("library")
+        // A category folder: the first collection with several apps (tap its small icons' area).
+        let groups = sb.otherElements.matching(NSPredicate(format: "label CONTAINS[c] 'Utilities' OR label CONTAINS[c] 'Productivity' OR label CONTAINS[c] 'Creativity' OR label CONTAINS[c] 'Other'")).allElementsBoundByIndex
+        mark("library groups \(groups.count): " + groups.prefix(8).map { "\($0.label) \($0.frame)" }.joined(separator: "; "))
+        if let g = groups.first {
+            let f = g.frame
+            tap("library-folder", f.maxX - f.width * 0.25, f.maxY - f.height * 0.25)
+            wait(2)
+            shot("library-folder")
+            tree("library-folder")
+            tap("library-folder-out", w / 2, h * 0.93)
+            wait(1.5)
+        }
+        // The search field: the list.
+        tap("library-search", w / 2, 85)
+        wait(2)
+        shot("library-list")
+        tree("library-list")
+        drag("library-list-down", CGPoint(x: w / 2, y: h * 0.3), CGPoint(x: w / 2, y: h * 0.8), velocity: 1500)
+        wait(1.5)
+        XCUIDevice.shared.press(.home)
+        wait(1.5)
+    }
+
+    func test19_spotlight() {
+        drag("spotlight", CGPoint(x: w / 2, y: h * 0.35), CGPoint(x: w / 2, y: h * 0.6), velocity: 800)
+        wait(2)
+        shot("spotlight")
+        tree("spotlight")
+        drag("spotlight-up", CGPoint(x: w / 2, y: h * 0.75), CGPoint(x: w / 2, y: h * 0.3), velocity: 1500)
+        wait(1.5)
+        XCUIDevice.shared.press(.home)
+        wait(1.5)
+    }
+
+    func test20_iconMenu() {
+        let settings = sb.icons["Settings"]
+        guard settings.exists else { mark("no Settings icon"); return }
+        let f = settings.frame
+        longPress("icon-menu", f.midX, f.midY, 0.9)
+        wait(1.5)
+        shot("icon-menu")
+        tree("icon-menu")
+        tap("icon-menu-out", w / 2, h * 0.08)
+        wait(1.5)
+    }
+
+    func test21_editMode() {
+        // Long press on an empty area of the home page: jiggle mode.
+        longPress("home-empty", w / 2, h * 0.62, 1.6)
+        wait(2)
+        shot("edit")
+        tree("edit")
+        // Drag one icon over another's place: the others make room.
+        let icons = sb.icons.allElementsBoundByIndex.filter { $0.frame.minY > 50 && $0.frame.maxY < h - 150 }
+        mark("icons \(icons.count): " + icons.prefix(8).map { "\($0.label) \($0.frame)" }.joined(separator: "; "))
+        if icons.count >= 3 {
+            let a = icons[0].frame, b = icons[2].frame
+            drag("icon-move", CGPoint(x: a.midX, y: a.midY), CGPoint(x: b.midX + 10, y: b.midY), velocity: 300, press: 0.6, hold: 1.2)
+            wait(2)
+            shot("edit-moved")
+            // And back.
+            let c = sb.icons.allElementsBoundByIndex.filter { $0.label == icons[0].label }.first?.frame ?? b
+            drag("icon-back", CGPoint(x: c.midX, y: c.midY), CGPoint(x: a.midX, y: a.midY), velocity: 300, press: 0.6, hold: 1.2)
+            wait(2)
+        }
+        let done = sb.buttons["Done"]
+        if done.exists { mark("tap Done"); done.tap() } else { XCUIDevice.shared.press(.home) }
+        wait(2)
+        shot("edit-done")
+    }
+
+    func test23_folder() {
+        // Make a folder (edit mode: an icon dropped on another), open and close it, then take it apart again.
+        longPress("home-empty", w / 2, h * 0.62, 1.6)
+        wait(2)
+        let icons = sb.icons.allElementsBoundByIndex.filter { $0.frame.minY > 50 && $0.frame.maxY < h - 150 }
+        guard icons.count >= 2 else { mark("too few icons"); return }
+        let a = icons[0].frame, b = icons[1].frame
+        drag("icon-onto", CGPoint(x: a.midX, y: a.midY), CGPoint(x: b.midX, y: b.midY), velocity: 300, press: 0.6, hold: 1.6)
+        wait(2.5)
+        shot("folder-made")
+        tree("folder-made")
+        tap("folder-made-out", w / 2, h * 0.08)
+        wait(1)
+        let done = sb.buttons["Done"]
+        if done.exists { done.tap() } else { XCUIDevice.shared.press(.home) }
+        wait(2)
+        let folders = sb.icons.allElementsBoundByIndex.filter { $0.label.lowercased().contains("folder") || $0.identifier.lowercased().contains("folder") }
+        mark("folders \(folders.count): " + folders.map { "\($0.label) \($0.frame)" }.joined(separator: "; "))
+        if let f = folders.first?.frame {
+            tap("folder-open", f.midX, f.midY)
+            wait(2)
+            shot("folder-open")
+            tree("folder-open")
+            tap("folder-close", w / 2, h * 0.92)
+            wait(2)
+            shot("folder-closed")
+        }
+    }
+
+    func test22_appSwitcher() {
+        let settings = sb.icons["Settings"]
+        guard settings.exists else { mark("no Settings icon"); return }
+        settings.tap()
+        wait(2.5)
+        // Up from the bar and hold: the App Switcher.
+        drag("switcher", CGPoint(x: w / 2, y: h - 4), CGPoint(x: w / 2, y: h * 0.55), velocity: 500, hold: 1.0)
+        wait(2)
+        shot("switcher")
+        tree("switcher")
+        // Flick the card away, then home.
+        drag("switcher-flick", CGPoint(x: w / 2, y: h * 0.5), CGPoint(x: w / 2, y: h * 0.1), velocity: 3000)
+        wait(2)
+        shot("switcher-flicked")
+        XCUIDevice.shared.press(.home)
+        wait(1.5)
     }
 }
