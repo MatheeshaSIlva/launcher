@@ -9,6 +9,10 @@ only way to see the real thing move.
   in points) and prints `REFMARK <unix time> <what>` lines.
 - `RefHost/`: a tiny app that posts local notifications on cue (`-post <set> <delay>`), for real banners and stacks.
 - `capture.sh`: records the screen around each scenario (`simctl io recordVideo`).
+- `plan.txt`: what a push runs: `normal: <tests>|all` and `slow <factor>: <tests>` lines. The slow pass turns on the
+  Simulator's Slow Animations (`cadebug.swift`, CoreSimulator's own switch) so each animation spans many frames; the
+  tests stretch their pauses by the factor. `test98_calibrate` (known springs in RefHost) checks the chain and measures
+  the real factor. A fresh simulator each run: `test00_setupControls` first when Control Center needs controls.
 - `.github/workflows/ios-reference.yml`: builds (XcodeGen + xcodebuild) and runs everything on the newest iPhone Pro
   simulator; the results are the run's artifact `ios-reference-<n>`.
 

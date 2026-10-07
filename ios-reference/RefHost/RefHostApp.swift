@@ -29,13 +29,48 @@ struct ContentView: View {
     @State private var status = "starting"
 
     var body: some View {
-        VStack(spacing: 16) {
-            Text("Reference host").font(.title)
-            Text(status).accessibilityIdentifier("status")
+        if ProcessInfo.processInfo.arguments.contains("-calibrate") {
+            CalibrationView()
+        } else {
+            VStack(spacing: 16) {
+                Text("Reference host").font(.title)
+                Text(status).accessibilityIdentifier("status")
+            }
+            .task {
+                let ok = await Poster.authorize()
+                status = ok ? "authorized" : "denied"
+            }
+        }
+    }
+}
+
+/// Known motion for checking the measurement chain (Simulator -> recording -> tracking -> spring fit) and for finding
+/// the slow-motion factor: a red square moves on a white screen, first linearly for 1 s, then on three springs with
+/// known SwiftUI parameters. `-slow F` stretches the pauses between them (the animations themselves are slowed by
+/// the Simulator).
+struct CalibrationView: View {
+    @State private var x: CGFloat = 40
+    static let moves: [(CGFloat, Animation, String)] = [
+        (300, .linear(duration: 1.0), "linear 1.0"),
+        (40, .spring(response: 0.5, dampingFraction: 0.8), "spring 0.5 0.8"),
+        (300, .spring(response: 0.35, dampingFraction: 1.0), "spring 0.35 1.0"),
+        (40, .spring(response: 0.6, dampingFraction: 0.6), "spring 0.6 0.6"),
+    ]
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.white.ignoresSafeArea()
+            Rectangle().fill(Color.red).frame(width: 60, height: 60).position(x: x + 30, y: 400)
         }
         .task {
-            let ok = await Poster.authorize()
-            status = ok ? "authorized" : "denied"
+            let args = ProcessInfo.processInfo.arguments
+            let slow = args.firstIndex(of: "-slow").flatMap { Double(args[$0 + 1]) } ?? 1
+            try? await Task.sleep(nanoseconds: UInt64(2.0 * slow * 1e9))
+            for (to, anim, name) in Self.moves {
+                print(String(format: "REFMARK %.3f calibrate %@", Date().timeIntervalSince1970, name))
+                withAnimation(anim) { x = to }
+                try? await Task.sleep(nanoseconds: UInt64(2.5 * slow * 1e9))
+            }
         }
     }
 }

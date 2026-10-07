@@ -16,10 +16,13 @@ final class Scenarios: XCTestCase {
     private var w: CGFloat { sb.frame.width }
     private var h: CGFloat { sb.frame.height }
 
+    /// The slow-motion pass (Simulator's Slow Animations on) stretches every pause by this factor.
+    private let slow = Double(ProcessInfo.processInfo.environment["REF_SLOW"] ?? "1") ?? 1
+
     override func setUp() {
         continueAfterFailure = true
         home()
-        mark("ready \(Int(w))x\(Int(h))")
+        mark("ready \(Int(w))x\(Int(h)) slow \(slow)")
     }
 
     // MARK: - Helpers
@@ -58,7 +61,7 @@ final class Scenarios: XCTestCase {
         mark("long \(name) lifted")
     }
 
-    private func wait(_ s: Double) { usleep(useconds_t(s * 1_000_000)) }
+    private func wait(_ s: Double) { usleep(useconds_t(s * slow * 1_000_000)) }
 
     private func shot(_ name: String) {
         let a = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
@@ -98,7 +101,7 @@ final class Scenarios: XCTestCase {
     /// Waits for a banner; logs and returns its frame.
     @discardableResult
     private func waitBanner(_ timeout: Double = 12) -> CGRect? {
-        guard banner.waitForExistence(timeout: timeout) else { mark("no banner"); return nil }
+        guard banner.waitForExistence(timeout: timeout * slow) else { mark("no banner"); return nil }
         let f = banner.frame
         mark("banner at \(f) '\(banner.label)'")
         return f
@@ -319,7 +322,7 @@ final class Scenarios: XCTestCase {
                 if i == 1 { shot("banner"); tree("banner") }
                 // Until it has gone by itself.
                 let t0 = Date()
-                while banner.exists && Date().timeIntervalSince(t0) < 15 { wait(0.25) }
+                while banner.exists && Date().timeIntervalSince(t0) < 15 * slow { usleep(250_000) }
                 mark("banner gone after \(String(format: "%.2f", Date().timeIntervalSince(t0))) s")
             }
             wait(2)
@@ -519,5 +522,18 @@ final class Scenarios: XCTestCase {
                 wait(2)
             }
         }
+    }
+
+    // MARK: - Calibration
+
+    /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the
+    /// slow-motion factor.
+    func test98_calibrate() {
+        host.launchArguments = ["-calibrate", "-slow", String(slow)]
+        host.launch()
+        mark("calibration launched")
+        wait(2 + 4 * 2.5 + 1.5)
+        mark("calibration done")
+        home()
     }
 }

@@ -17,7 +17,7 @@ for t in "${TESTS[@]}"; do
   # The recorder prints a line once it really records: each line gets the wall time it arrived.
   ( xcrun simctl io "$UDID" recordVideo --codec=h264 --force "$d/video.mp4" 2>&1 | while IFS= read -r l; do echo "$(now) $l"; done > "$d/rec.log" ) &
   sleep 2
-  TEST_RUNNER_REF_OUT="$d" xcodebuild test-without-building -xctestrun "$XCTESTRUN" -destination "id=$UDID" \
+  TEST_RUNNER_REF_OUT="$d" TEST_RUNNER_REF_SLOW="${SLOW:-1}" xcodebuild test-without-building -xctestrun "$XCTESTRUN" -destination "id=$UDID" \
     -only-testing:"RefUITests/Scenarios/$t" -resultBundlePath "$d/result.xcresult" > "$d/test.log" 2>&1
   echo "xcodebuild exit $?" >> "$d/test.log"
   sleep 1

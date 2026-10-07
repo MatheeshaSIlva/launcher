@@ -71,8 +71,24 @@ jobs:
           XCTESTRUN=$(ls dd/Build/Products/*.xctestrun | head -1)
           mkdir -p out
           cp sim.env out/
-          ios-reference/capture.sh "${{ steps.sim.outputs.udid }}" "$XCTESTRUN" out ${{ github.event.inputs.tests }}
-          du -sh out/*
+          UDID="${{ steps.sim.outputs.udid }}"
+          if [ -n "${{ github.event.inputs.tests }}" ]; then
+            ios-reference/capture.sh "$UDID" "$XCTESTRUN" out ${{ github.event.inputs.tests }}
+          else
+            # ios-reference/plan.txt: "normal: tests..." (or "all") and "slow F: tests..." lines; slow runs with the
+            # Simulator's Slow Animations on (F: the factor every pause in the tests is stretched by).
+            while IFS= read -r line; do
+              case "$line" in
+                normal:*) t=${line#normal:}; [ "$(echo $t)" = all ] && t=""; ios-reference/capture.sh "$UDID" "$XCTESTRUN" out $t ;;
+                slow*)
+                  f=$(echo "$line" | cut -d: -f1 | awk '{print $2}'); t=${line#*:}
+                  xcrun swift ios-reference/cadebug.swift "$UDID" debug_slow_animations 1
+                  SLOW=$f ios-reference/capture.sh "$UDID" "$XCTESTRUN" out/slow $t
+                  xcrun swift ios-reference/cadebug.swift "$UDID" debug_slow_animations 0 ;;
+              esac
+            done < ios-reference/plan.txt
+          fi
+          du -sh out/* out/slow/* 2>/dev/null
 
       # The full recordings are ~500 MB a run and the download to the dev machine is slow: a small copy for analysis
       # (video at 1 px per point with every frame's own time kept, stills at 1.5 px per point), the originals apart.
@@ -80,8 +96,9 @@ jobs:
         if: always()
         run: |
           which ffmpeg > /dev/null || brew install ffmpeg > /dev/null
-          for d in out/*/; do
-            t=$(basename "$d"); s="small/$t"; mkdir -p "$s"
+          for d in out/*/ out/slow/*/; do
+            [ "$(basename "$d")" = slow ] && continue
+            t=${d#out/}; t=${t%/}; s="small/$t"; mkdir -p "$s"
             cp "$d"/*.txt "$d"/*.log "$s"/ 2>/dev/null || true
             if [ -f "$d/video.mp4" ]; then
               ffmpeg -nostdin -loglevel error -i "$d/video.mp4" -fps_mode passthrough -vf "scale=402:-2" \
