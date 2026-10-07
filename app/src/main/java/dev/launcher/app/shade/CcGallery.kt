@@ -13,6 +13,7 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import dev.launcher.app.R
+import dev.launcher.app.design.Design
 import dev.launcher.app.motion.IosScroller
 import dev.launcher.app.motion.SpringSpec
 import dev.launcher.app.motion.SpringValue
@@ -26,11 +27,12 @@ import kotlin.math.roundToInt
  * Control Center's controls gallery (iOS 18+ "Add a Control"): a sheet that slides up over Control Center, listing the
  * controls that are not on the page by section, each at its own size with its name below. Tap one to add it (the sheet
  * goes down and the control grows into its place). The sheet follows a pull down and goes on a flick or past a third.
+ * iOS 27's look (`comp.cc.gallery.*`): a dark sheet, the controls flat grey circles and capsules on it.
  */
 @SuppressLint("ViewConstructor")
 class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
     interface Host {
-        val glass: PanelGlass?
+        val surfaces: CcSurfaces
         fun missing(): List<Control>
         /** Adds [c] to the page; false if there is no room. */
         fun add(c: Control): Boolean
@@ -128,15 +130,14 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
         val k = sheetK.value.coerceIn(0f, 1.05f)
         if (k <= 0.001f) return
         // Control Center dims behind the sheet.
-        fill.color = (((0.5f * min(k, 1f)) * 255).roundToInt() shl 24)
+        val dim = Design.color(CcTokens.GALLERY_DIM)
+        fill.color = (((dim ushr 24) * min(k, 1f)).roundToInt() shl 24) or (dim and 0xFFFFFF)
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), fill)
         val top = sheetTop()
-        val g = host.glass
-        val radius = 38f * u
+        val radius = host.surfaces.pt(CcTokens.GALLERY_CORNER)
         c.save()
         c.translate(0f, top)
-        g?.draw(c, width.toFloat(), height + radius, radius, 0f, top, 1f, 0xD6161618.toInt(), 0, min(k, 1f) * 1f, 0.4f)
-            ?: run { fill.color = 0xF2161618.toInt(); rect.set(0f, 0f, width.toFloat(), height + radius); c.drawRoundRect(rect, radius, radius, fill) }
+        host.surfaces.draw(c, Design.material(CcTokens.GALLERY_SHEET), width.toFloat(), height + radius, radius, 0f, top, 1f, min(k, 1f))
         // Grabber.
         fill.color = 0x66FFFFFF
         rect.set(width / 2f - 18f * u, 7f * u, width / 2f + 18f * u, 12f * u)
@@ -170,8 +171,9 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
         c.save()
         c.translate(cx - w * s / 2f, cy - h * s / 2f)
         c.scale(s, s)
-        host.glass?.draw(c, w, h, radius, cx - w * s / 2f, screenTop, s, 0x26FFFFFF, 0, 1f, 0.45f, p)
-            ?: run { fill.color = 0x33FFFFFF; rect.set(0f, 0f, w, h); c.drawRoundRect(rect, radius, radius, fill) }
+        // A flat circle or capsule on the sheet (it sees what is behind through the sheet's own fills).
+        host.surfaces.draw(c, Design.material(CcTokens.GALLERY_ENTRY), w, h, radius, cx - w * s / 2f, screenTop, s, 1f, p,
+            under = Design.material(CcTokens.GALLERY_SHEET).fills)
         glyphs.draw(c, ctl.icon, w / 2f, h / 2f, min(w, h) * 0.42f, 0xFFFFFFFF.toInt())
         c.restore()
         val label = TextUtils.ellipsize(ctl.title, name, e.rect.width() + 18f * u, TextUtils.TruncateAt.END).toString()

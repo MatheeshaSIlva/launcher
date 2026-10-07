@@ -70,7 +70,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val launchCard = dev.launcher.app.CardView(ctx).apply { visibility = View.GONE }
     val state = ControlState(ctx, handler)
     val media = Media(ctx, handler)
-    private var glass: PanelGlass? = null
+    /** Control Center's surfaces (its modules, the expanded modules, the gallery) on the one material renderer. */
+    private val surfaces = CcSurfaces()
     private val cc: ControlCenterView
     private val gallery: CcGallery
     private val nc: NotificationCenterView
@@ -95,7 +96,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         cc = ControlCenterView(ctx, object : ControlCenterView.Host {
             override val state get() = this@Shade.state
             override val media get() = this@Shade.media
-            override val glass get() = this@Shade.glass
+            override val surfaces get() = this@Shade.surfaces
             override fun closeDrag(phase: Int, dy: Float, vy: Float) = panelDrag(phase, dy, vy)
             override fun close() = this@Shade.close()
             override fun launch(i: Intent?) { if (state.start(i)) close() }
@@ -105,7 +106,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override fun editProgress(k: Float) { editK = k; applyProgress() }
         })
         gallery = CcGallery(ctx, object : CcGallery.Host {
-            override val glass get() = this@Shade.glass
+            override val surfaces get() = this@Shade.surfaces
             override fun missing() = cc.missing()
             override fun add(c: Control) = cc.add(c)
         }).apply { visibility = View.GONE }
@@ -173,8 +174,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         }
         // The live blur's window first: it must sit under this one.
         liveBlur.attach()
-        liveBlur.maxBlurPx = if (liveBlur.mode == LiveBlur.Mode.SAMSUNG) SAMSUNG_BLUR_DIM
-            else BLUR_PT * ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels) / 402f
+        liveBlur.maxBlurPx = if (liveBlur.mode == LiveBlur.Mode.SAMSUNG) dev.launcher.app.design.Design.num(CcTokens.SAMSUNG_STRENGTH)
+            else ccBlurRadius()
         // adb test hook (senders must hold DUMP: adb's shell does, other apps cannot):
         //   am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do nc_expand
         // fans Notification Center's collapsed stack out, so a script can scroll it without tapping a notification.
@@ -195,11 +196,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             state.start()
             media.start()
             showRinging("shade shown")
-            if (glass == null) {
-                val u = ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels) / 402f
-                glass = PanelGlass.create(u)
-                bannerGlass = PanelGlass.create(u)
-            }
+            if (bannerGlass == null) bannerGlass = PanelGlass.create(ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels) / 402f)
             true
         } catch (t: Throwable) {
             AppLog.log("[shade] addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
@@ -276,7 +273,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 val live = liveBlur.available
                 backdrop.live = live
                 if (live) liveBlur.set(k, true)
-                backdrop.set(BLUR_PT * u * k, DIM * k, (p / 0.12f).coerceIn(0f, 1f))
+                backdrop.set(ccBlurRadius() * k, ccDim() * k, (p / 0.12f).coerceIn(0f, 1f))
                 bar.setPanel(k, 0f, 0f, cc.statusRowY)
                 bar.setRowAlpha(1f - editK)
             }
@@ -324,17 +321,36 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         AppLog.log("[shade] ${if (p == Panel.CC) "Control Center" else "Notification Center"} opening")
     }
 
+    /**
+     * Control Center's background (the kit's overlay: a background blur of 24, black 50 %): its blur as Android's blur
+     * radius (px), and how much it darkens (0..1).
+     */
+    private fun ccBlurRadius(): Float {
+        val m = dev.launcher.app.design.Design.material(CcTokens.BACKGROUND)
+        val unit = dev.launcher.app.design.Scale.unitPx(ctx, ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels))
+        return dev.launcher.app.design.Blur.renderRadius(dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * dev.launcher.app.theme.Appearance.dark, unit))
+    }
+
+    private fun ccDim(): Float {
+        var keep = 1f
+        for (f in dev.launcher.app.design.Design.material(CcTokens.BACKGROUND).fills) {
+            val op = f.opacity + (f.opacityDark - f.opacity) * dev.launcher.app.theme.Appearance.dark
+            val col = dev.launcher.app.design.Design.color(f.color)
+            val l = (0.2126f * ((col shr 16) and 0xFF) + 0.7152f * ((col shr 8) and 0xFF) + 0.0722f * (col and 0xFF)) / 255f
+            keep *= 1f - op * ((col ushr 24) / 255f) * (1f - l)
+        }
+        return 1f - keep
+    }
+
     private fun prepareBackdrop() {
-        val g = glass
         val t0 = SystemClock.uptimeMillis()
         nav.backdrop { src ->
             if (panel != Panel.CC) return@backdrop
             backdrop.source = src
-            if (src == null) { g?.setBackdrop(null, null); cc.invalidate(); return@backdrop }
-            val u = u()
-            BlurBaker.bake(src, root.width, root.height, 0.25f, BLUR_PT * u, ((DIM * 255).toInt() shl 24), handler) { bmp, m ->
+            if (src == null) { surfaces.setBackdrop(null, null); cc.invalidate(); return@backdrop }
+            BlurBaker.bake(src, root.width, root.height, 0.25f, ccBlurRadius(), ((ccDim() * 255).toInt() shl 24), handler) { bmp, m ->
                 if (panel != Panel.CC || backdrop.source !== src) return@bake
-                g?.setBackdrop(bmp, m)
+                surfaces.setBackdrop(bmp, m)
                 cc.invalidate()
                 gallery.invalidate()
                 if (backdropLogs < 4) { backdropLogs++; AppLog.log("[shade] Control Center glass ready ${SystemClock.uptimeMillis() - t0} ms after the touch (${src.javaClass.simpleName})") }
@@ -355,7 +371,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         liveBlur.set(0f, false)
         gallery.dismissNow()
         backdrop.source = null
-        glass?.setBackdrop(null, null)
+        surfaces.setBackdrop(null, null)
         handler.removeCallbacks(focusWhenIdle)
         setFocusable(false)
         regionOpen = false
@@ -911,14 +927,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     private companion object {
-        const val BLUR_PT = 26f
         /** A notification's app that is not in front this long after its card started: the card goes anyway. */
         const val LAUNCH_TIMEOUT_MS = 2500L
         const val LAUNCH_FADE_MS = 140L
-        /** Samsung's dim-to-blur at Control Center's full strength (its blur grows with the dim amount, 0..1; already heavy at
-         *  0.35, where home's icons were gone: at 0.15 they show through as coloured shapes, as under iOS's). */
-        const val SAMSUNG_BLUR_DIM = 0.15f
-        const val DIM = 0.36f
         const val FLING = 900f
         val NO_TOUCH = Region(-2, -2, -1, -1)
         /** Control Center coming in (blur, the controls' opacity), going out, and its controls settling into place. iOS 27,

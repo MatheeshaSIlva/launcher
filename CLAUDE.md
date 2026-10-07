@@ -56,8 +56,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.
-  Notification Center is on it (step 2a, tokens `comp.nc.*` in `shade/NcTokens.kt`); Control Center, banners and home still
-  use `PanelGlass`/`GlassDrawable` until steps 2b-2d. Theme seeds live in `tools/design/build_ios27_theme.py`
+  Notification Center is on it (step 2a, tokens `comp.nc.*` in `shade/NcTokens.kt`), and Control Center with its expanded
+  modules and gallery (2b, `comp.cc.*` in `shade/CcTokens.kt`, drawn through `shade/CcSurfaces`); banners and home still
+  use `PanelGlass`/`GlassDrawable` until steps 2c-2d. Blur sizes in tokens are the kit's (sigma = radius / 2); Android's
+  `RenderEffect` blur takes its own radius: convert with `design/Blur`. Theme seeds live in `tools/design/build_ios27_theme.py`
   (`reseed.py KEY` re-applies a corrected seed). To compare with the kit over its own picture: push it to
   `/sdcard/Android/data/dev.launcher.app/files/wallpaper.png` (the app shows it instead of the wallpaper; delete to undo).
 - **Glass/blur**: three layers — own snapshot blur (baseline, all phones) → standard cross-window blur where the system enables it

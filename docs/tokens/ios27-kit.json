@@ -191,5 +191,21 @@
     "Controls": {"node": "5592:29063", "frame": [46, 766, 310, 58], "buttons": "58 round, Clear Glass (_Controls - Lock Screen 5592:28123)", "symbol": "SF Pro Bold 21, #d9d9d9 LINEAR_DODGE at 90 %"},
     "Clock": {"glyphs": [98, 115, 205.06, 87.4], "fill": "background blur 80, #404040 LINEAR_DODGE, side rims #d0d0d0 +-0.5 spread -0.75 LINEAR_BURN (6092:2540)", "glass": "refraction 0.5, depth 1, light 0.4 @0, splay 0.2; inner #282828 0,+-1 r3 spread -40 LINEAR_DODGE (6491:17567)"},
     "Date": {"frame": [0, 82, 402, 26], "text": "SF Pro Semibold 22 -0.2 #ffffff LINEAR_DODGE, background blur 40 (598:4326)"}
+  },
+  "controlCenter": {
+    "_note": "Examples/Control Center, iPhone (12740:33932), read 2026-10-08. Geometry in pt as stored; symbol sizes measured on the kit's own render at 3x (tools/shots/kit/cc_3x.png) as the symbol's larger side.",
+    "Overlay": {"node": "2524:24518", "backgroundBlur": 24, "fills": ["#000000@0.5 NORMAL"]},
+    "Module": {"node": "10486:21122 / 10486:21123", "material": "Clear Glass (fills #101010@1 LINEAR_DODGE, #ffffff@0.04 LUMINOSITY; glass 6/0.7/30/0.2/0.4; the clear glass's inner and drop shadows)", "radius": {"1x1": "round", "2x1": "round", "1x2 slider": 34, "2x2": 30}},
+    "On": {"node": "10486:20857 (Extra Fill, between Fill + Shadow and Glass Effect)", "fills": ["#6f6f6f@1 COLOR_DODGE", "#ffffff@0.65 SCREEN"], "use": "a white control when on (Silent Mode), a slider's level (Filled, 2570:20570)"},
+    "Well": {"node": "2570:20607 (AirDrop), 2570:20736, 2570:20726", "fills": ["#111111@0.6 LUMINOSITY", "#777777@1 COLOR_DODGE", "#222222@1 LINEAR_DODGE"], "note": "Focus's and the accessory's 40 pt wells use #808080 for the colour dodge (2543:2535)"},
+    "Plus and Power": {"node": "10491:21418 / 10491:21417", "size": 28.67, "x": [38, 335.33], "y": 23, "fills": ["#121212@1 LINEAR_DODGE (the layer's blend)"], "symbol": "SF Pro Medium 15 #f5f5f5, measured 12 x 12 (plus), 14.7 x 15.7 (power)"},
+    "Status row": {"node": "10491:21456", "y": 60.67, "icons": "y +24.5; cellular 19.33 x 12.33 and Wi-Fi from x 42.67; '100%' SF Pro Medium 15/18; battery 27.33 x 13.67 ending at 359.33"},
+    "1x1": {"node": "2524:24582 (Camera)", "symbol": "SF Pro Bold 19 -0.2 #ffffff, measured 29.3 x 23.3 (camera)", "on symbol": "Silent Mode: #ff0000 at 60 %, layer 90 %"},
+    "2x1 (Focus)": {"node": "2547:2623", "well": [14, 15, 40], "wellSymbol": "SF Pro Bold 15, measured 18.7 x 19", "text": {"x": 62, "y": 17}, "title": "SF Pro Medium 15 -0.2 #ffffff", "detail": "SF Pro Medium 14/18 -0.08 #ffffff 33 % LINEAR_DODGE"},
+    "2x2 (accessory)": {"node": "2547:2662", "well": [14, 14, 40], "text": {"x": 16, "y": 106}, "title": "SF Pro Semibold 14 -0.08 #ffffff", "detail": "SF Pro Medium 14/18 -0.08 #ffffff 33 % LINEAR_DODGE"},
+    "Connectivity": {"node": "2570:20605", "big": {"size": 57, "at": [[14, 13], [84.67, 13], [14, 84]], "symbol": "SF Pro Bold 16, measured 23.3-23.7"}, "small": {"size": 25.67, "at": [[84.67, 84], [116, 84], [84.67, 115.33], [116, 115.33]], "symbol": "measured 8.3-15.3"}, "on": "solid accent (Wi-Fi, Bluetooth #0088ff; Cellular #34c759)", "off": "well"},
+    "Now Playing": {"node": "2570:20529", "art": {"x": 12.67, "y": 13.33, "size": 53.67, "radius": 14, "fills": "well"}, "output": {"x": 100, "y": 13, "size": 40, "fills": "well", "symbol": "SF Pro Medium 15, measured 19.3"}, "track": "SF Pro Medium 15 -0.2 #afafaf LINEAR_DODGE at y 74 (artist y 91), x 14", "transport": "previous / next SF Pro Bold 12 (measured 20 x 12.3) centred at x 34 / 121, play Bold 25 (measured 20 x 22.3) at x 77; y 131"},
+    "Sliders": {"node": "2570:20682 / 2570:20433", "size": [70, 155], "radius": 34, "level": "On fills, from the bottom", "symbols": "sun #ffcc00 (rays at 50 %) 27 at (21,107); speaker #00c0e8 (waves at 50 %) at (20,109)"},
+    "Page control": {"node": "2524:24607", "x": 372, "y": 290, "size": [21, 241], "symbols": "current #ffffff, others #404040 LINEAR_DODGE"}
   }
 }

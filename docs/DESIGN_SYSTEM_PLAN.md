@@ -77,6 +77,8 @@ kit's own render over its own wallpaper. The long look's menu moved with it (its
 later steps: the kit's progressive scroll edge (a judged fade stands in), the stacked front's measured detail beyond the
 kit's numbers. On the S24 it is no slower than before (the fan-out is lighter); the fan-out's GPU time and an occasional
 late scroll frame, there before too, are still to be traced.
+*2b done 2026-10-08*: Control Center, its expanded modules and the gallery on `CcSurfaces` (the same renderer) and 91
+`comp.cc.*` tokens, compared with the kit's own render over its own wallpaper.
 
 **Step 3: components.** Platter, control tile (sizes and states), slider, pill and round buttons, sheet, menu, badge,
 status row, clock numerals: specs plus painters. The shade's views shrink to layout and touch.
@@ -102,4 +104,7 @@ display and font size.
 - The depth to aim for (not all now, but nothing may block it): the tokens, materials, components and motion must be
   able to turn the iOS look into a Pixel (Material You) look, or any other look, **completely**. So: no element whose
   look or motion is decided in code; layouts and component sets swappable per profile, not only colours and numbers.
+- Decided (2026-10-08): smoothness is measured and tuned **once, at the end** of this plan (every code change moves the
+  numbers). Until then each step is checked for looks on the emulator; known items for that pass are kept in
+  `docs/PROGRESS.md` (step 2a: the fan-out's GPU time, an occasional late scroll frame).
 - Open: the theme file's syntax (step 5).

@@ -32,51 +32,51 @@ private val ONE_OR_WIDE = listOf(Control.Size(1, 1), Control.Size(2, 1))
  * Hotspot in place of AirDrop). [sizes]: the sizes it can take (columns x rows), its default first. [kind] decides how it
  * draws and behaves.
  */
-enum class Control(val title: String, val icon: Int, val kind: Kind, val sizes: List<Size>, val accent: Int, val style: Style = Style.WHITE) {
-    CONNECTIVITY("Connectivity", R.drawable.sym_wifi, Kind.CONNECTIVITY, listOf(Size(2, 2)), 0xFF0A84FF.toInt()),
-    MEDIA("Now Playing", R.drawable.sym_music, Kind.MEDIA, listOf(Size(2, 2), Size(4, 2)), 0xFFFF375F.toInt()),
-    BRIGHTNESS("Brightness", R.drawable.sym_sun, Kind.SLIDER, listOf(Size(1, 2), Size(1, 3)), 0xFFFFCC00.toInt()),
-    VOLUME("Volume", R.drawable.sym_volume, Kind.SLIDER, listOf(Size(1, 2), Size(1, 3)), 0xFF32ADE6.toInt()),
-    FOCUS("Focus", R.drawable.sym_moon, Kind.FOCUS, listOf(Size(2, 1), Size(1, 1)), 0xFF5E5CE6.toInt(), Style.COLOR),
-    ROTATION_LOCK("Orientation Lock", R.drawable.sym_rotation_lock, Kind.TOGGLE, ONE_OR_WIDE, 0xFFFF453A.toInt()),
-    SILENT("Silent Mode", R.drawable.sym_bell, Kind.TOGGLE, ONE_OR_WIDE, 0xFFFF453A.toInt()),
-    FLASHLIGHT("Flashlight", R.drawable.sym_flashlight, Kind.TOGGLE, ONE_OR_WIDE, 0xFF0A84FF.toInt()),
-    TIMER("Timer", R.drawable.sym_timer, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF9F0A.toInt()),
-    CALCULATOR("Calculator", R.drawable.sym_calculator, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF9F0A.toInt()),
-    CAMERA("Camera", R.drawable.sym_camera, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
-    MIRRORING("Screen Mirroring", R.drawable.sym_mirroring, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt()),
-    SCAN_CODE("Scan Code", R.drawable.sym_qr, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
-    DARK_MODE("Dark Mode", R.drawable.sym_dark_mode, Kind.TOGGLE, ONE_OR_WIDE, 0xFF1C1C1E.toInt()),
-    LOW_POWER("Low Power Mode", R.drawable.sym_low_power, Kind.TOGGLE, ONE_OR_WIDE, 0xFFFFCC00.toInt()),
-    AIRPLANE("Airplane Mode", R.drawable.sym_airplane, Kind.TOGGLE, ONE_OR_WIDE, 0xFFFF9F0A.toInt(), Style.COLOR),
-    WIFI("Wi-Fi", R.drawable.sym_wifi, Kind.TOGGLE, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
-    BLUETOOTH("Bluetooth", R.drawable.sym_bluetooth, Kind.TOGGLE, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
-    CELLULAR("Cellular Data", R.drawable.sym_cellular, Kind.TOGGLE, ONE_OR_WIDE, 0xFF30D158.toInt(), Style.COLOR),
-    HOTSPOT("Personal Hotspot", R.drawable.sym_hotspot, Kind.LAUNCH, ONE_OR_WIDE, 0xFF30D158.toInt(), Style.COLOR),
-    LOCATION("Location", R.drawable.sym_location, Kind.TOGGLE, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
-    NFC("NFC", R.drawable.sym_nfc, Kind.TOGGLE, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
-    ALARM("Alarm", R.drawable.sym_alarm, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF9F0A.toInt()),
-    STOPWATCH("Stopwatch", R.drawable.sym_stopwatch, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF9F0A.toInt()),
-    NOTES("Quick Note", R.drawable.sym_note, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFFCC00.toInt()),
-    SETTINGS("Settings", R.drawable.sym_settings, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
+enum class Control(val title: String, val icon: Int, val kind: Kind, val sizes: List<Size>, val style: Style = Style.WHITE) {
+    CONNECTIVITY("Connectivity", R.drawable.sym_wifi, Kind.CONNECTIVITY, listOf(Size(2, 2))),
+    MEDIA("Now Playing", R.drawable.sym_music, Kind.MEDIA, listOf(Size(2, 2), Size(4, 2))),
+    BRIGHTNESS("Brightness", R.drawable.sym_sun, Kind.SLIDER, listOf(Size(1, 2), Size(1, 3))),
+    VOLUME("Volume", R.drawable.sym_volume, Kind.SLIDER, listOf(Size(1, 2), Size(1, 3))),
+    FOCUS("Focus", R.drawable.sym_moon, Kind.FOCUS, listOf(Size(2, 1), Size(1, 1)), Style.COLOR),
+    ROTATION_LOCK("Orientation Lock", R.drawable.sym_rotation_lock, Kind.TOGGLE, ONE_OR_WIDE),
+    SILENT("Silent Mode", R.drawable.sym_bell, Kind.TOGGLE, ONE_OR_WIDE),
+    FLASHLIGHT("Flashlight", R.drawable.sym_flashlight, Kind.TOGGLE, ONE_OR_WIDE),
+    TIMER("Timer", R.drawable.sym_timer, Kind.LAUNCH, ONE_OR_WIDE),
+    CALCULATOR("Calculator", R.drawable.sym_calculator, Kind.LAUNCH, ONE_OR_WIDE),
+    CAMERA("Camera", R.drawable.sym_camera, Kind.LAUNCH, ONE_OR_WIDE),
+    MIRRORING("Screen Mirroring", R.drawable.sym_mirroring, Kind.LAUNCH, ONE_OR_WIDE),
+    SCAN_CODE("Scan Code", R.drawable.sym_qr, Kind.LAUNCH, ONE_OR_WIDE),
+    DARK_MODE("Dark Mode", R.drawable.sym_dark_mode, Kind.TOGGLE, ONE_OR_WIDE),
+    LOW_POWER("Low Power Mode", R.drawable.sym_low_power, Kind.TOGGLE, ONE_OR_WIDE),
+    AIRPLANE("Airplane Mode", R.drawable.sym_airplane, Kind.TOGGLE, ONE_OR_WIDE, Style.COLOR),
+    WIFI("Wi-Fi", R.drawable.sym_wifi, Kind.TOGGLE, ONE_OR_WIDE, Style.COLOR),
+    BLUETOOTH("Bluetooth", R.drawable.sym_bluetooth, Kind.TOGGLE, ONE_OR_WIDE, Style.COLOR),
+    CELLULAR("Cellular Data", R.drawable.sym_cellular, Kind.TOGGLE, ONE_OR_WIDE, Style.COLOR),
+    HOTSPOT("Personal Hotspot", R.drawable.sym_hotspot, Kind.LAUNCH, ONE_OR_WIDE, Style.COLOR),
+    LOCATION("Location", R.drawable.sym_location, Kind.TOGGLE, ONE_OR_WIDE, Style.COLOR),
+    NFC("NFC", R.drawable.sym_nfc, Kind.TOGGLE, ONE_OR_WIDE, Style.COLOR),
+    ALARM("Alarm", R.drawable.sym_alarm, Kind.LAUNCH, ONE_OR_WIDE),
+    STOPWATCH("Stopwatch", R.drawable.sym_stopwatch, Kind.LAUNCH, ONE_OR_WIDE),
+    NOTES("Quick Note", R.drawable.sym_note, Kind.LAUNCH, ONE_OR_WIDE),
+    SETTINGS("Settings", R.drawable.sym_settings, Kind.LAUNCH, ONE_OR_WIDE),
     // iOS 18+'s other controls, where Android has them (the app-backed ones only where such an app is installed).
-    QUICK_SHARE("Quick Share", R.drawable.sym_share, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
-    VPN("VPN", R.drawable.sym_vpn, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
-    DATA_SAVER("Data Saver", R.drawable.sym_data_saver, Kind.TOGGLE, ONE_OR_WIDE, 0xFF30D158.toInt(), Style.COLOR),
-    VIDEO("Video", R.drawable.sym_video, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
-    SELFIE("Selfie", R.drawable.sym_selfie, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
-    VOICE_MEMO("Voice Memo", R.drawable.sym_mic, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF453A.toInt()),
-    RECOGNIZE_MUSIC("Recognize Music", R.drawable.sym_recognize_music, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt()),
-    TRANSLATE("Translate", R.drawable.sym_translate, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt()),
-    MAGNIFIER("Magnifier", R.drawable.sym_magnifier, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
-    WALLET("Wallet", R.drawable.sym_wallet, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
-    HOME("Home", R.drawable.sym_home, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF9F0A.toInt()),
-    TEXT_SIZE("Text Size", R.drawable.sym_text_size, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
-    INVERT("Invert Colors", R.drawable.sym_invert, Kind.TOGGLE, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
-    GRAYSCALE("Color Filters", R.drawable.sym_grayscale, Kind.TOGGLE, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
-    EXTRA_DIM("Reduce White Point", R.drawable.sym_extra_dim, Kind.TOGGLE, ONE_OR_WIDE, 0xFFFFCC00.toInt()),
-    LIVE_CAPTIONS("Live Captions", R.drawable.sym_captions, Kind.TOGGLE, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
-    ACCESSIBILITY("Accessibility Shortcut", R.drawable.sym_accessibility, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt());
+    QUICK_SHARE("Quick Share", R.drawable.sym_share, Kind.LAUNCH, ONE_OR_WIDE, Style.COLOR),
+    VPN("VPN", R.drawable.sym_vpn, Kind.LAUNCH, ONE_OR_WIDE, Style.COLOR),
+    DATA_SAVER("Data Saver", R.drawable.sym_data_saver, Kind.TOGGLE, ONE_OR_WIDE, Style.COLOR),
+    VIDEO("Video", R.drawable.sym_video, Kind.LAUNCH, ONE_OR_WIDE),
+    SELFIE("Selfie", R.drawable.sym_selfie, Kind.LAUNCH, ONE_OR_WIDE),
+    VOICE_MEMO("Voice Memo", R.drawable.sym_mic, Kind.LAUNCH, ONE_OR_WIDE),
+    RECOGNIZE_MUSIC("Recognize Music", R.drawable.sym_recognize_music, Kind.LAUNCH, ONE_OR_WIDE),
+    TRANSLATE("Translate", R.drawable.sym_translate, Kind.LAUNCH, ONE_OR_WIDE),
+    MAGNIFIER("Magnifier", R.drawable.sym_magnifier, Kind.LAUNCH, ONE_OR_WIDE),
+    WALLET("Wallet", R.drawable.sym_wallet, Kind.LAUNCH, ONE_OR_WIDE),
+    HOME("Home", R.drawable.sym_home, Kind.LAUNCH, ONE_OR_WIDE),
+    TEXT_SIZE("Text Size", R.drawable.sym_text_size, Kind.LAUNCH, ONE_OR_WIDE),
+    INVERT("Invert Colors", R.drawable.sym_invert, Kind.TOGGLE, ONE_OR_WIDE),
+    GRAYSCALE("Color Filters", R.drawable.sym_grayscale, Kind.TOGGLE, ONE_OR_WIDE),
+    EXTRA_DIM("Reduce White Point", R.drawable.sym_extra_dim, Kind.TOGGLE, ONE_OR_WIDE),
+    LIVE_CAPTIONS("Live Captions", R.drawable.sym_captions, Kind.TOGGLE, ONE_OR_WIDE, Style.COLOR),
+    ACCESSIBILITY("Accessibility Shortcut", R.drawable.sym_accessibility, Kind.LAUNCH, ONE_OR_WIDE);
 
     enum class Kind { TOGGLE, LAUNCH, SLIDER, CONNECTIVITY, MEDIA, FOCUS }
 
@@ -86,6 +86,9 @@ enum class Control(val title: String, val icon: Int, val kind: Kind, val sizes: 
     data class Size(val w: Int, val h: Int)
 
     val defaultSize get() = sizes.first()
+
+    /** Its colour: the toggled-on fill or glyph (`comp.cc.accent.<control>`, at the current appearance). */
+    val accent: Int get() = dev.launcher.app.design.Design.color(CcTokens.accent(this))
 }
 
 /**

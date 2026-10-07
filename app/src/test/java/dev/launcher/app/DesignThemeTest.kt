@@ -52,6 +52,22 @@ class DesignThemeTest {
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
         }
+        // Control Center's: the same check, and a colour for every control.
+        for (k in dev.launcher.app.shade.CcTokens.ALL) {
+            val v = r.resolve(k)
+            val want = when {
+                k.endsWith("material") || k.endsWith(".sheet") || k.endsWith(".entry") -> Value.Mat::class
+                k.endsWith("-blend") -> Value.Choice::class
+                k.endsWith("color") || k.endsWith(".dim") -> Value.Color::class
+                k.endsWith(".title") || k.endsWith(".title-large") || k.endsWith(".detail") -> Value.Text::class
+                else -> Value.Number::class
+            }
+            assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
+        }
+        for (c in dev.launcher.app.shade.Control.entries) {
+            val key = dev.launcher.app.shade.CcTokens.accent(c).name
+            assertTrue("$key: no colour", r.resolve(key) is Value.Color)
+        }
         // The kit's platter, as the kit has it.
         assertEquals(24f, (r.resolve("comp.nc.platter.corner") as Value.Number).v)
         val overlay = (r.resolve("comp.nc.overlay.material") as Value.Mat).material

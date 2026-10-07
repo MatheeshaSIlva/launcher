@@ -75,8 +75,8 @@ object FrostCache {
             content.setPosition(0, 0, w, h)
             val c = content.beginRecording()
             try { c.scale(scale, scale); c.drawBitmap(source, 0f, 0f, null) } finally { content.endRecording() }
-            val s = sigmaPx * scale
-            content.setRenderEffect(RenderEffect.createBlurEffect(s, s, Shader.TileMode.CLAMP))
+            val r = Blur.renderRadius(sigmaPx * scale)
+            if (r > 0f) content.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP))
             renderer.setContentRoot(content)
             renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
             val image = reader.acquireNextImage()

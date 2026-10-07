@@ -14,6 +14,8 @@ import android.text.TextUtils
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import dev.launcher.app.R
+import dev.launcher.app.design.Design
+import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.SpringSpec
 import dev.launcher.app.motion.SpringValue
@@ -33,13 +35,15 @@ import kotlin.math.roundToInt
  * - Timer: a large slider of durations; letting go starts that timer in the clock app (it does not open).
  * - Now Playing: the player large: artwork, title, the track's progress, the transport, the volume, the output.
  * - Focus: Do Not Disturb and Focus settings.
- * Everything moves on springs from where the module was and back; the panel can be grabbed while it moves.
+ * Everything moves on springs from where the module was and back; the panel can be grabbed while it moves. It is drawn as
+ * the modules are ([CcSurfaces], `comp.cc.*` tokens): the module's clear glass, its circles the kit's wells (their colour
+ * when on), a slider's level and a white button the kit's "on" fill.
  */
 internal class CcExpanded(ctx: Context, private val host: Host) {
     interface Host {
         val state: ControlState
         val media: Media
-        val glass: PanelGlass?
+        val surfaces: CcSurfaces
         fun launch(i: Intent?)
         fun invalidate()
         fun haptic(kind: Int)
@@ -203,12 +207,25 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     }
 
     private fun drawPanel(c: Canvas, r: RectF, radius: Float) {
-        val g = host.glass
         c.save()
         c.translate(r.left, r.top)
-        if (g != null) g.draw(c, r.width(), r.height(), radius, r.left, r.top, 1f, GLASS_TINT, 0, panelAlpha, 0.6f)
-        else { fill.color = 0x40FFFFFF; rect.set(0f, 0f, r.width(), r.height()); c.drawRoundRect(rect, radius, radius, fill) }
+        host.surfaces.module(c, r.width(), r.height(), radius, r.left, r.top, alpha = panelAlpha)
         c.restore()
+    }
+
+    /** A round well centred at ([cx], [cy]), [d] across, drawn on the panel (screen coordinates). */
+    private fun well(c: Canvas, cx: Float, cy: Float, d: Float, alpha: Float, on: Float = 0f, accent: dev.launcher.app.design.ColorKey? = null) =
+        host.surfaces.well(c, cx - d / 2f, cy - d / 2f, d, d, d / 2f, cx - d / 2f, cy - d / 2f, 1f, alpha, on, accent)
+
+    private fun white() = Design.color(CcTokens.SYMBOL_COLOR)
+
+    /** The kit's module title and detail on [title] / [small] at [size] pt (the expanded modules' larger type). */
+    private fun titleType(size: Float) { host.surfaces.text(title, CcTokens.TITLE); title.textSize = pt(size) }
+    private fun detailType(size: Float, a: Float) {
+        host.surfaces.text(small, CcTokens.DETAIL)
+        small.textSize = pt(size)
+        small.color = alpha(Design.color(CcTokens.DETAIL_COLOR), a)
+        small.blendMode = Design.blend(CcTokens.DETAIL_BLEND).toBlendMode()
     }
 
     private var panelAlpha = 1f
@@ -241,19 +258,18 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             connCenter(i, r, pt2)
             val on = st.isOn(ctl)
             val p = if (pressed == i) press.value else 0f
-            val d = pt(58f) * (1f - 0.06f * p)
-            fill.color = alpha(if (on) ctl.accent else 0x38FFFFFF, a)
-            c.drawCircle(pt2[0], pt2[1], d / 2f, fill)
-            glyphs.draw(c, ctl.icon, pt2[0], pt2[1], pt(26f), alpha(0xFFFFFFFF.toInt(), a))
-            title.textSize = pt(13f)
+            val d = host.surfaces.pt(CcTokens.CONN_BIG) * (1f - 0.06f * p)
+            well(c, pt2[0], pt2[1], d, a, if (on) 1f else 0f, CcTokens.accent(ctl))
+            glyphs.draw(c, ctl.icon, pt2[0], pt2[1], host.surfaces.pt(CcTokens.CONN_SYMBOL_BIG), alpha(white(), a))
+            titleType(13f)
             title.textAlign = Paint.Align.CENTER
-            title.color = alpha(0xFFFFFFFF.toInt(), a)
+            title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
             val maxW = r.width() / 2f - pt(16f)
             c.drawText(TextUtils.ellipsize(ctl.title, title, maxW, TextUtils.TruncateAt.END).toString(), pt2[0], pt2[1] + pt(29f) + pt(18f), title)
-            small.textSize = pt(12f)
+            detailType(12f, a)
             small.textAlign = Paint.Align.CENTER
-            small.color = alpha(0xB3FFFFFF.toInt(), a)
             c.drawText(TextUtils.ellipsize(connStatus(ctl, on), small, maxW, TextUtils.TruncateAt.END).toString(), pt2[0], pt2[1] + pt(29f) + pt(34f), small)
+            small.blendMode = null
             title.textAlign = Paint.Align.LEFT
             small.textAlign = Paint.Align.LEFT
         }
@@ -271,13 +287,14 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     private fun drawSlider(c: Canvas, kd: Kind, r: RectF, radius: Float, a: Float) {
         val v = sliderValue(kd).coerceIn(0f, 1f)
         val fillH = v * r.height()
-        c.save()
-        path.reset()
-        path.addRoundRect(r, radius, radius, Path.Direction.CW)
-        c.clipPath(path)
-        fill.color = alpha(0xF7FFFFFF.toInt(), panelAlpha)
-        c.drawRect(r.left, r.bottom - fillH, r.right, r.bottom, fill)
-        c.restore()
+        if (fillH > 0.5f) {
+            // The level: the kit's "on" fill over the glass, from the bottom.
+            c.save()
+            c.clipRect(r.left, r.bottom - fillH, r.right, r.bottom)
+            c.translate(r.left, r.top)
+            host.surfaces.onFill(c, r.width(), r.height(), radius, r.left, r.top, 1f, panelAlpha)
+            c.restore()
+        }
         val icon = when (kd) {
             Kind.BRIGHTNESS -> R.drawable.sym_sun
             Kind.VOLUME -> if (v <= 0.001f) R.drawable.sym_volume_off else R.drawable.sym_volume
@@ -285,19 +302,19 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             else -> R.drawable.sym_timer
         }
         val accent = when (kd) {
-            Kind.BRIGHTNESS -> 0xFFFFCC00.toInt()
-            Kind.VOLUME -> 0xFF32ADE6.toInt()
-            Kind.FLASHLIGHT -> 0xFF0A84FF.toInt()
-            else -> 0xFFFF9F0A.toInt()
+            Kind.BRIGHTNESS -> Control.BRIGHTNESS.accent
+            Kind.VOLUME -> Control.VOLUME.accent
+            Kind.FLASHLIGHT -> Control.FLASHLIGHT.accent
+            else -> Control.TIMER.accent
         }
         val gy = r.bottom - r.width() / 2f
         val covered = ((fillH - (r.width() / 2f - pt(17f))) / pt(34f)).coerceIn(0f, 1f)
-        glyphs.draw(c, icon, r.centerX(), gy, pt(34f) * (r.width() / pt(SLIDER_W)).coerceIn(0.5f, 1f), alpha(mix(0xFFFFFFFF.toInt(), accent, covered), panelAlpha))
+        glyphs.draw(c, icon, r.centerX(), gy, pt(34f) * (r.width() / pt(SLIDER_W)).coerceIn(0.5f, 1f), alpha(mix(white(), accent, covered), panelAlpha))
         if (a <= 0.003f) return
         when (kd) {
             Kind.TIMER -> {
                 big.textSize = pt(28f)
-                big.color = alpha(0xFFFFFFFF.toInt(), a)
+                big.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
                 c.drawText(timerLabel(timerStep()), r.centerX(), r.top - pt(22f), big)
             }
             Kind.BRIGHTNESS -> drawBrightnessButtons(c, r, a)
@@ -324,14 +341,14 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             buttonCenter(i, r, pt2)
             val p = if (pressed == i) press.value else 0f
             val d = pt(56f) * (1f - 0.06f * p)
-            fill.color = alpha(if (b.third) 0xFFF2F2F7.toInt() else 0x38FFFFFF, a)
-            c.drawCircle(pt2[0], pt2[1], d / 2f, fill)
-            glyphs.draw(c, b.second, pt2[0], pt2[1], pt(25f), alpha(if (b.third) 0xFF1C1C1E.toInt() else 0xFFFFFFFF.toInt(), a))
-            small.textSize = pt(12f)
-            small.textAlign = Paint.Align.CENTER
-            small.color = alpha(0xFFFFFFFF.toInt(), a)
-            c.drawText(b.first, pt2[0], pt2[1] + pt(28f) + pt(18f), small)
-            small.textAlign = Paint.Align.LEFT
+            // Off: a well; on: the kit's white "on" fill, with a dark symbol.
+            well(c, pt2[0], pt2[1], d, a, if (b.third) 1f else 0f)
+            glyphs.draw(c, b.second, pt2[0], pt2[1], pt(25f), alpha(if (b.third) 0xFF1C1C1E.toInt() else white(), a))
+            titleType(12f)
+            title.textAlign = Paint.Align.CENTER
+            title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
+            c.drawText(b.first, pt2[0], pt2[1] + pt(28f) + pt(18f), title)
+            title.textAlign = Paint.Align.LEFT
         }
     }
 
@@ -360,28 +377,28 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             sh.setLocalMatrix(mat)
             artPaint.shader = sh
             artPaint.alpha = (255 * a).toInt()
-            c.drawRoundRect(rect, pt(12f), pt(12f), artPaint)
+            c.drawRoundRect(rect, pt(14f), pt(14f), artPaint)
             artPaint.shader = null
         } else {
-            fill.color = alpha(0x26FFFFFF, a)
-            c.drawRoundRect(rect, pt(12f), pt(12f), fill)
+            host.surfaces.well(c, rect.left, rect.top, art, art, pt(14f), rect.left, rect.top, 1f, a)
             glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), pt(28f), alpha(0x80FFFFFF.toInt(), a))
         }
         val tx = rect.right + pt(14f)
         val outR = pt(20f)
         val outX = r.right - pad - outR
         val maxW = outX - outR - pt(10f) - tx
-        title.textSize = pt(17f)
-        title.color = alpha(0xFFFFFFFF.toInt(), a)
+        titleType(17f)
+        title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
         c.drawText(TextUtils.ellipsize(m.title ?: "Not Playing", title, maxW, TextUtils.TruncateAt.END).toString(), tx, rect.top + pt(26f), title)
         m.artist?.let {
-            small.textSize = pt(15f)
-            small.color = alpha(0xB3FFFFFF.toInt(), a)
+            host.surfaces.text(small, CcTokens.MEDIA_TITLE)
+            small.color = alpha(Design.color(CcTokens.MEDIA_TEXT_COLOR), a)
+            small.blendMode = Design.blend(CcTokens.MEDIA_TEXT_BLEND).toBlendMode()
             c.drawText(TextUtils.ellipsize(it, small, maxW, TextUtils.TruncateAt.END).toString(), tx, rect.top + pt(48f), small)
+            small.blendMode = null
         }
-        fill.color = alpha(0x26FFFFFF, a * (1f - 0.3f * (if (pressed == M_OUTPUT) press.value else 0f)))
-        c.drawCircle(outX, rect.top + outR, outR, fill)
-        glyphs.draw(c, R.drawable.sym_airplay, outX, rect.top + outR, pt(21f), alpha(0xFFFFFFFF.toInt(), a))
+        well(c, outX, rect.top + outR, 2 * outR * (1f - 0.06f * (if (pressed == M_OUTPUT) press.value else 0f)), a)
+        glyphs.draw(c, R.drawable.sym_airplay, outX, rect.top + outR, host.surfaces.pt(CcTokens.WELL_SYMBOL), alpha(white(), a))
         // The track's progress.
         val sy = r.top + pt(128f)
         val x0 = r.left + pad
@@ -441,19 +458,20 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             focusRow(i, r, rowRect)
             val p = if (pressed == i) press.value else 0f
             val on = i == 0 && dnd
-            fill.color = alpha(if (on) 0xFF5E5CE6.toInt() else mix(0x1FFFFFFF, 0x33FFFFFF, p), a)
-            c.drawRoundRect(rowRect, pt(28f), pt(28f), fill)
+            // Each row a well (its colour when on), lighter under the finger.
+            host.surfaces.well(c, rowRect.left, rowRect.top, rowRect.width(), rowRect.height(), pt(28f), rowRect.left, rowRect.top, 1f, a,
+                if (on) 1f else 0f, CcTokens.accent(Control.FOCUS), p)
             val cy = rowRect.centerY()
-            glyphs.draw(c, if (i == 0) R.drawable.sym_moon else R.drawable.sym_settings, rowRect.left + pt(30f), cy, pt(22f), alpha(0xFFFFFFFF.toInt(), a))
-            title.textSize = pt(16f)
-            title.color = alpha(0xFFFFFFFF.toInt(), a)
+            glyphs.draw(c, if (i == 0) R.drawable.sym_moon else R.drawable.sym_settings, rowRect.left + pt(30f), cy, pt(22f), alpha(white(), a))
+            titleType(16f)
+            title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
             c.drawText(if (i == 0) "Do Not Disturb" else "Focus Settings", rowRect.left + pt(58f), cy + pt(5.5f), title)
             if (on) {
-                small.textSize = pt(13f)
+                detailType(13f, a)
                 small.textAlign = Paint.Align.RIGHT
-                small.color = alpha(0xCCFFFFFF.toInt(), a)
                 c.drawText("On", rowRect.right - pt(20f), cy + pt(4.5f), small)
                 small.textAlign = Paint.Align.LEFT
+                small.blendMode = null
             }
         }
     }
@@ -635,7 +653,6 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         const val ROW_PT = 106f
         const val SLIDER_W = 152f
         const val SLIDER_H = 380f
-        const val GLASS_TINT = 0x26FFFFFF
         const val P_SLIDER = 100
         const val P_PANEL = 101
         const val M_PREV = -10

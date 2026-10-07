@@ -2,7 +2,10 @@ package dev.launcher.app.shade
 
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.drawable.Drawable
+import dev.launcher.app.design.Blend
+import dev.launcher.app.design.toBlendMode
 
 /**
  * The shade's symbols (vector drawables, white, tinted when drawn). One cached drawable per symbol and per instance of
@@ -23,6 +26,22 @@ class Glyphs(private val ctx: Context) {
         val save = c.save()
         c.translate(cx - s / 2f, cy - s / 2f)
         d.draw(c)
+        c.restoreToCount(save)
+    }
+
+    private val layer = Paint()
+
+    /**
+     * [res] laid on what is drawn with [blend] (a design kit's symbol blend: plus-lighter, ...), through a small layer (a
+     * tinted drawable cannot blend by itself). Normal, or a blend the canvas has no mode for, draws it plainly.
+     */
+    fun draw(c: Canvas, res: Int, cx: Float, cy: Float, size: Float, color: Int, blend: Blend) {
+        val mode = blend.toBlendMode()
+        if (blend == Blend.NORMAL || mode == null) { draw(c, res, cx, cy, size, color); return }
+        if (size <= 0.5f || (color ushr 24) == 0) return
+        layer.blendMode = mode
+        val save = c.saveLayer(cx - size, cy - size, cx + size, cy + size, layer)
+        draw(c, res, cx, cy, size, color)
         c.restoreToCount(save)
     }
 }

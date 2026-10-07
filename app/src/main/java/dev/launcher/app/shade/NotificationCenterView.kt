@@ -586,7 +586,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         c.restore()
         if (c !== canvas) {
             sheetNode.endRecording()
-            val r = Design.pt(NcTokens.LOOK_BLUR, u) * look
+            val r = dev.launcher.app.design.Blur.renderRadius(lookSigma() * look)
             if (r != sheetBlur) {
                 sheetBlur = r
                 sheetNode.setRenderEffect(if (r > 0.5f) android.graphics.RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)
@@ -662,7 +662,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun warmFrost() {
         if (width == 0 || wallpaper == null) return
         for (k in listOf(NcTokens.PLATTER, NcTokens.BUTTON)) backdropFor(Design.material(k))
-        backdropFor(Design.material(NcTokens.MENU), Design.pt(NcTokens.LOOK_BLUR, u))
+        backdropFor(Design.material(NcTokens.MENU), lookSigma())
     }
 
     private val sharpMatrix = Matrix()
@@ -1049,22 +1049,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             drawGlass(c, mat, x - r, y - r, 2 * r, 2 * r, r, 1f, s, x - r * s, y - r * s, over = onFill, overK = t)
             val res = if (i == 0) R.drawable.sym_flashlight else R.drawable.sym_camera
             // Off: the kit's grey, added to the glass; on: dark on the white disc (they cross-fade).
-            drawGlyph(c, res, x, y, symbol, alpha(symColor, 1f - t), symBlend)
+            glyphs.draw(c, res, x, y, symbol, alpha(symColor, 1f - t), symBlend)
             if (t > 0.003f) glyphs.draw(c, res, x, y, symbol, alpha(0xFF1C1C1E.toInt(), t))
             c.restore()
         }
-    }
-
-    private val blendLayer = Paint()
-
-    /** A symbol drawn with a blend mode (through a small layer: a tinted drawable cannot blend by itself). */
-    private fun drawGlyph(c: Canvas, res: Int, cx: Float, cy: Float, size: Float, color: Int, blend: Blend) {
-        val mode = blend.toBlendMode()
-        if (blend == Blend.NORMAL || mode == null) { glyphs.draw(c, res, cx, cy, size, color); return }
-        blendLayer.blendMode = mode
-        c.saveLayer(cx - size, cy - size, cx + size, cy + size, blendLayer)
-        glyphs.draw(c, res, cx, cy, size, color)
-        c.restore()
     }
 
     /**
@@ -1160,6 +1148,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val menuR = RectF()
     private val platR = RectF()
 
+    /** How much the sheet behind a long look is blurred (a Gaussian's sigma, px). */
+    private fun lookSigma() = dev.launcher.app.design.Blur.sigmaPx(Design.num(NcTokens.LOOK_BLUR), u)
+
     private fun menuRowPitch() = Design.pt(NcTokens.MENU_ROW, u) + Design.pt(NcTokens.MENU_ROW_GAP, u)
 
     /** Where the long look's card ([cardR]) and its menu ([menuR]) rest, for [m] on a sheet at [sheetY]. */
@@ -1225,7 +1216,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         // sees the wallpaper blurred as the sheet is, with the list's overlay and the long look's dim.
         val menuUnder = under + Fill(ColorValue.Literal(dim or (0xFF shl 24), dim or (0xFF shl 24)), kc * ((dim ushr 24) / 255f), kc * ((dim ushr 24) / 255f), Blend.NORMAL)
         drawGlass(c, Design.material(NcTokens.MENU), menuR.left, menuR.top, menuR.width(), menuR.height(), Design.pt(NcTokens.MENU_CORNER, u),
-            kc, s, menuR.centerX() - menuR.width() * s / 2f, menuR.top, under = menuUnder, behindPx = Design.pt(NcTokens.LOOK_BLUR, u))
+            kc, s, menuR.centerX() - menuR.width() * s / 2f, menuR.top, under = menuUnder, behindPx = lookSigma())
         Design.text(NcTokens.MENU_LABEL).applyTo(menuPaint, u)
         menuPaint.color = alpha(Design.color(NcTokens.MENU_LABEL_COLOR), kc)
         val padX = Design.pt(NcTokens.MENU_PAD_X, u)

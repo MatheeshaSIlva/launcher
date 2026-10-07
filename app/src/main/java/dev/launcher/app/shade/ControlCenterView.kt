@@ -18,6 +18,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import dev.launcher.app.R
+import dev.launcher.app.design.Design
+import dev.launcher.app.design.Scale
+import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.SpringSpec
 import dev.launcher.app.motion.SpringValue
@@ -31,10 +34,13 @@ import kotlin.math.roundToInt
 
 /**
  * iOS 27's Control Center: a grid of glass controls over the blurred, dimmed picture of what is behind it (the shade's
- * backdrop). Geometry from the running iOS 27 (Simulator, iPhone 18 Pro, accessibility frames; 1 pt = width / 402) and
- * Apple's iOS 27 UI kit (docs/IOS27_KIT.md): 4 columns of 70 pt controls on an 85.33 pt pitch from 38 pt; the grid starts
- * 132.3 pt from the top (86 pt in edit mode); the status row's centre at 104.2 pt; "+" and the power button 29 pt at
- * (38, 23) and (335, 23). Controls of one cell are circles, of one row or column capsules, larger ones rounded by 30 pt.
+ * backdrop). Every size, colour, type and material is a design token (`comp.cc.*`, [CcTokens]: Apple's iOS 27 kit, or the
+ * running iOS 27 where they differ) and every surface is drawn by the one material renderer ([CcSurfaces]): 4 columns of
+ * 70 pt controls on an 85.33 pt pitch; the grid starts 132.3 pt from the top (86 pt in edit mode); the status row's centre
+ * at 104.2 pt; "+" and the power button 28.67 pt at (38, 23) and (335.33, 23). Controls of one cell are circles, of one
+ * row capsules, sliders rounded by 34 pt, larger ones by 30. Modules are the kit's clear glass; a white control when on
+ * and a slider's level are the kit's "on" fill (colour dodge and screen over the glass), a coloured one its accent; round
+ * symbol wells (Focus, Connectivity's circles, the player's artwork and output) the kit's well.
  *
  * Motion (measured in iOS 27, docs/IOS27_MOTION.md): [progress] is how present the panel is (0 closed .. 1 open): the
  * blur comes in over the first ~110 pt of the pull and the controls fade in with it, at their own size; the controls and
@@ -54,7 +60,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     interface Host {
         val state: ControlState
         val media: Media
-        val glass: PanelGlass?
+        val surfaces: CcSurfaces
         /** A vertical drag that closes (or stretches) the panel: [phase] 0 begin, 1 move, 2 end; [dy] since the touch (+ = down). */
         fun closeDrag(phase: Int, dy: Float, vy: Float)
         fun close()
@@ -100,7 +106,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val expanded: CcExpanded = CcExpanded(ctx, object : CcExpanded.Host {
         override val state get() = host.state
         override val media get() = host.media
-        override val glass get() = host.glass
+        override val surfaces get() = host.surfaces
         override fun launch(i: Intent?) = host.launch(i)
         override fun invalidate() = this@ControlCenterView.invalidate()
         override fun haptic(kind: Int) { performHapticFeedback(kind) }
@@ -125,31 +131,54 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        u = min(w, h) / 402f
-        cell = 70f * u
-        gap = 15.333f * u
-        pitch = cell + gap
-        val gridW = 4 * cell + 3 * gap
-        gridLeft = (w - gridW) / 2f
-        gridTopRest = 132.3f * u
-        gridTopEdit = 86f * u
-        rowY = 104.2f * u
-        btnY = 37.5f * u
-        btnR = 14.5f * u
-        rows = max(4, ((h - gridTopRest - 96f * u + gap) / pitch).toInt())
+        u = Scale.unitPx(context, min(w, h))
+        host.surfaces.unit(u)
+        syncTokens()
         val l = layout
         if (l == null) {
             layout = CcLayout.fromJson(prefs.getString(KEY, null), 4, rows)?.takeIf { it.items.isNotEmpty() } ?: CcLayout.default(4, rows)
             layout!!.items.removeAll { !host.state.available(it.control) }
         } else l.rows = max(rows, l.usedRows())
-        title.textSize = 15f * u
-        small.textSize = 12.5f * u
         rebuildAnims(animate = false)
     }
 
+    /** The grid's geometry and the type from the tokens. */
+    private fun syncTokens() {
+        val sf = host.surfaces
+        cell = sf.pt(CcTokens.CELL)
+        gap = sf.pt(CcTokens.GAP)
+        pitch = cell + gap
+        val gridW = 4 * cell + 3 * gap
+        gridLeft = (width - gridW) / 2f
+        gridTopRest = sf.pt(CcTokens.GRID_TOP)
+        gridTopEdit = sf.pt(CcTokens.GRID_TOP_EDIT)
+        rowY = sf.pt(CcTokens.ROW_Y)
+        btnR = sf.pt(CcTokens.BUTTON_SIZE) / 2f
+        btnY = sf.pt(CcTokens.BUTTON_TOP) + btnR
+        rows = max(4, ((height - gridTopRest - 96f * u + gap) / pitch).toInt())
+        layout?.let { it.rows = max(rows, it.usedRows()) }
+        sf.text(title, CcTokens.TITLE)
+        sf.text(small, CcTokens.DETAIL)
+    }
+
+    /** A token changed (the token editor): laid out and drawn again; the controls move to their new places on springs. */
+    private val tokensChanged: () -> Unit = {
+        (handler ?: android.os.Handler(android.os.Looper.getMainLooper())).post {
+            if (width > 0) { syncTokens(); rebuildAnims(animate = progress > 0f); slotsKey = Long.MIN_VALUE }
+        }
+    }
+
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); Design.addListener(tokensChanged) }
+    override fun onDetachedFromWindow() { Design.removeListener(tokensChanged); super.onDetachedFromWindow() }
+
     private fun save() { layout?.let { prefs.edit().putString(KEY, it.toJson()).apply() } }
 
-    private fun radiusFor(w: Float, h: Float): Float = if (min(w, h) <= cell * 1.01f) min(w, h) / 2f else 30f * u
+    /** One cell, or one row: round; a slider (one column): the kit's 34 pt; larger modules: 30 pt. */
+    private fun radiusFor(w: Float, h: Float): Float = when {
+        min(w, h) > cell * 1.01f -> host.surfaces.pt(CcTokens.CORNER)
+        w <= cell * 1.01f && h > cell * 1.01f -> min(host.surfaces.pt(CcTokens.SLIDER_CORNER), w / 2f)
+        else -> min(w, h) / 2f
+    }
 
     // ------------------------------------------------------------------ animation state per control
 
@@ -298,8 +327,6 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun gridTop() = gridTopRest + (gridTopEdit - gridTopRest) * editK.value
 
 
-    private val glassTint = 0x26FFFFFF
-
     override fun onDraw(c: Canvas) {
         budget = 3
         if (progress <= 0.002f || width == 0) return
@@ -320,18 +347,26 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val plusPress = SpringValue(0f, 100f, inv)
     private val powerPress = SpringValue(0f, 100f, inv)
 
+    /** Where "+" (0) and the power button (1) are centred horizontally (the kit: 38 pt from the sides). */
+    private fun buttonX(i: Int): Float { val c = host.surfaces.pt(CcTokens.BUTTON_INSET_X) + btnR; return if (i == 0) c else width - c }
+
+    /** "+" and power: the kit's near-black added to what is behind (plus-lighter), a light symbol. */
     private fun drawTopButtons(c: Canvas, k: Float) {
         if (k <= 0.003f) return
-        val g = host.glass
-        for ((i, x) in listOf(52.5f * u, width - 52.5f * u).withIndex()) {
+        val sf = host.surfaces
+        val mat = Design.material(CcTokens.BUTTON)
+        val symbol = sf.pt(CcTokens.BUTTON_SYMBOL)
+        val col = Design.color(CcTokens.BUTTON_SYMBOL_COLOR)
+        for (i in 0..1) {
+            val x = buttonX(i)
             val p = if (i == 0) plusPress.value else powerPress.value
             val s = 1f + 0.08f * p
             val d = btnR * 2f
             c.save()
             c.translate(x - btnR * s, btnY - btnR * s)
             c.scale(s, s)
-            g?.draw(c, d, d, btnR, x - btnR * s, btnY - btnR * s, s, glassTint, 0, k, 0.4f, p)
-            glyphs.draw(c, if (i == 0) R.drawable.sym_plus else R.drawable.sym_power, btnR, btnR, 17f * u, alpha(0xFFFFFFFF.toInt(), k))
+            sf.draw(c, mat, d, d, btnR, x - btnR * s, btnY - btnR * s, s, k, p)
+            glyphs.draw(c, if (i == 0) R.drawable.sym_plus else R.drawable.sym_power, btnR, btnR, symbol, alpha(col, k))
             c.restore()
         }
     }
@@ -369,14 +404,14 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun slotsKeyOf(l: CcLayout): Long {
         var k = 17L
         for (it in l.items) k = k * 31 + (it.col * 64 + it.row * 4096 + it.w * 7 + it.h * 13)
-        return k * 31 + (host.glass?.generation ?: -1) + height
+        return (k * 31 + host.surfaces.generation + height) * 31 + Design.version
     }
 
     private val slotsNode = android.graphics.RenderNode("cc-slots").apply { setUseCompositingLayer(true, null) }
     private var slotsKey = Long.MIN_VALUE
 
     private fun recordSlots(l: CcLayout) {
-        val g = host.glass
+        val sf = host.surfaces
         slotsNode.setPosition(0, 0, width, height)
         val c = slotsNode.beginRecording()
         try {
@@ -386,12 +421,10 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 val x = gridLeft + col * pitch
                 val y = gridTopEdit + r * pitch
                 if (y + cell > height - 100f * u) continue
-                if (g != null) {
-                    c.save()
-                    c.translate(x, y)
-                    g.draw(c, cell, cell, cell / 2f, x, y, 1f, 0x0FFFFFFF, 0, 0.55f, 0f)
-                    c.restore()
-                } else c.drawCircle(x + cell / 2f, y + cell / 2f, cell / 2f, fill)
+                c.save()
+                c.translate(x, y)
+                sf.module(c, cell, cell, cell / 2f, x, y, alpha = SLOT_ALPHA)
+                c.restore()
             }
         } finally {
             slotsNode.endRecording()
@@ -474,7 +507,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         // picture arrived): a few controls a frame (all at once cost an 11 ms GPU frame on the S24); the others keep their
         // look a frame or two longer, which does not show under the blur.
         val key = contentKey(a, p.w, p.h)
-        val placeKey = (Math.round(restX).toLong() shl 40) xor (Math.round(restY).toLong() shl 16) xor (host.glass?.generation ?: -1).toLong()
+        val placeKey = (Math.round(restX).toLong() shl 40) xor (Math.round(restY).toLong() shl 16) xor host.surfaces.generation.toLong()
         val stale = key != a.key || !a.node.hasDisplayList()
         if (stale || (placeKey != a.placeKey && budget > 0)) {
             if (!stale) budget--
@@ -482,7 +515,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             a.key = key
             a.placeKey = placeKey
         } else if (placeKey != a.placeKey) postInvalidateOnAnimation()
-        val m = PanelGlass.SHADOW_PT * u
+        val m = LAYER_MARGIN_PT * u
         c.save()
         c.translate(dl, dt)
         c.scale(p.scale, p.scale)
@@ -503,7 +536,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun contentKey(a: Anim, w: Float, h: Float): Long {
         var k = 17L
         fun mixIn(v: Int) { k = k * 31 + v }
-        mixIn(Math.round(w * 2f)); mixIn(Math.round(h * 2f))
+        mixIn(Math.round(w * 2f)); mixIn(Math.round(h * 2f)); mixIn(Design.version); mixIn(Math.round(dev.launcher.app.theme.Appearance.dark * 64f))
         mixIn(Math.round(a.active.value * 255f)); mixIn(Math.round(a.press.value * 255f)); mixIn(Math.round(a.lift.value * 64f))
         mixIn(Math.round(a.value.value * 1000f)); mixIn(Math.round(a.subPress.value * 255f)); mixIn(a.sub?.hashCode() ?: 0)
         when (a.item.control.kind) {
@@ -519,21 +552,25 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         return k
     }
 
+    /** Where the control being recorded rests on screen (what its parts' glass samples). */
+    private var recX = 0f
+    private var recY = 0f
+
     /** Draws [a]'s look into its layer at full size, its glass sampling the backdrop at its resting place ([sx], [sy]). */
     private fun record(a: Anim, w: Float, h: Float, radius: Float, sx: Float, sy: Float) {
-        val g = host.glass
+        val sf = host.surfaces
         val ctl = a.item.control
-        val m = PanelGlass.SHADOW_PT * u
+        val m = LAYER_MARGIN_PT * u
         val on = a.active.value.coerceIn(0f, 1f)
-        // A single control fills with its colour (or white) when on; larger ones keep clear glass and light up inside.
+        // A single control takes its colour (or the kit's white) when on; larger ones keep clear glass and light up inside.
         val whole = (ctl.kind == Control.Kind.TOGGLE || ctl.kind == Control.Kind.FOCUS) && a.item.w == 1 && a.item.h == 1
-        val fillColor = if (whole && on > 0f) alpha(if (ctl.style == Control.Style.COLOR) ctl.accent else 0xFFF2F2F7.toInt(), on * 0.96f) else 0
+        recX = sx; recY = sy
         a.node.setPosition(0, 0, kotlin.math.ceil(w + 2 * m).toInt(), kotlin.math.ceil(h + 2 * m).toInt())
         val c = a.node.beginRecording()
         try {
             c.translate(m, m)
-            g?.draw(c, w, h, radius, sx, sy, 1f, glassTint, fillColor, 1f, 0.55f + 0.35f * a.lift.value, a.press.value)
-                ?: run { fill.color = 0x40FFFFFF; rect.set(0f, 0f, w, h); c.drawRoundRect(rect, radius, radius, fill) }
+            sf.module(c, w, h, radius, sx, sy, press = a.press.value, on = if (whole) on else 0f,
+                accent = if (ctl.style == Control.Style.COLOR) CcTokens.accent(ctl) else null)
             when (ctl.kind) {
                 Control.Kind.TOGGLE, Control.Kind.LAUNCH -> drawSingle(c, a, w, h, 1f, on)
                 Control.Kind.FOCUS -> drawFocus(c, a, w, h, 1f, on)
@@ -546,41 +583,62 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
     }
 
-    /** A circle (glyph) or, two cells wide, a capsule with the glyph in a disc and the control's name beside it. */
+    /** A round symbol well at ([x], [y]) of the control being recorded, [d] across; [on]: its accent ([accent]) or white. */
+    private fun well(c: Canvas, x: Float, y: Float, d: Float, on: Float, accent: dev.launcher.app.design.ColorKey?, alpha: Float, press: Float = 0f) =
+        host.surfaces.well(c, x, y, d, d, d / 2f, recX + x, recY + y, 1f, alpha, on, accent, press)
+
+    /** The baseline of [p]'s text in a line box [lineH] tall from [top] (half leading, as Figma places text). */
+    private fun baseline(p: Paint, top: Float, lineH: Float): Float {
+        p.getFontMetrics(fm)
+        return top + (lineH - (fm.descent - fm.ascent)) / 2f - fm.ascent
+    }
+    private val fm = Paint.FontMetrics()
+
+    /**
+     * A circle (its symbol) or, two cells wide, a capsule (the kit's 2x1): a 40 pt symbol well 14 pt in (it takes the
+     * control's colour, or the kit's white, when on), the name and its state 8 pt beside it.
+     */
     private fun drawSingle(c: Canvas, a: Anim, w: Float, h: Float, alpha: Float, on: Float) {
         val ctl = a.item.control
-        val glyphOn = if (ctl.style == Control.Style.COLOR) 0xFFFFFFFF.toInt() else ctl.accent
-        val glyphColor = mix(0xFFFFFFFF.toInt(), if (ctl.kind == Control.Kind.TOGGLE) glyphOn else 0xFFFFFFFF.toInt(), on)
+        val sf = host.surfaces
+        val white = Design.color(CcTokens.SYMBOL_COLOR)
+        val glyphOn = if (ctl.style == Control.Style.COLOR) white else ctl.accent
+        val glyphColor = mix(white, if (ctl.kind == Control.Kind.TOGGLE) glyphOn else white, on)
         val icon = iconOf(ctl, on)
         if (a.item.w == 1) {
-            glyphs.draw(c, icon, w / 2f, h / 2f, 27f * u, alpha(glyphColor, alpha))
+            glyphs.draw(c, icon, w / 2f, h / 2f, sf.pt(CcTokens.SYMBOL), alpha(glyphColor, alpha))
             return
         }
-        // Capsule: a disc on the left (it fills when on), the name and state beside it.
-        val d = h - 16f * u
-        val dcx = 8f * u + d / 2f
-        fill.color = alpha(if (ctl.kind == Control.Kind.TOGGLE) mix(0x33FFFFFF, if (ctl.style == Control.Style.COLOR) ctl.accent else 0xFFF2F2F7.toInt(), on) else 0x33FFFFFF, alpha)
-        c.drawCircle(dcx, h / 2f, d / 2f, fill)
-        glyphs.draw(c, icon, dcx, h / 2f, 24f * u, alpha(glyphColor, alpha))
-        val tx = 8f * u + d + 9f * u
-        val maxW = w - tx - 12f * u
+        val d = sf.pt(CcTokens.WELL_SIZE)
+        val x = sf.pt(CcTokens.WIDE_PADDING)
+        val wellOn = if (ctl.kind == Control.Kind.TOGGLE) on else 0f
+        well(c, x, (h - d) / 2f, d, wellOn, if (ctl.style == Control.Style.COLOR) CcTokens.accent(ctl) else null, alpha)
+        glyphs.draw(c, icon, x + d / 2f, h / 2f, sf.pt(CcTokens.WELL_SYMBOL), alpha(glyphColor, alpha))
+        val tx = x + d + sf.pt(CcTokens.WIDE_GAP)
+        val maxW = w - tx - x
         val state = when (ctl.kind) { Control.Kind.TOGGLE -> if (on > 0.5f) "On" else "Off"; else -> null }
         drawLabel(c, ctl.title, state, tx, h / 2f, maxW, alpha)
     }
 
+    /** A module's name (the kit's title) and, under it, its state (the kit's detail: white 33 %, added to the glass). */
     private fun drawLabel(c: Canvas, name: String, sub: String?, x: Float, cy: Float, maxW: Float, alpha: Float) {
-        title.textSize = 14f * u
-        title.color = alpha(0xFFFFFFFF.toInt(), alpha)
+        val sf = host.surfaces
+        sf.text(title, CcTokens.TITLE)
+        title.color = alpha(Design.color(CcTokens.LABEL_COLOR), alpha)
+        val tLine = Design.text(CcTokens.TITLE).lineHeightPt * u
         val t = TextUtils.ellipsize(name, title, maxW, TextUtils.TruncateAt.END).toString()
         if (sub == null) {
-            c.drawText(t, x, cy + 0.36f * title.textSize, title)
-        } else {
-            c.drawText(t, x, cy - 1.5f * u, title)
-            small.textSize = 12.5f * u
-            small.color = alpha(0xB3FFFFFF.toInt(), alpha)
-            c.drawText(sub, x, cy + 14f * u, small)
+            c.drawText(t, x, baseline(title, cy - tLine / 2f, tLine), title)
+            return
         }
-        title.textSize = 15f * u
+        sf.text(small, CcTokens.DETAIL)
+        val dLine = Design.text(CcTokens.DETAIL).lineHeightPt * u
+        val top = cy - (tLine + dLine) / 2f
+        c.drawText(t, x, baseline(title, top, tLine), title)
+        small.color = alpha(Design.color(CcTokens.DETAIL_COLOR), alpha)
+        small.blendMode = Design.blend(CcTokens.DETAIL_BLEND).toBlendMode()
+        c.drawText(TextUtils.ellipsize(sub, small, maxW, TextUtils.TruncateAt.END).toString(), x, baseline(small, top + tLine, dLine), small)
+        small.blendMode = null
     }
 
     private fun iconOf(ctl: Control, on: Float): Int = when (ctl) {
@@ -590,59 +648,66 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         else -> ctl.icon
     }
 
+    /** Focus: the moon (one cell), or the kit's 2x1: its well (indigo when on), "Focus" or the mode that is on. */
     private fun drawFocus(c: Canvas, a: Anim, w: Float, h: Float, alpha: Float, on: Float) {
         val ctl = a.item.control
+        val sf = host.surfaces
+        val white = Design.color(CcTokens.SYMBOL_COLOR)
         if (a.item.w == 1) {
-            glyphs.draw(c, R.drawable.sym_moon, w / 2f, h / 2f, 27f * u, alpha(0xFFFFFFFF.toInt(), alpha))
+            glyphs.draw(c, R.drawable.sym_moon, w / 2f, h / 2f, sf.pt(CcTokens.SYMBOL), alpha(white, alpha))
             return
         }
-        val d = h - 22f * u
-        val dcx = 11f * u + d / 2f
-        fill.color = alpha(mix(0x33FFFFFF, ctl.accent, on), alpha)
-        c.drawCircle(dcx, h / 2f, d / 2f, fill)
-        glyphs.draw(c, R.drawable.sym_moon, dcx, h / 2f, 23f * u, alpha(0xFFFFFFFF.toInt(), alpha))
-        val tx = 11f * u + d + 10f * u
-        if (on > 0.5f) drawLabel(c, "Do Not Disturb", "On", tx, h / 2f, w - tx - 10f * u, alpha)
+        val d = sf.pt(CcTokens.WELL_SIZE)
+        val x = sf.pt(CcTokens.WIDE_PADDING)
+        well(c, x, (h - d) / 2f, d, on, CcTokens.accent(ctl), alpha)
+        glyphs.draw(c, R.drawable.sym_moon, x + d / 2f, h / 2f, sf.pt(CcTokens.WELL_SYMBOL), alpha(white, alpha))
+        val tx = x + d + sf.pt(CcTokens.WIDE_GAP)
+        if (on > 0.5f) drawLabel(c, "Do Not Disturb", "On", tx, h / 2f, w - tx - x, alpha)
         else {
-            title.textSize = 15f * u
-            title.color = alpha(0xFFFFFFFF.toInt(), alpha)
-            c.drawText("Focus", tx, h / 2f + 0.36f * title.textSize, title)
-            glyphs.draw(c, R.drawable.sym_unfold, tx + title.measureText("Focus") + 9f * u, h / 2f, 15f * u, alpha(0xB3FFFFFF.toInt(), alpha))
+            drawLabel(c, "Focus", null, tx, h / 2f, w - tx - x, alpha)
+            glyphs.draw(c, R.drawable.sym_unfold, tx + title.measureText("Focus") + 9f * u, h / 2f, 15f * u,
+                alpha((Design.color(CcTokens.LABEL_COLOR) and 0xFFFFFF) or (0xB3 shl 24), alpha))
         }
     }
 
-    /** Fills white from the bottom to the level; its glyph at the bottom takes the control's colour once the fill covers it. */
+    /**
+     * The level fills from the bottom with the kit's "on" fill (the glass under it lit by colour dodge and screen); its
+     * symbol at the bottom takes the control's colour once the fill covers it.
+     */
     private fun drawSlider(c: Canvas, a: Anim, w: Float, h: Float, alpha: Float, radius: Float) {
         val ctl = a.item.control
+        val sf = host.surfaces
         val v = a.value.value.coerceIn(0f, 1f)
         val fillH = v * h
-        c.save()
-        path.reset()
-        rect.set(0f, 0f, w, h)
-        path.addRoundRect(rect, radius, radius, Path.Direction.CW)
-        c.clipPath(path)
-        fill.color = alpha(0xF7FFFFFF.toInt(), alpha)
-        c.drawRect(0f, h - fillH, w, h, fill)
-        c.restore()
+        if (fillH > 0.5f) {
+            c.save()
+            c.clipRect(0f, h - fillH, w, h)
+            sf.onFill(c, w, h, radius, recX, recY, 1f, alpha)
+            c.restore()
+        }
         val gy = h - w / 2f
-        // How much of the glyph the fill covers (0..1).
-        val covered = ((fillH - (w / 2f - 13f * u)) / (26f * u)).coerceIn(0f, 1f)
-        val col = mix(0xFFFFFFFF.toInt(), ctl.accent, covered)
+        val sym = sf.pt(CcTokens.SYMBOL)
+        // How much of the symbol the fill covers (0..1).
+        val covered = ((fillH - (w / 2f - sym * 0.4f)) / (sym * 0.8f)).coerceIn(0f, 1f)
+        val col = mix(Design.color(CcTokens.SYMBOL_COLOR), ctl.accent, covered)
         val icon = if (ctl == Control.VOLUME && v <= 0.001f) R.drawable.sym_volume_off else iconOf(ctl, 0f)
-        glyphs.draw(c, icon, w / 2f, gy, 26f * u, alpha(col, alpha))
+        glyphs.draw(c, icon, w / 2f, gy, sym, alpha(col, alpha))
     }
 
-    // Connectivity: three large circles and four small ones, measured on Apple's illustration (fractions of the module).
+    // Connectivity: three large circles and four small ones where Apple's kit has them (2570:20605: 57 pt circles at 14 and
+    // 84.67 pt, 25.67 pt ones at 84.67 and 116 pt of the 155 pt module), as fractions of the module; their sizes are tokens.
     private val connectivitySubs: List<Triple<Control, FloatArray, Float>> by lazy {
         val fourth = if (host.state.hasNfc) Control.NFC else Control.DARK_MODE
+        val big = 28.5f / 155f
+        val small = 12.835f / 155f
         listOf(
-            Triple(Control.AIRPLANE, floatArrayOf(0.273f, 0.273f), 0.181f),
-            Triple(Control.HOTSPOT, floatArrayOf(0.733f, 0.273f), 0.181f),
-            Triple(Control.WIFI, floatArrayOf(0.273f, 0.733f), 0.181f),
-            Triple(Control.CELLULAR, floatArrayOf(0.632f, 0.632f), 0.080f),
-            Triple(Control.BLUETOOTH, floatArrayOf(0.833f, 0.632f), 0.080f),
-            Triple(Control.LOCATION, floatArrayOf(0.632f, 0.833f), 0.080f),
-            Triple(fourth, floatArrayOf(0.833f, 0.833f), 0.080f),
+            Triple(Control.AIRPLANE, floatArrayOf((14f + 28.5f) / 155f, (13f + 28.5f) / 155f), big),
+            Triple(Control.HOTSPOT, floatArrayOf((84.67f + 28.5f) / 155f, (13f + 28.5f) / 155f), big),
+            Triple(Control.WIFI, floatArrayOf((14f + 28.5f) / 155f, (84f + 28.5f) / 155f), big),
+            Triple(Control.CELLULAR, floatArrayOf((84.67f + 12.835f) / 155f, (84f + 12.835f) / 155f), small),
+            Triple(Control.BLUETOOTH, floatArrayOf((116f + 12.835f) / 155f, (84f + 12.835f) / 155f), small),
+            Triple(Control.LOCATION, floatArrayOf((84.67f + 12.835f) / 155f, (115.33f + 12.835f) / 155f), small),
+            Triple(fourth, floatArrayOf((116f + 12.835f) / 155f, (115.33f + 12.835f) / 155f), small),
         )
     }
 
@@ -655,26 +720,36 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         for ((ctl, s) in subActive) { val t = if (host.state.isOn(ctl)) 1f else 0f; if (s.target != t) s.animateTo(t, TOGGLE) }
     }
 
+    /** Its circles: the kit's wells, each its control's colour when on. */
     private fun drawConnectivity(c: Canvas, a: Anim, w: Float, h: Float, alpha: Float) {
-        val size = min(w, h)
+        val sf = host.surfaces
+        val k = min(w, h) / (2 * cell + gap)   // the module's size against the kit's 155 pt
+        val white = Design.color(CcTokens.SYMBOL_COLOR)
         for ((ctl, at, rf) in connectivitySubs) {
             val on = subActiveOf(ctl).value.coerceIn(0f, 1f)
             val pressed = if (a.sub == ctl) a.subPress.value else 0f
-            val r = rf * size * (1f - 0.06f * pressed)
+            val bigOne = rf > 0.1f
+            val d = sf.pt(if (bigOne) CcTokens.CONN_BIG else CcTokens.CONN_SMALL) * k * (1f - 0.06f * pressed)
             val cx = at[0] * w
             val cy = at[1] * h
-            fill.color = alpha(mix(0x38FFFFFF, ctl.accent, on), alpha)
-            c.drawCircle(cx, cy, r, fill)
-            glyphs.draw(c, ctl.icon, cx, cy, r * (if (rf > 0.1f) 0.92f else 1.08f), alpha(0xFFFFFFFF.toInt(), alpha))
+            well(c, cx - d / 2f, cy - d / 2f, d, on, CcTokens.accent(ctl), alpha)
+            glyphs.draw(c, ctl.icon, cx, cy, sf.pt(if (bigOne) CcTokens.CONN_SYMBOL_BIG else CcTokens.CONN_SYMBOL_SMALL) * k * (1f - 0.06f * pressed),
+                alpha(white, alpha))
         }
     }
 
+    /**
+     * Now Playing (the kit's 2x2): the artwork (a well until there is one), the output switcher's well at the top right,
+     * the title and artist in the kit's grey added to the glass, the transport at the bottom.
+     */
     private fun drawMedia(c: Canvas, a: Anim, w: Float, h: Float, alpha: Float) {
         val m = host.media
+        val sf = host.surfaces
         val wide = a.item.w >= 4
-        val artSize = if (wide) 58f * u else 52f * u
-        val ax = 15f * u
-        val ay = 14f * u
+        val artSize = sf.pt(CcTokens.ART)
+        val ax = sf.pt(CcTokens.ART_X)
+        val ay = sf.pt(CcTokens.ART_Y)
+        val artR = sf.pt(CcTokens.ART_CORNER)
         rect.set(ax, ay, ax + artSize, ay + artSize)
         val art = m.art
         if (art != null && !art.isRecycled) {
@@ -686,44 +761,46 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             sh.setLocalMatrix(mat)
             artPaint.shader = sh
             artPaint.alpha = (255 * alpha).toInt()
-            c.drawRoundRect(rect, 11f * u, 11f * u, artPaint)
+            c.drawRoundRect(rect, artR, artR, artPaint)
             artPaint.shader = null
         } else {
-            fill.color = alpha(0x26FFFFFF, alpha)
-            c.drawRoundRect(rect, 11f * u, 11f * u, fill)
-            glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), 24f * u, alpha(0x80FFFFFF.toInt(), alpha))
+            host.surfaces.well(c, ax, ay, artSize, artSize, artR, recX + ax, recY + ay, 1f, alpha)
+            glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), sf.pt(CcTokens.WELL_SYMBOL), alpha(0x80FFFFFF.toInt(), alpha))
         }
-        // The output switcher (AirPlay's place).
-        val apR = 20f * u
-        val apX = w - 14f * u - apR
-        val apY = ay + apR
-        fill.color = alpha(0x26FFFFFF, alpha * (1f - 0.3f * (if (a.sub == SUB_OUTPUT) a.subPress.value else 0f)))
-        c.drawCircle(apX, apY, apR, fill)
-        glyphs.draw(c, R.drawable.sym_airplay, apX, apY, 21f * u, alpha(0xFFFFFFFF.toInt(), alpha))
-        // Title and artist.
-        val tx = if (wide) ax + artSize + 13f * u else ax
+        // The output switcher (AirPlay's place): a well 15 pt from the right (the kit: x 100 of 155).
+        val apD = sf.pt(CcTokens.OUTPUT)
+        val apR = apD / 2f
+        val apX = w - 15f * u - apR
+        val apY = 13f * u + apR
+        well(c, apX - apR, apY - apR, apD, 0f, null, alpha, if (a.sub == SUB_OUTPUT) a.subPress.value else 0f)
+        glyphs.draw(c, R.drawable.sym_airplay, apX, apY, sf.pt(CcTokens.WELL_SYMBOL), alpha(Design.color(CcTokens.SYMBOL_COLOR), alpha))
+        // Title and artist: the kit's 15 pt grey, added to the glass (plus-lighter), at 74 and 91 pt (the wide player: beside
+        // the artwork).
+        val tx = if (wide) ax + artSize + 13f * u else 14f * u
         val maxW = (if (wide) apX - apR - 10f * u else w - 15f * u) - tx
         val name = m.title ?: "Not Playing"
-        title.textSize = 15f * u
-        title.color = alpha(0xFFFFFFFF.toInt(), alpha)
-        val tBase = if (wide) ay + 22f * u else 90f * u
+        sf.text(title, CcTokens.MEDIA_TITLE)
+        val line = Design.text(CcTokens.MEDIA_TITLE).lineHeightPt * u
+        title.color = alpha(Design.color(CcTokens.MEDIA_TEXT_COLOR), alpha)
+        title.blendMode = Design.blend(CcTokens.MEDIA_TEXT_BLEND).toBlendMode()
+        val top = if (wide) ay + 4f * u else 74f * u
         if (m.title != null && m.artist != null) {
-            c.drawText(TextUtils.ellipsize(name, title, maxW, TextUtils.TruncateAt.END).toString(), tx, tBase, title)
-            small.textSize = 13f * u
-            small.color = alpha(0xB3FFFFFF.toInt(), alpha)
-            c.drawText(TextUtils.ellipsize(m.artist, small, maxW, TextUtils.TruncateAt.END).toString(), tx, tBase + 17f * u, small)
+            c.drawText(TextUtils.ellipsize(name, title, maxW, TextUtils.TruncateAt.END).toString(), tx, baseline(title, top, line), title)
+            c.drawText(TextUtils.ellipsize(m.artist, title, maxW, TextUtils.TruncateAt.END).toString(), tx, baseline(title, top + line, line), title)
         } else {
-            c.drawText(TextUtils.ellipsize(name, title, maxW, TextUtils.TruncateAt.END).toString(), tx, tBase + 7f * u, title)
+            c.drawText(TextUtils.ellipsize(name, title, maxW, TextUtils.TruncateAt.END).toString(), tx, baseline(title, top + line / 2f, line), title)
         }
-        // Transport: previous, play/pause, next.
-        val by = h - 25f * u
-        val xs = if (wide) floatArrayOf(w / 2f - 64f * u, w / 2f, w / 2f + 64f * u) else floatArrayOf(33f * u, w / 2f + 1f * u, w - 34f * u)
+        title.blendMode = null
+        // Transport: previous, play/pause, next (the kit: centred at 34, 77 and 121 pt, 131 pt down).
+        val by = h - 24f * u
+        val xs = if (wide) floatArrayOf(w / 2f - 64f * u, w / 2f, w / 2f + 64f * u) else floatArrayOf(34f * u, w / 2f, w - 34f * u)
         val dim = if (m.active) 1f else 0.45f
+        val white = Design.color(CcTokens.SYMBOL_COLOR)
         for ((i, id) in listOf(SUB_PREV, SUB_PLAY, SUB_NEXT).withIndex()) {
             val pressed = if (a.sub == id) a.subPress.value else 0f
             val res = when (id) { SUB_PREV -> R.drawable.sym_rewind; SUB_NEXT -> R.drawable.sym_forward; else -> if (m.playing) R.drawable.sym_pause else R.drawable.sym_play }
-            val size = (if (id == SUB_PLAY) 30f else 27f) * u * (1f - 0.12f * pressed)
-            glyphs.draw(c, res, xs[i], by, size, alpha(0xFFFFFFFF.toInt(), alpha * (if (id == SUB_PLAY) 1f else dim) * (1f - 0.35f * pressed)))
+            val size = sf.pt(if (id == SUB_PLAY) CcTokens.PLAY else CcTokens.TRANSPORT) * (1f - 0.12f * pressed)
+            glyphs.draw(c, res, xs[i], by, size, alpha(white, alpha * (if (id == SUB_PLAY) 1f else dim) * (1f - 0.35f * pressed)))
         }
         if (wide && m.duration > 0) {
             // The scrubber: elapsed over the track's length.
@@ -826,13 +903,13 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 ?.takeIf { (_, at, rf) -> hypot(lx - at[0] * w, ly - at[1] * h) < rf * min(w, h) * 1.35f + 6f * u }?.first
             Control.Kind.MEDIA -> {
                 val wide = a.item.w >= 4
-                val by = h - 25f * u
-                val xs = if (wide) floatArrayOf(w / 2f - 64f * u, w / 2f, w / 2f + 64f * u) else floatArrayOf(33f * u, w / 2f + 1f * u, w - 34f * u)
+                val by = h - 24f * u
+                val xs = if (wide) floatArrayOf(w / 2f - 64f * u, w / 2f, w / 2f + 64f * u) else floatArrayOf(34f * u, w / 2f, w - 34f * u)
                 val ids = listOf(SUB_PREV, SUB_PLAY, SUB_NEXT)
                 val near = xs.indices.minByOrNull { abs(lx - xs[it]) }!!
                 when {
                     abs(ly - by) < 24f * u && abs(lx - xs[near]) < 24f * u -> ids[near]
-                    hypot(lx - (w - 34f * u), ly - 34f * u) < 26f * u -> SUB_OUTPUT
+                    hypot(lx - (w - 15f * u - host.surfaces.pt(CcTokens.OUTPUT) / 2f), ly - 13f * u - host.surfaces.pt(CcTokens.OUTPUT) / 2f) < 26f * u -> SUB_OUTPUT
                     else -> SUB_OPEN
                 }
             }
@@ -875,8 +952,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun downNormal(x: Float, y: Float) {
         // The top buttons.
-        if (hypot(x - 52.5f * u, y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 0; plusPress.animateTo(1f, PRESS_IN); return }
-        if (hypot(x - (width - 52.5f * u), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 1; powerPress.animateTo(1f, PRESS_IN); return }
+        if (hypot(x - buttonX(0), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 0; plusPress.animateTo(1f, PRESS_IN); return }
+        if (hypot(x - buttonX(1), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 1; powerPress.animateTo(1f, PRESS_IN); return }
         val a = hit(x, y)
         if (a == null) {
             mode = Mode.EMPTY
@@ -1134,6 +1211,10 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val SUB_NEXT = "next"
         const val SUB_OUTPUT = "output"
         const val SUB_OPEN = "open"
+        /** Edit mode's empty cells: the module's glass at this opacity (judged: faint, as iOS's). */
+        const val SLOT_ALPHA = 0.55f
+        /** Room around a control's layer for its rims (the kit's are within 2 pt of the edge). */
+        const val LAYER_MARGIN_PT = 4f
         val PRESS_IN = SpringSpec(0.22f, 1f)
         val PRESS_OUT = SpringSpec(0.38f, 0.7f)
         val TOGGLE = SpringSpec(0.32f, 0.9f)

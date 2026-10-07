@@ -1204,3 +1204,32 @@ The lens (refraction x depth = 21 pt at the very edge, our reading of Figma's un
 platter into its top edge; the button comparison says it matches the kit, platters over a busy wallpaper should be looked
 at on the phone. iOS Simulator pass 9 again showed no notifications (the posting test failed), so there is still no
 iOS 27 screenshot of a long list.
+
+## Design system, step 2b: Control Center on the one material renderer (2026-10-08)
+
+Control Center, its expanded modules and the controls gallery are drawn by `design/MaterialPainter` through
+`shade/CcSurfaces`, from 91 `comp.cc.*` tokens (`shade/CcTokens.kt`). Read from Apple's kit (Examples/Control Center,
+iPhone, 12740:33932; recorded in `docs/tokens/ios27-kit.json` "controlCenter") and measured on its own render at 3x:
+
+- Background: the kit's overlay, a background blur of 24 (sigma 12 pt) and black 50 % (was a judged 26 pt "radius" and
+  36 %). One UI's live dim-to-blur keeps its judged strength (`comp.cc.background.samsung-strength`, 0.15).
+- Modules: the kit's clear glass. A white control when on (Silent Mode in the kit) and a slider's level: the kit's "on"
+  fill (`#6f6f6f` colour dodge + white 65 % screen) over the glass, not flat white. A coloured control when on: its
+  accent. Every control's colour is a token (`comp.cc.accent.<control>`, aliased to the kit's accents: Wi-Fi `#0088ff`,
+  Cellular `#34c759`...).
+- Round symbol wells (the 2x1 controls' and Focus's 40 pt well, Connectivity's circles, the player's artwork and
+  output, the expanded modules' circles and rows): the kit's well (`#111111` 60 % luminosity, `#777777` colour dodge,
+  `#222222` plus-lighter) over the module's glass; it brings out the colour of what is behind, as in the kit.
+- "+" and power: `#121212` plus-lighter, `#f5f5f5` symbols, 28.67 pt at 38 pt from the sides.
+- Type: titles SF Medium 15 (-0.2), details Medium 14/18 in white 33 % plus-lighter, the player's track and artist
+  Medium 15 `#afafaf` plus-lighter; lines placed in their line boxes as Figma does.
+- Symbols, measured on the kit's render (their larger side): 1x1 29 pt, Connectivity's 23.5 and ~14, wells' 19,
+  transport 20 and 22; ours were ~20 % smaller. Sliders rounded 34 (kit), 2x2 modules 30.
+- The gallery (not in the kit): iOS 27's near-solid `#272925` sheet with flat white-21 % circles (measured, pass 5).
+
+Also fixed: `FrostCache` and the long look passed a Gaussian sigma to `RenderEffect.createBlurEffect`, which takes its
+own "radius" (sigma = 0.577 x radius + 0.5 px): those blurs were about a quarter too weak (`design/Blur`).
+
+Checked on the emulator over the kit's wallpaper next to the kit's own render (light and dark), the expanded
+Connectivity and Brightness modules, edit mode, the gallery; Notification Center again after the blur fix. Not measured
+for smoothness (decided: one performance pass at the end).

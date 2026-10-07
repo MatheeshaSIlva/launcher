@@ -142,6 +142,18 @@ def build_ref(kit):
     ref['ref.material.overlay.lock-screen'] = {'material': {
         'frost': 0, 'fills': [[c, o, b] for c, o, b in (fill(f) for f in ov['fills'])], 'innerShadows': [], 'shadows': []},
         'src': 'kit:' + ov['node']}
+    cc = kit['controlCenter']
+    ref['ref.material.overlay.control-center'] = {'material': {
+        'frost': cc['Overlay']['backgroundBlur'], 'fills': [[c, o, b] for c, o, b in (fill(f) for f in cc['Overlay']['fills'])],
+        'innerShadows': [], 'shadows': []}, 'src': 'kit:' + cc['Overlay']['node']}
+    ref['ref.material.control-center.on'] = {'material': {
+        'frost': 0, 'fills': [[c, o, b] for c, o, b in (fill(f) for f in cc['On']['fills'])], 'innerShadows': [], 'shadows': []},
+        'src': 'kit:10486:20857'}
+    ref['ref.material.control-center.well'] = {'material': {
+        'frost': 0, 'fills': [[c, o, b] for c, o, b in (fill(f) for f in cc['Well']['fills'])], 'innerShadows': [], 'shadows': []},
+        'src': 'kit:2570:20607'}
+    ref['ref.material.control-center.button'] = {'material': {
+        'frost': 0, 'fills': [['#121212', 1.0, 'LINEAR_DODGE']], 'innerShadows': [], 'shadows': []}, 'src': 'kit:10491:21418'}
     return ref
 
 
@@ -233,11 +245,86 @@ SEED = {
     'comp.nc.look.menu-label': {'text': {'family': 'text', 'weight': 400, 'size': 17, 'line': 22, 'tracking': -0.43}, 'src': 'kit:143:62847'},
     'comp.nc.look.menu-label-color': {'color': '#ffffff', 'src': 'kit:143:62847'},
     'comp.nc.look.dim': {'color': '#00000066', 'src': 'judged:the rest of Notification Center dims behind a long look (the kit does not show it)'},
-    'comp.nc.look.blur': {'pt': 22, 'src': 'judged:the list behind the long look is out of focus (the kit does not show it)'},
+    'comp.nc.look.blur': {'pt': 25, 'src': 'judged:the list behind the long look is out of focus (the kit does not show it); a blur radius as the kit gives them (sigma 12.5 pt)'},
+    # Control Center (docs/tokens/ios27-kit.json "controlCenter"; geometry of the running system where it differs: docs/IOS27_KIT.md)
+    'comp.cc.background.material': {'ref': 'ref.material.overlay.control-center', 'src': 'kit:2524:24518'},
+    'comp.cc.background.samsung-strength': {'factor': 0.15, 'src': "judged:One UI's dim-to-blur strength (blur and dim come together there; 0.35 and 0.6 were too strong on the S24)"},
+    'comp.cc.module.material': {'ref': 'sys.material.glass.clear', 'src': 'kit:10486:21122'},
+    'comp.cc.module.on-material': {'ref': 'ref.material.control-center.on', 'src': 'kit:10486:20857'},
+    'comp.cc.well.material': {'ref': 'ref.material.control-center.well', 'src': 'kit:2570:20607'},
+    'comp.cc.button.material': {'ref': 'ref.material.control-center.button', 'src': 'kit:10491:21418'},
+    'comp.cc.button.size': {'pt': 28.67, 'src': 'kit:10491:21418'},
+    'comp.cc.button.inset-x': {'pt': 38, 'src': 'kit:10491:21418'},
+    'comp.cc.button.top': {'pt': 23, 'src': 'kit:10491:21421'},
+    'comp.cc.button.symbol': {'pt': 18, 'src': "measured:the kit's render at 3x (plus 12, power 15.7 pt); our symbols fill 5/6 of their box"},
+    'comp.cc.button.symbol-color': {'color': '#f5f5f5', 'src': 'kit:10491:21415'},
+    'comp.cc.grid.cell': {'pt': 70, 'src': 'kit:2524:24582'},
+    'comp.cc.grid.gap': {'pt': 15.333, 'src': 'measured:iOS 27 Simulator, accessibility frames (85.33 pt pitch; the kit has 15 / 17)'},
+    'comp.cc.grid.top': {'pt': 132.3, 'src': 'measured:iOS 27 Simulator, accessibility frames (the kit: 132)'},
+    'comp.cc.grid.top-edit': {'pt': 86, 'src': 'measured:iOS 27 Simulator, edit mode'},
+    'comp.cc.status.row-y': {'pt': 104.2, 'src': 'measured:iOS 27 Simulator, accessibility frames (the kit: 91.7)'},
+    'comp.cc.module.corner': {'pt': 30, 'src': 'kit:2547:2662 (2x2)'},
+    'comp.cc.slider.corner': {'pt': 34, 'src': 'kit:2570:20682'},
+    'comp.cc.symbol': {'pt': 35, 'src': "measured:the kit's render at 3x (the camera, SF Pro Bold 19: 29.3 pt wide); our symbols fill 5/6 of their box"},
+    'comp.cc.symbol-color': {'color': '#ffffff', 'src': 'kit:2524:24527'},
+    'comp.cc.wide.padding': {'pt': 14, 'src': 'kit:2547:2623'},
+    'comp.cc.wide.gap': {'pt': 8, 'src': 'kit:2547:2623'},
+    'comp.cc.well.size': {'pt': 40, 'src': 'kit:2543:2535'},
+    'comp.cc.well.symbol': {'pt': 23, 'src': "measured:the kit's render at 3x (Focus's moon 19 pt)"},
+    'comp.cc.module.title': {'text': {'family': 'text', 'weight': 510, 'size': 15, 'line': 18, 'tracking': -0.2}, 'src': 'kit:2547:2574'},
+    'comp.cc.module.title-large': {'text': {'family': 'text', 'weight': 590, 'size': 14, 'line': 17, 'tracking': -0.08}, 'src': 'kit:2547:2646'},
+    'comp.cc.module.detail': {'text': {'family': 'text', 'weight': 510, 'size': 14, 'line': 18, 'tracking': -0.08}, 'src': 'kit:2547:2575'},
+    'comp.cc.module.label-color': {'color': '#ffffff', 'src': 'kit:2547:2574'},
+    'comp.cc.module.detail-color': {'color': '#ffffff54', 'src': 'kit:2547:2575 (white 33 %)'},
+    'comp.cc.module.detail-blend': {'choice': 'LINEAR_DODGE', 'src': 'kit:2547:2575'},
+    'comp.cc.connectivity.big': {'pt': 57, 'src': 'kit:2570:20593'},
+    'comp.cc.connectivity.small': {'pt': 25.67, 'src': 'kit:2570:20671'},
+    'comp.cc.connectivity.symbol-big': {'pt': 28, 'src': "measured:the kit's render at 3x (23.3-23.7 pt)"},
+    'comp.cc.connectivity.symbol-small': {'pt': 17, 'src': "measured:the kit's render at 3x (8.3-15.3 pt)"},
+    'comp.cc.media.art': {'pt': 53.67, 'src': 'kit:2570:20726'},
+    'comp.cc.media.art-corner': {'pt': 14, 'src': 'kit:2570:20726'},
+    'comp.cc.media.art-x': {'pt': 12.67, 'src': 'kit:2570:20726'},
+    'comp.cc.media.art-y': {'pt': 13.33, 'src': 'kit:2570:20726'},
+    'comp.cc.media.output': {'pt': 40, 'src': 'kit:2570:20736'},
+    'comp.cc.media.title': {'text': {'family': 'text', 'weight': 510, 'size': 15, 'line': 17, 'tracking': -0.2}, 'src': 'kit:2570:20722'},
+    'comp.cc.media.text-color': {'color': '#afafaf', 'src': 'kit:2570:20722'},
+    'comp.cc.media.text-blend': {'choice': 'LINEAR_DODGE', 'src': 'kit:2570:20722'},
+    'comp.cc.media.transport': {'pt': 24, 'src': "measured:the kit's render at 3x (previous, next: 20 pt)"},
+    'comp.cc.media.play': {'pt': 27, 'src': "measured:the kit's render at 3x (play: 22.3 pt)"},
+    'comp.cc.gallery.sheet': {'material': {'frost': 0, 'fills': [['#272925', 0.85, 'NORMAL']], 'innerShadows': [], 'shadows': []},
+                              'src': 'measured:iOS 27 Simulator, the gallery (pass 5): its sheet #272925, nearly opaque over Control Center (the kit has no gallery)'},
+    'comp.cc.gallery.entry': {'material': {'frost': 0, 'fills': [['#ffffff', 0.21, 'NORMAL']], 'innerShadows': [], 'shadows': []},
+                              'src': 'measured:iOS 27 Simulator, the gallery: flat circles #555852 on the sheet (white 21 %)'},
+    'comp.cc.gallery.dim': {'color': '#00000080', 'src': 'judged:Control Center dims behind the gallery'},
+    'comp.cc.gallery.corner': {'pt': 38, 'src': "judged:a sheet of iOS 27's size (the kit's sheets are rounded 38)"},
     'comp.nc.fade.top': {'pt': 50, 'src': 'judged:where a scrolled notification has faded out (to be replaced by the kit\'s scroll edge)'},
     'comp.nc.fade.bottom': {'pt': 108, 'src': 'judged:gone by the top of the flashlight and camera buttons (bottom 50 + 58 pt): nothing shows under them'},
     'comp.nc.fade.length': {'pt': 70, 'src': 'judged:over how far it fades'},
 }
+
+
+CONTROL_ACCENTS = {
+    'connectivity': 'blue', 'media': 'pink', 'brightness': 'yellow', 'volume': 'cyan', 'focus': 'indigo',
+    'rotation-lock': 'red', 'silent': 'red', 'flashlight': 'blue', 'timer': 'orange', 'calculator': 'orange',
+    'camera': 'gray', 'mirroring': 'blue', 'scan-code': 'gray', 'dark-mode': None, 'low-power': 'yellow',
+    'airplane': 'orange', 'wifi': 'blue', 'bluetooth': 'blue', 'cellular': 'green', 'hotspot': 'green', 'location': 'blue',
+    'nfc': 'blue', 'alarm': 'orange', 'stopwatch': 'orange', 'notes': 'yellow', 'settings': 'gray', 'quick-share': 'blue',
+    'vpn': 'blue', 'data-saver': 'green', 'video': 'gray', 'selfie': 'gray', 'voice-memo': 'red', 'recognize-music': 'blue',
+    'translate': 'blue', 'magnifier': 'gray', 'wallet': 'gray', 'home': 'orange', 'text-size': 'gray', 'invert': 'gray',
+    'grayscale': 'gray', 'extra-dim': 'yellow', 'live-captions': 'blue', 'accessibility': 'blue',
+}
+for _c, _a in CONTROL_ACCENTS.items():
+    if _a is None:
+        SEED['comp.cc.accent.' + _c] = {'color': '#1c1c1e', 'src': 'judged:a dark glyph on the white of an active control'}
+    else:
+        _ref = 'ref.color.grays.gray' if _a == 'gray' else 'ref.color.accents.' + _a
+        SEED['comp.cc.accent.' + _c] = {'ref': _ref, 'src': 'judged:the iOS colour of this control (' + _a + ')'}
+for _c in ('wifi', 'bluetooth'):
+    SEED['comp.cc.accent.' + _c]['src'] = 'kit:2570:20609 (Wi-Fi on: #0088ff)'
+SEED['comp.cc.accent.cellular']['src'] = 'kit:2570:20677 (Cellular on: #34c759)'
+SEED['comp.cc.accent.brightness']['src'] = 'kit:2570:20698 (sun #ffcc00)'
+SEED['comp.cc.accent.volume']['src'] = 'kit:2570:20700 (speaker #00c0e8)'
+SEED['comp.cc.accent.silent']['src'] = 'kit:2524:24523 (silent on: red)'
 
 
 def main():
