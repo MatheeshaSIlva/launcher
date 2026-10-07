@@ -1,1 +1,3 @@
-normal: test00_setupControls test11_bannerTimeout test12_bannerSwipeUp test32_bannerHoldRelease test14_bannerPullDown test10_ncStacks test33_pageHoldRelease test34_iconMenuClean test98_calibrate
+normal: test00_setupControls test40_ncLongList test41_ncLongLook test42_ncTapOpen test43_ccGallery test44_ccModules
+setup dark
+normal@dark: test41_ncLongLook test44_ccModules test08_ncOpenClose
