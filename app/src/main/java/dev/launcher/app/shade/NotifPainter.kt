@@ -16,6 +16,10 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import dev.launcher.app.apps.Icons
+import dev.launcher.app.design.Blend
+import dev.launcher.app.design.Design
+import dev.launcher.app.design.applyTo
+import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.theme.Fonts
 import java.util.concurrent.Executors
 import kotlin.math.max
@@ -23,10 +27,12 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * What a notification shows on its platter, laid out as iOS 27 does (Apple's UI kit, pt): the app's 38.33 pt icon 14 pt
- * in (or the sender's photo with the app's icon as a badge), the title in semibold and "now" / "5m ago" on the right of
- * its line (14 pt from the edge), a subtitle, then up to [maxLines] lines of text, all 15 pt on 18 pt lines, from 62.33 pt
- * in; at least 66.33 pt tall.
+ * What a notification shows on its platter, laid out as iOS 27 does (Apple's UI kit; every size is a `comp.nc.platter.*`
+ * token, see [NcTokens]): the app's icon (38.33 pt, 14 pt in; or the sender's photo with the app's icon as a badge), the
+ * title in semibold and "now" / "5m ago" on the right of its line (14 pt from the edge), a subtitle, then up to [maxLines]
+ * lines of text, from 62.33 pt in. Lines are placed as a design tool places them: each in its line box (17 pt for the
+ * title, 18 for the text), the glyphs centred in it by the font's own ascent and descent, the first line box 15.67 pt
+ * from the top and as much space below the last; at least 66.33 pt tall.
  * Shared by Notification Center and the banners, so both look exactly the same. One instance per view (one thread).
  * [onLoaded] redraws when a sender's photo has loaded.
  */
@@ -34,10 +40,45 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
     var u = 1f
         set(v) {
             if (field != v) {
-                field = v; layouts.clear(); title.textSize = 15f * v; body.textSize = 15f * v; time.textSize = 13.5f * v
+                field = v; tokens = -1
                 callName.textSize = 17f * v; callWhat.textSize = 15f * v
             }
         }
+
+    // The platter's tokens, taken up again when one changes (the token editor) or the scale does.
+    private var tokens = -1
+    private var padding = 14f
+    private var iconPt = 38.33f
+    private var textX = 62.33f
+    private var textTop = 15.67f
+    private var minH = 66.33f
+    private var stackTop = 12f
+    private var stackMinH = 63f
+    private var titleLine = 17f
+    private var bodyLine = 18f
+    private var timeLine = 17f
+    private var timeBlend = Blend.LINEAR_DODGE
+
+    private fun sync() {
+        if (tokens == Design.version) return
+        tokens = Design.version
+        layouts.clear()
+        padding = Design.num(NcTokens.PADDING); iconPt = Design.num(NcTokens.ICON); textX = Design.num(NcTokens.TEXT_X)
+        textTop = Design.num(NcTokens.TEXT_TOP); minH = Design.num(NcTokens.MIN_HEIGHT)
+        stackTop = Design.num(NcTokens.STACK_TEXT_TOP); stackMinH = Design.num(NcTokens.STACK_MIN_HEIGHT)
+        Design.text(NcTokens.TITLE).let { it.applyTo(title, u); titleLine = it.lineHeightPt }
+        Design.text(NcTokens.BODY).let { it.applyTo(body, u); bodyLine = it.lineHeightPt }
+        Design.text(NcTokens.TIME).let { it.applyTo(time, u); timeLine = it.lineHeightPt }
+        timeBlend = Design.blend(NcTokens.TIME_BLEND)
+    }
+
+    private val fm = Paint.FontMetrics()
+
+    /** Where the baseline of [p]'s text sits in a line box [lineH] px tall starting at [top] (half-leading, as Figma). */
+    private fun baseline(p: Paint, top: Float, lineH: Float): Float {
+        p.getFontMetrics(fm)
+        return top + (lineH - (fm.descent - fm.ascent)) / 2f - fm.ascent
+    }
 
     private val title = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600) }
     private val body = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(400) }
@@ -54,7 +95,7 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
     private fun texts(item: Notifs.Item, w: Float): Texts {
         val key = item.key + "|" + item.postTime + "|" + item.text?.length + "|" + item.title + "|" + w.toInt()
         layouts[key]?.let { return it }
-        val tw = w - TEXT_X * u - 14f * u
+        val tw = w - textX * u - padding * u
         val t = (item.title ?: appLabel(item.pkg)).toString()
         val sub = item.sub?.toString()?.takeIf { it.isNotBlank() && it != t }
         val text = item.text?.toString()?.trim()
@@ -64,23 +105,29 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
         return Texts(t, sub, l, tw).also { if (layouts.size > 200) layouts.clear(); layouts[key] = it }
     }
 
-    private fun lineH() = 18f * u
-
-    /** The platter's height for [item] at width [w] (with [extraLines] more lines below the text: a stack's "N more"). */
-    fun height(item: Notifs.Item, w: Float, extraLines: Int = 0): Float {
+    /**
+     * The platter's height for [item] at width [w] (with [extraLines] more lines below the text). [stacked]: as the front
+     * of a stack (the kit's Stack=2 and 3: 12 pt of padding, at least 63 pt).
+     */
+    fun height(item: Notifs.Item, w: Float, extraLines: Int = 0, stacked: Boolean = false): Float {
+        sync()
         val t = texts(item, w)
-        val lines = 1 + (if (t.sub != null) 1 else 0) + (t.body?.lineCount ?: 0) + extraLines
-        return max(15.7f * u + 0.727f * 15f * u + (lines - 1) * lineH() + 18f * u, 66.33f * u)
+        val text = titleLine + (if (t.sub != null) titleLine else 0f) + ((t.body?.lineCount ?: 0) + extraLines) * bodyLine
+        val top = if (stacked) stackTop else textTop
+        return max((2f * top + text) * u, (if (stacked) stackMinH else minH) * u)
     }
 
     /**
      * Draws [item]'s icon and text inside the platter at [x],[y] ([w] x [h]) in [primary] / [secondary] text colours,
      * faded by [alpha]. [more]: how many more notifications a stack gathers (shown below the text, faded by [moreAlpha]).
+     * [platter]: on its glass, the time in the platter's own colour and blend (the kit's plus-lighter grey); else (a solid
+     * card) in [secondary]. [stacked]: how much it is a stack's front (its text closer to the top: see [height]).
      */
     fun draw(c: Canvas, item: Notifs.Item, x: Float, y: Float, w: Float, h: Float, alpha: Float, primary: Int, secondary: Int,
-             more: Int = 0, moreAlpha: Float = 0f) {
-        val iconS = 38.33f * u
-        val ix = x + 14f * u
+             more: Int = 0, moreAlpha: Float = 0f, platter: Boolean = false, stacked: Float = 0f) {
+        sync()
+        val iconS = iconPt * u
+        val ix = x + padding * u
         val iy = y + (min(h, 140f * u) - iconS) / 2f
         val avatar = avatarOf(item)
         val icon = appIcon(item.pkg)
@@ -89,29 +136,38 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
             icon?.let { drawIcon(c, it, ix + iconS - 15f * u, iy + iconS - 15f * u, 17f * u, alpha) }
         } else icon?.let { drawIcon(c, it, ix, iy, iconS, alpha) }
         val t = texts(item, w)
-        val tx = x + TEXT_X * u
-        var base = y + 15.7f * u + 0.727f * 15f * u
-        time.color = fade(secondary, alpha)
-        time.textAlign = Paint.Align.RIGHT
+        val tx = x + textX * u
+        var top = y + (textTop + (stackTop - textTop) * stacked) * u
         val tl = timeLabel(item.postTime)
-        c.drawText(tl, x + w - 14f * u, base, time)
+        // The time on the title's line, centred on it in its own line box.
+        time.textAlign = Paint.Align.RIGHT
+        if (platter) {
+            time.color = fade(Design.color(NcTokens.TIME_COLOR), alpha)
+            time.blendMode = timeBlend.toBlendMode()
+        } else {
+            time.color = fade(secondary, alpha)
+            time.blendMode = null
+        }
+        c.drawText(tl, x + w - padding * u, baseline(time, top + (titleLine - timeLine) * u / 2f, timeLine * u), time)
+        time.blendMode = null
         title.color = fade(primary, alpha)
-        val titleW = w - TEXT_X * u - 14f * u - time.measureText(tl) - 8f * u
-        c.drawText(TextUtils.ellipsize(t.title, title, titleW, TextUtils.TruncateAt.END).toString(), tx, base, title)
+        val titleW = w - textX * u - padding * u - time.measureText(tl) - 8f * u
+        c.drawText(TextUtils.ellipsize(t.title, title, titleW, TextUtils.TruncateAt.END).toString(), tx, baseline(title, top, titleLine * u), title)
+        top += titleLine * u
         if (t.sub != null) {
-            base += lineH()
-            c.drawText(TextUtils.ellipsize(t.sub, title, t.w, TextUtils.TruncateAt.END).toString(), tx, base, title)
+            c.drawText(TextUtils.ellipsize(t.sub, title, t.w, TextUtils.TruncateAt.END).toString(), tx, baseline(title, top, titleLine * u), title)
+            top += titleLine * u
         }
         t.body?.let { l ->
-            // The body's lines (broken by the layout) on the platter's own 18 pt pitch.
+            // The body's lines (broken by the layout) on the platter's own line pitch.
             body.color = fade(primary, alpha)
             for (i in 0 until l.lineCount) {
                 val start = l.getLineStart(i)
                 val end = l.getLineEnd(i)
                 val ell = l.getEllipsisCount(i)
                 val text = l.text.subSequence(start, (end - ell).coerceAtLeast(start)).toString().trimEnd('\n', ' ') + if (ell > 0) "…" else ""
-                base += lineH()
-                c.drawText(text, tx, base, body)
+                c.drawText(text, tx, baseline(body, top, bodyLine * u), body)
+                top += bodyLine * u
             }
         }
         if (more > 0 && moreAlpha > 0f) drawStackCount(c, more + 1, ix + iconS, iy, alpha * moreAlpha)
@@ -249,8 +305,6 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
     }
 
     companion object {
-        /** Where the text starts in a platter (pt). */
-        const val TEXT_X = 62.33f
         private val io = Executors.newSingleThreadExecutor()
     }
 }

@@ -54,6 +54,12 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `Design` (light/dark blended at `Appearance.dark`, aliases followed, the user's edits from the token editor on top);
   `Scale` turns points into pixels. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
+  Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
+  frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.
+  Notification Center is on it (step 2a, tokens `comp.nc.*` in `shade/NcTokens.kt`); Control Center, banners and home still
+  use `PanelGlass`/`GlassDrawable` until steps 2b-2d. Theme seeds live in `tools/design/build_ios27_theme.py`
+  (`reseed.py KEY` re-applies a corrected seed). To compare with the kit over its own picture: push it to
+  `/sdcard/Android/data/dev.launcher.app/files/wallpaper.png` (the app shows it instead of the wallpaper; delete to undo).
 - **Glass/blur**: three layers — own snapshot blur (baseline, all phones) → standard cross-window blur where the system enables it
   → Samsung dim-behind blur upgrade.
 - **Shade (iOS 27 profile)**: `statusbar/` (the bar: springs for every slot, notification icons) and `shade/`: one full-screen
@@ -169,6 +175,12 @@ copy it wholesale — port the working pieces cleanly. File map:
   down on it hides the list into a count ("● 12 Notifications") and that state lasts across tests in the same simulator:
   find platters on screen before pressing them. The Control Center gallery is another process: SpringBoard's tree has no
   labels for it (read the screenshots).
+- **Git Bash path conversion**: `MSYS_NO_PATHCONV=1` is needed for adb paths like `/sdcard/...`, but exported for a whole
+  command it also stops `tools/device.sh install` from converting the APK's path: the install fails quietly and the old
+  build keeps running. Set it per adb call, never for the scripts. (An install while the app starts can also crash it in
+  Android's own `handleBindApplication`: force-stop and start again before judging a build.)
+- **AGSL**: `out` is a reserved word (a variable named so fails to compile); uniform arrays (`uniform half4 x[8]`) are
+  set with one `setFloatUniform(name, FloatArray)` of the whole array.
 - **Keystore**: debug builds are signed with a committed keystore so CI builds install over each other. Keep that pattern (new key file for this app).
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
 

@@ -1153,3 +1153,40 @@ Dynamic Type, 34 text styles, every material's recipe with node ids). From it th
 every token with its source and edits it (checked on the emulator: a colour edit saved, followed through its aliases,
 reset). Found on the way: iOS's scroll edge is a progressive 10 pt blur under a gradient (kit), not a fade.
 
+
+## Design system, step 2a: Notification Center on the one material renderer (2026-10-07)
+
+Every surface of Notification Center (platters, a group's shelves, the collapsed stack's peek and "+N" pill, swipe
+actions, the header's buttons, the flashlight and camera, the long look's menu) and the wallpaper's dim are drawn by
+`design/MaterialPainter`: a material token drawn the way Apple's kit defines it, layer by layer in one shader pass
+(backdrop blurred to the material's frost, the lens, fills with all 16 of the kit's blend modes, inner shadows, the rim
+light, the drop-shadow rims; red/blue split only where it is a third of a pixel or more). The backdrop is the wallpaper
+blurred to each frost by `design/FrostCache` (GPU, off the UI threads, made when the wallpaper loads: 94-154 ms on the
+emulator). The list's dim is the kit's lock-screen overlay material (black 25 % + 5 % linear burn), which a canvas cannot
+draw, so the wallpaper itself goes through the renderer. Sizes, type, colours and materials are 57 `comp.nc.*` tokens
+(`shade/NcTokens.kt`; each with its kit node or why it is judged); `NotifPainter` (shared with the banners) lays text out
+as Figma does (line boxes, half leading from the font's metrics, the kit's 15.67 pt padding above and below), the time in
+the kit's plus-lighter grey on glass. The old `PanelGlass` is no longer used here (Control Center and banners still use
+it until 2b and 2c).
+
+Checked on the emulator against the kit itself, over the kit's own wallpaper (a test hook: a picture in the app's files
+folder replaces the wallpaper, see `Wallpaper.load`; the iOS 27 Simulator's lock screen uses the same picture):
+
+- The flashlight and camera buttons, ours next to Figma's 3x render of the kit's lock screen: the same size and place,
+  the same clear glass (rim, lit edges, tint). The kit's symbols are 31 pt tall (flashlight) and 33 pt wide (camera);
+  ours were 17 pt: now a measured 38.5 pt box.
+- Collapsed stack, expanded list, a stacked group (the kit's Stack=3: a 63 pt front with 12 pt padding, two shelves 10
+  and 20 pt in, 8 pt of each showing; the front's height eases between 63 and 66.33 as the group fans out), the long look
+  (white card; clear glass menu over the blurred sheet, its glass now sees the wallpaper blurred as much as the sheet, not
+  the sharp wallpaper), light and dark (dark: the kit's wallpaper dim; the clear glass is the same in both, as in the kit).
+- A token changed in the token editor (button size 58 -> 80) redraws Notification Center at once and survives a restart;
+  that showed the list's bottom was a fixed 118 pt: it now follows the buttons' tokens.
+- Fixed on the way: a long list ran under the flashlight and camera buttons (text visible through them); the bottom fade
+  now ends at the buttons' top (a judged token until the kit's progressive scroll edge is built).
+
+Not verified: frame timing on the S24 (the phone was not reachable over adb). The emulator, scroll scenario, this build
+vs e524c87: GPU median 14.8 vs 15.0 ms, CPU the same (the emulator is not sensitive enough to stand in for the S24).
+The lens (refraction x depth = 21 pt at the very edge, our reading of Figma's unitless refraction) bends what is above a
+platter into its top edge; the button comparison says it matches the kit, platters over a busy wallpaper should be looked
+at on the phone. iOS Simulator pass 9 again showed no notifications (the posting test failed), so there is still no
+iOS 27 screenshot of a long list.

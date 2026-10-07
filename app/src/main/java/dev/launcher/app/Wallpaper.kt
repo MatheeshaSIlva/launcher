@@ -70,6 +70,16 @@ class Wallpaper private constructor(
          * Center draws it and its glass refracts it. Any thread (the bitmaps are immutable hardware bitmaps).
          */
         @Volatile var current: Wallpaper? = null
+            set(v) {
+                field = v
+                synchronized(listeners) { listeners.toList() }.forEach { (h, l) -> h.post(l) }
+            }
+
+        private val listeners = ArrayList<Pair<android.os.Handler, () -> Unit>>()
+
+        /** Calls [l] on [h] whenever [current] changes (Notification Center makes its blurs of it at once). */
+        fun addListener(h: android.os.Handler, l: () -> Unit) = synchronized(listeners) { listeners += h to l }
+        fun removeListener(l: () -> Unit) = synchronized(listeners) { listeners.removeAll { it.second === l } }
 
         /** The system wallpaper's id: changes whenever the user sets a new wallpaper (-1 if unknown). */
         fun currentId(ctx: Context): Int = try {
@@ -78,8 +88,13 @@ class Wallpaper private constructor(
 
         fun load(ctx: Context): Wallpaper? = try {
             val id = currentId(ctx)
-            val d = WallpaperManager.getInstance(ctx).drawable as? BitmapDrawable
-            val src = d?.bitmap ?: throw IllegalStateException("no bitmap wallpaper")
+            // For comparing with a design kit over its own picture: `adb push kit.png
+            // /sdcard/Android/data/dev.launcher.app/files/wallpaper.png` shows that picture instead (home and the shade only;
+            // delete the file to go back).
+            val over = ctx.getExternalFilesDir(null)?.let { java.io.File(it, "wallpaper.png") }?.takeIf { it.exists() }
+                ?.let { android.graphics.BitmapFactory.decodeFile(it.path) }?.also { AppLog.log("[wallpaper] test picture from files/wallpaper.png") }
+            val d = if (over != null) null else WallpaperManager.getInstance(ctx).drawable as? BitmapDrawable
+            val src = over ?: d?.bitmap ?: throw IllegalStateException("no bitmap wallpaper")
             val bmp = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
             // What glass on home sees (dock, widgets, Search pill): half size, box radius 2 twice, about 1.5 iOS points of blur,
             // just enough to soften fine detail; clear glass keeps the wallpaper's shapes sharp (heavier blur read as frosted).

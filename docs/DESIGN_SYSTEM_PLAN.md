@@ -71,6 +71,11 @@ lens; fills with blend modes; rims; shadows) and one renderer replacing the four
 2a Notification Center (platters, collapsed stack, buttons, clock), 2b Control Center (controls, expanded modules,
 gallery), 2c banners and the long look, 2d home (dock, folders, widgets, menus, Spotlight, App Library). This is where
 "different blur levels, different tints" ends: one value per material, from the kit.
+*2a done 2026-10-07* (`docs/PROGRESS.md`): `design/MaterialPainter` (one shader for every material token), `FrostCache`
+(the backdrop blurred per frost), Notification Center entirely on it and on 57 `comp.nc.*` tokens, checked against the
+kit's own render over its own wallpaper. The long look's menu moved with it (its card was already the kit's). Left for
+later steps: the kit's progressive scroll edge (a judged fade stands in), the stacked front's measured detail beyond the
+kit's numbers, frame timing on the S24.
 
 **Step 3: components.** Platter, control tile (sizes and states), slider, pill and round buttons, sheet, menu, badge,
 status row, clock numerals: specs plus painters. The shade's views shrink to layout and touch.

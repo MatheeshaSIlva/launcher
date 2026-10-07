@@ -71,7 +71,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     val state = ControlState(ctx, handler)
     val media = Media(ctx, handler)
     private var glass: PanelGlass? = null
-    private var ncGlass: PanelGlass? = null
     private val cc: ControlCenterView
     private val gallery: CcGallery
     private val nc: NotificationCenterView
@@ -111,7 +110,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override fun add(c: Control) = cc.add(c)
         }).apply { visibility = View.GONE }
         nc = NotificationCenterView(ctx, object : NotificationCenterView.Host {
-            override val glass get() = this@Shade.ncGlass
             override val media get() = this@Shade.media
             override fun closeDrag(phase: Int, dy: Float, vy: Float) = panelDrag(phase, dy, vy)
             override fun close() = this@Shade.close()
@@ -200,9 +198,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             if (glass == null) {
                 val u = ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels) / 402f
                 glass = PanelGlass.create(u)
-                // Notification Center's platters are drawn every frame while the list moves: no dispersion (one sample a
-                // pixel instead of three; over the heavily blurred wallpaper it does not show).
-                ncGlass = PanelGlass.create(u, dev.launcher.app.GlassStyle.IOS_CLEAR.copy(dispersion = 0f))
                 bannerGlass = PanelGlass.create(u)
             }
             true

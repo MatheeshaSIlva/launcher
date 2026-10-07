@@ -40,6 +40,23 @@ class DesignThemeTest {
     @Test fun codeKeysExistInTheShippedTheme() {
         val r = Resolver(listOf(shipped.entries))
         for (k in listOf(Scale.POLICY.name, Scale.REFERENCE_WIDTH.name)) r.resolve(k)
+        // Notification Center's: each one there, of the kind the code reads it as.
+        for (k in dev.launcher.app.shade.NcTokens.ALL) {
+            val v = r.resolve(k)
+            val want = when {
+                k.endsWith("material") -> Value.Mat::class
+                k.endsWith("-blend") -> Value.Choice::class
+                k.endsWith("color") || k.endsWith(".label") || k.endsWith("-color") || k.endsWith(".dim") -> Value.Color::class
+                k.endsWith(".title") || k.endsWith(".body") || k.endsWith(".time") || k.endsWith("menu-label") -> Value.Text::class
+                else -> Value.Number::class
+            }
+            assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
+        }
+        // The kit's platter, as the kit has it.
+        assertEquals(24f, (r.resolve("comp.nc.platter.corner") as Value.Number).v)
+        val overlay = (r.resolve("comp.nc.overlay.material") as Value.Mat).material
+        assertEquals(listOf(Blend.NORMAL, Blend.LINEAR_BURN), overlay.fills.map { it.blend })
+        assertEquals(0.25f, overlay.fills[0].opacity)
     }
 
     @Test fun kitValuesComeThroughExactly() {

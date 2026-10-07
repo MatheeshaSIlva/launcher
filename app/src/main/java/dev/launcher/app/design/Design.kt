@@ -23,8 +23,10 @@ object Design {
     private lateinit var appCtx: Context
     private var base: Theme? = null
     private val user = LinkedHashMap<String, Entry>()
-    private var resolver = Resolver(emptyList())
-    private val cache = HashMap<String, Value>()
+    /** The resolver and its cache, replaced as a whole on a change (surfaces read tokens on their own threads). */
+    private class State(val resolver: Resolver) { val cache = java.util.concurrent.ConcurrentHashMap<String, Value>() }
+    @Volatile private var state = State(Resolver(emptyList()))
+    private val resolver get() = state.resolver
     private val listeners = LinkedHashSet<() -> Unit>()
     private val main = Handler(Looper.getMainLooper())
 
@@ -55,8 +57,7 @@ object Design {
     }
 
     private fun rebuild() {
-        resolver = Resolver(listOf(base?.entries ?: emptyMap(), user))
-        cache.clear()
+        state = State(Resolver(listOf(base?.entries ?: emptyMap(), LinkedHashMap(user))))
     }
 
     fun addListener(l: () -> Unit) { listeners += l }
@@ -64,7 +65,7 @@ object Design {
 
     // ------------------------------------------------------------------ reading
 
-    private fun value(key: String): Value = cache.getOrPut(key) { resolver.resolve(key) }
+    private fun value(key: String): Value = state.let { st -> st.cache.getOrPut(key) { st.resolver.resolve(key) } }
 
     /** [k]'s colour at the current appearance (ARGB). */
     fun color(k: ColorKey): Int {
@@ -74,6 +75,9 @@ object Design {
 
     /** A material's colour (a literal or a token) at the current appearance. */
     fun color(c: ColorValue): Int = resolver.colorPair(c).let { (l, d) -> Appearance.mix(l, d) }
+
+    /** A blend token ([Blend]'s name; NORMAL if it is not one). */
+    fun blend(k: ChoiceKey): Blend = try { Blend.valueOf(choice(k)) } catch (_: IllegalArgumentException) { Blend.NORMAL }
 
     /** [k]'s number in its own unit (points for lengths). */
     fun num(k: NumberKey): Float = (value(k.name) as? Value.Number ?: throw IllegalStateException("token $k is not a number")).v
@@ -140,6 +144,33 @@ object Design {
  * `sys.scale.reference-width` points wide (iOS 27's iPhone: 402 pt; on the S24 an element comes out the size it is on an
  * iPhone 17 Pro); "density": one point is one Android dp (follows the system's display size).
  */
+/** [this] style on [p]: font, weight, size and letter spacing at [unitPx] pixels per point (line height is the caller's). */
+fun TextStyle.applyTo(p: android.graphics.Paint, unitPx: Float) {
+    p.typeface = if (family == "display") dev.launcher.app.theme.Fonts.display(weight) else dev.launcher.app.theme.Fonts.text(weight)
+    p.textSize = sizePt * unitPx
+    p.letterSpacing = if (sizePt > 0f) trackingPt / sizePt else 0f
+}
+
+/** [this] blend as the canvas draws it (null: the canvas has no such mode; the caller draws it normally). */
+fun Blend.toBlendMode(): android.graphics.BlendMode? = when (this) {
+    Blend.NORMAL -> android.graphics.BlendMode.SRC_OVER
+    Blend.MULTIPLY -> android.graphics.BlendMode.MULTIPLY
+    Blend.SCREEN -> android.graphics.BlendMode.SCREEN
+    Blend.OVERLAY -> android.graphics.BlendMode.OVERLAY
+    Blend.DARKEN -> android.graphics.BlendMode.DARKEN
+    Blend.LIGHTEN -> android.graphics.BlendMode.LIGHTEN
+    Blend.COLOR_DODGE -> android.graphics.BlendMode.COLOR_DODGE
+    Blend.COLOR_BURN -> android.graphics.BlendMode.COLOR_BURN
+    Blend.LINEAR_DODGE -> android.graphics.BlendMode.PLUS
+    Blend.LINEAR_BURN -> null
+    Blend.HARD_LIGHT -> android.graphics.BlendMode.HARD_LIGHT
+    Blend.SOFT_LIGHT -> android.graphics.BlendMode.SOFT_LIGHT
+    Blend.LUMINOSITY -> android.graphics.BlendMode.LUMINOSITY
+    Blend.COLOR -> android.graphics.BlendMode.COLOR
+    Blend.HUE -> android.graphics.BlendMode.HUE
+    Blend.SATURATION -> android.graphics.BlendMode.SATURATION
+}
+
 object Scale {
     val POLICY = ChoiceKey("sys.scale.policy")
     val REFERENCE_WIDTH = NumberKey("sys.scale.reference-width")
