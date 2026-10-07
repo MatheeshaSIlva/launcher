@@ -57,8 +57,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.
   Notification Center is on it (step 2a, tokens `comp.nc.*` in `shade/NcTokens.kt`), and Control Center with its expanded
-  modules and gallery (2b, `comp.cc.*` in `shade/CcTokens.kt`, drawn through `shade/CcSurfaces`); banners and home still
-  use `PanelGlass`/`GlassDrawable` until steps 2c-2d. Blur sizes in tokens are the kit's (sigma = radius / 2); Android's
+  modules and gallery (2b, `comp.cc.*` in `shade/CcTokens.kt`, drawn through `shade/CcSurfaces`), and the banners (2c,
+  `comp.banner.*`); home still uses `GlassDrawable`/`LiveGlass` until step 2d. Blur sizes in tokens are the kit's (sigma = radius / 2); Android's
   `RenderEffect` blur takes its own radius: convert with `design/Blur`. Theme seeds live in `tools/design/build_ios27_theme.py`
   (`reseed.py KEY` re-applies a corrected seed). To compare with the kit over its own picture: push it to
   `/sdcard/Android/data/dev.launcher.app/files/wallpaper.png` (the app shows it instead of the wallpaper; delete to undo).
@@ -66,8 +66,7 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   → Samsung dim-behind blur upgrade.
 - **Shade (iOS 27 profile)**: `statusbar/` (the bar: springs for every slot, notification icons) and `shade/`: one full-screen
   overlay window (`Shade`) holding the bar, Notification Center (`NotificationCenterView`), Control Center
-  (`ControlCenterView`, `CcLayout`, `CcGallery`, `Controls`), banners (`BannerView`) and `PanelGlass` (the dock's glass over a
-  baked backdrop). Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
+  (`ControlCenterView`, `CcLayout`, `CcGallery`, `Controls`) and banners (`BannerView`), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
   Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),
   that blurs what is behind (One UI dim-to-blur; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded

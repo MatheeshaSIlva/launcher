@@ -19,6 +19,14 @@ import dev.launcher.app.motion.SpringSpec
 import dev.launcher.app.motion.SpringValue
 import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts
+import dev.launcher.app.design.ColorKey
+import dev.launcher.app.design.Design
+import dev.launcher.app.design.MaterialKey
+import dev.launcher.app.design.MaterialPainter
+import dev.launcher.app.design.NumberKey
+import dev.launcher.app.design.Scale
+import dev.launcher.app.design.TextKey
+import dev.launcher.app.design.applyTo
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -30,7 +38,9 @@ import kotlin.math.min
  * size peaks at 1.01), stays [SHOW_MS] (longer while touched) and goes back up into the camera (~0.15 s). A swipe up (or
  * sideways) sends it away with the finger's speed; a tap opens it; a pull down opens Notification Center. A newer banner
  * pushes the shown one up and away as it comes in. Platters look exactly like Notification Center's ([NotifPainter]) on
- * the same glass, as a solid material (nothing behind them is known). Where it rests: 8 pt from the sides, just under the
+ * the kit's regular glass (`comp.banner.*` tokens, the one material renderer), over the colour most likely behind them
+ * (an app's background in this appearance: what is really behind a banner is not known). iOS 27's banner over a white app
+ * measured #fafafa inside with a darker rim: that glass over white. Where it rests: 8 pt from the sides, just under the
  * status bar (iOS: 386 x 66-97 pt at y 58.7 on a 402 pt wide iPhone).
  *
  * A ringing notification (an incoming call, an alarm: [Notifs.Item.urgent]) stays until it stops ringing, over an open
@@ -44,9 +54,10 @@ import kotlin.math.min
 @SuppressLint("ViewConstructor")
 class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLayout(ctx) {
     interface Host {
-        val glass: PanelGlass?
         /** The status bar's height (px): banners sit just under the camera line. */
         val barHeight: Int
+        /** Home is in front (behind a banner is the wallpaper, which its glass can show), not an app. */
+        fun overHome(): Boolean
         fun open(item: Notifs.Item)
         fun openNotificationCenter()
         /** Sends a ringing banner's button or full screen; [closePanel]: an open panel goes (what it opens comes in front). */
@@ -58,6 +69,8 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     }
 
     private val painter = NotifPainter(ctx, 3) { for (s in all) s.card.invalidate() }
+    /** The renderer of the banners' glass (they draw on the shade's thread, one at a time). */
+    private var mp: MaterialPainter? = null
     private val glyphs = Glyphs(ctx)
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
     private var u = 1f
@@ -68,7 +81,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     init { clipChildren = false }
 
     /** A ringing banner's button: a round symbol on its own colour (a call's) or a capsule with the action's title. */
-    private class Button(val title: String?, val icon: Int, val color: Int, val pi: PendingIntent, val closesPanel: Boolean)
+    private class Button(val title: String?, val icon: Int, val color: ColorKey?, val pi: PendingIntent, val closesPanel: Boolean)
 
     /** A call with its own answer / decline intents: drawn as iOS's compact call. Other calls show their actions. */
     private fun isCall(item: Notifs.Item) = item.call && (item.answer != null || item.decline != null)
@@ -76,12 +89,12 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     private fun buttonsOf(item: Notifs.Item): List<Button> {
         if (!item.urgent) return emptyList()
         if (isCall(item)) return listOfNotNull(
-            item.decline?.let { Button(null, R.drawable.sym_call_end, RED, it, closesPanel = false) },
-            item.answer?.let { Button(null, R.drawable.sym_call, GREEN, it, closesPanel = true) },
+            item.decline?.let { Button(null, R.drawable.sym_call_end, DECLINE, it, closesPanel = false) },
+            item.answer?.let { Button(null, R.drawable.sym_call, ANSWER, it, closesPanel = true) },
         )
         // Replies need a keyboard (not yet ours): those stay in the app.
         return item.actions.filter { it.actionIntent != null && it.remoteInputs.isNullOrEmpty() && !it.title.isNullOrBlank() }
-            .take(3).map { Button(it.title.toString(), 0, 0, it.actionIntent, closesPanel = false) }
+            .take(3).map { Button(it.title.toString(), 0, null, it.actionIntent, closesPanel = false) }
     }
 
     /** One banner on screen: [k] 0 (folded into the corner) .. 1 (in place); [dx], [dy] where a finger moved it. */
@@ -119,14 +132,28 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         override fun onDraw(c: Canvas) {
             val m = shadowMargin()
             val w = bannerW()
-            val tint = Appearance.mix(0xF2F7F7F9.toInt(), 0xEB222224.toInt())
             c.save()
             c.translate(m, m)
-            host.glass?.draw(c, w, s.h, radius(s), 0f, 0f, 1f, tint, 0, 1f, 0.55f)
-            if (isCall(s.item)) {
-                painter.drawCall(c, s.item, 0f, 0f, w, s.h, w - callButtonsLeft(s), Appearance.label, Appearance.secondaryLabel)
+            val p = mp
+            if (p != null) {
+                // Over home: the wallpaper, blurred to the glass's frost, where the banner rests. Over an app: its usual
+                // background colour (what is behind is not known).
+                val home = if (host.overHome()) wallpaperFrost() else null
+                p.setBackdrop(home, Design.color(BEHIND) or (0xFF shl 24))
+                val dim = Appearance.wallpaperDim
+                val under = if (home != null && dim > 0.001f) listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(0xFF000000.toInt(), 0xFF000000.toInt()), dim, dim, dev.launcher.app.design.Blend.NORMAL)) else emptyList()
+                p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, under = under)
             } else {
-                painter.draw(c, s.item, 0f, 0f, w, textHeight(s.item), 1f, Appearance.label, Appearance.secondaryLabel)
+                fill.color = Appearance.mix(0xF2F7F7F9.toInt(), 0xEB222224.toInt())
+                r.set(0f, 0f, w, s.h)
+                c.drawRoundRect(r, radius(s), radius(s), fill)
+            }
+            val label = Design.color(LABEL)
+            val secondary = Design.color(SECONDARY)
+            if (isCall(s.item)) {
+                painter.drawCall(c, s.item, 0f, 0f, w, s.h, w - callButtonsLeft(s), label, secondary)
+            } else {
+                painter.draw(c, s.item, 0f, 0f, w, textHeight(s.item), 1f, label, secondary)
             }
             for (i in s.buttons.indices) drawButton(c, s, i)
             c.restore()
@@ -141,17 +168,20 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             // A call's: a round symbol on its colour, darker and a little smaller while pressed.
             val sc = 1f - 0.06f * p
             val rad = r.width() / 2f * sc
-            fill.color = b.color
+            fill.color = b.color?.let { Design.color(it) } ?: 0xFF888888.toInt()
             c.drawCircle(r.centerX(), r.centerY(), rad, fill)
             if (p > 0f) { fill.color = (Math.round(0x40 * p) shl 24); c.drawCircle(r.centerX(), r.centerY(), rad, fill) }
             glyphs.draw(c, b.icon, r.centerX(), r.centerY(), 26f * u * sc, 0xFFFFFFFF.toInt())
         } else {
-            // An action: a capsule in the label's colour, faint; stronger while pressed.
-            val a = 0.10f + 0.10f * p
-            fill.color = (Appearance.label and 0xFFFFFF) or (Math.round(255 * a) shl 24)
+            // An action: a faint capsule (the kit's tertiary fill), stronger while pressed.
+            fill.color = Design.color(ACTION_FILL)
             c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, fill)
-            label.color = Appearance.label
-            label.textSize = 15f * u
+            if (p > 0f) {
+                fill.color = (Design.color(LABEL) and 0xFFFFFF) or (Math.round(255 * 0.10f * p) shl 24)
+                c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, fill)
+            }
+            Design.text(ACTION_TYPE).applyTo(label, u)
+            label.color = Design.color(LABEL)
             val text = TextUtils.ellipsize(b.title, label, r.width() - 16f * u, TextUtils.TruncateAt.END).toString()
             c.drawText(text, r.centerX(), r.centerY() + 5.3f * u, label)
         }
@@ -163,22 +193,24 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
 
     /** The platter's height for [s]'s notification and buttons. */
     private fun heightOf(s: Shown): Float = when {
-        isCall(s.item) -> CALL_PT * u
-        s.buttons.isNotEmpty() -> textHeight(s.item) - 4f * u + ACTION_PT * u + 12f * u
+        isCall(s.item) -> pt(CALL_HEIGHT)
+        s.buttons.isNotEmpty() -> textHeight(s.item) - 4f * u + pt(ACTION_HEIGHT) + 12f * u
         else -> textHeight(s.item)
     }
 
-    private fun radius(s: Shown) = if (isCall(s.item)) 30f * u else 24f * u
+    private fun pt(k: NumberKey) = Design.pt(k, u)
+
+    private fun radius(s: Shown) = pt(if (isCall(s.item)) CALL_CORNER else CORNER)
 
     private fun callButtonsLeft(s: Shown): Float {
         val n = s.buttons.size
-        return bannerW() - 13f * u - n * CALL_BUTTON_PT * u - (n - 1) * 12f * u
+        return bannerW() - 13f * u - n * pt(CALL_BUTTON) - (n - 1) * 12f * u
     }
 
     /** Button [i] of [s], in the platter's coordinates. */
     private fun buttonRect(s: Shown, i: Int, out: RectF): RectF {
         if (isCall(s.item)) {
-            val d = CALL_BUTTON_PT * u
+            val d = pt(CALL_BUTTON)
             val x = callButtonsLeft(s) + i * (d + 12f * u)
             val y = (s.h - d) / 2f
             return out.apply { set(x, y, x + d, y + d) }
@@ -187,8 +219,8 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         val gap = 8f * u
         val bw = (bannerW() - 24f * u - (n - 1) * gap) / n
         val x = 12f * u + i * (bw + gap)
-        val y = s.h - 12f * u - ACTION_PT * u
-        return out.apply { set(x, y, x + bw, y + ACTION_PT * u) }
+        val y = s.h - 12f * u - pt(ACTION_HEIGHT)
+        return out.apply { set(x, y, x + bw, y + pt(ACTION_HEIGHT)) }
     }
 
     /** The button of the shown banner under [x],[y] (this view's coordinates), or -1. */
@@ -203,7 +235,8 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         return -1
     }
 
-    private fun shadowMargin() = PanelGlass.SHADOW_PT * u
+    /** Room around a banner in its layer for its glass's drop shadow (the kit's regular glass: 8 down, blur 48). */
+    private fun shadowMargin() = mp?.reach(Design.material(MATERIAL)) ?: (14f * u)
 
     /** Where banners come from and go back to (px): the camera's centre (iOS: the Dynamic Island), else the top centre. */
     private var camX = 0f
@@ -254,8 +287,11 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        u = min(w, h) / 402f
+        val nu = Scale.unitPx(context, min(w, h))
+        if (mp == null || nu != u) mp = MaterialPainter.create(nu)
+        u = nu
         painter.u = u
+        post { wallpaperFrost() }   // made before the first banner over home needs it
         findCamera()
         pending?.let { p -> pending = null; post { show(p) } }
     }
@@ -263,7 +299,44 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     /** Shown before the first layout (the window just came up): shown once it has a size. */
     private var pending: Notifs.Item? = null
 
-    private fun margin() = 8f * u
+    private fun margin() = pt(MARGIN)
+
+    private val frostMatrix = android.graphics.Matrix()
+
+    /** The wallpaper blurred to the banner glass's frost ([dev.launcher.app.design.FrostCache]; null until it is made). */
+    private fun wallpaperFrost(): dev.launcher.app.design.BackdropImage? {
+        val wp = dev.launcher.app.Wallpaper.current ?: return null
+        val h = handler ?: return null
+        if (width == 0) return null
+        frostMatrix.set(wp.matrix(width, height))
+        val sigma = dev.launcher.app.design.Blur.sigmaPx(Design.material(MATERIAL).let { it.frostPt + (it.frostDarkPt - it.frostPt) * Appearance.dark }, u) /
+            frostMatrix.mapRadius(1f).coerceAtLeast(0.001f)
+        return dev.launcher.app.design.FrostCache.get(wp.bitmap, frostMatrix, sigma, h) { for (s in all) s.card.invalidate() }
+    }
+
+    private val wallpaperChanged: () -> Unit = { wallpaperFrost() }
+
+    /** A light/dark change or a token edit: every banner's layer is drawn again (and laid out, if its size changed). */
+    fun restyle() {
+        for (s in all) {
+            val h = heightOf(s)
+            if (abs(s.height.target - h) > 0.5f) s.height.animateTo(h, RESIZE)
+            place(s)
+            s.card.invalidate()
+        }
+    }
+
+    private val tokensChanged: () -> Unit = { handler?.post { restyle() } }
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        Design.addListener(tokensChanged)
+        handler?.let { dev.launcher.app.Wallpaper.addListener(it, wallpaperChanged) }
+    }
+    override fun onDetachedFromWindow() {
+        Design.removeListener(tokensChanged)
+        dev.launcher.app.Wallpaper.removeListener(wallpaperChanged)
+        super.onDetachedFromWindow()
+    }
     private fun bannerW() = width - 2 * margin()
     private fun top() = host.barHeight * 0.5f + 16f * u
 
@@ -472,17 +545,26 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         return true
     }
 
-    private companion object {
+    companion object {
         /** iOS 27 keeps a banner ~7 s (measured: 7.4-7.7 s from its first frame to its last). */
         const val SHOW_MS = 7000L
-        /** A call's banner (iOS's compact incoming call) and its round buttons (pt). */
-        const val CALL_PT = 76f
-        const val CALL_BUTTON_PT = 46f
-        /** An action capsule's height (pt). */
-        const val ACTION_PT = 40f
-        /** iOS's system red and green. */
-        const val RED = 0xFFFF3B30.toInt()
-        const val GREEN = 0xFF34C759.toInt()
+        // The banner's tokens (`comp.banner.*`; values and sources in assets/themes/ios27.json).
+        val MATERIAL = MaterialKey("comp.banner.material")
+        val BEHIND = ColorKey("comp.banner.behind")
+        val CORNER = NumberKey("comp.banner.corner")
+        val MARGIN = NumberKey("comp.banner.margin")
+        val LABEL = ColorKey("comp.banner.label")
+        val SECONDARY = ColorKey("comp.banner.secondary")
+        val CALL_CORNER = NumberKey("comp.banner.call.corner")
+        val CALL_HEIGHT = NumberKey("comp.banner.call.height")
+        val CALL_BUTTON = NumberKey("comp.banner.call.button")
+        val DECLINE = ColorKey("comp.banner.call.decline")
+        val ANSWER = ColorKey("comp.banner.call.answer")
+        val ACTION_HEIGHT = NumberKey("comp.banner.action.height")
+        val ACTION_FILL = ColorKey("comp.banner.action.fill")
+        val ACTION_TYPE = TextKey("comp.banner.action.type")
+        val ALL = listOf(MATERIAL, BEHIND, CORNER, MARGIN, LABEL, SECONDARY, CALL_CORNER, CALL_HEIGHT, CALL_BUTTON, DECLINE, ANSWER,
+            ACTION_HEIGHT, ACTION_FILL, ACTION_TYPE).map { it.name }
         val SWOOP_IN = SpringSpec(0.64f, 0.61f)
         val SWOOP_OUT = SpringSpec(0.3f, 1f)
         val FLY = SpringSpec(0.35f, 1f)

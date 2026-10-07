@@ -1251,3 +1251,14 @@ for smoothness (decided: one performance pass at the end).
   change take a second or more); if the system does not confirm within 5 s, we go back to what it says.
 - Floating windows (picture in picture, a call's bubble) are covered by the panels: as under the stock shade and on
   iOS. Kept.
+
+## Design system, step 2c: banners on the one material renderer (2026-10-08)
+
+Banners are drawn by `design/MaterialPainter` from 14 `comp.banner.*` tokens (`BannerView.ALL`); the old `PanelGlass` is
+gone (nothing used it any more). iOS 27's banner over a white app (Simulator run 4, the only banner capture) measured
+#fafafa inside with a slightly darker rim: exactly the kit's regular glass over white (its 10 % `#bfbfbf` darken leaves
+249). So banners are the kit's regular glass with its deep soft shadow (8 down, blur 48; the banner's layer now has room
+for it). What a banner sees: over home, the wallpaper blurred to the glass's frost (made when the wallpaper loads); over
+an app, which we cannot see, an app's usual background in this appearance (`comp.banner.behind`: white / black). Text
+in the label colours; a call's buttons the kit's red and green; action capsules the kit's tertiary fill. Checked on the
+emulator over home and over an app, in light and dark. The long look moved in step 2a.

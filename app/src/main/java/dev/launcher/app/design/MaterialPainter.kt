@@ -55,22 +55,35 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     private val dropGeom = FloatArray(4 * MAX_SHADOWS)
     private val dropModes = FloatArray(MAX_SHADOWS)
     private var backdrop: BackdropImage? = null
+    private var inputSet = false
+    private var plainNow = 0
 
     init {
         setBackdrop(null)
         paint.shader = shader
     }
 
-    /** What the surfaces drawn from now on see behind them (null: nothing, only their fills over a neutral grey). */
-    fun setBackdrop(b: BackdropImage?) {
-        if (b === backdrop && b != null) return
-        backdrop = b
-        shader.setInputShader("backdrop", BitmapShader(b?.bitmap ?: blank, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
-            setLocalMatrix(b?.toScreen ?: Matrix())
-            filterMode = BitmapShader.FILTER_MODE_LINEAR
-        })
+    /**
+     * What the surfaces drawn from now on see behind them. Null: nothing known (a banner over an app), so they see
+     * [plain] (ARGB, opaque) instead: what is most likely behind.
+     */
+    fun setBackdrop(b: BackdropImage?, plain: Int = PLAIN) {
+        if (b !== backdrop || (b == null && backdrop == null && !inputSet)) {
+            backdrop = b
+            inputSet = true
+            shader.setInputShader("backdrop", BitmapShader(b?.bitmap ?: blank, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+                setLocalMatrix(b?.toScreen ?: Matrix())
+                filterMode = BitmapShader.FILTER_MODE_LINEAR
+            })
+        }
         shader.setFloatUniform("plain", if (b == null) 1f else 0f)
+        if (plain != plainNow) {
+            plainNow = plain
+            shader.setFloatUniform("plainColor", ((plain shr 16) and 0xFF) / 255f, ((plain shr 8) and 0xFF) / 255f, (plain and 0xFF) / 255f)
+        }
     }
+    /** How far [m]'s drop shadows reach outside a surface (px): the room a layer holding it needs around it. */
+    fun reach(m: Material): Float = shadows(m.shadows, dropColors, dropGeom, dropModes, unitPx, inner = false)
 
     /**
      * One surface of [m]: [w] x [h] px at the canvas's origin (translate and scale the canvas to place it), corner [radius]
@@ -163,6 +176,9 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         /** No layers of its own: only the [draw]'s under and over fills over the backdrop. */
         val BARE = Material(0f, 0f, null, emptyList(), emptyList(), emptyList())
 
+        /** What a surface sees when nothing behind it is known and the caller does not say (a neutral dark grey). */
+        const val PLAIN = 0xFF2B2B2E.toInt()
+
         private val blank: Bitmap by lazy { Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF2A2A2E.toInt()) } }
 
         fun create(unitPx: Float): MaterialPainter? =
@@ -188,6 +204,7 @@ uniform float rimWidth;
 uniform float alpha;
 uniform float press;
 uniform float plain;
+uniform half3 plainColor;
 uniform half4 fillColor[$MAX_FILLS];
 uniform float fillMode[$MAX_FILLS];
 uniform half4 innerColor[$MAX_SHADOWS];
@@ -260,7 +277,7 @@ float gauss(float d, float s) {
 }
 
 half3 seen(float2 sp, float2 off, float t) {
-    if (plain > 0.5) return half3(0.17, 0.17, 0.18);
+    if (plain > 0.5) return plainColor;
     // Red and blue apart only where they visibly part (a third of a pixel): elsewhere one sample instead of three.
     if (t <= 0.0 || dispersion * length(off) < 0.35) return backdrop.eval(sp + off).rgb;
     return half3(

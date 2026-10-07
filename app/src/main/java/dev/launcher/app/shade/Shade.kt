@@ -76,7 +76,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val gallery: CcGallery
     private val nc: NotificationCenterView
     private val banner: BannerView
-    private var bannerGlass: PanelGlass? = null
     private var bannerArea: android.graphics.RectF? = null
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
 
@@ -97,7 +96,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val onAppearance: () -> Unit = {
         if (!appearancePending.getAndSet(true)) handler.post {
             appearancePending.set(false)
-            cc.invalidate(); nc.invalidate(); gallery.invalidate(); bar.invalidate(); banner.invalidate()
+            cc.invalidate(); nc.invalidate(); gallery.invalidate(); bar.invalidate(); banner.restyle()
         }
     }
 
@@ -131,8 +130,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override fun camera() { if (state.start(state.intentFor(Control.CAMERA))) close() }
         })
         banner = BannerView(ctx, object : BannerView.Host {
-            override val glass get() = this@Shade.bannerGlass
             override val barHeight get() = this@Shade.barHeight
+            override fun overHome() = nav.frontPackage() == ctx.packageName && nav.frontClass()?.endsWith(".HomeActivity") == true
             override fun open(item: Notifs.Item) { if (Notifs.open(ctx, item) && panel != null) close() }
             override fun openNotificationCenter() { begin(Panel.NC); progress.snapTo(0.12f); openFully(0f) }
             override fun send(pi: PendingIntent, closePanel: Boolean): Boolean =
@@ -208,7 +207,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             state.start()
             media.start()
             showRinging("shade shown")
-            if (bannerGlass == null) bannerGlass = PanelGlass.create(ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels) / 402f)
             true
         } catch (t: Throwable) {
             AppLog.log("[shade] addView FAILED: ${t.javaClass.simpleName}: ${t.message}")

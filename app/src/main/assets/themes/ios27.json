@@ -1293,6 +1293,68 @@
    },
    "src": "kit:text style Title3/Regular"
   },
+  "comp.banner.action.fill": {
+   "ref": "ref.color.fills.tertiary",
+   "src": "judged:a faint capsule in the label colour (the kit's tertiary fill)"
+  },
+  "comp.banner.action.height": {
+   "pt": 40,
+   "src": "judged:a ringing notification's action capsules"
+  },
+  "comp.banner.action.type": {
+   "text": {
+    "family": "text",
+    "weight": 590,
+    "size": 15,
+    "line": 20,
+    "tracking": -0.23
+   },
+   "src": "judged:the platter title's type"
+  },
+  "comp.banner.behind": {
+   "ref": "ref.color.backgrounds.primary",
+   "src": "judged:what is behind a banner (an app) is not known: an app's usual background in this appearance"
+  },
+  "comp.banner.call.answer": {
+   "ref": "ref.color.accents.green",
+   "src": "kit:VariableID:509:77474 (green)"
+  },
+  "comp.banner.call.button": {
+   "pt": 46,
+   "src": "judged:iOS's compact incoming call's buttons"
+  },
+  "comp.banner.call.corner": {
+   "pt": 30,
+   "src": "judged:iOS's compact incoming call, rounder than a platter"
+  },
+  "comp.banner.call.decline": {
+   "ref": "ref.color.accents.red",
+   "src": "kit:VariableID:509:77471 (red)"
+  },
+  "comp.banner.call.height": {
+   "pt": 76,
+   "src": "judged:iOS's compact incoming call"
+  },
+  "comp.banner.corner": {
+   "pt": 24,
+   "src": "kit:0:11292 (the platter)"
+  },
+  "comp.banner.label": {
+   "ref": "sys.color.label.primary",
+   "src": "measured:iOS 27 Simulator run 4 (black text in light)"
+  },
+  "comp.banner.margin": {
+   "pt": 8,
+   "src": "measured:iOS 27 Simulator run 4, BannerNotification at x 8, 386 wide"
+  },
+  "comp.banner.material": {
+   "ref": "sys.material.glass.regular",
+   "src": "measured:iOS 27 Simulator run 4, a banner over a white app: #fafafa inside, a darker rim: the kit's regular glass over white (its darken leaves 249)"
+  },
+  "comp.banner.secondary": {
+   "ref": "sys.color.label.secondary",
+   "src": "measured:iOS 27 Simulator run 4 (the time in grey)"
+  },
   "comp.cc.accent.accessibility": {
    "ref": "ref.color.accents.blue",
    "src": "judged:the iOS colour of this control (blue)"

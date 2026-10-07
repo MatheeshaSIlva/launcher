@@ -68,6 +68,18 @@ class DesignThemeTest {
             val key = dev.launcher.app.shade.CcTokens.accent(c).name
             assertTrue("$key: no colour", r.resolve(key) is Value.Color)
         }
+        // The banners'.
+        for (k in dev.launcher.app.shade.BannerView.ALL) {
+            val v = r.resolve(k)
+            val want = when {
+                k.endsWith("material") -> Value.Mat::class
+                k.endsWith(".type") -> Value.Text::class
+                k.endsWith(".behind") || k.endsWith(".label") || k.endsWith(".secondary") || k.endsWith(".decline") ||
+                    k.endsWith(".answer") || k.endsWith(".fill") -> Value.Color::class
+                else -> Value.Number::class
+            }
+            assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
+        }
         // The kit's platter, as the kit has it.
         assertEquals(24f, (r.resolve("comp.nc.platter.corner") as Value.Number).v)
         val overlay = (r.resolve("comp.nc.overlay.material") as Value.Mat).material
