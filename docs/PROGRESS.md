@@ -1184,8 +1184,22 @@ folder replaces the wallpaper, see `Wallpaper.load`; the iOS 27 Simulator's lock
 - Fixed on the way: a long list ran under the flashlight and camera buttons (text visible through them); the bottom fade
   now ends at the buttons' top (a judged token until the kit's progressive scroll edge is built).
 
-Not verified: frame timing on the S24 (the phone was not reachable over adb). The emulator, scroll scenario, this build
-vs e524c87: GPU median 14.8 vs 15.0 ms, CPU the same (the emulator is not sensitive enough to stand in for the S24).
+Measured on the S24 (2026-10-08, `tools/scenario_nc_scroll.sh`, 3 runs each, frame stats only), 2e85c35 against the
+build before it (e524c87, installed for the comparison, then the CI build put back):
+
+| step | 2e85c35: missed / GPU median ms | e524c87: missed / GPU median ms |
+| --- | --- | --- |
+| open | 0-1 / 2.8-3.0 | 0-1 / 4.5-8.0 |
+| stack fans out | 0-2 / 11.2-11.7 | 0-8 / 13.8-16.2 |
+| scroll up | 0 / 7.2-8.3 | 0-1 / 7.9-12.2 |
+| scroll down | 0-1 / 7.9-12.0 | 0 / 7.0-11.6 |
+| scroll up twice | 1 / 6.2-11.0 | 1 / 7.3-7.8 |
+| close | 0 / 2.3-8.4 | 0-1 / 2.1-6.8 |
+
+No regression: the one renderer costs no more than the four it replaced, and the fan-out is lighter (it no longer draws
+the dim as a second full-screen pass). Still not good enough for rule 1, in both builds: the fan-out's GPU time is over
+the 8.3 ms a frame has at 120 Hz, and one frame of a scroll is late now and then. The same step swings between ~7.5 and
+~12 ms from run to run (GPU clock, not our work): a Perfetto trace should say which frames are late and why.
 The lens (refraction x depth = 21 pt at the very edge, our reading of Figma's unitless refraction) bends what is above a
 platter into its top edge; the button comparison says it matches the kit, platters over a busy wallpaper should be looked
 at on the phone. iOS Simulator pass 9 again showed no notifications (the posting test failed), so there is still no
