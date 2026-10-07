@@ -1,2 +1,1 @@
-normal: test00_setupControls test98_calibrate
-slow 10: test98_calibrate test02_ccOpenClose test08_ncOpenClose test12_bannerSwipeUp test16_appOpenClose
+normal: all

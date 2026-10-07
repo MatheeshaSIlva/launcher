@@ -161,7 +161,7 @@ final class Scenarios: XCTestCase {
     }
 
     func test02_ccOpenClose() {
-        for i in 1...3 {
+        for i in 1...5 {
             openCC("cc-open-\(i)")
             wait(2)
             if i == 1 { shot("cc-open"); tree("cc-open") }
@@ -255,7 +255,7 @@ final class Scenarios: XCTestCase {
     // MARK: - Notification Center
 
     func test08_ncOpenClose() {
-        for i in 1...3 {
+        for i in 1...5 {
             openNC("nc-open-\(i)")
             wait(2)
             if i == 1 { shot("nc-open"); tree("nc-open") }
@@ -281,12 +281,22 @@ final class Scenarios: XCTestCase {
     }
 
     func test10_ncStacks() {
-        post("stack", in: 1)
-        // Let the banners pass (or send the shown one away), then look at the list.
-        if let f = waitBanner(10) {
-            drag("banner-away", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: 5), velocity: 1500)
+        post("stack", in: 5)
+        // Let every banner pass (sending each shown one away), then look at the list.
+        waitBanner(12)
+        var quiet = 0.0
+        let t0 = Date()
+        while quiet < 4 && Date().timeIntervalSince(t0) < 60 {
+            if banner.exists {
+                quiet = 0
+                let f = banner.frame
+                drag("banner-away", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: 5), velocity: 1500)
+            } else {
+                quiet += 0.5
+            }
+            wait(0.5)
         }
-        wait(6)
+        mark("banners over")
         openNC()
         wait(2.5)
         shot("nc-stacks")
@@ -316,8 +326,8 @@ final class Scenarios: XCTestCase {
     // MARK: - Banners (always found by their element, then acted on)
 
     func test11_bannerTimeout() {
-        for i in 1...2 {
-            post("one", in: 2)
+        for i in 1...3 {
+            post("one", in: 5)
             if waitBanner() != nil {
                 if i == 1 { shot("banner"); tree("banner") }
                 // Until it has gone by itself.
@@ -330,24 +340,24 @@ final class Scenarios: XCTestCase {
     }
 
     func test12_bannerSwipeUp() {
-        for i in 1...2 {
-            post("one", in: 2)
+        for i in 1...4 {
+            post("one", in: 5)
             if let f = waitBanner() {
                 wait(1.0)
-                drag("banner-up-\(i)", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: 5), velocity: i == 1 ? 800 : 2000)
+                drag("banner-up-\(i)", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: 5), velocity: i <= 2 ? 800 : 2000)
             }
             wait(3)
         }
     }
 
     func test13_bannerReplace() {
-        post("two", in: 2)
+        post("two", in: 5)
         waitBanner()
         wait(10)
     }
 
     func test14_bannerPullDown() {
-        post("one", in: 2)
+        post("one", in: 5)
         if let f = waitBanner() {
             wait(1.0)
             drag("banner-down", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: f.midY + 250), velocity: 500, hold: 0.8)
@@ -360,7 +370,7 @@ final class Scenarios: XCTestCase {
     }
 
     func test15_bannerLong() {
-        post("long", in: 2)
+        post("long", in: 5)
         if waitBanner() != nil {
             shot("banner-long")
             tree("banner-long")
@@ -374,12 +384,12 @@ final class Scenarios: XCTestCase {
         let settings = sb.icons["Settings"]
         guard settings.waitForExistence(timeout: 3) else { mark("no Settings icon"); return }
         mark("Settings icon at \(settings.frame)")
-        for i in 1...3 {
+        for i in 1...5 {
             mark("open settings \(i)")
             settings.tap()
             wait(2.5)
             if i == 1 { shot("settings") }
-            closeFromBottom("app-home-\(i)", velocity: i == 3 ? 3500 : 2000)
+            closeFromBottom("app-home-\(i)", velocity: i >= 4 ? 3500 : 2000)
             wait(2.5)
         }
         // A slow, held swipe up: the app as a card under the finger, then let go.
@@ -394,7 +404,7 @@ final class Scenarios: XCTestCase {
 
     func test17_pages() {
         tree("home-pages")
-        for i in 1...3 {
+        for i in 1...5 {
             drag("page-left-\(i)", CGPoint(x: w * 0.85, y: h * 0.5), CGPoint(x: w * 0.25, y: h * 0.5), velocity: 1500)
             wait(1.5)
             drag("page-right-\(i)", CGPoint(x: w * 0.15, y: h * 0.5), CGPoint(x: w * 0.75, y: h * 0.5), velocity: 1500)
@@ -414,8 +424,9 @@ final class Scenarios: XCTestCase {
         shot("library")
         tree("library")
         // A category's small icon group opens the category folder.
-        let folder = sb.icons.matching(NSPredicate(format: "label ENDSWITH 'folder'")).firstMatch
-        if folder.exists {
+        let folder = sb.icons.matching(NSPredicate(format: "label ENDSWITH 'folder'")).allElementsBoundByIndex
+            .first { $0.frame.width > 0 && $0.frame.minX >= 0 && $0.frame.maxX <= w }
+        if let folder = folder {
             let f = folder.frame
             mark("library folder \(folder.label) at \(f)")
             for i in 1...2 {
@@ -447,7 +458,7 @@ final class Scenarios: XCTestCase {
         let settings = sb.icons["Settings"]
         guard settings.waitForExistence(timeout: 3) else { mark("no Settings icon"); return }
         let f = settings.frame
-        for i in 1...2 {
+        for i in 1...4 {
             longPress("icon-menu-\(i)", f.midX, f.midY, 0.9)
             wait(2)
             if i == 1 { shot("icon-menu"); tree("icon-menu") }
@@ -495,33 +506,35 @@ final class Scenarios: XCTestCase {
     }
 
     func test23_folder() {
-        // Make a folder (edit mode: News dropped on Photos), open and close it a few times.
+        // Home page two holds the Simulator's own "Utilities" folder: open and close it a few times.
+        drag("page-2", CGPoint(x: w * 0.85, y: h * 0.5), CGPoint(x: w * 0.25, y: h * 0.5), velocity: 1500)
+        wait(1.5)
+        let folder = sb.icons.matching(NSPredicate(format: "label CONTAINS[c] 'folder'")).allElementsBoundByIndex
+            .first { $0.frame.width > 0 && $0.frame.minX >= 0 && $0.frame.maxX <= w }
+        guard let f = folder?.frame else { mark("no folder on screen"); tree("no-folder"); return }
+        mark("folder \(folder!.label) at \(f)")
+        for i in 1...5 {
+            tap("folder-open-\(i)", f.midX, f.midY)
+            wait(2)
+            if i == 1 { shot("folder-open"); tree("folder-open") }
+            tap("folder-close-\(i)", w / 2, h * 0.9)
+            wait(2)
+        }
+        // And a folder made by dropping one icon on another (page one, edit mode, a fast move then a hold).
+        home()
         longPress("home-empty", w / 2, h * 0.66, 1.6)
         wait(2)
-        let a = sb.icons["News"].frame, b = sb.icons["Photos"].frame
-        mark("News \(a) Photos \(b)")
-        guard a.width > 0 && b.width > 0 else { mark("icons missing"); return }
-        drag("icon-onto", CGPoint(x: a.midX, y: a.midY), CGPoint(x: b.midX, y: b.midY), velocity: 300, press: 0.6, hold: 2.0)
-        wait(2.5)
-        shot("folder-made")
-        tree("folder-made")
-        tap("folder-made-out", w / 2, 40)
-        wait(1)
+        let a = sb.icons["Maps"].frame, b = sb.icons["News"].frame
+        mark("Maps \(a) News \(b)")
+        if a.width > 0 && b.width > 0 {
+            drag("icon-onto", CGPoint(x: a.midX, y: a.midY), CGPoint(x: b.midX, y: b.midY), velocity: 1500, press: 0.6, hold: 1.8)
+            wait(2.5)
+            shot("folder-made")
+            tree("folder-made")
+        }
         let done = sb.buttons["Done"]
         if done.exists { done.tap() } else { home() }
         wait(2)
-        let folder = sb.icons.matching(NSPredicate(format: "label CONTAINS[c] 'folder'")).firstMatch
-        mark("folder \(folder.exists ? folder.label : "none") \(folder.exists ? folder.frame : .zero)")
-        if folder.exists {
-            let f = folder.frame
-            for i in 1...3 {
-                tap("folder-open-\(i)", f.midX, f.midY)
-                wait(2)
-                if i == 1 { shot("folder-open"); tree("folder-open") }
-                tap("folder-close-\(i)", w / 2, h * 0.9)
-                wait(2)
-            }
-        }
     }
 
     // MARK: - Calibration

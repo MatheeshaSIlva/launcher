@@ -13,6 +13,11 @@ on:
         required: false
         default: ""
 
+# One run per commit (a push was seen to start three).
+concurrency:
+  group: ios-ref-${{ github.sha }}
+  cancel-in-progress: true
+
 jobs:
   capture:
     runs-on: xcode-27
