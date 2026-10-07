@@ -81,6 +81,21 @@
             android:icon="@mipmap/ic_dev"
             android:label="Launcher dev" />
 
+        <!-- The token editor (design system, docs/DESIGN_SYSTEM_PLAN.md): own task and own app-drawer entry. -->
+        <activity
+            android:name=".design.DesignActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_dev"
+            android:label="Launcher design"
+            android:launchMode="singleTask"
+            android:taskAffinity="dev.launcher.app.design"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <!-- Notification counts for the icon badges (access granted through Shizuku, or in Settings). -->
         <service
             android:name=".BadgeListener"

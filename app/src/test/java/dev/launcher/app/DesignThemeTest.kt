@@ -1,0 +1,95 @@
+package dev.launcher.app
+
+import dev.launcher.app.design.Blend
+import dev.launcher.app.design.ColorValue
+import dev.launcher.app.design.Entry
+import dev.launcher.app.design.NumUnit
+import dev.launcher.app.design.Provenance
+import dev.launcher.app.design.Resolver
+import dev.launcher.app.design.Scale
+import dev.launcher.app.design.Theme
+import dev.launcher.app.design.Value
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
+import org.junit.Test
+import java.io.File
+
+/** The design system's theme files and their resolution (no Android needed). */
+class DesignThemeTest {
+    private val shipped: Theme by lazy { Theme.parse(File("src/main/assets/themes/ios27.json").readText()) }
+
+    @Test fun shippedThemeResolvesEveryToken() {
+        val r = Resolver(listOf(shipped.entries))
+        for (key in shipped.entries.keys) {
+            val v = r.resolve(key)   // throws on a dangling alias or a cycle
+            if (v is Value.Mat) {
+                v.material.fills.forEach { r.colorPair(it.color) }
+                v.material.innerShadows.forEach { r.colorPair(it.color) }
+                v.material.shadows.forEach { r.colorPair(it.color) }
+            }
+        }
+        assertTrue("the shipped theme has tokens", shipped.entries.size > 100)
+    }
+
+    @Test fun everyTokenSaysWhereItCameFrom() {
+        val unsourced = shipped.entries.filter { (_, e) -> e.src is Provenance.Judged && (e.src as Provenance.Judged).why == "no source given" }
+        assertTrue("tokens without a source: ${unsourced.keys}", unsourced.isEmpty())
+    }
+
+    @Test fun codeKeysExistInTheShippedTheme() {
+        val r = Resolver(listOf(shipped.entries))
+        for (k in listOf(Scale.POLICY.name, Scale.REFERENCE_WIDTH.name)) r.resolve(k)
+    }
+
+    @Test fun kitValuesComeThroughExactly() {
+        val r = Resolver(listOf(shipped.entries))
+        val label = r.resolve("sys.color.label.secondary") as Value.Color
+        assertEquals(0x993C3C43.toInt(), label.light)   // #3c3c4399: alpha last in the file, first in ARGB
+        assertEquals(0xB2EBEBF5.toInt(), label.dark)
+        val regular = (r.resolve("sys.material.glass.regular") as Value.Mat).material
+        assertEquals(16f, regular.frostPt)
+        assertEquals(0.7f, regular.lens!!.refraction)
+        // Light's fills are zero in dark and dark's in light (one material holds both of the kit's versions).
+        assertEquals(Blend.LIGHTEN, regular.fills[0].blend)
+        assertEquals(0.7f, regular.fills[0].opacity)
+        assertEquals(0f, regular.fills[0].opacityDark)
+        assertEquals(0f, regular.fills[2].opacity)
+        assertEquals(0.7f, regular.fills[2].opacityDark)
+        val shadow = regular.shadows[0].color as ColorValue.Literal
+        assertEquals(0x40000000, shadow.light)
+        assertEquals(0x73000000, shadow.dark)
+    }
+
+    @Test fun editsLayerOverTheThemeAndReset() {
+        val user = LinkedHashMap<String, Entry>()
+        val r = Resolver(listOf(shipped.entries, user))
+        val before = r.resolve("sys.color.accent")
+        user["ref.color.accents.blue"] = Entry(Value.Color(0xFFFF0000.toInt(), 0xFF00FF00.toInt()), Provenance.User)
+        assertEquals(Value.Color(0xFFFF0000.toInt(), 0xFF00FF00.toInt()), r.resolve("sys.color.accent"))   // through the alias
+        user.clear()
+        assertEquals(before, r.resolve("sys.color.accent"))
+    }
+
+    @Test fun aliasCyclesAreReportedWithTheirChain() {
+        val r = Resolver(listOf(mapOf(
+            "a" to Entry(Value.Alias("b"), Provenance.User),
+            "b" to Entry(Value.Alias("a"), Provenance.User),
+        )))
+        try { r.resolve("a"); fail("a cycle must throw") } catch (e: IllegalStateException) { assertTrue(e.message!!.contains("a -> b -> a")) }
+    }
+
+    @Test fun writtenThemesReadBackTheSame() {
+        val again = Theme.parse(Theme.write("copy", shipped.entries))
+        for ((k, e) in shipped.entries) {
+            assertEquals("token $k", e.value, again.entries[k]?.value)
+            assertEquals("source of $k", e.src, again.entries[k]?.src)
+        }
+        val edited = Theme.parse(Theme.write("user", mapOf("k" to Entry(Value.Choice("x"), Provenance.User))))
+        assertEquals(Provenance.User, edited.entries["k"]!!.src)
+        val n = Theme.parse("""{"tokens": {"x": {"ms": 140, "src": "judged:test"}, "y": {"color": "#ff383c80"}}}""")
+        assertEquals(Value.Number(140f, NumUnit.MS), n.entries["x"]!!.value)
+        assertEquals(Value.Color(0x80FF383C.toInt(), 0x80FF383C.toInt()), n.entries["y"]!!.value)
+        assertEquals(Provenance.Judged("test"), n.entries["x"]!!.src)
+    }
+}

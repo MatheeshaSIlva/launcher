@@ -55,7 +55,14 @@ the evidence the next steps need, and only that: Apple's kit for the expanded mo
 Simulator pass with notifications granted first (the list scrolled, the long look, opening an app, dark mode); an
 authoritative list of iOS 27's controls.
 
-**Step 1: the design-system core** (no visible change). A `design/` package: tokens for colour (light/dark), materials,
+**Step 1: the design-system core** (no visible change). *Done 2026-10-07:* `app/.../design/` (keys, values with
+light/dark, aliases, provenance, materials with Apple's per-mode layers, the resolver, the live `Design` object, the
+`Scale` policy); the iOS 27 theme is already a theme file (`assets/themes/ios27.json`, 130 `ref` tokens generated from
+the kit by `tools/design/build_ios27_theme.py` out of `docs/tokens/ios27-kit.json`, 32 `sys` tokens), which pulls part of
+step 5 forward; the **token editor** ("Launcher design" in the app list, or "Design tokens" in the developer panel):
+every token with its source, editors for every kind, edits kept in `files/design/user.json`; unit tests
+(`DesignThemeTest`). Nothing draws with tokens yet: that starts with step 2a.
+Original plan: A `design/` package: tokens for colour (light/dark), materials,
 shape and spacing, type, motion roles; how points become pixels (today 1 pt = width / 402; the policy becomes a token so
 Android's display size and font size can be honoured later); the iOS 27 profile as data with provenance; unit tests.
 

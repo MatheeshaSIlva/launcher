@@ -1143,3 +1143,13 @@ Simulator passes (7, 8) and Apple's kit (Control Center, lock screen clock, expa
   was 8-15 ms); the collapsed stack fanning out 0-2 missed (7 on the first run after an install).
 - Not done: hiding the list into a count, Control Center pages, gallery search, apps' own controls (quick settings
   tiles), Screen Recording, the notification count/grouping by conversation, "Carrier" in the status rows.
+
+## Design system, step 1: the core (2026-10-07)
+
+`docs/DESIGN_SYSTEM_PLAN.md`. Apple's iOS 27 kit read as its own tokens (Figma variables and styles, the Materials page's
+components layer by layer): `docs/tokens/ios27-kit.json` (63 colours light/dark, the Liquid Glass globals, dimensions,
+Dynamic Type, 34 text styles, every material's recipe with node ids). From it the iOS 27 theme file
+(`assets/themes/ios27.json`), loaded at start (`[design] theme 'iOS 27' 162 tokens` in the log). The token editor lists
+every token with its source and edits it (checked on the emulator: a colour edit saved, followed through its aliases,
+reset). Found on the way: iOS's scroll edge is a progressive 10 pt blur under a gradient (kit), not a fade.
+

@@ -118,6 +118,7 @@ class DevActivity : Activity() {
         val row5 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         row5.addView(button("Gesture nav on/off") { toggleGestures() }, weighted())
         row5.addView(button("Frame report") { frameReport() }, weighted())
+        row5.addView(button("Design tokens") { startActivity(Intent(this, dev.launcher.app.design.DesignActivity::class.java)) }, weighted())
         root.addView(row5)
         val row6 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val placement = button("") { }

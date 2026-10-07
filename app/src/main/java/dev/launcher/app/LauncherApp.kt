@@ -10,6 +10,7 @@ class LauncherApp : Application() {
         Watchdog.startHeartbeat()
         dev.launcher.app.theme.Fonts.init(this)
         dev.launcher.app.theme.Appearance.init(this)
+        dev.launcher.app.design.Design.init(this)
         // Dark mode switched anywhere (also while an app is in front): home crossfades at once, so it is already in the new
         // appearance (and its picture behind closing cards too) when it is next seen.
         registerComponentCallbacks(object : android.content.ComponentCallbacks {

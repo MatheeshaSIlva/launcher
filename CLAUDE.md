@@ -49,6 +49,11 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").
+- **Design system** (`design/`, plan in `docs/DESIGN_SYSTEM_PLAN.md`): every look value is a token in the active theme file
+  (`assets/themes/ios27.json`: `ref.*` from Apple's kit with its ids, `sys.*` roles, `comp.*` per component), read through
+  `Design` (light/dark blended at `Appearance.dark`, aliases followed, the user's edits from the token editor on top);
+  `Scale` turns points into pixels. New and migrated drawing code reads tokens, never literals; every token says where its
+  value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
 - **Glass/blur**: three layers — own snapshot blur (baseline, all phones) → standard cross-window blur where the system enables it
   → Samsung dim-behind blur upgrade.
 - **Shade (iOS 27 profile)**: `statusbar/` (the bar: springs for every slot, notification icons) and `shade/`: one full-screen
