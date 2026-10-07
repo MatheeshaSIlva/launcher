@@ -88,9 +88,22 @@ final class Scenarios: XCTestCase {
         mark("tree \(name)")
     }
 
-    private func allowNotifications() {
+    private func allowNotifications(_ timeout: Double = 4) {
         let allow = sb.alerts.buttons["Allow"]
-        if allow.waitForExistence(timeout: 4) { mark("allow notifications"); allow.tap() }
+        if allow.waitForExistence(timeout: timeout) { mark("allow notifications"); allow.tap() }
+    }
+
+    /// Grants the host app notifications before anything posts (pass 8 lost every notification: the prompt came after
+    /// the 4 s wait). Waits for the prompt as long as it takes, then for the host to say "authorized".
+    func test01b_grantNotifications() {
+        host.launchArguments = []
+        host.launch()
+        allowNotifications(30)
+        let status = host.staticTexts["status"]
+        let t0 = Date()
+        while Date().timeIntervalSince(t0) < 15 && status.label != "authorized" { usleep(500_000) }
+        mark("notifications: \(status.exists ? status.label : "no status")")
+        home()
     }
 
     /// The host app schedules `set` (see RefHostApp) `delay` s from now; we go home (page one) before it arrives.
