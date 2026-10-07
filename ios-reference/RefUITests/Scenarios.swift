@@ -734,6 +734,94 @@ final class Scenarios: XCTestCase {
         wait(1.5)
     }
 
+    // MARK: - Notification Center: collapsed, expanded, scrolled, held, opened (pass 8)
+
+    /** Platters on screen now (frames inside the visible area), top to bottom. */
+    private func visiblePlatters() -> [XCUIElement] {
+        platters.filter { $0.frame.minY > 90 && $0.frame.maxY < h - 110 && $0.frame.height > 30 }.sorted { $0.frame.minY < $1.frame.minY }
+    }
+
+    func test45_ncList() {
+        post("many", in: 20)
+        letBannersPass()
+        openNC()
+        wait(2.5)
+        shot("nc-collapsed")
+        tree("nc-collapsed")
+        // The collapsed stack at the bottom: a tap fans it out into the list.
+        let first = visiblePlatters().last ?? platters.last
+        if let f = first?.frame {
+            mark("collapsed front at \(f)")
+            tap("nc-expand", f.midX, f.midY)
+            wait(2.5)
+            shot("nc-expanded")
+            tree("nc-expanded")
+        }
+        // The list scrolled up step by step (the finger rests before it lifts: no fling).
+        for i in 1...6 {
+            drag("nc-scroll-up-\(i)", CGPoint(x: w / 2, y: h * 0.72), CGPoint(x: w / 2, y: h * 0.72 - 120), velocity: 250, hold: 0.8)
+            wait(1.2)
+            shot("nc-scrolled-\(i)")
+            if i % 2 == 0 { tree("nc-scrolled-\(i)") }
+        }
+        // Held mid-scroll, then back down slowly (never a fling down: that hides the notifications).
+        drag("nc-scroll-held", CGPoint(x: w / 2, y: h * 0.7), CGPoint(x: w / 2, y: h * 0.7 - 90), velocity: 200, hold: 2.5)
+        for i in 1...3 {
+            drag("nc-scroll-down-\(i)", CGPoint(x: w / 2, y: h * 0.4), CGPoint(x: w / 2, y: h * 0.4 + 120), velocity: 250, hold: 0.8)
+            wait(1.0)
+        }
+        shot("nc-scrolled-back")
+        // Press and hold a platter in the middle of the screen: the long look.
+        let vis = visiblePlatters()
+        if let p = vis.dropFirst(vis.count / 2).first {
+            let f = p.frame
+            mark("hold platter at \(f)")
+            longPress("nc-hold", f.midX, f.midY, 1.2)
+            wait(2)
+            shot("nc-longlook")
+            tree("nc-longlook")
+            tap("nc-longlook-out", w / 2, h * 0.08)
+            wait(2)
+            shot("nc-after-longlook")
+        } else { mark("no visible platter to hold") }
+        // A tap on a platter opens its app (the host app).
+        if let p = visiblePlatters().last {
+            let f = p.frame
+            mark("tap platter at \(f)")
+            tap("nc-open-app", f.midX, f.midY)
+            wait(2.5)
+            shot("nc-opened-app")
+        } else { mark("no visible platter to tap") }
+        home()
+        wait(1)
+    }
+
+    func test46_ncHideShow() {
+        // Swiped down, the notifications hide into a count at the bottom; a tap (or a swipe up) brings them back.
+        openNC()
+        wait(2.5)
+        shot("nc-before-hide")
+        drag("nc-hide", CGPoint(x: w / 2, y: h * 0.62), CGPoint(x: w / 2, y: h * 0.92), velocity: 1200)
+        wait(2)
+        shot("nc-hidden")
+        tree("nc-hidden")
+        let count = sb.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] 'Notification'")).allElementsBoundByIndex
+            .filter { $0.frame.minY > h * 0.6 }.first
+        if let f = count?.frame {
+            mark("count at \(f)")
+            tap("nc-show", f.midX, f.midY)
+            wait(2)
+            shot("nc-shown-again")
+            tree("nc-shown-again")
+        } else {
+            drag("nc-show-swipe", CGPoint(x: w / 2, y: h * 0.85), CGPoint(x: w / 2, y: h * 0.55), velocity: 800)
+            wait(2)
+            shot("nc-shown-again")
+        }
+        closeFromBottom("nc-close")
+        wait(1.5)
+    }
+
     // MARK: - Calibration
 
     /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the
