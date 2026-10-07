@@ -1,0 +1,83 @@
+name: iOS reference capture
+# Records iOS 27's own system UI (Control Center, Notification Center, banners, home) in the Simulator, driven by
+# ios-reference/RefUITests, so its motion and layout can be measured instead of guessed. Runs on pushes to the
+# ios-reference branch (it never touches the Android build on main) or by hand.
+on:
+  push:
+    branches: [ios-reference]
+    paths: ["ios-reference/**", ".github/workflows/ios-reference.yml"]
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: "Scenario names to run (space separated); empty = all"
+        required: false
+        default: ""
+
+jobs:
+  capture:
+    runs-on: xcode-27
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools and versions
+        run: |
+          brew install xcodegen > /dev/null
+          xcodebuild -version
+          sw_vers
+          xcrun simctl list runtimes
+
+      - name: Simulator (newest iPhone Pro on the newest iOS)
+        id: sim
+        run: |
+          python3 - <<'EOF' > sim.env
+          import json, re, subprocess
+          d = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "-j"]))
+          rts = [r for r in d["runtimes"] if r.get("platform") == "iOS" and r.get("isAvailable")]
+          rt = max(rts, key=lambda r: [int(x) for x in r["version"].split(".")])
+          def num(t):
+              m = re.match(r"iPhone (\d+) Pro$", t["name"])
+              return int(m.group(1)) if m else -1
+          types = [t for t in rt.get("supportedDeviceTypes", []) if num(t) > 0]
+          ty = max(types, key=num)
+          print(f"RUNTIME={rt['identifier']}")
+          print(f"RUNTIME_NAME={rt['name']}")
+          print(f"TYPE={ty['identifier']}")
+          print(f"TYPE_NAME={ty['name']}")
+          EOF
+          cat sim.env
+          . ./sim.env
+          UDID=$(xcrun simctl create Ref "$TYPE" "$RUNTIME")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          # A calm, repeatable status bar and light appearance (dark is a later pass).
+          xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100 || true
+          xcrun simctl ui "$UDID" appearance light || true
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "$TYPE_NAME on $RUNTIME_NAME ($UDID)"
+
+      - name: Build the host app and the UI tests
+        working-directory: ios-reference
+        run: |
+          xcodegen generate
+          set -o pipefail
+          xcodebuild build-for-testing -project IOSReference.xcodeproj -scheme RefUITests \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath ../dd | tail -n 40
+
+      - name: Capture
+        run: |
+          chmod +x ios-reference/capture.sh
+          XCTESTRUN=$(ls dd/Build/Products/*.xctestrun | head -1)
+          mkdir -p out
+          cp sim.env out/
+          ios-reference/capture.sh "${{ steps.sim.outputs.udid }}" "$XCTESTRUN" out ${{ github.event.inputs.tests }}
+          du -sh out/*
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-reference-${{ github.run_number }}
+          path: out/
+          retention-days: 30
