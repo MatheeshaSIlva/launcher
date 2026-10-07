@@ -95,6 +95,32 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         private set
 
     private val prefs = ctx.getSharedPreferences("control_center", Context.MODE_PRIVATE)
+
+    /** A module grown into its large form (a long press; Focus: a tap): see [CcExpanded]. */
+    private val expanded: CcExpanded = CcExpanded(ctx, object : CcExpanded.Host {
+        override val state get() = host.state
+        override val media get() = host.media
+        override val glass get() = host.glass
+        override fun launch(i: Intent?) = host.launch(i)
+        override fun invalidate() = this@ControlCenterView.invalidate()
+        override fun haptic(kind: Int) { performHapticFeedback(kind) }
+        override fun sliderValue(c: Control): Float = anims.values.firstOrNull { it.item.control == c }?.value?.value
+            ?: if (c == Control.BRIGHTNESS) host.state.brightness else host.state.volume
+        override fun setSlider(c: Control, v: Float, final: Boolean) {
+            anims.values.firstOrNull { it.item.control == c }?.value?.snapTo(v)
+            if (c == Control.BRIGHTNESS) host.state.setBrightness(v, final) else host.state.setVolume(v, final)
+            this@ControlCenterView.invalidate()
+        }
+        override fun expandProgress(k: Float) { host.editProgress(max(editK.value.coerceIn(0f, 1f), k)); this@ControlCenterView.invalidate() }
+        override fun closeAll() = host.close()
+    })
+
+    /** Back: an expanded module goes back into place first. */
+    fun onBack(): Boolean {
+        if (!expanded.isOpen) return false
+        expanded.close()
+        return true
+    }
     private var layout: CcLayout? = null
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -214,7 +240,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** The controls' opacity for how present the panel is: quickly in, and they outlast the blur when it closes. */
     private fun presence(): Float = kotlin.math.sqrt(progress.coerceIn(0f, 1f))
 
-    private val editK = SpringValue(0f, 100f, { host.editProgress(it); invalidate() })
+    private val editK: SpringValue = SpringValue(0f, 100f, { host.editProgress(max(it.coerceIn(0f, 1f), expanded.presence)); invalidate() })
     val editing get() = editK.target > 0.5f
 
     fun enterEdit() {
@@ -232,6 +258,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     /** The panel finished closing: edit mode ends, presses end. */
     fun onClosed() {
+        expanded.dismissNow()
         exitEdit(animate = false)
         cancelTouch()
         for (a in anims.values) { a.press.snapTo(0f); a.subPress.snapTo(0f); a.lift.snapTo(0f) }
@@ -278,12 +305,14 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         if (progress <= 0.002f || width == 0) return
         val edit = editK.value.coerceIn(0f, 1f)
         val top = gridTop()
-        drawTopButtons(c, (1f - edit) * presence())
+        val ex = expanded.presence
+        drawTopButtons(c, (1f - edit) * presence() * (1f - ex))
         if (edit > 0.001f) drawEmptySlots(c, top, edit)
         else if (warmSlots && slotsNode.hasDisplayList()) { slotsNode.setAlpha(0.003f); c.drawRenderNode(slotsNode); warmSlots = false }
         for (a in anims.values) if (a !== dragged) drawItem(c, a, top, edit)
         dragged?.let { drawItem(c, it, top, edit) }
         if (edit > 0.001f) drawAddButton(c, edit)
+        expanded.draw(c, presence())
     }
 
     private fun smooth(t: Float): Float { val x = t.coerceIn(0f, 1f); return x * x * (3f - 2f * x) }
@@ -415,6 +444,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         out.w = w; out.h = h
         out.scale = (0.55f + 0.45f * min(appear, 1f)) * (1f + 0.035f * a.press.value) * (1f + 0.05f * a.lift.value)
         out.alpha = k * appear.coerceIn(0f, 1f) * (if (edit > 0f && a !== dragged) 1f - 0.08f * edit else 1f)
+        // A module grown into its large form: the others fade away, and it gives way to its large form at once.
+        val ex = expanded.presence
+        if (ex > 0f) out.alpha *= if (expanded.control == it.control) (1f - ex * 6f).coerceAtLeast(0f) else 1f - ex
         return true
     }
 
@@ -810,6 +842,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (expanded.isOpen) { expanded.onTouch(e); return true }
         val x = e.x
         val y = e.y
         when (e.actionMasked) {
@@ -966,6 +999,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 a.press.animateTo(0f, PRESS_OUT); a.subPress.animateTo(0f, PRESS_OUT)
                 val st = host.state
+                // A module grows into its large form (iOS 18+); anything else opens its settings.
+                if (expandFrom(a)) { mode = Mode.NONE; return }
                 val ctl = (a.sub as? Control) ?: a.item.control
                 when (ctl.kind) {
                     Control.Kind.MEDIA -> if (host.media.open()) host.close()
@@ -981,7 +1016,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val st = host.state
         val ctl = a.item.control
         when (ctl.kind) {
-            Control.Kind.TOGGLE, Control.Kind.FOCUS -> {
+            Control.Kind.FOCUS -> if (!expandFrom(a)) { performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); st.toggle(ctl) }
+            Control.Kind.TOGGLE -> {
                 performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 if (!st.toggle(ctl)) host.launch(st.settingsFor(ctl))
             }
@@ -1005,6 +1041,15 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 }
             }
         }
+    }
+
+    /** Grows [a] into its large form, from where it is drawn now. False if it has none. */
+    private fun expandFrom(a: Anim): Boolean {
+        if (expanded.kindFor(a.item.control) == null) return false
+        a.press.snapTo(0f); a.subPress.snapTo(0f)
+        placementOf(a, gridTop(), editK.value, place)
+        val r = RectF(place.left, place.top, place.left + place.w, place.top + place.h)
+        return expanded.open(a.item.control, r, radiusFor(place.w, place.h), width.toFloat(), height.toFloat(), u)
     }
 
     private fun slide(a: Anim, y: Float, final: Boolean) {

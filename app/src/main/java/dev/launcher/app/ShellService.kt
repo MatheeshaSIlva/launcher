@@ -242,6 +242,12 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${describe(t)}"
     }
 
+    override fun sendNoAnim(pi: android.app.PendingIntent): String = try {
+        instant.send(pi)
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
     override fun switchToTaskNoAnim(taskId: Int): String = try {
         instant.switchToTask(taskId)
     } catch (t: Throwable) {

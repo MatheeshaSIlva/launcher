@@ -58,7 +58,25 @@ enum class Control(val title: String, val icon: Int, val kind: Kind, val sizes: 
     ALARM("Alarm", R.drawable.sym_alarm, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF9F0A.toInt()),
     STOPWATCH("Stopwatch", R.drawable.sym_stopwatch, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF9F0A.toInt()),
     NOTES("Quick Note", R.drawable.sym_note, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFFCC00.toInt()),
-    SETTINGS("Settings", R.drawable.sym_settings, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt());
+    SETTINGS("Settings", R.drawable.sym_settings, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
+    // iOS 18+'s other controls, where Android has them (the app-backed ones only where such an app is installed).
+    QUICK_SHARE("Quick Share", R.drawable.sym_share, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
+    VPN("VPN", R.drawable.sym_vpn, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
+    DATA_SAVER("Data Saver", R.drawable.sym_data_saver, Kind.TOGGLE, ONE_OR_WIDE, 0xFF30D158.toInt(), Style.COLOR),
+    VIDEO("Video", R.drawable.sym_video, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
+    SELFIE("Selfie", R.drawable.sym_selfie, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
+    VOICE_MEMO("Voice Memo", R.drawable.sym_mic, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF453A.toInt()),
+    RECOGNIZE_MUSIC("Recognize Music", R.drawable.sym_recognize_music, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt()),
+    TRANSLATE("Translate", R.drawable.sym_translate, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt()),
+    MAGNIFIER("Magnifier", R.drawable.sym_magnifier, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
+    WALLET("Wallet", R.drawable.sym_wallet, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
+    HOME("Home", R.drawable.sym_home, Kind.LAUNCH, ONE_OR_WIDE, 0xFFFF9F0A.toInt()),
+    TEXT_SIZE("Text Size", R.drawable.sym_text_size, Kind.LAUNCH, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
+    INVERT("Invert Colors", R.drawable.sym_invert, Kind.TOGGLE, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
+    GRAYSCALE("Color Filters", R.drawable.sym_grayscale, Kind.TOGGLE, ONE_OR_WIDE, 0xFF8E8E93.toInt()),
+    EXTRA_DIM("Reduce White Point", R.drawable.sym_extra_dim, Kind.TOGGLE, ONE_OR_WIDE, 0xFFFFCC00.toInt()),
+    LIVE_CAPTIONS("Live Captions", R.drawable.sym_captions, Kind.TOGGLE, ONE_OR_WIDE, 0xFF0A84FF.toInt(), Style.COLOR),
+    ACCESSIBILITY("Accessibility Shortcut", R.drawable.sym_accessibility, Kind.LAUNCH, ONE_OR_WIDE, 0xFF0A84FF.toInt());
 
     enum class Kind { TOGGLE, LAUNCH, SLIDER, CONNECTIVITY, MEDIA, FOCUS }
 
@@ -99,6 +117,17 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
     var brightness = 0.5f; private set
     var volume = 0.5f; private set
     var hasNfc = false; private set
+    var dataSaver = false; private set
+    var invert = false; private set
+    var grayscale = false; private set
+    var extraDim = false; private set
+    var liveCaptions = false; private set
+    /** Expanded modules' details: the Wi-Fi network's name, Night Light, automatic brightness, the torch's strength. */
+    var wifiName: String? = null; private set
+    var nightLight = false; private set
+    var autoBrightness = false; private set
+    var torchLevels = 1; private set
+    var torchLevel = 1; private set
 
     fun isOn(c: Control): Boolean = when (c) {
         Control.WIFI -> wifi
@@ -114,6 +143,11 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
         Control.FOCUS -> dnd
         Control.DARK_MODE -> darkMode
         Control.LOW_POWER -> lowPower
+        Control.DATA_SAVER -> dataSaver
+        Control.INVERT -> invert
+        Control.GRAYSCALE -> grayscale
+        Control.EXTRA_DIM -> extraDim
+        Control.LIVE_CAPTIONS -> liveCaptions
         else -> false
     }
 
@@ -140,8 +174,90 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
         hasNfc = nfcAdapter != null
         nfc = try { nfcAdapter?.isEnabled == true } catch (_: Throwable) { false }
         if (!brightnessHeld) readBrightness()
+        // Hidden settings an app may not read since Android 12 throw: those are read through the shell ([readDetails]).
+        secure("night_display_activated")?.let { n -> nightLight = n == 1 || system("blue_light_filter") == 1 } ?: system("blue_light_filter")?.let { if (it == 1) nightLight = true }
+        secure("accessibility_display_inversion_enabled")?.let { invert = it == 1 }
+        secure("accessibility_display_daltonizer_enabled")?.let { grayscale = it == 1 }
+        secure("reduce_bright_colors_activated")?.let { extraDim = it == 1 }
+        secure("odi_captions_enabled")?.let { liveCaptions = it == 1 }
+        dataSaver = try {
+            ctx.getSystemService(android.net.ConnectivityManager::class.java).restrictBackgroundStatus == android.net.ConnectivityManager.RESTRICT_BACKGROUND_STATUS_ENABLED
+        } catch (_: Throwable) { false }
+        autoBrightness = Settings.System.getInt(cr, Settings.System.SCREEN_BRIGHTNESS_MODE, 0) == Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC
+        if (!wifi) wifiName = null
         changed()
     }
+
+    private fun secure(name: String): Int? = try { Settings.Secure.getInt(ctx.contentResolver, name, 0) } catch (_: Throwable) { null }
+    private fun system(name: String): Int? = try { Settings.System.getInt(ctx.contentResolver, name, 0) } catch (_: Throwable) { null }
+
+    /** The hidden settings behind some controls, read through the shell (an app may not read them since Android 12). */
+    private fun readHidden() {
+        val s = ShizukuLink.service ?: return
+        io.execute {
+            val keys = listOf("night_display_activated", "accessibility_display_inversion_enabled", "accessibility_display_daltonizer_enabled",
+                "reduce_bright_colors_activated", "odi_captions_enabled")
+            val out = try { s.runShell(keys.joinToString("; ") { "settings get secure $it" }) } catch (_: Throwable) { return@execute }
+            val v = out.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("[exit") }
+            if (v.size < keys.size) return@execute
+            fun on(i: Int) = v[i] == "1"
+            handler.post {
+                nightLight = on(0) || system("blue_light_filter") == 1
+                invert = on(1); grayscale = on(2); extraDim = on(3); liveCaptions = on(4)
+                changed()
+            }
+        }
+    }
+
+    /**
+     * What an expanded module shows beyond on and off, read when it opens: the Wi-Fi network's name (from the shell: our
+     * app would need location access for it) and the torch's strength levels.
+     */
+    fun readDetails() {
+        readHidden()
+        val s = ShizukuLink.service
+        if (s != null && wifi) io.execute {
+            val out = try { s.runShell("cmd wifi status") } catch (_: Throwable) { "" }
+            val name = Regex("connected to \"([^\"]+)\"").find(out)?.groupValues?.get(1)
+            handler.post { wifiName = name; changed() }
+        }
+        val id = torchId ?: return
+        if (android.os.Build.VERSION.SDK_INT >= 33) try {
+            val cm = ctx.getSystemService(CameraManager::class.java)
+            torchLevels = cm.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL) ?: 1
+            torchLevel = if (torch) cm.getTorchStrengthLevel(id) else torchLevel.coerceAtLeast(1)
+        } catch (_: Throwable) { torchLevels = 1 }
+    }
+
+    /** The torch at [level] (1..[torchLevels]; 0 turns it off). */
+    fun setTorchLevel(level: Int) {
+        val id = torchId ?: return
+        val cm = ctx.getSystemService(CameraManager::class.java)
+        try {
+            if (level <= 0) { cm.setTorchMode(id, false); torch = false }
+            else if (android.os.Build.VERSION.SDK_INT >= 33 && torchLevels > 1) { cm.turnOnTorchWithStrengthLevel(id, level.coerceIn(1, torchLevels)); torch = true; torchLevel = level }
+            else { cm.setTorchMode(id, true); torch = true }
+        } catch (t: Throwable) { AppLog.log("[controls] torch level: ${t.message}") }
+        changed()
+    }
+
+    /** Night Light (One UI: Eye comfort shield), through the shell. */
+    fun setNightLight(on: Boolean) {
+        nightLight = on; changed()
+        shell("cmd color_display set-night-display-activated $on; settings put system blue_light_filter ${if (on) 1 else 0}")
+    }
+
+    fun setAutoBrightness(on: Boolean) {
+        autoBrightness = on; changed()
+        shell("settings put system screen_brightness_mode ${if (on) 1 else 0}")
+    }
+
+    /** Starts a timer of [seconds] in the clock app without opening it. */
+    fun startTimer(seconds: Int): Boolean = try {
+        ctx.startActivity(Intent(AlarmClock.ACTION_SET_TIMER).putExtra(AlarmClock.EXTRA_LENGTH, seconds)
+            .putExtra(AlarmClock.EXTRA_SKIP_UI, true).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        true
+    } catch (t: Throwable) { AppLog.log("[controls] timer: ${t.javaClass.simpleName}"); false }
 
     private fun readBrightness() {
         val s = ShizukuLink.service
@@ -182,6 +298,11 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
             cr.registerContentObserver(Settings.Global.getUriFor(name), false, observer)
         cr.registerContentObserver(Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION), false, observer)
         cr.registerContentObserver(Settings.System.getUriFor(Settings.System.SCREEN_BRIGHTNESS), false, observer)
+        cr.registerContentObserver(Settings.System.getUriFor(Settings.System.SCREEN_BRIGHTNESS_MODE), false, observer)
+        try { cr.registerContentObserver(Settings.System.getUriFor("blue_light_filter"), false, observer) } catch (_: Throwable) { }
+        try { cr.registerContentObserver(Settings.Secure.getUriFor("night_display_activated"), false, observer) } catch (_: Throwable) { }
+        for (name in listOf("accessibility_display_inversion_enabled", "accessibility_display_daltonizer_enabled", "reduce_bright_colors_activated", "odi_captions_enabled"))
+            try { cr.registerContentObserver(Settings.Secure.getUriFor(name), false, observer) } catch (_: Throwable) { }
         cr.registerContentObserver(Settings.Secure.getUriFor("location_mode"), false, observer)
         val f = IntentFilter().apply {
             addAction(WifiManager.WIFI_STATE_CHANGED_ACTION)
@@ -193,6 +314,7 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
             addAction(LocationManager.MODE_CHANGED_ACTION)
             addAction("android.nfc.action.ADAPTER_STATE_CHANGED")
             addAction(Intent.ACTION_CONFIGURATION_CHANGED)
+            addAction(android.net.ConnectivityManager.ACTION_RESTRICT_BACKGROUND_CHANGED)
         }
         try { ctx.registerReceiver(receiver, f, null, handler) } catch (t: Throwable) { AppLog.log("[controls] receiver: ${t.message}") }
         try {
@@ -206,6 +328,7 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
             if (range != null && range.size == 2 && range[1] > range[0]) handler.post { bMin = range[0]; bMax = range[1]; readBrightness() }
         }
         readAll()
+        readHidden()
     }
 
     fun stop() {
@@ -257,6 +380,12 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
             Control.ROTATION_LOCK -> "settings put system accelerometer_rotation ${if (to) 0 else 1}"
             Control.DARK_MODE -> "cmd uimode night ${if (to) "yes" else "no"}"
             Control.LOW_POWER -> "cmd power set-mode ${if (to) 1 else 0}"
+            Control.DATA_SAVER -> "cmd netpolicy set restrict-background $to"
+            Control.INVERT -> "settings put secure accessibility_display_inversion_enabled ${if (to) 1 else 0}"
+            Control.GRAYSCALE -> if (to) "settings put secure accessibility_display_daltonizer 0; settings put secure accessibility_display_daltonizer_enabled 1"
+                else "settings put secure accessibility_display_daltonizer_enabled 0"
+            Control.EXTRA_DIM -> "settings put secure reduce_bright_colors_activated ${if (to) 1 else 0}"
+            Control.LIVE_CAPTIONS -> "settings put secure odi_captions_enabled ${if (to) 1 else 0}"
             else -> return false
         }
         if (ShizukuLink.service == null) return false
@@ -276,6 +405,11 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
             Control.ROTATION_LOCK -> rotationLock = v
             Control.DARK_MODE -> darkMode = v
             Control.LOW_POWER -> lowPower = v
+            Control.DATA_SAVER -> dataSaver = v
+            Control.INVERT -> invert = v
+            Control.GRAYSCALE -> grayscale = v
+            Control.EXTRA_DIM -> extraDim = v
+            Control.LIVE_CAPTIONS -> liveCaptions = v
             else -> {}
         }
         changed()
@@ -333,6 +467,20 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
         Control.SETTINGS -> Intent(Settings.ACTION_SETTINGS)
         Control.HOTSPOT -> Intent().setComponent(ComponentName("com.android.settings", "com.android.settings.TetherSettings")).takeIf { resolves(it) }
             ?: Intent(Settings.ACTION_WIRELESS_SETTINGS)
+        Control.QUICK_SHARE -> Intent("com.google.android.gms.RECEIVE_NEARBY").takeIf { resolves(it) } ?: launcherOf(QUICK_SHARE_APPS)
+        Control.VPN -> Intent(Settings.ACTION_VPN_SETTINGS)
+        Control.VIDEO -> Intent(MediaStore.INTENT_ACTION_VIDEO_CAMERA)
+        Control.SELFIE -> Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
+            .putExtra("android.intent.extras.CAMERA_FACING", 1).putExtra("android.intent.extras.LENS_FACING_FRONT", 1)
+            .putExtra("android.intent.extra.USE_FRONT_CAMERA", true)
+        Control.VOICE_MEMO -> Intent(MediaStore.Audio.Media.RECORD_SOUND_ACTION).takeIf { resolves(it) } ?: launcherOf(RECORDER_APPS)
+        Control.RECOGNIZE_MUSIC -> launcherOf(listOf("com.shazam.android")) ?: Intent("com.google.android.googlequicksearchbox.MUSIC_SEARCH").takeIf { resolves(it) }
+        Control.TRANSLATE -> launcherOf(listOf("com.google.android.apps.translate", "com.samsung.android.app.interpreter"))
+        Control.MAGNIFIER -> launcherOf(listOf("com.google.android.apps.accessibility.magnifier", "com.samsung.android.app.magnifier"))
+        Control.WALLET -> launcherOf(listOf("com.google.android.apps.walletnfcrel", "com.samsung.android.spay"))
+        Control.HOME -> launcherOf(listOf("com.google.android.apps.chromecast.app", "com.samsung.android.oneconnect"))
+        Control.TEXT_SIZE -> Intent("android.settings.TEXT_READING_SETTINGS").takeIf { resolves(it) } ?: Intent(Settings.ACTION_DISPLAY_SETTINGS)
+        Control.ACCESSIBILITY -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         else -> settingsFor(c)
     }?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
@@ -350,8 +498,15 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
         Control.BRIGHTNESS -> Intent(Settings.ACTION_DISPLAY_SETTINGS)
         Control.VOLUME, Control.SILENT -> Intent(Settings.ACTION_SOUND_SETTINGS)
         Control.CONNECTIVITY -> Intent(Settings.ACTION_WIRELESS_SETTINGS)
+        Control.DATA_SAVER -> Intent("android.settings.DATA_SAVER_SETTINGS").takeIf { resolves(it) } ?: Intent(Settings.ACTION_WIRELESS_SETTINGS)
+        Control.INVERT, Control.GRAYSCALE, Control.EXTRA_DIM, Control.LIVE_CAPTIONS -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         else -> null
     }?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /** The launch screen of the first of [pkgs] that is installed. */
+    private fun launcherOf(pkgs: List<String>): Intent? = pkgs.firstNotNullOfOrNull { p ->
+        try { ctx.packageManager.getLaunchIntentForPackage(p) } catch (_: Throwable) { null }
+    }
 
     private fun resolves(i: Intent) = try { ctx.packageManager.resolveActivity(i, 0) != null } catch (_: Throwable) { false }
 
@@ -367,7 +522,15 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
     fun available(c: Control): Boolean = when (c) {
         Control.NFC -> hasNfc
         Control.FLASHLIGHT -> torchId != null || !started
+        // The app-backed controls only where such an app is installed.
+        Control.QUICK_SHARE, Control.VOICE_MEMO, Control.RECOGNIZE_MUSIC, Control.TRANSLATE, Control.MAGNIFIER, Control.WALLET,
+        Control.HOME -> intentFor(c) != null
         else -> true
+    }
+
+    private companion object {
+        val QUICK_SHARE_APPS = listOf("com.samsung.android.app.sharelive")
+        val RECORDER_APPS = listOf("com.sec.android.app.voicenote", "com.google.android.apps.recorder")
     }
 
     /** The UI mode service, used to read dark mode where the configuration lags. */

@@ -112,6 +112,10 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
     private var dim = 0f
     private var shown = 0f
 
+    /** The system blurs what is behind live ([LiveBlur]): only the veil is drawn here, not the picture. */
+    var live = false
+        set(v) { if (field != v) { field = v; apply() } }
+
     /** Blur radius (px, at full size), dim (0..1 black) and visibility (0..1) for this frame. */
     fun set(blurPx: Float, dim: Float, shown: Float) {
         if (blurPx == this.blurPx && dim == this.dim && shown == this.shown) return
@@ -120,7 +124,7 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun apply() {
-        val has = source != null && shown > 0f
+        val has = source != null && shown > 0f && !live
         val minBlur = MIN_LOW_BLUR_DP * resources.displayMetrics.density
         val mix = if (Build.VERSION.SDK_INT >= 31) (blurPx / minBlur).coerceIn(0f, 1f) else 0f
         if (Build.VERSION.SDK_INT >= 31 && mix > 0f) {
@@ -131,7 +135,7 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
         sharp.alpha = if (has && mix < 1f) shown else 0f
         // Without a picture of what is behind (none could be taken), a deep dark veil instead of the blur: the sharp app
         // through a light dim was busy behind the controls.
-        dimView.alpha = (if (source == null) dim * 2.1f else dim).coerceIn(0f, 0.78f) * (if (shown > 0f) 1f else 0f)
+        dimView.alpha = (if (source == null && !live) dim * 2.1f else dim).coerceIn(0f, 0.78f) * (if (shown > 0f) 1f else 0f)
     }
 
     private companion object {

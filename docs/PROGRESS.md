@@ -1114,3 +1114,32 @@ the design system and the motion, then carry them over.
   - **The long look in Notification Center**: held, a notification grows into a solid card (16 pt from the sides, radius
     26, its whole text under the same header) with a 250 pt clear-glass menu under it (17 pt symbol and label rows, 20
     apart); a tap on the card opens it.
+
+## iOS 27 consistency round (2026-10-07, after f014eac)
+
+Matheesha on f014eac: Notification Center "BAD and glitchy" (backgrounds flicker while scrolling, the clock's space cuts
+the notifications, the long-press menu does not blur what is under it, opening an app from a notification uses the
+system's animation), the clock widget "doesn't feel accurate", Control Center's background "has to be live", not all
+controls available and not implemented as iOS. Full evaluation, item by item: `docs/IOS27_EVALUATION.md`. Two more iOS
+Simulator passes (7, 8) and Apple's kit (Control Center, lock screen clock, expanded notification).
+
+- **Notification Center**: platters' glass drawn where they are every frame (the cached layers showed another place's
+  wallpaper and jumped); opens **collapsed** as iOS 27 does (newest in front, the next peeking on one line, "+N from App";
+  a tap fans it out; the list's anchor glides on a spring); no title row; a stack's count as a badge on the icon; clear
+  glass with white text over a dimmed wallpaper; 58 pt clear glass flashlight and camera; nothing cuts the list (it scrolls
+  over the clock, which fades, and fades out under the status bar and near the buttons); the long look blurs the sheet
+  and has a dark menu; an app opens out of its platter (a card in the shade's window, the app started through our instant
+  transition: `IShellService.sendNoAnim` sends PendingIntents with it; the system's animation does not play).
+- **Clock** (home widget and Notification Center): iOS's lock-screen material (heavy frost, lifted, clear glass's light,
+  weight 700).
+- **Control Center**: live background (`LiveBlur`: Samsung dim-to-blur at 0.15 on the S24, where 0.35-0.6 left home a
+  flat brown; Android's blur-behind on the emulator); expanded modules (Connectivity, Brightness, Volume, Now Playing,
+  Focus, Flashlight, Timer: `CcExpanded`); 17 more controls (44); the gallery in iOS's sections.
+- **Fixed on the way**: an unguarded read of a hidden setting crashed the app (Android 12+ throws); a restarted
+  accessibility service left the shade unable to add its windows (it keeps the old token): a new shade now.
+- **S24, measured** (local build, framestats; the scenarios never screenshot Notification Center): Control Center open
+  0 missed refreshes (2 runs) with the live blur; Notification Center scrolling 0-1 missed per step, GPU median 7-7.6 ms
+  (after dropping the platters' invisible shadow, their dispersion, and folding the dim into the wallpaper's layer: it
+  was 8-15 ms); the collapsed stack fanning out 0-2 missed (7 on the first run after an install).
+- Not done: hiding the list into a count, Control Center pages, gallery search, apps' own controls (quick settings
+  tiles), Screen Recording, the notification count/grouping by conversation, "Carrier" in the status rows.

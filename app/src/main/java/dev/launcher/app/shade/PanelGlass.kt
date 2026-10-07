@@ -78,7 +78,8 @@ class PanelGlass private constructor(private val unitPx: Float, style: GlassStyl
         shader.setFloatUniform("shadowR", m * 0.78f)
         shader.setFloatUniform("press", press.coerceIn(0f, 1f))
         shader.setFloatUniform("plain", if (hasBackdrop) 0f else 1f)
-        c.drawRect(-m, -m, w + m, h + m, paint)
+        // Without a shadow only the shape itself is shaded (the margin around it was a third more pixels for nothing).
+        if (shadow <= 0f) c.drawRect(-1f, -1f, w + 1f, h + 1f, paint) else c.drawRect(-m, -m, w + m, h + m, paint)
     }
 
     private fun color(name: String, argb: Int) =
@@ -115,7 +116,7 @@ uniform float press;
 uniform float plain;
 """ + GlassDrawable.LIGHTING + """
 half3 seen(float2 sp, float2 off, float bend) {
-    if (bend < 0.001) return backdrop.eval(sp + off).rgb;
+    if (bend < 0.001 || dispersion <= 0.0) return backdrop.eval(sp + off).rgb;
     return half3(
         backdrop.eval(sp + off * (1.0 - dispersion)).r,
         backdrop.eval(sp + off).g,

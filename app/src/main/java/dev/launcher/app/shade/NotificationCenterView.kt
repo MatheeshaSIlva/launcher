@@ -50,12 +50,14 @@ import kotlin.math.roundToInt
  * playing, and the notifications grouped by app, newest first, gathered at the bottom above the flashlight and camera
  * buttons (iOS 16+). From Apple's iOS 27 UI kit (docs/IOS27_KIT.md; 1 pt = width / 402): platters 14 pt from the sides,
  * 8 pt apart, corners 24, a 38.33 pt app icon 14 pt in, text from 62.33 pt, 15 pt type on 17-18 pt lines; a stack's cards
- * peek out 8 pt below each other, 10 and 20 pt narrower on each side. At most four lines of text.
+ * peek out 8 pt below each other, 10 and 20 pt narrower on each side. At most four lines of text. It opens with them
+ * collapsed into one stack at the bottom (iOS 27's default): the newest in front, the next peeking out on one line, then
+ * "+N from App"; a tap fans them out into the list. Platters are clear glass with white text in light and dark.
  *
  * Every change moves: notifications that arrive grow in where they belong while the others make room, cleared ones slide
  * away and the gap closes, stacks fan out into their notifications (and back) on springs, a swipe left follows the finger
  * and reveals Options and Clear (a long swipe clears), a press dims a platter, the clock's numerals cross-fade at the
- * minute, the "Clear" confirmation grows out of its "×". Scrolling up a long list moves the clock away.
+ * minute, the "Clear" confirmation grows out of its "×". A long list scrolls up over the clock and fades under the bar.
  */
 @SuppressLint("ViewConstructor")
 class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
@@ -66,7 +68,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         fun close()
         fun launch(i: Intent?)
         fun send(pi: PendingIntent?): Boolean
-        fun open(item: Notifs.Item): Boolean
+        /** Opens [item]'s app, out of its platter at [from] (screen px) if given. */
+        fun open(item: Notifs.Item, from: RectF? = null): Boolean
         fun torch()
         val torchOn: Boolean
         fun camera()
@@ -139,6 +142,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     /** About to open: what it shows is brought up to date (wallpaper, clock, notifications). */
     fun prepare() {
+        collapsed = true
         wallpaper = Wallpaper.current
         host.glass?.setBackdrop(wallpaper?.heavy, wallpaper?.heavyMatrix(width.coerceAtLeast(1), height.coerceAtLeast(1)))
         expanded.clear()
@@ -148,12 +152,21 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         startTicking()
     }
 
+    /**
+     * Fans the collapsed stack out into the list, and every app's stack too (the adb test hook: a script on the phone
+     * never taps a notification, and a long list is what it measures).
+     */
+    fun expandList() {
+        collapsed = false
+        expanded += groups.map { it.first }
+        relayout(animate = true)
+    }
+
     fun onClosed() {
         stopTicking()
         revealed?.swipe?.snapTo(0f)
         revealed = null
         menu = null
-        confirmClearAll.snapTo(0f)
         cancelTouch()
     }
 
@@ -166,7 +179,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     /** 0..1: how much the wallpaper under the status bar wants black content. */
     fun wantsDarkContent(): Float {
-        val l = (wallpaper?.topLuminance ?: 0.3f) * (1f - Appearance.wallpaperDim)
+        val l = (wallpaper?.topLuminance ?: 0.3f) * (1f - Appearance.wallpaperDim) * (1f - listDim.target)
         return ((l - 0.55f) / 0.15f).coerceIn(0f, 1f)
     }
 
@@ -182,10 +195,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var clockText = ""
     private var dateText = ""
     private val digitPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFFFFF.toInt(); typeface = Fonts.display(640); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
+        color = 0xFFFFFFFF.toInt(); typeface = Fonts.display(700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
     }
     private val solidDigits = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xF2FFFFFF.toInt(); typeface = Fonts.display(640); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
+        color = 0xF2FFFFFF.toInt(); typeface = Fonts.display(700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
     }
 
     private fun clockBox(out: RectF): RectF = out.apply { set(36f * u, 110f * u, width - 36f * u, 206f * u) }
@@ -240,12 +253,14 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     // ------------------------------------------------------------------ the list: blocks on springs
 
-    private enum class Kind { MEDIA, TITLE, HEADER, PLATTER }
+    private enum class Kind { MEDIA, HEADER, PLATTER, PEEK, MORE }
 
     /** Something in the list, keyed by [id]: its place ([y], list coordinates) and presence animate. */
     private inner class Block(val id: String, val kind: Kind) {
         var item: Notifs.Item? = null
         var group: String = ""
+        /** What a [Kind.MORE] pill says ("+10 from Messages"). */
+        var label: String = ""
         var count = 1            // a collapsed group's size (the stack shows under its top platter)
         var height = 0f
         var visible = true
@@ -257,13 +272,15 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val stack = SpringValue(0f, 100f, inv)
         var removing = false
         var placed = false
-        /** Drawn into its own GPU layer as it looks at rest (see [drawLayered]). */
-        val node = android.graphics.RenderNode("nc").apply { setUseCompositingLayer(true, null) }
+        /** What it shows, without its glass (see [drawLayered]); faded per draw, never through an offscreen layer. */
+        val node = android.graphics.RenderNode("nc").apply { setHasOverlappingRendering(false) }
         var key = Long.MIN_VALUE
-        var placeKey = Long.MIN_VALUE
     }
 
     private val blocks = LinkedHashMap<String, Block>()
+    /** Notifications gathered in one stack at the bottom (iOS 27's default, each time Notification Center opens). */
+    private var collapsed = true
+    private val listDim = SpringValue(0f, 100f, inv) { invalidate() }   // at rest: folded into the wallpaper's layer
     private val expanded = HashSet<String>()
     private var groups: List<Pair<String, List<Notifs.Item>>> = emptyList()
     private var contentH = 0f
@@ -296,7 +313,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private val gap get() = 8f * u
     private val mediaH get() = 162f * u
-    private val titleH get() = 44f * u
     private val headerH get() = 44f * u
 
     private fun relayout(animate: Boolean) {
@@ -321,14 +337,49 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             place(b, y, true)
             y += b.height + gap
         }
-        val hasClearable = groups.any { (_, l) -> l.any { it.clearable } }
-        if (groups.isNotEmpty()) {
-            val b = blocks.getOrPut("title") { Block("title", Kind.TITLE) }
-            b.height = titleH
-            place(b, y, hasClearable)
-            if (hasClearable) y += b.height
-        }
-        for ((pkg, list) in groups) {
+        val all = groups.flatMap { it.second }.sortedByDescending { it.postTime }
+        if (collapsed && all.size >= 2) {
+            // iOS 27 (Stack, its default display): the newest notification in front, the next one peeking out under it on
+            // one line, then how many more ("+10 from Messages"); a tap fans them out into the list. The others wait hidden
+            // where the front one is, so they fan out from there.
+            val front = all[0]
+            val frontTop = y
+            val fb = blocks.getOrPut(front.key) { Block(front.key, Kind.PLATTER) }
+            fb.item = front; fb.group = front.pkg; fb.count = 1
+            fb.height = painter.height(front, platterW)
+            place(fb, y, true)
+            if (!animate) fb.stack.snapTo(0f) else if (fb.stack.target != 0f) fb.stack.animateTo(0f, REFLOW)
+            y += fb.height
+            val pk = blocks.getOrPut("peek") { Block("peek", Kind.PEEK) }
+            pk.item = all[1]
+            pk.height = PEEK_PT * u
+            place(pk, y - (PEEK_PT - PEEK_SHOW_PT) * u, true)
+            y += PEEK_SHOW_PT * u
+            val rest = all.size - 2
+            if (rest > 0) {
+                val mb = blocks.getOrPut("more") { Block("more", Kind.MORE) }
+                mb.height = PEEK_PT * u
+                val apps = all.drop(2).map { it.pkg }.distinct()
+                mb.label = if (apps.size == 1) "+$rest from ${painter.appLabel(apps[0])}" else "+$rest more"
+                place(mb, y - (PEEK_PT - PEEK_SHOW_PT) * u, true)
+                y += PEEK_SHOW_PT * u
+            }
+            for ((pkg, list) in groups) {
+                val hb = blocks.getOrPut("hdr:$pkg") { Block("hdr:$pkg", Kind.HEADER) }
+                hb.group = pkg
+                hb.height = headerH
+                place(hb, frontTop, false)
+                for (item in list) {
+                    if (item === front) continue
+                    val b = blocks.getOrPut(item.key) { Block(item.key, Kind.PLATTER) }
+                    b.item = item; b.group = pkg; b.count = 1
+                    b.height = painter.height(item, platterW)
+                    place(b, frontTop, false)
+                    if (!animate) b.stack.snapTo(0f) else if (b.stack.target != 0f) b.stack.animateTo(0f, REFLOW)
+                }
+            }
+            y += gap
+        } else for ((pkg, list) in groups) {
             val open = pkg in expanded && list.size > 1
             val hb = blocks.getOrPut("hdr:$pkg") { Block("hdr:$pkg", Kind.HEADER) }
             hb.group = pkg
@@ -340,7 +391,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 b.item = item
                 b.group = pkg
                 b.count = if (open) 1 else list.size
-                b.height = painter.height(item, platterW, extraLines = if (!open && list.size > 1 && i == 0) 1 else 0)
+                b.height = painter.height(item, platterW)
                 if (open || i == 0) {
                     if (i == 0) groupTop = y
                     place(b, y, true)
@@ -364,6 +415,14 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
         if (!animate) blocks.entries.removeAll { it.value.removing }
         contentH = y
+        val nt = naturalTop()
+        if (!animate || !originPlaced) { origin.snapTo(nt); originPlaced = true }
+        else if (abs(origin.target - nt) > 0.5f || origin.isAnimating) origin.animateTo(nt, REFLOW)
+        // iOS dims the wallpaper under a list of notifications (Apple's kit: black 25 % and 5 % linear-burn), so white
+        // text on clear glass reads; an empty Notification Center shows the wallpaper as it is.
+        // The collapsed stack leaves the wallpaper as it is (iOS); the list dims it.
+        val dimTo = if (!(collapsed && all.size >= 2) && blocks.values.any { it.visible && !it.removing && (it.kind == Kind.PLATTER || it.kind == Kind.MEDIA) }) NC_DIM else 0f
+        if (!animate) listDim.snapTo(dimTo) else if (listDim.target != dimTo) listDim.animateTo(dimTo, APPEAR)
         updateScrollBounds()
         invalidate()
     }
@@ -379,12 +438,20 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         scroller.setBounds(0f, over + if (over > 0f) 120f * u else 0f, area.height())
     }
 
-    /** The list's top on the sheet: at the bottom of its area while it fits (iOS gathers them at the bottom), else under the clock. */
-    private fun listTop(): Float {
+    /**
+     * Where the list starts on the sheet: at the bottom of its area while it fits (iOS gathers them at the bottom), else
+     * under the clock. It glides there on a spring: the collapsed stack fanning out into a long list (or a notification
+     * arriving or going) moves the whole list, never in one frame.
+     */
+    private fun naturalTop(): Float {
         listArea(area)
-        val natural = if (contentH <= area.height()) area.bottom - contentH else area.top
-        return natural - scroller.position
+        return if (contentH <= area.height()) area.bottom - contentH else area.top
     }
+
+    private val origin = SpringValue(0f, 1f, inv)
+    private var originPlaced = false
+
+    private fun listTop(): Float = origin.value - scroller.position
 
     // ---- what a platter shows (shared with the banners)
 
@@ -395,37 +462,50 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val wpMatrix = Matrix()
 
     /*
-     * The sheet draws its parts from their own GPU layers: the wallpaper, the clock, each notification (and the player), as
-     * they look at rest. The sheet's own layer (see [progress]) then only combines textures when something inside moves:
-     * a swipe, a stack opening, notifications closing a gap, the list scrolling. Drawing all of it anew for such a frame
-     * (the wallpaper, the glass clock and every glass platter) cost the S24 7-9 ms of GPU. A notification's glass samples the
-     * wallpaper where it rests; while it glides to a new place it keeps that look a few frames (it is under heavy blur), and
-     * the one under the finger in a swipe is drawn exactly every frame.
+     * The sheet draws the wallpaper and the clock from their own GPU layers, and each notification's content (icon, text)
+     * from its own display list. The sheet's own layer (see [progress]) is drawn anew only when something inside moves: a
+     * swipe, a stack opening, notifications closing a gap, the list scrolling. Then every platter's glass is drawn where
+     * it is (one shader pass each, sampling the pre-blurred wallpaper): drawing the wallpaper and the glass clock anew too
+     * cost the S24 7-9 ms of GPU, the platters' glass alone is a fraction of that.
      */
     private val bgNode = android.graphics.RenderNode("nc-bg").apply { setUseCompositingLayer(true, null) }
     private var bgKey = Long.MIN_VALUE
     private val clockNode = android.graphics.RenderNode("nc-clock").apply { setUseCompositingLayer(true, null) }
     private var clockKey = Long.MIN_VALUE
-    private var budget = 0
 
-    override fun onDraw(c: Canvas) {
+    /** The sheet behind a long look, blurred by how far it is open (see [drawMenu]). */
+    private val sheetNode = android.graphics.RenderNode("nc-sheet")
+    private var sheetBlur = -1f
+
+    override fun onDraw(canvas: Canvas) {
         if (width == 0) return
-        budget = 3
         // Drawn on the sheet (it slides as a whole: see [progress]); the touch code adds the sheet's offset itself.
         val sy = 0f
+        // A long look blurs everything behind it (iOS: the list goes out of focus as the notification comes forward).
+        val look = if (menu != null) menuK.value.coerceIn(0f, 1f) else 0f
+        val c: Canvas = if (look > 0.003f) {
+            sheetNode.setPosition(0, 0, width, height)
+            sheetNode.beginRecording()
+        } else canvas
         adoptWallpaper()
-        val bk = ((System.identityHashCode(wallpaper).toLong() shl 20) xor (Math.round(Appearance.dark * 255f).toLong() shl 8)) xor width.toLong() * 31 xor height.toLong()
+        // The list's dim is part of the wallpaper's layer once it rests (not a full-screen pass every frame of a scroll);
+        // while it fades it is drawn over the layer (drawing the layer anew each frame cost more).
+        val dimFading = listDim.isAnimating
+        val dimNow = if (dimFading) 0 else Math.round(listDim.value * 255f).coerceIn(0, 255)
+        val bk = ((System.identityHashCode(wallpaper).toLong() shl 20) xor (Math.round(Appearance.dark * 255f).toLong() shl 8)) xor width.toLong() * 31 xor
+            height.toLong() xor (dimNow.toLong() shl 48)
         if (bk != bgKey || !bgNode.hasDisplayList()) {
             bgNode.setPosition(0, 0, width, height)
             val rc = bgNode.beginRecording()
-            try { drawWallpaper(rc) } finally { bgNode.endRecording() }
+            try { drawWallpaper(rc); if (dimNow > 0) rc.drawColor(dimNow shl 24) } finally { bgNode.endRecording() }
             bgKey = bk
         }
         c.drawRenderNode(bgNode)
-        // Scrolling a long list up moves the clock away with it.
-        val clockOff = min(scroller.position, 220f * u)
-        val clockK = (1f - clockOff / (160f * u)).coerceIn(0f, 1f)
-        if (clockK > 0f) {
+        if (dimFading) c.drawColor(alpha(0xFF000000.toInt(), listDim.value.coerceIn(0f, 1f)))
+        // The clock stays where it is: a long list scrolls up over it (iOS's lock screen) while it fades, so the date and the
+        // numerals never show through the notifications passing over them.
+        val clockK = (1f - scroller.position / (CLOCK_FADE_PT * u)).coerceIn(0f, 1f)
+        if (clockK > 0.003f) {
             val ck = ((dateText.hashCode().toLong() shl 32) xor (System.identityHashCode(clockGlass).toLong() shl 12)) xor
                 (System.identityHashCode(clockGlassOld).toLong() shl 2) xor Math.round(clockFade.value * 255f).toLong() xor
                 (if (clockGlass == null) clockText.hashCode().toLong() else 0L) xor (System.identityHashCode(wallpaper).toLong() shl 40)
@@ -435,17 +515,23 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 try { drawClock(rc, 0f, 1f) } finally { clockNode.endRecording() }
                 clockKey = ck
             }
-            c.save()
-            c.translate(0f, -clockOff * 0.6f)
             clockNode.setAlpha(clockK)
             c.drawRenderNode(clockNode)
-            c.restore()
         }
         c.save()
         drawList(c, sy)
         drawButtons(c)
         c.restore()
-        menu?.let { drawMenu(c, it, sy) }
+        if (c !== canvas) {
+            sheetNode.endRecording()
+            val r = LOOK_BLUR_PT * u * look
+            if (r != sheetBlur) {
+                sheetBlur = r
+                sheetNode.setRenderEffect(if (r > 0.5f) android.graphics.RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)
+            }
+            canvas.drawRenderNode(sheetNode)
+        }
+        menu?.let { drawMenu(canvas, it, sy) }
         // The player's progress moves on (a few times a second is enough).
         if (host.media.playing && host.media.active) postInvalidateDelayed(250)
     }
@@ -508,26 +594,37 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         c.restore()
     }
 
-    private fun platterTint() = Appearance.mix(0x99F5F5F7.toInt(), 0x80141416.toInt())
-    private fun primary() = Appearance.label
-    private fun secondary() = Appearance.secondaryLabel
+    /**
+     * iOS 27's clear glass, the same in light and dark, with white text. Its tint is the wallpaper's dim under the list
+     * ([NC_DIM]: the glass sees the dimmed wallpaper, as iOS's sees its overlay), and every surface gets [GLASS_LIFT] over
+     * that (Apple's kit: `#101010` plus-lighter and white 4 % luminosity, a faint lift of what is behind).
+     */
+    private fun platterTint() = alpha(0xFF000000.toInt(), listDim.value)
+    private fun primary() = 0xFFFFFFFF.toInt()
+    private fun secondary() = 0xA6FFFFFF.toInt()
 
     private fun drawList(c: Canvas, sheetY: Float) {
         listArea(area)
         val top = listTop()
         c.save()
-        // Notifications scroll under the clock's area and fade out at its edge.
-        c.clipRect(0f, area.top - 40f * u, width.toFloat(), height.toFloat())
         val headK = 1f
-        for (b in blocks.values) {
+        val held = menu?.block
+        // The collapsed stack's peeking parts lie under the notification in front: drawn first.
+        for (pass in 0..1) for (b in blocks.values) {
+            if (b === held) continue
+            if ((b.kind == Kind.PEEK || b.kind == Kind.MORE) != (pass == 0)) continue
             val a = b.appear.value.coerceIn(0f, 1.1f)
             if (a <= 0.003f) continue
             val y = top + b.y.value
-            if (y > height || y + b.height + 40f * u < area.top - 40f * u) continue
+            if (y > height || y + b.height < 0f) continue
+            // Scrolled up, the list passes over the clock (iOS: nothing cuts it) and each notification fades out as it
+            // goes under the status bar.
+            val f = topFade(y, b.height)
+            if (f <= 0.003f) continue
             when (b.kind) {
-                Kind.MEDIA, Kind.PLATTER -> drawLayered(c, b, top, y, a)
-                Kind.TITLE -> drawTitle(c, b, y, a * headK, sheetY)
-                Kind.HEADER -> drawHeader(c, b, y, a * headK, sheetY)
+                Kind.PEEK, Kind.MORE -> drawPeek(c, b, y, min(a, 1f) * f)
+                Kind.MEDIA, Kind.PLATTER -> drawLayered(c, b, top, y, a * f)
+                Kind.HEADER -> drawHeader(c, b, y, a * headK * f, sheetY)
             }
         }
         c.restore()
@@ -535,19 +632,28 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
 
     /**
-     * A notification (or the player) from its layer: drawn as it looks at its resting place ([top] + its target), moved to
-     * where it is now ([y]) and grown in by how present it is ([a]). Drawn again when what it shows changes (now), or only
-     * where it rests (a few a frame).
+     * How visible a block at [y] ([h] tall) is at the list's ends: it fades out as its middle goes under the status bar, and
+     * under the flashlight and camera buttons at the bottom.
+     */
+    private fun topFade(y: Float, h: Float): Float {
+        val mid = y + h / 2f
+        val top = ((mid - FADE_TOP_PT * u) / (FADE_PT * u)).coerceIn(0f, 1f)
+        val bottom = ((height - FADE_BOTTOM_PT * u - mid) / (FADE_PT * u)).coerceIn(0f, 1f)
+        return min(top, bottom)
+    }
+
+    /**
+     * A notification (or the player) where it is now ([y]), grown in by how present it is ([a]). Its glass is drawn every
+     * frame where it really is: the glass samples the wallpaper under it, and a glass recorded at another place (where
+     * the platter rests) showed the wrong colours while the list scrolled and flickered as they were redrawn. What it
+     * shows (icon, text, the player's controls) comes from its own display list, recorded again only when that changes.
      */
     private fun drawLayered(c: Canvas, b: Block, top: Float, y: Float, a: Float) {
         val m = PanelGlass.SHADOW_PT * u
-        val restY = top + b.targetY
-        val shelves = if (b.kind == Kind.PLATTER && b.count > 1) min(b.count - 1, 2) * SHELF_PT * u else 0f
-        val h = b.height + shelves
         var k = 17L
         fun mixIn(v: Long) { k = k * 31 + v }
         mixIn(Math.round(b.height).toLong()); mixIn(b.count.toLong()); mixIn(Math.round(b.stack.value * 255f).toLong())
-        mixIn(Math.round(b.press.value * 255f).toLong()); mixIn(Math.round(b.swipe.value).toLong()); mixIn(Math.round(Appearance.dark * 255f).toLong())
+        mixIn(Math.round(Appearance.dark * 255f).toLong())
         mixIn(b.item?.let { it.key.hashCode().toLong() * 7 + it.postTime } ?: 0L); mixIn(width.toLong())
         if (b.kind == Kind.PLATTER) mixIn((System.currentTimeMillis() / 60_000L))   // "now" -> "1m ago"
         if (b.kind == Kind.MEDIA) {
@@ -556,67 +662,108 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             mixIn(if (md.playing) 1L else 0L); mixIn(if (md.active) 1L else 0L); mixIn(md.positionNow() / 250L)
             mixIn(Math.round(pressOf("prev") * 64f).toLong()); mixIn(Math.round(pressOf("play") * 64f).toLong()); mixIn(Math.round(pressOf("next") * 64f).toLong())
         }
-        val placeKey = (Math.round(restY).toLong() shl 20) xor (host.glass?.generation ?: -1).toLong()
-        val stale = k != b.key || !b.node.hasDisplayList()
-        if (stale || (placeKey != b.placeKey && budget > 0)) {
-            if (!stale) budget--
-            b.node.setPosition(0, 0, width, kotlin.math.ceil(h + 2 * m).toInt())
+        if (k != b.key || !b.node.hasDisplayList()) {
+            b.node.setPosition(0, 0, width, kotlin.math.ceil(b.height + 2 * m).toInt())
             val rc = b.node.beginRecording()
-            try {
-                rc.translate(0f, -(restY - m))
-                if (b.kind == Kind.MEDIA) drawMedia(rc, b, restY, 1f, 0f) else drawPlatter(rc, b, restY, 1f, 0f)
-            } finally { b.node.endRecording() }
+            try { if (b.kind == Kind.MEDIA) drawMediaContent(rc, b, m, 1f) else drawPlatterContent(rc, b, m, 1f) } finally { b.node.endRecording() }
             b.key = k
-            b.placeKey = placeKey
-        } else if (placeKey != b.placeKey) postInvalidateOnAnimation()
-        val s = 0.92f + 0.08f * min(a, 1f)
+        }
+        val alpha = min(a, 1f)
+        if (alpha <= 0.003f) return
+        // Grown in about its centre; a press shrinks the platter itself a little (not its stack).
+        val s = 0.92f + 0.08f * alpha
+        val sw = if (b.kind == Kind.PLATTER) b.swipe.value else 0f
+        val ps = if (b.kind == Kind.PLATTER) 1f - 0.02f * b.press.value else 1f
+        val w2 = width / 2f
+        val cy = y + b.height / 2f
+        val cx = margin + sw + platterW / 2f
         c.save()
-        c.translate(0f, restY - m + (y - restY))
-        if (s != 1f) c.scale(s, s, width / 2f, m + b.height / 2f)
-        b.node.setAlpha(min(a, 1f))
+        if (s != 1f) c.scale(s, s, w2, cy)
+        if (b.kind == Kind.PLATTER) drawPlatterUnder(c, b, y, alpha, s)
+        if (ps != 1f) c.scale(ps, ps, cx, cy)
+        // Where the platter's top-left corner really is on the sheet, and its scale there (what its glass samples).
+        val x0 = margin + sw
+        val gx = w2 + (cx + (x0 - cx) * ps - w2) * s
+        val gy = cy + (y - cy) * ps * s
+        // No shadow: iOS's clear glass has a 2 % one (Apple's kit), and without it only the platter itself is shaded.
+        drawGlass(c, host.glass, x0, y, platterW, b.height, RADIUS_PT * u, platterTint(), alpha, 0f, ps * s, 0f, gx, gy)
+        if (b.kind == Kind.PLATTER && b.press.value > 0f) {
+            fill.color = alpha(Appearance.mix(0x14000000, 0x14FFFFFF), b.press.value * alpha)
+            rect.set(x0, y, x0 + platterW, y + b.height)
+            c.drawRoundRect(rect, RADIUS_PT * u, RADIUS_PT * u, fill)
+        }
+        c.translate(sw, y - m)
+        b.node.setAlpha(alpha)
         c.drawRenderNode(b.node)
         c.restore()
     }
 
-    private fun drawPlatter(c: Canvas, b: Block, y0: Float, a: Float, sheetY: Float) {
+    /**
+     * A part of the collapsed stack peeking out under the notification in front ([PEEK_SHOW_PT] of it shows): the next
+     * notification on one line (icon, title, text, time), 11 pt narrower each side, or the "+N" pill, 22 pt narrower.
+     */
+    private fun drawPeek(c: Canvas, b: Block, y: Float, a: Float) {
+        val inset = (if (b.kind == Kind.PEEK) 11f else 22f) * u
+        val x = margin + inset
+        val w = platterW - 2 * inset
+        val h = b.height
+        drawGlass(c, host.glass, x, y, w, h, 18f * u, platterTint(), a, 0f, 1f, 0f)
+        // Its content sits in the part that shows.
+        val cy = y + h - PEEK_SHOW_PT * u / 2f
+        if (b.kind == Kind.MORE) {
+            buttonPaint.textSize = 15f * u
+            buttonPaint.color = alpha(primary(), a)
+            c.drawText(b.label, x + w / 2f, cy + 0.36f * buttonPaint.textSize, buttonPaint)
+            return
+        }
         val item = b.item ?: return
-        val g = host.glass
-        val y = y0
+        val iconS = 20f * u
+        painter.appIcon(item.pkg)?.let { drawDrawable(c, it, x + 10f * u, cy - iconS / 2f, iconS, a) }
+        val tx = x + 10f * u + iconS + 10f * u
+        val time = painter.timeLabel(item.postTime)
+        timePaint.color = alpha(secondary(), a)
+        timePaint.textAlign = Paint.Align.RIGHT
+        c.drawText(time, x + w - 12f * u, cy + 0.36f * timePaint.textSize, timePaint)
+        val room = x + w - 12f * u - timePaint.measureText(time) - 8f * u - tx
+        val t = item.title?.toString()?.trim().orEmpty()
+        titlePaint.color = alpha(primary(), a)
+        val tShown = TextUtils.ellipsize(t, titlePaint, room, TextUtils.TruncateAt.END).toString()
+        c.drawText(tShown, tx, cy + 0.36f * titlePaint.textSize, titlePaint)
+        val left = room - titlePaint.measureText(tShown) - 6f * u
+        val body = item.text?.toString()?.replace('\n', ' ')?.trim().orEmpty()
+        if (left > 20f * u && body.isNotEmpty()) {
+            bodyPaint.color = alpha(primary(), a)
+            c.drawText(TextUtils.ellipsize(body, bodyPaint, left, TextUtils.TruncateAt.END).toString(), tx + titlePaint.measureText(tShown) + 6f * u,
+                cy + 0.36f * bodyPaint.textSize, bodyPaint)
+        }
+    }
+
+    /** Under a platter: the stack's shelves (a collapsed group) and the actions a swipe reveals, all glass, where they are. */
+    private fun drawPlatterUnder(c: Canvas, b: Block, y: Float, alpha: Float, s: Float) {
         val sw = b.swipe.value
-        val press = b.press.value
-        val s = 1f - 0.02f * press
-        val alpha = min(a, 1f)
         val x = margin + sw
         val h = b.height
         val w = platterW
-        val radius = RADIUS_PT * u
-        val tint = platterTint()
-        // The stack under a collapsed group: two shelves peeking out below, narrower and fainter.
         val st = b.stack.value.coerceIn(0f, 1f)
         if (st > 0.002f) {
+            val w2 = width / 2f
+            val cy = y + h / 2f
             for (k in min(b.count - 1, 2) downTo 1) {
                 val inset = k * 10f * u
                 val sh = h - k * 6f * u
                 val stop = y + h + k * SHELF_PT * u * st - sh
-                drawGlass(c, g, x + inset, stop, w - 2 * inset, sh, radius, tint, alpha * st * (1f - 0.22f * k), sheetY, 1f, 0.3f)
+                drawGlass(c, host.glass, x + inset, stop, w - 2 * inset, sh, RADIUS_PT * u, platterTint(), alpha * st * (1f - 0.22f * k), 0f, s, 0f,
+                    w2 + (x + inset - w2) * s, cy + (stop - cy) * s)
             }
         }
-        // Revealed actions behind a swipe.
-        if (sw < -1f) drawSwipeActions(c, b, y, h, alpha, sheetY)
-        val cx = x + w / 2f
-        val cy = y + h / 2f
-        c.save()
-        c.scale(s, s, cx, cy)
-        val dl = cx - w * s / 2f
-        val dt = cy - h * s / 2f
-        drawGlass(c, g, x, y, w, h, radius, tint, alpha, sheetY, s, 0.35f, dl, dt)
-        if (press > 0f) {
-            fill.color = alpha(Appearance.mix(0x14000000, 0x14FFFFFF), press * alpha)
-            rect.set(x, y, x + w, y + h)
-            c.drawRoundRect(rect, radius, radius, fill)
-        }
-        painter.draw(c, item, x, y, w, h, alpha, primary(), secondary(), more = b.count - 1, moreAlpha = st)
-        c.restore()
+        if (sw < -1f) drawSwipeActions(c, b, y, h, alpha, 0f)
+    }
+
+    /** What a platter shows (icon, title, text, time, "more"), its top at [y0]: recorded into its display list. */
+    private fun drawPlatterContent(c: Canvas, b: Block, y0: Float, a: Float) {
+        val item = b.item ?: return
+        val st = b.stack.value.coerceIn(0f, 1f)
+        painter.draw(c, item, margin, y0, platterW, b.height, min(a, 1f), primary(), secondary(), more = b.count - 1, moreAlpha = st)
     }
 
     private fun drawSwipeActions(c: Canvas, b: Block, y: Float, h: Float, alpha: Float, sheetY: Float) {
@@ -645,14 +792,14 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         @Suppress("UNUSED_VARIABLE") val unused = item
     }
 
-    private fun drawMedia(c: Canvas, b: Block, y0: Float, a: Float, sheetY: Float) {
+    /** What the player shows (artwork, title, scrubber, controls), its top at [y0]: recorded into its display list. */
+    private fun drawMediaContent(c: Canvas, b: Block, y0: Float, a: Float) {
         val m = host.media
         val y = y0
         val alpha = min(a, 1f)
         val x = margin
         val w = platterW
         val h = b.height
-        drawGlass(c, host.glass, x, y, w, h, RADIUS_PT * u, platterTint(), alpha, sheetY, 1f, 0.35f)
         val art = m.art
         val asz = 56f * u
         val ax = x + 16f * u
@@ -701,16 +848,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun fmt(ms: Long): String { val s = ms / 1000; return "${s / 60}:${(s % 60).toString().padStart(2, '0')}" }
 
-    private val confirmClearAll = SpringValue(0f, 100f, inv)
     private val confirmGroup = HashMap<String, SpringValue>()
-
-    private fun drawTitle(c: Canvas, b: Block, y: Float, a: Float, sheetY: Float) {
-        headPaint.textSize = 22f * u
-        headPaint.color = alpha(0xFFFFFFFF.toInt(), a)
-        headShadow.apply(headPaint)
-        c.drawText("Notification Center", margin + 6f * u, y + 28f * u, headPaint)
-        drawClearButton(c, confirmClearAll.value, width - margin - 4f * u, y + 20f * u, a, sheetY)
-    }
 
     private fun drawHeader(c: Canvas, b: Block, y: Float, a: Float, sheetY: Float) {
         headPaint.textSize = 22f * u
@@ -754,16 +892,16 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         if (a <= 0f) return
         val on = if (host.torchOn) 1f else 0f
         if (torchK.target != on) torchK.animateTo(on, TOGGLE)
-        val r = 25f * u
-        val y = height - 78f * u
-        for ((i, x) in listOf(71f * u, width - 71f * u).withIndex()) {
+        val r = 29f * u
+        val y = height - 79f * u
+        for ((i, x) in listOf(75f * u, width - 75f * u).withIndex()) {
             val hold = if (i == 0) holdTorch.value else holdCamera.value
             val s = 1f + 0.22f * hold
             val t = if (i == 0) torchK.value.coerceIn(0f, 1f) else 0f
             c.save()
             c.scale(s, s, x, y)
-            drawGlass(c, host.glass, x - r, y - r, 2 * r, 2 * r, r, Appearance.mix(0x4D000000, 0x59000000), a, 0f, s, 0.3f, x - r * s, y - r * s, fill = alpha(0xFFF2F2F7.toInt(), t))
-            glyphs.draw(c, if (i == 0) R.drawable.sym_flashlight else R.drawable.sym_camera, x, y, 23f * u, alpha(mix(0xFFFFFFFF.toInt(), 0xFF1C1C1E.toInt(), t), a))
+            drawGlass(c, host.glass, x - r, y - r, 2 * r, 2 * r, r, platterTint(), a, 0f, s, 0.12f, x - r * s, y - r * s, fill = alpha(0xFFF2F2F7.toInt(), t))
+            glyphs.draw(c, if (i == 0) R.drawable.sym_flashlight else R.drawable.sym_camera, x, y, 22f * u, alpha(mix(0xFFFFFFFF.toInt(), 0xFF1C1C1E.toInt(), t), a))
             c.restore()
         }
     }
@@ -780,7 +918,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         c.save()
         c.translate(x, y)
         // The glass samples the wallpaper as drawn on the sheet (it moves with the sheet), so in sheet coordinates.
-        g.draw(c, w, h, radius, screenX, screenY, scale, tint, fill, alpha, shadow)
+        g.draw(c, w, h, radius, screenX, screenY, scale, tint, if (fill == 0) GLASS_LIFT else fill, alpha, shadow)
         c.restore()
     }
 
@@ -812,8 +950,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /**
      * iOS 27's expanded notification (Apple's UI kit, "Notification - Expanded"): held, a notification grows into a solid
      * card 16 pt from the sides (radius 26) with its whole text under the same header (icon 38.33, 14 pt padding), and
-     * under it, centred, a 250 pt menu of clear glass (radius 26): rows of a 17 pt symbol and label, 20 pt apart, 26 pt and
-     * 20 pt of padding. The rest of Notification Center dims behind. A tap on the card opens the notification; on a row,
+     * under it, centred, a 250 pt menu of dark glass (radius 26): rows of a 17 pt symbol and label, 20 pt apart, 26 pt and
+     * 20 pt of padding. The rest of Notification Center blurs and dims behind. A tap on the card opens the notification; on a row,
      * runs it; anywhere else, the card shrinks back into its platter.
      */
     private class MenuRow(val label: String, val icon: Int, val run: () -> Unit)
@@ -905,11 +1043,12 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             expandedPainter.draw(c, item, rect.left, rect.top, rect.width(), min(rect.height(), 66.33f * u), kc, Appearance.label, Appearance.secondaryLabel)
             c.restore()
         }
-        // The menu: clear glass, growing from its top centre.
+        // The menu, growing from its top centre.
         val s = 0.6f + 0.4f * k
         c.save()
         c.scale(s, s, menuR.centerX(), menuR.top)
-        drawGlass(c, host.glass, menuR.left, menuR.top, menuR.width(), menuR.height(), 26f * u, 0x26FFFFFF,
+        // Dark glass with white labels (Apple's kit: the expanded notification's menu), over the blurred sheet.
+        drawGlass(c, host.glass, menuR.left, menuR.top, menuR.width(), menuR.height(), 26f * u, 0xB31C1C1E.toInt(),
             kc, 0f, s, 0.5f, menuR.centerX() - menuR.width() * s / 2f, menuR.top)
         titlePaint.color = alpha(0xFFFFFFFF.toInt(), kc)
         val textSize = titlePaint.textSize
@@ -987,6 +1126,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         for (b in blocks.values.reversed()) {
             if (!b.visible || b.removing || b.appear.value < 0.5f) continue
             val by = top + b.y.value
+            if (topFade(by, b.height) < 0.5f) continue
             val extra = if (b.kind == Kind.PLATTER && b.count > 1 && b.stack.value > 0.5f) min(b.count - 1, 2) * SHELF_PT * u else 0f
             if (y >= by && y <= by + b.height + extra && x >= margin && x <= width - margin) return b
         }
@@ -1039,7 +1179,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
         // Flashlight and camera: touch and hold.
         val by = height - 78f * u + sy
-        for ((i, bx) in listOf(71f * u, width - 71f * u).withIndex()) {
+        for ((i, bx) in listOf(75f * u, width - 75f * u).withIndex()) {
             if (hypot(x - bx, y - by) < 34f * u) {
                 mode = Mode.HOLD
                 touchTarget = if (i == 0) "torch" else "camera"
@@ -1063,7 +1203,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         if (b == null) { mode = Mode.PRESS; return }
         val by0 = listTop() + b.y.value + sy
         when (b.kind) {
-            Kind.TITLE -> { mode = Mode.BUTTON; touchTarget = if (x > width - margin - 90f * u) "clearAll" else ""; if (touchTarget.isEmpty()) mode = Mode.PRESS }
             Kind.HEADER -> {
                 mode = Mode.BUTTON
                 touchTarget = when {
@@ -1091,6 +1230,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 swipeFrom = b.swipe.value
                 postDelayed(longPress, LONG_MS)
             }
+            Kind.PEEK, Kind.MORE -> mode = Mode.PRESS
         }
     }
 
@@ -1140,7 +1280,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             Mode.PRESS -> {
                 val b = touched
                 b?.press?.animateTo(0f, PRESS_OUT)
-                if (b != null && !longFired && b.kind == Kind.PLATTER) tapPlatter(b)
+                if (b != null && !longFired && (b.kind == Kind.PLATTER || b.kind == Kind.PEEK || b.kind == Kind.MORE)) tapPlatter(b)
             }
             Mode.SWIPE -> settleSwipe(touched ?: return, vx)
             Mode.SCROLL -> scroller.endDrag(-vy)
@@ -1162,7 +1302,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 val i = menuPressed
                 menuPressed = -1
                 if (m != null && i in m.rows.indices) m.rows[i].run()
-                else if (m != null && i == -2) m.block.item?.let { host.open(it) }
+                else if (m != null && i == -2) m.block.item?.let { longLook(m, sheetY()); host.open(it, RectF(cardR)) }
                 closeMenu()
             }
             else -> {}
@@ -1172,6 +1312,13 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     private fun tapPlatter(b: Block) {
+        if (collapsed && (b.kind == Kind.PEEK || b.kind == Kind.MORE || blocks["peek"]?.let { it.visible && !it.removing } == true)) {
+            // The collapsed stack fans out into the list.
+            collapsed = false
+            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            relayout(animate = true)
+            return
+        }
         val item = b.item ?: return
         if (b.count > 1 && b.stack.value > 0.5f) {
             // A stack fans out into its notifications.
@@ -1179,7 +1326,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             relayout(animate = true)
             return
         }
-        if (!host.open(item)) {
+        val sy = sheetY()
+        val top = listTop() + b.y.value + sy
+        val from = RectF(margin + b.swipe.value, top, margin + b.swipe.value + platterW, top + b.height)
+        if (!host.open(item, from)) {
             // Nothing to open: the app's notification settings, as iOS opens the app.
             openSettings(item.pkg)
         }
@@ -1187,10 +1337,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun buttonTap(b: Block?) {
         when (touchTarget) {
-            "clearAll" -> {
-                if (confirmClearAll.target < 0.5f) { confirmClearAll.animateTo(1f, CONFIRM); hnd().postDelayed({ confirmClearAll.animateTo(0f, CONFIRM) }, 3000) }
-                else { performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); Notifs.cancelAll() }
-            }
             "clearGroup" -> {
                 val g = b?.group ?: return
                 val s = confirmGroup.getOrPut(g) { SpringValue(0f, 100f, inv) }
@@ -1233,6 +1379,20 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val SHELF_PT = 8f
         const val MAX_LINES = 4
         const val LONG_MS = 480L
+        /** The wallpaper's dim under a list of notifications. */
+        const val NC_DIM = 0.28f
+        /** Where notifications scrolled up finish fading out (the status bar's foot), and over how far they fade (pt). */
+        const val FADE_TOP_PT = 50f
+        const val FADE_BOTTOM_PT = 40f
+        const val FADE_PT = 70f
+        /** How far the list scrolls up before the clock under it has faded out (pt). */
+        const val CLOCK_FADE_PT = 140f
+        /** The collapsed stack's parts under the notification in front: their height, and how much of each shows. */
+        const val PEEK_PT = 40f
+        const val PEEK_SHOW_PT = 32f
+        const val GLASS_LIFT = 0x14FFFFFF
+        /** How much the sheet behind a long look is blurred (pt, Gaussian radius). */
+        const val LOOK_BLUR_PT = 22f
         const val HOLD_MS = 380L
         val clockIo = Executors.newSingleThreadExecutor()
         val REFLOW = SpringSpec(0.4f, 0.88f)

@@ -56,6 +56,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`ControlCenterView`, `CcLayout`, `CcGallery`, `Controls`), banners (`BannerView`) and `PanelGlass` (the dock's glass over a
   baked backdrop). Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
+  Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),
+  that blurs what is behind (One UI dim-to-blur; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded
+  modules; a notification's app opens out of its platter on a card inside the shade's window (`Shade.openFrom`). iOS 27
+  consistency, item by item: `docs/IOS27_EVALUATION.md`.
 
 ## Proven mechanisms (reference implementations are in the probe repo)
 
@@ -148,6 +152,18 @@ copy it wholesale — port the working pieces cleanly. File map:
   the app to idle (post notifications 20 s ahead, wait for `NotificationShortLookView`). The Simulator's Slow Animations
   switch does nothing on iOS 27. Each run is a fresh simulator: Control Center starts empty (`test00_setupControls`).
   Download the run's small artifact only (the originals are ~1 GB and this connection gets ~75 KB/s).
+- **A glass recorded where something rests shows the wrong backdrop while it moves** (its sampling position is baked
+  into the display list): Notification Center's platters, cached as layers and redrawn three a frame, flickered while the
+  list scrolled. Draw a moving surface's glass where it is, every frame; cache only what it shows on top.
+- **Hidden settings throw for an app since Android 12** (`Settings.Secure.getInt("reduce_bright_colors_activated")`:
+  SecurityException, not a default): one unguarded read crashed the app on every ringer broadcast. Read them through the
+  shell (`ControlState.readHidden`), guard every other read.
+- **The shade belongs to the accessibility service that made it**: after the service restarted (off and on, rebound by
+  the system) every window the old shade adds is refused (BadTokenException), so GestureNav makes a new shade.
+- **iOS 27 Notification Center opens collapsed** (one stack at the bottom, "+N from App"); a tap fans it out. A fling
+  down on it hides the list into a count ("● 12 Notifications") and that state lasts across tests in the same simulator:
+  find platters on screen before pressing them. The Control Center gallery is another process: SpringBoard's tree has no
+  labels for it (read the screenshots).
 - **Keystore**: debug builds are signed with a committed keystore so CI builds install over each other. Keep that pattern (new key file for this app).
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
 

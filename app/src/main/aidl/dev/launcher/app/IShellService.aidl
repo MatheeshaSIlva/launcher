@@ -2,6 +2,7 @@ package dev.launcher.app;
 
 import android.graphics.Bitmap;
 import android.hardware.HardwareBuffer;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.os.Bundle;
 import dev.launcher.app.ITouchStream;
@@ -100,4 +101,8 @@ interface IShellService {
     // receiving it; the shade keeps following the finger from this stream. Starts at once; a second call replaces the first.
     void watchTouch(in ITouchStream listener) = 29;
     void stopTouch() = 30;
+
+    // Sends a notification's PendingIntent as the user's tap, with the same instant remote transition as startNoAnim (no
+    // system animation: our card grows out of the notification). Returns "result <code>" or "ERROR: ...".
+    String sendNoAnim(in PendingIntent pi) = 31;
 }

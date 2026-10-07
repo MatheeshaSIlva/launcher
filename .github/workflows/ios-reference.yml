@@ -90,6 +90,10 @@ jobs:
                   xcrun simctl spawn "$UDID" defaults write com.apple.Accessibility EnhancedBackgroundContrastEnabled -bool true
                   xcrun simctl shutdown "$UDID"; xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
                   xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3                     --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100 || true ;;
+                "setup dark")
+                  xcrun simctl ui "$UDID" appearance dark || true ;;
+                "setup light")
+                  xcrun simctl ui "$UDID" appearance light || true ;;
                 normal*)
                   # "normal: tests" or "normal@tag: tests" (results in out/tag/...)
                   head=${line%%:*}; t=${line#*:}; [ "$(echo $t)" = all ] && t=""

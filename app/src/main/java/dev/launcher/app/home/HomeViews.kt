@@ -194,7 +194,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     }
     private val digitPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
-        typeface = dev.launcher.app.theme.Fonts.display(640)
+        typeface = dev.launcher.app.theme.Fonts.display(700)
         textAlign = Paint.Align.CENTER
         letterSpacing = -0.02f
     }

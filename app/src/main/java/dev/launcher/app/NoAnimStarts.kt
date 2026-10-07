@@ -26,6 +26,9 @@ object NoAnimStarts {
 
     fun switchToTask(taskId: Int): Boolean = call("switch to task $taskId") { it.switchToTaskNoAnim(taskId) }
 
+    /** A notification's tap (its PendingIntent) without a system animation. */
+    fun send(pi: android.app.PendingIntent): Boolean = call("send ${pi.creatorPackage}") { it.sendNoAnim(pi) }
+
     private inline fun call(what: String, op: (IShellService) -> String): Boolean {
         if (!usable) return false
         val s = ShizukuLink.service ?: return false

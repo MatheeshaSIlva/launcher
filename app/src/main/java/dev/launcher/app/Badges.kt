@@ -37,7 +37,7 @@ object Badges {
         }
         // A notification that alerts (high importance), for checking banners:
         //   adb shell am broadcast -a dev.launcher.app.TEST_NOTIFY -p dev.launcher.app --es title T --es text X [--ei id N]
-        //   (... --ei id N --ez cancel true: removes it again)
+        //   (... --ei id N --ez cancel true: removes it again; --es open PACKAGE: a tap opens that app)
         val notify = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: android.content.Intent) {
                 val nm = c.getSystemService(android.app.NotificationManager::class.java)
@@ -48,6 +48,11 @@ object Badges {
                     .setContentTitle(i.getStringExtra("title") ?: "Test")
                     .setContentText(i.getStringExtra("text") ?: "A notification that alerts.")
                     .setAutoCancel(true)
+                    .apply {
+                        val open = i.getStringExtra("open")?.let { c.packageManager.getLaunchIntentForPackage(it) }
+                        if (open != null) setContentIntent(android.app.PendingIntent.getActivity(c, i.getIntExtra("id", 0), open,
+                            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT))
+                    }
                     .build()
                 nm.notify(1000 + i.getIntExtra("id", 0), n)
                 AppLog.log("[badges] test notification posted")

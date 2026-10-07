@@ -55,6 +55,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         fun frontPackage(): String?
         fun frontClass(): String?
         fun frontSince(): Long
+        /** The app's latest picture, if gesture navigation has one (its launch card shows it). */
+        fun snapshotFor(pkg: String): android.graphics.Bitmap?
     }
 
     enum class Panel { NC, CC }
@@ -62,6 +64,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val root = Root(ctx)
     val bar = StatusBarView(ctx)
     private val backdrop = BackdropView(ctx)
+    /** Control Center's live background where the system can blur what is behind a window (see [LiveBlur]). */
+    private val liveBlur = LiveBlur(ctx, wm)
+    /** The card a notification's app opens out of (see [openFrom]). */
+    private val launchCard = dev.launcher.app.CardView(ctx).apply { visibility = View.GONE }
     val state = ControlState(ctx, handler)
     val media = Media(ctx, handler)
     private var glass: PanelGlass? = null
@@ -83,6 +89,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     /** Ringing notifications the user sent away: they rest in Notification Center while they ring. */
     private val quiet = HashSet<String>()
+
+    private val notifsListener: () -> Unit = { onNotifs() }
 
     init {
         cc = ControlCenterView(ctx, object : ControlCenterView.Host {
@@ -109,7 +117,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override fun close() = this@Shade.close()
             override fun launch(i: Intent?) { if (state.start(i)) close() }
             override fun send(pi: PendingIntent?): Boolean = pi != null && Notifs.send(ctx, pi).also { if (it) close() }
-            override fun open(item: Notifs.Item): Boolean = Notifs.open(ctx, item).also { if (it) close() }
+            override fun open(item: Notifs.Item, from: android.graphics.RectF?): Boolean = openFrom(item, from)
             override fun torch() { state.toggle(Control.FLASHLIGHT) }
             override val torchOn get() = state.torch
             override fun camera() { if (state.start(state.intentFor(Control.CAMERA))) close() }
@@ -129,9 +137,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         root.addView(nc, FrameLayout.LayoutParams(mp, mp))
         root.addView(cc, FrameLayout.LayoutParams(mp, mp))
         root.addView(gallery, FrameLayout.LayoutParams(mp, mp))
+        root.addView(launchCard, FrameLayout.LayoutParams(mp, mp))
         root.addView(bar, FrameLayout.LayoutParams(mp, mp))
         root.addView(banner, FrameLayout.LayoutParams(mp, mp))
-        Notifs.addListener(handler) { onNotifs() }
+        Notifs.addListener(handler, notifsListener)
         // Already connected: what it holds now was there before us (only what comes from here on alerts).
         if (Notifs.connected) seen = Notifs.items.associate { it.key to it.postTime }
         cc.alpha = 1f
@@ -164,6 +173,24 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             if (Build.VERSION.SDK_INT >= 30) setFitInsetsTypes(0)
         }
+        // The live blur's window first: it must sit under this one.
+        liveBlur.attach()
+        liveBlur.maxBlurPx = if (liveBlur.mode == LiveBlur.Mode.SAMSUNG) SAMSUNG_BLUR_DIM
+            else BLUR_PT * ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels) / 402f
+        // adb test hook (senders must hold DUMP: adb's shell does, other apps cannot):
+        //   am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do nc_expand
+        // fans Notification Center's collapsed stack out, so a script can scroll it without tapping a notification.
+        if (testHook == null) testHook = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                if (i.getStringExtra("do") == "nc_expand") handler.post { if (panel == Panel.NC) nc.expandList() }
+            }
+        }.also {
+            val f = android.content.IntentFilter("dev.launcher.app.TEST_SHADE")
+            try {
+                if (Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(it, f, android.Manifest.permission.DUMP, handler, Context.RECEIVER_EXPORTED)
+                else ctx.registerReceiver(it, f, android.Manifest.permission.DUMP, handler)
+            } catch (_: Throwable) { }
+        }
         return try {
             wm.addView(root, lp)
             attached = true
@@ -173,7 +200,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             if (glass == null) {
                 val u = ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels) / 402f
                 glass = PanelGlass.create(u)
-                ncGlass = PanelGlass.create(u)
+                // Notification Center's platters are drawn every frame while the list moves: no dispersion (one sample a
+                // pixel instead of three; over the heavily blurred wallpaper it does not show).
+                ncGlass = PanelGlass.create(u, dev.launcher.app.GlassStyle.IOS_CLEAR.copy(dispersion = 0f))
                 bannerGlass = PanelGlass.create(u)
             }
             true
@@ -183,11 +212,23 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         }
     }
 
+    /** This shade is replaced (its accessibility service went): it stops listening, its blur thread ends. */
+    private var testHook: android.content.BroadcastReceiver? = null
+
+    fun release() {
+        testHook?.let { try { ctx.unregisterReceiver(it) } catch (_: Throwable) { } }
+        testHook = null
+        detach()
+        Notifs.removeListener(notifsListener)
+        liveBlur.release()
+    }
+
     fun detach() {
         if (!attached) return
         closeNow()
         banner.clear()
         try { wm.removeView(root) } catch (_: Throwable) { }
+        liveBlur.detach()
         attached = false
         state.stop()
         media.stop()
@@ -235,6 +276,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             Panel.CC -> {
                 cc.progress = p
                 val u = u()
+                // Live where the system can blur behind a window (the app or home keeps moving under it), else our
+                // blurred picture of what was behind.
+                val live = liveBlur.available
+                backdrop.live = live
+                if (live) liveBlur.set(k, true)
                 backdrop.set(BLUR_PT * u * k, DIM * k, (p / 0.12f).coerceIn(0f, 1f))
                 bar.setPanel(k, 0f, 0f, cc.statusRowY)
                 bar.setRowAlpha(1f - editK)
@@ -274,6 +320,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         nav.shadeChanged(true)
         if (p == Panel.CC) {
             state.readAll()
+            state.readDetails()
             prepareBackdrop()
         } else {
             nc.prepare()
@@ -310,6 +357,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         applyProgress()
         cc.onClosed()
         nc.onClosed()
+        liveBlur.set(0f, false)
         gallery.dismissNow()
         backdrop.source = null
         glass?.setBackdrop(null, null)
@@ -649,7 +697,114 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * A different window came to the front: a ringing banner goes while its own screen shows (the call's screen came up),
      * and comes back when that screen goes (the user went home with the call still ringing).
      */
+    // ------------------------------------------------------------------ opening an app from a notification
+
+    /**
+     * A notification's app opens out of its platter (iOS): a card grows from the platter to the full screen on the app
+     * opening spring, showing the app's latest picture or its launch screen (splash colour and icon), while the app starts
+     * underneath without a system animation (our instant transition, [dev.launcher.app.NoAnimStarts]). Once the card is
+     * full and the app is in front, Notification Center goes (hidden under the card) and the card fades into the app.
+     */
+    private val launchFrom = android.graphics.RectF()
+    private var launchPkg: String? = null
+    private var launchAt = 0L
+    private var launchSettled = false
+    private var launchAppReady = false
+    private var launchFading = false
+    private val launchK: SpringValue = SpringValue(0f, 100f, { placeLaunchCard() }) { launchSettled = true; maybeEndLaunch() }
+    private val launchIo = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    private fun screenRadius(): Float {
+        val r = if (Build.VERSION.SDK_INT >= 31) try {
+            root.display?.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_LEFT)?.radius?.toFloat()
+        } catch (_: Throwable) { null } else null
+        return r ?: (40f * u())
+    }
+
+    private fun placeLaunchCard() {
+        val k = launchK.value
+        val w = root.width.toFloat()
+        val h = root.height.toFloat()
+        fun lerp(a: Float, b: Float) = a + (b - a) * k
+        val l = lerp(launchFrom.left, 0f)
+        val t = lerp(launchFrom.top, 0f)
+        val r = lerp(launchFrom.right, w)
+        val b = lerp(launchFrom.bottom, h)
+        val rad = 24f * u() + (screenRadius() - 24f * u()) * k.coerceIn(0f, 1f)
+        launchCard.setFrame((l + r) / 2f, (t + b) / 2f, r - l, b - t, rad)
+        // It comes out of the platter: its picture fades in over the first part of the way.
+        if (!launchFading) launchCard.alpha = (k / 0.22f).coerceIn(0f, 1f)
+    }
+
+    /** Opens [item]'s app out of its platter at [from] (screen px); without a platter (or not an activity), as before. */
+    private fun openFrom(item: Notifs.Item, from: android.graphics.RectF?): Boolean {
+        val pi = item.contentIntent ?: return false
+        if (from == null || !pi.isActivity || panel != Panel.NC) return Notifs.open(ctx, item).also { if (it) close() }
+        val pkg = pi.creatorPackage ?: item.pkg
+        launchPkg = pkg
+        launchAt = SystemClock.uptimeMillis()
+        launchSettled = false
+        launchAppReady = false
+        launchFading = false
+        launchFrom.set(from)
+        launchCard.animate().cancel()
+        launchCard.snapshot = nav.snapshotFor(pkg)
+        val icon = dev.launcher.app.apps.Icons.drawableFor(pkg) ?: try { ctx.packageManager.getApplicationIcon(pkg) } catch (_: Throwable) { null }
+        launchCard.icon = icon?.constantState?.newDrawable()?.mutate() ?: icon
+        launchCard.minIconSize = 60f * u()
+        launchCard.iconMix = 0f
+        launchCard.badge = 0
+        val splash = dev.launcher.app.apps.SplashColors.cached(pkg)
+        launchCard.placeholderColor = splash ?: 0xFF1C1C1E.toInt()
+        if (splash == null) dev.launcher.app.apps.SplashColors.resolve(ctx, pkg) { col -> handler.post { if (launchPkg == pkg) launchCard.fadePlaceholderTo(col) } }
+        launchCard.visibility = View.VISIBLE
+        launchK.snapTo(0f)
+        launchK.animateTo(1f, Motion.profile.appOpen)
+        handler.removeCallbacks(launchTimeout)
+        handler.postDelayed(launchTimeout, LAUNCH_TIMEOUT_MS)
+        launchIo.execute {
+            val ok = dev.launcher.app.NoAnimStarts.send(pi) ||
+                Notifs.send(ctx, pi, android.app.ActivityOptions.makeCustomAnimation(ctx, 0, 0))
+            if (ok && item.autoCancel) Notifs.cancel(item)
+            if (!ok) handler.post { if (launchPkg == pkg) endLaunch() }
+        }
+        AppLog.log("[shade] open $pkg from its notification")
+        return true
+    }
+
+    private val launchTimeout = Runnable {
+        if (launchPkg == null) return@Runnable
+        AppLog.log("[shade] $launchPkg not in front in time: its card goes")
+        launchAppReady = true
+        maybeEndLaunch()
+    }
+
+    private fun maybeEndLaunch() {
+        if (launchPkg == null || !launchSettled || !launchAppReady || launchFading) return
+        endLaunch()
+    }
+
+    /** The app is in front under the full card: Notification Center goes, the card fades into the app. */
+    private fun endLaunch() {
+        handler.removeCallbacks(launchTimeout)
+        launchPkg = null
+        launchFading = true
+        if (panel != null) finishClose()
+        launchCard.animate().alpha(0f).setDuration(LAUNCH_FADE_MS).withEndAction {
+            launchCard.visibility = View.GONE
+            launchCard.snapshot = null
+            launchCard.icon = null
+            launchFading = false
+        }.start()
+    }
+
     fun frontChanged() {
+        // What came to the front after the tap is the notification's app (its intent may belong to another package than
+        // the notification's: a shared link, a settings page). SystemUI's windows (a passing shade) do not count.
+        if (launchPkg != null && nav.frontSince() >= launchAt && nav.frontPackage().let { it != null && it != "com.android.systemui" }) {
+            launchAppReady = true
+            maybeEndLaunch()
+        }
         // Windows come in bursts (a call's screen: a frame of the app, then its activity): decided once they settle, so a
         // passing window never brings the banner back for a moment.
         handler.removeCallbacks(frontSettled)
@@ -727,6 +882,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (event.action == KeyEvent.ACTION_UP) {
                     when {
                         gallery.isOpen -> gallery.close()
+                        cc.onBack() -> {}
                         cc.editing -> cc.exitEdit()
                         nc.onBack() -> {}
                         else -> close()
@@ -761,6 +917,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private companion object {
         const val BLUR_PT = 26f
+        /** A notification's app that is not in front this long after its card started: the card goes anyway. */
+        const val LAUNCH_TIMEOUT_MS = 2500L
+        const val LAUNCH_FADE_MS = 140L
+        /** Samsung's dim-to-blur at Control Center's full strength (its blur grows with the dim amount, 0..1; already heavy at
+         *  0.35, where home's icons were gone: at 0.15 they show through as coloured shapes, as under iOS's). */
+        const val SAMSUNG_BLUR_DIM = 0.15f
         const val DIM = 0.36f
         const val FLING = 900f
         val NO_TOUCH = Region(-2, -2, -1, -1)

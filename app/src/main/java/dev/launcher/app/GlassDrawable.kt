@@ -72,11 +72,14 @@ data class GlassStyle(
         val IOS_CLEAR = IOS.copy(rimLight = 0.40f, rimBack = 0.18f)
 
         /**
-         * The glass clock: the dock's glass itself, shaped like the digits (Matheesha: "the same material look as the dock").
-         * Its lens follows the dock's own law for small shapes: the bevel is the dock's 30 pt, or 35 % of the stroke's width
-         * where that is less, and the bend shrinks with it ([GlassMask.bevelPx]).
+         * The glass clock, as iOS 27's lock-screen clock (Apple's kit, "9:41 - Fill" and "9:41 - Glass Effect"): frosted, the
+         * wallpaper behind blurred heavily ([GlassDrawable.Source.FROSTED]) and lifted (`#404040` linear dodge: here a white
+         * tint), a lens a little weaker than the controls' (refraction 0.5 against 0.7), no dispersion, and clear glass's
+         * light (0.4). It was the dock's clear glass shaped like the digits; Matheesha: the clock "doesn't feel accurate".
+         * Its lens follows the dock's law for small shapes: the bevel is 35 % of the stroke's width ([GlassMask.bevelPx]).
          */
-        val IOS_CLOCK = IOS
+        val IOS_CLOCK = IOS.copy(tint = 0.22f, refraction = 21f, dispersion = 0f, rimLight = 0.55f, rimBack = 0.25f,
+            glowWidth = 4f, glow = 0.10f, shade = 0.18f)
 
         /** Glass over the App Library's blurred backdrop, Spotlight's, a sheet's: the same glass as the dock. */
         val IOS_LIBRARY = IOS
@@ -206,7 +209,9 @@ class GlassDrawable(
 
     private fun setImages(which: String, wp: Wallpaper) {
         val backdrop = source == Source.BACKDROP
-        val heavyFrost = source == Source.BACKDROP
+        // The clock's numerals are frosted: iOS 27's lock-screen clock blurs what is behind it heavily (Apple's kit: background
+        // blur 80, a Gaussian of 40 pt) and lifts it ([GlassStyle.IOS_CLOCK]'s tint).
+        val heavyFrost = source == Source.BACKDROP || source == Source.FROSTED
         shader.setInputShader("sharp$which", BitmapShader(if (backdrop) wp.heavy else wp.bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
             setLocalMatrix(if (backdrop) wp.heavyMatrix(screenW, screenH) else wp.matrix(screenW, screenH))
             filterMode = BitmapShader.FILTER_MODE_LINEAR

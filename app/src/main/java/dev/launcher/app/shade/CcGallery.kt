@@ -77,11 +77,15 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
 
     private var pull = 0f
 
+    /** The gallery's sections, as iOS's (Connectivity, Camera, Clock, Accessibility...), in Android's terms where needed. */
     private fun groupOf(c: Control): String = when (c) {
         Control.CONNECTIVITY, Control.AIRPLANE, Control.WIFI, Control.BLUETOOTH, Control.CELLULAR, Control.HOTSPOT,
-        Control.LOCATION, Control.NFC -> "Connectivity"
-        Control.MEDIA, Control.VOLUME, Control.SILENT, Control.MIRRORING -> "Media & Sound"
-        Control.BRIGHTNESS, Control.DARK_MODE, Control.ROTATION_LOCK, Control.LOW_POWER, Control.FOCUS -> "Display & Focus"
+        Control.LOCATION, Control.NFC, Control.QUICK_SHARE, Control.VPN, Control.DATA_SAVER -> "Connectivity"
+        Control.MEDIA, Control.VOLUME, Control.SILENT, Control.MIRRORING, Control.RECOGNIZE_MUSIC, Control.VOICE_MEMO -> "Media & Sound"
+        Control.CAMERA, Control.VIDEO, Control.SELFIE, Control.SCAN_CODE -> "Camera"
+        Control.TIMER, Control.ALARM, Control.STOPWATCH -> "Clock"
+        Control.BRIGHTNESS, Control.DARK_MODE, Control.ROTATION_LOCK, Control.LOW_POWER, Control.FOCUS, Control.TEXT_SIZE -> "Display & Focus"
+        Control.INVERT, Control.GRAYSCALE, Control.EXTRA_DIM, Control.LIVE_CAPTIONS, Control.MAGNIFIER, Control.ACCESSIBILITY -> "Accessibility"
         else -> "Utilities"
     }
 
@@ -95,7 +99,7 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
         val out = ArrayList<Entry>()
         val secs = ArrayList<Section>()
         val missing = host.missing()
-        for (group in listOf("Connectivity", "Media & Sound", "Display & Focus", "Utilities")) {
+        for (group in listOf("Connectivity", "Media & Sound", "Camera", "Clock", "Display & Focus", "Accessibility", "Utilities")) {
             val list = missing.filter { groupOf(it) == group }
             if (list.isEmpty()) continue
             secs += Section(group, y)

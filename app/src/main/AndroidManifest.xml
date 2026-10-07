@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Control Center's Timer: starts a timer in the clock app without opening it (AlarmClock.ACTION_SET_TIMER). -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- Our shade's notification icons come from apps that are not always launchable (system packages); a launcher may
          see every package. -->
     <uses-permission

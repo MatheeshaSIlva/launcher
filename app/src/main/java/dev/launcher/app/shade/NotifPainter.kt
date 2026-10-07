@@ -114,13 +114,32 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
                 c.drawText(text, tx, base, body)
             }
         }
-        if (more > 0 && moreAlpha > 0f) {
-            // A stack: how many more it gathers (iOS).
-            time.textAlign = Paint.Align.LEFT
-            time.color = fade(secondary, alpha * moreAlpha)
-            c.drawText("$more more notification${if (more > 1) "s" else ""}", tx, base + lineH(), time)
-            time.textAlign = Paint.Align.RIGHT
-        }
+        if (more > 0 && moreAlpha > 0f) drawStackCount(c, more + 1, ix + iconS, iy, alpha * moreAlpha)
+    }
+
+    private val countFill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val countText = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = dev.launcher.app.theme.Fonts.text(600); textAlign = Paint.Align.CENTER
+    }
+
+    /**
+     * A stack's size, as iOS 16+ shows it: a white badge with the number in dark grey on the icon's top-right corner
+     * (measured on the iOS 27 Simulator: 18 pt round, its right edge ~3 pt past the icon's, its centre 3 pt below the
+     * icon's top; a pill for two digits).
+     */
+    private fun drawStackCount(c: Canvas, n: Int, right: Float, top: Float, a: Float) {
+        if (a <= 0.003f) return
+        val label = if (n > 99) "99+" else n.toString()
+        countText.textSize = 12.5f * u
+        val d = 18f * u
+        val w = max(d, countText.measureText(label) + 7f * u)
+        val cx = right + 3f * u - w / 2f
+        val cy = top + 3f * u
+        rect.set(cx - w / 2f, cy - d / 2f, cx + w / 2f, cy + d / 2f)
+        countFill.color = fade(0xFFFFFFFF.toInt(), a)
+        c.drawRoundRect(rect, d / 2f, d / 2f, countFill)
+        countText.color = fade(0xFF3A3A3C.toInt(), a)
+        c.drawText(label, cx, cy + 0.36f * countText.textSize, countText)
     }
 
     /**

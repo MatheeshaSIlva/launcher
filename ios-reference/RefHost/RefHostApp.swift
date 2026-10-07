@@ -108,6 +108,17 @@ enum Poster {
             n.append(("reminder", "Reminder", nil, "Water the plants", 0.4))
             n.append(("delivery", "Delivery", nil, "Your parcel is out for delivery.", 0.4))
             return n
+        case "many":
+            // A list longer than the screen: twelve threads (each its own platter), a few of two lines.
+            let people = [("p1", "Delivery", "Your parcel is out for delivery."), ("p2", "Reminder", "Water the plants"),
+                          ("p3", "Maya", "Are we still on for lunch tomorrow? I can book the place near the station."),
+                          ("p4", "Sam", "Sent a photo"), ("p5", "Calendar", "Team standup in 15 minutes"),
+                          ("p6", "Weather", "Rain expected from 4 PM."),
+                          ("p7", "News", "Morning briefing: five stories to start your day, from the markets to the weather."),
+                          ("p8", "Bank", "Card payment of 12.40 at the bakery."), ("p9", "Gym", "Your class starts at 6"),
+                          ("p10", "Podcast", "New episode available"), ("p11", "Alex", "See you at the station at eight?"),
+                          ("p12", "Photos", "You have a new memory: Summer by the sea.")]
+            return people.map { ($0.0, $0.1, nil, $0.2, 0.35) }
         case "long":
             return [("long", "A rather long title that will not fit on one line of a banner", "Subtitle line",
                      "A body that runs over several lines so the banner's maximum height and its truncation show. " +

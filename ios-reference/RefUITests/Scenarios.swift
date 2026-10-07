@@ -604,6 +604,224 @@ final class Scenarios: XCTestCase {
         }
     }
 
+    // MARK: - Notification Center in depth (pass 7)
+
+    /// Waits out every banner of a posted set (sending each shown one away).
+    private func letBannersPass() {
+        waitBanner(30)
+        var quiet = 0.0
+        let t0 = Date()
+        while quiet < 4 && Date().timeIntervalSince(t0) < 90 {
+            if banner.exists {
+                quiet = 0
+                let f = banner.frame
+                drag("banner-away", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX, y: 5), velocity: 1500)
+            } else {
+                quiet += 0.5
+            }
+            wait(0.5)
+        }
+        mark("banners over")
+    }
+
+    private var platters: [XCUIElement] {
+        sb.descendants(matching: .any).matching(identifier: "NotificationShortLookView").allElementsBoundByIndex
+    }
+
+    func test40_ncLongList() {
+        // A list longer than the screen: what happens at the top (under the clock) and at the bottom (over the buttons)
+        // while it scrolls, step by step with the finger resting (no fling).
+        post("many", in: 20)
+        letBannersPass()
+        openNC()
+        wait(2.5)
+        shot("nc-long-0")
+        tree("nc-long-0")
+        for i in 1...6 {
+            drag("nc-scroll-up-\(i)", CGPoint(x: w / 2, y: h * 0.78), CGPoint(x: w / 2, y: h * 0.78 - 110), velocity: 250, hold: 0.8)
+            wait(1.2)
+            shot("nc-long-\(i)")
+            if i % 2 == 0 { tree("nc-long-\(i)") }
+        }
+        // Held mid-scroll (finger down) to see the list while it is being dragged.
+        drag("nc-scroll-held", CGPoint(x: w / 2, y: h * 0.7), CGPoint(x: w / 2, y: h * 0.7 - 80), velocity: 200, hold: 2.5)
+        // Back down to the end: fling, then the overscroll at the bottom.
+        drag("nc-fling-down", CGPoint(x: w / 2, y: h * 0.3), CGPoint(x: w / 2, y: h * 0.9), velocity: 2500)
+        wait(2)
+        shot("nc-long-back")
+        drag("nc-pull-past-end", CGPoint(x: w / 2, y: h * 0.4), CGPoint(x: w / 2, y: h * 0.75), velocity: 300, hold: 1.0)
+        wait(2)
+        shot("nc-long-after-pull")
+        tree("nc-long-after-pull")
+        closeFromBottom("nc-close")
+        wait(1.5)
+    }
+
+    func test41_ncLongLook() {
+        // Press and hold a notification in Notification Center: the expanded notification and its menu, and what happens to
+        // the list behind it. Then a tap outside.
+        openNC()
+        wait(2.5)
+        guard let p = platters.last else { mark("no platter"); closeFromBottom("nc-close"); return }
+        let f = p.frame
+        for i in 1...2 {
+            longPress("nc-hold-\(i)", f.midX, f.midY, 1.2)
+            wait(2)
+            if i == 1 { shot("nc-longlook"); tree("nc-longlook") }
+            tap("nc-longlook-out-\(i)", w / 2, 60)
+            wait(2)
+        }
+        closeFromBottom("nc-close")
+        wait(1.5)
+    }
+
+    func test42_ncTapOpen() {
+        // A tap on a notification in Notification Center opens its app: how the app comes out of the platter and what the
+        // sheet does meanwhile. Three times (the host app is closed between them).
+        for i in 1...3 {
+            openNC("nc-open-\(i)")
+            wait(2.5)
+            guard let p = platters.last else { mark("no platter"); closeFromBottom("nc-close"); return }
+            let f = p.frame
+            mark("tap platter at \(f)")
+            tap("nc-tap-\(i)", f.midX, f.midY)
+            wait(2.5)
+            if i == 1 { shot("nc-opened-app") }
+            home()
+            wait(1)
+        }
+    }
+
+    func test43_ccGallery() {
+        // Every control iOS offers: the "Add a Control" gallery, page by page (labels and frames in the trees).
+        openCC()
+        wait(2)
+        longPress("cc-empty", w / 2, h * 0.93, 1.3)
+        wait(1.5)
+        let add = sb.buttons["Add a Control"]
+        guard add.waitForExistence(timeout: 3) else { mark("no Add a Control"); closeFromBottom("cc-close"); return }
+        add.tap()
+        wait(2.5)
+        shot("gallery-0")
+        tree("gallery-0")
+        for i in 1...10 {
+            drag("gallery-up-\(i)", CGPoint(x: w / 2, y: h * 0.82), CGPoint(x: w / 2, y: h * 0.32), velocity: 700, hold: 0.6)
+            wait(1.2)
+            shot("gallery-\(i)")
+            tree("gallery-\(i)")
+        }
+        home()
+    }
+
+    func test44_ccModules() {
+        // The controls added in setup, each pressed and held (expanded modules) and tapped, after a fresh open.
+        openCC()
+        wait(2)
+        shot("cc-modules")
+        tree("cc-modules")
+        let buttons = sb.buttons.allElementsBoundByIndex.filter { $0.frame.minY > 120 && $0.frame.maxY < h * 0.8 && $0.frame.width > 50 }
+        mark("cc buttons: " + buttons.prefix(12).map { "\($0.label) \($0.frame)" }.joined(separator: "; "))
+        for (n, b) in buttons.prefix(3).enumerated() {
+            let f = b.frame
+            longPress("cc-hold-\(n)", f.midX, f.midY, 1.0)
+            wait(2)
+            shot("cc-held-\(n)")
+            tree("cc-held-\(n)")
+            tap("cc-out-\(n)", w / 2, h * 0.95)
+            wait(1.5)
+        }
+        closeFromBottom("cc-close")
+        wait(1.5)
+    }
+
+    // MARK: - Notification Center: collapsed, expanded, scrolled, held, opened (pass 8)
+
+    /** Platters on screen now (frames inside the visible area), top to bottom. */
+    private func visiblePlatters() -> [XCUIElement] {
+        platters.filter { $0.frame.minY > 90 && $0.frame.maxY < h - 110 && $0.frame.height > 30 }.sorted { $0.frame.minY < $1.frame.minY }
+    }
+
+    func test45_ncList() {
+        post("many", in: 20)
+        letBannersPass()
+        openNC()
+        wait(2.5)
+        shot("nc-collapsed")
+        tree("nc-collapsed")
+        // The collapsed stack at the bottom: a tap fans it out into the list.
+        let first = visiblePlatters().last ?? platters.last
+        if let f = first?.frame {
+            mark("collapsed front at \(f)")
+            tap("nc-expand", f.midX, f.midY)
+            wait(2.5)
+            shot("nc-expanded")
+            tree("nc-expanded")
+        }
+        // The list scrolled up step by step (the finger rests before it lifts: no fling).
+        for i in 1...6 {
+            drag("nc-scroll-up-\(i)", CGPoint(x: w / 2, y: h * 0.72), CGPoint(x: w / 2, y: h * 0.72 - 120), velocity: 250, hold: 0.8)
+            wait(1.2)
+            shot("nc-scrolled-\(i)")
+            if i % 2 == 0 { tree("nc-scrolled-\(i)") }
+        }
+        // Held mid-scroll, then back down slowly (never a fling down: that hides the notifications).
+        drag("nc-scroll-held", CGPoint(x: w / 2, y: h * 0.7), CGPoint(x: w / 2, y: h * 0.7 - 90), velocity: 200, hold: 2.5)
+        for i in 1...3 {
+            drag("nc-scroll-down-\(i)", CGPoint(x: w / 2, y: h * 0.4), CGPoint(x: w / 2, y: h * 0.4 + 120), velocity: 250, hold: 0.8)
+            wait(1.0)
+        }
+        shot("nc-scrolled-back")
+        // Press and hold a platter in the middle of the screen: the long look.
+        let vis = visiblePlatters()
+        if let p = vis.dropFirst(vis.count / 2).first {
+            let f = p.frame
+            mark("hold platter at \(f)")
+            longPress("nc-hold", f.midX, f.midY, 1.2)
+            wait(2)
+            shot("nc-longlook")
+            tree("nc-longlook")
+            tap("nc-longlook-out", w / 2, h * 0.08)
+            wait(2)
+            shot("nc-after-longlook")
+        } else { mark("no visible platter to hold") }
+        // A tap on a platter opens its app (the host app).
+        if let p = visiblePlatters().last {
+            let f = p.frame
+            mark("tap platter at \(f)")
+            tap("nc-open-app", f.midX, f.midY)
+            wait(2.5)
+            shot("nc-opened-app")
+        } else { mark("no visible platter to tap") }
+        home()
+        wait(1)
+    }
+
+    func test46_ncHideShow() {
+        // Swiped down, the notifications hide into a count at the bottom; a tap (or a swipe up) brings them back.
+        openNC()
+        wait(2.5)
+        shot("nc-before-hide")
+        drag("nc-hide", CGPoint(x: w / 2, y: h * 0.62), CGPoint(x: w / 2, y: h * 0.92), velocity: 1200)
+        wait(2)
+        shot("nc-hidden")
+        tree("nc-hidden")
+        let count = sb.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] 'Notification'")).allElementsBoundByIndex
+            .filter { $0.frame.minY > h * 0.6 }.first
+        if let f = count?.frame {
+            mark("count at \(f)")
+            tap("nc-show", f.midX, f.midY)
+            wait(2)
+            shot("nc-shown-again")
+            tree("nc-shown-again")
+        } else {
+            drag("nc-show-swipe", CGPoint(x: w / 2, y: h * 0.85), CGPoint(x: w / 2, y: h * 0.55), velocity: 800)
+            wait(2)
+            shot("nc-shown-again")
+        }
+        closeFromBottom("nc-close")
+        wait(1.5)
+    }
+
     // MARK: - Calibration
 
     /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the

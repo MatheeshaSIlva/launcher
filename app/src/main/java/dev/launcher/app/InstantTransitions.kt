@@ -143,7 +143,9 @@ class InstantTransitions(private val atm: Any) {
             ?: rtClass.getConstructor(ifaceClass).newInstance(iface)
     }
 
-    private fun options(): Bundle {
+    private fun options(): Bundle = activityOptions().toBundle()
+
+    private fun activityOptions(): ActivityOptions {
         val rtClass = Class.forName("android.window.RemoteTransition")
         var o = ActivityOptions.makeBasic()
         try {
@@ -151,7 +153,7 @@ class InstantTransitions(private val atm: Any) {
         } catch (_: NoSuchMethodException) {
             o = ActivityOptions::class.java.getMethod("makeRemoteTransition", rtClass).invoke(null, remote) as ActivityOptions
         }
-        return o.toBundle()
+        return o
     }
 
     fun start(intent: Intent, userId: Int): String {
@@ -176,6 +178,34 @@ class InstantTransitions(private val atm: Any) {
             }
         }.toTypedArray()
         return "result ${m.invoke(atm, *args)}"
+    }
+
+    /**
+     * Sends [pi] (a notification's tap) with our transition. The system checks the transition against the sender's
+     * rights (this process holds CONTROL_REMOTE_APP_TRANSITION_ANIMATIONS), and the sender lends its right to start
+     * activities from the background, as SystemUI does for its own taps.
+     */
+    fun send(pi: android.app.PendingIntent): String {
+        requests.incrementAndGet()
+        val o = activityOptions()
+        if (Build.VERSION.SDK_INT >= 34) o.setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+        val target = pi.javaClass.getMethod("getTarget").invoke(pi)
+        val token = try { pi.javaClass.getMethod("getWhitelistToken").invoke(pi) } catch (_: Throwable) { null }
+        val am = Class.forName("android.app.ActivityManager").getMethod("getService").invoke(null)
+        val m = am.javaClass.methods.firstOrNull { it.name == "sendIntentSender" } ?: return "ERROR: no sendIntentSender"
+        var ints = 0
+        var binders = 0
+        val args = m.parameterTypes.map { p ->
+            when {
+                p == Intent::class.java -> null
+                p == Bundle::class.java -> o.toBundle()
+                p == Int::class.javaPrimitiveType -> if (ints++ == 0) 0 else 0
+                p.name == "android.content.IIntentSender" -> target
+                p == IBinder::class.java -> if (binders++ == 0) token else null
+                else -> null
+            }
+        }.toTypedArray()
+        return "result ${m.invoke(am, *args)}"
     }
 
     fun switchToTask(taskId: Int): String {

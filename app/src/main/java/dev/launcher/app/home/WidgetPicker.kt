@@ -133,7 +133,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     // Text in the appearance's colours (dark on the light sheet, white on the dark one).
     // The clock preview's date line, as the widget's (its size is set per draw: the preview is the widget, scaled).
     private val clockDate = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); textAlign = Paint.Align.CENTER }
-    private val clockPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6FFFFFF.toInt(); typeface = Fonts.display(640); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f }
+    private val clockPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6FFFFFF.toInt(); typeface = Fonts.display(700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f }
     private val title = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600)).toned { Appearance.label }
     private val rowText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.label }
     private val rowSub = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.secondaryLabel }

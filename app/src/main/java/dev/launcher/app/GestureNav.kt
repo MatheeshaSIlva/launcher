@@ -350,6 +350,7 @@ object GestureNav {
     @Volatile var statusBarShown = false
         private set
     private var shade: dev.launcher.app.shade.Shade? = null
+    private var shadeService: Any? = null
     private val statusBar: dev.launcher.app.statusbar.StatusBarView? get() = shade?.takeIf { statusBarShown }?.bar
     private val appearanceIo = Executors.newSingleThreadExecutor()
     private var appearanceLogs = 0
@@ -360,7 +361,10 @@ object GestureNav {
         val ctx = a11y ?: return
         val wm = wm ?: return
         val h = max(systemDimen("status_bar_height"), dp(24).toInt())
-        val s = shade ?: dev.launcher.app.shade.Shade(ctx, wm, nav, shadeLink).also { shade = it }
+        // The shade's windows belong to the accessibility service that made it: after the service restarted (turned off and
+        // on, rebound by the system) its token is gone and every window it adds is refused, so a new service gets a new shade.
+        if (shade != null && shadeService !== ctx) { shade?.release(); shade = null }
+        val s = shade ?: dev.launcher.app.shade.Shade(ctx, wm, nav, shadeLink).also { shade = it; shadeService = ctx }
         if (s.attach(h)) {
             statusBarShown = true
             AppLog.log("[statusbar] on (${h}px), with our shade")
@@ -385,6 +389,7 @@ object GestureNav {
         override fun frontPackage(): String? = frontNow
         override fun frontClass(): String? = frontNowClass
         override fun frontSince(): Long = frontNowAt
+        override fun snapshotFor(pkg: String): Bitmap? = images[pkg]
     }
 
     /**

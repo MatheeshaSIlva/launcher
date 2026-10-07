@@ -63,6 +63,23 @@ SYMBOLS = {
     "keyboard_arrow_down": "arrow_down",
     "call": "call",
     "call_end": "call_end",
+    # More of iOS's controls, as Android has them.
+    "format_size": "text_size",
+    "invert_colors": "invert",
+    "filter_b_and_w": "grayscale",
+    "brightness_low": "extra_dim",
+    "closed_caption": "captions",
+    "mic": "mic",
+    "zoom_in": "magnifier",
+    "translate": "translate",
+    "graphic_eq": "recognize_music",
+    "videocam": "video",
+    "camera_front": "selfie",
+    "account_balance_wallet": "wallet",
+    "home": "home",
+    "share": "share",
+    "accessibility_new": "accessibility",
+    "hearing": "hearing",
 }
 
 URL = "https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/{0}/materialsymbolsrounded/{0}_fill1_24px.svg"
