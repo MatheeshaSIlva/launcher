@@ -43,6 +43,16 @@ jobs:
           gh release delete latest --cleanup-tag -y || true
           gh release create latest /tmp/Launcher.apk --prerelease --target "${GITHUB_SHA}" \
             --title "latest build" --notes "${GITHUB_SHA}"
+          # gh creates the release as a draft, uploads, then publishes; once the publish did not stick (a draft is not
+          # public: the phone's updater got 404). Publish explicitly and check the public download.
+          for i in 1 2 3 4 5; do
+            gh release edit latest --draft=false --prerelease || true
+            code=$(curl -s -o /dev/null -w "%{http_code}" -L "https://github.com/${GITHUB_REPOSITORY}/releases/download/latest/Launcher.apk")
+            echo "public download: HTTP $code"
+            [ "$code" = "200" ] && break
+            sleep 5
+          done
+          [ "$code" = "200" ]
       - name: Publish build log to the ci-logs branch (readable without pasting logs)
         if: always()
         run: |
