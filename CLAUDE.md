@@ -214,7 +214,10 @@ copy it wholesale — port the working pieces cleanly. File map:
 ## Build, release, update pipeline (to recreate in this repo)
 
 1. GitHub Actions on push to `main`: `./gradlew assembleDebug -PbuildSha=${GITHUB_SHA}`; `versionName` = first 7 chars of the sha.
-2. Publish a rolling prerelease tagged `latest` with the APK (`gh release delete latest --cleanup-tag -y; gh release create latest …`), release notes = full sha.
+2. Publish a rolling prerelease tagged `latest` with the APK, release notes = full sha: **updated in place** (tag moved,
+   `gh release upload --clobber`, `gh release edit --draft=false --notes SHA`; `gh release create` only if none exists).
+   Deleting and recreating it at once left it a draft (GitHub deletes the old tag in the background, after the new release
+   took it): a draft is not public and the phone's updater got 404.
 3. App shows `BUILD <sha7>` in its first log line; **UPDATE** compares that to the release, downloads inside the shell process, runs
    `pm install -r -d /data/local/tmp/update.apk`, then `am start`; if still alive after ~9 s it prints the installer's output.
 4. Publish build logs to an orphan `ci-logs` branch so a cloud session can read failures without log paste.
