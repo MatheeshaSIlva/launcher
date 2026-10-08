@@ -66,7 +66,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   → Samsung dim-behind blur upgrade.
 - **Shade (iOS 27 profile)**: `statusbar/` (the bar: springs for every slot, notification icons) and `shade/`: one full-screen
   overlay window (`Shade`) holding the bar, Notification Center (`NotificationCenterView`), Control Center
-  (`ControlCenterView`, `CcLayout`, `CcGallery`, `Controls`) and banners (`BannerView`), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
+  (`ControlCenterView`, `CcLayout`, `CcGallery`, `Controls`; apps' Quick Settings tiles as controls: `AppTiles`, run by SystemUI
+  through `cmd statusbar add-tile/click-tile`) and banners (`BannerView`), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
   Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),
   that blurs what is behind (One UI dim-to-blur; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded

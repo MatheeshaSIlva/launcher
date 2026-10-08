@@ -125,13 +125,14 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override fun powerMenu() { close(); nav.powerMenu() }
             override val locked get() = this@Shade.locked
             override fun unlockToEdit() = this@Shade.unlockToEdit()
+            override fun clickTile(id: String) = this@Shade.clickTile(id)
             override fun openGallery() = this@Shade.openGallery()
             override fun editProgress(k: Float) { editK = k; applyProgress() }
         })
         gallery = CcGallery(ctx, object : CcGallery.Host {
             override val surfaces get() = this@Shade.surfaces
             override fun missing() = cc.missing()
-            override fun add(c: Control) = cc.add(c)
+            override fun add(c: ControlId) = cc.add(c)
         }).apply { visibility = View.GONE }
         nc = NotificationCenterView(ctx, object : NotificationCenterView.Host {
             override val media get() = this@Shade.media
@@ -177,6 +178,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         android.os.Handler(android.os.Looper.getMainLooper()).post { dev.launcher.app.theme.Appearance.addListener(onAppearance) }
         media.addListener { cc.invalidate(); nc.mediaChanged() }
         Unlock.onAsk = unlockAsked
+        // The apps' Quick Settings tiles, for Control Center's gallery (found in the background, again on app changes).
+        AppTiles.start(ctx)
         root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) { updateTouchable() }
             override fun onViewDetachedFromWindow(v: View) {}
@@ -356,6 +359,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (p == Panel.CC) {
             state.readAll()
             state.readDetails()
+            if (cc.hasAppTiles()) AppTiles.readStates()
             prepareBackdrop()
         } else {
             nc.prepare()
@@ -974,6 +978,33 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (state.start(secure)) close() else launchIntent(state.intentFor(Control.CAMERA))
     }
 
+    /**
+     * An app's tile tapped in Control Center: SystemUI clicks it ([AppTiles]). One that opens something (an activity, a
+     * dialog: a window of another app comes to the front soon after) closes the panel, as a launch does; a switch leaves it
+     * open and its state follows. On the lock screen it waits for the unlock, as opening anything does.
+     */
+    private fun clickTile(id: String) {
+        if (locked) { close(); Unlock.then(ctx, "use the tile $id") { AppTiles.click(ctx, id) }; return }
+        if (!AppTiles.click(ctx, id)) { AppLog.log("[tiles] no shell: $id cannot be used"); return }
+        val t0 = SystemClock.uptimeMillis()
+        handler.removeCallbacks(tileWatch)
+        tileWatch = object : Runnable {
+            override fun run() {
+                if (panel != Panel.CC) return
+                val front = nav.frontPackage()
+                if (nav.frontSince() > t0 && front != null && front != ctx.packageName) {
+                    AppLog.log("[tiles] $front came to the front after a tap on $id: closing")
+                    close()
+                    return
+                }
+                if (SystemClock.uptimeMillis() - t0 < TILE_WATCH_MS) handler.postDelayed(this, 100)
+            }
+        }
+        handler.postDelayed(tileWatch, 100)
+    }
+
+    private var tileWatch: Runnable = Runnable { }
+
     /** Control Center's edit mode from the lock screen: unlock first, then it opens again in edit mode. */
     private fun unlockToEdit() {
         close()
@@ -1071,6 +1102,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         const val LAUNCH_FADE_MS = 140L
         /** The window manager hands a swipe from the top to the stock status bar only within this long of its start. */
         const val HANDOVER_MS = 600L
+        /** How long after a tap on an app's tile a window of another app counts as that tile opening it. */
+        const val TILE_WATCH_MS = 2000L
         const val FLING = 900f
         val NO_TOUCH = Region(-2, -2, -1, -1)
         /** Control Center coming in (blur, the controls' opacity), going out, and its controls settling into place. iOS 27,

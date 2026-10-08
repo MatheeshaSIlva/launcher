@@ -74,6 +74,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         /** Over the lock screen: edit mode waits for the user to unlock ([unlockToEdit]). */
         val locked: Boolean
         fun unlockToEdit()
+        /** An app's tile was tapped ([AppTiles]: SystemUI clicks it; the panel closes if it opens something). */
+        fun clickTile(id: String)
     }
 
     private val glyphs = Glyphs(ctx)
@@ -171,8 +173,12 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
     }
 
-    override fun onAttachedToWindow() { super.onAttachedToWindow(); Design.addListener(tokensChanged) }
-    override fun onDetachedFromWindow() { Design.removeListener(tokensChanged); super.onDetachedFromWindow() }
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        Design.addListener(tokensChanged)
+        AppTiles.addListener(android.os.Handler(android.os.Looper.myLooper() ?: android.os.Looper.getMainLooper()), tilesChanged)
+    }
+    override fun onDetachedFromWindow() { Design.removeListener(tokensChanged); AppTiles.removeListener(tilesChanged); super.onDetachedFromWindow() }
 
     private fun save() { layout?.let { prefs.edit().putString(KEY, it.toJson()).apply() } }
 
@@ -244,11 +250,18 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun springTo(s: SpringValue, to: Float, spec: SpringSpec) { if (abs(s.target - to) > 0.5f || s.isAnimating) s.animateTo(to, spec) }
 
+    /** On: a built-in control by the system's state, an app's tile by what SystemUI shows for it. */
+    private fun isOn(item: CcItem): Boolean =
+        if (item.tile != null) AppTiles.state(item.tile)?.state == android.service.quicksettings.Tile.STATE_ACTIVE else host.state.isOn(item.control)
+
+    /** An app's tile that is a switch (it says so, or it has been seen on): drawn as one (On / Off, its fill). */
+    private fun tileToggles(item: CcItem): Boolean = item.tile?.let { AppTiles.info(it)?.toggleable == true || AppTiles.wasOn(it) } == true
+
     /** Toggles and sliders follow the system's state. */
     fun syncActive(animate: Boolean = true) {
         val st = host.state
         for (a in anims.values) {
-            val on = if (st.isOn(a.item.control)) 1f else 0f
+            val on = if (isOn(a.item)) 1f else 0f
             if (!animate) a.active.snapTo(on) else if (a.active.target != on) a.active.animateTo(on, TOGGLE)
             val v = when (a.item.control) { Control.BRIGHTNESS -> st.brightness; Control.VOLUME -> st.volume; else -> 0f }
             if (a !== sliding) { if (!animate) a.value.snapTo(v) else if (abs(a.value.target - v) > 0.002f) a.value.animateTo(v, LEVEL) }
@@ -298,10 +311,12 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     /** A control from the gallery joins the page at the first free place (it grows in). Returns false if the page is full. */
-    fun add(control: Control): Boolean {
+    fun add(id: ControlId): Boolean {
         val l = layout ?: return false
-        if (l.items.any { it.control == control }) return false
-        val item = l.add(control) ?: return false
+        if (l.items.any { it.id == id }) return false
+        val item = l.add(id) ?: return false
+        // An app's tile: SystemUI starts running it (its state is known before the first tap).
+        id.tile?.let { AppTiles.added(context, it) }
         val a = animOf(item)
         syncTarget(a, animate = false)
         a.placed = true
@@ -312,12 +327,35 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         return true
     }
 
-    /** Controls not on the page (for the gallery). */
-    fun missing(): List<Control> = Control.entries.filter { c -> layout?.items?.none { it.control == c } != false && host.state.available(c) }
+    /** Controls not on the page (for the gallery): the built-in ones, then the apps' tiles. */
+    fun missing(): List<ControlId> {
+        val on = layout?.items?.mapTo(HashSet()) { it.id } ?: emptySet()
+        val builtIn = Control.entries.filter { it != Control.APP_TILE && host.state.available(it) }.map { ControlId(it) }
+        val tiles = AppTiles.all.map { ControlId(Control.APP_TILE, it.id) }
+        return (builtIn + tiles).filter { it !in on }
+    }
+
+    /** True if an app's tile is on the page (Control Center then reads the tiles' states as it opens). */
+    fun hasAppTiles(): Boolean = layout?.items?.any { it.tile != null } == true
+
+    /**
+     * The apps' tiles changed (found again, or their state): the switches follow, and a tile whose app is gone leaves the
+     * page (only once the tiles were found: before, none is known to be gone).
+     */
+    private val tilesChanged: () -> Unit = {
+        val l = layout
+        if (l != null && AppTiles.found) {
+            val gone = anims.values.filter { !it.removing && it.item.tile != null && AppTiles.info(it.item.tile) == null }
+            for (a in gone) { l.remove(a.item); a.removing = true; a.appear.animateTo(0f, LEAVE) }
+            if (gone.isNotEmpty()) save()
+        }
+        syncActive()
+    }
 
     private fun remove(a: Anim) {
         val l = layout ?: return
         l.remove(a.item)
+        a.item.tile?.let { AppTiles.removed(context, it) }
         a.removing = true
         a.appear.animateTo(0f, LEAVE)
         performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -551,6 +589,11 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 mixIn(if (m.playing) 1 else 0); mixIn(if (m.active) 1 else 0)
                 if (a.item.w >= 4 && m.duration > 0) mixIn((m.positionNow() / 500L).toInt())
             }
+            Control.Kind.APP -> a.item.tile?.let { id ->
+                val st = AppTiles.state(id)
+                mixIn(st?.label?.hashCode() ?: 0); mixIn(st?.secondary?.hashCode() ?: 0); mixIn(st?.state ?: -1)
+                mixIn(if (AppTiles.info(id) != null) 1 else 0); mixIn(if (tileToggles(a.item)) 1 else 0)
+            }
             else -> {}
         }
         return k
@@ -567,7 +610,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val m = LAYER_MARGIN_PT * u
         val on = a.active.value.coerceIn(0f, 1f)
         // A single control takes its colour (or the kit's white) when on; larger ones keep clear glass and light up inside.
-        val whole = (ctl.kind == Control.Kind.TOGGLE || ctl.kind == Control.Kind.FOCUS) && a.item.w == 1 && a.item.h == 1
+        val whole = (ctl.kind == Control.Kind.TOGGLE || ctl.kind == Control.Kind.FOCUS || (ctl.kind == Control.Kind.APP && tileToggles(a.item))) &&
+            a.item.w == 1 && a.item.h == 1
         recX = sx; recY = sy
         a.node.setPosition(0, 0, kotlin.math.ceil(w + 2 * m).toInt(), kotlin.math.ceil(h + 2 * m).toInt())
         val c = a.node.beginRecording()
@@ -581,6 +625,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 Control.Kind.SLIDER -> drawSlider(c, a, w, h, 1f, radius)
                 Control.Kind.CONNECTIVITY -> drawConnectivity(c, a, w, h, 1f)
                 Control.Kind.MEDIA -> drawMedia(c, a, w, h, 1f)
+                Control.Kind.APP -> drawTile(c, a, w, h, 1f, on)
             }
         } finally {
             a.node.endRecording()
@@ -622,6 +667,32 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val maxW = w - tx - x
         val state = when (ctl.kind) { Control.Kind.TOGGLE -> if (on > 0.5f) "On" else "Off"; else -> null }
         drawLabel(c, ctl.title, state, tx, h / 2f, maxW, alpha)
+    }
+
+    /**
+     * An app's tile, as a built-in switch or button looks (see [drawSingle]): its own symbol, and (two cells wide) the name
+     * and subtitle SystemUI shows for it (else its service's name, and On / Off for a switch). Unavailable: faded.
+     */
+    private fun drawTile(c: Canvas, a: Anim, w: Float, h: Float, alpha: Float, on: Float) {
+        val id = a.item.tile ?: return
+        val st = AppTiles.state(id)
+        val sf = host.surfaces
+        val white = Design.color(CcTokens.SYMBOL_COLOR)
+        val toggles = tileToggles(a.item)
+        val glyphColor = mix(white, if (toggles) a.item.control.accent else white, on)
+        val k = if (st?.state == android.service.quicksettings.Tile.STATE_UNAVAILABLE) alpha * 0.45f else alpha
+        if (a.item.w == 1) {
+            glyphs.drawTile(c, id, w / 2f, h / 2f, sf.pt(CcTokens.SYMBOL), alpha(glyphColor, k))
+            return
+        }
+        val d = sf.pt(CcTokens.WELL_SIZE)
+        val x = sf.pt(CcTokens.WIDE_PADDING)
+        well(c, x, (h - d) / 2f, d, if (toggles) on else 0f, null, alpha)
+        glyphs.drawTile(c, id, x + d / 2f, h / 2f, sf.pt(CcTokens.WELL_SYMBOL), alpha(glyphColor, k))
+        val tx = x + d + sf.pt(CcTokens.WIDE_GAP)
+        val name = st?.label ?: AppTiles.info(id)?.label ?: a.item.control.title
+        val sub = st?.secondary ?: if (toggles) (if (on > 0.5f) "On" else "Off") else null
+        drawLabel(c, name, sub, tx, h / 2f, w - tx - x, k)
     }
 
     /** A module's name (the kit's title) and, under it, its state (the kit's detail: white 33 %, added to the glass). */
@@ -1085,6 +1156,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 val ctl = (a.sub as? Control) ?: a.item.control
                 when (ctl.kind) {
                     Control.Kind.MEDIA -> if (host.media.open()) host.close()
+                    Control.Kind.APP -> host.launch(a.item.tile?.let { AppTiles.settingsIntent(context, it) })
                     else -> host.launch(st.settingsFor(ctl) ?: st.intentFor(ctl))
                 }
                 mode = Mode.NONE
@@ -1103,6 +1175,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 if (!st.toggle(ctl)) host.launch(st.settingsFor(ctl))
             }
             Control.Kind.LAUNCH -> host.launch(st.intentFor(ctl))
+            Control.Kind.APP -> a.item.tile?.let { performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); host.clickTile(it) }
             Control.Kind.SLIDER -> {}
             Control.Kind.CONNECTIVITY -> {
                 val sub = a.sub as? Control ?: return

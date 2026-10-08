@@ -1367,6 +1367,10 @@
    "ref": "ref.color.accents.orange",
    "src": "judged:the iOS colour of this control (orange)"
   },
+  "comp.cc.accent.app-tile": {
+   "ref": "ref.color.accents.blue",
+   "src": "judged:the iOS colour of this control (blue)"
+  },
   "comp.cc.accent.bluetooth": {
    "ref": "ref.color.accents.blue",
    "src": "kit:2570:20609 (Wi-Fi on: #0088ff)"

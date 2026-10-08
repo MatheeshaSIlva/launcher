@@ -17,7 +17,20 @@ class Glyphs(private val ctx: Context) {
     /** Draws symbol [res] centred on [cx],[cy], [size] px square, in [color] (ARGB: its alpha fades it). */
     fun draw(c: Canvas, res: Int, cx: Float, cy: Float, size: Float, color: Int) {
         if (size <= 0.5f || (color ushr 24) == 0) return
-        val d = cache.getOrPut(res) { ctx.getDrawable(res)!!.mutate() }
+        draw(c, cache.getOrPut(res) { ctx.getDrawable(res)!!.mutate() }, cx, cy, size, color)
+    }
+
+    private val tiles = HashMap<String, Drawable>()
+
+    /** An app's tile's own symbol ([AppTiles]; a generic one while it is not known, or if it has none), as [draw]. */
+    fun drawTile(c: Canvas, id: String, cx: Float, cy: Float, size: Float, color: Int) {
+        if (size <= 0.5f || (color ushr 24) == 0) return
+        val d = tiles[id] ?: AppTiles.info(id)?.icon?.newDrawable()?.mutate()?.also { tiles[id] = it }
+        if (d == null) { draw(c, dev.launcher.app.R.drawable.sym_more, cx, cy, size, color); return }
+        draw(c, d, cx, cy, size, color)
+    }
+
+    private fun draw(c: Canvas, d: Drawable, cx: Float, cy: Float, size: Float, color: Int) {
         val s = size.toInt().coerceAtLeast(1)
         d.setBounds(0, 0, s, s)
         d.setTint(color or (0xFF shl 24))

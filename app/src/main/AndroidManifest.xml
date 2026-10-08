@@ -37,6 +37,10 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Apps' Quick Settings tiles: Control Center offers them as controls (shade/AppTiles.kt). -->
+        <intent>
+            <action android:name="android.service.quicksettings.action.QS_TILE" />
+        </intent>
         <!-- Keyboards: their windows are told apart from the app in front (gesture navigation). -->
         <intent>
             <action android:name="android.view.InputMethod" />

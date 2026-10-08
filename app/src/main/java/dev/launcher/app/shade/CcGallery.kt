@@ -25,7 +25,8 @@ import kotlin.math.roundToInt
 
 /**
  * Control Center's controls gallery (iOS 18+ "Add a Control"): a sheet that slides up over Control Center, listing the
- * controls that are not on the page by section, each at its own size with its name below. Tap one to add it (the sheet
+ * controls that are not on the page by section, each at its own size with its name below, then the apps' controls (their
+ * Quick Settings tiles, [AppTiles]) in a section per app, as iOS lists apps' controls. Tap one to add it (the sheet
  * goes down and the control grows into its place). The sheet follows a pull down and goes on a flick or past a third.
  * iOS 27's look (`comp.cc.gallery.*`): a dark sheet, the controls flat grey circles and capsules on it.
  */
@@ -33,9 +34,9 @@ import kotlin.math.roundToInt
 class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
     interface Host {
         val surfaces: CcSurfaces
-        fun missing(): List<Control>
+        fun missing(): List<ControlId>
         /** Adds [c] to the page; false if there is no room. */
-        fun add(c: Control): Boolean
+        fun add(c: ControlId): Boolean
     }
 
     private val glyphs = Glyphs(ctx)
@@ -53,12 +54,14 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
 
     private val scroller = IosScroller({ invalidate() })
 
-    private class Entry(val control: Control, val rect: RectF)
+    private class Entry(val id: ControlId, val rect: RectF) {
+        val control get() = id.control
+    }
     private class Section(val title: String, val top: Float)
     private var entries: List<Entry> = emptyList()
     private var sections: List<Section> = emptyList()
     private var contentH = 0f
-    private val press = HashMap<Control, SpringValue>()
+    private val press = HashMap<ControlId, SpringValue>()
 
     fun open() {
         layoutEntries()
@@ -101,21 +104,29 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
         val out = ArrayList<Entry>()
         val secs = ArrayList<Section>()
         val missing = host.missing()
-        for (group in listOf("Connectivity", "Media & Sound", "Camera", "Clock", "Display & Focus", "Accessibility", "Utilities")) {
-            val list = missing.filter { groupOf(it) == group }
+        val builtIn = missing.filter { it.tile == null }
+        val groups = listOf("Connectivity", "Media & Sound", "Camera", "Clock", "Display & Focus", "Accessibility", "Utilities")
+            .map { g -> g to builtIn.filter { groupOf(it.control) == g } } +
+            // The apps' controls: a section per app (AppTiles lists them by app name).
+            missing.filter { it.tile != null }.groupBy { AppTiles.info(it.tile!!)?.appLabel ?: "Apps" }.toList()
+        for ((group, list) in groups) {
             if (list.isEmpty()) continue
             secs += Section(group, y)
             y += 30f * u
             // Free placement as on the page, every control at its default size.
-            val grid = CcLayout(4, 20, mutableListOf())
-            val placed = list.mapNotNull { c -> grid.firstFree(c.defaultSize.w, c.defaultSize.h)?.let { at -> grid.items += CcItem(c, at[0], at[1], c.defaultSize.w, c.defaultSize.h); c to at } }
+            val grid = CcLayout(4, 40, mutableListOf())
+            val placed = list.mapNotNull { id ->
+                val sz = id.control.defaultSize
+                grid.firstFree(sz.w, sz.h)?.let { at -> grid.items += CcItem(id.control, at[0], at[1], sz.w, sz.h, id.tile); id to at }
+            }
             val rows = grid.usedRows()
-            for ((c, at) in placed) {
-                val w = c.defaultSize.w * cell + (c.defaultSize.w - 1) * gap
-                val h = c.defaultSize.h * cell + (c.defaultSize.h - 1) * (gap + labelH)
+            for ((id, at) in placed) {
+                val sz = id.control.defaultSize
+                val w = sz.w * cell + (sz.w - 1) * gap
+                val h = sz.h * cell + (sz.h - 1) * (gap + labelH)
                 val x = left + at[0] * (cell + gap)
                 val top = y + at[1] * (cell + gap + labelH)
-                out += Entry(c, RectF(x, top, x + w, top + h))
+                out += Entry(id, RectF(x, top, x + w, top + h))
             }
             y += rows * (cell + gap + labelH) + 10f * u
         }
@@ -160,7 +171,7 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun drawEntry(c: Canvas, e: Entry, sheetTop: Float) {
         val ctl = e.control
-        val p = press[ctl]?.value ?: 0f
+        val p = press[e.id]?.value ?: 0f
         val s = 1f - 0.06f * p
         val w = e.rect.width()
         val h = if (ctl.defaultSize.h > 1) e.rect.height() - 28f * u * 0f else e.rect.height()
@@ -174,9 +185,12 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
         // A flat circle or capsule on the sheet (it sees what is behind through the sheet's own fills).
         host.surfaces.draw(c, Design.material(CcTokens.GALLERY_ENTRY), w, h, radius, cx - w * s / 2f, screenTop, s, 1f, p,
             under = Design.material(CcTokens.GALLERY_SHEET).fills)
-        glyphs.draw(c, ctl.icon, w / 2f, h / 2f, min(w, h) * 0.42f, 0xFFFFFFFF.toInt())
+        val tile = e.id.tile
+        if (tile != null) glyphs.drawTile(c, tile, w / 2f, h / 2f, min(w, h) * 0.42f, 0xFFFFFFFF.toInt())
+        else glyphs.draw(c, ctl.icon, w / 2f, h / 2f, min(w, h) * 0.42f, 0xFFFFFFFF.toInt())
         c.restore()
-        val label = TextUtils.ellipsize(ctl.title, name, e.rect.width() + 18f * u, TextUtils.TruncateAt.END).toString()
+        val title = if (tile != null) AppTiles.info(tile)?.label ?: ctl.title else ctl.title
+        val label = TextUtils.ellipsize(title, name, e.rect.width() + 18f * u, TextUtils.TruncateAt.END).toString()
         c.drawText(label, cx, e.rect.top + h + 17f * u, name)
     }
 
@@ -200,13 +214,13 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
                 val wasMoving = scroller.isMovingVisibly()
                 scroller.stop()
                 touched = if (wasMoving) null else entryAt(e.x, e.y)
-                touched?.let { pressOf(it.control).animateTo(1f, PRESS_IN) }
+                touched?.let { pressOf(it.id).animateTo(1f, PRESS_IN) }
             }
             MotionEvent.ACTION_MOVE -> {
                 vt?.addMovement(e)
                 val dy = e.y - downY
                 if (mode == 1 && (abs(dy) > slop || abs(e.x - downX) > slop)) {
-                    touched?.let { pressOf(it.control).animateTo(0f, PRESS_OUT) }
+                    touched?.let { pressOf(it.id).animateTo(0f, PRESS_OUT) }
                     touched = null
                     mode = if (dy > 0 && scroller.position <= 0.5f) 3 else 2
                     if (mode == 2) scroller.beginDrag()
@@ -223,9 +237,9 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
                 val vy = vt?.yVelocity ?: 0f
                 when (mode) {
                     1 -> touched?.let { t ->
-                        pressOf(t.control).animateTo(0f, PRESS_OUT)
+                        pressOf(t.id).animateTo(0f, PRESS_OUT)
                         if (e.actionMasked == MotionEvent.ACTION_UP) {
-                            if (host.add(t.control)) { performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); close() }
+                            if (host.add(t.id)) { performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); close() }
                             else performHapticFeedback(HapticFeedbackConstants.REJECT)
                         }
                     }
@@ -251,7 +265,7 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
 
     private var lastY = 0f
 
-    private fun pressOf(c: Control) = press.getOrPut(c) { SpringValue(0f, 100f, { invalidate() }) }
+    private fun pressOf(c: ControlId) = press.getOrPut(c) { SpringValue(0f, 100f, { invalidate() }) }
 
     private fun entryAt(x: Float, y: Float): Entry? {
         val cy = y - sheetTop() + scroller.position

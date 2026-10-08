@@ -76,9 +76,12 @@ enum class Control(val title: String, val icon: Int, val kind: Kind, val sizes: 
     GRAYSCALE("Color Filters", R.drawable.sym_grayscale, Kind.TOGGLE, ONE_OR_WIDE),
     EXTRA_DIM("Reduce White Point", R.drawable.sym_extra_dim, Kind.TOGGLE, ONE_OR_WIDE),
     LIVE_CAPTIONS("Live Captions", R.drawable.sym_captions, Kind.TOGGLE, ONE_OR_WIDE, Style.COLOR),
-    ACCESSIBILITY("Accessibility Shortcut", R.drawable.sym_accessibility, Kind.LAUNCH, ONE_OR_WIDE);
+    ACCESSIBILITY("Accessibility Shortcut", R.drawable.sym_accessibility, Kind.LAUNCH, ONE_OR_WIDE),
+    /** An app's Quick Settings tile ([AppTiles]): one entry for all of them; each placed one names its tile (CcItem.tile). */
+    APP_TILE("App Control", R.drawable.sym_more, Kind.APP, ONE_OR_WIDE);
 
-    enum class Kind { TOGGLE, LAUNCH, SLIDER, CONNECTIVITY, MEDIA, FOCUS }
+    /** APP: an app's tile (its own name, symbol and state; a tap is SystemUI's click on it). */
+    enum class Kind { TOGGLE, LAUNCH, SLIDER, CONNECTIVITY, MEDIA, FOCUS, APP }
 
     /** WHITE: an active control turns white with its glyph in [accent] (iOS's flashlight, orientation lock); COLOR: it fills with [accent]. */
     enum class Style { WHITE, COLOR }

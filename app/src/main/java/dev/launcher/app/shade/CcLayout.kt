@@ -3,10 +3,20 @@ package dev.launcher.app.shade
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** One control on Control Center's grid: its place (column, row) and size (columns x rows). */
-class CcItem(val control: Control, var col: Int, var row: Int, var w: Int, var h: Int) {
+/**
+ * What can be put on the page: a built-in control, or an app's Quick Settings tile ([Control.APP_TILE] with [tile], its
+ * component flattened: see AppTiles).
+ */
+data class ControlId(val control: Control, val tile: String? = null) {
+    /** Saved and compared by this: one of each on the page. */
+    val key: String get() = if (tile == null) control.name else "${control.name}:$tile"
+}
+
+/** One control on Control Center's grid: its place (column, row) and size (columns x rows); [tile]: see [ControlId]. */
+class CcItem(val control: Control, var col: Int, var row: Int, var w: Int, var h: Int, val tile: String? = null) {
+    val id get() = ControlId(control, tile)
     fun overlaps(c: Int, r: Int, cw: Int, ch: Int) = col < c + cw && c < col + w && row < r + ch && r < row + h
-    override fun toString() = "${control.name}@$col,$row ${w}x$h"
+    override fun toString() = "${id.key}@$col,$row ${w}x$h"
 }
 
 /**
@@ -36,14 +46,16 @@ class CcLayout(val cols: Int, var rows: Int, val items: MutableList<CcItem>) {
         return null
     }
 
-    /** Adds [control] at its default size at the first free place. Returns the new item, or null if the page is full. */
-    fun add(control: Control): CcItem? {
-        for (s in control.sizes) {
+    /** Adds [id] at its default size at the first free place. Returns the new item, or null if the page is full. */
+    fun add(id: ControlId): CcItem? {
+        for (s in id.control.sizes) {
             val at = firstFree(s.w, s.h) ?: continue
-            return CcItem(control, at[0], at[1], s.w, s.h).also { items += it }
+            return CcItem(id.control, at[0], at[1], s.w, s.h, id.tile).also { items += it }
         }
         return null
     }
+
+    fun add(control: Control): CcItem? = add(ControlId(control))
 
     /**
      * Puts [item] at [col],[row] (kept inside the columns). Controls it covers move on to the first free place after their
@@ -88,7 +100,8 @@ class CcLayout(val cols: Int, var rows: Int, val items: MutableList<CcItem>) {
     fun usedRows(): Int = items.maxOfOrNull { it.row + it.h } ?: 0
 
     fun toJson(): String = JSONArray().also { a ->
-        for (it in items) a.put(JSONObject().put("c", it.control.name).put("x", it.col).put("y", it.row).put("w", it.w).put("h", it.h))
+        for (it in items) a.put(JSONObject().put("c", it.control.name).put("x", it.col).put("y", it.row).put("w", it.w).put("h", it.h)
+            .also { o -> it.tile?.let { t -> o.put("t", t) } })
     }.toString()
 
     companion object {
@@ -109,7 +122,7 @@ class CcLayout(val cols: Int, var rows: Int, val items: MutableList<CcItem>) {
             CcItem(Control.SCAN_CODE, 1, 5, 1, 1),
         ))
 
-        /** A saved page; unknown controls and overlaps are dropped, sizes the control no longer has are reset. */
+        /** A saved page; unknown controls (an app's tile without its name) and overlaps are dropped, sizes the control no longer has are reset. */
         fun fromJson(json: String?, cols: Int, rows: Int): CcLayout? {
             json ?: return null
             return try {
@@ -118,14 +131,16 @@ class CcLayout(val cols: Int, var rows: Int, val items: MutableList<CcItem>) {
                 for (i in 0 until a.length()) {
                     val o = a.getJSONObject(i)
                     val control = Control.entries.firstOrNull { it.name == o.getString("c") } ?: continue
+                    val tile = if (control == Control.APP_TILE) o.optString("t").takeIf { it.isNotEmpty() } ?: continue else null
                     var w = o.optInt("w", control.defaultSize.w)
                     var h = o.optInt("h", control.defaultSize.h)
                     if (control.sizes.none { it.w == w && it.h == h }) { w = control.defaultSize.w; h = control.defaultSize.h }
                     val x = o.optInt("x", 0)
                     val y = o.optInt("y", 0)
-                    if (l.items.any { it.control == control }) continue
-                    if (l.free(x, y, w, h)) l.items += CcItem(control, x, y, w, h)
-                    else l.firstFree(w, h)?.let { at -> l.items += CcItem(control, at[0], at[1], w, h) }
+                    val id = ControlId(control, tile)
+                    if (l.items.any { it.id == id }) continue
+                    if (l.free(x, y, w, h)) l.items += CcItem(control, x, y, w, h, tile)
+                    else l.firstFree(w, h)?.let { at -> l.items += CcItem(control, at[0], at[1], w, h, tile) }
                 }
                 l
             } catch (_: Throwable) { null }

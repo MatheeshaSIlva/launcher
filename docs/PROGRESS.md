@@ -1327,3 +1327,24 @@ pulled, then vanishes suddenly; the lock screen to home animation still glitches
   screen's or the fingerprint icon's; no task): its controls showed the plain fallback. Over the lock screen the backdrop is
   now the wallpaper (`BackdropSource.Wall`); the S24 has one wallpaper for both. A separate lock screen wallpaper is not
   read yet (Notification Center draws the home one there too): open item.
+
+## Control Center: controls from apps (2026-10-08)
+
+Matheesha asked how Control Center finds controls ("a custom control from an app, e.g. Shazam"): it had a fixed list.
+Now apps' Quick Settings tiles are controls too, as iOS 18+ lists apps' controls (`shade/AppTiles.kt`):
+- Found through the package manager (TileService, `BIND_QUICK_SETTINGS_TILE`), again on every app install / update /
+  removal: the S24 has 45 tiles from 30 apps (0.76 s in the background), all with a symbol to tint. A symbol that is a
+  full-colour icon falls back to a generic one; a theme-coloured vector gets its app's theme.
+- The gallery ("Add a Control") lists them after the built-in sections, one section per app, with the tile's own name and
+  symbol. On the page a tile is `Control.APP_TILE` with its component (`CcItem.tile`, saved as `"t"`), one cell or two
+  wide (then its name and subtitle: SystemUI's, e.g. "Quick Share / No one", else On / Off for a switch).
+- Only SystemUI may bind a tile, so SystemUI runs it: a tile put on Control Center is added to SystemUI's own tiles
+  (`cmd statusbar add-tile`; the stock panel stays blocked, it never shows) and removed again when it leaves, if we added
+  it. A tap is `cmd statusbar click-tile` (shell); its state (label, subtitle, on / off / unavailable) is read from
+  `dumpsys activity service com.android.systemui/.SystemUIService QSTileHost` (0.23 s) when Control Center opens and
+  after a tap. A tile that opens something (a window of another app comes to the front within 2 s) closes the panel; a
+  switch keeps it open and animates on. Long press: the tile's settings (`ACTION_QS_TILE_PREFERENCES`), else the app. On
+  the lock screen a tap waits for the unlock. An app removed: its tile leaves the page.
+- Emulator: the gallery showed 8 tiles from 7 apps; Digital Wellbeing's Focus tile added, tapped: its screen opened and
+  Control Center closed; wide tiles show "Focus / Off", "Quick Share / Off". Not tried on the S24 (a tap changes real
+  settings): to be checked by Matheesha.
