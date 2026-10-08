@@ -104,7 +104,7 @@ words: the Liquid Glass look with the convenience and customizability of Android
   from the app's name** above a card (App info, Close, and what Android offers there: split screen, pop-up view, pin). *Done
   2026-10-08* (App Info, Keep Open, Close; split screen and pop-up view stay out: launches into them from the shell stick).
 - Banners over an app on real glass: a picture of the app behind (its task snapshot when the banner comes) instead of
-  the flat colour they sit on now.
+  the flat colour they sit on now. *Done 2026-10-08 (unchecked on the phone).*
 - One UI's "Brief" notification pop-ups (edge lighting) come from the system server and are not stopped by the flags
   that stop the stock heads-up: onboarding finds the setting and offers to switch it to "Detailed" (and back on restore).
 - Optional, by token: the glass's light follows the phone's tilt (iOS moves its highlights with the device); today its

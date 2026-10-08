@@ -66,6 +66,11 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         fun dismissed(item: Notifs.Item)
         /** Where the banner takes touches now (null: none): the shade's window adds it to its touchable region. */
         fun touchArea(r: RectF?)
+        /**
+         * The app in front, as its latest picture blurred by [radiusPx] (Android's blur radius), for the glass of a banner
+         * over it; [then] (this view's thread) may run twice (a fresher picture), or with null (none: over home, a secure app).
+         */
+        fun appBackdrop(radiusPx: Float, then: (dev.launcher.app.design.BackdropImage?) -> Unit)
     }
 
     private val painter = NotifPainter(ctx, 3) { for (s in all) s.card.invalidate() }
@@ -136,13 +141,21 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             c.translate(m, m)
             val p = mp
             if (p != null) {
-                // Over home: the wallpaper, blurred to the glass's frost, where the banner rests. Over an app: its usual
-                // background colour (what is behind is not known).
+                // Over home: the wallpaper, blurred to the glass's frost, where the banner rests. Over an app: its latest
+                // picture, blurred the same way, once it has come (a moment after the banner: until then the app's usual
+                // background colour, which the glass then fades from).
                 val home = if (host.overHome()) wallpaperFrost() else null
+                val app = if (home == null) appImage else null
                 p.setBackdrop(home, Design.color(BEHIND) or (0xFF shl 24))
                 val dim = Appearance.wallpaperDim
                 val under = if (home != null && dim > 0.001f) listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(0xFF000000.toInt(), 0xFF000000.toInt()), dim, dim, dev.launcher.app.design.Blend.NORMAL)) else emptyList()
-                p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, under = under)
+                val f = if (app == null) 0f else ((android.os.SystemClock.uptimeMillis() - appImageAt).toFloat() / APP_FADE_MS).coerceIn(0f, 1f)
+                if (f < 1f) p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, under = under)
+                if (app != null) {
+                    p.setBackdrop(app, Design.color(BEHIND) or (0xFF shl 24))
+                    p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, alpha = f * f * (3f - 2f * f))
+                    if (f < 1f) postInvalidateOnAnimation()
+                }
             } else {
                 fill.color = Appearance.mix(0xF2F7F7F9.toInt(), 0xEB222224.toInt())
                 r.set(0f, 0f, w, s.h)
@@ -316,6 +329,25 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
 
     private val wallpaperChanged: () -> Unit = { wallpaperFrost() }
 
+    /** The app in front's picture, blurred to the glass's frost, for banners over it (see [Host.appBackdrop]). */
+    private var appImage: dev.launcher.app.design.BackdropImage? = null
+    private var appImageAt = 0L
+    private var appAsk = 0
+
+    private fun askAppBackdrop() {
+        val ask = ++appAsk
+        appImage = null
+        if (host.overHome()) return
+        val m = Design.material(MATERIAL)
+        val sigma = dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * Appearance.dark, u)
+        host.appBackdrop(dev.launcher.app.design.Blur.renderRadius(sigma)) { img ->
+            if (ask != appAsk || img == null) return@appBackdrop
+            if (appImage == null) appImageAt = android.os.SystemClock.uptimeMillis()
+            appImage = img
+            for (s in all) s.card.invalidate()
+        }
+    }
+
     /** A light/dark change or a token edit: every banner's layer is drawn again (and laid out, if its size changed). */
     fun restyle() {
         for (s in all) {
@@ -353,6 +385,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         // A ringing banner stays: what does not ring waits in Notification Center.
         if (cur != null && cur.item.urgent && !item.urgent) return
         cur?.let { leave(it, up = true, velocity = -1200f) }
+        askAppBackdrop()
         val s = Shown(item)
         s.height.snapTo(heightOf(s))
         all += s
@@ -550,6 +583,8 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         const val SHOW_MS = 7000L
         // The banner's tokens (`comp.banner.*`; values and sources in assets/themes/ios27.json).
         val MATERIAL = MaterialKey("comp.banner.material")
+        /** A banner over an app: its glass fades from the app's flat colour to the app's picture this long (ms). */
+        const val APP_FADE_MS = 180f
         val BEHIND = ColorKey("comp.banner.behind")
         val CORNER = NumberKey("comp.banner.corner")
         val MARGIN = NumberKey("comp.banner.margin")

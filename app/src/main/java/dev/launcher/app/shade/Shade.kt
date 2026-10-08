@@ -169,6 +169,16 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 Notifs.send(ctx, pi).also { if (it && closePanel && panel != null) close() }
             override fun dismissed(item: Notifs.Item) { quiet += item.key }
             override fun touchArea(r: android.graphics.RectF?) { bannerArea = r?.let { android.graphics.RectF(it) }; updateTouchable() }
+            override fun appBackdrop(radiusPx: Float, then: (dev.launcher.app.design.BackdropImage?) -> Unit) {
+                // The app's latest picture (gesture nav keeps one: the same Control Center's glass sees), baked small and
+                // blurred off the UI threads.
+                nav.backdrop { src ->
+                    if (src !is BackdropSource.App) { handler.post { then(null) }; return@backdrop }
+                    BlurBaker.bake(src, root.width, root.height, BANNER_BAKE_SCALE, radiusPx, 0, handler) { bmp, m ->
+                        then(bmp?.let { dev.launcher.app.design.BackdropImage(it, m) })
+                    }
+                }
+            }
         })
         val mp = FrameLayout.LayoutParams.MATCH_PARENT
         root.addView(backdrop, FrameLayout.LayoutParams(mp, mp))
@@ -1166,6 +1176,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         /** A notification's app that is not in front this long after its card started: the card goes anyway. */
         const val LAUNCH_TIMEOUT_MS = 2500L
         const val LAUNCH_FADE_MS = 140L
+        /** The size a banner's backdrop (the app behind) is blurred at (of the screen's). */
+        const val BANNER_BAKE_SCALE = 0.25f
         /** What a launch from a button or control grows out of: a square this big (pt) around the touch. */
         const val LAUNCH_FROM_PT = 64f
         /** The window manager hands a swipe from the top to the stock status bar only within this long of its start. */

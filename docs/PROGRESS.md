@@ -1546,3 +1546,8 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
 - **Kotlin's incremental build missed a changed interface**: `tools/build.sh` succeeded while GestureNav did not implement
   DeckView.Listener's new methods; `compileDebugKotlin --rerun-tasks` showed the error. After an interface change, run a
   full compile before believing a build.
+- **Banners over an app on real glass** (step 3+): over an app a banner's glass sees the app's latest picture (gesture
+  nav's, the one Control Center's glass uses), baked at a quarter size and blurred to the banner glass's frost off the UI
+  threads (`BlurBaker`); until it comes (a moment) the app's flat colour stands in and the glass fades from it (180 ms).
+  Over home, the wallpaper as before. Not checked on the emulator (it keeps no app pictures: the banner stays flat
+  there, as before); on the S24 only Matheesha may look at banners.
