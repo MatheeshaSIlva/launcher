@@ -1348,3 +1348,23 @@ Now apps' Quick Settings tiles are controls too, as iOS 18+ lists apps' controls
 - Emulator: the gallery showed 8 tiles from 7 apps; Digital Wellbeing's Focus tile added, tapped: its screen opened and
   Control Center closed; wide tiles show "Focus / Off", "Quick Share / Off". Not tried on the S24 (a tap changes real
   settings): to be checked by Matheesha.
+
+## Design system step 2d, part 1: home's glass on the material renderer (2026-10-08)
+
+- Apple's kit has the dock's own material (System page, `_Dock Material` 10486:20740): frost 3, the clear glass's lens with
+  light 0.2, a luminosity fill (#999999 at 33 % light, #333333 dark), lit top and bottom edges (inner shadows) and the thin
+  rims. It is now `ref.material.liquid-glass.dock` / `sys.material.glass.dock` (kit data in `docs/tokens/ios27-kit.json`), and
+  home's surfaces each have a token (`home/HomeTokens`, `comp.home.*`): the dock and the Search pill (the kit makes both of
+  it), the widgets' glass and edit mode's Edit / Done (ours, judged: the same).
+- `GlassView` given a material draws it with `MaterialPainter` over the wallpaper blurred to the material's frost
+  (`FrostCache`), as Notification Center does; its placement tracking is unchanged. The renderer learnt what home's glass
+  needs: home's depth zoom (`setDepth`, the same maths as before), a wallpaper change (`setReveal`: the old wallpaper ahead of
+  the same front as the wallpaper's own reveal, so the glass changes on the same frames), and the light turning as home
+  arrives (`lightTurn`); the dark appearance's dim of the wallpaper is an under fill. The glass clock's numerals stay on
+  `GlassDrawable` (a text shape the renderer does not have yet).
+- Emulator, over the kit's own wallpaper: the dock and the Search pill side by side with the kit's render match in tone,
+  lift, rims and light (light and dark). A wallpaper change: the dock keeps the old wallpaper until the front reaches it,
+  then the new one. Control Center, edit mode's buttons, an app's close back to home: drawn as expected.
+- Differences from the kit left as they were (not materials): the Search pill is a little larger than the kit's 77 x 30 pt,
+  and its label turns dark over a light wallpaper (the kit's stays white). Next: the long press menu, App Library,
+  Spotlight and the search fields, the widget gallery's sheet.

@@ -500,7 +500,7 @@ class AppWidgetFrame(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, val h
     fun setGlassBacking(on: Boolean) {
         if (on == (glass != null)) return
         if (on) {
-            val g = GlassView(context, GlassStyle.IOS, m.u).apply { radius = m.widgetRadius; alpha = 0f }
+            val g = GlassView(context, GlassStyle.IOS, m.u, HomeTokens.WIDGET).apply { radius = m.widgetRadius; alpha = 0f }
             card.addView(g, 0, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
             glass = g
             onGlassCreated?.invoke(g)

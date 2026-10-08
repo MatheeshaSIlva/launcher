@@ -626,7 +626,7 @@ object RemoveBadge {
  * the page columns. [bind] with `animate` slides icons that stay to their new places (edit mode).
  */
 class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
-    val glass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = m.dockRadius }
+    val glass = GlassView(ctx, GlassStyle.IOS, m.u, HomeTokens.DOCK).apply { radius = m.dockRadius }
     private val icons = ArrayList<IconView>()
 
     init {
@@ -696,7 +696,7 @@ class DockShadow(ctx: Context) : View(ctx) {
  * instead (the current page's dot white, the others dimmed), and goes back to "Search" a moment after they stop.
  */
 class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
-    val glass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = m.indicatorHeight / 2f }
+    val glass = GlassView(ctx, GlassStyle.IOS, m.u, HomeTokens.SEARCH).apply { radius = m.indicatorHeight / 2f }
     private val content = object : View(ctx) {
         override fun onDraw(canvas: Canvas) = drawContent(canvas)
     }

@@ -776,6 +776,107 @@
    },
    "src": "kit:5914:23547"
   },
+  "ref.material.liquid-glass.dock": {
+   "material": {
+    "frost": 3,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.2,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#999999",
+      [
+       0.33,
+       0.0
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#333333",
+      [
+       0.0,
+       0.33
+      ],
+      "LUMINOSITY"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#282828",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      -1.25,
+      0.25,
+      0.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      1.25,
+      0.25,
+      0.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000005",
+      0.0,
+      8.0,
+      15.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#cccccc",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "kit:558:44490 / 10486:20741",
+   "note": "the System page's _Dock Material: a Fill + Shadow layer under a Glass Effect layer"
+  },
   "ref.material.liquid-glass.regular": {
    "material": {
     "frost": 16,
@@ -1769,6 +1870,22 @@
    "pt": 14,
    "src": "kit:2547:2623"
   },
+  "comp.home.button.material": {
+   "ref": "sys.material.glass.dock",
+   "src": "judged:edit mode's Edit and Done on home's glass, as the Search pill"
+  },
+  "comp.home.dock.material": {
+   "ref": "sys.material.glass.dock",
+   "src": "kit:558:50551"
+  },
+  "comp.home.search.material": {
+   "ref": "sys.material.glass.dock",
+   "src": "kit:5593:10801"
+  },
+  "comp.home.widget.material": {
+   "ref": "sys.material.glass.dock",
+   "src": "judged:the kit's widgets show the app's own background; ours sit on home's glass, the dock's"
+  },
   "comp.nc.button.bottom": {
    "pt": 50,
    "src": "kit:5592:29063 (874 - 766 - 58)"
@@ -2077,6 +2194,10 @@
   "sys.material.glass.clear": {
    "ref": "ref.material.liquid-glass.clear",
    "src": "kit:5914:23547"
+  },
+  "sys.material.glass.dock": {
+   "ref": "ref.material.liquid-glass.dock",
+   "src": "kit:10486:20740"
   },
   "sys.material.glass.regular": {
    "ref": "ref.material.liquid-glass.regular",

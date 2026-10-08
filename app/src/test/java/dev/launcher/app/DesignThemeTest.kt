@@ -68,6 +68,8 @@ class DesignThemeTest {
             val key = dev.launcher.app.shade.CcTokens.accent(c).name
             assertTrue("$key: no colour", r.resolve(key) is Value.Color)
         }
+        // Home's.
+        for (k in dev.launcher.app.home.HomeTokens.ALL) assertTrue("$k is not a material", r.resolve(k) is Value.Mat)
         // The banners'.
         for (k in dev.launcher.app.shade.BannerView.ALL) {
             val v = r.resolve(k)

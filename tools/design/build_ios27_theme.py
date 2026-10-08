@@ -138,6 +138,11 @@ def build_ref(kit):
         'frost': al['glass']['frost'], 'lens': lens(al['glass']), 'fills': union_fills(al['fills'], ad['fills']),
         'innerShadows': pair_shadows(al['innerShadows'], ad['innerShadows']), 'shadows': pair_shadows(al['shadows'], ad['shadows'])},
         'src': 'kit:' + al['node'] + ' / ' + ad['node']}
+    dl, dd = mats['Dock/Light'], mats['Dock/Dark']
+    ref['ref.material.liquid-glass.dock'] = {'material': {
+        'frost': dl['glass']['frost'], 'lens': lens(dl['glass']), 'fills': union_fills(dl['fills'], dd['fills']),
+        'innerShadows': pair_shadows(dl['innerShadows'], dd['innerShadows']), 'shadows': pair_shadows(dl['shadows'], dd['shadows'])},
+        'src': 'kit:' + dl['node'] + ' / ' + dd['node'], 'note': "the System page's _Dock Material: a Fill + Shadow layer under a Glass Effect layer"}
     ov = kit['notifications']['Overlay']
     ref['ref.material.overlay.lock-screen'] = {'material': {
         'frost': 0, 'fills': [[c, o, b] for c, o, b in (fill(f) for f in ov['fills'])], 'innerShadows': [], 'shadows': []},
@@ -178,6 +183,7 @@ SEED = {
     'sys.material.glass.regular': {'ref': 'ref.material.liquid-glass.regular', 'src': 'kit:5584:31857'},
     'sys.material.glass.small': {'ref': 'ref.material.liquid-glass.small', 'src': 'kit:10472:45029'},
     'sys.material.glass.small-active': {'ref': 'ref.material.liquid-glass.small-active', 'src': 'kit:5564:42811'},
+    'sys.material.glass.dock': {'ref': 'ref.material.liquid-glass.dock', 'src': 'kit:10486:20740'},
     'sys.material.thin': {'ref': 'ref.material.classic.thin', 'src': 'kit:510:78331'},
     'sys.material.regular': {'ref': 'ref.material.classic.regular', 'src': 'kit:510:78333'},
     'sys.material.thick': {'ref': 'ref.material.classic.thick', 'src': 'kit:510:78335'},
@@ -192,6 +198,12 @@ SEED = {
     'sys.type.caption1': {'ref': 'ref.type.caption1.regular', 'src': 'kit:text style Caption1/Regular'},
     'sys.spacing.margin': {'ref': 'ref.dimen.margin', 'src': 'kit:VariableID:10442:65'},
     # Notification Center (docs/tokens/ios27-kit.json, "notifications" and "lockScreen")
+    # Home (step 2d): the dock's material is the kit's own; the Search pill is made of it (kit 5593:10801); the
+    # widgets' glass and edit mode's buttons are ours (the kit's widgets have the app's own background) and take it too.
+    'comp.home.dock.material': {'ref': 'sys.material.glass.dock', 'src': 'kit:558:50551'},
+    'comp.home.search.material': {'ref': 'sys.material.glass.dock', 'src': 'kit:5593:10801'},
+    'comp.home.widget.material': {'ref': 'sys.material.glass.dock', 'src': "judged:the kit's widgets show the app's own background; ours sit on home's glass, the dock's"},
+    'comp.home.button.material': {'ref': 'sys.material.glass.dock', 'src': "judged:edit mode's Edit and Done on home's glass, as the Search pill"},
     'comp.nc.platter.material': {'ref': 'sys.material.glass.clear', 'src': 'kit:0:11292'},
     'comp.nc.platter.corner': {'pt': 24, 'src': 'kit:0:11292'},
     'comp.nc.platter.padding': {'pt': 14, 'src': 'kit:0:11292'},

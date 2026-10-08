@@ -41,6 +41,10 @@ fun Fill.scaled(k: Float): Fill = if (k == 1f) this else copy(opacity = opacity 
  *    weaker than 3 % are skipped (the kit's 2 % shadow: invisible, and its reach was a third more pixels to shade).
  *
  * Uniforms are taken when a draw is recorded, so one painter draws every surface of a frame.
+ *
+ * For glass on home's wallpaper: home's depth zoom ([setDepth]: the wallpaper zooms less than home's content, so the glass
+ * samples about a centre, scaled), and a wallpaper change ([setReveal]: the old wallpaper's blur ahead of the same front as
+ * the wallpaper's own reveal, [dev.launcher.app.Reveal], so the glass changes on the same frame as what is behind it).
  */
 @TargetApi(33)
 class MaterialPainter private constructor(private val unitPx: Float) {
@@ -57,10 +61,42 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     private var backdrop: BackdropImage? = null
     private var inputSet = false
     private var plainNow = 0
+    private var old: BackdropImage? = null
+    private var oldSet = false
 
     init {
         setBackdrop(null)
+        setDepth(1f, 0f, 0f)
+        setReveal(null, 1f, 0f, 1f, 1f, 1f)
         paint.shader = shader
+    }
+
+    /** Home's depth zoom as glass on the wallpaper sees it (see [dev.launcher.app.GlassDepth]); 1 at rest. */
+    fun setDepth(k: Float, cx: Float, cy: Float) {
+        shader.setFloatUniform("depthK", k)
+        shader.setFloatUniform("depthC", cx, cy)
+    }
+
+    /**
+     * A wallpaper change: [from] (the old wallpaper at the same frost, mapped like the backdrop) shows ahead of the reveal's
+     * front at [progress] and [time] (the wallpaper's own, on a [screenW] x [screenH] screen, [cellPx] its band's unit).
+     * Progress 1 (or no [from]): the backdrop only.
+     */
+    fun setReveal(from: BackdropImage?, progress: Float, time: Float, screenW: Float, screenH: Float, cellPx: Float) {
+        if (from !== old || !oldSet) {
+            old = from
+            oldSet = true
+            shader.setInputShader("backdropOld", BitmapShader(from?.bitmap ?: blank, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+                setLocalMatrix(from?.toScreen ?: Matrix())
+                filterMode = BitmapShader.FILTER_MODE_LINEAR
+            })
+        }
+        shader.setFloatUniform("revealProgress", if (from == null) 1f else progress)
+        shader.setFloatUniform("revealTime", time)
+        val o = dev.launcher.app.Reveal.origin(screenW, screenH)
+        shader.setFloatUniform("revealOrigin", o[0], o[1])
+        shader.setFloatUniform("revealMaxDist", dev.launcher.app.Reveal.maxDist(screenW, screenH))
+        shader.setFloatUniform("revealCell", cellPx)
     }
 
     /**
@@ -90,10 +126,12 @@ class MaterialPainter private constructor(private val unitPx: Float) {
      * px. [screenX], [screenY]: where that origin is on the backdrop's screen, [screenScale]: how much the canvas is scaled
      * there (so the glass samples what is really behind it). [alpha] fades it all; [press] lightens it (a touch).
      * [under] are fills between the backdrop and the surface (a dim over the wallpaper); [over], fills laid on the material's
-     * own (an active control's colour), at [overK] of their opacity.
+     * own (an active control's colour), at [overK] of their opacity. [lightTurn]: degrees the light has turned from where
+     * the material says it comes from (home's highlights travel as it arrives).
      */
     fun draw(c: Canvas, m: Material, w: Float, h: Float, radius: Float, screenX: Float, screenY: Float, screenScale: Float,
-             alpha: Float = 1f, under: List<Fill> = emptyList(), press: Float = 0f, over: List<Fill> = emptyList(), overK: Float = 0f) {
+             alpha: Float = 1f, under: List<Fill> = emptyList(), press: Float = 0f, over: List<Fill> = emptyList(), overK: Float = 0f,
+             lightTurn: Float = 0f) {
         if (alpha <= 0.003f || w <= 1f || h <= 1f) return
         val u = unitPx
         val dark = Appearance.dark
@@ -135,7 +173,7 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         shader.setFloatUniform("bend", (lens?.refraction ?: 0f) * depth)
         shader.setFloatUniform("dispersion", lens?.dispersion ?: 0f)
         shader.setFloatUniform("light", lens?.light ?: 0f)
-        val a = Math.toRadians((225.0 + (lens?.lightAngle ?: 0f)))
+        val a = Math.toRadians((225.0 + (lens?.lightAngle ?: 0f) + lightTurn))
         shader.setFloatUniform("lightDir", Math.cos(a).toFloat(), Math.sin(a).toFloat())
         shader.setFloatUniform("rimWidth", RIM_PT * u)
         shader.setFloatUniform("alpha", alpha.coerceIn(0f, 1f))
@@ -189,8 +227,20 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         // Blend mode ids are [Blend]'s ordinals: NORMAL 0, MULTIPLY 1, SCREEN 2, OVERLAY 3, DARKEN 4, LIGHTEN 5,
         // COLOR_DODGE 6, COLOR_BURN 7, LINEAR_DODGE 8, LINEAR_BURN 9, HARD_LIGHT 10, SOFT_LIGHT 11, LUMINOSITY 12,
         // COLOR 13, HUE 14, SATURATION 15.
+        /** The reveal's front ([dev.launcher.app.Reveal.FRONT]) with its uniforms named apart from this shader's own. */
+        private val FRONT = dev.launcher.app.Reveal.FRONT.replace("origin", "revealOrigin").replace("maxDist", "revealMaxDist")
+            .replace("cell", "revealCell").replace("progress", "revealProgress").replace("time", "revealTime")
+
         private val AGSL = """
 uniform shader backdrop;
+uniform shader backdropOld;
+uniform float revealProgress;
+uniform float revealTime;
+uniform float2 revealOrigin;
+uniform float revealMaxDist;
+uniform float revealCell;
+uniform float2 depthC;
+uniform float depthK;
 uniform float2 size;
 uniform float2 origin;
 uniform float placeScale;
@@ -276,14 +326,31 @@ float gauss(float d, float s) {
     return 1.0 - smoothstep(-2.2 * s, 2.2 * s, d);
 }
 
-half3 seen(float2 sp, float2 off, float t) {
-    if (plain > 0.5) return plainColor;
-    // Red and blue apart only where they visibly part (a third of a pixel): elsewhere one sample instead of three.
+${dev.launcher.app.Reveal.NOISE}
+$FRONT
+
+// Red and blue apart only where they visibly part (a third of a pixel): elsewhere one sample instead of three.
+half3 seenNew(float2 sp, float2 off, float t) {
     if (t <= 0.0 || dispersion * length(off) < 0.35) return backdrop.eval(sp + off).rgb;
     return half3(
         backdrop.eval(sp + off * (1.0 - dispersion)).r,
         backdrop.eval(sp + off).g,
         backdrop.eval(sp + off * (1.0 + dispersion)).b);
+}
+half3 seenOld(float2 sp, float2 off, float t) {
+    if (t <= 0.0 || dispersion * length(off) < 0.35) return backdropOld.eval(sp + off).rgb;
+    return half3(
+        backdropOld.eval(sp + off * (1.0 - dispersion)).r,
+        backdropOld.eval(sp + off).g,
+        backdropOld.eval(sp + off * (1.0 + dispersion)).b);
+}
+
+half3 seen(float2 sp, float2 off, float t) {
+    if (plain > 0.5) return plainColor;
+    if (revealProgress >= 1.0) return seenNew(sp, off, t);
+    // A wallpaper change: the old one ahead of the front, the new one behind it, as the wallpaper itself shows them.
+    float rv = revealMix(sp + off);
+    return rv >= 0.999 ? seenNew(sp, off, t) : rv <= 0.001 ? seenOld(sp, off, t) : mix(seenOld(sp, off, t), seenNew(sp, off, t), half(rv));
 }
 
 // Outside the shape: the drop shadows (the rims, a soft shadow) over what is behind, premultiplied. Only what they
@@ -308,7 +375,8 @@ half4 main(float2 coord) {
     float2 hs = size * 0.5;
     float2 p = coord - hs;
     float d = sdRoundRect(p, hs, radius);
-    float2 sp = origin + coord * placeScale;
+    // Where it samples: its place on screen, about home's depth centre as far as the wallpaper zooms (1: at rest).
+    float2 sp = depthC + (origin + coord * placeScale - depthC) * depthK;
     if (d > 0.5) return dropShadows(p, hs, seen(sp, float2(0.0), 0.0)) * half(alpha);
     float2 q = abs(p) - hs + radius;
     float2 sg = float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);

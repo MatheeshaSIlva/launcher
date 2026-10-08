@@ -707,8 +707,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     /** Top of the screen while editing: "Edit" on the left (its menu adds widgets), "Done" on the right; liquid glass capsules. */
     inner class Bar(ctx: Context) : FrameLayout(ctx) {
         private val bh = m.pt(36f)
-        val editGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
-        val doneGlass = GlassView(ctx, GlassStyle.IOS, m.u).apply { radius = bh / 2f }
+        val editGlass = GlassView(ctx, GlassStyle.IOS, m.u, HomeTokens.BUTTON).apply { radius = bh / 2f }
+        val doneGlass = GlassView(ctx, GlassStyle.IOS, m.u, HomeTokens.BUTTON).apply { radius = bh / 2f }
         // A soft shadow keeps the white labels readable over a light wallpaper (the glass itself is clear).
         // The dock's glass (nothing laid over it); the label dark or white for what is behind the capsule, as iOS's glass
         // buttons ([Appearance.labelOnGlass]).

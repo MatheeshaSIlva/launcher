@@ -58,7 +58,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.
   Notification Center is on it (step 2a, tokens `comp.nc.*` in `shade/NcTokens.kt`), and Control Center with its expanded
   modules and gallery (2b, `comp.cc.*` in `shade/CcTokens.kt`, drawn through `shade/CcSurfaces`), and the banners (2c,
-  `comp.banner.*`); home still uses `GlassDrawable`/`LiveGlass` until step 2d. Blur sizes in tokens are the kit's (sigma = radius / 2); Android's
+  `comp.banner.*`), and home's dock, Search pill, widgets and edit buttons (2d part 1, `comp.home.*` in `home/HomeTokens.kt`, through
+  `GlassView` with a material); home's menus, App Library, Spotlight, fields and the glass clock still use `GlassDrawable`/`LiveGlass`. Blur sizes in tokens are the kit's (sigma = radius / 2); Android's
   `RenderEffect` blur takes its own radius: convert with `design/Blur`. Theme seeds live in `tools/design/build_ios27_theme.py`
   (`reseed.py KEY` re-applies a corrected seed). To compare with the kit over its own picture: push it to
   `/sdcard/Android/data/dev.launcher.app/files/wallpaper.png` (the app shows it instead of the wallpaper; delete to undo).

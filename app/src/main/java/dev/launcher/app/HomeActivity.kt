@@ -531,9 +531,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             // same change on the same frames, so the dock never lags behind the wallpaper.
             wallpaper = w
             val glass = screen.glassViews()
-            for (g in glass) g.glass?.beginTransition(old, w)
-            screen.wallpaperView.transitionTo(old, w, onFrame = { p, t -> for (g in glass) g.glass?.setReveal(p, t) }) {
-                for (g in glass) { g.glass?.endTransition(w); g.adoptWallpaper(w) }
+            for (g in glass) g.beginTransition(old, w)
+            screen.wallpaperView.transitionTo(old, w, onFrame = { p, t -> for (g in glass) g.setReveal(p, t) }) {
+                for (g in glass) g.endTransition(w)
                 finishWallpaper(w)
             }
             return

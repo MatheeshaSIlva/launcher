@@ -154,7 +154,7 @@
     "Caption2/Emphasized": ["SF Pro Semibold", 11, 13, 0.06]
   },
   "materials": {
-    "_note": "The Materials page (215:105157): each material's layers as Figma stores them. 'fill' entries are colour@opacity blend; GLASS frost is a blur radius (sigma = frost / 2); shadows are offset x,y, radius (blur), spread, blend.",
+    "_note": "The Materials page (215:105157): each material's layers as Figma stores them. 'fill' entries are colour@opacity blend; GLASS frost is a blur radius (sigma = frost / 2); shadows are offset x,y, radius (blur), spread, blend. Dock/*: the System page's _Dock Material (10486:20740), what the iPhone dock (558:50551) and the Home Screen's Search pill (5593:10801) are made of: a \"Fill + Shadow\" layer under a \"Glass Effect\" layer.",
     "Classic/Light/Ultrathin": {"node": "510:78329", "backgroundBlur": 100, "fills": ["#ffffff@0.07 NORMAL", "#ffffff@0.03 COLOR_DODGE"]},
     "Classic/Light/Thin": {"node": "510:78331", "backgroundBlur": 100, "fills": ["#ffffff@0.05 NORMAL", "#ffffff@0.4 COLOR_DODGE"]},
     "Classic/Light/Regular": {"node": "510:78333", "backgroundBlur": 100, "fills": ["#ffffff@0.25 LINEAR_DODGE", "#ffffff@0.6 COLOR_DODGE"]},
@@ -175,7 +175,9 @@
     "LiquidGlass/Regular/Small/Prominent/Active": {"node": "5564:42807 (light), 5431:1764 (dark)", "radius": "round", "layers": ["white backing #ffffff opacity 0.94", "tint #0088ff LINEAR_BURN (the accent)"], "glass": {"frost": 6, "refraction": 0.7, "depth": 30, "dispersion": 0.2, "light": 0.25, "lightAngle": 0, "splay": 0.2}, "shadows": ["#00000005 (dark #0000000a) 0,8 r15 NORMAL", "#e6e6e6 -1.25,0 spread-0.75 LINEAR_BURN", "#e6e6e6 1.25,0 spread-0.75 LINEAR_BURN"]},
     "ScrollEdge/Soft": {"node": "5661:26964 (top), 5661:26968 (bottom)", "backgroundBlur": "10 progressive", "mask": "linear gradient, opaque at the edge to clear", "layer": "#000000 SCREEN at 0.9 opacity with background blur 100"},
     "ScrollEdge/Hard/Light": {"node": "5661:26986", "backgroundBlur": 6, "fills": ["#ffffff@0.85 NORMAL"], "stroke": "#000000@0.05"},
-    "ScrollEdge/Hard/Dark": {"node": "10509:2669", "backgroundBlur": 6, "fills": ["#000000@0.55 NORMAL"], "stroke": "#000000@0.10"}
+    "ScrollEdge/Hard/Dark": {"node": "10509:2669", "backgroundBlur": 6, "fills": ["#000000@0.55 NORMAL"], "stroke": "#000000@0.10"},
+    "Dock/Light": {"node": "558:44490", "radius": 38, "fills": ["#999999@0.33 LUMINOSITY"], "glass": {"frost": 3, "refraction": 0.7, "depth": 30, "dispersion": 0.2, "light": 0.2, "lightAngle": 0, "splay": 0.2}, "innerShadows": ["#282828 0,-40 r10 spread-40 LINEAR_DODGE", "#282828 0,40 r10 spread-40 LINEAR_DODGE", "#282828 0,-1.25 r0.25 LINEAR_DODGE", "#282828 0,1.25 r0.25 LINEAR_DODGE"], "shadows": ["#00000005 0,8 r15 NORMAL", "#cccccc 0,0 spread0.5 LINEAR_BURN", "#d0d0d0 -1.25,0 spread-0.75 LINEAR_BURN", "#d0d0d0 1.25,0 spread-0.75 LINEAR_BURN"]},
+    "Dock/Dark": {"node": "10486:20741", "radius": 38, "fills": ["#333333@0.33 LUMINOSITY"], "glass": {"frost": 3, "refraction": 0.7, "depth": 30, "dispersion": 0.2, "light": 0.2, "lightAngle": 0, "splay": 0.2}, "innerShadows": ["#282828 0,-40 r10 spread-40 LINEAR_DODGE", "#282828 0,40 r10 spread-40 LINEAR_DODGE", "#282828 0,-1.25 r0.25 LINEAR_DODGE", "#282828 0,1.25 r0.25 LINEAR_DODGE"], "shadows": ["#00000005 0,8 r15 NORMAL", "#cccccc 0,0 spread0.5 LINEAR_BURN", "#d0d0d0 -1.25,0 spread-0.75 LINEAR_BURN", "#d0d0d0 1.25,0 spread-0.75 LINEAR_BURN"]}
   },
   "notifications": {
     "_note": "Notifications page (507:24678), read 2026-10-07. Geometry in pt relative to the component, as stored in the kit.",
