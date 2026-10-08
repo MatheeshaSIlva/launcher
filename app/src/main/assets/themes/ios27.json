@@ -1886,8 +1886,8 @@
    "src": "judged:edit mode's Edit and Done on home's glass, as the Search pill"
   },
   "comp.home.clock.tint-dark": {
-   "color": "#00000052",
-   "src": "judged:the clock over a bright wallpaper: the glass's dark tint (the dock's in dark mode)"
+   "color": "#00000029",
+   "src": "judged:the clock over a bright wallpaper: the light glass only slightly dimmed, close to the dock's glass (Matheesha, 2026-10-09; the dark mode tint 52 read as grey)"
   },
   "comp.home.clock.tint-light": {
    "color": "#ffffff30",

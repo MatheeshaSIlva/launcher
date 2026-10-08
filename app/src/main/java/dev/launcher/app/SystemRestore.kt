@@ -160,6 +160,8 @@ object SystemRestore {
         val why = if (gesturesWanted(ctx) && !GestureNav.ready) " (gesture nav waits for the accessibility service)" else ""
         AppLog.log("[flags] status bar and shade ${if (bar) "ours" else "stock"}, stock gestures ${if (gestures) "blocked" else "on"}$why: $r")
         GestureNav.update()
+        // Our shade has taken over: One UI's Brief pop-ups would still show beside our banners.
+        if (bar && !r.contains("ERROR")) PopupStyle.check(ctx, s)
         return r
     }
 
@@ -230,9 +232,10 @@ object SystemRestore {
             "back already (Shizuku is not running, so the system dropped our flags)"
         }
         if (svc != null) Watchdog.sync(ctx, svc)
+        val popups = PopupStyle.restore(ctx, svc)
 
         val report = "animations: ${animations ?: "NOT restored (no Shizuku, no permission): Developer options > animation scales"}; " +
-            "status bar: $statusBar"
+            "status bar: $statusBar" + (popups?.let { "; $it" } ?: "")
         AppLog.log("[restore] $report")
         return report
     }

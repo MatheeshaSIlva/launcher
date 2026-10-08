@@ -1569,8 +1569,28 @@ material in all six cases. Found and fixed:
   spring, the appearance's crossfade frame by frame.
 - **The glass clock**: white glass vanished over a bright wallpaper in light mode, and dark mode's dark glass was muddy
   over mid and dark ones. Its tint now follows the wallpaper under it instead of the appearance, with the names'
-  thresholds (`comp.home.clock.tint-light` / `-dark`, the dock's two tints): light glass and a white date over dark and
-  mid wallpapers, dark glass and a dark date over a bright one, in both modes. The same for Notification Center's clock
+  thresholds (`comp.home.clock.tint-light` / `-dark`): light glass and a white date over dark and mid wallpapers, the
+  same glass slightly dimmed and a dark date over a bright one, in both modes. (First with the dark mode's tint, 32 %
+  black: confirmed on the S24, but it read as grey; Matheesha: keep it close to the dock's glass, only dim slightly.
+  Now 16 %, `#00000029`.) The same for Notification Center's clock
   and the widget gallery's clock preview. Emulator: all six cases on home and in Notification Center look readable.
 - Still to look at: Control Center and the App Library over the three wallpapers (the capture script missed them),
   Spotlight, the edit menu and the switcher's sheets.
+- **Two ANRs on the emulator, not from the app's code**: after ten hours up, the emulator was out of memory and swapping
+  (3.9 of 4 GB, swap nearly full, 92 % of CPU in the kernel); a frost bake took 2-3 s there, and the main thread, which
+  needs the render thread to draw or to add a window, waited on it past the system's limits (the gesture strip's input,
+  the watchdog's foreground service). The emulator was restarted (swap empty again). Noted for the performance pass: all of the app's
+  hardware renderers share one render thread, so a bake delays every window's next frame while it runs.
+
+## Step 3+: One UI's Brief pop-ups (2026-10-09)
+
+- With One UI's notification pop-up style "Brief" (`edge_lighting` 1), pop-ups come from the system server's edge
+  lighting and show beside our banners (the flags stop only SystemUI's heads-up). When our shade takes over, `PopupStyle`
+  reads the setting through the shell once per process; if it is Brief, a notification of ours (channel `setup`, which
+  shows as one of our banners, 3 s after the shade took over so home has arrived) offers "Use Detailed pop-ups?". A tap
+  switches it to Detailed (0) and keeps the user's value; Restore system puts it back and lets the offer come again.
+  Asked once (swiping it away is a no). Phones without the setting ("null") are left alone.
+- Emulator (the setting set to 1 for the test, removed after): the offer's banner arrived after home, the tap switched
+  to 0 ("switched to Detailed (was 1)"), Restore system put back 1. The S24 is already on Detailed: nothing shows there.
+- Emulator pitfall: Shizuku's app starts its own server at boot; starting another by hand left two, our service attached
+  to the other one ("unable to find token") and never connected. Check `ps -A | grep shizuku_server` first.

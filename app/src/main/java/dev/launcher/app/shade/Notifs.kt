@@ -200,13 +200,15 @@ object Notifs {
     /**
      * Would Android peek [item] (show a heads-up)? Ours replace them: the stock ones do not show while the stock shade is
      * blocked (SystemUI suppresses heads-up while its panel is disabled). High importance, not suppressed by Do Not
-     * Disturb, not ongoing (unless it rings: a call, an alarm), not a group summary, not our own. Calls and alarms matter most:
+     * Disturb, not ongoing (unless it rings: a call, an alarm), not a group summary, not our own (but our offers and adb's
+ * tests). Calls and alarms matter most:
      * with the stock heads-up suppressed, SystemUI does not open their full screen either while the phone is in use (it expects
      * the heads-up to show: FullScreenIntentDecisionProvider, NO_FSI_NO_HUN_OR_KEYGUARD).
      */
     fun peeks(item: Item, own: String): Boolean =
         item.importance >= NotificationManager.IMPORTANCE_HIGH && !item.suppressPeek && (!item.ongoing || item.urgent) && !item.summary &&
-            (item.pkg != own || item.sbn.notification.channelId == dev.launcher.app.Badges.TEST_CHANNEL) && (item.title != null || item.text != null)
+            (item.pkg != own || item.sbn.notification.channelId.let { it == dev.launcher.app.Badges.TEST_CHANNEL || it == dev.launcher.app.PopupStyle.CHANNEL }) &&
+            (item.title != null || item.text != null)
 
     // ------------------------------------------------------------------ what the status bar shows
 

@@ -109,6 +109,7 @@ words: the Liquid Glass look with the convenience and customizability of Android
   the flat colour they sit on now. *Done 2026-10-08 (unchecked on the phone).*
 - One UI's "Brief" notification pop-ups (edge lighting) come from the system server and are not stopped by the flags
   that stop the stock heads-up: onboarding finds the setting and offers to switch it to "Detailed" (and back on restore).
+  *Done 2026-10-09* (`PopupStyle`: one of our banners offers it when our shade takes over).
 - Optional, by token: the glass's light follows the phone's tilt (iOS moves its highlights with the device); today its
   direction is fixed (the kit's inner shadows at top and bottom, the rim light from a fixed angle).
 
@@ -135,7 +136,9 @@ display and font size.
   look or motion is decided in code; layouts and component sets swappable per profile, not only colours and numbers.
 - Decided (2026-10-08): smoothness is measured and tuned **once, at the end** of this plan (every code change moves the
   numbers). Until then each step is checked for looks on the emulator; known items for that pass are kept in
-  `docs/PROGRESS.md` (step 2a: the fan-out's GPU time, an occasional late scroll frame).
+  `docs/PROGRESS.md` (step 2a: the fan-out's GPU time, an occasional late scroll frame; the look audit: every
+  `HardwareRenderer` of the app shares its one render thread, so a frost bake (`FrostCache`, `BlurBaker`) holds up the
+  next frame of every window while it runs: time the bakes on the S24, split or move them off the busy moments).
 - Open: the theme file's syntax (step 5).
 - Decided (2026-10-08): the goal is the Liquid Glass look with Android's convenience and customizability: where iOS
   leaves something out that Android users rely on (Back from the edge closes a panel, Clear All, an app's menu in the

@@ -150,6 +150,10 @@
             android:name=".GestureToggleReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".PopupStyleReceiver"
+            android:exported="false" />
+
         <!-- Only for its overlay window type (see NavAccessibilityService). -->
         <service
             android:name=".NavAccessibilityService"

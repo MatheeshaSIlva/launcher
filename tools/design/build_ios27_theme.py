@@ -216,7 +216,7 @@ SEED = {
     # light glass over a dark or mid wallpaper, dark glass over a bright one (white glass vanished there, dark glass was
     # muddy over a dark one), whatever the appearance.
     'comp.home.clock.tint-light': {'color': '#ffffff30', 'src': "judged:the clock over a dark or mid wallpaper: the glass's light tint (the dock's in light mode)"},
-    'comp.home.clock.tint-dark': {'color': '#00000052', 'src': "judged:the clock over a bright wallpaper: the glass's dark tint (the dock's in dark mode)"},
+    'comp.home.clock.tint-dark': {'color': '#00000029', 'src': "judged:the clock over a bright wallpaper: the light glass only slightly dimmed, close to the dock's glass (Matheesha, 2026-10-09; the dark mode tint 52 read as grey)"},
     # The long-press menu: the kit's Home Screen Quick Actions (System page 2607:25374, its menu 5626:51776).
     'comp.home.menu.material': {'ref': 'sys.material.glass.regular', 'src': 'kit:5626:51776 (BG: the Regular glass, frost 16)'},
     'comp.home.menu.corner': {'pt': 30, 'src': 'kit:10411:18581'},

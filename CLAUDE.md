@@ -156,7 +156,8 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Blocking the stock shade also blocks heads-up notifications** (SystemUI: "No heads up: disabled panel"); sound and
   vibration still play. Not One UI's "Brief" pop-up style (system setting `edge_lighting=1`): those come from the system
   server's EdgeLightingManager (SystemUI logs "no Heads up : edgelighting enabled app") and show next to our banners;
-  pop-up style "Detailed" hands them back to SystemUI's heads-up, which the flags stop. Our banners (`shade/BannerView.kt`) replace them; never ship DISABLE_EXPAND without them. With the
+  pop-up style "Detailed" hands them back to SystemUI's heads-up, which the flags stop (`PopupStyle` offers the switch
+  when our shade takes over; Restore system switches back). Our banners (`shade/BannerView.kt`) replace them; never ship DISABLE_EXPAND without them. With the
   heads-up suppressed, SystemUI does not open a call's or an alarm's full screen either while the phone is unlocked (it expects
   the heads-up to show it): our ringing banners (Answer/Decline from the call's own intents, an alarm's actions) are the only
   way such a notification shows; they stay until it stops ringing, also over an open panel.
@@ -231,7 +232,9 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - `tools/build.sh` (errors only), `./gradlew testDebugUnitTest` (logic tests), `DEVICE=emulator-5554 tools/reinstall.sh`.
 - `tools/device.sh shot|tap|long|drag|swipe|log|gfx` drives the device; screenshots land in `tools/shots/` (git-ignored).
 - Emulator `Medium_Phone` (Android 17): start with `emulator -avd Medium_Phone -no-window -gpu host`. Shizuku is installed:
-  start it with `adb shell <shizuku apk dir>/lib/x86_64/libshizuku.so`; enable our accessibility service with
+  start it with `adb shell <shizuku apk dir>/lib/x86_64/libshizuku.so` only if `ps -A | grep shizuku_server` shows none
+  (two servers: our service attaches to the wrong one and never connects); a long-running emulator runs out of memory
+  and swaps (blurs take seconds, ANRs): restart it after some hours; enable our accessibility service with
   `settings put secure enabled_accessibility_services dev.launcher.app/dev.launcher.app.NavAccessibilityService`.
 - `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
 - Do not run `uiautomator dump` while gesture nav is on (it unbinds accessibility services).
