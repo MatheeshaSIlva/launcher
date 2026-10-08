@@ -95,9 +95,10 @@ the wallpaper) listed surface by surface over a light, a mid and a dark wallpape
 is not a decision of ours, each fixed in its token. Already done: the kit's hairline rims at a theme strength
 (`sys.glass.rim`: they read as a black outline over dark backdrops).
 
-**Step 3+: Android conveniences** (requested 2026-10-08; built on step 3's menu and buttons). The aim, in Matheesha's
+**Step 3+: Android conveniences** (requested 2026-10-08; built on step 3's menu and buttons, which come first; the rest of
+step 3 after them). The aim, in Matheesha's
 words: the Liquid Glass look with the convenience and customizability of Android.
-- Edit mode: **Change Wallpaper** in the Edit menu (the system's wallpaper picker; the new one arrives with the reveal).
+- Edit mode: **Change Wallpaper** in the Edit menu (the system's wallpaper picker; the new one arrives with the reveal). *Done 2026-10-08.*
 - App Switcher: a **Clear All** button (the cards leave one after another; the apps' tasks are removed), and a **menu
   from the app's name** above a card (App info, Close, and what Android offers there: split screen, pop-up view, pin).
 - Banners over an app on real glass: a picture of the app behind (its task snapshot when the banner comes) instead of

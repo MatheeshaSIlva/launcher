@@ -43,6 +43,8 @@ import kotlin.math.roundToInt
 class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx), DrawerHost, SpotlightView.Host {
     interface Listener {
         fun launch(e: AppEntry, iconOnScreen: RectF, icon: Drawable?)
+        /** The system's wallpaper picker, opening out of [from] (screen px). */
+        fun openWallpaperPicker(from: RectF)
         /** Everything came to rest: a good moment to record the picture of home. */
         fun onHomeSettled()
         /** The layout was edited (moved, removed, added): save it. */
@@ -1474,6 +1476,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun showEditMenu(button: RectF) {
         val items = arrayListOf(
             ContextMenuView.Item("Add Widget", glyph = ContextMenuView.Glyph.PLUS) { openWidgetPicker() },
+            // Android's convenience (iOS changes it from the lock screen): the system's own picker, out of the Edit button.
+            ContextMenuView.Item("Change Wallpaper", glyph = ContextMenuView.Glyph.WALLPAPER) { listener.openWallpaperPicker(RectF(button)) },
             ContextMenuView.Item(if (cfg.showLabels) "Hide App Names" else "Show App Names", glyph = ContextMenuView.Glyph.LABEL) { setAppLabelsShown(!cfg.showLabels) },
         )
         items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) }

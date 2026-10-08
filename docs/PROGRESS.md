@@ -1515,3 +1515,12 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   before the list took it back (two thresholds, 0.3 % and 0.1 % of the close): for a frame or two it was not drawn at all.
   One handover point now (`LOOK_HANDOVER`). And the platter faded into the card at its own place in the list while the
   card moved: two copies of its text, apart; it now rides with the morphing card. Recorded on the emulator.
+
+## Step 3+: Change Wallpaper in the Edit menu (2026-10-08)
+
+- Edit mode's Edit menu has **Change Wallpaper** (second, after Add Widget; a picture glyph). It opens the system's own
+  picker on the launch card, out of the Edit button, through our own transition: Samsung's "Wallpaper and style"
+  (`com.samsung.intent.action.WALLPAPER_SETTING`, checked on the S24 without opening it), else the system app answering
+  "set wallpaper" (Google's picker before Android's: on the emulator Android's crashed at once, denied Google's provider),
+  else Android's chooser. Edit mode ends as home goes out of sight (as for any app opened from it); the new wallpaper
+  arrives with its reveal. Emulator: recorded, the menu closes, the card grows into the picker.

@@ -389,6 +389,40 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (!GestureNav.launchApp(e.pkg, iconOnScreen, icon, start)) start()
     }
 
+    /**
+     * The system's wallpaper picker (Samsung's "Wallpaper and style" where there is one, else the system app answering
+     * "set wallpaper", else Android's chooser), opening on the launch card out of [from] as an app does. The new wallpaper
+     * arrives on home with its reveal.
+     */
+    override fun openWallpaperPicker(from: RectF) {
+        val intent = wallpaperPickerIntent()
+        val pkg = intent.component?.packageName ?: "android"
+        val icon = try { packageManager.getApplicationIcon(pkg) } catch (_: Throwable) { null }
+        AppLog.log("[home] change wallpaper: ${intent.component?.flattenToShortString() ?: intent.action}")
+        val start = {
+            try {
+                val i = Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                if (!NoAnimStarts.start(i, android.os.Process.myUserHandle().hashCode())) startActivity(i, GestureNav.noAnimation(this))
+            } catch (t: Throwable) {
+                AppLog.log("[home] wallpaper picker failed: ${t.message}")
+            }
+        }
+        HomeBridge.putWithout(pkg, recordWithout(pkg))
+        if (!GestureNav.launchApp(pkg, from, icon, start)) start()
+    }
+
+    private fun wallpaperPickerIntent(): Intent {
+        val pm = packageManager
+        Intent("com.samsung.intent.action.WALLPAPER_SETTING").resolveActivity(pm)?.let { return Intent().setComponent(it) }
+        val set = Intent(Intent.ACTION_SET_WALLPAPER)
+        val system = pm.queryIntentActivities(set, 0).filter { (it.activityInfo.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0 }
+        // In the order of WALLPAPER_PICKERS: Google's first (on a Google phone Android's own one is its older copy; on the
+        // emulator it crashed at once, denied Google's provider).
+        val pick = WALLPAPER_PICKERS.firstNotNullOfOrNull { p -> system.firstOrNull { it.activityInfo.packageName == p } } ?: system.singleOrNull()
+        return if (pick != null) Intent(set).setComponent(android.content.ComponentName(pick.activityInfo.packageName, pick.activityInfo.name))
+        else Intent.createChooser(set, "Change Wallpaper")
+    }
+
     override fun onHomeSettled() = recordPreviewSoon()
 
     // Recording home takes ~20 ms of the main thread (the library with an open folder, on the S24). Called from inside the
@@ -611,6 +645,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
 
     private companion object {
+        /** The system's wallpaper apps ("Wallpaper & style"), preferred when several system apps answer "set wallpaper". */
+        val WALLPAPER_PICKERS = listOf("com.google.android.apps.wallpaper", "com.android.wallpaper")
         /** The arrival plays only if home is seen within this long of the unlock (USER_PRESENT; ms). */
         const val ARRIVAL_WINDOW_MS = 4000L
         /** How often home checks whether the lock screen has gone while it is resumed and shown behind it (ms: a frame). */
