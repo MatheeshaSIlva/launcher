@@ -338,7 +338,7 @@ class GlassDrawable(
             shader.setFloatUniform("lightDir", kotlin.math.cos(a).toFloat(), kotlin.math.sin(a).toFloat())
         }
 
-        /** Rounded-rectangle distance, colour helpers and the glass's light (shared with [LiveGlass]). */
+        /** Rounded-rectangle distance, colour helpers and the glass's light (the glass clock's numerals). */
         internal const val LIGHTING = """
 uniform float glowWidth;
 uniform float glow;

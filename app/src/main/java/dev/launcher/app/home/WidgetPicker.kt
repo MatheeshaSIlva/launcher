@@ -26,7 +26,6 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import dev.launcher.app.GlassDrawable
 import dev.launcher.app.GlassStyle
-import dev.launcher.app.LiveGlass
 import dev.launcher.app.Wallpaper
 import dev.launcher.app.drawer.LabelPainter
 import dev.launcher.app.motion.IosScroller
@@ -110,7 +109,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     // Pressed things shrink a little (buttons) or highlight (rows); released ones spring back.
     private val pressK = SpringValue(0f, 1000f, { invalidate() })
 
-    private val glass = LiveGlass.create(GlassStyle.IOS, m.u)
+    /** The sheet (`comp.widgets.sheet.material`), drawn over home as it is behind it. */
+    private val glass = dev.launcher.app.design.MaterialPainter.create(m.u)
     private val fallbackFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6202024.toInt() }
     private val dimInside = Paint()
     private val sheetTint = Paint()
@@ -262,7 +262,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         previewShownAt.clear()
         clockGlasses.clear()
         clockBuilding.clear()
-        sheetGlass = null
+        sheetGlass.wallpaper = null
         // The preview layouts added as children go; the field stays.
         for (i in childCount - 1 downTo 0) { val c = getChildAt(i); if (c !== edit) removeViewAt(i) }
         host.pickerProgress(0f)
@@ -401,17 +401,15 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         dimInside.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
         c.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), dimInside)
         r.set(0f, y, m.w.toFloat(), m.h + sheetRadius)
-        val g = glass
-        if (g != null && c.isHardwareAccelerated) {
-            toScreen.reset()
-            g.draw(c, r, sheetRadius, host.sceneBlur() * Motion.profile.menuBlur * m.u, null, RectF(0f, 0f, width.toFloat(), height.toFloat())) { cc ->
-                host.drawBehindSheet(cc)
-                // The same scrim as around it; the sheet is the dock's glass (its tint only), like a menu.
-                sheetTint.color = sc
-                sheetTint.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
-                cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), sheetTint)
-            }
-        } else c.drawRoundRect(r, sheetRadius, sheetRadius, fallbackFill)
+        val drawn = glass?.drawLive(c, dev.launcher.app.design.Design.material(HomeTokens.WIDGETS_SHEET), r, sheetRadius, null,
+            RectF(0f, 0f, width.toFloat(), height.toFloat())) { cc ->
+            host.drawBehindSheet(cc)
+            // The same scrim as around it: the sheet's glass sees home as it shows around the sheet.
+            sheetTint.color = sc
+            sheetTint.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
+            cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), sheetTint)
+        } == true
+        if (!drawn) c.drawRoundRect(r, sheetRadius, sheetRadius, fallbackFill)
         c.save()
         c.clipRect(0f, y, m.w.toFloat(), m.h.toFloat())
         c.translate(0f, y)
@@ -450,46 +448,25 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         return previewShownAt.values.any { now - it < PREVIEW_FADE_MS }
     }
 
-    // The sheet's buttons and cards: the dock's glass, bending the blurred wallpaper (what the sheet shows, near enough),
-    // darkened a little for the white text on them. Built once the sheet is open; without a wallpaper copy, plain fills.
-    private var sheetGlass: GlassDrawable? = null
-    private val glassTint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x30000000 }
-
-    private fun sheetGlass(): GlassDrawable? {
-        sheetGlass?.let { return it }
-        val wp = host.wallpaper() ?: return null
-        if (android.os.Build.VERSION.SDK_INT < 33) return null
-        return try {
-            GlassDrawable(wp, m.w, m.h, m.pt(18f), m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_LIBRARY,
-                GlassDrawable.Source.BACKDROP).also { it.role = GlassDrawable.Role.SHEET; sheetGlass = it }
-        } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] sheet glass failed: ${t.message}"); null }
-    }
+    // The sheet's buttons (`comp.widgets.button.material`) and cards (`comp.widgets.card.material`): over the blurred
+    // wallpaper (home behind the sheet, near enough) under home's scrim and the sheet's own fills, as the sheet shows them.
+    // Without a wallpaper copy, plain fills.
+    private val sheetGlass = dev.launcher.app.drawer.BackdropGlass(m.u, m.w, m.h)
 
     /**
      * A glass shape at [rect] (canvas coordinates; [dy] = the canvas's y offset from the screen) with corner [radius],
      * [down] 0..1 pressed (a little darker). Falls back to a translucent fill.
      */
-    private fun glassShape(c: Canvas, rect: RectF, radius: Float, dy: Float, down: Float = 0f, fallback: Paint = capsule, fallbackAlpha: Int = 0x26) {
-        val g = sheetGlass()
-        if (g == null || !c.isHardwareAccelerated) {
-            fallback.alpha = (fallbackAlpha + 0x27 * down).toInt()
-            c.drawRoundRect(rect, radius, radius, fallback)
-            capsuleRim.alpha = 0x33
-            c.drawRoundRect(rect, radius, radius, capsuleRim)
-            return
-        }
-        g.setRadius(radius)
-        g.originX = rect.left
-        g.originY = rect.top + dy
-        g.setBounds(rect.left.toInt(), rect.top.toInt(), kotlin.math.ceil(rect.right).toInt(), kotlin.math.ceil(rect.bottom).toInt())
-        g.draw(c)
-        // Pressed: a touch of the label colour over it (the glass itself is the dock's, untinted beyond its own tint).
-        if (down > 0f) {
-            val pf = Appearance.pressFill
-            glassTint.color = pf
-            glassTint.alpha = (android.graphics.Color.alpha(pf) * down).toInt()
-            c.drawRoundRect(rect, radius, radius, glassTint)
-        }
+    private fun glassShape(c: Canvas, rect: RectF, radius: Float, dy: Float, down: Float = 0f, fallback: Paint = capsule, fallbackAlpha: Int = 0x26,
+                           key: dev.launcher.app.design.MaterialKey = HomeTokens.WIDGETS_BUTTON) {
+        sheetGlass.wallpaper = host.wallpaper()
+        val sheetFills = dev.launcher.app.design.Design.material(HomeTokens.WIDGETS_SHEET).fills
+        // Pressed: the material's own press (it lightens), as every glass control.
+        if (c.isHardwareAccelerated && sheetGlass.draw(c, key, rect, radius, 0f, dy, Appearance.scrim, sheetFills, press = down)) return
+        fallback.alpha = (fallbackAlpha + 0x27 * down).toInt()
+        c.drawRoundRect(rect, radius, radius, fallback)
+        capsuleRim.alpha = 0x33
+        c.drawRoundRect(rect, radius, radius, capsuleRim)
     }
 
     private fun drawCircleButton(c: Canvas, cx: Float, cy: Float, key: String) {
@@ -519,7 +496,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val pushX = -push.value.coerceIn(0f, 1f) * m.w * 0.3f
         val fieldShape = RectF(r)
         if (!fieldGlass.drawAt(c, pushX, sheetY(), fieldShape, fieldH / 2f) { cc -> drawBehindField(cc, pushX, fieldShape) })
-            glassShape(c, r, fieldH / 2f, sheetY(), fallback = fieldFill, fallbackAlpha = 0x1F)
+            glassShape(c, r, fieldH / 2f, sheetY(), fallback = fieldFill, fallbackAlpha = 0x1F, key = HomeTokens.FIELD)
         val lx = m.libMargin + m.pt(18f)
         val ly = headerH + fieldH / 2f - m.pt(1f)
         val lr = m.pt(6f)
@@ -718,7 +695,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
      */
     private fun drawWallpaperWindow(c: Canvas, rect: RectF, radius: Float, screenY: Float, down: Float) {
         val wp = host.wallpaper()
-        if (wp == null) { glassShape(c, rect, radius, screenY, down, cardFill, 0x1F); return }
+        if (wp == null) { glassShape(c, rect, radius, screenY, down, cardFill, 0x1F, HomeTokens.WIDGETS_CARD); return }
         c.save()
         windowClip.reset()
         windowClip.addRoundRect(rect, radius, radius, Path.Direction.CW)
@@ -859,7 +836,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         c.drawRoundRect(box.left + m.pt(6f), box.top + m.pt(14f), box.right - m.pt(6f), box.bottom + m.pt(10f), rad, rad, cardShadow)
         val info = e.info
         // Our clock is shown on a window onto the wallpaper (as it will look on home); Android widgets on glass cards.
-        if (info == null) drawWallpaperWindow(c, box, rad, sheetY(), 0f) else glassShape(c, box, rad, sheetY(), 0f, cardFill, 0x1F)
+        if (info == null) drawWallpaperWindow(c, box, rad, sheetY(), 0f) else glassShape(c, box, rad, sheetY(), 0f, cardFill, 0x1F, HomeTokens.WIDGETS_CARD)
         if (info == null) {
             // Our clock: the widget inside its card with the featured card's margins, scaled as the card is.
             val padH = featuredPadH * s

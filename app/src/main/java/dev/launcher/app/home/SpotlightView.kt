@@ -73,7 +73,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
     private val header = LabelPainter(m.listHeaderText, 0xCCFFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).toned { Appearance.secondaryLabel }.shadowed(m.pt(2f))
     private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, Fonts.text(450)).toned { Appearance.label }.shadowed(m.pt(2f))
     private var wallpaper: Wallpaper? = null
-    private var glass: GlassDrawable? = null
+    /** Its card and (in a recorded picture of home) its field: `comp.spotlight.card.material` over the blurred background. */
+    private val glass = dev.launcher.app.drawer.BackdropGlass(m.u, m.w, m.h)
     private var suggestions: List<AppEntry> = emptyList()
     private var imeInset = 0
     private var bottomInset = 0f
@@ -123,9 +124,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
     fun setWallpaper(w: Wallpaper?) {
         if (w === wallpaper) return
         wallpaper = w
-        glass = if (w != null && Build.VERSION.SDK_INT >= 33) try {
-            GlassDrawable(w, m.w, m.h, m.searchHeight / 2f, m.u, resources.displayMetrics.density * 7f, GlassStyle.IOS_LIBRARY, GlassDrawable.Source.BACKDROP)
-        } catch (t: Throwable) { AppLog.log("[spotlight] glass failed: ${t.message}"); null } else null
+        glass.wallpaper = w
         invalidate(); field.invalidate()
     }
 
@@ -149,14 +148,10 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
 
     /** The Top Hit card: the theme's glass, refracting the blurred background behind Spotlight. */
     private fun drawCard(c: Canvas, rect: RectF, rad: Float = m.pt(26f)) {
-        val g = glass
-        if (g == null) { cardFallback.color = Appearance.pressFill; c.drawRoundRect(rect, rad, rad, cardFallback); return }
         screenOffset(results, offset)
-        g.setRadius(rad)
-        g.originX = offset[0] + rect.left
-        g.originY = offset[1] + rect.top
-        g.setBounds(rect.left.toInt(), rect.top.toInt(), kotlin.math.ceil(rect.right).toInt(), kotlin.math.ceil(rect.bottom).toInt())
-        g.draw(c)
+        if (glass.draw(c, HomeTokens.SPOTLIGHT_CARD, rect, rad, offset[0], offset[1], Appearance.backdropVeil)) return
+        cardFallback.color = Appearance.pressFill
+        c.drawRoundRect(rect, rad, rad, cardFallback)
     }
 
     private val cardFallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x24FFFFFF }
@@ -559,18 +554,12 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                 val rad = height / 2f
                 if (fade <= 0.004f) return
                 if (fieldGlass.draw(c, this, shape, rad, fade) { cc -> drawBehindField(cc) }) return
-                val layer = if (fade < 1f) c.saveLayerAlpha(shape, (255 * fade).toInt()) else -1
-                val g = glass
-                if (g == null) c.drawRoundRect(shape, rad, rad, cardFallback)
-                else {
-                    screenOffset(this, at)
-                    g.setRadius(rad)
-                    g.originX = at[0]
-                    g.originY = at[1]
-                    g.setBounds(0, 0, width, height)
-                    g.draw(c)
+                screenOffset(this, at)
+                if (!glass.draw(c, HomeTokens.FIELD, shape, rad, at[0], at[1], Appearance.backdropVeil, alpha = fade)) {
+                    val layer = if (fade < 1f) c.saveLayerAlpha(shape, (255 * fade).toInt()) else -1
+                    c.drawRoundRect(shape, rad, rad, cardFallback)
+                    if (layer >= 0) c.restoreToCount(layer)
                 }
-                if (layer >= 0) c.restoreToCount(layer)
             }
         }
     }

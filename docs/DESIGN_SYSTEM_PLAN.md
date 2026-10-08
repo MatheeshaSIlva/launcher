@@ -83,8 +83,10 @@ late scroll frame, there before too, are still to be traced.
 background colour elsewhere; `PanelGlass` removed. The long look moved in 2a.
 *2d, part 1 (2026-10-08)*: the dock, the Search pill, the widgets' glass and edit mode's buttons on the kit's dock material
 (`comp.home.*`) through `GlassView` and the renderer (which learnt home's depth zoom, the wallpaper's reveal and the
-arrival's light). Left: the long press menu, App Library, Spotlight, the search fields, the widget gallery; the glass
-clock's numerals (a text shape) stay on `GlassDrawable` until the renderer has shapes.
+arrival's light). *Part 2*: the long-press menu (the kit's Regular glass), the search fields (the kit's search field: the
+small glass), App Library, Spotlight and the widget gallery, through the renderer's live form (`drawLive`) or over the
+blurred backdrop (`drawer/BackdropGlass`); `LiveGlass` removed. Left: the glass clock's numerals (a text shape) stay on
+`GlassDrawable` until the renderer draws shapes other than rounded rectangles.
 
 **Step 3: components.** Platter, control tile (sizes and states), slider, pill and round buttons, sheet, menu, badge,
 status row, clock numerals: specs plus painters. The shade's views shrink to layout and touch.

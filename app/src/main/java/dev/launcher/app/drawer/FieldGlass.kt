@@ -4,19 +4,21 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.RectF
 import android.view.View
-import dev.launcher.app.GlassStyle
-import dev.launcher.app.LiveGlass
+import dev.launcher.app.design.Design
+import dev.launcher.app.design.MaterialPainter
 import dev.launcher.app.home.HomeMetrics
+import dev.launcher.app.home.HomeTokens
 
 /**
- * A search field's glass: the dock's glass over what is really behind the field, the content scrolling under it included
- * (seen through it, softened by the dock's blur, bent at its edge), instead of a field that hides the content. [draw] needs
+ * A search field's glass (`comp.home.field.material`: the kit's search field, the small glass) over what is really behind
+ * the field, the content scrolling under it included (seen through it, blurred to the material's frost, bent at its edge),
+ * instead of a field that hides the content. Drawn by the renderer over live content ([MaterialPainter.drawLive]). [draw] needs
  * the field's view (for where it is on screen) and [behind], which draws what is behind it in screen coordinates. On a
  * canvas that is not hardware accelerated (home recorded into a picture) it returns false: the caller draws its plain
- * glass instead. Never inside a view with alpha below 1 or a smaller clip (see LiveGlass).
+ * glass instead. Never inside a view with alpha below 1 or a smaller clip (see MaterialPainter.drawLive).
  */
 internal class FieldGlass(private val m: HomeMetrics) {
-    private val glass = LiveGlass.create(GlassStyle.IOS, m.u)
+    private val glass = MaterialPainter.create(m.u)
     private val at = FloatArray(2)
     private val toScreen = Matrix()
     private val limit = RectF()
@@ -32,8 +34,7 @@ internal class FieldGlass(private val m: HomeMetrics) {
         if (!c.isHardwareAccelerated) return false
         toScreen.setTranslate(ox, oy)
         limit.set(-ox, -oy, m.w - ox, m.h - oy)
-        g.draw(c, shape, radius, BLUR_PT * m.u, toScreen, limit, alpha, behind)
-        return true
+        return g.drawLive(c, Design.material(HomeTokens.FIELD), shape, radius, toScreen, limit, alpha, drawBehind = behind)
     }
 
     /** Draws [v] (a child pane) as it shows, at its place on screen, into [c] (screen coordinates). */
@@ -47,8 +48,4 @@ internal class FieldGlass(private val m: HomeMetrics) {
         c.restoreToCount(save)
     }
 
-    private companion object {
-        /** The dock's softening of what is behind it (its wallpaper copy is blurred about this much). */
-        const val BLUR_PT = 1.5f
-    }
 }

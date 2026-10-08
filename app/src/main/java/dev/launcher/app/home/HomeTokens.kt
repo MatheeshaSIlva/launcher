@@ -30,6 +30,16 @@ object HomeTokens {
     val MENU_DESTRUCTIVE = dev.launcher.app.design.ColorKey("comp.home.menu.destructive")
     val MENU_PRESS = dev.launcher.app.design.ColorKey("comp.home.menu.press")
 
-    val ALL = listOf(DOCK, SEARCH, WIDGET, BUTTON, MENU, MENU_CORNER, MENU_WIDTH, MENU_ROW, MENU_PAD_TOP, MENU_PAD_BOTTOM, MENU_SYMBOL_X,
+    /** Search fields (App Library, Spotlight, the widget gallery), over the content scrolling under them. */
+    val FIELD = MaterialKey("comp.home.field.material")
+    /** The App Library's tiles, folder panel and search bar; Spotlight's card. */
+    val LIBRARY_TILE = MaterialKey("comp.library.tile.material")
+    val SPOTLIGHT_CARD = MaterialKey("comp.spotlight.card.material")
+    /** The widget gallery: its sheet (over home), its buttons and its widgets' cards. */
+    val WIDGETS_SHEET = MaterialKey("comp.widgets.sheet.material")
+    val WIDGETS_BUTTON = MaterialKey("comp.widgets.button.material")
+    val WIDGETS_CARD = MaterialKey("comp.widgets.card.material")
+
+    val ALL = listOf(DOCK, SEARCH, WIDGET, BUTTON, FIELD, LIBRARY_TILE, SPOTLIGHT_CARD, WIDGETS_SHEET, WIDGETS_BUTTON, WIDGETS_CARD, MENU, MENU_CORNER, MENU_WIDTH, MENU_ROW, MENU_PAD_TOP, MENU_PAD_BOTTOM, MENU_SYMBOL_X,
         MENU_LABEL_X, MENU_TYPE, MENU_LABEL, MENU_DESTRUCTIVE, MENU_PRESS).map { it.name }
 }

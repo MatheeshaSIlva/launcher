@@ -217,6 +217,15 @@ SEED = {
     'comp.home.menu.label': {'light': '#1a1a1a', 'dark': '#ffffff', 'src': 'kit:5619:49810 (light; dark judged: white on the dark glass)'},
     'comp.home.menu.destructive': {'ref': 'ref.color.accents.red', 'src': 'kit:5622:50175 (#ff383c)'},
     'comp.home.menu.press': {'light': '#00000014', 'dark': '#ffffff1f', 'src': "judged:a pressed row's highlight (was the app's press fill)"},
+    # Search fields (App Library, Spotlight, the widget gallery): the kit's search field (Toolbars, _Search - 48pt).
+    'comp.home.field.material': {'ref': 'sys.material.glass.small-active', 'src': 'kit:5720:33170 (the 48 pt search field: the small glass, active)'},
+    # Over the App Library's and Spotlight's blurred background: the dock's glass (kept from before; the kit has no App Library).
+    'comp.library.tile.material': {'ref': 'sys.material.glass.dock', 'src': "judged:App Library's tiles, folders and search bar on the dock's glass (the kit has no App Library)"},
+    'comp.spotlight.card.material': {'ref': 'sys.material.glass.dock', 'src': "judged:Spotlight's card on the dock's glass, as the App Library's tiles"},
+    # The widget gallery: a tall glass sheet (the kit's medium sheet is the Regular glass; its large one is opaque).
+    'comp.widgets.sheet.material': {'ref': 'sys.material.glass.regular', 'src': "kit:10525:1636 (Sheet - iPhone, medium detent: the Regular glass); judged for the gallery's tall sheet (iOS 26's is glass)"},
+    'comp.widgets.button.material': {'ref': 'sys.material.glass.small-active', 'src': "kit:5566:7888 (a sheet's 44 pt buttons: the small glass, active)"},
+    'comp.widgets.card.material': {'ref': 'sys.material.glass.dock', 'src': "judged:a widget's preview card on the dock's glass (as on home)"},
     'comp.nc.platter.material': {'ref': 'sys.material.glass.clear', 'src': 'kit:0:11292'},
     'comp.nc.platter.corner': {'pt': 24, 'src': 'kit:0:11292'},
     'comp.nc.platter.padding': {'pt': 14, 'src': 'kit:0:11292'},

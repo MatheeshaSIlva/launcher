@@ -247,38 +247,32 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
 
     internal var wallpaper: dev.launcher.app.Wallpaper? = null
         private set
-    internal var tileGlass: dev.launcher.app.GlassDrawable? = null
+    // What the tiles, the folder panel and the search bar are made of (`comp.library.tile.material`); null without the
+    // wallpaper copy (plain fills then).
+    internal var tileGlass: dev.launcher.app.design.MaterialKey? = null
         private set
-    internal var searchGlass: dev.launcher.app.GlassDrawable? = null
+    internal var searchGlass: dev.launcher.app.design.MaterialKey? = null
         private set
-    internal var panelGlass: dev.launcher.app.GlassDrawable? = null
+    internal var panelGlass: dev.launcher.app.design.MaterialKey? = null
         private set
+    private val backdropGlass = BackdropGlass(m.u, m.w, m.h)
     private val glassFallback = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x2EFFFFFF }
 
     /** A text shadow colour faded with the appearance (white text on the dark material has one, dark text none). */
     internal fun shadowFor(color: Int): Int = ((android.graphics.Color.alpha(color) * dev.launcher.app.theme.Appearance.textShadowStrength).toInt() shl 24) or (color and 0xFFFFFF)
     private val offset = FloatArray(2)
 
-    private fun makeGlass(w: dev.launcher.app.Wallpaper, radius: Float): dev.launcher.app.GlassDrawable? {
-        if (Build.VERSION.SDK_INT < 33) return null
-        return try {
-            val d = resources.displayMetrics.density
-            dev.launcher.app.GlassDrawable(w, m.w, m.h, radius, m.u, d * 7f, dev.launcher.app.GlassStyle.IOS_LIBRARY, dev.launcher.app.GlassDrawable.Source.BACKDROP)
-        } catch (t: Throwable) {
-            dev.launcher.app.AppLog.log("[library] glass shader failed, plain tiles instead: ${t.javaClass.simpleName}: ${t.message}")
-            null
+    /**
+     * Draws the glass [key] at [rect] (in [onView]'s coordinates) over the App Library's background (the blurred wallpaper
+     * under its veil); without our wallpaper copy, a plain translucent fill.
+     */
+    internal fun drawGlass(c: Canvas, key: dev.launcher.app.design.MaterialKey?, rect: RectF, radius: Float, onView: View) {
+        if (key != null) {
+            screenOffset(onView, offset)
+            if (backdropGlass.draw(c, key, rect, radius, offset[0], offset[1], dev.launcher.app.theme.Appearance.backdropVeil)) return
         }
-    }
-
-    /** Draws a glass surface at [rect] (in [onView]'s coordinates); without our wallpaper copy, a plain translucent fill. */
-    internal fun drawGlass(c: Canvas, g: dev.launcher.app.GlassDrawable?, rect: RectF, radius: Float, onView: View) {
-        if (g == null) { glassFallback.color = dev.launcher.app.theme.Appearance.pressFill; c.drawRoundRect(rect, radius, radius, glassFallback); return }
-        screenOffset(onView, offset)
-        g.setRadius(radius)
-        g.originX = offset[0] + rect.left
-        g.originY = offset[1] + rect.top
-        g.setBounds(rect.left.toInt(), rect.top.toInt(), kotlin.math.ceil(rect.right).toInt(), kotlin.math.ceil(rect.bottom).toInt())
-        g.draw(c)
+        glassFallback.color = dev.launcher.app.theme.Appearance.pressFill
+        c.drawRoundRect(rect, radius, radius, glassFallback)
     }
 
     internal fun settled() = host.onDrawerSettled()
@@ -391,9 +385,10 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     override fun setWallpaper(w: dev.launcher.app.Wallpaper?) {
         if (w === wallpaper) return
         wallpaper = w
-        tileGlass = w?.let { makeGlass(it, m.tileRadius) }
-        searchGlass = w?.let { makeGlass(it, m.searchHeight / 2f) }
-        panelGlass = w?.let { makeGlass(it, m.folderRadius) }
+        backdropGlass.wallpaper = w
+        tileGlass = if (w != null) dev.launcher.app.home.HomeTokens.LIBRARY_TILE else null
+        searchGlass = tileGlass
+        panelGlass = tileGlass
         invalidateAll()
         searchBar.invalidate()
     }

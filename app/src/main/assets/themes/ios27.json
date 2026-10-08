@@ -1889,6 +1889,10 @@
    "ref": "sys.material.glass.dock",
    "src": "kit:558:50551"
   },
+  "comp.home.field.material": {
+   "ref": "sys.material.glass.small-active",
+   "src": "kit:5720:33170 (the 48 pt search field: the small glass, active)"
+  },
   "comp.home.menu.corner": {
    "pt": 30,
    "src": "kit:10411:18581"
@@ -1946,6 +1950,10 @@
   "comp.home.widget.material": {
    "ref": "sys.material.glass.dock",
    "src": "judged:the kit's widgets show the app's own background; ours sit on home's glass, the dock's"
+  },
+  "comp.library.tile.material": {
+   "ref": "sys.material.glass.dock",
+   "src": "judged:App Library's tiles, folders and search bar on the dock's glass (the kit has no App Library)"
   },
   "comp.nc.button.bottom": {
    "pt": 50,
@@ -2199,6 +2207,22 @@
   "comp.nc.stack.shelf-show": {
    "pt": 8,
    "src": "kit:533:5978"
+  },
+  "comp.spotlight.card.material": {
+   "ref": "sys.material.glass.dock",
+   "src": "judged:Spotlight's card on the dock's glass, as the App Library's tiles"
+  },
+  "comp.widgets.button.material": {
+   "ref": "sys.material.glass.small-active",
+   "src": "kit:5566:7888 (a sheet's 44 pt buttons: the small glass, active)"
+  },
+  "comp.widgets.card.material": {
+   "ref": "sys.material.glass.dock",
+   "src": "judged:a widget's preview card on the dock's glass (as on home)"
+  },
+  "comp.widgets.sheet.material": {
+   "ref": "sys.material.glass.regular",
+   "src": "kit:10525:1636 (Sheet - iPhone, medium detent: the Regular glass); judged for the gallery's tall sheet (iOS 26's is glass)"
   },
   "sys.color.accent": {
    "ref": "ref.color.accents.blue",

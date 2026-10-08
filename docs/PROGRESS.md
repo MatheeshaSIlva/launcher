@@ -1402,3 +1402,25 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   is resumed behind the lock screen the state is read every frame (for 2 s), so the arrival starts ~1 frame after the lock
   screen goes. Matheesha: "works now" (all three: from screen-off, power key first, a quick re-wake); his log: every
   arrival 93-94 frames at 120 Hz.
+
+## Design system step 2d, part 2: the rest of home's glass (2026-10-08)
+
+- The renderer draws over live content too (`MaterialPainter.drawLive`: what is behind recorded into a render node, blurred
+  to the material's frost, the one shader run on it as a render effect), so `LiveGlass` is gone.
+- **Long-press menu**: the kit's Home Screen Quick Actions (System page 5626:51776) is the Regular glass (frost 16, white
+  70 % lighten / grey 10 % darken; dark: #1a1a1a luminosity), corner 30, 250 pt, rows 42, Body 17 #1a1a1a, red #ff383c
+  (`comp.home.menu.*`). Compared with the kit's render: the same frosted white, rims and soft shadow (home behind ours is
+  blurred as well as dimmed, as iOS does; the kit's mock only dims it).
+- **Search fields** (App Library, Spotlight, the widget gallery): the kit's search field (Toolbars, `_Search - 48pt`) is
+  exactly the small glass, active (`comp.home.field.material`), drawn live over the content scrolling under it.
+- **App Library** tiles, folder panel and search bar; **Spotlight**'s card: the dock's glass as before (the kit has no App
+  Library: judged), now the kit's dock material, over the same blurred wallpaper and veil as their background
+  (`drawer/BackdropGlass`, `comp.library.tile.material`, `comp.spotlight.card.material`).
+- **Widget gallery**: the sheet on the Regular glass (the kit's medium sheet; its large one is opaque white: judged for
+  the gallery's tall glass sheet), drawn live over home; its buttons on the kit's sheet-button material (the small glass,
+  active), its widgets' cards on the dock's glass (`comp.widgets.*`).
+- Soft drop shadows were composited as colour x coverage (a shadow at opacity a came out at about a squared: the kit's
+  25 % black at ~6 %); now the colour that over the backdrop gives it. Banners and the menu show the kit's soft shadow.
+- Emulator, light and dark: the menu, App Library (tiles, search), Spotlight (Top Hit, field), the widget gallery (list,
+  an app's page): all on their materials. Left on `GlassDrawable`: the glass clock's numerals (a text shape; the renderer
+  draws rounded rectangles), on home, in Notification Center and in the gallery's clock preview.

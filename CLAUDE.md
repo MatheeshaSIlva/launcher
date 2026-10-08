@@ -59,7 +59,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   Notification Center is on it (step 2a, tokens `comp.nc.*` in `shade/NcTokens.kt`), and Control Center with its expanded
   modules and gallery (2b, `comp.cc.*` in `shade/CcTokens.kt`, drawn through `shade/CcSurfaces`), and the banners (2c,
   `comp.banner.*`), and home's dock, Search pill, widgets and edit buttons (2d part 1, `comp.home.*` in `home/HomeTokens.kt`, through
-  `GlassView` with a material); home's menus, App Library, Spotlight, fields and the glass clock still use `GlassDrawable`/`LiveGlass`. Blur sizes in tokens are the kit's (sigma = radius / 2); Android's
+  `GlassView` with a material) and the rest of home's glass (2d part 2: menus, search fields, App Library, Spotlight, the widget
+  gallery, over live content through `MaterialPainter.drawLive` or over the blurred backdrop through `drawer/BackdropGlass`);
+  only the glass clock's numerals (a text shape) still use `GlassDrawable`. Blur sizes in tokens are the kit's (sigma = radius / 2); Android's
   `RenderEffect` blur takes its own radius: convert with `design/Blur`. Theme seeds live in `tools/design/build_ios27_theme.py`
   (`reseed.py KEY` re-applies a corrected seed). To compare with the kit over its own picture: push it to
   `/sdcard/Android/data/dev.launcher.app/files/wallpaper.png` (the app shows it instead of the wallpaper; delete to undo).
@@ -120,8 +122,9 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Recording home into a Picture costs ~20 ms of main thread**: never inside an animation frame (settle callbacks run inside
   the last frame); reuse the last picture when home has not drawn since. **No GPU layer on any view inside home** (only on
   the recorded root): a layered child is drawn in software inside the recording and the glass shader crashes the app.
-- **`LiveGlass` must never be drawn inside a clip or a smaller layer** (clipToOutline, a parent's clip, view alpha < 1):
-  the effect's input is cut there and the edges break. Use `GlassDrawable` (samples our wallpaper copy) for anything clipped.
+- **Glass over live content (`MaterialPainter.drawLive`: menus, search fields, the widget gallery's sheet) must never be drawn
+  inside a clip or a smaller layer** (clipToOutline, a parent's clip, view alpha < 1): the effect's input is cut there and the
+  edges break. Use the paint form (`MaterialPainter.draw` over a backdrop image) for anything clipped.
 - **Text-shaped glass needs a distance field, not a blurred mask**: a blur wide enough for a lens turns a whole thin stroke
   into "edge". Judge glass offline only with the app's own pipeline at the device's real size (`docs/design/clock_proto.py`).
 - **Glass and transforms**: a glass surface's uniforms are recorded into its display list; a parent moving it does not redraw
