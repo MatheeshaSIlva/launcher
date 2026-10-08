@@ -291,7 +291,7 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
  * new one while the old look crossfades into the new content laid out at its final size (nothing stretches), as iOS resizes
  * a widget. Subclasses lay out their content for [cardW] x [cardH] and draw within the card as shown now ([shownW], [shownH]).
  */
-abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX: Int, spanY: Int) : FrameLayout(ctx), HomeWidgetView {
+abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX: Int, spanY: Int) : FrameLayout(ctx), HomeWidgetView, TonedLabel {
     var spanX = spanX
         private set
     var spanY = spanY
@@ -328,6 +328,9 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
         typeface = dev.launcher.app.theme.Fonts.text(450)
     }
     private val labelShadow = dev.launcher.app.theme.FadingShadow(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
+    /** 0: a white name, 1: a dark one (over a bright wallpaper): set by home ([LabelTone]). */
+    private val labelTone = SpringValue(0f, 100f, { invalidate() })
+    private var labelToneKnown = false
     private val oldClip = android.graphics.Path()
     /** True while the frame records its own look (badges, label and the crossfade are left out). */
     protected var recordingLook = false
@@ -413,6 +416,16 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
         return p
     }
 
+    override fun labelArea(out: RectF) {
+        shownRect(out)
+        out.set(out.left, out.bottom, out.right, out.bottom + m.labelBaseline + m.labelTextSize * 0.3f)
+    }
+
+    override fun setLabelTone(tone: Float, animate: Boolean) {
+        if (!labelToneKnown || !animate) { labelTone.snapTo(tone); labelToneKnown = true; invalidate(); return }
+        if (kotlin.math.abs(labelTone.target - tone) > 0.01f) labelTone.animateTo(tone, dev.launcher.app.motion.SpringSpec(0.5f, 1f))
+    }
+
     /** The card's rounded rectangle as shown now, in this view's coordinates. */
     protected fun shownRect(out: RectF): RectF = out.apply { set(left, 0f, left + shownW, shownH) }
 
@@ -437,7 +450,11 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
         }
         val label = labelText
         if (label != null && labelK > 0f) {
-            labelPaint.alpha = (255 * labelK).toInt()
+            val t = labelTone.value.coerceIn(0f, 1f)
+            val col = LabelTone.color(t)
+            labelPaint.color = col
+            labelPaint.alpha = (((col ushr 24) and 0xFF) * labelK).toInt()
+            labelShadow.color = LabelTone.shadow(t)
             labelShadow.apply(labelPaint)
             canvas.drawText(label, left + shownW / 2f, shownH + m.labelBaseline, labelPaint)
         }

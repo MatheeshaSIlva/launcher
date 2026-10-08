@@ -74,7 +74,10 @@ object FrostCache {
             val content = RenderNode("frost")
             content.setPosition(0, 0, w, h)
             val c = content.beginRecording()
-            try { c.scale(scale, scale); c.drawBitmap(source, 0f, 0f, null) } finally { content.endRecording() }
+            // Scaled to cover the image exactly: at one rounded scale the last column and row were only partly covered
+            // (half transparent, dark), and a lens bending its samples out at the screen's right edge showed it as an
+            // orange-red line along the dock's right end (red and blue apart).
+            try { c.scale(w / source.width.toFloat(), h / source.height.toFloat()); c.drawBitmap(source, 0f, 0f, null) } finally { content.endRecording() }
             val r = Blur.renderRadius(sigmaPx * scale)
             if (r > 0f) content.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP))
             renderer.setContentRoot(content)

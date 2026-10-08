@@ -205,6 +205,18 @@ SEED = {
     'comp.home.search.material': {'ref': 'sys.material.glass.dock', 'src': 'kit:5593:10801'},
     'comp.home.widget.material': {'ref': 'sys.material.glass.dock', 'src': "judged:the kit's widgets show the app's own background; ours sit on home's glass, the dock's"},
     'comp.home.button.material': {'ref': 'sys.material.glass.dock', 'src': "judged:edit mode's Edit and Done on home's glass, as the Search pill"},
+    # Home's names under icons and widgets: white with a soft shadow (iOS), dark over a bright wallpaper (Android's
+    # convenience: always readable), blended by the wallpaper's luminance under each name (dark mode's dim counted).
+    'comp.home.label.light': {'color': '#ffffff', 'src': "kit:the Home Screen's app names"},
+    'comp.home.label.dark': {'color': '#1c1c1e', 'src': 'judged:dark names over a bright wallpaper (the kit\'s label primary, light)'},
+    'comp.home.label.shadow': {'color': '#00000040', 'src': 'judged:the soft shadow under white names (none under dark ones)'},
+    'comp.home.label.dark-from': {'factor': 0.62, 'src': 'judged:names start turning dark over a wallpaper this light (luminance)'},
+    'comp.home.label.dark-full': {'factor': 0.78, 'src': 'judged:names are fully dark over a wallpaper this light'},
+    # The glass clock (home's widget, Notification Center's) takes the same tone as the names, from the wallpaper under it:
+    # light glass over a dark or mid wallpaper, dark glass over a bright one (white glass vanished there, dark glass was
+    # muddy over a dark one), whatever the appearance.
+    'comp.home.clock.tint-light': {'color': '#ffffff30', 'src': "judged:the clock over a dark or mid wallpaper: the glass's light tint (the dock's in light mode)"},
+    'comp.home.clock.tint-dark': {'color': '#00000052', 'src': "judged:the clock over a bright wallpaper: the glass's dark tint (the dock's in dark mode)"},
     # The long-press menu: the kit's Home Screen Quick Actions (System page 2607:25374, its menu 5626:51776).
     'comp.home.menu.material': {'ref': 'sys.material.glass.regular', 'src': 'kit:5626:51776 (BG: the Regular glass, frost 16)'},
     'comp.home.menu.corner': {'pt': 30, 'src': 'kit:10411:18581'},

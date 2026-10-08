@@ -120,6 +120,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         drawer?.onAppearance()
         spotlight?.onAppearance()
         updateStatusDark()
+        updateLabelTones(animate = false)   // every frame of the crossfade: the names follow it
         // The Edit button lifted above its menu is a picture: taken again in the new colours.
         if (menu?.isShowing == true && editMode?.active == true) (editBar as? EditMode.Bar)?.let { menu?.replaceLifted(it.editButtonPicture()) }
         invalidateTree(this)
@@ -131,14 +132,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (v is android.view.ViewGroup) for (i in 0 until v.childCount) invalidateTree(v.getChildAt(i))
     }
 
+    /** After any layout (a page laid out, an icon moved in edit mode): the names take the tone of the wallpaper under them. */
+    private val toneAfterLayout = android.view.ViewTreeObserver.OnGlobalLayoutListener { updateLabelTones(animate = true) }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        viewTreeObserver.addOnGlobalLayoutListener(toneAfterLayout)
         dev.launcher.app.Badges.addListener(onBadges)
         dev.launcher.app.theme.Appearance.addListener(onAppearance)
         onBadges()
     }
 
     override fun onDetachedFromWindow() {
+        viewTreeObserver.removeOnGlobalLayoutListener(toneAfterLayout)
         dev.launcher.app.Badges.removeListener(onBadges)
         dev.launcher.app.theme.Appearance.removeListener(onAppearance)
         super.onDetachedFromWindow()
@@ -208,6 +214,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         drawer?.setWallpaper(w)
         spotlight?.setWallpaper(w)
         applyGlassWallpaper()
+        post { updateLabelTones(animate = true) }
     }
 
     /** Every widget on the pages. */
@@ -215,6 +222,30 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     /** Glass on the pages (widgets): redrawn while the pages move, so it keeps refracting what is behind it. */
     private fun pageGlass(): List<GlassView> = widgetViews().flatMap { it.glassViews() }
+
+    private val toneAt = IntArray(2)
+    private val tonePage = IntArray(2)
+    private val toneRect = RectF()
+
+    /**
+     * Every name on the pages takes the tone of the wallpaper under it ([LabelTone]: white, or dark over a bright one), as
+     * it shows when its page is in front. After a layout, a new wallpaper (on a spring: [animate]) or a frame of the
+     * appearance's crossfade (its dim changes how light the wallpaper is).
+     */
+    fun updateLabelTones(animate: Boolean) {
+        if (wallpaper == null || width == 0) return
+        for (p in pages) {
+            p.getLocationOnScreen(tonePage)
+            for (i in 0 until p.childCount) {
+                val v = p.getChildAt(i) as? TonedLabel ?: continue
+                (v as View).getLocationOnScreen(toneAt)
+                v.labelArea(toneRect)
+                // Its place with its page in front: the pages lie side by side, each the screen's width.
+                toneRect.offset((toneAt[0] - tonePage[0]).toFloat(), toneAt[1].toFloat())
+                v.setLabelTone(LabelTone.of(wallpaperLuminanceUnder(toneRect)), animate)
+            }
+        }
+    }
 
     /** How light the wallpaper is under [rectOnScreen] (0..1; 0.5 without our copy of it). */
     fun wallpaperLuminanceUnder(rectOnScreen: RectF): Float {

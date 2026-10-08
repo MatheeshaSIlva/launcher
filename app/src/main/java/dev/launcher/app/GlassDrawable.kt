@@ -176,6 +176,12 @@ class GlassDrawable(
     /** False for glass outside home (Notification Center's clock): home's depth zoom ([GlassDepth]) is not behind it. */
     var followsHomeDepth = true
 
+    /**
+     * The clock's tone, from the wallpaper under it (0: light glass, 1: dark glass over a bright wallpaper:
+     * [dev.launcher.app.home.LabelTone]), whatever the appearance. NaN: the appearance's tint, as all other glass.
+     */
+    var tone = Float.NaN
+
     init {
         setImages("Old", wallpaper)
         setImages("New", wallpaper)
@@ -307,7 +313,8 @@ class GlassDrawable(
             // On a sheet: the blurred home under the scrim, seen through the sheet's own glass (its tint).
             Role.SHEET -> a.overlay(a.scrim, a.glassTint)
         }
-        val tint = a.glassTint
+        val tn = tone
+        val tint = if (tn.isNaN()) a.glassTint else dev.launcher.app.home.LabelTone.clockTint(tn)
         if (veil != veilAt) { veilAt = veil; setColorUniform("veil", veil) }
         if (tint != tintAt) { tintAt = tint; setColorUniform("themeTint", tint) }
     }

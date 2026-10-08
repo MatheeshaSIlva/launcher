@@ -94,7 +94,9 @@ status row, clock numerals: specs plus painters. The shade's views shrink to lay
 With it, the **look audit** Matheesha asked for (2026-10-08): tints and opacities that differ between surfaces (or with
 the wallpaper) listed surface by surface over a light, a mid and a dark wallpaper, and every difference from iOS 27 that
 is not a decision of ours, each fixed in its token. Already done: the kit's hairline rims at a theme strength
-(`sys.glass.rim`: they read as a black outline over dark backdrops).
+(`sys.glass.rim`: they read as a black outline over dark backdrops); the dock's edge fringe (frosted backdrops cover their
+image exactly); home's names and the glass clock take a light or dark tone from the wallpaper under them (`LabelTone`,
+`comp.home.label.*`, `comp.home.clock.*`). Left: Control Center, App Library, Spotlight and sheets over the three wallpapers.
 
 **Step 3+: Android conveniences** (requested 2026-10-08; built on step 3's menu and buttons, which come first; the rest of
 step 3 after them). The aim, in Matheesha's

@@ -664,9 +664,11 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         // numerals never show through the notifications passing over them.
         val clockK = (1f - scroller.position / (CLOCK_FADE_PT * u)).coerceIn(0f, 1f)
         if (clockK > 0.003f) {
+            val tone = clockTone()
             val ck = ((dateText.hashCode().toLong() shl 32) xor (System.identityHashCode(clockGlass).toLong() shl 12)) xor
                 (System.identityHashCode(clockGlassOld).toLong() shl 2) xor Math.round(clockFade.value * 255f).toLong() xor
-                (if (clockGlass == null) clockText.hashCode().toLong() else 0L) xor (System.identityHashCode(wallpaper).toLong() shl 40)
+                (if (clockGlass == null) clockText.hashCode().toLong() else 0L) xor (System.identityHashCode(wallpaper).toLong() shl 40) xor
+                (Math.round(tone * 255f).toLong() shl 24) xor (Math.round(Appearance.dark * 255f).toLong() shl 52)
             if (ck != clockKey || !clockNode.hasDisplayList()) {
                 clockNode.setPosition(0, 0, width, (clockBox(RectF()).bottom + 40f * u).toInt())
                 val rc = clockNode.beginRecording()
@@ -792,10 +794,33 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private val clockRect = RectF()
 
+    // The clock's tone (home's: [dev.launcher.app.home.LabelTone]): light glass and a white date, dark ones over a bright
+    // wallpaper. Worked out again for a new wallpaper, size or appearance only.
+    private var toneOf: Wallpaper? = null
+    private var toneDim = -1f
+    private var toneW = 0
+    private var toneValue = 0f
+    private val toneArea = RectF()
+
+    private fun clockTone(): Float {
+        val wp = wallpaper ?: return 0f
+        val dim = Appearance.wallpaperDim
+        if (wp !== toneOf || dim != toneDim || width != toneW) {
+            toneOf = wp; toneDim = dim; toneW = width
+            clockBox(toneArea)
+            toneArea.top -= 40f * u   // the date above the numerals
+            toneValue = dev.launcher.app.home.LabelTone.of(wp.luminanceUnder(toneArea, width, height))
+        }
+        return toneValue
+    }
+
     private fun drawClock(c: Canvas, dy: Float, k: Float) {
         clockBox(clockRect)
         clockRect.offset(0f, dy)
-        datePaint.color = alpha(0xF2FFFFFF.toInt(), k)
+        val tone = clockTone()
+        val col = dev.launcher.app.home.LabelTone.color(tone)
+        datePaint.color = alpha(col, k * (0xF2 / 255f))
+        dateShadow.color = alpha(0x59000000, 1f - tone)
         dateShadow.apply(datePaint)
         c.drawText(dateText, width / 2f, clockRect.top - 13f * u, datePaint)
         val g = clockGlass
@@ -805,13 +830,14 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             drawClockGlass(c, g, f * k)
         } else if (clockText.isNotEmpty()) {
             val baseline = dev.launcher.app.home.ClockNumerals.layout(solidDigits, clockRect.width(), clockRect.height(), android.text.format.DateFormat.is24HourFormat(context))
-            solidDigits.alpha = (0xF2 * k).roundToInt()
+            solidDigits.color = alpha(col, k * (0xF2 / 255f))
             c.drawText(clockText, clockRect.centerX(), clockRect.top + baseline, solidDigits)
         } else clockLog("nothing to draw (no numerals, no time yet)")
     }
 
     private fun drawClockGlass(c: Canvas, g: GlassDrawable, a: Float) {
         if (a <= 0.003f) return
+        g.tone = clockTone()
         g.originX = clockRect.left
         g.originY = clockRect.top
         g.scale = 1f

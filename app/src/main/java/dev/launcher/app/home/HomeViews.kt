@@ -189,9 +189,15 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         textSize = dateSize
         textAlign = Paint.Align.CENTER
         typeface = dev.launcher.app.theme.Fonts.text(600)
-        // Readable over a light wallpaper too.
-        setShadowLayer(m.pt(5f), 0f, m.pt(1f), 0x66000000)
     }
+    /** Under the white date (none under a dark one). */
+    private val dateShadow = dev.launcher.app.theme.FadingShadow(m.pt(5f), 0f, m.pt(1f), 0x66000000)
+    /**
+     * 0: light glass and a white date, 1: dark ones (over a bright wallpaper). Home sets it from the wallpaper under the
+     * whole clock ([LabelTone]), the date and the numerals together; it moves on a spring.
+     */
+    private val tone = dev.launcher.app.motion.SpringValue(0f, 100f, { applyTone() })
+    private var toneKnown = false
     private val digitPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         typeface = dev.launcher.app.theme.Fonts.display(700)
@@ -239,6 +245,21 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     }
 
     override fun glassViews(): List<GlassView> = if (solid) emptyList() else listOf(layerA.glass, layerB.glass)
+
+    /** The date and the numerals: one tone for both. */
+    override fun labelArea(out: RectF) { shownRect(out) }
+
+    override fun setLabelTone(tone: Float, animate: Boolean) {
+        if (!toneKnown || !animate) { this.tone.snapTo(tone); toneKnown = true; applyTone(); return }
+        if (kotlin.math.abs(this.tone.target - tone) > 0.01f) this.tone.animateTo(tone, TONE_SPRING)
+    }
+
+    private fun applyTone() {
+        val t = tone.value.coerceIn(0f, 1f)
+        layerA.glass.tone = t
+        layerB.glass.tone = t
+        invalidate()
+    }
 
     override fun onSpanChanged() {
         tickAnim?.cancel()
@@ -383,16 +404,29 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     private val solidShadow = dev.launcher.app.theme.FadingShadow(m.pt(3f), 0f, m.pt(1f), 0x33000000)
 
     override fun onDraw(canvas: Canvas) {
+        val t = tone.value.coerceIn(0f, 1f)
+        val col = LabelTone.color(t)
+        datePaint.color = col
+        datePaint.alpha = ((col ushr 24) * 0xF2 / 255f).toInt()
+        dateShadow.color = (((0x66 * (1f - t)).toInt()) shl 24)
+        dateShadow.apply(datePaint)
         canvas.drawText(dateText, left + shownW / 2f, dateSize * 0.86f, datePaint)
         if (solid && shownTime.isNotEmpty()) {
             solidPaint.typeface = digitPaint.typeface
             solidPaint.textSize = digitPaint.textSize
             solidPaint.textScaleX = digitPaint.textScaleX
             solidPaint.letterSpacing = digitPaint.letterSpacing
-            solidPaint.alpha = (0xF2 * contentK).toInt()
+            solidPaint.color = col
+            solidPaint.alpha = ((col ushr 24) * 0xF2 / 255f * contentK).toInt()
+            solidShadow.color = (((0x33 * (1f - t)).toInt()) shl 24)
             solidShadow.apply(solidPaint)
             canvas.drawText(shownTime, left + cardW / 2f, digitsTop + solidBaseline, solidPaint)
         }
+    }
+
+    private companion object {
+        /** The clock turning light or dark (a new wallpaper): as gently as the names under the icons. */
+        val TONE_SPRING = dev.launcher.app.motion.SpringSpec(0.5f, 1f)
     }
 }
 

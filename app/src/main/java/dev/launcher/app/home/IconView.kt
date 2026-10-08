@@ -20,7 +20,7 @@ import dev.launcher.app.motion.Motion
  * Touching it dims the icon as iOS does. Hidden icons (a card is flying into or out of them) use alpha, so they stay
  * tappable: reopening an app while its card is still closing must work.
  */
-class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: Boolean) : View(ctx) {
+class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: Boolean) : View(ctx), TonedLabel {
     var entry: AppEntry? = null
         private set
     private var bitmap: Bitmap? = null
@@ -34,6 +34,9 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
     }
     // Fades with the label (names switched off, the arrival): see FadingShadow.
     private val labelShadow = dev.launcher.app.theme.FadingShadow(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
+    /** 0: a white name, 1: a dark one (over a bright wallpaper): set by home ([LabelTone]), moving on a spring. */
+    private val tone = dev.launcher.app.motion.SpringValue(0f, 100f, { invalidate() })
+    private var toneKnown = false
     private val iconRect = RectF()
     private var dim = 0f
     /** A card is flying into or out of this icon: the image is left out, the label stays. */
@@ -141,13 +144,24 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
         }
         if (showLabel && !labelHidden && labelK > 0f && shownLabel.isNotEmpty()) {
             val y = iconRect.bottom + m.labelBaseline
-            labelPaint.alpha = (255 * labelK).toInt()
+            val t = tone.value.coerceIn(0f, 1f)
+            val col = LabelTone.color(t)
+            labelPaint.color = col
+            labelPaint.alpha = (((col ushr 24) and 0xFF) * labelK).toInt()
+            labelShadow.color = LabelTone.shadow(t)
             labelShadow.apply(labelPaint)
             canvas.drawText(shownLabel, 0, shownLabel.length, width / 2f, y, labelPaint)
         }
         if (shownBadge > 0 && !iconHidden) CountBadge.draw(canvas, iconRect, shownBadge, m, scale = badgeScale.value.coerceAtLeast(0f))
         val ek = editK.value
         if (ek > 0.01f && !editBadgeHidden) RemoveBadge.draw(canvas, badgeCenter()[0], badgeCenter()[1], m, ek)
+    }
+
+    override fun labelArea(out: RectF) { out.set(0f, iconRect.bottom, width.toFloat(), iconRect.bottom + m.labelBaseline + m.labelTextSize * 0.3f) }
+
+    override fun setLabelTone(tone: Float, animate: Boolean) {
+        if (!toneKnown || !animate) { this.tone.snapTo(tone); toneKnown = true; invalidate(); return }
+        if (kotlin.math.abs(this.tone.target - tone) > 0.01f) this.tone.animateTo(tone, TONE_SPRING)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -173,5 +187,10 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             addUpdateListener { dim = it.animatedValue as Float; invalidate() }
             start()
         }
+    }
+
+    private companion object {
+        /** A name turning white or dark (a new wallpaper): as gently as the wallpaper's own change. */
+        val TONE_SPRING = dev.launcher.app.motion.SpringSpec(0.5f, 1f)
     }
 }

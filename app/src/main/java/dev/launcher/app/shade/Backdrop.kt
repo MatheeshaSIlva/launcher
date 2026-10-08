@@ -173,7 +173,8 @@ object BlurBaker {
                 val content = RenderNode("shade-bake-content")
                 content.setPosition(0, 0, bw, bh)
                 val rc = content.beginRecording()
-                try { rc.scale(scale, scale); source.draw(rc, w.toFloat(), h.toFloat()) } finally { content.endRecording() }
+                // Covering the image exactly (a rounded size at one scale left the last column and row half transparent).
+                try { rc.scale(bw / w.toFloat(), bh / h.toFloat()); source.draw(rc, w.toFloat(), h.toFloat()) } finally { content.endRecording() }
                 content.setRenderEffect(RenderEffect.createBlurEffect(radiusPx * scale, radiusPx * scale, Shader.TileMode.CLAMP))
                 val root = RenderNode("shade-bake")
                 root.setPosition(0, 0, bw, bh)

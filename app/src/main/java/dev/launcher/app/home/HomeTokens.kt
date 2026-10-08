@@ -40,6 +40,59 @@ object HomeTokens {
     val WIDGETS_BUTTON = MaterialKey("comp.widgets.button.material")
     val WIDGETS_CARD = MaterialKey("comp.widgets.card.material")
 
+    /** Names under icons and widgets: white, or dark over a bright wallpaper (see [LabelTone]). */
+    val LABEL_LIGHT = dev.launcher.app.design.ColorKey("comp.home.label.light")
+    val LABEL_DARK = dev.launcher.app.design.ColorKey("comp.home.label.dark")
+    val LABEL_SHADOW = dev.launcher.app.design.ColorKey("comp.home.label.shadow")
+    val LABEL_DARK_FROM = dev.launcher.app.design.NumberKey("comp.home.label.dark-from")
+    val LABEL_DARK_FULL = dev.launcher.app.design.NumberKey("comp.home.label.dark-full")
+    /** The glass clock's tint, light or dark by the wallpaper under it ([LabelTone.clockTint]). */
+    val CLOCK_TINT_LIGHT = dev.launcher.app.design.ColorKey("comp.home.clock.tint-light")
+    val CLOCK_TINT_DARK = dev.launcher.app.design.ColorKey("comp.home.clock.tint-dark")
+
     val ALL = listOf(DOCK, SEARCH, WIDGET, BUTTON, FIELD, LIBRARY_TILE, SPOTLIGHT_CARD, WIDGETS_SHEET, WIDGETS_BUTTON, WIDGETS_CARD, MENU, MENU_CORNER, MENU_WIDTH, MENU_ROW, MENU_PAD_TOP, MENU_PAD_BOTTOM, MENU_SYMBOL_X,
-        MENU_LABEL_X, MENU_TYPE, MENU_LABEL, MENU_DESTRUCTIVE, MENU_PRESS).map { it.name }
+        MENU_LABEL_X, MENU_TYPE, MENU_LABEL, MENU_DESTRUCTIVE, MENU_PRESS, LABEL_LIGHT, LABEL_DARK, LABEL_SHADOW, LABEL_DARK_FROM, LABEL_DARK_FULL,
+        CLOCK_TINT_LIGHT, CLOCK_TINT_DARK).map { it.name }
+}
+
+/**
+ * How home's names over the wallpaper look (Android's convenience on iOS's look): white with a soft shadow, as iOS, turning
+ * dark over a bright wallpaper, as Android launchers do (white names vanished over a light one). [of] is the blend for a
+ * wallpaper luminance under the name, dark mode's dim counted; the views move to a new one on a spring. The glass clock
+ * (its date and numerals) takes the same tone ([clockTint]).
+ */
+object LabelTone {
+    fun of(wallpaperLum: Float): Float {
+        val l = wallpaperLum * (1f - dev.launcher.app.theme.Appearance.wallpaperDim)
+        val a = dev.launcher.app.design.Design.num(HomeTokens.LABEL_DARK_FROM)
+        val b = dev.launcher.app.design.Design.num(HomeTokens.LABEL_DARK_FULL)
+        val t = ((l - a) / (b - a).coerceAtLeast(0.001f)).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
+    fun color(tone: Float): Int =
+        mix(dev.launcher.app.design.Design.color(HomeTokens.LABEL_LIGHT), dev.launcher.app.design.Design.color(HomeTokens.LABEL_DARK), tone)
+
+    /** The glass clock's tint (ARGB, alpha = amount) for [tone]: light glass, or dark glass over a bright wallpaper. */
+    fun clockTint(tone: Float): Int =
+        mix(dev.launcher.app.design.Design.color(HomeTokens.CLOCK_TINT_LIGHT), dev.launcher.app.design.Design.color(HomeTokens.CLOCK_TINT_DARK), tone)
+
+    private fun mix(a: Int, b: Int, t: Float): Int {
+        fun ch(shift: Int) = ((((a shr shift) and 0xFF) + (((b shr shift) and 0xFF) - ((a shr shift) and 0xFF)) * t) + 0.5f).toInt().coerceIn(0, 255) shl shift
+        return ch(24) or ch(16) or ch(8) or ch(0)
+    }
+
+    /** The shadow under a name of [tone]: the soft dark one under white names, none under dark ones. */
+    fun shadow(tone: Float): Int {
+        val s = dev.launcher.app.design.Design.color(HomeTokens.LABEL_SHADOW)
+        val a = (((s ushr 24) and 0xFF) * (1f - tone)).toInt().coerceIn(0, 255)
+        return (a shl 24) or (s and 0xFFFFFF)
+    }
+}
+
+/** A view drawing a name over the wallpaper: home sets its tone (see [LabelTone]). */
+interface TonedLabel {
+    /** The name's area in the view (px). */
+    fun labelArea(out: android.graphics.RectF)
+    fun setLabelTone(tone: Float, animate: Boolean)
 }

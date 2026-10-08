@@ -1551,3 +1551,26 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   threads (`BlurBaker`); until it comes (a moment) the app's flat colour stands in and the glass fades from it (180 ms).
   Over home, the wallpaper as before. Not checked on the emulator (it keeps no app pictures: the banner stays flat
   there, as before); on the S24 only Matheesha may look at banners.
+
+## Step 3: the look audit, first part (2026-10-08)
+
+Every surface screenshotted on the emulator over a light, a mid and a dark test wallpaper (pushed as
+`files/wallpaper.png`), in light and dark mode, and compared side by side (contact sheets per surface). The glass
+surfaces (dock, Search pill, widgets, menus, the widget gallery, banners, Notification Center's platters) read as one
+material in all six cases. Found and fixed:
+
+- **An orange-red line along the dock's right end.** The frosted backdrops (`FrostCache`, and `BlurBaker` for the
+  shade) were drawn into a rounded-up size at one scale: the last column and row were only partly covered (half
+  transparent, dark), and the lens, bending its samples outward at the screen's edge, showed that edge with red and blue
+  apart. Both now scale to cover the image exactly.
+- **Names under icons and widgets vanished over a bright wallpaper** (white on white). They now take a tone from the
+  wallpaper under each name (`LabelTone`, tokens `comp.home.label.*`): white with the soft shadow, as iOS, turning dark
+  (no shadow) over a bright one, as Android launchers do; dark mode's dim is counted. A new wallpaper moves them on a
+  spring, the appearance's crossfade frame by frame.
+- **The glass clock**: white glass vanished over a bright wallpaper in light mode, and dark mode's dark glass was muddy
+  over mid and dark ones. Its tint now follows the wallpaper under it instead of the appearance, with the names'
+  thresholds (`comp.home.clock.tint-light` / `-dark`, the dock's two tints): light glass and a white date over dark and
+  mid wallpapers, dark glass and a dark date over a bright one, in both modes. The same for Notification Center's clock
+  and the widget gallery's clock preview. Emulator: all six cases on home and in Notification Center look readable.
+- Still to look at: Control Center and the App Library over the three wallpapers (the capture script missed them),
+  Spotlight, the edit menu and the switcher's sheets.

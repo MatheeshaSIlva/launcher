@@ -862,14 +862,34 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         c.drawRoundRect(rect, radius, radius, windowRim)
     }
 
+    // The preview's tone as home's clock would take it there ([LabelTone]: light, or dark over a bright wallpaper).
+    private var previewToneOf: dev.launcher.app.Wallpaper? = null
+    private var previewToneAt = Float.NaN
+    private var previewTone = 0f
+    private val previewToneRect = RectF()
+
+    private fun previewTone(wp: dev.launcher.app.Wallpaper?, box: RectF, boxScreenY: Float): Float {
+        if (wp == null) return 0f
+        val at = boxScreenY + box.top + box.left * 7f + box.width() * 13f + Appearance.wallpaperDim * 1e4f
+        if (wp !== previewToneOf || at != previewToneAt) {
+            previewToneOf = wp; previewToneAt = at
+            previewToneRect.set(box.left, boxScreenY + box.top, box.right, boxScreenY + box.bottom)
+            previewTone = LabelTone.of(wp.luminanceUnder(previewToneRect, m.w, m.h))
+        }
+        return previewTone
+    }
+
     /** [window]: the wallpaper window it is on (its shadow stays inside it). */
     private fun drawClockPreview(c: Canvas, box: RectF, s: Float, boxScreenY: Float, window: RectF) {
-        // Exactly the widget's geometry and look (ClockWidgetView): the date at 19 pt in white with its shadow, the numerals'
-        // box from 25 pt to the bottom, on the wallpaper.
+        // Exactly the widget's geometry and look (ClockWidgetView): the date at 19 pt with its shadow, the numerals' box
+        // from 25 pt to the bottom, on the wallpaper, in the tone home's clock would take there.
+        val tone = previewTone(host.wallpaper(), box, boxScreenY)
         val dateSize = m.pt(19f) * s
         clockDate.textSize = dateSize
-        clockDate.color = 0xF2FFFFFF.toInt()
-        clockDate.setShadowLayer(m.pt(5f) * s, 0f, m.pt(1f) * s, 0x66000000)
+        val col = LabelTone.color(tone)
+        clockDate.color = col
+        clockDate.alpha = ((col ushr 24) * 0xF2 / 255f).toInt()
+        clockDate.setShadowLayer(m.pt(5f) * s, 0f, m.pt(1f) * s, ((0x66 * (1f - tone)).toInt()) shl 24)
         c.drawText(previewDate, box.centerX(), box.top + dateSize * 0.86f, clockDate)
         val numTop = box.top + m.pt(25f) * s
         val w = box.width().roundToInt()
@@ -899,6 +919,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             val k = ((SystemClock.uptimeMillis() - g.second).toFloat() / PREVIEW_FADE_MS).coerceIn(0f, 1f)
             val gl = g.first
             gl.alpha = (255 * k).toInt()
+            gl.tone = tone
             gl.originX = box.left
             gl.originY = boxScreenY + numTop
             gl.setBounds(box.left.roundToInt(), numTop.roundToInt(), box.left.roundToInt() + w, numTop.roundToInt() + h)

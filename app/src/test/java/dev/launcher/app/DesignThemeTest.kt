@@ -75,7 +75,8 @@ class DesignThemeTest {
             val want = when {
                 k.endsWith("material") -> Value.Mat::class
                 k.endsWith(".type") -> Value.Text::class
-                k.endsWith(".label") || k.endsWith(".destructive") || k.endsWith(".press") -> Value.Color::class
+                k.endsWith(".label") || k.endsWith(".destructive") || k.endsWith(".press") ||
+                    k.endsWith(".light") || k.endsWith(".dark") || k.endsWith(".shadow") || k.contains(".tint-") -> Value.Color::class
                 else -> Value.Number::class
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
