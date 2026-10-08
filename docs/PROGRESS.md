@@ -1574,8 +1574,10 @@ material in all six cases. Found and fixed:
   black: confirmed on the S24, but it read as grey; Matheesha: keep it close to the dock's glass, only dim slightly.
   Now 16 %, `#00000029`.) The same for Notification Center's clock
   and the widget gallery's clock preview. Emulator: all six cases on home and in Notification Center look readable.
-- Still to look at: Control Center and the App Library over the three wallpapers (the capture script missed them),
-  Spotlight, the edit menu and the switcher's sheets.
+- Then Control Center, the App Library, Spotlight, the Edit menu, the App Switcher's Clear All and its app menu over
+  the three wallpapers in both modes: consistent, nothing to fix. Control Center looks the same in both modes (as iOS);
+  an "on" round control is pure white over a light backdrop and a light grey over a dark one: that is the kit's own
+  material (`ref.material.control-center.on`: colour dodge, then white in screen mode), kept.
 - **Two ANRs on the emulator, not from the app's code**: after ten hours up, the emulator was out of memory and swapping
   (3.9 of 4 GB, swap nearly full, 92 % of CPU in the kernel); a frost bake took 2-3 s there, and the main thread, which
   needs the render thread to draw or to add a window, waited on it past the system's limits (the gesture strip's input,
