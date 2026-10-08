@@ -102,7 +102,10 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private val shown: SpringValue = SpringValue(0f, 1000f, { onMoved() }, { if (shown.value == 0f) finishClose() })
     private val drop = SpringValue(0f, 1f, { onMoved() })
     // 0 = the list, 1 = an app's page.
-    private val push: SpringValue = SpringValue(0f, 1000f, { placeField(); invalidate() }, { if (push.value == 0f) { app = null; entries = emptyList() } })
+    private val push: SpringValue = SpringValue(0f, 1000f, { placeField(); invalidate() }, {
+        if (push.value == 0f) { app = null; entries = emptyList() }
+        else if (push.value >= 0.999f && pendingViews.isNotEmpty()) postOnAnimation(inflateNext)
+    })
     // An app's page: which entry is centred (fractional while swiping).
     private val pager = SpringValue(0f, 1000f, { invalidate() })
     private val list = IosScroller({ invalidate() })
@@ -261,6 +264,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         drop.snapTo(0f)
         previews.clear()
         previewShownAt.clear()
+        pendingViews.clear()
+        removeCallbacks(inflateNext)
+        rowIcons.clear()
         clockGlasses.clear()
         clockBuilding.clear()
         sheetGlass.wallpaper = null
@@ -377,9 +383,30 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             post {
                 if (gen != generation) return@post
                 val now = SystemClock.uptimeMillis()
-                for ((info, img) in images) { previews[info] = img ?: host.widgetPreviewView(info, this); previewShownAt[info] = now }
+                for ((info, img) in images) {
+                    if (img != null) { previews[info] = img; previewShownAt[info] = now } else if (info !in pendingViews) pendingViews += info
+                }
+                if (pendingViews.isNotEmpty() && !push.isAnimating) postOnAnimation(inflateNext)
                 invalidate()
             }
+        }
+    }
+
+    /**
+     * Widgets without a preview image show their preview layout, inflated here on the main thread (an app's views): one
+     * a frame, and only once the page has come to rest (several at once, while the page slid in, made it stutter until
+     * they were all made). Each fades in as it comes.
+     */
+    private val pendingViews = ArrayDeque<AppWidgetProviderInfo>()
+    private val inflateNext = object : Runnable {
+        override fun run() {
+            val info = pendingViews.removeFirstOrNull() ?: return
+            if (!previews.containsKey(info)) {
+                previews[info] = host.widgetPreviewView(info, this@WidgetPicker)
+                previewShownAt[info] = SystemClock.uptimeMillis()
+                invalidate()
+            }
+            if (pendingViews.isNotEmpty()) postOnAnimation(this)
         }
     }
 
@@ -702,7 +729,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
                 capsule.alpha = (0x26 * pressK.value.coerceIn(0f, 1f)).toInt()
                 c.drawRect(r, capsule)
             }
-            a.icon?.let { ic ->
+            rowIcon(a)?.let { ic ->
                 // App icons in a rounded square (iOS lists them so), whatever shape the system draws them in.
                 val l = m.libMargin
                 val t = rt + (rowH - iconS) / 2f
@@ -774,6 +801,16 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         }
         c.drawRenderNode(featuredNode)
         return true
+    }
+
+    private val rowIcons = HashMap<String, Drawable?>()
+
+    /**
+     * A row's app icon: home's own, already shaped and drawn into a bitmap (the app's adaptive icon, composed at its first
+     * draw on the main thread, cost the rows' arrival frames); the app's icon where home has none.
+     */
+    private fun rowIcon(a: WidgetApp): Drawable? = rowIcons.getOrPut(a.pkg + "/" + a.user.hashCode()) {
+        (if (a.user == android.os.Process.myUserHandle()) dev.launcher.app.apps.Icons.drawableFor(a.pkg) else null) ?: a.icon
     }
 
     private fun drawChevron(c: Canvas, x: Float, cy: Float, right: Boolean, paint: Paint) {

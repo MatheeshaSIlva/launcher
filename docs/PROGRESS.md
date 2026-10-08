@@ -1493,3 +1493,21 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   (`MaterialPainter.drawLive(contentKey)`): the shader runs on the kept blur; the scrim is a fill in the shader. Same look
   (compared on the emulator); the phone decides the smoothness.
 - **Status bar notification icons**: at most 3 (was 5), a dot for the rest.
+
+## Fixes reported on the S24 (2026-10-08, fifth round)
+
+- **Notification Center sometimes opened darker and without its clock** (Matheesha's screenshots: the whole picture at
+  0.71 of the right brightness, exactly the list's overlay, and no date or clock; a touch or a new notification fixed
+  it). Reproduced once on the emulator: the list fanned out and flung, closed while still moving, reopened. The sheet
+  showed the last session's dimmed wallpaper and faded clock (kept in layers of their own) over the new, collapsed list.
+  Not reproduced again with logging on (timing). Made robust from both ends: on closing, Notification Center goes back to
+  how it opens at once (collapsed, at the top, a running fling stopped, the wallpaper undimmed), and on opening the
+  wallpaper's and the clock's layers are always made anew.
+- **The widget gallery still lagged at first** (Matheesha: while widgets load). An app's page made the preview layouts of
+  its widgets without a preview image on the main thread, all at once while the page slid in: now one a frame once the
+  page rests, each fading in. The list's rows draw home's own shaped icons (bitmaps) instead of composing each app's
+  adaptive icon on the main thread as the rows arrive.
+- **A notification once opened with the system's animation again**: the animation switch-off goes through a setting
+  SystemUI takes up a moment later, and a warm app can be ready sooner. Now it is switched off when a finger lands on a
+  notification (back by itself 1.5 s later if nothing opens), and when it is switched at the tap itself the tap waits
+  100 ms for it (the card covers that). Emulator: the system's part 7 ms, the scales back to 1 after.

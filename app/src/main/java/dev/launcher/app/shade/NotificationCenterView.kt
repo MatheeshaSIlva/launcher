@@ -85,6 +85,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         fun send(pi: PendingIntent?): Boolean
         /** Opens [item]'s app, out of its platter at [from] (screen px) if given. */
         fun open(item: Notifs.Item, from: RectF? = null): Boolean
+        /** A finger came down on a notification: a tap may open its app (the system's animations go off ahead). */
+        fun mayOpen()
         fun torch()
         val torchOn: Boolean
         fun camera()
@@ -194,6 +196,11 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         readNotifs(animate = false)
         refreshClock()
         startTicking()
+        // The wallpaper and the clock are drawn from layers kept between frames: made anew for this opening (a reopen once
+        // showed the last session's dimmed wallpaper and faded clock over the new, collapsed list).
+        bgKey = Long.MIN_VALUE
+        clockKey = Long.MIN_VALUE
+        invalidate()
     }
 
     /**
@@ -212,6 +219,13 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         revealed = null
         menu = null
         cancelTouch()
+        // Back to how it opens (collapsed, at the top, the wallpaper undimmed) as soon as it is out of sight, a fling still
+        // running stopped: closed with the list fanned out and moving, it kept drawing itself (unseen) with that state, and
+        // the next opening showed the dimmed wallpaper and the faded clock until something redrew it.
+        scroller.jumpTo(0f)
+        collapsed = true
+        expanded.clear()
+        readNotifs(animate = false)
     }
 
     /** Back: closes a menu or a revealed swipe first. */
@@ -1503,6 +1517,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             }
             Kind.PLATTER -> {
                 mode = Mode.PRESS
+                if (!lockedNow && b.item?.contentIntent != null) host.mayOpen()
                 b.press.animateTo(1f, PRESS_IN)
                 swipeFrom = b.swipe.value
                 postDelayed(longPress, LONG_MS)

@@ -147,6 +147,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override fun launch(i: Intent?) = launchIntent(i)
             override fun send(pi: PendingIntent?): Boolean = pi != null && sendIntent(pi, closePanel = true)
             override fun open(item: Notifs.Item, from: android.graphics.RectF?): Boolean = openFrom(item, from)
+            override fun mayOpen() {
+                // Off from the touch on (the system takes them up a moment later; a warm app was ready before that once),
+                // back by themselves if no tap opens anything.
+                launchIo.execute { nav.quietStarts(true); nav.quietStarts(false) }
+            }
             override fun torch() { state.toggle(Control.FLASHLIGHT) }
             override val torchOn get() = state.torch
             override fun camera() = openCamera()

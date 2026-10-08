@@ -400,7 +400,10 @@ object GestureNav {
             if (!on) { nav.post { nav.removeCallbacks(scalesBack); nav.postDelayed(scalesBack, QUIET_BACK_MS) }; return }
             nav.removeCallbacks(scalesBack)
             val s = ShizukuLink.service ?: return
+            val wasOn = try { android.provider.Settings.Global.getFloat(app.contentResolver, android.provider.Settings.Global.TRANSITION_ANIMATION_SCALE, 1f) != 0f } catch (_: Throwable) { true }
             try { SystemRestore.scalesOffForCards(app, s) } catch (t: Throwable) { AppLog.log("[nav] transitions off failed: ${t.javaClass.simpleName}: ${t.message}") }
+            // Switched just now: SystemUI takes the setting up a moment later (a warm app's transition can start before).
+            if (wasOn) try { Thread.sleep(QUIET_SETTLE_MS) } catch (_: InterruptedException) { }
         }
     }
 
@@ -1907,6 +1910,7 @@ object GestureNav {
     private const val SCALES_BACK_MS = 1000L
     /** After a start our card covered (quietStarts): the system's transition starts once the app has drawn, after our card. */
     private const val QUIET_BACK_MS = 1500L
+    private const val QUIET_SETTLE_MS = 100L
     /** The gesture bar's pill fading out as a panel opens, and back in once it has closed. */
     private const val STRIP_OUT_MS = 140L
     private const val STRIP_IN_MS = 240L
