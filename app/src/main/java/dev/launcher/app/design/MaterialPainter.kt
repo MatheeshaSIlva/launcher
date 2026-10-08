@@ -269,10 +269,12 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     private fun shadows(list: List<Shadow>, colors: FloatArray, geom: FloatArray, modes: FloatArray, u: Float, inner: Boolean): Float {
         var reach = 1f
         var n = 0
+        val rim = if (inner) 1f else rimStrength()
         for (s in list) {
             if (n >= MAX_SHADOWS) break
             val col = Design.color(s.color)
-            val a = ((col ushr 24) and 0xFF) / 255f
+            // The hairline rims (drop shadows without blur) at the theme's strength (`sys.glass.rim`, 1 = as given).
+            val a = ((col ushr 24) and 0xFF) / 255f * (if (s.blur == 0f) rim else 1f)
             if (!inner && a < 0.03f) continue
             colors[n * 4] = ((col shr 16) and 0xFF) / 255f
             colors[n * 4 + 1] = ((col shr 8) and 0xFF) / 255f
@@ -290,7 +292,23 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         return reach
     }
 
+    private var rimVersion = -1
+    private var rimK = 1f
+
+    private fun rimStrength(): Float {
+        if (rimVersion != Design.version) {
+            rimVersion = Design.version
+            rimK = try { Design.num(RIM) } catch (_: Throwable) { 1f }
+        }
+        return rimK
+    }
+
     companion object {
+        /**
+         * How strong the hairline rims are drawn (1 = as the material gives them). The kit's rims are linear burn: over a
+         * dark backdrop they come out black, an outline the phone shows plainly at its real size.
+         */
+        val RIM = NumberKey("sys.glass.rim")
         const val MAX_FILLS = 8
         const val MAX_SHADOWS = 4
         /** The rim light's width (pt): judged (the kit gives its strength, not its width). */

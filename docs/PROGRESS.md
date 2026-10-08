@@ -1455,3 +1455,8 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   wallpaper as it is behind the card with the list at its top). Emulator frame stats while scrolling (GPU per frame,
   median): 78 ms before, 55 ms after the first change; the emulator is too noisy to measure the card's layer (and far
   slower than the phone): the S24 decides.
+- **A thin black outline around glass.** The kit's hairline rims are drop shadows without blur in linear burn (#cccccc,
+  dark #a6a6a6): burn subtracts, so over anything darker than a mid grey they come out black, a 1 px outline the phone
+  shows plainly. New token `sys.glass.rim` (factor, judged 0.4; 1 = the kit's) scales every blur-0 drop shadow; the soft
+  shadow is unchanged. Emulator, Control Center over home, zoomed: the black line gone, a faint darker edge left under the
+  light rim. Tunable in "Launcher design".

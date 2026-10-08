@@ -2276,6 +2276,10 @@
    "ref": "ref.color.separators.non-opaque",
    "src": "kit:VariableID:509:77495"
   },
+  "sys.glass.rim": {
+   "factor": 0.4,
+   "src": "judged:Matheesha: the kit's hairline rims (its blur-0 drop shadows, linear burn #cccccc / #a6a6a6) read as a black outline over dark backdrops on the phone; 1 is the kit's"
+  },
   "sys.material.glass.clear": {
    "ref": "ref.material.liquid-glass.clear",
    "src": "kit:5914:23547"
