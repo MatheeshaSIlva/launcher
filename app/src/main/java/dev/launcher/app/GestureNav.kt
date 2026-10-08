@@ -388,11 +388,20 @@ object GestureNav {
     private val shadeLink = object : dev.launcher.app.shade.Shade.NavLink {
         override fun backdrop(then: (dev.launcher.app.shade.BackdropSource?) -> Unit) = shadeBackdrop(then)
         override fun stripHeight(): Int = if (stripHeight > 0) stripHeight else dp(20).toInt()
-        override fun shadeChanged(open: Boolean) { if (!open) refreshAppearance() }
+        override fun shadeChanged(open: Boolean) {
+            nav.post { stripUnderShade(open) }
+            if (!open) refreshAppearance()
+        }
         override fun frontPackage(): String? = frontNow
         override fun frontClass(): String? = frontNowClass
         override fun frontSince(): Long = frontNowAt
         override fun snapshotFor(pkg: String): Bitmap? = images[pkg]
+        override fun quietStarts(on: Boolean) {
+            if (!on) { nav.post { nav.removeCallbacks(scalesBack); nav.postDelayed(scalesBack, QUIET_BACK_MS) }; return }
+            nav.removeCallbacks(scalesBack)
+            val s = ShizukuLink.service ?: return
+            try { SystemRestore.scalesOffForCards(app, s) } catch (t: Throwable) { AppLog.log("[nav] transitions off failed: ${t.javaClass.simpleName}: ${t.message}") }
+        }
     }
 
     /**
@@ -645,10 +654,30 @@ object GestureNav {
             wm.addView(stripView, lp)   // added after the card window, so it stays above it
             strip = stripView
             stripHeight = h
+            stripHidden = false
+            if (shadeOpen) stripView.post { stripUnderShade(true) }
             AppLog.log("[nav] gesture strip on (${h}px high, own UI thread, persistent card window)")
         } catch (t: Throwable) {
             AppLog.log("[nav] strip addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
         }
+    }
+
+    private var stripHidden = false
+
+    /**
+     * While a panel of the shade is open the gesture bar is not there (Matheesha: it got in the way of the panels): its
+     * pill fades out and the strip takes no touches (a swipe up from the bottom closes the panel, the shade's own). A
+     * touchable region, not a window change: no relayout.
+     */
+    private fun stripUnderShade(hidden: Boolean) {
+        val s = strip ?: return
+        if (hidden == stripHidden) return
+        stripHidden = hidden
+        (s as? android.view.ViewGroup)?.getChildAt(0)?.animate()?.alpha(if (hidden) 0f else 1f)
+            ?.setDuration(if (hidden) STRIP_OUT_MS else STRIP_IN_MS)?.start()
+        // Back to all of it with an explicit region: null does not reset the region the window manager has.
+        if (Build.VERSION.SDK_INT >= 34) s.rootSurfaceControl?.setTouchableRegion(
+            if (hidden) android.graphics.Region(-2, -2, -1, -1) else android.graphics.Region(0, 0, s.width.coerceAtLeast(1) * 4, s.height.coerceAtLeast(1) * 4))
     }
 
     @Suppress("DEPRECATION")
@@ -1077,7 +1106,12 @@ object GestureNav {
                     hideCards(); pendingFresh = true; prefetch(fresh = true)
                     // On home: it is recorded as it shows right now and rendered ahead, so a swipe up can show it receding from
                     // its first frame (the picture from when home last came to rest can be out of date: a folder opened since).
-                    if (homeVisible) {
+                    // Something open on top of home (the widget gallery, a menu, edit mode, Spotlight): the swipe closes it
+                    // with its own motion (the picture of home lacked the gallery: it vanished at the touch, then slid away
+                    // again under the picture springing back).
+                    closesOnTop = homeVisible && HomeBridge.hasOnTop()
+                    if (homeVisible && closesOnTop) pullPicture = null
+                    if (homeVisible && !closesOnTop) {
                         val id = gestureId
                         pullPicture = null
                         HomeBridge.recordForGesture {
@@ -1871,6 +1905,11 @@ object GestureNav {
     // icon. The second keeps fast open/close runs from toggling them; after it, apps have their own transitions again.
     // On the start queue, never dropped, so they are always off before anything is started.
     private const val SCALES_BACK_MS = 1000L
+    /** After a start our card covered (quietStarts): the system's transition starts once the app has drawn, after our card. */
+    private const val QUIET_BACK_MS = 1500L
+    /** The gesture bar's pill fading out as a panel opens, and back in once it has closed. */
+    private const val STRIP_OUT_MS = 140L
+    private const val STRIP_IN_MS = 240L
     private var fingerDown = false
 
     private fun holdScalesOff() {
@@ -2221,6 +2260,7 @@ object GestureNav {
 
     private fun maybeEnterSwitcher() {
         if (!fingerDown) return
+        if (phase == Phase.HOME_PULL && closesOnTop) return
         if (phase == Phase.DRAG_HOME) { if (root?.visibility != View.VISIBLE || catchUpAt != 0L) return }
         else if (phase != Phase.HOME_PULL) return
         if (swipeTravel() < Motion.profile.switcher.holdMinTravelDp * density) return   // re-armed by the next move
@@ -2273,6 +2313,7 @@ object GestureNav {
     // ---- a swipe up on home: home recedes with the finger (iOS); a rest opens the switcher, a release springs home back
 
     private var pulling = false                // the picture of home is shown receding (a swipe up on home)
+    private var closesOnTop = false            // this swipe on home closes what is open on top of it instead
     private var pullPicture: HomePicture? = null   // home as it showed when this swipe touched the bar
     private val pullBack = dev.launcher.app.motion.SpringValue(0f, 300f, onChange = { backdrop?.depth = it })
 

@@ -285,6 +285,26 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** The controls' opacity for how present the panel is: quickly in, and they outlast the blur when it closes. */
     private fun presence(): Float = kotlin.math.sqrt(progress.coerceIn(0f, 1f))
 
+    /**
+     * Closing (0 not .. 1 closing, on a spring, so a panel grabbed back while it closes never jumps): the controls fold
+     * back into the corner Control Center is pulled from, the farthest first, each shrinking and drifting toward it as it
+     * fades (iOS 27 only lifts them a little and fades them; Matheesha found that cheap). Opening is left as it was.
+     */
+    private val closeK = SpringValue(0f, 100f, inv)
+
+    fun closing(on: Boolean) {
+        val t = if (on) 1f else 0f
+        if (closeK.target != t) closeK.animateTo(t, CLOSE_STYLE)
+    }
+
+    /** How far a control centred at [cx], [cy] has left (0..1): the farther from the top-right corner, the sooner. */
+    private fun leaving(cx: Float, cy: Float): Float {
+        val gone = 1f - progress.coerceIn(0f, 1f)
+        val far = (kotlin.math.hypot(width - cx, cy) / kotlin.math.hypot(width.toFloat(), height * 0.8f)).coerceIn(0f, 1f)
+        val local = ((gone - (1f - far) * LEAVE_STAGGER) / (1f - LEAVE_STAGGER)).coerceIn(0f, 1f)
+        return local * local * (3f - 2f * local)
+    }
+
     private val editK: SpringValue = SpringValue(0f, 100f, { host.editProgress(max(it.coerceIn(0f, 1f), expanded.presence)); invalidate() })
     val editing get() = editK.target > 0.5f
 
@@ -304,6 +324,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     /** The panel finished closing: edit mode ends, presses end. */
     fun onClosed() {
+        closeK.snapTo(0f)
         expanded.dismissNow()
         exitEdit(animate = false)
         cancelTouch()
@@ -375,7 +396,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val edit = editK.value.coerceIn(0f, 1f)
         val top = gridTop()
         val ex = expanded.presence
-        drawTopButtons(c, (1f - edit) * presence() * (1f - ex))
+        drawTopButtons(c, (1f - edit) * (1f - ex))
         if (edit > 0.001f) drawEmptySlots(c, top, edit)
         else if (warmSlots && slotsNode.hasDisplayList()) { slotsNode.setAlpha(0.003f); c.drawRenderNode(slotsNode); warmSlots = false }
         for (a in anims.values) if (a !== dragged) drawItem(c, a, top, edit)
@@ -393,21 +414,35 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun buttonX(i: Int): Float { val c = host.surfaces.pt(CcTokens.BUTTON_INSET_X) + btnR; return if (i == 0) c else width - c }
 
     /** "+" and power: the kit's near-black added to what is behind (plus-lighter), a light symbol. */
-    private fun drawTopButtons(c: Canvas, k: Float) {
-        if (k <= 0.003f) return
+    private fun drawTopButtons(c: Canvas, base: Float) {
+        if (base <= 0.003f) return
         val sf = host.surfaces
         val mat = Design.material(CcTokens.BUTTON)
         val symbol = sf.pt(CcTokens.BUTTON_SYMBOL)
         val col = Design.color(CcTokens.BUTTON_SYMBOL_COLOR)
+        val cs = closeK.value.coerceIn(0f, 1f)
+        val k0 = presence()
         for (i in 0..1) {
-            val x = buttonX(i)
+            var x = buttonX(i)
+            var y = btnY
             val p = if (i == 0) plusPress.value else powerPress.value
-            val s = 1f + 0.08f * p
+            var s = 1f + 0.08f * p
+            var k = k0
+            if (cs > 0.001f) {
+                // As the controls: back into the corner (see closeK).
+                val e = leaving(x, y)
+                x += (width - x) * LEAVE_PULL * e * cs
+                y += -y * LEAVE_PULL * e * cs
+                s *= 1f - LEAVE_SHRINK * e * cs
+                k += ((1f - e) - k) * cs
+            }
+            k *= base
+            if (k <= 0.003f) continue
             val d = btnR * 2f
             c.save()
-            c.translate(x - btnR * s, btnY - btnR * s)
+            c.translate(x - btnR * s, y - btnR * s)
             c.scale(s, s)
-            sf.draw(c, mat, d, d, btnR, x - btnR * s, btnY - btnR * s, s, k, p)
+            sf.draw(c, mat, d, d, btnR, x - btnR * s, y - btnR * s, s, k, p)
             glyphs.draw(c, if (i == 0) R.drawable.sym_plus else R.drawable.sym_power, btnR, btnR, symbol, alpha(col, k))
             c.restore()
         }
@@ -518,7 +553,18 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         out.top = t
         out.w = w; out.h = h
         out.scale = (0.55f + 0.45f * min(appear, 1f)) * (1f + 0.035f * a.press.value) * (1f + 0.05f * a.lift.value)
-        out.alpha = k * appear.coerceIn(0f, 1f) * (if (edit > 0f && a !== dragged) 1f - 0.08f * edit else 1f)
+        var fade = k
+        val cs = closeK.value.coerceIn(0f, 1f)
+        if (cs > 0.001f) {
+            val cx = out.left + w / 2f
+            val cy = t + h / 2f
+            val e = leaving(cx, cy) * cs
+            out.left += (width - cx) * LEAVE_PULL * e
+            out.top += -cy * LEAVE_PULL * e
+            out.scale *= 1f - LEAVE_SHRINK * e
+            fade = k + ((1f - leaving(cx, cy)) - k) * cs
+        }
+        out.alpha = fade * appear.coerceIn(0f, 1f) * (if (edit > 0f && a !== dragged) 1f - 0.08f * edit else 1f)
         // A module grown into its large form: the others fade away, and it gives way to its large form at once.
         val ex = expanded.presence
         if (ex > 0f) out.alpha *= if (expanded.control == it.control) (1f - ex * 6f).coerceAtLeast(0f) else 1f - ex
@@ -1292,6 +1338,12 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val SLOT_ALPHA = 0.55f
         /** Room around a control's layer for its rims (the kit's are within 2 pt of the edge). */
         const val LAYER_MARGIN_PT = 4f
+        /** Closing (see closeK): how much of the close the nearest control waits, how far each drifts toward the corner
+         *  (of its distance), how much it shrinks; the spring the choreography blends in and out on. Judged. */
+        const val LEAVE_STAGGER = 0.45f
+        const val LEAVE_PULL = 0.16f
+        const val LEAVE_SHRINK = 0.22f
+        val CLOSE_STYLE = SpringSpec(0.2f, 1f)
         val PRESS_IN = SpringSpec(0.22f, 1f)
         val PRESS_OUT = SpringSpec(0.38f, 0.7f)
         val TOGGLE = SpringSpec(0.32f, 0.9f)

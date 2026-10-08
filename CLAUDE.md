@@ -162,6 +162,11 @@ copy it wholesale — port the working pieces cleanly. File map:
   way such a notification shows; they stay until it stops ringing, also over an open panel.
 - **Never screenshot or record Notification Center or banners on Matheesha's phone** (they show his messages). Measure them
   with framestats only (`tools/scenario_shade.sh` never captures them; its test banner is our own text).
+- **"No animation" options (`makeCustomAnimation(0, 0)`, or any custom animation) are ignored for a cross-app start**:
+  the system's transitions play their default open animation. Starts we make ourselves go through our own transition
+  (`NoAnimStarts`, the shell); a notification's tap (it must come from our process) is sent with the system's transition
+  animations off (`NavLink.quietStarts`).
+- **`setTouchableRegion(null)` does not give a window its full touchable area back**: set the full region explicitly.
 - **A PendingIntent sent by the Shizuku shell starts its activity behind everything** (Android 15+: the sender must itself be
   allowed to start activities; the shell is not a visible app). Notification taps are sent from our process (its windows
   are on screen), never through the shell; check `adb logcat | grep "would be moved to the foreground"`.

@@ -209,6 +209,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private var generation = 0
 
     fun open() {
+        homeNodeKey = Long.MIN_VALUE   // home recorded anew for this opening
         // Listing providers and their labels and icons takes a while: the sheet rises at once, the rows settle in when ready.
         apps = emptyList()
         shownApps = emptyList()
@@ -404,14 +405,13 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         // Home behind the sheet changes only as the sheet comes and goes (its scrim, home's blur): at rest (the list
         // scrolling, rows arriving) the sheet's glass is drawn as it was, not recorded and blurred again every frame.
         val sk = behindKey(y, k)
+        // While it rises, home behind it does not change: recorded and blurred once (the content key), the scrim (the same as
+        // around it: the sheet's glass sees home as it shows around the sheet) laid over it in the shader. Recording all of
+        // home and blurring it again at every frame of the rise made the gallery's first moments lag.
         val drawn = if (sk == sheetKey && glass?.drawLiveAgain(c) == true) true
         else (glass?.drawLive(c, dev.launcher.app.design.Design.material(HomeTokens.WIDGETS_SHEET), r, sheetRadius, null,
-            RectF(0f, 0f, width.toFloat(), height.toFloat())) { cc ->
-            host.drawBehindSheet(cc)
-            // The same scrim as around it: the sheet's glass sees home as it shows around the sheet.
-            sheetTint.color = sc
-            sheetTint.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
-            cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), sheetTint)
+            limitRect.apply { set(0f, 0f, width.toFloat(), height.toFloat()) }, under = scrimUnder(sc, k), contentKey = homeKey()) { cc ->
+            drawHome(cc)
         } == true).also { sheetKey = if (it) sk else Long.MIN_VALUE }
         if (!drawn) c.drawRoundRect(r, sheetRadius, sheetRadius, fallbackFill)
         c.save()
@@ -446,6 +446,42 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
 
     private var sheetKey = Long.MIN_VALUE
     private var fieldBackKey = Long.MIN_VALUE
+    private val limitRect = RectF()
+    private val scrimFill = ArrayList<dev.launcher.app.design.Fill>(1)
+
+    /** Home's scrim [sc] at [k] as a fill under the sheet's glass. */
+    private fun scrimUnder(sc: Int, k: Float): List<dev.launcher.app.design.Fill> {
+        scrimFill.clear()
+        val a = android.graphics.Color.alpha(sc) / 255f * k
+        if (a > 0.001f) {
+            val opaque = sc or (0xFF shl 24)
+            scrimFill += dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(opaque, opaque), a, a, dev.launcher.app.design.Blend.NORMAL)
+        }
+        return scrimFill
+    }
+
+    private val homeNode = android.graphics.RenderNode("widgets-home")
+    private var homeNodeKey = Long.MIN_VALUE
+
+    /**
+     * Home as it is behind the sheet, recorded once per opening (and again if [homeKey] changes) and drawn by reference
+     * wherever the gallery needs it (behind the sheet's glass, behind the search field): recording all of home cost the
+     * main thread at every frame of the rise, twice.
+     */
+    private fun drawHome(c: Canvas) {
+        val k = homeKey()
+        if (k != homeNodeKey || !homeNode.hasDisplayList()) {
+            homeNode.setPosition(0, 0, width.coerceAtLeast(1), height.coerceAtLeast(1))
+            val rc = homeNode.beginRecording()
+            try { host.drawBehindSheet(rc) } finally { homeNode.endRecording() }
+            homeNodeKey = k
+        }
+        c.drawRenderNode(homeNode)
+    }
+
+    /** What home draws behind the sheet (its views are recorded by reference: their own changes show by themselves). */
+    private fun homeKey(): Long = (System.identityHashCode(host.wallpaper()).toLong() * 31 + dev.launcher.app.design.Design.version) * 31 +
+        width * 7919L + height
 
     /** What home behind the sheet looks like at sheet position [y] and scrim [k] (equal keys: the same picture). */
     private fun behindKey(y: Float, k: Float): Long {
@@ -598,7 +634,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val rc = sheetBack.beginRecording()
         try {
             rc.translate(-l.toFloat(), -t.toFloat())
-            host.drawBehindSheet(rc)
+            drawHome(rc)
             val sc = Appearance.scrim
             sheetTint.color = sc
             sheetTint.alpha = (android.graphics.Color.alpha(sc) * k).toInt()

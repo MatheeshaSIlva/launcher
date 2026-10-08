@@ -1226,6 +1226,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
      * gallery, edit mode, Spotlight); with nothing on top it does what the Home button does: back to the first page, the
      * App Library and its search closed.
      */
+    /** A menu, the widget gallery, edit mode or Spotlight is open (see HomeBridge.hasOnTop; read from gesture nav's thread). */
+    fun hasOnTop(): Boolean = menu?.isShowing == true || picker?.isOpen == true || editMode?.active == true || spotlight?.isOpen == true
+
     fun onHomeSwipeUp() {
         // An open App Library folder is on top too: the swipe closes it, as iOS closes an expanded category.
         if (drawerProgress() > 0.5f && drawer?.closeTop() == true) return

@@ -1460,3 +1460,36 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   shows plainly. New token `sys.glass.rim` (factor, judged 0.4; 1 = the kit's) scales every blur-0 drop shadow; the soft
   shadow is unchanged. Emulator, Control Center over home, zoomed: the black line gone, a faint darker edge left under the
   light rim. Tunable in "Launcher design".
+
+## Fixes reported on the S24 (2026-10-08, fourth round)
+
+- **Opening an app from a notification played Android's own open animation after our card.** The tap went out with
+  "custom animation 0, 0", which the system's transitions read as "none given" and replace with their default (the log:
+  `DefaultTransitionHandler`, ~0.55 s, starting as our card faded). Real "do nothing" animation resources were tried too:
+  the system takes no animation from a cross-app tap's options. The tap must come from our process (Android 15: only a
+  sender with a visible window brings an app forward), and our own transition needs the shell, so the system's transition
+  animations are switched off (shell, `SystemRestore.scalesOffForCards`, restored by the watchdog if we die) just before
+  the tap and back 1.5 s after the launch ended. Emulator: the system's transition took 70 ms (was 550), scales back to
+  1.0 after. The card itself is unchanged.
+- **Options (and every page or app the shade opens) had the system's animation too.** They now open out of where they
+  were tapped, on the same card as a notification, through our own transition (the shell's start: `animated by
+  firstHandler`); Settings' panels (sheets with their own entrance) open as before. Emulator: Options grows into
+  Settings' notification page.
+- **The gesture bar under the panels.** While Notification Center or Control Center is open the gesture bar's pill fades
+  out and the strip takes no touches (a touchable region; `null` does not reset one: the full region is set back
+  explicitly). A swipe up from the bottom closes the panel, the shade's own.
+- **Control Center's close felt cheap** (iOS 27's: a small lift and a fade). The controls now fold back into the corner
+  Control Center is pulled from: the farthest leave first, each shrinking and drifting toward the corner as it fades; the
+  blur clears with them; a little slower (0.34 s spring). Blended in on a spring when closing starts, so a panel grabbed
+  back mid-close never jumps; the open is unchanged.
+- **Home swipe with the widget gallery open** showed the gallery vanish in one frame (the picture of home a home swipe
+  recedes did not contain it), home sharp, then blurred, then the gallery sliding away again under the picture. With
+  something open on top of home (the gallery, a menu, edit mode, Spotlight) the swipe now just closes it with its own
+  motion, as iOS (no receding picture, no App Switcher on a hold). Recorded on the emulator: the sheet slides down, home
+  un-blurs, edit mode ends.
+- **The widget gallery's first moments lagged.** While the sheet rose, every frame recorded all of home twice (main
+  thread) and blurred it again for the sheet's glass. Now home is recorded once per opening and drawn by reference, and
+  the renderer's live form keeps what is behind blurred in a node of its own when the caller gives a content key
+  (`MaterialPainter.drawLive(contentKey)`): the shader runs on the kept blur; the scrim is a fill in the shader. Same look
+  (compared on the emulator); the phone decides the smoothness.
+- **Status bar notification icons**: at most 3 (was 5), a dot for the rest.

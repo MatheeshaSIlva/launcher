@@ -797,7 +797,8 @@ class StatusBarView(ctx: Context) : View(ctx) {
         const val TIME_GAP_PT = 7f
         const val ICON_PT = 14.5f
         const val ICON_GAP_PT = 4.5f
-        const val MAX_ICONS = 5
+        /** Notification icons shown at most (Matheesha: more looked cluttered); a dot stands for the rest. */
+        const val MAX_ICONS = 3
         val MOVE = SpringSpec(0.36f, 1f)
         val APPEAR = SpringSpec(0.38f, 0.78f)
         val LEAVE = SpringSpec(0.26f, 1f)

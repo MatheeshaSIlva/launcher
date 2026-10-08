@@ -404,6 +404,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     override fun layoutChanged() { screen.layoutForSaving()?.let { HomeModel.save(this, it) } }
 
     fun onHomeSwipeUp() = screen.onHomeSwipeUp()
+    fun hasOnTop(): Boolean = screen.hasOnTop()
 
     private val decorOnScreen = IntArray(2)
 

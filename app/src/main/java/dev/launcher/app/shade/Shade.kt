@@ -58,6 +58,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         fun frontSince(): Long
         /** The app's latest picture, if gesture navigation has one (its launch card shows it). */
         fun snapshotFor(pkg: String): android.graphics.Bitmap?
+        /**
+         * A start our card covers but that only our own process may make (a notification's tap: Android 15 lets only a
+         * sender with a visible window bring an app to the front, and our own transition needs the shell): the system's
+         * transition animations off until [quietStarts] false (blocking for true: off before the start is sent).
+         */
+        fun quietStarts(on: Boolean)
     }
 
     enum class Panel { NC, CC }
@@ -446,8 +452,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     fun close(velocity: Float = progress.velocity) {
         if (panel == null) return
         progress.animateTo(0f, if (panel == Panel.NC) NC_CLOSE else CC_CLOSE, velocity.coerceAtMost(0f))
-        // iOS 27: the controls lift a few points as they fade.
-        if (panel == Panel.CC) ccOffset.animateTo(-8f * u(), CC_CLOSE)
+        // iOS 27: the controls lift a few points as they fade; ours also fold back into the corner (ControlCenterView.closing).
+        if (panel == Panel.CC) { cc.closing(true); ccOffset.animateTo(-8f * u(), CC_CLOSE) }
     }
 
     /** Gone at once (the screen went off). */
@@ -456,7 +462,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun openFully(velocity: Float) {
         if (locked) focusHolder.take()
         progress.animateTo(1f, if (panel == Panel.NC) NC_OPEN else ccOpen(), velocity)
-        if (panel == Panel.CC) ccOffset.animateTo(0f, CC_SETTLE)
+        if (panel == Panel.CC) { cc.closing(false); ccOffset.animateTo(0f, CC_SETTLE) }
         regionOpen = true
         updateTouchable()
     }
@@ -709,6 +715,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             1 -> if (panel == Panel.CC) {
                 // Down: the controls are pulled below their place as when opening; up: the panel fades with the finger
                 // and the controls lift with it a little.
+                cc.closing(dy < 0f)
                 if (dy > 0f) { progress.snapTo(dragFrom); ccOffset.snapTo(offsetFrom + ccPull(dy)); lastPullDy = dy }
                 else { progress.snapTo((dragFrom + dy / ccCloseTravel()).coerceIn(0f, 1f)); ccOffset.snapTo(offsetFrom + dy * 0.15f) }
             } else {
@@ -826,6 +833,47 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val pi = item.contentIntent ?: return false
         if (from == null || !pi.isActivity || panel != Panel.NC) return Notifs.open(ctx, item).also { if (it) close() }
         val pkg = pi.creatorPackage ?: item.pkg
+        cardFrom(pkg, from)
+        launchIo.execute {
+            // Sent by our own process: since Android 15 only a visible sender may bring the app to the front (our shade's
+            // window is), and the shell is not one. The shell's start (no system animation, a transition of ours) started
+            // the activity behind everything: the card waited, froze and went. "No animation" options (0, 0) gave Android's
+            // default open animation under the card's fade (the system takes no animation from a cross-app tap's options):
+            // the system's transitions are off for this start instead.
+            nav.quietStarts(true)
+            val ok = Notifs.send(ctx, pi, android.app.ActivityOptions.makeBasic()) || dev.launcher.app.NoAnimStarts.send(pi)
+            if (ok && item.autoCancel) Notifs.cancel(item)
+            if (!ok) handler.post { if (launchPkg == pkg) endLaunch() }
+        }
+        AppLog.log("[shade] open $pkg from its notification")
+        return true
+    }
+
+    /**
+     * Opens [i] (a page of Settings, an app: what the shade's buttons and controls open) out of where it was tapped, as a
+     * notification opens: a card grows from a square around the touch, through our own transition (no system animation).
+     * False if it is not such a start (the caller starts it as before): Settings' panels are sheets with their own
+     * entrance, and an intent nothing answers.
+     */
+    private fun launchWithCard(i: Intent): Boolean {
+        if (i.action?.startsWith("android.settings.panel.") == true) return false
+        val target = try { i.resolveActivity(ctx.packageManager) } catch (_: Throwable) { null } ?: return false
+        val side = LAUNCH_FROM_PT * u()
+        val x = downX.coerceIn(side / 2f, root.width - side / 2f)
+        val y = downY.coerceIn(side / 2f, root.height - side / 2f)
+        cardFrom(target.packageName, android.graphics.RectF(x - side / 2f, y - side / 2f, x + side / 2f, y + side / 2f))
+        val start = Intent(i).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        launchIo.execute {
+            val ok = dev.launcher.app.NoAnimStarts.start(start, android.os.Process.myUserHandle().hashCode()) ||
+                run { nav.quietStarts(true); state.start(start) }
+            if (!ok) handler.post { if (launchPkg == target.packageName) endLaunch() }
+        }
+        AppLog.log("[shade] open ${target.packageName} (${i.action ?: i.component?.className})")
+        return true
+    }
+
+    /** The launch card of [pkg] starts growing out of [from] (screen px). */
+    private fun cardFrom(pkg: String, from: android.graphics.RectF) {
         launchPkg = pkg
         launchAt = SystemClock.uptimeMillis()
         launchSettled = false
@@ -847,18 +895,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         launchK.animateTo(1f, Motion.profile.appOpen)
         handler.removeCallbacks(launchTimeout)
         handler.postDelayed(launchTimeout, LAUNCH_TIMEOUT_MS)
-        launchIo.execute {
-            // Sent by our own process: since Android 15 only a visible sender may bring the app to the front (our shade's
-            // window is), and the shell is not one. The shell's start (no system animation, a transition of ours) started
-            // the activity behind everything: the card waited, froze and went. "No animation" options instead; the card
-            // covers the start.
-            val ok = Notifs.send(ctx, pi, android.app.ActivityOptions.makeCustomAnimation(ctx, 0, 0)) ||
-                dev.launcher.app.NoAnimStarts.send(pi)
-            if (ok && item.autoCancel) Notifs.cancel(item)
-            if (!ok) handler.post { if (launchPkg == pkg) endLaunch() }
-        }
-        AppLog.log("[shade] open $pkg from its notification")
-        return true
     }
 
     private val launchTimeout = Runnable {
@@ -877,6 +913,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun endLaunch() {
         handler.removeCallbacks(launchTimeout)
         launchPkg = null
+        nav.quietStarts(false)
         launchFading = true
         if (panel != null) finishClose()
         launchCard.animate().alpha(0f).setDuration(LAUNCH_FADE_MS).withEndAction {
@@ -969,7 +1006,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     /** Starts [i] (closing the panel); on the lock screen once the user has unlocked. */
     private fun launchIntent(i: Intent?) {
         if (i == null) return
-        if (!locked) { if (state.start(i)) close(); return }
+        if (!locked) { if (!launchWithCard(i) && state.start(i)) close(); return }
         close()
         Unlock.then(ctx, "open ${i.component?.packageName ?: i.`package` ?: i.action}") { state.start(i) }
     }
@@ -1124,6 +1161,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         /** A notification's app that is not in front this long after its card started: the card goes anyway. */
         const val LAUNCH_TIMEOUT_MS = 2500L
         const val LAUNCH_FADE_MS = 140L
+        /** What a launch from a button or control grows out of: a square this big (pt) around the touch. */
+        const val LAUNCH_FROM_PT = 64f
         /** The window manager hands a swipe from the top to the stock status bar only within this long of its start. */
         const val HANDOVER_MS = 600L
         /** How long after a tap on an app's tile a window of another app counts as that tile opening it. */
@@ -1132,7 +1171,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val NO_TOUCH = Region(-2, -2, -1, -1)
         /** Control Center going out, and its controls settling into place (coming in: [ccOpen], a token). iOS 27, measured
          *  (docs/IOS27_MOTION.md): the controls settle on 0.42 / 0.68 (overshooting a little), closing takes ~0.18 s. */
-        val CC_CLOSE = SpringSpec(0.28f, 1f)
+        val CC_CLOSE = SpringSpec(0.34f, 1f)
         val CC_SETTLE = SpringSpec(0.42f, 0.68f)
         val NC_OPEN = SpringSpec(0.44f, 1f)
         val NC_CLOSE = SpringSpec(0.38f, 1f)

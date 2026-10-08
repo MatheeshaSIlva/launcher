@@ -145,6 +145,11 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     }
 
     private val node by lazy { android.graphics.RenderNode("material") }
+    /** With a content key: what is behind, blurred, kept from frame to frame (see [drawLive]). */
+    private val behind by lazy { android.graphics.RenderNode("material-behind") }
+    private var behindKey = NO_CONTENT_KEY
+    private val behindBounds = android.graphics.Rect()
+    private var behindRadius = -1f
     private val inverse = Matrix()
 
     /**
@@ -155,10 +160,15 @@ class MaterialPainter private constructor(private val unitPx: Float) {
      * (canvas coordinates): what is on screen, the content is recorded within it only. [under]: fills between the content
      * and the surface. Never inside a smaller layer or clip (the effect's input is cut there: the lens would see nothing at
      * the edge). Hardware canvases only (else nothing is drawn: the caller draws its fallback).
+     *
+     * [contentKey]: what [drawBehind] draws, as far as the caller knows (equal keys: the same). With one, what is behind is
+     * recorded over the whole [limit] and blurred in a node of its own, recorded again only when the key changes: a surface
+     * moving over still content (the widget gallery's sheet rising over home) runs its shader on the kept blur each frame,
+     * instead of recording what is behind and blurring it again every frame.
      */
     fun drawLive(canvas: Canvas, m: Material, shape: android.graphics.RectF, radius: Float, toScreen: Matrix?,
                  limit: android.graphics.RectF?, alpha: Float = 1f, under: List<Fill> = emptyList(), press: Float = 0f,
-                 drawBehind: (Canvas) -> Unit): Boolean {
+                 contentKey: Long = NO_CONTENT_KEY, drawBehind: (Canvas) -> Unit): Boolean {
         if (!canvas.isHardwareAccelerated || shape.isEmpty || alpha <= 0.003f) return false
         val u = unitPx
         val sigma = m.frostNowPt() * u / 2f
@@ -168,20 +178,47 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         var t = shape.top - margin
         var r = shape.right + margin
         var b = shape.bottom + margin
-        if (limit != null) { l = maxOf(l, limit.left); t = maxOf(t, limit.top); r = minOf(r, limit.right); b = minOf(b, limit.bottom) }
+        val keep = contentKey != NO_CONTENT_KEY && limit != null
+        if (keep) { l = limit!!.left; t = limit.top; r = limit.right; b = limit.bottom }
+        else if (limit != null) { l = maxOf(l, limit.left); t = maxOf(t, limit.top); r = minOf(r, limit.right); b = minOf(b, limit.bottom) }
         val left = kotlin.math.floor(l).toInt()
         val top = kotlin.math.floor(t).toInt()
         val w = kotlin.math.ceil(r - left).toInt()
         val h = kotlin.math.ceil(b - top).toInt()
         if (w <= 0 || h <= 0) return false
+        val br = Blur.renderRadius(sigma)
         node.setPosition(left, top, left + w, top + h)
-        val rc = node.beginRecording()
-        try {
-            rc.translate(-left.toFloat(), -top.toFloat())
-            if (toScreen != null && toScreen.invert(inverse)) rc.concat(inverse)
-            drawBehind(rc)
-        } finally {
-            node.endRecording()
+        if (keep) {
+            if (contentKey != behindKey || !behind.hasDisplayList() || behindBounds.left != left || behindBounds.top != top ||
+                behindBounds.width() != w || behindBounds.height() != h) {
+                behind.setPosition(0, 0, w, h)
+                val bc = behind.beginRecording()
+                try {
+                    bc.translate(-left.toFloat(), -top.toFloat())
+                    if (toScreen != null && toScreen.invert(inverse)) bc.concat(inverse)
+                    drawBehind(bc)
+                } finally {
+                    behind.endRecording()
+                }
+                behindKey = contentKey
+                behindBounds.set(left, top, left + w, top + h)
+            }
+            // The same effect object while the frost is the same: the renderer keeps its blurred result.
+            if (br != behindRadius) {
+                behindRadius = br
+                behind.setRenderEffect(if (br >= 0.5f) RenderEffect.createBlurEffect(br, br, Shader.TileMode.CLAMP) else null)
+            }
+            val rc = node.beginRecording()
+            try { rc.drawRenderNode(behind) } finally { node.endRecording() }
+        } else {
+            val rc = node.beginRecording()
+            try {
+                rc.translate(-left.toFloat(), -top.toFloat())
+                if (toScreen != null && toScreen.invert(inverse)) rc.concat(inverse)
+                drawBehind(rc)
+            } finally {
+                node.endRecording()
+            }
         }
         val ox = shape.left - left
         val oy = shape.top - top
@@ -195,8 +232,7 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         shader.setFloatUniform("revealProgress", 1f)
         // A shader effect takes the shader's uniforms as they are when it is made: made anew for this frame.
         val fx = RenderEffect.createRuntimeShaderEffect(shader, "backdrop")
-        val br = Blur.renderRadius(sigma)
-        node.setRenderEffect(if (br >= 0.5f) RenderEffect.createChainEffect(fx, RenderEffect.createBlurEffect(br, br, Shader.TileMode.CLAMP)) else fx)
+        node.setRenderEffect(if (keep || br < 0.5f) fx else RenderEffect.createChainEffect(fx, RenderEffect.createBlurEffect(br, br, Shader.TileMode.CLAMP)))
         canvas.drawRenderNode(node)
         // Back to what paint draws expect (the backdrop image, depth and reveal are set again by their own calls).
         shader.setFloatUniform("plain", if (backdrop == null) 1f else 0f)
@@ -304,6 +340,9 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     }
 
     companion object {
+        /** [drawLive] without a content key: what is behind is recorded and blurred anew each time. */
+        const val NO_CONTENT_KEY = Long.MIN_VALUE
+
         /**
          * How strong the hairline rims are drawn (1 = as the material gives them). The kit's rims are linear burn: over a
          * dark backdrop they come out black, an outline the phone shows plainly at its real size.

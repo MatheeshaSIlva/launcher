@@ -153,6 +153,12 @@ object HomeBridge {
     /** A swipe up on the gesture bar while home is in front (leave edit mode, close Spotlight). Any thread. */
     fun homeSwipeUp() = main.post { (home as? HomeActivity)?.onHomeSwipeUp() }
 
+    /**
+     * Something is open on top of home (a menu, the widget gallery, edit mode, Spotlight): a swipe up on the bar closes it
+     * (iOS) instead of making home recede. Any thread (a few flags of home's, read as they are).
+     */
+    fun hasOnTop(): Boolean = (home as? HomeActivity)?.hasOnTop() == true
+
     /** A touch the card window caught during a close: home handles it as its own (any thread; a copy is posted). */
     fun forwardTouch(e: MotionEvent) {
         val ev = MotionEvent.obtain(e)
