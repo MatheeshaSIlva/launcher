@@ -760,7 +760,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun warmFrost() {
         if (width == 0 || wallpaper == null) return
         for (k in listOf(NcTokens.PLATTER, NcTokens.BUTTON)) backdropFor(Design.material(k))
-        backdropFor(Design.material(NcTokens.MENU), lookSigma())
+        backdropFor(Design.material(dev.launcher.app.components.MenuSpec.NC.material), lookSigma())
     }
 
     private val sharpMatrix = Matrix()
@@ -1265,8 +1265,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
      * and a 17 pt label, 20 pt apart, 26 pt and 20 pt of padding. The rest of Notification Center blurs and dims behind. A
      * tap on the card opens the notification; on a row, runs it; anywhere else, the card shrinks back into its platter.
      */
-    private class MenuRow(val label: String, val icon: Int, val run: () -> Unit)
-    private class Menu(val block: Block, val rows: List<MenuRow>)
+    private class Menu(val block: Block, val rows: List<dev.launcher.app.components.MenuPainter.Item>,
+                       val painter: dev.launcher.app.components.MenuPainter, val height: Float)
     private var menu: Menu? = null
 
     /** The long look's text: every line of it (the platters show at most [MAX_LINES]). */
@@ -1274,19 +1274,24 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun openMenu(b: Block) {
         val item = b.item ?: return
-        val rows = ArrayList<MenuRow>()
+        val rows = ArrayList<dev.launcher.app.components.MenuPainter.Item>()
         for (act in item.actions) {
             val title = act.title?.toString() ?: continue
             val input = act.remoteInputs?.isNotEmpty() == true
-            rows += MenuRow(title, 0) {
+            rows += dev.launcher.app.components.MenuPainter.Item(title) {
                 // Replying in place needs a keyboard over our window; until then a reply opens the conversation.
                 if (input) host.open(item) else if (act.actionIntent != null) host.send(act.actionIntent)
             }
         }
-        if (item.contentIntent != null) rows += MenuRow("Open", R.drawable.sym_chevron) { host.open(item) }
-        rows += MenuRow("View Settings", R.drawable.sym_settings) { openSettings(item.pkg) }
+        if (item.contentIntent != null) rows += dev.launcher.app.components.MenuPainter.Item("Open", symbol = symbol(R.drawable.sym_chevron)) { host.open(item) }
+        rows += dev.launcher.app.components.MenuPainter.Item("View Settings", symbol = symbol(R.drawable.sym_settings)) { openSettings(item.pkg) }
         expandedPainter.u = u
-        menu = Menu(b, rows)
+        // The menu component (MenuSpec.NC); its height first, so the card can make room for it below.
+        val painter = dev.launcher.app.components.MenuPainter(dev.launcher.app.components.MenuSpec.NC, u)
+        menuBounds.set(0f, 0f, width.toFloat(), Float.MAX_VALUE / 4f)
+        painter.layout(rows, menuBounds, menuBounds, 0f, fromLeft = false)
+        menuAnchor.setEmpty()
+        menu = Menu(b, rows, painter, painter.panel.height())
         menuK.snapTo(0f)
         menuK.animateTo(1f, MENU_OPEN)
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -1300,11 +1305,16 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val cardR = RectF()
     private val menuR = RectF()
     private val platR = RectF()
+    /** What the menu was last laid out for (laid out again only when the card moves). */
+    private val menuAnchor = RectF()
+    private val menuBounds = RectF()
+    private val menuAt = FloatArray(2)
+    private val symbols = HashMap<Int, android.graphics.drawable.Drawable>()
+
+    private fun symbol(res: Int) = symbols.getOrPut(res) { context.getDrawable(res)!!.mutate() }
 
     /** How much the sheet behind a long look is blurred (a Gaussian's sigma, px). */
     private fun lookSigma() = dev.launcher.app.design.Blur.sigmaPx(Design.num(NcTokens.LOOK_BLUR), u)
-
-    private fun menuRowPitch() = Design.pt(NcTokens.MENU_ROW, u) + Design.pt(NcTokens.MENU_ROW_GAP, u)
 
     /** Where the long look's card ([cardR]) and its menu ([menuR]) rest, for [m] on a sheet at [sheetY]. */
     private fun longLook(m: Menu, sheetY: Float) {
@@ -1312,14 +1322,18 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val inset = Design.pt(NcTokens.LOOK_INSET, u)
         val cw = width - 2 * inset
         val ch = if (item != null) expandedPainter.height(item, cw) else m.block.height
-        val mh = 2 * Design.pt(NcTokens.MENU_PAD_Y, u) + menuRowPitch() * m.rows.size - Design.pt(NcTokens.MENU_ROW_GAP, u)
         val mGap = Design.pt(NcTokens.MENU_GAP, u)
-        val total = ch + mGap + mh
+        val total = ch + mGap + m.height
         var top = listTop() + m.block.y.value + sheetY
         top = min(top, height - 40f * u - total).coerceAtLeast(60f * u)
         cardR.set(inset, top, inset + cw, top + ch)
-        val mw = Design.pt(NcTokens.MENU_WIDTH, u)
-        menuR.set((width - mw) / 2f, cardR.bottom + mGap, (width + mw) / 2f, cardR.bottom + mGap + mh)
+        // Centred under the card, never wider than it.
+        if (cardR != menuAnchor) {
+            menuAnchor.set(cardR)
+            menuBounds.set(cardR.left, 0f, cardR.right, height.toFloat())
+            m.painter.layout(m.rows, cardR, menuBounds, Design.num(NcTokens.MENU_GAP), fromLeft = false)
+        }
+        menuR.set(m.painter.panel)
     }
 
     /** The menu row under [x], [y] (-2: the card, -1: neither). */
@@ -1327,8 +1341,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val m = menu ?: return -1
         longLook(m, sheetY())
         if (cardR.contains(x, y)) return -2
-        if (!menuR.contains(x, y)) return -1
-        return ((y - menuR.top - Design.pt(NcTokens.MENU_PAD_Y, u) + Design.pt(NcTokens.MENU_ROW_GAP, u) / 2f) / menuRowPitch()).toInt().coerceIn(0, m.rows.size - 1)
+        return m.painter.rowAt(x, y)
     }
 
     private fun drawMenu(c: Canvas, m: Menu, sheetY: Float) {
@@ -1363,37 +1376,21 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 Design.color(NcTokens.LOOK_LABEL), Appearance.secondaryLabel)
             c.restore()
         }
-        // The menu, growing from its top centre.
-        val s = 0.6f + 0.4f * k
-        c.save()
-        c.scale(s, s, menuR.centerX(), menuR.top)
-        // Clear glass with white labels (Apple's kit: the expanded notification's menu), over the blurred, dimmed sheet: it
-        // sees the wallpaper blurred as the sheet is, with the list's overlay and the long look's dim.
+        // The menu (the menu component), growing out of the card. Clear glass with white labels (Apple's kit: the expanded
+        // notification's menu), over the blurred, dimmed sheet: it sees the wallpaper blurred as the sheet is, with the
+        // list's overlay and the long look's dim.
         val menuUnder = under + Fill(ColorValue.Literal(dim or (0xFF shl 24), dim or (0xFF shl 24)), kc * ((dim ushr 24) / 255f), kc * ((dim ushr 24) / 255f), Blend.NORMAL)
-        drawGlass(c, Design.material(NcTokens.MENU), menuR.left, menuR.top, menuR.width(), menuR.height(), Design.pt(NcTokens.MENU_CORNER, u),
-            kc, s, menuR.centerX() - menuR.width() * s / 2f, menuR.top, under = menuUnder, behindPx = lookSigma())
-        Design.text(NcTokens.MENU_LABEL).applyTo(menuPaint, u)
-        menuPaint.color = alpha(Design.color(NcTokens.MENU_LABEL_COLOR), kc)
-        val padX = Design.pt(NcTokens.MENU_PAD_X, u)
-        val row0 = Design.pt(NcTokens.MENU_PAD_Y, u) + Design.pt(NcTokens.MENU_ROW, u) / 2f
-        val sym = Design.pt(NcTokens.MENU_SYMBOL, u)
-        val labelX = padX + sym + Design.pt(NcTokens.MENU_SYMBOL_GAP, u)
-        for ((i, row) in m.rows.withIndex()) {
-            val cy = menuR.top + row0 + i * menuRowPitch()
-            if (i == menuPressed) {
-                fill.color = alpha(0x26FFFFFF, kc)
-                rect.set(menuR.left + 8f * u, cy - 19f * u, menuR.right - 8f * u, cy + 19f * u)
-                c.drawRoundRect(rect, 16f * u, 16f * u, fill)
-            }
-            if (row.icon != 0) glyphs.draw(c, row.icon, menuR.left + padX + sym / 2f, cy, sym * 0.85f, menuPaint.color)
-            c.drawText(TextUtils.ellipsize(row.label, menuPaint, menuR.width() - labelX - padX, TextUtils.TruncateAt.END).toString(),
-                menuR.left + labelX, cy + 0.36f * menuPaint.textSize, menuPaint)
+        val mat = m.painter.material
+        m.painter.draw(c, k, menuPressed, 0f) { cc, r, radius2, mx, a ->
+            menuAt[0] = r.left; menuAt[1] = r.top
+            mx.mapPoints(menuAt)
+            drawGlass(cc, mat, r.left, r.top, r.width(), r.height(), radius2, a, mx.mapRadius(1f), menuAt[0], menuAt[1],
+                under = menuUnder, behindPx = lookSigma())
+            true
         }
-        c.restore()
     }
 
     private var menuPressed = -1
-    private val menuPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
 
     private fun openSettings(pkg: String) {
         host.launch(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, pkg))
@@ -1624,7 +1621,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 val m = menu
                 val i = menuPressed
                 menuPressed = -1
-                if (m != null && i in m.rows.indices) m.rows[i].run()
+                if (m != null && i in m.rows.indices) m.rows[i].action()
                 else if (m != null && i == -2) m.block.item?.let { longLook(m, sheetY()); host.open(it, RectF(cardR)) }
                 closeMenu()
             }

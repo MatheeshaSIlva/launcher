@@ -1929,6 +1929,10 @@
    "ref": "ref.color.accents.red",
    "src": "kit:5622:50175 (#ff383c)"
   },
+  "comp.home.menu.grow-from": {
+   "factor": 0.8,
+   "src": "judged:the panel grows out of what it belongs to from 80 % of its size"
+  },
   "comp.home.menu.label": {
    "light": "#1a1a1a",
    "dark": "#ffffff",
@@ -1958,6 +1962,10 @@
   "comp.home.menu.row": {
    "pt": 42,
    "src": "kit:5626:51776 (rows 42 pt apart)"
+  },
+  "comp.home.menu.symbol": {
+   "pt": 18,
+   "src": "judged:a symbol from a drawable, the size of the drawn ones (18 pt)"
   },
   "comp.home.menu.symbol-x": {
    "pt": 36,
@@ -2060,15 +2068,59 @@
    "ref": "sys.color.label.primary",
    "src": "kit:143:62847"
   },
-  "comp.nc.look.menu-corner": {
-   "pt": 26,
-   "src": "kit:143:62847"
-  },
   "comp.nc.look.menu-gap": {
    "pt": 10,
    "src": "kit:143:62847"
   },
-  "comp.nc.look.menu-label": {
+  "comp.nc.menu.corner": {
+   "pt": 26,
+   "src": "kit:143:62847"
+  },
+  "comp.nc.menu.destructive": {
+   "ref": "ref.color.accents.red",
+   "src": "judged:as home's menus"
+  },
+  "comp.nc.menu.grow-from": {
+   "factor": 0.6,
+   "src": "judged:the menu grows out of the card from 60 % of its size (as before)"
+  },
+  "comp.nc.menu.label": {
+   "color": "#ffffff",
+   "src": "kit:143:62847"
+  },
+  "comp.nc.menu.label-x": {
+   "pt": 60,
+   "src": "kit:143:62847 (26 pt in, a 20 pt symbol, 14 pt after it)"
+  },
+  "comp.nc.menu.material": {
+   "ref": "sys.material.glass.clear",
+   "src": "kit:143:62847"
+  },
+  "comp.nc.menu.pad-bottom": {
+   "pt": 10,
+   "src": "kit:143:62847 (as the top)"
+  },
+  "comp.nc.menu.pad-top": {
+   "pt": 10,
+   "src": "kit:143:62847 (20 pt of padding less half the 20 pt between rows)"
+  },
+  "comp.nc.menu.press": {
+   "color": "#ffffff26",
+   "src": "judged:a pressed row on the clear glass (as before)"
+  },
+  "comp.nc.menu.row": {
+   "pt": 42,
+   "src": "kit:143:62847 (a 22 pt line and 20 pt between rows)"
+  },
+  "comp.nc.menu.symbol": {
+   "pt": 17,
+   "src": "judged:a symbol drawn at 85 % of its 20 pt column (as before)"
+  },
+  "comp.nc.menu.symbol-x": {
+   "pt": 36,
+   "src": "kit:143:62847 (a 20 pt symbol 26 pt in: its centre)"
+  },
+  "comp.nc.menu.type": {
    "text": {
     "family": "text",
     "weight": 400,
@@ -2078,39 +2130,7 @@
    },
    "src": "kit:143:62847"
   },
-  "comp.nc.look.menu-label-color": {
-   "color": "#ffffff",
-   "src": "kit:143:62847"
-  },
-  "comp.nc.look.menu-material": {
-   "ref": "sys.material.glass.clear",
-   "src": "kit:143:62847"
-  },
-  "comp.nc.look.menu-pad-x": {
-   "pt": 26,
-   "src": "kit:143:62847"
-  },
-  "comp.nc.look.menu-pad-y": {
-   "pt": 20,
-   "src": "kit:143:62847"
-  },
-  "comp.nc.look.menu-row": {
-   "pt": 22,
-   "src": "kit:143:62847"
-  },
-  "comp.nc.look.menu-row-gap": {
-   "pt": 20,
-   "src": "kit:143:62847"
-  },
-  "comp.nc.look.menu-symbol": {
-   "pt": 20,
-   "src": "kit:143:62847"
-  },
-  "comp.nc.look.menu-symbol-gap": {
-   "pt": 14,
-   "src": "kit:143:62847"
-  },
-  "comp.nc.look.menu-width": {
+  "comp.nc.menu.width": {
    "pt": 250,
    "src": "kit:143:62847"
   },
@@ -2276,6 +2296,10 @@
    "ref": "comp.home.menu.destructive",
    "src": "judged:the App Switcher's app menu looks as home's menus"
   },
+  "comp.switcher.menu.grow-from": {
+   "ref": "comp.home.menu.grow-from",
+   "src": "judged:the App Switcher's app menu looks as home's menus"
+  },
   "comp.switcher.menu.label": {
    "ref": "comp.home.menu.label",
    "src": "judged:the App Switcher's app menu looks as home's menus"
@@ -2302,6 +2326,10 @@
   },
   "comp.switcher.menu.row": {
    "ref": "comp.home.menu.row",
+   "src": "judged:the App Switcher's app menu looks as home's menus"
+  },
+  "comp.switcher.menu.symbol": {
+   "ref": "comp.home.menu.symbol",
    "src": "judged:the App Switcher's app menu looks as home's menus"
   },
   "comp.switcher.menu.symbol-x": {

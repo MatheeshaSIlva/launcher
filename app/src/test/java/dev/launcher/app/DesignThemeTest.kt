@@ -46,8 +46,9 @@ class DesignThemeTest {
             val want = when {
                 k.endsWith("material") -> Value.Mat::class
                 k.endsWith("-blend") -> Value.Choice::class
-                k.endsWith("color") || k.endsWith(".label") || k.endsWith("-color") || k.endsWith(".dim") -> Value.Color::class
-                k.endsWith(".title") || k.endsWith(".body") || k.endsWith(".time") || k.endsWith("menu-label") -> Value.Text::class
+                k.endsWith("color") || k.endsWith(".label") || k.endsWith("-color") || k.endsWith(".dim") ||
+                    k.endsWith(".destructive") || k.endsWith(".press") -> Value.Color::class
+                k.endsWith(".title") || k.endsWith(".body") || k.endsWith(".time") || k.endsWith(".type") -> Value.Text::class
                 else -> Value.Number::class
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
@@ -80,6 +81,14 @@ class DesignThemeTest {
                 else -> Value.Number::class
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
+        }
+        // Every menu's (the menu component reads each of these).
+        for (spec in listOf(dev.launcher.app.components.MenuSpec.HOME, dev.launcher.app.components.MenuSpec.SWITCHER, dev.launcher.app.components.MenuSpec.NC)) {
+            assertTrue(spec.material.name, r.resolve(spec.material.name) is Value.Mat)
+            assertTrue(spec.type.name, r.resolve(spec.type.name) is Value.Text)
+            for (k in listOf(spec.label, spec.destructive, spec.press)) assertTrue(k.name, r.resolve(k.name) is Value.Color)
+            for (k in listOf(spec.corner, spec.width, spec.row, spec.padTop, spec.padBottom, spec.symbolX, spec.labelX, spec.symbol, spec.growFrom))
+                assertTrue(k.name, r.resolve(k.name) is Value.Number)
         }
         // The banners'.
         for (k in dev.launcher.app.shade.BannerView.ALL) {

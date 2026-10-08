@@ -1596,3 +1596,15 @@ material in all six cases. Found and fixed:
   to 0 ("switched to Detailed (was 1)"), Restore system put back 1. The S24 is already on Detailed: nothing shows there.
 - Emulator pitfall: Shizuku's app starts its own server at boot; starting another by hand left two, our service attached
   to the other one ("unable to find token") and never connected. Check `ps -A | grep shizuku_server` first.
+
+## Step 3: Notification Center's long-look menu on the menu component (2026-10-09)
+
+- The long look's menu is drawn by `MenuPainter` with its own token set (`MenuSpec.NC`, `comp.nc.menu.*`: the kit's clear
+  glass and white labels; the old `comp.nc.look.menu-*` tokens went, except the gap under the card). The kit's
+  measures turned out to be home's menu geometry exactly (42 pt rows, symbols centred 36 pt in, labels at 60 pt, 17 pt
+  body), so only the glass, the label colour, the press colour and how far it grows (`grow-from`, new for every menu:
+  home 0.8, here 0.6) differ. Menu items take a tinted drawable symbol (`symbol`, sized by the spec).
+- Before/after on the emulator (the same test notification held): pixel for pixel the same, once two differences were
+  fixed: the component drew labels without the type's tracking (the kit's -0.43 pt: home's and the switcher's menus
+  now get it too, slightly tighter, as the kit), and the symbols' bounds were rounded instead of placed by translation.
+  Tapping "View Settings" opened the app's notification settings (rows map to touches as before).

@@ -11,6 +11,7 @@ import dev.launcher.app.design.Design
 import dev.launcher.app.design.MaterialKey
 import dev.launcher.app.design.NumberKey
 import dev.launcher.app.design.TextKey
+import dev.launcher.app.design.applyTo
 import dev.launcher.app.drawer.LabelPainter
 import dev.launcher.app.home.WidgetSize
 import dev.launcher.app.theme.Appearance
@@ -33,14 +34,20 @@ class MenuSpec(prefix: String) {
     val label = ColorKey("$prefix.label")
     val destructive = ColorKey("$prefix.destructive")
     val press = ColorKey("$prefix.press")
+    /** A symbol given as a drawable ([MenuPainter.Item.symbol]): its size, tinted as the label. */
+    val symbol = NumberKey("$prefix.symbol")
+    /** How large the panel starts as it grows out of what it belongs to (a fraction of its size). */
+    val growFrom = NumberKey("$prefix.grow-from")
 
-    val all get() = listOf(material, corner, width, row, padTop, padBottom, symbolX, labelX, type, label, destructive, press).map { it.name }
+    val all get() = listOf(material, corner, width, row, padTop, padBottom, symbolX, labelX, type, label, destructive, press, symbol, growFrom).map { it.name }
 
     companion object {
         /** Home's long-press and Edit menus (the kit's Home Screen Quick Actions). */
         val HOME = MenuSpec("comp.home.menu")
         /** The App Switcher's menu of an app (its name above its card). */
         val SWITCHER = MenuSpec("comp.switcher.menu")
+        /** Notification Center's long look (the kit's expanded notification: clear glass, white labels). */
+        val NC = MenuSpec("comp.nc.menu")
     }
 }
 
@@ -60,7 +67,9 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
      * A menu row; with [sizes] it is iOS's row of widget sizes (glyphs shaped like each size, [current] filled) and
      * [onSize] runs for the one tapped.
      */
-    class Item(val label: String, val icon: Drawable? = null, val glyph: Glyph? = null, val destructive: Boolean = false,
+    class Item(val label: String, val icon: Drawable? = null, val glyph: Glyph? = null,
+               /** A symbol drawable (tinted as the label, [MenuSpec.symbol] square); [icon] is drawn as it is (an app's). */
+               val symbol: Drawable? = null, val destructive: Boolean = false,
                val sizes: List<WidgetSize>? = null, val current: WidgetSize? = null, val onSize: ((WidgetSize) -> Unit)? = null,
                /** A segmented row of [choices] ([chosen] highlighted): [onChoice] runs for the one tapped; the menu stays open. */
                val choices: List<String>? = null, var chosen: Int = 0, val onChoice: ((Int) -> Unit)? = null,
@@ -81,6 +90,7 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
     private val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = pt(1.6f); strokeCap = Paint.Cap.ROUND }
     private val type = Design.text(spec.type)
     private val labels = LabelPainter(pt(type.sizePt), Color.WHITE, Paint.Align.LEFT, Fonts.text(type.weight)).toned { Design.color(spec.label) }
+        .also { type.applyTo(it.paint, u) }   // the type's tracking too (the kit's 17 pt body: -0.43)
     private val choiceText = LabelPainter(pt(14f), Color.WHITE, Paint.Align.CENTER, Fonts.text(500)).toned { Appearance.label }
     private val choiceFill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val press = Paint()
@@ -127,7 +137,8 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
 
     /** The transform the panel is drawn with at presence [k] (it grows out of the side of what it belongs to). */
     fun matrixAt(k: Float, out: Matrix): Matrix {
-        val ps = 0.8f + 0.2f * k
+        val g = Design.num(spec.growFrom)
+        val ps = g + (1f - g) * k
         val px = panel.centerX()
         val py = if (below) panel.top else panel.bottom
         out.reset()
@@ -232,6 +243,18 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
     }
 
     private fun drawGlyph(c: Canvas, item: Item, cx: Float, cy: Float) {
+        val sym = item.symbol
+        if (sym != null) {
+            // Whole-pixel bounds placed by translation (sub-pixel), as the shade's symbols are.
+            val size = pt(Design.num(spec.symbol)).toInt().coerceAtLeast(1)
+            sym.setBounds(0, 0, size, size)
+            sym.setTint(if (item.destructive) Design.color(spec.destructive) else Design.color(spec.label))
+            val save = c.save()
+            c.translate(cx - size / 2f, cy - size / 2f)
+            sym.draw(c)
+            c.restoreToCount(save)
+            return
+        }
         val icon = item.icon
         if (icon != null) {
             val s = pt(11f)

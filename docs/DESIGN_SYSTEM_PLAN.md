@@ -90,7 +90,7 @@ blurred backdrop (`drawer/BackdropGlass`); `LiveGlass` removed. Left: the glass 
 
 **Step 3: components.** Platter, control tile (sizes and states), slider, pill and round buttons, sheet, menu, badge,
 status row, clock numerals: specs plus painters. The shade's views shrink to layout and touch. *Menu done 2026-10-08*
-(`components/Menu.kt`: home's menus and the App Switcher's; Notification Center's long-look menu still its own).
+(`components/Menu.kt`: home's menus, the App Switcher's and, since 2026-10-09, Notification Center's long look).
 With it, the **look audit** Matheesha asked for (2026-10-08): tints and opacities that differ between surfaces (or with
 the wallpaper) listed surface by surface over a light, a mid and a dark wallpaper, and every difference from iOS 27 that
 is not a decision of ours, each fixed in its token. Already done: the kit's hairline rims at a theme strength
