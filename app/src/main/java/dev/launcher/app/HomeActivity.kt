@@ -170,7 +170,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             when (intent.action) {
                 // Only when home was in front as the screen went off: if an app was, the unlock goes back to that app.
                 // (onPause marks it too: it can come first.)
-                Intent.ACTION_SCREEN_OFF -> if (resumed) { markArrivalDue("screen off"); screen.holdArrival() }
+                // Only if the screen is still off: the broadcast can come late, after a quick wake-up (it re-armed an arrival
+                // that had just played, and it played twice).
+                Intent.ACTION_SCREEN_OFF -> if (resumed && !screenOn()) { markArrivalDue("screen off"); screen.holdArrival() }
                 Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> {
                     lastWakeAt = android.os.SystemClock.uptimeMillis()
                     if (intent.action == Intent.ACTION_USER_PRESENT && arrivalDue) presentAt = lastWakeAt
@@ -213,14 +215,17 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
     }
 
-    // Home's window shown again (its surface is made again: the lock screen is going away). That is home being seen: the
-    // keyguard's state said so 80-160 ms later on the S24, and the held frame stood still meanwhile.
+    // Home's window shown and home resumed: the lock screen is going away (an activity behind it is never resumed), so home
+    // is being seen. The keyguard's own state said so 80-160 ms later on the S24, and the held frame stood still meanwhile.
+    // The window alone is not enough: woken with the power key, One UI shows home's window behind the lock screen at once,
+    // and the arrival played there, over before the unlock (Matheesha: "instant and glitchy").
+    private var windowVisible = true
     private val windowShown = android.view.ViewTreeObserver.OnWindowVisibilityChangeListener { v ->
-        if (v == android.view.View.VISIBLE && arrivalDue) arriveIfDue(seen = true)
+        windowVisible = v == android.view.View.VISIBLE
+        if (windowVisible && arrivalDue) arriveIfDue()
     }
 
-    /** [seen]: home's window has just been shown again (see [windowShown]). */
-    private fun arriveIfDue(seen: Boolean = false) {
+    private fun arriveIfDue() {
         screen.removeCallbacks(unlockCheck)
         if (coldStart) {
             coldStart = false
@@ -232,7 +237,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
         if (!arrivalDue) return
         val on = screenOn()
-        if (seen && on && !wokeSinceDue) { wokeSinceDue = true; AppLog.log("[home] arrival: woke (home's window shown)") }
+        val seen = resumed && windowVisible && on
+        if (seen && !wokeSinceDue) { wokeSinceDue = true; AppLog.log("[home] arrival: woke (home resumed and shown)") }
         val unlocked = wokeSinceDue && on && (seen || !keyguardUp())
         // Seen only long after the unlock (it went to an app first): no arrival; the held frame goes before home shows.
         val sinceUnlock = if (presentAt == 0L) 0L else android.os.SystemClock.uptimeMillis() - presentAt
@@ -242,7 +248,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             AppLog.log("[home] arrival dropped: home was seen $sinceUnlock ms after the unlock")
             return
         }
-        if (!resumed && !seen) return
+        if (!resumed) return
         if (!unlocked) {
             // Not seen yet: hold the first frame, and look again shortly while the screen is on (not every unlock sends
             // USER_PRESENT at the moment home shows). It starts as soon as the lock screen is gone: waiting for home's focus
@@ -253,7 +259,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
         if (screen.playArrival(cold = false)) {
             arrivalDue = false
-            AppLog.log("[home] arrival: home is seen${if (seen) " (its window shown)" else ""}, playing")
+            AppLog.log("[home] arrival: home is seen${if (seen) " (resumed and shown)" else ""}, playing")
         } else if (++arrivalTries < 20) {
             // Home is busy for a moment (a card still over it, its zoom settling): again shortly, never dropped silently.
             screen.postDelayed(unlockCheck, 50)

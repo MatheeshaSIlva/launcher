@@ -1390,3 +1390,8 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   starts when home's window is shown again (before the keyguard's exit even starts); its time advances at most 1/60 s a
   frame. Recorded after (1) and (2): lock screen, then the zoomed first frame, then the zoom-out, no frame at rest; (3) is
   made, not yet recorded.
+- Matheesha on 505513b: from screen-off smooth; woken with the power key first, "instant and glitchy". His log: woken with
+  the power key, One UI shows home's window behind the lock screen at once, and "window shown" had started the arrival
+  there, over before the unlock; a late SCREEN_OFF broadcast (after a quick wake-up) also re-armed an arrival that had just
+  played. Now home is seen when its window is shown *and* it is resumed (an activity behind the lock screen never is), and
+  SCREEN_OFF counts only while the screen is still off. On the S24: a quick lock and wake leaves the arrival held.
