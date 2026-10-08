@@ -90,6 +90,16 @@ class DesignThemeTest {
             for (k in listOf(spec.corner, spec.width, spec.row, spec.padTop, spec.padBottom, spec.symbolX, spec.labelX, spec.symbol, spec.growFrom))
                 assertTrue(k.name, r.resolve(k.name) is Value.Number)
         }
+        // The badges'.
+        for (k in dev.launcher.app.components.BadgeTokens.ALL) {
+            val v = r.resolve(k)
+            val want = when {
+                k.endsWith(".type") -> Value.Text::class
+                k.endsWith(".fill") || k.endsWith(".label") || k.endsWith(".disc") || k.endsWith(".minus") -> Value.Color::class
+                else -> Value.Number::class
+            }
+            assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
+        }
         // The banners'.
         for (k in dev.launcher.app.shade.BannerView.ALL) {
             val v = r.resolve(k)

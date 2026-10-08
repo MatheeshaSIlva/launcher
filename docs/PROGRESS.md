@@ -1608,3 +1608,10 @@ material in all six cases. Found and fixed:
   fixed: the component drew labels without the type's tracking (the kit's -0.43 pt: home's and the switcher's menus
   now get it too, slightly tighter, as the kit), and the symbols' bounds were rounded instead of placed by translation.
   Tapping "View Settings" opened the app's notification settings (rows map to touches as before).
+
+## Step 3: the badge component (2026-10-09)
+
+- `components/Badge.kt`: the count badge (icons, the dock, launch and close cards) and edit mode's remove badge read
+  `comp.badge.*` (the values they had, marked judged: the kit's data has no badge). `Appearance.removeDisc` /
+  `removeMinus` went into the tokens. Emulator: home with the dock's count pixel for pixel the same; edit mode's
+  remove badges the same (the icons' wiggle differs between captures).

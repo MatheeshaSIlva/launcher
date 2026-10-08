@@ -208,8 +208,6 @@ object Appearance {
     fun shadowFor(label: Int): Float = (((label shr 16) and 0xFF) / 255f)
 
     /** The edit-mode remove badge: a light disc with a dark minus in light mode, as iOS. */
-    val removeDisc get() = mix(0xF2E5E5EA.toInt(), 0xE6747480.toInt())
-    val removeMinus get() = mix(0xFF3C3C43.toInt(), 0xFFFFFFFF.toInt())
 
     private const val KEY = "mode"
     private const val CHANGE_MS = 450L

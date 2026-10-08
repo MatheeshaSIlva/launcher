@@ -169,7 +169,7 @@ class CardView(context: Context) : View(context) {
         val alphaNow = (a * alpha).roundToInt()
         if (alphaNow <= 0) return
         iconRect.set(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
-        dev.launcher.app.home.CountBadge.draw(canvas, iconRect, badge, unitPx * (size / minIconSize.coerceAtLeast(1f)).coerceIn(0.5f, 1f), alphaNow)
+        dev.launcher.app.components.CountBadge.draw(canvas, iconRect, badge, unitPx * (size / minIconSize.coerceAtLeast(1f)).coerceIn(0.5f, 1f), alphaNow)
     }
 
     /** The unclipped view above this card that draws its badge ([drawBadge]); redrawn whenever this card is. */

@@ -215,6 +215,17 @@ SEED = {
     # The glass clock (home's widget, Notification Center's) takes the same tone as the names, from the wallpaper under it:
     # light glass over a dark or mid wallpaper, dark glass over a bright one (white glass vanished there, dark glass was
     # muddy over a dark one), whatever the appearance.
+    # Badges (not in the kit's data: measured on iOS before, kept as they were).
+    'comp.badge.fill': {'color': '#ff3b30', 'src': "judged:iOS's notification badge red"},
+    'comp.badge.label': {'color': '#ffffff', 'src': 'judged:the white count'},
+    'comp.badge.type': {'text': {'family': 'text', 'weight': 500, 'size': 15.5, 'line': 18, 'tracking': 0}, 'src': 'judged:measured on iOS'},
+    'comp.badge.height': {'pt': 24, 'src': 'judged:measured on iOS'},
+    'comp.badge.pad-x': {'pt': 7, 'src': 'judged:on each side of a long count'},
+    'comp.badge.offset': {'pt': 5, 'src': "judged:its top right 5 pt past the icon's corner, as on iOS"},
+    'comp.badge.remove.disc': {'light': '#e5e5eaf2', 'dark': '#747480e6', 'src': "judged:edit mode's grey disc"},
+    'comp.badge.remove.minus': {'light': '#3c3c43', 'dark': '#ffffff', 'src': 'judged:its minus'},
+    'comp.badge.remove.radius': {'pt': 11, 'src': 'judged:measured on iOS'},
+    'comp.badge.remove.stroke': {'pt': 2.2, 'src': 'judged:the minus'},
     'comp.home.clock.tint-light': {'color': '#ffffff30', 'src': "judged:the clock over a dark or mid wallpaper: the glass's light tint (the dock's in light mode)"},
     'comp.home.clock.tint-dark': {'color': '#00000029', 'src': "judged:the clock over a bright wallpaper: the light glass only slightly dimmed, close to the dock's glass (Matheesha, 2026-10-09; the dark mode tint 52 read as grey)"},
     # The long-press menu: the kit's Home Screen Quick Actions (System page 2607:25374, its menu 5626:51776).

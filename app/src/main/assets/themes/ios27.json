@@ -1394,6 +1394,54 @@
    },
    "src": "kit:text style Title3/Regular"
   },
+  "comp.badge.fill": {
+   "color": "#ff3b30",
+   "src": "judged:iOS's notification badge red"
+  },
+  "comp.badge.height": {
+   "pt": 24,
+   "src": "judged:measured on iOS"
+  },
+  "comp.badge.label": {
+   "color": "#ffffff",
+   "src": "judged:the white count"
+  },
+  "comp.badge.offset": {
+   "pt": 5,
+   "src": "judged:its top right 5 pt past the icon's corner, as on iOS"
+  },
+  "comp.badge.pad-x": {
+   "pt": 7,
+   "src": "judged:on each side of a long count"
+  },
+  "comp.badge.remove.disc": {
+   "light": "#e5e5eaf2",
+   "dark": "#747480e6",
+   "src": "judged:edit mode's grey disc"
+  },
+  "comp.badge.remove.minus": {
+   "light": "#3c3c43",
+   "dark": "#ffffff",
+   "src": "judged:its minus"
+  },
+  "comp.badge.remove.radius": {
+   "pt": 11,
+   "src": "judged:measured on iOS"
+  },
+  "comp.badge.remove.stroke": {
+   "pt": 2.2,
+   "src": "judged:the minus"
+  },
+  "comp.badge.type": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 15.5,
+    "line": 18,
+    "tracking": 0
+   },
+   "src": "judged:measured on iOS"
+  },
   "comp.banner.action.fill": {
    "ref": "ref.color.fills.tertiary",
    "src": "judged:a faint capsule in the label colour (the kit's tertiary fill)"

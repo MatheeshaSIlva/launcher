@@ -602,59 +602,6 @@ object Edt {
         ((f[q] + q.toFloat() * q) - (f[p] + p.toFloat() * p)) / (2f * q - 2f * p)
 }
 
-/** iOS's notification badge: a red capsule with the count in white, over the icon's top-right corner. */
-object CountBadge {
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFF3B30.toInt() }
-    private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textAlign = Paint.Align.CENTER }
-    private val r = RectF()
-
-    fun draw(c: Canvas, icon: RectF, count: Int, m: HomeMetrics, alpha: Int = 255, scale: Float = 1f) = draw(c, icon, count, m.u, alpha, scale)
-
-    /** With [u] = one iOS point in px; [scale] grows or shrinks the badge about its centre (its pop-in animation). */
-    fun draw(c: Canvas, icon: RectF, count: Int, u: Float, alpha: Int = 255, scale: Float = 1f) {
-        if (alpha <= 0 || scale <= 0f) return
-        val label = if (count > 999) "999+" else count.toString()
-        val h = 24f * u
-        text.typeface = dev.launcher.app.theme.Fonts.text(500)
-        text.textSize = 15.5f * u
-        val w = maxOf(h, text.measureText(label) + 14f * u)
-        // Its top-right a little outside the icon's corner, as on iOS.
-        val right = icon.right + 5f * u
-        val top = icon.top - 5f * u
-        r.set(right - w, top, right, top + h)
-        fill.alpha = alpha
-        text.alpha = alpha
-        val save = c.save()
-        if (scale != 1f) c.scale(scale, scale, r.centerX(), r.centerY())
-        c.drawRoundRect(r, h / 2f, h / 2f, fill)
-        c.drawText(label, r.centerX(), r.centerY() + text.textSize * 0.36f, text)
-        c.restoreToCount(save)
-    }
-}
-
-/** iOS edit mode's remove badge: a grey disc with a white minus. */
-object RemoveBadge {
-    private val disc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6747480.toInt() }
-    private val bar = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeCap = Paint.Cap.ROUND }
-
-    fun radius(m: HomeMetrics) = m.pt(11f)
-
-    /** [k]: how far it has popped in (0..1, a spring that may overshoot): its size, and its opacity up to 1. */
-    fun draw(c: Canvas, cx: Float, cy: Float, m: HomeMetrics, k: Float = 1f) {
-        if (k <= 0f) return
-        val r = radius(m) * k
-        val a = k.coerceIn(0f, 1f)
-        val dc = dev.launcher.app.theme.Appearance.removeDisc
-        disc.color = dc
-        disc.alpha = (android.graphics.Color.alpha(dc) * a).toInt()
-        bar.color = dev.launcher.app.theme.Appearance.removeMinus
-        bar.alpha = (255 * a).toInt()
-        c.drawCircle(cx, cy, r, disc)
-        bar.strokeWidth = m.pt(2.2f) * k
-        c.drawLine(cx - r * 0.45f, cy, cx + r * 0.45f, cy, bar)
-    }
-}
-
 /**
  * The iOS 26 dock: a floating glass platter with up to [HomeConfig.dockSlots] icons, centred, spaced a little tighter than
  * the page columns. [bind] with `animate` slides icons that stay to their new places (edit mode).

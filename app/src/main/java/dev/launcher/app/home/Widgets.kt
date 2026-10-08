@@ -1,5 +1,6 @@
 package dev.launcher.app.home
 
+import dev.launcher.app.components.RemoveBadge
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.appwidget.AppWidgetHost
