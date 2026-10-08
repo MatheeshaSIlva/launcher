@@ -409,6 +409,9 @@ object GestureNav {
      * app, our latest picture of it at once, then a fresh one if that was stale (its screen changed since, or none).
      */
     private fun shadeBackdrop(then: (dev.launcher.app.shade.BackdropSource?) -> Unit) {
+        // Over the lock screen: its wallpaper (the front window there is the lock screen's or the fingerprint icon's,
+        // which have no task to take a picture of; Control Center's glass showed its plain fallback).
+        if (locked) { then(Wallpaper.current?.let { dev.launcher.app.shade.BackdropSource.Wall(it) }); return }
         if (homeVisible) {
             HomeBridge.preview?.let { then(dev.launcher.app.shade.BackdropSource.Home(it)) }
             HomeBridge.recordForGesture {

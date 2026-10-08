@@ -26,8 +26,8 @@ import kotlin.math.ceil
 import kotlin.math.max
 
 /**
- * What is behind the shade: the app in front (its latest picture, a hardware bitmap) or home (its recorded pictures).
- * Drawn to fill the screen.
+ * What is behind the shade: the app in front (its latest picture, a hardware bitmap), home (its recorded pictures), or
+ * the lock screen's wallpaper. Drawn to fill the screen.
  */
 sealed class BackdropSource {
     abstract fun draw(c: Canvas, w: Float, h: Float)
@@ -36,6 +36,12 @@ sealed class BackdropSource {
         private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
         private val dst = RectF()
         override fun draw(c: Canvas, w: Float, h: Float) { dst.set(0f, 0f, w, h); c.drawBitmap(bitmap, null, dst, paint) }
+    }
+
+    /** The wallpaper as the screen shows it (over the lock screen; One UI shows the home wallpaper there too). */
+    class Wall(val wallpaper: dev.launcher.app.Wallpaper) : BackdropSource() {
+        private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        override fun draw(c: Canvas, w: Float, h: Float) { c.drawBitmap(wallpaper.bitmap, wallpaper.matrix(w.toInt(), h.toInt()), paint) }
     }
 
     class Home(val picture: HomePicture) : BackdropSource() {

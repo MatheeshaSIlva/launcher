@@ -1306,3 +1306,24 @@ Rule 2 (one shade everywhere) now holds on the lock screen too. Before, locking 
 - An invisible activity over the lock screen cannot ask for the unlock prompt itself (a translucent activity does not
   cover the lock screen; the system cancelled the request): `UnlockActivity` stays only as the fallback without the
   shell.
+
+Round 27 (Matheesha on 168c503: our panels work on the lock screen; One UI's fingerprint icon draws over both while
+pulled, then vanishes suddenly; the lock screen to home animation still glitches).
+- **Fingerprint icon**: One UI draws it in a system window above every app window, ours too (`FP Iconview`, type 2619,
+  `com.samsung.android.biometrics.app.setting`), and hides it ~120 ms after the lock screen's window loses the focus
+  (measured with window dumps, no screenshots). Our shade's window took the focus only once a panel had rested (+300 ms),
+  so the icon stood over the pull and vanished after. Now a 1 px untouchable window on its own thread (`shade/FocusHolder`)
+  takes the focus while the panel comes in: at the finger's lift, or 600 ms into a slower pull. Not at once: with the lock
+  screen focused the window manager never hands a pull from the top to the stock status bar, with ours it does within the
+  swipe's first 500 ms (the S24 did at 116 px). Measured on the S24 (window dumps): a 300 ms pull hid the icon ~0.4 s after
+  the touch, a 1.2 s pull at ~0.7 s; no handover; back closes the panel (the window passes back and volume on). It comes
+  back as the panel finishes closing, and at once when an unlock is asked for (the bouncer needs the focus).
+- **Unlock arrival**: home dropped the arrival when it was first seen more than 4 s after the *wake-up*, so a longer look
+  at the lock screen (now with our panels on it) dropped it and let the held zoomed-in frame go with home already showing:
+  a jump to rest. The S24 log had two such drops ("home was seen 4842 ms after the unlock"). Now the 4 s count from
+  USER_PRESENT (home often sees the keyguard gone just before it arrives: that is the unlock itself). Emulator: 7.5 s on the
+  lock screen, then the PIN: the arrival played.
+- **Control Center's glass on the lock screen** had no picture of what is behind (the front window there is the lock
+  screen's or the fingerprint icon's; no task): its controls showed the plain fallback. Over the lock screen the backdrop is
+  now the wallpaper (`BackdropSource.Wall`); the S24 has one wallpaper for both. A separate lock screen wallpaper is not
+  read yet (Notification Center draws the home one there too): open item.

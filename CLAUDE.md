@@ -160,6 +160,9 @@ copy it wholesale — port the working pieces cleanly. File map:
   are on screen), never through the shell; check `adb logcat | grep "would be moved to the foreground"`.
 - **A focusable overlay becomes the keyboard's target** and the system lifts an open keyboard above it: the shade's
   window takes `FLAG_ALT_FOCUSABLE_IM` together with focus (never without it: on a non-focusable window it inverts).
+- **One UI's fingerprint icon** (`FP Iconview`, a system window above all of ours) hides only when the lock screen's window
+  loses the focus. Over the lock screen `shade/FocusHolder` takes the focus, but never in a pull's first 500 ms: with the lock
+  screen focused the window manager does not hand a pull from the top to the stock status bar, with our window focused it does.
 - **Changing the touchable region of a window that holds a touch is fine, changing its flags is not**: making the shade
   focusable (for back) is a relayout (16.7 ms of its thread on the S24); it happens only 300 ms after a panel came to rest.
 - **iOS reference capture** (`ios-reference/`, `tools/ios_ref/`, results in `docs/IOS27_KIT.md` and `docs/IOS27_MOTION.md`):

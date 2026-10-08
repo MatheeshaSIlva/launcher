@@ -67,6 +67,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val backdrop = BackdropView(ctx)
     /** Control Center's live background where the system can blur what is behind a window (see [LiveBlur]). */
     private val liveBlur = LiveBlur(ctx, wm)
+    /** Over the lock screen, takes the focus from it while a panel comes in: One UI's fingerprint icon goes then (see [FocusHolder]). */
+    private val focusHolder = FocusHolder(ctx, wm) { ev -> handler.post { root.dispatchKeyEvent(ev) } }
+    /** An unlock is asked for: the lock screen has its focus back at once (see [Unlock.onAsk]). */
+    private val unlockAsked: () -> Unit = { focusHolder.release() }
     /** The card a notification's app opens out of (see [openFrom]). */
     private val launchCard = dev.launcher.app.CardView(ctx).apply { visibility = View.GONE }
     val state = ControlState(ctx, handler)
@@ -79,6 +83,14 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val banner: BannerView
     private var bannerArea: android.graphics.RectF? = null
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
+
+    /**
+     * When the touch that pulls started (uptime ms). Over the lock screen the focus window ([focusHolder]) takes the focus
+     * only once the window manager can no longer hand the pull to the stock status bar (it does for a swipe from the top
+     * within its first 500 ms, unless the lock screen has the focus): past [HANDOVER_MS], or when the finger lifts. Taken at
+     * once, the S24 handed the pull over at 116 px (the touchscreen stream carried it on; an injected touch had no stream).
+     */
+    private var touchDownAt = 0L
 
     var barHeight = 0
         private set
@@ -164,6 +176,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // did not listen, and caught up late in one step).
         android.os.Handler(android.os.Looper.getMainLooper()).post { dev.launcher.app.theme.Appearance.addListener(onAppearance) }
         media.addListener { cc.invalidate(); nc.mediaChanged() }
+        Unlock.onAsk = unlockAsked
         root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) { updateTouchable() }
             override fun onViewDetachedFromWindow(v: View) {}
@@ -241,6 +254,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         Notifs.removeListener(notifsListener)
         android.os.Handler(android.os.Looper.getMainLooper()).post { dev.launcher.app.theme.Appearance.removeListener(onAppearance) }
         liveBlur.release()
+        focusHolder.quit()
+        if (Unlock.onAsk === unlockAsked) Unlock.onAsk = null
     }
 
     fun detach() {
@@ -402,6 +417,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         surfaces.setBackdrop(null, null)
         handler.removeCallbacks(focusWhenIdle)
         setFocusable(false)
+        focusHolder.release()
         regionOpen = false
         updateTouchable()
         nav.shadeChanged(false)
@@ -420,6 +436,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     fun closeNow() { if (panel != null) finishClose() }
 
     private fun openFully(velocity: Float) {
+        if (locked) focusHolder.take()
         progress.animateTo(1f, if (panel == Panel.NC) NC_OPEN else CC_OPEN, velocity)
         if (panel == Panel.CC) ccOffset.animateTo(0f, CC_SETTLE)
         regionOpen = true
@@ -445,6 +462,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (e.actionMasked == MotionEvent.ACTION_DOWN) {
             vt?.recycle(); vt = VelocityTracker.obtain()
             downX = e.rawX; downY = e.rawY
+            touchDownAt = e.eventTime
             touch = when {
                 banner.hits(e.rawX, e.rawY) -> Touch.BANNER
                 gallery.isOpen -> Touch.GALLERY
@@ -546,6 +564,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     /** The open panel follows the finger at [y], [dy] past where it took the panel. */
     private fun follow(y: Float, dy: Float) {
+        if (locked && !focusHolder.held && SystemClock.uptimeMillis() - touchDownAt > HANDOVER_MS) focusHolder.take()
         progress.snapTo(fingerProgress(y, dy))
         if (panel == Panel.CC) { lastPullDy = dy; ccOffset.snapTo(ccPull(dy)) }
     }
@@ -985,7 +1004,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var focusable = false
 
     private val focusWhenIdle = Runnable {
-        if (panel != null && !progress.isAnimating && progress.value >= 0.999f && touch == Touch.NONE) setFocusable(true)
+        // Over the lock screen the focus window has it already (and passes back on).
+        if (panel != null && !progress.isAnimating && progress.value >= 0.999f && touch == Touch.NONE && !focusHolder.held) setFocusable(true)
     }
 
     /**
@@ -1049,6 +1069,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         /** A notification's app that is not in front this long after its card started: the card goes anyway. */
         const val LAUNCH_TIMEOUT_MS = 2500L
         const val LAUNCH_FADE_MS = 140L
+        /** The window manager hands a swipe from the top to the stock status bar only within this long of its start. */
+        const val HANDOVER_MS = 600L
         const val FLING = 900f
         val NO_TOUCH = Region(-2, -2, -1, -1)
         /** Control Center coming in (blur, the controls' opacity), going out, and its controls settling into place. iOS 27,

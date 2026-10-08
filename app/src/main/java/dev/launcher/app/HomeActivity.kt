@@ -153,12 +153,17 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     // screen went off, home at rest, for a frame: Matheesha saw "the whole home for a single frame", then the animation.)
     // It plays once home can really be seen: after a wake-up that came after it went due (SCREEN_ON or USER_PRESENT), with
     // the screen on and the keyguard gone. If home is first seen long after the unlock (the unlock
-    // went to an app, home came later), it does not play: the held frame is let go before home shows.
+    // went to an app, home came later), it does not play: the held frame is let go before home shows. "The unlock" is
+    // USER_PRESENT, never the wake-up: a long look at the lock screen first (its panels) dropped the arrival as late and let
+    // the held frame go with home already showing, a jump from zoomed in to rest. Home often sees the keyguard gone a moment
+    // before USER_PRESENT arrives: that is the unlock itself.
     private var coldStart = true
     private var arrivalDue = false
     private var wokeSinceDue = false
     private var arrivalTries = 0
     private var lastWakeAt = 0L
+    /** When the user was last present (USER_PRESENT: the unlock) since the arrival went due; 0 until then. */
+    private var presentAt = 0L
     private val screenState = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -167,6 +172,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
                 Intent.ACTION_SCREEN_OFF -> if (resumed) { markArrivalDue("screen off"); screen.holdArrival() }
                 Intent.ACTION_SCREEN_ON, Intent.ACTION_USER_PRESENT -> {
                     lastWakeAt = android.os.SystemClock.uptimeMillis()
+                    if (intent.action == Intent.ACTION_USER_PRESENT && arrivalDue) presentAt = lastWakeAt
                     if (arrivalDue && !wokeSinceDue) { wokeSinceDue = true; AppLog.log("[home] arrival: woke (${intent.action?.substringAfterLast('.')})") }
                     if (arrivalDue) screen.holdArrival()
                     arriveIfDue()
@@ -179,6 +185,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (!arrivalDue) AppLog.log("[home] arrival due ($why): the screen went off with home in front")
         arrivalDue = true
         wokeSinceDue = false
+        presentAt = 0L
         arrivalTries = 0
     }
 
@@ -204,10 +211,11 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         val on = screenOn()
         val unlocked = wokeSinceDue && on && !keyguardUp()
         // Seen only long after the unlock (it went to an app first): no arrival; the held frame goes before home shows.
-        if (unlocked && android.os.SystemClock.uptimeMillis() - lastWakeAt > ARRIVAL_WINDOW_MS) {
+        val sinceUnlock = if (presentAt == 0L) 0L else android.os.SystemClock.uptimeMillis() - presentAt
+        if (unlocked && sinceUnlock > ARRIVAL_WINDOW_MS) {
             arrivalDue = false
             screen.releaseArrival()
-            AppLog.log("[home] arrival dropped: home was seen ${android.os.SystemClock.uptimeMillis() - lastWakeAt} ms after the unlock")
+            AppLog.log("[home] arrival dropped: home was seen $sinceUnlock ms after the unlock")
             return
         }
         if (!resumed) return
@@ -555,7 +563,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
 
     private companion object {
-        /** The arrival plays only if home is seen within this long of the wake-up or unlock (ms). */
+        /** The arrival plays only if home is seen within this long of the unlock (USER_PRESENT; ms). */
         const val ARRIVAL_WINDOW_MS = 4000L
     }
 }

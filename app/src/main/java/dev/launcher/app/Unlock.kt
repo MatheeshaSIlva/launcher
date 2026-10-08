@@ -34,8 +34,15 @@ object Unlock {
 
     fun locked(ctx: Context): Boolean = try { ctx.getSystemService(KeyguardManager::class.java).isKeyguardLocked } catch (_: Throwable) { false }
 
+    /**
+     * Called (on the caller's thread) when the unlock prompt is about to be asked for: the shade gives the lock screen its
+     * focus back at once (a password's keyboard needs it), not only once its panel has closed.
+     */
+    @Volatile var onAsk: (() -> Unit)? = null
+
     fun then(ctx: Context, why: String, action: () -> Unit) {
         if (!locked(ctx)) { action(); return }
+        onAsk?.invoke()
         listen(ctx.applicationContext)
         val id = ids.incrementAndGet()
         pending[id] = Waiting(action, SystemClock.uptimeMillis(), why)
