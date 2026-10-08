@@ -7,6 +7,11 @@ on:
 permissions:
   contents: write
 
+# One run at a time: two runs for one push once raced on the release.
+concurrency:
+  group: build-and-release
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -40,19 +45,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/*.apk /tmp/Launcher.apk
-          gh release delete latest --cleanup-tag -y || true
-          gh release create latest /tmp/Launcher.apk --prerelease --target "${GITHUB_SHA}" \
-            --title "latest build" --notes "${GITHUB_SHA}"
-          # gh creates the release as a draft, uploads, then publishes; once the publish did not stick (a draft is not
-          # public: the phone's updater got 404). Publish explicitly and check the public download.
-          for i in 1 2 3 4 5; do
-            gh release edit latest --draft=false --prerelease || true
-            code=$(curl -s -o /dev/null -w "%{http_code}" -L "https://github.com/${GITHUB_REPOSITORY}/releases/download/latest/Launcher.apk")
-            echo "public download: HTTP $code"
-            [ "$code" = "200" ] && break
-            sleep 5
-          done
-          [ "$code" = "200" ]
+          # One release, updated in place. Deleting it with its tag and creating it again at once left it a draft (not
+          # public: the phone's updater got 404): GitHub deletes the tag in the background, after the new release took it.
+          if gh release view latest >/dev/null 2>&1; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/latest" -f sha="${GITHUB_SHA}" -F force=true >/dev/null               || gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref=refs/tags/latest -f sha="${GITHUB_SHA}" >/dev/null
+            gh release upload latest /tmp/Launcher.apk --clobber
+            gh release edit latest --draft=false --prerelease --title "latest build" --notes "${GITHUB_SHA}"
+          else
+            gh release create latest /tmp/Launcher.apk --prerelease --target "${GITHUB_SHA}" --title "latest build" --notes "${GITHUB_SHA}"
+            gh release edit latest --draft=false --prerelease
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/releases/tags/latest" --jq '"release: draft=\(.draft) notes=\(.body)"'
       - name: Publish build log to the ci-logs branch (readable without pasting logs)
         if: always()
         run: |
