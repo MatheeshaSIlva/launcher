@@ -338,6 +338,18 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun startTicking() { hnd().removeCallbacks(tick); hnd().postDelayed(tick, 15_000) }
     private fun stopTicking() { hnd().removeCallbacks(tick) }
 
+    /**
+     * The numerals are kept current while Notification Center is closed too (each minute while the screen is on, and as
+     * it comes on): made only as it opened, the sheet slid in with the time it was last open at and changed in front of
+     * the user (seen: 4:35 at 5:13, then a cross-fade).
+     */
+    private val minute = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) {
+            if (i?.action == Intent.ACTION_SCREEN_ON || power.isInteractive) refreshClock()
+        }
+    }
+    private val power by lazy { context.getSystemService(android.os.PowerManager::class.java) }
+
     // ------------------------------------------------------------------ the list: blocks on springs
 
     private enum class Kind { MEDIA, HEADER, PLATTER, PEEK, MORE }
@@ -391,14 +403,24 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         Notifs.addListener(hnd(), notifsChanged)
         Design.addListener(tokensChanged)
         Wallpaper.addListener(hnd(), wallpaperChanged)
+        try {
+            context.registerReceiver(minute, android.content.IntentFilter().apply {
+                addAction(Intent.ACTION_TIME_TICK)
+                addAction(Intent.ACTION_TIME_CHANGED)
+                addAction(Intent.ACTION_TIMEZONE_CHANGED)
+                addAction(Intent.ACTION_SCREEN_ON)
+            }, null, hnd())
+        } catch (t: Throwable) { clockLog("no minute ticks: ${t.javaClass.simpleName}") }
         readNotifs(animate = false)
         adoptWallpaper()
+        refreshClock()   // the time at least (plain numerals) before the wallpaper is there
     }
 
     override fun onDetachedFromWindow() {
         Notifs.removeListener(notifsChanged)
         Design.removeListener(tokensChanged)
         Wallpaper.removeListener(wallpaperChanged)
+        try { context.unregisterReceiver(minute) } catch (_: Throwable) { }
         stopTicking()
         super.onDetachedFromWindow()
     }
@@ -543,6 +565,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         updateScrollBounds()
         invalidate()
     }
+
+    /** Where notifications are swiped (this view's coordinates, the sheet at rest): the shade keeps Android's back gesture off its right edge. */
+    fun swipeBand(out: RectF) { listArea(out) }
 
     /** Where the list may sit: below the clock, above the buttons. */
     private fun listArea(out: RectF): RectF =
@@ -794,8 +819,13 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         c.save()
         val headK = 1f
         val held = menu?.block
+        // Lower in the list is further back: a stack fanning out slides its notifications out from behind the one in front
+        // (iOS), never over it (drawn in the order they were made, their text showed through each other's glass).
+        order.clear()
+        order.addAll(blocks.values)
+        order.sortWith(backToFront)
         // The collapsed stack's peeking parts lie under the notification in front: drawn first.
-        for (pass in 0..1) for (b in blocks.values) {
+        for (pass in 0..1) for (b in order) {
             if (b === held) continue
             if ((b.kind == Kind.PEEK || b.kind == Kind.MORE) != (pass == 0)) continue
             val a = b.appear.value.coerceIn(0f, 1.1f)
@@ -808,13 +838,19 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             if (f <= 0.003f) continue
             when (b.kind) {
                 Kind.PEEK, Kind.MORE -> drawPeek(c, b, y, min(a, 1f) * f)
-                Kind.MEDIA, Kind.PLATTER -> drawLayered(c, b, top, y, a * f)
+                Kind.MEDIA, Kind.PLATTER -> drawLayered(c, b, top, y, a, f)
                 Kind.HEADER -> drawHeader(c, b, y, a * headK * f, sheetY)
             }
         }
         c.restore()
+        order.clear()
     }
 
+    private val order = ArrayList<Block>()
+    private val backToFront = Comparator<Block> { a, b ->
+        val c = b.y.value.compareTo(a.y.value)
+        if (c != 0) c else b.targetY.compareTo(a.targetY)
+    }
 
     /**
      * How visible a block at [y] ([h] tall) is at the list's ends: it fades out as its middle goes under the status bar, and
@@ -829,12 +865,15 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     /**
-     * A notification (or the player) where it is now ([y]), grown in by how present it is ([a]). Its glass is drawn every
+     * A notification (or the player) where it is now ([y]), grown in by how present it is ([a]), faded by [f] at the list's
+     * ends. Its glass comes in first and its content after it (and leaves the other way round): a stack fanning out slides
+     * its notifications out as solid cards whose text then appears (iOS); fading both together showed every one's text
+     * through the others' half-clear glass while they overlapped. Its glass is drawn every
      * frame where it really is: the glass samples the wallpaper under it, and a glass recorded at another place (where
      * the platter rests) showed the wrong colours while the list scrolled and flickered as they were redrawn. What it
      * shows (icon, text, the player's controls) comes from its own display list, recorded again only when that changes.
      */
-    private fun drawLayered(c: Canvas, b: Block, top: Float, y: Float, a: Float) {
+    private fun drawLayered(c: Canvas, b: Block, top: Float, y: Float, a: Float, f: Float) {
         val m = 2f * u
         var k = 17L
         fun mixIn(v: Long) { k = k * 31 + v }
@@ -854,10 +893,12 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             try { if (b.kind == Kind.MEDIA) drawMediaContent(rc, b, m, 1f) else drawPlatterContent(rc, b, m, 1f) } finally { b.node.endRecording() }
             b.key = k
         }
-        val alpha = min(a, 1f)
+        val present = min(a, 1f)
+        val alpha = min(1f, present / GLASS_FIRST) * f
+        val contentA = ((present - CONTENT_AFTER) / (1f - CONTENT_AFTER)).coerceIn(0f, 1f) * f
         if (alpha <= 0.003f) return
         // Grown in about its centre; a press shrinks the platter itself a little (not its stack).
-        val s = 0.92f + 0.08f * alpha
+        val s = 0.92f + 0.08f * present
         val sw = if (b.kind == Kind.PLATTER) b.swipe.value else 0f
         val ps = if (b.kind == Kind.PLATTER) 1f - 0.02f * b.press.value else 1f
         val w2 = width / 2f
@@ -874,8 +915,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         drawGlass(c, Design.material(NcTokens.PLATTER), x0, y, platterW, b.shownH(), Design.pt(NcTokens.CORNER, u), alpha, ps * s, gx, gy,
             press = if (b.kind == Kind.PLATTER) b.press.value else 0f)
         c.translate(sw, y - m)
-        b.node.setAlpha(alpha)
-        c.drawRenderNode(b.node)
+        if (contentA > 0.003f) {
+            b.node.setAlpha(contentA)
+            c.drawRenderNode(b.node)
+        }
         c.restore()
     }
 
@@ -1263,7 +1306,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         fun lerp(a: Float, z: Float) = a + (z - a) * k
         rect.set(lerp(platR.left, cardR.left), lerp(platR.top, cardR.top), lerp(platR.right, cardR.right), lerp(platR.bottom, cardR.bottom))
         val radius = lerp(Design.pt(NcTokens.CORNER, u), Design.pt(NcTokens.LOOK_CORNER, u))
-        if (kc < 0.999f) drawLayered(c, b, listTop(), by - sheetY, 1f - kc)
+        if (kc < 0.999f) drawLayered(c, b, listTop(), by - sheetY, 1f, 1f - kc)
         fill.color = alpha(Design.color(NcTokens.LOOK_CARD), kc)
         c.drawRoundRect(rect, radius, radius, fill)
         if (menuPressed == -2) { fill.color = alpha(Appearance.pressFill, kc); c.drawRoundRect(rect, radius, radius, fill) }
@@ -1640,6 +1683,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val LONG_MS = 480L
         /** How far the list scrolls up before the clock under it has faded out (pt). */
         const val CLOCK_FADE_PT = 140f
+        /** A platter coming in: its glass is whole at this much of its presence; its content shows from [CONTENT_AFTER] on. */
+        const val GLASS_FIRST = 0.4f
+        const val CONTENT_AFTER = 0.35f
         /** The gap between the list at rest and the top of the flashlight and camera buttons (pt). */
         const val LIST_ABOVE_BUTTONS_PT = 10f
         const val HOLD_MS = 380L

@@ -1424,3 +1424,34 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
 - Emulator, light and dark: the menu, App Library (tiles, search), Spotlight (Top Hit, field), the widget gallery (list,
   an app's page): all on their materials. Left on `GlassDrawable`: the glass clock's numerals (a text shape; the renderer
   draws rounded rectangles), on home, in Notification Center and in the gallery's clock preview.
+
+## Fixes reported on the S24 (2026-10-08, third round)
+
+- **Notification Center's clock showed an old time** (and then cross-faded to the right one in front of the user). Its
+  glass numerals were made only while Notification Center was open, so it slid in with the time it was last open at
+  (emulator recording: 4:35 at 5:13). They are kept current while it is closed now (each minute while the screen is on,
+  and as the screen comes on). Recorded on the emulator after the minute turned: the right time on every frame.
+- **A stack fanning out showed every notification's text through the others.** Notifications were drawn in the order
+  they were made, so the ones coming out of the stack were drawn over the one in front, and their half-clear glass (fading
+  in) showed the text under them. Now lower in the list is further back, and a notification's glass is whole early (at
+  40 % of its presence) while its content fades in after (from 35 %): cards slide out from behind the front one, solid,
+  then show their text (iOS). Recorded on the emulator.
+- **Android's back gesture took our gestures.** The system watches a swipe in from a side edge over every window: a pull
+  from a top corner that moves sideways first (a thumb's pull for Control Center) was taken (the panel never opened;
+  over an app the app got Back), and a swipe from the right edge over a notification closed Notification Center instead
+  of showing its actions (both reproduced on the emulator). The shade's window now keeps the back gesture off the bar's
+  two ends and off Notification Center's right edge beside the list (system gesture exclusion). A window gets only 200 dp
+  of each edge for that, counted from the bottom up, unless it asks for the navigation bar hidden with the transient
+  behaviour: the shade's window asks so, and never takes the focus (the focus window, `FocusHolder`, takes it for Back
+  now, unlocked too, so the shade's window never controls the bars: the navigation bar stays). Emulator: the corner pull
+  opens Control Center, the right-edge swipe leaves Notification Center open, a swipe from the left edge and the Back
+  key still close it, the navigation bar stays visible. Making the shade's window focusable is gone with it (a relayout
+  of 16.7 ms of its thread on the S24).
+- **The widget gallery lagged.** Every frame of a scroll (and of its rows arriving) recorded all of home twice (behind the
+  sheet and behind the search field) and blurred both again, and drew the featured clock card (the wallpaper through a
+  rounded clip and the glass numerals) up to four times. Now the sheet's glass and the field's backdrop are drawn again
+  only when what is behind them changes (`MaterialPainter.drawLiveAgain`: same render node, same effect, so the renderer
+  keeps its blurred result), and the featured card is drawn once into a layer of its own and moved (it shows the
+  wallpaper as it is behind the card with the list at its top). Emulator frame stats while scrolling (GPU per frame,
+  median): 78 ms before, 55 ms after the first change; the emulator is too noisy to measure the card's layer (and far
+  slower than the phone): the S24 decides.

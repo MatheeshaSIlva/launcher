@@ -401,14 +401,18 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         dimInside.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
         c.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), dimInside)
         r.set(0f, y, m.w.toFloat(), m.h + sheetRadius)
-        val drawn = glass?.drawLive(c, dev.launcher.app.design.Design.material(HomeTokens.WIDGETS_SHEET), r, sheetRadius, null,
+        // Home behind the sheet changes only as the sheet comes and goes (its scrim, home's blur): at rest (the list
+        // scrolling, rows arriving) the sheet's glass is drawn as it was, not recorded and blurred again every frame.
+        val sk = behindKey(y, k)
+        val drawn = if (sk == sheetKey && glass?.drawLiveAgain(c) == true) true
+        else (glass?.drawLive(c, dev.launcher.app.design.Design.material(HomeTokens.WIDGETS_SHEET), r, sheetRadius, null,
             RectF(0f, 0f, width.toFloat(), height.toFloat())) { cc ->
             host.drawBehindSheet(cc)
             // The same scrim as around it: the sheet's glass sees home as it shows around the sheet.
             sheetTint.color = sc
             sheetTint.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
             cc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), sheetTint)
-        } == true
+        } == true).also { sheetKey = if (it) sk else Long.MIN_VALUE }
         if (!drawn) c.drawRoundRect(r, sheetRadius, sheetRadius, fallbackFill)
         c.save()
         c.clipRect(0f, y, m.w.toFloat(), m.h.toFloat())
@@ -438,6 +442,22 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         }
         c.restore()
         if (animatingArrivals()) postInvalidateOnAnimation()
+    }
+
+    private var sheetKey = Long.MIN_VALUE
+    private var fieldBackKey = Long.MIN_VALUE
+
+    /** What home behind the sheet looks like at sheet position [y] and scrim [k] (equal keys: the same picture). */
+    private fun behindKey(y: Float, k: Float): Long {
+        var h = Math.round(y * 4f).toLong()
+        h = h * 31 + Math.round(k * 1000f)
+        h = h * 31 + Math.round(host.sceneBlur() * 1000f)
+        h = h * 31 + Appearance.scrim
+        h = h * 31 + Appearance.glassTint
+        h = h * 31 + dev.launcher.app.design.Design.version
+        h = h * 31 + width * 7919L + height
+        h = h * 31 + System.identityHashCode(host.wallpaper())
+        return h
     }
 
     /** Rows and previews are still settling in. */
@@ -556,6 +576,24 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val t = (field.top + y - pad).toInt()
         val rgt = (field.right + pushX + pad).toInt()
         val btm = (field.bottom + y + pad).toInt()
+        // Recorded and blurred again only when what it shows changed (as the sheet's glass: see onDraw).
+        var fk = behindKey(y, k)
+        fk = (fk * 31 + l) * 31 + t
+        fk = (fk * 31 + rgt) * 31 + btm
+        if (fk != fieldBackKey || !sheetBack.hasDisplayList()) {
+            fieldBackKey = fk
+            recordBehindField(l, t, rgt, btm, k, blur)
+        }
+        c.drawRenderNode(sheetBack)
+        sheetBackTint.color = Appearance.glassTint
+        c.drawRect(l.toFloat(), t.toFloat(), rgt.toFloat(), btm.toFloat(), sheetBackTint)
+        c.save()
+        c.translate(pushX, y)
+        drawContentFaded(c)
+        c.restore()
+    }
+
+    private fun recordBehindField(l: Int, t: Int, rgt: Int, btm: Int, k: Float, blur: Float) {
         sheetBack.setPosition(l, t, rgt, btm)
         val rc = sheetBack.beginRecording()
         try {
@@ -571,13 +609,6 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val colour = android.graphics.RenderEffect.createColorFilterEffect(satFilter)
         sheetBack.setRenderEffect(if (blur >= 0.5f) android.graphics.RenderEffect.createChainEffect(colour,
             android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.CLAMP)) else colour)
-        c.drawRenderNode(sheetBack)
-        sheetBackTint.color = Appearance.glassTint
-        c.drawRect(l.toFloat(), t.toFloat(), rgt.toFloat(), btm.toFloat(), sheetBackTint)
-        c.save()
-        c.translate(pushX, y)
-        drawContentFaded(c)
-        c.restore()
     }
 
     /** The list's content (the featured clock, the titles, the app rows), the canvas at the content's origin. */
@@ -595,12 +626,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             val down = if (pressed == "clock") pressK.value.coerceIn(0f, 1f) else 0f
             c.save()
             c.scale(1f - 0.03f * down, 1f - 0.03f * down, r.centerX(), r.centerY())
-            drawWallpaperWindow(c, r, m.widgetRadius, listTop - list.position + sheetY(), down)
-            val fs = featuredScale
-            val bw = m.widgetWidth(4) * fs
-            val bh = m.widgetHeight(2) * fs
-            val box = RectF(r.centerX() - bw / 2f, r.centerY() - bh / 2f, r.centerX() + bw / 2f, r.centerY() + bh / 2f)
-            drawClockPreview(c, box, fs, listTop - list.position + sheetY(), r)
+            if (!drawFeaturedCached(c, r, down)) drawFeaturedCard(c, RectF(r), listTop - list.position + sheetY(), down)
             c.restore()
             sub.draw(c, "clock", "Clock", m.w / 2f, r.bottom + m.pt(26f), m.w * 0.6f)
             if (fl >= 0) c.restoreToCount(fl)
@@ -661,6 +687,57 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             c.restore()
             if (rowLayer >= 0) c.restoreToCount(rowLayer)
         }
+    }
+
+    /** The featured clock card at [card] (content coordinates; [screenY]: the content's y offset from the screen). */
+    private fun drawFeaturedCard(c: Canvas, card: RectF, screenY: Float, down: Float) {
+        drawWallpaperWindow(c, card, m.widgetRadius, screenY, down)
+        val fs = featuredScale
+        val bw = m.widgetWidth(4) * fs
+        val bh = m.widgetHeight(2) * fs
+        val box = RectF(card.centerX() - bw / 2f, card.centerY() - bh / 2f, card.centerX() + bw / 2f, card.centerY() + bh / 2f)
+        drawClockPreview(c, box, fs, screenY, card)
+    }
+
+    private val featuredNode = android.graphics.RenderNode("widgets-featured").apply { setUseCompositingLayer(true, null) }
+    private var featuredKey = Long.MIN_VALUE
+
+    /**
+     * The featured clock card from a GPU layer of its own: drawn as it looks with the sheet up and the list at its top (the
+     * wallpaper window and the glass numerals as they are there), then only moved. Drawn live, the wallpaper through a
+     * rounded clip and the numerals' glass were drawn anew at every frame of a scroll, up to four times a frame (the list,
+     * its fading edge, and both again behind the search field's glass). Made again when what it shows changes: a press, the
+     * numerals arriving and fading in, the appearance, the wallpaper.
+     */
+    private fun drawFeaturedCached(c: Canvas, card: RectF, down: Float): Boolean {
+        if (!c.isHardwareAccelerated) return false
+        val pad = 2
+        val l = kotlin.math.floor(card.left).toInt() - pad
+        val t = kotlin.math.floor(card.top).toInt() - pad
+        val rgt = kotlin.math.ceil(card.right).toInt() + pad
+        val btm = kotlin.math.ceil(card.bottom).toInt() + pad
+        val now = SystemClock.uptimeMillis()
+        val fading = clockGlasses.values.any { now - it.second < PREVIEW_FADE_MS }
+        var k = ((l * 31L + t) * 31 + rgt) * 31 + btm
+        k = k * 31 + Math.round(down * 64f)
+        k = k * 31 + previewDate.hashCode() * 17L + previewTime.hashCode()
+        k = k * 31 + System.identityHashCode(host.wallpaper())
+        k = k * 31 + Math.round(Appearance.wallpaperDim * 255f) * 7L + Appearance.separator
+        k = k * 31 + clockGlasses.values.sumOf { System.identityHashCode(it.first).toLong() }
+        if (fading) k = k * 31 + now
+        if (k != featuredKey || !featuredNode.hasDisplayList()) {
+            featuredNode.setPosition(l, t, rgt, btm)
+            val rc = featuredNode.beginRecording()
+            try {
+                rc.translate(-l.toFloat(), -t.toFloat())
+                drawFeaturedCard(rc, RectF(card), listTop + sheetTop, down)
+            } finally {
+                featuredNode.endRecording()
+            }
+            featuredKey = k
+        }
+        c.drawRenderNode(featuredNode)
+        return true
     }
 
     private fun drawChevron(c: Canvas, x: Float, cy: Float, right: Boolean, paint: Paint) {

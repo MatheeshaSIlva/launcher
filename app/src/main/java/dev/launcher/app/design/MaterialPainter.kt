@@ -203,6 +203,17 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         return true
     }
 
+    /**
+     * The last [drawLive] once more, as it was: for a surface whose shape and backdrop have not changed since (the caller
+     * knows: a sheet at rest over home while its list scrolls). Nothing is recorded and the effect stays the same object,
+     * so the renderer reuses its blurred result instead of blurring the backdrop again every frame. False if there is none.
+     */
+    fun drawLiveAgain(canvas: Canvas): Boolean {
+        if (!canvas.isHardwareAccelerated || !node.hasDisplayList()) return false
+        canvas.drawRenderNode(node)
+        return true
+    }
+
     /** Sets every uniform of one surface; returns how far its drop shadows reach outside it (px). */
     private fun setUniforms(m: Material, w: Float, h: Float, radius: Float, screenX: Float, screenY: Float, screenScale: Float,
                             alpha: Float, under: List<Fill>, press: Float, over: List<Fill>, overK: Float, lightTurn: Float): Float {

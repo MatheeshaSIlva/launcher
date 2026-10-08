@@ -181,7 +181,16 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // The apps' Quick Settings tiles, for Control Center's gallery (found in the background, again on app changes).
         AppTiles.start(ctx)
         root.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) { updateTouchable() }
+            override fun onViewAttachedToWindow(v: View) {
+                updateTouchable()
+                // A window that asks for the navigation bar hidden, shown by a swipe, may keep Android's back gesture off
+                // as much of the side edges as it needs (others get 200 dp of each): see updateExclusion. Only the window
+                // with the focus controls the bars, and this one never takes it (FocusHolder does), so nothing is hidden.
+                v.windowInsetsController?.let {
+                    it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    it.hide(android.view.WindowInsets.Type.navigationBars())
+                }
+            }
             override fun onViewDetachedFromWindow(v: View) {}
         })
     }
@@ -345,8 +354,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun rested() {
         if (progress.value <= 0.0005f && panel != null) finishClose()
         else if (progress.value >= 0.999f) {
-            // Back closes an open panel, which needs a focusable window; a window change costs a relayout (16.7 ms of this
-            // thread on the S24), so only once it has been still for a moment, never while anything moves.
+            // Back closes an open panel, which needs the focus: the focus window takes it (FocusHolder: the shade's own
+            // window never does, see updateExclusion), once the panel has been still for a moment.
             handler.removeCallbacks(focusWhenIdle)
             handler.postDelayed(focusWhenIdle, 300)
             cc.prerecord()
@@ -426,7 +435,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         backdrop.source = null
         surfaces.setBackdrop(null, null)
         handler.removeCallbacks(focusWhenIdle)
-        setFocusable(false)
         focusHolder.release()
         regionOpen = false
         updateTouchable()
@@ -1036,29 +1044,39 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             }
         }
         sc.setTouchableRegion(r)
+        updateExclusion()
     }
 
-    private var focusable = false
-
-    private val focusWhenIdle = Runnable {
-        // Over the lock screen the focus window has it already (and passes back on).
-        if (panel != null && !progress.isAnimating && progress.value >= 0.999f && touch == Touch.NONE && !focusHolder.held) setFocusable(true)
-    }
+    private val exclusion = ArrayList<android.graphics.Rect>(3)
+    private val swipeBand = android.graphics.RectF()
 
     /**
-     * Focusable while a panel rests open (back closes it); not while anything moves (a window change costs a relayout).
-     * Focusable, it must not become the keyboard's target: then the system lifts an open keyboard above it for a moment
-     * (it popped over the panel, then hid). FLAG_ALT_FOCUSABLE_IM keeps it out (and above the keyboard); it is only set
-     * with focus, since on a window that cannot take focus the same flag means the opposite.
+     * Where Android's back gesture (a swipe in from a side edge, watched by the system over every window) must not start:
+     * it took a pull that begins in a top corner and moves sideways first (a thumb's pull from the corner: the panel never
+     * opened, and over an app the app got Back), and a swipe that starts at the right edge over a notification (to show its
+     * actions: Notification Center closed instead). Excluded: the bar's two ends, and Notification Center's right edge
+     * beside the list. Back from the left edge still closes a panel, as on Android. The system grants a window 200 dp of
+     * each edge (counted from the bottom up: not the whole list), unless the window asks for the navigation bar hidden
+     * (see the attach listener).
      */
-    private fun setFocusable(on: Boolean) {
-        if (on == focusable || !attached) return
-        val lp = root.layoutParams as? WindowManager.LayoutParams ?: return
-        focusable = on
-        val nf = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        val alt = WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM
-        lp.flags = if (on) (lp.flags and nf.inv()) or alt else (lp.flags or nf) and alt.inv()
-        try { wm.updateViewLayout(root, lp) } catch (_: Throwable) { }
+    private fun updateExclusion() {
+        val w = root.width
+        if (w == 0) return
+        val edge = (40f * u()).toInt()
+        exclusion.clear()
+        if (panel == Panel.NC && regionOpen) {
+            nc.swipeBand(swipeBand)
+            if (!swipeBand.isEmpty) exclusion += android.graphics.Rect(w - edge, swipeBand.top.toInt(), w, swipeBand.bottom.toInt())
+        }
+        if (barHeight > 0) {
+            exclusion += android.graphics.Rect(0, 0, edge, barHeight)
+            exclusion += android.graphics.Rect(w - edge, 0, w, barHeight)
+        }
+        if (exclusion != root.systemGestureExclusionRects) root.systemGestureExclusionRects = exclusion
+    }
+
+    private val focusWhenIdle = Runnable {
+        if (panel != null && !progress.isAnimating && progress.value >= 0.999f && touch == Touch.NONE) focusHolder.take()
     }
 
     private inner class Root(ctx: Context) : FrameLayout(ctx) {

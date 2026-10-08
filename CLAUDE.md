@@ -169,7 +169,13 @@ copy it wholesale — port the working pieces cleanly. File map:
   loses the focus. Over the lock screen `shade/FocusHolder` takes the focus, but never in a pull's first 500 ms: with the lock
   screen focused the window manager does not hand a pull from the top to the stock status bar, with our window focused it does.
 - **Changing the touchable region of a window that holds a touch is fine, changing its flags is not**: making the shade
-  focusable (for back) is a relayout (16.7 ms of its thread on the S24); it happens only 300 ms after a panel came to rest.
+  focusable (for back) was a relayout (16.7 ms of its thread on the S24); the focus window (`shade/FocusHolder`) takes the
+  focus for Back instead, 300 ms after a panel came to rest (during the pull already over the lock screen).
+- **Android's back gesture watches every window's side edges** (it pilfers the touch: our window gets ACTION_CANCEL):
+  a pull from a top corner that starts sideways, a swipe from the right edge over a notification. Keep it off with
+  `setSystemGestureExclusionRects` (only where the touch lands matters). A window gets 200 dp per edge, counted from the
+  bottom up, unless it requests the navigation bar hidden with BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE: the shade's window
+  does, and must therefore never take the focus (the focused window controls the bars; it would hide the navigation bar).
 - **iOS reference capture** (`ios-reference/`, `tools/ios_ref/`, results in `docs/IOS27_KIT.md` and `docs/IOS27_MOTION.md`):
   the CI Simulator has no GPU, so the recorder misses frames while SpringBoard animates heavy layers: use frame times,
   never counts; repeat a motion and fit one spring over the runs; release from a standstill (hold before lifting), since

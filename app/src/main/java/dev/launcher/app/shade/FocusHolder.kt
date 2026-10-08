@@ -11,8 +11,11 @@ import android.view.WindowManager
 import dev.launcher.app.AppLog
 
 /**
- * Takes the window focus from the lock screen while a panel is over it, without changing the shade's own window.
+ * Takes the window focus while a panel is open (Back closes it), without changing the shade's own window: a change of
+ * its flags is a relayout of its thread (16.7 ms on the S24), and the window with the focus controls the system bars,
+ * which the shade's window must never do (it asks for the navigation bar hidden: see Shade.updateExclusion).
  *
+ * Over the lock screen it is taken during the pull already:
  * One UI draws its fingerprint icon in a system window above every app window, ours included ("FP Iconview"), and hides
  * it only when the lock screen's window loses the focus (measured on the S24: ~120 ms after). The shade's window takes the
  * focus only once a panel rests (a change of its flags is a relayout of its thread, never done while anything moves), so
