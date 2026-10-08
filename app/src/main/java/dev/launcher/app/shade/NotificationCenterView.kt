@@ -832,7 +832,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val top = listTop()
         c.save()
         val headK = 1f
-        val held = menu?.block
+        // The long look draws its notification itself until the very end of its close (the same point as drawMenu's): one
+        // of the two draws it on every frame. (The list took it back only once the menu was gone, a little later than the
+        // long look stopped drawing it: the notification vanished for a frame or two as it turned back into glass.)
+        val held = menu?.block?.takeIf { menuK.value > LOOK_HANDOVER }
         // Lower in the list is further back: a stack fanning out slides its notifications out from behind the one in front
         // (iOS), never over it (drawn in the order they were made, their text showed through each other's glass).
         order.clear()
@@ -1304,7 +1307,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun drawMenu(c: Canvas, m: Menu, sheetY: Float) {
         val k = menuK.value.coerceIn(0f, 1.15f)
-        if (k <= 0.003f) return
+        if (k <= LOOK_HANDOVER) return
         val kc = min(k, 1f)
         // The rest of the sheet dims behind it.
         val dim = Design.color(NcTokens.LOOK_DIM)
@@ -1320,7 +1323,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         fun lerp(a: Float, z: Float) = a + (z - a) * k
         rect.set(lerp(platR.left, cardR.left), lerp(platR.top, cardR.top), lerp(platR.right, cardR.right), lerp(platR.bottom, cardR.bottom))
         val radius = lerp(Design.pt(NcTokens.CORNER, u), Design.pt(NcTokens.LOOK_CORNER, u))
-        if (kc < 0.999f) drawLayered(c, b, listTop(), by - sheetY, 1f, 1f - kc)
+        // The platter (its glass and content) rides with the morphing card and fades into it there: drawn at its place in
+        // the list, its text and the card's showed twice, apart, while the card moved.
+        if (kc < 0.999f) drawLayered(c, b, listTop(), rect.top - sheetY, 1f, 1f - kc)
         fill.color = alpha(Design.color(NcTokens.LOOK_CARD), kc)
         c.drawRoundRect(rect, radius, radius, fill)
         if (menuPressed == -2) { fill.color = alpha(Appearance.pressFill, kc); c.drawRoundRect(rect, radius, radius, fill) }
@@ -1698,6 +1703,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val LONG_MS = 480L
         /** How far the list scrolls up before the clock under it has faded out (pt). */
         const val CLOCK_FADE_PT = 140f
+        /** The long look's presence below which the list draws its notification again (see drawList). */
+        const val LOOK_HANDOVER = 0.003f
         /** A platter coming in: its glass is whole at this much of its presence; its content shows from [CONTENT_AFTER] on. */
         const val GLASS_FIRST = 0.4f
         const val CONTENT_AFTER = 0.35f

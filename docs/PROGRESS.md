@@ -1511,3 +1511,7 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   SystemUI takes up a moment later, and a warm app can be ready sooner. Now it is switched off when a finger lands on a
   notification (back by itself 1.5 s later if nothing opens), and when it is switched at the tap itself the tap waits
   100 ms for it (the card covers that). Emulator: the system's part 7 ms, the scales back to 1 after.
+- **A notification flickered as its long look closed** (back into glass). The long look stopped drawing it a little
+  before the list took it back (two thresholds, 0.3 % and 0.1 % of the close): for a frame or two it was not drawn at all.
+  One handover point now (`LOOK_HANDOVER`). And the platter faded into the card at its own place in the list while the
+  card moved: two copies of its text, apart; it now rides with the morphing card. Recorded on the emulator.
