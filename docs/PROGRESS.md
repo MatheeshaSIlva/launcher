@@ -1368,3 +1368,13 @@ Now apps' Quick Settings tiles are controls too, as iOS 18+ lists apps' controls
 - Differences from the kit left as they were (not materials): the Search pill is a little larger than the kit's 77 x 30 pt,
   and its label turns dark over a light wallpaper (the kit's stays white). Next: the long press menu, App Library,
   Spotlight and the search fields, the widget gallery's sheet.
+
+Round 28 (Matheesha on 171f94f: the fingerprint icon fixed; apps' controls all there; the dock and Search pill look
+great; Control Center comes in too fast to see; the unlock animation still bad).
+- **Control Center coming in** is now two tokens he can tune in "Launcher design": `comp.cc.motion.open-travel` (the pull
+  over which it comes in: 240 pt, was iOS's measured 110 pt, ~75 ms of a quick pull) and `comp.cc.motion.open` (the spring
+  it finishes on: 0.45 / 1, was 0.3 / 1). A flick's speed is divided by that travel, so the short one also made the
+  release spring finish in a few frames. Emulator: it comes in over about a quarter second instead of at once.
+- **Unlock**: his five unlocks on 171f94f all played the arrival (94 frames, 0.78 s, none dropped). On the emulator the
+  arrival runs while the lock screen is still going away: the first frame of home that shows is already at rest. Recording
+  the unlock on the S24 is the next step (the PIN screen records black; our status bar shows).

@@ -271,6 +271,8 @@ SEED = {
     'comp.cc.button.symbol': {'pt': 18, 'src': "measured:the kit's render at 3x (plus 12, power 15.7 pt); our symbols fill 5/6 of their box"},
     'comp.cc.button.symbol-color': {'color': '#f5f5f5', 'src': 'kit:10491:21415'},
     'comp.cc.grid.cell': {'pt': 70, 'src': 'kit:2524:24582'},
+    'comp.cc.motion.open-travel': {'pt': 240, 'src': "judged:Matheesha: iOS 27's (fully in after ~110 pt, measured: docs/IOS27_MOTION.md) is too fast to see"},
+    'comp.cc.motion.open': {'spring': [0.45, 1.0], 'src': "judged:Matheesha wants the opening seen; it was 0.3 / 1 (iOS: in within ~75 ms of a quick pull)"},
     'comp.cc.grid.gap': {'pt': 15.333, 'src': 'measured:iOS 27 Simulator, accessibility frames (85.33 pt pitch; the kit has 15 / 17)'},
     'comp.cc.grid.top': {'pt': 132.3, 'src': 'measured:iOS 27 Simulator, accessibility frames (the kit: 132)'},
     'comp.cc.grid.top-edit': {'pt': 86, 'src': 'measured:iOS 27 Simulator, edit mode'},

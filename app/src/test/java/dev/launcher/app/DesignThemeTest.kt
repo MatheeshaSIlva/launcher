@@ -60,6 +60,7 @@ class DesignThemeTest {
                 k.endsWith("-blend") -> Value.Choice::class
                 k.endsWith("color") || k.endsWith(".dim") -> Value.Color::class
                 k.endsWith(".title") || k.endsWith(".title-large") || k.endsWith(".detail") -> Value.Text::class
+                k.endsWith(".motion.open") -> Value.SpringV::class
                 else -> Value.Number::class
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))

@@ -292,8 +292,14 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private fun u() = min(root.width, root.height).coerceAtLeast(1) / 402f
 
-    /** The pull over which Control Center comes in (blur, controls): iOS 27 is fully there after ~110 pt (px). */
-    private fun ccTravel() = 110f * u()
+    /**
+     * The pull over which Control Center comes in (blur, controls), px (`comp.cc.motion.open-travel`). iOS 27 is fully
+     * there after ~110 pt (75 ms of a quick pull); Matheesha found that too fast to see.
+     */
+    private fun ccTravel() = dev.launcher.app.design.Design.num(CcTokens.OPEN_TRAVEL) * u()
+
+    /** The spring Control Center finishes coming in on (`comp.cc.motion.open`). */
+    private fun ccOpen(): SpringSpec = dev.launcher.app.design.Design.spring(CcTokens.OPEN).let { SpringSpec(it.response, it.damping) }
 
     /** How far a push up from the bottom (or on the panel) must go to close Control Center (px). */
     private fun ccCloseTravel() = max(root.height * 0.30f, 200f)
@@ -441,7 +447,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private fun openFully(velocity: Float) {
         if (locked) focusHolder.take()
-        progress.animateTo(1f, if (panel == Panel.NC) NC_OPEN else CC_OPEN, velocity)
+        progress.animateTo(1f, if (panel == Panel.NC) NC_OPEN else ccOpen(), velocity)
         if (panel == Panel.CC) ccOffset.animateTo(0f, CC_SETTLE)
         regionOpen = true
         updateTouchable()
@@ -1106,9 +1112,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         const val TILE_WATCH_MS = 2000L
         const val FLING = 900f
         val NO_TOUCH = Region(-2, -2, -1, -1)
-        /** Control Center coming in (blur, the controls' opacity), going out, and its controls settling into place. iOS 27,
-         *  measured (docs/IOS27_MOTION.md): the controls settle on 0.42 / 0.68 (overshooting a little), closing takes ~0.18 s. */
-        val CC_OPEN = SpringSpec(0.3f, 1f)
+        /** Control Center going out, and its controls settling into place (coming in: [ccOpen], a token). iOS 27, measured
+         *  (docs/IOS27_MOTION.md): the controls settle on 0.42 / 0.68 (overshooting a little), closing takes ~0.18 s. */
         val CC_CLOSE = SpringSpec(0.28f, 1f)
         val CC_SETTLE = SpringSpec(0.42f, 0.68f)
         val NC_OPEN = SpringSpec(0.44f, 1f)

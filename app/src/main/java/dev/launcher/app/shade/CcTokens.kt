@@ -76,7 +76,11 @@ object CcTokens {
     /** A control's colour (its toggled-on fill or glyph): `comp.cc.accent.<control>`. */
     fun accent(c: Control) = ColorKey("comp.cc.accent." + c.name.lowercase().replace('_', '-'))
 
-    val ALL = listOf(BACKGROUND, SAMSUNG_STRENGTH, MODULE, ON, WELL, CORNER, SLIDER_CORNER, SYMBOL, SYMBOL_COLOR, WIDE_PADDING,
+    // How it comes in: over how much of a pull (pt), and the spring it finishes on once the finger lets go.
+    val OPEN_TRAVEL = NumberKey("comp.cc.motion.open-travel")
+    val OPEN = dev.launcher.app.design.SpringKey("comp.cc.motion.open")
+
+    val ALL = listOf(OPEN_TRAVEL, OPEN, BACKGROUND, SAMSUNG_STRENGTH, MODULE, ON, WELL, CORNER, SLIDER_CORNER, SYMBOL, SYMBOL_COLOR, WIDE_PADDING,
         WIDE_GAP, WELL_SIZE, WELL_SYMBOL, TITLE, TITLE_LARGE, DETAIL, LABEL_COLOR, DETAIL_COLOR, DETAIL_BLEND, CELL, GAP,
         GRID_TOP, GRID_TOP_EDIT, ROW_Y, BUTTON, BUTTON_SIZE, BUTTON_INSET_X, BUTTON_TOP, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR,
         CONN_BIG, CONN_SMALL, CONN_SYMBOL_BIG, CONN_SYMBOL_SMALL, ART, ART_CORNER, ART_X, ART_Y, OUTPUT, MEDIA_TITLE,

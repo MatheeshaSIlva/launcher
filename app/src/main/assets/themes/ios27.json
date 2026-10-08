@@ -1834,6 +1834,17 @@
    },
    "src": "kit:2547:2646"
   },
+  "comp.cc.motion.open": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:Matheesha wants the opening seen; it was 0.3 / 1 (iOS: in within ~75 ms of a quick pull)"
+  },
+  "comp.cc.motion.open-travel": {
+   "pt": 240,
+   "src": "judged:Matheesha: iOS 27's (fully in after ~110 pt, measured: docs/IOS27_MOTION.md) is too fast to see"
+  },
   "comp.cc.slider.corner": {
    "pt": 34,
    "src": "kit:2570:20682"
