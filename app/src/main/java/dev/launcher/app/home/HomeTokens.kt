@@ -16,5 +16,20 @@ object HomeTokens {
     /** Edit mode's Edit and Done buttons. */
     val BUTTON = MaterialKey("comp.home.button.material")
 
-    val ALL = listOf(DOCK, SEARCH, WIDGET, BUTTON).map { it.name }
+    // The long-press menu (the kit's Home Screen Quick Actions).
+    val MENU = MaterialKey("comp.home.menu.material")
+    val MENU_CORNER = dev.launcher.app.design.NumberKey("comp.home.menu.corner")
+    val MENU_WIDTH = dev.launcher.app.design.NumberKey("comp.home.menu.width")
+    val MENU_ROW = dev.launcher.app.design.NumberKey("comp.home.menu.row")
+    val MENU_PAD_TOP = dev.launcher.app.design.NumberKey("comp.home.menu.pad-top")
+    val MENU_PAD_BOTTOM = dev.launcher.app.design.NumberKey("comp.home.menu.pad-bottom")
+    val MENU_SYMBOL_X = dev.launcher.app.design.NumberKey("comp.home.menu.symbol-x")
+    val MENU_LABEL_X = dev.launcher.app.design.NumberKey("comp.home.menu.label-x")
+    val MENU_TYPE = dev.launcher.app.design.TextKey("comp.home.menu.type")
+    val MENU_LABEL = dev.launcher.app.design.ColorKey("comp.home.menu.label")
+    val MENU_DESTRUCTIVE = dev.launcher.app.design.ColorKey("comp.home.menu.destructive")
+    val MENU_PRESS = dev.launcher.app.design.ColorKey("comp.home.menu.press")
+
+    val ALL = listOf(DOCK, SEARCH, WIDGET, BUTTON, MENU, MENU_CORNER, MENU_WIDTH, MENU_ROW, MENU_PAD_TOP, MENU_PAD_BOTTOM, MENU_SYMBOL_X,
+        MENU_LABEL_X, MENU_TYPE, MENU_LABEL, MENU_DESTRUCTIVE, MENU_PRESS).map { it.name }
 }

@@ -6,6 +6,7 @@ import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.RenderEffect
 import android.graphics.RuntimeShader
 import android.graphics.Shader
 import android.os.Build
@@ -45,6 +46,10 @@ fun Fill.scaled(k: Float): Fill = if (k == 1f) this else copy(opacity = opacity 
  * For glass on home's wallpaper: home's depth zoom ([setDepth]: the wallpaper zooms less than home's content, so the glass
  * samples about a centre, scaled), and a wallpaper change ([setReveal]: the old wallpaper's blur ahead of the same front as
  * the wallpaper's own reveal, [dev.launcher.app.Reveal], so the glass changes on the same frame as what is behind it).
+ *
+ * Over live content (what is drawn behind it, moving: a search field over the results scrolling under it, a menu over
+ * home): [drawLive] records that content into a render node and runs the same shader on it as a render effect, after a
+ * blur of the material's frost.
  */
 @TargetApi(33)
 class MaterialPainter private constructor(private val unitPx: Float) {
@@ -133,6 +138,74 @@ class MaterialPainter private constructor(private val unitPx: Float) {
              alpha: Float = 1f, under: List<Fill> = emptyList(), press: Float = 0f, over: List<Fill> = emptyList(), overK: Float = 0f,
              lightTurn: Float = 0f) {
         if (alpha <= 0.003f || w <= 1f || h <= 1f) return
+        val reach = setUniforms(m, w, h, radius, screenX, screenY, screenScale, alpha, under, press, over, overK, lightTurn)
+        shader.setFloatUniform("local0", 0f, 0f)
+        shader.setFloatUniform("clampSize", 0f, 0f)
+        c.drawRect(-reach, -reach, w + reach, h + reach, paint)
+    }
+
+    private val node by lazy { android.graphics.RenderNode("material") }
+    private val inverse = Matrix()
+
+    /**
+     * [m] as a [shape] (in [canvas]'s coordinates, corner [radius]) over what [drawBehind] draws (screen coordinates):
+     * that content is recorded into a render node around the shape (with room for the blur, the lens and the drop shadows)
+     * and blurred to the material's frost, then this painter's shader runs on it. [toScreen] maps the canvas's coordinates
+     * to the screen's (a menu drawn scaled while it opens: what it shows still lines up with what is behind it); [limit]
+     * (canvas coordinates): what is on screen, the content is recorded within it only. [under]: fills between the content
+     * and the surface. Never inside a smaller layer or clip (the effect's input is cut there: the lens would see nothing at
+     * the edge). Hardware canvases only (else nothing is drawn: the caller draws its fallback).
+     */
+    fun drawLive(canvas: Canvas, m: Material, shape: android.graphics.RectF, radius: Float, toScreen: Matrix?,
+                 limit: android.graphics.RectF?, alpha: Float = 1f, under: List<Fill> = emptyList(), press: Float = 0f,
+                 drawBehind: (Canvas) -> Unit): Boolean {
+        if (!canvas.isHardwareAccelerated || shape.isEmpty || alpha <= 0.003f) return false
+        val u = unitPx
+        val sigma = m.frostNowPt() * u / 2f
+        val bend = (m.lens?.depthPt ?: 0f) * (m.lens?.refraction ?: 0f) * u
+        val margin = maxOf(sigma * 3f + bend, reach(m)) + u
+        var l = shape.left - margin
+        var t = shape.top - margin
+        var r = shape.right + margin
+        var b = shape.bottom + margin
+        if (limit != null) { l = maxOf(l, limit.left); t = maxOf(t, limit.top); r = minOf(r, limit.right); b = minOf(b, limit.bottom) }
+        val left = kotlin.math.floor(l).toInt()
+        val top = kotlin.math.floor(t).toInt()
+        val w = kotlin.math.ceil(r - left).toInt()
+        val h = kotlin.math.ceil(b - top).toInt()
+        if (w <= 0 || h <= 0) return false
+        node.setPosition(left, top, left + w, top + h)
+        val rc = node.beginRecording()
+        try {
+            rc.translate(-left.toFloat(), -top.toFloat())
+            if (toScreen != null && toScreen.invert(inverse)) rc.concat(inverse)
+            drawBehind(rc)
+        } finally {
+            node.endRecording()
+        }
+        val ox = shape.left - left
+        val oy = shape.top - top
+        // The shader's coordinates are the node's: the surface starts at (ox, oy) in them and samples the node's content
+        // where it is (no depth zoom, no reveal; kept inside what was recorded).
+        setUniforms(m, shape.width(), shape.height(), radius, ox, oy, 1f, alpha, under, press, emptyList(), 0f, 0f)
+        shader.setFloatUniform("local0", ox, oy)
+        shader.setFloatUniform("clampSize", w.toFloat(), h.toFloat())
+        shader.setFloatUniform("plain", 0f)
+        shader.setFloatUniform("depthK", 1f)
+        shader.setFloatUniform("revealProgress", 1f)
+        // A shader effect takes the shader's uniforms as they are when it is made: made anew for this frame.
+        val fx = RenderEffect.createRuntimeShaderEffect(shader, "backdrop")
+        val br = Blur.renderRadius(sigma)
+        node.setRenderEffect(if (br >= 0.5f) RenderEffect.createChainEffect(fx, RenderEffect.createBlurEffect(br, br, Shader.TileMode.CLAMP)) else fx)
+        canvas.drawRenderNode(node)
+        // Back to what paint draws expect (the backdrop image, depth and reveal are set again by their own calls).
+        shader.setFloatUniform("plain", if (backdrop == null) 1f else 0f)
+        return true
+    }
+
+    /** Sets every uniform of one surface; returns how far its drop shadows reach outside it (px). */
+    private fun setUniforms(m: Material, w: Float, h: Float, radius: Float, screenX: Float, screenY: Float, screenScale: Float,
+                            alpha: Float, under: List<Fill>, press: Float, over: List<Fill>, overK: Float, lightTurn: Float): Float {
         val u = unitPx
         val dark = Appearance.dark
         // Fills: the ones under the surface first, then the material's own.
@@ -178,7 +251,7 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         shader.setFloatUniform("rimWidth", RIM_PT * u)
         shader.setFloatUniform("alpha", alpha.coerceIn(0f, 1f))
         shader.setFloatUniform("press", press.coerceIn(0f, 1f))
-        c.drawRect(-reach, -reach, w + reach, h + reach, paint)
+        return reach
     }
 
     /** Writes [list] into the shadow uniforms (px); returns how far the drop shadows reach outside the shape. */
@@ -241,6 +314,8 @@ uniform float revealMaxDist;
 uniform float revealCell;
 uniform float2 depthC;
 uniform float depthK;
+uniform float2 local0;
+uniform float2 clampSize;
 uniform float2 size;
 uniform float2 origin;
 uniform float placeScale;
@@ -329,13 +404,16 @@ float gauss(float d, float s) {
 ${dev.launcher.app.Reveal.NOISE}
 $FRONT
 
+// Over live content ([clampSize] = its recorded size): samples kept inside what was recorded (beyond it there is nothing).
+float2 inside(float2 q) { return clampSize.x > 0.0 ? clamp(q, float2(0.5), clampSize - 0.5) : q; }
+
 // Red and blue apart only where they visibly part (a third of a pixel): elsewhere one sample instead of three.
 half3 seenNew(float2 sp, float2 off, float t) {
-    if (t <= 0.0 || dispersion * length(off) < 0.35) return backdrop.eval(sp + off).rgb;
+    if (t <= 0.0 || dispersion * length(off) < 0.35) return backdrop.eval(inside(sp + off)).rgb;
     return half3(
-        backdrop.eval(sp + off * (1.0 - dispersion)).r,
-        backdrop.eval(sp + off).g,
-        backdrop.eval(sp + off * (1.0 + dispersion)).b);
+        backdrop.eval(inside(sp + off * (1.0 - dispersion))).r,
+        backdrop.eval(inside(sp + off)).g,
+        backdrop.eval(inside(sp + off * (1.0 + dispersion))).b);
 }
 half3 seenOld(float2 sp, float2 off, float t) {
     if (t <= 0.0 || dispersion * length(off) < 0.35) return backdropOld.eval(sp + off).rgb;
@@ -354,7 +432,9 @@ half3 seen(float2 sp, float2 off, float t) {
 }
 
 // Outside the shape: the drop shadows (the rims, a soft shadow) over what is behind, premultiplied. Only what they
-// change shows: the backdrop itself is already drawn under this surface.
+// change shows: the backdrop itself is already drawn under this surface, so the colour is what, laid over it at coverage
+// a, gives the shadowed backdrop (col = b (1 - a) + out). (It was col x a: a soft shadow came out at about a squared, the
+// kit's 25 % black at ~6 %.)
 half4 dropShadows(float2 p, float2 hs, half3 b) {
     half3 col = b;
     half a = 0.0;
@@ -368,10 +448,12 @@ half4 dropShadows(float2 p, float2 hs, half3 b) {
             a = max(a, k);
         }
     }
-    return half4(col * a, a);
+    return half4(max(col - b * (1.0 - a), half3(0.0)), a);
 }
 
-half4 main(float2 coord) {
+half4 main(float2 coordIn) {
+    // Where this pixel is on the surface ([local0]: the surface's top-left in this shader's coordinates; 0 as a paint).
+    float2 coord = coordIn - local0;
     float2 hs = size * 0.5;
     float2 p = coord - hs;
     float d = sdRoundRect(p, hs, radius);

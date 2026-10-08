@@ -70,7 +70,16 @@ class DesignThemeTest {
             assertTrue("$key: no colour", r.resolve(key) is Value.Color)
         }
         // Home's.
-        for (k in dev.launcher.app.home.HomeTokens.ALL) assertTrue("$k is not a material", r.resolve(k) is Value.Mat)
+        for (k in dev.launcher.app.home.HomeTokens.ALL) {
+            val v = r.resolve(k)
+            val want = when {
+                k.endsWith("material") -> Value.Mat::class
+                k.endsWith(".type") -> Value.Text::class
+                k.endsWith(".label") || k.endsWith(".destructive") || k.endsWith(".press") -> Value.Color::class
+                else -> Value.Number::class
+            }
+            assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
+        }
         // The banners'.
         for (k in dev.launcher.app.shade.BannerView.ALL) {
             val v = r.resolve(k)

@@ -1889,6 +1889,56 @@
    "ref": "sys.material.glass.dock",
    "src": "kit:558:50551"
   },
+  "comp.home.menu.corner": {
+   "pt": 30,
+   "src": "kit:10411:18581"
+  },
+  "comp.home.menu.destructive": {
+   "ref": "ref.color.accents.red",
+   "src": "kit:5622:50175 (#ff383c)"
+  },
+  "comp.home.menu.label": {
+   "light": "#1a1a1a",
+   "dark": "#ffffff",
+   "src": "kit:5619:49810 (light; dark judged: white on the dark glass)"
+  },
+  "comp.home.menu.label-x": {
+   "pt": 60,
+   "src": "kit:5619:49810"
+  },
+  "comp.home.menu.material": {
+   "ref": "sys.material.glass.regular",
+   "src": "kit:5626:51776 (BG: the Regular glass, frost 16)"
+  },
+  "comp.home.menu.pad-bottom": {
+   "pt": 8,
+   "src": "kit:5621:50116"
+  },
+  "comp.home.menu.pad-top": {
+   "pt": 10,
+   "src": "kit:5621:50116 (actions 10 pt below the top)"
+  },
+  "comp.home.menu.press": {
+   "light": "#00000014",
+   "dark": "#ffffff1f",
+   "src": "judged:a pressed row's highlight (was the app's press fill)"
+  },
+  "comp.home.menu.row": {
+   "pt": 42,
+   "src": "kit:5626:51776 (rows 42 pt apart)"
+  },
+  "comp.home.menu.symbol-x": {
+   "pt": 36,
+   "src": "kit:5619:49811 (a 20 pt symbol column 26 pt in: its centre)"
+  },
+  "comp.home.menu.type": {
+   "ref": "ref.type.body.regular",
+   "src": "kit:5619:49810 (17 Regular)"
+  },
+  "comp.home.menu.width": {
+   "pt": 250,
+   "src": "kit:5626:51776"
+  },
   "comp.home.search.material": {
    "ref": "sys.material.glass.dock",
    "src": "kit:5593:10801"
