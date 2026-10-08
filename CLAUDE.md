@@ -154,7 +154,9 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **`adb shell input` never reaches `/dev/input`** (injected after the kernel): the raw stream sees nothing, so scripted pulls
   over apps always end at the handover. On the emulator `tools/kswipe.sh` sends real touchscreen events through the console.
 - **Blocking the stock shade also blocks heads-up notifications** (SystemUI: "No heads up: disabled panel"); sound and
-  vibration still play. Our banners (`shade/BannerView.kt`) replace them; never ship DISABLE_EXPAND without them. With the
+  vibration still play. Not One UI's "Brief" pop-up style (system setting `edge_lighting=1`): those come from the system
+  server's EdgeLightingManager (SystemUI logs "no Heads up : edgelighting enabled app") and show next to our banners;
+  pop-up style "Detailed" hands them back to SystemUI's heads-up, which the flags stop. Our banners (`shade/BannerView.kt`) replace them; never ship DISABLE_EXPAND without them. With the
   heads-up suppressed, SystemUI does not open a call's or an alarm's full screen either while the phone is unlocked (it expects
   the heads-up to show it): our ringing banners (Answer/Decline from the call's own intents, an alarm's actions) are the only
   way such a notification shows; they stay until it stops ringing, also over an open panel.

@@ -90,6 +90,22 @@ blurred backdrop (`drawer/BackdropGlass`); `LiveGlass` removed. Left: the glass 
 
 **Step 3: components.** Platter, control tile (sizes and states), slider, pill and round buttons, sheet, menu, badge,
 status row, clock numerals: specs plus painters. The shade's views shrink to layout and touch.
+With it, the **look audit** Matheesha asked for (2026-10-08): tints and opacities that differ between surfaces (or with
+the wallpaper) listed surface by surface over a light, a mid and a dark wallpaper, and every difference from iOS 27 that
+is not a decision of ours, each fixed in its token. Already done: the kit's hairline rims at a theme strength
+(`sys.glass.rim`: they read as a black outline over dark backdrops).
+
+**Step 3+: Android conveniences** (requested 2026-10-08; built on step 3's menu and buttons). The aim, in Matheesha's
+words: the Liquid Glass look with the convenience and customizability of Android.
+- Edit mode: **Change Wallpaper** in the Edit menu (the system's wallpaper picker; the new one arrives with the reveal).
+- App Switcher: a **Clear All** button (the cards leave one after another; the apps' tasks are removed), and a **menu
+  from the app's name** above a card (App info, Close, and what Android offers there: split screen, pop-up view, pin).
+- Banners over an app on real glass: a picture of the app behind (its task snapshot when the banner comes) instead of
+  the flat colour they sit on now.
+- One UI's "Brief" notification pop-ups (edge lighting) come from the system server and are not stopped by the flags
+  that stop the stock heads-up: onboarding finds the setting and offers to switch it to "Detailed" (and back on restore).
+- Optional, by token: the glass's light follows the phone's tilt (iOS moves its highlights with the device); today its
+  direction is fixed (the kit's inner shadows at top and bottom, the rim light from a fixed angle).
 
 **Step 4: motion.** Every animation listed with a role name; the registry; transitions behind interfaces (launch, close,
 panel open and close, module expand, stack fan-out, banner in and out...). Then the animation audit: each one recorded
@@ -116,3 +132,6 @@ display and font size.
   numbers). Until then each step is checked for looks on the emulator; known items for that pass are kept in
   `docs/PROGRESS.md` (step 2a: the fan-out's GPU time, an occasional late scroll frame).
 - Open: the theme file's syntax (step 5).
+- Decided (2026-10-08): the goal is the Liquid Glass look with Android's convenience and customizability: where iOS
+  leaves something out that Android users rely on (Back from the edge closes a panel, Clear All, an app's menu in the
+  switcher, choosing a wallpaper from home), we keep it, drawn in the same glass.
