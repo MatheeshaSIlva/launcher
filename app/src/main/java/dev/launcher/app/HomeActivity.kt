@@ -188,6 +188,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (!arrivalDue) AppLog.log("[home] arrival due ($why): the screen went off with home in front")
         arrivalDue = true
         wokeSinceDue = false
+        sawKeyguard = false
         presentAt = 0L
         arrivalTries = 0
     }
@@ -215,10 +216,11 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
     }
 
-    // Home's window shown and home resumed: the lock screen is going away (an activity behind it is never resumed), so home
-    // is being seen. The keyguard's own state said so 80-160 ms later on the S24, and the held frame stood still meanwhile.
-    // The window alone is not enough: woken with the power key, One UI shows home's window behind the lock screen at once,
-    // and the arrival played there, over before the unlock (Matheesha: "instant and glitchy").
+    // Home is seen once it is resumed, its window shown and the lock screen gone (the keyguard's state). Resumed and shown
+    // are not enough: woken with the power key soon after the screen went off, One UI resumes home for ~30 ms behind the
+    // lock screen (S24 log), and the arrival played there, over before the unlock ("instant and glitchy"). While home is
+    // resumed and shown and the lock screen still up (the moments before the unlock completes) the state is read every
+    // frame, not every 50 ms: the lock screen is gone ~25-40 ms after home resumes, and the held frame should not stand still.
     private var windowVisible = true
     private val windowShown = android.view.ViewTreeObserver.OnWindowVisibilityChangeListener { v ->
         windowVisible = v == android.view.View.VISIBLE
@@ -237,9 +239,15 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
         if (!arrivalDue) return
         val on = screenOn()
-        val seen = resumed && windowVisible && on
+        val keyguard = keyguardUp()
+        if (keyguard) sawKeyguard = true
+        // The lock screen gone after it was up. Woken again soon after the screen went off (~0.6 s), One UI resumes home
+        // ~40 ms before it puts the lock screen up (it had not been shown yet), and nothing says it is coming: the arrival
+        // played under it. A phone that did not lock at all (it locks later): home resumed for [NO_LOCK_MS] is seen.
+        val clear = !keyguard && (sawKeyguard || (resumed && android.os.SystemClock.uptimeMillis() - resumedAt > NO_LOCK_MS))
+        val seen = resumed && windowVisible && on && clear
         if (seen && !wokeSinceDue) { wokeSinceDue = true; AppLog.log("[home] arrival: woke (home resumed and shown)") }
-        val unlocked = wokeSinceDue && on && (seen || !keyguardUp())
+        val unlocked = wokeSinceDue && on && clear
         // Seen only long after the unlock (it went to an app first): no arrival; the held frame goes before home shows.
         val sinceUnlock = if (presentAt == 0L) 0L else android.os.SystemClock.uptimeMillis() - presentAt
         if (unlocked && sinceUnlock > ARRIVAL_WINDOW_MS) {
@@ -254,7 +262,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             // USER_PRESENT at the moment home shows). It starts as soon as the lock screen is gone: waiting for home's focus
             // left the zoomed frame standing still for a moment.
             screen.holdArrival()
-            if (on && wokeSinceDue) screen.postDelayed(unlockCheck, 50)
+            val fast = windowVisible && android.os.SystemClock.uptimeMillis() - resumedAt < 2000L
+            if (on && (wokeSinceDue || windowVisible)) screen.postDelayed(unlockCheck, if (fast) UNLOCK_POLL_FAST_MS else 50)
             return
         }
         if (screen.playArrival(cold = false)) {
@@ -277,9 +286,14 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (hasFocus) arriveIfDue()
     }
 
+    private var resumedAt = 0L
+    /** The lock screen was seen up since the arrival went due (see [arriveIfDue]). */
+    private var sawKeyguard = false
+
     override fun onResume() {
         super.onResume()
         resumed = true
+        resumedAt = android.os.SystemClock.uptimeMillis()
         GestureNav.onHomeShown()
         reportFirstFrame()
         arriveIfDue()
@@ -598,6 +612,10 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private companion object {
         /** The arrival plays only if home is seen within this long of the unlock (USER_PRESENT; ms). */
         const val ARRIVAL_WINDOW_MS = 4000L
+        /** How often home checks whether the lock screen has gone while it is resumed and shown behind it (ms: a frame). */
+        const val UNLOCK_POLL_FAST_MS = 8L
+        /** Home resumed this long with no lock screen ever up: the phone did not lock, home is seen (ms). */
+        const val NO_LOCK_MS = 300L
         /** How often home checks, while in front, whether the screen has started going off (ms). */
         const val SLEEP_POLL_MS = 50L
     }

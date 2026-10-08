@@ -1395,3 +1395,10 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   there, over before the unlock; a late SCREEN_OFF broadcast (after a quick wake-up) also re-armed an arrival that had just
   played. Now home is seen when its window is shown *and* it is resumed (an activity behind the lock screen never is), and
   SCREEN_OFF counts only while the screen is still off. On the S24: a quick lock and wake leaves the arrival held.
+- Still "the same" for him: woken within ~0.6 s of the screen going off, One UI resumes home ~40 ms *before* it puts the
+  lock screen up (it had not been shown yet), with the keyguard's state still clear: nothing said it was coming. Home is now
+  seen only once the lock screen has been seen up since the arrival went due and is gone again (a real unlock: up at the
+  resume, gone ~40 ms later; a quick wake-up: clear first, up after); with no lock at all, after 300 ms resumed. While home
+  is resumed behind the lock screen the state is read every frame (for 2 s), so the arrival starts ~1 frame after the lock
+  screen goes. Matheesha: "works now" (all three: from screen-off, power key first, a quick re-wake); his log: every
+  arrival 93-94 frames at 120 Hz.
