@@ -1280,3 +1280,29 @@ emulator over home and over an app, in light and dark. The long look moved in st
   fading) and the list closes up at once; a clear the system does not confirm within 3 s comes back. Checked on the
   emulator frame by frame. (The emulator's synthetic swipes report no speed: only a swipe past 62 % of the width clears
   there; a real flick clears from the button's width.)
+
+## Our shade on the lock screen (2026-10-08)
+
+Rule 2 (one shade everywhere) now holds on the lock screen too. Before, locking handed everything back to the stock UI
+(our status bar and shade removed, the stock panels free). Now, while the keyguard shows:
+
+- The gesture strip and the cards stay off (the lock screen has its own swipe up to unlock); our status bar and shade
+  stay, and the stock panels stay blocked (checked on the emulator: a pull anywhere on the lock screen opens nothing of
+  the stock UI; One UI not yet checked). The bar's time fades out (the lock screen's clock shows it, as on iOS).
+- Notification Center shows what the lock screen's settings allow (`lock_screen_show_notifications`,
+  `lock_screen_allow_private_notifications`, read through the shell when the screen goes off; unknown counts as hide):
+  none, or each notification by its own lock-screen visibility (the channel's override, else its own): secret ones not at
+  all, private ones as "App / Notification" (or their public version) without sender, picture or actions. Unlocking
+  brings the full list in, animated. On the S24 the settings are "hide notifications": our Notification Center over the
+  lock screen shows the clock and the buttons only.
+- Anything that opens an app (a notification, a control, a setting, the player, an action that starts an activity)
+  waits for the user to unlock (`Unlock.kt`): the panel closes, the system's unlock prompt comes up (`wm dismiss-keyguard`
+  through the shell), and it runs when the user is present; given up on (screen off, a minute) it is dropped. Broadcast
+  actions (media controls, a call's buttons, "mark as read") work without unlocking, as on the stock lock screen. The
+  camera opens the secure camera over the lock screen. Control Center's edit mode asks to unlock, then opens again in
+  edit mode. No banners over the lock screen.
+- Checked on the emulator with a PIN: the unlock prompt came up for a notification, Settings opened after the PIN; the
+  secure camera opened from the lock screen with the keyguard still up; content hidden with "hide content" set.
+- An invisible activity over the lock screen cannot ask for the unlock prompt itself (a translucent activity does not
+  cover the lock screen; the system cancelled the request): `UnlockActivity` stays only as the fallback without the
+  shell.

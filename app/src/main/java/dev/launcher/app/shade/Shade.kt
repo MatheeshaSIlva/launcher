@@ -18,6 +18,7 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.FrameLayout
 import dev.launcher.app.AppLog
+import dev.launcher.app.Unlock
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.SpringSpec
 import dev.launcher.app.motion.SpringValue
@@ -107,9 +108,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override val surfaces get() = this@Shade.surfaces
             override fun closeDrag(phase: Int, dy: Float, vy: Float) = panelDrag(phase, dy, vy)
             override fun close() = this@Shade.close()
-            override fun launch(i: Intent?) { if (state.start(i)) close() }
-            override fun send(pi: PendingIntent?) { if (pi != null && Notifs.send(ctx, pi)) close() }
+            override fun launch(i: Intent?) = launchIntent(i)
+            override fun send(pi: PendingIntent?) { if (pi != null) sendIntent(pi, closePanel = true) }
             override fun powerMenu() { close(); nav.powerMenu() }
+            override val locked get() = this@Shade.locked
+            override fun unlockToEdit() = this@Shade.unlockToEdit()
             override fun openGallery() = this@Shade.openGallery()
             override fun editProgress(k: Float) { editK = k; applyProgress() }
         })
@@ -122,17 +125,21 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override val media get() = this@Shade.media
             override fun closeDrag(phase: Int, dy: Float, vy: Float) = panelDrag(phase, dy, vy)
             override fun close() = this@Shade.close()
-            override fun launch(i: Intent?) { if (state.start(i)) close() }
-            override fun send(pi: PendingIntent?): Boolean = pi != null && Notifs.send(ctx, pi).also { if (it) close() }
+            override fun launch(i: Intent?) = launchIntent(i)
+            override fun send(pi: PendingIntent?): Boolean = pi != null && sendIntent(pi, closePanel = true)
             override fun open(item: Notifs.Item, from: android.graphics.RectF?): Boolean = openFrom(item, from)
             override fun torch() { state.toggle(Control.FLASHLIGHT) }
             override val torchOn get() = state.torch
-            override fun camera() { if (state.start(state.intentFor(Control.CAMERA))) close() }
+            override fun camera() = openCamera()
         })
         banner = BannerView(ctx, object : BannerView.Host {
             override val barHeight get() = this@Shade.barHeight
             override fun overHome() = nav.frontPackage() == ctx.packageName && nav.frontClass()?.endsWith(".HomeActivity") == true
-            override fun open(item: Notifs.Item) { if (Notifs.open(ctx, item) && panel != null) close() }
+            override fun open(item: Notifs.Item) {
+                if (!locked) { if (Notifs.open(ctx, item) && panel != null) close(); return }
+                if (panel != null) close()
+                Unlock.then(ctx, "open a notification of ${item.pkg}") { Notifs.open(ctx, item) }
+            }
             override fun openNotificationCenter() { begin(Panel.NC); progress.snapTo(0.12f); openFully(0f) }
             override fun send(pi: PendingIntent, closePanel: Boolean): Boolean =
                 Notifs.send(ctx, pi).also { if (it && closePanel && panel != null) close() }
@@ -706,6 +713,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 (panel == null || it.urgent) && (!it.urgent || (it.key !in quiet && !ownScreenInFront(it)))
         }
         val newest = fresh.maxByOrNull { it.postTime } ?: return
+        // Over the lock screen no banners (the lock screen shows what arrives, as its settings allow); a ringing call or
+        // alarm opens its own screen there.
+        if (locked) return
         banner.show(newest)
         if (bannerLogs < 5 || newest.urgent) { bannerLogs++; AppLog.log("[shade] banner: ${newest.pkg}${if (newest.urgent) " (ringing${if (newest.call) ", a call" else ""})" else ""}") }
     }
@@ -770,6 +780,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     /** Opens [item]'s app out of its platter at [from] (screen px); without a platter (or not an activity), as before. */
     private fun openFrom(item: Notifs.Item, from: android.graphics.RectF?): Boolean {
+        if (locked) {
+            if (item.contentIntent == null) return false
+            close()
+            Unlock.then(ctx, "open a notification of ${item.pkg}") { Notifs.open(ctx, item) }
+            return true
+        }
         val pi = item.contentIntent ?: return false
         if (from == null || !pi.isActivity || panel != Panel.NC) return Notifs.open(ctx, item).also { if (it) close() }
         val pkg = pi.creatorPackage ?: item.pkg
@@ -873,6 +889,77 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     private var bannerLogs = 0
+
+    // ------------------------------------------------------------------ the lock screen
+
+    /**
+     * The phone is locked (the keyguard shows): the shade is over the lock screen. What opens an app waits for the user
+     * to unlock ([Unlock]); Notification Center shows what the lock screen settings allow; the bar leaves the time to the
+     * lock screen's clock.
+     */
+    @Volatile var locked = false
+        private set
+
+    fun setLocked(l: Boolean) {
+        if (l == locked) return
+        locked = l
+        handler.post {
+            AppLog.log("[shade] ${if (l) "over the lock screen" else "unlocked"}")
+            bar.setLocked(l)
+            nc.setLocked(l)
+            if (l) { cc.exitEdit(animate = false); gallery.dismissNow(); banner.clear(keepRinging = true); readLockPrivacy() }
+        }
+    }
+
+    /** The screen went off (it locks): the lock screen's settings are read again (they change only while unlocked). */
+    fun onScreenOff() { handler.post { if (locked) readLockPrivacy() } }
+
+    /**
+     * The lock screen's notification settings (hidden settings: read through the shell). Until they are known nothing
+     * shows there; unreadable, they count as "hide".
+     */
+    private fun readLockPrivacy() {
+        val s = dev.launcher.app.ShizukuLink.service ?: return
+        launchIo.execute {
+            val out = try { s.runShell("settings get secure lock_screen_show_notifications; settings get secure lock_screen_allow_private_notifications") } catch (_: Throwable) { "" }
+            val v = out.lines().map { it.trim() }.filter { it == "0" || it == "1" || it == "null" }
+            val p = NotificationCenterView.LockPrivacy(show = v.getOrNull(0) == "1", allowPrivate = v.getOrNull(1) == "1")
+            AppLog.log("[shade] lock screen: notifications ${if (p.show) "shown" else "hidden"}${if (p.show) ", content ${if (p.allowPrivate) "shown" else "hidden"}" else ""}")
+            handler.post { if (locked) nc.setLocked(true, p) }
+        }
+    }
+
+    /** Starts [i] (closing the panel); on the lock screen once the user has unlocked. */
+    private fun launchIntent(i: Intent?) {
+        if (i == null) return
+        if (!locked) { if (state.start(i)) close(); return }
+        close()
+        Unlock.then(ctx, "open ${i.component?.packageName ?: i.`package` ?: i.action}") { state.start(i) }
+    }
+
+    /**
+     * Sends [pi] as a tap. An activity waits for the user to unlock on the lock screen (a broadcast or a service does not:
+     * media controls, a call's buttons, "mark as read" work there, as on the stock lock screen).
+     */
+    private fun sendIntent(pi: PendingIntent, closePanel: Boolean): Boolean {
+        if (!locked || !pi.isActivity) return Notifs.send(ctx, pi).also { if (it && closePanel && panel != null) close() }
+        if (panel != null) close()
+        Unlock.then(ctx, "open ${pi.creatorPackage}") { Notifs.send(ctx, pi) }
+        return true
+    }
+
+    /** The camera: on the lock screen the secure camera, which opens over it without unlocking (as iOS's). */
+    private fun openCamera() {
+        if (!locked) { if (state.start(state.intentFor(Control.CAMERA))) close(); return }
+        val secure = Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA_SECURE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (state.start(secure)) close() else launchIntent(state.intentFor(Control.CAMERA))
+    }
+
+    /** Control Center's edit mode from the lock screen: unlock first, then it opens again in edit mode. */
+    private fun unlockToEdit() {
+        close()
+        Unlock.then(ctx, "edit Control Center") { handler.postDelayed({ begin(Panel.CC); progress.snapTo(0.12f); openFully(0f); cc.enterEdit() }, 350) }
+    }
 
     private fun openGallery() {
         gallery.open()

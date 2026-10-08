@@ -56,7 +56,20 @@ object Notifs {
         val answer: PendingIntent?,
         val decline: PendingIntent?,
         val sbn: StatusBarNotification,
+        /** What the lock screen may show of it (Notification.VISIBILITY_*: the channel's override, else its own). */
+        val lockVisibility: Int = Notification.VISIBILITY_PRIVATE,
+        /** Its public version's title and text (what an app wants shown when its content is hidden), if it has one. */
+        val publicTitle: CharSequence? = null,
+        val publicText: CharSequence? = null,
     ) {
+        /**
+         * As the lock screen shows it when its content is hidden: the app's name (or its public version), "Notification",
+         * no sender, picture or actions. A tap still opens it (after unlocking).
+         */
+        fun redacted(appLabel: String): Item = Item(key, pkg, user, postTime, groupKey, summary, ongoing, clearable, importance,
+            publicTitle ?: appLabel, publicText ?: "Notification", null, smallIcon, null, color, contentIntent, emptyList(),
+            autoCancel, false, number, suppressPeek, onlyAlertOnce, null, false, null, null, sbn, lockVisibility, publicTitle, publicText)
+
         /** It rings or wakes: its banner stays (with its buttons) until it goes. */
         val urgent: Boolean get() = fullScreen != null || (call && answer != null)
         /** The id the shade animates this item by (stable across updates of the same notification). */
@@ -93,7 +106,8 @@ object Notifs {
             val ranked = ranking != null && ranking.getRanking(sbn.key, r)
             val importance = if (ranked) r.importance else NotificationManager.IMPORTANCE_DEFAULT
             val noPeek = ranked && (r.suppressedVisualEffects and NotificationManager.Policy.SUPPRESSED_EFFECT_PEEK) != 0
-            list += read(sbn, importance, noPeek) ?: continue
+            val lockVis = if (ranked) r.lockscreenVisibilityOverride else NotificationListenerService.Ranking.VISIBILITY_NO_OVERRIDE
+            list += read(sbn, importance, noPeek, lockVis) ?: continue
         }
         list.sortBy { order[it.key] ?: Int.MAX_VALUE }
         connected = true
@@ -108,7 +122,7 @@ object Notifs {
         for ((h, l) in listeners) h.post(l)
     }
 
-    private fun read(sbn: StatusBarNotification, importance: Int, noPeek: Boolean): Item? = try {
+    private fun read(sbn: StatusBarNotification, importance: Int, noPeek: Boolean, lockVis: Int): Item? = try {
         val n = sbn.notification
         val x = n.extras
         val flags = n.flags
@@ -157,6 +171,9 @@ object Notifs {
             answer = pendingExtra(x, "android.answerIntent"),
             decline = pendingExtra(x, "android.declineIntent") ?: pendingExtra(x, "android.hangUpIntent"),
             sbn = sbn,
+            lockVisibility = if (lockVis != NotificationListenerService.Ranking.VISIBILITY_NO_OVERRIDE) lockVis else n.visibility,
+            publicTitle = n.publicVersion?.extras?.getCharSequence(Notification.EXTRA_TITLE),
+            publicText = n.publicVersion?.extras?.getCharSequence(Notification.EXTRA_TEXT),
         )
     } catch (t: Throwable) {
         AppLog.log("[notifs] unreadable notification from ${sbn.packageName}: ${t.javaClass.simpleName}: ${t.message}")

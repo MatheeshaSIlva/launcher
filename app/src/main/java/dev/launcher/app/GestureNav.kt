@@ -331,13 +331,16 @@ object GestureNav {
     /** Shows or removes our windows to match the current state. */
     fun update() {
         if (Looper.myLooper() != navThread.looper) { nav.post { update() }; return }
-        val want = ready && SystemRestore.gestureFlagsActive && ShizukuLink.service != null && !locked
-        if (want && strip == null) { ensureCardWindow(); addStrip() }
-        if (!want && strip != null) removeAll()
-        // Our iOS status bar rides on the same overlay windows (above the strip and cards).
-        val wantBar = want && strip != null && SystemRestore.statusBarWanted(app)
+        val base = ready && SystemRestore.gestureFlagsActive && ShizukuLink.service != null
+        // Gestures (the strip, the cards): not on the lock screen (it has its own swipe up to unlock).
+        val wantNav = base && !locked
+        if (wantNav && strip == null) { ensureCardWindow(); addStrip() }
+        if (!wantNav && strip != null) removeNav()
+        // Our iOS status bar and shade: on the lock screen too (one shade everywhere; the stock one stays blocked).
+        val wantBar = base && SystemRestore.statusBarWanted(app) && (strip != null || locked)
         if (wantBar && statusBar == null) addStatusBar()
         if (!wantBar && statusBar != null) removeStatusBar()
+        shade?.setLocked(locked)
     }
 
     // ================================================================== status bar (nav thread)
@@ -487,7 +490,7 @@ object GestureNav {
     fun attach(service: NavAccessibilityService) {
         nav.post {
             if (a11y === service) return@post
-            if (strip != null) removeAll()
+            if (strip != null || statusBarShown) removeAll()
             a11y = service
             wm = service.getSystemService(WindowManager::class.java)
             locked = app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
@@ -600,6 +603,7 @@ object GestureNav {
                 else -> app.getSystemService(KeyguardManager::class.java).isKeyguardLocked
             }
             update()
+            if (intent.action == Intent.ACTION_SCREEN_OFF) shade?.onScreenOff()
         }
     }
 
@@ -973,6 +977,11 @@ object GestureNav {
 
     private fun removeAll() {
         removeStatusBar()
+        removeNav()
+    }
+
+    /** The gesture strip and the card window go (the status bar and the shade stay, as on the lock screen). */
+    private fun removeNav() {
         hideCards()
         nav.removeCallbacks(scalesBack)
         ShizukuLink.service?.let { s -> frontIo.execute { restoreScales(s) } }

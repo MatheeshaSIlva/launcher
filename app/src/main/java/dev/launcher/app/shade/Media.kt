@@ -111,11 +111,16 @@ class Media(private val ctx: Context, private val handler: Handler) {
     fun previous() { controller?.transportControls?.skipToPrevious() }
     fun seekTo(ms: Long) { controller?.transportControls?.seekTo(ms); position = ms; positionAt = SystemClock.elapsedRealtime(); changed() }
 
-    /** Opens the app that plays (its session's activity, else its launcher entry). */
+    /** Opens the app that plays (its session's activity, else its launcher entry); on the lock screen once unlocked. */
     fun open(): Boolean {
         val c = controller ?: return false
-        c.sessionActivity?.let { return Notifs.send(ctx, it) }
-        val i = ctx.packageManager.getLaunchIntentForPackage(c.packageName) ?: return false
-        return try { ctx.startActivity(i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (_: Throwable) { false }
+        val act = c.sessionActivity
+        val i = if (act == null) ctx.packageManager.getLaunchIntentForPackage(c.packageName) ?: return false else null
+        val go = {
+            if (act != null) Notifs.send(ctx, act)
+            else try { ctx.startActivity(i!!.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (_: Throwable) { false }
+        }
+        if (dev.launcher.app.Unlock.locked(ctx)) { dev.launcher.app.Unlock.then(ctx, "open ${c.packageName}") { go() }; return true }
+        return go()
     }
 }

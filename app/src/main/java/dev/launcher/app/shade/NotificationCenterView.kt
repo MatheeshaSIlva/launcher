@@ -229,6 +229,26 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     fun mediaChanged() { relayout(animate = progress > 0f); invalidate() }
 
+    /** The lock screen's notification settings: shown there at all, and with their content. */
+    class LockPrivacy(val show: Boolean, val allowPrivate: Boolean)
+
+    private var lockedNow = false
+    /** Null until read (nothing shows on the lock screen until then). */
+    private var privacy: LockPrivacy? = null
+
+    /**
+     * Over the lock screen ([locked]) or not: the list shows what the lock screen's settings allow, and grows into the
+     * full list as the phone unlocks (the notifications arrive as any new one does).
+     */
+    fun setLocked(locked: Boolean, p: LockPrivacy? = privacy) {
+        val changed = locked != lockedNow || p !== privacy
+        privacy = p
+        lockedNow = locked
+        if (!changed) return
+        if (locked) { menu = null; revealed?.swipe?.snapTo(0f); revealed = null }
+        readNotifs(animate = progress > 0f)
+    }
+
     // ------------------------------------------------------------------ the wallpaper and the clock
 
     private var wallpaper: Wallpaper? = null
@@ -387,9 +407,17 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun readNotifs(animate: Boolean) {
         // Cleared here and confirmed by the system since: forgotten.
         cleared.keys.retainAll(Notifs.items.mapTo(HashSet()) { it.key })
-        val items = Notifs.items.filter { !it.summary || Notifs.items.none { o -> o !== it && o.groupKey == it.groupKey && !o.summary } }
+        var items = Notifs.items.filter { !it.summary || Notifs.items.none { o -> o !== it && o.groupKey == it.groupKey && !o.summary } }
             .filter { !it.media || it.contentIntent != null && !host.media.active }
             .filter { it.key !in cleared }
+        // Over the lock screen: what its settings allow (none at all, or their content hidden), as the stock lock screen.
+        if (lockedNow) {
+            val p = privacy
+            items = if (p == null || !p.show) emptyList()
+            else items.filter { it.lockVisibility != android.app.Notification.VISIBILITY_SECRET }.map {
+                if (it.lockVisibility == android.app.Notification.VISIBILITY_PRIVATE && !p.allowPrivate) it.redacted(painter.appLabel(it.pkg)) else it
+            }
+        }
         val byApp = LinkedHashMap<String, MutableList<Notifs.Item>>()
         for (it in items) byApp.getOrPut(it.pkg) { ArrayList() } += it
         groups = byApp.map { (pkg, list) -> pkg to list.sortedByDescending { it.postTime } }

@@ -107,6 +107,15 @@
             </intent-filter>
         </service>
 
+        <!-- Invisible, over the lock screen: asks the system to unlock before the shade opens an app (Unlock.kt). -->
+        <activity
+            android:name=".UnlockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:showWhenLocked="true"
+            android:taskAffinity="dev.launcher.app.unlock"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Component previews for visual checks (adb shell am start -n dev.launcher.app/.PreviewActivity). Shows UI only. -->
         <activity
             android:name=".PreviewActivity"

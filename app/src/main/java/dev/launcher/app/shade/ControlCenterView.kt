@@ -71,6 +71,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         fun openGallery()
         /** Edit mode's progress (0..1): the status row fades with it. */
         fun editProgress(k: Float)
+        /** Over the lock screen: edit mode waits for the user to unlock ([unlockToEdit]). */
+        val locked: Boolean
+        fun unlockToEdit()
     }
 
     private val glyphs = Glyphs(ctx)
@@ -274,6 +277,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     fun enterEdit() {
         if (editing) return
+        if (host.locked) { host.unlockToEdit(); return }
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         editK.animateTo(1f, EDIT)
     }

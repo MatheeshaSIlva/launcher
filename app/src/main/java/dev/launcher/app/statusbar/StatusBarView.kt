@@ -147,6 +147,27 @@ class StatusBarView(ctx: Context) : View(ctx) {
         }
     }
 
+    /**
+     * Over the lock screen: the time (and the notification icons beside it) fade out, as on iOS's lock screen: the lock
+     * screen's own clock shows the time.
+     */
+    fun setLocked(l: Boolean) {
+        val t = if (l) 1f else 0f
+        if (t == lockTarget) return
+        lockTarget = t
+        lockAnim?.cancel()
+        lockAnim = android.animation.ValueAnimator.ofFloat(lockK, t).apply {
+            duration = 260
+            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+            addUpdateListener { lockK = it.animatedValue as Float; invalidate() }
+            start()
+        }
+    }
+
+    private var lockK = 0f
+    private var lockTarget = 0f
+    private var lockAnim: android.animation.ValueAnimator? = null
+
     // ------------------------------------------------------------------ panels (set by the shade every frame)
 
     private var cc = 0f
@@ -558,7 +579,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val content = Color.rgb(k, k, k)
 
         // Left group: fades as either panel opens (the time: Notification Center's clock shows it; Control Center has none).
-        val leftK = (1f - cc) * (1f - nc)
+        val leftK = (1f - cc) * (1f - nc) * (1f - lockK)
         for (s in leftSlots) drawSlot(c, s, s.x.value, cy - cc * 6f * u, content, leftK)
 
         // Right group: down to Control Center's status row with cc. The network icons glide over to the row's left side
