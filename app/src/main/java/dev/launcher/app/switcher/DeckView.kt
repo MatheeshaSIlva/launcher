@@ -3,6 +3,8 @@ package dev.launcher.app.switcher
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
+import android.graphics.Color
+import dev.launcher.app.design.applyTo
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -57,6 +59,15 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
          * hand it to [setPicture]. Check [Card.want] just before fetching: the deck may have moved on.
          */
         fun onWantPicture(card: Card, full: Boolean)
+        /** Draws what lies behind the deck (home's picture, the dim over it), screen coordinates: the deck's glass sees it. */
+        fun drawBehind(c: Canvas)
+        /** What [drawBehind] draws, as a key (equal keys: the same). */
+        fun behindKey(): Long
+        /** The app is kept open: Clear All leaves it (its name shows a lock). */
+        fun isKept(pkg: String): Boolean
+        fun onKeep(card: Card, keep: Boolean)
+        /** How an app's details page (App Info) looks while it starts: its launch-screen colour and icon. */
+        fun detailsLook(): Pair<Int, Drawable?>
     }
 
     /** One recent app. [snapshot] may arrive later (or never: then its launch screen, colour and icon, stands in). */
@@ -75,6 +86,9 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         internal var frozenRadius = 0f
         internal var flyingAt = 0                   // flying away: drawn just above the card now at this index (its place)
         internal var offForHome = false             // off screen when going home began: stays out of sight
+        /** Opened for its App Info page, not the app: the card grows into that page's launch screen. */
+        var details = false
+            internal set
     }
 
     private val cards = ArrayList<Card>()
@@ -230,9 +244,15 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     private val above = RectF()
 
     override fun onDraw(canvas: Canvas) {
+        drawCards(canvas)
+        drawClearAll(canvas)
+        drawMenu(canvas)
+    }
+
+    private fun drawCards(canvas: Canvas) {
         // Oldest first: newer cards lie on top. A card lifted by a finger or flying away keeps its place: every newer card
         // stays in front of it (it never jumps on top).
-        drawFlying(canvas, cards.size, Int.MAX_VALUE)
+        drawFlying(canvas, max(cards.size, 1), Int.MAX_VALUE)
         for (i in cards.indices.reversed()) {
             drawFlying(canvas, i + 1, i + 1)
             if (homeK > 0f && cards[i].offForHome) continue
@@ -351,6 +371,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     }
 
     private fun drawCard(canvas: Canvas, c: Card, r: RectF, radius: Float, a: Float) {
+        if (c.details && c === openCard) { drawDetailsCard(canvas, c, r, radius, a); return }
         val b = c.snapshot
         if (b != null) {
             // Cover the card, keeping the snapshot's aspect (it is a full-display image).
@@ -376,6 +397,31 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         }
     }
 
+    private var detailsColor = 0
+    private var detailsIcon: Drawable? = null
+
+    /**
+     * A card opening for its App Info page: its picture gives way, as it grows, to that page's launch screen (its colour and
+     * icon), which is what shows when the page starts underneath: the hand-over is seamless.
+     */
+    private fun drawDetailsCard(canvas: Canvas, c: Card, r: RectF, radius: Float, a: Float) {
+        val k = smooth((openK / 0.6f).coerceIn(0f, 1f))
+        fillPaint.color = detailsColor
+        fillPaint.alpha = (a * 255).roundToInt()
+        canvas.drawRoundRect(r, radius, radius, fillPaint)
+        c.details = false
+        if (k < 1f) drawCard(canvas, c, r, radius, a * (1f - k))
+        c.details = true
+        detailsIcon?.let { d ->
+            val size = min(sw, sh) * 0.3f * (r.width() / sw).coerceAtLeast(0.2f)
+            d.setBounds((r.centerX() - size / 2).roundToInt(), (r.centerY() - size / 2).roundToInt(), (r.centerX() + size / 2).roundToInt(), (r.centerY() + size / 2).roundToInt())
+            d.alpha = (a * k * 255).roundToInt()
+            d.draw(canvas)
+        }
+    }
+
+    private fun smooth(t: Float) = t * t * (3f - 2f * t)
+
     /** The app's icon above the card's left edge; its name beside it while the card is (nearly) focused ([t] from focus). */
     private fun drawLabel(canvas: Canvas, c: Card, t: Float, r: RectF, a: Float) {
         if (a <= 0.004f) return
@@ -392,8 +438,40 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         if (nameA > 0.004f && c.label.isNotEmpty()) {
             labelPaint.alpha = (nameA * 255).roundToInt()
             labelShadow.apply(labelPaint)
-            canvas.drawText(c.label, left + iconPx + dp(8f), cy + labelPaint.textSize * 0.36f, labelPaint)
+            val tx = left + iconPx + dp(8f)
+            canvas.drawText(c.label, tx, cy + labelPaint.textSize * 0.36f, labelPaint)
+            // Kept open (Clear All leaves it): a small lock after its name.
+            if (listener.isKept(c.pkg)) drawLock(canvas, tx + labelPaint.measureText(c.label) + dp(10f), cy, nameA)
         }
+    }
+
+    private val lockPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt(); strokeCap = Paint.Cap.ROUND }
+
+    private fun drawLock(canvas: Canvas, x: Float, cy: Float, a: Float) {
+        val g = dp(5f)
+        lockPaint.alpha = (a * 255).roundToInt()
+        lockPaint.strokeWidth = dp(1.5f)
+        lockPaint.style = Paint.Style.STROKE
+        tmp.set(x + g * 0.35f, cy - g * 1.2f, x + g * 1.65f, cy)
+        canvas.drawArc(tmp, 180f, 180f, false, lockPaint)
+        canvas.drawLine(tmp.left, cy - g * 0.6f, tmp.left, cy - g * 0.1f, lockPaint)
+        canvas.drawLine(tmp.right, cy - g * 0.6f, tmp.right, cy - g * 0.1f, lockPaint)
+        lockPaint.style = Paint.Style.FILL
+        canvas.drawRoundRect(x, cy - g * 0.25f, x + g * 2f, cy + g * 1.2f, dp(1.5f), dp(1.5f), lockPaint)
+    }
+
+    /** Where card [i]'s icon and name are (the area a tap opens its menu from), or false when its name does not show. */
+    private fun labelArea(i: Int, out: RectF): Boolean {
+        val c = cards[i]
+        if (abs(i - scroll) > 0.5f || c.label.isEmpty()) return false
+        frame(i, box)
+        val k = (box.width() / cardW).coerceIn(0.5f, 1.2f)
+        val iconPx = dp(28f) * k
+        val left = box.left + dp(14f) * k
+        val cy = box.top - dp(12f) * k - iconPx / 2
+        val right = left + iconPx + dp(8f) + labelPaint.measureText(c.label) + dp(24f)
+        out.set(left - dp(12f), cy - iconPx / 2 - dp(12f), right, cy + iconPx / 2 + dp(12f))
+        return true
     }
 
     // ------------------------------------------------------------------ entering and leaving
@@ -425,6 +503,9 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     private fun start(list: List<Card>, fromFrame: RectF, fromCornerRadius: Float) {
         for (c in cards) c.want = 0
+        for (c in list) c.details = false
+        menuCard = null; menuK.snapTo(0f); menuPressed = -1
+        clearPress.snapTo(0f); clearing = false
         cards.clear(); cards.addAll(list)
         flying.clear()
         openCard = null; openAnim.snapTo(0f)
@@ -527,6 +608,8 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     }
 
     fun clear() {
+        menuCard = null; menuK.snapTo(0f)
+        clearing = false
         for (c in cards) c.want = 0
         cards.clear(); flying.clear()
         openCard = null
@@ -536,6 +619,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     fun open(card: Card) {
         if (openCard != null || homeK > 0f) return
+        closeMenu()
         openCard = card
         listener.onOpenStart(card)
         openAnim.animateTo(1f, profile.open, 0f)
@@ -543,6 +627,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     fun goHome() {
         if (openCard != null || homeK > 0f) return
+        closeMenu()
         scrollAnim.stop()   // the cards leave from where they are
         prepareHomeSlide()
         listener.onHomeStart()
@@ -582,6 +667,9 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     private var touched: Card? = null
 
     fun onTouch(e: MotionEvent) {
+        if (clearing) return
+        if (menuCard != null && menuK.target > 0f) { menuTouch(e); return }
+        if (clearTouch(e)) return
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 vt?.recycle(); vt = VelocityTracker.obtain().also { it.addMovement(e) }
@@ -612,7 +700,12 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
                 val vy = vt?.yVelocity ?: 0f
                 val up = e.actionMasked == MotionEvent.ACTION_UP
                 when (mode) {
-                    0 -> if (up) { val c = touched; if (c != null) open(c) else goHome() } else settle(0f)
+                    0 -> if (up) {
+                        val named = cards.indices.firstOrNull { labelArea(it, tmp) && tmp.contains(e.rawX, e.rawY) }
+                        val c = touched
+                        if (named != null) { openMenu(cards[named]); settle(0f) }
+                        else if (c != null) open(c) else goHome()
+                    } else settle(0f)
                     1 -> settle(vx)
                     2 -> touched?.let { releaseLift(it, vy, up) }
                 }
@@ -620,6 +713,197 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
                 vt?.recycle(); vt = null
             }
         }
+    }
+
+    // ------------------------------------------------------------------ an app's menu (a tap on its name)
+
+    private val u get() = sw / 402f
+    private val menu by lazy { dev.launcher.app.components.MenuPainter(dev.launcher.app.components.MenuSpec.SWITCHER, u) }
+    private val menuGlass by lazy { dev.launcher.app.design.MaterialPainter.create(u) }
+    private var menuCard: Card? = null
+    private val menuK: SpringValue = SpringValue(0f, 1000f, onChange = { invalidate() }, onRest = { if (menuK.value <= 0.001f) { menuCard = null; invalidate() } })
+    private var menuPressed = -1
+    private val menuInverse = Matrix()
+    private val menuVisible = RectF()
+    private val menuBounds = RectF()
+
+    /**
+     * The app's menu (Android's convenience; iOS has none here): a tap on a card's name opens it below the name, the kit's
+     * menu glass over the card. App Info, Keep Open (Clear All leaves the app) and Close.
+     */
+    private fun openMenu(c: Card) {
+        if (!interactive) return
+        val i = cards.indexOf(c)
+        if (i < 0 || !labelArea(i, tmp)) return
+        val kept = listener.isKept(c.pkg)
+        val items = listOf(
+            dev.launcher.app.components.MenuPainter.Item("App Info", glyph = dev.launcher.app.components.MenuPainter.Glyph.INFO) { openDetails(c) },
+            dev.launcher.app.components.MenuPainter.Item(if (kept) "Don't Keep Open" else "Keep Open", glyph = dev.launcher.app.components.MenuPainter.Glyph.LOCK) {
+                listener.onKeep(c, !kept); invalidate()
+            },
+            dev.launcher.app.components.MenuPainter.Item("Close", glyph = dev.launcher.app.components.MenuPainter.Glyph.CLOSE, destructive = true) {
+                val j = cards.indexOf(c)
+                if (j >= 0) dismiss(c, 0f)
+            },
+        )
+        menuBounds.set(dp(16f), dp(40f), sw - dp(16f), sh - dp(24f))
+        menu.layout(items, tmp, menuBounds, 4f, fromLeft = true)
+        menuCard = c
+        menuPressed = -1
+        menuK.animateTo(1f, Motion.profile.menuOpen)
+        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+    }
+
+    private fun closeMenu() { if (menuCard != null && menuK.target > 0f) menuK.animateTo(0f, Motion.profile.menuClose) }
+
+    private fun menuTouch(e: MotionEvent) {
+        val i = menu.rowAt(e.rawX, e.rawY)
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> if (i != menuPressed) { menuPressed = i; invalidate() }
+            MotionEvent.ACTION_UP -> {
+                menuPressed = -1
+                val item = menu.items.getOrNull(i)
+                closeMenu()
+                item?.action?.invoke()
+                invalidate()
+            }
+            MotionEvent.ACTION_CANCEL -> { menuPressed = -1; invalidate() }
+        }
+    }
+
+    private fun drawMenu(canvas: Canvas) {
+        if (menuCard == null) return
+        val k = menuK.value
+        menu.draw(canvas, k, menuPressed, 0f) { cc, panel, radius, matrix, alpha ->
+            matrix.invert(menuInverse)
+            menuVisible.set(0f, 0f, sw, sh)
+            menuInverse.mapRect(menuVisible)
+            menuGlass?.drawLive(cc, menu.material, panel, radius, matrix, menuVisible, alpha) { b ->
+                // Home behind and the cards (Clear All is far below the menu, out of its reach).
+                listener.drawBehind(b)
+                drawCards(b)
+            } == true
+        }
+    }
+
+    /** Opens [c]'s App Info page: the card grows as when it is opened, into that page's launch screen (see [drawDetailsCard]). */
+    private fun openDetails(c: Card) {
+        val look = listener.detailsLook()
+        detailsColor = look.first
+        detailsIcon = look.second?.constantState?.newDrawable()?.mutate() ?: look.second
+        c.details = true
+        open(c)
+    }
+
+    // ------------------------------------------------------------------ Clear All
+
+    private val clearGlass by lazy { dev.launcher.app.design.MaterialPainter.create(u) }
+    private val clearPress = SpringValue(0f, 100f, onChange = { invalidate() })
+    private val clearRect = RectF()
+    private var clearPressed = false
+    private var clearing = false
+    private val clearText = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
+    private val clearMatrix = Matrix()
+
+    /** Where Clear All is (a capsule centred at the bottom, `comp.switcher.clear.*`), and how present it is (0..1). */
+    private fun placeClear(): Float {
+        val d = dev.launcher.app.design.Design
+        d.text(SwitcherTokens.CLEAR_TYPE).applyTo(clearText, u)
+        val h = d.num(SwitcherTokens.CLEAR_HEIGHT) * u
+        val w = clearText.measureText(CLEAR_LABEL) + 2 * d.num(SwitcherTokens.CLEAR_PADDING_X) * u
+        val bottom = sh - d.num(SwitcherTokens.CLEAR_BOTTOM) * u
+        clearRect.set(sw / 2f - w / 2f, bottom - h, sw / 2f + w / 2f, bottom)
+        var k = enterK.coerceIn(0f, 1f) * (1f - homeK) * (1f - openK)
+        if (cards.none { !listener.isKept(it.pkg) } || clearing) k = 0f
+        return k
+    }
+
+    private val clearShown = SpringValue(0f, 100f, onChange = { invalidate() })
+
+    private fun drawClearAll(canvas: Canvas) {
+        val want = placeClear()
+        // Follows the deck's own motion (entering, leaving); when it goes for another reason (nothing left to clear, the
+        // clearing begun) it fades on its own spring.
+        val k = if (clearing || cards.none { !listener.isKept(it.pkg) }) clearShown.value else want
+        if (!clearing && cards.any { !listener.isKept(it.pkg) }) clearShown.snapTo(want)
+        if (k <= 0.003f) return
+        val p = clearPress.value.coerceIn(0f, 1f)
+        val s = (0.85f + 0.15f * k) * (1f - 0.04f * p)
+        val d = dev.launcher.app.design.Design
+        val radius = clearRect.height() / 2f
+        clearMatrix.reset()
+        clearMatrix.postScale(s, s, clearRect.centerX(), clearRect.centerY())
+        canvas.save()
+        canvas.concat(clearMatrix)
+        // What lies behind it is home's picture under the dim only (it sits below the cards): kept blurred between frames.
+        val drawn = clearGlass?.drawLive(canvas, d.material(SwitcherTokens.CLEAR_MATERIAL), clearRect, radius, clearMatrix,
+            tmp2.apply { set(0f, 0f, sw, sh) }, k, press = p, contentKey = listener.behindKey()) { b -> listener.drawBehind(b) } == true
+        if (!drawn) {
+            fillPaint.color = 0xD92C2C2E.toInt()
+            fillPaint.alpha = (k * 0xD9).roundToInt()
+            canvas.drawRoundRect(clearRect, radius, radius, fillPaint)
+        }
+        clearText.color = d.color(SwitcherTokens.CLEAR_LABEL)
+        clearText.alpha = (k * Color.alpha(clearText.color)).roundToInt()
+        canvas.drawText(CLEAR_LABEL, clearRect.centerX(), clearRect.centerY() - (clearText.ascent() + clearText.descent()) / 2f, clearText)
+        canvas.restore()
+    }
+
+    private val tmp2 = RectF()
+
+    /** Clear All's touches: true while it has the touch. */
+    private fun clearTouch(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                clearPressed = interactive && placeClear() > 0.5f && clearRect.contains(e.rawX, e.rawY)
+                if (clearPressed) clearPress.animateTo(1f, CLEAR_PRESS)
+                return clearPressed
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!clearPressed) return false
+                val inside = clearRect.contains(e.rawX, e.rawY)
+                clearPress.animateTo(if (inside) 1f else 0f, CLEAR_PRESS)
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (!clearPressed) return false
+                clearPressed = false
+                clearPress.animateTo(0f, CLEAR_PRESS)
+                if (e.actionMasked == MotionEvent.ACTION_UP && clearRect.contains(e.rawX, e.rawY)) clearAll()
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Closes every app not kept open: the cards on screen fly off the top one after another, the newest (the one in front)
+     * first, each from its place in the stack (the ones under it rise from behind, never jump in front); home follows as
+     * the last ones leave. The apps are closed once the deck is still (the listener).
+     */
+    fun clearAll() {
+        if (!interactive || clearing) return
+        val gone = cards.filter { !listener.isKept(it.pkg) }
+        if (gone.isEmpty()) return
+        clearing = true
+        clearShown.snapTo(placeClear().coerceAtLeast(clearShown.value))
+        clearShown.animateTo(0f, Motion.profile.menuClose)
+        closeMenu()
+        performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+        var n = 0
+        for (i in cards.indices) {
+            val c = cards[i]
+            if (c !in gone) continue
+            frame(i, box)
+            if (box.right <= 0f || box.left >= sw) continue
+            val top = -(box.bottom - (c.lift?.value ?: 0f) + dp(40f))
+            postDelayed({ liftOf(c).animateTo(top, profile.flick, -dp(1600f)) }, n * CLEAR_STAGGER_MS)
+            n++
+        }
+        for (c in gone) listener.onRemove(c)
+        invalidate()
+        // (Still clearing while home comes: the closed cards stay in the deck until it goes, Clear All must not come back.)
+        postDelayed({ goHome() }, n * CLEAR_STAGGER_MS + CLEAR_HOME_AFTER_MS)
     }
 
     private fun cardAt(x: Float, y: Float): Card? {
@@ -706,5 +990,11 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         const val PICTURE_FULL_WITHIN = 1.5f
         const val PICTURE_KEEP_NEWEST = 3
         const val PICTURE_MARGIN = 4f
+
+        const val CLEAR_LABEL = "Clear All"
+        /** Clear All: one card flies off this long after the one before it; home comes this long after the last. */
+        const val CLEAR_STAGGER_MS = 45L
+        const val CLEAR_HOME_AFTER_MS = 160L
+        val CLEAR_PRESS = dev.launcher.app.motion.SpringSpec(0.16f, 1f)
     }
 }

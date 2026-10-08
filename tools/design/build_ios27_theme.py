@@ -218,6 +218,17 @@ SEED = {
     'comp.home.menu.label': {'light': '#1a1a1a', 'dark': '#ffffff', 'src': 'kit:5619:49810 (light; dark judged: white on the dark glass)'},
     'comp.home.menu.destructive': {'ref': 'ref.color.accents.red', 'src': 'kit:5622:50175 (#ff383c)'},
     'comp.home.menu.press': {'light': '#00000014', 'dark': '#ffffff1f', 'src': "judged:a pressed row's highlight (was the app's press fill)"},
+    # The App Switcher's menu of an app and its Clear All button: not in iOS (Android's convenience), so judged: the menu
+    # is home's menu, the button a capsule of the same glass.
+    **{'comp.switcher.menu.' + _k: {'ref': 'comp.home.menu.' + _k, 'src': "judged:the App Switcher's app menu looks as home's menus"}
+       for _k in ['material', 'corner', 'width', 'row', 'pad-top', 'pad-bottom', 'symbol-x', 'label-x', 'type', 'label', 'destructive', 'press']},
+    'comp.switcher.clear.material': {'ref': 'comp.home.menu.material', 'src': "judged:Clear All on the menus' glass (the Regular glass)"},
+    'comp.switcher.clear.height': {'pt': 44, 'src': "judged:the kit's button height (a sheet's 44 pt buttons)"},
+    'comp.switcher.clear.padding-x': {'pt': 22, 'src': 'judged:the label 22 pt from the capsule\'s ends'},
+    'comp.switcher.clear.bottom': {'pt': 44, 'src': 'judged:the capsule\'s bottom this far above the screen\'s bottom edge (above the gesture bar)'},
+    'comp.switcher.clear.type': {'ref': 'ref.type.headline.regular', 'src': 'judged:17 semibold, a button\'s label'},
+    'comp.switcher.clear.label': {'ref': 'comp.home.menu.label', 'src': 'judged:as the menus\' labels'},
+    'comp.switcher.clear.press': {'ref': 'comp.home.menu.press', 'src': 'judged:as a pressed menu row'},
     # Search fields (App Library, Spotlight, the widget gallery): the kit's search field (Toolbars, _Search - 48pt).
     'comp.home.field.material': {'ref': 'sys.material.glass.small-active', 'src': 'kit:5720:33170 (the 48 pt search field: the small glass, active)'},
     # Over the App Library's and Spotlight's blurred background: the dock's glass (kept from before; the kit has no App Library).

@@ -209,6 +209,8 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **AGSL**: `out` is a reserved word (a variable named so fails to compile); uniform arrays (`uniform half4 x[8]`) are
   set with one `setFloatUniform(name, FloatArray)` of the whole array.
 - **Keystore**: debug builds are signed with a committed keystore so CI builds install over each other. Keep that pattern (new key file for this app).
+- **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
+  "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
 
 ## Build, release, update pipeline (to recreate in this repo)

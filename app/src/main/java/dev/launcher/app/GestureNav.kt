@@ -2521,11 +2521,37 @@ object GestureNav {
         }
     }
 
+    /** Apps kept open from the App Switcher's menu: Clear All leaves them (persisted). */
+    private val keepOpen: MutableSet<String> by lazy { HashSet(app.getSharedPreferences(SWITCHER_PREFS, 0).getStringSet(KEY_KEEP, emptySet()) ?: emptySet()) }
+
+    /** The package showing an app's details (App Info): what an App Info opening waits for in front. */
+    private fun detailsPkg(pkg: String): String = try {
+        detailsIntent(pkg).resolveActivity(app.packageManager)?.packageName
+    } catch (_: Throwable) { null } ?: "com.android.settings"
+
+    private fun detailsIntent(pkg: String) = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", pkg, null))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
     private val deckListener = object : dev.launcher.app.switcher.DeckView.Listener {
         override fun onOpenStart(card: dev.launcher.app.switcher.DeckView.Card) {
             // The input window stays until the cards are gone (hideCards): removing it now made the window manager and the
             // compositor change windows in the middle of the animation.
             openedAt = SystemClock.uptimeMillis()
+            if (card.details) {
+                // App Info (the app's menu): its page starts through our own transition while the card grows into its launch
+                // screen (DeckView.drawDetailsCard); the app itself stays where it is.
+                val target = detailsPkg(card.pkg)
+                cardPkg = target
+                val i = detailsIntent(card.pkg)
+                frontIo.execute {
+                    if (!NoAnimStarts.start(i, android.os.Process.myUserHandle().hashCode())) main.post {
+                        try { app.startActivity(i, noAnimation(app)) } catch (t: Throwable) { AppLog.log("[switcher] app info failed: ${t.message}") }
+                    }
+                }
+                stats.reset(); stats.start()
+                AppLog.log("[switcher] app info of ${card.pkg} ($target)")
+                return
+            }
             // The app the swipe started in is still in front underneath unless home was asked for or it was closed.
             val stillInFront = !homeVisible && card.taskId == recentList.switchable().firstOrNull()?.id && !homeStarted && lastFrontPkg == card.pkg
             cardPkg = card.pkg
@@ -2537,7 +2563,37 @@ object GestureNav {
         override fun onOpened(card: dev.launcher.app.switcher.DeckView.Card) {
             AppLog.log(stats.report("[switcher] ${card.pkg} fills the screen"))
             val g = gen
-            if (lastFrontPkg == card.pkg) hideCards() else awaitForeground(card.pkg, g) { hideCards() }
+            val pkg = if (card.details) detailsPkg(card.pkg) else card.pkg
+            if (lastFrontPkg == pkg) hideCards() else awaitForeground(pkg, g) { hideCards() }
+        }
+
+        override fun drawBehind(c: Canvas) {
+            backdrop?.draw(c)
+            val bg = (root?.background as? android.graphics.drawable.ColorDrawable)?.color ?: 0
+            if (bg != 0) c.drawColor(bg)
+        }
+
+        override fun behindKey(): Long {
+            val bg = (root?.background as? android.graphics.drawable.ColorDrawable)?.color ?: 0
+            return (System.identityHashCode(backdrop?.picture).toLong() * 31 + ((backdrop?.depth ?: 0f) * 1000f).toLong()) * 31 + bg
+        }
+
+        override fun isKept(pkg: String): Boolean = pkg in keepOpen
+
+        override fun onKeep(card: dev.launcher.app.switcher.DeckView.Card, keep: Boolean) {
+            if (keep) keepOpen += card.pkg else keepOpen -= card.pkg
+            app.getSharedPreferences(SWITCHER_PREFS, 0).edit().putStringSet(KEY_KEEP, HashSet(keepOpen)).apply()
+            AppLog.log("[switcher] ${card.pkg} ${if (keep) "kept open" else "no longer kept open"}")
+        }
+
+        override fun detailsLook(): Pair<Int, Drawable?> {
+            val pkg = detailsPkg("android")
+            val icon = try { app.packageManager.getApplicationIcon(pkg) } catch (_: Throwable) { null }
+            val colour = SplashColors.cached(pkg) ?: run {
+                SplashColors.resolve(app, pkg) { }
+                if (dev.launcher.app.theme.Appearance.dark > 0.5f) 0xFF0E0E10.toInt() else 0xFFF4F4F6.toInt()
+            }
+            return colour to icon
         }
 
         override fun onHomeStart() {
@@ -2605,6 +2661,8 @@ object GestureNav {
     private const val HOLD_RADIUS_DP = 12f
     private const val HOME_PULL_DEPTH = 0.6f   // how far home recedes at most while a swipe up on it goes on
     private const val SWITCHER_DIM = 0.28f              // home behind the deck: darkened by this much
+    private const val SWITCHER_PREFS = "switcher"
+    private const val KEY_KEEP = "keep"
     private const val SWITCHER_MAX_CARDS = 50   // every recent app (the system keeps about this many)
     // A window's touchable region can change without a re-layout from Android 14 (AttachedSurfaceControl).
     private val CAN_CATCH_TOUCHES = Build.VERSION.SDK_INT >= 34

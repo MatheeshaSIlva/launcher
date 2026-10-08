@@ -1524,3 +1524,25 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
   "set wallpaper" (Google's picker before Android's: on the emulator Android's crashed at once, denied Google's provider),
   else Android's chooser. Edit mode ends as home goes out of sight (as for any app opened from it); the new wallpaper
   arrives with its reveal. Emulator: recorded, the menu closes, the card grows into the picker.
+
+## Step 3: the menu component; Step 3+: the App Switcher's Clear All and app menu (2026-10-08)
+
+- **Menu component** (`components/Menu.kt`): `MenuSpec` (one set of tokens per menu: `comp.<menu>.*`) and `MenuPainter`
+  (layout beside what it belongs to, rows with symbols and labels, destructive, pressed, a segmented row, widget sizes,
+  the growing transform). The panel's glass is the host's (it knows its backdrop). Home's long-press and Edit menus are
+  on it (`ContextMenuView` keeps the lifted item, the dim and the touches): no visible change (compared on the emulator).
+- **App Switcher menu** (Android's convenience; iOS has none): a tap on the focused card's name opens the menu below it,
+  the kit's menu glass over the card (`comp.switcher.menu.*`, the home menu's values): **App Info** (the card grows as
+  when opened, its picture giving way to Settings' launch look, while App Info starts through our own transition: the
+  hand-over matches), **Keep Open** (a lock after the name; Clear All leaves the app; persisted) and **Close** (the card
+  flies off as when flicked).
+- **Clear All**: a capsule of the menus' glass at the bottom of the deck (`comp.switcher.clear.*`; it sits below the cards,
+  so its glass keeps its blur between frames). The cards on screen lift off the top one after another, the front one
+  first, each from its place in the stack (the ones behind rise from behind); kept apps stay; home follows. (A first try
+  took the cards out of the deck to fly them: hidden ones jumped in front of the kept card. And Clear All came back for a
+  moment as the deck slid home.) Emulator: recorded; the closed apps' tasks are gone, the kept one stays in recents.
+- The emulator cannot take task pictures (launch screens stand in) and its recorder stalls when the windows change: the
+  App Info hand-over is checked by logs and the final screen; the S24 shows the motion.
+- **Kotlin's incremental build missed a changed interface**: `tools/build.sh` succeeded while GestureNav did not implement
+  DeckView.Listener's new methods; `compileDebugKotlin --rerun-tasks` showed the error. After an interface change, run a
+  full compile before believing a build.

@@ -1284,9 +1284,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     /** The app's own shortcuts (we are the home app, so we may list and start them), at most four. */
-    private fun shortcutItems(e: AppEntry, frame: RectF): List<ContextMenuView.Item> {
+    private fun shortcutItems(e: AppEntry, frame: RectF): List<dev.launcher.app.components.MenuPainter.Item> {
         val la = context.getSystemService(android.content.pm.LauncherApps::class.java)
-        val items = ArrayList<ContextMenuView.Item>()
+        val items = ArrayList<dev.launcher.app.components.MenuPainter.Item>()
         try {
             if (la.hasShortcutHostPermission()) {
                 val q = android.content.pm.LauncherApps.ShortcutQuery().setPackage(e.pkg).setQueryFlags(
@@ -1295,7 +1295,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                         android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED)
                 la.getShortcuts(q, e.user)?.sortedBy { it.rank }?.take(4)?.forEach { sc ->
                     val icon = try { la.getShortcutIconDrawable(sc, resources.displayMetrics.densityDpi) } catch (_: Throwable) { null }
-                    items += ContextMenuView.Item((sc.shortLabel ?: sc.longLabel ?: sc.id).toString(), icon = icon) {
+                    items += dev.launcher.app.components.MenuPainter.Item((sc.shortLabel ?: sc.longLabel ?: sc.id).toString(), icon = icon) {
                         try { la.startShortcut(sc, android.graphics.Rect().also { frame.roundOut(it) }, null) } catch (t: Throwable) { AppLog.log("[home] shortcut failed: ${t.message}") }
                     }
                 }
@@ -1305,12 +1305,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     /** "Delete App" (iOS): Android's own uninstall confirmation; system apps cannot be deleted, so they do not get it. */
-    private fun deleteItem(e: AppEntry): ContextMenuView.Item? {
+    private fun deleteItem(e: AppEntry): dev.launcher.app.components.MenuPainter.Item? {
         val system = try {
             (context.packageManager.getApplicationInfo(e.pkg, 0).flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
         } catch (_: Throwable) { true }
         if (system || e.pkg == context.packageName) return null
-        return ContextMenuView.Item("Delete App", glyph = ContextMenuView.Glyph.TRASH, destructive = true) {
+        return dev.launcher.app.components.MenuPainter.Item("Delete App", glyph = dev.launcher.app.components.MenuPainter.Glyph.TRASH, destructive = true) {
             try {
                 context.startActivity(android.content.Intent(android.content.Intent.ACTION_DELETE, android.net.Uri.parse("package:${e.pkg}"))
                     .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -1318,7 +1318,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         }
     }
 
-    private fun appInfoItem(e: AppEntry, frame: RectF) = ContextMenuView.Item("App Info", glyph = ContextMenuView.Glyph.INFO) {
+    private fun appInfoItem(e: AppEntry, frame: RectF) = dev.launcher.app.components.MenuPainter.Item("App Info", glyph = dev.launcher.app.components.MenuPainter.Glyph.INFO) {
         val la = context.getSystemService(android.content.pm.LauncherApps::class.java)
         try { la.startAppDetailsActivity(e.component, e.user, android.graphics.Rect().also { frame.roundOut(it) }, null) } catch (t: Throwable) { AppLog.log("[home] app info failed: ${t.message}") }
     }
@@ -1329,14 +1329,14 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         val (pic, frame) = liftedCopy(v)
         val items = ArrayList(shortcutItems(e, frame))
-        items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
-        items += ContextMenuView.Item("Remove from Home Screen", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
+        items += dev.launcher.app.components.MenuPainter.Item("Edit Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.GRID) { editMode?.enter() }
+        items += dev.launcher.app.components.MenuPainter.Item("Remove from Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
         deleteItem(e)?.let { items += it }
         items += appInfoItem(e, frame)
         showMenu(v, pic, frame, items)
     }
 
-    private fun showMenu(v: View, pic: android.graphics.Picture, frame: RectF, items: List<ContextMenuView.Item>) {
+    private fun showMenu(v: View, pic: android.graphics.Picture, frame: RectF, items: List<dev.launcher.app.components.MenuPainter.Item>) {
         val mv = menu ?: return
         mv.show(pic, frame, items)
         // The lifted copy draws the item above the blur; the real one (blurred, with its label) hides meanwhile.
@@ -1351,34 +1351,34 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         val (pic, frame) = liftedCopy(v)
         val item = pages.firstNotNullOfOrNull { it.itemOf(v) } as? HomeItem.Widget
-        val items = ArrayList<ContextMenuView.Item>()
-        var sizeRow: ContextMenuView.Item? = null
+        val items = ArrayList<dev.launcher.app.components.MenuPainter.Item>()
+        var sizeRow: dev.launcher.app.components.MenuPainter.Item? = null
         if (item != null) {
             // iOS 27: its own settings first, the sizes it comes in as the menu's last row.
             val sizes = editHost.widgetSizes(item)
             val current = sizes.firstOrNull { it.spanX == item.spanX && it.spanY == item.spanY }
-            if (sizes.size > 1) sizeRow = ContextMenuView.Item("Size", sizes = sizes, current = current, onSize = { s -> editMode?.resize(item, s) })
+            if (sizes.size > 1) sizeRow = dev.launcher.app.components.MenuPainter.Item("Size", sizes = sizes, current = current, onSize = { s -> editMode?.resize(item, s) })
             if (item.kind == HomeItem.Widget.APP && widgets?.isConfigurable(item.id) == true)
-                items += ContextMenuView.Item("Edit Widget", glyph = ContextMenuView.Glyph.SLIDERS) { widgets?.reconfigure(item.id) }
+                items += dev.launcher.app.components.MenuPainter.Item("Edit Widget", glyph = dev.launcher.app.components.MenuPainter.Glyph.SLIDERS) { widgets?.reconfigure(item.id) }
             if (item.kind == "clock") {
                 val solid = item.style == "solid"
-                items += ContextMenuView.Item(if (solid) "Glass Style" else "Solid Style", glyph = ContextMenuView.Glyph.STYLE) {
+                items += dev.launcher.app.components.MenuPainter.Item(if (solid) "Glass Style" else "Solid Style", glyph = dev.launcher.app.components.MenuPainter.Glyph.STYLE) {
                     editMode?.restyle(item, if (solid) null else "solid")
                 }
             }
             if (item.kind == HomeItem.Widget.APP) {
                 // A platter of the theme's glass behind a widget that comes without a background of its own.
                 val glass = item.style == HomeItem.Widget.GLASS
-                items += ContextMenuView.Item(if (glass) "No Background" else "Glass Background", glyph = ContextMenuView.Glyph.STYLE) {
+                items += dev.launcher.app.components.MenuPainter.Item(if (glass) "No Background" else "Glass Background", glyph = dev.launcher.app.components.MenuPainter.Glyph.STYLE) {
                     editMode?.restyle(item, if (glass) null else HomeItem.Widget.GLASS)
                 }
             }
         }
-        items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) {
+        items += dev.launcher.app.components.MenuPainter.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = dev.launcher.app.components.MenuPainter.Glyph.LABEL) {
             setWidgetLabelsShown(!cfg.showWidgetLabels)
         }
-        items += ContextMenuView.Item("Edit Home Screen", glyph = ContextMenuView.Glyph.GRID) { editMode?.enter() }
-        items += ContextMenuView.Item("Remove Widget", glyph = ContextMenuView.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
+        items += dev.launcher.app.components.MenuPainter.Item("Edit Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.GRID) { editMode?.enter() }
+        items += dev.launcher.app.components.MenuPainter.Item("Remove Widget", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
         sizeRow?.let { items += it }
         showMenu(v, pic, frame, items)
     }
@@ -1421,7 +1421,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         pic.endRecording()
         val items = ArrayList(shortcutItems(e, frame))
         val onHome = isOnHome(e.key)
-        if (!onHome) items += ContextMenuView.Item("Add to Home Screen", glyph = ContextMenuView.Glyph.PLUS) { addAppToHome(e) }
+        if (!onHome) items += dev.launcher.app.components.MenuPainter.Item("Add to Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.PLUS) { addAppToHome(e) }
         deleteItem(e)?.let { items += it }
         items += appInfoItem(e, frame)
         val mv = menu ?: return
@@ -1475,15 +1475,15 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun showEditMenu(button: RectF) {
         val items = arrayListOf(
-            ContextMenuView.Item("Add Widget", glyph = ContextMenuView.Glyph.PLUS) { openWidgetPicker() },
+            dev.launcher.app.components.MenuPainter.Item("Add Widget", glyph = dev.launcher.app.components.MenuPainter.Glyph.PLUS) { openWidgetPicker() },
             // Android's convenience (iOS changes it from the lock screen): the system's own picker, out of the Edit button.
-            ContextMenuView.Item("Change Wallpaper", glyph = ContextMenuView.Glyph.WALLPAPER) { listener.openWallpaperPicker(RectF(button)) },
-            ContextMenuView.Item(if (cfg.showLabels) "Hide App Names" else "Show App Names", glyph = ContextMenuView.Glyph.LABEL) { setAppLabelsShown(!cfg.showLabels) },
+            dev.launcher.app.components.MenuPainter.Item("Change Wallpaper", glyph = dev.launcher.app.components.MenuPainter.Glyph.WALLPAPER) { listener.openWallpaperPicker(RectF(button)) },
+            dev.launcher.app.components.MenuPainter.Item(if (cfg.showLabels) "Hide App Names" else "Show App Names", glyph = dev.launcher.app.components.MenuPainter.Glyph.LABEL) { setAppLabelsShown(!cfg.showLabels) },
         )
-        items += ContextMenuView.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = ContextMenuView.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) }
+        items += dev.launcher.app.components.MenuPainter.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = dev.launcher.app.components.MenuPainter.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) }
         // Light or dark appearance (iOS: Customize); the menu stays open and everything crossfades behind it.
         val modes = dev.launcher.app.theme.Appearance.Mode.entries
-        items += ContextMenuView.Item("Appearance", choices = modes.map { it.title }, chosen = modes.indexOf(dev.launcher.app.theme.Appearance.mode),
+        items += dev.launcher.app.components.MenuPainter.Item("Appearance", choices = modes.map { it.title }, chosen = modes.indexOf(dev.launcher.app.theme.Appearance.mode),
             onChoice = { i -> dev.launcher.app.theme.Appearance.setMode(context, modes[i]) })
         menu?.show((editBar as? EditMode.Bar)?.editButtonPicture(), button, items)
     }

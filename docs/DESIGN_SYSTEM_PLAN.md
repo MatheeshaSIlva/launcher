@@ -89,7 +89,8 @@ blurred backdrop (`drawer/BackdropGlass`); `LiveGlass` removed. Left: the glass 
 `GlassDrawable` until the renderer draws shapes other than rounded rectangles.
 
 **Step 3: components.** Platter, control tile (sizes and states), slider, pill and round buttons, sheet, menu, badge,
-status row, clock numerals: specs plus painters. The shade's views shrink to layout and touch.
+status row, clock numerals: specs plus painters. The shade's views shrink to layout and touch. *Menu done 2026-10-08*
+(`components/Menu.kt`: home's menus and the App Switcher's; Notification Center's long-look menu still its own).
 With it, the **look audit** Matheesha asked for (2026-10-08): tints and opacities that differ between surfaces (or with
 the wallpaper) listed surface by surface over a light, a mid and a dark wallpaper, and every difference from iOS 27 that
 is not a decision of ours, each fixed in its token. Already done: the kit's hairline rims at a theme strength
@@ -100,7 +101,8 @@ step 3 after them). The aim, in Matheesha's
 words: the Liquid Glass look with the convenience and customizability of Android.
 - Edit mode: **Change Wallpaper** in the Edit menu (the system's wallpaper picker; the new one arrives with the reveal). *Done 2026-10-08.*
 - App Switcher: a **Clear All** button (the cards leave one after another; the apps' tasks are removed), and a **menu
-  from the app's name** above a card (App info, Close, and what Android offers there: split screen, pop-up view, pin).
+  from the app's name** above a card (App info, Close, and what Android offers there: split screen, pop-up view, pin). *Done
+  2026-10-08* (App Info, Keep Open, Close; split screen and pop-up view stay out: launches into them from the shell stick).
 - Banners over an app on real glass: a picture of the app behind (its task snapshot when the banner comes) instead of
   the flat colour they sit on now.
 - One UI's "Brief" notification pop-ups (edge lighting) come from the system server and are not stopped by the flags
