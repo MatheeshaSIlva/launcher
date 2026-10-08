@@ -89,6 +89,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         screen.postDelayed({ widgets?.prewarmApps() }, 4000)
         screen.setConfig(HomeConfig.load(this))
         setContentView(screen)
+        window.decorView.viewTreeObserver.addOnWindowVisibilityChangeListener(windowShown)
         screen.viewTreeObserver.addOnDrawListener(drawWatch)
         HomeBridge.home = this
         Apps.addListener(onApps)
@@ -197,7 +198,29 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private fun screenOn() = try { getSystemService(android.os.PowerManager::class.java).isInteractive } catch (_: Throwable) { true }
     private fun keyguardUp() = try { getSystemService(android.app.KeyguardManager::class.java).isKeyguardLocked } catch (_: Throwable) { false }
 
-    private fun arriveIfDue() {
+    /**
+     * The screen has started going off while home is in front. Android tells home only ~0.45 s after the power key (onPause),
+     * and One UI takes the picture of home it shows first at the unlock (until home has drawn again) ~0.4 s after it
+     * (SurfaceFlinger's "Capture layer list" at screenTurningOff): that picture showed home at rest for 1-4 frames, then the
+     * arrival's zoomed first frame (Matheesha's recordings). So home watches for it (PowerManager.isInteractive, every
+     * [SLEEP_POLL_MS]) while in front and holds the arrival's first frame at once, eased in: the picture is then that frame.
+     */
+    private val sleepWatch = object : Runnable {
+        override fun run() {
+            if (!resumed) return
+            if (!screenOn()) { markArrivalDue("going to sleep"); screen.holdArrival(animate = true); return }
+            screen.postDelayed(this, SLEEP_POLL_MS)
+        }
+    }
+
+    // Home's window shown again (its surface is made again: the lock screen is going away). That is home being seen: the
+    // keyguard's state said so 80-160 ms later on the S24, and the held frame stood still meanwhile.
+    private val windowShown = android.view.ViewTreeObserver.OnWindowVisibilityChangeListener { v ->
+        if (v == android.view.View.VISIBLE && arrivalDue) arriveIfDue(seen = true)
+    }
+
+    /** [seen]: home's window has just been shown again (see [windowShown]). */
+    private fun arriveIfDue(seen: Boolean = false) {
         screen.removeCallbacks(unlockCheck)
         if (coldStart) {
             coldStart = false
@@ -209,7 +232,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
         if (!arrivalDue) return
         val on = screenOn()
-        val unlocked = wokeSinceDue && on && !keyguardUp()
+        if (seen && on && !wokeSinceDue) { wokeSinceDue = true; AppLog.log("[home] arrival: woke (home's window shown)") }
+        val unlocked = wokeSinceDue && on && (seen || !keyguardUp())
         // Seen only long after the unlock (it went to an app first): no arrival; the held frame goes before home shows.
         val sinceUnlock = if (presentAt == 0L) 0L else android.os.SystemClock.uptimeMillis() - presentAt
         if (unlocked && sinceUnlock > ARRIVAL_WINDOW_MS) {
@@ -218,7 +242,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             AppLog.log("[home] arrival dropped: home was seen $sinceUnlock ms after the unlock")
             return
         }
-        if (!resumed) return
+        if (!resumed && !seen) return
         if (!unlocked) {
             // Not seen yet: hold the first frame, and look again shortly while the screen is on (not every unlock sends
             // USER_PRESENT at the moment home shows). It starts as soon as the lock screen is gone: waiting for home's focus
@@ -229,7 +253,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
         if (screen.playArrival(cold = false)) {
             arrivalDue = false
-            AppLog.log("[home] arrival: home is seen, playing")
+            AppLog.log("[home] arrival: home is seen${if (seen) " (its window shown)" else ""}, playing")
         } else if (++arrivalTries < 20) {
             // Home is busy for a moment (a card still over it, its zoom settling): again shortly, never dropped silently.
             screen.postDelayed(unlockCheck, 50)
@@ -253,6 +277,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         GestureNav.onHomeShown()
         reportFirstFrame()
         arriveIfDue()
+        screen.removeCallbacks(sleepWatch)
+        screen.postDelayed(sleepWatch, SLEEP_POLL_MS)
         screen.setConfig(HomeConfig.load(this))   // the dev panel may have changed it
         // Retried on every return until it works (the permission arrives when Shizuku connects, possibly after the first try),
         // and reloaded whenever the system wallpaper changed while we were away.
@@ -267,6 +293,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (sleeping) markArrivalDue("paused")
         resumed = false
         screen.removeCallbacks(unlockCheck)
+        screen.removeCallbacks(sleepWatch)
         GestureNav.homeVisible = false
         if (screen.onHidden()) recordAfterSearchEnded()
         // Going to sleep: home takes the arrival's first frame now (unseen with the screen off), so the first frame the unlock
@@ -565,5 +592,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private companion object {
         /** The arrival plays only if home is seen within this long of the unlock (USER_PRESENT; ms). */
         const val ARRIVAL_WINDOW_MS = 4000L
+        /** How often home checks, while in front, whether the screen has started going off (ms). */
+        const val SLEEP_POLL_MS = 50L
     }
 }

@@ -816,6 +816,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     // the wallpaper from black). Nothing waits for it: the items are tappable from their first frame.
     private var arrivalAnimating = false
     private var arrivalStart = 0L
+    private var arrivalT = 0.0
+    private var arrivalLast = 0L
     private var pendingArrival: Boolean? = null
     /** An element and where its pivot is in home's coordinates (it is scaled about the screen's centre through it). */
     private class Arriving(val v: View, val px: Float, val py: Float)
@@ -826,15 +828,34 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var arrivalHeld = false
 
     /**
-     * Puts home into the arrival's first frame right away (zoomed in) without playing it: from the moment the screen goes
-     * off, so whatever frame of home the unlock reveals first is already the arrival's.
+     * Puts home into the arrival's first frame (zoomed in) without playing it: from the moment the screen starts going off,
+     * so whatever frame of home the unlock reveals first is already the arrival's. [animate]: eased in over [HOLD_MS] (the
+     * screen is fading out: home zooms in as it goes instead of jumping); else at once.
      */
-    fun holdArrival() {
+    fun holdArrival(animate: Boolean = false) {
         if (arrivalAnimating || arrivalHeld) return
         if (!prepareArrival(cold = false, log = false)) return
         arrivalHeld = true
-        applyArrival(0.0)
-        AppLog.log("[home] arrival held until home is seen (screen off or lock screen up)")
+        if (animate) {
+            holdStart = System.nanoTime()
+            Choreographer.getInstance().postFrameCallback(holdFrame)
+        } else applyArrival(0.0)
+        AppLog.log("[home] arrival held until home is seen (${if (animate) "the screen is going off" else "screen off or lock screen up"})")
+    }
+
+    private var holdStart = 0L
+
+    /** The hold eased in: the zoom from rest to the arrival's first frame, the light with it. */
+    private val holdFrame = object : Choreographer.FrameCallback {
+        override fun doFrame(now: Long) {
+            if (!arrivalHeld || arrivalAnimating) return
+            val s = arrivalSpring ?: return
+            val k = ((now - holdStart) / 1e6 / HOLD_MS).coerceIn(0.0, 1.0)
+            val e = (k * k * (3 - 2 * k)).toFloat()
+            applyArrivalZoom(1f + (s.value(0.0) - 1f) * e)
+            for (g in glassViews()) g.setLightAngle(225f - 60f * e)
+            if (k < 1.0) Choreographer.getInstance().postFrameCallback(this) else applyArrival(0.0)
+        }
     }
 
     // A cold start: home takes the arrival's first frame (black, the items zoomed in and hidden) from its first layout, so it
@@ -886,6 +907,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         }
         arrivalHeld = false
         arrivalStart = System.nanoTime()
+        arrivalT = 0.0
+        arrivalLast = arrivalStart
         arrivalAnimating = true
         applyArrival(0.0)
         Choreographer.getInstance().postFrameCallback(arrivalFrame)
@@ -929,7 +952,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private val arrivalFrame = object : Choreographer.FrameCallback {
         override fun doFrame(now: Long) {
             if (!arrivalAnimating) return
-            val t = maxOf(0L, now - arrivalStart) / 1e9
+            // The arrival's own time: real time, but at most [MAX_STEP_S] a frame. A display waking from the always-on display
+            // (an unlock straight from screen-off) shows its first frames ~50 ms apart: on real time the zoom moved on unseen and
+            // jumped (the S24's recordings); now it stretches a little there instead, and runs on real time at 120 Hz.
+            arrivalT += (maxOf(0L, now - arrivalLast) / 1e9).coerceAtMost(MAX_STEP_S)
+            arrivalLast = maxOf(arrivalLast, now)
+            val t = arrivalT
             arrivalFrames++
             applyArrival(t)
             val s = arrivalSpring ?: return
@@ -1565,6 +1593,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     companion object {
+        /** The hold's ease into the arrival's first frame as the screen goes off (ms; done well before One UI's picture). */
+        const val HOLD_MS = 140.0
+        /** The most the arrival advances in one frame (s): a 60 Hz frame. */
+        const val MAX_STEP_S = 1.0 / 60.0
         /** Sparkle grid and front wobble scale of the wallpaper reveal, shared by wallpaper and glass. */
         const val REVEAL_CELL_DP = 7f
     }

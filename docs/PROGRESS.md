@@ -1378,3 +1378,15 @@ great; Control Center comes in too fast to see; the unlock animation still bad).
 - **Unlock**: his five unlocks on 171f94f all played the arrival (94 frames, 0.78 s, none dropped). On the emulator the
   arrival runs while the lock screen is still going away: the first frame of home that shows is already at rest. Recording
   the unlock on the S24 is the next step (the PIN screen records black; our status bar shows).
+- **Unlock, measured on the S24** (screen recordings of his fingerprint unlocks, started from a volume press so they span
+  the lock; the lock screen itself was recorded with his consent). Every unlock showed home *at rest* for 1-4 frames (once
+  with a two-minute-old clock), then the arrival's zoomed first frame, then (after 80-160 ms standing still) the zoom-out.
+  Causes: (1) One UI takes a picture of home ~0.4 s after the power key (SurfaceFlinger "Capture layer list" at
+  screenTurningOff) and shows it at the unlock until home has drawn again; home learnt of the sleep only at onPause, ~50 ms
+  after that picture, and its window was stopped (surface destroyed) before the held frame rendered. (2) The arrival
+  waited for the keyguard's state. (3) Straight from screen-off, the display wakes from the always-on display with frames
+  ~50 ms apart, and the zoom, on real time, jumped across them. Now: home watches for the screen going off while in front
+  (`isInteractive` every 50 ms) and eases into the held frame at once (140 ms), well before One UI's picture; the arrival
+  starts when home's window is shown again (before the keyguard's exit even starts); its time advances at most 1/60 s a
+  frame. Recorded after (1) and (2): lock screen, then the zoomed first frame, then the zoom-out, no frame at rest; (3) is
+  made, not yet recorded.
