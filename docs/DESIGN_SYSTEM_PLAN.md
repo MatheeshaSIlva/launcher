@@ -91,7 +91,11 @@ blurred backdrop (`drawer/BackdropGlass`); `LiveGlass` removed. Left: the glass 
 **Step 3: components.** Platter, control tile (sizes and states), slider, pill and round buttons, sheet, menu, badge,
 status row, clock numerals: specs plus painters. The shade's views shrink to layout and touch. *Menu done 2026-10-08*
 (`components/Menu.kt`: home's menus, the App Switcher's and, since 2026-10-09, Notification Center's long look).
-*Badge done 2026-10-09* (`components/Badge.kt`: the count on icons and cards, edit mode's remove badge; `comp.badge.*`).
+*Badge done 2026-10-09* (`components/Badge.kt`: the count on icons and cards, Notification Center's stack count, edit
+mode's remove badge; `comp.badge.*`, `comp.nc.count.*`). *Slider done 2026-10-09* (`shade/CcParts.kt`: Control Center's
+module and expanded slider). The rest goes by a sweep of what is still decided in code: colours first (the shade's done
+2026-10-09: about 40 literals into `comp.cc.*`, `comp.nc.*`, `comp.banner.*`, `comp.statusbar.*`), then symbol, type and
+corner sizes; positions stay in the iOS profile's layout code.
 With it, the **look audit** Matheesha asked for (2026-10-08): tints and opacities that differ between surfaces (or with
 the wallpaper) listed surface by surface over a light, a mid and a dark wallpaper, and every difference from iOS 27 that
 is not a decision of ours, each fixed in its token. Already done: the kit's hairline rims at a theme strength

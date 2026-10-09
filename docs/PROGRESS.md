@@ -1631,3 +1631,19 @@ material in all six cases. Found and fixed:
 - Emulator (Android 17): rendered to bitmaps before/after (bare circle / circle with the pencil), and Gmail's long-press menu
   shows the white pencil on the red circle, crisp at full resolution. Maps' (Home, Work) and Chrome's (New Incognito tab,
   New tab) adaptive shortcut icons draw as before, masks and glyphs clean at full resolution.
+## Step 3: the slider part, the stack count, the shade's colours (2026-10-09)
+
+- `shade/CcParts.kt` `CcSlider`: Control Center's slider module and its expanded form are one part (the level in the
+  kit's "on" fill, the symbol taking the control's colour as the level crosses it). The expanded slider's sizes are
+  tokens (`comp.cc.expanded.slider-*`); the colour change now spans the same 80 % of the symbol in both
+  (`comp.cc.slider.cover`; the expanded one had used 100 %).
+- The badge component takes a spec (`BadgeSpec`): an app's count (`comp.badge.*`) and a stack's count in Notification
+  Center (`comp.nc.count.*`, its own painter before) are one painter.
+- The shade's colours that were in code are tokens: Control Center's (a symbol on a lit control, the media bars and
+  placeholder, edit mode's marks, "Add a Control", the gallery's text), Notification Center's (the player's placeholder
+  and track, group names and the text shadow, a lit button's symbol), the banners' (the plain platter, a call's buttons)
+  and the battery's colours (`comp.statusbar.*`).
+- Checked against a build of b7ce563 on the emulator (each APK's hash checked on the device: a second session had
+  installed its own build on the same emulator mid-test, which voided one earlier comparison): Control Center, its
+  expanded brightness slider, Notification Center fanned out and with a stacked group (its count badge): pixel for
+  pixel the same, but for the emulator's signal indicator.
