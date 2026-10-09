@@ -40,9 +40,12 @@ tiles and notification cards `accent2_900` (dark) / `accent2_100` (light); lit t
   pulling up collapses, then closes. The status bar stays, its content in the panel's colours, the date beside the time;
   its time goes as the panel expands. Checked against the reference on the emulator in dark and light.
 
+- **Heads-up notifications** (2026-10-09): with the Pixel shade, banners are its notification cards (`shade/PxCardPainter`,
+  shared with the shade's list), opaque, sliding down from above the top edge (no live blur plate); actions as outlined
+  capsules. Checked on the emulator in dark and light.
+
 ## To do (in order)
 
-1. Heads-up notifications as Pixel's cards (the banner layout).
 2. Home: At a glance, the grid's proportions, the hotseat without a platter, the search bar at the bottom.
 3. Apps: a bottom sheet with search, predictions and the alphabetical grid (`sys.layout.drawer` = "grid", placement swipe up).
 4. Recents: the carousel (`sys.layout.switcher` = "carousel").

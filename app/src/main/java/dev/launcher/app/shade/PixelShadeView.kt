@@ -65,7 +65,7 @@ internal class PixelShadeView(ctx: Context, private val host: Host) : View(ctx) 
     val expandK get() = expand.value.coerceIn(0f, 1f)
     private val page = SpringValue(0f, 1000f, { invalidate() })
     private val list = IosScroller({ invalidate() })
-    private val painter = NotifPainter(ctx, 2) { invalidate() }
+    private val cards = PxCardPainter(ctx) { invalidate() }
     private val glyphs = Glyphs(ctx)
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
     private var u = 1f
@@ -137,6 +137,7 @@ internal class PixelShadeView(ctx: Context, private val host: Host) : View(ctx) 
     private fun measure() {
         w = width.toFloat(); h = height.toFloat()
         u = Scale.unitPx(context, min(width, height))
+        cards.u = u
         margin = Design.pt(PxTokens.MARGIN, u)
         tileH = Design.pt(PxTokens.TILE_HEIGHT, u)
         gap = Design.pt(PxTokens.TILE_GAP, u)
@@ -194,7 +195,7 @@ internal class PixelShadeView(ctx: Context, private val host: Host) : View(ctx) 
     fun onClosed() {
         expand.snapTo(0f)
         swipes.clear()
-        painter.resetTimeFades()
+        cards.resetTimes()
     }
 
     fun notifsChanged() { rebuildList(); invalidate() }
@@ -247,20 +248,11 @@ internal class PixelShadeView(ctx: Context, private val host: Host) : View(ctx) 
         return out
     }
 
-    private val textLayouts = HashMap<String, android.text.StaticLayout>()
 
     private fun lineHeight(k: dev.launcher.app.design.TextKey) = Design.text(k).lineHeightPt * u
 
-    private fun cardHeight(card: Card): Float {
-        val pad = Design.pt(PxTokens.NOTIF_PAD, u)
-        val icon = Design.pt(PxTokens.NOTIF_ICON, u)
-        val lines = if (card.asGroup) lineHeight(PxTokens.NOTIF_APP) + min(card.entry.items.size, 2) * lineHeight(PxTokens.NOTIF_TEXT) + 4f * u
-        else lineHeight(PxTokens.NOTIF_TITLE) + (if (card.item.text.isNullOrBlank()) 0f else lineHeight(PxTokens.NOTIF_TEXT)) +
-            (if (actionsOf(card.item).isNotEmpty()) 56f * u else 0f)
-        return pad * 2 + max(icon, lines)
-    }
-
-    private fun actionsOf(item: Notifs.Item) = item.actions.filter { it.actionIntent != null && !it.title.isNullOrBlank() && it.remoteInputs.isNullOrEmpty() }.take(3)
+    private fun cardHeight(card: Card): Float =
+        if (card.asGroup) cards.groupHeight(card.entry.items.size) else cards.height(card.item)
 
     private fun listTop(e: Float) = qqsBottom() + 22f * u + e * (fullTilesBottom() - qqsBottom() + 80f * u)
 
@@ -438,13 +430,12 @@ internal class PixelShadeView(ctx: Context, private val host: Host) : View(ctx) 
 
     // The cards as last drawn (screen rectangles), for touches.
     private val drawn = ArrayList<Pair<Card, RectF>>()
-    private val chipRects = HashMap<String, RectF>()
     private val clearRect = RectF()
     private val silentClearRect = RectF()
     private var listTopNow = 0f
 
     private fun drawList(c: Canvas, e: Float, a: Float) {
-        drawn.clear(); chipRects.clear(); clearRect.setEmpty(); silentClearRect.setEmpty(); actionRects.clear()
+        drawn.clear(); cards.clearHits(); clearRect.setEmpty(); silentClearRect.setEmpty()
         val la = a * (1f - smooth(0f, 0.6f, e))
         if (la <= 0.003f) return
         val cs = cards()
@@ -523,141 +514,9 @@ internal class PixelShadeView(ctx: Context, private val host: Host) : View(ctx) 
     private fun drawCard(c: Canvas, card: Card, rect: RectF, a: Float) {
         val outer = Design.pt(PxTokens.NOTIF_CORNER, u)
         val inner = Design.pt(PxTokens.NOTIF_INNER_CORNER, u)
-        val tr = if (card.first) outer else inner
-        val br = if (card.last) outer else inner
-        fill.color = alpha(Design.color(PxTokens.NOTIF_FILL), a)
-        roundRect(c, rect, tr, br, fill)
-        val pad = Design.pt(PxTokens.NOTIF_PAD, u)
-        val iconS = Design.pt(PxTokens.NOTIF_ICON, u)
-        val item = card.item
-        // The app's icon, as Android 16 shows it: its small icon on a filled circle.
-        r2.set(rect.left + pad, rect.top + pad, rect.left + pad + iconS, rect.top + pad + iconS)
-        fill.color = alpha(Design.color(PxTokens.NOTIF_ICON_FILL), a)
-        c.drawOval(r2, fill)
-        smallIcon(item)?.let { d -> drawTinted(c, d, r2, iconS * 0.55f, alpha(Design.color(PxTokens.NOTIF_ICON_COLOR), a)) }
-        val tx = r2.right + 16f * u
-        var ty = rect.top + pad
-        val maxW = rect.right - tx - pad - (if (card.asGroup || card.entry.group) 56f * u else 0f)
-        val titleC = Design.color(PxTokens.NOTIF_TITLE_COLOR)
-        val textC = Design.color(PxTokens.NOTIF_TEXT_COLOR)
-        val time = painter.timeLabel(item.postTime).removeSuffix(" ago")
-        if (card.asGroup) {
-            // A group: "App • 6m", then a line for each of its newest notifications.
-            Design.text(PxTokens.NOTIF_APP).applyTo(text, u)
-            text.textAlign = Paint.Align.LEFT
-            text.color = alpha(titleC, a)
-            val al = lineHeight(PxTokens.NOTIF_APP)
-            c.drawText(TextUtils.ellipsize(painter.appLabel(item.pkg) + " • " + time, text, maxW, TextUtils.TruncateAt.END).toString(), tx, baselineIn(text, ty, al), text)
-            ty += al + 4f * u
-            Design.text(PxTokens.NOTIF_TEXT).applyTo(text, u)
-            val tl = lineHeight(PxTokens.NOTIF_TEXT)
-            for (child in card.entry.items.take(2)) {
-                val line = listOfNotNull(child.title?.toString(), child.text?.toString()).joinToString("  ")
-                text.color = alpha(textC, a)
-                c.drawText(TextUtils.ellipsize(line, text, maxW, TextUtils.TruncateAt.END).toString(), tx, baselineIn(text, ty, tl), text)
-                ty += tl
-            }
-            drawChip(c, card, rect, pad, card.entry.items.size, a)
-            return
-        }
-        // One notification: its title and time, its text.
-        Design.text(PxTokens.NOTIF_TITLE).applyTo(text, u)
-        text.textAlign = Paint.Align.LEFT
-        val tl = lineHeight(PxTokens.NOTIF_TITLE)
-        val title = (item.title ?: painter.appLabel(item.pkg)).toString()
-        val timePart = " • $time"
-        text.color = alpha(titleC, a)
-        val titleShown = TextUtils.ellipsize(title, text, maxW - text.measureText(timePart), TextUtils.TruncateAt.END).toString()
-        val base = baselineIn(text, ty, tl)
-        c.drawText(titleShown, tx, base, text)
-        val tw = text.measureText(titleShown)
-        Design.text(PxTokens.NOTIF_APP).applyTo(text, u)
-        text.color = alpha(textC, a)
-        c.drawText(timePart, tx + tw, base, text)
-        ty += tl
-        if (!item.text.isNullOrBlank()) {
-            Design.text(PxTokens.NOTIF_TEXT).applyTo(text, u)
-            text.color = alpha(textC, a)
-            val xl = lineHeight(PxTokens.NOTIF_TEXT)
-            c.drawText(TextUtils.ellipsize(item.text.toString().replace('\n', ' '), text, maxW, TextUtils.TruncateAt.END).toString(), tx, baselineIn(text, ty, xl), text)
-            ty += xl
-        }
-        val acts = actionsOf(item)
-        if (acts.isNotEmpty()) {
-            // Its actions as outlined buttons along the bottom (Android 16: "Pause", "Lap").
-            val bh = 40f * u
-            val top = rect.bottom - pad - bh
-            val left = rect.left + pad
-            val bw = (rect.width() - 2 * pad - (acts.size - 1) * 8f * u) / acts.size
-            Design.text(PxTokens.NOTIF_TITLE).applyTo(text, u)
-            text.textAlign = Paint.Align.CENTER
-            for ((k, act) in acts.withIndex()) {
-                val ar = RectF(left + k * (bw + 8f * u), top, left + k * (bw + 8f * u) + bw, top + bh)
-                stroke.color = alpha(Design.color(PxTokens.ACTION_OUTLINE), a)
-                stroke.strokeWidth = max(1f, 1f * u)
-                c.drawRoundRect(ar, bh / 2f, bh / 2f, stroke)
-                text.color = alpha(Design.color(PxTokens.ACTION_TEXT), a)
-                c.drawText(TextUtils.ellipsize(act.title, text, bw - 16f * u, TextUtils.TruncateAt.END).toString(), ar.centerX(), baselineIn(text, top, bh), text)
-                actionRects += Triple(item, act, ar)
-            }
-        }
-        if (card.entry.group) drawChip(c, card, rect, pad, 0, a)
-    }
-
-    private val actionRects = ArrayList<Triple<Notifs.Item, android.app.Notification.Action, RectF>>()
-
-    /** The expand chip at a group's top right: the count and a chevron (down to open, up to close). */
-    private fun drawChip(c: Canvas, card: Card, rect: RectF, pad: Float, count: Int, a: Float) {
-        val ch = 28f * u
-        Design.text(PxTokens.NOTIF_APP).applyTo(text, u)
-        val label = if (count > 0) "$count" else ""
-        val cw = (if (label.isEmpty()) 0f else text.measureText(label) + 6f * u) + 34f * u
-        val cr = RectF(rect.right - pad - cw, rect.top + pad - 4f * u, rect.right - pad, rect.top + pad - 4f * u + ch)
-        fill.color = alpha(Design.color(PxTokens.NOTIF_CHIP), a)
-        c.drawRoundRect(cr, ch / 2f, ch / 2f, fill)
-        val col = alpha(Design.color(PxTokens.NOTIF_TITLE_COLOR), a)
-        if (label.isNotEmpty()) {
-            text.color = col
-            text.textAlign = Paint.Align.LEFT
-            c.drawText(label, cr.left + 12f * u, baselineIn(text, cr.top, ch), text)
-        }
-        c.save()
-        val open = card.entry.key in openGroups
-        c.rotate(if (open) -90f else 90f, cr.right - 17f * u, cr.centerY())
-        glyphs.draw(c, R.drawable.sym_chevron, cr.right - 17f * u, cr.centerY(), 12f * u, col)
-        c.restore()
-        chipRects[card.entry.key] = cr
-    }
-
-    private fun roundRect(c: Canvas, rect: RectF, top: Float, bottom: Float, p: Paint) {
-        if (top == bottom) { c.drawRoundRect(rect, top, top, p); return }
-        path.reset()
-        path.addRoundRect(rect, floatArrayOf(top, top, top, top, bottom, bottom, bottom, bottom), android.graphics.Path.Direction.CW)
-        c.drawPath(path, p)
-    }
-
-    private val path = android.graphics.Path()
-
-    private val smallIcons = HashMap<String, Drawable?>()
-
-    private fun smallIcon(item: Notifs.Item): Drawable? {
-        val k = item.key + "|" + item.postTime
-        if (smallIcons.containsKey(k)) return smallIcons[k]
-        val d = try { item.smallIcon?.loadDrawable(context)?.mutate() } catch (_: Throwable) { null }
-        if (smallIcons.size > 120) smallIcons.clear()
-        smallIcons[k] = d
-        return d
-    }
-
-    private fun drawTinted(c: Canvas, d: Drawable, box: RectF, size: Float, color: Int) {
-        val s = size.roundToInt().coerceAtLeast(1)
-        d.setBounds(0, 0, s, s)
-        d.setTint(color or (0xFF shl 24))
-        d.alpha = (color ushr 24) and 0xFF
-        c.save()
-        c.translate(box.centerX() - s / 2f, box.centerY() - s / 2f)
-        d.draw(c)
-        c.restore()
+        cards.background(c, rect, if (card.first) outer else inner, if (card.last) outer else inner, a)
+        if (card.asGroup) cards.drawGroup(c, card.entry.items, card.entry.key, rect, a)
+        else cards.draw(c, card.item, rect, a, chip = if (card.entry.group) -1 else 0, chipOpen = true, groupKey = card.entry.key)
     }
 
     private fun baselineIn(p: Paint, top: Float, lineH: Float): Float {
@@ -814,8 +673,8 @@ internal class PixelShadeView(ctx: Context, private val host: Host) : View(ctx) 
         if (historyRect.contains(x, y)) { host.launch(Intent("android.settings.NOTIFICATION_HISTORY")); return }
         if (notifSettingsRect.contains(x, y)) { host.launch(Intent("android.settings.NOTIFICATION_SETTINGS")); return }
         if (silentClearRect.contains(x, y)) { entries.filter { it.silent }.flatMap { it.items }.filter { it.clearable }.forEach { Notifs.cancel(it) }; return }
-        for ((k, cr) in chipRects) if (cr.contains(x, y)) { if (!openGroups.remove(k)) openGroups += k; invalidate(); return }
-        actionRects.lastOrNull { it.third.contains(x, y) }?.let { (_, act, _) -> host.send(act.actionIntent); return }
+        for ((k, cr) in cards.chipHits) if (cr.contains(x, y)) { if (!openGroups.remove(k)) openGroups += k; invalidate(); return }
+        cards.actionHits.lastOrNull { it.third.contains(x, y) }?.let { (_, act, _) -> host.send(act.actionIntent); return }
         drawn.lastOrNull { it.second.contains(x, y) }?.let { (card, rect) ->
             if (card.asGroup) { openGroups += card.entry.key; invalidate() } else host.open(card.item, rect)
             return

@@ -81,6 +81,13 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
      */
     private var live = dev.launcher.app.design.SamsungBlur.available
 
+    /**
+     * The shade's layout is Android 16's (`sys.layout.shade` = "pixel"): banners are its heads-up cards, opaque, sliding in
+     * from the top edge ([PxCardPainter]), instead of iOS's glass platters out of the camera.
+     */
+    private fun pixel() = try { Design.choice(PxTokens.LAYOUT) == "pixel" } catch (_: Throwable) { false }
+    private val pxCards = PxCardPainter(ctx) { for (s in all) s.card.invalidate() }
+
     private val painter = NotifPainter(ctx, 3) { for (s in all) s.card.invalidate() }
     /** The renderer of the banners' glass (they draw on the shade's thread, one at a time). */
     private var mp: MaterialPainter? = null
@@ -88,6 +95,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
     private var u = 1f
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val label = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); textAlign = Paint.Align.CENTER }
     private val r = RectF()
 
@@ -137,7 +145,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         var leaving = false
         val card = Card(this)
         /** Behind the card, exactly its platter: the system's live blur where it has one ([live]). */
-        val plate: View? = if (live) View(context) else null
+        val plate: View? = if (live && !pixel()) View(context) else null
         /** The blur radius and tint the plate was last given (-1: none yet). */
         var plateRadius = -1
         var plateTint = 0
@@ -152,6 +160,17 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             val w = bannerW()
             c.save()
             c.translate(m, m)
+            if (pixel()) {
+                // Android 16's heads-up: the shade's notification card, opaque.
+                pxCards.u = u
+                r.set(0f, 0f, w, s.h)
+                pxCards.background(c, r, radius(s), radius(s), 1f)
+                if (isCall(s.item)) painter.drawCall(c, s.item, 0f, 0f, w, s.h, w - callButtonsLeft(s), Design.color(PxTokens.NOTIF_TITLE_COLOR), Design.color(PxTokens.NOTIF_TEXT_COLOR))
+                else pxCards.draw(c, s.item, r, 1f, withActions = false)
+                for (i in s.buttons.indices) drawButton(c, s, i)
+                c.restore()
+                return
+            }
             val p = mp
             if (p != null && live) {
                 // The system blurs what is behind live (the plate under this card); the glass adds only its own light,
@@ -206,6 +225,20 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
                 c.drawCircle(r.centerX(), r.centerY(), rad, fill)
             }
             glyphs.draw(c, b.icon, r.centerX(), r.centerY(), 26f * u * sc, Design.color(CALL_SYMBOL))
+        } else if (pixel()) {
+            // Android 16: an outlined capsule, its label in the accent colour.
+            stroke.color = Design.color(PxTokens.ACTION_OUTLINE)
+            stroke.strokeWidth = kotlin.math.max(1f, u)
+            c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, stroke)
+            if (p > 0f) {
+                fill.color = (Design.color(PxTokens.ACTION_TEXT) and 0xFFFFFF) or (Math.round(255 * 0.12f * p) shl 24)
+                c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, fill)
+            }
+            Design.text(PxTokens.NOTIF_TITLE).applyTo(label, u)
+            label.color = Design.color(PxTokens.ACTION_TEXT)
+            val text = TextUtils.ellipsize(b.title, label, r.width() - 16f * u, TextUtils.TruncateAt.END).toString()
+            val fm = label.fontMetrics
+            c.drawText(text, r.centerX(), r.centerY() - (fm.ascent + fm.descent) / 2f, label)
         } else {
             // An action: a faint capsule (the kit's tertiary fill), stronger while pressed.
             fill.color = Design.color(ACTION_FILL)
@@ -228,13 +261,14 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     /** The platter's height for [s]'s notification and buttons. */
     private fun heightOf(s: Shown): Float = when {
         isCall(s.item) -> pt(CALL_HEIGHT)
+        pixel() -> { pxCards.u = u; pxCards.height(s.item, withActions = false) + if (s.buttons.isNotEmpty()) 56f * u else 0f }
         s.buttons.isNotEmpty() -> textHeight(s.item) - 4f * u + pt(ACTION_HEIGHT) + 12f * u
         else -> textHeight(s.item)
     }
 
     private fun pt(k: NumberKey) = Design.pt(k, u)
 
-    private fun radius(s: Shown) = pt(if (isCall(s.item)) CALL_CORNER else CORNER)
+    private fun radius(s: Shown) = if (pixel()) Design.pt(PxTokens.NOTIF_CORNER, u) else pt(if (isCall(s.item)) CALL_CORNER else CORNER)
 
     private fun callButtonsLeft(s: Shown): Float {
         val n = s.buttons.size
@@ -251,6 +285,13 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         }
         val n = s.buttons.size
         val gap = 8f * u
+        if (pixel()) {
+            val pad = Design.pt(PxTokens.NOTIF_PAD, u)
+            val bh = 40f * u
+            val pw = (bannerW() - 2 * pad - (n - 1) * gap) / n
+            val px = pad + i * (pw + gap)
+            return out.apply { set(px, s.h - pad - bh, px + pw, s.h - pad) }
+        }
         val bw = (bannerW() - 24f * u - (n - 1) * gap) / n
         val x = 12f * u + i * (bw + gap)
         val y = s.h - 12f * u - pt(ACTION_HEIGHT)
@@ -297,6 +338,16 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         val bw = bannerW()
         card.pivotX = m + bw / 2f
         card.pivotY = m
+        if (pixel()) {
+            // Android 16: slides down from above the top edge, full size, and back up when it goes.
+            card.scaleX = 1f - 0.02f * s.press.value
+            card.scaleY = card.scaleX
+            card.translationX = margin() + s.dx.value - m
+            card.translationY = top() - (1f - min(k, 1f)) * (top() + s.h + m) + max(0f, k - 1f) * 12f * u + s.dy.value - m
+            card.alpha = (k * 3f).coerceIn(0f, 1f) * (1f - (-s.dy.value / (top() + s.h)).coerceIn(0f, 1f) * 0.6f)
+            s.plate?.let { pl -> placePlate(s, pl, bannerW(), 1f, m) }
+            return
+        }
         // Out of the camera: grows about its top centre while it comes down, past its place on the spring's overshoot (its
         // size only just past 1, as iOS's), and back up into the camera when it goes.
         val kc = min(k, 1f)
@@ -363,7 +414,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     /** Shown before the first layout (the window just came up): shown once it has a size. */
     private var pending: Notifs.Item? = null
 
-    private fun margin() = pt(MARGIN)
+    private fun margin() = if (pixel()) Design.pt(PxTokens.MARGIN, u) * 0.5f else pt(MARGIN)
 
     private val frostMatrix = android.graphics.Matrix()
 
@@ -434,7 +485,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         super.onDetachedFromWindow()
     }
     private fun bannerW() = width - 2 * margin()
-    private fun top() = host.barHeight * 0.5f + 16f * u
+    private fun top() = if (pixel()) host.barHeight + 4f * u else host.barHeight * 0.5f + 16f * u
 
     /** Shows [item] (a newer banner sends the shown one up and away; a ringing one stays for anything that does not ring). */
     fun show(item: Notifs.Item) {
