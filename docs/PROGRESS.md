@@ -1615,3 +1615,19 @@ material in all six cases. Found and fixed:
   `comp.badge.*` (the values they had, marked judged: the kit's data has no badge). `Appearance.removeDisc` /
   `removeMinus` went into the tokens. Emulator: home with the dock's count pixel for pixel the same; edit mode's
   remove badges the same (the icons' wiggle differs between captures).
+
+## Fix: app shortcut icons in home's menu drew without their foreground (2026-10-09)
+
+- Gmail's "Compose" shortcut showed as a plain red circle. Its icon (`drawable/compose_launcher_shortcut_icon`, no bitmap;
+  `aapt2 dump xmltree`) is a `layer-list`: a red oval, then the white pencil (`ic_pencil_wht_24dp`, a 24 dp vector with a
+  literal `#ffffffff` fill, no theme attribute) inset **16 dp on each side**: 56 dp in all (147 px on the emulator).
+  `MenuPainter` gave it bounds of 22 pt (59 px); a layer's insets are in dp, not fractions of the bounds, so the pencil's
+  bounds came out inverted (`Rect(42, 42 - 17, 17)`, logged on the emulator) and a vector with no room draws nothing.
+  Not the theme (the colour is literal) and not the layer (the same happened rendered to a plain bitmap).
+- Fix (`MenuPainter.drawGlyph`, the `icon` branch): the drawable is laid out at its intrinsic size and the canvas scales it
+  into the 22 pt box (centred, aspect kept), as a launcher draws a shortcut at its own icon size. Adaptive and bitmap icons
+  scale with their bounds, so they look as before (sub-pixel placed now); only drawables without an intrinsic size still get
+  the box as bounds.
+- Emulator (Android 17): rendered to bitmaps before/after (bare circle / circle with the pencil), and Gmail's long-press menu
+  shows the white pencil on the red circle, crisp at full resolution. Maps' (Home, Work) and Chrome's (New Incognito tab,
+  New tab) adaptive shortcut icons draw as before, masks and glyphs clean at full resolution.

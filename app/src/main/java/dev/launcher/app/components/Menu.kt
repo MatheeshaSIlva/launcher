@@ -257,9 +257,24 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
         }
         val icon = item.icon
         if (icon != null) {
-            val s = pt(11f)
-            icon.setBounds((cx - s).toInt(), (cy - s).toInt(), (cx + s).toInt(), (cy + s).toInt())
+            // Laid out at its own size and scaled into the 22 pt box, as a launcher draws a shortcut's icon (into its icon
+            // size): its insets are in dp, not fractions (Gmail's Compose is a circle with its pencil inset 16 dp a side, 56 dp
+            // in all), so bounds of 22 pt left the pencil no room and only the circle drew.
+            val s = pt(22f)
+            val iw = icon.intrinsicWidth
+            val ih = icon.intrinsicHeight
+            if (iw <= 0 || ih <= 0) {
+                icon.setBounds((cx - s / 2f).toInt(), (cy - s / 2f).toInt(), (cx + s / 2f).toInt(), (cy + s / 2f).toInt())
+                icon.draw(c)
+                return
+            }
+            val k = s / maxOf(iw, ih)
+            icon.setBounds(0, 0, iw, ih)
+            val save = c.save()
+            c.translate(cx - iw * k / 2f, cy - ih * k / 2f)
+            c.scale(k, k)
             icon.draw(c)
+            c.restoreToCount(save)
             return
         }
         glyphPaint.color = if (item.destructive) Design.color(spec.destructive) else Design.color(spec.label)
