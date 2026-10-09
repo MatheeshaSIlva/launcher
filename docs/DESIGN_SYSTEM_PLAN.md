@@ -136,7 +136,7 @@ files (`assets/themes/<id>.json`, or `files/themes/<id>.json` pushed over adb, w
 (`"extends": "ios27"`) and hold only what differs, every theme is checked at load against iOS 27 (every token the code
 reads, of the same kind; else it is refused and the current one stays), edits are kept per theme, the active theme is
 remembered; switching and reloading over adb (`DESIGN_RELOAD [--es theme ID]`) and in the token editor ("Theme"). The test
-theme `graphite.json` (21 tokens: solid graphite surfaces, a green accent, tighter corners, dark text in light mode)
+theme `graphite.json` (20 tokens: solid graphite surfaces, a green accent, tighter corners, dark text in light mode)
 restyles the shade and home live (emulator, both modes).
 
 **Step 6: features again**, each built on the system: hiding Notification Center's list into a count, Control Center's

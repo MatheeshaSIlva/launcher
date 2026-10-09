@@ -1812,7 +1812,7 @@ stays, so a bad file never breaks drawing. The user's token edits are kept per t
 Switching: the token editor's Theme button, or `am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app --es
 theme ID` (without `theme`: the files are read again, for iterating on a pushed theme).
 
-The test theme `graphite.json` (21 tokens over iOS 27): solid graphite surfaces instead of glass, a green accent (iOS's
+The test theme `graphite.json` (20 tokens over iOS 27): solid graphite surfaces instead of glass, a green accent (iOS's
 blue overridden at the `ref` level, so every control and link that is blue follows), tighter corners, dark symbols and text
 on its light surfaces in light mode. Checked on the emulator, switched live, in dark and light: Notification Center,
 Control Center, a banner, home's dock, Search pill, menus, Spotlight's field, edit mode's buttons, the App Library. Things
@@ -1820,3 +1820,6 @@ the theme had to set that a theme author would not guess: Control Center's symbo
 iOS 27 (white on dark glass), and the player's text is added to the glass (plus-lighter): on a light surface both need a
 theme's own values (`comp.cc.symbol-color`, `comp.cc.module.label-color`, `comp.cc.media.text-blend`).
 Not themable yet: the glass clock's numerals (GlassDrawable), layouts (step 6 and phase 5).
+Checked on the S24 too (Control Center over Samsung's live blur, home): solid modules over the blurred background, the
+accent green. A first version turned the "on" plate green too: a toggle's own colour (rotation lock's red) then sat on
+green; the theme keeps iOS's white plate.

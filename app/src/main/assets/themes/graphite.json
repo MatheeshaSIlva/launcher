@@ -14,8 +14,6 @@
   "sys.material.glass.dock": {"material": {"frost": 24, "fills": [["#e8e8ed|#232429", 0.72, "NORMAL"]], "innerShadows": [], "shadows": [["#0000001a|#ffffff1a", 0.0, 0.0, 0.0, 0.5, "NORMAL"]]}, "src": "judged:test theme: the dock, search pill and widgets, a lighter graphite"},
   "sys.material.glass.small": {"material": {"frost": 24, "fills": [["#dcdce2|#2e2f35", 0.9, "NORMAL"]], "innerShadows": [], "shadows": []}, "src": "judged:test theme: small controls"},
   "sys.material.glass.small-active": {"material": {"frost": 24, "fills": [["#dcdce2|#2e2f35", 0.95, "NORMAL"]], "innerShadows": [], "shadows": []}, "src": "judged:test theme: fields and pressed small controls"},
-  "comp.cc.module.on-material": {"material": {"frost": 0, "fills": [["{ref.color.accents.blue}", 1.0, "NORMAL"]], "innerShadows": [], "shadows": []}, "src": "judged:test theme: a control that is on is the accent colour (iOS: white)"},
-  "comp.cc.symbol-on-color": {"color": "#ffffff", "src": "judged:test theme: white symbols on the green of a control that is on"},
   "comp.cc.module.corner": {"pt": 20, "src": "judged:test theme: tighter corners"},
   "comp.cc.slider.corner": {"pt": 22, "src": "judged:test theme: tighter corners"},
   "comp.nc.platter.corner": {"pt": 16, "src": "judged:test theme: tighter corners"},
