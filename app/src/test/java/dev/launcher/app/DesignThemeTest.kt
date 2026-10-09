@@ -47,7 +47,7 @@ class DesignThemeTest {
                 k.endsWith("material") -> Value.Mat::class
                 k.endsWith("-blend") -> Value.Choice::class
                 k.endsWith("color") || k.endsWith(".label") || k.endsWith("-color") || k.endsWith(".dim") ||
-                    k.endsWith(".destructive") || k.endsWith(".press") -> Value.Color::class
+                    k.endsWith(".destructive") || k.endsWith(".press") || k.endsWith(".fallback") -> Value.Color::class
                 k.endsWith(".title") || k.endsWith(".body") || k.endsWith(".time") || k.endsWith(".type") -> Value.Text::class
                 else -> Value.Number::class
             }
@@ -101,8 +101,8 @@ class DesignThemeTest {
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
         }
         // The appearance's palette.
-        for (k in dev.launcher.app.theme.Appearance.TOKENS) assertTrue(k, r.resolve(k) is Value.Color)
-        for (k in dev.launcher.app.theme.Appearance.NUMBER_TOKENS) assertTrue(k, r.resolve(k) is Value.Number)
+        for (k in dev.launcher.app.theme.PaletteTokens.COLORS) assertTrue(k, r.resolve(k) is Value.Color)
+        for (k in dev.launcher.app.theme.PaletteTokens.NUMBERS) assertTrue(k, r.resolve(k) is Value.Number)
         // The status bar's.
         for (k in dev.launcher.app.statusbar.StatusBarTokens.ALL) assertTrue(k, r.resolve(k) is Value.Color)
         // The banners'.
