@@ -621,6 +621,35 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         return max(camRight, w / 2f) + w * 0.04f
     }
 
+    /**
+     * A pull that began on home's pages (Android's home: a swipe down anywhere on it brings the shade): the panel follows
+     * the finger exactly as a pull from the top edge does. Any thread; ([x], [y]) in screen coordinates.
+     */
+    fun homePull(action: Int, x: Float, y: Float, time: Long) {
+        handler.post {
+            val ev = MotionEvent.obtain(time, time, action, x, y, 0)
+            try {
+                if (action == MotionEvent.ACTION_DOWN) {
+                    if (panel != null || touch != Touch.NONE) return@post
+                    vt?.recycle(); vt = VelocityTracker.obtain()
+                    downX = x; downY = y
+                    touchDownAt = time
+                    touch = Touch.PULL
+                    pulling = false
+                    takenOver = false
+                    pullPanel = if (pixel()) Panel.PX else Panel.NC
+                }
+                if (touch != Touch.PULL) return@post
+                vt?.addMovement(ev)
+                if (action != MotionEvent.ACTION_DOWN) pull(ev)
+                if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                    touch = Touch.NONE
+                    vt?.recycle(); vt = null
+                }
+            } finally { ev.recycle() }
+        }
+    }
+
     private fun pull(e: MotionEvent) {
         val dy = e.rawY - downY
         when (e.actionMasked) {

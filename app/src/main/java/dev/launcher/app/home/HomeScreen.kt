@@ -25,6 +25,7 @@ import dev.launcher.app.drawer.AppDrawer
 import dev.launcher.app.drawer.DrawerHost
 import dev.launcher.app.drawer.Drawers
 import dev.launcher.app.drawer.GridMotion
+import dev.launcher.app.GestureNav
 import dev.launcher.app.motion.Motion
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -615,7 +616,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     // ================================================================== touch
 
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
-    private enum class Drag { NONE, PAGES, SHEET, SEARCH, IGNORED }
+    private enum class Drag { NONE, PAGES, SHEET, SEARCH, SHADE, IGNORED }
     private var drag = Drag.NONE
     private var downX = 0f
     private var downY = 0f
@@ -640,6 +641,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (abs(dx) < slop && abs(dy) < slop) return false
         // From here the content follows the finger 1:1 (it does not jump by the slop it took to decide).
         if (abs(dx) > abs(dy) && canPage()) { downX = e.x; downY = e.y; beginPages(); return true }
+        // Android's home: a pull down anywhere below the status bar brings the shade, following the finger.
+        if (metrics.pixel && abs(dy) > abs(dx) && dy > 0 && drawerProgress() == 0f && sheet == 0f && downY > metrics.statusTop &&
+            spotlight?.isOpen != true && editMode?.active != true) {
+            val ox = e.rawX - e.x
+            val oy = e.rawY - e.y
+            if (GestureNav.homePull(MotionEvent.ACTION_DOWN, downX + ox, downY + oy)) {
+                GestureNav.homePull(MotionEvent.ACTION_MOVE, e.rawX, e.rawY)
+                downX = e.x; downY = e.y
+                drag = Drag.SHADE
+                parent?.requestDisallowInterceptTouchEvent(true)
+                return true
+            }
+        }
         // Pull down on a home page (below the status bar: the top edge is the system's shade): Spotlight follows the finger.
         if (abs(dy) > abs(dx) && dy > 0 && drawerProgress() == 0f && sheet == 0f && downY > metrics.gridTop - metrics.pt(40f) &&
             spotlight?.isOpen != true && editMode?.active != true) {
@@ -756,6 +770,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                     Drag.PAGES -> dragPages(e.x - downX)
                     Drag.SHEET -> dragSheet(e.y - downY)
                     Drag.SEARCH -> spotlight?.let { it.dragTo((e.y - downY) / it.pullDistance()) }
+                    Drag.SHADE -> GestureNav.homePull(MotionEvent.ACTION_MOVE, e.rawX, e.rawY)
                     else -> {}
                 }
             }
@@ -767,6 +782,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                     Drag.PAGES -> releasePages(vx)
                     Drag.SHEET -> releaseSheet(vy)
                     Drag.SEARCH -> spotlight?.release(vy)
+                    Drag.SHADE -> GestureNav.homePull(e.actionMasked, e.rawX, e.rawY)
                     else -> {}
                 }
                 drag = Drag.NONE

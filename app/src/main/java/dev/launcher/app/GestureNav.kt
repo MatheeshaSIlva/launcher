@@ -385,6 +385,17 @@ object GestureNav {
     /** True while our shade has a panel open (nav thread). */
     val shadeOpen get() = shade?.isOpen == true
 
+    /**
+     * A swipe down on home's pages pulls our shade (Android's home; [dev.launcher.app.shade.Shade.homePull]), screen
+     * coordinates. False when our shade is not there (no accessibility service, stock bar): home does its own thing.
+     */
+    fun homePull(action: Int, x: Float, y: Float): Boolean {
+        val s = shade ?: return false
+        if (!statusBarShown) return false
+        s.homePull(action, x, y, SystemClock.uptimeMillis())
+        return true
+    }
+
     private val shadeLink = object : dev.launcher.app.shade.Shade.NavLink {
         override fun backdrop(then: (dev.launcher.app.shade.BackdropSource?) -> Unit) = shadeBackdrop(then)
         override fun stripHeight(): Int = if (stripHeight > 0) stripHeight else dp(20).toInt()

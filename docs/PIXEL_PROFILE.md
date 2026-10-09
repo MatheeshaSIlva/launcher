@@ -89,10 +89,13 @@ tiles and notification cards `accent2_900` (dark) / `accent2_100` (light); lit t
   measured on the emulator's SystemUI. Every slot keeps its springs (levels glide, icons grow in and out); a theme change
   lays the bar out anew at once.
 
+- **Swipe down on home** (2026-10-10, with the Pixel home): a pull down anywhere below the status bar brings our shade,
+  following the finger as a pull from the top edge does (`Shade.homePull`); Spotlight is not used by the Pixel profile.
+
 ## To do (in order)
 
 6. Motion: Material's springs; icons: Material Symbols (needs the font, to be downloaded with permission).
 7. The shade's remaining parts: media player in Quick Settings, tile editing, the header's carrier and icons.
-8. Behaviour: a home gesture from an app opened from All apps lands on home with the sheet closed (Back returns to the
-   sheet); ours returns to the sheet either way (iOS's). A swipe down on home opens the shade (ours: Spotlight).
+8. Behaviour: a home gesture from an app opened from All apps may land on home with the sheet closed on a Pixel (to
+   check on a real Pixel); ours returns to the sheet (iOS's).
    Recents' Screenshot (and Select, Google's).
