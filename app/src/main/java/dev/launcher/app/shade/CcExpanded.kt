@@ -169,13 +169,13 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
                 targetRadius = pt(34f)
             }
             Kind.BRIGHTNESS, Kind.VOLUME, Kind.FLASHLIGHT, Kind.TIMER -> {
-                val sw = pt(SLIDER_W)
-                val sh = pt(SLIDER_H)
+                val sw = Design.pt(CcTokens.EXPANDED_SLIDER_WIDTH, u)
+                val sh = Design.pt(CcTokens.EXPANDED_SLIDER_HEIGHT, u)
                 val below = if (kd == Kind.BRIGHTNESS) pt(118f) else 0f
                 val above = if (kd == Kind.TIMER) pt(56f) else 0f
                 val top = (h - (sh + below + above)) / 2f + above - pt(10f)
                 target.set((w - sw) / 2f, top, (w + sw) / 2f, top + sh)
-                targetRadius = pt(46f)
+                targetRadius = Design.pt(CcTokens.EXPANDED_SLIDER_CORNER, u)
             }
         }
     }
@@ -286,15 +286,6 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
 
     private fun drawSlider(c: Canvas, kd: Kind, r: RectF, radius: Float, a: Float) {
         val v = sliderValue(kd).coerceIn(0f, 1f)
-        val fillH = v * r.height()
-        if (fillH > 0.5f) {
-            // The level: the kit's "on" fill over the glass, from the bottom.
-            c.save()
-            c.clipRect(r.left, r.bottom - fillH, r.right, r.bottom)
-            c.translate(r.left, r.top)
-            host.surfaces.onFill(c, r.width(), r.height(), radius, r.left, r.top, 1f, panelAlpha)
-            c.restore()
-        }
         val icon = when (kd) {
             Kind.BRIGHTNESS -> R.drawable.sym_sun
             Kind.VOLUME -> if (v <= 0.001f) R.drawable.sym_volume_off else R.drawable.sym_volume
@@ -307,9 +298,12 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             Kind.FLASHLIGHT -> Control.FLASHLIGHT.accent
             else -> Control.TIMER.accent
         }
-        val gy = r.bottom - r.width() / 2f
-        val covered = ((fillH - (r.width() / 2f - pt(17f))) / pt(34f)).coerceIn(0f, 1f)
-        glyphs.draw(c, icon, r.centerX(), gy, pt(34f) * (r.width() / pt(SLIDER_W)).coerceIn(0.5f, 1f), alpha(mix(white(), accent, covered), panelAlpha))
+        // The module's slider, large (its symbol smaller while it grows out of the module).
+        val sym = Design.pt(CcTokens.EXPANDED_SLIDER_SYMBOL, u) * (r.width() / Design.pt(CcTokens.EXPANDED_SLIDER_WIDTH, u)).coerceIn(0.5f, 1f)
+        c.save()
+        c.translate(r.left, r.top)
+        CcSlider.draw(c, host.surfaces, glyphs, r.width(), r.height(), radius, r.left, r.top, v, icon, accent, sym, panelAlpha)
+        c.restore()
         if (a <= 0.003f) return
         when (kd) {
             Kind.TIMER -> {
@@ -651,8 +645,6 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
 
     private companion object {
         const val ROW_PT = 106f
-        const val SLIDER_W = 152f
-        const val SLIDER_H = 380f
         const val P_SLIDER = 100
         const val P_PANEL = 101
         const val M_PREV = -10

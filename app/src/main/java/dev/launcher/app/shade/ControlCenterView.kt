@@ -797,22 +797,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
      */
     private fun drawSlider(c: Canvas, a: Anim, w: Float, h: Float, alpha: Float, radius: Float) {
         val ctl = a.item.control
-        val sf = host.surfaces
         val v = a.value.value.coerceIn(0f, 1f)
-        val fillH = v * h
-        if (fillH > 0.5f) {
-            c.save()
-            c.clipRect(0f, h - fillH, w, h)
-            sf.onFill(c, w, h, radius, recX, recY, 1f, alpha)
-            c.restore()
-        }
-        val gy = h - w / 2f
-        val sym = sf.pt(CcTokens.SYMBOL)
-        // How much of the symbol the fill covers (0..1).
-        val covered = ((fillH - (w / 2f - sym * 0.4f)) / (sym * 0.8f)).coerceIn(0f, 1f)
-        val col = mix(Design.color(CcTokens.SYMBOL_COLOR), ctl.accent, covered)
         val icon = if (ctl == Control.VOLUME && v <= 0.001f) R.drawable.sym_volume_off else iconOf(ctl, 0f)
-        glyphs.draw(c, icon, w / 2f, gy, sym, alpha(col, alpha))
+        CcSlider.draw(c, host.surfaces, glyphs, w, h, radius, recX, recY, v, icon, ctl.accent, host.surfaces.pt(CcTokens.SYMBOL), alpha)
     }
 
     // Connectivity: three large circles and four small ones where Apple's kit has them (2570:20605: 57 pt circles at 14 and

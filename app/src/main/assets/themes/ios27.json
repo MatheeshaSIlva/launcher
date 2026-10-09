@@ -1728,6 +1728,22 @@
    "pt": 17,
    "src": "measured:the kit's render at 3x (8.3-15.3 pt)"
   },
+  "comp.cc.expanded.slider-corner": {
+   "pt": 46,
+   "src": "judged:the expanded slider (as it was in code)"
+  },
+  "comp.cc.expanded.slider-height": {
+   "pt": 380,
+   "src": "judged:the expanded slider (as it was in code)"
+  },
+  "comp.cc.expanded.slider-symbol": {
+   "pt": 34,
+   "src": "judged:its symbol (as it was in code; smaller while the slider grows)"
+  },
+  "comp.cc.expanded.slider-width": {
+   "pt": 152,
+   "src": "judged:the expanded slider (as it was in code)"
+  },
   "comp.cc.gallery.corner": {
    "pt": 38,
    "src": "judged:a sheet of iOS 27's size (the kit's sheets are rounded 38)"
@@ -1896,6 +1912,10 @@
   "comp.cc.slider.corner": {
    "pt": 34,
    "src": "kit:2570:20682"
+  },
+  "comp.cc.slider.cover": {
+   "factor": 0.8,
+   "src": "judged:the symbol takes the slider's colour while the level crosses its middle 80 % (the expanded slider's 100 % made one with the module's)"
   },
   "comp.cc.status.row-y": {
    "pt": 104.2,

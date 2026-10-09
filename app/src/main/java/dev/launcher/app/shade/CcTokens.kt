@@ -21,6 +21,13 @@ object CcTokens {
     val WELL = MaterialKey("comp.cc.well.material")
     val CORNER = NumberKey("comp.cc.module.corner")
     val SLIDER_CORNER = NumberKey("comp.cc.slider.corner")
+    /** The part of a slider's symbol over which it takes the slider's colour as the level crosses it (a fraction). */
+    val SLIDER_COVER = NumberKey("comp.cc.slider.cover")
+    // The expanded slider (brightness, volume, flashlight, timer).
+    val EXPANDED_SLIDER_WIDTH = NumberKey("comp.cc.expanded.slider-width")
+    val EXPANDED_SLIDER_HEIGHT = NumberKey("comp.cc.expanded.slider-height")
+    val EXPANDED_SLIDER_CORNER = NumberKey("comp.cc.expanded.slider-corner")
+    val EXPANDED_SLIDER_SYMBOL = NumberKey("comp.cc.expanded.slider-symbol")
     val SYMBOL = NumberKey("comp.cc.symbol")
     val SYMBOL_COLOR = ColorKey("comp.cc.symbol-color")
     val WIDE_PADDING = NumberKey("comp.cc.wide.padding")
@@ -84,5 +91,6 @@ object CcTokens {
         WIDE_GAP, WELL_SIZE, WELL_SYMBOL, TITLE, TITLE_LARGE, DETAIL, LABEL_COLOR, DETAIL_COLOR, DETAIL_BLEND, CELL, GAP,
         GRID_TOP, GRID_TOP_EDIT, ROW_Y, BUTTON, BUTTON_SIZE, BUTTON_INSET_X, BUTTON_TOP, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR,
         CONN_BIG, CONN_SMALL, CONN_SYMBOL_BIG, CONN_SYMBOL_SMALL, ART, ART_CORNER, ART_X, ART_Y, OUTPUT, MEDIA_TITLE,
-        MEDIA_TEXT_COLOR, MEDIA_TEXT_BLEND, TRANSPORT, PLAY, GALLERY_SHEET, GALLERY_ENTRY, GALLERY_DIM, GALLERY_CORNER).map { it.name }
+        MEDIA_TEXT_COLOR, MEDIA_TEXT_BLEND, TRANSPORT, PLAY, GALLERY_SHEET, GALLERY_ENTRY, GALLERY_DIM, GALLERY_CORNER,
+        SLIDER_COVER, EXPANDED_SLIDER_WIDTH, EXPANDED_SLIDER_HEIGHT, EXPANDED_SLIDER_CORNER, EXPANDED_SLIDER_SYMBOL).map { it.name }
 }

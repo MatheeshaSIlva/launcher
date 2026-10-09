@@ -344,6 +344,12 @@ SEED = {
     'comp.cc.status.row-y': {'pt': 104.2, 'src': 'measured:iOS 27 Simulator, accessibility frames (the kit: 91.7)'},
     'comp.cc.module.corner': {'pt': 30, 'src': 'kit:2547:2662 (2x2)'},
     'comp.cc.slider.corner': {'pt': 34, 'src': 'kit:2570:20682'},
+    'comp.cc.slider.cover': {'factor': 0.8, 'src': "judged:the symbol takes the slider's colour while the level crosses its middle 80 % (the expanded slider's 100 % made one with the module's)"},
+    # The expanded modules (iOS 18+; not in the kit: measured on iOS before, kept as they were).
+    'comp.cc.expanded.slider-width': {'pt': 152, 'src': 'judged:the expanded slider (as it was in code)'},
+    'comp.cc.expanded.slider-height': {'pt': 380, 'src': 'judged:the expanded slider (as it was in code)'},
+    'comp.cc.expanded.slider-corner': {'pt': 46, 'src': 'judged:the expanded slider (as it was in code)'},
+    'comp.cc.expanded.slider-symbol': {'pt': 34, 'src': 'judged:its symbol (as it was in code; smaller while the slider grows)'},
     'comp.cc.symbol': {'pt': 35, 'src': "measured:the kit's render at 3x (the camera, SF Pro Bold 19: 29.3 pt wide); our symbols fill 5/6 of their box"},
     'comp.cc.symbol-color': {'color': '#ffffff', 'src': 'kit:2524:24527'},
     'comp.cc.wide.padding': {'pt': 14, 'src': 'kit:2547:2623'},
