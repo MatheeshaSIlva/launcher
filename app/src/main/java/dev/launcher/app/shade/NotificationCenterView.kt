@@ -214,6 +214,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     fun onClosed() {
+        painter.resetTimeFades()
         stopTicking()
         revealed?.swipe?.snapTo(0f)
         revealed = null
@@ -923,7 +924,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         mixIn(Math.round(b.height).toLong()); mixIn(b.count.toLong()); mixIn(Math.round(b.stack.value * 255f).toLong())
         mixIn(Math.round(Appearance.dark * 255f).toLong()); mixIn(Design.version.toLong())
         mixIn(b.item?.let { it.key.hashCode().toLong() * 7 + it.postTime } ?: 0L); mixIn(width.toLong())
-        if (b.kind == Kind.PLATTER) mixIn((System.currentTimeMillis() / 60_000L))   // "now" -> "1m ago"
+        // "now" -> "1m ago": the label itself (the wall clock's minute lagged it by up to a minute), and its crossfade.
+        val fading = b.kind == Kind.PLATTER && b.item?.let { painter.timeFadeProgress(it.key) < 1f } == true
+        if (b.kind == Kind.PLATTER) b.item?.let { mixIn(painter.timeLabel(it.postTime).hashCode().toLong()); mixIn(Math.round(painter.timeFadeProgress(it.key) * 64f).toLong()) }
         if (b.kind == Kind.MEDIA) {
             val md = host.media
             mixIn((md.title?.hashCode() ?: 0).toLong()); mixIn((md.artist?.hashCode() ?: 0).toLong()); mixIn(System.identityHashCode(md.art).toLong())
@@ -935,7 +938,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val rc = b.node.beginRecording()
             try { if (b.kind == Kind.MEDIA) drawMediaContent(rc, b, m, 1f) else drawPlatterContent(rc, b, m, 1f) } finally { b.node.endRecording() }
             b.key = k
-        }
+            if (b.kind == Kind.PLATTER && b.item?.let { painter.timeFadeProgress(it.key) < 1f } == true) postInvalidateOnAnimation()
+        } else if (fading) postInvalidateOnAnimation()
         val present = min(a, 1f)
         val alpha = min(1f, present / GLASS_FIRST) * f
         val contentA = ((present - CONTENT_AFTER) / (1f - CONTENT_AFTER)).coerceIn(0f, 1f) * f
@@ -992,6 +996,14 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         timePaint.color = alpha(Design.color(NcTokens.TIME_COLOR), a)
         timePaint.blendMode = Design.blend(NcTokens.TIME_BLEND).toBlendMode()
         timePaint.textAlign = Paint.Align.RIGHT
+        // A new label crossfades from the old one, as on a platter.
+        val tf = painter.timeFade("peek:" + item.key, time)
+        if (tf.k < 1f) {
+            timePaint.color = alpha(Design.color(NcTokens.TIME_COLOR), a * (1f - tf.k))
+            c.drawText(tf.old, x + w - 12f * u, cy + 0.36f * timePaint.textSize, timePaint)
+            timePaint.color = alpha(Design.color(NcTokens.TIME_COLOR), a * tf.k)
+            postInvalidateOnAnimation()
+        }
         c.drawText(time, x + w - 12f * u, cy + 0.36f * timePaint.textSize, timePaint)
         timePaint.blendMode = null
         val room = x + w - 12f * u - timePaint.measureText(time) - 8f * u - tx
@@ -1039,7 +1051,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val item = b.item ?: return
         val st = b.stack.value.coerceIn(0f, 1f)
         painter.draw(c, item, margin, y0, platterW, b.shownH(), min(a, 1f), primary(), secondary(), more = b.count - 1, moreAlpha = st,
-            platter = true, stacked = if (b.stackH != b.fullH) st else 0f)
+            platter = true, stacked = if (b.stackH != b.fullH) st else 0f, fadeTime = true)
     }
 
     private fun drawSwipeActions(c: Canvas, b: Block, y: Float, h: Float, alphaIn: Float, sheetY: Float) {

@@ -124,7 +124,7 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
      * card) in [secondary]. [stacked]: how much it is a stack's front (its text closer to the top: see [height]).
      */
     fun draw(c: Canvas, item: Notifs.Item, x: Float, y: Float, w: Float, h: Float, alpha: Float, primary: Int, secondary: Int,
-             more: Int = 0, moreAlpha: Float = 0f, platter: Boolean = false, stacked: Float = 0f) {
+             more: Int = 0, moreAlpha: Float = 0f, platter: Boolean = false, stacked: Float = 0f, fadeTime: Boolean = false) {
         sync()
         val iconS = iconPt * u
         val ix = x + padding * u
@@ -148,7 +148,16 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
             time.color = fade(secondary, alpha)
             time.blendMode = null
         }
-        c.drawText(tl, x + w - padding * u, baseline(time, top + (titleLine - timeLine) * u / 2f, timeLine * u), time)
+        val tyb = baseline(time, top + (titleLine - timeLine) * u / 2f, timeLine * u)
+        // A new label ("now" to "1m ago") crossfades from the old one ([fadeTime]: the caller draws again while it does).
+        val f = if (fadeTime) timeFade(item.key, tl) else null
+        if (f != null && f.k < 1f) {
+            val base = time.color
+            time.color = fade(base, 1f - f.k)
+            c.drawText(f.old, x + w - padding * u, tyb, time)
+            time.color = fade(base, f.k)
+        }
+        c.drawText(tl, x + w - padding * u, tyb, time)
         time.blendMode = null
         title.color = fade(primary, alpha)
         val titleW = w - textX * u - padding * u - time.measureText(tl) - 8f * u
@@ -243,6 +252,26 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
         return null
     }
 
+    /** A time label's crossfade: [old] fading out as the current one fades in ([k] 0..1). */
+    class TimeFade(var cur: String, var old: String, var at: Long) {
+        val k get() = ((android.os.SystemClock.uptimeMillis() - at).toFloat() / TIME_FADE_MS).coerceIn(0f, 1f)
+    }
+    private val timeFades = HashMap<String, TimeFade>()
+
+    /** [key]'s time label is [label] now: its crossfade from the label it showed before (a new one starts here). */
+    fun timeFade(key: String, label: String): TimeFade {
+        val f = timeFades.getOrPut(key) { TimeFade(label, label, 0L) }
+        if (f.cur != label) { f.old = f.cur; f.cur = label; f.at = android.os.SystemClock.uptimeMillis() }
+        if (timeFades.size > 200) timeFades.keys.retainAll(setOf(key))
+        return f
+    }
+
+    /** Forgets the labels shown (closed: the next showing draws the current ones at once, no crossfade from stale ones). */
+    fun resetTimeFades() = timeFades.clear()
+
+    /** How far [key]'s time label is through its crossfade (1: at rest), for the caller's redraws. */
+    fun timeFadeProgress(key: String): Float = timeFades[key]?.k ?: 1f
+
     fun timeLabel(t: Long): String {
         val d = System.currentTimeMillis() - t
         return when {
@@ -295,6 +324,8 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
     }
 
     companion object {
+        /** A time label changing ("now" to "1m ago"): its crossfade. */
+        const val TIME_FADE_MS = 300f
         private val io = Executors.newSingleThreadExecutor()
     }
 }

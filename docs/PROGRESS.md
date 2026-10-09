@@ -1727,3 +1727,19 @@ whose change is far above its own change in the frames around it) and by eye at 
 Not yet audited: an app's close grabbed mid-flight, quick switches, folder to folder, Spotlight, the clock's minute,
 unlock and cold-start arrival, Control Center's expanded modules and edit mode, Notification Center's swipes and stacks,
 the S24's own blur. Tools kept in the repo: `tools/slowmo.sh`, `tools/pops.py`.
+
+## Step 4: the animation audit, second round (2026-10-09, emulator)
+
+| Animation | Result |
+| --- | --- |
+| Spotlight: open, close | Clean (the keyboard is the system's own motion). |
+| A close touched on the bar while it flies | Not grabbed, by design (bar touches during a close are ignored); clean. |
+| Quick switch sideways on the bar | Clean (the emulator has no app pictures: launch screens, then the app). |
+| Control Center's expanded brightness slider: in, out | Clean. |
+| Control Center's edit mode: in, out | Clean. |
+| Notification Center: a stack fanning out, a swipe revealing Options | Clean. |
+| The glass clock's minute (home and Notification Center) | Clean (crossfade). |
+| Notification times ("now" -> "1m ago") | **Defect, fixed:** the label changed at once, and up to a minute late (its platter's cached content was redrawn on the wall clock's minute, not when its own label changed). Now the label is part of the cache key and crossfades from the old one (300 ms), on platters and on a stack's second line; a reopened Notification Center shows the current labels at once. |
+
+`tools/sheet.py` makes contact sheets of chosen frames (with times) from a recording `tools/pops.py` has unpacked.
+Still to audit: folder to folder, unlock and cold-start arrival, the S24's own blur and pacing.
