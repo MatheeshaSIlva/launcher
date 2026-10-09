@@ -346,7 +346,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         fg.addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (metrics.gridTop - topInset - metrics.pt(6f)).roundToInt().coerceAtLeast(1)).apply { topMargin = topInset })
         overlay.removeAllViews()
         menuK = 0f; pickerK = 0f; applySceneBlur()
-        val mv = ContextMenuView(context, metrics, { k -> menuK = k; applySceneBlur() }, { c -> scene.draw(c) }).also { menu = it }
+        val mv = ContextMenuView(context, metrics, { k ->
+            menuK = k; applySceneBlur()
+            // The item the menu is for fades out under the lifted copy as the menu opens (its name went at once); closing,
+            // it stays hidden until the copy has settled back into its place (then onClosed shows it again).
+            menuItem?.let { v -> if (menu?.opening == true) v.alpha = 1f - k }
+        }, { c -> scene.draw(c) }).also { menu = it }
         overlay.addView(mv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         val pk = WidgetPicker(context, metrics, pickerHost).also { picker = it }
         overlay.addView(pk, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -1297,16 +1302,33 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         scene.setRenderEffect(if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP))
     }
 
-    /** A picture of [v] as it looks (an icon without its label), and its frame in home's coordinates. */
+    /**
+     * A picture of [v] as it looks (an icon without its label), and its frame in home's coordinates; for an icon also as it
+     * looks pressed ([pressedCopy]: the lifted icon turns from that into the clear one as the menu opens, never at once).
+     */
     private fun liftedCopy(v: View): Pair<android.graphics.Picture, RectF> {
+        pressedCopy = null
+        if (v is IconView) {
+            v.labelHidden = true
+            pressedCopy = android.graphics.Picture().also { p ->
+                val c = p.beginRecording(maxOf(1, v.width), maxOf(1, v.height))
+                try { v.draw(c) } finally { p.endRecording() }
+            }
+            v.clearPress()
+        }
         val pic = android.graphics.Picture()
         val c = pic.beginRecording(maxOf(1, v.width), maxOf(1, v.height))
-        if (v is IconView) { v.clearPress(); v.labelHidden = true }
         v.draw(c)
         if (v is IconView) v.labelHidden = false
         pic.endRecording()
         return pic to frameInHome(v)
     }
+
+    /** The last [liftedCopy]'s icon as it looked pressed (null for a widget). */
+    private var pressedCopy: android.graphics.Picture? = null
+
+    /** The item a menu is open for: it fades out (its name with it) as the menu opens over it. */
+    private var menuItem: View? = null
 
     private fun frameInHome(v: View): RectF {
         val loc = IntArray(2)
@@ -1373,10 +1395,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun showMenu(v: View, pic: android.graphics.Picture, frame: RectF, items: List<dev.launcher.app.components.MenuPainter.Item>) {
         val mv = menu ?: return
-        mv.show(pic, frame, items)
-        // The lifted copy draws the item above the blur; the real one (blurred, with its label) hides meanwhile.
-        v.alpha = 0f
-        mv.onClosed = { v.alpha = 1f }
+        // The lifted copy draws the item above the blur; the real one (blurred, with its label) fades out meanwhile (with the
+        // menu's progress), and its name comes back fading in once the copy has settled into its place.
+        menuItem = v
+        mv.show(pic, frame, items, pressedCopy)
+        val icon = v as? IconView
+        val widget = v as? WidgetFrameView
+        mv.onClosed = {
+            if (menuItem === v) menuItem = null
+            v.alpha = 1f
+            // Nothing is changed while the menu is open: a drag that takes the item over drops this callback.
+            if (icon != null && cfg.showLabels) { icon.setLabelShown(false, animate = false); icon.setLabelShown(true, animate = true) }
+            if (widget != null && cfg.showWidgetLabels) { widget.setLabelShown(false, animate = false); widget.setLabelShown(true, animate = true) }
+        }
         pendingDragView = v
     }
 

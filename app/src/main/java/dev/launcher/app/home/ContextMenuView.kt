@@ -44,6 +44,8 @@ class ContextMenuView(
     private val painter = MenuPainter(MenuSpec.HOME, m.u)
     private val items get() = painter.items
     private var lifted: Picture? = null
+    // The item as it looked pressed (dimmed): over the lifted copy, fading away as the menu opens.
+    private var liftedPressed: Picture? = null
     private val anchor = RectF()      // the lifted item's frame (or the button the menu belongs to)
     private var pressed = -1
     private var liftedFades = false   // a destructive choice: the lifted item shrinks away with the menu
@@ -60,6 +62,8 @@ class ContextMenuView(
     private val bounds = RectF()
 
     val isShowing get() = visibility == VISIBLE && k.target > 0f
+    /** Opening (or open), as opposed to closing. */
+    val opening get() = k.target > 0f
 
     /** The menu finished closing (by [dismissNow] only when asked: a drag that takes the item over keeps it hidden). */
     var onClosed: (() -> Unit)? = null
@@ -67,12 +71,13 @@ class ContextMenuView(
     init { visibility = GONE }
 
     /** Opens for the item drawn by [picture] at [frame] (this view's coordinates); no picture: a menu for a button at [frame]. */
-    fun show(picture: Picture?, frame: RectF, menu: List<MenuPainter.Item>) {
+    fun show(picture: Picture?, frame: RectF, menu: List<MenuPainter.Item>, pressed: Picture? = null) {
         // The previous menu may still be closing: its item shows again now (its "closed" would be replaced and lost, leaving
         // that item invisible on home).
         onClosed?.invoke()
         onClosed = null
         lifted = picture
+        liftedPressed = pressed
         liftedFades = false
         anchor.set(frame)
         bounds.set(m.libMargin, 0f, m.w - m.libMargin, m.h - m.bottomSafe)
@@ -94,6 +99,7 @@ class ContextMenuView(
     fun handOff() {
         if (visibility != VISIBLE) return
         lifted = null
+        liftedPressed = null
         painter.layout(emptyList(), anchor, bounds, 8f, false)
         onClosed = null
         pressed = -1
@@ -138,7 +144,18 @@ class ContextMenuView(
                 val l = c.saveLayerAlpha(0f, 0f, anchor.width(), anchor.height(), (255 * kk).toInt())
                 c.drawPicture(p)
                 c.restoreToCount(l)
-            } else c.drawPicture(p)
+            } else {
+                c.drawPicture(p)
+                // Pressed (dimmed) at first, clear once open: the press fades as it lifts (it went at once).
+                val pk = if (opening) 1f - kk else 0f
+                liftedPressed?.let { pp ->
+                    if (pk > 0.003f) {
+                        val l = c.saveLayerAlpha(0f, 0f, anchor.width(), anchor.height(), (255 * pk).toInt())
+                        c.drawPicture(pp)
+                        c.restoreToCount(l)
+                    }
+                }
+            }
             c.restore()
         }
         // The kit's Regular glass over home as it is behind the menu (blurred by home, under the scrim), with its shadow and
