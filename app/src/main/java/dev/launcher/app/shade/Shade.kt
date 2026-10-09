@@ -358,8 +358,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 // blurred picture of what was behind.
                 val live = liveBlur.available
                 backdrop.live = live
-                if (live) liveBlur.set(k, true)
-                backdrop.set(ccBlurRadius() * k, ccDim() * k, (p / 0.12f).coerceIn(0f, 1f))
+                // The background on the controls' own curve (they show at the square root of the progress): linear, the
+                // blur was all but gone while the controls still showed at a third (it cleared in one frame as they faded).
+                val bk = kotlin.math.sqrt(k)
+                if (live) liveBlur.set(bk, true)
+                backdrop.set(ccBlurRadius() * bk, ccDim() * bk, (p / 0.12f).coerceIn(0f, 1f))
                 bar.setPanel(k, 0f, 0f, cc.statusRowY)
                 bar.setRowAlpha(1f - editK)
             }
