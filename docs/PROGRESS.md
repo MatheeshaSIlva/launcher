@@ -1743,3 +1743,9 @@ the S24's own blur. Tools kept in the repo: `tools/slowmo.sh`, `tools/pops.py`.
 
 `tools/sheet.py` makes contact sheets of chosen frames (with times) from a recording `tools/pops.py` has unpacked.
 Still to audit: folder to folder, unlock and cold-start arrival, the S24's own blur and pacing.
+- Cold start (8x, emulator): the arrival plays from black as designed. Before it, the killed process's last frame of
+  home stays on screen (Android keeps its window, EXITING, until the new process draws): after an UPDATE that shows as
+  home at rest, then black, then the arrival. That is the system's; ours now also takes the arrival's held first frame
+  right before home's first draw (it was asked in onResume, before home had a size, and waited for a retry).
+- Reopening an App Library folder right after it closed: clean. (Folder to folder could not be tried: on the emulator only
+  one category has enough apps to be a folder.)

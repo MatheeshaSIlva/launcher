@@ -910,6 +910,18 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     fun holdColdArrival() {
         coldHoldWanted = true
         holdCold()
+        // Asked before home's first layout (onResume: no size yet, no pages), the hold waited for the next try: it is taken
+        // right before the first frame that can have it, so no frame of a new process shows home at rest.
+        if (!arrivalHeld && coldHoldWanted) viewTreeObserver.addOnPreDrawListener(coldHoldBeforeDraw)
+    }
+
+    private val coldHoldBeforeDraw = object : android.view.ViewTreeObserver.OnPreDrawListener {
+        override fun onPreDraw(): Boolean {
+            if (!coldHoldWanted || arrivalHeld || arrivalAnimating) { post { viewTreeObserver.removeOnPreDrawListener(this) }; return true }
+            holdCold()
+            if (arrivalHeld) post { viewTreeObserver.removeOnPreDrawListener(this) }
+            return true
+        }
     }
 
     private fun holdCold() {
