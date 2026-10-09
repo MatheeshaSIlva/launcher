@@ -2981,6 +2981,78 @@
    "color": "#ffcc00",
    "src": "judged:iOS's yellow in Low Power Mode"
   },
+  "comp.switcher.carousel.chip.fill": {
+   "color": "@surface_bright",
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): #262d33 (dark)"
+  },
+  "comp.switcher.carousel.chip.height": {
+   "pt": 36,
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): 95 px"
+  },
+  "comp.switcher.carousel.chip.icon": {
+   "pt": 24,
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): the icon and the chevron, 63 px"
+  },
+  "comp.switcher.carousel.chip.inset": {
+   "pt": 12,
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): the chip 32 px in from the card's top left"
+  },
+  "comp.switcher.carousel.chip.label": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): #e0e6ee"
+  },
+  "comp.switcher.carousel.chip.min-width": {
+   "pt": 156,
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): 409 px for \"Clock\""
+  },
+  "comp.switcher.carousel.chip.type": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): the name, 14 sp"
+  },
+  "comp.switcher.carousel.clear.fill": {
+   "color": "@surface_bright",
+   "src": "judged:as the chips"
+  },
+  "comp.switcher.carousel.clear.height": {
+   "pt": 40,
+   "src": "judged:Launcher3's Clear all button"
+  },
+  "comp.switcher.carousel.clear.label": {
+   "color": "@on_surface",
+   "src": "judged:as the chips"
+  },
+  "comp.switcher.carousel.clear.padding-x": {
+   "pt": 16,
+   "src": "judged:Launcher3's Clear all button"
+  },
+  "comp.switcher.carousel.clear.type": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0
+   },
+   "src": "judged:a button's label, 14 sp medium"
+  },
+  "comp.switcher.carousel.corner": {
+   "pt": 27.4,
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): corners 72 px"
+  },
+  "comp.switcher.carousel.dim": {
+   "factor": 0.13,
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): the wallpaper #03a0e9 shows #088bc9 behind the cards"
+  },
+  "comp.switcher.carousel.gap": {
+   "pt": 16,
+   "src": "measured:the Android 17 emulator's Pixel Launcher recents (tools/shots/pxref/recents): 42 px between cards"
+  },
   "comp.switcher.clear.bottom": {
    "pt": 44,
    "src": "judged:the capsule's bottom this far above the screen's bottom edge (above the gesture bar)"

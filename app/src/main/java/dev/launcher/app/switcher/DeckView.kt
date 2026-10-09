@@ -26,6 +26,10 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
+ * Android's recents instead when the theme picks `sys.layout.switcher` = "carousel" ([carousel]): the cards side by side
+ * at one size, the focused one centred, the app's chip (icon, name, a chevron; a tap opens its menu) inside each card's
+ * top, "Clear all" after the oldest card, no shadows. Everything else (gestures, pictures, springs) is the deck's.
+ *
  * The iOS App Switcher's deck (hold during a home swipe), laid out as in Apple's illustration of the iOS 27 App Switcher:
  * recent apps as cards (MotionProfile.switcher.cardScale of the screen), the newest on the right and on top; the focused
  * card a little right of centre, newer cards spread out to the right, older ones stacked tightly to the left. Each card has
@@ -106,7 +110,19 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     private var cardH = 1f
     private var cardTop = 0f
     private var focusLeft = 0f
-    private val cardRadius get() = deviceRadius * profile.cardScale
+    private val cardRadius get() = if (carousel) d.pt(SwitcherTokens.CAROUSEL_CORNER, cu) else deviceRadius * profile.cardScale
+
+    private val d = dev.launcher.app.design.Design
+    /** Android's recents (`sys.layout.switcher` = "carousel"), read at each entry; see the class comment. */
+    var carousel = false
+        private set
+    private var cu = 1f   // the theme's point in px (the carousel's tokens)
+    private val gap get() = d.pt(SwitcherTokens.CAROUSEL_GAP, cu)
+
+    private fun readLayout() {
+        carousel = try { d.choice(SwitcherTokens.LAYOUT) == "carousel" } catch (_: Throwable) { false }
+        cu = dev.launcher.app.design.Scale.unitPx(context, min(sw, sh).roundToInt())
+    }
 
     var scroll = 0f
         private set
@@ -140,6 +156,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         cardH = sh * profile.cardScale
         cardTop = sh * profile.cardCenterY - cardH / 2
         focusLeft = sw * profile.focusLeft
+        readLayout()
         if (shadowFor != cardW * 10000f + cardH) makeShadow()   // once per size: it blurs on the CPU
     }
 
@@ -152,13 +169,14 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
      * pass the focus without a jump.
      */
     private fun offsetFor(t: Float): Float {
+        if (carousel) return -t * (1f + gap / cardW)   // side by side, a gap between
         val k = STEP_SHARPNESS
         val soft = (ln(1.0 + exp(-k * t.toDouble())) - ln(2.0)) / k
         return (-STEP_OLDER * t + (STEP_NEWER - STEP_OLDER) * soft).toFloat()
     }
 
     /** Pixels the focused card moves per card of scroll (a drag keeps the card under the finger). */
-    private val pxPerCard get() = cardW * (STEP_OLDER + STEP_NEWER) / 2f
+    private val pxPerCard get() = if (carousel) cardW + gap else cardW * (STEP_OLDER + STEP_NEWER) / 2f
 
     private fun slot(i: Int, s: Float, out: RectF): RectF {
         val left = focusLeft + offsetFor(i - s) * cardW
@@ -315,6 +333,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     }
 
     private fun drawShadow(canvas: Canvas, r: RectF, radius: Float, a: Float) {
+        if (carousel) return   // Android's cards lie flat
         val sb = shadow ?: return
         val k = r.width() / cardW
         val pad = shadowPad * k
@@ -425,6 +444,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     /** The app's icon above the card's left edge; its name beside it while the card is (nearly) focused ([t] from focus). */
     private fun drawLabel(canvas: Canvas, c: Card, t: Float, r: RectF, a: Float) {
         if (a <= 0.004f) return
+        if (carousel) { drawChip(canvas, c, r, a); return }
         val k = (r.width() / cardW).coerceIn(0.5f, 1.2f)
         val iconPx = dp(28f) * k
         val left = r.left + dp(14f) * k
@@ -460,9 +480,73 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         canvas.drawRoundRect(x, cy - g * 0.25f, x + g * 2f, cy + g * 1.2f, dp(1.5f), dp(1.5f), lockPaint)
     }
 
+    // ---- the carousel's app chip: a capsule inside the card's top left (icon, name, chevron), scaled with the card.
+
+    private val chipPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val chipText = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val chevron = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+    private val chipRect = RectF()
+
+    /** The chip of a card drawn at [r] (its size follows the card's: [r] width over [cardW]). */
+    private fun chipFor(c: Card, r: RectF, out: RectF): RectF {
+        val k = r.width() / cardW
+        d.text(SwitcherTokens.CHIP_TEXT).applyTo(chipText, cu)
+        val inset = d.pt(SwitcherTokens.CHIP_INSET, cu) * k
+        val h = d.pt(SwitcherTokens.CHIP_HEIGHT, cu) * k
+        val icon = d.pt(SwitcherTokens.CHIP_ICON, cu)
+        // Icon 6 from the start, the name 8 after it, the chevron's box (an icon's size) 8 before the end (measured).
+        val content = (6f + 8f + 8f + 8f) * cu + 2 * icon + chipText.measureText(c.label)
+        val w = (max(d.pt(SwitcherTokens.CHIP_MIN_WIDTH, cu), content) * k).coerceAtMost(r.width() - 2 * inset)
+        return out.apply { set(r.left + inset, r.top + inset, r.left + inset + w, r.top + inset + h) }
+    }
+
+    private fun drawChip(canvas: Canvas, c: Card, r: RectF, a: Float) {
+        val k = r.width() / cardW
+        val chip = chipFor(c, r, chipRect)
+        chipPaint.color = d.color(SwitcherTokens.CHIP_FILL)
+        chipPaint.alpha = (Color.alpha(chipPaint.color) * a).roundToInt()
+        canvas.drawRoundRect(chip, chip.height() / 2f, chip.height() / 2f, chipPaint)
+        val icon = d.pt(SwitcherTokens.CHIP_ICON, cu) * k
+        val il = chip.left + 6f * cu * k
+        c.icon?.let { dr ->
+            dr.setBounds(il.roundToInt(), (chip.centerY() - icon / 2).roundToInt(), (il + icon).roundToInt(), (chip.centerY() + icon / 2).roundToInt())
+            dr.alpha = (a * 255).roundToInt()
+            dr.draw(canvas)
+        }
+        val labelColor = d.color(SwitcherTokens.CHIP_TEXT_COLOR)
+        // The chevron in its box at the end; the name between, cut short if the chip is too narrow for it.
+        val cx = chip.right - 8f * cu * k - icon / 2f
+        val name = c.label
+        if (name.isNotEmpty()) {
+            chipText.textSize *= k
+            chipText.color = labelColor
+            chipText.alpha = (Color.alpha(labelColor) * a).roundToInt()
+            val tx = il + icon + 8f * cu * k
+            val room = cx - icon / 2f - 8f * cu * k - tx
+            val shown = android.text.TextUtils.ellipsize(name, chipText, room, android.text.TextUtils.TruncateAt.END).toString()
+            canvas.drawText(shown, tx, chip.centerY() - (chipText.ascent() + chipText.descent()) / 2f, chipText)
+            if (listener.isKept(c.pkg)) drawLock(canvas, tx + chipText.measureText(shown) + 6f * cu * k, chip.centerY(), a)
+        }
+        chevron.color = labelColor
+        chevron.alpha = (Color.alpha(labelColor) * a).roundToInt()
+        chevron.strokeWidth = 2f * cu * k
+        val hw = 6f * cu * k
+        val hh = 3.5f * cu * k
+        val cy = chip.centerY()
+        canvas.drawLine(cx - hw, cy - hh, cx, cy + hh, chevron)
+        canvas.drawLine(cx, cy + hh, cx + hw, cy - hh, chevron)
+    }
+
     /** Where card [i]'s icon and name are (the area a tap opens its menu from), or false when its name does not show. */
     private fun labelArea(i: Int, out: RectF): Boolean {
         val c = cards[i]
+        if (carousel) {
+            if (abs(i - scroll) > 0.5f) return false
+            frame(i, box)
+            chipFor(c, box, out)
+            out.inset(-dp(6f), -dp(6f))
+            return true
+        }
         if (abs(i - scroll) > 0.5f || c.label.isEmpty()) return false
         frame(i, box)
         val k = (box.width() / cardW).coerceIn(0.5f, 1.2f)
@@ -482,7 +566,9 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
      * older app (the one you most likely want back), as on iOS.
      */
     fun enter(list: List<Card>, fromFrame: RectF, fromCornerRadius: Float) {
-        releaseFocus = 1
+        readLayout()
+        // iOS moves on to the previous app as the finger lifts; Android keeps the app the swipe started in centred.
+        releaseFocus = if (carousel) 0 else 1
         slidingIn = false
         start(list, fromFrame, fromCornerRadius)
     }
@@ -492,6 +578,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
      * recent apps lie to the left of home), as one, and the newest app stays focused when the finger lifts.
      */
     fun enterFromHome(list: List<Card>) {
+        readLayout()
         releaseFocus = 0
         slidingIn = true
         start(list, RectF(), cardRadius)
@@ -805,8 +892,12 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     private val clearText = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
     private val clearMatrix = Matrix()
 
-    /** Where Clear All is (a capsule centred at the bottom, `comp.switcher.clear.*`), and how present it is (0..1). */
+    /**
+     * Where Clear All is (a capsule centred at the bottom, `comp.switcher.clear.*`; the carousel's after the oldest card,
+     * `comp.switcher.carousel.clear.*`), and how present it is (0..1).
+     */
     private fun placeClear(): Float {
+        if (carousel) return placeCarouselClear()
         val d = dev.launcher.app.design.Design
         d.text(SwitcherTokens.CLEAR_TYPE).applyTo(clearText, u)
         val h = d.num(SwitcherTokens.CLEAR_HEIGHT) * u
@@ -820,6 +911,53 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     private val clearShown = SpringValue(0f, 100f, onChange = { invalidate() })
 
+    private fun clearable() = cards.any { !listener.isKept(it.pkg) }
+
+    /** The carousel's Clear all: left of the oldest card, centred on the cards' height, moving with them. */
+    private fun placeCarouselClear(): Float {
+        d.text(SwitcherTokens.CAROUSEL_CLEAR_TEXT).applyTo(clearText, cu)
+        if (cards.isEmpty()) return 0f
+        val h = d.pt(SwitcherTokens.CAROUSEL_CLEAR_HEIGHT, cu)
+        val w = clearText.measureText(CAROUSEL_CLEAR) + 2 * d.pt(SwitcherTokens.CAROUSEL_CLEAR_PADDING, cu)
+        val last = cards.size - 1
+        frame(last, box)
+        val right = box.left - gap
+        clearRect.set(right - w, box.centerY() - h / 2f, right, box.centerY() + h / 2f)
+        var k = enterK.coerceIn(0f, 1f) * (1f - homeK) * (1f - openK) * alphaOf(last)
+        if (!clearable() || clearing) k = 0f
+        return k
+    }
+
+    /** How far past the oldest card the carousel scrolls (in cards): to bring Clear all to the middle. 0 for the deck. */
+    private fun clearExtra(): Float {
+        if (!carousel || !clearable()) return 0f
+        d.text(SwitcherTokens.CAROUSEL_CLEAR_TEXT).applyTo(clearText, cu)
+        val w = clearText.measureText(CAROUSEL_CLEAR) + 2 * d.pt(SwitcherTokens.CAROUSEL_CLEAR_PADDING, cu)
+        return (sw / 2f + gap + w / 2f - focusLeft) / pxPerCard
+    }
+
+    private fun maxScroll() = (cards.size - 1).coerceAtLeast(0) + clearExtra()
+
+    private fun drawCarouselClear(canvas: Canvas, k: Float) {
+        val p = clearPress.value.coerceIn(0f, 1f)
+        val s = (0.85f + 0.15f * k) * (1f - 0.04f * p)
+        val radius = clearRect.height() / 2f
+        canvas.save()
+        canvas.scale(s, s, clearRect.centerX(), clearRect.centerY())
+        fillPaint.color = d.color(SwitcherTokens.CAROUSEL_CLEAR_FILL)
+        fillPaint.alpha = (Color.alpha(fillPaint.color) * k).roundToInt()
+        canvas.drawRoundRect(clearRect, radius, radius, fillPaint)
+        if (p > 0f) {
+            fillPaint.color = d.color(SwitcherTokens.CAROUSEL_CLEAR_LABEL)
+            fillPaint.alpha = (0.12f * p * k * 255).roundToInt()
+            canvas.drawRoundRect(clearRect, radius, radius, fillPaint)
+        }
+        clearText.color = d.color(SwitcherTokens.CAROUSEL_CLEAR_LABEL)
+        clearText.alpha = (k * Color.alpha(clearText.color)).roundToInt()
+        canvas.drawText(CAROUSEL_CLEAR, clearRect.centerX(), clearRect.centerY() - (clearText.ascent() + clearText.descent()) / 2f, clearText)
+        canvas.restore()
+    }
+
     private fun drawClearAll(canvas: Canvas) {
         val want = placeClear()
         // Follows the deck's own motion (entering, leaving); when it goes for another reason (nothing left to clear, the
@@ -827,6 +965,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         val k = if (clearing || cards.none { !listener.isKept(it.pkg) }) clearShown.value else want
         if (!clearing && cards.any { !listener.isKept(it.pkg) }) clearShown.snapTo(want)
         if (k <= 0.003f) return
+        if (carousel) { drawCarouselClear(canvas, k); return }
         val p = clearPress.value.coerceIn(0f, 1f)
         val s = (0.85f + 0.15f * k) * (1f - 0.04f * p)
         val d = dev.launcher.app.design.Design
@@ -915,7 +1054,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     }
 
     private fun setScrollFromDrag(raw: Float) {
-        val last = (cards.size - 1).coerceAtLeast(0).toFloat()
+        val last = maxScroll()
         // Past either end: a rubber band (measured in pixels of the focused card's motion).
         val s = when {
             raw < 0f -> -Motion.rubberBand(-raw * pxPerCard, sw) / pxPerCard
@@ -928,7 +1067,12 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     /** Comes to rest on the card the motion would stop near (iOS: the deck always ends on a card). */
     private fun settle(vx: Float) {
         val v = vx / pxPerCard   // cards per second (a throw to the right goes towards older apps)
-        val target = (scroll + v * profile.flingProjection).roundToInt().coerceIn(0, (cards.size - 1).coerceAtLeast(0)).toFloat()
+        val projected = scroll + v * profile.flingProjection
+        val last = (cards.size - 1).coerceAtLeast(0)
+        val extra = clearExtra()
+        // The carousel's end: past the oldest card's middle towards Clear all, it rests with Clear all in the middle.
+        val target = if (extra > 0f && projected > last + extra / 2f) last + extra
+            else projected.roundToInt().coerceIn(0, last).toFloat()
         scrollAnim.animateTo(target, profile.scroll, v)
     }
 
@@ -992,6 +1136,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         const val PICTURE_MARGIN = 4f
 
         const val CLEAR_LABEL = "Clear All"
+        const val CAROUSEL_CLEAR = "Clear all"
         /** Clear All: one card flies off this long after the one before it; home comes this long after the last. */
         const val CLEAR_STAGGER_MS = 45L
         const val CLEAR_HOME_AFTER_MS = 160L

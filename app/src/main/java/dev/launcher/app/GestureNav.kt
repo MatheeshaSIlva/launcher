@@ -974,6 +974,7 @@ object GestureNav {
     /** Ends the card session: window invisible (kept), icon back, everything pending forgotten. */
     private fun hideCards() {
         catchTouchesForHome(false)
+        backdrop?.contentFade = 1f
         gen++
         animating = false
         onSettled = null
@@ -2255,8 +2256,13 @@ object GestureNav {
     private var switcherGround = 0   // opaque ground behind the deck when there is no picture of home (else 0)
     private val switcherBg = dev.launcher.app.motion.SpringValue(0f, 300f, onChange = { k ->
         backdrop?.depth = depthAtSwitcher + (1f - depthAtSwitcher) * k
-        root?.setBackgroundColor(if (switcherGround != 0) switcherGround else ((SWITCHER_DIM * k * 255).toInt().coerceIn(0, 255)) shl 24)
+        // Android's recents: home's icons go, only its wallpaper stays behind the cards.
+        backdrop?.contentFade = if (deck?.carousel == true) 1f - k else 1f
+        root?.setBackgroundColor(if (switcherGround != 0) switcherGround else ((switcherDim() * k * 255).toInt().coerceIn(0, 255)) shl 24)
     })
+
+    /** How much home is darkened behind the switcher: iOS's deck, or Android's recents (`comp.switcher.carousel.dim`). */
+    private fun switcherDim() = if (deck?.carousel == true) dev.launcher.app.design.Design.num(dev.launcher.app.switcher.SwitcherTokens.CAROUSEL_DIM) else SWITCHER_DIM
 
     private val holdCheck = Runnable { maybeEnterSwitcher() }
 
@@ -2631,7 +2637,8 @@ object GestureNav {
 
         override fun onHomeProgress(k: Float) {
             backdrop?.depth = 1f - k
-            if (switcherGround == 0) root?.setBackgroundColor(((SWITCHER_DIM * (1f - k) * 255).toInt().coerceIn(0, 255)) shl 24)
+            if (deck?.carousel == true) backdrop?.contentFade = k   // home's icons come back as it does
+            if (switcherGround == 0) root?.setBackgroundColor(((switcherDim() * (1f - k) * 255).toInt().coerceIn(0, 255)) shl 24)
         }
 
         override fun onHomeDone() {
@@ -2815,6 +2822,14 @@ object GestureNav {
                 applyDepth()
             }
 
+        /** How much of home's content (its icons, widgets) shows over its wallpaper: Android's recents hide it. */
+        var contentFade = 1f
+            set(v) {
+                if (field == v) return
+                field = v
+                applyDepth()
+            }
+
         private fun applyDepth() {
             val v = depth
             val mp = Motion.profile
@@ -2835,8 +2850,11 @@ object GestureNav {
             low.alpha = if (shown) mix else 0f
             // Under a fully opaque blurred copy the sharp layers are not drawn at all.
             val sharp = if (shown && mix < 1f) 1f else 0f
+            // Home's content fades only over our own copy of its wallpaper (without one the content layer is opaque).
+            val fade = if (picture?.wallpaper == null) 1f else contentFade
             wallpaperLayer.alpha = sharp
-            contentLayer.alpha = sharp
+            contentLayer.alpha = sharp * fade
+            lowContent.alpha = fade
         }
 
         private companion object {

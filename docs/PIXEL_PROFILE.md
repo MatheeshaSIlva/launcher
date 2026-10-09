@@ -65,13 +65,21 @@ tiles and notification cards `accent2_900` (dark) / `accent2_100` (light); lit t
   the same pixels; search, Back (keyboard, search, sheet), launch and close into the drawer's icon, long press, pull
   down to close. Not drawn: Google's G, mic and lens (ours: a magnifier and "Search apps").
 
+- **Recents** (2026-10-10, `sys.layout.switcher` = "carousel", in `switcher/DeckView`, tokens
+  `comp.switcher.carousel.*`): the same switcher (hold during a home swipe; gestures, pictures, springs) laid out as
+  Android's: cards side by side at 68 % of the screen, the focused one centred and staying the app the swipe started in,
+  16 dp apart, 27 dp corners, no shadows; the app's chip inside each card's top left (icon, name, chevron; a tap opens the
+  app's menu); "Clear all" after the oldest card (the carousel rests with it in the middle); home's icons fade out behind
+  (only the wallpaper, dimmed 13 %). Flick up to close, tap to open, Clear all: checked on the emulator against the
+  reference. Not there: Pixel's Screenshot and Select buttons under the cards.
+- **Wallpaper**: Pixel does not dim it in dark mode (`sys.appearance.wallpaper-dim` 0).
+
 ## To do (in order)
 
-4. Recents: the carousel (`sys.layout.switcher` = "carousel").
 5. Menus: Pixel's popup for apps and home.
 6. Status bar: Pixel's battery and icons; motion: Material's springs; icons: Material Symbols (needs the font, to be
    downloaded with permission).
 7. The shade's remaining parts: media player in Quick Settings, tile editing, the header's carrier and icons.
 8. Behaviour: a home gesture from an app opened from All apps lands on home with the sheet closed (Back returns to the
    sheet); ours returns to the sheet either way (iOS's). A swipe down on home opens the shade (ours: Spotlight).
-   App menus from the drawer are still iOS's (item 5).
+   App menus from the drawer are still iOS's (item 5). Recents' Screenshot (and Select, Google's).
