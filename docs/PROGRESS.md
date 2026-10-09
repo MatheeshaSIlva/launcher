@@ -1674,3 +1674,27 @@ material in all six cases. Found and fixed:
   of the way down, standing still: the pull was let go short and closed. With real touchscreen events
   (`tools/kswipe.sh`) it stayed open 4 in 4. Kept from this: a pull now takes the lift's own position before it decides
   (a real finger's last pixels arrive with the lift).
+
+## Fixes reported on the S24 (2026-10-09)
+
+- **An icon missing for a moment after a close.** The card that had turned into the icon went once home drew a frame
+  with the icon, or after 150 ms: right after home came back its draw can be later (the emulator logged 327 ms), and the
+  window still held a frame without the icon. The handover now waits up to 600 ms (the card looks exactly like the icon
+  meanwhile) and logs a late draw ("[home] icon handover: home drew N ms after it was asked").
+- **Badges on cards from and into the App Library.** A launch or close card always took the app's count; the App
+  Library's icons show none, so a count appeared and went with the animation. Home now tells gesture nav which icons
+  show badges (its pages and dock); a card shows one only for those.
+- **The App Library's search field looked different during launches.** In the recorded picture of home behind the
+  card (no live glass there) it fell back to the tiles' glass; it uses the field's own now.
+- **Edit and Done hard to read.** Their labels were redrawn only with the bar itself: a new wallpaper or appearance
+  left the old colour. They now redraw then, move to a new colour on a spring, and are white (with their shadow) or dark,
+  never the grey the old blend gave over mid-grey glass: dark only over clearly light glass (`sys.glass.label.*`, with a
+  band in which a label keeps its colour). The Search pill on home the same (`home/GlassLabelTone`).
+- **Some surfaces barely translucent.** Menus, the widget gallery's sheet, the switcher's menu, Clear All and banners
+  were on the kit's Regular glass (white at 70 % in light mode, dark at 90 % in dark). Now `sys.material.glass.frosted`
+  (the dock's glass, frosted as Regular, a light veil) for what sits over home's blurred backdrop, and
+  `sys.material.glass.frosted-legible` (Regular with half its fills) for what floats over any app (banners, the
+  switcher's menu over an app's picture). Compared on the emulator in three strengths, light and dark.
+- **Banners over home drawn opaque in dark mode** (found while checking): over home they need home's blurred wallpaper,
+  and "over home" came from the accessibility window events; after Home came back with a FrameLayout event the last
+  event still named the app. Now from home's own resumed state.

@@ -178,6 +178,9 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **One UI's fingerprint icon** (`FP Iconview`, a system window above all of ours) hides only when the lock screen's window
   loses the focus. Over the lock screen `shade/FocusHolder` takes the focus, but never in a pull's first 500 ms: with the lock
   screen focused the window manager does not hand a pull from the top to the stock status bar, with our window focused it does.
+- **Whether home is in front: ask `GestureNav.homeVisible`** (HomeActivity's own onResume/onPause), not the accessibility
+  window events: Home coming back with the Home key can report a plain FrameLayout, and the last event then still named
+  the app (banners drew over an app's flat colour on home).
 - **Changing the touchable region of a window that holds a touch is fine, changing its flags is not**: making the shade
   focusable (for back) was a relayout (16.7 ms of its thread on the S24); the focus window (`shade/FocusHolder`) takes the
   focus for Back instead, 300 ms after a panel came to rest (during the pull already over the lock screen).

@@ -14,7 +14,10 @@ object PaletteTokens {
     val GLASS_TINT = ColorKey("sys.glass.tint")
     /** How much dark mode dims the wallpaper. */
     val WALLPAPER_DIM = NumberKey("sys.appearance.wallpaper-dim")
+    /** Text on glass straight on the wallpaper: dark from this brightness behind the tinted glass, fully dark at the second. */
+    val GLASS_LABEL_DARK_FROM = NumberKey("sys.glass.label.dark-from")
+    val GLASS_LABEL_DARK_FULL = NumberKey("sys.glass.label.dark-full")
 
     val COLORS = listOf(LABEL, SECONDARY_LABEL, TERTIARY_LABEL, SEPARATOR, PRESS, DESTRUCTIVE, GLASS_TINT).map { it.name }
-    val NUMBERS = listOf(WALLPAPER_DIM).map { it.name }
+    val NUMBERS = listOf(WALLPAPER_DIM, GLASS_LABEL_DARK_FROM, GLASS_LABEL_DARK_FULL).map { it.name }
 }

@@ -121,6 +121,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         spotlight?.onAppearance()
         updateStatusDark()
         updateLabelTones(animate = false)   // every frame of the crossfade: the names follow it
+        indicator?.redrawLabel(); editBar?.invalidate()   // labels on glass too
         // The Edit button lifted above its menu is a picture: taken again in the new colours.
         if (menu?.isShowing == true && editMode?.active == true) (editBar as? EditMode.Bar)?.let { menu?.replaceLifted(it.editButtonPicture()) }
         invalidateTree(this)
@@ -214,6 +215,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         drawer?.setWallpaper(w)
         spotlight?.setWallpaper(w)
         applyGlassWallpaper()
+        editBar?.invalidate(); indicator?.redrawLabel()   // labels on glass take the new wallpaper's tone
         post { updateLabelTones(animate = true) }
     }
 
@@ -321,10 +323,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             topMargin = metrics.dockTop.roundToInt()
         })
         val ind = PageIndicator(context, metrics).also { indicator = it }
+        val pillTone = GlassLabelTone { ind.redrawLabel() }
         ind.labelColor = {
             val o = IntArray(2)
             ind.getLocationOnScreen(o)
-            dev.launcher.app.theme.Appearance.labelOnGlass(wallpaperLuminanceUnder(RectF(o[0].toFloat(), o[1].toFloat(), o[0] + ind.width.toFloat(), o[1] + ind.height.toFloat())))
+            pillTone.color(wallpaperLuminanceUnder(RectF(o[0].toFloat(), o[1].toFloat(), o[0] + ind.width.toFloat(), o[1] + ind.height.toFloat())))
         }
         fg.addView(ind, LayoutParams(ind.widthFor(1), metrics.indicatorHeight.roundToInt()))
         val dr = Drawers.create(cfg.drawerStyle, context, this).also { drawer = it }
@@ -1180,7 +1183,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             }
         }
         published = views
-        HomeBridge.setVisibleIcons(map)
+        // Home's pages and dock show badges; the App Library's icons do not (a card from or into one shows none).
+        HomeBridge.setVisibleIcons(map, if (dp <= 0.001f) views.keys.toSet() else emptySet())
     }
 
     /**

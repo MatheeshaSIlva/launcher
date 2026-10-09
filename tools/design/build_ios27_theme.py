@@ -278,6 +278,10 @@ SEED = {
     'motion.switcher.clear-press': {'spring': [0.16, 1.0], 'src': 'judged:Clear All pressed'},
     'motion.home.label-tone': {'spring': [0.5, 1.0], 'src': 'judged:names and the clock turning light or dark with a new wallpaper (as gently as the wallpaper changes)'},
     'motion.banner.fly-fade': {'spring': [0.5, 1.0], 'src': 'judged:a flung banner fading as it goes'},
+    # Frosted glass for what carries text over home (menus, sheets, the switcher's menu, Clear All) and over anything
+    # (banners): Matheesha found the kit's Regular glass barely translucent next to the rest (judged 2026-10-09).
+    'sys.material.glass.frosted': {'material': {'frost': 16, 'lens': {'refraction': 0.7, 'depth': 30, 'dispersion': 0.2, 'splay': 0.2, 'light': 0.2, 'lightAngle': 0}, 'fills': [['#ffffff', [0.15, 0.0], 'LIGHTEN'], ['#999999', [0.33, 0.0], 'LUMINOSITY'], ['#333333', [0.0, 0.45], 'LUMINOSITY']], 'innerShadows': [['#282828', 0.0, -40.0, 10.0, -40.0, 'LINEAR_DODGE'], ['#282828', 0.0, 40.0, 10.0, -40.0, 'LINEAR_DODGE'], ['#282828', 0.0, -1.25, 0.25, 0.0, 'LINEAR_DODGE'], ['#282828', 0.0, 1.25, 0.25, 0.0, 'LINEAR_DODGE']], 'shadows': [['#00000040|#00000073', 0.0, 8.0, 48.0, 0.0, 'NORMAL'], ['#dbdbdb|#a6a6a6', 0.0, 0.0, 0.0, 0.5, 'LINEAR_BURN'], ['#dbdbdb|#a6a6a6', -1.25, 0.0, 0.0, -0.75, 'LINEAR_BURN'], ['#dbdbdb|#a6a6a6', 1.25, 0.0, 0.0, -0.75, 'LINEAR_BURN']]}, 'src': "judged:the dock's glass frosted as the kit's Regular (16), a light veil in light mode, a darker one in dark mode: as translucent as the rest, its text readable over home's blurred, veiled backdrop"},
+    'sys.material.glass.frosted-legible': {'material': {'frost': 16, 'lens': {'refraction': 0.7, 'depth': 30, 'dispersion': 0.2, 'splay': 0.2, 'light': 0.25, 'lightAngle': 0}, 'fills': [['#ffffff', [0.35, 0.0], 'LIGHTEN'], ['#bfbfbf', [0.05, 0.0], 'DARKEN'], ['#1a1a1a', [0.0, 0.35], 'LUMINOSITY'], ['#1a1a1a', [0.0, 0.45], 'LUMINOSITY'], ['#1a1a1a', [0.0, 0.5], 'LIGHTEN']], 'innerShadows': [['#282828|#1a1a1a', 0.0, -40.0, 10.0, -40.0, 'LINEAR_DODGE'], ['#282828|#1a1a1a', 0.0, 40.0, 10.0, -40.0, 'LINEAR_DODGE']], 'shadows': [['#00000040|#00000073', 0.0, 8.0, 48.0, 0.0, 'NORMAL'], ['#dbdbdb|#a6a6a6', 0.0, 0.0, 0.0, 0.5, 'LINEAR_BURN'], ['#dbdbdb|#a6a6a6', -1.25, 0.0, 0.0, -0.75, 'LINEAR_BURN'], ['#dbdbdb|#a6a6a6', 1.25, 0.0, 0.0, -0.75, 'LINEAR_BURN']]}, 'src': "judged:the kit's Regular glass with half its fills: still glass, readable over any app (banners)"},
     'sys.glass.rim': {'factor': 0.4, 'src': "judged:Matheesha: the kit's hairline rims (its blur-0 drop shadows, linear burn #cccccc / #a6a6a6) read as a black outline over dark backdrops on the phone; 1 is the kit's"},
     'sys.color.label.primary': {'ref': 'ref.color.labels.primary', 'src': 'kit:VariableID:507:29167'},
     'sys.color.label.secondary': {'ref': 'ref.color.labels.secondary', 'src': 'kit:VariableID:507:29162'},
@@ -298,6 +302,8 @@ SEED = {
     'sys.color.material.destructive': {'light': '#ff3b30', 'dark': '#ff453a', 'src': "judged:iOS's system red"},
     'sys.color.press': {'light': '#00000014', 'dark': '#ffffff1f', 'src': 'judged:a pressed row or button'},
     'sys.glass.tint': {'light': '#ffffff30', 'dark': '#00000052', 'src': "judged:the glass's own tint: light in light mode, dark in dark mode (the dock's)"},
+    'sys.glass.label.dark-from': {'factor': 0.56, 'src': "judged:text on glass straight on the wallpaper is white (with its shadow) up to this brightness behind the tinted glass, dark only over clearly light glass (Matheesha: dark labels over a darker wallpaper were hard to read; the old blend 0.40-0.52 gave grey text)"},
+    'sys.glass.label.dark-full': {'factor': 0.62, 'src': 'judged:dark from here; in between a label keeps the tone it has'},
     'sys.appearance.wallpaper-dim': {'factor': 0.14, 'src': 'judged:dark mode dims the wallpaper a little (iOS: "Dark Appearance Dims Wallpaper")'},
     # Fallbacks: a surface drawn without the glass renderer.
     'comp.home.menu.fallback': {'light': '#f2f2f7f2', 'dark': '#2c2c2ed9', 'src': 'judged:a menu without the glass renderer'},
@@ -382,7 +388,7 @@ SEED = {
     'comp.home.clock.tint-light': {'color': '#ffffff30', 'src': "judged:the clock over a dark or mid wallpaper: the glass's light tint (the dock's in light mode)"},
     'comp.home.clock.tint-dark': {'color': '#00000029', 'src': "judged:the clock over a bright wallpaper: the light glass only slightly dimmed, close to the dock's glass (Matheesha, 2026-10-09; the dark mode tint 52 read as grey)"},
     # The long-press menu: the kit's Home Screen Quick Actions (System page 2607:25374, its menu 5626:51776).
-    'comp.home.menu.material': {'ref': 'sys.material.glass.regular', 'src': 'kit:5626:51776 (BG: the Regular glass, frost 16)'},
+    'comp.home.menu.material': {'ref': 'sys.material.glass.frosted', 'src': "judged:the frosted glass (was the kit's Regular, 5626:51776: barely translucent next to the rest)"},
     'comp.home.menu.corner': {'pt': 30, 'src': 'kit:10411:18581'},
     'comp.home.menu.width': {'pt': 250, 'src': 'kit:5626:51776'},
     'comp.home.menu.row': {'pt': 42, 'src': 'kit:5626:51776 (rows 42 pt apart)'},
@@ -401,6 +407,8 @@ SEED = {
     **{'comp.switcher.menu.' + _k: {'ref': 'comp.home.menu.' + _k, 'src': "judged:the App Switcher's app menu looks as home's menus"}
        for _k in ['material', 'corner', 'width', 'row', 'pad-top', 'pad-bottom', 'symbol-x', 'label-x', 'type', 'label', 'destructive', 'press',
                   'symbol', 'grow-from', 'fallback']},
+    # Over the app's own picture (bright in dark mode too): the frosted glass that stays readable over anything.
+    'comp.switcher.menu.material': {'ref': 'sys.material.glass.frosted-legible', 'src': "judged:the switcher's menu lies over an app's picture, which may be bright in dark mode"},
     'comp.switcher.clear.material': {'ref': 'comp.home.menu.material', 'src': "judged:Clear All on the menus' glass (the Regular glass)"},
     'comp.switcher.clear.height': {'pt': 44, 'src': "judged:the kit's button height (a sheet's 44 pt buttons)"},
     'comp.switcher.clear.padding-x': {'pt': 22, 'src': 'judged:the label 22 pt from the capsule\'s ends'},
@@ -414,7 +422,7 @@ SEED = {
     'comp.library.tile.material': {'ref': 'sys.material.glass.dock', 'src': "judged:App Library's tiles, folders and search bar on the dock's glass (the kit has no App Library)"},
     'comp.spotlight.card.material': {'ref': 'sys.material.glass.dock', 'src': "judged:Spotlight's card on the dock's glass, as the App Library's tiles"},
     # The widget gallery: a tall glass sheet (the kit's medium sheet is the Regular glass; its large one is opaque).
-    'comp.widgets.sheet.material': {'ref': 'sys.material.glass.regular', 'src': "kit:10525:1636 (Sheet - iPhone, medium detent: the Regular glass); judged for the gallery's tall sheet (iOS 26's is glass)"},
+    'comp.widgets.sheet.material': {'ref': 'sys.material.glass.frosted', 'src': "judged:the frosted glass (was the kit's Regular)"},
     'comp.widgets.button.material': {'ref': 'sys.material.glass.small-active', 'src': "kit:5566:7888 (a sheet's 44 pt buttons: the small glass, active)"},
     'comp.widgets.card.material': {'ref': 'sys.material.glass.dock', 'src': "judged:a widget's preview card on the dock's glass (as on home)"},
     'comp.nc.platter.material': {'ref': 'sys.material.glass.clear', 'src': 'kit:0:11292'},
@@ -555,7 +563,7 @@ SEED = {
     'comp.cc.gallery.dim': {'color': '#00000080', 'src': 'judged:Control Center dims behind the gallery'},
     'comp.cc.gallery.corner': {'pt': 38, 'src': "judged:a sheet of iOS 27's size (the kit's sheets are rounded 38)"},
     # Banners (docs/IOS27_KIT.md "Banners"): Notification Center's platter (NotifPainter) on regular glass.
-    'comp.banner.material': {'ref': 'sys.material.glass.regular', 'src': "measured:iOS 27 Simulator run 4, a banner over a white app: #fafafa inside, a darker rim: the kit's regular glass over white (its darken leaves 249)"},
+    'comp.banner.material': {'ref': 'sys.material.glass.frosted-legible', 'src': "judged:the frosted glass that stays readable over any app (was the kit's Regular)"},
     'comp.banner.behind': {'ref': 'ref.color.backgrounds.primary', 'src': "judged:what is behind a banner (an app) is not known: an app's usual background in this appearance"},
     'comp.banner.corner': {'pt': 24, 'src': "kit:0:11292 (the platter)"},
     'comp.banner.margin': {'pt': 8, 'src': "measured:iOS 27 Simulator run 4, BannerNotification at x 8, 386 wide"},

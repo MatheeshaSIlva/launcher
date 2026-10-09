@@ -722,6 +722,16 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         // The capsules are clear glass: over a light wallpaper the white labels need a slightly darker capsule to sit on.
         private val tint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
         private val tintRect = RectF()
+        /**
+         * The labels' tone (0 white, 1 dark) for what is behind the capsules, on a spring: a new wallpaper or appearance moves
+         * it. The labels are drawn by this bar, which a change of the glass under them did not redraw (they kept a dark
+         * colour over a darker wallpaper): the bar redraws on every appearance change and new wallpaper.
+         */
+        private val labelTone = GlassLabelTone { invalidate() }
+        private val onAppearance: () -> Unit = { invalidate() }
+
+        override fun onAttachedToWindow() { super.onAttachedToWindow(); dev.launcher.app.theme.Appearance.addListener(onAppearance) }
+        override fun onDetachedFromWindow() { dev.launcher.app.theme.Appearance.removeListener(onAppearance); super.onDetachedFromWindow() }
 
         init {
             setWillNotDraw(false)
@@ -807,7 +817,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             doneGlass.getLocationOnScreen(b)
             val la = home.wallpaperLuminanceUnder(RectF(a[0].toFloat(), a[1].toFloat(), a[0] + editGlass.width.toFloat(), a[1] + editGlass.height.toFloat()))
             val lb = home.wallpaperLuminanceUnder(RectF(b[0].toFloat(), b[1].toFloat(), b[0] + doneGlass.width.toFloat(), b[1] + doneGlass.height.toFloat()))
-            return dev.launcher.app.theme.Appearance.labelOnGlass((la + lb) / 2f)
+            return labelTone.color((la + lb) / 2f, snap = visibility != View.VISIBLE || alpha <= 0.001f)
         }
 
         private fun setPressed(edit: Boolean, done: Boolean) {

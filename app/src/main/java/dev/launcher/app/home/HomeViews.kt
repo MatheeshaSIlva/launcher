@@ -747,6 +747,9 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
     /** Its text, glyph and dots: dark or white for what is behind the pill (set by home). */
     var labelColor: () -> Int = { Color.WHITE }
 
+    /** Draws the label again (its colour changed: a new wallpaper, the appearance, a frame of its tone's spring). */
+    fun redrawLabel() = content.invalidate()
+
     private fun drawContent(c: Canvas) {
         val cy = height / 2f
         val col = labelColor()

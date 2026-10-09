@@ -31,8 +31,11 @@ object HomeBridge {
         fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long)
         /** Records home exactly as it shows now (every icon; open folder, scroll, page as they are). Main thread. */
         fun recordAsShown(): HomePicture?
-        /** Runs [then] once home has drawn its next frame (a frame later, when it has been queued), or after 150 ms. */
-        fun afterNextDraw(then: () -> Unit)
+        /**
+         * Runs [then] once home has drawn its next frame (a frame later, when it has been queued), or after [timeoutMs];
+         * with a [label], a late draw (or none) is logged.
+         */
+        fun afterNextDraw(then: () -> Unit, timeoutMs: Long = 150, label: String? = null)
     }
 
     @Volatile var home: Home? = null
@@ -94,22 +97,35 @@ object HomeBridge {
 
     // Icons a closing card can fly into right now (screen px), published by home whenever it settles.
     @Volatile private var icons: Map<String, RectF> = emptyMap()
+    // Those of them that show a badge (home's pages and dock; the App Library's icons show none).
+    @Volatile private var badged: Set<String> = emptySet()
 
-    fun setVisibleIcons(m: Map<String, RectF>) { icons = m }
+    fun setVisibleIcons(m: Map<String, RectF>, badges: Set<String> = emptySet()) { icons = m; badged = badges }
     fun iconRect(pkg: String): RectF? = icons[pkg]
+
+    /** Whether [pkg]'s icon a card flies into shows a badge (the card shows it too as it turns into the icon). */
+    fun showsBadge(pkg: String): Boolean = pkg in badged
+
+    /** Whether the icon at [rect] (screen px) a card grows out of is one that shows a badge (not the App Library's). */
+    fun showsBadgeAt(pkg: String, rect: RectF): Boolean {
+        if (pkg !in badged) return false
+        val r = icons[pkg] ?: return false
+        return kotlin.math.abs(r.centerX() - rect.centerX()) < 4f && kotlin.math.abs(r.centerY() - rect.centerY()) < 4f
+    }
 
     fun setIconHidden(pkg: String, hidden: Boolean) = main.post { home?.setIconHidden(pkg, hidden) }
 
     /**
-     * Shows [pkg]'s icon again and runs [then] (main thread) once home has drawn a frame with it, or after 150 ms: the
+     * Shows [pkg]'s icon again and runs [then] (main thread) once home has drawn a frame with it, or after 600 ms: the
      * card that turned into the icon is taken away only then, so no frame shows neither (the icon "went missing for a
-     * moment" when the card went on a timer while home's draw was late).
+     * moment" when the card went on a timer while home's draw was late; 150 ms was not always enough right after home
+     * came back: Matheesha saw the icon missing, then coming back). The card looks exactly like the icon meanwhile.
      */
     fun showIconThen(pkg: String, then: () -> Unit) = main.post {
         val h = home
         if (h == null) { then(); return@post }
         h.setIconHidden(pkg, false)
-        h.afterNextDraw(then)
+        h.afterNextDraw(then, timeoutMs = 600, label = "icon handover")
     }
 
     /** Runs [then] (main thread) once home has drawn its next frame and it has been queued, or after 150 ms. Any thread. */

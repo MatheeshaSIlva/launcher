@@ -394,6 +394,7 @@ object GestureNav {
         }
         override fun frontPackage(): String? = frontNow
         override fun frontClass(): String? = frontNowClass
+        override fun homeShown(): Boolean = homeVisible
         override fun frontSince(): Long = frontNowAt
         override fun snapshotFor(pkg: String): Bitmap? = images[pkg]
         override fun quietStarts(on: Boolean) {
@@ -1061,7 +1062,7 @@ object GestureNav {
         c.homePicture = null
         c.snapshot = bitmap
         c.icon = pkg?.let { iconFor(it) }
-        c.badge = pkg?.let { Badges.count(it) } ?: 0
+        c.badge = pkg?.let { if (HomeBridge.showsBadge(it)) Badges.count(it) else 0 } ?: 0
         c.unitPx = sw / 402f
         c.minIconSize = Icons.homeSize.toFloat()
         // Without a snapshot the card shows the app's launch screen: its splash colour behind its icon.
@@ -1516,7 +1517,9 @@ object GestureNav {
             val size = target?.width() ?: (sw * 0.3f)
             val sizeH = target?.height() ?: (sh * 0.3f)
             switchAt = 0L   // going home ends any run of quick switches
-            c.badge = pkg?.let { Badges.count(it) } ?: 0   // as it will show on home (it may have changed while the app was open)
+            // As it will show on home (it may have changed while the app was open); none for an icon without badges (the
+            // App Library's: the count appeared on the card and went as the card turned into the icon).
+            c.badge = pkg?.let { if (target != null && HomeBridge.showsBadge(it)) Badges.count(it) else 0 } ?: 0
             hideIcon(if (target != null) pkg else null)
             cardIconSize = size
             beginCardSprings(toIcon = target != null)
@@ -1790,7 +1793,7 @@ object GestureNav {
         if (!reverse) {
             c.homePicture = null
             c.icon = icon
-            c.badge = Badges.count(pkg)
+            c.badge = if (HomeBridge.showsBadgeAt(pkg, iconRect)) Badges.count(pkg) else 0   // as the icon it grows out of
             c.unitPx = sw / 402f
             c.snapshot = images[pkg]
             c.minIconSize = iconRect.width()

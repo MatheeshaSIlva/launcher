@@ -55,6 +55,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         /** The package whose window came to the front last (home: ours), its window's class, and when (uptime ms). */
         fun frontPackage(): String?
         fun frontClass(): String?
+        /** Home is in front (its activity resumed; our own overlays do not count as apps). */
+        fun homeShown(): Boolean
         fun frontSince(): Long
         /** The app's latest picture, if gesture navigation has one (its launch card shows it). */
         fun snapshotFor(pkg: String): android.graphics.Bitmap?
@@ -158,7 +160,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         })
         banner = BannerView(ctx, object : BannerView.Host {
             override val barHeight get() = this@Shade.barHeight
-            override fun overHome() = nav.frontPackage() == ctx.packageName && nav.frontClass()?.endsWith(".HomeActivity") == true
+            // Home resumed: the window events alone left it out after Home came back with a plain FrameLayout event (the
+            // banner then drew over the flat colour meant for an app, opaque dark in dark mode).
+            override fun overHome() = nav.homeShown() || (nav.frontPackage() == ctx.packageName && nav.frontClass()?.endsWith(".HomeActivity") == true)
             override fun open(item: Notifs.Item) {
                 if (!locked) { if (Notifs.open(ctx, item) && panel != null) close(); return }
                 if (panel != null) close()

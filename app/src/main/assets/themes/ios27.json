@@ -1522,8 +1522,8 @@
    "src": "measured:iOS 27 Simulator run 4, BannerNotification at x 8, 386 wide"
   },
   "comp.banner.material": {
-   "ref": "sys.material.glass.regular",
-   "src": "measured:iOS 27 Simulator run 4, a banner over a white app: #fafafa inside, a darker rim: the kit's regular glass over white (its darken leaves 249)"
+   "ref": "sys.material.glass.frosted-legible",
+   "src": "judged:the frosted glass that stays readable over any app (was the kit's Regular)"
   },
   "comp.banner.secondary": {
    "ref": "sys.color.label.secondary",
@@ -2115,8 +2115,8 @@
    "src": "kit:5619:49810"
   },
   "comp.home.menu.material": {
-   "ref": "sys.material.glass.regular",
-   "src": "kit:5626:51776 (BG: the Regular glass, frost 16)"
+   "ref": "sys.material.glass.frosted",
+   "src": "judged:the frosted glass (was the kit's Regular, 5626:51776: barely translucent next to the rest)"
   },
   "comp.home.menu.pad-bottom": {
    "pt": 8,
@@ -2561,8 +2561,8 @@
    "src": "judged:the App Switcher's app menu looks as home's menus"
   },
   "comp.switcher.menu.material": {
-   "ref": "comp.home.menu.material",
-   "src": "judged:the App Switcher's app menu looks as home's menus"
+   "ref": "sys.material.glass.frosted-legible",
+   "src": "judged:the switcher's menu lies over an app's picture, which may be bright in dark mode"
   },
   "comp.switcher.menu.pad-bottom": {
    "ref": "comp.home.menu.pad-bottom",
@@ -2615,8 +2615,8 @@
    "src": "judged:the gallery sheet's grabber"
   },
   "comp.widgets.sheet.material": {
-   "ref": "sys.material.glass.regular",
-   "src": "kit:10525:1636 (Sheet - iPhone, medium detent: the Regular glass); judged for the gallery's tall sheet (iOS 26's is glass)"
+   "ref": "sys.material.glass.frosted",
+   "src": "judged:the frosted glass (was the kit's Regular)"
   },
   "motion.app.cancel": {
    "spring": [
@@ -3399,6 +3399,14 @@
    "ref": "ref.color.separators.non-opaque",
    "src": "kit:VariableID:509:77495"
   },
+  "sys.glass.label.dark-from": {
+   "factor": 0.56,
+   "src": "judged:text on glass straight on the wallpaper is white (with its shadow) up to this brightness behind the tinted glass, dark only over clearly light glass (Matheesha: dark labels over a darker wallpaper were hard to read; the old blend 0.40-0.52 gave grey text)"
+  },
+  "sys.glass.label.dark-full": {
+   "factor": 0.62,
+   "src": "judged:dark from here; in between a label keeps the tone it has"
+  },
   "sys.glass.rim": {
    "factor": 0.4,
    "src": "judged:Matheesha: the kit's hairline rims (its blur-0 drop shadows, linear burn #cccccc / #a6a6a6) read as a black outline over dark backdrops on the phone; 1 is the kit's"
@@ -3415,6 +3423,222 @@
   "sys.material.glass.dock": {
    "ref": "ref.material.liquid-glass.dock",
    "src": "kit:10486:20740"
+  },
+  "sys.material.glass.frosted": {
+   "material": {
+    "frost": 16,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.2,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.15,
+       0.0
+      ],
+      "LIGHTEN"
+     ],
+     [
+      "#999999",
+      [
+       0.33,
+       0.0
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#333333",
+      [
+       0.0,
+       0.45
+      ],
+      "LUMINOSITY"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#282828",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      -1.25,
+      0.25,
+      0.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      1.25,
+      0.25,
+      0.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000040|#00000073",
+      0.0,
+      8.0,
+      48.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:the dock's glass frosted as the kit's Regular (16), a light veil in light mode, a darker one in dark mode: as translucent as the rest, its text readable over home's blurred, veiled backdrop"
+  },
+  "sys.material.glass.frosted-legible": {
+   "material": {
+    "frost": 16,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.25,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.35,
+       0.0
+      ],
+      "LIGHTEN"
+     ],
+     [
+      "#bfbfbf",
+      [
+       0.05,
+       0.0
+      ],
+      "DARKEN"
+     ],
+     [
+      "#1a1a1a",
+      [
+       0.0,
+       0.35
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#1a1a1a",
+      [
+       0.0,
+       0.45
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#1a1a1a",
+      [
+       0.0,
+       0.5
+      ],
+      "LIGHTEN"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#282828|#1a1a1a",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828|#1a1a1a",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000040|#00000073",
+      0.0,
+      8.0,
+      48.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:the kit's Regular glass with half its fills: still glass, readable over any app (banners)"
   },
   "sys.material.glass.regular": {
    "ref": "ref.material.liquid-glass.regular",

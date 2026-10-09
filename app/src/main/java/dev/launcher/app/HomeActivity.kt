@@ -479,11 +479,18 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (android.os.SystemClock.uptimeMillis() - recordedAt > 6) drawnSinceRecord = true
     }
 
-    override fun afterNextDraw(then: () -> Unit) {
+    override fun afterNextDraw(then: () -> Unit, timeoutMs: Long, label: String?) {
         // This frame is the one gesture nav uncovers home on: its glass must be current in it.
         screen.refreshGlass()
         var done = false
-        val run = Runnable { if (!done) { done = true; then() } }
+        val asked = android.os.SystemClock.uptimeMillis()
+        val run = Runnable {
+            if (done) return@Runnable
+            done = true
+            val took = android.os.SystemClock.uptimeMillis() - asked
+            if (label != null && took > 150) AppLog.log("[home] $label: home drew ${took} ms after it was asked" + if (took >= timeoutMs) " (gave up waiting)" else "")
+            then()
+        }
         val vto = screen.viewTreeObserver
         val listener = object : ViewTreeObserver.OnDrawListener {
             override fun onDraw() {
@@ -493,7 +500,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
         vto.addOnDrawListener(listener)
         screen.invalidate()
-        screen.postDelayed({ screen.viewTreeObserver.removeOnDrawListener(listener); run.run() }, 150)
+        screen.postDelayed({ screen.viewTreeObserver.removeOnDrawListener(listener); run.run() }, timeoutMs)
     }
 
     override fun recordWithout(pkg: String): HomePicture? {

@@ -387,7 +387,9 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         wallpaper = w
         backdropGlass.wallpaper = w
         tileGlass = if (w != null) dev.launcher.app.home.HomeTokens.LIBRARY_TILE else null
-        searchGlass = tileGlass
+        // The field's own glass (as it is drawn live): with the tiles' glass it changed look in the picture of home behind
+        // launching and closing cards.
+        searchGlass = if (w != null) dev.launcher.app.home.HomeTokens.FIELD else null
         panelGlass = tileGlass
         invalidateAll()
         searchBar.invalidate()

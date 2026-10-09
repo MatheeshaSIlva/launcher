@@ -187,22 +187,39 @@ object Appearance {
 
     /**
      * Text and symbols on glass straight on the wallpaper (the edit buttons, the Search pill), whose brightness behind is
-     * [wallpaperLum] (0..1): dark where the tinted glass is light, white (with a shadow) where it is dark, as iOS's glass
-     * controls do. Blended across the middle, so a change never snaps.
+     * [wallpaperLum] (0..1): 0 = white (with a shadow), 1 = dark, as iOS's glass controls. Dark only where the tinted glass
+     * is clearly light (`sys.glass.label.*`): over mid-grey glass dark text was hard to read and white with its shadow
+     * reads. Views move to a new tone on a spring ([dev.launcher.app.home.GlassLabelTone]).
      */
-    fun labelOnGlass(wallpaperLum: Float): Int {
+    fun glassLabelTone(wallpaperLum: Float, current: Float = Float.NaN): Float {
         val t = glassTint
         val ta = ((t ushr 24) and 0xFF) / 255f
         val tl = (0.2126f * ((t shr 16) and 0xFF) + 0.7152f * ((t shr 8) and 0xFF) + 0.0722f * (t and 0xFF)) / 255f
         val behind = wallpaperLum * (1f - wallpaperDim)
         val eff = behind * (1f - ta) + tl * ta
-        // Equal contrast for white and black text at about 0.46 (sRGB): blended across 0.40-0.52.
-        val k = ((eff - 0.40f) / 0.12f).coerceIn(0f, 1f)   // 0 = white text, 1 = dark text
+        val a = dev.launcher.app.design.Design.num(PaletteTokens.GLASS_LABEL_DARK_FROM)
+        val b = dev.launcher.app.design.Design.num(PaletteTokens.GLASS_LABEL_DARK_FULL)
+        // White or dark, never grey in between (grey read worse than either): inside the band the label keeps the tone it
+        // has ([current]), so a wallpaper near the edge does not make it flip back and forth.
+        return when {
+            eff >= b -> 1f
+            eff <= a -> 0f
+            current.isNaN() -> if (eff >= (a + b) / 2f) 1f else 0f
+            else -> if (current >= 0.5f) 1f else 0f
+        }
+    }
+
+    /** The colour of text on glass at [tone] (see [glassLabelTone]). */
+    fun glassLabelColor(tone: Float): Int {
+        val k = tone.coerceIn(0f, 1f)
         fun ch(a: Int, b: Int, shift: Int) = ((((a shr shift) and 0xFF) + (((b shr shift) and 0xFF) - ((a shr shift) and 0xFF)) * k) + 0.5f).toInt() shl shift
         val white = 0xFFFFFFFF.toInt()
         val darkText = 0xE6000000.toInt()
         return ch(white, darkText, 24) or ch(white, darkText, 16) or ch(white, darkText, 8) or ch(white, darkText, 0)
     }
+
+    /** [glassLabelColor] of [glassLabelTone] at once (no spring). */
+    fun labelOnGlass(wallpaperLum: Float): Int = glassLabelColor(glassLabelTone(wallpaperLum))
 
     /** How much of a text shadow [labelOnGlass]'s colour wants (white text: full, dark text: none). */
     fun shadowFor(label: Int): Float = (((label shr 16) and 0xFF) / 255f)
