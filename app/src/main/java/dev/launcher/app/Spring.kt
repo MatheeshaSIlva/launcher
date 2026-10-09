@@ -13,7 +13,8 @@ import kotlin.math.sqrt
  * [response] = period of the undamped oscillation in seconds, [damping] = damping fraction (1 = critically damped).
  */
 class Spring(private val response: Float, private val damping: Float) {
-    private val omega = 2.0 * PI / response                  // natural angular frequency
+    // Natural angular frequency; slow motion (a debug token, 1 = normal) stretches every spring's period alike.
+    private val omega = 2.0 * PI / (response * dev.launcher.app.motion.Motion.slow())
     private var x0 = 0.0                                    // start offset from target
     private var v0 = 0.0                                    // start velocity (units per second)
     var target = 0f

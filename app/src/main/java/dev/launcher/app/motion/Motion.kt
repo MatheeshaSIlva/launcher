@@ -93,6 +93,12 @@ class SwitcherProfile internal constructor() {
 }
 
 object Motion {
+    /**
+     * Slow motion for checking animations frame by frame (`motion.debug.slow`, 1 = normal, as iOS's Slow Animations): every
+     * spring's period is stretched by it. 1 when the theme cannot be read (unit tests).
+     */
+    fun slow(): Float = try { Design.num(MotionTokens.DEBUG_SLOW).coerceIn(1f, 20f) } catch (_: Throwable) { 1f }
+
     /** A role's spring from the theme ([MotionTokens]); read when an animation starts. */
     fun role(k: SpringKey): SpringSpec = Design.spring(k).let { SpringSpec(it.response, it.damping) }
 

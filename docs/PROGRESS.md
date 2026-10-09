@@ -1698,3 +1698,11 @@ material in all six cases. Found and fixed:
 - **Banners over home drawn opaque in dark mode** (found while checking): over home they need home's blurred wallpaper,
   and "over home" came from the accessibility window events; after Home came back with a FrameLayout event the last
   event still named the app. Now from home's own resumed state.
+
+## Step 4: slow motion for the animation audit (2026-10-09)
+
+- `motion.debug.slow` (a token, 1 = normal): every spring's period is stretched by it (`Spring`), as iOS's Slow
+  Animations; with the system's animator scale set alike, the few timed fades follow. On the emulator
+  (`slowmo.sh FACTOR` writes the token edit and the scale) its recorder catches ~12 frames a second: at 8x that is about
+  every real frame of our own animations. It cannot help where the recorder itself stalls (windows changing, an app
+  starting: 200-600 ms gaps during a launch): those are checked on the S24's 120 fps recorder.

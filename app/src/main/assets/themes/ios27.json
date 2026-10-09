@@ -2865,6 +2865,10 @@
    "ms": 420,
    "src": "judged:the clock's numerals crossfading at the minute change"
   },
+  "motion.debug.slow": {
+   "factor": 1,
+   "src": "judged:slow motion for checking animations frame by frame (1 = normal; every spring's period is stretched by it)"
+  },
   "motion.disappear.fade": {
    "ms": 200,
    "src": "judged:something leaving fading"
