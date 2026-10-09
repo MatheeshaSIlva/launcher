@@ -193,6 +193,6 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
 
     private companion object {
         /** A name turning white or dark (a new wallpaper): as gently as the wallpaper's own change. */
-        val TONE_SPRING = dev.launcher.app.motion.SpringSpec(0.5f, 1f)
+        val TONE_SPRING get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.HOME_LABEL_TONE)
     }
 }

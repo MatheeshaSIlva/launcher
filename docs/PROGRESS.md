@@ -1659,3 +1659,18 @@ material in all six cases. Found and fixed:
   gallery pixel for pixel the same (but for the text cursor and the clock's minute).
 - A mistake of mine: one commit went out with the theme test failing (the command committed whatever the test said);
   fixed in the next commit. Commits now go through a script that commits only when the tests pass.
+
+## Step 4: the motion registry (2026-10-09)
+
+- Every animation's spring and timing is a theme token by role (`motion.*`, keys in `motion/MotionTokens`): home's
+  profile (`MotionProfile` keeps its property names and reads the tokens, so no call site changed) and the springs that
+  were constants in the shade, Control Center, its expanded modules and gallery, the banners, the status bar, edit mode
+  and the switcher. Equal press springs became shared roles (`motion.press-*` for Notification Center and the banners,
+  `motion.cc.press-*` for Control Center). Same values as before; the token editor can retime any of them.
+- Emulator smoke test: launch and close an app, App Library, edit mode, Notification Center, Control Center, a banner:
+  as before, no errors.
+- Found while testing: Control Center closed by itself after scripted pulls (3 in 4). `adb input swipe` on the loaded
+  emulator (its UWB service crash-loops every 5 s) delivered the lift where the app had last seen the finger, a quarter
+  of the way down, standing still: the pull was let go short and closed. With real touchscreen events
+  (`tools/kswipe.sh`) it stayed open 4 in 4. Kept from this: a pull now takes the lift's own position before it decides
+  (a real finger's last pixels arrive with the lift).

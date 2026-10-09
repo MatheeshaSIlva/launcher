@@ -153,6 +153,8 @@ copy it wholesale — port the working pieces cleanly. File map:
   raw events, read by the shell service (`TouchStream`, `/dev/input`) only while a pull lasts.
 - **`adb shell input` never reaches `/dev/input`** (injected after the kernel): the raw stream sees nothing, so scripted pulls
   over apps always end at the handover. On the emulator `tools/kswipe.sh` sends real touchscreen events through the console.
+  On a loaded emulator an injected swipe can also end early (its lift where the app last saw it, a quarter of the way): a
+  pulled panel then closes by itself. Scripted pulls use `tools/kswipe.sh`.
 - **Blocking the stock shade also blocks heads-up notifications** (SystemUI: "No heads up: disabled panel"); sound and
   vibration still play. Not One UI's "Brief" pop-up style (system setting `edge_lighting=1`): those come from the system
   server's EdgeLightingManager (SystemUI logs "no Heads up : edgelighting enabled app") and show next to our banners;

@@ -121,7 +121,9 @@ words: the Liquid Glass look with the convenience and customizability of Android
 - Optional, by token: the glass's light follows the phone's tilt (iOS moves its highlights with the device); today its
   direction is fixed (the kit's inner shadows at top and bottom, the rim light from a fixed angle).
 
-**Step 4: motion.** Every animation listed with a role name; the registry; transitions behind interfaces (launch, close,
+**Step 4: motion.** *Registry done 2026-10-09:* every spring and timing is a `motion.*` token by role (home's profile,
+`MotionProfile`, and about 50 of the shade's, Control Center's, the status bar's and edit mode's springs that were in
+code; `motion/MotionTokens`, read through `Motion.role`). Every animation listed with a role name; the registry; transitions behind interfaces (launch, close,
 panel open and close, module expand, stack fan-out, banner in and out...). Then the animation audit: each one recorded
 and frame-checked (S24 where it shows no private content, emulator otherwise), every defect listed in `docs/` and fixed
 one at a time.

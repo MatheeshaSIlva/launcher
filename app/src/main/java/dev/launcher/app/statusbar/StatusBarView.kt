@@ -799,10 +799,10 @@ class StatusBarView(ctx: Context) : View(ctx) {
         const val ICON_GAP_PT = 4.5f
         /** Notification icons shown at most (Matheesha: more looked cluttered); a dot stands for the rest. */
         const val MAX_ICONS = 3
-        val MOVE = SpringSpec(0.36f, 1f)
-        val APPEAR = SpringSpec(0.38f, 0.78f)
-        val LEAVE = SpringSpec(0.26f, 1f)
-        val LEVEL = SpringSpec(0.6f, 1f)
+        val MOVE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_MOVE)
+        val APPEAR get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_APPEAR)
+        val LEAVE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_LEAVE)
+        val LEVEL get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_LEVEL)
         val iconIo = Executors.newSingleThreadExecutor()
     }
 }
@@ -877,6 +877,6 @@ class RollingText(private val onFrame: () -> Unit) {
     }
 
     private companion object {
-        val ROLL = SpringSpec(0.42f, 1f)
+        val ROLL get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_ROLL)
     }
 }

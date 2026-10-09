@@ -282,9 +282,9 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     private companion object {
-        val OPEN = SpringSpec(0.45f, 1f)
-        val CLOSE = SpringSpec(0.38f, 1f)
-        val PRESS_IN = SpringSpec(0.22f, 1f)
-        val PRESS_OUT = SpringSpec(0.38f, 0.7f)
+        val OPEN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_GALLERY_OPEN)
+        val CLOSE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_GALLERY_CLOSE)
+        val PRESS_IN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_PRESS_IN)
+        val PRESS_OUT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_PRESS_OUT)
     }
 }

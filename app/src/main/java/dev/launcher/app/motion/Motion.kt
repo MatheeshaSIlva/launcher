@@ -93,6 +93,9 @@ class SwitcherProfile internal constructor() {
 }
 
 object Motion {
+    /** A role's spring from the theme ([MotionTokens]); read when an animation starts. */
+    fun role(k: SpringKey): SpringSpec = Design.spring(k).let { SpringSpec(it.response, it.damping) }
+
     @Volatile var profile: MotionProfile = MotionProfile()
 
     /**

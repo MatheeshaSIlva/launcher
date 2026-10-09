@@ -1329,18 +1329,18 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val LEAVE_STAGGER = 0.45f
         const val LEAVE_PULL = 0.16f
         const val LEAVE_SHRINK = 0.22f
-        val CLOSE_STYLE = SpringSpec(0.2f, 1f)
-        val PRESS_IN = SpringSpec(0.22f, 1f)
-        val PRESS_OUT = SpringSpec(0.38f, 0.7f)
-        val TOGGLE = SpringSpec(0.32f, 0.9f)
-        val LEVEL = SpringSpec(0.45f, 1f)
-        val EDIT = SpringSpec(0.42f, 0.9f)
-        val REFLOW = SpringSpec(0.36f, 0.9f)
-        val RESIZE = SpringSpec(0.4f, 0.82f)
-        val APPEAR = SpringSpec(0.42f, 0.78f)
-        val LEAVE = SpringSpec(0.26f, 1f)
-        val LIFT = SpringSpec(0.26f, 0.8f)
-        val DROP = SpringSpec(0.34f, 0.86f)
-        val STRETCH_BACK = SpringSpec(0.38f, 0.7f)
+        val CLOSE_STYLE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_CLOSE_STYLE)
+        val PRESS_IN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_PRESS_IN)
+        val PRESS_OUT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_PRESS_OUT)
+        val TOGGLE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_TOGGLE)
+        val LEVEL get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_LEVEL)
+        val EDIT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_EDIT)
+        val REFLOW get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_REFLOW)
+        val RESIZE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_RESIZE)
+        val APPEAR get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_APPEAR)
+        val LEAVE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_LEAVE)
+        val LIFT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_LIFT)
+        val DROP get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_DROP)
+        val STRETCH_BACK get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_STRETCH_BACK)
     }
 }

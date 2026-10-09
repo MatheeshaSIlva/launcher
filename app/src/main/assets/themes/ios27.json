@@ -2679,6 +2679,188 @@
    "factor": 1.18,
    "src": "judged:how far home is zoomed when it starts arriving"
   },
+  "motion.banner.back": {
+   "spring": [
+    0.38,
+    0.82
+   ],
+   "src": "judged:a dragged banner let go: back"
+  },
+  "motion.banner.fly": {
+   "spring": [
+    0.35,
+    1.0
+   ],
+   "src": "judged:a banner flung away sideways"
+  },
+  "motion.banner.fly-fade": {
+   "spring": [
+    0.5,
+    1.0
+   ],
+   "src": "judged:a flung banner fading as it goes"
+  },
+  "motion.banner.in": {
+   "spring": [
+    0.64,
+    0.61
+   ],
+   "src": "judged:a banner swooping in from the top"
+  },
+  "motion.banner.out": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:and going"
+  },
+  "motion.banner.resize": {
+   "spring": [
+    0.4,
+    1.0
+   ],
+   "src": "judged:a banner changing height"
+  },
+  "motion.cc.appear": {
+   "spring": [
+    0.42,
+    0.78
+   ],
+   "src": "judged:a control added"
+  },
+  "motion.cc.close": {
+   "spring": [
+    0.34,
+    1.0
+   ],
+   "src": "measured:iOS 27 (docs/IOS27_MOTION.md): Control Center closing takes ~0.18 s"
+  },
+  "motion.cc.close-style": {
+   "spring": [
+    0.2,
+    1.0
+   ],
+   "src": "judged:Control Center's closing choreography blending in and out"
+  },
+  "motion.cc.drop": {
+   "spring": [
+    0.34,
+    0.86
+   ],
+   "src": "judged:and dropped into its place"
+  },
+  "motion.cc.edit": {
+   "spring": [
+    0.42,
+    0.9
+   ],
+   "src": "judged:edit mode coming and going"
+  },
+  "motion.cc.expanded.close": {
+   "spring": [
+    0.34,
+    1.0
+   ],
+   "src": "judged:and back into its place"
+  },
+  "motion.cc.expanded.level": {
+   "spring": [
+    0.4,
+    1.0
+   ],
+   "src": "judged:the expanded slider's level"
+  },
+  "motion.cc.expanded.open": {
+   "spring": [
+    0.42,
+    0.84
+   ],
+   "src": "judged:a module growing into its expanded form"
+  },
+  "motion.cc.gallery.close": {
+   "spring": [
+    0.38,
+    1.0
+   ],
+   "src": "judged:and going"
+  },
+  "motion.cc.gallery.open": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:the gallery sheet coming up"
+  },
+  "motion.cc.leave": {
+   "spring": [
+    0.26,
+    1.0
+   ],
+   "src": "judged:a control removed"
+  },
+  "motion.cc.level": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:a slider's level following the system's"
+  },
+  "motion.cc.lift": {
+   "spring": [
+    0.26,
+    0.8
+   ],
+   "src": "judged:a control lifted to be dragged"
+  },
+  "motion.cc.press-in": {
+   "spring": [
+    0.22,
+    1.0
+   ],
+   "src": "judged:a control pressed"
+  },
+  "motion.cc.press-out": {
+   "spring": [
+    0.38,
+    0.7
+   ],
+   "src": "judged:a control let go (springing back)"
+  },
+  "motion.cc.reflow": {
+   "spring": [
+    0.36,
+    0.9
+   ],
+   "src": "judged:controls making room in edit mode"
+  },
+  "motion.cc.resize": {
+   "spring": [
+    0.4,
+    0.82
+   ],
+   "src": "judged:a control changing size"
+  },
+  "motion.cc.settle": {
+   "spring": [
+    0.42,
+    0.68
+   ],
+   "src": "measured:iOS 27 (docs/IOS27_MOTION.md): the controls settle, overshooting a little"
+  },
+  "motion.cc.stretch-back": {
+   "spring": [
+    0.38,
+    0.7
+   ],
+   "src": "judged:the grid stretched by an overpull, back"
+  },
+  "motion.cc.toggle": {
+   "spring": [
+    0.32,
+    0.9
+   ],
+   "src": "judged:a control turning on or off"
+  },
   "motion.clock.tick": {
    "ms": 420,
    "src": "judged:the clock's numerals crossfading at the minute change"
@@ -2723,6 +2905,20 @@
    "factor": 0.26,
    "src": "judged:the wiggle's period (s)"
   },
+  "motion.edit.press-in": {
+   "spring": [
+    0.12,
+    1.0
+   ],
+   "src": "judged:edit mode's buttons pressed"
+  },
+  "motion.edit.press-out": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:and let go"
+  },
   "motion.edit.reflow": {
    "spring": [
     0.36,
@@ -2765,6 +2961,13 @@
     1.0
    ],
    "src": "judged:home recedes behind an opening app"
+  },
+  "motion.home.label-tone": {
+   "spring": [
+    0.5,
+    1.0
+   ],
+   "src": "judged:names and the clock turning light or dark with a new wallpaper (as gently as the wallpaper changes)"
   },
   "motion.home.page-fling": {
    "factor": 320,
@@ -2843,6 +3046,111 @@
    "ms": 220,
    "src": "judged:light and dark mode crossfading"
   },
+  "motion.nc.appear": {
+   "spring": [
+    0.42,
+    0.82
+   ],
+   "src": "judged:a notification arriving in the list"
+  },
+  "motion.nc.clock-tick": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:the clock's numerals crossfading at the minute"
+  },
+  "motion.nc.close": {
+   "spring": [
+    0.38,
+    1.0
+   ],
+   "src": "judged:and going"
+  },
+  "motion.nc.confirm": {
+   "spring": [
+    0.34,
+    0.8
+   ],
+   "src": "judged:a group's clear button turning into Clear"
+  },
+  "motion.nc.hold": {
+   "spring": [
+    0.38,
+    1.0
+   ],
+   "src": "judged:the flashlight and camera buttons growing while held"
+  },
+  "motion.nc.leave": {
+   "spring": [
+    0.28,
+    1.0
+   ],
+   "src": "judged:a notification leaving"
+  },
+  "motion.nc.menu-close": {
+   "spring": [
+    0.26,
+    1.0
+   ],
+   "src": "judged:and closing"
+  },
+  "motion.nc.menu-open": {
+   "spring": [
+    0.35,
+    0.8
+   ],
+   "src": "judged:a notification held: the long look opening"
+  },
+  "motion.nc.open": {
+   "spring": [
+    0.44,
+    1.0
+   ],
+   "src": "judged:Notification Center coming down"
+  },
+  "motion.nc.reflow": {
+   "spring": [
+    0.4,
+    0.88
+   ],
+   "src": "judged:the list's notifications moving to new places"
+  },
+  "motion.nc.swipe-back": {
+   "spring": [
+    0.36,
+    0.86
+   ],
+   "src": "judged:a swiped notification let go: back"
+  },
+  "motion.nc.swipe-out": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:or away"
+  },
+  "motion.nc.toggle": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:the flashlight button lighting"
+  },
+  "motion.press-in": {
+   "spring": [
+    0.2,
+    1.0
+   ],
+   "src": "judged:a platter or a button pressed (Notification Center, banners)"
+  },
+  "motion.press-out": {
+   "spring": [
+    0.35,
+    1.0
+   ],
+   "src": "judged:and let go"
+  },
   "motion.scroll.deceleration": {
    "factor": 0.998,
    "src": "judged:UIScrollView's normal deceleration (per ms)"
@@ -2872,6 +3180,41 @@
    ],
    "src": "judged:a page pushed inside a sheet"
   },
+  "motion.statusbar.appear": {
+   "spring": [
+    0.38,
+    0.78
+   ],
+   "src": "judged:an icon coming"
+  },
+  "motion.statusbar.leave": {
+   "spring": [
+    0.26,
+    1.0
+   ],
+   "src": "judged:an icon going"
+  },
+  "motion.statusbar.level": {
+   "spring": [
+    0.6,
+    1.0
+   ],
+   "src": "judged:the battery's level"
+  },
+  "motion.statusbar.move": {
+   "spring": [
+    0.36,
+    1.0
+   ],
+   "src": "judged:a slot moving aside"
+  },
+  "motion.statusbar.roll": {
+   "spring": [
+    0.42,
+    1.0
+   ],
+   "src": "judged:a digit rolling to the next"
+  },
   "motion.switch.cancel": {
    "spring": [
     0.3,
@@ -2893,6 +3236,13 @@
   "motion.switcher.card-scale": {
    "factor": 0.68,
    "src": "measured:Apple's illustration of the iOS 27 App Switcher (card size, of the screen)"
+  },
+  "motion.switcher.clear-press": {
+   "spring": [
+    0.16,
+    1.0
+   ],
+   "src": "judged:Clear All pressed"
   },
   "motion.switcher.enter": {
    "spring": [

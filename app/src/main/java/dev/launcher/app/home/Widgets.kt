@@ -424,7 +424,7 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
 
     override fun setLabelTone(tone: Float, animate: Boolean) {
         if (!labelToneKnown || !animate) { labelTone.snapTo(tone); labelToneKnown = true; invalidate(); return }
-        if (kotlin.math.abs(labelTone.target - tone) > 0.01f) labelTone.animateTo(tone, dev.launcher.app.motion.SpringSpec(0.5f, 1f))
+        if (kotlin.math.abs(labelTone.target - tone) > 0.01f) labelTone.animateTo(tone, dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.HOME_LABEL_TONE))
     }
 
     /** The card's rounded rectangle as shown now, in this view's coordinates. */

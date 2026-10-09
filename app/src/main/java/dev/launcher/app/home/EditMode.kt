@@ -844,7 +844,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     init { ghost.visibility = View.GONE }
 
     private companion object {
-        val PRESS_IN = dev.launcher.app.motion.SpringSpec(0.12f, 1f)
-        val PRESS_OUT = dev.launcher.app.motion.SpringSpec(0.3f, 1f)
+        val PRESS_IN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.EDIT_PRESS_IN)
+        val PRESS_OUT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.EDIT_PRESS_OUT)
     }
 }

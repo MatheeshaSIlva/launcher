@@ -654,10 +654,10 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         const val M_VOLUME = -14
         const val M_OPEN = -15
         val TIMER_STEPS = intArrayOf(60, 120, 180, 300, 600, 900, 1200, 1800, 2700, 3600, 7200)
-        val OPEN = SpringSpec(0.42f, 0.84f)
-        val CLOSE = SpringSpec(0.34f, 1f)
-        val PRESS_IN = SpringSpec(0.22f, 1f)
-        val PRESS_OUT = SpringSpec(0.38f, 0.7f)
-        val LEVEL = SpringSpec(0.4f, 1f)
+        val OPEN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_EXPANDED_OPEN)
+        val CLOSE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_EXPANDED_CLOSE)
+        val PRESS_IN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_PRESS_IN)
+        val PRESS_OUT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_PRESS_OUT)
+        val LEVEL get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_EXPANDED_LEVEL)
     }
 }

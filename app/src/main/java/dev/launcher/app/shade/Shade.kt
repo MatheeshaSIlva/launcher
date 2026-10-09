@@ -561,6 +561,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             MotionEvent.ACTION_UP -> {
                 stopStream()
                 if (!pulling) return
+                // Where the finger lifted counts: moves can arrive late, batched or not at all when the thread was busy (the
+                // panel's first frames), and the last of them only with this event. Without it a full pull was released at a
+                // quarter of the way, standing still, and closed (seen on the emulator, 3 pulls in 4).
+                follow(e.rawY, e.rawY - downY)
                 vt?.computeCurrentVelocity(1000)
                 release(vt?.yVelocity ?: 0f)
             }
@@ -1188,9 +1192,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val NO_TOUCH = Region(-2, -2, -1, -1)
         /** Control Center going out, and its controls settling into place (coming in: [ccOpen], a token). iOS 27, measured
          *  (docs/IOS27_MOTION.md): the controls settle on 0.42 / 0.68 (overshooting a little), closing takes ~0.18 s. */
-        val CC_CLOSE = SpringSpec(0.34f, 1f)
-        val CC_SETTLE = SpringSpec(0.42f, 0.68f)
-        val NC_OPEN = SpringSpec(0.44f, 1f)
-        val NC_CLOSE = SpringSpec(0.38f, 1f)
+        val CC_CLOSE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_CLOSE)
+        val CC_SETTLE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_SETTLE)
+        val NC_OPEN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_OPEN)
+        val NC_CLOSE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_CLOSE)
     }
 }

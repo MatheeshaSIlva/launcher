@@ -426,7 +426,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
 
     private companion object {
         /** The clock turning light or dark (a new wallpaper): as gently as the names under the icons. */
-        val TONE_SPRING = dev.launcher.app.motion.SpringSpec(0.5f, 1f)
+        val TONE_SPRING get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.HOME_LABEL_TONE)
     }
 }
 

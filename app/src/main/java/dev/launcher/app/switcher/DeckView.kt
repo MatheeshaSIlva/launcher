@@ -995,6 +995,6 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         /** Clear All: one card flies off this long after the one before it; home comes this long after the last. */
         const val CLEAR_STAGGER_MS = 45L
         const val CLEAR_HOME_AFTER_MS = 160L
-        val CLEAR_PRESS = dev.launcher.app.motion.SpringSpec(0.16f, 1f)
+        val CLEAR_PRESS get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.SWITCHER_CLEAR_PRESS)
     }
 }

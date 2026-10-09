@@ -564,7 +564,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
                     mode == Mode.DRAG && (abs(s.dx.value) > width * 0.3f || abs(vx) > 1200f) -> {
                         s.leaving = true
                         s.dx.animateTo(if ((s.dx.value + vx * 0.1f) > 0f) width.toFloat() else -width.toFloat(), FLY, vx)
-                        s.k.animateTo(0f, SpringSpec(0.5f, 1f))
+                        s.k.animateTo(0f, dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.BANNER_FLY_FADE))
                         areaChanged()
                         if (s.item.urgent) host.dismissed(s.item)
                     }
@@ -609,12 +609,12 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         val ACTION_TYPE = TextKey("comp.banner.action.type")
         val ALL = listOf(MATERIAL, BEHIND, CORNER, MARGIN, LABEL, SECONDARY, CALL_CORNER, CALL_HEIGHT, CALL_BUTTON, DECLINE, ANSWER,
             ACTION_HEIGHT, ACTION_FILL, ACTION_TYPE, FLAT, CALL_BUTTON_COLOR, CALL_PRESS, CALL_SYMBOL).map { it.name }
-        val SWOOP_IN = SpringSpec(0.64f, 0.61f)
-        val SWOOP_OUT = SpringSpec(0.3f, 1f)
-        val FLY = SpringSpec(0.35f, 1f)
-        val BACK = SpringSpec(0.38f, 0.82f)
-        val RESIZE = SpringSpec(0.4f, 1f)
-        val PRESS_IN = SpringSpec(0.2f, 1f)
-        val PRESS_OUT = SpringSpec(0.35f, 1f)
+        val SWOOP_IN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.BANNER_IN)
+        val SWOOP_OUT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.BANNER_OUT)
+        val FLY get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.BANNER_FLY)
+        val BACK get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.BANNER_BACK)
+        val RESIZE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.BANNER_RESIZE)
+        val PRESS_IN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.PRESS_IN)
+        val PRESS_OUT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.PRESS_OUT)
     }
 }
