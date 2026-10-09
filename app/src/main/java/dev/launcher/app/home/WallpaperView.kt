@@ -82,18 +82,23 @@ class WallpaperView(ctx: Context, private val cellPx: Float) : View(ctx) {
  */
 class BackdropView(ctx: Context) : View(ctx) {
     // iOS's background material keeps the wallpaper's colours vivid (more saturated, barely darkened).
-    private val paint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
-        colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(1.4f) })
-    }
+    private val vivid = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(1.4f) })
+    private val paint = Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = vivid }
     var wallpaper: Wallpaper? = null
         set(v) { field = v; invalidate() }
+    /**
+     * The drawer's own veil (Android's "All apps" dims the blurred wallpaper with its scrim, its colours as they are);
+     * null: iOS's material (the appearance's veil over the wallpaper made more vivid).
+     */
+    var veil: (() -> Int)? = null
+        set(v) { field = v; paint.colorFilter = if (v == null) vivid else null; invalidate() }
 
     override fun onDraw(canvas: Canvas) {
         val w = wallpaper
         if (w != null) {
             canvas.drawBitmap(w.heavy, w.heavyMatrix(width, height), paint)
             // The appearance's material: light (a white veil) or dark (a dark one); the glass on it sees the same veil.
-            canvas.drawColor(dev.launcher.app.theme.Appearance.backdropVeil)
+            canvas.drawColor(veil?.invoke() ?: dev.launcher.app.theme.Appearance.backdropVeil)
         } else {
             canvas.drawColor(0x99000000.toInt())
         }

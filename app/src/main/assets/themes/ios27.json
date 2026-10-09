@@ -2038,6 +2038,198 @@
    "pt": 14,
    "src": "kit:2547:2623"
   },
+  "comp.grid.content-top": {
+   "pt": 105.1,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): the predicted apps start 276 px under the sheet's top"
+  },
+  "comp.grid.corner": {
+   "pt": 28,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): the sheet's top corners, 73 px"
+  },
+  "comp.grid.divider": {
+   "pt": 43.4,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): \"All apps\" between the predictions and the grid, 114 px"
+  },
+  "comp.grid.field.fill": {
+   "light": "@system_accent2_100/85",
+   "dark": "@system_accent2_900/90",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): #0c202a dark, #c7dfee light"
+  },
+  "comp.grid.field.focus-shift": {
+   "pt": 16,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): focused, the field's fill goes and its content moves 42 px to the left"
+  },
+  "comp.grid.field.glyph-inset": {
+   "pt": 28.3,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): the G's centre 74 px into the field"
+  },
+  "comp.grid.field.height": {
+   "pt": 51.4,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): 135 px"
+  },
+  "comp.grid.field.hint-color": {
+   "color": "@on_surface_variant",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer)"
+  },
+  "comp.grid.field.margin": {
+   "pt": 29.7,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): 78 px from either edge"
+  },
+  "comp.grid.field.text": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 21,
+    "line": 28,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): the hint's capitals 39 px"
+  },
+  "comp.grid.field.text-color": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer)"
+  },
+  "comp.grid.field.top": {
+   "pt": 41.5,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): the field starts 109 px under the sheet's top"
+  },
+  "comp.grid.handle-color": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): #e0e6ee dark, #2d3339 light"
+  },
+  "comp.grid.handle.height": {
+   "pt": 4,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): 11 px"
+  },
+  "comp.grid.handle.top": {
+   "pt": 16,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): 42 px under the sheet's top"
+  },
+  "comp.grid.handle.width": {
+   "pt": 32,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): 84 px"
+  },
+  "comp.grid.header.text": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): \"All apps\", 131 px wide"
+  },
+  "comp.grid.icon": {
+   "pt": 60,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): icons 158 px"
+  },
+  "comp.grid.icon-top": {
+   "pt": 13,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): 34 px from a cell's top"
+  },
+  "comp.grid.label-baseline": {
+   "pt": 23.2,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): the name's baseline 61 px under the icon"
+  },
+  "comp.grid.label-color": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): #e0e6ee dark, #2d3339 light"
+  },
+  "comp.grid.label.text": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): names in 14 sp"
+  },
+  "comp.grid.margin": {
+   "pt": 11.4,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): four 255 px columns from 30 px"
+  },
+  "comp.grid.motion.content-from": {
+   "factor": 0.1,
+   "src": "judged:the apps fade in as the sheet rises"
+  },
+  "comp.grid.motion.content-to": {
+   "factor": 0.6,
+   "src": "judged:the apps fade in as the sheet rises"
+  },
+  "comp.grid.motion.home-fade-end": {
+   "factor": 0.4,
+   "src": "judged:Launcher3's all apps pull (AllAppsSwipeController): the workspace fades over the first 40 %"
+  },
+  "comp.grid.motion.scrim-from": {
+   "factor": 0.1,
+   "src": "judged:Launcher3's all apps pull: the scrim shows from 10 %"
+  },
+  "comp.grid.motion.scrim-to": {
+   "factor": 0.5,
+   "src": "judged:Launcher3's all apps pull: full scrim and blur at 50 %"
+  },
+  "comp.grid.row": {
+   "pt": 110.9,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): rows 291 px apart"
+  },
+  "comp.grid.scrim-fill": {
+   "light": "#00000052",
+   "dark": "#000000a3",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): above the sheet the wallpaper #03a0e9 is #013a54 dark (64 % black), #026d9e light (32 %)"
+  },
+  "comp.grid.scroller.letter-color": {
+   "color": "@on_primary",
+   "src": "judged:on the popup"
+  },
+  "comp.grid.scroller.letter.text": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 32,
+    "line": 40,
+    "tracking": 0
+   },
+   "src": "judged:Launcher3's fast scroll popup, 32 sp"
+  },
+  "comp.grid.scroller.popup-fill": {
+   "color": "@primary",
+   "src": "judged:Launcher3's fast scroll popup in the accent"
+  },
+  "comp.grid.scroller.popup-size": {
+   "pt": 72,
+   "src": "judged:Launcher3's fast scroll popup"
+  },
+  "comp.grid.scroller.thumb-fill": {
+   "light": "@primary",
+   "dark": "@system_accent1_100",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): #cae6ff dark, #346384 light"
+  },
+  "comp.grid.scroller.thumb-height": {
+   "pt": 47.6,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): 125 px"
+  },
+  "comp.grid.scroller.thumb-width": {
+   "pt": 8,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): a capsule 19 px in from the edge"
+  },
+  "comp.grid.scroller.top": {
+   "pt": 16,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): the thumb starts 42 px under the predicted apps' top"
+  },
+  "comp.grid.scroller.track-fill": {
+   "color": "@on_surface/12",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): #214558 over #062d42"
+  },
+  "comp.grid.scroller.track-width": {
+   "pt": 6,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): 16 px in from the edge, below the thumb"
+  },
+  "comp.grid.sheet-fill": {
+   "light": "@system_accent2_50/62",
+   "dark": "@system_accent2_900/45",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/drawer): the sheet #062d42 dark, #8dbedc light over the blurred wallpaper"
+  },
   "comp.home.button.material": {
    "ref": "sys.material.glass.dock",
    "src": "judged:edit mode's Edit and Done on home's glass, as the Search pill"

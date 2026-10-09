@@ -52,11 +52,26 @@ tiles and notification cards `accent2_900` (dark) / `accent2_100` (light); lit t
   against the reference in dark and light. Still iOS: the glance's colour (white, not the labels' tone), the Google logo
   and lens (Android's own marks, not drawn).
 
+- **All apps** (2026-10-10, `drawer/AppGridView`, tokens `comp.grid.*` in `drawer/GridTokens`): with
+  `sys.layout.drawer` = "grid" the drawer is a sheet that a swipe up on home pulls from the bottom (whatever the drawer
+  placement setting says): rounded top corners and a handle, the search field, a row of predicted apps (most used, filled
+  up from the list), "All apps" and every app in an alphabetical four-column grid, a fast scroller at the right edge (the
+  thumb follows the finger, a drop-shaped bubble with the letter points at it, a tick per letter). Typing filters the
+  grid: matches glide to their new places, the rest fade where they are; Go opens the first. The field loses its fill and
+  its content moves left while focused (Pixel's). Past an end the list stretches. Home's search bar opens the sheet with
+  search focused. A pull follows Launcher3's timing (`comp.grid.motion.*`): home fades over the first 40 %, the scrim
+  (`comp.grid.scrim-fill`, its own veil over the blurred wallpaper) comes in from 10 % to 50 %, the apps from 10 % to
+  60 %. Checked on the emulator against the reference: colours within a few levels in dark and light, rows and icons on
+  the same pixels; search, Back (keyboard, search, sheet), launch and close into the drawer's icon, long press, pull
+  down to close. Not drawn: Google's G, mic and lens (ours: a magnifier and "Search apps").
+
 ## To do (in order)
 
-3. Apps: a bottom sheet with search, predictions and the alphabetical grid (`sys.layout.drawer` = "grid", placement swipe up).
 4. Recents: the carousel (`sys.layout.switcher` = "carousel").
 5. Menus: Pixel's popup for apps and home.
 6. Status bar: Pixel's battery and icons; motion: Material's springs; icons: Material Symbols (needs the font, to be
    downloaded with permission).
 7. The shade's remaining parts: media player in Quick Settings, tile editing, the header's carrier and icons.
+8. Behaviour: a home gesture from an app opened from All apps lands on home with the sheet closed (Back returns to the
+   sheet); ours returns to the sheet either way (iOS's). A swipe down on home opens the shade (ours: Spotlight).
+   App menus from the drawer are still iOS's (item 5).

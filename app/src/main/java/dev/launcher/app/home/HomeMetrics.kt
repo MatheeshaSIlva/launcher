@@ -37,6 +37,8 @@ class HomeMetrics(
     val dp = density
     /** The status bar's height (px). */
     val statusTop = topInset.toFloat()
+    /** The navigation bar's height (px). */
+    val navInset = bottomInset.toFloat()
 
     // ---- home pages
     val iconSize = if (pixel) (60 * d).roundToInt() else (64 * u).roundToInt()

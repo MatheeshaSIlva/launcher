@@ -24,6 +24,7 @@ import dev.launcher.app.apps.Icons
 import dev.launcher.app.drawer.AppDrawer
 import dev.launcher.app.drawer.DrawerHost
 import dev.launcher.app.drawer.Drawers
+import dev.launcher.app.drawer.GridMotion
 import dev.launcher.app.motion.Motion
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -55,7 +56,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         private set
     private var m: HomeMetrics? = null
     override val metrics: HomeMetrics get() = m!!
-    override val placement: DrawerPlacement get() = cfg.drawerPlacement
+    /** The theme's drawer is Android's "All apps" (`sys.layout.drawer` = "grid"): always a sheet from the bottom. */
+    private var gridDrawer = false
+    override val placement: DrawerPlacement get() = if (gridDrawer) DrawerPlacement.SWIPE_UP else cfg.drawerPlacement
 
     val wallpaperView = WallpaperView(ctx, ctx.resources.displayMetrics.density * REVEAL_CELL_DP)
     /** Everything above the wallpaper; recorded as the content layer of the picture of home. */
@@ -330,6 +333,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun build() {
         if (width == 0 || height == 0) return
         val pixel = try { dev.launcher.app.design.Design.choice(HomeTokens.LAYOUT) == "pixel" } catch (_: Throwable) { false }
+        gridDrawer = try { dev.launcher.app.design.Design.choice(dev.launcher.app.drawer.GridTokens.LAYOUT) == "grid" } catch (_: Throwable) { false }
         val metrics = HomeMetrics(width, height, topInset, bottomInset, deviceRadius, cfg, pixel, resources.displayMetrics.density)
         m = metrics
         builtLayout = layoutSignature()
@@ -337,6 +341,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         fg.removeAllViews()
         stopAnimations()
         fg.addView(backdrop, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        backdrop.veil = if (gridDrawer) ({ dev.launcher.app.design.Design.color(dev.launcher.app.drawer.GridTokens.SCRIM) }) else null
         fg.addView(pagesLayer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         val shadow = DockShadow(context).also { dockShadow = it }
         fg.addView(shadow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -367,7 +372,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             pillTone.color(wallpaperLuminanceUnder(RectF(o[0].toFloat(), o[1].toFloat(), o[0] + ind.width.toFloat(), o[1] + ind.height.toFloat())))
         }
         fg.addView(ind, LayoutParams(if (metrics.pixel) metrics.searchPillWidth.roundToInt() else ind.widthFor(1), metrics.indicatorHeight.roundToInt()))
-        val dr = Drawers.create(cfg.drawerStyle, context, this).also { drawer = it }
+        val dr = Drawers.create(if (gridDrawer) DrawerStyle.GRID else cfg.drawerStyle, context, this).also { drawer = it }
         fg.addView(dr.view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         dr.setWallpaper(wallpaper)
         // Spotlight covers everything above the wallpaper while open.
@@ -532,7 +537,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     // ================================================================== positions
 
     private val libIndex: Int?
-        get() = when (cfg.drawerPlacement) {
+        get() = when (placement) {
             DrawerPlacement.PAGE_AFTER_LAST -> pages.size
             DrawerPlacement.PAGE_BEFORE_FIRST -> -1
             DrawerPlacement.SWIPE_UP -> null
@@ -563,8 +568,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         }
         val dp = drawerProgress()
         val dv = drawer?.view
+        // Android's "All apps" (Launcher3's timing for a pull, `comp.grid.motion.*`): home fades out over the first part of
+        // the way, the scrim and blur come in a little later; the iOS sheet crossfades home over the whole way.
+        val homeFade = if (gridDrawer) (1f - dp / GridMotion.homeFadeEnd).coerceIn(0f, 1f) else 1f - dp
+        val backdropK = if (gridDrawer) GridMotion.between(dp, GridMotion.scrimFrom, GridMotion.scrimTo) else dp
         var shift = 0f
-        when (cfg.drawerPlacement) {
+        when (placement) {
             DrawerPlacement.PAGE_AFTER_LAST -> {
                 dv?.translationX = (pages.size - pos) * w
                 shift = -(pos - (pages.size - 1)).coerceIn(0f, 1f) * w
@@ -576,12 +585,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             DrawerPlacement.SWIPE_UP -> {
                 dv?.translationY = (1f - sheet) * h
                 val k = 1f - 0.05f * dp
-                for (v in listOf(pagesLayer, dock, dockShadow, indicator)) v?.apply { alpha = 1f - dp; scaleX = k; scaleY = k }
+                for (v in listOf(pagesLayer, dock, dockShadow, indicator)) v?.apply { alpha = homeFade; scaleX = k; scaleY = k }
             }
         }
         dv?.visibility = if (dp > 0f) View.VISIBLE else View.INVISIBLE
-        backdrop.alpha = dp
-        backdrop.visibility = if (dp > 0f && !(backgroundCovered && dp >= 1f)) View.VISIBLE else View.INVISIBLE
+        backdrop.alpha = backdropK
+        backdrop.visibility = if (backdropK > 0f && !(backgroundCovered && dp >= 1f)) View.VISIBLE else View.INVISIBLE
         stripShift = shift
         for (v in listOf(dock, dockShadow, indicator, editBar)) v?.translationX = shift
         // The arrival's zoom moves the dock and pill too: kept on top of the strip's shift (a swipe during it never jumps).
@@ -594,8 +603,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         indicator?.setPosition(pos.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()))
         // Pixel: At a glance belongs to the first page (it moves with it); the dots follow the pages.
         glance?.translationX = (pages.firstOrNull()?.translationX ?: 0f) + shift
-        glance?.alpha = 1f - dp
-        pixelDots?.let { pd -> pd.pages = pages.size; pd.position = pos.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()); pd.translationX = shift; pd.alpha = 1f - dp }
+        glance?.alpha = homeFade
+        pixelDots?.let { pd -> pd.pages = pages.size; pd.position = pos.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()); pd.translationX = shift; pd.alpha = homeFade }
         drawer?.setOpenProgress(dp)
         if (dp > 0f) drawerWasOpen = true
         updateStatusDark()
@@ -616,7 +625,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun canPage(): Boolean {
         if (spotlight?.isOpen == true) return false
         if (pages.size <= 1 && libIndex == null) return false
-        if (cfg.drawerPlacement == DrawerPlacement.SWIPE_UP && sheet > 0f) return false
+        if (placement == DrawerPlacement.SWIPE_UP && sheet > 0f) return false
         val d = drawer
         return !(d != null && drawerProgress() > 0.5f && d.capturesGestures())
     }
@@ -638,7 +647,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             spotlight?.beginDrag()
             return true
         }
-        if (cfg.drawerPlacement == DrawerPlacement.SWIPE_UP && abs(dy) > abs(dx)) {
+        if (placement == DrawerPlacement.SWIPE_UP && abs(dy) > abs(dx)) {
             val d = drawer
             if (sheet < 0.5f && dy < 0) { downX = e.x; downY = e.y; beginSheet(); return true }
             if (sheet >= 0.5f && dy > 0 && d != null && !d.canScrollBack() && !d.capturesGestures()) { downX = e.x; downY = e.y; beginSheet(); return true }
@@ -1204,9 +1213,17 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private var pendingSearch = false
 
-    /** The Search pill: opens Spotlight with the keyboard up (as on iOS). */
+    /**
+     * The Search pill: opens Spotlight with the keyboard up (as on iOS). With Android's "All apps" (the Pixel's search bar
+     * at the bottom of home), the drawer rises with its search field focused.
+     */
     fun openLibrarySearch() {
         if (m == null || editMode?.active == true) return
+        if (gridDrawer) {
+            pendingSearch = true
+            animateSheet(1f)
+            return
+        }
         spotlight?.open()
     }
 
@@ -1218,7 +1235,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         editMode?.exit()
         spotlight?.takeIf { it.isOpen }?.close()
         drawer?.hideKeyboard()   // App Library search ends once the library has slid away (onClosed)
-        if (cfg.drawerPlacement == DrawerPlacement.SWIPE_UP && sheet > 0f) animateSheet(0f)
+        if (placement == DrawerPlacement.SWIPE_UP && sheet > 0f) animateSheet(0f)
         if (pos != 0f) animatePages(0f)
         if (drawerProgress() == 0f) drawer?.onClosed()
     }
@@ -1232,7 +1249,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val d = drawer ?: return
         if (drawerProgress() < 0.5f) return
         if (d.onBack()) return
-        when (cfg.drawerPlacement) {
+        when (placement) {
             DrawerPlacement.SWIPE_UP -> animateSheet(0f)
             DrawerPlacement.PAGE_AFTER_LAST -> animatePages((pages.size - 1).toFloat())
             DrawerPlacement.PAGE_BEFORE_FIRST -> animatePages(0f)
@@ -1635,7 +1652,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun closeDrawer() {
         if (drawerProgress() == 0f) return
-        when (cfg.drawerPlacement) {
+        when (placement) {
             DrawerPlacement.SWIPE_UP -> animateSheet(0f)
             DrawerPlacement.PAGE_AFTER_LAST -> animatePages((pages.size - 1).coerceAtLeast(0).toFloat())
             DrawerPlacement.PAGE_BEFORE_FIRST -> animatePages(0f)

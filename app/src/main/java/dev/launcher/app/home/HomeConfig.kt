@@ -18,6 +18,8 @@ enum class DrawerPlacement(val title: String) {
 /** What the drawer shows. More styles (a plain grid, a list) plug in through [dev.launcher.app.drawer.AppDrawer]. */
 enum class DrawerStyle(val title: String) {
     APP_LIBRARY("App Library (iOS)"),
+    /** Android's: a sheet from the bottom with search, predictions and every app in an alphabetical grid. */
+    GRID("All apps (Pixel)"),
 }
 
 /**

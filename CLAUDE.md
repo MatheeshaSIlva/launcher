@@ -50,7 +50,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").
 - **Pixel profile** (`docs/PIXEL_PROFILE.md`): theme `pixel.json` (Material You colours from the system palette, `@role`)
-  plus Android 16's layouts chosen by `sys.layout.*` tokens; the shade is `shade/PixelShadeView` (`comp.px.*`). Reference
+  plus Android 16's layouts chosen by `sys.layout.*` tokens; the shade is `shade/PixelShadeView` (`comp.px.*`), home's
+  Pixel layout `HomeMetrics.pixel`, the drawer `drawer/AppGridView` ("All apps", `comp.grid.*`). Reference
   captures of the stock Pixel UI: `tools/shots/pxref/` (emulator, our app disabled).
 - **Design system** (`design/`, plan in `docs/DESIGN_SYSTEM_PLAN.md`): every look value is a token in the active theme file
   (`assets/themes/ios27.json`: `ref.*` from Apple's kit with its ids, `sys.*` roles, `comp.*` per component), read through

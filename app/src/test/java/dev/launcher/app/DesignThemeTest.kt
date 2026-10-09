@@ -67,6 +67,17 @@ class DesignThemeTest {
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
         }
+        // The "All apps" drawer's (Android 16's): the same.
+        for (k in dev.launcher.app.drawer.GridTokens.ALL) {
+            val v = r.resolve(k)
+            val want = when {
+                k.startsWith("sys.layout") -> Value.Choice::class
+                k.endsWith("color") || k.endsWith("fill") -> Value.Color::class
+                k.endsWith(".text") -> Value.Text::class
+                else -> Value.Number::class
+            }
+            assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
+        }
         // Control Center's: the same check, and a colour for every control.
         for (k in dev.launcher.app.shade.CcTokens.ALL) {
             val v = r.resolve(k)
