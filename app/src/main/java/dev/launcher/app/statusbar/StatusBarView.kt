@@ -98,6 +98,34 @@ class StatusBarView(ctx: Context) : View(ctx) {
     /** One point of the iOS layout in px. */
     private val u get() = width / 402f
 
+    /** Android 16's bar (`sys.layout.statusbar` = "pixel"): its places and glyphs, in [pu] (dp under the Pixel theme). */
+    private var pixelBar = false
+    private var pu = 1f
+    private fun ppt(k: dev.launcher.app.design.NumberKey) = dev.launcher.app.design.Design.pt(k, pu)
+
+    private fun readLayout() {
+        pixelBar = try { dev.launcher.app.design.Design.choice(StatusBarTokens.LAYOUT) == "pixel" } catch (_: Throwable) { false }
+        pu = dev.launcher.app.design.Scale.unitPx(context, minOf(width, height).takeIf { it > 0 } ?: resources.displayMetrics.widthPixels)
+        time.typeface = Fonts.text(if (pixelBar) 500 else 600)
+    }
+
+    // The theme changed: a new layout is laid out at once (no glide across from the old one's places).
+    private val onTokens: () -> Unit = {
+        post {
+            val was = pixelBar
+            readLayout()
+            if (was != pixelBar) settled = false
+            relayout()
+        }
+    }
+
+    private fun sideStart() = if (pixelBar) ppt(StatusBarTokens.PX_SIDE_START) else SIDE_PT * u
+    private fun sideEnd() = if (pixelBar) ppt(StatusBarTokens.PX_SIDE_END) else SIDE_PT * u
+    private fun timeSize() = if (pixelBar) ppt(StatusBarTokens.PX_TIME) else TIME_PT * u
+    private fun timeGap() = if (pixelBar) ppt(StatusBarTokens.PX_ICON_GAP) * 1.6f else TIME_GAP_PT * u
+    private fun iconSize() = if (pixelBar) ppt(StatusBarTokens.PX_ICON) else ICON_PT * u
+    private fun iconGap() = if (pixelBar) ppt(StatusBarTokens.PX_ICON_GAP) else ICON_GAP_PT * u
+
     init {
         // Not from our own window's insets: an overlay above the status bar is never told the bar is visible (that hid this
         // bar for good). Whether an app hides the status bar comes from the window manager instead ([setHiddenByApp]).
@@ -212,7 +240,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
     val sideMargin get() = SIDE_PT * u
 
     /** Where the time ends (px): a panel may set its own text beside it (the Pixel shade's date). */
-    val timeRight get() = SIDE_PT * u + timeSlot.width
+    val timeRight get() = sideStart() + timeSlot.width
 
     /** Dev preview: a fixed state (every indicator at once when [busy]). */
     fun preview(busy: Boolean, level: Int, isCharging: Boolean, icons: List<Drawable> = emptyList()) {
@@ -273,6 +301,8 @@ class StatusBarView(ctx: Context) : View(ctx) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         settled = false
+        readLayout()
+        dev.launcher.app.design.Design.addListener(onTokens)
         if (previewing) { relayout(); return }
         updateClock()
         val f = IntentFilter().apply {
@@ -300,6 +330,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     override fun onDetachedFromWindow() {
+        dev.launcher.app.design.Design.removeListener(onTokens)
         if (!previewing) {
             try { context.unregisterReceiver(receiver) } catch (_: Throwable) { }
             try { cm.unregisterNetworkCallback(wifi) } catch (_: Throwable) { }
@@ -437,7 +468,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private val boltSlot = Slot("bolt") { c, x, cy, _, col -> drawBolt(c, x + 3.6f * u, cy, 9f * u, col) }
     private val batterySlot = Slot("battery") { c, x, cy, _, col -> drawBattery(c, x, cy, col) }
     private val vpnSlot = Slot("vpn") { c, x, cy, _, col -> drawBadge(c, "VPN", x, cy, col) }
-    private val wifiSlot = Slot("wifi") { c, x, cy, _, col -> drawWifi(c, x + 8.5f * u, cy + 5.6f * u, col) }
+    private val wifiSlot = Slot("wifi") { c, x, cy, _, col -> if (pixelBar) drawPixelWifi(c, x, cy, col) else drawWifi(c, x + 8.5f * u, cy + 5.6f * u, col) }
     private val typeSlot = Slot("type") { c, x, cy, k, col -> typeText.draw(c, x, cy + 0.727f * 12.5f * u / 2f, label.apply { color = col; textSize = 12.5f * u }, k) }
     private val cellSlot = Slot("cell") { c, x, cy, _, col -> drawCell(c, x, cy, col) }
 
@@ -473,24 +504,24 @@ class StatusBarView(ctx: Context) : View(ctx) {
         pctText = "$batteryLevel%"
 
         // Left: the time, the moon, notification icons while they fit before the camera, a dot for the rest.
-        time.textSize = TIME_PT * u
+        time.textSize = timeSize()
         timeSlot.width = clockText.width(time)
         timeSlot.present(clockText.text.isNotEmpty())
         moonSlot.width = 12.4f * u
         moonSlot.present(dnd)
         val limit = cameraLeft() - 8f * u
-        var cursor = SIDE_PT * u + timeSlot.width + TIME_GAP_PT * u + (if (dnd) moonSlot.width + ICON_GAP_PT * u else 0f)
+        var cursor = sideStart() + timeSlot.width + timeGap() + (if (dnd) moonSlot.width + iconGap() else 0f)
         val want = LinkedHashMap<String, Drawable?>()
         if (previewing) previewIcons.forEachIndexed { i, d -> want["p$i"] = d }
         else for ((pkg, item) in notifApps) want[pkg] = iconFor(item)
-        val iconW = ICON_PT * u
+        val iconW = iconSize()
         val fitting = LinkedHashMap<String, Drawable>()
         var overflow = false
         for ((id, d) in want) {
             if (d == null) continue   // still loading: it arrives (grows in) once it has loaded
-            if (cursor + iconW > limit - (3.4f + ICON_GAP_PT) * u || fitting.size >= MAX_ICONS) { overflow = true; continue }
+            if (cursor + iconW > limit - 3.4f * u - iconGap() || fitting.size >= MAX_ICONS) { overflow = true; continue }
             fitting[id] = d
-            cursor += iconW + ICON_GAP_PT * u
+            cursor += iconW + iconGap()
         }
         // In ranking order: the icons that show first, then those shrinking away (they no longer take room).
         val ordered = LinkedHashMap<String, NotifSlot>()
@@ -501,23 +532,24 @@ class StatusBarView(ctx: Context) : View(ctx) {
         for ((id, s) in notifSlots) { s.slot.width = iconW; s.slot.present(id in fitting) }
         moreSlot.width = 3.4f * u
         moreSlot.present(overflow)
-        var x = SIDE_PT * u
+        var x = sideStart()
         for (s in leftSlots) {
             s.place(x)
-            if (s.wanted) x += s.width + (if (s === timeSlot) TIME_GAP_PT else ICON_GAP_PT) * u
+            if (s.wanted) x += s.width + (if (s === timeSlot) timeGap() else iconGap())
         }
         // Slots of apps whose notifications are gone are dropped once they have shrunk away.
         notifSlots.entries.removeAll { (_, s) -> !s.slot.wanted && !s.slot.shown.isAnimating && s.slot.shown.value == 0f }
 
         // Right, from the edge inwards: bolt, battery, VPN, Wi-Fi or the network type, cellular.
+        // (Android's bolt sits on the battery's end, drawn with it.)
         boltSlot.width = 7.6f * u
-        boltSlot.present(charging)
-        batterySlot.width = 27f * u
+        boltSlot.present(charging && !pixelBar)
+        batterySlot.width = if (pixelBar) (if (charging) PX_BATTERY_W + PX_BOLT_OUT else PX_BATTERY_W) * pu else 27f * u
         batterySlot.present(true)
         label.textSize = 9.5f * u
         vpnSlot.width = label.measureText("VPN") + 5f * u
         vpnSlot.present(vpn)
-        wifiSlot.width = 17f * u
+        wifiSlot.width = if (pixelBar) PX_WIFI_W * pu else 17f * u
         wifiSlot.present(wifiLevel > 0)
         label.textSize = 12.5f * u
         typeSlot.width = typeText.width(label)
@@ -527,13 +559,14 @@ class StatusBarView(ctx: Context) : View(ctx) {
             airplane -> 16.8f * u
             simAbsent -> label.measureText("No SIM")
             !inService -> label.measureText("No Service")
+            pixelBar -> PX_CELL_W * pu
             else -> 4 * 3f * u + 3 * 2.2f * u
         }
         cellSlot.present(true)
-        var right = width - SIDE_PT * u
+        var right = width - sideEnd()
         for (s in rightSlots) {
             s.place(right - s.width)
-            if (s.wanted) right -= s.width + (if (s === boltSlot) 2.6f else 6.8f) * u
+            if (s.wanted) right -= s.width + if (pixelBar) ppt(StatusBarTokens.PX_GAP) else (if (s === boltSlot) 2.6f else 6.8f) * u
         }
         settled = true
         invalidate()
@@ -654,13 +687,13 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     private fun drawTime(c: Canvas, x: Float, cy: Float, k: Float, col: Int) {
         time.color = col
-        time.textSize = TIME_PT * u
+        time.textSize = timeSize()
         clockText.draw(c, x, cy + 0.727f * time.textSize / 2f, time, 1f)
     }
 
     private fun drawIcon(c: Canvas, d: Drawable?, x: Float, cy: Float, col: Int) {
         d ?: return
-        val s = ICON_PT * u
+        val s = iconSize()
         d.setBounds(x.toInt(), (cy - s / 2f).toInt(), (x + s).toInt(), (cy + s / 2f).toInt())
         d.setTint(col or (0xFF shl 24))
         d.alpha = (col ushr 24) and 0xFF
@@ -669,6 +702,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     /** The battery starting at [left]. */
     private fun drawBattery(c: Canvas, left: Float, cy: Float, content: Int) {
+        if (pixelBar) { drawPixelBattery(c, left, cy, content); return }
         val u = u
         val a = (content ushr 24) and 0xFF
         val nubW = 1.6f * u
@@ -709,6 +743,20 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val a = (content ushr 24) and 0xFF
         val faint = Color.argb(77 * a / 255, Color.red(content), Color.green(content), Color.blue(content))
         when {
+            pixelBar && !airplane && !simAbsent && inService -> {
+                // Android's: four rounded bars side by side, rising to the right (measured: 2.7 dp wide, 2.3 apart).
+                val barW = 2.7f * pu
+                val gap = 2.3f * pu
+                val heights = floatArrayOf(5f, 7.6f, 10.3f, 12.2f)
+                val bottom = cy + 6.1f * pu
+                var x = left
+                for (i in 0 until 4) {
+                    fill.color = blend(faint, content, (cellAnim.value - i).coerceIn(0f, 1f))
+                    val h = heights[i] * pu
+                    c.drawRoundRect(x, bottom - h, x + barW, bottom, barW / 2f, barW / 2f, fill)
+                    x += barW + gap
+                }
+            }
             airplane -> drawPlane(c, left + 8.4f * u, cy, 8.4f * u, content)
             simAbsent -> { label.color = content; label.textSize = 13.5f * u; c.drawText("No SIM", left, cy + 0.727f * label.textSize / 2f, label) }
             !inService -> { label.color = content; label.textSize = 13.5f * u; c.drawText("No Service", left, cy + 0.727f * label.textSize / 2f, label) }
@@ -809,6 +857,89 @@ class StatusBarView(ctx: Context) : View(ctx) {
         }
     }
 
+    /**
+     * Android 16's Wi-Fi: a dot and two arcs above it (rounded strokes), from [left]; the parts fill as the level glides
+     * past them (measured on the emulator: 16.4 x 12.2 dp).
+     */
+    private fun drawPixelWifi(c: Canvas, left: Float, cy: Float, on: Int) {
+        val a = (on ushr 24) and 0xFF
+        val off = Color.argb(77 * a / 255, Color.red(on), Color.green(on), Color.blue(on))
+        val cx = left + PX_WIFI_W * pu / 2f
+        val bottom = cy + 6.1f * pu
+        val sw = 2.4f * pu
+        fill.color = blend(off, on, wifiAnim.value.coerceIn(0f, 1f))
+        c.drawCircle(cx, bottom - 1.5f * pu, 1.5f * pu, fill)
+        stroke.strokeWidth = sw
+        stroke.strokeCap = Paint.Cap.ROUND
+        val radii = floatArrayOf(5.4f, 9.6f)
+        for (i in 0 until 2) {
+            val rr = radii[i] * pu
+            val oy = bottom - 1.5f * pu
+            stroke.color = blend(off, on, (wifiAnim.value - 1 - i).coerceIn(0f, 1f))
+            r.set(cx - rr, oy - rr, cx + rr, oy + rr)
+            c.drawArc(r, 230f, 80f, false, stroke)
+        }
+        stroke.strokeCap = Paint.Cap.BUTT
+    }
+
+    /**
+     * Android 16's battery: a capsule filled to the level (the rest faint), green while charging with the bolt on its end
+     * (cut out of the capsule), red when low, from [left] (measured: 24 x 12.6 dp, the bolt 6.5 dp past the end).
+     */
+    private fun drawPixelBattery(c: Canvas, left: Float, cy: Float, content: Int) {
+        val a = (content ushr 24) and 0xFF
+        val k = Color.red(content)
+        val bodyW = PX_BATTERY_W * pu
+        val bodyH = 12.6f * pu
+        r.set(left, cy - bodyH / 2f, left + bodyW, cy + bodyH / 2f)
+        val rad = 3.8f * pu
+        val low = ((25f - batteryAnim.value) / 8f).coerceIn(0f, 1f)
+        var levelColor = blend(content or (0xFF shl 24), dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_LOW), low)
+        levelColor = blend(levelColor, dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_SAVER), saveAnim.value.coerceIn(0f, 1f))
+        levelColor = blend(levelColor, dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_CHARGING), chargeAnim.value.coerceIn(0f, 1f))
+        levelColor = (a shl 24) or (levelColor and 0xFFFFFF)
+        val lvl = (batteryAnim.value / 100f).coerceIn(0f, 1f)
+        val ch = chargeAnim.value.coerceIn(0f, 1f)
+        val boltH = 13.5f * pu
+        val boltCx = r.right + (PX_BOLT_OUT * pu) / 2f - 1.2f * pu
+        val layer = c.saveLayer(r.left - pu, r.top - pu, r.right + PX_BOLT_OUT * pu + pu, r.bottom + pu, null)
+        fill.color = Color.argb(77 * a / 255, k, k, k)
+        c.drawRoundRect(r, rad, rad, fill)
+        c.save()
+        c.clipRect(r.left, r.top, r.left + r.width() * lvl, r.bottom)
+        fill.color = levelColor
+        c.drawRoundRect(r, rad, rad, fill)
+        c.restore()
+        if (ch > 0.003f) {
+            // The bolt over the end, a gap of the background round it (cut out of the capsule), growing in with the charge.
+            c.save()
+            c.scale(ch, ch, boltCx, cy)
+            cut.alpha = 255
+            cut.style = Paint.Style.STROKE
+            cut.strokeWidth = 2.6f * pu
+            cut.strokeJoin = Paint.Join.ROUND
+            drawBoltPath(boltCx, cy, boltH)
+            c.drawPath(path, cut)
+            cut.style = Paint.Style.FILL
+            c.drawPath(path, cut)
+            fill.color = (a shl 24) or (content and 0xFFFFFF)
+            c.drawPath(path, fill)
+            c.restore()
+        }
+        c.restoreToCount(layer)
+    }
+
+    private fun drawBoltPath(cx: Float, cy: Float, h: Float) {
+        path.reset()
+        path.moveTo(cx + h * 0.12f, cy - h * 0.5f)
+        path.lineTo(cx - h * 0.3f, cy + h * 0.08f)
+        path.lineTo(cx - h * 0.02f, cy + h * 0.08f)
+        path.lineTo(cx - h * 0.12f, cy + h * 0.5f)
+        path.lineTo(cx + h * 0.3f, cy - h * 0.08f)
+        path.lineTo(cx + h * 0.02f, cy - h * 0.08f)
+        path.close()
+    }
+
     private fun blend(a: Int, b: Int, t: Float): Int {
         if (t <= 0f) return a
         if (t >= 1f) return b
@@ -817,6 +948,12 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     private companion object {
+        // Android's glyphs (dp, measured on the emulator's SystemUI): the battery's capsule and how far its bolt reaches past
+        // it, the Wi-Fi fan, the four signal bars.
+        const val PX_BATTERY_W = 24f
+        const val PX_BOLT_OUT = 6.5f
+        const val PX_WIFI_W = 16.4f
+        const val PX_CELL_W = 4 * 2.7f + 3 * 2.3f
         /** Distance of both groups from the screen's edges (pt). */
         const val SIDE_PT = 34f
         const val TIME_PT = 15f

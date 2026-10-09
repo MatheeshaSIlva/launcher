@@ -17,6 +17,8 @@
   "motion.switcher.focus-left": {"factor": 0.16, "src": "measured:the same: the focused card centred, its left edge 173 px"},
   "sys.appearance.wallpaper-dim": {"factor": 0, "src": "measured:the emulator's Pixel Launcher in dark mode shows the wallpaper #03a0e9 as it is"},
   "sys.layout.menu": {"choice": "pixel", "src": "measured:Android 16's long-press popups: actions and shortcuts in rounded containers, a pointer, home left as it is"},
+  "sys.layout.statusbar": {"choice": "pixel", "src": "measured:Android 16's status bar: the time at the left, signal bars, Wi-Fi fan and a capsule battery at the right"},
+  "comp.statusbar.battery-charging-color": {"color": "#18cc47", "src": "measured:the emulator's SystemUI: the charging battery #18cc47"},
   "sys.layout.home": {"choice": "pixel", "src": "measured:Android 16's home: At a glance, a 4-column grid, the hotseat, the search bar at the bottom"},
   "comp.home.search.material": {"material": {"frost": 0, "fills": [["{comp.home.pixel.search-fill}", 1.0, "NORMAL"]], "innerShadows": [], "shadows": []}, "src": "measured:Pixel Launcher's search bar: a solid surface"}
  }

@@ -144,7 +144,15 @@ class DesignThemeTest {
         for (k in dev.launcher.app.theme.PaletteTokens.COLORS) assertTrue(k, r.resolve(k) is Value.Color)
         for (k in dev.launcher.app.theme.PaletteTokens.NUMBERS) assertTrue(k, r.resolve(k) is Value.Number)
         // The status bar's.
-        for (k in dev.launcher.app.statusbar.StatusBarTokens.ALL) assertTrue(k, r.resolve(k) is Value.Color)
+        for (k in dev.launcher.app.statusbar.StatusBarTokens.ALL) {
+            val v = r.resolve(k)
+            val ok = when {
+                k.startsWith("sys.layout") -> v is Value.Choice
+                k.endsWith("-color") -> v is Value.Color
+                else -> v is Value.Number
+            }
+            assertTrue(k, ok)
+        }
         // The banners'.
         for (k in dev.launcher.app.shade.BannerView.ALL) {
             val v = r.resolve(k)

@@ -486,6 +486,13 @@ SEED = {
     'comp.banner.call.press-color': {'color': '#00000040', 'src': "judged:a call's button pressed (darker)"},
     'comp.banner.call.symbol-color': {'color': '#ffffff', 'src': "judged:the symbol on a call's button"},
     # The status bar's battery (iOS's system colours).
+    # Android's status bar (sys.layout.statusbar = pixel): defaults any theme may use.
+    'comp.statusbar.pixel.side-start': {'pt': 5.3, 'src': "measured:the Android 17 emulator's SystemUI status bar (tools/shots/pxref/home_now.png): the time 14 px from the left edge"},
+    'comp.statusbar.pixel.side-end': {'pt': 29, 'src': "measured:the Android 17 emulator's SystemUI status bar (tools/shots/pxref/home_now.png): the battery ends 76 px from the right edge"},
+    'comp.statusbar.pixel.time': {'pt': 15, 'src': "measured:the Android 17 emulator's SystemUI status bar (tools/shots/pxref/home_now.png): the time's digits 28 px tall"},
+    'comp.statusbar.pixel.icon': {'pt': 16, 'src': "judged:Android's notification icons in the bar"},
+    'comp.statusbar.pixel.icon-gap': {'pt': 5, 'src': 'judged:between notification icons'},
+    'comp.statusbar.pixel.gap': {'pt': 6.5, 'src': "measured:the Android 17 emulator's SystemUI status bar (tools/shots/pxref/home_now.png): 17 px between signal, Wi-Fi and battery"},
     'comp.statusbar.battery-low-color': {'color': '#ff3b30', 'src': "judged:iOS's red below 20 %"},
     'comp.statusbar.battery-saver-color': {'color': '#ffcc00', 'src': "judged:iOS's yellow in Low Power Mode"},
     'comp.statusbar.battery-charging-color': {'color': '#34c759', 'src': "judged:iOS's green while charging"},

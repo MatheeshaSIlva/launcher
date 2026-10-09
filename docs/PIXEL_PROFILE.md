@@ -83,10 +83,15 @@ tiles and notification cards `accent2_900` (dark) / `accent2_100` (light); lit t
   reference (`icon_menu*.png`, `home_menu*.png`, re-captured): colours equal in dark and light. Not there: Pause app,
   Bubble, App lock (system features), the options popup's wallpaper previews, the "+" that pins a shortcut to home.
 
+- **Status bar** (2026-10-10, `sys.layout.statusbar` = "pixel", tokens `comp.statusbar.pixel.*`): the time at the
+  left edge (15 sp, medium), notification icons after it; at the right four rounded signal bars, Android's Wi-Fi (a dot
+  and two arcs) and the capsule battery (filled to the level, green while charging with the bolt cut into its end), as
+  measured on the emulator's SystemUI. Every slot keeps its springs (levels glide, icons grow in and out); a theme change
+  lays the bar out anew at once.
+
 ## To do (in order)
 
-6. Status bar: Pixel's battery and icons; motion: Material's springs; icons: Material Symbols (needs the font, to be
-   downloaded with permission).
+6. Motion: Material's springs; icons: Material Symbols (needs the font, to be downloaded with permission).
 7. The shade's remaining parts: media player in Quick Settings, tile editing, the header's carrier and icons.
 8. Behaviour: a home gesture from an app opened from All apps lands on home with the sheet closed (Back returns to the
    sheet); ours returns to the sheet either way (iOS's). A swipe down on home opens the shade (ours: Spotlight).
