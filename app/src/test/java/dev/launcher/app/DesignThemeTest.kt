@@ -100,6 +100,9 @@ class DesignThemeTest {
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
         }
+        // Every animation's.
+        for (k in dev.launcher.app.motion.MotionTokens.SPRINGS) assertTrue(k, r.resolve(k) is Value.SpringV)
+        for (k in dev.launcher.app.motion.MotionTokens.NUMBERS) assertTrue(k, r.resolve(k) is Value.Number)
         // The appearance's palette.
         for (k in dev.launcher.app.theme.PaletteTokens.COLORS) assertTrue(k, r.resolve(k) is Value.Color)
         for (k in dev.launcher.app.theme.PaletteTokens.NUMBERS) assertTrue(k, r.resolve(k) is Value.Number)
