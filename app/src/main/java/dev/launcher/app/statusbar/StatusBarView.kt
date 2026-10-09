@@ -652,9 +652,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val rad = 4.2f * u
         val k = Color.red(content)
         val low = ((25f - batteryAnim.value) / 8f).coerceIn(0f, 1f)   // turns red below ~20 %
-        var levelColor = blend(content or (0xFF shl 24), 0xFFFF3B30.toInt(), low)
-        levelColor = blend(levelColor, 0xFFFFCC00.toInt(), saveAnim.value.coerceIn(0f, 1f))
-        levelColor = blend(levelColor, 0xFF34C759.toInt(), chargeAnim.value.coerceIn(0f, 1f))
+        var levelColor = blend(content or (0xFF shl 24), dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_LOW), low)
+        levelColor = blend(levelColor, dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_SAVER), saveAnim.value.coerceIn(0f, 1f))
+        levelColor = blend(levelColor, dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_CHARGING), chargeAnim.value.coerceIn(0f, 1f))
         levelColor = (a shl 24) or (levelColor and 0xFFFFFF)
         // Nub.
         fill.color = Color.argb(102 * a / 255, k, k, k)

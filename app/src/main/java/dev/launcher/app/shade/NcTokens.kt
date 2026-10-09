@@ -59,6 +59,12 @@ object NcTokens {
     val BUTTON_SYMBOL_COLOR = ColorKey("comp.nc.button.symbol-color")
     val BUTTON_SYMBOL_BLEND = ChoiceKey("comp.nc.button.symbol-blend")
     val BUTTON_ON = ColorKey("comp.nc.button.on-color")
+    val MEDIA_PLACEHOLDER = ColorKey("comp.nc.media.placeholder-color")
+    val MEDIA_TRACK = ColorKey("comp.nc.media.track-color")
+    /** An app's name over its expanded group (on the wallpaper). */
+    val HEADER_COLOR = ColorKey("comp.nc.header-color")
+    /** The soft shadow under the date and the group names. */
+    val TEXT_SHADOW = ColorKey("comp.nc.text-shadow-color")
     /** The symbol on a lit button (the torch on). */
     val BUTTON_ON_SYMBOL = ColorKey("comp.nc.button.on-symbol-color")
 
@@ -75,6 +81,6 @@ object NcTokens {
     val ALL = listOf(PLATTER, CORNER, PADDING, ICON, TEXT_X, TEXT_TOP, MIN_HEIGHT, TITLE, BODY, TIME, LABEL, TIME_COLOR, TIME_BLEND,
         MARGIN, GAP, OVERLAY, FADE_TOP, FADE_BOTTOM, FADE_LENGTH, SHELF_HEIGHT, SHELF_SHOW, SHELF_INSET1, SHELF_INSET2, STACK_TEXT_TOP, STACK_MIN_HEIGHT,
         PEEK_SHOW, PEEK_HEIGHT, PEEK_INSET, MORE_INSET, PEEK_CORNER, PEEK_ICON, BUTTON, BUTTON_SIZE, BUTTON_INSET_X,
-        BUTTON_BOTTOM, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR, BUTTON_SYMBOL_BLEND, BUTTON_ON, BUTTON_ON_SYMBOL, LOOK_CARD, LOOK_CORNER, LOOK_INSET, LOOK_LABEL,
+        BUTTON_BOTTOM, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR, BUTTON_SYMBOL_BLEND, BUTTON_ON, BUTTON_ON_SYMBOL, MEDIA_PLACEHOLDER, MEDIA_TRACK, HEADER_COLOR, TEXT_SHADOW, LOOK_CARD, LOOK_CORNER, LOOK_INSET, LOOK_LABEL,
         MENU_GAP, LOOK_DIM, LOOK_BLUR).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
 }

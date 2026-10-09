@@ -95,11 +95,13 @@ class DesignThemeTest {
             val v = r.resolve(k)
             val want = when {
                 k.endsWith(".type") -> Value.Text::class
-                k.endsWith(".fill") || k.endsWith(".label") || k.endsWith(".disc") || k.endsWith(".minus") -> Value.Color::class
+                k.endsWith(".fill") || k.endsWith(".label") || k.endsWith(".disc") || k.endsWith(".minus") || k.endsWith("-color") -> Value.Color::class
                 else -> Value.Number::class
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
         }
+        // The status bar's.
+        for (k in dev.launcher.app.statusbar.StatusBarTokens.ALL) assertTrue(k, r.resolve(k) is Value.Color)
         // The banners'.
         for (k in dev.launcher.app.shade.BannerView.ALL) {
             val v = r.resolve(k)
@@ -107,7 +109,7 @@ class DesignThemeTest {
                 k.endsWith("material") -> Value.Mat::class
                 k.endsWith(".type") -> Value.Text::class
                 k.endsWith(".behind") || k.endsWith(".label") || k.endsWith(".secondary") || k.endsWith(".decline") ||
-                    k.endsWith(".answer") || k.endsWith(".fill") -> Value.Color::class
+                    k.endsWith(".answer") || k.endsWith(".fill") || k.endsWith("-color") -> Value.Color::class
                 else -> Value.Number::class
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))

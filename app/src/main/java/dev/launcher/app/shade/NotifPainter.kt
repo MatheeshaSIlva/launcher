@@ -173,10 +173,6 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
         if (more > 0 && moreAlpha > 0f) drawStackCount(c, more + 1, ix + iconS, iy, alpha * moreAlpha)
     }
 
-    private val countFill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val countText = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        typeface = dev.launcher.app.theme.Fonts.text(600); textAlign = Paint.Align.CENTER
-    }
 
     /**
      * A stack's size, as iOS 16+ shows it: a white badge with the number in dark grey on the icon's top-right corner
@@ -185,18 +181,12 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
      */
     private fun drawStackCount(c: Canvas, n: Int, right: Float, top: Float, a: Float) {
         if (a <= 0.003f) return
-        val label = if (n > 99) "99+" else n.toString()
-        countText.textSize = 12.5f * u
-        val d = 18f * u
-        val w = max(d, countText.measureText(label) + 7f * u)
-        val cx = right + 3f * u - w / 2f
-        val cy = top + 3f * u
-        rect.set(cx - w / 2f, cy - d / 2f, cx + w / 2f, cy + d / 2f)
-        countFill.color = fade(0xFFFFFFFF.toInt(), a)
-        c.drawRoundRect(rect, d / 2f, d / 2f, countFill)
-        countText.color = fade(0xFF3A3A3C.toInt(), a)
-        c.drawText(label, cx, cy + 0.36f * countText.textSize, countText)
+        // The badge component's stack count (BadgeSpec.STACK), against the icon whose top-right corner is ([right], [top]).
+        countIcon.set(right - 1f, top, right, top + 1f)
+        dev.launcher.app.components.CountBadge.draw(c, countIcon, n, u, (255 * a.coerceIn(0f, 1f)).roundToInt(), 1f,
+            dev.launcher.app.components.BadgeSpec.STACK)
     }
+    private val countIcon = RectF()
 
     /**
      * A ringing call's banner (iOS's compact incoming call): the caller's photo (or the calling app's icon), their name and

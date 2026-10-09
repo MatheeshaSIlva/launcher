@@ -820,7 +820,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val tone = clockTone()
         val col = dev.launcher.app.home.LabelTone.color(tone)
         datePaint.color = alpha(col, k * (0xF2 / 255f))
-        dateShadow.color = alpha(0x59000000, 1f - tone)
+        dateShadow.color = alpha(Design.color(NcTokens.TEXT_SHADOW), 1f - tone)
         dateShadow.apply(datePaint)
         c.drawText(dateText, width / 2f, clockRect.top - 13f * u, datePaint)
         val g = clockGlass
@@ -1093,7 +1093,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         rect.set(ax, ay, ax + asz, ay + asz)
         if (art != null && !art.isRecycled) painter.drawRounded(c, art, rect, 9f * u, alpha)
         else {
-            fill.color = alpha(Appearance.mix(0x1A000000, 0x26FFFFFF), alpha)
+            fill.color = alpha(Design.color(NcTokens.MEDIA_PLACEHOLDER), alpha)
             c.drawRoundRect(rect, 9f * u, 9f * u, fill)
             glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), 26f * u, alpha(secondary(), alpha))
         }
@@ -1108,7 +1108,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val sy = y + 96f * u
         val x0 = x + 16f * u
         val x1 = x + w - 16f * u
-        fill.color = alpha(Appearance.mix(0x26000000, 0x33FFFFFF), alpha)
+        fill.color = alpha(Design.color(NcTokens.MEDIA_TRACK), alpha)
         rect.set(x0, sy - 3f * u, x1, sy + 3f * u)
         c.drawRoundRect(rect, 3f * u, 3f * u, fill)
         if (m.duration > 0) {
@@ -1139,7 +1139,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun drawHeader(c: Canvas, b: Block, y: Float, a: Float, sheetY: Float) {
         headPaint.textSize = 22f * u
-        headPaint.color = alpha(0xFFFFFFFF.toInt(), a)
+        headPaint.color = alpha(Design.color(NcTokens.HEADER_COLOR), a)
+        headShadow.color = Design.color(NcTokens.TEXT_SHADOW)
         headShadow.apply(headPaint)
         val name = painter.appLabel(b.group)
         c.drawText(TextUtils.ellipsize(name, headPaint, width * 0.45f, TextUtils.TruncateAt.END).toString(), margin + 6f * u, y + 28f * u, headPaint)

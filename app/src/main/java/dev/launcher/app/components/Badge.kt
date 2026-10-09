@@ -10,25 +10,42 @@ import dev.launcher.app.design.TextKey
 import dev.launcher.app.design.applyTo
 import dev.launcher.app.home.HomeMetrics
 
-/** The badges' tokens (`comp.badge.*`): the count on an app's icon, and edit mode's remove badge. */
-object BadgeTokens {
-    val FILL = ColorKey("comp.badge.fill")
-    val LABEL = ColorKey("comp.badge.label")
-    val TYPE = TextKey("comp.badge.type")
-    val HEIGHT = NumberKey("comp.badge.height")
+/**
+ * The tokens of one count badge's look: an app's on its icon ([APP], `comp.badge.*`), a stack's in Notification Center
+ * ([STACK], `comp.nc.count.*`).
+ */
+class BadgeSpec(prefix: String) {
+    val fill = ColorKey("$prefix.fill")
+    val label = ColorKey("$prefix.label")
+    val type = TextKey("$prefix.type")
+    val height = NumberKey("$prefix.height")
     /** Room on each side of a count wider than the badge is high. */
-    val PAD_X = NumberKey("comp.badge.pad-x")
-    /** How far its top right lies past the icon's corner. */
-    val OFFSET = NumberKey("comp.badge.offset")
+    val padX = NumberKey("$prefix.pad-x")
+    /** Where it lies against the icon's top-right corner: its right edge [offsetX] past it, its top [offsetY] below it. */
+    val offsetX = NumberKey("$prefix.offset-x")
+    val offsetY = NumberKey("$prefix.offset-y")
+    /** The largest count shown as it is (larger: "max+"). */
+    val max = NumberKey("$prefix.max")
+
+    val all get() = listOf(fill, label, type, height, padX, offsetX, offsetY, max).map { it.name }
+
+    companion object {
+        val APP = BadgeSpec("comp.badge")
+        val STACK = BadgeSpec("comp.nc.count")
+    }
+}
+
+/** The badges' tokens: the count badges' ([BadgeSpec]) and edit mode's remove badge. */
+object BadgeTokens {
     val REMOVE_DISC = ColorKey("comp.badge.remove.disc")
     val REMOVE_MINUS = ColorKey("comp.badge.remove.minus")
     val REMOVE_RADIUS = NumberKey("comp.badge.remove.radius")
     val REMOVE_STROKE = NumberKey("comp.badge.remove.stroke")
 
-    val ALL = listOf(FILL, LABEL, TYPE, HEIGHT, PAD_X, OFFSET, REMOVE_DISC, REMOVE_MINUS, REMOVE_RADIUS, REMOVE_STROKE).map { it.name }
+    val ALL = listOf(REMOVE_DISC, REMOVE_MINUS, REMOVE_RADIUS, REMOVE_STROKE).map { it.name } + BadgeSpec.APP.all + BadgeSpec.STACK.all
 }
 
-/** iOS's notification badge: a capsule with the count at an icon's top right. */
+/** iOS's count badge: a capsule with the count at an icon's top right ([BadgeSpec]: an app's, a stack's). */
 object CountBadge {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val text = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER }
@@ -37,19 +54,19 @@ object CountBadge {
     fun draw(c: Canvas, icon: RectF, count: Int, m: HomeMetrics, alpha: Int = 255, scale: Float = 1f) = draw(c, icon, count, m.u, alpha, scale)
 
     /** With [u] = one point in px; [scale] grows or shrinks the badge about its centre (its pop-in animation). */
-    fun draw(c: Canvas, icon: RectF, count: Int, u: Float, alpha: Int = 255, scale: Float = 1f) {
+    fun draw(c: Canvas, icon: RectF, count: Int, u: Float, alpha: Int = 255, scale: Float = 1f, spec: BadgeSpec = BadgeSpec.APP) {
         if (alpha <= 0 || scale <= 0f) return
-        val label = if (count > 999) "999+" else count.toString()
-        val h = Design.pt(BadgeTokens.HEIGHT, u)
-        Design.text(BadgeTokens.TYPE).applyTo(text, u)
-        val w = maxOf(h, text.measureText(label) + 2f * Design.pt(BadgeTokens.PAD_X, u))
-        val off = Design.pt(BadgeTokens.OFFSET, u)
-        val right = icon.right + off
-        val top = icon.top - off
+        val max = Design.num(spec.max).toInt()
+        val label = if (count > max) "$max+" else count.toString()
+        val h = Design.pt(spec.height, u)
+        Design.text(spec.type).applyTo(text, u)
+        val w = maxOf(h, text.measureText(label) + 2f * Design.pt(spec.padX, u))
+        val right = icon.right + Design.pt(spec.offsetX, u)
+        val top = icon.top + Design.pt(spec.offsetY, u)
         r.set(right - w, top, right, top + h)
-        fill.color = Design.color(BadgeTokens.FILL)
+        fill.color = Design.color(spec.fill)
         fill.alpha = fill.alpha * alpha / 255
-        text.color = Design.color(BadgeTokens.LABEL)
+        text.color = Design.color(spec.label)
         text.alpha = text.alpha * alpha / 255
         val save = c.save()
         if (scale != 1f) c.scale(scale, scale, r.centerX(), r.centerY())

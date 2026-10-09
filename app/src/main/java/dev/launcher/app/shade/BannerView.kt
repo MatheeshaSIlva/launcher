@@ -157,7 +157,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
                     if (f < 1f) postInvalidateOnAnimation()
                 }
             } else {
-                fill.color = Appearance.mix(0xF2F7F7F9.toInt(), 0xEB222224.toInt())
+                fill.color = Design.color(FLAT)
                 r.set(0f, 0f, w, s.h)
                 c.drawRoundRect(r, radius(s), radius(s), fill)
             }
@@ -181,10 +181,14 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             // A call's: a round symbol on its colour, darker and a little smaller while pressed.
             val sc = 1f - 0.06f * p
             val rad = r.width() / 2f * sc
-            fill.color = b.color?.let { Design.color(it) } ?: 0xFF888888.toInt()
+            fill.color = Design.color(b.color ?: CALL_BUTTON_COLOR)
             c.drawCircle(r.centerX(), r.centerY(), rad, fill)
-            if (p > 0f) { fill.color = (Math.round(0x40 * p) shl 24); c.drawCircle(r.centerX(), r.centerY(), rad, fill) }
-            glyphs.draw(c, b.icon, r.centerX(), r.centerY(), 26f * u * sc, 0xFFFFFFFF.toInt())
+            if (p > 0f) {
+                val pc = Design.color(CALL_PRESS)
+                fill.color = (Math.round(((pc ushr 24) and 0xFF) * p) shl 24) or (pc and 0xFFFFFF)
+                c.drawCircle(r.centerX(), r.centerY(), rad, fill)
+            }
+            glyphs.draw(c, b.icon, r.centerX(), r.centerY(), 26f * u * sc, Design.color(CALL_SYMBOL))
         } else {
             // An action: a faint capsule (the kit's tertiary fill), stronger while pressed.
             fill.color = Design.color(ACTION_FILL)
@@ -597,9 +601,14 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         val ANSWER = ColorKey("comp.banner.call.answer")
         val ACTION_HEIGHT = NumberKey("comp.banner.action.height")
         val ACTION_FILL = ColorKey("comp.banner.action.fill")
+        /** A banner without the glass renderer: a plain platter. */
+        val FLAT = ColorKey("comp.banner.flat-color")
+        val CALL_BUTTON_COLOR = ColorKey("comp.banner.call.button-color")
+        val CALL_PRESS = ColorKey("comp.banner.call.press-color")
+        val CALL_SYMBOL = ColorKey("comp.banner.call.symbol-color")
         val ACTION_TYPE = TextKey("comp.banner.action.type")
         val ALL = listOf(MATERIAL, BEHIND, CORNER, MARGIN, LABEL, SECONDARY, CALL_CORNER, CALL_HEIGHT, CALL_BUTTON, DECLINE, ANSWER,
-            ACTION_HEIGHT, ACTION_FILL, ACTION_TYPE).map { it.name }
+            ACTION_HEIGHT, ACTION_FILL, ACTION_TYPE, FLAT, CALL_BUTTON_COLOR, CALL_PRESS, CALL_SYMBOL).map { it.name }
         val SWOOP_IN = SpringSpec(0.64f, 0.61f)
         val SWOOP_OUT = SpringSpec(0.3f, 1f)
         val FLY = SpringSpec(0.35f, 1f)
