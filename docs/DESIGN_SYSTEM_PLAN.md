@@ -94,8 +94,10 @@ status row, clock numerals: specs plus painters. The shade's views shrink to lay
 *Badge done 2026-10-09* (`components/Badge.kt`: the count on icons and cards, Notification Center's stack count, edit
 mode's remove badge; `comp.badge.*`, `comp.nc.count.*`). *Slider done 2026-10-09* (`shade/CcParts.kt`: Control Center's
 module and expanded slider). The rest goes by a sweep of what is still decided in code: colours first (the shade's done
-2026-10-09: about 40 literals into `comp.cc.*`, `comp.nc.*`, `comp.banner.*`, `comp.statusbar.*`), then symbol, type and
-corner sizes; positions stay in the iOS profile's layout code.
+2026-10-09: about 40 literals into `comp.cc.*`, `comp.nc.*`, `comp.banner.*`, `comp.statusbar.*`; home's palette, which
+`Appearance` held, is the theme's `sys.color.material.*`, `sys.color.press`, `sys.glass.tint`), then symbol, type and
+corner sizes; positions stay in the iOS profile's layout code. Still in code: the strengths of the soft shadows under
+white text over pictures (several judged values), surfaces' fallbacks without the glass renderer, fade masks.
 With it, the **look audit** Matheesha asked for (2026-10-08): tints and opacities that differ between surfaces (or with
 the wallpaper) listed surface by surface over a light, a mid and a dark wallpaper, and every difference from iOS 27 that
 is not a decision of ours, each fixed in its token. Already done: the kit's hairline rims at a theme strength

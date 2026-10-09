@@ -1647,3 +1647,15 @@ material in all six cases. Found and fixed:
   installed its own build on the same emulator mid-test, which voided one earlier comparison): Control Center, its
   expanded brightness slider, Notification Center fanned out and with a stacked group (its count badge): pixel for
   pixel the same, but for the emulator's signal indicator.
+
+## Step 3: home's palette from the theme (2026-10-09)
+
+- `Appearance`'s colours for text and lines on the materials (label, secondary and tertiary label, separator, press
+  fill, destructive), the glass's tint and dark mode's wallpaper dim are theme tokens (`sys.color.material.*`,
+  `sys.color.press`, `sys.glass.tint`, `sys.appearance.wallpaper-dim`; keys in `theme/PaletteTokens`), with the values
+  they had. The theme now loads before the appearance. Also tokens: a menu's fallback (`MenuSpec.fallback`), the widget
+  gallery's fallback and grabber, a search field's clear button.
+- Emulator, against the previous build, light and dark mode: App Library, Spotlight, the Edit menu and the widget
+  gallery pixel for pixel the same (but for the text cursor and the clock's minute).
+- A mistake of mine: one commit went out with the theme test failing (the command committed whatever the test said);
+  fixed in the next commit. Commits now go through a script that commits only when the tests pass.
