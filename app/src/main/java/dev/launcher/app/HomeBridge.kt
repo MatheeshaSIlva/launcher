@@ -144,6 +144,9 @@ object HomeBridge {
      */
     @Volatile var homeCovered = false
 
+    /** When gesture nav last brought home forward from an app (a close, the App Switcher's home; uptime ms; 0 never). */
+    @Volatile var homeStartedAt = 0L
+
     /**
      * What is under the status bar on home is light (the wallpaper, or the light App Library or Spotlight): our status bar
      * shows black content on home. Gesture nav is told at once ([onStatusDarkChanged]).

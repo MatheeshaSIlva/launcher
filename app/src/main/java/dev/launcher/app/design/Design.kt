@@ -54,6 +54,32 @@ object Design {
         }
         rebuild()
         AppLog.log("[design] theme '${base?.name}' ${base?.entries?.size} tokens, ${user.size} edited")
+        // Over adb, for fast iteration (and tests): the edits file is read again and everything drawn with tokens redraws.
+        //   adb shell am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app
+        // Senders must hold DUMP (adb's shell does; other apps cannot).
+        val r = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: android.content.Intent) = reloadEdits()
+        }
+        val f = android.content.IntentFilter("dev.launcher.app.DESIGN_RELOAD")
+        if (android.os.Build.VERSION.SDK_INT >= 33) appCtx.registerReceiver(r, f, android.Manifest.permission.DUMP, null, Context.RECEIVER_EXPORTED)
+        else appCtx.registerReceiver(r, f, android.Manifest.permission.DUMP, null)
+    }
+
+    /** The edits file read again (written over adb): applied at once, as an edit in the token editor is. */
+    fun reloadEdits() {
+        val read = try {
+            val f = File(appCtx.filesDir, USER)
+            if (f.exists()) Theme.parse(f.readText()).entries else emptyMap()
+        } catch (t: Throwable) {
+            AppLog.log("[design] reload: edits unreadable (${t.message}): kept as they were"); return
+        }
+        user.clear()
+        user.putAll(read)
+        rebuild()
+        version++
+        AppLog.log("[design] reloaded: ${user.size} edited")
+        val run = Runnable { for (l in listeners.toList()) l() }
+        if (Looper.myLooper() == Looper.getMainLooper()) run.run() else main.post(run)
     }
 
     private fun rebuild() {

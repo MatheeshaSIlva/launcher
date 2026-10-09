@@ -60,6 +60,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         fun frontSince(): Long
         /** The app's latest picture, if gesture navigation has one (its launch card shows it). */
         fun snapshotFor(pkg: String): android.graphics.Bitmap?
+        /** The package of the task in front, asked of the system (a binder call through the shell: never on the UI thread). */
+        fun topTaskPackage(): String?
         /**
          * A start our card covers but that only our own process may make (a notification's tap: Android 15 lets only a
          * sender with a visible window bring an app to the front, and our own transition needs the shell): the system's
@@ -363,12 +365,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 val bk = kotlin.math.sqrt(k)
                 if (live) liveBlur.set(bk, true)
                 backdrop.set(ccBlurRadius() * bk, ccDim() * bk, (p / 0.12f).coerceIn(0f, 1f))
-                bar.setPanel(k, 0f, 0f, cc.statusRowY)
+                bar.setPanel(k * (1f - launchBarK()), 0f, 0f, cc.statusRowY)
                 bar.setRowAlpha(1f - editK)
             }
             Panel.NC -> {
                 nc.progress = p
-                bar.setPanel(0f, k, nc.wantsDarkContent(), 0f)
+                bar.setPanel(0f, k * (1f - launchBarK()), nc.wantsDarkContent(), 0f)
             }
             null -> {
                 cc.progress = 0f
@@ -464,6 +466,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         surfaces.setBackdrop(null, null)
         handler.removeCallbacks(focusWhenIdle)
         focusHolder.release()
+        backdropHold?.cancel()
+        backdropHold = null
+        backdrop.freeze = 0f
         regionOpen = false
         updateTouchable()
         nav.shadeChanged(false)
@@ -823,7 +828,27 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var launchSettled = false
     private var launchAppReady = false
     private var launchFading = false
-    private val launchK: SpringValue = SpringValue(0f, 100f, { placeLaunchCard() }) { launchSettled = true; maybeEndLaunch() }
+    private val launchK: SpringValue = SpringValue(0f, 100f, { placeLaunchCard() }) { launchSettled = true; maybeEndLaunch(); if (!launchAppReady) askTopTask() }
+
+    /**
+     * The card is full and the app has not said it is in front: asks the system which task is (again shortly until it is the
+     * app's). An app's existing task brought back sends no window event (Settings opened from Control Center: the card
+     * waited for the timeout, 2.5 s, the app under it untouchable).
+     */
+    private fun askTopTask() {
+        val pkg = launchPkg ?: return
+        launchIo.execute {
+            val top = try { nav.topTaskPackage() } catch (_: Throwable) { null }
+            handler.post {
+                if (launchPkg != pkg || launchAppReady) return@post
+                if (top == pkg) {
+                    AppLog.log("[shade] $pkg is the task in front (no window event): the card goes")
+                    launchAppReady = true
+                    maybeEndLaunch()
+                } else handler.postDelayed({ askTopTask() }, TOP_TASK_POLL_MS)
+            }
+        }
+    }
     private val launchIo = java.util.concurrent.Executors.newSingleThreadExecutor()
 
     private fun screenRadius(): Float {
@@ -834,6 +859,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     private fun placeLaunchCard() {
+        if (panel != null) applyProgress()   // the bar leaves the panel's look as the card grows
         val k = launchK.value
         val w = root.width.toFloat()
         val h = root.height.toFloat()
@@ -889,17 +915,26 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val y = downY.coerceIn(side / 2f, root.height - side / 2f)
         cardFrom(target.packageName, android.graphics.RectF(x - side / 2f, y - side / 2f, x + side / 2f, y + side / 2f))
         val start = Intent(i).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        launchIo.execute {
-            val ok = dev.launcher.app.NoAnimStarts.start(start, android.os.Process.myUserHandle().hashCode()) ||
-                run { nav.quietStarts(true); state.start(start) }
-            if (!ok) handler.post { if (launchPkg == target.packageName) endLaunch() }
-        }
+        val pkg = target.packageName
+        // Started once the background holds still (it would show the app coming up behind the panel), right away if it does.
+        handler.postDelayed({
+            if (launchPkg == pkg) launchIo.execute {
+                val ok = dev.launcher.app.NoAnimStarts.start(start, android.os.Process.myUserHandle().hashCode()) ||
+                    run { nav.quietStarts(true); state.start(start) }
+                if (!ok) handler.post { if (launchPkg == pkg) endLaunch() }
+            }
+        }, holdBackdrop())
         AppLog.log("[shade] open ${target.packageName} (${i.action ?: i.component?.className})")
         return true
     }
 
     /** The launch card of [pkg] starts growing out of [from] (screen px). */
     private fun cardFrom(pkg: String, from: android.graphics.RectF) {
+        // The app must be able to take the focus: only then does Android say it is in front (its window event), which ends the
+        // launch. With the panel at rest our focus window held it: Settings opened from Control Center stayed under the full
+        // card until the timeout (2.5 s, untouchable).
+        handler.removeCallbacks(focusWhenIdle)
+        focusHolder.release()
         launchPkg = pkg
         launchAt = SystemClock.uptimeMillis()
         launchSettled = false
@@ -921,6 +956,31 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         launchK.animateTo(1f, Motion.profile.appOpen)
         handler.removeCallbacks(launchTimeout)
         handler.postDelayed(launchTimeout, LAUNCH_TIMEOUT_MS)
+    }
+
+    private var backdropHold: android.animation.ValueAnimator? = null
+
+    /**
+     * How far a launch from a panel has come (0..1, 0 with none): the status bar goes from the panel's look to the app's as
+     * the card grows. The panel closes under the full card, and the bar (above the card) jumped there in one frame.
+     */
+    private fun launchBarK(): Float = if (launchPkg != null || launchFading) launchK.value.coerceIn(0f, 1f) else 0f
+
+    /**
+     * Control Center's live background (the system blurring what is behind) turns into our own still picture of it, faded
+     * over [BACKDROP_HOLD_MS]: what launches from it comes up behind the panel, and the live blur showed it at once. Returns
+     * how long to wait before starting the app (0: nothing to hold, the background is our picture already).
+     */
+    private fun holdBackdrop(): Long {
+        if (panel != Panel.CC || !liveBlur.available || backdrop.source == null) return 0L
+        backdropHold?.cancel()
+        backdropHold = android.animation.ValueAnimator.ofFloat(backdrop.freeze, 1f).apply {
+            duration = BACKDROP_HOLD_MS
+            interpolator = android.view.animation.DecelerateInterpolator()
+            addUpdateListener { a -> backdrop.freeze = a.animatedValue as Float }
+            start()
+        }
+        return BACKDROP_HOLD_MS
     }
 
     private val launchTimeout = Runnable {
@@ -953,7 +1013,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     fun frontChanged() {
         // What came to the front after the tap is the notification's app (its intent may belong to another package than
         // the notification's: a shared link, a settings page). SystemUI's windows (a passing shade) do not count.
-        if (launchPkg != null && nav.frontSince() >= launchAt && nav.frontPackage().let { it != null && it != "com.android.systemui" }) {
+        // Nor is home: it takes the focus back the moment the panel lets it go, before the app has come up.
+        if (launchPkg != null && nav.frontSince() >= launchAt && nav.frontPackage().let { it != null && it != "com.android.systemui" } &&
+            nav.frontClass()?.endsWith(".HomeActivity") != true) {
             launchAppReady = true
             maybeEndLaunch()
         }
@@ -1139,7 +1201,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     private val focusWhenIdle = Runnable {
-        if (panel != null && !progress.isAnimating && progress.value >= 0.999f && touch == Touch.NONE) focusHolder.take()
+        if (panel != null && launchPkg == null && !progress.isAnimating && progress.value >= 0.999f && touch == Touch.NONE) focusHolder.take()
     }
 
     private inner class Root(ctx: Context) : FrameLayout(ctx) {
@@ -1186,6 +1248,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private companion object {
         /** A notification's app that is not in front this long after its card started: the card goes anyway. */
         const val LAUNCH_TIMEOUT_MS = 2500L
+        /** How long Control Center's background takes to turn from the live blur into our still picture before a launch (ms). */
+        const val BACKDROP_HOLD_MS = 120L
+        /** How often a launch whose app has not said it is in front asks for the task in front (ms). */
+        const val TOP_TASK_POLL_MS = 80L
         const val LAUNCH_FADE_MS = 140L
         /** The size a banner's backdrop (the app behind) is blurred at (of the screen's). */
         const val BANNER_BAKE_SCALE = 0.25f

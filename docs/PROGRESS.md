@@ -1755,3 +1755,24 @@ Still to audit: folder to folder, unlock and cold-start arrival, the S24's own b
 - Audit status: every animation listed in the plan has had a pass on the emulator. Left for the S24 (its own recorder at
   120 fps): Control Center's first frames with Samsung's blur, the icon handover after closes on the phone, real frame
   pacing (the final performance pass).
+
+## S24 test session (2026-10-09): Matheesha's four checks
+
+Tested on the S24 itself (local builds installed with `adb install -r -d`, never `am force-stop`: see CLAUDE.md).
+
+| Check | Result |
+| --- | --- |
+| 3. Holding an app vibrates twice | **Confirmed, fixed.** The vibrator's history showed two LONG_PRESS effects per hold: `View.performLongClick` plays its own haptic when the listener returns true, and ours played as well. Icons and widgets have the view's own haptic off; after the fix one effect per hold (three icon holds, one widget hold). |
+| 1. Several apps opened quickly one after another (dock: Calculator, Clock, Launcher Dev, Settings; each closed at once, the next tapped during the close) | Recorded at 120 fps, checked frame by frame. **One pop, fixed:** a warm app's snapshot arriving while its launch card was already growing replaced the launch screen in one frame (Launcher Dev). Now it fades in over 160 ms (`CardView.fadeToSnapshot`; also for a fresher picture replacing a stale one mid-gesture). Everything else clean: a close touched by the next tap fades its card where it is while its icon glides into its slot (one icon, no jump). |
+| 2. Settings opened from Control Center | **Three defects, fixed.** (a) The card stayed full screen, Settings untouchable under it, until the 2.5 s timeout: the shade's focus window held the focus, and Settings' existing task brought back sends no window event at all (also not from the dock). The launch now lets the focus go, does not count home taking it, and once the card is full asks the system for the task in front (every 80 ms): the card went 458 ms after the tap. (b) On the tap, Control Center's live background turned black in one frame (the app came up behind the panel and the system's blur showed it): our still picture of what was behind now covers the live blur (120 ms fade) before the app is started. (c) The status bar jumped from Control Center's row to the app's bar when the panel closed under the card: it now follows the card's growth (as a swipe close). |
+| 4. The widget gallery's opening lags | **Partly fixed, not done.** Traces: the render thread spent 4-12 ms a frame allocating GPU images. The renderer's GPU cache budget on the S24 is 121 MB (`dumpsys gfxinfo`: "Max resource usage"); home at rest already held ~105 MB of render targets, and the open gallery needed more (122.9 MB): every frame freed and allocated images. Changes: the search field reuses the sheet's kept blur of home instead of its own full-screen blurred copy (it was also re-blurred every frame of the rise); kept content is blurred at a quarter of the resolution (the frost is wide: nothing lost, checked on the emulator for the sheet, the field and the App Switcher's Clear All); the sheet's node keeps its size (a node around the growing sheet was a new layer every frame) and the glass shader returns at once beyond its shadows. Gallery open: 113 MB. Interleaved A/B against 4b7c7f8 (3 rounds x 2 openings): GPU time per frame 25 % lower (median 15.6 vs 21 ms), missed refreshes the same (~11 both) — but the phone was hot (thermal status 1-2, GPU medians twice those measured cool), so the timings are not conclusive. Still allocating ~30 images a frame (offscreen layers of the effects re-applied as the sheet moves): next step. |
+
+Found on the way:
+- **Empty home after an update while an app was in front** (seen here, reproducible): the new process started under the
+  app, the first way home was a close, the cold-start arrival held its first frame (items hidden) and, finding a card over
+  home, never played or let go. Now a cold start whose first showing comes from gesture nav (`HomeBridge.homeStartedAt`,
+  within 3 s) has no arrival, and a cold arrival that finds home busy retries for a second, then lets go at rest.
+- Gesture nav lost after a force-stop: `am force-stop` disables the accessibility service; a race between its unbind and
+  a queued attach left stock gestures blocked with no strip. The attach of an unbound service is now dropped.
+- `DESIGN_RELOAD` broadcast (`am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app`): the app rereads its
+  token edits (`files/design/user.json`) in place, for experiments on the phone without a reinstall.

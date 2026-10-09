@@ -215,6 +215,17 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **AGSL**: `out` is a reserved word (a variable named so fails to compile); uniform arrays (`uniform half4 x[8]`) are
   set with one `setFloatUniform(name, FloatArray)` of the whole array.
 - **Keystore**: debug builds are signed with a committed keystore so CI builds install over each other. Keep that pattern (new key file for this app).
+- **Never `am force-stop dev.launcher.app` on the phone**: it disables our accessibility service (gesture nav, the shade)
+  and once left stock gestures blocked with no strip. Install local builds with `adb install -r -d` alone, then check the
+  log for "gesture strip on". Token experiments without a reinstall: write `files/design/user.json` (run-as) and send
+  `am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app`.
+- **The renderer's GPU cache has a budget** (S24: 121 MB, `dumpsys gfxinfo` "Max resource usage"). Each RenderEffect or
+  layer is a screen-sized image and its filtered output another; past the budget every frame frees and allocates images
+  (`allocateImageMemory` slices of 0.5-2 ms in a trace, 30-40 a frame in the widget gallery). Blur kept content at reduced
+  size, never give a layer a new size every frame, and check the budget with the surface open.
+- **An app's existing task brought back may send no window event** (Settings sends none, from the dock or a panel): never
+  wait on the accessibility event alone; ask the system for the task in front (`topTaskPackage`). And while a panel holds
+  our focus window, the launched app cannot take the focus at all: a launch from the shade lets it go.
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

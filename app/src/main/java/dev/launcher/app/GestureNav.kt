@@ -397,6 +397,7 @@ object GestureNav {
         override fun homeShown(): Boolean = homeVisible
         override fun frontSince(): Long = frontNowAt
         override fun snapshotFor(pkg: String): Bitmap? = images[pkg]
+        override fun topTaskPackage(): String? = ShizukuLink.service?.let { parseTasks(it.recentTasks(1)).firstOrNull()?.pkg }
         override fun quietStarts(on: Boolean) {
             if (!on) { nav.post { nav.removeCallbacks(scalesBack); nav.postDelayed(scalesBack, QUIET_BACK_MS) }; return }
             nav.removeCallbacks(scalesBack)
@@ -506,6 +507,8 @@ object GestureNav {
     fun attach(service: NavAccessibilityService) {
         nav.post {
             if (a11y === service) return@post
+            // Unbound before this ran (connected and unbound at once, seen on the S24 after an install): never attach it.
+            if (service === unboundService) return@post
             if (strip != null || statusBarShown) removeAll()
             a11y = service
             wm = service.getSystemService(WindowManager::class.java)
@@ -524,6 +527,7 @@ object GestureNav {
     /** Service gone: our windows are invalid and stock gestures must come back at once. */
     fun detach(service: NavAccessibilityService) {
         if (a11y !== service && a11y != null) return
+        unboundService = service
         ready = false
         reapplyFlags()
         nav.post {
@@ -532,8 +536,17 @@ object GestureNav {
             try { app.unregisterReceiver(screenReceiver) } catch (_: Throwable) { }
             a11y = null
             wm = null
+            // An attach queued before this detach ran in between and said ready: stock gestures back again.
+            if (ready) { ready = false; reapplyFlags() }
         }
     }
+
+    /**
+     * The service last unbound: an attach of it still queued on the nav thread must not run. (Connected and unbound at once,
+     * the queued attach set [ready] after the detach had cleared it: stock gestures stayed blocked with no strip of ours,
+     * no way home on the S24 until the app restarted.)
+     */
+    @Volatile private var unboundService: NavAccessibilityService? = null
 
     fun onHomeShown() {
         homeVisible = true
@@ -1392,10 +1405,10 @@ object GestureNav {
             cur?.let { c ->
                 // A card already showing an up-to-date picture of this app keeps it (a new picture's first draw costs a GPU
                 // import in the middle of the motion); an out-of-date one is replaced.
-                if (b != null && (!showsKept || keptStale)) c.snapshot = b
+                if (b != null && (!showsKept || keptStale)) c.fadeToSnapshot(b)
                 else if (b == null && c.snapshot == null) {
                     val kept = recentImage(pkg)
-                    if (kept != null) c.snapshot = kept else c.icon = fg?.let { iconFor(it.pkg) }
+                    if (kept != null) c.fadeToSnapshot(kept) else c.icon = fg?.let { iconFor(it.pkg) }
                 }
             }
             maybeShow()
@@ -1663,6 +1676,7 @@ object GestureNav {
     private fun startHome() {
         homeStarted = true
         homeRequestedAt = SystemClock.uptimeMillis()
+        HomeBridge.homeStartedAt = homeRequestedAt
         homeVisible = false
         // startActivity is a binder round trip of tens of ms: never on the nav thread, which is drawing the card right now.
         front("home") {
@@ -1872,7 +1886,7 @@ object GestureNav {
             val task = try { parseTasks(s.recentTasks(12)).firstOrNull { it.pkg == pkg } } catch (_: Throwable) { null } ?: return@execute
             val b = try { snapshot(s, task.id, false) } catch (_: Throwable) { null } ?: return@execute
             remember(pkg, b)
-            nav.post { if (gen == g && cardPkg == pkg) { c.snapshot = b; fg = task } }
+            nav.post { if (gen == g && cardPkg == pkg) { c.fadeToSnapshot(b); fg = task } }
         }
     }
 

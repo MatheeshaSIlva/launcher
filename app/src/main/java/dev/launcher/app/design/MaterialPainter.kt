@@ -150,6 +150,7 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     private var behindKey = NO_CONTENT_KEY
     private val behindBounds = android.graphics.Rect()
     private var behindRadius = -1f
+    private var behindScale = 1f
     private val inverse = Matrix()
 
     /**
@@ -179,6 +180,9 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         var r = shape.right + margin
         var b = shape.bottom + margin
         val keep = contentKey != NO_CONTENT_KEY && limit != null
+        // Kept content: the surface's node as large as what is behind (all of [limit]) and never resized while the surface
+        // moves: a node around the shape (the gallery's sheet growing as it rose) was a new layer, a new GPU image, at every
+        // frame. Outside the shadows' reach the shader returns at once.
         if (keep) { l = limit!!.left; t = limit.top; r = limit.right; b = limit.bottom }
         else if (limit != null) { l = maxOf(l, limit.left); t = maxOf(t, limit.top); r = minOf(r, limit.right); b = minOf(b, limit.bottom) }
         val left = kotlin.math.floor(l).toInt()
@@ -189,27 +193,44 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         val br = Blur.renderRadius(sigma)
         node.setPosition(left, top, left + w, top + h)
         if (keep) {
-            if (contentKey != behindKey || !behind.hasDisplayList() || behindBounds.left != left || behindBounds.top != top ||
-                behindBounds.width() != w || behindBounds.height() != h) {
-                behind.setPosition(0, 0, w, h)
+            val bl = kotlin.math.floor(limit!!.left).toInt()
+            val bt = kotlin.math.floor(limit.top).toInt()
+            val bw = kotlin.math.ceil(limit.right - bl).toInt()
+            val bh = kotlin.math.ceil(limit.bottom - bt).toInt()
+            if (bw <= 0 || bh <= 0) return false
+            // Kept content is blurred at a lower resolution and drawn scaled back up: a frost this wide loses nothing (the
+            // blur removed the detail), and full-size it was two screen-sized GPU images (content and blurred), which with
+            // home's own blur pushed the renderer over its GPU memory budget: every frame then freed and allocated images.
+            val s = if (sigma > 4f) (4f / sigma).coerceIn(KEEP_SCALE_MIN, 1f) else 1f
+            if (contentKey != behindKey || !behind.hasDisplayList() || behindBounds.left != bl || behindBounds.top != bt ||
+                behindBounds.width() != bw || behindBounds.height() != bh || s != behindScale) {
+                behind.setPosition(0, 0, kotlin.math.ceil(bw * s).toInt(), kotlin.math.ceil(bh * s).toInt())
+                behindScale = s
+                behindRadius = -1f
                 val bc = behind.beginRecording()
                 try {
-                    bc.translate(-left.toFloat(), -top.toFloat())
+                    bc.scale(s, s)
+                    bc.translate(-bl.toFloat(), -bt.toFloat())
                     if (toScreen != null && toScreen.invert(inverse)) bc.concat(inverse)
                     drawBehind(bc)
                 } finally {
                     behind.endRecording()
                 }
                 behindKey = contentKey
-                behindBounds.set(left, top, left + w, top + h)
+                behindBounds.set(bl, bt, bl + bw, bt + bh)
             }
             // The same effect object while the frost is the same: the renderer keeps its blurred result.
-            if (br != behindRadius) {
-                behindRadius = br
-                behind.setRenderEffect(if (br >= 0.5f) RenderEffect.createBlurEffect(br, br, Shader.TileMode.CLAMP) else null)
+            val sbr = Blur.renderRadius(sigma * behindScale)
+            if (sbr != behindRadius) {
+                behindRadius = sbr
+                behind.setRenderEffect(if (sbr >= 0.5f) RenderEffect.createBlurEffect(sbr, sbr, Shader.TileMode.CLAMP) else null)
             }
             val rc = node.beginRecording()
-            try { rc.drawRenderNode(behind) } finally { node.endRecording() }
+            try {
+                rc.translate((behindBounds.left - left).toFloat(), (behindBounds.top - top).toFloat())
+                rc.scale(1f / behindScale, 1f / behindScale)
+                rc.drawRenderNode(behind)
+            } finally { node.endRecording() }
         } else {
             val rc = node.beginRecording()
             try {
@@ -250,6 +271,21 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         return true
     }
 
+    /**
+     * What the last kept [drawLive] (one with a content key) sees, blurred to its frost, drawn at its place in [canvas]
+     * (the coordinates that call's [limit] was in): the renderer's own blurred result, no new blur. For something on top of
+     * that surface that looks through it (the gallery's search field over the sheet). False if there is none.
+     */
+    fun drawKept(canvas: Canvas): Boolean {
+        if (!canvas.isHardwareAccelerated || behindKey == NO_CONTENT_KEY || !behind.hasDisplayList()) return false
+        canvas.save()
+        canvas.translate(behindBounds.left.toFloat(), behindBounds.top.toFloat())
+        canvas.scale(1f / behindScale, 1f / behindScale)
+        canvas.drawRenderNode(behind)
+        canvas.restore()
+        return true
+    }
+
     /** Sets every uniform of one surface; returns how far its drop shadows reach outside it (px). */
     private fun setUniforms(m: Material, w: Float, h: Float, radius: Float, screenX: Float, screenY: Float, screenScale: Float,
                             alpha: Float, under: List<Fill>, press: Float, over: List<Fill>, overK: Float, lightTurn: Float): Float {
@@ -275,6 +311,7 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         for (i in n until MAX_FILLS) { fillColors[i * 4 + 3] = 0f; fillModes[i] = 0f }
         shadows(m.innerShadows, innerColors, innerGeom, innerModes, u, inner = true)
         val reach = shadows(m.shadows, dropColors, dropGeom, dropModes, u, inner = false)
+        shader.setFloatUniform("dropReach", reach)
         shader.setFloatUniform("fillColor", fillColors)
         shader.setFloatUniform("fillMode", fillModes)
         shader.setFloatUniform("innerColor", innerColors)
@@ -343,6 +380,9 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         /** [drawLive] without a content key: what is behind is recorded and blurred anew each time. */
         const val NO_CONTENT_KEY = Long.MIN_VALUE
 
+        /** The smallest scale kept content is blurred at (a quarter: a 6 px blur there for the sheet's 21 px frost). */
+        const val KEEP_SCALE_MIN = 0.25f
+
         /**
          * How strong the hairline rims are drawn (1 = as the material gives them). The kit's rims are linear burn: over a
          * dark backdrop they come out black, an outline the phone shows plainly at its real size.
@@ -396,6 +436,7 @@ uniform float2 lightDir;
 uniform float rimWidth;
 uniform float alpha;
 uniform float press;
+uniform float dropReach;
 uniform float plain;
 uniform half3 plainColor;
 uniform half4 fillColor[$MAX_FILLS];
@@ -525,6 +566,8 @@ half4 main(float2 coordIn) {
     float2 hs = size * 0.5;
     float2 p = coord - hs;
     float d = sdRoundRect(p, hs, radius);
+    // Beyond the drop shadows' reach nothing is drawn (a surface over kept content runs on a node as large as the screen).
+    if (d > dropReach) return half4(0.0);
     // Where it samples: its place on screen, about home's depth centre as far as the wallpaper zooms (1: at rest).
     float2 sp = depthC + (origin + coord * placeScale - depthC) * depthK;
     if (d > 0.5) return dropShadows(p, hs, seen(sp, float2(0.0), 0.0)) * half(alpha);

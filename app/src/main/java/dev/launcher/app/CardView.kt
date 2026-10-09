@@ -21,7 +21,32 @@ import kotlin.math.roundToInt
  */
 class CardView(context: Context) : View(context) {
     var snapshot: Bitmap? = null
-        set(v) { field = v; invalidate() }
+        set(v) { field = v; fadeStart = 0L; fadeFrom = null; invalidate() }
+
+    // A snapshot that arrived while the card was on screen ([fadeToSnapshot]) fades in over what the card showed before (its
+    // launch screen, or an older snapshot): [fadeFrom] (null: the launch screen) since [fadeStart] (0: no fade).
+    private var fadeFrom: Bitmap? = null
+    private var fadeStart = 0L
+
+    /**
+     * [b] as the card's picture, faded in over what the card shows now when the card is on screen (set directly while it is
+     * not). A warm app's snapshot arriving mid-launch replaced the launch screen in one frame.
+     */
+    fun fadeToSnapshot(b: Bitmap?) {
+        if (b === snapshot) return
+        val from = snapshot
+        val onScreen = b != null && isShown && alpha > 0f && homePicture == null
+        snapshot = b
+        if (onScreen) { fadeFrom = from; fadeStart = android.os.SystemClock.uptimeMillis() }
+    }
+
+    /** How far a [fadeToSnapshot] has come (1: done, or none), eased out. */
+    private fun fadeK(): Float {
+        if (fadeStart == 0L) return 1f
+        val f = ((android.os.SystemClock.uptimeMillis() - fadeStart) / SNAPSHOT_FADE_MS).coerceIn(0f, 1f)
+        if (f >= 1f) { fadeStart = 0L; fadeFrom = null; return 1f }
+        return 1f - (1f - f) * (1f - f) * (1f - f)
+    }
     var icon: Drawable? = null
         set(v) { field = v; invalidate() }
     /** Background of the launch screen when there is no snapshot (the app's splash colour). */
@@ -84,7 +109,8 @@ class CardView(context: Context) : View(context) {
      * frames at 16.7 ms in every such close). With a single image the fade can apply to the draw itself; only home as a
      * card (two pictures) or a snapshot crossing into the icon overlap.
      */
-    override fun hasOverlappingRendering(): Boolean = homePicture != null || (snapshot != null && icon != null && iconMix > 0f && iconMix < 1f)
+    override fun hasOverlappingRendering(): Boolean = homePicture != null || fadeStart != 0L ||
+        (snapshot != null && icon != null && iconMix > 0f && iconMix < 1f)
 
     fun setFrame(cx: Float, cy: Float, w: Float, h: Float, radius: Float) {
         this.cx = cx; this.cy = cy; this.w = max(1f, w); this.h = max(1f, h); this.radius = radius
@@ -112,20 +138,38 @@ class CardView(context: Context) : View(context) {
         val d = icon
         if (b != null) {
             if (contentAlpha > 0) {
-                // Cover the frame, keeping the snapshot's aspect (it is a full-display image).
-                val s = max(w / b.width, h / b.height)
-                canvas.save()
-                canvas.translate(cx, cy)
-                canvas.scale(s, s)
-                paint.alpha = contentAlpha
-                canvas.drawBitmap(b, -b.width / 2f, -b.height / 2f, paint)
-                canvas.restore()
+                val k = fadeK()
+                if (k < 1f) {
+                    // A picture that just arrived, over what was shown before it.
+                    val from = fadeFrom
+                    if (from != null) drawCover(canvas, from, contentAlpha) else drawLaunchScreen(canvas, l, t, contentAlpha, d)
+                    postInvalidateOnAnimation()
+                }
+                drawCover(canvas, b, (contentAlpha * k).roundToInt())
             }
             if (d != null && iconMix > 0f) drawIcon(canvas, d, min(w, h), (iconMix * 255).roundToInt())
             return
         }
-        // No snapshot: the app's launch screen. Its colour fades in behind the icon as the card grows; the icon goes from
-        // filling the card to its launch-screen size in the middle (about a third of the width, never below home size).
+        drawLaunchScreen(canvas, l, t, contentAlpha, d)
+    }
+
+    /** [b] covering the frame, keeping its aspect (it is a full-display image), at [alpha]. */
+    private fun drawCover(canvas: Canvas, b: Bitmap, alpha: Int) {
+        if (alpha <= 0) return
+        val s = max(w / b.width, h / b.height)
+        canvas.save()
+        canvas.translate(cx, cy)
+        canvas.scale(s, s)
+        paint.alpha = alpha
+        canvas.drawBitmap(b, -b.width / 2f, -b.height / 2f, paint)
+        canvas.restore()
+    }
+
+    /**
+     * No snapshot: the app's launch screen. Its colour fades in behind the icon as the card grows; the icon goes from filling
+     * the card to its launch-screen size in the middle (about a third of the width, never below home size).
+     */
+    private fun drawLaunchScreen(canvas: Canvas, l: Float, t: Float, contentAlpha: Int, d: Drawable?) {
         if (contentAlpha > 0) {
             paint.color = shownColor
             paint.alpha = contentAlpha
@@ -196,3 +240,6 @@ class CardBadgeView(context: Context, private val card: CardView) : View(context
     init { card.badgeLayer = this }
     override fun onDraw(canvas: Canvas) = card.drawBadge(canvas)
 }
+
+/** How long a snapshot that arrived while its card was on screen takes to fade in over what the card showed (ms). */
+private const val SNAPSHOT_FADE_MS = 160f

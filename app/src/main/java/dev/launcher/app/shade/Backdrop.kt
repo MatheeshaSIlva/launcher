@@ -122,6 +122,14 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
     var live = false
         set(v) { if (field != v) { field = v; apply() } }
 
+    /**
+     * With [live]: how far our own picture of what was behind covers the system's live blur (0..1). An app launched from
+     * Control Center comes to the front under the panel at once: live, the background turned into that app (blurred, a
+     * dark page: black) in one frame while the card was still small. Held still on the picture instead.
+     */
+    var freeze = 0f
+        set(v) { if (field != v) { field = v; apply() } }
+
     /** Blur radius (px, at full size), dim (0..1 black) and visibility (0..1) for this frame. */
     fun set(blurPx: Float, dim: Float, shown: Float) {
         if (blurPx == this.blurPx && dim == this.dim && shown == this.shown) return
@@ -130,15 +138,16 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun apply() {
-        val has = source != null && shown > 0f && !live
+        val pic = if (live) freeze else 1f
+        val has = source != null && shown > 0f && pic > 0f
         val minBlur = MIN_LOW_BLUR_DP * resources.displayMetrics.density
         val mix = if (Build.VERSION.SDK_INT >= 31) (blurPx / minBlur).coerceIn(0f, 1f) else 0f
         if (Build.VERSION.SDK_INT >= 31 && mix > 0f) {
             val lr = max(blurPx, minBlur) * lowScale
             lowBlur.setRenderEffect(RenderEffect.createBlurEffect(lr, lr, Shader.TileMode.CLAMP))
         }
-        low.alpha = if (has) mix * shown else 0f
-        sharp.alpha = if (has && mix < 1f) shown else 0f
+        low.alpha = if (has) mix * shown * pic else 0f
+        sharp.alpha = if (has && mix < 1f) shown * pic else 0f
         // Without a picture of what is behind (none could be taken), a deep dark veil instead of the blur: the sharp app
         // through a light dim was busy behind the controls.
         dimView.alpha = (if (source == null && !live) dim * 2.1f else dim).coerceIn(0f, 0.78f) * (if (shown > 0f) 1f else 0f)

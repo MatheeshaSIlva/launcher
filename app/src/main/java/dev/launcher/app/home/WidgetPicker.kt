@@ -472,7 +472,6 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     }
 
     private var sheetKey = Long.MIN_VALUE
-    private var fieldBackKey = Long.MIN_VALUE
     private val limitRect = RectF()
     private val scrimFill = ArrayList<dev.launcher.app.design.Fill>(1)
 
@@ -621,9 +620,10 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     // ---- what is behind the search field (screen coordinates): the sheet's own material, then the list
 
     private val fieldGlass = dev.launcher.app.drawer.FieldGlass(m)
-    private val sheetBack = android.graphics.RenderNode("sheetBehindField")
     private val sheetBackTint = Paint()
-    private val satFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(GlassStyle.IOS.saturation) })
+    private val satPaint = Paint().apply {
+        colorFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setSaturation(GlassStyle.IOS.saturation) })
+    }
 
     /**
      * The sheet as it looks behind the field (home under the scrim, blurred and tinted as the sheet's glass does it), then the
@@ -633,45 +633,27 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private fun drawBehindField(c: Canvas, pushX: Float, field: RectF) {
         val y = sheetY()
         val k = ((m.h - y) / (m.h - sheetTop)).coerceIn(0f, 1f)
-        val blur = host.sceneBlur() * Motion.profile.menuBlur * m.u
-        val pad = blur * 3f + m.pt(40f)
-        val l = (field.left + pushX - pad).toInt()
-        val t = (field.top + y - pad).toInt()
-        val rgt = (field.right + pushX + pad).toInt()
-        val btm = (field.bottom + y + pad).toInt()
-        // Recorded and blurred again only when what it shows changed (as the sheet's glass: see onDraw).
-        var fk = behindKey(y, k)
-        fk = (fk * 31 + l) * 31 + t
-        fk = (fk * 31 + rgt) * 31 + btm
-        if (fk != fieldBackKey || !sheetBack.hasDisplayList()) {
-            fieldBackKey = fk
-            recordBehindField(l, t, rgt, btm, k, blur)
-        }
-        c.drawRenderNode(sheetBack)
+        val pad = m.pt(60f)
+        val l = field.left + pushX - pad
+        val t = field.top + y - pad
+        val rgt = field.right + pushX + pad
+        val btm = field.bottom + y + pad
+        // Home as the sheet's glass sees it: the sheet's own kept blur of home (no blur of its own: a second full-screen
+        // blurred copy of home just for the field, redone at every frame of the rise, pushed the renderer's GPU memory over
+        // its budget and every frame allocated its images anew), saturated as the glass does it, the scrim over it.
+        val layer = c.saveLayer(l, t, rgt, btm, satPaint)
+        glass?.drawKept(c)
+        c.restoreToCount(layer)
+        val sc = Appearance.scrim
+        sheetTint.color = sc
+        sheetTint.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
+        c.drawRect(l, t, rgt, btm, sheetTint)
         sheetBackTint.color = Appearance.glassTint
-        c.drawRect(l.toFloat(), t.toFloat(), rgt.toFloat(), btm.toFloat(), sheetBackTint)
+        c.drawRect(l, t, rgt, btm, sheetBackTint)
         c.save()
         c.translate(pushX, y)
         drawContentFaded(c)
         c.restore()
-    }
-
-    private fun recordBehindField(l: Int, t: Int, rgt: Int, btm: Int, k: Float, blur: Float) {
-        sheetBack.setPosition(l, t, rgt, btm)
-        val rc = sheetBack.beginRecording()
-        try {
-            rc.translate(-l.toFloat(), -t.toFloat())
-            drawHome(rc)
-            val sc = Appearance.scrim
-            sheetTint.color = sc
-            sheetTint.alpha = (android.graphics.Color.alpha(sc) * k).toInt()
-            rc.drawRect(0f, 0f, m.w.toFloat(), m.h.toFloat(), sheetTint)
-        } finally {
-            sheetBack.endRecording()
-        }
-        val colour = android.graphics.RenderEffect.createColorFilterEffect(satFilter)
-        sheetBack.setRenderEffect(if (blur >= 0.5f) android.graphics.RenderEffect.createChainEffect(colour,
-            android.graphics.RenderEffect.createBlurEffect(blur, blur, android.graphics.Shader.TileMode.CLAMP)) else colour)
     }
 
     /** The list's content (the featured clock, the titles, the app rows), the canvas at the content's origin. */

@@ -425,6 +425,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 w.onSettled = { if (isIdle) listener.onHomeSettled() }
                 w.setLabelShown(cfg.showWidgetLabels, animate = false)
                 w.setOnLongClickListener { onWidgetLongPress(w); true }
+                w.isHapticFeedbackEnabled = false   // home plays the long press's haptic itself (see appIcon)
                 editMode?.adopt(w)
             }
             HomeItem.Widget.APP -> {
@@ -435,6 +436,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                     f.glassViews().forEach { giveWallpaper(it) }
                     f.setLabelShown(cfg.showWidgetLabels, animate = false)
                     f.setOnLongClickListener { onWidgetLongPress(f); true }
+                    f.isHapticFeedbackEnabled = false   // home plays the long press's haptic itself (see appIcon)
                     editMode?.adopt(f)
                 }
             }
@@ -448,6 +450,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         setLabelShown(cfg.showLabels, animate = false)
         badge = dev.launcher.app.Badges.count(e.pkg)
         setOnLongClickListener { v -> onIconLongPress(v as IconView, e); true }
+        // Home plays the long press's haptic itself (onIconLongPress): a long click handled by its listener also played
+        // the view's own, after the menu was prepared (5-110 ms later on the S24: felt twice).
+        isHapticFeedbackEnabled = false
         editMode?.adopt(this)
         setOnClickListener { v ->
             val icon = v as IconView
@@ -956,8 +961,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (cold) { coldHoldWanted = false; removeCallbacks(coldRetry) }
         if (!arrivalHeld || cold) {
             if (arrivalAnimating) finishArrival()
-            if (!prepareArrival(cold)) return pendingArrival != null
+            if (!prepareArrival(cold)) {
+                if (cold && pendingArrival == null) coldBusy()
+                return pendingArrival != null
+            }
         }
+        coldBusyTries = 0
         arrivalHeld = false
         arrivalStart = System.nanoTime()
         arrivalT = 0.0
@@ -971,6 +980,24 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     private var arrivalFrames = 0
+    private var coldBusyTries = 0
+
+    /**
+     * A cold start's arrival found home busy: its held frame (black, the items hidden) must never stay. A card closing onto
+     * home (the process started under an app, home's first showing is that close): the close is the way in, home is let go
+     * at rest at once (it is under the card's picture of home, nobody sees it change). Anything else (its zoom settling): again
+     * shortly, let go after a second. (It returned once, holding the frame for good: an empty home after an update.)
+     */
+    private fun coldBusy() {
+        if (HomeBridge.homeCovered || ++coldBusyTries > 20) {
+            coldBusyTries = 0
+            if (arrivalHeld) { arrivalHeld = false; finishArrival() }
+            AppLog.log("[home] arrival (cold start) dropped: home busy, at rest")
+            return
+        }
+        removeCallbacks(coldRetry)
+        postDelayed(coldRetry, 50)
+    }
 
     /** Collects what arrives and sets up the springs; false if home cannot play one now (deferred when it has no layout). */
     private fun prepareArrival(cold: Boolean, log: Boolean = true): Boolean {
@@ -1311,8 +1338,17 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (blurHold > 0f && pickerK >= blurHold) blurHold = 0f
         editMode?.jigglePaused = sceneBlurK() > 0.01f
         val r = sceneBlurK() * Motion.profile.menuBlur * (m?.u ?: 0f)
-        scene.setRenderEffect(if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP))
+        // A new effect object only when the radius really changed (a quarter pixel): the renderer keeps the blurred picture
+        // of home for as long as the same effect is set. A new one at every frame (the same radius: the widget gallery
+        // rising over a held blur) re-blurred the whole screen at every frame (6-11 refreshes missed per opening on the S24).
+        val q = if (r < 0.5f) 0f else Math.round(r * 4f) / 4f
+        if (q == sceneBlurAt) return
+        sceneBlurAt = q
+        scene.setRenderEffect(if (q == 0f) null else android.graphics.RenderEffect.createBlurEffect(q, q, android.graphics.Shader.TileMode.CLAMP))
     }
+
+    /** The radius home's blur was last set at (px; 0 none). */
+    private var sceneBlurAt = -1f
 
     /**
      * A picture of [v] as it looks (an icon without its label), and its frame in home's coordinates; for an icon also as it

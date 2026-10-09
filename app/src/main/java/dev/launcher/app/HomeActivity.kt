@@ -232,6 +232,13 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (coldStart) {
             coldStart = false
             arrivalDue = false
+            // Home's first showing in this process is a close from an app (it started under one: an update or a crash with an
+            // app in front): the close is the way in. The arrival held black behind the closing card and played after it.
+            val sinceNav = android.os.SystemClock.uptimeMillis() - HomeBridge.homeStartedAt
+            if (HomeBridge.homeStartedAt != 0L && sinceNav < COLD_VIA_NAV_MS) {
+                AppLog.log("[home] cold start: home came in from an app ($sinceNav ms ago), no arrival")
+                return
+            }
             coldArrivalPending = true
             screen.holdColdArrival()
             screen.postDelayed(coldArrival, 500)
@@ -662,5 +669,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         const val NO_LOCK_MS = 300L
         /** How often home checks, while in front, whether the screen has started going off (ms). */
         const val SLEEP_POLL_MS = 50L
+        /** A cold start's first showing this soon after gesture nav brought home forward is that close, not an arrival (ms). */
+        const val COLD_VIA_NAV_MS = 3000L
     }
 }
