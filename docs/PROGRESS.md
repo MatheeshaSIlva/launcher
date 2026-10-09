@@ -1801,3 +1801,22 @@ Found on the way:
   the S24: square, then rounded). Found with it: a 4-wide widget's resize handle lies in the S24's right-edge back-gesture
   band; dragging it became Back (edit mode ended, the resize stopped half-way). Edit mode keeps its handles out of the back
   gesture now (checked: 4x2 to 2x2 from that handle on the S24).
+
+## Step 5: the theme file (2026-10-09)
+
+Themes are files: the app's own in `assets/themes/`, and `files/themes/<id>.json` (pushed over adb with run-as, or later
+made by the builder), which wins over an app theme of the same id. A theme can be built on another (`"extends": "ios27"`)
+and hold only what it changes. Every theme is checked as it loads: every token resolves, and every token iOS 27 has (the
+ones the code reads) is there with the same kind; a theme that fails is refused (the reason logged) and the current one
+stays, so a bad file never breaks drawing. The user's token edits are kept per theme; the active theme is remembered.
+Switching: the token editor's Theme button, or `am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app --es
+theme ID` (without `theme`: the files are read again, for iterating on a pushed theme).
+
+The test theme `graphite.json` (21 tokens over iOS 27): solid graphite surfaces instead of glass, a green accent (iOS's
+blue overridden at the `ref` level, so every control and link that is blue follows), tighter corners, dark symbols and text
+on its light surfaces in light mode. Checked on the emulator, switched live, in dark and light: Notification Center,
+Control Center, a banner, home's dock, Search pill, menus, Spotlight's field, edit mode's buttons, the App Library. Things
+the theme had to set that a theme author would not guess: Control Center's symbols and names are white in both modes in
+iOS 27 (white on dark glass), and the player's text is added to the glass (plus-lighter): on a light surface both need a
+theme's own values (`comp.cc.symbol-color`, `comp.cc.module.label-color`, `comp.cc.media.text-blend`).
+Not themable yet: the glass clock's numerals (GlassDrawable), layouts (step 6 and phase 5).

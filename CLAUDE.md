@@ -52,7 +52,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Design system** (`design/`, plan in `docs/DESIGN_SYSTEM_PLAN.md`): every look value is a token in the active theme file
   (`assets/themes/ios27.json`: `ref.*` from Apple's kit with its ids, `sys.*` roles, `comp.*` per component), read through
   `Design` (light/dark blended at `Appearance.dark`, aliases followed, the user's edits from the token editor on top);
-  `Scale` turns points into pixels. New and migrated drawing code reads tokens, never literals; every token says where its
+  `Scale` turns points into pixels. Themes: `assets/themes/<id>.json` (or `files/themes/<id>.json`, pushed with run-as;
+  wins over the app's), `"extends"` another and hold only what differs; checked at load against iOS 27 (refused if a token
+  the code reads is missing or of another kind); switch/reload: `am broadcast -a dev.launcher.app.DESIGN_RELOAD -p
+  dev.launcher.app [--es theme ID]`, or the token editor's Theme button. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.

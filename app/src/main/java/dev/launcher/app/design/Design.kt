@@ -8,20 +8,28 @@ import dev.launcher.app.theme.Appearance
 import java.io.File
 
 /**
- * The live design system: the active theme (`assets/themes/<name>.json`) with the user's edits over it
- * (`files/design/user.json`, written by the token editor), resolved for drawing. Colours are blended at the current
- * appearance ([Appearance.dark], so a light/dark change crossfades every token on the same frames); numbers come in their
- * own unit ([pt] turns points into pixels by the scaling policy).
+ * The live design system: the active theme with the user's edits over it, resolved for drawing. A theme is a file
+ * (`assets/themes/<id>.json` built in, or `files/themes/<id>.json`, pushed over adb or made by the builder, which wins
+ * over a built-in one of the same id); a theme can be built on another (`"extends": "ios27"`) and hold only what it
+ * changes. The user's edits (the token editor) are kept per theme (`files/design/user.json` for iOS 27,
+ * `user-<id>.json` for the others). Colours are blended at the current appearance ([Appearance.dark], so a light/dark
+ * change crossfades every token on the same frames); numbers come in their own unit ([pt] turns points into pixels by
+ * the scaling policy).
  *
- * Changing a token bumps [version] and calls the listeners (on the main thread): views that drew with tokens draw again.
- * Resolved values are cached until the next change; reading a token in a draw call is a map lookup.
+ * Changing a token or the theme bumps [version] and calls the listeners (on the main thread): views that drew with tokens
+ * draw again. Resolved values are cached until the next change; reading a token in a draw call is a map lookup.
  */
 object Design {
-    private const val BASE = "themes/ios27.json"
-    private const val USER = "design/user.json"
+    /** The theme every other one is checked against (it has every token the code reads) and the one used by default. */
+    const val DEFAULT_THEME = "ios27"
+    private const val ACTIVE = "design/theme.txt"
+    /** How deep themes may be built on each other. */
+    private const val MAX_EXTENDS = 6
 
     private lateinit var appCtx: Context
-    private var base: Theme? = null
+    /** The active theme and the ones it is built on, the base first. */
+    private var chain: List<Theme> = emptyList()
+    private var activeId = DEFAULT_THEME
     private val user = LinkedHashMap<String, Entry>()
     /** The resolver and its cache, replaced as a whole on a change (surfaces read tokens on their own threads). */
     private class State(val resolver: Resolver) { val cache = java.util.concurrent.ConcurrentHashMap<String, Value>() }
@@ -34,56 +42,134 @@ object Design {
     @Volatile var version = 0
         private set
 
-    val themeName get() = base?.name ?: "none"
+    val themeName get() = chain.lastOrNull()?.name ?: "none"
+    val themeId get() = activeId
 
-    /** Loads the theme and the user's edits (at app start, before anything draws). */
+    /** Loads the active theme and the user's edits (at app start, before anything draws). */
     fun init(ctx: Context) {
-        if (base != null) return
+        if (chain.isNotEmpty()) return
         appCtx = ctx.applicationContext
-        base = try {
-            Theme.parse(ctx.assets.open(BASE).bufferedReader().use { it.readText() })
-        } catch (t: Throwable) {
-            AppLog.log("[design] theme $BASE failed: ${t.javaClass.simpleName}: ${t.message}")
-            Theme("empty", "", "", emptyMap())
-        }
-        try {
-            val f = File(ctx.filesDir, USER)
-            if (f.exists()) user.putAll(Theme.parse(f.readText()).entries)
-        } catch (t: Throwable) {
-            AppLog.log("[design] user edits unreadable (${t.message}): ignored")
-        }
-        rebuild()
-        AppLog.log("[design] theme '${base?.name}' ${base?.entries?.size} tokens, ${user.size} edited")
-        // Over adb, for fast iteration (and tests): the edits file is read again and everything drawn with tokens redraws.
-        //   adb shell am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app
+        activeId = try { File(appCtx.filesDir, ACTIVE).takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null } } catch (_: Throwable) { null } ?: DEFAULT_THEME
+        if (!load(activeId)) { activeId = DEFAULT_THEME; load(DEFAULT_THEME) }
+        AppLog.log("[design] theme '$themeName' (${chain.joinToString(" < ") { it.name }}) ${resolver.keys().size} tokens, ${user.size} edited")
+        // Over adb, for fast iteration: the theme files and the edits are read again (a theme pushed to files/themes/ shows at
+        // once), or another theme is chosen; everything drawn with tokens redraws.
+        //   adb shell am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app [--es theme ID]
         // Senders must hold DUMP (adb's shell does; other apps cannot).
         val r = object : android.content.BroadcastReceiver() {
-            override fun onReceive(c: Context, i: android.content.Intent) = reloadEdits()
+            override fun onReceive(c: Context, i: android.content.Intent) {
+                val id = i.getStringExtra("theme")
+                if (id != null) setTheme(id) else reload()
+            }
         }
         val f = android.content.IntentFilter("dev.launcher.app.DESIGN_RELOAD")
         if (android.os.Build.VERSION.SDK_INT >= 33) appCtx.registerReceiver(r, f, android.Manifest.permission.DUMP, null, Context.RECEIVER_EXPORTED)
         else appCtx.registerReceiver(r, f, android.Manifest.permission.DUMP, null)
     }
 
-    /** The edits file read again (written over adb): applied at once, as an edit in the token editor is. */
-    fun reloadEdits() {
-        val read = try {
-            val f = File(appCtx.filesDir, USER)
-            if (f.exists()) Theme.parse(f.readText()).entries else emptyMap()
-        } catch (t: Throwable) {
-            AppLog.log("[design] reload: edits unreadable (${t.message}): kept as they were"); return
+    /** A theme the app can use: its id (file name), its name, and whether it comes with the app. */
+    data class ThemeInfo(val id: String, val name: String, val builtIn: Boolean)
+
+    /** The themes there are: the app's own, and the ones in `files/themes/` (which win over an app one of the same id). */
+    fun themes(): List<ThemeInfo> {
+        val out = LinkedHashMap<String, ThemeInfo>()
+        try {
+            for (n in appCtx.assets.list("themes") ?: emptyArray()) if (n.endsWith(".json")) {
+                val id = n.removeSuffix(".json")
+                readTheme(id)?.let { out[id] = ThemeInfo(id, it.name, true) }
+            }
+        } catch (_: Throwable) { }
+        File(appCtx.filesDir, "themes").listFiles()?.filter { it.name.endsWith(".json") }?.forEach { f ->
+            val id = f.name.removeSuffix(".json")
+            readTheme(id)?.let { out[id] = ThemeInfo(id, it.name, false) }
         }
-        user.clear()
-        user.putAll(read)
-        rebuild()
+        return out.values.toList()
+    }
+
+    /** Makes [id] the active theme (remembered); false if it cannot be used (the reason is logged), the current one stays. */
+    fun setTheme(id: String): Boolean {
+        val before = activeId
+        if (!load(id)) return false
+        activeId = id
+        try { File(appCtx.filesDir, ACTIVE).apply { parentFile?.mkdirs() }.writeText(id) } catch (_: Throwable) { }
+        changedOutside("theme '$themeName'" + if (before != id) " (was $before)" else " (reloaded)")
+        return true
+    }
+
+    /** The active theme's files and the edits read again (written over adb): applied at once, as an edit in the editor is. */
+    fun reload() {
+        if (!load(activeId)) return
+        changedOutside("reloaded")
+    }
+
+    private fun changedOutside(what: String) {
         version++
-        AppLog.log("[design] reloaded: ${user.size} edited")
+        AppLog.log("[design] $what: ${user.size} edited")
         val run = Runnable { for (l in listeners.toList()) l() }
         if (Looper.myLooper() == Looper.getMainLooper()) run.run() else main.post(run)
     }
 
+    /**
+     * Loads theme [id] (with the ones it is built on) and its edits, if the result has every token the code reads, of the
+     * same kind as [DEFAULT_THEME]'s (a missing or mistyped token would fail where it is drawn); else nothing changes.
+     */
+    private fun load(id: String): Boolean {
+        val c = try { chainOf(id) } catch (t: Throwable) { AppLog.log("[design] theme '$id' cannot be used: ${t.message}"); return false }
+        val edits = try {
+            val f = File(appCtx.filesDir, userFile(id))
+            if (f.exists()) Theme.parse(f.readText()).entries else emptyMap()
+        } catch (t: Throwable) { AppLog.log("[design] edits of '$id' unreadable (${t.message}): ignored"); emptyMap() }
+        val layers = c.map { it.entries } + listOf(LinkedHashMap(edits))
+        val problem = if (id == DEFAULT_THEME && c.size == 1) checkResolves(layers) else checkAgainstDefault(layers)
+        if (problem != null) { AppLog.log("[design] theme '$id' cannot be used: $problem"); return false }
+        chain = c
+        user.clear()
+        user.putAll(edits)
+        rebuild()
+        return true
+    }
+
+    /** [id] and the themes it is built on, the base first. */
+    private fun chainOf(id: String): List<Theme> {
+        val out = ArrayList<Theme>()
+        val seen = HashSet<String>()
+        var cur: String? = id
+        while (cur != null) {
+            if (!seen.add(cur)) throw IllegalStateException("themes built on each other in a loop ($cur)")
+            if (out.size >= MAX_EXTENDS) throw IllegalStateException("built on too many themes")
+            val t = readTheme(cur) ?: throw IllegalStateException("theme '$cur' not found")
+            out.add(0, t)
+            cur = t.extends
+        }
+        return out
+    }
+
+    /** The theme file [id], from `files/themes/` or the app's own; null if there is none or it cannot be read. */
+    private fun readTheme(id: String): Theme? = try {
+        val f = File(appCtx.filesDir, "themes/$id.json")
+        val text = if (f.exists()) f.readText() else appCtx.assets.open("themes/$id.json").bufferedReader().use { it.readText() }
+        Theme.parse(text)
+    } catch (t: Throwable) {
+        if (t !is java.io.FileNotFoundException) AppLog.log("[design] theme file '$id' unreadable: ${t.javaClass.simpleName}: ${t.message}")
+        null
+    }
+
+    private fun checkResolves(layers: List<Map<String, Entry>>): String? {
+        val r = Resolver(layers)
+        for (k in r.keys()) try { r.resolve(k) } catch (t: Throwable) { return t.message }
+        return null
+    }
+
+    private fun checkAgainstDefault(layers: List<Map<String, Entry>>): String? {
+        checkResolves(layers)?.let { return it }
+        val base = readTheme(DEFAULT_THEME) ?: return "the default theme is missing"
+        return ThemeCheck.against(base.entries, layers)
+    }
+
+    private fun userFile(id: String) = if (id == DEFAULT_THEME) "design/user.json" else "design/user-$id.json"
+
     private fun rebuild() {
-        state = State(Resolver(listOf(base?.entries ?: emptyMap(), LinkedHashMap(user))))
+        state = State(Resolver(chain.map { it.entries } + listOf(LinkedHashMap(user))))
     }
 
     fun addListener(l: () -> Unit) { listeners += l }
@@ -122,7 +208,10 @@ object Design {
     fun keys(): List<String> = resolver.keys().sorted()
 
     /** [key] as the theme defines it (null: not edited) and as the user edited it. */
-    fun themeEntry(key: String): Entry? = base?.entries?.get(key)
+    fun themeEntry(key: String): Entry? {
+        for (t in chain.asReversed()) t.entries[key]?.let { return it }
+        return null
+    }
     fun userEntry(key: String): Entry? = user[key]
     fun entry(key: String): Entry? = resolver.entry(key)
     fun resolved(key: String): Value = value(key)
@@ -154,7 +243,7 @@ object Design {
 
     private fun save() {
         try {
-            val f = File(appCtx.filesDir, USER)
+            val f = File(appCtx.filesDir, userFile(activeId))
             f.parentFile?.mkdirs()
             val tmp = File(f.path + ".tmp")
             tmp.writeText(Theme.write("user", user))
@@ -205,4 +294,5 @@ object Scale {
         "density" -> ctx.resources.displayMetrics.density
         else -> shortSidePx / Design.num(REFERENCE_WIDTH)
     }
+
 }

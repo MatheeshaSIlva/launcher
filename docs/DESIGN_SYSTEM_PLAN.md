@@ -131,7 +131,13 @@ and frame-checked (S24 where it shows no private content, emulator otherwise), e
 one at a time.
 
 **Step 5: the theme file.** The iOS 27 profile written as a plain-text theme file, loaded at start; a second small test
-theme proves a theme restyles the shade; reloading over adb for fast iteration (the builder's groundwork).
+theme proves a theme restyles the shade; reloading over adb for fast iteration (the builder's groundwork). *Done 2026-10-09:* themes are
+files (`assets/themes/<id>.json`, or `files/themes/<id>.json` pushed over adb, which wins), a theme can be built on another
+(`"extends": "ios27"`) and hold only what differs, every theme is checked at load against iOS 27 (every token the code
+reads, of the same kind; else it is refused and the current one stays), edits are kept per theme, the active theme is
+remembered; switching and reloading over adb (`DESIGN_RELOAD [--es theme ID]`) and in the token editor ("Theme"). The test
+theme `graphite.json` (21 tokens: solid graphite surfaces, a green accent, tighter corners, dark text in light mode)
+restyles the shade and home live (emulator, both modes).
 
 **Step 6: features again**, each built on the system: hiding Notification Center's list into a count, Control Center's
 pages, gallery search, the missing controls, grouping by conversation, "Carrier" in the status rows, honouring Android's
@@ -151,7 +157,8 @@ display and font size.
   `docs/PROGRESS.md` (step 2a: the fan-out's GPU time, an occasional late scroll frame; the look audit: every
   `HardwareRenderer` of the app shares its one render thread, so a frost bake (`FrostCache`, `BlurBaker`) holds up the
   next frame of every window while it runs: time the bakes on the S24, split or move them off the busy moments).
-- Open: the theme file's syntax (step 5).
+- Decided (step 5): the theme file's syntax is the token JSON the app already used (one object per token, `ref`, colour
+  pairs, units as keys), plus `extends`.
 - Decided (2026-10-08): the goal is the Liquid Glass look with Android's convenience and customizability: where iOS
   leaves something out that Android users rely on (Back from the edge closes a panel, Clear All, an app's menu in the
   switcher, choosing a wallpaper from home), we keep it, drawn in the same glass.

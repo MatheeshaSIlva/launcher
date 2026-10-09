@@ -1,0 +1,32 @@
+{
+ "format": 1,
+ "name": "Graphite (test)",
+ "author": "Launcher",
+ "version": "0.1",
+ "extends": "ios27",
+ "_about": "A small test theme built on iOS 27: solid graphite surfaces instead of glass (no lens, a heavy frost, an opaque fill), a green accent, tighter corners. It exists to prove that a theme restyles the shade and home from tokens alone (design system plan, step 5). Only what differs from iOS 27 is written here.",
+ "tokens": {
+  "ref.color.accents.blue": {"light": "#1e9e5a", "dark": "#3ddc84", "src": "judged:test theme: a green accent in place of iOS's blue (every control and link that is blue turns green)"},
+  "sys.material.glass.clear": {"material": {"frost": 30, "fills": [["#e8e8ed|#232429", 0.9, "NORMAL"]], "innerShadows": [], "shadows": [["#0000001f|#00000059", 0.0, 4.0, 16.0, 0.0, "NORMAL"], ["#0000001a|#ffffff1a", 0.0, 0.0, 0.0, 0.5, "NORMAL"]]}, "src": "judged:test theme: a solid graphite surface (Control Center's modules, Notification Center's platters)"},
+  "sys.material.glass.regular": {"material": {"frost": 30, "fills": [["#e8e8ed|#232429", 0.88, "NORMAL"]], "innerShadows": [], "shadows": [["#0000001f|#00000059", 0.0, 4.0, 16.0, 0.0, "NORMAL"], ["#0000001a|#ffffff1a", 0.0, 0.0, 0.0, 0.5, "NORMAL"]]}, "src": "judged:test theme: solid graphite"},
+  "sys.material.glass.frosted": {"material": {"frost": 30, "fills": [["#efeff3|#1c1d21", 0.92, "NORMAL"]], "innerShadows": [], "shadows": [["#00000026|#00000066", 0.0, 6.0, 24.0, 0.0, "NORMAL"], ["#0000001a|#ffffff1a", 0.0, 0.0, 0.0, 0.5, "NORMAL"]]}, "src": "judged:test theme: menus and sheets, solid graphite"},
+  "sys.material.glass.frosted-legible": {"material": {"frost": 30, "fills": [["#efeff3|#1c1d21", 0.94, "NORMAL"]], "innerShadows": [], "shadows": [["#00000026|#00000066", 0.0, 6.0, 24.0, 0.0, "NORMAL"], ["#0000001a|#ffffff1a", 0.0, 0.0, 0.0, 0.5, "NORMAL"]]}, "src": "judged:test theme: banners, solid graphite"},
+  "sys.material.glass.dock": {"material": {"frost": 24, "fills": [["#e8e8ed|#232429", 0.72, "NORMAL"]], "innerShadows": [], "shadows": [["#0000001a|#ffffff1a", 0.0, 0.0, 0.0, 0.5, "NORMAL"]]}, "src": "judged:test theme: the dock, search pill and widgets, a lighter graphite"},
+  "sys.material.glass.small": {"material": {"frost": 24, "fills": [["#dcdce2|#2e2f35", 0.9, "NORMAL"]], "innerShadows": [], "shadows": []}, "src": "judged:test theme: small controls"},
+  "sys.material.glass.small-active": {"material": {"frost": 24, "fills": [["#dcdce2|#2e2f35", 0.95, "NORMAL"]], "innerShadows": [], "shadows": []}, "src": "judged:test theme: fields and pressed small controls"},
+  "comp.cc.module.on-material": {"material": {"frost": 0, "fills": [["{ref.color.accents.blue}", 1.0, "NORMAL"]], "innerShadows": [], "shadows": []}, "src": "judged:test theme: a control that is on is the accent colour (iOS: white)"},
+  "comp.cc.symbol-on-color": {"color": "#ffffff", "src": "judged:test theme: white symbols on the green of a control that is on"},
+  "comp.cc.module.corner": {"pt": 20, "src": "judged:test theme: tighter corners"},
+  "comp.cc.slider.corner": {"pt": 22, "src": "judged:test theme: tighter corners"},
+  "comp.nc.platter.corner": {"pt": 16, "src": "judged:test theme: tighter corners"},
+  "comp.banner.corner": {"pt": 16, "src": "judged:test theme: tighter corners"},
+  "comp.home.menu.corner": {"pt": 18, "src": "judged:test theme: tighter corners"},
+  "comp.cc.symbol-color": {"light": "#1c1c1e", "dark": "#ffffff", "src": "judged:test theme: dark symbols on its light surfaces (iOS's Control Center is white on dark glass in both modes)"},
+  "comp.cc.module.label-color": {"light": "#1c1c1e", "dark": "#ffffff", "src": "judged:test theme: dark names on light surfaces"},
+  "comp.cc.module.detail-color": {"light": "#3c3c4399", "dark": "#ffffff66", "src": "judged:test theme: the secondary line"},
+  "comp.cc.chevron-color": {"light": "#3c3c43b3", "dark": "#ffffffb3", "src": "judged:test theme: Focus's chevron on light surfaces"},
+  "comp.cc.media.text-color": {"light": "#3c3c4399", "dark": "#afafaf", "src": "judged:test theme: the player's text on light surfaces"},
+  "comp.cc.media.placeholder-color": {"light": "#3c3c4380", "dark": "#ffffff80", "src": "judged:test theme: the music symbol on light surfaces"},
+  "comp.cc.media.text-blend": {"choice": "NORMAL", "src": "judged:test theme: the player's text drawn as it is (iOS adds it to the dark glass: on a light surface it washed out)"}
+ }
+}

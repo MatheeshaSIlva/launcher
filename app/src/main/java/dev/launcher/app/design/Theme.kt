@@ -40,6 +40,8 @@ class Theme(
     val author: String,
     val version: String,
     val entries: Map<String, Entry>,
+    /** The theme this one is built on (its id: the file name without `.json`): only what differs is written here. */
+    val extends: String? = null,
 ) {
     companion object {
         const val FORMAT = 1
@@ -55,7 +57,8 @@ class Theme(
                 val t = tokens.getJSONObject(key)
                 out[key] = Entry(parseValue(key, t), Provenance.parse(t.optString("src").ifEmpty { null }), t.optString("note").ifEmpty { null })
             }
-            return Theme(o.optString("name", "Untitled"), o.optString("author", ""), o.optString("version", ""), out)
+            return Theme(o.optString("name", "Untitled"), o.optString("author", ""), o.optString("version", ""), out,
+                o.optString("extends").ifEmpty { null })
         }
 
         private fun parseValue(key: String, t: JSONObject): Value = when {
@@ -211,4 +214,23 @@ class Resolver(private val layers: List<Map<String, Entry>>) {
 
     /** Every key any layer defines. */
     fun keys(): Set<String> = layers.flatMapTo(LinkedHashSet()) { it.keys }
+}
+
+/** Checks a theme against the theme the code is written for. Pure (no Android): unit-tested. */
+object ThemeCheck {
+    /**
+     * Null if [layers] (a theme, the ones it is built on and edits; the base first) resolve and give every token of [base]
+     * in the same kind (a missing or mistyped token would fail where it is drawn); else what is wrong.
+     */
+    fun against(base: Map<String, Entry>, layers: List<Map<String, Entry>>): String? {
+        val want = Resolver(listOf(base))
+        val got = Resolver(layers)
+        for (k in got.keys()) try { got.resolve(k) } catch (t: Throwable) { return t.message }
+        for (k in base.keys) {
+            val a = try { want.resolve(k) } catch (_: Throwable) { continue }
+            val b = try { got.resolve(k) } catch (t: Throwable) { return "token '$k' is missing (${t.message})" }
+            if (a::class != b::class) return "token '$k' is a ${b::class.simpleName}, the code reads a ${a::class.simpleName}"
+        }
+        return null
+    }
 }

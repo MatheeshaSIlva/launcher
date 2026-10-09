@@ -58,6 +58,9 @@ class DesignActivity : Activity() {
         }
         header = text("", 18f, Color.WHITE, bold = true)
         root.addView(header)
+        // The theme: the app's own and the ones in files/themes/ (pushed over adb); the edits below belong to it.
+        themeButton = button("") { chooseTheme() }
+        root.addView(themeButton)
         val search = EditText(this).apply {
             hint = "Search tokens (key or value)"
             setHintTextColor(0x80FFFFFF.toInt())
@@ -93,6 +96,17 @@ class DesignActivity : Activity() {
         super.onDestroy()
     }
 
+    private lateinit var themeButton: Button
+
+    private fun chooseTheme() {
+        val list = Design.themes()
+        val names = list.map { t -> (if (t.id == Design.themeId) "✓ " else "") + t.name + if (t.builtIn) "" else "  (file)" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Theme").setItems(names) { _, i ->
+            val id = list[i].id
+            if (!Design.setTheme(id)) android.widget.Toast.makeText(this, "That theme cannot be used (see the log)", android.widget.Toast.LENGTH_LONG).show()
+        }.setNegativeButton("Cancel", null).show()
+    }
+
     private fun refresh() {
         val keys = Design.keys().filter { k ->
             val e = Design.entry(k)
@@ -114,7 +128,8 @@ class DesignActivity : Activity() {
         adapter.rows = rows
         adapter.notifyDataSetChanged()
         val edited = Design.keys().count { Design.userEntry(it) != null }
-        header.text = "Design tokens: ${Design.themeName} (${Design.keys().size}, $edited edited)"
+        header.text = "Design tokens (${Design.keys().size}, $edited edited)"
+        themeButton.text = "Theme: ${Design.themeName}  ▾"
     }
 
     /** "ref.color.accents.blue" -> "ref.color"; "comp.nc.platter.corner" -> "comp.nc". */
