@@ -1680,6 +1680,10 @@
    "ref": "ref.color.accents.blue",
    "src": "kit:2570:20609 (Wi-Fi on: #0088ff)"
   },
+  "comp.cc.add.fill-color": {
+   "color": "#ffffff",
+   "src": "judged:edit mode's \"Add a Control\" disc"
+  },
   "comp.cc.background.material": {
    "ref": "ref.material.overlay.control-center",
    "src": "kit:2524:24518"
@@ -1712,6 +1716,10 @@
    "pt": 23,
    "src": "kit:10491:21421"
   },
+  "comp.cc.chevron-color": {
+   "color": "#ffffffb3",
+   "src": "judged:Focus's chevron beside its name"
+  },
   "comp.cc.connectivity.big": {
    "pt": 57,
    "src": "kit:2570:20593"
@@ -1727,6 +1735,22 @@
   "comp.cc.connectivity.symbol-small": {
    "pt": 17,
    "src": "measured:the kit's render at 3x (8.3-15.3 pt)"
+  },
+  "comp.cc.edit.badge-color": {
+   "color": "#e5e5eaf2",
+   "src": "judged:edit mode's remove badge (home's light one)"
+  },
+  "comp.cc.edit.badge-minus-color": {
+   "color": "#3c3c43",
+   "src": "judged:its minus"
+  },
+  "comp.cc.edit.handle-color": {
+   "color": "#ffffff",
+   "src": "judged:edit mode's resize arc"
+  },
+  "comp.cc.edit.handle-shadow-color": {
+   "color": "#00000059",
+   "src": "judged:the shadow under it"
   },
   "comp.cc.expanded.slider-corner": {
    "pt": 46,
@@ -1766,6 +1790,22 @@
     "shadows": []
    },
    "src": "measured:iOS 27 Simulator, the gallery: flat circles #555852 on the sheet (white 21 %)"
+  },
+  "comp.cc.gallery.grabber-color": {
+   "color": "#ffffff66",
+   "src": "judged:the gallery sheet's grabber"
+  },
+  "comp.cc.gallery.heading-color": {
+   "color": "#ffffff",
+   "src": "judged:\"Add a Control\""
+  },
+  "comp.cc.gallery.name-color": {
+   "color": "#ffffffd9",
+   "src": "judged:the controls' names"
+  },
+  "comp.cc.gallery.section-color": {
+   "color": "#ffffff99",
+   "src": "judged:the sections' names"
   },
   "comp.cc.gallery.sheet": {
    "material": {
@@ -1814,13 +1854,29 @@
    "pt": 13.33,
    "src": "kit:2570:20726"
   },
+  "comp.cc.media.level-color": {
+   "color": "#fffffff2",
+   "src": "judged:the expanded player's volume level"
+  },
   "comp.cc.media.output": {
    "pt": 40,
    "src": "kit:2570:20736"
   },
+  "comp.cc.media.placeholder-color": {
+   "color": "#ffffff80",
+   "src": "judged:the music symbol while there is no artwork"
+  },
   "comp.cc.media.play": {
    "pt": 27,
    "src": "measured:the kit's render at 3x (play: 22.3 pt)"
+  },
+  "comp.cc.media.progress-color": {
+   "color": "#ffffffe6",
+   "src": "judged:the track's progress"
+  },
+  "comp.cc.media.secondary-color": {
+   "color": "#ffffff99",
+   "src": "judged:the expanded player's times and volume symbols"
   },
   "comp.cc.media.text-blend": {
    "choice": "LINEAR_DODGE",
@@ -1839,6 +1895,10 @@
     "tracking": -0.2
    },
    "src": "kit:2570:20722"
+  },
+  "comp.cc.media.track-color": {
+   "color": "#ffffff40",
+   "src": "judged:a progress or volume bar's track"
   },
   "comp.cc.media.transport": {
    "pt": 24,
@@ -1928,6 +1988,10 @@
   "comp.cc.symbol-color": {
    "color": "#ffffff",
    "src": "kit:2524:24527"
+  },
+  "comp.cc.symbol-on-color": {
+   "color": "#1c1c1e",
+   "src": "judged:a symbol on a lit (white) control"
   },
   "comp.cc.well.material": {
    "ref": "ref.material.control-center.well",
@@ -2074,6 +2138,10 @@
   "comp.nc.button.on-color": {
    "color": "#ffffff",
    "src": "judged:the flashlight on: a white disc (as iOS's)"
+  },
+  "comp.nc.button.on-symbol-color": {
+   "ref": "comp.cc.symbol-on-color",
+   "src": "judged:dark on the white disc, as Control Center's lit controls"
   },
   "comp.nc.button.size": {
    "pt": 58,

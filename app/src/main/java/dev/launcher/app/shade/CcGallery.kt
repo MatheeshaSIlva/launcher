@@ -150,10 +150,13 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
         c.translate(0f, top)
         host.surfaces.draw(c, Design.material(CcTokens.GALLERY_SHEET), width.toFloat(), height + radius, radius, 0f, top, 1f, min(k, 1f))
         // Grabber.
-        fill.color = 0x66FFFFFF
+        fill.color = Design.color(CcTokens.GALLERY_GRABBER)
         rect.set(width / 2f - 18f * u, 7f * u, width / 2f + 18f * u, 12f * u)
         c.drawRoundRect(rect, 2.5f * u, 2.5f * u, fill)
         heading.textSize = 26f * u
+        heading.color = Design.color(CcTokens.GALLERY_HEADING)
+        section.color = Design.color(CcTokens.GALLERY_SECTION)
+        name.color = Design.color(CcTokens.GALLERY_NAME)
         c.drawText("Add a Control", 24f * u, 58f * u, heading)
         c.clipRect(0f, 70f * u, width.toFloat(), height.toFloat())
         c.translate(0f, -scroller.position)
@@ -186,8 +189,9 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
         host.surfaces.draw(c, Design.material(CcTokens.GALLERY_ENTRY), w, h, radius, cx - w * s / 2f, screenTop, s, 1f, p,
             under = Design.material(CcTokens.GALLERY_SHEET).fills)
         val tile = e.id.tile
-        if (tile != null) glyphs.drawTile(c, tile, w / 2f, h / 2f, min(w, h) * 0.42f, 0xFFFFFFFF.toInt())
-        else glyphs.draw(c, ctl.icon, w / 2f, h / 2f, min(w, h) * 0.42f, 0xFFFFFFFF.toInt())
+        val symbol = Design.color(CcTokens.SYMBOL_COLOR)
+        if (tile != null) glyphs.drawTile(c, tile, w / 2f, h / 2f, min(w, h) * 0.42f, symbol)
+        else glyphs.draw(c, ctl.icon, w / 2f, h / 2f, min(w, h) * 0.42f, symbol)
         c.restore()
         val title = if (tile != null) AppTiles.info(tile)?.label ?: ctl.title else ctl.title
         val label = TextUtils.ellipsize(title, name, e.rect.width() + 18f * u, TextUtils.TruncateAt.END).toString()

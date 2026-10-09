@@ -21,6 +21,23 @@ object CcTokens {
     val WELL = MaterialKey("comp.cc.well.material")
     val CORNER = NumberKey("comp.cc.module.corner")
     val SLIDER_CORNER = NumberKey("comp.cc.slider.corner")
+    /** A symbol on a lit (white) control. */
+    val SYMBOL_ON = ColorKey("comp.cc.symbol-on-color")
+    val CHEVRON_COLOR = ColorKey("comp.cc.chevron-color")
+    val ADD_FILL = ColorKey("comp.cc.add.fill-color")
+    val MEDIA_PLACEHOLDER = ColorKey("comp.cc.media.placeholder-color")
+    val MEDIA_TRACK = ColorKey("comp.cc.media.track-color")
+    val MEDIA_PROGRESS = ColorKey("comp.cc.media.progress-color")
+    val MEDIA_LEVEL = ColorKey("comp.cc.media.level-color")
+    val MEDIA_SECONDARY = ColorKey("comp.cc.media.secondary-color")
+    val EDIT_BADGE = ColorKey("comp.cc.edit.badge-color")
+    val EDIT_BADGE_MINUS = ColorKey("comp.cc.edit.badge-minus-color")
+    val EDIT_HANDLE = ColorKey("comp.cc.edit.handle-color")
+    val EDIT_HANDLE_SHADOW = ColorKey("comp.cc.edit.handle-shadow-color")
+    val GALLERY_GRABBER = ColorKey("comp.cc.gallery.grabber-color")
+    val GALLERY_HEADING = ColorKey("comp.cc.gallery.heading-color")
+    val GALLERY_SECTION = ColorKey("comp.cc.gallery.section-color")
+    val GALLERY_NAME = ColorKey("comp.cc.gallery.name-color")
     /** The part of a slider's symbol over which it takes the slider's colour as the level crosses it (a fraction). */
     val SLIDER_COVER = NumberKey("comp.cc.slider.cover")
     // The expanded slider (brightness, volume, flashlight, timer).
@@ -92,5 +109,8 @@ object CcTokens {
         GRID_TOP, GRID_TOP_EDIT, ROW_Y, BUTTON, BUTTON_SIZE, BUTTON_INSET_X, BUTTON_TOP, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR,
         CONN_BIG, CONN_SMALL, CONN_SYMBOL_BIG, CONN_SYMBOL_SMALL, ART, ART_CORNER, ART_X, ART_Y, OUTPUT, MEDIA_TITLE,
         MEDIA_TEXT_COLOR, MEDIA_TEXT_BLEND, TRANSPORT, PLAY, GALLERY_SHEET, GALLERY_ENTRY, GALLERY_DIM, GALLERY_CORNER,
-        SLIDER_COVER, EXPANDED_SLIDER_WIDTH, EXPANDED_SLIDER_HEIGHT, EXPANDED_SLIDER_CORNER, EXPANDED_SLIDER_SYMBOL).map { it.name }
+        SLIDER_COVER, EXPANDED_SLIDER_WIDTH, EXPANDED_SLIDER_HEIGHT, EXPANDED_SLIDER_CORNER, EXPANDED_SLIDER_SYMBOL,
+        SYMBOL_ON, CHEVRON_COLOR, ADD_FILL, MEDIA_PLACEHOLDER, MEDIA_TRACK, MEDIA_PROGRESS, MEDIA_LEVEL, MEDIA_SECONDARY,
+        EDIT_BADGE, EDIT_BADGE_MINUS, EDIT_HANDLE, EDIT_HANDLE_SHADOW, GALLERY_GRABBER, GALLERY_HEADING, GALLERY_SECTION,
+        GALLERY_NAME).map { it.name }
 }

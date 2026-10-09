@@ -1203,7 +1203,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val res = if (i == 0) R.drawable.sym_flashlight else R.drawable.sym_camera
             // Off: the kit's grey, added to the glass; on: dark on the white disc (they cross-fade).
             glyphs.draw(c, res, x, y, symbol, alpha(symColor, 1f - t), symBlend)
-            if (t > 0.003f) glyphs.draw(c, res, x, y, symbol, alpha(0xFF1C1C1E.toInt(), t))
+            if (t > 0.003f) glyphs.draw(c, res, x, y, symbol, alpha(Design.color(NcTokens.BUTTON_ON_SYMBOL), t))
             c.restore()
         }
     }

@@ -337,7 +337,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             val d = pt(56f) * (1f - 0.06f * p)
             // Off: a well; on: the kit's white "on" fill, with a dark symbol.
             well(c, pt2[0], pt2[1], d, a, if (b.third) 1f else 0f)
-            glyphs.draw(c, b.second, pt2[0], pt2[1], pt(25f), alpha(if (b.third) 0xFF1C1C1E.toInt() else white(), a))
+            glyphs.draw(c, b.second, pt2[0], pt2[1], pt(25f), alpha(if (b.third) Design.color(CcTokens.SYMBOL_ON) else white(), a))
             titleType(12f)
             title.textAlign = Paint.Align.CENTER
             title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
@@ -375,7 +375,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             artPaint.shader = null
         } else {
             host.surfaces.well(c, rect.left, rect.top, art, art, pt(14f), rect.left, rect.top, 1f, a)
-            glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), pt(28f), alpha(0x80FFFFFF.toInt(), a))
+            glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), pt(28f), alpha(Design.color(CcTokens.MEDIA_PLACEHOLDER), a))
         }
         val tx = rect.right + pt(14f)
         val outR = pt(20f)
@@ -398,14 +398,14 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         val x0 = r.left + pad
         val x1 = r.right - pad
         stroke.strokeWidth = pt(6f)
-        stroke.color = alpha(0x40FFFFFF, a)
+        stroke.color = alpha(Design.color(CcTokens.MEDIA_TRACK), a)
         c.drawLine(x0, sy, x1, sy, stroke)
         if (m.duration > 0) {
             val kk = (m.positionNow().toFloat() / m.duration).coerceIn(0f, 1f)
-            stroke.color = alpha(0xE6FFFFFF.toInt(), a)
+            stroke.color = alpha(Design.color(CcTokens.MEDIA_PROGRESS), a)
             c.drawLine(x0, sy, x0 + (x1 - x0) * kk, sy, stroke)
             small.textSize = pt(12f)
-            small.color = alpha(0x99FFFFFF.toInt(), a)
+            small.color = alpha(Design.color(CcTokens.MEDIA_SECONDARY), a)
             c.drawText(fmt(m.positionNow()), x0, sy + pt(22f), small)
             small.textAlign = Paint.Align.RIGHT
             c.drawText("-" + fmt(max(0L, m.duration - m.positionNow())), x1, sy + pt(22f), small)
@@ -420,7 +420,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             val p = if (pressed == id) press.value else 0f
             val res = when (id) { M_PREV -> R.drawable.sym_rewind; M_NEXT -> R.drawable.sym_forward; else -> if (m.playing) R.drawable.sym_pause else R.drawable.sym_play }
             val size = (if (id == M_PLAY) 44f else 36f) * u * (1f - 0.12f * p)
-            glyphs.draw(c, res, x, by, size, alpha(0xFFFFFFFF.toInt(), a * (if (id == M_PLAY) 1f else dim) * (1f - 0.35f * p)))
+            glyphs.draw(c, res, x, by, size, alpha(white(), a * (if (id == M_PLAY) 1f else dim) * (1f - 0.35f * p)))
         }
         // The volume.
         val vy = r.top + pt(278f)
@@ -428,12 +428,12 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         val vx0 = x0 + pt(30f)
         val vx1 = x1 - pt(30f)
         stroke.strokeWidth = pt(8f)
-        stroke.color = alpha(0x40FFFFFF, a)
+        stroke.color = alpha(Design.color(CcTokens.MEDIA_TRACK), a)
         c.drawLine(vx0, vy, vx1, vy, stroke)
-        stroke.color = alpha(0xF2FFFFFF.toInt(), a)
+        stroke.color = alpha(Design.color(CcTokens.MEDIA_LEVEL), a)
         c.drawLine(vx0, vy, vx0 + (vx1 - vx0) * v, vy, stroke)
-        glyphs.draw(c, R.drawable.sym_volume_off, x0 + pt(10f), vy, pt(16f), alpha(0x99FFFFFF.toInt(), a))
-        glyphs.draw(c, R.drawable.sym_volume, x1 - pt(10f), vy, pt(18f), alpha(0x99FFFFFF.toInt(), a))
+        glyphs.draw(c, R.drawable.sym_volume_off, x0 + pt(10f), vy, pt(16f), alpha(Design.color(CcTokens.MEDIA_SECONDARY), a))
+        glyphs.draw(c, R.drawable.sym_volume, x1 - pt(10f), vy, pt(18f), alpha(Design.color(CcTokens.MEDIA_SECONDARY), a))
     }
 
     private fun fmt(ms: Long): String { val s = ms / 1000; return "${s / 60}:${(s % 60).toString().padStart(2, '0')}" }

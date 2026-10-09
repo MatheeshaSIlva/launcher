@@ -492,7 +492,6 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         slotsNode.setPosition(0, 0, width, height)
         val c = slotsNode.beginRecording()
         try {
-            fill.color = 0x1FFFFFFF
             for (r in 0 until l.rows) for (col in 0 until 4) {
                 if (l.at(col, r) != null) continue
                 val x = gridLeft + col * pitch
@@ -521,14 +520,14 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val s = 1f + 0.06f * p
         c.save()
         c.scale(s, s, width / 2f, y)
-        fill.color = alpha(0xFFFFFFFF.toInt(), a)
+        fill.color = alpha(Design.color(CcTokens.ADD_FILL), a)
         c.drawCircle(x0 + gw / 2f, y, gw / 2f, fill)
-        glyphs.draw(c, R.drawable.sym_plus, x0 + gw / 2f, y, 15f * u, alpha(0xFF1C1C1E.toInt(), a))
-        title.color = alpha(0xFFFFFFFF.toInt(), a * (1f - 0.3f * p))
+        glyphs.draw(c, R.drawable.sym_plus, x0 + gw / 2f, y, 15f * u, alpha(Design.color(CcTokens.SYMBOL_ON), a))
+        title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a * (1f - 0.3f * p))
         c.drawText(text, x0 + gw + 7f * u, y + 0.36f * title.textSize, title)
         c.restore()
         title.textSize = 15f * u
-        title.color = 0xFFFFFFFF.toInt()
+        title.color = Design.color(CcTokens.LABEL_COLOR)
     }
 
     private val addPress = SpringValue(0f, 100f, inv)
@@ -787,7 +786,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         else {
             drawLabel(c, "Focus", null, tx, h / 2f, w - tx - x, alpha)
             glyphs.draw(c, R.drawable.sym_unfold, tx + title.measureText("Focus") + 9f * u, h / 2f, 15f * u,
-                alpha((Design.color(CcTokens.LABEL_COLOR) and 0xFFFFFF) or (0xB3 shl 24), alpha))
+                alpha(Design.color(CcTokens.CHEVRON_COLOR), alpha))
         }
     }
 
@@ -873,7 +872,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             artPaint.shader = null
         } else {
             host.surfaces.well(c, ax, ay, artSize, artSize, artR, recX + ax, recY + ay, 1f, alpha)
-            glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), sf.pt(CcTokens.WELL_SYMBOL), alpha(0x80FFFFFF.toInt(), alpha))
+            glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), sf.pt(CcTokens.WELL_SYMBOL), alpha(Design.color(CcTokens.MEDIA_PLACEHOLDER), alpha))
         }
         // The output switcher (AirPlay's place): a well 15 pt from the right (the kit: x 100 of 155).
         val apD = sf.pt(CcTokens.OUTPUT)
@@ -916,10 +915,10 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val x0 = 16f * u
             val x1 = w - 16f * u
             stroke.strokeWidth = 4f * u
-            stroke.color = alpha(0x40FFFFFF, alpha)
+            stroke.color = alpha(Design.color(CcTokens.MEDIA_TRACK), alpha)
             c.drawLine(x0, y, x1, y, stroke)
             val k = (m.positionNow().toFloat() / m.duration).coerceIn(0f, 1f)
-            stroke.color = alpha(0xE6FFFFFF.toInt(), alpha)
+            stroke.color = alpha(Design.color(CcTokens.MEDIA_PROGRESS), alpha)
             c.drawLine(x0, y, x0 + (x1 - x0) * k, y, stroke)
             if (m.playing) postInvalidateDelayed(250)
         }
@@ -929,9 +928,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun drawEditMarks(c: Canvas, a: Anim, w: Float, h: Float, radius: Float, k: Float) {
         val off = radius * (1f - 0.7071f)
         val br = 11f * u * (0.4f + 0.6f * k)
-        fill.color = alpha(0xF2E5E5EA.toInt(), k)
+        fill.color = alpha(Design.color(CcTokens.EDIT_BADGE), k)
         c.drawCircle(off, off, br, fill)
-        stroke.color = alpha(0xFF3C3C43.toInt(), k)
+        stroke.color = alpha(Design.color(CcTokens.EDIT_BADGE_MINUS), k)
         stroke.strokeWidth = 2.2f * u
         c.drawLine(off - 5f * u, off, off + 5f * u, off, stroke)
         if (a.item.control.sizes.size > 1) {
@@ -939,10 +938,10 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val rr = radius + 2f * u
             rect.set(w - 2 * rr + 2f * u, h - 2 * rr + 2f * u, w + 2f * u, h + 2f * u)
             stroke.strokeWidth = 4f * u
-            stroke.color = alpha(0x59000000, k)
+            stroke.color = alpha(Design.color(CcTokens.EDIT_HANDLE_SHADOW), k)
             c.drawArc(rect, 20f, 50f, false, stroke)
             stroke.strokeWidth = 3f * u
-            stroke.color = alpha(0xFFFFFFFF.toInt(), k)
+            stroke.color = alpha(Design.color(CcTokens.EDIT_HANDLE), k)
             c.drawArc(rect, 20f, 50f, false, stroke)
         }
     }
