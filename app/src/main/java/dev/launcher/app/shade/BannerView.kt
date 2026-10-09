@@ -30,6 +30,7 @@ import dev.launcher.app.design.applyTo
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Notification banners (Android's heads-up, ours: the stock ones do not show while the stock shade is blocked). As iOS
@@ -72,6 +73,13 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
          */
         fun appBackdrop(radiusPx: Float, then: (dev.launcher.app.design.BackdropImage?) -> Unit)
     }
+
+    /**
+     * The system blurs what is behind a banner live (One UI: [dev.launcher.app.design.SamsungBlur]): its glass draws only its
+     * own layers over that. Else the glass is drawn over our own blurred picture of what is behind (the wallpaper, the
+     * app's latest picture), which does not move with what is behind.
+     */
+    private var live = dev.launcher.app.design.SamsungBlur.available
 
     private val painter = NotifPainter(ctx, 3) { for (s in all) s.card.invalidate() }
     /** The renderer of the banners' glass (they draw on the shade's thread, one at a time). */
@@ -128,6 +136,11 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         val pressed = List(3) { SpringValue(0f, 100f, { card.invalidate() }) }
         var leaving = false
         val card = Card(this)
+        /** Behind the card, exactly its platter: the system's live blur where it has one ([live]). */
+        val plate: View? = if (live) View(context) else null
+        /** The blur radius and tint the plate was last given (-1: none yet). */
+        var plateRadius = -1
+        var plateTint = 0
     }
 
     /** A banner's platter in its own layer: drawn when its notification changes, moved by its transform. */
@@ -140,7 +153,11 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             c.save()
             c.translate(m, m)
             val p = mp
-            if (p != null) {
+            if (p != null && live) {
+                // The system blurs what is behind live (the plate under this card); the glass adds only its own light,
+                // rims and shadow over it.
+                p.drawOverSystemBlur(c, Design.material(MATERIAL), w, s.h, radius(s))
+            } else if (p != null) {
                 // Over home: the wallpaper, blurred to the glass's frost, where the banner rests. Over an app: its latest
                 // picture, blurred the same way, once it has come (a moment after the banner: until then the app's usual
                 // background colour, which the glass then fades from).
@@ -291,11 +308,41 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         card.translationX = cx - bw / 2f + s.dx.value - m
         card.translationY = startTop + (top() - startTop) * k + s.dy.value - m
         card.alpha = (k * 2.5f).coerceIn(0f, 1f) * (1f - (-s.dy.value / (top() + s.h)).coerceIn(0f, 1f) * 0.6f)
+        s.plate?.let { pl -> placePlate(s, pl, bw, scale, m) }
+    }
+
+    /**
+     * The plate takes the platter's place and transform, and the system's blur under it fades with the card (the blur does
+     * not follow a view's alpha: its radius and tint are scaled instead).
+     */
+    private fun placePlate(s: Shown, pl: View, bw: Float, scale: Float, m: Float) {
+        val lp = pl.layoutParams as? LayoutParams
+        val pw = bw.roundToInt()
+        val ph = s.h.roundToInt().coerceAtLeast(1)
+        if (lp == null || lp.width != pw || lp.height != ph) { pl.layoutParams = LayoutParams(pw, ph); s.plateRadius = -1 }
+        pl.pivotX = bw / 2f
+        pl.pivotY = 0f
+        pl.scaleX = scale
+        pl.scaleY = scale
+        pl.translationX = s.card.translationX + m
+        pl.translationY = s.card.translationY + m
+        val a = s.card.alpha.coerceIn(0f, 1f)
+        val mat = Design.material(MATERIAL)
+        val sigma = dev.launcher.app.design.Blur.sigmaPx(mat.frostPt + (mat.frostDarkPt - mat.frostPt) * Appearance.dark, u)
+        val radius = Math.round(dev.launcher.app.design.SamsungBlur.radiusFor(sigma) * a)
+        val tint = mp?.systemTint(mat) ?: 0
+        val tintNow = (Math.round(((tint ushr 24) and 0xFF) * a) shl 24) or (tint and 0xFFFFFF)
+        if (radius == s.plateRadius && tintNow == s.plateTint) return
+        s.plateRadius = radius
+        s.plateTint = tintNow
+        if (radius <= 0 && (tintNow ushr 24) == 0) dev.launcher.app.design.SamsungBlur.clear(pl)
+        else if (!dev.launcher.app.design.SamsungBlur.set(pl, radius, radius(s), tintNow)) live = false
     }
 
     private fun drop(s: Shown) {
         if (!all.remove(s)) return
         removeView(s.card)
+        s.plate?.let { removeView(it) }
         areaChanged()
     }
 
@@ -369,6 +416,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         for (s in all) {
             val h = heightOf(s)
             if (abs(s.height.target - h) > 0.5f) s.height.animateTo(h, RESIZE)
+            s.plateRadius = -1   // its tint follows the appearance
             place(s)
             s.card.invalidate()
         }
@@ -401,10 +449,11 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         // A ringing banner stays: what does not ring waits in Notification Center.
         if (cur != null && cur.item.urgent && !item.urgent) return
         cur?.let { leave(it, up = true, velocity = -1200f) }
-        askAppBackdrop()
+        if (!live) askAppBackdrop()
         val s = Shown(item)
         s.height.snapTo(heightOf(s))
         all += s
+        s.plate?.let { addView(it) }
         addView(s.card)
         place(s)
         // Over an app the banner comes in once its glass has the app's blurred picture (10-30 ms on the S24), so it is glass
@@ -412,7 +461,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         // [BACKDROP_WAIT_MS]; without a picture it comes in as before.
         // Over home the same for the wallpaper's frost (being made: just after a start or a new wallpaper).
         val overHome = host.overHome()
-        if (if (overHome) dev.launcher.app.Wallpaper.current != null && wallpaperFrost() == null else appImage == null) {
+        if (!live && (if (overHome) dev.launcher.app.Wallpaper.current != null && wallpaperFrost() == null else appImage == null)) {
             entering = s
             removeCallbacks(enterNow)
             postDelayed(enterNow, BACKDROP_WAIT_MS)
@@ -460,6 +509,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         for (s in all.toList()) {
             if (keepRinging && !s.leaving && s.item.urgent) continue
             removeView(s.card)
+            s.plate?.let { removeView(it) }
             all.remove(s)
         }
         if (current == null) { removeCallbacks(timeout); mode = Mode.NONE }

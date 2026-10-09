@@ -564,7 +564,12 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     /** The dragged item's real view stays hidden wherever it now is. */
     private fun hideDragged() {
         val d = drag ?: return
-        draggedView(d)?.alpha = 0f
+        draggedView(d)?.let { v ->
+            // Tagged so that its arrival (a new view where it now is) does not fade it in under the copy.
+            v.setTag(dev.launcher.app.R.id.drag_held, true)
+            v.animate().cancel()
+            v.alpha = 0f
+        }
     }
 
     private fun draggedView(d: Drag): View? =
@@ -608,6 +613,11 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         }
         val target = draggedView(d)
         drag = null
+        // Views the drag held on its way (where it was for a moment) are no longer held; the one it lands on shows when the
+        // copy is there.
+        for (v in host.pageViews.flatMap { it.itemViews() } + (host.dockView?.icons() ?: emptyList())) {
+            if (v !== target && v.getTag(dev.launcher.app.R.id.drag_held) == true) v.setTag(dev.launcher.app.R.id.drag_held, null)
+        }
         if (target == null) { ghost.clear(); return }
         target.post {
             // Where the view will rest once its own reflow glide ends (its translation goes to zero); the copy's pivot (the
@@ -615,7 +625,11 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val o = screenOrigin(target)
             val pv = pivotOf(target)
             ghost.settle(o[0] - target.translationX + pv[0], o[1] - target.translationY + pv[1]) {
+                target.setTag(dev.launcher.app.R.id.drag_held, null)
                 target.alpha = 1f
+                // The copy carries no remove badge: the item's grows back in (it appeared at once).
+                (target as? IconView)?.growEditBadge()
+                (target as? WidgetFrameView)?.growEditBadge()
             }
         }
         host.layoutChanged()

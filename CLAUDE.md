@@ -115,6 +115,13 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Standard cross-window blur is off on this Samsung** (`ro.surface_flinger.supports_background_blur` empty, not changeable without root).
   Samsung's plain `View.semSetBlurRadius` gives fog. What works: window with `FLAG_DIM_BEHIND` + `semAddExtensionFlags(SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR)`;
   strength follows `dimAmount`; whole-screen only (never a rectangle). Reflection on `sem*` worked without changing the hidden-API policy.
+  **For one view's rectangle: `View.semSetBlurInfo(SemBlurInfo.Builder(BLUR_MODE_WINDOW)...)` is real live blur** (the "fog" was
+  `semSetBlurRadius` only): `design/SamsungBlur`. It blurs what is behind the window within the view's bounds, follows the view's
+  translation and scale, works inside a GPU layer, takes `setBackgroundCornerRadius`; it ignores the view's alpha (fade it by
+  re-applying a smaller radius each frame: works). Radius = 4.7 x Gaussian sigma (measured). `setColorCurve(sat, curve, minX,
+  maxX, minY, maxY)`: ranges 0..255 (a linear map), sat 0 turns the whole curve off, chroma grows ~1 + 1.9 x sat; `curve` did
+  nothing visible. Banners use it (`BannerView` plates; the glass draws only its own layers over it:
+  `MaterialPainter.drawOverSystemBlur`, `systemLook`). Probe: `TEST_SHADE --es do semblur` (`shade/SemBlurProbe`).
 - **Stock notification launch animation** (SystemUI) still plays even with animation scales at 0; solved by replacing the shade so taps go through us (re-test).
 - **Status bar race**: a restore-on-start can clear freshly set flags; set flags only after restore has finished.
 - **Never change an overlay window's layout params at the start of a gesture** (alpha, flags, size): each change is a

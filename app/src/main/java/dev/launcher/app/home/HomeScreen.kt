@@ -62,6 +62,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     val fg = FrameLayout(ctx)
     /** Wallpaper and [fg]: what blurs as one behind a menu or the widget gallery. */
     private val scene = FrameLayout(ctx)
+    // Home blurred behind a menu or the widget gallery (a small copy over the scene; see SceneBlurView).
+    private val sceneBlur = SceneBlurView(ctx, scene)
     /** Above the scene, never blurred or recorded: the long-press menu, the widget gallery, a dragged item's copy. */
     private val overlay = FrameLayout(ctx)
     private var picker: WidgetPicker? = null
@@ -156,6 +158,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         scene.addView(fg, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         scene.clipChildren = false
         addView(scene, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(sceneBlur, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(overlay, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         fg.clipChildren = false
         // Home's depth zoom scales everything above the wallpaper as one (through a GPU layer): glass inside it keeps sampling
@@ -1340,14 +1343,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (Build.VERSION.SDK_INT < 31) return
         if (blurHold > 0f && pickerK >= blurHold) blurHold = 0f
         editMode?.jigglePaused = sceneBlurK() > 0.01f
-        val r = sceneBlurK() * Motion.profile.menuBlur * (m?.u ?: 0f)
-        // A new effect object only when the radius really changed (a quarter pixel): the renderer keeps the blurred picture
-        // of home for as long as the same effect is set. A new one at every frame (the same radius: the widget gallery
-        // rising over a held blur) re-blurred the whole screen at every frame (6-11 refreshes missed per opening on the S24).
-        val q = if (r < 0.5f) 0f else Math.round(r * 4f) / 4f
-        if (q == sceneBlurAt) return
-        sceneBlurAt = q
-        scene.setRenderEffect(if (q == 0f) null else android.graphics.RenderEffect.createBlurEffect(q, q, android.graphics.Shader.TileMode.CLAMP))
+        val k = sceneBlurK()
+        sceneBlur.set(k, k * Motion.profile.menuBlur * (m?.u ?: 0f))
     }
 
     // The widget gallery drawn once off screen while home is idle after it was built ([WidgetPicker.warmUp]): never while
@@ -1367,9 +1364,6 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             }.start()
         }
     }
-
-    /** The radius home's blur was last set at (px; 0 none). */
-    private var sceneBlurAt = -1f
 
     /**
      * A picture of [v] as it looks (an icon without its label), and its frame in home's coordinates; for an icon also as it

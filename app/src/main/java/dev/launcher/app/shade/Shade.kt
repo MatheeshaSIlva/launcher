@@ -77,6 +77,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val backdrop = BackdropView(ctx)
     /** Control Center's live background where the system can blur what is behind a window (see [LiveBlur]). */
     private val liveBlur = LiveBlur(ctx, wm)
+    private val semBlurProbe by lazy { SemBlurProbe(ctx, wm, handler) }
     /** Over the lock screen, takes the focus from it while a panel comes in: One UI's fingerprint icon goes then (see [FocusHolder]). */
     private val focusHolder = FocusHolder(ctx, wm) { ev -> handler.post { root.dispatchKeyEvent(ev) } }
     /** An unlock is asked for: the lock screen has its focus back at once (see [Unlock.onAsk]). */
@@ -254,6 +255,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (testHook == null) testHook = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
                 if (i.getStringExtra("do") == "nc_expand") handler.post { if (panel == Panel.NC) nc.expandList() }
+                if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
                 // Opens one of OUR test notifications (by its title) as a tap on its platter would: a script never taps the
                 // list on the phone (it holds the owner's own notifications).
                 if (i.getStringExtra("do") == "nc_open") handler.post {

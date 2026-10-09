@@ -101,8 +101,12 @@ class SpringTranslate(private val view: View) {
 
 /** Something entering or leaving home: a new item grows into its place on a spring, a removed one shrinks away. */
 object Appear {
-    /** [v] grows from [from] of its size to full size (a little overshoot) while it fades in. */
+    /**
+     * [v] grows from [from] of its size to full size (a little overshoot) while it fades in. Not a view a drag holds (the
+     * dragged item's new view, tagged `drag_held`): the dragged copy lands on it and shows it (it faded in under the copy).
+     */
     fun grow(v: View, spec: SpringSpec = Motion.profile.appear, from: Float = 0.7f, fadeMs: Long = Motion.profile.appearMs) {
+        if (v.getTag(dev.launcher.app.R.id.drag_held) == true) { v.animate().cancel(); v.alpha = 0f; v.scaleX = 1f; v.scaleY = 1f; return }
         v.scaleX = from; v.scaleY = from
         v.alpha = 0f
         SpringValue(from, 100f, { k -> v.scaleX = k; v.scaleY = k }).animateTo(1f, spec)

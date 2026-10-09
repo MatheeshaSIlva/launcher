@@ -52,6 +52,13 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             editK.animateTo(if (v) 1f else 0f, if (v) Motion.profile.appear else Motion.profile.menuClose)
         }
     private val editK = dev.launcher.app.motion.SpringValue(0f, 100f, { invalidate() })
+
+    /** The remove badge grows in again (a dragged copy without one has just landed on this icon). */
+    fun growEditBadge() {
+        if (!editing) return
+        editK.snapTo(0f)
+        editK.animateTo(1f, Motion.profile.appear)
+    }
     /** Leaves the remove badge out of what is drawn (the lifted copy of a dragged icon), without animating it. */
     var editBadgeHidden = false
         set(v) { if (field != v) { field = v; invalidate() } }

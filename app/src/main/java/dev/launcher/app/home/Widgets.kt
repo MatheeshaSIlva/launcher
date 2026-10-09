@@ -391,6 +391,13 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
             editK.animateTo(if (v) 1f else 0f, if (v) Motion.profile.appear else Motion.profile.menuClose)
         }
     private val editK = SpringValue(0f, 100f, { invalidate() })
+
+    /** The remove badge and resize handle grow in again (a dragged copy without them has just landed on this widget). */
+    fun growEditBadge() {
+        if (!editing) return
+        editK.snapTo(0f)
+        editK.animateTo(1f, Motion.profile.appear)
+    }
     override var editBadgeHidden = false
         set(v) { if (field != v) { field = v; invalidate() } }
     /** True for a widget drawn without a card (the glass clock): edit mode shows its outline. */

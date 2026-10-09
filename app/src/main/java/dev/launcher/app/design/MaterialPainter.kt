@@ -123,6 +123,81 @@ class MaterialPainter private constructor(private val unitPx: Float) {
             shader.setFloatUniform("plainColor", ((plain shr 16) and 0xFF) / 255f, ((plain shr 8) and 0xFF) / 255f, (plain and 0xFF) / 255f)
         }
     }
+    /**
+     * [m] as a surface over the system's live blur ([SamsungBlur], drawn behind it by the system with [systemTint]): only
+     * what the material lays over its frosted backdrop (inner shadows, the rim's light, drop shadows and rims, a press).
+     * The lens's bending needs the backdrop's pixels and is left out. Same placement as [draw].
+     */
+    fun drawOverSystemBlur(c: Canvas, m: Material, w: Float, h: Float, radius: Float, alpha: Float = 1f, press: Float = 0f) {
+        if (alpha <= 0.003f || w <= 1f || h <= 1f) return
+        val base = overGray(m, 0.5f)
+        shader.setFloatUniform("live", 1f)
+        shader.setFloatUniform("liveBase", base[0], base[1], base[2])
+        draw(c, m, w, h, radius, 0f, 0f, 1f, alpha = alpha, press = press)
+        shader.setFloatUniform("live", 0f)
+    }
+
+    /**
+     * The colour (ARGB) the system lays over its live blur for [m]: the material's fills, worked out over black and over
+     * white backdrops, as the one plain tint that maps both the same way (exact for plain fills; for the others (lighten,
+     * luminosity...) the nearest such tint).
+     */
+    fun systemTint(m: Material): Int {
+        val a0 = overGray(m, 0f)
+        val a1 = overGray(m, 1f)
+        var alpha = 0f
+        for (i in 0..2) alpha += 1f - (a1[i] - a0[i])
+        alpha = (alpha / 3f).coerceIn(0f, 1f)
+        if (alpha < 0.004f) return 0
+        fun ch(i: Int) = Math.round((a0[i] / alpha).coerceIn(0f, 1f) * 255f)
+        return (Math.round(alpha * 255f) shl 24) or (ch(0) shl 16) or (ch(1) shl 8) or ch(2)
+    }
+
+    /**
+     * The system's live blur as [m]'s fills would leave it ([SamsungBlur.Look]): brightness mapped linearly as the fills map
+     * greys (black to [Look.low], white to [Look.high]), colour kept as strong as the fills keep it (a luminosity fill keeps
+     * the backdrop's colour where a plain tint would wash it out: measured on a warm colour), and what the fills tint left
+     * as a plain colour over it. Fades with [k] (0: no change at all).
+     */
+    fun systemLook(m: Material, k: Float = 1f): SamsungBlur.Look {
+        val a0 = overGray(m, 0f)
+        val a1 = overGray(m, 1f)
+        val lo = (a0[0] * 0.3f + a0[1] * 0.59f + a0[2] * 0.11f)
+        val hi = (a1[0] * 0.3f + a1[1] * 0.59f + a1[2] * 0.11f)
+        // How much colour the fills leave on a coloured backdrop, against what the brightness map alone leaves.
+        val probe = floatArrayOf(0.63f, 0.49f, 0.37f)
+        val out = over(m, probe)
+        val chromaIn = probe.max() - probe.min()
+        val chromaOut = out.max() - out.min()
+        val span = (hi - lo).coerceAtLeast(0.02f)
+        val keep = (chromaOut / chromaIn / span).coerceIn(1f, 4f)
+        val kk = k.coerceIn(0f, 1f)
+        return SamsungBlur.Look(
+            low = lo * kk,
+            high = 1f + (hi - 1f) * kk,
+            saturation = (keep - 1f) * kk,
+        )
+    }
+
+    /** [m]'s fills over a grey backdrop of brightness [g] (0..1): the resulting RGB. */
+    private fun overGray(m: Material, g: Float): FloatArray = over(m, floatArrayOf(g, g, g))
+
+    /** [m]'s fills over [backdrop] (RGB 0..1). */
+    private fun over(m: Material, backdrop: FloatArray): FloatArray {
+        val dark = Appearance.dark
+        var c = backdrop.copyOf()
+        for (f in m.fills) {
+            val op = (f.opacity + (f.opacityDark - f.opacity) * dark)
+            val col = Design.color(f.color)
+            val k = op * ((col ushr 24) and 0xFF) / 255f
+            if (k <= 0.001f) continue
+            val s = floatArrayOf(((col shr 16) and 0xFF) / 255f, ((col shr 8) and 0xFF) / 255f, (col and 0xFF) / 255f)
+            val b = Blends.blend(c, s, f.blend)
+            c = FloatArray(3) { i -> c[i] + (b[i] - c[i]) * k }
+        }
+        return c
+    }
+
     /** How far [m]'s drop shadows reach outside a surface (px): the room a layer holding it needs around it. */
     fun reach(m: Material): Float = shadows(m.shadows, dropColors, dropGeom, dropModes, unitPx, inner = false)
 
@@ -437,6 +512,10 @@ uniform float rimWidth;
 uniform float alpha;
 uniform float press;
 uniform float dropReach;
+// Over the system's live blur ([drawOverSystemBlur]): only what the material lays over its frosted backdrop, as light added
+// and shade laid over; [liveBase] is about what the system shows there (blurred, tinted).
+uniform float live;
+uniform half3 liveBase;
 uniform float plain;
 uniform half3 plainColor;
 uniform half4 fillColor[$MAX_FILLS];
@@ -560,6 +639,36 @@ half4 dropShadows(float2 p, float2 hs, half3 b) {
     return half4(max(col - b * (1.0 - a), half3(0.0)), a);
 }
 
+// What the surface adds over the system's blurred and tinted backdrop (premultiplied): the inner shadows' and the rim's
+// light as light added (alpha 0: it brightens what is there), their shade and a press as colour laid over.
+half4 liveOverlay(float2 p, float2 hs, float2 n, float inside, float d) {
+    half3 g = liveBase;
+    half3 add = half3(0.0);
+    half dark = 0.0;
+    for (int i = 0; i < $MAX_SHADOWS; i++) {
+        half4 sc = innerColor[i];
+        if (sc.a > 0.0) {
+            float4 gm = innerGeom[i];
+            float dh = sdRoundRect(p - gm.xy, max(hs - gm.w, float2(0.0)), max(radius - gm.w, 0.0));
+            half k = half(1.0 - gauss(dh, gm.z)) * sc.a;
+            half3 dl = (blendOf(g, sc.rgb, innerMode[i]) - g) * k;
+            add += max(dl, half3(0.0));
+            dark = max(dark, max(max(-dl.r, -dl.g), -dl.b));
+        }
+    }
+    float facing = dot(n, lightDir);
+    float rim = 1.0 - smoothstep(0.0, rimWidth, inside);
+    add += half3(half(rim * light * (pow(max(facing, 0.0), 1.8) + 0.45 * pow(max(-facing, 0.0), 1.8))));
+    half4 res = half4(add, 0.0);
+    res = res * (1.0 - dark) + half4(0.0, 0.0, 0.0, dark);
+    half pa = half(press * 0.16);
+    res = res * (1.0 - pa) + half4(pa);
+    half cov = half(clamp(0.5 - d, 0.0, 1.0));
+    res *= cov;
+    if (d > -0.5) res += dropShadows(p, hs, g) * (1.0 - cov);
+    return res;
+}
+
 half4 main(float2 coordIn) {
     // Where this pixel is on the surface ([local0]: the surface's top-left in this shader's coordinates; 0 as a paint).
     float2 coord = coordIn - local0;
@@ -570,11 +679,12 @@ half4 main(float2 coordIn) {
     if (d > dropReach) return half4(0.0);
     // Where it samples: its place on screen, about home's depth centre as far as the wallpaper zooms (1: at rest).
     float2 sp = depthC + (origin + coord * placeScale - depthC) * depthK;
-    if (d > 0.5) return dropShadows(p, hs, seen(sp, float2(0.0), 0.0)) * half(alpha);
+    if (d > 0.5) return dropShadows(p, hs, live > 0.5 ? liveBase : seen(sp, float2(0.0), 0.0)) * half(alpha);
     float2 q = abs(p) - hs + radius;
     float2 sg = float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
     float2 n = (q.x > 0.0 && q.y > 0.0) ? normalize(q) * sg : (q.x > q.y ? float2(sg.x, 0.0) : float2(0.0, sg.y));
     float inside = max(-d, 0.0);
+    if (live > 0.5) return liveOverlay(p, hs, n, inside, d) * half(alpha);
     // The lens: bent outward near the edge (quarter-circle profile), red and blue apart.
     float dp = min(depth, 0.45 * min(size.x, size.y));
     float t = dp > 0.0 ? clamp(inside / dp, 0.0, 1.0) : 1.0;
