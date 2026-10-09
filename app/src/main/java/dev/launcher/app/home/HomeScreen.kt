@@ -94,6 +94,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     // A long press on empty space enters edit mode (an item's own long press cancels this).
     private val emptyLongPress = Runnable {
         if ((drag == Drag.NONE || drag == Drag.IGNORED) && editMode?.active == false && drawerProgress() == 0f && spotlight?.isOpen != true) {
+            // Android: home's options (wallpaper, widgets, settings) at the touch; iOS: edit mode.
+            if (dev.launcher.app.components.PxMenuTokens.active()) { showHomeOptions(downX, downY); return@Runnable }
             enteredByPress = true
             editMode?.enter()
         }
@@ -1497,6 +1499,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (editMode?.active == true) return
         performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         val (pic, frame) = liftedCopy(v)
+        if (dev.launcher.app.components.PxMenuTokens.active()) { showMenu(v, pic, frame, pixelAppItems(e, frame, onHome = v)); return }
         val items = ArrayList(shortcutItems(e, frame))
         items += dev.launcher.app.components.MenuPainter.Item("Edit Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.GRID) { editMode?.enter() }
         items += dev.launcher.app.components.MenuPainter.Item("Remove from Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
@@ -1509,8 +1512,16 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val mv = menu ?: return
         // The lifted copy draws the item above the blur; the real one (blurred, with its label) fades out meanwhile (with the
         // menu's progress), and its name comes back fading in once the copy has settled into its place.
-        menuItem = v
         mv.show(pic, frame, items, pressedCopy)
+        if (mv.pixel) {
+            // Android's popup: the item stays as it is (nothing lifts, nothing to show again).
+            menuItem = null
+            mv.onHandBack = null
+            mv.onClosed = null
+            pendingDragView = v
+            return
+        }
+        menuItem = v
         val icon = v as? IconView
         val widget = v as? WidgetFrameView
         var shown = false
@@ -1536,6 +1547,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
         val (pic, frame) = liftedCopy(v)
         val item = pages.firstNotNullOfOrNull { it.itemOf(v) } as? HomeItem.Widget
+        if (dev.launcher.app.components.PxMenuTokens.active()) { showMenu(v, pic, frame, pixelWidgetItems(v, item)); return }
         val items = ArrayList<dev.launcher.app.components.MenuPainter.Item>()
         var sizeRow: dev.launcher.app.components.MenuPainter.Item? = null
         if (item != null) {
@@ -1605,14 +1617,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 c.drawBitmap(b, null, RectF(0f, 0f, frame.width(), frame.height()), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
             }
         }
-        val items = ArrayList(shortcutItems(e, frame))
         val onHome = isOnHome(e.key)
-        if (!onHome) items += dev.launcher.app.components.MenuPainter.Item("Add to Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.PLUS) { addAppToHome(e) }
-        deleteItem(e)?.let { items += it }
-        items += appInfoItem(e, frame)
+        val pixelMenu = dev.launcher.app.components.PxMenuTokens.active()
+        val items = if (pixelMenu) pixelAppItems(e, frame, onHome = null) else ArrayList(shortcutItems(e, frame)).also { items ->
+            if (!onHome) items += dev.launcher.app.components.MenuPainter.Item("Add to Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.PLUS) { addAppToHome(e) }
+            deleteItem(e)?.let { items += it }
+            items += appInfoItem(e, frame)
+        }
         val mv = menu ?: return
-        if (!fromSpotlight) drawer?.setHiddenPkg(e.pkg)
-        mv.show(pic, frame, items)
+        // Android's popup leaves the icon where it is (iOS lifts a copy over it: the icon itself hides meanwhile).
+        if (!fromSpotlight && !pixelMenu) drawer?.setHiddenPkg(e.pkg)
+        // The popup clears the app's name under its icon (the icon's square is what was pressed).
+        val anchor = if (pixelMenu) RectF(frame).apply { bottom += metrics.labelBaseline + metrics.labelTextSize * 0.3f } else frame
+        mv.show(pic, anchor, items)
         mv.onClosed = { if (!fromSpotlight) drawer?.setHiddenPkg(hiddenPkg) }
         // An app already on home is not dragged out again (iOS keeps one icon per app).
         pendingExternal = if (onHome) null else e to RectF(frame)
@@ -1674,10 +1691,61 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         menu?.show((editBar as? EditMode.Bar)?.editButtonNode(), button, items)
     }
 
-    fun openWidgetPicker() {
+    fun openWidgetPicker(pkg: String? = null) {
         blurHold = menuK
         menu?.dismiss()
-        picker?.open()
+        picker?.open(pkg)
+    }
+
+    // ---- Android's popups (`sys.layout.menu` = "pixel"): its items, as a Pixel's
+
+    /**
+     * An app's popup: its shortcuts (nearest the icon), then App info, Widgets (when it has any: the gallery opens on its
+     * widgets), Remove (from home, when [onHome] is its icon there) and Uninstall (not for system apps).
+     */
+    private fun pixelAppItems(e: AppEntry, frame: RectF, onHome: View?): List<dev.launcher.app.components.MenuPainter.Item> {
+        val items = ArrayList(shortcutItems(e, frame))
+        items += dev.launcher.app.components.MenuPainter.Item("App info", glyph = dev.launcher.app.components.MenuPainter.Glyph.INFO) { appInfoItem(e, frame).action() }
+        val hasWidgets = try {
+            android.appwidget.AppWidgetManager.getInstance(context).getInstalledProvidersForPackage(e.pkg, e.user).isNotEmpty()
+        } catch (_: Throwable) { false }
+        if (hasWidgets) items += dev.launcher.app.components.MenuPainter.Item("Widgets", glyph = dev.launcher.app.components.MenuPainter.Glyph.WIDGETS) { openWidgetPicker(e.pkg) }
+        if (onHome != null) items += dev.launcher.app.components.MenuPainter.Item("Remove", glyph = dev.launcher.app.components.MenuPainter.Glyph.CLOSE) { editMode?.removeFromHome(onHome) }
+        deleteItem(e)?.let { d -> items += dev.launcher.app.components.MenuPainter.Item("Uninstall", glyph = dev.launcher.app.components.MenuPainter.Glyph.TRASH) { d.action() } }
+        return items
+    }
+
+    /** A widget's popup: its settings (when it has them), Remove, and the sizes it comes in. */
+    private fun pixelWidgetItems(v: View, item: HomeItem.Widget?): List<dev.launcher.app.components.MenuPainter.Item> {
+        val items = ArrayList<dev.launcher.app.components.MenuPainter.Item>()
+        if (item != null && item.kind == HomeItem.Widget.APP && widgets?.isConfigurable(item.id) == true)
+            items += dev.launcher.app.components.MenuPainter.Item("Widget settings", glyph = dev.launcher.app.components.MenuPainter.Glyph.SLIDERS) { widgets?.reconfigure(item.id) }
+        items += dev.launcher.app.components.MenuPainter.Item("Remove", glyph = dev.launcher.app.components.MenuPainter.Glyph.CLOSE) { editMode?.removeFromHome(v) }
+        if (item != null) {
+            val sizes = editHost.widgetSizes(item)
+            val current = sizes.firstOrNull { it.spanX == item.spanX && it.spanY == item.spanY }
+            if (sizes.size > 1) items += dev.launcher.app.components.MenuPainter.Item("Size", sizes = sizes, current = current, onSize = { s -> editMode?.resize(item, s) })
+        }
+        return items
+    }
+
+    /** Home's options at a long press on empty space ([x], [y]): wallpaper and style, widgets, home settings. */
+    private fun showHomeOptions(x: Float, y: Float) {
+        val mv = menu ?: return
+        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        val at = RectF(x - 1f, y - 1f, x + 1f, y + 1f)
+        val items = listOf(
+            dev.launcher.app.components.MenuPainter.Item("Wallpaper & style", glyph = dev.launcher.app.components.MenuPainter.Glyph.WALLPAPER) { listener.openWallpaperPicker(RectF(at)) },
+            dev.launcher.app.components.MenuPainter.Item("Widgets", glyph = dev.launcher.app.components.MenuPainter.Glyph.WIDGETS) { openWidgetPicker() },
+            dev.launcher.app.components.MenuPainter.Item("Home settings", glyph = dev.launcher.app.components.MenuPainter.Glyph.SETTINGS) {
+                try {
+                    context.startActivity(android.content.Intent(context, dev.launcher.app.design.DesignActivity::class.java)
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (t: Throwable) { AppLog.log("[home] settings failed: ${t.message}") }
+            },
+        )
+        mv.show(null, at, items)
+        mv.onClosed = null
     }
 
     private val editHost = object : EditMode.Host {

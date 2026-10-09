@@ -74,12 +74,20 @@ tiles and notification cards `accent2_900` (dark) / `accent2_100` (light); lit t
   reference. Not there: Pixel's Screenshot and Select buttons under the cards.
 - **Wallpaper**: Pixel does not dim it in dark mode (`sys.appearance.wallpaper-dim` 0).
 
+- **Popups** (2026-10-10, `sys.layout.menu` = "pixel", `components/PixelMenu`, tokens `comp.pxmenu.*`): a long press
+  leaves home as it is (no lift, no blur) and opens Android's popup: the app's actions (App info, Widgets when it has
+  some: the gallery opens on them, Remove on home, Uninstall) in one rounded container and its shortcuts in another,
+  nearest the icon, 2 dp apart, with a pointer at the icon (its edge 26 dp from the pointer, flipped at the screen's
+  edge); widgets get Widget settings, Remove and their sizes. A long press on empty space opens home's options (Wallpaper
+  & style, Widgets, Home settings) in one translucent, blurred container at the touch. Checked on the emulator against the
+  reference (`icon_menu*.png`, `home_menu*.png`, re-captured): colours equal in dark and light. Not there: Pause app,
+  Bubble, App lock (system features), the options popup's wallpaper previews, the "+" that pins a shortcut to home.
+
 ## To do (in order)
 
-5. Menus: Pixel's popup for apps and home.
 6. Status bar: Pixel's battery and icons; motion: Material's springs; icons: Material Symbols (needs the font, to be
    downloaded with permission).
 7. The shade's remaining parts: media player in Quick Settings, tile editing, the header's carrier and icons.
 8. Behaviour: a home gesture from an app opened from All apps lands on home with the sheet closed (Back returns to the
    sheet); ours returns to the sheet either way (iOS's). A swipe down on home opens the shade (ours: Spotlight).
-   App menus from the drawer are still iOS's (item 5). Recents' Screenshot (and Select, Google's).
+   Recents' Screenshot (and Select, Google's).

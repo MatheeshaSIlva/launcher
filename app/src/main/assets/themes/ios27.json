@@ -2965,6 +2965,112 @@
    },
    "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): \"Wi-Fi\" caps 26 px"
   },
+  "comp.pxmenu.arrow-height": {
+   "pt": 6,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): 16 px"
+  },
+  "comp.pxmenu.arrow-offset": {
+   "pt": 26,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): the pointer 68 px from the popup's edge"
+  },
+  "comp.pxmenu.arrow-width": {
+   "pt": 10,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): the pointer 26 px wide"
+  },
+  "comp.pxmenu.corner": {
+   "pt": 26,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): corners about 66 px (a one-row container is a capsule)"
+  },
+  "comp.pxmenu.fill": {
+   "color": "@surface_container",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): #151a1f dark, #eaeef4 light"
+  },
+  "comp.pxmenu.gap": {
+   "pt": 2,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): 5 px between the actions and the shortcuts"
+  },
+  "comp.pxmenu.grow-from": {
+   "factor": 0.85,
+   "src": "judged:the popup grows out of its pointer from 85 % as it fades in"
+  },
+  "comp.pxmenu.icon-gap": {
+   "pt": 9.5,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): the pointer's tip 25 px from the icon"
+  },
+  "comp.pxmenu.label": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): #e0e6ee dark, #2d3339 light"
+  },
+  "comp.pxmenu.label-x": {
+   "pt": 44.6,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): names 117 px in"
+  },
+  "comp.pxmenu.options.fill": {
+   "light": "@system_accent2_50/73",
+   "dark": "@system_accent2_900/68",
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/home_menu): over the wallpaper #03a0e9, #0a4768 dark, #abdaf9 light"
+  },
+  "comp.pxmenu.options.material": {
+   "material": {
+    "frost": 24,
+    "fills": [
+     [
+      "{comp.pxmenu.options.fill}",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/home_menu): what is behind it blurred under its fill"
+  },
+  "comp.pxmenu.options.width": {
+   "pt": 347,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/home_menu): 912 px"
+  },
+  "comp.pxmenu.press": {
+   "color": "@on_surface/10",
+   "src": "judged:Material's pressed state layer"
+  },
+  "comp.pxmenu.row": {
+   "pt": 52,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): rows 137 px"
+  },
+  "comp.pxmenu.shortcut-icon": {
+   "pt": 31,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): a shortcut's icon 82 px"
+  },
+  "comp.pxmenu.shortcut-label-x": {
+   "pt": 52,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): its name 137 px in"
+  },
+  "comp.pxmenu.shortcut-x": {
+   "pt": 28,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): centred 73 px in"
+  },
+  "comp.pxmenu.symbol": {
+   "pt": 20,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): symbols about 43 px"
+  },
+  "comp.pxmenu.symbol-x": {
+   "pt": 26,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): symbols centred 69 px in"
+  },
+  "comp.pxmenu.type": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): 14 sp"
+  },
+  "comp.pxmenu.width": {
+   "pt": 216,
+   "src": "measured:the Android 17 emulator's Pixel Launcher (tools/shots/pxref/icon_menu): 567 px"
+  },
   "comp.spotlight.card.material": {
    "ref": "sys.material.glass.dock",
    "src": "judged:Spotlight's card on the dock's glass, as the App Library's tiles"
