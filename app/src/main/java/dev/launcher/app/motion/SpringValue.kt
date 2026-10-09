@@ -22,12 +22,17 @@ class SpringValue(
     var isAnimating = false
         private set
     private var spring: Spring? = null
-    private var startNs = 0L
+    // The spring's own clock: how far into it the last frame was, and when that frame was (the start, before the first).
+    // A frame advances it by the time since the previous one, at most [MAX_STEP_NS]: after the main thread stalled (a
+    // widget resized from its menu: ~110 ms) the motion goes on from where it was instead of jumping ahead (the menu and
+    // home's blur were all but gone in the first frame after the stall).
+    private var elapsedNs = 0L
+    private var lastNs = 0L
     private var posted = false
 
     /** Current velocity in value units per second. */
     val velocity: Float
-        get() = if (!isAnimating) 0f else (spring?.velocity((System.nanoTime() - startNs) / 1e9) ?: 0f) / scale
+        get() = if (!isAnimating) 0f else (spring?.velocity(elapsedNs / 1e9) ?: 0f) / scale
 
     fun snapTo(v: Float) {
         isAnimating = false
@@ -39,7 +44,8 @@ class SpringValue(
     fun animateTo(to: Float, spec: SpringSpec, velocity: Float = this.velocity) {
         target = to
         spring = spec.spring().apply { start(value * scale, velocity * scale, to * scale) }
-        startNs = System.nanoTime()
+        elapsedNs = 0L
+        lastNs = System.nanoTime()
         isAnimating = true
         if (!posted) { posted = true; Choreographer.getInstance().postFrameCallback(frame) }
     }
@@ -51,7 +57,9 @@ class SpringValue(
             posted = false
             if (!isAnimating) return
             val s = spring ?: return
-            val t = maxOf(0L, now - startNs) / 1e9
+            elapsedNs += (now - lastNs).coerceIn(0L, MAX_STEP_NS)
+            lastNs = maxOf(lastNs, now)
+            val t = elapsedNs / 1e9
             if (s.settled(t)) {
                 isAnimating = false
                 value = target
@@ -64,6 +72,11 @@ class SpringValue(
                 Choreographer.getInstance().postFrameCallback(this)
             }
         }
+    }
+
+    private companion object {
+        /** The most one frame moves a spring on (ns): four refreshes at 120 Hz; a longer stall holds the motion instead. */
+        const val MAX_STEP_NS = 34_000_000L
     }
 }
 

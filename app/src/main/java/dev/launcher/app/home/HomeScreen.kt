@@ -123,7 +123,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         updateLabelTones(animate = false)   // every frame of the crossfade: the names follow it
         indicator?.redrawLabel(); editBar?.invalidate()   // labels on glass too
         // The Edit button lifted above its menu is a picture: taken again in the new colours.
-        if (menu?.isShowing == true && editMode?.active == true) (editBar as? EditMode.Bar)?.let { menu?.replaceLifted(it.editButtonPicture()) }
+        if (menu?.isShowing == true && editMode?.active == true) (editBar as? EditMode.Bar)?.let { menu?.replaceLifted(it.editButtonNode()) }
         invalidateTree(this)
         if (!dev.launcher.app.theme.Appearance.changing) post { if (isIdle) listener.onHomeSettled() }
     }
@@ -355,6 +355,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         overlay.addView(mv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         val pk = WidgetPicker(context, metrics, pickerHost).also { picker = it }
         overlay.addView(pk, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        warmTries = 0
+        removeCallbacks(warmPicker)
+        postDelayed(warmPicker, WARM_UP_DELAY_MS)
         (em.ghostView.parent as? android.view.ViewGroup)?.removeView(em.ghostView)
         overlay.addView(em.ghostView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         applyGlassWallpaper()
@@ -1347,6 +1350,24 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         scene.setRenderEffect(if (q == 0f) null else android.graphics.RenderEffect.createBlurEffect(q, q, android.graphics.Shader.TileMode.CLAMP))
     }
 
+    // The widget gallery drawn once off screen while home is idle after it was built ([WidgetPicker.warmUp]): never while
+    // anything moves or home is not in front (the GPU's render thread is busy with it for a moment).
+    private var warmTries = 0
+    private val warmPicker = object : Runnable {
+        override fun run() {
+            val pk = picker ?: return
+            val w = widgets ?: return
+            if (!isIdle || !hasWindowFocus() || HomeBridge.homeCovered) { if (++warmTries < 10) postDelayed(this, 2000L); return }
+            Thread {
+                val list = try { w.apps() } catch (_: Throwable) { emptyList() }
+                post {
+                    if (picker === pk && isIdle && hasWindowFocus() && !HomeBridge.homeCovered) pk.warmUp(list)
+                    else if (++warmTries < 10) postDelayed(this, 2000L)
+                }
+            }.start()
+        }
+    }
+
     /** The radius home's blur was last set at (px; 0 none). */
     private var sceneBlurAt = -1f
 
@@ -1354,26 +1375,20 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
      * A picture of [v] as it looks (an icon without its label), and its frame in home's coordinates; for an icon also as it
      * looks pressed ([pressedCopy]: the lifted icon turns from that into the clear one as the menu opens, never at once).
      */
-    private fun liftedCopy(v: View): Pair<android.graphics.Picture, RectF> {
+    private fun liftedCopy(v: View): Pair<android.graphics.RenderNode, RectF> {
         pressedCopy = null
         if (v is IconView) {
             v.labelHidden = true
-            pressedCopy = android.graphics.Picture().also { p ->
-                val c = p.beginRecording(maxOf(1, v.width), maxOf(1, v.height))
-                try { v.draw(c) } finally { p.endRecording() }
-            }
+            pressedCopy = ContextMenuView.record(v.width, v.height) { c -> v.draw(c) }
             v.clearPress()
         }
-        val pic = android.graphics.Picture()
-        val c = pic.beginRecording(maxOf(1, v.width), maxOf(1, v.height))
-        v.draw(c)
+        val node = ContextMenuView.record(v.width, v.height) { c -> if (v is WidgetFrameView) v.drawCard(c) else v.draw(c) }
         if (v is IconView) v.labelHidden = false
-        pic.endRecording()
-        return pic to frameInHome(v)
+        return node to frameInHome(v)
     }
 
     /** The last [liftedCopy]'s icon as it looked pressed (null for a widget). */
-    private var pressedCopy: android.graphics.Picture? = null
+    private var pressedCopy: android.graphics.RenderNode? = null
 
     /** The item a menu is open for: it fades out (its name with it) as the menu opens over it. */
     private var menuItem: View? = null
@@ -1441,7 +1456,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         showMenu(v, pic, frame, items)
     }
 
-    private fun showMenu(v: View, pic: android.graphics.Picture, frame: RectF, items: List<dev.launcher.app.components.MenuPainter.Item>) {
+    private fun showMenu(v: View, pic: android.graphics.RenderNode, frame: RectF, items: List<dev.launcher.app.components.MenuPainter.Item>) {
         val mv = menu ?: return
         // The lifted copy draws the item above the blur; the real one (blurred, with its label) fades out meanwhile (with the
         // menu's progress), and its name comes back fading in once the copy has settled into its place.
@@ -1449,13 +1464,20 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         mv.show(pic, frame, items, pressedCopy)
         val icon = v as? IconView
         val widget = v as? WidgetFrameView
-        mv.onClosed = {
-            if (menuItem === v) menuItem = null
-            v.alpha = 1f
-            // Nothing is changed while the menu is open: a drag that takes the item over drops this callback.
-            if (icon != null && cfg.showLabels) { icon.setLabelShown(false, animate = false); icon.setLabelShown(true, animate = true) }
-            if (widget != null && cfg.showWidgetLabels) { widget.setLabelShown(false, animate = false); widget.setLabelShown(true, animate = true) }
+        var shown = false
+        // The item back in view, its name fading in (at the end of the close, or early when the item changes in place).
+        val showItem = {
+            if (!shown) {
+                shown = true
+                if (menuItem === v) menuItem = null
+                v.alpha = 1f
+                if (icon != null && cfg.showLabels) { icon.setLabelShown(false, animate = false); icon.setLabelShown(true, animate = true) }
+                if (widget != null && cfg.showWidgetLabels) { widget.setLabelShown(false, animate = false); widget.setLabelShown(true, animate = true) }
+            }
         }
+        // Nothing is changed while the menu is open: a drag that takes the item over drops these callbacks.
+        mv.onHandBack = { showItem() }
+        mv.onClosed = { showItem() }
         pendingDragView = v
     }
 
@@ -1477,6 +1499,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             if (item.kind == "clock") {
                 val solid = item.style == "solid"
                 items += dev.launcher.app.components.MenuPainter.Item(if (solid) "Glass Style" else "Solid Style", glyph = dev.launcher.app.components.MenuPainter.Glyph.STYLE) {
+                    menu?.handBack()
                     editMode?.restyle(item, if (solid) null else "solid")
                 }
             }
@@ -1484,6 +1507,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 // A platter of the theme's glass behind a widget that comes without a background of its own.
                 val glass = item.style == HomeItem.Widget.GLASS
                 items += dev.launcher.app.components.MenuPainter.Item(if (glass) "No Background" else "Glass Background", glyph = dev.launcher.app.components.MenuPainter.Glyph.STYLE) {
+                    menu?.handBack()
                     editMode?.restyle(item, if (glass) null else HomeItem.Widget.GLASS)
                 }
             }
@@ -1527,12 +1551,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun onLibraryLongPress(e: AppEntry, frame: RectF, fromSpotlight: Boolean) {
         val metrics = m ?: return
         performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-        val pic = android.graphics.Picture()
-        val c = pic.beginRecording(maxOf(1, frame.width().toInt()), maxOf(1, frame.height().toInt()))
-        Icons.cached(e, metrics.iconSize)?.let { b ->
-            c.drawBitmap(b, null, RectF(0f, 0f, frame.width(), frame.height()), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        val pic = ContextMenuView.record(frame.width().toInt(), frame.height().toInt()) { c ->
+            Icons.cached(e, metrics.iconSize)?.let { b ->
+                c.drawBitmap(b, null, RectF(0f, 0f, frame.width(), frame.height()), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+            }
         }
-        pic.endRecording()
         val items = ArrayList(shortcutItems(e, frame))
         val onHome = isOnHome(e.key)
         if (!onHome) items += dev.launcher.app.components.MenuPainter.Item("Add to Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.PLUS) { addAppToHome(e) }
@@ -1599,7 +1622,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val modes = dev.launcher.app.theme.Appearance.Mode.entries
         items += dev.launcher.app.components.MenuPainter.Item("Appearance", choices = modes.map { it.title }, chosen = modes.indexOf(dev.launcher.app.theme.Appearance.mode),
             onChoice = { i -> dev.launcher.app.theme.Appearance.setMode(context, modes[i]) })
-        menu?.show((editBar as? EditMode.Bar)?.editButtonPicture(), button, items)
+        menu?.show((editBar as? EditMode.Bar)?.editButtonNode(), button, items)
     }
 
     fun openWidgetPicker() {
@@ -1720,5 +1743,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         const val MAX_STEP_S = 1.0 / 60.0
         /** Sparkle grid and front wobble scale of the wallpaper reveal, shared by wallpaper and glass. */
         const val REVEAL_CELL_DP = 7f
+        /** How long after home is built the widget gallery is drawn off screen once, if home is idle then (ms). */
+        const val WARM_UP_DELAY_MS = 6000L
     }
 }

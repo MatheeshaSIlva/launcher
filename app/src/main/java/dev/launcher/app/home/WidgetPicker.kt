@@ -245,6 +245,42 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         shown.animateTo(1f, Motion.profile.sheet)
     }
 
+    private var warmed = false
+
+    /**
+     * Draws what the gallery shows as it opens (its header and the list of [found] apps) once, off screen: loads every row's
+     * icon and text, and has the GPU compile what these draws need. The first opening after a start did both on its way up
+     * (after an update, one frame of ~140 ms compiling on the S24, then rows of 6-7 ms of recording). Home calls it while idle.
+     */
+    fun warmUp(found: List<WidgetApp>) {
+        // (Closed, the gallery is GONE and has no size of its own: home's.)
+        if (warmed || visibility == VISIBLE || found.isEmpty()) return
+        warmed = true
+        val keepApps = apps
+        val keepShown = shownApps
+        apps = found
+        shownApps = found
+        val node = android.graphics.RenderNode("widgets-warm-up")
+        node.setPosition(0, 0, m.w, m.h)
+        val c = node.beginRecording()
+        try {
+            syncColors()
+            drawList(c, 255)
+            // A row arriving (the first listing fades its rows in): through a layer.
+            val l = c.saveLayerAlpha(0f, 0f, m.w.toFloat(), rowH, 128)
+            drawChevron(c, m.w - m.libMargin, rowH / 2f, right = true, paint = chevron)
+            rowText.draw(c, "warm", "Widgets", m.libMargin, rowText.baselineFor(rowH / 2f), m.w * 0.5f)
+            c.restoreToCount(l)
+        } catch (t: Throwable) {
+            dev.launcher.app.AppLog.log("[widgets] warm-up drawing failed: ${t.message}")
+        } finally {
+            node.endRecording()
+            apps = keepApps
+            shownApps = keepShown
+        }
+        dev.launcher.app.design.GpuWarmUp.render(node, m.w, m.h, "the widget gallery")
+    }
+
     fun close() {
         if (visibility != VISIBLE) return
         hideKeyboard()

@@ -231,6 +231,23 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
      * A tile's icons with the tile's top-left at ([left], [top]), scaled by [scale]: up to four large icons, or three and a
      * cluster of small ones. Shared with the folder, which draws them while it grows out of the tile or shrinks back.
      */
+    /**
+     * Where app [i] of [tile] shows in it (the tile at [left], [top]; [scale] 1 at rest): one of its large icons, or one of the
+     * small ones of the fourth slot. Null for an app the tile does not show.
+     */
+    fun tileIconRect(tile: Tile, i: Int, left: Float, top: Float, scale: Float, out: RectF): RectF? {
+        val large = if (tile.expandable) 3 else min(4, tile.apps.size)
+        val step = m.tileIcon + m.tileIconGap
+        fun slot(s: Int, o: RectF): RectF {
+            val l = left + (m.tilePad + (s % 2) * step) * scale
+            val t = top + (m.tilePad + (s / 2) * step) * scale
+            return o.apply { set(l, t, l + m.tileIcon * scale, t + m.tileIcon * scale) }
+        }
+        if (i < large) return slot(i, out)
+        if (tile.expandable && i < 3 + min(4, tile.apps.size - 3)) return miniRect(slot(3, RectF()), i - 3, out)
+        return null
+    }
+
     fun drawTileIcons(c: Canvas, tile: Tile, left: Float, top: Float, scale: Float, alpha: Int, skipHidden: Boolean, dimSlot: Int = -1) {
         val large = if (tile.expandable) 3 else min(4, tile.apps.size)
         val step = m.tileIcon + m.tileIconGap

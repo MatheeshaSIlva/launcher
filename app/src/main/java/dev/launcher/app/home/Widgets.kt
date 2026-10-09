@@ -283,6 +283,48 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
         super.cancelLongPress()
         removeCallbacks(check)
     }
+
+    /**
+     * Until when (uptime ms) a new layout from the widget's app crossfades in: set when the widget changes size. Apps
+     * answer a resize with a layout for the new size half a second to seconds later (a paused app gets it late), which replaced the content in one frame
+     * (the old layout squeezed into the new card, then the new one).
+     */
+    var crossfadeUntil = 0L
+    private var fadeFrom: android.graphics.Picture? = null
+    private var fadeStart = 0L
+
+    override fun updateAppWidget(remoteViews: android.widget.RemoteViews?) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now < crossfadeUntil && width > 0 && height > 0 && isAttachedToWindow) {
+            fadeFrom = try {
+                android.graphics.Picture().also { p ->
+                    val c = p.beginRecording(width, height)
+                    try { draw(c) } finally { p.endRecording() }
+                }
+            } catch (_: Throwable) { null }
+            fadeStart = now
+        }
+        super.updateAppWidget(remoteViews)
+        invalidate()
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        super.dispatchDraw(canvas)
+        val p = fadeFrom ?: return
+        val f = ((android.os.SystemClock.uptimeMillis() - fadeStart) / LAYOUT_FADE_MS).coerceIn(0f, 1f)
+        if (f >= 1f) { fadeFrom = null; return }
+        // The old content over the new, fading out (eased).
+        val a = (255 * (1f - f) * (1f - f)).toInt()
+        val l = canvas.saveLayerAlpha(0f, 0f, width.toFloat(), height.toFloat(), a)
+        canvas.drawPicture(p)
+        canvas.restoreToCount(l)
+        postInvalidateOnAnimation()
+    }
+
+    private companion object {
+        /** How long a widget's new layout takes to crossfade in after a resize (ms). */
+        const val LAYOUT_FADE_MS = 220f
+    }
 }
 
 /**
@@ -406,6 +448,25 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
         contentK = 1f
         onShownChanged()
         invalidate()
+    }
+
+    private val cardClip = android.graphics.Path()
+
+    /**
+     * The card as it looks now, drawn into [c] (a picture: drawn in software, where the card's rounded outline does not
+     * clip, so it is clipped here; the copy lifted above a menu showed square corners). Without the name under it.
+     */
+    fun drawCard(c: Canvas) {
+        val save = c.save()
+        // (A frameless widget, the glass clock, is drawn as it is: its numerals are its shape.)
+        if (!frameless) {
+            shownRect(r)
+            cardClip.reset()
+            cardClip.addRoundRect(r, oldCornerRadius(), oldCornerRadius(), android.graphics.Path.Direction.CW)
+            c.clipPath(cardClip)
+        }
+        draw(c)
+        c.restoreToCount(save)
     }
 
     /** This view as it looks now (content only): what the resize crossfades away from. */
@@ -534,6 +595,7 @@ class AppWidgetFrame(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, val h
 
     override fun onSpanChanged() {
         card.layoutParams = (card.layoutParams as LayoutParams).apply { width = cardW.roundToInt(); height = cardH.roundToInt(); leftMargin = left.roundToInt() }
+        hostView?.crossfadeUntil = android.os.SystemClock.uptimeMillis() + LAYOUT_WAIT_MS
         pushSize()
     }
 
@@ -562,5 +624,10 @@ class AppWidgetFrame(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, val h
 
     override fun onDraw(canvas: Canvas) {
         if (hostView == null) canvas.drawRoundRect(left, 0f, left + shownW, shownH, m.widgetRadius, m.widgetRadius, placeholder)
+    }
+
+    private companion object {
+        /** How long after a resize the widget's app may answer with a new layout that crossfades in (ms). */
+        const val LAYOUT_WAIT_MS = 8000L
     }
 }

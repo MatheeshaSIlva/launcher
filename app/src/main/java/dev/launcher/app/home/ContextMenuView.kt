@@ -6,7 +6,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Picture
+import android.graphics.RenderNode
 import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.view.MotionEvent
@@ -43,12 +43,17 @@ class ContextMenuView(
     /** The menu's panel and rows (the menu component, `comp.home.menu.*`). */
     private val painter = MenuPainter(MenuSpec.HOME, m.u)
     private val items get() = painter.items
-    private var lifted: Picture? = null
+    private var lifted: RenderNode? = null
     // The item as it looked pressed (dimmed): over the lifted copy, fading away as the menu opens.
-    private var liftedPressed: Picture? = null
+    private var liftedPressed: RenderNode? = null
     private val anchor = RectF()      // the lifted item's frame (or the button the menu belongs to)
     private var pressed = -1
     private var liftedFades = false   // a destructive choice: the lifted item shrinks away with the menu
+    // The item changes in place (a size, a style): the lifted copy fades into it as the menu closes ([handBack]).
+    private var liftedHandsBack = false
+
+    /** The item is shown again early, under the lifted copy fading into it ([handBack]); [onClosed] still runs at the end. */
+    var onHandBack: (() -> Unit)? = null
 
     private val k = SpringValue(0f, 1000f, { onProgress(it.coerceIn(0f, 1f)); invalidate() }, { onRest() })
 
@@ -70,8 +75,12 @@ class ContextMenuView(
 
     init { visibility = GONE }
 
-    /** Opens for the item drawn by [picture] at [frame] (this view's coordinates); no picture: a menu for a button at [frame]. */
-    fun show(picture: Picture?, frame: RectF, menu: List<MenuPainter.Item>, pressed: Picture? = null) {
+    /**
+     * Opens for the item drawn by [picture] at [frame] (this view's coordinates); no picture: a menu for a button at [frame].
+     * The item's copies are render nodes ([record]): drawn on the GPU, as the item itself is (recorded as pictures, in
+     * software, a widget lost its rounded corners and the glass clock its numerals).
+     */
+    fun show(picture: RenderNode?, frame: RectF, menu: List<MenuPainter.Item>, pressed: RenderNode? = null) {
         // The previous menu may still be closing: its item shows again now (its "closed" would be replaced and lost, leaving
         // that item invisible on home).
         onClosed?.invoke()
@@ -79,6 +88,7 @@ class ContextMenuView(
         lifted = picture
         liftedPressed = pressed
         liftedFades = false
+        liftedHandsBack = false
         anchor.set(frame)
         bounds.set(m.libMargin, 0f, m.w - m.libMargin, m.h - m.bottomSafe)
         painter.layout(menu, anchor, bounds, if (picture == null) 8f else 12f, fromLeft = picture == null)
@@ -90,12 +100,27 @@ class ContextMenuView(
     fun dismiss() { if (k.target > 0f) k.animateTo(0f, Motion.profile.menuClose) }
 
     /** The lifted item's look changed while the menu shows (the Edit button in a new appearance). */
-    fun replaceLifted(p: Picture?) { if (lifted != null && p != null) { lifted = p; invalidate() } }
+    fun replaceLifted(p: RenderNode?) { if (lifted != null && p != null) { lifted = p; invalidate() } }
 
     /**
      * A drag takes the item over: the lifted copy and the menu go at once (the drag draws its own copy), the blur and dim
      * behind fade out quickly. The item stays hidden ([onClosed] is dropped).
      */
+    /**
+     * The item changes in place (a new size or style chosen here): it shows at once under the lifted copy ([onHandBack]),
+     * and the copy fades into it as the menu closes. Settling back over it instead, the copy hid the change (a resize ran
+     * unseen under the old size, square-cornered) and the item jumped to the result when the menu was gone.
+     */
+    fun handBack() {
+        if (lifted == null || liftedHandsBack) return
+        liftedHandsBack = true
+        liftedPressed = null
+        val c = onHandBack
+        onHandBack = null
+        c?.invoke()
+        invalidate()
+    }
+
     fun handOff() {
         if (visibility != VISIBLE) return
         lifted = null
@@ -140,18 +165,18 @@ class ContextMenuView(
             c.translate(anchor.centerX(), anchor.centerY())
             c.scale(s, s)
             c.translate(-anchor.width() / 2f, -anchor.height() / 2f)
-            if (liftedFades) {
+            if (liftedFades || liftedHandsBack) {
                 val l = c.saveLayerAlpha(0f, 0f, anchor.width(), anchor.height(), (255 * kk).toInt())
-                c.drawPicture(p)
+                c.drawRenderNode(p)
                 c.restoreToCount(l)
             } else {
-                c.drawPicture(p)
+                c.drawRenderNode(p)
                 // Pressed (dimmed) at first, clear once open: the press fades as it lifts (it went at once).
                 val pk = if (opening) 1f - kk else 0f
                 liftedPressed?.let { pp ->
                     if (pk > 0.003f) {
                         val l = c.saveLayerAlpha(0f, 0f, anchor.width(), anchor.height(), (255 * pk).toInt())
-                        c.drawPicture(pp)
+                        c.drawRenderNode(pp)
                         c.restoreToCount(l)
                     }
                 }
@@ -197,6 +222,7 @@ class ContextMenuView(
                 if (chosen != null && sizes != null) {
                     // A size: applied at once and the menu closes onto the widget, which is already growing or shrinking
                     // to it (the lifted copy shows the old size: kept open, the menu would hide the change).
+                    handBack()
                     chosen.onSize?.invoke(sizes[painter.sizeIndexAt(e.x, sizes.size)])
                     dismiss()
                     return true
@@ -208,5 +234,14 @@ class ContextMenuView(
             MotionEvent.ACTION_CANCEL -> { pressed = -1; invalidate() }
         }
         return true
+    }
+
+    companion object {
+        /** A copy of what [draw] draws ([w] x [h] px), recorded for the GPU: views inside are drawn as they show. */
+        fun record(w: Int, h: Int, draw: (Canvas) -> Unit): RenderNode = RenderNode("lifted").apply {
+            setPosition(0, 0, maxOf(1, w), maxOf(1, h))
+            val c = beginRecording()
+            try { draw(c) } finally { endRecording() }
+        }
     }
 }

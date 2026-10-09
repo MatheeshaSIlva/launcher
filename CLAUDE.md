@@ -223,6 +223,11 @@ copy it wholesale — port the working pieces cleanly. File map:
   layer is a screen-sized image and its filtered output another; past the budget every frame frees and allocates images
   (`allocateImageMemory` slices of 0.5-2 ms in a trace, 30-40 a frame in the widget gallery). Blur kept content at reduced
   size, never give a layer a new size every frame, and check the budget with the surface open.
+- **A `Picture` of a view is drawn in software**: outline clips, RenderEffects and glass that only draws on the GPU are
+  lost (a widget's copy above its menu had square corners, the glass clock no numerals). Copies that must look like the
+  item are render nodes (`ContextMenuView.record`). And **Android empties the app's GPU pipeline cache with every update**:
+  the first draw of a surface compiles its pipelines inside its first frame (the widget gallery: 141 ms); warm such
+  surfaces off screen while idle (`design/GpuWarmUp`).
 - **An app's existing task brought back may send no window event** (Settings sends none, from the dock or a panel): never
   wait on the accessibility event alone; ask the system for the task in front (`topTaskPackage`). And while a panel holds
   our focus window, the launched app cannot take the focus at all: a launch from the shade lets it go.

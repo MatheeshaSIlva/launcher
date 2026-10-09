@@ -141,6 +141,8 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
     private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
         .toned { dev.launcher.app.theme.Appearance.label }.shadowed(m.pt(2f))
     private val r = RectF()
+    private val r2 = RectF()
+    private val at = RectF()
     private var pressed = -1
     // This touch is the second tap of a double tap on the tile that just opened the folder: it does nothing (it used to land
     // on whatever icon of the growing folder was under the finger and open that app).
@@ -357,29 +359,41 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         clip.reset()
         clip.addRoundRect(cur, radius, radius, Path.Direction.CW)
         c.clipPath(clip)
-        // The tile's own icons, at the panel's scale, fading out as the folder opens (and back in as it closes).
-        val tileAlpha = 1f - smooth(0f, 0.45f, p)
-        if (tileAlpha > 0f) {
-            val s = cur.width() / pn.from.width()
-            lib.tilesPane.drawTileIcons(c, t, cur.left, cur.top, s, (255 * tileAlpha).toInt(), skipHidden = false)
-        }
-        // The folder's grid, drawn at full size and scaled uniformly with the panel, fading in.
-        val gridAlpha = smooth(0.3f, 0.85f, p)
-        if (gridAlpha > 0f) {
-            val s = cur.width() / panel.width()
-            c.save()
-            c.translate(cur.left, cur.top)
-            c.scale(s, s)
-            c.translate(-panel.left, -panel.top)
-            val a = (255 * gridAlpha).toInt()
-            for (i in t.apps.indices) {
-                pn.iconRect(i, r)
-                if (r.bottom < panel.top - m.labelBaseline || r.top > panel.bottom) continue
-                val e = t.apps[i]
-                if (!lib.isHidden(e, r)) lib.iconPainter.draw(c, e, r, dimmed = i == pressedIcon, alpha = a)
-                labels.draw(c, e.key, e.label, r.centerX(), r.bottom + m.labelBaseline, pn.cellW - m.pt(4f), a)
+        // iOS: the icons the tile shows (its large ones, the small ones of its fourth slot) fly from their places in the tile
+        // to their cells in the folder's grid, growing, as the panel opens (and back as it closes); the apps the tile does
+        // not show come in where they belong in the grid, which is scaled with the panel. (The tile's icons and the grid
+        // used to crossfade.) The names come once the icons are nearly in place.
+        val s = cur.width() / panel.width()
+        val restA = smooth(0.25f, 0.8f, p)
+        val labelA = (255 * smooth(0.7f, 1f, p)).toInt()
+        // The ones coming in first, the flying ones over them (their paths cross the grid).
+        for (pass in 0..1) for (i in t.apps.indices) {
+            pn.iconRect(i, r)                                    // the cell, the folder fully open
+            val from = lib.tilesPane.tileIconRect(t, i, pn.from.left, pn.from.top, 1f, r2)
+            if ((from != null) != (pass == 1)) continue
+            val a: Int
+            if (from != null) {
+                // From its place in the tile to its cell, with the panel's own progress (so it keeps its place in the frame).
+                at.set(lerp(from.left, r.left, p), lerp(from.top, r.top, p), lerp(from.right, r.right, p), lerp(from.bottom, r.bottom, p))
+                a = 255
+            } else {
+                if (restA <= 0f || r.bottom < panel.top - m.labelBaseline || r.top > panel.bottom) continue
+                at.set(cur.left + (r.left - panel.left) * s, cur.top + (r.top - panel.top) * s, 0f, 0f)
+                at.right = at.left + r.width() * s
+                at.bottom = at.top + r.height() * s
+                a = (255 * restA).toInt()
             }
-            c.restore()
+            val e = t.apps[i]
+            if (!lib.isHidden(e, at)) lib.iconPainter.draw(c, e, at, dimmed = i == pressedIcon, alpha = a)
+            if (labelA > 0) {
+                // The name under the icon where it is now, at the icon's scale.
+                val f = at.width() / m.iconSize
+                c.save()
+                c.translate(at.centerX(), at.bottom)
+                c.scale(f, f)
+                labels.draw(c, e.key, e.label, 0f, m.labelBaseline, pn.cellW - m.pt(4f), minOf(a, labelA))
+                c.restore()
+            }
         }
         c.restore()
     }

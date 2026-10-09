@@ -328,7 +328,10 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         frostMatrix.set(wp.matrix(width, height))
         val sigma = dev.launcher.app.design.Blur.sigmaPx(Design.material(MATERIAL).let { it.frostPt + (it.frostDarkPt - it.frostPt) * Appearance.dark }, u) /
             frostMatrix.mapRadius(1f).coerceAtLeast(0.001f)
-        return dev.launcher.app.design.FrostCache.get(wp.bitmap, frostMatrix, sigma, h) { for (s in all) s.card.invalidate() }
+        return dev.launcher.app.design.FrostCache.get(wp.bitmap, frostMatrix, sigma, h) {
+            for (s in all) s.card.invalidate()
+            entering?.let { s -> if (host.overHome()) post { enter(s) } }
+        }
     }
 
     private val wallpaperChanged: () -> Unit = { wallpaperFrost() }
@@ -338,15 +341,24 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     private var appImageAt = 0L
     private var appAsk = 0
 
+    private var backdropLogs = 0
+
     private fun askAppBackdrop() {
         val ask = ++appAsk
         appImage = null
-        if (host.overHome()) return
+        val t0 = android.os.SystemClock.uptimeMillis()
+        if (host.overHome()) {
+            if (backdropLogs < 8) { backdropLogs++; dev.launcher.app.AppLog.log("[banner] over home: wallpaper frost ${if (wallpaperFrost() != null) "ready" else "NOT ready (plain fallback until it is)"}") }
+            return
+        }
         val m = Design.material(MATERIAL)
         val sigma = dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * Appearance.dark, u)
         host.appBackdrop(dev.launcher.app.design.Blur.renderRadius(sigma)) { img ->
+            if (backdropLogs < 8 && ask == appAsk) { backdropLogs++; dev.launcher.app.AppLog.log("[banner] over an app: its blurred picture ${if (img != null) "after ${android.os.SystemClock.uptimeMillis() - t0} ms" else "NONE (plain fallback)"}") }
             if (ask != appAsk || img == null) return@appBackdrop
-            if (appImage == null) appImageAt = android.os.SystemClock.uptimeMillis()
+            // Before the banner has come in: no fade from the fallback, it comes in as glass.
+            if (appImage == null) appImageAt = android.os.SystemClock.uptimeMillis() - if (entering != null) APP_FADE_MS.toLong() else 0L
+            entering?.let { s -> post { enter(s) } }
             appImage = img
             for (s in all) s.card.invalidate()
         }
@@ -395,7 +407,16 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         all += s
         addView(s.card)
         place(s)
-        s.k.animateTo(1f, SWOOP_IN)
+        // Over an app the banner comes in once its glass has the app's blurred picture (10-30 ms on the S24), so it is glass
+        // from its first frame: it came in on the plain opaque fallback and faded to glass on the way. At most
+        // [BACKDROP_WAIT_MS]; without a picture it comes in as before.
+        // Over home the same for the wallpaper's frost (being made: just after a start or a new wallpaper).
+        val overHome = host.overHome()
+        if (if (overHome) dev.launcher.app.Wallpaper.current != null && wallpaperFrost() == null else appImage == null) {
+            entering = s
+            removeCallbacks(enterNow)
+            postDelayed(enterNow, BACKDROP_WAIT_MS)
+        } else enter(s)
         restartTimer()
         areaChanged()
     }
@@ -461,6 +482,16 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         val s = current ?: return@Runnable
         if (s.item.urgent) return@Runnable
         if (mode == Mode.NONE) leave(s, up = false) else restartTimer()
+    }
+
+    // A banner waiting for its glass's picture before it comes in.
+    private var entering: Shown? = null
+    private val enterNow = Runnable { entering?.let { enter(it) } }
+
+    private fun enter(s: Shown) {
+        if (entering === s) { entering = null; removeCallbacks(enterNow) }
+        if (s.leaving || s.k.isAnimating || s.k.value > 0f) return
+        s.k.animateTo(1f, SWOOP_IN)
     }
 
     private fun restartTimer() {
@@ -589,6 +620,8 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         val MATERIAL = MaterialKey("comp.banner.material")
         /** A banner over an app: its glass fades from the app's flat colour to the app's picture this long (ms). */
         const val APP_FADE_MS = 180f
+        /** How long a banner over an app waits for its glass's picture before it comes in on the plain fallback (ms). */
+        const val BACKDROP_WAIT_MS = 150L
         val BEHIND = ColorKey("comp.banner.behind")
         val CORNER = NumberKey("comp.banner.corner")
         val MARGIN = NumberKey("comp.banner.margin")

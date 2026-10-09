@@ -398,7 +398,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         val c = pic.beginRecording(maxOf(1, v.width), maxOf(1, v.height))
         if (v is IconView) { v.labelHidden = true; v.editBadgeHidden = true }
         if (v is HomeWidgetView) v.editBadgeHidden = true
-        v.draw(c)
+        // A widget's card clipped to its rounded corners here (drawn in software, its outline does not clip it).
+        if (v is WidgetFrameView) v.drawCard(c) else v.draw(c)
         if (v is IconView) { v.labelHidden = false; v.editBadgeHidden = false }
         if (v is HomeWidgetView) v.editBadgeHidden = false
         pic.endRecording()
@@ -743,15 +744,11 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         fun glassViews(): List<GlassView> = listOf(editGlass, doneGlass)
 
         /** The "Edit" capsule as it looks now (it stays sharp above its menu while home blurs). */
-        fun editButtonPicture(): Picture {
-            val p = Picture()
-            val c = p.beginRecording(maxOf(1, editGlass.width), maxOf(1, editGlass.height))
+        fun editButtonNode(): android.graphics.RenderNode = ContextMenuView.record(editGlass.width, editGlass.height) { c ->
             editGlass.draw(c)
             val col = labelColorFor(editGlass)
             text.draw(c, "Edit", "Edit", editGlass.width / 2f, text.baselineFor(editGlass.height / 2f), editGlass.width.toFloat(), color = col,
                 shadowStrength = dev.launcher.app.theme.Appearance.shadowFor(col))
-            p.endRecording()
-            return p
         }
 
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

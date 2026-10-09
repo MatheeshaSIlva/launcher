@@ -178,8 +178,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override fun appBackdrop(radiusPx: Float, then: (dev.launcher.app.design.BackdropImage?) -> Unit) {
                 // The app's latest picture (gesture nav keeps one: the same Control Center's glass sees), baked small and
                 // blurred off the UI threads.
+                // Whatever is behind: over the lock screen that is its wallpaper (only an app's picture was taken, and the
+                // banners there were drawn on their plain opaque fallback).
                 nav.backdrop { src ->
-                    if (src !is BackdropSource.App) { handler.post { then(null) }; return@backdrop }
+                    if (src == null) { handler.post { then(null) }; return@backdrop }
                     BlurBaker.bake(src, root.width, root.height, BANNER_BAKE_SCALE, radiusPx, 0, handler) { bmp, m ->
                         then(bmp?.let { dev.launcher.app.design.BackdropImage(it, m) })
                     }
