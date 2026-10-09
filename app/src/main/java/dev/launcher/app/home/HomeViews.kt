@@ -612,7 +612,9 @@ class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
 
     init {
         clipChildren = false
+        // Pixel's hotseat is a row of icons without a platter.
         addView(glass, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        if (m.pixel) glass.visibility = View.GONE
     }
 
     /** Left edge (in the dock) of slot [i] of [n] icons. */
@@ -722,7 +724,7 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
     /** Pages started or stopped moving: dots while they move, "Search" again shortly after. */
     fun setMoving(moving: Boolean) {
         removeCallbacks(backToSearch)
-        if (editing) return
+        if (editing || m.pixel) return
         if (moving) { if (pages > 1) fadeTo(0f, 140) } else postDelayed(backToSearch, 650)
     }
 
@@ -731,7 +733,7 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
         set(v) {
             field = v
             removeCallbacks(backToSearch)
-            fadeTo(if (v) 0f else 1f, 200)
+            if (!m.pixel) fadeTo(if (v) 0f else 1f, 200)
         }
 
     private fun fadeTo(target: Float, ms: Long) {
@@ -751,6 +753,7 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
     fun redrawLabel() = content.invalidate()
 
     private fun drawContent(c: Canvas) {
+        if (m.pixel) { drawPixelBar(c); return }
         val cy = height / 2f
         val col = labelColor()
         val shadowK = dev.launcher.app.theme.Appearance.shadowFor(col)
@@ -783,5 +786,98 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
             c.drawLine(gx + lens * 0.72f, gy + lens * 0.72f, gx + lens * 1.5f, gy + lens * 1.5f, glyph)
             c.drawText(label, x0 + glyphW + gap, cy - (text.fontMetrics.ascent + text.fontMetrics.descent) / 2f, text)
         }
+    }
+
+    private val pxIcon = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+
+    /**
+     * Pixel's search bar: a search glyph at the left, "Search" in the bar's secondary colour, a microphone at the right
+     * (the bar itself is the glass view's material: the Pixel theme makes it a solid surface).
+     */
+    private fun drawPixelBar(c: Canvas) {
+        val cy = height / 2f
+        val col = dev.launcher.app.design.Design.color(HomeTokens.PX_SEARCH_LABEL)
+        val d = resources.displayMetrics.density
+        pxIcon.color = col
+        pxIcon.strokeWidth = 2f * d
+        val lens = 6.5f * d
+        val gx = 24f * d
+        c.drawCircle(gx, cy - 1.5f * d, lens, pxIcon)
+        c.drawLine(gx + lens * 0.72f, cy - 1.5f * d + lens * 0.72f, gx + lens * 1.45f, cy - 1.5f * d + lens * 1.45f, pxIcon)
+        text.color = col
+        text.textSize = 16f * d
+        text.clearShadowLayer()
+        c.drawText("Search", gx + 22f * d, cy - (text.fontMetrics.ascent + text.fontMetrics.descent) / 2f, text)
+        // A microphone: a rounded capsule on a stand.
+        val mx = width - 26f * d
+        val r = RectF(mx - 4f * d, cy - 9f * d, mx + 4f * d, cy + 3f * d)
+        c.drawRoundRect(r, 4f * d, 4f * d, pxIcon)
+        val arc = RectF(mx - 7f * d, cy - 5f * d, mx + 7f * d, cy + 7f * d)
+        c.drawArc(arc, 0f, 180f, false, pxIcon)
+        c.drawLine(mx, cy + 7f * d, mx, cy + 10f * d, pxIcon)
+    }
+
+}
+
+/** Pixel: the page dots in a row of their own above the hotseat (the current page's wider and brighter). */
+class PixelDots(ctx: Context, private val m: HomeMetrics) : View(ctx) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val r = RectF()
+    var pages = 1
+        set(v) { if (field != v) { field = v; invalidate() } }
+    var position = 0f
+        set(v) { if (field != v) { field = v; invalidate() } }
+    var color = Color.WHITE
+        set(v) { if (field != v) { field = v; invalidate() } }
+
+    override fun onDraw(c: Canvas) {
+        if (pages < 2) return
+        val dot = m.dotSize
+        val gap = m.dotGap
+        val wide = dot * 2.2f
+        val total = (pages - 1) * (dot + gap) + wide
+        var x = (width - total) / 2f
+        val cy = height / 2f
+        for (i in 0 until pages) {
+            val k = (1f - abs(position - i)).coerceIn(0f, 1f)
+            val w = dot + (wide - dot) * k
+            r.set(x, cy - dot / 2f, x + w, cy + dot / 2f)
+            paint.color = color
+            paint.alpha = ((110 + 145 * k) * Color.alpha(color) / 255f).roundToInt()
+            c.drawRoundRect(r, dot / 2f, dot / 2f, paint)
+            x += w + gap
+        }
+    }
+}
+
+/** Pixel: At a glance at the top of the first page: today's date (a tap opens the calendar). */
+class GlanceView(ctx: Context, private val m: HomeMetrics) : View(ctx) {
+    private val text = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = m.glanceText
+        typeface = dev.launcher.app.theme.Fonts.text(500)
+    }
+    private val shadow = dev.launcher.app.theme.FadingShadow(m.pt(2f), 0f, m.pt(0.5f), 0x59000000)
+    var color = Color.WHITE
+        set(v) { if (field != v) { field = v; invalidate() } }
+    private var shown = ""
+    private val tick = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: android.content.Intent?) = invalidate()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        context.registerReceiver(tick, android.content.IntentFilter(android.content.Intent.ACTION_DATE_CHANGED).apply { addAction(android.content.Intent.ACTION_TIME_TICK) })
+    }
+
+    override fun onDetachedFromWindow() {
+        try { context.unregisterReceiver(tick) } catch (_: Throwable) { }
+        super.onDetachedFromWindow()
+    }
+
+    override fun onDraw(c: Canvas) {
+        shown = java.text.SimpleDateFormat("EEE, MMM d", java.util.Locale.getDefault()).format(java.util.Date())
+        text.color = color
+        shadow.apply(text, dev.launcher.app.theme.Appearance.shadowFor(color))
+        c.drawText(shown, 0f, -text.fontMetrics.ascent, text)
     }
 }

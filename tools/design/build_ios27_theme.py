@@ -174,6 +174,8 @@ SEED = {
     'sys.layout.menu': {'choice': 'ios', 'src': 'judged:iOS 27: the item lifts, the menu is glass'},
     'sys.layout.statusbar': {'choice': 'ios', 'src': 'judged:iOS 27: time on the left, battery as a cell on the right'},
     'sys.font.family': {'choice': 'inter', 'src': 'judged:Inter, the closest open font to SF Pro (bundled)'},
+    'comp.home.pixel.search-label': {'color': '@on_surface_variant', 'src': "measured:Pixel Launcher's search bar glyphs"},
+    'comp.home.pixel.search-fill': {'light': '@system_accent2_50', 'dark': '@system_accent2_700', 'src': "measured:Pixel Launcher's search bar #36474e dark, #deedf3 light"},
     # The Pixel shade (Android 16's, PixelShadeView): defaults any theme may use with sys.layout.shade = pixel.
     'comp.px.shade.background': {'material': {'frost': 40, 'fills': [], 'innerShadows': [], 'shadows': []}, 'src': "judged:Android 16's shade: what is behind, blurred (its veil: comp.px.shade.scrim)"},
     'comp.px.shade.scrim': {'light': '#ffffff8c', 'dark': '#000000b3', 'src': "measured:the emulator's shade over its blue wallpaper: about 70 % black in dark mode, 55 % white in light"},

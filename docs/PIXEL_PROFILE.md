@@ -44,9 +44,16 @@ tiles and notification cards `accent2_900` (dark) / `accent2_100` (light); lit t
   shared with the shade's list), opaque, sliding down from above the top edge (no live blur plate); actions as outlined
   capsules. Checked on the emulator in dark and light.
 
+- **Home** (2026-10-10, `sys.layout.home` = "pixel"): sizes in dp as the Pixel Launcher's (`HomeMetrics`, `pixel`):
+  60 dp icons in four columns with names in 14 sp, At a glance (the date) at the top left (`GlanceView`), the grid's rows
+  between it and the page dots (`PixelDots`, 6 dp, above the hotseat), the hotseat row without a platter, the search bar
+  at the bottom (48 dp, 26 dp above the navigation bar, a solid surface from the palette: `comp.home.pixel.search-fill`,
+  label `comp.home.pixel.search-label`). Changing the layout, font or scale tokens rebuilds home. Checked on the emulator
+  against the reference in dark and light. Still iOS: the glance's colour (white, not the labels' tone), the Google logo
+  and lens (Android's own marks, not drawn).
+
 ## To do (in order)
 
-2. Home: At a glance, the grid's proportions, the hotseat without a platter, the search bar at the bottom.
 3. Apps: a bottom sheet with search, predictions and the alphabetical grid (`sys.layout.drawer` = "grid", placement swipe up).
 4. Recents: the carousel (`sys.layout.switcher` = "carousel").
 5. Menus: Pixel's popup for apps and home.

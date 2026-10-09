@@ -138,8 +138,26 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** After any layout (a page laid out, an icon moved in edit mode): the names take the tone of the wallpaper under them. */
     private val toneAfterLayout = android.view.ViewTreeObserver.OnGlobalLayoutListener { updateLabelTones(animate = true) }
 
+    private var glance: GlanceView? = null
+    private var pixelDots: PixelDots? = null
+
+    /** The theme's choices that change how home is built (its layouts, its font, its scale): a change rebuilds home. */
+    private fun layoutSignature(): String = try {
+        val d = dev.launcher.app.design.Design
+        listOf("sys.layout.home", "sys.layout.drawer", "sys.font.family", "sys.scale.policy")
+            .joinToString("|") { k -> d.choice(dev.launcher.app.design.ChoiceKey(k)) }
+    } catch (_: Throwable) { "" }
+
+    private var builtLayout = ""
+
+    private val onTokens: () -> Unit = {
+        if (m != null && layoutSignature() != builtLayout) post { AppLog.log("[home] the theme's layout changed: rebuilding"); build() }
+        else invalidateTree(this)
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        dev.launcher.app.design.Design.addListener(onTokens)
         viewTreeObserver.addOnGlobalLayoutListener(toneAfterLayout)
         dev.launcher.app.Badges.addListener(onBadges)
         dev.launcher.app.theme.Appearance.addListener(onAppearance)
@@ -147,6 +165,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     override fun onDetachedFromWindow() {
+        dev.launcher.app.design.Design.removeListener(onTokens)
         viewTreeObserver.removeOnGlobalLayoutListener(toneAfterLayout)
         dev.launcher.app.Badges.removeListener(onBadges)
         dev.launcher.app.theme.Appearance.removeListener(onAppearance)
@@ -310,8 +329,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** (Re)creates everything above the wallpaper for the current size, insets and config. */
     private fun build() {
         if (width == 0 || height == 0) return
-        val metrics = HomeMetrics(width, height, topInset, bottomInset, deviceRadius, cfg)
+        val pixel = try { dev.launcher.app.design.Design.choice(HomeTokens.LAYOUT) == "pixel" } catch (_: Throwable) { false }
+        val metrics = HomeMetrics(width, height, topInset, bottomInset, deviceRadius, cfg, pixel, resources.displayMetrics.density)
         m = metrics
+        builtLayout = layoutSignature()
         Icons.homeSize = metrics.iconSize
         fg.removeAllViews()
         stopAnimations()
@@ -320,6 +341,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val shadow = DockShadow(context).also { dockShadow = it }
         fg.addView(shadow, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         shadow.place(metrics.dockInset, metrics.dockTop, metrics.w - metrics.dockInset, metrics.dockBottom, metrics.dockRadius)
+        if (metrics.pixel) shadow.visibility = View.GONE
+        // Pixel: At a glance (the date) on the first page, the page dots above the hotseat.
+        glance = null; pixelDots = null
+        if (metrics.pixel) {
+            val g = GlanceView(context, metrics).also { glance = it }
+            fg.addView(g, LayoutParams((metrics.w * 0.7f).roundToInt(), (metrics.glanceText * 1.6f).roundToInt()).apply {
+                leftMargin = metrics.glanceLeft.roundToInt(); topMargin = metrics.glanceTop.roundToInt()
+            })
+            val pd = PixelDots(context, metrics).also { pixelDots = it }
+            fg.addView(pd, LayoutParams(LayoutParams.MATCH_PARENT, (metrics.dotSize * 4).roundToInt()).apply {
+                topMargin = (metrics.pixelDotsY - metrics.dotSize * 2).roundToInt()
+            })
+        }
         val d = DockView(context, metrics).also { dock = it }
         fg.addView(d, LayoutParams((metrics.w - 2 * metrics.dockInset).roundToInt(), metrics.dockHeight.roundToInt()).apply {
             leftMargin = metrics.dockInset.roundToInt()
@@ -332,7 +366,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             ind.getLocationOnScreen(o)
             pillTone.color(wallpaperLuminanceUnder(RectF(o[0].toFloat(), o[1].toFloat(), o[0] + ind.width.toFloat(), o[1] + ind.height.toFloat())))
         }
-        fg.addView(ind, LayoutParams(ind.widthFor(1), metrics.indicatorHeight.roundToInt()))
+        fg.addView(ind, LayoutParams(if (metrics.pixel) metrics.searchPillWidth.roundToInt() else ind.widthFor(1), metrics.indicatorHeight.roundToInt()))
         val dr = Drawers.create(cfg.drawerStyle, context, this).also { drawer = it }
         fg.addView(dr.view, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         dr.setWallpaper(wallpaper)
@@ -558,6 +592,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         for (g in pageGlass()) g.invalidate()
         if (pendingSearch && dp > 0.5f) { pendingSearch = false; drawer?.openSearch() }
         indicator?.setPosition(pos.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()))
+        // Pixel: At a glance belongs to the first page (it moves with it); the dots follow the pages.
+        glance?.translationX = (pages.firstOrNull()?.translationX ?: 0f) + shift
+        glance?.alpha = 1f - dp
+        pixelDots?.let { pd -> pd.pages = pages.size; pd.position = pos.coerceIn(0f, (pages.size - 1).coerceAtLeast(0).toFloat()); pd.translationX = shift; pd.alpha = 1f - dp }
         drawer?.setOpenProgress(dp)
         if (dp > 0f) drawerWasOpen = true
         updateStatusDark()

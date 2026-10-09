@@ -9,6 +9,8 @@
   "sys.layout.shade": {"choice": "pixel", "src": "measured:Android 16: one panel, Quick Settings over the notifications"},
   "sys.font.family": {"choice": "system", "src": "judged:the device's sans-serif (Google Sans on a Pixel, Roboto elsewhere)"},
   "sys.scale.policy": {"choice": "density", "src": "judged:Android sizes in dp"},
-  "ref.color.accents.blue": {"color": "@primary", "src": "judged:Material You: the accent is the wallpaper's primary"}
+  "ref.color.accents.blue": {"color": "@primary", "src": "judged:Material You: the accent is the wallpaper's primary"},
+  "sys.layout.home": {"choice": "pixel", "src": "measured:Android 16's home: At a glance, a 4-column grid, the hotseat, the search bar at the bottom"},
+  "comp.home.search.material": {"material": {"frost": 0, "fills": [["{comp.home.pixel.search-fill}", 1.0, "NORMAL"]], "innerShadows": [], "shadows": []}, "src": "measured:Pixel Launcher's search bar: a solid surface"}
  }
 }

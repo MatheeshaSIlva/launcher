@@ -2151,6 +2151,15 @@
    "pt": 250,
    "src": "kit:5626:51776"
   },
+  "comp.home.pixel.search-fill": {
+   "light": "@system_accent2_50",
+   "dark": "@system_accent2_700",
+   "src": "measured:Pixel Launcher's search bar #36474e dark, #deedf3 light"
+  },
+  "comp.home.pixel.search-label": {
+   "color": "@on_surface_variant",
+   "src": "measured:Pixel Launcher's search bar glyphs"
+  },
   "comp.home.search.material": {
    "ref": "sys.material.glass.dock",
    "src": "kit:5593:10801"
