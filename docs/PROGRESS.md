@@ -1706,3 +1706,24 @@ material in all six cases. Found and fixed:
   (`slowmo.sh FACTOR` writes the token edit and the scale) its recorder catches ~12 frames a second: at 8x that is about
   every real frame of our own animations. It cannot help where the recorder itself stalls (windows changing, an app
   starting: 200-600 ms gaps during a launch): those are checked on the S24's 120 fps recorder.
+
+## Step 4: the animation audit, first round (2026-10-09, emulator, 8x slow motion)
+
+Each animation recorded at 8x (`tools/slowmo.sh 8`), its frames checked with `tools/pops.py` (a 24 x 12 grid: a tile
+whose change is far above its own change in the frames around it) and by eye at full size.
+
+| Animation | Result |
+| --- | --- |
+| Launch from home, close into the icon (the card's handover to the real icon) | Clean; the icon settles with no missing frame. |
+| Long-press menu on an icon: open, close | **Two defects, fixed:** the real item went at once under the lifted copy (now fades out on the menu's progress; the copy turns from pressed to clear as it lifts), and its name came back at once after the close (now fades in). |
+| Home pages, home to App Library and back | Clean (finger-driven). |
+| App Library folder: open, close | Clean. The tile's icons crossfade into the folder's grid over a short part of the spring (~40 ms at real speed): by design; iOS moves the big icons into their cells instead (a possible improvement). |
+| Control Center: open, close | **Defect, fixed:** closing, the background blur cleared in one frame while the controls still showed (blur linear in the progress, controls on its square root): both on the same curve now. The opening's first frames cannot be judged on the emulator (its recorder stalls while the blur window appears): S24. |
+| Notification Center: open, close | Clean. |
+| Edit mode (from the menu), the Edit menu, the widget gallery: open, close | Clean. |
+| App Switcher: open from an app, deck to home | Clean (dark cards: the emulator gives no task pictures). |
+| Banner: in, out | Clean. |
+
+Not yet audited: an app's close grabbed mid-flight, quick switches, folder to folder, Spotlight, the clock's minute,
+unlock and cold-start arrival, Control Center's expanded modules and edit mode, Notification Center's swipes and stacks,
+the S24's own blur. Tools kept in the repo: `tools/slowmo.sh`, `tools/pops.py`.

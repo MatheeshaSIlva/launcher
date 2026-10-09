@@ -123,7 +123,9 @@ words: the Liquid Glass look with the convenience and customizability of Android
 
 **Step 4: motion.** *Registry done 2026-10-09:* every spring and timing is a `motion.*` token by role (home's profile,
 `MotionProfile`, and about 50 of the shade's, Control Center's, the status bar's and edit mode's springs that were in
-code; `motion/MotionTokens`, read through `Motion.role`). Every animation listed with a role name; the registry; transitions behind interfaces (launch, close,
+code; `motion/MotionTokens`, read through `Motion.role`). *Audit, first round 2026-10-09:* nine animations at 8x slow
+motion (`motion.debug.slow`, `tools/slowmo.sh`, `tools/pops.py`), three defects fixed (see PROGRESS.md). Every animation
+listed with a role name; the registry; transitions behind interfaces (launch, close,
 panel open and close, module expand, stack fan-out, banner in and out...). Then the animation audit: each one recorded
 and frame-checked (S24 where it shows no private content, emulator otherwise), every defect listed in `docs/` and fixed
 one at a time.
