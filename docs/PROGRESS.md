@@ -1749,3 +1749,9 @@ Still to audit: folder to folder, unlock and cold-start arrival, the S24's own b
   right before home's first draw (it was asked in onResume, before home had a size, and waited for a retry).
 - Reopening an App Library folder right after it closed: clean. (Folder to folder could not be tried: on the emulator only
   one category has enough apps to be a folder.)
+- Unlock (8x, emulator, swipe lock screen): clean; the lock screen fades as home arrives zoomed and settles. (A first
+  try showed home's wallpaper black, then fading in: the emulator was locked seconds after a reinstall, before the
+  wallpaper had loaded: a test artefact.)
+- Audit status: every animation listed in the plan has had a pass on the emulator. Left for the S24 (its own recorder at
+  120 fps): Control Center's first frames with Samsung's blur, the icon handover after closes on the phone, real frame
+  pacing (the final performance pass).
