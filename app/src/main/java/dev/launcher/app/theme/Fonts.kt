@@ -20,8 +20,14 @@ object Fonts {
     /** Large titles (optical size 32). */
     fun display(weight: Int = 600): Typeface = get(weight, 32)
 
+    /** The theme's font family (`sys.font.family`): "inter" (bundled) or "system" (the device's sans-serif). */
+    private fun family(): String = try { dev.launcher.app.design.Design.choice(FAMILY) } catch (_: Throwable) { "inter" }
+
+    private val FAMILY = dev.launcher.app.design.ChoiceKey("sys.font.family")
+
     @Synchronized
-    private fun get(weight: Int, opsz: Int): Typeface = cache.getOrPut("$weight/$opsz") {
+    private fun get(weight: Int, opsz: Int): Typeface = family().let { fam -> cache.getOrPut("$fam/$weight/$opsz") {
+        if (fam == "system") return@getOrPut fallback(weight)
         try {
             Typeface.Builder(ctx.assets, "fonts/InterVariable.ttf")
                 .setFontVariationSettings("'wght' $weight, 'opsz' $opsz")
@@ -30,7 +36,7 @@ object Fonts {
         } catch (_: Throwable) {
             fallback(weight)
         }
-    }
+    } }
 
     private fun fallback(weight: Int): Typeface = Typeface.create(Typeface.SANS_SERIF, weight.coerceIn(1, 1000), false)
 }

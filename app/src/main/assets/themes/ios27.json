@@ -2492,6 +2492,278 @@
    "color": "#00000059",
    "src": "judged:the soft shadow under the date and group names"
   },
+  "comp.px.brightness.fill-color": {
+   "color": "@primary",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): #a9cae8 = primary"
+  },
+  "comp.px.brightness.height": {
+   "pt": 52,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): the slider is 137 px tall"
+  },
+  "comp.px.brightness.icon-color": {
+   "color": "@on_primary",
+   "src": "judged:the sun on the filled part"
+  },
+  "comp.px.brightness.track-color": {
+   "light": "@system_accent2_100",
+   "dark": "@system_accent2_900",
+   "src": "judged:the slider's empty part, as a tile"
+  },
+  "comp.px.footer.button": {
+   "pt": 48,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): footer buttons 126 px"
+  },
+  "comp.px.footer.fill": {
+   "light": "@system_accent2_100",
+   "dark": "@system_accent2_900",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): #0d1e29"
+  },
+  "comp.px.footer.icon-color": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.footer.power-fill": {
+   "color": "@primary",
+   "src": "judged:the power button stands out"
+  },
+  "comp.px.footer.power-icon-color": {
+   "color": "@on_primary",
+   "src": "judged:on the power button"
+  },
+  "comp.px.header.clock": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 36,
+    "line": 48,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): the expanded header clock (digits 68 px tall)"
+  },
+  "comp.px.header.date": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): the date beside the time"
+  },
+  "comp.px.header.height": {
+   "pt": 136,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): the expanded panel starts 136 dp down (clock, date, status icons above)"
+  },
+  "comp.px.header.text-color": {
+   "color": "@on_surface",
+   "src": "measured:the reference header: white in dark mode, dark in light"
+  },
+  "comp.px.notif.action-outline": {
+   "color": "@outline",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): the Pause / Lap outlines"
+  },
+  "comp.px.notif.action-text-color": {
+   "color": "@primary",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.notif.app": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 12,
+    "line": 16,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): \"Shell • 6m\" 23 px"
+  },
+  "comp.px.notif.chip-fill": {
+   "light": "@system_accent2_200",
+   "dark": "@system_accent2_800",
+   "src": "judged:the count chip"
+  },
+  "comp.px.notif.clear-fill": {
+   "light": "@system_accent2_200",
+   "dark": "@system_accent2_800",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): \"Clear all\" #1f323d"
+  },
+  "comp.px.notif.clear-height": {
+   "pt": 40,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): 96 px"
+  },
+  "comp.px.notif.clear-text-color": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.notif.corner": {
+   "pt": 28,
+   "src": "judged:the reference's outer corners"
+  },
+  "comp.px.notif.fill": {
+   "light": "@system_accent2_100",
+   "dark": "@system_accent2_900",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): card #0e212d dark, #d4e7f6 light"
+  },
+  "comp.px.notif.gap": {
+   "pt": 2,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): 6 px between cards of a stack"
+  },
+  "comp.px.notif.icon": {
+   "pt": 40,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): the app icon circle, 105 px"
+  },
+  "comp.px.notif.icon-color": {
+   "color": "@on_primary",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.notif.icon-fill": {
+   "color": "@primary",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): #a9cae8"
+  },
+  "comp.px.notif.inner-corner": {
+   "pt": 4,
+   "src": "judged:corners where cards of a stack meet"
+  },
+  "comp.px.notif.padding": {
+   "pt": 16,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.notif.section": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): \"Silent\""
+  },
+  "comp.px.notif.stack-fill": {
+   "color": "@surface_container/40",
+   "src": "judged:the lighter area behind the list (#0a3047 over the blur)"
+  },
+  "comp.px.notif.text": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.notif.text-color": {
+   "color": "@on_surface_variant",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.notif.title": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): 27 px"
+  },
+  "comp.px.notif.title-color": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.qqs.top": {
+   "pt": 25,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): the first pull's tiles start 66 px down"
+  },
+  "comp.px.qs.rows": {
+   "factor": 4,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): four rows of tiles a page"
+  },
+  "comp.px.shade.background": {
+   "material": {
+    "frost": 40,
+    "fills": [],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Android 16's shade: what is behind, blurred (its veil: comp.px.shade.scrim)"
+  },
+  "comp.px.shade.margin": {
+   "pt": 16,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): panel and cards 16 dp from the edges"
+  },
+  "comp.px.shade.scrim": {
+   "light": "#ffffff8c",
+   "dark": "#000000b3",
+   "src": "measured:the emulator's shade over its blue wallpaper: about 70 % black in dark mode, 55 % white in light"
+  },
+  "comp.px.tile.corner": {
+   "pt": 28,
+   "src": "judged:from the reference's rounded tiles"
+  },
+  "comp.px.tile.fill": {
+   "light": "@system_accent2_100",
+   "dark": "@system_accent2_900",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): tile #0c1f2a = accent2 900 (dark)"
+  },
+  "comp.px.tile.gap": {
+   "pt": 8,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): 21 px between tiles"
+  },
+  "comp.px.tile.height": {
+   "pt": 72,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): a tile is 189 px (72 dp) tall"
+  },
+  "comp.px.tile.icon": {
+   "pt": 28,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): icons 74 px"
+  },
+  "comp.px.tile.icon-box": {
+   "pt": 56,
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): the wide tile's icon box, 147 px"
+  },
+  "comp.px.tile.icon-color": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): an unlit tile's icon #e0e6ee = on surface"
+  },
+  "comp.px.tile.icon-corner": {
+   "pt": 16,
+   "src": "judged:from the reference"
+  },
+  "comp.px.tile.label-color": {
+   "color": "@on_surface",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.tile.on-fill": {
+   "color": "@primary",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): a lit tile / icon box #a9cae8 = primary"
+  },
+  "comp.px.tile.on-icon-color": {
+   "color": "@on_primary",
+   "src": "judged:the icon on a lit tile"
+  },
+  "comp.px.tile.secondary-color": {
+   "color": "@on_surface_variant",
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref)"
+  },
+  "comp.px.tile.subtitle": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 12,
+    "line": 16,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): \"AndroidWifi\" 23 px"
+  },
+  "comp.px.tile.title": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 18,
+    "tracking": 0
+   },
+   "src": "measured:the Android 17 emulator's SystemUI (tools/shots/pxref): \"Wi-Fi\" caps 26 px"
+  },
   "comp.spotlight.card.material": {
    "ref": "sys.material.glass.dock",
    "src": "judged:Spotlight's card on the dock's glass, as the App Library's tiles"
@@ -3155,6 +3427,13 @@
    ],
    "src": "judged:and let go"
   },
+  "motion.px.expand": {
+   "spring": [
+    0.4,
+    0.95
+   ],
+   "src": "judged:Material's spatial spring, near critically damped"
+  },
   "motion.scroll.deceleration": {
    "factor": 0.998,
    "src": "judged:UIScrollView's normal deceleration (per ms)"
@@ -3403,6 +3682,10 @@
    "ref": "ref.color.separators.non-opaque",
    "src": "kit:VariableID:509:77495"
   },
+  "sys.font.family": {
+   "choice": "inter",
+   "src": "judged:Inter, the closest open font to SF Pro (bundled)"
+  },
   "sys.glass.label.dark-from": {
    "factor": 0.56,
    "src": "judged:text on glass straight on the wallpaper is white (with its shadow) up to this brightness behind the tinted glass, dark only over clearly light glass (Matheesha: dark labels over a darker wallpaper were hard to read; the old blend 0.40-0.52 gave grey text)"
@@ -3419,6 +3702,30 @@
    "light": "#ffffff30",
    "dark": "#00000052",
    "src": "judged:the glass's own tint: light in light mode, dark in dark mode (the dock's)"
+  },
+  "sys.layout.drawer": {
+   "choice": "app-library",
+   "src": "judged:iOS 27: the App Library, a page after the last"
+  },
+  "sys.layout.home": {
+   "choice": "ios",
+   "src": "judged:iOS 27: icon grid, glass dock, Search pill above it"
+  },
+  "sys.layout.menu": {
+   "choice": "ios",
+   "src": "judged:iOS 27: the item lifts, the menu is glass"
+  },
+  "sys.layout.shade": {
+   "choice": "ios",
+   "src": "judged:iOS 27: Notification Center (pull from the left) and Control Center (from the right)"
+  },
+  "sys.layout.statusbar": {
+   "choice": "ios",
+   "src": "judged:iOS 27: time on the left, battery as a cell on the right"
+  },
+  "sys.layout.switcher": {
+   "choice": "deck",
+   "src": "judged:iOS 27: the App Switcher's deck of cards"
   },
   "sys.material.glass.clear": {
    "ref": "ref.material.liquid-glass.clear",

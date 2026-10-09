@@ -1,0 +1,14 @@
+{
+ "format": 1,
+ "name": "Pixel",
+ "author": "Launcher (from Android 16 on a Pixel, measured on the Android 17 emulator)",
+ "version": "0.1",
+ "extends": "ios27",
+ "_about": "Android 16 as a Pixel shows it: Material You colours from the wallpaper (the system's roles, @primary...), the device's sans-serif, one dp per point, and Android's own layouts where they differ (the shade first). Only what differs from iOS 27 is written here. References: tools/shots/pxref, docs/PIXEL_PROFILE.md.",
+ "tokens": {
+  "sys.layout.shade": {"choice": "pixel", "src": "measured:Android 16: one panel, Quick Settings over the notifications"},
+  "sys.font.family": {"choice": "system", "src": "judged:the device's sans-serif (Google Sans on a Pixel, Roboto elsewhere)"},
+  "sys.scale.policy": {"choice": "density", "src": "judged:Android sizes in dp"},
+  "ref.color.accents.blue": {"color": "@primary", "src": "judged:Material You: the accent is the wallpaper's primary"}
+ }
+}

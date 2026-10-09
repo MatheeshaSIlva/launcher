@@ -70,7 +70,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         fun quietStarts(on: Boolean)
     }
 
-    enum class Panel { NC, CC }
+    /** NC, CC: iOS 27's Notification Center and Control Center; PX: Android 16's one panel ([PixelShadeView]). */
+    enum class Panel { NC, CC, PX }
+
+    /** The theme's shade layout is Android 16's (`sys.layout.shade` = "pixel"): one panel from anywhere along the top. */
+    private fun pixel() = try { dev.launcher.app.design.Design.choice(PxTokens.LAYOUT) == "pixel" } catch (_: Throwable) { false }
 
     private val root = Root(ctx)
     val bar = StatusBarView(ctx)
@@ -91,6 +95,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val cc: ControlCenterView
     private val gallery: CcGallery
     private val nc: NotificationCenterView
+    private val px: PixelShadeView
     private val banner: BannerView
     private var bannerArea: android.graphics.RectF? = null
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
@@ -120,7 +125,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val onAppearance: () -> Unit = {
         if (!appearancePending.getAndSet(true)) handler.post {
             appearancePending.set(false)
-            cc.invalidate(); nc.invalidate(); gallery.invalidate(); bar.invalidate(); banner.restyle()
+            cc.invalidate(); nc.invalidate(); px.invalidate(); gallery.invalidate(); bar.invalidate(); banner.restyle()
         }
     }
 
@@ -161,6 +166,19 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override val torchOn get() = state.torch
             override fun camera() = openCamera()
         })
+        px = PixelShadeView(ctx, object : PixelShadeView.Host {
+            override val state get() = this@Shade.state
+            override val media get() = this@Shade.media
+            override val barHeight get() = this@Shade.barHeight
+            override fun closeDrag(phase: Int, dy: Float, vy: Float) = panelDrag(phase, dy, vy)
+            override fun close() = this@Shade.close()
+            override fun launch(i: Intent?) = launchIntent(i)
+            override fun open(item: Notifs.Item, from: android.graphics.RectF?): Boolean = openFrom(item, from)
+            override fun send(pi: PendingIntent?): Boolean = pi != null && sendIntent(pi, closePanel = true)
+            override fun powerMenu() { close(); nav.powerMenu() }
+            override fun timeRight(): Float = bar.timeRight
+            override fun expandChanged() { if (panel == Panel.PX) applyProgress() }
+        })
         banner = BannerView(ctx, object : BannerView.Host {
             override val barHeight get() = this@Shade.barHeight
             // Home resumed: the window events alone left it out after Home came back with a plain FrameLayout event (the
@@ -171,7 +189,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (panel != null) close()
                 Unlock.then(ctx, "open a notification of ${item.pkg}") { Notifs.open(ctx, item) }
             }
-            override fun openNotificationCenter() { begin(Panel.NC); progress.snapTo(0.12f); openFully(0f) }
+            override fun openNotificationCenter() { begin(if (pixel()) Panel.PX else Panel.NC); progress.snapTo(0.12f); openFully(0f) }
             override fun send(pi: PendingIntent, closePanel: Boolean): Boolean =
                 Notifs.send(ctx, pi).also { if (it && closePanel && panel != null) close() }
             override fun dismissed(item: Notifs.Item) { quiet += item.key }
@@ -192,6 +210,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val mp = FrameLayout.LayoutParams.MATCH_PARENT
         root.addView(backdrop, FrameLayout.LayoutParams(mp, mp))
         root.addView(nc, FrameLayout.LayoutParams(mp, mp))
+        root.addView(px, FrameLayout.LayoutParams(mp, mp))
         root.addView(cc, FrameLayout.LayoutParams(mp, mp))
         root.addView(gallery, FrameLayout.LayoutParams(mp, mp))
         root.addView(launchCard, FrameLayout.LayoutParams(mp, mp))
@@ -202,7 +221,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (Notifs.connected) seen = Notifs.items.associate { it.key to it.postTime }
         cc.alpha = 1f
         bar.onHiddenChanged = { updateTouchable() }
-        state.addListener { cc.syncActive(); cc.syncSubs(); nc.invalidate() }
+        state.addListener { cc.syncActive(); cc.syncSubs(); nc.invalidate(); px.stateChanged() }
         // Light and dark cross-fade (Appearance, on the main thread): the panels draw every frame of it, as home does (they
         // did not listen, and caught up late in one step).
         android.os.Handler(android.os.Looper.getMainLooper()).post { dev.launcher.app.theme.Appearance.addListener(onAppearance) }
@@ -376,7 +395,21 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 nc.progress = p
                 bar.setPanel(0f, k * (1f - launchBarK()), nc.wantsDarkContent(), 0f)
             }
+            Panel.PX -> {
+                px.progress = p
+                // What is behind, blurred and dimmed (the panel's background token), live where the system can blur.
+                val live = liveBlur.available
+                backdrop.live = live
+                val bk = kotlin.math.sqrt(k)
+                if (live) liveBlur.set(bk, true)
+                backdrop.set(blurRadius(PxTokens.BACKGROUND) * bk, dimOf(PxTokens.BACKGROUND) * bk, (p / 0.12f).coerceIn(0f, 1f))
+                bar.setPanel(0f, 0f, 0f, 0f)
+                val kb = k * (1f - launchBarK())
+                bar.setPixel(kb, 1f - dev.launcher.app.theme.Appearance.dark, kb * px.expandK)
+            }
             null -> {
+                px.progress = 0f
+                bar.setPixel(0f, 0f, 0f)
                 cc.progress = 0f
                 nc.progress = 0f
                 backdrop.set(0f, 0f, 0f)
@@ -405,31 +438,47 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // The touchable region widens once the finger lifts (openFully): changed while the window holds the touch, the
         // system cancelled the pull (seen on the emulator). The pull itself stays ours whatever the region.
         nav.shadeChanged(true)
-        if (p == Panel.CC) {
-            state.readAll()
-            state.readDetails()
-            if (cc.hasAppTiles()) AppTiles.readStates()
-            prepareBackdrop()
-        } else {
-            nc.prepare()
-            media.refresh()
+        when (p) {
+            Panel.CC -> {
+                state.readAll()
+                state.readDetails()
+                if (cc.hasAppTiles()) AppTiles.readStates()
+                prepareBackdrop()
+            }
+            Panel.PX -> {
+                state.readAll()
+                state.readDetails()
+                media.refresh()
+                px.prepare()
+                prepareBackdrop()
+            }
+            Panel.NC -> {
+                nc.prepare()
+                media.refresh()
+            }
         }
-        AppLog.log("[shade] ${if (p == Panel.CC) "Control Center" else "Notification Center"} opening")
+        AppLog.log("[shade] ${when (p) { Panel.CC -> "Control Center"; Panel.PX -> "the Pixel shade"; else -> "Notification Center" }} opening")
     }
 
     /**
      * Control Center's background (the kit's overlay: a background blur of 24, black 50 %): its blur as Android's blur
      * radius (px), and how much it darkens (0..1).
      */
-    private fun ccBlurRadius(): Float {
-        val m = dev.launcher.app.design.Design.material(CcTokens.BACKGROUND)
+    private fun ccBlurRadius(): Float = blurRadius(CcTokens.BACKGROUND)
+
+    /** [key]'s frost as Android's blur radius (px). */
+    private fun blurRadius(key: dev.launcher.app.design.MaterialKey): Float {
+        val m = dev.launcher.app.design.Design.material(key)
         val unit = dev.launcher.app.design.Scale.unitPx(ctx, ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels))
         return dev.launcher.app.design.Blur.renderRadius(dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * dev.launcher.app.theme.Appearance.dark, unit))
     }
 
-    private fun ccDim(): Float {
+    private fun ccDim(): Float = dimOf(CcTokens.BACKGROUND)
+
+    /** How much [key]'s fills darken what is behind (0..1). */
+    private fun dimOf(key: dev.launcher.app.design.MaterialKey): Float {
         var keep = 1f
-        for (f in dev.launcher.app.design.Design.material(CcTokens.BACKGROUND).fills) {
+        for (f in dev.launcher.app.design.Design.material(key).fills) {
             val op = f.opacity + (f.opacityDark - f.opacity) * dev.launcher.app.theme.Appearance.dark
             val col = dev.launcher.app.design.Design.color(f.color)
             val l = (0.2126f * ((col shr 16) and 0xFF) + 0.7152f * ((col shr 8) and 0xFF) + 0.0722f * (col and 0xFF)) / 255f
@@ -441,8 +490,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun prepareBackdrop() {
         val t0 = SystemClock.uptimeMillis()
         nav.backdrop { src ->
-            if (panel != Panel.CC) return@backdrop
+            if (panel != Panel.CC && panel != Panel.PX) return@backdrop
             backdrop.source = src
+            if (panel == Panel.PX) return@backdrop
             if (src == null) { surfaces.setBackdrop(null, null); cc.invalidate(); return@backdrop }
             BlurBaker.bake(src, root.width, root.height, 0.25f, ccBlurRadius(), ((ccDim() * 255).toInt() shl 24), handler) { bmp, m ->
                 if (panel != Panel.CC || backdrop.source !== src) return@bake
@@ -464,6 +514,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         applyProgress()
         cc.onClosed()
         nc.onClosed()
+        px.onClosed()
         liveBlur.set(0f, false)
         gallery.dismissNow()
         backdrop.source = null
@@ -482,7 +533,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     /** Closes the open panel (animated). */
     fun close(velocity: Float = progress.velocity) {
         if (panel == null) return
-        progress.animateTo(0f, if (panel == Panel.NC) NC_CLOSE else CC_CLOSE, velocity.coerceAtMost(0f))
+        progress.animateTo(0f, if (panel == Panel.CC) CC_CLOSE else NC_CLOSE, velocity.coerceAtMost(0f))
         // iOS 27: the controls lift a few points as they fade; ours also fold back into the corner (ControlCenterView.closing).
         if (panel == Panel.CC) { cc.closing(true); ccOffset.animateTo(-8f * u(), CC_CLOSE) }
     }
@@ -492,7 +543,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private fun openFully(velocity: Float) {
         if (locked) focusHolder.take()
-        progress.animateTo(1f, if (panel == Panel.NC) NC_OPEN else ccOpen(), velocity)
+        progress.animateTo(1f, if (panel == Panel.CC) ccOpen() else NC_OPEN, velocity)
         if (panel == Panel.CC) { cc.closing(false); ccOffset.animateTo(0f, CC_SETTLE) }
         regionOpen = true
         updateTouchable()
@@ -529,7 +580,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 Touch.PULL -> {
                     pulling = false
                     takenOver = false
-                    pullPanel = if (e.rawX >= ccZoneLeft()) Panel.CC else Panel.NC
+                    pullPanel = if (pixel()) Panel.PX else if (e.rawX >= ccZoneLeft()) Panel.CC else Panel.NC
                     startStream()
                 }
                 Touch.BOTTOM -> panelDrag(0, 0f, 0f)
@@ -542,7 +593,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         when (touch) {
             Touch.GALLERY -> gallery.dispatchTouchEvent(e)
             Touch.BANNER -> banner.dispatchTouchEvent(e)
-            Touch.PANEL -> (if (panel == Panel.CC) cc else nc).dispatchTouchEvent(e)
+            Touch.PANEL -> when (panel) { Panel.CC -> cc; Panel.PX -> px; else -> nc }.dispatchTouchEvent(e)
             Touch.PULL -> pull(e)
             Touch.BOTTOM -> when (e.actionMasked) {
                 MotionEvent.ACTION_MOVE -> panelDrag(1, e.rawY - downY, 0f)
@@ -722,11 +773,16 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun fingerProgress(y: Float, dy: Float): Float = when (panel) {
         // Notification Center: its bottom edge is under the finger.
         Panel.NC -> (y / root.height).coerceAtLeast(0f).let { if (it > 1f) 1f + Motion.rubberBand(it - 1f, 0.5f) else it }
+        // The Pixel shade: its content comes down with the finger over a third of the screen.
+        Panel.PX -> (dy / pxTravel()).coerceAtLeast(0f).let { if (it > 1f) 1f + Motion.rubberBand((it - 1f) * pxTravel(), root.height.toFloat()) / pxTravel() else it }
         // Control Center: fully there after a short pull; past it, the finger pulls the controls down (ccOffset).
         else -> (dy / ccTravel()).coerceIn(0f, 1f)
     }
 
-    private fun travel() = if (panel == Panel.NC) root.height.toFloat() else ccTravel()
+    private fun travel() = when (panel) { Panel.NC -> root.height.toFloat(); Panel.PX -> pxTravel(); else -> ccTravel() }
+
+    /** How far the finger pulls the Pixel shade fully open (px). */
+    private fun pxTravel() = root.height * 0.32f
 
     private fun release(vy: Float) {
         val v = vy / travel()
@@ -780,6 +836,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         seen = items.associate { it.key to it.postTime }
         // A shown banner whose notification went (or stopped ringing) goes; the others take up their changes.
         banner.sync(items)
+        if (panel == Panel.PX) px.notifsChanged()
         quiet.retainAll { k -> items.any { it.key == k && it.urgent } }
         // The first list (the listener connected): what was already there does not alert again, but a call still ringing
         // shows (the app restarted while it rang).

@@ -67,7 +67,7 @@ class Theme(
                 val l = color(t.optString("light").ifEmpty { t.getString("dark") })
                 Value.Color(l, if (t.has("dark")) color(t.getString("dark")) else l)
             }
-            t.has("color") -> color(t.getString("color")).let { Value.Color(it, it) }
+            t.has("color") -> t.getString("color").let { s -> if (s.startsWith("@")) dynamicPair(s).let { Value.Color(it.first, it.second) } else color(s).let { Value.Color(it, it) } }
             t.has("pt") -> Value.Number(t.getDouble("pt").toFloat(), NumUnit.PT)
             t.has("fraction") -> Value.Number(t.getDouble("fraction").toFloat(), NumUnit.FRACTION)
             t.has("percent") -> Value.Number(t.getDouble("percent").toFloat(), NumUnit.PERCENT)
@@ -107,14 +107,44 @@ class Theme(
 
         private fun <T> list(a: JSONArray?, f: (JSONArray) -> T): List<T> = if (a == null) emptyList() else List(a.length()) { f(a.getJSONArray(it)) }
 
-        /** `#rrggbb` / `#rrggbbaa` (alpha last), `#light|#dark`, or `{key}` (a colour token). */
+        /** `#rrggbb` / `#rrggbbaa` (alpha last), `#light|#dark`, `@role` (the system's), or `{key}` (a colour token). */
         fun colorValue(s: String): ColorValue = when {
             s.startsWith("{") && s.endsWith("}") -> ColorValue.Ref(s.substring(1, s.length - 1))
+            s.startsWith("@") -> dynamicPair(s).let { ColorValue.Literal(it.first, it.second) }
             '|' in s -> s.split('|').let { ColorValue.Literal(color(it[0]), color(it[1])) }
             else -> color(s).let { ColorValue.Literal(it, it) }
         }
 
+        /**
+         * The system's colours (Android's dynamic palette, from the wallpaper: Material You), looked up by name in
+         * `android.R.color` (null: unknown or no system). Set by the app; in tests nothing is set and a grey stands in.
+         */
+        @Volatile var systemColor: (String) -> Int? = { null }
+
+        /** Bumped while parsing whenever a theme names a system colour (a theme that does is read again when they change). */
+        @Volatile var usedSystemColors = false
+
+        /**
+         * `@name` (a role: light and dark, from `system_<name>_light` and `_dark`, Android 14's Material roles such as
+         * `@primary`, `@surface_container_high`, `@on_surface_variant`) or `@system_...` (one exact colour of the palette,
+         * `@system_accent1_200`, the same in both modes). An alpha may follow: `@primary/40` (percent).
+         */
+        fun dynamicPair(s: String): Pair<Int, Int> {
+            usedSystemColors = true
+            val body = s.removePrefix("@")
+            val name = body.substringBefore('/')
+            val alpha = body.substringAfter('/', "").toIntOrNull()?.coerceIn(0, 100)
+            fun one(n: String) = systemColor(n) ?: FALLBACK_SYSTEM
+            val (l, d) = if (name.startsWith("system_")) one(name).let { it to it } else one("system_${name}_light") to one("system_${name}_dark")
+            fun a(c: Int) = if (alpha == null) c else ((alpha * 255 / 100) shl 24) or (c and 0xFFFFFF)
+            return a(l) to a(d)
+        }
+
+        /** What a system colour is when there is none to read (tests, an old Android). */
+        const val FALLBACK_SYSTEM = 0xFF808080.toInt()
+
         fun color(s: String): Int {
+            if (s.startsWith("@")) return dynamicPair(s).first
             require(s.startsWith("#") && (s.length == 7 || s.length == 9)) { "colour '$s': expected #rrggbb or #rrggbbaa" }
             val rgb = s.substring(1, 7).toLong(16).toInt()
             val a = if (s.length == 9) s.substring(7, 9).toInt(16) else 0xFF

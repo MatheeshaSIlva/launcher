@@ -49,6 +49,8 @@ object Design {
     fun init(ctx: Context) {
         if (chain.isNotEmpty()) return
         appCtx = ctx.applicationContext
+        // The system's palette (Material You), for themes that name its colours (`@primary`).
+        Theme.systemColor = { name -> systemColor(name) }
         activeId = try { File(appCtx.filesDir, ACTIVE).takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null } } catch (_: Throwable) { null } ?: DEFAULT_THEME
         if (!load(activeId)) { activeId = DEFAULT_THEME; load(DEFAULT_THEME) }
         AppLog.log("[design] theme '$themeName' (${chain.joinToString(" < ") { it.name }}) ${resolver.keys().size} tokens, ${user.size} edited")
@@ -58,6 +60,8 @@ object Design {
         // Senders must hold DUMP (adb's shell does; other apps cannot).
         val r = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: android.content.Intent) {
+                // --ez palette true: logs the system's colours (the Material roles and the tonal palette), for theme work.
+                if (i.getBooleanExtra("palette", false)) { logPalette(); return }
                 val id = i.getStringExtra("theme")
                 if (id != null) setTheme(id) else reload()
             }
@@ -114,7 +118,9 @@ object Design {
      * same kind as [DEFAULT_THEME]'s (a missing or mistyped token would fail where it is drawn); else nothing changes.
      */
     private fun load(id: String): Boolean {
+        Theme.usedSystemColors = false
         val c = try { chainOf(id) } catch (t: Throwable) { AppLog.log("[design] theme '$id' cannot be used: ${t.message}"); return false }
+        val dynamic = Theme.usedSystemColors
         val edits = try {
             val f = File(appCtx.filesDir, userFile(id))
             if (f.exists()) Theme.parse(f.readText()).entries else emptyMap()
@@ -123,10 +129,53 @@ object Design {
         val problem = if (id == DEFAULT_THEME && c.size == 1) checkResolves(layers) else checkAgainstDefault(layers)
         if (problem != null) { AppLog.log("[design] theme '$id' cannot be used: $problem"); return false }
         chain = c
+        usesSystemColors = dynamic
+        systemColorsAt = systemColorStamp()
         user.clear()
         user.putAll(edits)
         rebuild()
         return true
+    }
+
+    /** The active theme names the system's colours (they change with the wallpaper: read again then). */
+    private var usesSystemColors = false
+    private var systemColorsAt = 0L
+
+    /**
+     * The configuration changed (the app's [android.content.ComponentCallbacks]): the system's palette may have changed with
+     * the wallpaper (or light and dark). A theme that uses it is read again when its colours really changed.
+     */
+    fun onConfiguration() {
+        if (!usesSystemColors || chain.isEmpty()) return
+        val stamp = systemColorStamp()
+        if (stamp == systemColorsAt) return
+        if (load(activeId)) changedOutside("system colours changed")
+    }
+
+    /** A fingerprint of the system palette's key colours (equal: nothing to read again). */
+    private fun systemColorStamp(): Long {
+        var h = 17L
+        for (n in listOf("system_accent1_500", "system_accent2_500", "system_accent3_500", "system_neutral1_500", "system_neutral2_500"))
+            h = h * 31 + (systemColor(n) ?: 0)
+        return h
+    }
+
+    private fun logPalette() {
+        val names = android.R.color::class.java.fields.map { it.name }.filter { it.startsWith("system_") }.sorted()
+        val out = names.mapNotNull { n -> systemColor(n)?.let { "$n=#" + String.format("%08x", it).substring(2) } }
+        out.chunked(12).forEach { AppLog.log("[design] palette " + it.joinToString(" ")) }
+    }
+
+    private val colorIds = HashMap<String, Int>()
+
+    /** The system colour [name] (an `android.R.color` field such as `system_primary_dark`), or null if there is none. */
+    private fun systemColor(name: String): Int? {
+        if (android.os.Build.VERSION.SDK_INT < 31) return null
+        val id = synchronized(colorIds) {
+            colorIds.getOrPut(name) { try { android.R.color::class.java.getField(name).getInt(null) } catch (_: Throwable) { 0 } }
+        }
+        if (id == 0) return null
+        return try { appCtx.resources.getColor(id, null) } catch (_: Throwable) { null }
     }
 
     /** [id] and the themes it is built on, the base first. */

@@ -186,6 +186,19 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     private var ccRow = 0f
+
+    // The Pixel shade (Android 16): the bar stays, its content in the panel's colours ([pxDark]), the time going as the
+    // panel expands (its large clock shows it).
+    private var px = 0f
+    private var pxDark = 0f
+    private var pxTimeGone = 0f
+
+    /** The Pixel shade is open by [k] (0..1), its content [darkContent] (0 white, 1 black), its time gone by [timeGone]. */
+    fun setPixel(k: Float, darkContent: Float, timeGone: Float) {
+        if (k == px && darkContent == pxDark && timeGone == pxTimeGone) return
+        px = k; pxDark = darkContent; pxTimeGone = timeGone
+        invalidate()
+    }
     private var rowAlpha = 1f
 
     /** Control Center's status row fades while its edit mode is on (iOS hides it there). */
@@ -197,6 +210,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     /** The left edge of the time (px), for panels that line their content up with the bar. */
     val sideMargin get() = SIDE_PT * u
+
+    /** Where the time ends (px): a panel may set its own text beside it (the Pixel shade's date). */
+    val timeRight get() = SIDE_PT * u + timeSlot.width
 
     /** Dev preview: a fixed state (every indicator at once when [busy]). */
     fun preview(busy: Boolean, level: Int, isCharging: Boolean, icons: List<Drawable> = emptyList()) {
@@ -574,13 +590,23 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val u = u
         val cy = centreLine()
         // White over Control Center, the wallpaper's choice over Notification Center, else the app's or home's.
-        val base = dark * (1f - cc) * (1f - nc) + ncDark * nc * (1f - cc)
+        val base0 = dark * (1f - cc) * (1f - nc) + ncDark * nc * (1f - cc)
+        val base = base0 + (pxDark - base0) * px
         val k = (255 * (1f - base)).toInt()
         val content = Color.rgb(k, k, k)
 
         // Left group: fades as either panel opens (the time: Notification Center's clock shows it; Control Center has none).
-        val leftK = (1f - cc) * (1f - nc) * (1f - lockK)
-        for (s in leftSlots) drawSlot(c, s, s.x.value, cy - cc * 6f * u, content, leftK)
+        val leftK = (1f - cc) * (1f - nc) * (1f - lockK) * (1f - pxTimeGone)
+        // In the Pixel shade the notification icons give way to the date beside the time (Android 16's first pull).
+        for (s in leftSlots) drawSlot(c, s, s.x.value, cy - cc * 6f * u, content, if (s === timeSlot) leftK else leftK * (1f - px))
+        if (px > 0.003f && leftK > 0.003f) {
+            label.color = content
+            label.alpha = (255 * px.coerceIn(0f, 1f) * leftK).toInt()
+            label.textSize = time.textSize * 0.92f
+            val d = java.text.SimpleDateFormat("EEE, MMM d", java.util.Locale.getDefault()).format(java.util.Date())
+            c.drawText(d, timeSlot.x.value + timeSlot.width + 18f * u, cy + 0.727f * label.textSize / 2f, label)
+            label.alpha = 255
+        }
 
         // Right group: down to Control Center's status row with cc. The network icons glide over to the row's left side
         // (iOS shows carrier, signal and Wi-Fi there), the percentage appears beside the battery.
