@@ -127,14 +127,26 @@ object Appearance {
     /** A number blended at the current appearance. */
     fun mix(light: Float, dark: Float): Float = light + (dark - light) * this.dark
 
-    // Text and lines on the materials (App Library, folders, Spotlight, menus, sheets). iOS label colours.
-    val label get() = mix(0xF2000000.toInt(), 0xFFFFFFFF.toInt())
-    val secondaryLabel get() = mix(0x993C3C43.toInt(), 0x99EBEBF5.toInt())
+    // Text and lines on the materials (App Library, folders, Spotlight, menus, sheets): the theme's (`sys.color.material.*`).
+    private val LABEL = dev.launcher.app.design.ColorKey("sys.color.material.label")
+    private val SECONDARY_LABEL = dev.launcher.app.design.ColorKey("sys.color.material.secondary-label")
+    private val TERTIARY_LABEL = dev.launcher.app.design.ColorKey("sys.color.material.tertiary-label")
+    private val SEPARATOR = dev.launcher.app.design.ColorKey("sys.color.material.separator")
+    private val PRESS = dev.launcher.app.design.ColorKey("sys.color.press")
+    private val DESTRUCTIVE = dev.launcher.app.design.ColorKey("sys.color.material.destructive")
+    private val GLASS_TINT = dev.launcher.app.design.ColorKey("sys.glass.tint")
+    private val WALLPAPER_DIM = dev.launcher.app.design.NumberKey("sys.appearance.wallpaper-dim")
+    /** The palette's tokens (for the theme's checks). */
+    val TOKENS = listOf(LABEL, SECONDARY_LABEL, TERTIARY_LABEL, SEPARATOR, PRESS, DESTRUCTIVE, GLASS_TINT).map { it.name }
+    val NUMBER_TOKENS = listOf(WALLPAPER_DIM).map { it.name }
+
+    val label get() = dev.launcher.app.design.Design.color(LABEL)
+    val secondaryLabel get() = dev.launcher.app.design.Design.color(SECONDARY_LABEL)
     /** Section letters, the A-Z index, placeholders: a little stronger than iOS's tertiary label (readability over any wallpaper). */
-    val tertiaryLabel get() = mix(0x8C3C3C43.toInt(), 0xB3EBEBF5.toInt())
-    val separator get() = mix(0x24000000, 0x26FFFFFF)
-    val pressFill get() = mix(0x14000000, 0x1FFFFFFF)
-    val destructive get() = mix(0xFFFF3B30.toInt(), 0xFFFF453A.toInt())
+    val tertiaryLabel get() = dev.launcher.app.design.Design.color(TERTIARY_LABEL)
+    val separator get() = dev.launcher.app.design.Design.color(SEPARATOR)
+    val pressFill get() = dev.launcher.app.design.Design.color(PRESS)
+    val destructive get() = dev.launcher.app.design.Design.color(DESTRUCTIVE)
     /** A soft dark shadow under white text keeps it readable over light parts of a dark material; dark text needs none. */
     val textShadowStrength get() = dark
 
@@ -166,10 +178,10 @@ object Appearance {
     /** Home behind a menu or a sheet (blurred): the same scrim, slightly stronger (text sits right over it). */
     val scrim get() = veil(0.58f, 0.24f, 0.10f, 0.55f, 0.24f, 0.62f)
     /** Dark mode dims the wallpaper a little (iOS: "Dark Appearance Dims Wallpaper"). */
-    val wallpaperDim get() = mix(0f, 0.14f)
+    val wallpaperDim get() = mix(0f, dev.launcher.app.design.Design.num(WALLPAPER_DIM))
 
     /** The glass's tint (the dock's): light in light mode, dark in dark mode. ARGB, alpha = amount. */
-    val glassTint get() = mix(0x30FFFFFF, 0x52000000)
+    val glassTint get() = dev.launcher.app.design.Design.color(GLASS_TINT)
 
     /** [over] laid on top of [under] (two ARGB veils as one). */
     fun overlay(under: Int, over: Int): Int {

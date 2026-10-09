@@ -34,12 +34,14 @@ class MenuSpec(prefix: String) {
     val label = ColorKey("$prefix.label")
     val destructive = ColorKey("$prefix.destructive")
     val press = ColorKey("$prefix.press")
+    /** The panel without the glass renderer. */
+    val fallback = ColorKey("$prefix.fallback")
     /** A symbol given as a drawable ([MenuPainter.Item.symbol]): its size, tinted as the label. */
     val symbol = NumberKey("$prefix.symbol")
     /** How large the panel starts as it grows out of what it belongs to (a fraction of its size). */
     val growFrom = NumberKey("$prefix.grow-from")
 
-    val all get() = listOf(material, corner, width, row, padTop, padBottom, symbolX, labelX, type, label, destructive, press, symbol, growFrom).map { it.name }
+    val all get() = listOf(material, corner, width, row, padTop, padBottom, symbolX, labelX, type, label, destructive, press, symbol, growFrom, fallback).map { it.name }
 
     companion object {
         /** Home's long-press and Edit menus (the kit's Home Screen Quick Actions). */
@@ -158,7 +160,7 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
         val kk = k.coerceIn(0f, 1f)
         if (kk <= 0.003f) return
         press.color = Design.color(spec.press)
-        fallback.color = Appearance.mix(0xF2F2F2F7.toInt(), 0xD92C2C2E.toInt())
+        fallback.color = Design.color(spec.fallback)
         matrixAt(k, panelMatrix)
         c.save()
         c.concat(panelMatrix)

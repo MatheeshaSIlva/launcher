@@ -77,7 +77,7 @@ class DesignThemeTest {
                 k.endsWith("material") -> Value.Mat::class
                 k.endsWith(".type") -> Value.Text::class
                 k.endsWith(".label") || k.endsWith(".destructive") || k.endsWith(".press") ||
-                    k.endsWith(".light") || k.endsWith(".dark") || k.endsWith(".shadow") || k.contains(".tint-") -> Value.Color::class
+                    k.endsWith(".light") || k.endsWith(".dark") || k.endsWith(".shadow") || k.contains(".tint-") || k.endsWith("-color") -> Value.Color::class
                 else -> Value.Number::class
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
@@ -86,7 +86,7 @@ class DesignThemeTest {
         for (spec in listOf(dev.launcher.app.components.MenuSpec.HOME, dev.launcher.app.components.MenuSpec.SWITCHER, dev.launcher.app.components.MenuSpec.NC)) {
             assertTrue(spec.material.name, r.resolve(spec.material.name) is Value.Mat)
             assertTrue(spec.type.name, r.resolve(spec.type.name) is Value.Text)
-            for (k in listOf(spec.label, spec.destructive, spec.press)) assertTrue(k.name, r.resolve(k.name) is Value.Color)
+            for (k in listOf(spec.label, spec.destructive, spec.press, spec.fallback)) assertTrue(k.name, r.resolve(k.name) is Value.Color)
             for (k in listOf(spec.corner, spec.width, spec.row, spec.padTop, spec.padBottom, spec.symbolX, spec.labelX, spec.symbol, spec.growFrom))
                 assertTrue(k.name, r.resolve(k.name) is Value.Number)
         }
@@ -100,6 +100,9 @@ class DesignThemeTest {
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
         }
+        // The appearance's palette.
+        for (k in dev.launcher.app.theme.Appearance.TOKENS) assertTrue(k, r.resolve(k) is Value.Color)
+        for (k in dev.launcher.app.theme.Appearance.NUMBER_TOKENS) assertTrue(k, r.resolve(k) is Value.Number)
         // The status bar's.
         for (k in dev.launcher.app.statusbar.StatusBarTokens.ALL) assertTrue(k, r.resolve(k) is Value.Color)
         // The banners'.

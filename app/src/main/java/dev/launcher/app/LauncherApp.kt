@@ -9,8 +9,9 @@ class LauncherApp : Application() {
         AppLog.log("BUILD ${buildStamp()}")
         Watchdog.startHeartbeat()
         dev.launcher.app.theme.Fonts.init(this)
-        dev.launcher.app.theme.Appearance.init(this)
+        // The theme before the appearance: the appearance's palette is the theme's.
         dev.launcher.app.design.Design.init(this)
+        dev.launcher.app.theme.Appearance.init(this)
         // Dark mode switched anywhere (also while an app is in front): home crossfades at once, so it is already in the new
         // appearance (and its picture behind closing cards too) when it is next seen.
         registerComponentCallbacks(object : android.content.ComponentCallbacks {

@@ -2054,6 +2054,16 @@
    "ref": "sys.material.glass.dock",
    "src": "kit:558:50551"
   },
+  "comp.home.field.clear-color": {
+   "light": "#3c3c4399",
+   "dark": "#ffffffd9",
+   "src": "judged:a search field's clear button"
+  },
+  "comp.home.field.clear-symbol-color": {
+   "light": "#ffffff",
+   "dark": "#1c1c1e",
+   "src": "judged:its cross"
+  },
   "comp.home.field.material": {
    "ref": "sys.material.glass.small-active",
    "src": "kit:5720:33170 (the 48 pt search field: the small glass, active)"
@@ -2085,6 +2095,11 @@
   "comp.home.menu.destructive": {
    "ref": "ref.color.accents.red",
    "src": "kit:5622:50175 (#ff383c)"
+  },
+  "comp.home.menu.fallback": {
+   "light": "#f2f2f7f2",
+   "dark": "#2c2c2ed9",
+   "src": "judged:a menu without the glass renderer"
   },
   "comp.home.menu.grow-from": {
    "factor": 0.8,
@@ -2291,6 +2306,10 @@
   },
   "comp.nc.menu.destructive": {
    "ref": "ref.color.accents.red",
+   "src": "judged:as home's menus"
+  },
+  "comp.nc.menu.fallback": {
+   "ref": "comp.home.menu.fallback",
    "src": "judged:as home's menus"
   },
   "comp.nc.menu.grow-from": {
@@ -2525,6 +2544,10 @@
    "ref": "comp.home.menu.destructive",
    "src": "judged:the App Switcher's app menu looks as home's menus"
   },
+  "comp.switcher.menu.fallback": {
+   "ref": "comp.home.menu.fallback",
+   "src": "judged:the App Switcher's app menu looks as home's menus"
+  },
   "comp.switcher.menu.grow-from": {
    "ref": "comp.home.menu.grow-from",
    "src": "judged:the App Switcher's app menu looks as home's menus"
@@ -2581,9 +2604,23 @@
    "ref": "sys.material.glass.dock",
    "src": "judged:a widget's preview card on the dock's glass (as on home)"
   },
+  "comp.widgets.fallback-color": {
+   "light": "#f2f2f7f2",
+   "dark": "#202024e6",
+   "src": "judged:the gallery sheet without the glass renderer"
+  },
+  "comp.widgets.grabber-color": {
+   "light": "#0000004d",
+   "dark": "#ffffff59",
+   "src": "judged:the gallery sheet's grabber"
+  },
   "comp.widgets.sheet.material": {
    "ref": "sys.material.glass.regular",
    "src": "kit:10525:1636 (Sheet - iPhone, medium detent: the Regular glass); judged for the gallery's tall sheet (iOS 26's is glass)"
+  },
+  "sys.appearance.wallpaper-dim": {
+   "factor": 0.14,
+   "src": "judged:dark mode dims the wallpaper a little (iOS: \"Dark Appearance Dims Wallpaper\")"
   },
   "sys.color.accent": {
    "ref": "ref.color.accents.blue",
@@ -2629,9 +2666,39 @@
    "ref": "ref.color.labels-vibrant.secondary",
    "src": "kit:VariableID:5500:4616"
   },
+  "sys.color.material.destructive": {
+   "light": "#ff3b30",
+   "dark": "#ff453a",
+   "src": "judged:iOS's system red"
+  },
+  "sys.color.material.label": {
+   "light": "#000000f2",
+   "dark": "#ffffff",
+   "src": "judged:the kit's primary label (95 % in light)"
+  },
+  "sys.color.material.secondary-label": {
+   "light": "#3c3c4399",
+   "dark": "#ebebf599",
+   "src": "judged:the kit's secondary label (dark: 60 %)"
+  },
+  "sys.color.material.separator": {
+   "light": "#00000024",
+   "dark": "#ffffff26",
+   "src": "judged:lines on the materials"
+  },
+  "sys.color.material.tertiary-label": {
+   "light": "#3c3c438c",
+   "dark": "#ebebf5b3",
+   "src": "judged:a little stronger than the kit's tertiary label (readable over any wallpaper)"
+  },
   "sys.color.overlay": {
    "ref": "ref.color.overlays.default",
    "src": "kit:VariableID:513:90698"
+  },
+  "sys.color.press": {
+   "light": "#00000014",
+   "dark": "#ffffff1f",
+   "src": "judged:a pressed row or button"
   },
   "sys.color.separator": {
    "ref": "ref.color.separators.non-opaque",
@@ -2640,6 +2707,11 @@
   "sys.glass.rim": {
    "factor": 0.4,
    "src": "judged:Matheesha: the kit's hairline rims (its blur-0 drop shadows, linear burn #cccccc / #a6a6a6) read as a black outline over dark backdrops on the phone; 1 is the kit's"
+  },
+  "sys.glass.tint": {
+   "light": "#ffffff30",
+   "dark": "#00000052",
+   "src": "judged:the glass's own tint: light in light mode, dark in dark mode (the dock's)"
   },
   "sys.material.glass.clear": {
    "ref": "ref.material.liquid-glass.clear",

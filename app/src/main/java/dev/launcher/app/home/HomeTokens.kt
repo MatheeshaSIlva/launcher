@@ -40,6 +40,13 @@ object HomeTokens {
     val WIDGETS_BUTTON = MaterialKey("comp.widgets.button.material")
     val WIDGETS_CARD = MaterialKey("comp.widgets.card.material")
 
+    /** The widget gallery's sheet without the glass renderer, and its grabber. */
+    val WIDGETS_FALLBACK = dev.launcher.app.design.ColorKey("comp.widgets.fallback-color")
+    val WIDGETS_GRABBER = dev.launcher.app.design.ColorKey("comp.widgets.grabber-color")
+    /** A search field's clear button and its cross. */
+    val FIELD_CLEAR = dev.launcher.app.design.ColorKey("comp.home.field.clear-color")
+    val FIELD_CLEAR_SYMBOL = dev.launcher.app.design.ColorKey("comp.home.field.clear-symbol-color")
+
     /** Names under icons and widgets: white, or dark over a bright wallpaper (see [LabelTone]). */
     val LABEL_LIGHT = dev.launcher.app.design.ColorKey("comp.home.label.light")
     val LABEL_DARK = dev.launcher.app.design.ColorKey("comp.home.label.dark")
@@ -52,7 +59,7 @@ object HomeTokens {
 
     val ALL = listOf(DOCK, SEARCH, WIDGET, BUTTON, FIELD, LIBRARY_TILE, SPOTLIGHT_CARD, WIDGETS_SHEET, WIDGETS_BUTTON, WIDGETS_CARD, MENU, MENU_CORNER, MENU_WIDTH, MENU_ROW, MENU_PAD_TOP, MENU_PAD_BOTTOM, MENU_SYMBOL_X,
         MENU_LABEL_X, MENU_TYPE, MENU_LABEL, MENU_DESTRUCTIVE, MENU_PRESS, LABEL_LIGHT, LABEL_DARK, LABEL_SHADOW, LABEL_DARK_FROM, LABEL_DARK_FULL,
-        CLOCK_TINT_LIGHT, CLOCK_TINT_DARK).map { it.name }
+        CLOCK_TINT_LIGHT, CLOCK_TINT_DARK, WIDGETS_FALLBACK, WIDGETS_GRABBER, FIELD_CLEAR, FIELD_CLEAR_SYMBOL).map { it.name }
 }
 
 /**

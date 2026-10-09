@@ -151,8 +151,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private fun syncColors() {
         val a = Appearance
         val label = a.label
-        fallbackFill.color = a.mix(0xF2F2F2F7.toInt(), 0xE6202024.toInt())
-        grabber.color = a.mix(0x4D000000, 0x59FFFFFF)
+        fallbackFill.color = dev.launcher.app.design.Design.color(HomeTokens.WIDGETS_FALLBACK)
+        grabber.color = dev.launcher.app.design.Design.color(HomeTokens.WIDGETS_GRABBER)
         capsule.color = label
         capsuleRim.color = label
         fieldFill.color = label

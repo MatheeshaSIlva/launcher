@@ -177,6 +177,22 @@ SEED = {
     'sys.color.fill.secondary': {'ref': 'ref.color.fills.secondary', 'src': 'kit:VariableID:509:77491'},
     'sys.color.fill.tertiary': {'ref': 'ref.color.fills.tertiary', 'src': 'kit:VariableID:509:77493'},
     'sys.color.separator': {'ref': 'ref.color.separators.non-opaque', 'src': 'kit:VariableID:509:77495'},
+    # Text and lines on the materials (App Library, folders, Spotlight, menus, sheets): iOS's label colours, adjusted where
+    # the app needed it (they were Appearance's; kept as they were).
+    'sys.color.material.label': {'light': '#000000f2', 'dark': '#ffffff', 'src': "judged:the kit's primary label (95 % in light)"},
+    'sys.color.material.secondary-label': {'light': '#3c3c4399', 'dark': '#ebebf599', 'src': "judged:the kit's secondary label (dark: 60 %)"},
+    'sys.color.material.tertiary-label': {'light': '#3c3c438c', 'dark': '#ebebf5b3', 'src': "judged:a little stronger than the kit's tertiary label (readable over any wallpaper)"},
+    'sys.color.material.separator': {'light': '#00000024', 'dark': '#ffffff26', 'src': 'judged:lines on the materials'},
+    'sys.color.material.destructive': {'light': '#ff3b30', 'dark': '#ff453a', 'src': "judged:iOS's system red"},
+    'sys.color.press': {'light': '#00000014', 'dark': '#ffffff1f', 'src': 'judged:a pressed row or button'},
+    'sys.glass.tint': {'light': '#ffffff30', 'dark': '#00000052', 'src': "judged:the glass's own tint: light in light mode, dark in dark mode (the dock's)"},
+    'sys.appearance.wallpaper-dim': {'factor': 0.14, 'src': 'judged:dark mode dims the wallpaper a little (iOS: "Dark Appearance Dims Wallpaper")'},
+    # Fallbacks: a surface drawn without the glass renderer.
+    'comp.home.menu.fallback': {'light': '#f2f2f7f2', 'dark': '#2c2c2ed9', 'src': 'judged:a menu without the glass renderer'},
+    'comp.widgets.fallback-color': {'light': '#f2f2f7f2', 'dark': '#202024e6', 'src': 'judged:the gallery sheet without the glass renderer'},
+    'comp.widgets.grabber-color': {'light': '#0000004d', 'dark': '#ffffff59', 'src': "judged:the gallery sheet's grabber"},
+    'comp.home.field.clear-color': {'light': '#3c3c4399', 'dark': '#ffffffd9', 'src': "judged:a search field's clear button"},
+    'comp.home.field.clear-symbol-color': {'light': '#ffffff', 'dark': '#1c1c1e', 'src': 'judged:its cross'},
     'sys.color.overlay': {'ref': 'ref.color.overlays.default', 'src': 'kit:VariableID:513:90698'},
     'sys.color.accent': {'ref': 'ref.color.accents.blue', 'src': 'kit:VariableID:507:29166'},
     'sys.color.destructive': {'ref': 'ref.color.accents.red', 'src': 'kit:VariableID:509:77471'},
@@ -272,7 +288,7 @@ SEED = {
     # is home's menu, the button a capsule of the same glass.
     **{'comp.switcher.menu.' + _k: {'ref': 'comp.home.menu.' + _k, 'src': "judged:the App Switcher's app menu looks as home's menus"}
        for _k in ['material', 'corner', 'width', 'row', 'pad-top', 'pad-bottom', 'symbol-x', 'label-x', 'type', 'label', 'destructive', 'press',
-                  'symbol', 'grow-from']},
+                  'symbol', 'grow-from', 'fallback']},
     'comp.switcher.clear.material': {'ref': 'comp.home.menu.material', 'src': "judged:Clear All on the menus' glass (the Regular glass)"},
     'comp.switcher.clear.height': {'pt': 44, 'src': "judged:the kit's button height (a sheet's 44 pt buttons)"},
     'comp.switcher.clear.padding-x': {'pt': 22, 'src': 'judged:the label 22 pt from the capsule\'s ends'},
@@ -346,6 +362,7 @@ SEED = {
     'comp.nc.menu.label': {'color': '#ffffff', 'src': 'kit:143:62847'},
     'comp.nc.menu.destructive': {'ref': 'ref.color.accents.red', 'src': "judged:as home's menus"},
     'comp.nc.menu.press': {'color': '#ffffff26', 'src': 'judged:a pressed row on the clear glass (as before)'},
+    'comp.nc.menu.fallback': {'ref': 'comp.home.menu.fallback', 'src': "judged:as home's menus"},
     'comp.nc.menu.grow-from': {'factor': 0.6, 'src': 'judged:the menu grows out of the card from 60 % of its size (as before)'},
     'comp.nc.look.dim': {'color': '#00000066', 'src': 'judged:the rest of Notification Center dims behind a long look (the kit does not show it)'},
     'comp.nc.look.blur': {'pt': 25, 'src': 'judged:the list behind the long look is out of focus (the kit does not show it); a blur radius as the kit gives them (sigma 12.5 pt)'},

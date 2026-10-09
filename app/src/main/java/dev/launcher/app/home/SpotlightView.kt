@@ -588,8 +588,8 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         }
 
         override fun onDraw(c: Canvas) {
-            disc.color = Appearance.mix(0x993C3C43.toInt(), 0xD9FFFFFF.toInt())
-            cross.color = Appearance.mix(0xFFFFFFFF.toInt(), 0xFF1C1C1E.toInt())
+            disc.color = dev.launcher.app.design.Design.color(HomeTokens.FIELD_CLEAR)
+            cross.color = dev.launcher.app.design.Design.color(HomeTokens.FIELD_CLEAR_SYMBOL)
             disc.alpha = (Color.alpha(disc.color) * field.fade).toInt()
             cross.alpha = (Color.alpha(cross.color) * field.fade).toInt()
             val cx = width / 2f
