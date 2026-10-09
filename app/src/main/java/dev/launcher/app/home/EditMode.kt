@@ -68,6 +68,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         if (haptic) home.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         setBadges(true)
         startJiggle()
+        updateExclusion(force = true)
         host.editingChanged(true)
     }
 
@@ -77,6 +78,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         active = false
         setBadges(false)
         stopJiggle()
+        updateExclusion(force = true)
         // Empty pages go (the first page always stays).
         val l = host.layout
         if (l != null && l.pages.size > 1 && l.pages.drop(1).any { it.isEmpty() }) {
@@ -135,8 +137,36 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
                 for (v in p.itemViews()) wiggle(v, t)
             }
             host.dockView?.icons()?.forEach { wiggle(it, t) }
+            updateExclusion()
             Choreographer.getInstance().postFrameCallback(this)
         }
+    }
+
+    // Android's back gesture takes a touch that starts at a side edge (the window gets a cancel, home gets Back and leaves
+    // edit mode): a wide widget's resize handle lies in that band on the S24, and dragging it went back instead. While
+    // editing, the handles of the page on screen are kept out of it (looked at a few times a second as things move).
+    private var exclusionAt = 0L
+    private val homeAt = IntArray(2)
+
+    private fun updateExclusion(force: Boolean = false) {
+        if (android.os.Build.VERSION.SDK_INT < 29) return
+        val now = android.os.SystemClock.uptimeMillis()
+        if (!force && now - exclusionAt < 250) return
+        exclusionAt = now
+        val rects = ArrayList<android.graphics.Rect>()
+        if (active) {
+            home.getLocationOnScreen(homeAt)
+            val r = m.pt(34f)
+            for (v in host.pageViews.getOrNull(host.currentPage())?.itemViews() ?: emptyList()) {
+                if (v !is HomeWidgetView) continue
+                val c = v.handleCenter()
+                val o = screenOrigin(v as View)
+                val x = o[0] + c[0] - homeAt[0]
+                val y = o[1] + c[1] - homeAt[1]
+                rects += android.graphics.Rect((x - r).toInt(), (y - r).toInt(), (x + r).toInt(), (y + r).toInt())
+            }
+        }
+        if (rects != home.systemGestureExclusionRects) home.systemGestureExclusionRects = rects
     }
 
     private fun wiggle(v: View, t: Double) {

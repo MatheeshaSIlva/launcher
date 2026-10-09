@@ -481,7 +481,9 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
         val p = Picture()
         val c = p.beginRecording(maxOf(1, width), maxOf(1, height))
         recordingLook = true
-        try { draw(c) } finally { recordingLook = false; p.endRecording() }
+        // Clipped to the card's rounded corners here: a picture is drawn in software, where the card's outline does not
+        // clip, and the old look faded out with square corners while the card was resized.
+        try { drawCard(c) } finally { recordingLook = false; p.endRecording() }
         return p
     }
 

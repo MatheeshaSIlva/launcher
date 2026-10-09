@@ -193,7 +193,8 @@ copy it wholesale — port the working pieces cleanly. File map:
   focus for Back instead, 300 ms after a panel came to rest (during the pull already over the lock screen).
 - **Android's back gesture watches every window's side edges** (it pilfers the touch: our window gets ACTION_CANCEL):
   a pull from a top corner that starts sideways, a swipe from the right edge over a notification. Keep it off with
-  `setSystemGestureExclusionRects` (only where the touch lands matters). A window gets 200 dp per edge, counted from the
+  `setSystemGestureExclusionRects` (only where the touch lands matters). Home in edit mode too: a 4-wide widget's resize
+  handle is in the S24's right back band (the drag became Back and left edit mode); `EditMode.updateExclusion`. A window gets 200 dp per edge, counted from the
   bottom up, unless it requests the navigation bar hidden with BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE: the shade's window
   does, and must therefore never take the focus (the focused window controls the bars; it would hide the navigation bar).
 - **iOS reference capture** (`ios-reference/`, `tools/ios_ref/`, results in `docs/IOS27_KIT.md` and `docs/IOS27_MOTION.md`):

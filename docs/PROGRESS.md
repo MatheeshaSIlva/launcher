@@ -1795,3 +1795,9 @@ Found on the way:
 | Banners must have a live blur | Done on One UI: `SemBlurInfo` in window mode on a plate behind each banner (the system blurs what is behind, live), its colour curve set from the material (brightness map and the colour a luminosity fill keeps), the glass drawing only its own layers over it. Checked on a probe card over home next to the old glass (not on a banner: they are not captured on the phone): brightness 70 vs 61, saturation 0.51 vs 0.57. A test banner (log and frame stats only): over home 0 missed refreshes, GPU 1.3 ms a frame; over an app 2 missed while at rest (to look at). Where the system has no such blur, banners keep the glass over a blurred picture. |
 | Dragging icons to and from the dock | Checked on the emulator (4x slow motion). **Two defects, fixed:** dragged from the dock onto a page, the icon's new view faded in under the dragged copy (two icons for a few frames): a view the drag holds is tagged and skips its arrival; and the remove badge appeared at once when the copy landed: it grows back in. Into the dock: the others make room smoothly, clean. |
 | Home folders | Not built yet: the layout model has folders, nothing makes or shows them. |
+- Widget corners while resizing by dragging (Matheesha): **reproduced on the S24 and fixed.** The resize crossfades from a
+  recording of the widget's old look, made as a software `Picture`, which ignores the card's rounded outline: the old card
+  faded out with square corners. It is now clipped to the card's corners as it is recorded (frame-by-frame before/after on
+  the S24: square, then rounded). Found with it: a 4-wide widget's resize handle lies in the S24's right-edge back-gesture
+  band; dragging it became Back (edit mode ended, the resize stopped half-way). Edit mode keeps its handles out of the back
+  gesture now (checked: 4x2 to 2x2 from that handle on the S24).
