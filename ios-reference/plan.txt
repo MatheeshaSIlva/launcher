@@ -1,3 +1,3 @@
-normal: test01b_grantNotifications test45_ncList test46_ncHideShow
+normal: test50_settingsApp
 setup dark
-normal@dark: test45_ncList
+normal@dark: test50_settingsApp

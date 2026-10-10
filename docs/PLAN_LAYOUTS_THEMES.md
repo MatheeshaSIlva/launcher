@@ -67,6 +67,19 @@ behaviour were not Pixel's, it felt like a cheap copy, and after switching back 
 - **Icons**: mask shape, icon packs, themed (monochrome) icons.
 - **Context menu presentation**: lift and blur, or popup in place.
 - Theme files extend each other and hold only what differs (as today); users' edits are kept per theme.
+- **A theme per element** (Matheesha, 2026-10-10: "Allow users to mix and match the themes for each element, even though
+  everything is unified by default"). One theme for everything is the default; any element (status bar, notifications
+  and controls, recent apps, app drawer, home, the settings app) may follow another theme, and one tap puts it back.
+  How: every element's code reads only its own namespace (`comp.statusbar.*`, `comp.nc.*`/`comp.cc.*`/`comp.banner.*`,
+  `comp.switcher.*`, `comp.library.*`/`comp.spotlight.*`, `comp.home.*`/`comp.widgets.*`, and a new `comp.settings.*`),
+  which are aliases into `sys.*` and `component.*`. `Design` routes a key by its namespace to the resolver of that
+  element's theme, and the alias chain resolves inside that theme, so the element is wholly that theme's. A resolver is
+  kept per theme in use (each theme is already checked against iOS 27 at load, so any theme can serve any element).
+  The few shared reads outside a namespace (the font roles, `Appearance`'s press fill and backdrop veil) get element
+  aliases. Motion stays one preset for everything; light/dark and Material You stay global. The choice is stored with
+  the design (`files/design/elements.json`: element -> theme id), never in a theme file. Measured on 2026-10-10: the
+  status bar, shade, home, drawer and recents code already reads nothing outside its namespace (one shade key aside);
+  the settings app reads 25 shared keys directly (its redesign gives it `comp.settings.*`).
 
 ### Animations (how everything moves)
 

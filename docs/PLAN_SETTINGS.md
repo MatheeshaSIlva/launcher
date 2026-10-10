@@ -93,6 +93,44 @@ bar without a fade.
 
 The walkthrough comes late on purpose: what it walks through (layouts, themes) is still growing in phases D and E.
 
+### Redesign (2026-10-10, after P1-P2)
+
+Matheesha on the S24 (`d1fd9f0`): "The settings app is laggy and the transition to sub-menus suck. research for some
+premium app UIs and find a good inspiration for our app. Try drafting a few design layouts in figma. And also, IOS apps
+doesn't follow the exact design from their UI. research and replicate the look IOS has for their apps for our IOS theme
+instead. Allow users to mix and match the themes for each element, even though everything is unified by default."
+
+**Why it lags (emulator, framestats of a push, back and swipe, 120 frames):** GPU median 13.8 ms (p90 23.7; the S24's
+budget is 8.3): every card is live glass (the lens over the blurred wallpaper) and every page draws its own full-screen
+backdrop, both pages during a slide. Opening a page costs 100-150 ms of CPU in its first two frames (the whole page
+composed and drawn at once, the shared title's overlay). Every frame redraws everything (glass and pages re-read their
+place on screen). Not yet measured on the S24.
+
+**How Apple's apps look (iOS 27 Simulator, `ios-reference` test50):** not like SpringBoard. Settings is a solid grouped
+grey (#F2F2F7 light), white groups inset 16 pt with ~26 pt corners, 52 pt rows, 29 pt coloured icon tiles with white
+glyphs, hairline separators from the label, a 34 pt bold large title. Liquid Glass only on the navigation layer: a round
+glass back button (44 pt at 16, 62, chevron only), glass toolbar buttons, the Search pill floating at the bottom. Run 15
+(`ios-reference/out/run15`, light and dark): only the root page has a large title; a sub-page has a small centred title
+and opens with a hero card (a big icon, its name in bold, a description: General). Section headers are sentence case
+("Notification Badges"), footers small grey text under a group. Scrolled, the large title hands over to the small one and
+the content dissolves under a soft edge (no bar). Choices are check rows; switches sit right; Appearance chooses with
+phone previews and a radio under each. A swipe back starts anywhere on the page (one from the middle went back); the page
+on top stays solid and slides, the one beneath moves in parallax slightly dimmed, its large title riding with it, and the
+round back button fades. Push: ~90 % of the way in the first ~80 ms, settled by ~0.3 s (CI frames too sparse to fit a
+spring; `motion.sheet.push` stays 0.42 / 1.0). Dark: a black page, #1C1C1E groups.
+
+**Premium apps (research):** restraint and generous spacing; one corner and shadow language; motion that reveals
+content and carries meaning (Flighty); Android 16's Material 3 Expressive Settings: every page in containers, a colour
+per category, heavier controls, springs.
+
+**Drafts (Figma, "Launcher settings — design directions"):** A Native (the iOS theme as Apple's apps: grouped lists,
+glass only on the back button and search; Look with a theme picker like iOS's Appearance, "Mix by element" rows and a
+page per element with its live preview); B Gallery (a live hero of home, colour tiles that open into their pages,
+themes as cards to swipe, "Use everywhere" or "only for" an element); C Studio (a dark room around a live preview with a
+sheet of tabs; tap a part of the phone to theme just that part). Read with the layouts/themes model: A, B and C are
+three layouts of the settings app (list, gallery, studio), each restyled by the theme; the iOS theme on the list layout
+is Apple's Settings. To decide: which layout comes first (and whether the others become choices).
+
 ### Polish (between C1 and C2)
 
 Matheesha after C1: "pretty basic and barebones, which is fine for a first build. we need to turn this into a super
