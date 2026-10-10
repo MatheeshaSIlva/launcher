@@ -77,7 +77,7 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `Motion.role(MotionTokens.X)` / `Motion.profile` and runs it through `Curve.mover()` / `MotionValue` (both kinds
   interruptible). Code never times an animation with a literal: Android's animators take a role through `.timed(curve)`,
   clock-drawn motion through `RoleTiming`; new roles are named in `motion/MotionRoles.kt` (a test checks it). Switch:
-  `DESIGN_RELOAD --es motion ID`. Theme seeds and motion seeds both live in the builder, which
+  `DESIGN_RELOAD --es motion ID`. Test preset: `eased` (every spring as a bezier; `tools/design/build_test_presets.py`). Theme seeds and motion seeds both live in the builder, which
   writes the two files. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:

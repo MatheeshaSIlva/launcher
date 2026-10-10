@@ -1,0 +1,870 @@
+{
+ "format": 1,
+ "name": "Eased (test)",
+ "author": "Launcher",
+ "version": "0.1",
+ "extends": "ios27",
+ "_about": "A test animation preset built on iOS 27: every spring role as a bezier curve (Material's emphasized decelerate, or a gentle back-out where iOS 27 overshoots). Written by tools/design/build_test_presets.py.",
+ "tokens": {
+  "motion.app.cancel": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 480,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 1.0) as a bezier (emphasized decelerate, 480 ms)"
+  },
+  "motion.app.close-position": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 620,
+   "src": "judged:test preset: iOS 27's spring (0.5 s, damping 0.92) as a bezier (emphasized decelerate, 620 ms)"
+  },
+  "motion.app.close-size": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 550,
+   "src": "judged:test preset: iOS 27's spring (0.44 s, damping 0.9) as a bezier (emphasized decelerate, 550 ms)"
+  },
+  "motion.app.open": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 520,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.92) as a bezier (emphasized decelerate, 520 ms)"
+  },
+  "motion.appear": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 630,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.78) as a bezier (back-out, 630 ms)"
+  },
+  "motion.arrival": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 780,
+   "src": "judged:test preset: iOS 27's spring (0.62 s, damping 1.0) as a bezier (emphasized decelerate, 780 ms)"
+  },
+  "motion.arrival.wallpaper": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 880,
+   "src": "judged:test preset: iOS 27's spring (0.7 s, damping 1.0) as a bezier (emphasized decelerate, 880 ms)"
+  },
+  "motion.banner.back": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 570,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 0.82) as a bezier (back-out, 570 ms)"
+  },
+  "motion.banner.fly": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 440,
+   "src": "judged:test preset: iOS 27's spring (0.35 s, damping 1.0) as a bezier (emphasized decelerate, 440 ms)"
+  },
+  "motion.banner.fly-fade": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 620,
+   "src": "judged:test preset: iOS 27's spring (0.5 s, damping 1.0) as a bezier (emphasized decelerate, 620 ms)"
+  },
+  "motion.banner.in": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 960,
+   "src": "judged:test preset: iOS 27's spring (0.64 s, damping 0.61) as a bezier (back-out, 960 ms)"
+  },
+  "motion.banner.out": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 380,
+   "src": "judged:test preset: iOS 27's spring (0.3 s, damping 1.0) as a bezier (emphasized decelerate, 380 ms)"
+  },
+  "motion.banner.resize": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 500,
+   "src": "judged:test preset: iOS 27's spring (0.4 s, damping 1.0) as a bezier (emphasized decelerate, 500 ms)"
+  },
+  "motion.cc.appear": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 630,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.78) as a bezier (back-out, 630 ms)"
+  },
+  "motion.cc.close": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 420,
+   "src": "judged:test preset: iOS 27's spring (0.34 s, damping 1.0) as a bezier (emphasized decelerate, 420 ms)"
+  },
+  "motion.cc.close-style": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 250,
+   "src": "judged:test preset: iOS 27's spring (0.2 s, damping 1.0) as a bezier (emphasized decelerate, 250 ms)"
+  },
+  "motion.cc.drop": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 510,
+   "src": "judged:test preset: iOS 27's spring (0.34 s, damping 0.86) as a bezier (back-out, 510 ms)"
+  },
+  "motion.cc.edit": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 520,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.9) as a bezier (emphasized decelerate, 520 ms)"
+  },
+  "motion.cc.expanded.close": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 420,
+   "src": "judged:test preset: iOS 27's spring (0.34 s, damping 1.0) as a bezier (emphasized decelerate, 420 ms)"
+  },
+  "motion.cc.expanded.level": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 500,
+   "src": "judged:test preset: iOS 27's spring (0.4 s, damping 1.0) as a bezier (emphasized decelerate, 500 ms)"
+  },
+  "motion.cc.expanded.open": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 630,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.84) as a bezier (back-out, 630 ms)"
+  },
+  "motion.cc.gallery.close": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 480,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 1.0) as a bezier (emphasized decelerate, 480 ms)"
+  },
+  "motion.cc.gallery.open": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 560,
+   "src": "judged:test preset: iOS 27's spring (0.45 s, damping 1.0) as a bezier (emphasized decelerate, 560 ms)"
+  },
+  "motion.cc.leave": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 320,
+   "src": "judged:test preset: iOS 27's spring (0.26 s, damping 1.0) as a bezier (emphasized decelerate, 320 ms)"
+  },
+  "motion.cc.level": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 560,
+   "src": "judged:test preset: iOS 27's spring (0.45 s, damping 1.0) as a bezier (emphasized decelerate, 560 ms)"
+  },
+  "motion.cc.lift": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 390,
+   "src": "judged:test preset: iOS 27's spring (0.26 s, damping 0.8) as a bezier (back-out, 390 ms)"
+  },
+  "motion.cc.open": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 560,
+   "src": "judged:test preset: iOS 27's spring (0.45 s, damping 1.0) as a bezier (emphasized decelerate, 560 ms)"
+  },
+  "motion.cc.press-in": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 280,
+   "src": "judged:test preset: iOS 27's spring (0.22 s, damping 1.0) as a bezier (emphasized decelerate, 280 ms)"
+  },
+  "motion.cc.press-out": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 570,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 0.7) as a bezier (back-out, 570 ms)"
+  },
+  "motion.cc.reflow": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 450,
+   "src": "judged:test preset: iOS 27's spring (0.36 s, damping 0.9) as a bezier (emphasized decelerate, 450 ms)"
+  },
+  "motion.cc.resize": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 600,
+   "src": "judged:test preset: iOS 27's spring (0.4 s, damping 0.82) as a bezier (back-out, 600 ms)"
+  },
+  "motion.cc.settle": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 630,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.68) as a bezier (back-out, 630 ms)"
+  },
+  "motion.cc.stretch-back": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 570,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 0.7) as a bezier (back-out, 570 ms)"
+  },
+  "motion.cc.toggle": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 400,
+   "src": "judged:test preset: iOS 27's spring (0.32 s, damping 0.9) as a bezier (emphasized decelerate, 400 ms)"
+  },
+  "motion.drawer": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 500,
+   "src": "judged:test preset: iOS 27's spring (0.4 s, damping 1.0) as a bezier (emphasized decelerate, 500 ms)"
+  },
+  "motion.edit.bar": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 500,
+   "src": "judged:test preset: iOS 27's spring (0.4 s, damping 0.9) as a bezier (emphasized decelerate, 500 ms)"
+  },
+  "motion.edit.drag-lift": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 390,
+   "src": "judged:test preset: iOS 27's spring (0.26 s, damping 0.8) as a bezier (back-out, 390 ms)"
+  },
+  "motion.edit.drag-settle": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 510,
+   "src": "judged:test preset: iOS 27's spring (0.34 s, damping 0.86) as a bezier (back-out, 510 ms)"
+  },
+  "motion.edit.press-in": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 150,
+   "src": "judged:test preset: iOS 27's spring (0.12 s, damping 1.0) as a bezier (emphasized decelerate, 150 ms)"
+  },
+  "motion.edit.press-out": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 380,
+   "src": "judged:test preset: iOS 27's spring (0.3 s, damping 1.0) as a bezier (emphasized decelerate, 380 ms)"
+  },
+  "motion.edit.reflow": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 450,
+   "src": "judged:test preset: iOS 27's spring (0.36 s, damping 1.0) as a bezier (emphasized decelerate, 450 ms)"
+  },
+  "motion.folder.close": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 460,
+   "src": "judged:test preset: iOS 27's spring (0.37 s, damping 0.97) as a bezier (emphasized decelerate, 460 ms)"
+  },
+  "motion.folder.open": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 610,
+   "src": "judged:test preset: iOS 27's spring (0.49 s, damping 0.92) as a bezier (emphasized decelerate, 610 ms)"
+  },
+  "motion.home.depth-close": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 620,
+   "src": "judged:test preset: iOS 27's spring (0.5 s, damping 1.0) as a bezier (emphasized decelerate, 620 ms)"
+  },
+  "motion.home.depth-open": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 560,
+   "src": "judged:test preset: iOS 27's spring (0.45 s, damping 1.0) as a bezier (emphasized decelerate, 560 ms)"
+  },
+  "motion.home.label-tone": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 620,
+   "src": "judged:test preset: iOS 27's spring (0.5 s, damping 1.0) as a bezier (emphasized decelerate, 620 ms)"
+  },
+  "motion.home.page-snap": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 480,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 1.0) as a bezier (emphasized decelerate, 480 ms)"
+  },
+  "motion.index.bubble-in": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 450,
+   "src": "judged:test preset: iOS 27's spring (0.3 s, damping 0.72) as a bezier (back-out, 450 ms)"
+  },
+  "motion.index.bubble-out": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 280,
+   "src": "judged:test preset: iOS 27's spring (0.22 s, damping 1.0) as a bezier (emphasized decelerate, 280 ms)"
+  },
+  "motion.index.follow": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 200,
+   "src": "judged:test preset: iOS 27's spring (0.16 s, damping 1.0) as a bezier (emphasized decelerate, 200 ms)"
+  },
+  "motion.index.scroll": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 400,
+   "src": "judged:test preset: iOS 27's spring (0.32 s, damping 1.0) as a bezier (emphasized decelerate, 400 ms)"
+  },
+  "motion.menu.close": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 380,
+   "src": "judged:test preset: iOS 27's spring (0.3 s, damping 1.0) as a bezier (emphasized decelerate, 380 ms)"
+  },
+  "motion.menu.open": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 520,
+   "src": "judged:test preset: iOS 27's spring (0.35 s, damping 0.8) as a bezier (back-out, 520 ms)"
+  },
+  "motion.nc.appear": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 630,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.82) as a bezier (back-out, 630 ms)"
+  },
+  "motion.nc.clock-tick": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 560,
+   "src": "judged:test preset: iOS 27's spring (0.45 s, damping 1.0) as a bezier (emphasized decelerate, 560 ms)"
+  },
+  "motion.nc.close": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 480,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 1.0) as a bezier (emphasized decelerate, 480 ms)"
+  },
+  "motion.nc.confirm": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 510,
+   "src": "judged:test preset: iOS 27's spring (0.34 s, damping 0.8) as a bezier (back-out, 510 ms)"
+  },
+  "motion.nc.hold": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 480,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 1.0) as a bezier (emphasized decelerate, 480 ms)"
+  },
+  "motion.nc.leave": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 350,
+   "src": "judged:test preset: iOS 27's spring (0.28 s, damping 1.0) as a bezier (emphasized decelerate, 350 ms)"
+  },
+  "motion.nc.menu-close": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 320,
+   "src": "judged:test preset: iOS 27's spring (0.26 s, damping 1.0) as a bezier (emphasized decelerate, 320 ms)"
+  },
+  "motion.nc.menu-open": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 520,
+   "src": "judged:test preset: iOS 27's spring (0.35 s, damping 0.8) as a bezier (back-out, 520 ms)"
+  },
+  "motion.nc.open": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 550,
+   "src": "judged:test preset: iOS 27's spring (0.44 s, damping 1.0) as a bezier (emphasized decelerate, 550 ms)"
+  },
+  "motion.nc.reflow": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 600,
+   "src": "judged:test preset: iOS 27's spring (0.4 s, damping 0.88) as a bezier (back-out, 600 ms)"
+  },
+  "motion.nc.swipe-back": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 540,
+   "src": "judged:test preset: iOS 27's spring (0.36 s, damping 0.86) as a bezier (back-out, 540 ms)"
+  },
+  "motion.nc.swipe-out": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 380,
+   "src": "judged:test preset: iOS 27's spring (0.3 s, damping 1.0) as a bezier (emphasized decelerate, 380 ms)"
+  },
+  "motion.nc.toggle": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 380,
+   "src": "judged:test preset: iOS 27's spring (0.3 s, damping 1.0) as a bezier (emphasized decelerate, 380 ms)"
+  },
+  "motion.press-in": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 250,
+   "src": "judged:test preset: iOS 27's spring (0.2 s, damping 1.0) as a bezier (emphasized decelerate, 250 ms)"
+  },
+  "motion.press-out": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 440,
+   "src": "judged:test preset: iOS 27's spring (0.35 s, damping 1.0) as a bezier (emphasized decelerate, 440 ms)"
+  },
+  "motion.scroll.overscroll-return": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 520,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 1.0) as a bezier (emphasized decelerate, 520 ms)"
+  },
+  "motion.sheet": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 560,
+   "src": "judged:test preset: iOS 27's spring (0.45 s, damping 1.0) as a bezier (emphasized decelerate, 560 ms)"
+  },
+  "motion.sheet.push": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 520,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 1.0) as a bezier (emphasized decelerate, 520 ms)"
+  },
+  "motion.statusbar.appear": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 570,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 0.78) as a bezier (back-out, 570 ms)"
+  },
+  "motion.statusbar.leave": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 320,
+   "src": "judged:test preset: iOS 27's spring (0.26 s, damping 1.0) as a bezier (emphasized decelerate, 320 ms)"
+  },
+  "motion.statusbar.level": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 750,
+   "src": "judged:test preset: iOS 27's spring (0.6 s, damping 1.0) as a bezier (emphasized decelerate, 750 ms)"
+  },
+  "motion.statusbar.move": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 450,
+   "src": "judged:test preset: iOS 27's spring (0.36 s, damping 1.0) as a bezier (emphasized decelerate, 450 ms)"
+  },
+  "motion.statusbar.roll": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 520,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 1.0) as a bezier (emphasized decelerate, 520 ms)"
+  },
+  "motion.switch.cancel": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 380,
+   "src": "judged:test preset: iOS 27's spring (0.3 s, damping 1.0) as a bezier (emphasized decelerate, 380 ms)"
+  },
+  "motion.switch.commit": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 440,
+   "src": "judged:test preset: iOS 27's spring (0.35 s, damping 1.0) as a bezier (emphasized decelerate, 440 ms)"
+  },
+  "motion.switcher.clear-press": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 200,
+   "src": "judged:test preset: iOS 27's spring (0.16 s, damping 1.0) as a bezier (emphasized decelerate, 200 ms)"
+  },
+  "motion.switcher.enter": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 480,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 0.9) as a bezier (emphasized decelerate, 480 ms)"
+  },
+  "motion.switcher.flick": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 440,
+   "src": "judged:test preset: iOS 27's spring (0.35 s, damping 1.0) as a bezier (emphasized decelerate, 440 ms)"
+  },
+  "motion.switcher.home": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 520,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 1.0) as a bezier (emphasized decelerate, 520 ms)"
+  },
+  "motion.switcher.open": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 520,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.92) as a bezier (emphasized decelerate, 520 ms)"
+  },
+  "motion.switcher.reflow": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 480,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 0.92) as a bezier (emphasized decelerate, 480 ms)"
+  },
+  "motion.switcher.scroll": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 500,
+   "src": "judged:test preset: iOS 27's spring (0.4 s, damping 1.0) as a bezier (emphasized decelerate, 500 ms)"
+  },
+  "motion.widget.resize": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 600,
+   "src": "judged:test preset: iOS 27's spring (0.4 s, damping 0.86) as a bezier (back-out, 600 ms)"
+  }
+ }
+}

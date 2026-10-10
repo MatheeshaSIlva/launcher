@@ -207,8 +207,13 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      12 groups; the App Switcher's geometry marked as layout behaviour, moving to the recents layout in D3); a test keeps
      the catalogue and the preset in step. Checked on the emulator: the tour of B3a, light and dark, Spotlight's clear
      button.
-   - **B3c, a second preset**: a test preset in beziers (as Graphite is for themes), switched both ways on the emulator,
-     grabs and interruptions included.
+   - **B3c, a second preset** (done 2026-10-10): "Eased (test)" (`assets/motion/eased.json`, built on iOS 27 by
+     `tools/design/build_test_presets.py`): every one of the 86 spring roles as a bezier (Material's emphasized decelerate,
+     or a gentle back-out where iOS 27 overshoots; about as long as the spring takes to settle). Checked on the emulator:
+     switched both ways (remembered), the tour of B3a on beziers, a launch grabbed 180 ms in and closed, plain closes
+     (12 runs, both presets, all home); a recording shows the grabbed card leaving the launch without a jump (the
+     emulator's recorder skips frames in the close itself: that is judged on the S24). Real presets (Material
+     Expressive, One UI, snappy, calm) come with the themes (E) and the settings app's curve editor (C2).
 4. Clean layout switching (teardown, rebuild, re-publish, transition), tested by switching every element back and forth.
 
 **C. Settings app** (Compose, themed by the active theme)
