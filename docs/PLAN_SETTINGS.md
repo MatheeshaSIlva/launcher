@@ -131,6 +131,23 @@ sheet of tabs; tap a part of the phone to theme just that part). Read with the l
 three layouts of the settings app (list, gallery, studio), each restyled by the theme; the iOS theme on the list layout
 is Apple's Settings. To decide: which layout comes first (and whether the others become choices).
 
+**Decided (Matheesha):** "I'd like a mix of B and C, that changes with the current theme tokens." Drafted as D in the
+Figma file (start, Look, a part picked on the preview; each drawn with iOS 27's and Graphite's values): a live picture of
+the phone above a sheet; the sheet holds colourful tiles (Layouts, Look, Motion, Phone) that open into their pages
+inside it; themes are cards with "Use everywhere" or "only for" a part; tapping a part of the picture picks that part.
+Everything is the active theme's (the settings app is an element: `comp.settings.*`): the page colour, the sheet's
+material, corners and inset (iOS 27: a floating glass sheet, Graphite: flush and frosted), the tiles' tint (iOS 27:
+tinted with their colour, Graphite: neutral with a coloured symbol), chips, buttons, type and every motion role.
+
+Build steps (each checked on the S24 before the next):
+
+| Step | What |
+|---|---|
+| S1 | The shell: the picture of home and the sheet (detents that follow the finger and spring on the preset), the tiles, a tile opening into its page inside the sheet and back (swipe or Back), today's pages restyled as grouped lists (solid groups: no glass per card); `comp.settings.*` tokens and motion roles; measured on the S24 |
+| S2 | Look: themes as cards (each drawn in its theme), "Use everywhere", "Only for" a part (the parts' own pages), the picture showing the theme being looked at |
+| S3 | Tap a part of the picture to pick it (status bar, panels, recents, drawer, home); the rest dims, the sheet shows that part's theme and layout |
+| S4 | Motion (presets with a demo on the picture) and Phone |
+
 ### Polish (between C1 and C2)
 
 Matheesha after C1: "pretty basic and barebones, which is fine for a first build. we need to turn this into a super
