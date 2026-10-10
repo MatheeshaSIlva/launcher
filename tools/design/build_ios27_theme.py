@@ -168,6 +168,7 @@ MATERIAL_YOU = {
     **{'ref.color.accents.' + _a: {'color': '@primary', 'src': "judged:Material You: the accents become the wallpaper's primary (as Android's)"}
        for _a in ('blue', 'brown', 'cyan', 'green', 'indigo', 'mint', 'orange', 'pink', 'purple', 'teal', 'yellow')},
     'ref.color.accents.red': {'color': '@error', 'src': "judged:Material You: destructive red becomes the palette's error colour"},
+    'component.control.accent-symbol-color': {'color': '@on_primary', 'src': "judged:Material You: a symbol on the primary is on-primary"},
 }
 
 # Seeds for the hand-written tiers (only used for keys missing from the theme file).
@@ -617,6 +618,108 @@ SEED['comp.cc.accent.volume']['src'] = 'kit:2570:20700 (speaker #00c0e8)'
 SEED['comp.cc.accent.silent']['src'] = 'kit:2524:24523 (silent on: red)'
 
 
+# The component catalogue (B2b, docs/PLAN_LAYOUTS_THEMES.md): shared styles every layout reads, whichever design it
+# comes from. Each component.* token takes the value the iOS 27 layout's own token had; that token becomes an alias of
+# it (so the look is unchanged, and a theme restyles every layout by setting component.*). Applied on every build, once
+# per key (a component.* token already in the file is left as it is).
+COMPONENTS = {
+    # Notification card (Notification Center's platters, banners).
+    'component.notification.material': 'comp.nc.platter.material',
+    'component.notification.floating-material': 'comp.banner.material',
+    'component.notification.corner': 'comp.nc.platter.corner',
+    'component.notification.padding': 'comp.nc.platter.padding',
+    'component.notification.icon': 'comp.nc.platter.icon',
+    'component.notification.title': 'comp.nc.platter.title',
+    'component.notification.body': 'comp.nc.platter.body',
+    'component.notification.time': 'comp.nc.platter.time',
+    'component.notification.label-color': 'comp.nc.platter.label',
+    'component.notification.time-color': 'comp.nc.platter.time-color',
+    'component.notification.time-blend': 'comp.nc.platter.time-blend',
+    'component.notification.gap': 'comp.nc.list.gap',
+    # Control (Control Center's modules and toggles).
+    'component.control.material': 'comp.cc.module.material',
+    'component.control.on-material': 'comp.cc.module.on-material',
+    'component.control.corner': 'comp.cc.module.corner',
+    'component.control.symbol': 'comp.cc.symbol',
+    'component.control.symbol-color': 'comp.cc.symbol-color',
+    'component.control.on-symbol-color': 'comp.cc.symbol-on-color',
+    'component.control.label-color': 'comp.cc.module.label-color',
+    'component.control.detail-color': 'comp.cc.module.detail-color',
+    'component.control.detail-blend': 'comp.cc.module.detail-blend',
+    'component.control.title': 'comp.cc.module.title',
+    'component.control.title-large': 'comp.cc.module.title-large',
+    'component.control.detail': 'comp.cc.module.detail',
+    'component.control.chevron-color': 'comp.cc.chevron-color',
+    'component.control.well-material': 'comp.cc.well.material',
+    # Slider.
+    'component.slider.corner': 'comp.cc.slider.corner',
+    'component.slider.cover': 'comp.cc.slider.cover',
+    'component.slider.expanded-corner': 'comp.cc.expanded.slider-corner',
+    # Round button (the lock screen's, Control Center's small buttons).
+    'component.round-button.material': 'comp.nc.button.material',
+    'component.round-button.size': 'comp.nc.button.size',
+    'component.round-button.symbol': 'comp.nc.button.symbol',
+    'component.round-button.symbol-color': 'comp.nc.button.symbol-color',
+    'component.round-button.symbol-blend': 'comp.nc.button.symbol-blend',
+    'component.round-button.on-color': 'comp.nc.button.on-color',
+    # Button (a capsule with a label: a banner's actions).
+    'component.button.fill': 'comp.banner.action.fill',
+    'component.button.height': 'comp.banner.action.height',
+    'component.button.text': 'comp.banner.action.type',
+    # Menu (home's, the App Switcher's).
+    **{'component.menu.' + _k: 'comp.home.menu.' + _k for _k in (
+        'material', 'corner', 'width', 'row', 'pad-top', 'pad-bottom', 'symbol-x', 'label-x', 'type', 'label', 'destructive',
+        'press', 'fallback', 'symbol', 'grow-from')},
+    # Badge (the count on icons) and the remove badge (edit mode).
+    **{'component.badge.' + _k: 'comp.badge.' + _k for _k in ('fill', 'height', 'label', 'max', 'offset-x', 'offset-y', 'pad-x', 'type')},
+    **{'component.remove-badge.' + _k: 'comp.badge.remove.' + _k for _k in ('disc', 'minus', 'radius', 'stroke')},
+    # Search field.
+    'component.field.material': 'comp.home.field.material',
+    'component.field.clear-color': 'comp.home.field.clear-color',
+    'component.field.clear-symbol-color': 'comp.home.field.clear-symbol-color',
+    # Names over the wallpaper.
+    **{'component.wallpaper-label.' + _k: 'comp.home.label.' + _k for _k in ('light', 'dark', 'dark-from', 'dark-full', 'shadow')},
+    # Card (widgets, App Library tiles, Spotlight's results), dock, sheet, panel.
+    'component.card.material': 'comp.home.widget.material',
+    'component.dock.material': 'comp.home.dock.material',
+    'component.sheet.material': 'comp.widgets.sheet.material',
+    'component.sheet.grabber-color': 'comp.widgets.grabber-color',
+    'component.sheet.fallback-color': 'comp.widgets.fallback-color',
+    'component.panel.material': 'comp.cc.background.material',
+    'component.panel.samsung-strength': 'comp.cc.background.samsung-strength',
+}
+
+# Other iOS tokens that are the same component (same value now): aliases of it too.
+COMPONENT_ALIASES = {
+    'comp.banner.corner': 'component.notification.corner',
+    'comp.widgets.card.material': 'component.card.material',
+    'comp.library.tile.material': 'component.card.material',
+    'comp.spotlight.card.material': 'component.card.material',
+}
+
+# New properties of the catalogue (no iOS token before).
+COMPONENT_SEEDS = {
+    'component.control.accent-symbol-color': {'color': '#ffffff', 'src': "kit:2570:20609 (a symbol on an accent well: white)"},
+}
+
+
+def apply_components(tokens):
+    """The catalogue over the theme's tokens: component.* takes the iOS token's entry, the iOS token becomes its alias."""
+    for ck, src in COMPONENTS.items():
+        if ck in tokens:
+            continue
+        if src not in tokens:
+            raise SystemExit(f'{ck}: its source {src} is not in the theme')
+        tokens[ck] = tokens[src]
+        tokens[src] = {'ref': ck, 'src': "judged:the shared component style (" + ck + ")"}
+    for ak, ck in COMPONENT_ALIASES.items():
+        v = tokens.get(ak)
+        if v is not None and v.get('ref') != ck:
+            tokens[ak] = {'ref': ck, 'src': "judged:the shared component style (" + ck + ")"}
+    for k, v in COMPONENT_SEEDS.items():
+        tokens.setdefault(k, v)
+
+
 def main():
     kit = json.load(open(KIT, encoding='utf-8'))
     old = {}
@@ -629,6 +732,8 @@ def main():
     for k, v in SEED.items():
         kept.setdefault(k, v)
     tokens.update(dict(sorted(kept.items())))
+    apply_components(tokens)
+    tokens = dict(sorted(tokens.items(), key=lambda kv: (not kv[0].startswith('ref.'), kv[0])))
     theme = {'format': 1, 'name': 'iOS 27', 'author': 'Launcher (from Apple\'s iOS 27 UI kit)', 'version': '0.1',
              '_about': 'ref.* is generated by tools/design/build_ios27_theme.py from docs/tokens/ios27-kit.json; sys.* and comp.* are written here.',
              'tokens': tokens,

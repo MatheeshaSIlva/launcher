@@ -696,7 +696,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val ctl = a.item.control
         val sf = host.surfaces
         val white = Design.color(CcTokens.SYMBOL_COLOR)
-        val glyphOn = if (ctl.style == Control.Style.COLOR) white else ctl.accent
+        val glyphOn = if (ctl.style == Control.Style.COLOR) Design.color(CcTokens.SYMBOL_ON_ACCENT) else ctl.accent
         val glyphColor = mix(white, if (ctl.kind == Control.Kind.TOGGLE) glyphOn else white, on)
         val icon = iconOf(ctl, on)
         if (a.item.w == 1) {
@@ -780,7 +780,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val d = sf.pt(CcTokens.WELL_SIZE)
         val x = sf.pt(CcTokens.WIDE_PADDING)
         well(c, x, (h - d) / 2f, d, on, CcTokens.accent(ctl), alpha)
-        glyphs.draw(c, R.drawable.sym_moon, x + d / 2f, h / 2f, sf.pt(CcTokens.WELL_SYMBOL), alpha(white, alpha))
+        glyphs.draw(c, R.drawable.sym_moon, x + d / 2f, h / 2f, sf.pt(CcTokens.WELL_SYMBOL), alpha(mix(white, Design.color(CcTokens.SYMBOL_ON_ACCENT), on), alpha))
         val tx = x + d + sf.pt(CcTokens.WIDE_GAP)
         if (on > 0.5f) drawLabel(c, "Do Not Disturb", "On", tx, h / 2f, w - tx - x, alpha)
         else {
@@ -832,6 +832,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val sf = host.surfaces
         val k = min(w, h) / (2 * cell + gap)   // the module's size against the kit's 155 pt
         val white = Design.color(CcTokens.SYMBOL_COLOR)
+        val onAccent = Design.color(CcTokens.SYMBOL_ON_ACCENT)
         for ((ctl, at, rf) in connectivitySubs) {
             val on = subActiveOf(ctl).value.coerceIn(0f, 1f)
             val pressed = if (a.sub == ctl) a.subPress.value else 0f
@@ -841,7 +842,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val cy = at[1] * h
             well(c, cx - d / 2f, cy - d / 2f, d, on, CcTokens.accent(ctl), alpha)
             glyphs.draw(c, ctl.icon, cx, cy, sf.pt(if (bigOne) CcTokens.CONN_SYMBOL_BIG else CcTokens.CONN_SYMBOL_SMALL) * k * (1f - 0.06f * pressed),
-                alpha(white, alpha))
+                alpha(mix(white, onAccent, on), alpha))
         }
     }
 

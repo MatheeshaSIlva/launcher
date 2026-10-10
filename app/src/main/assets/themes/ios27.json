@@ -1395,78 +1395,64 @@
    "src": "kit:text style Title3/Regular"
   },
   "comp.badge.fill": {
-   "color": "#ff3b30",
-   "src": "judged:iOS's notification badge red"
+   "ref": "component.badge.fill",
+   "src": "judged:the shared component style (component.badge.fill)"
   },
   "comp.badge.height": {
-   "pt": 24,
-   "src": "judged:measured on iOS"
+   "ref": "component.badge.height",
+   "src": "judged:the shared component style (component.badge.height)"
   },
   "comp.badge.label": {
-   "color": "#ffffff",
-   "src": "judged:the white count"
+   "ref": "component.badge.label",
+   "src": "judged:the shared component style (component.badge.label)"
   },
   "comp.badge.max": {
-   "factor": 999,
-   "src": "judged:larger counts show as 999+"
+   "ref": "component.badge.max",
+   "src": "judged:the shared component style (component.badge.max)"
   },
   "comp.badge.offset-x": {
-   "pt": 5,
-   "src": "judged:its right edge 5 pt past the icon's, as on iOS"
+   "ref": "component.badge.offset-x",
+   "src": "judged:the shared component style (component.badge.offset-x)"
   },
   "comp.badge.offset-y": {
-   "pt": -5,
-   "src": "judged:its top 5 pt above the icon's, as on iOS"
+   "ref": "component.badge.offset-y",
+   "src": "judged:the shared component style (component.badge.offset-y)"
   },
   "comp.badge.pad-x": {
-   "pt": 7,
-   "src": "judged:on each side of a long count"
+   "ref": "component.badge.pad-x",
+   "src": "judged:the shared component style (component.badge.pad-x)"
   },
   "comp.badge.remove.disc": {
-   "light": "#e5e5eaf2",
-   "dark": "#747480e6",
-   "src": "judged:edit mode's grey disc"
+   "ref": "component.remove-badge.disc",
+   "src": "judged:the shared component style (component.remove-badge.disc)"
   },
   "comp.badge.remove.minus": {
-   "light": "#3c3c43",
-   "dark": "#ffffff",
-   "src": "judged:its minus"
+   "ref": "component.remove-badge.minus",
+   "src": "judged:the shared component style (component.remove-badge.minus)"
   },
   "comp.badge.remove.radius": {
-   "pt": 11,
-   "src": "judged:measured on iOS"
+   "ref": "component.remove-badge.radius",
+   "src": "judged:the shared component style (component.remove-badge.radius)"
   },
   "comp.badge.remove.stroke": {
-   "pt": 2.2,
-   "src": "judged:the minus"
+   "ref": "component.remove-badge.stroke",
+   "src": "judged:the shared component style (component.remove-badge.stroke)"
   },
   "comp.badge.type": {
-   "text": {
-    "family": "text",
-    "weight": 500,
-    "size": 15.5,
-    "line": 18,
-    "tracking": 0
-   },
-   "src": "judged:measured on iOS"
+   "ref": "component.badge.type",
+   "src": "judged:the shared component style (component.badge.type)"
   },
   "comp.banner.action.fill": {
-   "ref": "ref.color.fills.tertiary",
-   "src": "judged:a faint capsule in the label colour (the kit's tertiary fill)"
+   "ref": "component.button.fill",
+   "src": "judged:the shared component style (component.button.fill)"
   },
   "comp.banner.action.height": {
-   "pt": 40,
-   "src": "judged:a ringing notification's action capsules"
+   "ref": "component.button.height",
+   "src": "judged:the shared component style (component.button.height)"
   },
   "comp.banner.action.type": {
-   "text": {
-    "family": "text",
-    "weight": 590,
-    "size": 15,
-    "line": 20,
-    "tracking": -0.23
-   },
-   "src": "judged:the platter title's type"
+   "ref": "component.button.text",
+   "src": "judged:the shared component style (component.button.text)"
   },
   "comp.banner.behind": {
    "ref": "ref.color.backgrounds.primary",
@@ -1505,8 +1491,8 @@
    "src": "judged:the symbol on a call's button"
   },
   "comp.banner.corner": {
-   "pt": 24,
-   "src": "kit:0:11292 (the platter)"
+   "ref": "component.notification.corner",
+   "src": "judged:the shared component style (component.notification.corner)"
   },
   "comp.banner.flat-color": {
    "light": "#f7f7f9f2",
@@ -1522,8 +1508,8 @@
    "src": "measured:iOS 27 Simulator run 4, BannerNotification at x 8, 386 wide"
   },
   "comp.banner.material": {
-   "ref": "sys.material.glass.frosted-legible",
-   "src": "judged:the frosted glass that stays readable over any app (was the kit's Regular)"
+   "ref": "component.notification.floating-material",
+   "src": "judged:the shared component style (component.notification.floating-material)"
   },
   "comp.banner.secondary": {
    "ref": "sys.color.label.secondary",
@@ -1710,12 +1696,12 @@
    "src": "judged:edit mode's \"Add a Control\" disc"
   },
   "comp.cc.background.material": {
-   "ref": "ref.material.overlay.control-center",
-   "src": "kit:2524:24518"
+   "ref": "component.panel.material",
+   "src": "judged:the shared component style (component.panel.material)"
   },
   "comp.cc.background.samsung-strength": {
-   "factor": 0.15,
-   "src": "judged:One UI's dim-to-blur strength (blur and dim come together there; 0.35 and 0.6 were too strong on the S24)"
+   "ref": "component.panel.samsung-strength",
+   "src": "judged:the shared component style (component.panel.samsung-strength)"
   },
   "comp.cc.button.inset-x": {
    "pt": 38,
@@ -1742,8 +1728,8 @@
    "src": "kit:10491:21421"
   },
   "comp.cc.chevron-color": {
-   "color": "#ffffffb3",
-   "src": "judged:Focus's chevron beside its name"
+   "ref": "component.control.chevron-color",
+   "src": "judged:the shared component style (component.control.chevron-color)"
   },
   "comp.cc.connectivity.big": {
    "pt": 57,
@@ -1778,8 +1764,8 @@
    "src": "judged:the shadow under it"
   },
   "comp.cc.expanded.slider-corner": {
-   "pt": 46,
-   "src": "judged:the expanded slider (as it was in code)"
+   "ref": "component.slider.expanded-corner",
+   "src": "judged:the shared component style (component.slider.expanded-corner)"
   },
   "comp.cc.expanded.slider-height": {
    "pt": 380,
@@ -1930,58 +1916,40 @@
    "src": "measured:the kit's render at 3x (previous, next: 20 pt)"
   },
   "comp.cc.module.corner": {
-   "pt": 30,
-   "src": "kit:2547:2662 (2x2)"
+   "ref": "component.control.corner",
+   "src": "judged:the shared component style (component.control.corner)"
   },
   "comp.cc.module.detail": {
-   "text": {
-    "family": "text",
-    "weight": 510,
-    "size": 14,
-    "line": 18,
-    "tracking": -0.08
-   },
-   "src": "kit:2547:2575"
+   "ref": "component.control.detail",
+   "src": "judged:the shared component style (component.control.detail)"
   },
   "comp.cc.module.detail-blend": {
-   "choice": "LINEAR_DODGE",
-   "src": "kit:2547:2575"
+   "ref": "component.control.detail-blend",
+   "src": "judged:the shared component style (component.control.detail-blend)"
   },
   "comp.cc.module.detail-color": {
-   "color": "#ffffff54",
-   "src": "kit:2547:2575 (white 33 %)"
+   "ref": "component.control.detail-color",
+   "src": "judged:the shared component style (component.control.detail-color)"
   },
   "comp.cc.module.label-color": {
-   "color": "#ffffff",
-   "src": "kit:2547:2574"
+   "ref": "component.control.label-color",
+   "src": "judged:the shared component style (component.control.label-color)"
   },
   "comp.cc.module.material": {
-   "ref": "sys.material.glass.clear",
-   "src": "kit:10486:21122"
+   "ref": "component.control.material",
+   "src": "judged:the shared component style (component.control.material)"
   },
   "comp.cc.module.on-material": {
-   "ref": "ref.material.control-center.on",
-   "src": "kit:10486:20857"
+   "ref": "component.control.on-material",
+   "src": "judged:the shared component style (component.control.on-material)"
   },
   "comp.cc.module.title": {
-   "text": {
-    "family": "text",
-    "weight": 510,
-    "size": 15,
-    "line": 18,
-    "tracking": -0.2
-   },
-   "src": "kit:2547:2574"
+   "ref": "component.control.title",
+   "src": "judged:the shared component style (component.control.title)"
   },
   "comp.cc.module.title-large": {
-   "text": {
-    "family": "text",
-    "weight": 590,
-    "size": 14,
-    "line": 17,
-    "tracking": -0.08
-   },
-   "src": "kit:2547:2646"
+   "ref": "component.control.title-large",
+   "src": "judged:the shared component style (component.control.title-large)"
   },
   "comp.cc.motion.open": {
    "spring": [
@@ -1995,32 +1963,32 @@
    "src": "judged:Matheesha: iOS 27's (fully in after ~110 pt, measured: docs/IOS27_MOTION.md) is too fast to see"
   },
   "comp.cc.slider.corner": {
-   "pt": 34,
-   "src": "kit:2570:20682"
+   "ref": "component.slider.corner",
+   "src": "judged:the shared component style (component.slider.corner)"
   },
   "comp.cc.slider.cover": {
-   "factor": 0.8,
-   "src": "judged:the symbol takes the slider's colour while the level crosses its middle 80 % (the expanded slider's 100 % made one with the module's)"
+   "ref": "component.slider.cover",
+   "src": "judged:the shared component style (component.slider.cover)"
   },
   "comp.cc.status.row-y": {
    "pt": 104.2,
    "src": "measured:iOS 27 Simulator, accessibility frames (the kit: 91.7)"
   },
   "comp.cc.symbol": {
-   "pt": 35,
-   "src": "measured:the kit's render at 3x (the camera, SF Pro Bold 19: 29.3 pt wide); our symbols fill 5/6 of their box"
+   "ref": "component.control.symbol",
+   "src": "judged:the shared component style (component.control.symbol)"
   },
   "comp.cc.symbol-color": {
-   "color": "#ffffff",
-   "src": "kit:2524:24527"
+   "ref": "component.control.symbol-color",
+   "src": "judged:the shared component style (component.control.symbol-color)"
   },
   "comp.cc.symbol-on-color": {
-   "color": "#1c1c1e",
-   "src": "judged:a symbol on a lit (white) control"
+   "ref": "component.control.on-symbol-color",
+   "src": "judged:the shared component style (component.control.on-symbol-color)"
   },
   "comp.cc.well.material": {
-   "ref": "ref.material.control-center.well",
-   "src": "kit:2570:20607"
+   "ref": "component.control.well-material",
+   "src": "judged:the shared component style (component.control.well-material)"
   },
   "comp.cc.well.size": {
    "pt": 40,
@@ -2051,117 +2019,112 @@
    "src": "judged:the clock over a dark or mid wallpaper: the glass's light tint (the dock's in light mode)"
   },
   "comp.home.dock.material": {
-   "ref": "sys.material.glass.dock",
-   "src": "kit:558:50551"
+   "ref": "component.dock.material",
+   "src": "judged:the shared component style (component.dock.material)"
   },
   "comp.home.field.clear-color": {
-   "light": "#3c3c4399",
-   "dark": "#ffffffd9",
-   "src": "judged:a search field's clear button"
+   "ref": "component.field.clear-color",
+   "src": "judged:the shared component style (component.field.clear-color)"
   },
   "comp.home.field.clear-symbol-color": {
-   "light": "#ffffff",
-   "dark": "#1c1c1e",
-   "src": "judged:its cross"
+   "ref": "component.field.clear-symbol-color",
+   "src": "judged:the shared component style (component.field.clear-symbol-color)"
   },
   "comp.home.field.material": {
-   "ref": "sys.material.glass.small-active",
-   "src": "kit:5720:33170 (the 48 pt search field: the small glass, active)"
+   "ref": "component.field.material",
+   "src": "judged:the shared component style (component.field.material)"
   },
   "comp.home.label.dark": {
-   "color": "#1c1c1e",
-   "src": "judged:dark names over a bright wallpaper (the kit's label primary, light)"
+   "ref": "component.wallpaper-label.dark",
+   "src": "judged:the shared component style (component.wallpaper-label.dark)"
   },
   "comp.home.label.dark-from": {
-   "factor": 0.62,
-   "src": "judged:names start turning dark over a wallpaper this light (luminance)"
+   "ref": "component.wallpaper-label.dark-from",
+   "src": "judged:the shared component style (component.wallpaper-label.dark-from)"
   },
   "comp.home.label.dark-full": {
-   "factor": 0.78,
-   "src": "judged:names are fully dark over a wallpaper this light"
+   "ref": "component.wallpaper-label.dark-full",
+   "src": "judged:the shared component style (component.wallpaper-label.dark-full)"
   },
   "comp.home.label.light": {
-   "color": "#ffffff",
-   "src": "kit:the Home Screen's app names"
+   "ref": "component.wallpaper-label.light",
+   "src": "judged:the shared component style (component.wallpaper-label.light)"
   },
   "comp.home.label.shadow": {
-   "color": "#00000040",
-   "src": "judged:the soft shadow under white names (none under dark ones)"
+   "ref": "component.wallpaper-label.shadow",
+   "src": "judged:the shared component style (component.wallpaper-label.shadow)"
   },
   "comp.home.menu.corner": {
-   "pt": 30,
-   "src": "kit:10411:18581"
+   "ref": "component.menu.corner",
+   "src": "judged:the shared component style (component.menu.corner)"
   },
   "comp.home.menu.destructive": {
-   "ref": "ref.color.accents.red",
-   "src": "kit:5622:50175 (#ff383c)"
+   "ref": "component.menu.destructive",
+   "src": "judged:the shared component style (component.menu.destructive)"
   },
   "comp.home.menu.fallback": {
-   "light": "#f2f2f7f2",
-   "dark": "#2c2c2ed9",
-   "src": "judged:a menu without the glass renderer"
+   "ref": "component.menu.fallback",
+   "src": "judged:the shared component style (component.menu.fallback)"
   },
   "comp.home.menu.grow-from": {
-   "factor": 0.8,
-   "src": "judged:the panel grows out of what it belongs to from 80 % of its size"
+   "ref": "component.menu.grow-from",
+   "src": "judged:the shared component style (component.menu.grow-from)"
   },
   "comp.home.menu.label": {
-   "light": "#1a1a1a",
-   "dark": "#ffffff",
-   "src": "kit:5619:49810 (light; dark judged: white on the dark glass)"
+   "ref": "component.menu.label",
+   "src": "judged:the shared component style (component.menu.label)"
   },
   "comp.home.menu.label-x": {
-   "pt": 60,
-   "src": "kit:5619:49810"
+   "ref": "component.menu.label-x",
+   "src": "judged:the shared component style (component.menu.label-x)"
   },
   "comp.home.menu.material": {
-   "ref": "sys.material.glass.frosted",
-   "src": "judged:the frosted glass (was the kit's Regular, 5626:51776: barely translucent next to the rest)"
+   "ref": "component.menu.material",
+   "src": "judged:the shared component style (component.menu.material)"
   },
   "comp.home.menu.pad-bottom": {
-   "pt": 8,
-   "src": "kit:5621:50116"
+   "ref": "component.menu.pad-bottom",
+   "src": "judged:the shared component style (component.menu.pad-bottom)"
   },
   "comp.home.menu.pad-top": {
-   "pt": 10,
-   "src": "kit:5621:50116 (actions 10 pt below the top)"
+   "ref": "component.menu.pad-top",
+   "src": "judged:the shared component style (component.menu.pad-top)"
   },
   "comp.home.menu.press": {
-   "light": "#00000014",
-   "dark": "#ffffff1f",
-   "src": "judged:a pressed row's highlight (was the app's press fill)"
+   "ref": "component.menu.press",
+   "src": "judged:the shared component style (component.menu.press)"
   },
   "comp.home.menu.row": {
-   "pt": 42,
-   "src": "kit:5626:51776 (rows 42 pt apart)"
+   "ref": "component.menu.row",
+   "src": "judged:the shared component style (component.menu.row)"
   },
   "comp.home.menu.symbol": {
-   "pt": 18,
-   "src": "judged:a symbol from a drawable, the size of the drawn ones (18 pt)"
+   "ref": "component.menu.symbol",
+   "src": "judged:the shared component style (component.menu.symbol)"
   },
   "comp.home.menu.symbol-x": {
-   "pt": 36,
-   "src": "kit:5619:49811 (a 20 pt symbol column 26 pt in: its centre)"
+   "ref": "component.menu.symbol-x",
+   "src": "judged:the shared component style (component.menu.symbol-x)"
   },
   "comp.home.menu.type": {
-   "ref": "ref.type.body.regular",
-   "src": "kit:5619:49810 (17 Regular)"
+   "ref": "component.menu.type",
+   "src": "judged:the shared component style (component.menu.type)"
   },
   "comp.home.menu.width": {
-   "pt": 250,
-   "src": "kit:5626:51776"
+   "ref": "component.menu.width",
+   "src": "judged:the shared component style (component.menu.width)"
   },
   "comp.home.search.material": {
    "ref": "sys.material.glass.dock",
    "src": "kit:5593:10801"
   },
   "comp.home.widget.material": {
-   "ref": "sys.material.glass.dock",
-   "src": "judged:the kit's widgets show the app's own background; ours sit on home's glass, the dock's"
+   "ref": "component.card.material",
+   "src": "judged:the shared component style (component.card.material)"
   },
   "comp.library.tile.material": {
-   "ref": "sys.material.glass.dock",
-   "src": "judged:App Library's tiles, folders and search bar on the dock's glass (the kit has no App Library)"
+   "ref": "component.card.material",
+   "src": "judged:the shared component style (component.card.material)"
   },
   "comp.nc.button.bottom": {
    "pt": 50,
@@ -2172,32 +2135,32 @@
    "src": "kit:5592:29063"
   },
   "comp.nc.button.material": {
-   "ref": "sys.material.glass.clear",
-   "src": "kit:5592:28123"
+   "ref": "component.round-button.material",
+   "src": "judged:the shared component style (component.round-button.material)"
   },
   "comp.nc.button.on-color": {
-   "color": "#ffffff",
-   "src": "judged:the flashlight on: a white disc (as iOS's)"
+   "ref": "component.round-button.on-color",
+   "src": "judged:the shared component style (component.round-button.on-color)"
   },
   "comp.nc.button.on-symbol-color": {
    "ref": "comp.cc.symbol-on-color",
    "src": "judged:dark on the white disc, as Control Center's lit controls"
   },
   "comp.nc.button.size": {
-   "pt": 58,
-   "src": "kit:5592:28123"
+   "ref": "component.round-button.size",
+   "src": "judged:the shared component style (component.round-button.size)"
   },
   "comp.nc.button.symbol": {
-   "pt": 38.5,
-   "src": "measured:the kit's lock screen rendered at 3x (SF Pro Bold 21 symbols: the flashlight 31.3 pt tall, the camera 32.7 pt wide); our symbols fill 5/6 of their box"
+   "ref": "component.round-button.symbol",
+   "src": "judged:the shared component style (component.round-button.symbol)"
   },
   "comp.nc.button.symbol-blend": {
-   "choice": "LINEAR_DODGE",
-   "src": "kit:5592:28123"
+   "ref": "component.round-button.symbol-blend",
+   "src": "judged:the shared component style (component.round-button.symbol-blend)"
   },
   "comp.nc.button.symbol-color": {
-   "color": "#d9d9d9e6",
-   "src": "kit:5592:28123 (#d9d9d9 linear dodge at 90 %)"
+   "ref": "component.round-button.symbol-color",
+   "src": "judged:the shared component style (component.round-button.symbol-color)"
   },
   "comp.nc.count.fill": {
    "color": "#ffffff",
@@ -2254,8 +2217,8 @@
    "src": "judged:an app's name over its expanded group, on the wallpaper"
   },
   "comp.nc.list.gap": {
-   "pt": 8,
-   "src": "kit:135:73247"
+   "ref": "component.notification.gap",
+   "src": "judged:the shared component style (component.notification.gap)"
   },
   "comp.nc.list.margin": {
    "pt": 14,
@@ -2395,38 +2358,32 @@
    "src": "measured:iOS 27 Simulator, pass 6 test10 and pass 7 test40 (collapsed stack)"
   },
   "comp.nc.platter.body": {
-   "text": {
-    "family": "text",
-    "weight": 400,
-    "size": 15,
-    "line": 18,
-    "tracking": -0.23
-   },
-   "src": "kit:0:11292"
+   "ref": "component.notification.body",
+   "src": "judged:the shared component style (component.notification.body)"
   },
   "comp.nc.platter.corner": {
-   "pt": 24,
-   "src": "kit:0:11292"
+   "ref": "component.notification.corner",
+   "src": "judged:the shared component style (component.notification.corner)"
   },
   "comp.nc.platter.icon": {
-   "pt": 38.33,
-   "src": "kit:0:11292"
+   "ref": "component.notification.icon",
+   "src": "judged:the shared component style (component.notification.icon)"
   },
   "comp.nc.platter.label": {
-   "color": "#ffffff",
-   "src": "kit:0:11292"
+   "ref": "component.notification.label-color",
+   "src": "judged:the shared component style (component.notification.label-color)"
   },
   "comp.nc.platter.material": {
-   "ref": "sys.material.glass.clear",
-   "src": "kit:0:11292"
+   "ref": "component.notification.material",
+   "src": "judged:the shared component style (component.notification.material)"
   },
   "comp.nc.platter.min-height": {
    "pt": 66.33,
    "src": "kit:0:11292"
   },
   "comp.nc.platter.padding": {
-   "pt": 14,
-   "src": "kit:0:11292"
+   "ref": "component.notification.padding",
+   "src": "judged:the shared component style (component.notification.padding)"
   },
   "comp.nc.platter.text-top": {
    "pt": 15.67,
@@ -2437,32 +2394,20 @@
    "src": "kit:0:11292"
   },
   "comp.nc.platter.time": {
-   "text": {
-    "family": "text",
-    "weight": 400,
-    "size": 15,
-    "line": 17,
-    "tracking": 0
-   },
-   "src": "kit:0:11292"
+   "ref": "component.notification.time",
+   "src": "judged:the shared component style (component.notification.time)"
   },
   "comp.nc.platter.time-blend": {
-   "choice": "LINEAR_DODGE",
-   "src": "kit:533:7108"
+   "ref": "component.notification.time-blend",
+   "src": "judged:the shared component style (component.notification.time-blend)"
   },
   "comp.nc.platter.time-color": {
-   "color": "#4d4d4d",
-   "src": "kit:533:7108"
+   "ref": "component.notification.time-color",
+   "src": "judged:the shared component style (component.notification.time-color)"
   },
   "comp.nc.platter.title": {
-   "text": {
-    "family": "text",
-    "weight": 590,
-    "size": 15,
-    "line": 17,
-    "tracking": -0.23
-   },
-   "src": "kit:0:11292"
+   "ref": "component.notification.title",
+   "src": "judged:the shared component style (component.notification.title)"
   },
   "comp.nc.stack.front-min-height": {
    "pt": 63,
@@ -2493,8 +2438,8 @@
    "src": "judged:the soft shadow under the date and group names"
   },
   "comp.spotlight.card.material": {
-   "ref": "sys.material.glass.dock",
-   "src": "judged:Spotlight's card on the dock's glass, as the App Library's tiles"
+   "ref": "component.card.material",
+   "src": "judged:the shared component style (component.card.material)"
   },
   "comp.statusbar.battery-charging-color": {
    "color": "#34c759",
@@ -2601,22 +2546,401 @@
    "src": "kit:5566:7888 (a sheet's 44 pt buttons: the small glass, active)"
   },
   "comp.widgets.card.material": {
-   "ref": "sys.material.glass.dock",
-   "src": "judged:a widget's preview card on the dock's glass (as on home)"
+   "ref": "component.card.material",
+   "src": "judged:the shared component style (component.card.material)"
   },
   "comp.widgets.fallback-color": {
+   "ref": "component.sheet.fallback-color",
+   "src": "judged:the shared component style (component.sheet.fallback-color)"
+  },
+  "comp.widgets.grabber-color": {
+   "ref": "component.sheet.grabber-color",
+   "src": "judged:the shared component style (component.sheet.grabber-color)"
+  },
+  "comp.widgets.sheet.material": {
+   "ref": "component.sheet.material",
+   "src": "judged:the shared component style (component.sheet.material)"
+  },
+  "component.badge.fill": {
+   "color": "#ff3b30",
+   "src": "judged:iOS's notification badge red"
+  },
+  "component.badge.height": {
+   "pt": 24,
+   "src": "judged:measured on iOS"
+  },
+  "component.badge.label": {
+   "color": "#ffffff",
+   "src": "judged:the white count"
+  },
+  "component.badge.max": {
+   "factor": 999,
+   "src": "judged:larger counts show as 999+"
+  },
+  "component.badge.offset-x": {
+   "pt": 5,
+   "src": "judged:its right edge 5 pt past the icon's, as on iOS"
+  },
+  "component.badge.offset-y": {
+   "pt": -5,
+   "src": "judged:its top 5 pt above the icon's, as on iOS"
+  },
+  "component.badge.pad-x": {
+   "pt": 7,
+   "src": "judged:on each side of a long count"
+  },
+  "component.badge.type": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 15.5,
+    "line": 18,
+    "tracking": 0
+   },
+   "src": "judged:measured on iOS"
+  },
+  "component.button.fill": {
+   "ref": "ref.color.fills.tertiary",
+   "src": "judged:a faint capsule in the label colour (the kit's tertiary fill)"
+  },
+  "component.button.height": {
+   "pt": 40,
+   "src": "judged:a ringing notification's action capsules"
+  },
+  "component.button.text": {
+   "text": {
+    "family": "text",
+    "weight": 590,
+    "size": 15,
+    "line": 20,
+    "tracking": -0.23
+   },
+   "src": "judged:the platter title's type"
+  },
+  "component.card.material": {
+   "ref": "sys.material.glass.dock",
+   "src": "judged:the kit's widgets show the app's own background; ours sit on home's glass, the dock's"
+  },
+  "component.control.accent-symbol-color": {
+   "color": "#ffffff",
+   "src": "kit:2570:20609 (a symbol on an accent well: white)"
+  },
+  "component.control.chevron-color": {
+   "color": "#ffffffb3",
+   "src": "judged:Focus's chevron beside its name"
+  },
+  "component.control.corner": {
+   "pt": 30,
+   "src": "kit:2547:2662 (2x2)"
+  },
+  "component.control.detail": {
+   "text": {
+    "family": "text",
+    "weight": 510,
+    "size": 14,
+    "line": 18,
+    "tracking": -0.08
+   },
+   "src": "kit:2547:2575"
+  },
+  "component.control.detail-blend": {
+   "choice": "LINEAR_DODGE",
+   "src": "kit:2547:2575"
+  },
+  "component.control.detail-color": {
+   "color": "#ffffff54",
+   "src": "kit:2547:2575 (white 33 %)"
+  },
+  "component.control.label-color": {
+   "color": "#ffffff",
+   "src": "kit:2547:2574"
+  },
+  "component.control.material": {
+   "ref": "sys.material.glass.clear",
+   "src": "kit:10486:21122"
+  },
+  "component.control.on-material": {
+   "ref": "ref.material.control-center.on",
+   "src": "kit:10486:20857"
+  },
+  "component.control.on-symbol-color": {
+   "color": "#1c1c1e",
+   "src": "judged:a symbol on a lit (white) control"
+  },
+  "component.control.symbol": {
+   "pt": 35,
+   "src": "measured:the kit's render at 3x (the camera, SF Pro Bold 19: 29.3 pt wide); our symbols fill 5/6 of their box"
+  },
+  "component.control.symbol-color": {
+   "color": "#ffffff",
+   "src": "kit:2524:24527"
+  },
+  "component.control.title": {
+   "text": {
+    "family": "text",
+    "weight": 510,
+    "size": 15,
+    "line": 18,
+    "tracking": -0.2
+   },
+   "src": "kit:2547:2574"
+  },
+  "component.control.title-large": {
+   "text": {
+    "family": "text",
+    "weight": 590,
+    "size": 14,
+    "line": 17,
+    "tracking": -0.08
+   },
+   "src": "kit:2547:2646"
+  },
+  "component.control.well-material": {
+   "ref": "ref.material.control-center.well",
+   "src": "kit:2570:20607"
+  },
+  "component.dock.material": {
+   "ref": "sys.material.glass.dock",
+   "src": "kit:558:50551"
+  },
+  "component.field.clear-color": {
+   "light": "#3c3c4399",
+   "dark": "#ffffffd9",
+   "src": "judged:a search field's clear button"
+  },
+  "component.field.clear-symbol-color": {
+   "light": "#ffffff",
+   "dark": "#1c1c1e",
+   "src": "judged:its cross"
+  },
+  "component.field.material": {
+   "ref": "sys.material.glass.small-active",
+   "src": "kit:5720:33170 (the 48 pt search field: the small glass, active)"
+  },
+  "component.menu.corner": {
+   "pt": 30,
+   "src": "kit:10411:18581"
+  },
+  "component.menu.destructive": {
+   "ref": "ref.color.accents.red",
+   "src": "kit:5622:50175 (#ff383c)"
+  },
+  "component.menu.fallback": {
+   "light": "#f2f2f7f2",
+   "dark": "#2c2c2ed9",
+   "src": "judged:a menu without the glass renderer"
+  },
+  "component.menu.grow-from": {
+   "factor": 0.8,
+   "src": "judged:the panel grows out of what it belongs to from 80 % of its size"
+  },
+  "component.menu.label": {
+   "light": "#1a1a1a",
+   "dark": "#ffffff",
+   "src": "kit:5619:49810 (light; dark judged: white on the dark glass)"
+  },
+  "component.menu.label-x": {
+   "pt": 60,
+   "src": "kit:5619:49810"
+  },
+  "component.menu.material": {
+   "ref": "sys.material.glass.frosted",
+   "src": "judged:the frosted glass (was the kit's Regular, 5626:51776: barely translucent next to the rest)"
+  },
+  "component.menu.pad-bottom": {
+   "pt": 8,
+   "src": "kit:5621:50116"
+  },
+  "component.menu.pad-top": {
+   "pt": 10,
+   "src": "kit:5621:50116 (actions 10 pt below the top)"
+  },
+  "component.menu.press": {
+   "light": "#00000014",
+   "dark": "#ffffff1f",
+   "src": "judged:a pressed row's highlight (was the app's press fill)"
+  },
+  "component.menu.row": {
+   "pt": 42,
+   "src": "kit:5626:51776 (rows 42 pt apart)"
+  },
+  "component.menu.symbol": {
+   "pt": 18,
+   "src": "judged:a symbol from a drawable, the size of the drawn ones (18 pt)"
+  },
+  "component.menu.symbol-x": {
+   "pt": 36,
+   "src": "kit:5619:49811 (a 20 pt symbol column 26 pt in: its centre)"
+  },
+  "component.menu.type": {
+   "ref": "ref.type.body.regular",
+   "src": "kit:5619:49810 (17 Regular)"
+  },
+  "component.menu.width": {
+   "pt": 250,
+   "src": "kit:5626:51776"
+  },
+  "component.notification.body": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 15,
+    "line": 18,
+    "tracking": -0.23
+   },
+   "src": "kit:0:11292"
+  },
+  "component.notification.corner": {
+   "pt": 24,
+   "src": "kit:0:11292"
+  },
+  "component.notification.floating-material": {
+   "ref": "sys.material.glass.frosted-legible",
+   "src": "judged:the frosted glass that stays readable over any app (was the kit's Regular)"
+  },
+  "component.notification.gap": {
+   "pt": 8,
+   "src": "kit:135:73247"
+  },
+  "component.notification.icon": {
+   "pt": 38.33,
+   "src": "kit:0:11292"
+  },
+  "component.notification.label-color": {
+   "color": "#ffffff",
+   "src": "kit:0:11292"
+  },
+  "component.notification.material": {
+   "ref": "sys.material.glass.clear",
+   "src": "kit:0:11292"
+  },
+  "component.notification.padding": {
+   "pt": 14,
+   "src": "kit:0:11292"
+  },
+  "component.notification.time": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 15,
+    "line": 17,
+    "tracking": 0
+   },
+   "src": "kit:0:11292"
+  },
+  "component.notification.time-blend": {
+   "choice": "LINEAR_DODGE",
+   "src": "kit:533:7108"
+  },
+  "component.notification.time-color": {
+   "color": "#4d4d4d",
+   "src": "kit:533:7108"
+  },
+  "component.notification.title": {
+   "text": {
+    "family": "text",
+    "weight": 590,
+    "size": 15,
+    "line": 17,
+    "tracking": -0.23
+   },
+   "src": "kit:0:11292"
+  },
+  "component.panel.material": {
+   "ref": "ref.material.overlay.control-center",
+   "src": "kit:2524:24518"
+  },
+  "component.panel.samsung-strength": {
+   "factor": 0.15,
+   "src": "judged:One UI's dim-to-blur strength (blur and dim come together there; 0.35 and 0.6 were too strong on the S24)"
+  },
+  "component.remove-badge.disc": {
+   "light": "#e5e5eaf2",
+   "dark": "#747480e6",
+   "src": "judged:edit mode's grey disc"
+  },
+  "component.remove-badge.minus": {
+   "light": "#3c3c43",
+   "dark": "#ffffff",
+   "src": "judged:its minus"
+  },
+  "component.remove-badge.radius": {
+   "pt": 11,
+   "src": "judged:measured on iOS"
+  },
+  "component.remove-badge.stroke": {
+   "pt": 2.2,
+   "src": "judged:the minus"
+  },
+  "component.round-button.material": {
+   "ref": "sys.material.glass.clear",
+   "src": "kit:5592:28123"
+  },
+  "component.round-button.on-color": {
+   "color": "#ffffff",
+   "src": "judged:the flashlight on: a white disc (as iOS's)"
+  },
+  "component.round-button.size": {
+   "pt": 58,
+   "src": "kit:5592:28123"
+  },
+  "component.round-button.symbol": {
+   "pt": 38.5,
+   "src": "measured:the kit's lock screen rendered at 3x (SF Pro Bold 21 symbols: the flashlight 31.3 pt tall, the camera 32.7 pt wide); our symbols fill 5/6 of their box"
+  },
+  "component.round-button.symbol-blend": {
+   "choice": "LINEAR_DODGE",
+   "src": "kit:5592:28123"
+  },
+  "component.round-button.symbol-color": {
+   "color": "#d9d9d9e6",
+   "src": "kit:5592:28123 (#d9d9d9 linear dodge at 90 %)"
+  },
+  "component.sheet.fallback-color": {
    "light": "#f2f2f7f2",
    "dark": "#202024e6",
    "src": "judged:the gallery sheet without the glass renderer"
   },
-  "comp.widgets.grabber-color": {
+  "component.sheet.grabber-color": {
    "light": "#0000004d",
    "dark": "#ffffff59",
    "src": "judged:the gallery sheet's grabber"
   },
-  "comp.widgets.sheet.material": {
+  "component.sheet.material": {
    "ref": "sys.material.glass.frosted",
    "src": "judged:the frosted glass (was the kit's Regular)"
+  },
+  "component.slider.corner": {
+   "pt": 34,
+   "src": "kit:2570:20682"
+  },
+  "component.slider.cover": {
+   "factor": 0.8,
+   "src": "judged:the symbol takes the slider's colour while the level crosses its middle 80 % (the expanded slider's 100 % made one with the module's)"
+  },
+  "component.slider.expanded-corner": {
+   "pt": 46,
+   "src": "judged:the expanded slider (as it was in code)"
+  },
+  "component.wallpaper-label.dark": {
+   "color": "#1c1c1e",
+   "src": "judged:dark names over a bright wallpaper (the kit's label primary, light)"
+  },
+  "component.wallpaper-label.dark-from": {
+   "factor": 0.62,
+   "src": "judged:names start turning dark over a wallpaper this light (luminance)"
+  },
+  "component.wallpaper-label.dark-full": {
+   "factor": 0.78,
+   "src": "judged:names are fully dark over a wallpaper this light"
+  },
+  "component.wallpaper-label.light": {
+   "color": "#ffffff",
+   "src": "kit:the Home Screen's app names"
+  },
+  "component.wallpaper-label.shadow": {
+   "color": "#00000040",
+   "src": "judged:the soft shadow under white names (none under dark ones)"
   },
   "motion.app.cancel": {
    "spring": [
@@ -3722,6 +4046,10 @@
   }
  },
  "materialYou": {
+  "component.control.accent-symbol-color": {
+   "color": "@on_primary",
+   "src": "judged:Material You: a symbol on the primary is on-primary"
+  },
   "ref.color.accents.blue": {
    "color": "@primary",
    "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"

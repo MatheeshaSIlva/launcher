@@ -144,9 +144,17 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      to iOS 27 and the fallback is remembered. Over adb: `DESIGN_RELOAD --es colors wallpaper|theme`, `--ez palette
      true` (logs the palette). Known: Control Center draws its symbols on an accent in the same white as on glass, low
      contrast on a pale primary; B2b gives controls their own "on" colours.
-   - **B2b, the component catalogue**: shared component styles every layout reads (panel, card, notification card,
-     control tile, toggle, slider, button, segmented control, chip, list row, menu, search field, badge, scrim, label);
-     today's per-layout tokens (`comp.nc.*`, `comp.cc.*`, `comp.home.*`...) become aliases of them, values unchanged.
+   - **B2b, the component catalogue** (done 2026-10-10): 14 shared components (notification card, control, slider,
+     round button, button, menu, badge, remove badge, search field, names on the wallpaper, card, dock, sheet, panel)
+     with 81 properties as `component.*` tokens, each named and described in plain words (`design/Components.kt`, for
+     the settings app). The iOS 27 layouts' own tokens took their values from them and are now their aliases: every one
+     of the 574 earlier tokens resolves to exactly the value it had (checked token by token; Control Center and home
+     pixel-identical on the emulator). Below them stay the shared styles (materials `sys.material.*`, text, colours).
+     A theme restyles every layout through `component.*` (Graphite now does). New: a symbol on a control's accent has
+     its own colour (`component.control.accent-symbol-color`: white in iOS 27, on-primary in its wallpaper colours).
+     Pure layout geometry (Control Center's grid, Notification Center's stack offsets) stays in each layout's tokens;
+     the element rounds move it into the layouts. Later components (toggle, segmented control, chip, list row) come
+     with the first layout or settings screen that draws them.
    - **B2c, paint v2**: gradient fills, strokes, per-corner radii and corner smoothing in the renderer.
    - **B2d, fonts**: any family per text style (bundled, the device's, Google Fonts downloaded on the phone).
 3. Animation engine v2: roles, springs and beziers, presets; today's iOS motion as the first preset.

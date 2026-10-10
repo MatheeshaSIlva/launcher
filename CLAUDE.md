@@ -62,7 +62,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   the code reads is missing or of another kind); switch/reload: `am broadcast -a dev.launcher.app.DESIGN_RELOAD -p
   dev.launcher.app [--es theme ID]`, or the token editor's Theme button. Colours may name the phone's palette (`@primary`,
   `@system_accent2_900/40`: Material You, looked up when drawn); every theme may have a `materialYou` section used when the
-  user picks the wallpaper's colours (`sys.color.source`; adb: `DESIGN_RELOAD --es colors wallpaper|theme`). Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
+  user picks the wallpaper's colours (`sys.color.source`; adb: `DESIGN_RELOAD --es colors wallpaper|theme`).
+  **Component catalogue** (`design/Components.kt`): shared styles as `component.*` tokens (notification card, control,
+  slider, menu, badge, field, card, dock, sheet, panel...); the iOS layouts' `comp.*` tokens are aliases of them. A theme
+  restyles components through `component.*`; new layouts read `component.*`, never another layout's `comp.*`. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.

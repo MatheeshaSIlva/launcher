@@ -23,6 +23,8 @@ object CcTokens {
     val SLIDER_CORNER = NumberKey("comp.cc.slider.corner")
     /** A symbol on a lit (white) control. */
     val SYMBOL_ON = ColorKey("comp.cc.symbol-on-color")
+    /** A symbol on a control's accent colour when it is on (the shared control component's). */
+    val SYMBOL_ON_ACCENT = ColorKey("component.control.accent-symbol-color")
     val CHEVRON_COLOR = ColorKey("comp.cc.chevron-color")
     val ADD_FILL = ColorKey("comp.cc.add.fill-color")
     val MEDIA_PLACEHOLDER = ColorKey("comp.cc.media.placeholder-color")
@@ -110,7 +112,7 @@ object CcTokens {
         CONN_BIG, CONN_SMALL, CONN_SYMBOL_BIG, CONN_SYMBOL_SMALL, ART, ART_CORNER, ART_X, ART_Y, OUTPUT, MEDIA_TITLE,
         MEDIA_TEXT_COLOR, MEDIA_TEXT_BLEND, TRANSPORT, PLAY, GALLERY_SHEET, GALLERY_ENTRY, GALLERY_DIM, GALLERY_CORNER,
         SLIDER_COVER, EXPANDED_SLIDER_WIDTH, EXPANDED_SLIDER_HEIGHT, EXPANDED_SLIDER_CORNER, EXPANDED_SLIDER_SYMBOL,
-        SYMBOL_ON, CHEVRON_COLOR, ADD_FILL, MEDIA_PLACEHOLDER, MEDIA_TRACK, MEDIA_PROGRESS, MEDIA_LEVEL, MEDIA_SECONDARY,
+        SYMBOL_ON, SYMBOL_ON_ACCENT, CHEVRON_COLOR, ADD_FILL, MEDIA_PLACEHOLDER, MEDIA_TRACK, MEDIA_PROGRESS, MEDIA_LEVEL, MEDIA_SECONDARY,
         EDIT_BADGE, EDIT_BADGE_MINUS, EDIT_HANDLE, EDIT_HANDLE_SHADOW, GALLERY_GRABBER, GALLERY_HEADING, GALLERY_SECTION,
         GALLERY_NAME).map { it.name }
 }
