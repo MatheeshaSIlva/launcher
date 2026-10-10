@@ -2,7 +2,7 @@ package dev.launcher.app.home
 
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.MotionTokens
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
 
 /**
@@ -11,7 +11,7 @@ import dev.launcher.app.theme.Appearance
  * snapping. [redraw] draws the label again (each frame of the spring).
  */
 class GlassLabelTone(redraw: () -> Unit) {
-    private val tone = SpringValue(0f, 100f, { redraw() })
+    private val tone = MotionValue(0f, 100f, { redraw() })
     private var known = false
 
     /** The colour for a wallpaper of luminance [lum] behind the label; [snap]: no spring (the label is not shown yet). */

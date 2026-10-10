@@ -11,7 +11,8 @@ import android.graphics.RectF
 import android.view.Choreographer
 import android.view.MotionEvent
 import android.view.View
-import dev.launcher.app.Spring
+import dev.launcher.app.motion.Mover
+import dev.launcher.app.motion.mover
 import dev.launcher.app.motion.IosScroller
 import dev.launcher.app.motion.Motion
 import kotlin.math.ceil
@@ -41,7 +42,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         val cur = RectF()
         var progress = 0f
         var target = 0f
-        var spring: Spring? = null
+        var spring: Mover? = null
         var springStart = 0L
         var animating = false
         /** When it was last asked to open (uptimeMillis): a second tap on the tile right after is a double tap, not a tap inside. */
@@ -64,7 +65,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         /** Interactive once mostly open (icons can be tapped and the grid scrolled while the last of the growth plays). */
         val interactive get() = target == 1f && (!animating || progress > 0.6f)
 
-        fun animateTo(to: Float, s: Spring) {
+        fun animateTo(to: Float, s: Mover) {
             // From where it is, at the speed it has (in thousandths, so the spring's rest threshold suits a 0..1 value).
             val v = velocity()
             target = to
@@ -170,7 +171,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         lib.tilesPane.visibility = View.VISIBLE
         lib.host.setBackgroundCovered(false)
         p.openedAt = android.os.SystemClock.uptimeMillis()
-        p.animateTo(1f, Motion.profile.folderOpen.spring())
+        p.animateTo(1f, Motion.profile.folderOpen.mover())
         startFrames()
     }
 
@@ -186,7 +187,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         lib.tilesPane.visibility = View.VISIBLE
         lib.host.setBackgroundCovered(false)
         closing += p
-        p.animateTo(0f, Motion.profile.folderClose.spring())
+        p.animateTo(0f, Motion.profile.folderClose.mover())
         startFrames()
     }
 

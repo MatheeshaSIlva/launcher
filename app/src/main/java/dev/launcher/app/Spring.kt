@@ -12,16 +12,16 @@ import kotlin.math.sqrt
  * error and no dependence on frame pacing. Parameterised like SwiftUI/UIKit springs:
  * [response] = period of the undamped oscillation in seconds, [damping] = damping fraction (1 = critically damped).
  */
-class Spring(private val response: Float, private val damping: Float) {
+class Spring(private val response: Float, private val damping: Float) : dev.launcher.app.motion.Mover {
     // Natural angular frequency; slow motion (a debug token, 1 = normal) stretches every spring's period alike.
     private val omega = 2.0 * PI / (response * dev.launcher.app.motion.Motion.slow())
     private var x0 = 0.0                                    // start offset from target
     private var v0 = 0.0                                    // start velocity (units per second)
-    var target = 0f
+    override var target = 0f
         private set
 
     /** Starts from [from] moving at [velocity] (units/s) towards [to]. */
-    fun start(from: Float, velocity: Float, to: Float) {
+    override fun start(from: Float, velocity: Float, to: Float) {
         target = to
         x0 = (from - to).toDouble()
         v0 = velocity.toDouble()
@@ -46,11 +46,11 @@ class Spring(private val response: Float, private val damping: Float) {
         }
     }
 
-    fun value(t: Double): Float = (target + state(t).first).toFloat()
-    fun velocity(t: Double): Float = state(t).second.toFloat()
+    override fun value(t: Double): Float = (target + state(t).first).toFloat()
+    override fun velocity(t: Double): Float = state(t).second.toFloat()
 
     /** At rest when both offset and speed are below what a pixel can show. */
-    fun settled(t: Double, epsilon: Float = 0.5f): Boolean {
+    override fun settled(t: Double, epsilon: Float): Boolean {
         val (x, v) = state(t)
         return abs(x) < epsilon && abs(v) < epsilon * 10
     }

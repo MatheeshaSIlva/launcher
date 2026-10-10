@@ -61,6 +61,9 @@ class DesignActivity : Activity() {
         // The theme: the app's own and the ones in files/themes/ (pushed over adb); the edits below belong to it.
         themeButton = button("") { chooseTheme() }
         root.addView(themeButton)
+        // The animation preset, chosen apart from the theme (motion.* tokens below belong to it).
+        motionButton = button("") { chooseMotion() }
+        root.addView(motionButton)
         val search = EditText(this).apply {
             hint = "Search tokens (key or value)"
             setHintTextColor(0x80FFFFFF.toInt())
@@ -97,6 +100,15 @@ class DesignActivity : Activity() {
     }
 
     private lateinit var themeButton: Button
+    private lateinit var motionButton: Button
+
+    private fun chooseMotion() {
+        val list = Design.motionPresets()
+        val names = list.map { t -> (if (t.id == Design.motionPresetId) "✓ " else "") + t.name + if (t.builtIn) "" else "  (file)" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Animations").setItems(names) { _, i ->
+            if (!Design.setMotion(list[i].id)) android.widget.Toast.makeText(this, "That preset cannot be used (see the log)", android.widget.Toast.LENGTH_LONG).show()
+        }.setNegativeButton("Cancel", null).show()
+    }
 
     private fun chooseTheme() {
         val list = Design.themes()
@@ -130,6 +142,7 @@ class DesignActivity : Activity() {
         val edited = Design.keys().count { Design.userEntry(it) != null }
         header.text = "Design tokens (${Design.keys().size}, $edited edited)"
         themeButton.text = "Theme: ${Design.themeName}  ▾"
+        motionButton.text = "Animations: ${Design.motionName}  ▾"
     }
 
     /** "ref.color.accents.blue" -> "ref.color"; "comp.nc.platter.corner" -> "comp.nc". */
@@ -202,7 +215,10 @@ class DesignActivity : Activity() {
             if (v.dynamic) "${listOfNotNull(v.lightSpec, v.darkSpec).distinct().joinToString(" / ")}  ($hexes)" else hexes
         }
         is Value.Number -> "${fmt(v.v)} ${v.unit.name.lowercase()}"
-        is Value.SpringV -> "spring ${fmt(v.spring.response)} s, damping ${fmt(v.spring.damping)}"
+        is Value.CurveV -> when (val c = v.curve) {
+            is Curve.Spring -> "spring ${fmt(c.response)} s, damping ${fmt(c.damping)}"
+            is Curve.Ease -> "bezier ${fmt(c.x1)}, ${fmt(c.y1)}, ${fmt(c.x2)}, ${fmt(c.y2)} over ${fmt(c.ms)} ms"
+        }
         is Value.Choice -> v.option
         is Value.Text -> "${v.style.family} ${v.style.weight}, ${fmt(v.style.sizePt)}/${fmt(v.style.lineHeightPt)} pt, ${fmt(v.style.trackingPt)}"
         is Value.Mat -> "frost ${fmt(v.material.frostPt)}" + (v.material.lens?.let { ", lens ${fmt(it.refraction)}/${fmt(it.depthPt)}" } ?: "") + ", ${v.material.fills.size} fills"
@@ -249,10 +265,20 @@ class DesignActivity : Activity() {
             val n = numberEditor(box, v.unit.name.lowercase(), v.v, lo, hi);
             { Value.Number(n(), v.unit) }
         }
-        is Value.SpringV -> {
-            val r = numberEditor(box, "response (s)", v.spring.response, 0.05f, 2f)
-            val d = numberEditor(box, "damping", v.spring.damping, 0.05f, 1.5f);
-            { Value.SpringV(Spring(r(), d())) }
+        is Value.CurveV -> {
+            // Either kind may be chosen: the other's fields start from a curve of about the same length.
+            val c = v.curve
+            val s = c as? Curve.Spring ?: Curve.Spring(((c as Curve.Ease).ms / 1000f).coerceIn(0.05f, 2f), 1f)
+            val e = c as? Curve.Ease ?: Curve.Ease(0.2f, 0f, 0f, 1f, (s.response * 1000f).coerceIn(50f, 2000f))
+            val kind = field(box, "kind (spring or bezier)", if (c is Curve.Spring) "spring" else "bezier", number = false)
+            val r = numberEditor(box, "spring: response (s)", s.response, 0.05f, 2f)
+            val d = numberEditor(box, "spring: damping", s.damping, 0.05f, 1.5f)
+            val x1 = numberEditor(box, "bezier: x1", e.x1, 0f, 1f)
+            val y1 = numberEditor(box, "bezier: y1", e.y1, -1f, 2f)
+            val x2 = numberEditor(box, "bezier: x2", e.x2, 0f, 1f)
+            val y2 = numberEditor(box, "bezier: y2", e.y2, -1f, 2f)
+            val ms = numberEditor(box, "bezier: duration (ms)", e.ms, 50f, 2000f);
+            { Value.CurveV(if (kind.text.toString().trim() == "bezier") Curve.Ease(x1(), y1(), x2(), y2(), ms()) else Curve.Spring(r(), d())) }
         }
         is Value.Choice -> {
             val f = field(box, "option", v.option, number = false);

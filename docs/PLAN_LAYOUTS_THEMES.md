@@ -180,7 +180,24 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      status bar) keep the font they got until they are rebuilt (B4's rebuild on a theme change); a font not yet on the
      phone shows the fallback until it arrives (the settings app downloads first and applies after, C2). Over adb:
      write `sys.font.text` into `files/design/user.json` (run-as) and `DESIGN_RELOAD`.
-3. Animation engine v2: roles, springs and beziers, presets; today's iOS motion as the first preset.
+3. Animation engine v2: roles, springs and beziers, presets; today's iOS motion as the first preset. In three steps:
+   - **B3a, curves and presets** (done 2026-10-10): every motion role (`motion.*`) is a curve: a spring (`{"spring":
+     [response, damping]}`) or a cubic bezier over a duration (`{"bezier": [x1, y1, x2, y2], "ms": 300}`, CSS's
+     cubic-bezier; x1 and x2 within 0..1), either kind for any role. The code runs both through one interface
+     (`motion/Curves.kt`: `Mover`, the analytic spring and `Ease`), so every animation stays interruptible: a bezier started
+     mid-motion keeps the speed it had (carried on and faded out by its end: `v0 · t · (1 − t/d)²`) and ends exactly on
+     its target. Motion left the theme: the animation presets are files of their own (`assets/motion/<id>.json`, or
+     `files/motion/`, built on each other like themes, checked against iOS 27's; a preset holds only `motion.*`, a theme
+     none); chosen apart from the theme (`files/design/motion.txt`; adb `DESIGN_RELOAD --es motion ID`; the token
+     editor's Animations button), the user's edits kept per preset (`files/design/motion-edits-<id>.json`; earlier motion
+     edits moved there once). iOS 27's preset: the 112 motion tokens as they were (`comp.cc.motion.open` became
+     `motion.cc.open`), every value unchanged. Checked on the emulator: launch, close, App Library, Spotlight, menu,
+     Control Center, Notification Center; the edits moved.
+   - **B3b, every animation a role**: the animations still timed in code (fades, crossfades, the status bar's, the
+     wallpaper's, Spotlight's) become roles with their current curves; the roles named and described for the settings
+     app (as the component catalogue).
+   - **B3c, a second preset**: a test preset in beziers (as Graphite is for themes), switched both ways on the emulator,
+     grabs and interruptions included.
 4. Clean layout switching (teardown, rebuild, re-publish, transition), tested by switching every element back and forth.
 
 **C. Settings app** (Compose, themed by the active theme)

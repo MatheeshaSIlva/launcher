@@ -196,7 +196,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
      * 0: light glass and a white date, 1: dark ones (over a bright wallpaper). Home sets it from the wallpaper under the
      * whole clock ([LabelTone]), the date and the numerals together; it moves on a spring.
      */
-    private val tone = dev.launcher.app.motion.SpringValue(0f, 100f, { applyTone() })
+    private val tone = dev.launcher.app.motion.MotionValue(0f, 100f, { applyTone() })
     private var toneKnown = false
     private val digitPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE

@@ -14,7 +14,7 @@ sealed class Value {
         val dynamic get() = lightSpec != null || darkSpec != null
     }
     data class Number(val v: Float, val unit: NumUnit) : Value()
-    data class SpringV(val spring: Spring) : Value()
+    data class CurveV(val curve: Curve) : Value()
     data class Choice(val option: String) : Value()
     data class Text(val style: TextStyle) : Value()
     data class Mat(val material: Material) : Value()
@@ -32,7 +32,8 @@ data class Entry(val value: Value, val src: Provenance, val note: String? = null
  * "sys.color.label.primary": {"ref": "ref.color.labels.primary", "src": "kit:VariableID:507:29167"}
  * "ref.color.accents.blue":  {"light": "#0088ff", "dark": "#0091ff", "src": "kit:VariableID:507:29166"}
  * "comp.nc.platter.corner":  {"pt": 24, "src": "kit:5914:23547"}
- * "sys.motion.panel.open":   {"spring": [0.3, 1.0], "src": "measured:pass 5, test30"}
+ * "motion.nc.open":          {"spring": [0.3, 1.0], "src": "measured:pass 5, test30"}   (animation presets: assets/motion/)
+ * "motion.sheet":            {"bezier": [0.2, 0, 0, 1], "ms": 300, "src": "judged:..."}
  * "sys.layout.shade":        {"choice": "ios27"}
  * "sys.type.body":           {"text": {"family": "text", "weight": 400, "size": 17, "line": 22, "tracking": -0.43}}
  * "sys.material.glass.clear": {"material": {"frost": 6, "lens": {...},
@@ -92,9 +93,23 @@ class Theme(
             t.has("fraction") -> Value.Number(t.getDouble("fraction").toFloat(), NumUnit.FRACTION)
             t.has("percent") -> Value.Number(t.getDouble("percent").toFloat(), NumUnit.PERCENT)
             t.has("deg") -> Value.Number(t.getDouble("deg").toFloat(), NumUnit.DEGREES)
+            t.has("bezier") -> t.getJSONArray("bezier").let { b ->
+                require(b.length() == 4) { "token $key: a bezier has four numbers (x1, y1, x2, y2)" }
+                val e = Curve.Ease(b.getDouble(0).toFloat(), b.getDouble(1).toFloat(), b.getDouble(2).toFloat(), b.getDouble(3).toFloat(),
+                    t.getDouble("ms").toFloat())
+                require(e.x1 in 0f..1f && e.x2 in 0f..1f) { "token $key: a bezier's x1 and x2 are within 0..1" }
+                require(e.y1 in -2f..3f && e.y2 in -2f..3f) { "token $key: a bezier's y1 and y2 are within -2..3" }
+                require(e.ms > 0f && e.ms <= 20_000f) { "token $key: a bezier's duration is 1 to 20000 ms" }
+                Value.CurveV(e)
+            }
             t.has("ms") -> Value.Number(t.getDouble("ms").toFloat(), NumUnit.MS)
             t.has("factor") -> Value.Number(t.getDouble("factor").toFloat(), NumUnit.FACTOR)
-            t.has("spring") -> t.getJSONArray("spring").let { Value.SpringV(Spring(it.getDouble(0).toFloat(), it.getDouble(1).toFloat())) }
+            t.has("spring") -> t.getJSONArray("spring").let {
+                val s = Curve.Spring(it.getDouble(0).toFloat(), it.getDouble(1).toFloat())
+                require(s.response > 0f && s.response <= 20f) { "token $key: a spring's response is above 0 and at most 20 s" }
+                require(s.damping > 0f && s.damping <= 4f) { "token $key: a spring's damping is above 0 and at most 4" }
+                Value.CurveV(s)
+            }
             t.has("choice") -> Value.Choice(t.getString("choice"))
             t.has("text") -> t.getJSONObject("text").let {
                 Value.Text(TextStyle(it.optString("family", "text"), it.getInt("weight"), it.getDouble("size").toFloat(),
@@ -224,7 +239,11 @@ class Theme(
                     NumUnit.PT -> "pt"; NumUnit.FRACTION -> "fraction"; NumUnit.PERCENT -> "percent"
                     NumUnit.DEGREES -> "deg"; NumUnit.MS -> "ms"; NumUnit.FACTOR -> "factor"
                 }, v.v.toDouble())
-                is Value.SpringV -> o.put("spring", JSONArray().put(v.spring.response.toDouble()).put(v.spring.damping.toDouble()))
+                is Value.CurveV -> when (val c = v.curve) {
+                    is Curve.Spring -> o.put("spring", JSONArray().put(c.response.toDouble()).put(c.damping.toDouble()))
+                    is Curve.Ease -> o.put("bezier", JSONArray().put(c.x1.toDouble()).put(c.y1.toDouble()).put(c.x2.toDouble()).put(c.y2.toDouble()))
+                        .put("ms", c.ms.toDouble())
+                }
                 is Value.Choice -> o.put("choice", v.option)
                 is Value.Text -> o.put("text", JSONObject().put("family", v.style.family).put("weight", v.style.weight)
                     .put("size", v.style.sizePt.toDouble()).put("line", v.style.lineHeightPt.toDouble()).put("tracking", v.style.trackingPt.toDouble()))

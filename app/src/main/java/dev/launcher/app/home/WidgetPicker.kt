@@ -30,7 +30,7 @@ import dev.launcher.app.Wallpaper
 import dev.launcher.app.drawer.LabelPainter
 import dev.launcher.app.motion.IosScroller
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
@@ -99,18 +99,18 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private val featuredH get() = m.pt(30f) + featuredCardH + m.pt(44f)
 
     // 0 = down (hidden), 1 = up. Dragging the sheet down moves [drop] (px).
-    private val shown: SpringValue = SpringValue(0f, 1000f, { onMoved() }, { if (shown.value == 0f) finishClose() })
-    private val drop = SpringValue(0f, 1f, { onMoved() })
+    private val shown: MotionValue = MotionValue(0f, 1000f, { onMoved() }, { if (shown.value == 0f) finishClose() })
+    private val drop = MotionValue(0f, 1f, { onMoved() })
     // 0 = the list, 1 = an app's page.
-    private val push: SpringValue = SpringValue(0f, 1000f, { placeField(); invalidate() }, {
+    private val push: MotionValue = MotionValue(0f, 1000f, { placeField(); invalidate() }, {
         if (push.value == 0f) { app = null; entries = emptyList() }
         else if (push.value >= 0.999f && pendingViews.isNotEmpty()) postOnAnimation(inflateNext)
     })
     // An app's page: which entry is centred (fractional while swiping).
-    private val pager = SpringValue(0f, 1000f, { invalidate() })
+    private val pager = MotionValue(0f, 1000f, { invalidate() })
     private val list = IosScroller({ invalidate() })
     // Pressed things shrink a little (buttons) or highlight (rows); released ones spring back.
-    private val pressK = SpringValue(0f, 1000f, { invalidate() })
+    private val pressK = MotionValue(0f, 1000f, { invalidate() })
 
     /** The sheet (`comp.widgets.sheet.material`), drawn over home as it is behind it. */
     private val glass = dev.launcher.app.design.MaterialPainter.create(m.u)

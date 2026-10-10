@@ -16,13 +16,23 @@ import java.io.File
  * change crossfades every token on the same frames); numbers come in their own unit ([pt] turns points into pixels by
  * the scaling policy).
  *
- * Changing a token or the theme bumps [version] and calls the listeners (on the main thread): views that drew with tokens
- * draw again. Resolved values are cached until the next change; reading a token in a draw call is a map lookup.
+ * Motion is a layer of its own (docs/PLAN_LAYOUTS_THEMES.md, B3): the active animation preset (`assets/motion/<id>.json`
+ * or `files/motion/<id>.json`, the same file format, built on each other the same way) holds every `motion.*` token,
+ * a theme none; the user picks a preset apart from the theme, and their edits of it are kept per preset
+ * (`files/design/motion-edits-<id>.json`). Both resolve together: code reads a motion role as any other token.
+ *
+ * Changing a token, the theme or the preset bumps [version] and calls the listeners (on the main thread): views that drew
+ * with tokens draw again. Resolved values are cached until the next change; reading a token in a draw call is a map lookup.
  */
 object Design {
     /** The theme every other one is checked against (it has every token the code reads) and the one used by default. */
     const val DEFAULT_THEME = "ios27"
     private const val ACTIVE = "design/theme.txt"
+    /** The animation preset every other one is checked against and the one used by default. */
+    const val DEFAULT_MOTION = "ios27"
+    private const val ACTIVE_MOTION = "design/motion.txt"
+    private const val THEMES = "themes"
+    private const val PRESETS = "motion"
     /** How deep themes may be built on each other. */
     private const val MAX_EXTENDS = 6
     /**
@@ -36,6 +46,10 @@ object Design {
     private var chain: List<Theme> = emptyList()
     private var activeId = DEFAULT_THEME
     private val user = LinkedHashMap<String, Entry>()
+    /** The active animation preset and the ones it is built on (the base first), and the user's edits of it. */
+    private var motionChain: List<Theme> = emptyList()
+    private var motionId = DEFAULT_MOTION
+    private val motionUser = LinkedHashMap<String, Entry>()
     /** The resolver and its cache, replaced as a whole on a change (surfaces read tokens on their own threads). */
     private class State(val resolver: Resolver) { val cache = java.util.concurrent.ConcurrentHashMap<String, Value>() }
     @Volatile private var state = State(Resolver(emptyList()))
@@ -49,6 +63,11 @@ object Design {
 
     val themeName get() = chain.lastOrNull()?.name ?: "none"
     val themeId get() = activeId
+    val motionName get() = motionChain.lastOrNull()?.name ?: "none"
+    val motionPresetId get() = motionId
+
+    /** A token of the animation layer (a preset's), not of the theme. */
+    fun isMotion(key: String) = key.startsWith("motion.")
 
     /** Loads the active theme and the user's edits (at app start, before anything draws). */
     fun init(ctx: Context) {
@@ -61,11 +80,19 @@ object Design {
             load(DEFAULT_THEME)
             try { File(appCtx.filesDir, ACTIVE).apply { parentFile?.mkdirs() }.writeText(DEFAULT_THEME) } catch (_: Throwable) { }
         }
+        moveMotionEdits()
+        motionId = try { File(appCtx.filesDir, ACTIVE_MOTION).takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null } } catch (_: Throwable) { null } ?: DEFAULT_MOTION
+        if (!loadMotion(motionId)) {
+            motionId = DEFAULT_MOTION
+            loadMotion(DEFAULT_MOTION)
+            try { File(appCtx.filesDir, ACTIVE_MOTION).apply { parentFile?.mkdirs() }.writeText(DEFAULT_MOTION) } catch (_: Throwable) { }
+        }
         paletteAt = paletteStamp()
-        AppLog.log("[design] theme '$themeName' (${chain.joinToString(" < ") { it.name }}) ${resolver.keys().size} tokens, ${user.size} edited")
+        AppLog.log("[design] theme '$themeName' (${chain.joinToString(" < ") { it.name }}), motion '$motionName' (${motionChain.joinToString(" < ") { it.name }}): " +
+            "${resolver.keys().size} tokens, ${user.size + motionUser.size} edited")
         // Over adb, for fast iteration: the theme files and the edits are read again (a theme pushed to files/themes/ shows at
         // once), or another theme is chosen; everything drawn with tokens redraws.
-        //   adb shell am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app [--es theme ID]
+        //   adb shell am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app [--es theme ID] [--es motion ID]
         // Senders must hold DUMP (adb's shell does; other apps cannot).
         val r = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: android.content.Intent) {
@@ -74,7 +101,10 @@ object Design {
                 // --es colors wallpaper|theme: the theme's colours from the wallpaper (Material You) or its own.
                 i.getStringExtra("colors")?.let { setColorSource(it); return }
                 val id = i.getStringExtra("theme")
-                if (id != null) setTheme(id) else reload()
+                val preset = i.getStringExtra("motion")
+                if (id != null) setTheme(id)
+                if (preset != null) setMotion(preset)
+                if (id == null && preset == null) reload()
             }
         }
         val f = android.content.IntentFilter("dev.launcher.app.DESIGN_RELOAD")
@@ -89,16 +119,42 @@ object Design {
     fun themes(): List<ThemeInfo> {
         val out = LinkedHashMap<String, ThemeInfo>()
         try {
-            for (n in appCtx.assets.list("themes") ?: emptyArray()) if (n.endsWith(".json")) {
+            for (n in appCtx.assets.list(THEMES) ?: emptyArray()) if (n.endsWith(".json")) {
                 val id = n.removeSuffix(".json")
-                readTheme(id)?.let { out[id] = ThemeInfo(id, it.name, true) }
+                readFile(THEMES, id)?.let { out[id] = ThemeInfo(id, it.name, true) }
             }
         } catch (_: Throwable) { }
-        File(appCtx.filesDir, "themes").listFiles()?.filter { it.name.endsWith(".json") }?.forEach { f ->
+        File(appCtx.filesDir, THEMES).listFiles()?.filter { it.name.endsWith(".json") }?.forEach { f ->
             val id = f.name.removeSuffix(".json")
-            readTheme(id)?.let { out[id] = ThemeInfo(id, it.name, false) }
+            readFile(THEMES, id)?.let { out[id] = ThemeInfo(id, it.name, false) }
         }
         return out.values.toList()
+    }
+
+    /** The animation presets there are: the app's own, and the ones in `files/motion/`. */
+    fun motionPresets(): List<ThemeInfo> {
+        val out = LinkedHashMap<String, ThemeInfo>()
+        try {
+            for (n in appCtx.assets.list(PRESETS) ?: emptyArray()) if (n.endsWith(".json")) {
+                val id = n.removeSuffix(".json")
+                readFile(PRESETS, id)?.let { out[id] = ThemeInfo(id, it.name, true) }
+            }
+        } catch (_: Throwable) { }
+        File(appCtx.filesDir, PRESETS).listFiles()?.filter { it.name.endsWith(".json") }?.forEach { f ->
+            val id = f.name.removeSuffix(".json")
+            readFile(PRESETS, id)?.let { out[id] = ThemeInfo(id, it.name, false) }
+        }
+        return out.values.toList()
+    }
+
+    /** Makes [id] the active animation preset (remembered); false if it cannot be used (logged), the current one stays. */
+    fun setMotion(id: String): Boolean {
+        val before = motionId
+        if (!loadMotion(id)) return false
+        motionId = id
+        try { File(appCtx.filesDir, ACTIVE_MOTION).apply { parentFile?.mkdirs() }.writeText(id) } catch (_: Throwable) { }
+        changedOutside("motion '$motionName'" + if (before != id) " (was $before)" else " (reloaded)")
+        return true
     }
 
     /** Makes [id] the active theme (remembered); false if it cannot be used (the reason is logged), the current one stays. */
@@ -113,8 +169,9 @@ object Design {
 
     /** The active theme's files and the edits read again (written over adb): applied at once, as an edit in the editor is. */
     fun reload() {
-        if (!load(activeId)) return
-        changedOutside("reloaded")
+        val theme = load(activeId)
+        val motion = loadMotion(motionId)
+        if (theme || motion) changedOutside("reloaded")
     }
 
     /** A Google font the theme names was downloaded (theme/Fonts): every surface draws again with it. */
@@ -122,7 +179,7 @@ object Design {
 
     private fun changedOutside(what: String) {
         version++
-        AppLog.log("[design] $what: ${user.size} edited")
+        AppLog.log("[design] $what: ${user.size + motionUser.size} edited")
         val run = Runnable { for (l in listeners.toList()) l() }
         if (Looper.myLooper() == Looper.getMainLooper()) run.run() else main.post(run)
     }
@@ -132,10 +189,15 @@ object Design {
      * same kind as [DEFAULT_THEME]'s (a missing or mistyped token would fail where it is drawn); else nothing changes.
      */
     private fun load(id: String): Boolean {
-        val c = try { chainOf(id) } catch (t: Throwable) { AppLog.log("[design] theme '$id' cannot be used: ${t.message}"); return false }
+        val c = (try { chainOf(THEMES, id) } catch (t: Throwable) { AppLog.log("[design] theme '$id' cannot be used: ${t.message}"); return false })
+            .map { t -> if (t.entries.keys.none(::isMotion)) t else {
+                // Motion is the animation preset's: a theme's own (an older theme file) is not used.
+                AppLog.log("[design] theme '${t.name}': its motion tokens are not used (motion belongs to an animation preset)")
+                Theme(t.name, t.author, t.version, t.entries.filterKeys { !isMotion(it) }, t.extends, t.materialYou.filterKeys { !isMotion(it) })
+            } }
         val edits = try {
             val f = File(appCtx.filesDir, userFile(id))
-            if (f.exists()) Theme.parse(f.readText()).entries else emptyMap()
+            if (f.exists()) Theme.parse(f.readText()).entries.filterKeys { !isMotion(it) } else emptyMap()
         } catch (t: Throwable) { AppLog.log("[design] edits of '$id' unreadable (${t.message}): ignored"); emptyMap() }
         // Checked with and without its Material You section (either may be shown).
         for (my in listOf(false, true)) {
@@ -150,28 +212,74 @@ object Design {
         return true
     }
 
-    /** [id] and the themes it is built on, the base first. */
-    private fun chainOf(id: String): List<Theme> {
+    /**
+     * Loads animation preset [id] (with the ones it is built on) and its edits, if it holds motion tokens only and gives
+     * every one the code reads, of the same kind as [DEFAULT_MOTION]'s; else nothing changes.
+     */
+    private fun loadMotion(id: String): Boolean {
+        val c = try { chainOf(PRESETS, id) } catch (t: Throwable) { AppLog.log("[design] animation preset '$id' cannot be used: ${t.message}"); return false }
+        val stray = c.flatMap { it.entries.keys }.filterNot(::isMotion)
+        if (stray.isNotEmpty()) { AppLog.log("[design] animation preset '$id' cannot be used: it holds tokens that are not motion (${stray.take(3).joinToString()})"); return false }
+        val edits = try {
+            val f = File(appCtx.filesDir, motionEditsFile(id))
+            if (f.exists()) Theme.parse(f.readText()).entries.filterKeys(::isMotion) else emptyMap()
+        } catch (t: Throwable) { AppLog.log("[design] edits of preset '$id' unreadable (${t.message}): ignored"); emptyMap() }
+        val layers = c.map { it.entries } + listOf(LinkedHashMap(edits))
+        val problem = checkResolves(layers) ?: if (id == DEFAULT_MOTION && c.size == 1) null else {
+            val base = readFile(PRESETS, DEFAULT_MOTION)
+            if (base == null) "the default animation preset is missing" else ThemeCheck.against(base.entries, layers)
+        }
+        if (problem != null) { AppLog.log("[design] animation preset '$id' cannot be used: $problem"); return false }
+        motionChain = c
+        motionUser.clear()
+        motionUser.putAll(edits)
+        rebuild()
+        return true
+    }
+
+    private fun motionEditsFile(id: String) = "design/motion-edits-$id.json"
+
+    /**
+     * Earlier builds kept motion in the theme, so a user's motion edits are in a theme's edits: moved (once) into the
+     * default preset's edits, where they apply as before.
+     */
+    private fun moveMotionEdits() {
+        val dir = File(appCtx.filesDir, "design")
+        val files = dir.listFiles()?.filter { it.name == "user.json" || (it.name.startsWith("user-") && it.name.endsWith(".json")) } ?: return
+        for (f in files) try {
+            val edits = Theme.parse(f.readText()).entries
+            val moving = edits.filterKeys(::isMotion)
+            if (moving.isEmpty()) continue
+            val target = File(appCtx.filesDir, motionEditsFile(DEFAULT_MOTION))
+            val have = if (target.exists()) Theme.parse(target.readText()).entries else emptyMap()
+            target.writeText(Theme.write("user", LinkedHashMap(moving).apply { putAll(have) }))
+            f.writeText(Theme.write("user", edits.filterKeys { !isMotion(it) }))
+            AppLog.log("[design] ${moving.size} motion edits moved from ${f.name} to the animation preset's")
+        } catch (t: Throwable) { AppLog.log("[design] moving motion edits from ${f.name} failed: ${t.message}") }
+    }
+
+    /** [id] and the files it is built on (themes or animation presets, in [folder]), the base first. */
+    private fun chainOf(folder: String, id: String): List<Theme> {
         val out = ArrayList<Theme>()
         val seen = HashSet<String>()
         var cur: String? = id
         while (cur != null) {
             if (!seen.add(cur)) throw IllegalStateException("themes built on each other in a loop ($cur)")
             if (out.size >= MAX_EXTENDS) throw IllegalStateException("built on too many themes")
-            val t = readTheme(cur) ?: throw IllegalStateException("theme '$cur' not found")
+            val t = readFile(folder, cur) ?: throw IllegalStateException("'$cur' not found in $folder")
             out.add(0, t)
             cur = t.extends
         }
         return out
     }
 
-    /** The theme file [id], from `files/themes/` or the app's own; null if there is none or it cannot be read. */
-    private fun readTheme(id: String): Theme? = try {
-        val f = File(appCtx.filesDir, "themes/$id.json")
-        val text = if (f.exists()) f.readText() else appCtx.assets.open("themes/$id.json").bufferedReader().use { it.readText() }
+    /** The file [id] in [folder] (themes or motion), from `files/<folder>/` or the app's own; null if none or unreadable. */
+    private fun readFile(folder: String, id: String): Theme? = try {
+        val f = File(appCtx.filesDir, "$folder/$id.json")
+        val text = if (f.exists()) f.readText() else appCtx.assets.open("$folder/$id.json").bufferedReader().use { it.readText() }
         Theme.parse(text)
     } catch (t: Throwable) {
-        if (t !is java.io.FileNotFoundException) AppLog.log("[design] theme file '$id' unreadable: ${t.javaClass.simpleName}: ${t.message}")
+        if (t !is java.io.FileNotFoundException) AppLog.log("[design] $folder file '$id' unreadable: ${t.javaClass.simpleName}: ${t.message}")
         null
     }
 
@@ -183,7 +291,7 @@ object Design {
 
     private fun checkAgainstDefault(layers: List<Map<String, Entry>>): String? {
         checkResolves(layers)?.let { return it }
-        val base = readTheme(DEFAULT_THEME) ?: return "the default theme is missing"
+        val base = readFile(THEMES, DEFAULT_THEME) ?: return "the default theme is missing"
         return ThemeCheck.against(base.entries, layers)
     }
 
@@ -191,8 +299,10 @@ object Design {
 
     private fun layersOf(c: List<Theme>, edits: Map<String, Entry>, materialYou: Boolean) = ThemeLayers.of(c, edits, materialYou)
 
+    /** The theme's layers and the animation preset's (their keys never meet: motion.* is only the preset's). */
     private fun rebuild() {
-        state = State(Resolver(layersOf(chain, user, ThemeLayers.fromWallpaper(chain, user))) { name -> paletteColor(name) })
+        val layers = layersOf(chain, user, ThemeLayers.fromWallpaper(chain, user)) + motionChain.map { it.entries } + listOf(LinkedHashMap(motionUser))
+        state = State(Resolver(layers) { name -> paletteColor(name) })
     }
 
     /** The theme's colours come from the wallpaper (Material You) instead of its own. */
@@ -279,7 +389,7 @@ object Design {
     /** [k] (a length in points) in pixels, at [unitPx] pixels per point ([Scale.unitPx]). */
     fun pt(k: NumberKey, unitPx: Float): Float = num(k) * unitPx
 
-    fun spring(k: SpringKey): Spring = (value(k.name) as? Value.SpringV ?: throw IllegalStateException("token $k is not a spring")).spring
+    fun curve(k: CurveKey): Curve = (value(k.name) as? Value.CurveV ?: throw IllegalStateException("token $k is not a curve")).curve
     fun choice(k: ChoiceKey): String = (value(k.name) as? Value.Choice ?: throw IllegalStateException("token $k is not a choice")).option
     fun text(k: TextKey): TextStyle = (value(k.name) as? Value.Text ?: throw IllegalStateException("token $k is not a text style")).style
     fun material(k: MaterialKey): Material = (value(k.name) as? Value.Mat ?: throw IllegalStateException("token $k is not a material")).material
@@ -289,29 +399,30 @@ object Design {
     /** Every token key of the theme (and of the user's edits), sorted. */
     fun keys(): List<String> = resolver.keys().sorted()
 
-    /** [key] as the theme defines it (null: not edited) and as the user edited it. */
+    /** [key] as the theme (or, for motion, the animation preset) defines it, and as the user edited it (null: not edited). */
     fun themeEntry(key: String): Entry? {
-        for (t in chain.asReversed()) t.entries[key]?.let { return it }
+        for (t in (if (isMotion(key)) motionChain else chain).asReversed()) t.entries[key]?.let { return it }
         return null
     }
-    fun userEntry(key: String): Entry? = user[key]
+    fun userEntry(key: String): Entry? = if (isMotion(key)) motionUser[key] else user[key]
     fun entry(key: String): Entry? = resolver.entry(key)
     fun resolved(key: String): Value = value(key)
 
     /** The user changed [key] to [v] (saved at once, every surface draws again). */
     fun set(key: String, v: Value) {
-        user[key] = Entry(v, Provenance.User)
+        (if (isMotion(key)) motionUser else user)[key] = Entry(v, Provenance.User)
         changed()
     }
 
-    /** Back to the theme's value. */
+    /** Back to the theme's (or the animation preset's) value. */
     fun reset(key: String) {
-        if (user.remove(key) != null) changed()
+        if ((if (isMotion(key)) motionUser else user).remove(key) != null) changed()
     }
 
     fun resetAll() {
-        if (user.isEmpty()) return
+        if (user.isEmpty() && motionUser.isEmpty()) return
         user.clear()
+        motionUser.clear()
         changed()
     }
 
@@ -324,11 +435,12 @@ object Design {
     }
 
     private fun save() {
-        try {
-            val f = File(appCtx.filesDir, userFile(activeId))
+        for ((name, edits) in listOf(userFile(activeId) to user, motionEditsFile(motionId) to motionUser)) try {
+            val f = File(appCtx.filesDir, name)
+            if (edits.isEmpty() && !f.exists()) continue
             f.parentFile?.mkdirs()
             val tmp = File(f.path + ".tmp")
-            tmp.writeText(Theme.write("user", user))
+            tmp.writeText(Theme.write("user", edits))
             tmp.renameTo(f)
         } catch (t: Throwable) {
             AppLog.log("[design] saving the edits failed: ${t.message}")

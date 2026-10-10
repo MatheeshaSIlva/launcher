@@ -15,8 +15,8 @@ import android.view.ViewConfiguration
 import dev.launcher.app.R
 import dev.launcher.app.design.Design
 import dev.launcher.app.motion.IosScroller
-import dev.launcher.app.motion.SpringSpec
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.design.Curve
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.max
@@ -48,7 +48,7 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
 
     private var u = 1f
-    private val sheetK: SpringValue = SpringValue(0f, 1000f, { invalidate() }) { if (sheetK.value <= 0.001f) { visibility = GONE; onClosed?.invoke() } }
+    private val sheetK: MotionValue = MotionValue(0f, 1000f, { invalidate() }) { if (sheetK.value <= 0.001f) { visibility = GONE; onClosed?.invoke() } }
     var onClosed: (() -> Unit)? = null
     val isOpen get() = sheetK.target > 0.5f
 
@@ -61,7 +61,7 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
     private var entries: List<Entry> = emptyList()
     private var sections: List<Section> = emptyList()
     private var contentH = 0f
-    private val press = HashMap<ControlId, SpringValue>()
+    private val press = HashMap<ControlId, MotionValue>()
 
     fun open() {
         layoutEntries()
@@ -269,7 +269,7 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
 
     private var lastY = 0f
 
-    private fun pressOf(c: ControlId) = press.getOrPut(c) { SpringValue(0f, 100f, { invalidate() }) }
+    private fun pressOf(c: ControlId) = press.getOrPut(c) { MotionValue(0f, 100f, { invalidate() }) }
 
     private fun entryAt(x: Float, y: Float): Entry? {
         val cy = y - sheetTop() + scroller.position

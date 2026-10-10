@@ -17,8 +17,8 @@ import dev.launcher.app.R
 import dev.launcher.app.design.Design
 import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringSpec
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.design.Curve
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -82,7 +82,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     private var h = 0f
 
     private val inv: (Float) -> Unit = { host.invalidate() }
-    private val k: SpringValue = SpringValue(0f, 100f, { host.expandProgress(it.coerceIn(0f, 1f)); host.invalidate() }) {
+    private val k: MotionValue = MotionValue(0f, 100f, { host.expandProgress(it.coerceIn(0f, 1f)); host.invalidate() }) {
         if (closing && k.value <= 0.002f) { closing = false; control = null; kind = null; host.expandProgress(0f); host.invalidate() }
     }
 
@@ -276,7 +276,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     }
 
     /** The slider's level (flashlight, timer: our own; brightness and volume: the system's, as the small slider shows it). */
-    private val level = SpringValue(0f, 1000f, inv)
+    private val level = MotionValue(0f, 1000f, inv)
 
     private fun sliderValue(kd: Kind): Float = when (kd) {
         Kind.BRIGHTNESS -> host.sliderValue(Control.BRIGHTNESS)
@@ -473,7 +473,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     // ------------------------------------------------------------------ touch
 
     private var pressed = -1
-    private val press = SpringValue(0f, 100f, inv)
+    private val press = MotionValue(0f, 100f, inv)
     private var sliding = false
     private var slideFrom = 0f
     private var downX = 0f

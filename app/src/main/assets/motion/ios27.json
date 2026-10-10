@@ -1,0 +1,715 @@
+{
+ "format": 1,
+ "name": "iOS 27",
+ "author": "Launcher (measured on iOS 27 and tuned on the S24)",
+ "version": "0.1",
+ "_about": "The iOS 27 animation preset: every motion role (motion.*) as a spring or a bezier curve. Written by tools/design/build_ios27_theme.py (its seeds); kept as edited here once written.",
+ "tokens": {
+  "motion.app.cancel": {
+   "spring": [
+    0.38,
+    1.0
+   ],
+   "src": "judged:a home drag that does not commit: back to the app"
+  },
+  "motion.app.close-position": {
+   "spring": [
+    0.5,
+    0.92
+   ],
+   "src": "measured:tuned on the S24 (launch and close \"really smooth\", close elasticity reduced on request); position and size on their own springs, as iOS"
+  },
+  "motion.app.close-size": {
+   "spring": [
+    0.44,
+    0.9
+   ],
+   "src": "measured:tuned on the S24 (launch and close \"really smooth\", close elasticity reduced on request)"
+  },
+  "motion.app.open": {
+   "spring": [
+    0.42,
+    0.92
+   ],
+   "src": "measured:tuned on the S24 (launch and close \"really smooth\", close elasticity reduced on request)"
+  },
+  "motion.appear": {
+   "spring": [
+    0.42,
+    0.78
+   ],
+   "src": "judged:something new on home growing into its place"
+  },
+  "motion.appear.fade": {
+   "ms": 180,
+   "src": "judged:its fade"
+  },
+  "motion.arrival": {
+   "spring": [
+    0.62,
+    1.0
+   ],
+   "src": "judged:home arriving (after unlock, after a cold start): zooming out to rest"
+  },
+  "motion.arrival.wallpaper": {
+   "spring": [
+    0.7,
+    1.0
+   ],
+   "src": "judged:the wallpaper settling on a cold start"
+  },
+  "motion.arrival.wallpaper-zoom": {
+   "factor": 1.06,
+   "src": "judged:and the wallpaper"
+  },
+  "motion.arrival.zoom": {
+   "factor": 1.18,
+   "src": "judged:how far home is zoomed when it starts arriving"
+  },
+  "motion.banner.back": {
+   "spring": [
+    0.38,
+    0.82
+   ],
+   "src": "judged:a dragged banner let go: back"
+  },
+  "motion.banner.fly": {
+   "spring": [
+    0.35,
+    1.0
+   ],
+   "src": "judged:a banner flung away sideways"
+  },
+  "motion.banner.fly-fade": {
+   "spring": [
+    0.5,
+    1.0
+   ],
+   "src": "judged:a flung banner fading as it goes"
+  },
+  "motion.banner.in": {
+   "spring": [
+    0.64,
+    0.61
+   ],
+   "src": "judged:a banner swooping in from the top"
+  },
+  "motion.banner.out": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:and going"
+  },
+  "motion.banner.resize": {
+   "spring": [
+    0.4,
+    1.0
+   ],
+   "src": "judged:a banner changing height"
+  },
+  "motion.cc.appear": {
+   "spring": [
+    0.42,
+    0.78
+   ],
+   "src": "judged:a control added"
+  },
+  "motion.cc.close": {
+   "spring": [
+    0.34,
+    1.0
+   ],
+   "src": "measured:iOS 27 (docs/IOS27_MOTION.md): Control Center closing takes ~0.18 s"
+  },
+  "motion.cc.close-style": {
+   "spring": [
+    0.2,
+    1.0
+   ],
+   "src": "judged:Control Center's closing choreography blending in and out"
+  },
+  "motion.cc.drop": {
+   "spring": [
+    0.34,
+    0.86
+   ],
+   "src": "judged:and dropped into its place"
+  },
+  "motion.cc.edit": {
+   "spring": [
+    0.42,
+    0.9
+   ],
+   "src": "judged:edit mode coming and going"
+  },
+  "motion.cc.expanded.close": {
+   "spring": [
+    0.34,
+    1.0
+   ],
+   "src": "judged:and back into its place"
+  },
+  "motion.cc.expanded.level": {
+   "spring": [
+    0.4,
+    1.0
+   ],
+   "src": "judged:the expanded slider's level"
+  },
+  "motion.cc.expanded.open": {
+   "spring": [
+    0.42,
+    0.84
+   ],
+   "src": "judged:a module growing into its expanded form"
+  },
+  "motion.cc.gallery.close": {
+   "spring": [
+    0.38,
+    1.0
+   ],
+   "src": "judged:and going"
+  },
+  "motion.cc.gallery.open": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:the gallery sheet coming up"
+  },
+  "motion.cc.leave": {
+   "spring": [
+    0.26,
+    1.0
+   ],
+   "src": "judged:a control removed"
+  },
+  "motion.cc.level": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:a slider's level following the system's"
+  },
+  "motion.cc.lift": {
+   "spring": [
+    0.26,
+    0.8
+   ],
+   "src": "judged:a control lifted to be dragged"
+  },
+  "motion.cc.open": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:Matheesha wants the opening seen; it was 0.3 / 1 (iOS: in within ~75 ms of a quick pull)"
+  },
+  "motion.cc.press-in": {
+   "spring": [
+    0.22,
+    1.0
+   ],
+   "src": "judged:a control pressed"
+  },
+  "motion.cc.press-out": {
+   "spring": [
+    0.38,
+    0.7
+   ],
+   "src": "judged:a control let go (springing back)"
+  },
+  "motion.cc.reflow": {
+   "spring": [
+    0.36,
+    0.9
+   ],
+   "src": "judged:controls making room in edit mode"
+  },
+  "motion.cc.resize": {
+   "spring": [
+    0.4,
+    0.82
+   ],
+   "src": "judged:a control changing size"
+  },
+  "motion.cc.settle": {
+   "spring": [
+    0.42,
+    0.68
+   ],
+   "src": "measured:iOS 27 (docs/IOS27_MOTION.md): the controls settle, overshooting a little"
+  },
+  "motion.cc.stretch-back": {
+   "spring": [
+    0.38,
+    0.7
+   ],
+   "src": "judged:the grid stretched by an overpull, back"
+  },
+  "motion.cc.toggle": {
+   "spring": [
+    0.32,
+    0.9
+   ],
+   "src": "judged:a control turning on or off"
+  },
+  "motion.clock.tick": {
+   "ms": 420,
+   "src": "judged:the clock's numerals crossfading at the minute change"
+  },
+  "motion.debug.slow": {
+   "factor": 1,
+   "src": "judged:slow motion for checking animations frame by frame (1 = normal; every spring's period is stretched by it)"
+  },
+  "motion.disappear.fade": {
+   "ms": 200,
+   "src": "judged:something leaving fading"
+  },
+  "motion.drawer": {
+   "spring": [
+    0.4,
+    1.0
+   ],
+   "src": "judged:UIKit's (paging and bounces critically damped)"
+  },
+  "motion.edit.bar": {
+   "spring": [
+    0.4,
+    0.9
+   ],
+   "src": "judged:the edit bar sliding in from the top and out"
+  },
+  "motion.edit.drag-lift": {
+   "spring": [
+    0.26,
+    0.8
+   ],
+   "src": "judged:the dragged one lifting"
+  },
+  "motion.edit.drag-settle": {
+   "spring": [
+    0.34,
+    0.86
+   ],
+   "src": "judged:and dropping into its place"
+  },
+  "motion.edit.jiggle": {
+   "deg": 1.6,
+   "src": "judged:the wiggle (widgets get less)"
+  },
+  "motion.edit.jiggle-period": {
+   "factor": 0.26,
+   "src": "judged:the wiggle's period (s)"
+  },
+  "motion.edit.press-in": {
+   "spring": [
+    0.12,
+    1.0
+   ],
+   "src": "judged:edit mode's buttons pressed"
+  },
+  "motion.edit.press-out": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:and let go"
+  },
+  "motion.edit.reflow": {
+   "spring": [
+    0.36,
+    1.0
+   ],
+   "src": "judged:icons making room for a dragged one"
+  },
+  "motion.folder.close": {
+   "spring": [
+    0.37,
+    0.97
+   ],
+   "src": "measured:iOS 27 (docs/IOS27_MOTION.md): the icons go back"
+  },
+  "motion.folder.open": {
+   "spring": [
+    0.49,
+    0.92
+   ],
+   "src": "measured:iOS 27 (docs/IOS27_MOTION.md): the icons grow out"
+  },
+  "motion.home.content-zoom": {
+   "factor": 1.12,
+   "src": "judged:home behind an open app: icons zoom more than the wallpaper (the sense of depth)"
+  },
+  "motion.home.depth-blur": {
+   "pt": 14,
+   "src": "judged:home blurred when it has fully receded behind an open app"
+  },
+  "motion.home.depth-close": {
+   "spring": [
+    0.5,
+    1.0
+   ],
+   "src": "judged:home comes forward again on close"
+  },
+  "motion.home.depth-open": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:home recedes behind an opening app"
+  },
+  "motion.home.label-tone": {
+   "spring": [
+    0.5,
+    1.0
+   ],
+   "src": "judged:names and the clock turning light or dark with a new wallpaper (as gently as the wallpaper changes)"
+  },
+  "motion.home.page-fling": {
+   "factor": 320,
+   "src": "judged:a fling faster than this (dp/s) turns the page even when it has moved only a little"
+  },
+  "motion.home.page-snap": {
+   "spring": [
+    0.38,
+    1.0
+   ],
+   "src": "judged:UIKit's (paging and bounces critically damped)"
+  },
+  "motion.home.wallpaper-zoom": {
+   "factor": 1.04,
+   "src": "judged:the wallpaper behind an open app"
+  },
+  "motion.icon.press-dim": {
+   "factor": 0.32,
+   "src": "judged:touching an icon dims it (iOS), instead of shrinking it"
+  },
+  "motion.icon.press-in": {
+   "ms": 70,
+   "src": "judged:the dim coming"
+  },
+  "motion.icon.press-out": {
+   "ms": 220,
+   "src": "judged:the dim going"
+  },
+  "motion.index.bubble-in": {
+   "spring": [
+    0.3,
+    0.72
+   ],
+   "src": "judged:the letter bubble popping in"
+  },
+  "motion.index.bubble-out": {
+   "spring": [
+    0.22,
+    1.0
+   ],
+   "src": "judged:and out"
+  },
+  "motion.index.follow": {
+   "spring": [
+    0.16,
+    1.0
+   ],
+   "src": "judged:and following the finger"
+  },
+  "motion.index.scroll": {
+   "spring": [
+    0.32,
+    1.0
+   ],
+   "src": "judged:the A-Z index: the list gliding to a letter's section"
+  },
+  "motion.menu.blur": {
+   "pt": 18,
+   "src": "judged:home's blur behind a menu"
+  },
+  "motion.menu.close": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:closing is quicker and does not bounce"
+  },
+  "motion.menu.open": {
+   "spring": [
+    0.35,
+    0.8
+   ],
+   "src": "judged:the item lifts, home blurs and the menu grows on one spring (UIContextMenuInteraction)"
+  },
+  "motion.mode-crossfade": {
+   "ms": 220,
+   "src": "judged:light and dark mode crossfading"
+  },
+  "motion.nc.appear": {
+   "spring": [
+    0.42,
+    0.82
+   ],
+   "src": "judged:a notification arriving in the list"
+  },
+  "motion.nc.clock-tick": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:the clock's numerals crossfading at the minute"
+  },
+  "motion.nc.close": {
+   "spring": [
+    0.38,
+    1.0
+   ],
+   "src": "judged:and going"
+  },
+  "motion.nc.confirm": {
+   "spring": [
+    0.34,
+    0.8
+   ],
+   "src": "judged:a group's clear button turning into Clear"
+  },
+  "motion.nc.hold": {
+   "spring": [
+    0.38,
+    1.0
+   ],
+   "src": "judged:the flashlight and camera buttons growing while held"
+  },
+  "motion.nc.leave": {
+   "spring": [
+    0.28,
+    1.0
+   ],
+   "src": "judged:a notification leaving"
+  },
+  "motion.nc.menu-close": {
+   "spring": [
+    0.26,
+    1.0
+   ],
+   "src": "judged:and closing"
+  },
+  "motion.nc.menu-open": {
+   "spring": [
+    0.35,
+    0.8
+   ],
+   "src": "judged:a notification held: the long look opening"
+  },
+  "motion.nc.open": {
+   "spring": [
+    0.44,
+    1.0
+   ],
+   "src": "judged:Notification Center coming down"
+  },
+  "motion.nc.reflow": {
+   "spring": [
+    0.4,
+    0.88
+   ],
+   "src": "judged:the list's notifications moving to new places"
+  },
+  "motion.nc.swipe-back": {
+   "spring": [
+    0.36,
+    0.86
+   ],
+   "src": "judged:a swiped notification let go: back"
+  },
+  "motion.nc.swipe-out": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:or away"
+  },
+  "motion.nc.toggle": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:the flashlight button lighting"
+  },
+  "motion.press-in": {
+   "spring": [
+    0.2,
+    1.0
+   ],
+   "src": "judged:a platter or a button pressed (Notification Center, banners)"
+  },
+  "motion.press-out": {
+   "spring": [
+    0.35,
+    1.0
+   ],
+   "src": "judged:and let go"
+  },
+  "motion.scroll.deceleration": {
+   "factor": 0.998,
+   "src": "judged:UIScrollView's normal deceleration (per ms)"
+  },
+  "motion.scroll.overscroll-return": {
+   "spring": [
+    0.42,
+    1.0
+   ],
+   "src": "judged:UIKit's (paging and bounces critically damped)"
+  },
+  "motion.scroll.rubber-band": {
+   "factor": 0.55,
+   "src": "judged:UIScrollView's rubber band"
+  },
+  "motion.sheet": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:a sheet presenting and dismissing (the widget gallery)"
+  },
+  "motion.sheet.push": {
+   "spring": [
+    0.42,
+    1.0
+   ],
+   "src": "judged:a page pushed inside a sheet"
+  },
+  "motion.statusbar.appear": {
+   "spring": [
+    0.38,
+    0.78
+   ],
+   "src": "judged:an icon coming"
+  },
+  "motion.statusbar.leave": {
+   "spring": [
+    0.26,
+    1.0
+   ],
+   "src": "judged:an icon going"
+  },
+  "motion.statusbar.level": {
+   "spring": [
+    0.6,
+    1.0
+   ],
+   "src": "judged:the battery's level"
+  },
+  "motion.statusbar.move": {
+   "spring": [
+    0.36,
+    1.0
+   ],
+   "src": "judged:a slot moving aside"
+  },
+  "motion.statusbar.roll": {
+   "spring": [
+    0.42,
+    1.0
+   ],
+   "src": "judged:a digit rolling to the next"
+  },
+  "motion.switch.cancel": {
+   "spring": [
+    0.3,
+    1.0
+   ],
+   "src": "judged:a sideways switch let go"
+  },
+  "motion.switch.commit": {
+   "spring": [
+    0.35,
+    1.0
+   ],
+   "src": "judged:a sideways switch to the next app"
+  },
+  "motion.switcher.card-center-y": {
+   "factor": 0.515,
+   "src": "measured:the same (its vertical centre, of the screen's height)"
+  },
+  "motion.switcher.card-scale": {
+   "factor": 0.68,
+   "src": "measured:Apple's illustration of the iOS 27 App Switcher (card size, of the screen)"
+  },
+  "motion.switcher.clear-press": {
+   "spring": [
+    0.16,
+    1.0
+   ],
+   "src": "judged:Clear All pressed"
+  },
+  "motion.switcher.enter": {
+   "spring": [
+    0.38,
+    0.9
+   ],
+   "src": "judged:the deck coming"
+  },
+  "motion.switcher.flick": {
+   "spring": [
+    0.35,
+    1.0
+   ],
+   "src": "judged:a card flicked up and away"
+  },
+  "motion.switcher.flick-speed": {
+   "factor": 900,
+   "src": "judged:faster than this (dp/s), or a third of its height"
+  },
+  "motion.switcher.fling-projection": {
+   "factor": 0.22,
+   "src": "judged:how far ahead (s) a throw is projected to choose a card"
+  },
+  "motion.switcher.focus-left": {
+   "factor": 0.225,
+   "src": "measured:the same (the focused card's left edge, of its width)"
+  },
+  "motion.switcher.hold": {
+   "ms": 150,
+   "src": "judged:the finger resting this long during a home swipe opens the deck"
+  },
+  "motion.switcher.hold-travel": {
+   "factor": 56,
+   "src": "judged:at least this far (dp) above where the swipe started"
+  },
+  "motion.switcher.home": {
+   "spring": [
+    0.42,
+    1.0
+   ],
+   "src": "judged:the deck going home"
+  },
+  "motion.switcher.open": {
+   "spring": [
+    0.42,
+    0.92
+   ],
+   "src": "judged:a card opening"
+  },
+  "motion.switcher.reflow": {
+   "spring": [
+    0.38,
+    0.92
+   ],
+   "src": "judged:the gap closing"
+  },
+  "motion.switcher.scroll": {
+   "spring": [
+    0.4,
+    1.0
+   ],
+   "src": "judged:scrolling to rest on a card"
+  },
+  "motion.widget.resize": {
+   "spring": [
+    0.4,
+    0.86
+   ],
+   "src": "judged:a widget changing size (the content crossfades)"
+  }
+ }
+}

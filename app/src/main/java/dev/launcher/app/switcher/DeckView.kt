@@ -17,7 +17,7 @@ import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.motion.MotionValue
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.ln
@@ -80,8 +80,8 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         @Volatile var want = 0
         internal var asked = 0                      // the level of a fetch on its way (0 none)
         internal var shader: BitmapShader? = null
-        internal var lift: SpringValue? = null      // vertical offset while dragged or flicked up (px, negative = up)
-        internal var shift: SpringValue? = null     // horizontal offset closing the gap a removed card left (px)
+        internal var lift: MotionValue? = null      // vertical offset while dragged or flicked up (px, negative = up)
+        internal var shift: MotionValue? = null     // horizontal offset closing the gap a removed card left (px)
         internal val frozen = RectF()               // where a card flying away was when it was let go
         internal var frozenRadius = 0f
         internal var flyingAt = 0                   // flying away: drawn just above the card now at this index (its place)
@@ -110,20 +110,20 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     var scroll = 0f
         private set
-    private val scrollAnim = SpringValue(0f, 100f, onChange = { scroll = it; invalidate(); updatePictures() }, onRest = { listener.onSettled("deck came to rest") })
+    private val scrollAnim = MotionValue(0f, 100f, onChange = { scroll = it; invalidate(); updatePictures() }, onRest = { listener.onSettled("deck came to rest") })
 
     // Entry: card 0 morphs from where the finger had it ([from]) into its slot; the others slide in from the left.
     private val from = RectF()
     private var fromRadius = 0f
     private var enterK = 1f
-    private val enterAnim = SpringValue(1f, 300f, onChange = { enterK = it; invalidate() })
+    private val enterAnim = MotionValue(1f, 300f, onChange = { enterK = it; invalidate() })
 
     // Leaving: [openCard] grows to full screen, or the whole deck fades towards home.
     private var openCard: Card? = null
     private var openK = 0f
-    private val openAnim = SpringValue(0f, 300f, onChange = { openK = it; invalidate() }, onRest = { if (openK > 0.5f) openCard?.let { listener.onOpened(it) } })
+    private val openAnim = MotionValue(0f, 300f, onChange = { openK = it; invalidate() }, onRest = { if (openK > 0.5f) openCard?.let { listener.onOpened(it) } })
     private var homeK = 0f
-    private val homeAnim = SpringValue(0f, 300f, onChange = { homeK = it; listener.onHomeProgress(it); invalidate() }, onRest = { if (homeK > 0.5f) listener.onHomeDone() })
+    private val homeAnim = MotionValue(0f, 300f, onChange = { homeK = it; listener.onHomeProgress(it); invalidate() }, onRest = { if (homeK > 0.5f) listener.onHomeDone() })
 
     /** Something in the deck is moving (frame logs measure while it is). */
     val moving get() = scrollAnim.isAnimating || enterAnim.isAnimating || openAnim.isAnimating || homeAnim.isAnimating ||
@@ -721,7 +721,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     private val menu by lazy { dev.launcher.app.components.MenuPainter(dev.launcher.app.components.MenuSpec.SWITCHER, u) }
     private val menuGlass by lazy { dev.launcher.app.design.MaterialPainter.create(u) }
     private var menuCard: Card? = null
-    private val menuK: SpringValue = SpringValue(0f, 1000f, onChange = { invalidate() }, onRest = { if (menuK.value <= 0.001f) { menuCard = null; invalidate() } })
+    private val menuK: MotionValue = MotionValue(0f, 1000f, onChange = { invalidate() }, onRest = { if (menuK.value <= 0.001f) { menuCard = null; invalidate() } })
     private var menuPressed = -1
     private val menuInverse = Matrix()
     private val menuVisible = RectF()
@@ -798,7 +798,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     // ------------------------------------------------------------------ Clear All
 
     private val clearGlass by lazy { dev.launcher.app.design.MaterialPainter.create(u) }
-    private val clearPress = SpringValue(0f, 100f, onChange = { invalidate() })
+    private val clearPress = MotionValue(0f, 100f, onChange = { invalidate() })
     private val clearRect = RectF()
     private var clearPressed = false
     private var clearing = false
@@ -818,7 +818,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         return k
     }
 
-    private val clearShown = SpringValue(0f, 100f, onChange = { invalidate() })
+    private val clearShown = MotionValue(0f, 100f, onChange = { invalidate() })
 
     private fun drawClearAll(canvas: Canvas) {
         val want = placeClear()
@@ -932,7 +932,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         scrollAnim.animateTo(target, profile.scroll, v)
     }
 
-    private fun liftOf(c: Card): SpringValue = c.lift ?: SpringValue(0f, 1f, onChange = { invalidate() }).also { c.lift = it }
+    private fun liftOf(c: Card): MotionValue = c.lift ?: MotionValue(0f, 1f, onChange = { invalidate() }).also { c.lift = it }
 
     private fun releaseLift(c: Card, vy: Float, up: Boolean) {
         val lift = liftOf(c)
@@ -967,7 +967,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
             val card = cards[j]
             val old = before[card] ?: continue
             slot(j, scroll, box)
-            val shift = card.shift ?: SpringValue(0f, 1f, onChange = { invalidate() }).also { card.shift = it }
+            val shift = card.shift ?: MotionValue(0f, 1f, onChange = { invalidate() }).also { card.shift = it }
             shift.snapTo(old - box.left)   // [old] includes any shift still running
             shift.animateTo(0f, profile.reflow, 0f)
         }

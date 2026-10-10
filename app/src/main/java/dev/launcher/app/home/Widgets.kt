@@ -31,7 +31,7 @@ import dev.launcher.app.AppLog
 import dev.launcher.app.GlassStyle
 import dev.launcher.app.ShizukuLink
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.motion.MotionValue
 import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.ceil
@@ -357,13 +357,13 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
     /** How far the new content has faded in during a resize (1 when none runs). */
     protected var contentK = 1f
         private set
-    private val resizeK = SpringValue(0f, 1000f, { k -> onResizeFrame(k) }, { onResizeDone() })
+    private val resizeK = MotionValue(0f, 1000f, { k -> onResizeFrame(k) }, { onResizeDone() })
     override val resizing: Boolean get() = resizeK.isAnimating
 
     /** The widget's name under the card (null: none, as the lock-screen clock). */
     protected open val labelText: String? = null
     private var labelK = 1f
-    private val labelSpring = SpringValue(1f, 1000f, { labelK = it.coerceIn(0f, 1f); invalidate() })
+    private val labelSpring = MotionValue(1f, 1000f, { labelK = it.coerceIn(0f, 1f); invalidate() })
     private val labelPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textSize = m.labelTextSize
@@ -372,7 +372,7 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
     }
     private val labelShadow = dev.launcher.app.theme.FadingShadow(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
     /** 0: a white name, 1: a dark one (over a bright wallpaper): set by home ([LabelTone]). */
-    private val labelTone = SpringValue(0f, 100f, { invalidate() })
+    private val labelTone = MotionValue(0f, 100f, { invalidate() })
     private var labelToneKnown = false
     private val oldClip = android.graphics.Path()
     /** True while the frame records its own look (badges, label and the crossfade are left out). */
@@ -390,7 +390,7 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
             field = v
             editK.animateTo(if (v) 1f else 0f, if (v) Motion.profile.appear else Motion.profile.menuClose)
         }
-    private val editK = SpringValue(0f, 100f, { invalidate() })
+    private val editK = MotionValue(0f, 100f, { invalidate() })
 
     /** The remove badge and resize handle grow in again (a dragged copy without them has just landed on this widget). */
     fun growEditBadge() {

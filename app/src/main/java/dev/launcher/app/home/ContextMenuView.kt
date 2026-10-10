@@ -14,7 +14,7 @@ import android.view.View
 import dev.launcher.app.components.MenuPainter
 import dev.launcher.app.components.MenuSpec
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
 import dev.launcher.app.design.Design
 import dev.launcher.app.theme.Fonts
@@ -55,12 +55,12 @@ class ContextMenuView(
     /** The item is shown again early, under the lifted copy fading into it ([handBack]); [onClosed] still runs at the end. */
     var onHandBack: (() -> Unit)? = null
 
-    private val k = SpringValue(0f, 1000f, { onProgress(it.coerceIn(0f, 1f)); invalidate() }, { onRest() })
+    private val k = MotionValue(0f, 1000f, { onProgress(it.coerceIn(0f, 1f)); invalidate() }, { onRest() })
 
     private val glass = dev.launcher.app.design.MaterialPainter.create(m.u)
     private val dim = Paint()
     // Where the highlight of a choice row sits (index, fractional while it glides to a newly chosen one).
-    private val choiceAt = SpringValue(0f, 100f, { invalidate() })
+    private val choiceAt = MotionValue(0f, 100f, { invalidate() })
     private val panelTint = Paint().apply { color = 0x4D000000 }
     private val inverse = Matrix()
     private val visible = RectF()

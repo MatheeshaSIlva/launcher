@@ -37,7 +37,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
     // Fades with the label (names switched off, the arrival): see FadingShadow.
     private val labelShadow = dev.launcher.app.theme.FadingShadow(m.pt(1.5f), 0f, m.pt(0.5f), 0x40000000)
     /** 0: a white name, 1: a dark one (over a bright wallpaper): set by home ([LabelTone]), moving on a spring. */
-    private val tone = dev.launcher.app.motion.SpringValue(0f, 100f, { invalidate() })
+    private val tone = dev.launcher.app.motion.MotionValue(0f, 100f, { invalidate() })
     private var toneKnown = false
     private val iconRect = RectF()
     private var dim = 0f
@@ -51,7 +51,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             field = v
             editK.animateTo(if (v) 1f else 0f, if (v) Motion.profile.appear else Motion.profile.menuClose)
         }
-    private val editK = dev.launcher.app.motion.SpringValue(0f, 100f, { invalidate() })
+    private val editK = dev.launcher.app.motion.MotionValue(0f, 100f, { invalidate() })
 
     /** The remove badge grows in again (a dragged copy without one has just landed on this icon). */
     fun growEditBadge() {
@@ -77,7 +77,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
             invalidate()
         }
     private var shownBadge = 0
-    private val badgeScale = dev.launcher.app.motion.SpringValue(0f, 100f, { invalidate() }, { if (badge == 0) { shownBadge = 0; invalidate() } })
+    private val badgeScale = dev.launcher.app.motion.MotionValue(0f, 100f, { invalidate() }, { if (badge == 0) { shownBadge = 0; invalidate() } })
     /** Leave the label out (the lifted copy of a dragged icon shows the icon alone). */
     var labelHidden = false
         set(v) { if (field != v) { field = v; invalidate() } }

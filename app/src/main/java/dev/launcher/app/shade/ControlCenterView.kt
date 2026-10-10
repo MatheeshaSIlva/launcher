@@ -22,8 +22,8 @@ import dev.launcher.app.design.Design
 import dev.launcher.app.design.Scale
 import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringSpec
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.design.Curve
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.FadingShadow
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
@@ -194,23 +194,23 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val inv: (Float) -> Unit = { invalidate() }
 
     private inner class Anim(val item: CcItem) {
-        val x = SpringValue(0f, 1f, inv)
-        val y = SpringValue(0f, 1f, inv)
-        val w = SpringValue(0f, 1f, inv)
-        val h = SpringValue(0f, 1f, inv)
-        val press = SpringValue(0f, 100f, inv)
-        val active = SpringValue(0f, 100f, inv)
-        val appear: SpringValue = SpringValue(1f, 100f, inv) { if (removing && appear.value <= 0.001f) dropRemoved(this) }
-        val lift = SpringValue(0f, 100f, inv)
+        val x = MotionValue(0f, 1f, inv)
+        val y = MotionValue(0f, 1f, inv)
+        val w = MotionValue(0f, 1f, inv)
+        val h = MotionValue(0f, 1f, inv)
+        val press = MotionValue(0f, 100f, inv)
+        val active = MotionValue(0f, 100f, inv)
+        val appear: MotionValue = MotionValue(1f, 100f, inv) { if (removing && appear.value <= 0.001f) dropRemoved(this) }
+        val lift = MotionValue(0f, 100f, inv)
         /** The slider's shown value (follows the finger exactly; glides when the system changes it). */
-        val value = SpringValue(0f, 1000f, inv)
+        val value = MotionValue(0f, 1000f, inv)
         /** How far a slider is pulled past its end (px; + = past the top). */
-        val stretch = SpringValue(0f, 1f, inv)
+        val stretch = MotionValue(0f, 1f, inv)
         var placed = false
         var removing = false
         /** Sub-control under the finger (connectivity's circles, the player's buttons), and its press. */
         var sub: Any? = null
-        val subPress = SpringValue(0f, 100f, inv)
+        val subPress = MotionValue(0f, 100f, inv)
         /** The control drawn into its own GPU layer, as it looks at rest ([contentKey] says when to draw it again). */
         val node = android.graphics.RenderNode("cc").apply { setUseCompositingLayer(true, null) }
         var key = Long.MIN_VALUE
@@ -248,7 +248,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         springTo(a.w, tw, RESIZE); springTo(a.h, th, RESIZE)
     }
 
-    private fun springTo(s: SpringValue, to: Float, spec: SpringSpec) { if (abs(s.target - to) > 0.5f || s.isAnimating) s.animateTo(to, spec) }
+    private fun springTo(s: MotionValue, to: Float, spec: Curve) { if (abs(s.target - to) > 0.5f || s.isAnimating) s.animateTo(to, spec) }
 
     /** On: a built-in control by the system's state, an app's tile by what SystemUI shows for it. */
     private fun isOn(item: CcItem): Boolean =
@@ -290,7 +290,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
      * back into the corner Control Center is pulled from, the farthest first, each shrinking and drifting toward it as it
      * fades (iOS 27 only lifts them a little and fades them; Matheesha found that cheap). Opening is left as it was.
      */
-    private val closeK = SpringValue(0f, 100f, inv)
+    private val closeK = MotionValue(0f, 100f, inv)
 
     fun closing(on: Boolean) {
         val t = if (on) 1f else 0f
@@ -305,7 +305,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         return local * local * (3f - 2f * local)
     }
 
-    private val editK: SpringValue = SpringValue(0f, 100f, { host.editProgress(max(it.coerceIn(0f, 1f), expanded.presence)); invalidate() })
+    private val editK: MotionValue = MotionValue(0f, 100f, { host.editProgress(max(it.coerceIn(0f, 1f), expanded.presence)); invalidate() })
     val editing get() = editK.target > 0.5f
 
     fun enterEdit() {
@@ -407,8 +407,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun smooth(t: Float): Float { val x = t.coerceIn(0f, 1f); return x * x * (3f - 2f * x) }
 
-    private val plusPress = SpringValue(0f, 100f, inv)
-    private val powerPress = SpringValue(0f, 100f, inv)
+    private val plusPress = MotionValue(0f, 100f, inv)
+    private val powerPress = MotionValue(0f, 100f, inv)
 
     /** Where "+" (0) and the power button (1) are centred horizontally (the kit: 38 pt from the sides). */
     private fun buttonX(i: Int): Float { val c = host.surfaces.pt(CcTokens.BUTTON_INSET_X) + btnR; return if (i == 0) c else width - c }
@@ -530,7 +530,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         title.color = Design.color(CcTokens.LABEL_COLOR)
     }
 
-    private val addPress = SpringValue(0f, 100f, inv)
+    private val addPress = MotionValue(0f, 100f, inv)
 
     /** Where a control is drawn this frame: its rect (px) and scale about its centre. */
     private class Placement { var left = 0f; var top = 0f; var w = 0f; var h = 0f; var scale = 1f; var alpha = 1f }
@@ -818,9 +818,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         )
     }
 
-    private val subActive = HashMap<Control, SpringValue>()
-    private fun subActiveOf(ctl: Control): SpringValue = subActive.getOrPut(ctl) {
-        SpringValue(if (host.state.isOn(ctl)) 1f else 0f, 100f, inv)
+    private val subActive = HashMap<Control, MotionValue>()
+    private fun subActiveOf(ctl: Control): MotionValue = subActive.getOrPut(ctl) {
+        MotionValue(if (host.state.isOn(ctl)) 1f else 0f, 100f, inv)
     }
 
     fun syncSubs() {

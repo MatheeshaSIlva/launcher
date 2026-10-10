@@ -39,6 +39,8 @@ import kotlin.math.min
 import dev.launcher.app.apps.Icons
 import dev.launcher.app.apps.SplashColors
 import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.Mover
+import dev.launcher.app.motion.mover
 
 /**
  * Our bottom-edge gesture navigation and app launch/close animations.
@@ -283,13 +285,13 @@ object GestureNav {
     }
 
     // Springs
-    private var sCx = Spring(0.5f, 0.86f)
-    private var sCy = Spring(0.5f, 0.86f)
-    private var sW = Spring(0.44f, 0.9f)
-    private var sH = Spring(0.44f, 0.9f)
-    private var sDepth = Spring(0.5f, 1f)   // home behind the card: 0 = at rest, 1 = receded (an app is open)
-    private var sOff = Spring(0.35f, 1f)
-    private var sScale = Spring(0.35f, 1f)
+    private var sCx: Mover = Spring(0.5f, 0.86f)
+    private var sCy: Mover = Spring(0.5f, 0.86f)
+    private var sW: Mover = Spring(0.44f, 0.9f)
+    private var sH: Mover = Spring(0.44f, 0.9f)
+    private var sDepth: Mover = Spring(0.5f, 1f)   // home behind the card: 0 = at rest, 1 = receded (an app is open)
+    private var sOff: Mover = Spring(0.35f, 1f)
+    private var sScale: Mover = Spring(0.35f, 1f)
     private var springStartNs = 0L
     private var animating = false
     private var onSettled: (() -> Unit)? = null
@@ -1544,12 +1546,12 @@ object GestureNav {
             // The close looks and lasts the same however fast the flick was: only a little of the finger's motion towards the
             // target carries over ([towards]), so the card neither stops dead at the release nor gets thrown.
             val mp = Motion.profile
-            sCx = mp.appClosePosition.spring().apply { start(c.cx, towards(vx, c.cx, tx), tx) }
-            sCy = mp.appClosePosition.spring().apply { start(c.cy, towards(vy, c.cy, ty), ty) }
-            sW = mp.appCloseSize.spring().apply { start(c.w, towards(vW, c.w, size), size) }
-            sH = mp.appCloseSize.spring().apply { start(c.h, towards(vH, c.h, sizeH), sizeH) }
+            sCx = mp.appClosePosition.mover().apply { start(c.cx, towards(vx, c.cx, tx), tx) }
+            sCy = mp.appClosePosition.mover().apply { start(c.cy, towards(vy, c.cy, ty), ty) }
+            sW = mp.appCloseSize.mover().apply { start(c.w, towards(vW, c.w, size), size) }
+            sH = mp.appCloseSize.mover().apply { start(c.h, towards(vH, c.h, sizeH), sizeH) }
             val depth0 = depthNow()
-            sDepth = mp.homeDepthClose.spring().apply { start(depth0, 0f, 0f) }
+            sDepth = mp.homeDepthClose.mover().apply { start(depth0, 0f, 0f) }
             closeDepthFrom = depth0
             anim = Anim.HOME_COMMIT
             catchTouchesForHome(true)
@@ -1577,11 +1579,11 @@ object GestureNav {
             cardIconSize = 0f
             beginCardSprings(toIcon = false)
             val sp = Motion.profile.appCancel
-            sCx = sp.spring().apply { start(c.cx, vx, sw / 2) }
-            sCy = sp.spring().apply { start(c.cy, vy, sh / 2) }
-            sW = sp.spring().apply { start(c.w, vW, sw) }
-            sH = sp.spring().apply { start(c.h, vH, sh) }
-            sDepth = sp.spring().apply { start(depthNow(), 0f, 1f) }
+            sCx = sp.mover().apply { start(c.cx, vx, sw / 2) }
+            sCy = sp.mover().apply { start(c.cy, vy, sh / 2) }
+            sW = sp.mover().apply { start(c.w, vW, sw) }
+            sH = sp.mover().apply { start(c.h, vH, sh) }
+            sDepth = sp.mover().apply { start(depthNow(), 0f, 1f) }
             closeDepthFrom = -1f
             anim = Anim.HOME_CANCEL
             endLabel = "back to the app"
@@ -1602,7 +1604,7 @@ object GestureNav {
             // The real home runs the same depth spring underneath, so it matches the picture whenever it takes over (at the end,
             // or when home is touched during the flight).
             val spec = Motion.profile.homeDepthClose
-            HomeBridge.animateDepth(closeDepthFrom, 0f, 0f, spec.response, spec.damping, springStartNs)
+            HomeBridge.animateDepth(closeDepthFrom, 0f, 0f, spec, springStartNs)
         }
     }
 
@@ -1830,11 +1832,11 @@ object GestureNav {
         switchAt = 0L   // a launch ends any run of quick switches
         beginCardSprings(toIcon = false)
         val open = Motion.profile.appOpen
-        sCx = open.spring().apply { start(m[0], m[4], sw / 2) }
-        sCy = open.spring().apply { start(m[1], m[5], sh / 2) }
-        sW = open.spring().apply { start(m[2], m[6], sw) }
-        sH = open.spring().apply { start(m[3], m[7], sh) }
-        sDepth = Motion.profile.homeDepthOpen.spring().apply { start(depth0, 0f, 1f) }
+        sCx = open.mover().apply { start(m[0], m[4], sw / 2) }
+        sCy = open.mover().apply { start(m[1], m[5], sh / 2) }
+        sW = open.mover().apply { start(m[2], m[6], sw) }
+        sH = open.mover().apply { start(m[3], m[7], sh) }
+        sDepth = Motion.profile.homeDepthOpen.mover().apply { start(depth0, 0f, 1f) }
         endLabel = "launch $pkg${if (reverse) " (reversed a closing card)" else ""}"
         val startApp = { runPendingStart() }
         onSettled = {
@@ -2121,8 +2123,8 @@ object GestureNav {
             switchIndex += if (toOlder) 1 else -1
             switchAt = SystemClock.uptimeMillis()
             val since = switchAt
-            sOff = Motion.profile.switchCommit.spring().apply { start(offset, vx, if (toOlder) sw + gap() else -(sw + gap())) }
-            sScale = Motion.profile.switchCommit.spring().apply { start(switchScale, 0f, 1f) }
+            sOff = Motion.profile.switchCommit.mover().apply { start(offset, vx, if (toOlder) sw + gap() else -(sw + gap())) }
+            sScale = Motion.profile.switchCommit.mover().apply { start(switchScale, 0f, 1f) }
             anim = Anim.SWITCH_COMMIT
             endLabel = "quick switch to ${if (toOlder) "an older" else "a newer"} app (${target.pkg})"
             onSettled = {
@@ -2131,8 +2133,8 @@ object GestureNav {
                 if (lastFrontPkg == target.pkg && lastFrontAt >= since) hideCards() else awaitForeground(target.pkg, g) { hideCards() }
             }
         } else {
-            sOff = Motion.profile.switchCancel.spring().apply { start(offset, vx, 0f) }
-            sScale = Motion.profile.switchCancel.spring().apply { start(switchScale, 0f, 1f) }
+            sOff = Motion.profile.switchCancel.mover().apply { start(offset, vx, 0f) }
+            sScale = Motion.profile.switchCancel.mover().apply { start(switchScale, 0f, 1f) }
             anim = Anim.SWITCH_CANCEL
             endLabel = "switch cancelled"
             onSettled = { hideCards() }
@@ -2253,7 +2255,7 @@ object GestureNav {
 
     // Home behind the deck: from the drag's depth to fully receded and dimmed (0..1).
     private var switcherGround = 0   // opaque ground behind the deck when there is no picture of home (else 0)
-    private val switcherBg = dev.launcher.app.motion.SpringValue(0f, 300f, onChange = { k ->
+    private val switcherBg = dev.launcher.app.motion.MotionValue(0f, 300f, onChange = { k ->
         backdrop?.depth = depthAtSwitcher + (1f - depthAtSwitcher) * k
         root?.setBackgroundColor(if (switcherGround != 0) switcherGround else ((SWITCHER_DIM * k * 255).toInt().coerceIn(0, 255)) shl 24)
     })
@@ -2336,7 +2338,7 @@ object GestureNav {
     private var pulling = false                // the picture of home is shown receding (a swipe up on home)
     private var closesOnTop = false            // this swipe on home closes what is open on top of it instead
     private var pullPicture: HomePicture? = null   // home as it showed when this swipe touched the bar
-    private val pullBack = dev.launcher.app.motion.SpringValue(0f, 300f, onChange = { backdrop?.depth = it })
+    private val pullBack = dev.launcher.app.motion.MotionValue(0f, 300f, onChange = { backdrop?.depth = it })
 
     private fun beginHomePull() {
         phase = Phase.HOME_PULL
@@ -2383,7 +2385,7 @@ object GestureNav {
         val g = gen
         val spec = Motion.profile.appCancel
         HomeBridge.homeCovered = false   // home blurs with its depth from now on: it is about to be what shows
-        HomeBridge.animateDepth(d, 0f, 0f, spec.response, spec.damping, System.nanoTime())
+        HomeBridge.animateDepth(d, 0f, 0f, spec, System.nanoTime())
         HomeBridge.afterHomeDraw { nav.post { if (gen == g && phase == Phase.HOME_PULL) finishHomePull() } }
     }
 
@@ -2623,7 +2625,7 @@ object GestureNav {
                 startHome()
                 // The real home runs the same depth spring underneath, so it matches the picture when that goes.
                 val spec = Motion.profile.switcher.home
-                HomeBridge.animateDepth(backdrop?.depth ?: 1f, 0f, 0f, spec.response, spec.damping, System.nanoTime())
+                HomeBridge.animateDepth(backdrop?.depth ?: 1f, 0f, 0f, spec, System.nanoTime())
             }   // (opened from home: home is in front at rest already; the picture of it just comes forward again)
             stats.reset(); stats.start()
             AppLog.log("[switcher] home")

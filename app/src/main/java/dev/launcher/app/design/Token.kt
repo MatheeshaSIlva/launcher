@@ -24,8 +24,8 @@ class ColorKey(name: String) : Key<Int>(name)
 /** A number: a length in points ([NumUnit.PT]), a fraction, an angle, a duration... */
 class NumberKey(name: String) : Key<Float>(name)
 
-/** A spring (SwiftUI's response in seconds, damping fraction). */
-class SpringKey(name: String) : Key<Spring>(name)
+/** How a motion role moves: a spring or a bezier curve ([Curve]); the animation preset's (`motion.*`), not the theme's. */
+class CurveKey(name: String) : Key<Curve>(name)
 
 /** One of a set of named options (which layout, which component set, which scaling policy). */
 class ChoiceKey(name: String) : Key<String>(name)
@@ -68,7 +68,17 @@ sealed class Provenance {
     }
 }
 
-data class Spring(val response: Float, val damping: Float)
+/**
+ * How a motion role moves (docs/PLAN_LAYOUTS_THEMES.md, B3): a spring, or a cubic bezier over a duration. Any role may
+ * take either; the code animates both alike (motion/Curves.kt: interruptible, a new target keeps the current speed).
+ */
+sealed class Curve {
+    /** SwiftUI's parameters: [response] = the undamped period in seconds, [damping] = fraction (1: no overshoot). */
+    data class Spring(val response: Float, val damping: Float) : Curve()
+
+    /** CSS's `cubic-bezier(x1, y1, x2, y2)` over [ms] milliseconds; [x1] and [x2] within 0..1. */
+    data class Ease(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val ms: Float) : Curve()
+}
 
 /** Units a number token is in (the token editor shows them and limits its ranges by them). */
 enum class NumUnit { PT, FRACTION, PERCENT, DEGREES, MS, FACTOR }

@@ -15,7 +15,7 @@ import android.view.View
 import dev.launcher.app.apps.AppEntry
 import dev.launcher.app.home.HomeMetrics
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
@@ -133,9 +133,9 @@ internal class SearchList(
     private var scrubbing = false
     private var scrubLetter = ' '
     // The index while scrubbed: how lit it is (capsule, magnified letters), the bubble's presence and where it glides.
-    private val indexK = SpringValue(0f, 1000f, { invalidate() })
-    private val bubbleK: SpringValue = SpringValue(0f, 1000f, { invalidate() }, { if (!scrubbing) settled() })
-    private val bubbleY = SpringValue(0f, 1f, { invalidate() })
+    private val indexK = MotionValue(0f, 1000f, { invalidate() })
+    private val bubbleK: MotionValue = MotionValue(0f, 1000f, { invalidate() }, { if (!scrubbing) settled() })
+    private val bubbleY = MotionValue(0f, 1f, { invalidate() })
     private val bubbleShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x40000000
         maskFilter = android.graphics.BlurMaskFilter(m.pt(10f), android.graphics.BlurMaskFilter.Blur.NORMAL)

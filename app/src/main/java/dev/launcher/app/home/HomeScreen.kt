@@ -16,7 +16,9 @@ import android.view.WindowInsets
 import android.widget.FrameLayout
 import dev.launcher.app.AppLog
 import dev.launcher.app.HomeBridge
-import dev.launcher.app.Spring
+import dev.launcher.app.design.Curve
+import dev.launcher.app.motion.Mover
+import dev.launcher.app.motion.mover
 import dev.launcher.app.Wallpaper
 import dev.launcher.app.apps.AppEntry
 import dev.launcher.app.apps.Apps
@@ -762,7 +764,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     fun animatePages(target: Float, velocityPx: Float = 0f) {
         if (target != pos) indicator?.setMoving(true)
         val w = metrics.w.toFloat()
-        pagerSpring = Motion.profile.pageSnap.spring().apply { start(pos * w, velocityPx, target * w) }
+        pagerSpring = Motion.profile.pageSnap.mover().apply { start(pos * w, velocityPx, target * w) }
         pagerTarget = target
         startFrames(pager = true)
     }
@@ -794,17 +796,17 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun animateSheet(target: Float, velocityPx: Float = 0f) {
         val h = metrics.h.toFloat()
-        sheetSpring = Motion.profile.drawer.spring().apply { start(sheet * h, velocityPx, target * h) }
+        sheetSpring = Motion.profile.drawer.mover().apply { start(sheet * h, velocityPx, target * h) }
         sheetTarget = target
         startFrames(pager = false)
     }
 
     // ---- animation driver
 
-    private var pagerSpring: Spring? = null
+    private var pagerSpring: Mover? = null
     private var pagerTarget = 0f
     private var pagerAnimating = false
-    private var sheetSpring: Spring? = null
+    private var sheetSpring: Mover? = null
     private var sheetTarget = 0f
     private var sheetAnimating = false
     private var pagerStart = 0L
@@ -874,8 +876,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** An element and where its pivot is in home's coordinates (it is scaled about the screen's centre through it). */
     private class Arriving(val v: View, val px: Float, val py: Float)
     private val arriving = ArrayList<Arriving>()
-    private var arrivalSpring: Spring? = null
-    private var arrivalWallpaper: Spring? = null
+    private var arrivalSpring: Mover? = null
+    private var arrivalWallpaper: Mover? = null
     private var arrivalCold = false
     private var arrivalHeld = false
 
@@ -1028,10 +1030,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         for (v in listOfNotNull(indicator, dock, dockShadow)) arriving += Arriving(v, v.left + v.pivotX, v.top + v.pivotY)
         arrivalCold = cold
         // One zoom for everything, from a little closer to at rest; it starts moving on its first frame.
-        arrivalSpring = mp.arrival.spring().apply { start(mp.arrivalZoom, -0.4f, 1f) }
+        arrivalSpring = mp.arrival.mover().apply { start(mp.arrivalZoom, -0.4f, 1f) }
         // The wallpaper settles from a zoom only on a cold start: after an unlock the system has already shown it at rest
         // on the lock screen, and zooming it again played the zoom twice.
-        arrivalWallpaper = if (cold) mp.arrivalWallpaper.spring().apply { start(mp.arrivalWallpaperZoom, 0f, 1f) } else null
+        arrivalWallpaper = if (cold) mp.arrivalWallpaper.mover().apply { start(mp.arrivalWallpaperZoom, 0f, 1f) } else null
         return true
     }
 
@@ -1102,14 +1104,14 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     // ---- depth: home receding behind an open app (iOS), run here once the real home is on screen
 
-    private var depthSpring: Spring? = null
+    private var depthSpring: Mover? = null
     private var depthStart = 0L
     private var depthTarget = 0f
     private var depthAnimating = false
 
-    /** Follows gesture nav's depth spring exactly (same parameters and start time). */
-    fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long) {
-        depthSpring = Spring(response, damping).apply { start(from, velocity, to) }
+    /** Follows gesture nav's depth curve exactly (same curve and start time). */
+    fun animateDepth(from: Float, to: Float, velocity: Float, curve: Curve, startNanos: Long) {
+        depthSpring = curve.mover().apply { start(from, velocity, to) }
         depthStart = startNanos
         depthTarget = to
         val wasAnimating = depthAnimating

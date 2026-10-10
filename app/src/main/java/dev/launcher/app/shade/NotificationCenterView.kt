@@ -45,8 +45,8 @@ import dev.launcher.app.design.frostNowPt
 import dev.launcher.app.design.scaled
 import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.IosScroller
-import dev.launcher.app.motion.SpringSpec
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.design.Curve
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.FadingShadow
 import dev.launcher.app.theme.Fonts
@@ -269,7 +269,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var wallpaper: Wallpaper? = null
     private var clockGlass: GlassDrawable? = null
     private var clockGlassOld: GlassDrawable? = null
-    private val clockFade = SpringValue(1f, 100f, inv)
+    private val clockFade = MotionValue(1f, 100f, inv)
     private var clockMasks: Pair<String, GlassMask>? = null
     private var clockText = ""
     private var dateText = ""
@@ -385,11 +385,11 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         fun shownH(): Float = if (kind == Kind.PLATTER && stackH > 0f) fullH + (stackH - fullH) * stack.value.coerceIn(0f, 1f) else height
         var visible = true
         var targetY = 0f
-        val y = SpringValue(0f, 1f, inv)
-        val appear: SpringValue = SpringValue(0f, 100f, inv) { if (removing && appear.value <= 0.001f) { blocks.remove(id); invalidate() } }
-        val swipe: SpringValue = SpringValue(0f, 1f, inv) { if (removing && abs(swipe.value) >= width * 0.98f) { blocks.remove(id); invalidate() } }
-        val press = SpringValue(0f, 100f, inv)
-        val stack = SpringValue(0f, 100f, inv)
+        val y = MotionValue(0f, 1f, inv)
+        val appear: MotionValue = MotionValue(0f, 100f, inv) { if (removing && appear.value <= 0.001f) { blocks.remove(id); invalidate() } }
+        val swipe: MotionValue = MotionValue(0f, 1f, inv) { if (removing && abs(swipe.value) >= width * 0.98f) { blocks.remove(id); invalidate() } }
+        val press = MotionValue(0f, 100f, inv)
+        val stack = MotionValue(0f, 100f, inv)
         var removing = false
         var placed = false
         /** Cleared by a swipe or its Clear button: it flies off with its actions (from [clearFrom], how far it was revealed). */
@@ -403,7 +403,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val blocks = LinkedHashMap<String, Block>()
     /** Notifications gathered in one stack at the bottom (iOS 27's default, each time Notification Center opens). */
     private var collapsed = true
-    private val listDim = SpringValue(0f, 100f, inv) { invalidate() }   // at rest: folded into the wallpaper's layer
+    private val listDim = MotionValue(0f, 100f, inv) { invalidate() }   // at rest: folded into the wallpaper's layer
     private val expanded = HashSet<String>()
     private var groups: List<Pair<String, List<Notifs.Item>>> = emptyList()
     private var contentH = 0f
@@ -606,7 +606,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         return if (contentH <= area.height()) area.bottom - contentH else area.top
     }
 
-    private val origin = SpringValue(0f, 1f, inv)
+    private val origin = MotionValue(0f, 1f, inv)
     private var originPlaced = false
 
     private fun listTop(): Float = origin.value - scroller.position
@@ -1147,7 +1147,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun fmt(ms: Long): String { val s = ms / 1000; return "${s / 60}:${(s % 60).toString().padStart(2, '0')}" }
 
-    private val confirmGroup = HashMap<String, SpringValue>()
+    private val confirmGroup = HashMap<String, MotionValue>()
 
     private fun drawHeader(c: Canvas, b: Block, y: Float, a: Float, sheetY: Float) {
         headPaint.textSize = 22f * u
@@ -1156,7 +1156,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         headShadow.apply(headPaint)
         val name = painter.appLabel(b.group)
         c.drawText(TextUtils.ellipsize(name, headPaint, width * 0.45f, TextUtils.TruncateAt.END).toString(), margin + 6f * u, y + 28f * u, headPaint)
-        val conf = confirmGroup.getOrPut(b.group) { SpringValue(0f, 100f, inv) }.value
+        val conf = confirmGroup.getOrPut(b.group) { MotionValue(0f, 100f, inv) }.value
         val xRight = drawClearButton(c, conf, width - margin - 4f * u, y + 20f * u, a, sheetY)
         // "Show Less".
         buttonPaint.textSize = 14f * u
@@ -1182,9 +1182,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         return x0
     }
 
-    private val torchK = SpringValue(0f, 100f, inv)
-    private val holdTorch = SpringValue(0f, 100f, inv)
-    private val holdCamera = SpringValue(0f, 100f, inv)
+    private val torchK = MotionValue(0f, 100f, inv)
+    private val holdTorch = MotionValue(0f, 100f, inv)
+    private val holdCamera = MotionValue(0f, 100f, inv)
 
     /** Where the flashlight's (0) or the camera's (1) button is centred, and its radius (the kit's lock screen controls). */
     private fun buttonX(i: Int): Float { val c = Design.pt(NcTokens.BUTTON_INSET_X, u) + buttonR(); return if (i == 0) c else width - c }
@@ -1310,7 +1310,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
     }
 
-    private val menuK: SpringValue = SpringValue(0f, 100f, inv) { if (menuK.value <= 0.001f && menuClosing) { menu = null; menuClosing = false; invalidate() } }
+    private val menuK: MotionValue = MotionValue(0f, 100f, inv) { if (menuK.value <= 0.001f && menuClosing) { menu = null; menuClosing = false; invalidate() } }
     private var menuClosing = false
 
     private fun closeMenu() { menuClosing = true; menuK.animateTo(0f, MENU_CLOSE) }
@@ -1422,9 +1422,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var revealed: Block? = null
     private var longFired = false
     private var vt: VelocityTracker? = null
-    private val presses = HashMap<String, SpringValue>()
+    private val presses = HashMap<String, MotionValue>()
     private fun pressOf(id: String) = presses[id]?.value ?: 0f
-    private fun pressSpring(id: String) = presses.getOrPut(id) { SpringValue(0f, 100f, inv) }
+    private fun pressSpring(id: String) = presses.getOrPut(id) { MotionValue(0f, 100f, inv) }
 
     private val longPress = Runnable {
         longFired = true
@@ -1672,7 +1672,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         when (touchTarget) {
             "clearGroup" -> {
                 val g = b?.group ?: return
-                val s = confirmGroup.getOrPut(g) { SpringValue(0f, 100f, inv) }
+                val s = confirmGroup.getOrPut(g) { MotionValue(0f, 100f, inv) }
                 if (s.target < 0.5f) { s.animateTo(1f, CONFIRM); hnd().postDelayed({ s.animateTo(0f, CONFIRM) }, 3000) }
                 else { expanded.remove(g); clearItems(groups.firstOrNull { it.first == g }?.second ?: emptyList()) }
             }

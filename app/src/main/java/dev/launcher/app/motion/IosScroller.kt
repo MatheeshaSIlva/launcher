@@ -1,7 +1,7 @@
 package dev.launcher.app.motion
 
 import android.view.Choreographer
-import dev.launcher.app.Spring
+import dev.launcher.app.design.Curve
 import kotlin.math.abs
 import kotlin.math.ln
 import kotlin.math.pow
@@ -28,7 +28,7 @@ class IosScroller(private val onScroll: (Float) -> Unit, private val onSettle: (
     private var startNs = 0L
     private var p0 = 0f
     private var v0 = 0f
-    private var spring: Spring? = null
+    private var spring: Mover? = null
     private var raw = 0f
     private var posted = false
 
@@ -101,9 +101,9 @@ class IosScroller(private val onScroll: (Float) -> Unit, private val onSettle: (
      * Animates to [target] (clamped) on [spec], carrying the motion it has now (so a run of retargets, e.g. a finger
      * scrubbing an index, flows instead of restarting at every letter).
      */
-    fun animateTo(target: Float, spec: SpringSpec, velocity: Float = this.velocity) {
+    fun animateTo(target: Float, spec: Curve, velocity: Float = this.velocity) {
         mode = Mode.SPRING
-        spring = spec.spring().apply { start(position, velocity, target.coerceIn(minPos, maxPos)) }
+        spring = spec.mover().apply { start(position, velocity, target.coerceIn(minPos, maxPos)) }
         startNs = System.nanoTime()
         post()
     }
@@ -120,7 +120,7 @@ class IosScroller(private val onScroll: (Float) -> Unit, private val onSettle: (
 
     private fun springTo(target: Float, velocity: Float) {
         mode = Mode.SPRING
-        spring = Motion.profile.overscrollReturn.spring().apply { start(position, velocity, target) }
+        spring = Motion.profile.overscrollReturn.mover().apply { start(position, velocity, target) }
         startNs = System.nanoTime()
         post()
     }
@@ -144,7 +144,7 @@ class IosScroller(private val onScroll: (Float) -> Unit, private val onSettle: (
                     position < minPos || position > maxPos -> {
                         // Ran past an end: the spring takes over with the fling's velocity and brings it back.
                         val target = if (position < minPos) minPos else maxPos
-                        spring = Motion.profile.overscrollReturn.spring().apply { start(position, v, target) }
+                        spring = Motion.profile.overscrollReturn.mover().apply { start(position, v, target) }
                         mode = Mode.SPRING
                         startNs = now
                         post()

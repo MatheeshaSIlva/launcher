@@ -71,7 +71,12 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   constants (a function parameter as an index does not compile): gradient stops are read inside the fill loop.
   Fonts (`theme/Fonts.kt`, `FontFamily`): `sys.font.text` / `sys.font.display` name a family (`inter`, `system`,
   `system-serif`, `system-mono`, `google:Name`); Google fonts are downloaded through Play services' font provider into
-  `files/fonts/google/` (then instant, offline). Paints built once keep their font until rebuilt. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
+  `files/fonts/google/` (then instant, offline). Paints built once keep their font until rebuilt.
+  **Motion is not the theme's**: animation presets (`assets/motion/<id>.json`, same file format, `ios27` the base) hold
+  every `motion.*` role as a curve, a spring or a bezier (`{"bezier": [x1, y1, x2, y2], "ms": N}`); code asks
+  `Motion.role(MotionTokens.X)` / `Motion.profile` and runs it through `Curve.mover()` / `MotionValue` (both kinds
+  interruptible). Switch: `DESIGN_RELOAD --es motion ID`. Theme seeds and motion seeds both live in the builder, which
+  writes the two files. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.

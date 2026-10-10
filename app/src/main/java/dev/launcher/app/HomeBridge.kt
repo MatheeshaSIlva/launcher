@@ -28,7 +28,7 @@ object HomeBridge {
         /** Records home with [pkg]'s icon left out (main thread). */
         fun recordWithout(pkg: String): HomePicture?
         /** Runs home's own depth (zoom) on the same spring as gesture nav's, from the same start time (main thread). */
-        fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long)
+        fun animateDepth(from: Float, to: Float, velocity: Float, curve: dev.launcher.app.design.Curve, startNanos: Long)
         /** Records home exactly as it shows now (every icon; open folder, scroll, page as they are). Main thread. */
         fun recordAsShown(): HomePicture?
         /**
@@ -132,11 +132,11 @@ object HomeBridge {
     fun afterHomeDraw(then: () -> Unit) = main.post { home?.afterNextDraw(then) ?: then() }
 
     /**
-     * The real home takes over the depth animation from the picture: same spring, same start ([startNanos], System.nanoTime
+     * The real home takes over the depth animation from the picture: same curve, same start ([startNanos], System.nanoTime
      * base like Choreographer frame times), so when the picture is dropped nothing jumps. Any thread.
      */
-    fun animateDepth(from: Float, to: Float, velocity: Float, response: Float, damping: Float, startNanos: Long) =
-        main.post { home?.animateDepth(from, to, velocity, response, damping, startNanos) }
+    fun animateDepth(from: Float, to: Float, velocity: Float, curve: dev.launcher.app.design.Curve, startNanos: Long) =
+        main.post { home?.animateDepth(from, to, velocity, curve, startNanos) }
 
     /**
      * True while gesture nav's picture of home covers the real home (cards on screen): home then skips its depth blur,

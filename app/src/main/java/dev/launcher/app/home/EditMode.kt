@@ -16,7 +16,7 @@ import android.widget.FrameLayout
 import dev.launcher.app.GlassStyle
 import dev.launcher.app.drawer.LabelPainter
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -675,8 +675,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         private var pivotY0 = 0f
         private var size0 = 1f     // scale the copy starts at (an App Library icon is smaller), reaching 1 as it lifts
         // 0 = in place, 1 = lifted (scale and shadow).
-        private val liftK = SpringValue(0f, 100f, { invalidate() })
-        private val settleK = SpringValue(0f, 1000f, { k -> place(k) }, { onSettleEnd() })
+        private val liftK = MotionValue(0f, 100f, { invalidate() })
+        private val settleK = MotionValue(0f, 1000f, { k -> place(k) }, { onSettleEnd() })
         private var fromX = 0f
         private var fromY = 0f
         private var toX = 0f
@@ -762,8 +762,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         private var pressedEdit = false
         private var pressedDone = false
         // Presses dim the label and the capsule a little, in and out on a spring (not at once).
-        private val editPress = SpringValue(0f, 100f, { invalidate() })
-        private val donePress = SpringValue(0f, 100f, { invalidate() })
+        private val editPress = MotionValue(0f, 100f, { invalidate() })
+        private val donePress = MotionValue(0f, 100f, { invalidate() })
         // The capsules are clear glass: over a light wallpaper the white labels need a slightly darker capsule to sit on.
         private val tint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
         private val tintRect = RectF()
@@ -804,7 +804,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
         // 0 = away (above the screen's edge, faded), 1 = in place. The capsules slide down into place as editing begins
         // and back up as it ends, on a spring that a quick Done can reverse midway.
-        private val shown: SpringValue = SpringValue(0f, 1000f, { k -> place(k) }, { if (alpha <= 0.001f) visibility = View.GONE })
+        private val shown: MotionValue = MotionValue(0f, 1000f, { k -> place(k) }, { if (alpha <= 0.001f) visibility = View.GONE })
 
         private fun place(k: Float) {
             val kk = k.coerceIn(0f, 1.2f)

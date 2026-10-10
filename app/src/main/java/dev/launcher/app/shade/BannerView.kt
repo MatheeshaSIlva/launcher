@@ -15,8 +15,8 @@ import android.view.View
 import android.view.ViewConfiguration
 import dev.launcher.app.R
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringSpec
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.design.Curve
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts
 import dev.launcher.app.design.ColorKey
@@ -125,15 +125,15 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             if (redraw) card.invalidate()
         }
         private val move: (Float) -> Unit = { place(this) }
-        val k: SpringValue = SpringValue(0f, 100f, move) { if (k.value <= 0.001f && leaving) drop(this) }
-        val dx: SpringValue = SpringValue(0f, 1f, move) { if (leaving && abs(dx.value) >= width * 0.9f) drop(this) }
-        val dy: SpringValue = SpringValue(0f, 1f, move) { if (leaving && dy.value < 0f) drop(this) }
-        val press = SpringValue(0f, 100f, move)
+        val k: MotionValue = MotionValue(0f, 100f, move) { if (k.value <= 0.001f && leaving) drop(this) }
+        val dx: MotionValue = MotionValue(0f, 1f, move) { if (leaving && abs(dx.value) >= width * 0.9f) drop(this) }
+        val dy: MotionValue = MotionValue(0f, 1f, move) { if (leaving && dy.value < 0f) drop(this) }
+        val press = MotionValue(0f, 100f, move)
         /** Its height (px): springs when an update changes what it shows. */
-        val height = SpringValue(0f, 1f, { place(this); card.invalidate() })
+        val height = MotionValue(0f, 1f, { place(this); card.invalidate() })
         val h get() = height.value
         /** Each button's press (0..1). */
-        val pressed = List(3) { SpringValue(0f, 100f, { card.invalidate() }) }
+        val pressed = List(3) { MotionValue(0f, 100f, { card.invalidate() }) }
         var leaving = false
         val card = Card(this)
         /** Behind the card, exactly its platter: the system's live blur where it has one ([live]). */

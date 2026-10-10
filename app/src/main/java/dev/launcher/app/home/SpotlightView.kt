@@ -26,7 +26,8 @@ import android.widget.FrameLayout
 import dev.launcher.app.AppLog
 import dev.launcher.app.GlassDrawable
 import dev.launcher.app.GlassStyle
-import dev.launcher.app.Spring
+import dev.launcher.app.motion.Mover
+import dev.launcher.app.motion.mover
 import dev.launcher.app.Wallpaper
 import dev.launcher.app.apps.AppEntry
 import dev.launcher.app.apps.Apps
@@ -85,7 +86,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
     var progress = 0f
         private set
     private var resultsShown = 0f      // 0 = suggestions, 1 = results (crossfade)
-    private var spring: Spring? = null
+    private var spring: Mover? = null
     private var springStart = 0L
     private var target = 0f
     private var animating = false
@@ -268,7 +269,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
 
     private fun animateTo(to: Float, velocity: Float) {
         target = to
-        spring = Motion.profile.drawer.spring().apply { start(progress * 1000f, velocity * 1000f, to * 1000f) }
+        spring = Motion.profile.drawer.mover().apply { start(progress * 1000f, velocity * 1000f, to * 1000f) }
         springStart = System.nanoTime()
         if (!animating) { animating = true; Choreographer.getInstance().postFrameCallback(frame) }
     }

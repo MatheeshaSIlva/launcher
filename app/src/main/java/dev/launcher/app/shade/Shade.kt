@@ -20,8 +20,8 @@ import android.widget.FrameLayout
 import dev.launcher.app.AppLog
 import dev.launcher.app.Unlock
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.motion.SpringSpec
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.design.Curve
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.statusbar.StatusBarView
 import kotlin.math.abs
 import kotlin.math.max
@@ -321,14 +321,14 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var editK = 0f
 
     /** 0 closed .. 1 open (Notification Center: past 1 while pulled further; Control Center: how present it is). */
-    private val progress = SpringValue(0f, 1000f, { applyProgress() }) { rested() }
+    private val progress = MotionValue(0f, 1000f, { applyProgress() }) { rested() }
 
     /**
      * Control Center's controls and status row below their place (px), as iOS 27 pulls them: an ease-out of the finger's
      * travel ([ccPull]) while it holds them, then back on [CC_SETTLE], which overshoots a little upwards (measured: 8-9 pt
      * on a ~70 pt return); a little above their place (negative) as they fade out closing.
      */
-    private val ccOffset = SpringValue(0f, 1f, { cc.pullOffset = it; if (panel == Panel.CC) applyProgress() })
+    private val ccOffset = MotionValue(0f, 1f, { cc.pullOffset = it; if (panel == Panel.CC) applyProgress() })
 
     private fun u() = min(root.width, root.height).coerceAtLeast(1) / 402f
 
@@ -338,8 +338,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private fun ccTravel() = dev.launcher.app.design.Design.num(CcTokens.OPEN_TRAVEL) * u()
 
-    /** The spring Control Center finishes coming in on (`comp.cc.motion.open`). */
-    private fun ccOpen(): SpringSpec = dev.launcher.app.design.Design.spring(CcTokens.OPEN).let { SpringSpec(it.response, it.damping) }
+    /** The curve Control Center finishes coming in on (`motion.cc.open`). */
+    private fun ccOpen(): Curve = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_OPEN)
 
     /** How far a push up from the bottom (or on the panel) must go to close Control Center (px). */
     private fun ccCloseTravel() = max(root.height * 0.30f, 200f)
@@ -832,7 +832,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var launchSettled = false
     private var launchAppReady = false
     private var launchFading = false
-    private val launchK: SpringValue = SpringValue(0f, 100f, { placeLaunchCard() }) { launchSettled = true; maybeEndLaunch(); if (!launchAppReady) askTopTask() }
+    private val launchK: MotionValue = MotionValue(0f, 100f, { placeLaunchCard() }) { launchSettled = true; maybeEndLaunch(); if (!launchAppReady) askTopTask() }
 
     /**
      * The card is full and the app has not said it is in front: asks the system which task is (again shortly until it is the

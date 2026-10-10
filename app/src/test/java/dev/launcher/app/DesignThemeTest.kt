@@ -61,7 +61,6 @@ class DesignThemeTest {
                 k.endsWith("-blend") -> Value.Choice::class
                 k.endsWith("color") || k.endsWith(".dim") -> Value.Color::class
                 k.endsWith(".title") || k.endsWith(".title-large") || k.endsWith(".detail") -> Value.Text::class
-                k.endsWith(".motion.open") -> Value.SpringV::class
                 else -> Value.Number::class
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
@@ -100,9 +99,13 @@ class DesignThemeTest {
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
         }
-        // Every animation's.
-        for (k in dev.launcher.app.motion.MotionTokens.SPRINGS) assertTrue(k, r.resolve(k) is Value.SpringV)
-        for (k in dev.launcher.app.motion.MotionTokens.NUMBERS) assertTrue(k, r.resolve(k) is Value.Number)
+        // Every animation's: in the iOS 27 animation preset (motion is not the theme's).
+        val preset = Resolver(listOf(Theme.parse(File("src/main/assets/motion/ios27.json").readText()).entries))
+        for (k in dev.launcher.app.motion.MotionTokens.CURVES) {
+            assertTrue(k, preset.resolve(k) is Value.CurveV)
+            assertTrue("$k is in the theme", !shipped.entries.containsKey(k))
+        }
+        for (k in dev.launcher.app.motion.MotionTokens.NUMBERS) assertTrue(k, preset.resolve(k) is Value.Number)
         // The appearance's palette.
         for (k in dev.launcher.app.theme.PaletteTokens.COLORS) assertTrue(k, r.resolve(k) is Value.Color)
         for (k in dev.launcher.app.theme.PaletteTokens.NUMBERS) assertTrue(k, r.resolve(k) is Value.Number)

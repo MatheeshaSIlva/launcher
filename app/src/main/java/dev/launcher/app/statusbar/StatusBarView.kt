@@ -32,8 +32,8 @@ import android.text.format.DateFormat
 import android.view.View
 import android.view.WindowInsets
 import dev.launcher.app.AppLog
-import dev.launcher.app.motion.SpringSpec
-import dev.launcher.app.motion.SpringValue
+import dev.launcher.app.design.Curve
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.shade.Notifs
 import dev.launcher.app.theme.Fonts
 import java.util.Calendar
@@ -397,8 +397,8 @@ class StatusBarView(ctx: Context) : View(ctx) {
         var width = 0f
         var wanted = false
         var placed = false
-        val x = SpringValue(0f, 1f, { invalidate() })
-        val shown = SpringValue(0f, 100f, { invalidate() })
+        val x = MotionValue(0f, 1f, { invalidate() })
+        val shown = MotionValue(0f, 100f, { invalidate() })
 
         fun place(target: Float) {
             if (!placed || !settled) { x.snapTo(target); placed = true; return }
@@ -432,11 +432,11 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private val rightSlots: List<Slot> get() = listOf(boltSlot, batterySlot, vpnSlot, wifiSlot, typeSlot, cellSlot)
 
     // Levels glide instead of jumping.
-    private val batteryAnim = SpringValue(100f, 1f, { invalidate() })
-    private val cellAnim = SpringValue(0f, 100f, { invalidate() })
-    private val wifiAnim = SpringValue(0f, 100f, { invalidate() })
-    private val chargeAnim = SpringValue(0f, 100f, { invalidate() })
-    private val saveAnim = SpringValue(0f, 100f, { invalidate() })
+    private val batteryAnim = MotionValue(100f, 1f, { invalidate() })
+    private val cellAnim = MotionValue(0f, 100f, { invalidate() })
+    private val wifiAnim = MotionValue(0f, 100f, { invalidate() })
+    private val chargeAnim = MotionValue(0f, 100f, { invalidate() })
+    private val saveAnim = MotionValue(0f, 100f, { invalidate() })
 
     private val clockText = RollingText { invalidate() }
     private val typeText = RollingText { invalidate() }
@@ -529,7 +529,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val slot = Slot(id) { c, x, cy, _, col -> drawIcon(c, drawable, x, cy, col) }
     }
 
-    private fun level(s: SpringValue, to: Float) {
+    private fun level(s: MotionValue, to: Float) {
         if (!settled) { s.snapTo(to); return }
         if (s.target != to) s.animateTo(to, LEVEL)
     }
@@ -815,7 +815,7 @@ class RollingText(private val onFrame: () -> Unit) {
     var text = ""
         private set
     private var old = ""
-    private val k = SpringValue(1f, 100f, { onFrame() })
+    private val k = MotionValue(1f, 100f, { onFrame() })
 
     fun set(t: String, animate: Boolean) {
         if (t == text) return
