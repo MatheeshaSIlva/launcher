@@ -155,7 +155,16 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      Pure layout geometry (Control Center's grid, Notification Center's stack offsets) stays in each layout's tokens;
      the element rounds move it into the layouts. Later components (toggle, segmented control, chip, list row) come
      with the first layout or settings screen that draws them.
-   - **B2c, paint v2**: gradient fills, strokes, per-corner radii and corner smoothing in the renderer.
+   - **B2c, paint v2** (done 2026-10-10): the one renderer (`MaterialPainter`) draws Figma's remaining paint
+     properties. Fills may be gradients (linear, radial, angular, diamond; 2-4 stops, each colour any colour value,
+     palette ones included), written as `{"gradient": {"type", "from", "to", "stops"}, "opacity", "blend"}` beside the
+     short `["#colour", opacity, "BLEND"]`. Materials may have up to two strokes (`"strokes": [{"color", "width",
+     "align": inside|center|outside, "opacity", "blend"}]`), the outer part drawn with the drop shadows. A surface may
+     have a radius per corner (`radii` on `draw` / `drawLive`). Corners can be smoothed theme-wide
+     (`sys.shape.corner-smoothing`, 0..1): iOS's continuous corner (the curve reaching 1.528 r along each edge, a
+     superellipse of exponent 3.25 at full smoothing), giving way where the sides leave no room, so circles and capsules
+     stay round. iOS 27: no gradients or strokes, smoothing 0 (round, as drawn so far; to judge against the kit later):
+     Control Center and home pixel-identical. The Graphite test theme shows all three (emulator).
    - **B2d, fonts**: any family per text style (bundled, the device's, Google Fonts downloaded on the phone).
 3. Animation engine v2: roles, springs and beziers, presets; today's iOS motion as the first preset.
 4. Clean layout switching (teardown, rebuild, re-publish, transition), tested by switching every element back and forth.

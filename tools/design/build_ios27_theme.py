@@ -173,6 +173,7 @@ MATERIAL_YOU = {
 
 # Seeds for the hand-written tiers (only used for keys missing from the theme file).
 SEED = {
+    'sys.shape.corner-smoothing': {'factor': 0, 'src': "judged:round corners as the iOS surfaces have been drawn so far (iOS's own are continuous: to judge against the kit)"},
     'sys.color.source': {'choice': 'theme', 'src': "judged:the theme's own colours until the user picks the wallpaper's (Material You)"},
     'sys.scale.policy': {'choice': 'reference-width', 'src': 'judged:the screen is as many points wide as iOS 27\'s iPhone, so proportions and, on the S24, physical sizes match it'},
     'sys.scale.reference-width': {'pt': 402, 'src': 'kit:the kit\'s iPhone 17 Pro frame, 402 x 874'},

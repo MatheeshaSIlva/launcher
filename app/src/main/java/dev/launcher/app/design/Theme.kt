@@ -111,16 +111,57 @@ class Theme(
                 Lens(it.optDouble("refraction", 0.0).toFloat(), it.optDouble("depth", 0.0).toFloat(), it.optDouble("dispersion", 0.0).toFloat(),
                     it.optDouble("splay", 0.0).toFloat(), it.optDouble("light", 0.0).toFloat(), it.optDouble("lightAngle", 0.0).toFloat())
             },
-            fills = list(m.optJSONArray("fills")) { a ->
-                // Opacity: one number, or [light, dark].
-                val op = a.optJSONArray(1)
-                val l = op?.getDouble(0)?.toFloat() ?: a.getDouble(1).toFloat()
-                val d = op?.getDouble(1)?.toFloat() ?: l
-                Fill(colorValue(a.getString(0)), l, d, Blend.valueOf(a.getString(2)))
+            fills = m.optJSONArray("fills").let { arr ->
+                if (arr == null) emptyList() else List(arr.length()) { i ->
+                    val o = arr.optJSONObject(i)
+                    if (o != null) fillObject(o) else arr.getJSONArray(i).let { a ->
+                        // ["#colour", opacity (one number, or [light, dark]), "BLEND"]
+                        val (l, d) = opacity(a.opt(1))
+                        Fill(colorValue(a.getString(0)), l, d, Blend.valueOf(a.getString(2)))
+                    }
+                }
             },
             innerShadows = list(m.optJSONArray("innerShadows")) { shadow(it) },
             shadows = list(m.optJSONArray("shadows")) { shadow(it) },
+            strokes = m.optJSONArray("strokes").let { arr -> if (arr == null) emptyList() else List(arr.length()) { stroke(arr.getJSONObject(it)) } },
         )
+
+        /** One number, or [light, dark]. */
+        private fun opacity(v: Any?): Pair<Float, Float> = when (v) {
+            is JSONArray -> v.getDouble(0).toFloat() to v.getDouble(1).toFloat()
+            is Number -> v.toFloat().let { it to it }
+            null -> 1f to 1f
+            else -> v.toString().toFloat().let { it to it }
+        }
+
+        /**
+         * A fill as an object: `{"color": "#..."}` or `{"gradient": {"type": "linear", "from": [x, y], "to": [x, y],
+         * "stops": [["#colour", position], ...]}}`, with `"opacity"` and `"blend"`.
+         */
+        private fun fillObject(o: JSONObject): Fill {
+            val (l, d) = opacity(o.opt("opacity"))
+            val blend = Blend.valueOf(o.optString("blend", "NORMAL"))
+            val g = o.optJSONObject("gradient")
+            if (g == null) return Fill(colorValue(o.getString("color")), l, d, blend)
+            val from = g.optJSONArray("from")
+            val to = g.optJSONArray("to")
+            val stops = g.getJSONArray("stops").let { st -> List(st.length()) { st.getJSONArray(it).let { a -> GradientStop(colorValue(a.getString(0)), a.getDouble(1).toFloat()) } } }
+            require(stops.size in 2..MAX_STOPS) { "a gradient takes 2 to $MAX_STOPS stops" }
+            val gradient = Gradient(GradientType.valueOf(g.optString("type", "linear").uppercase()),
+                from?.getDouble(0)?.toFloat() ?: 0.5f, from?.getDouble(1)?.toFloat() ?: 0f,
+                to?.getDouble(0)?.toFloat() ?: 0.5f, to?.getDouble(1)?.toFloat() ?: 1f, stops)
+            return Fill(stops.first().color, l, d, blend, gradient)
+        }
+
+        /** `{"color": "#...", "width": pt, "align": "inside|center|outside", "opacity": ..., "blend": ...}` */
+        private fun stroke(o: JSONObject): Stroke {
+            val (l, d) = opacity(o.opt("opacity"))
+            return Stroke(colorValue(o.getString("color")), o.optDouble("width", 1.0).toFloat(),
+                StrokeAlign.valueOf(o.optString("align", "inside").uppercase()), l, d, Blend.valueOf(o.optString("blend", "NORMAL")))
+        }
+
+        /** The most stops a gradient may have (the renderer's). */
+        const val MAX_STOPS = 4
 
         private fun shadow(a: JSONArray) = Shadow(colorValue(a.getString(0)), a.getDouble(1).toFloat(), a.getDouble(2).toFloat(),
             a.getDouble(3).toFloat(), a.getDouble(4).toFloat(), Blend.valueOf(a.getString(5)))
@@ -207,10 +248,23 @@ class Theme(
                 o.put("lens", JSONObject().put("refraction", l.refraction.toDouble()).put("depth", l.depthPt.toDouble()).put("dispersion", l.dispersion.toDouble())
                     .put("splay", l.splay.toDouble()).put("light", l.light.toDouble()).put("lightAngle", l.lightAngle.toDouble()))
             }
+            fun op(l: Float, d: Float): Any = if (l == d) l.toDouble() else JSONArray().put(l.toDouble()).put(d.toDouble())
             o.put("fills", JSONArray().apply {
                 m.fills.forEach {
-                    val op: Any = if (it.opacity == it.opacityDark) it.opacity.toDouble() else JSONArray().put(it.opacity.toDouble()).put(it.opacityDark.toDouble())
-                    put(JSONArray().put(colorString(it.color)).put(op).put(it.blend.name))
+                    val g = it.gradient
+                    if (g == null) put(JSONArray().put(colorString(it.color)).put(op(it.opacity, it.opacityDark)).put(it.blend.name))
+                    else put(JSONObject()
+                        .put("gradient", JSONObject().put("type", g.type.name.lowercase())
+                            .put("from", JSONArray().put(g.fromX.toDouble()).put(g.fromY.toDouble()))
+                            .put("to", JSONArray().put(g.toX.toDouble()).put(g.toY.toDouble()))
+                            .put("stops", JSONArray().apply { g.stops.forEach { s -> put(JSONArray().put(colorString(s.color)).put(s.position.toDouble())) } }))
+                        .put("opacity", op(it.opacity, it.opacityDark)).put("blend", it.blend.name))
+                }
+            })
+            if (m.strokes.isNotEmpty()) o.put("strokes", JSONArray().apply {
+                m.strokes.forEach {
+                    put(JSONObject().put("color", colorString(it.color)).put("width", it.widthPt.toDouble()).put("align", it.align.name.lowercase())
+                        .put("opacity", op(it.opacity, it.opacityDark)).put("blend", it.blend.name))
                 }
             })
             fun shadows(list: List<Shadow>) = JSONArray().apply {

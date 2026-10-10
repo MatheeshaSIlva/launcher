@@ -4004,6 +4004,10 @@
    "pt": 402,
    "src": "kit:the kit's iPhone 17 Pro frame, 402 x 874"
   },
+  "sys.shape.corner-smoothing": {
+   "factor": 0,
+   "src": "judged:round corners as the iOS surfaces have been drawn so far (iOS's own are continuous: to judge against the kit)"
+  },
   "sys.spacing.margin": {
    "ref": "ref.dimen.margin",
    "src": "kit:VariableID:10442:65"

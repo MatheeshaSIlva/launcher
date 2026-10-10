@@ -93,7 +93,26 @@ enum class Blend { NORMAL, MULTIPLY, SCREEN, OVERLAY, DARKEN, LIGHTEN, COLOR_DOD
  * Light and dark may differ in opacity: a design kit's light and dark versions of a material can have different layers,
  * and one material holds both (each mode's layers at zero in the other).
  */
-data class Fill(val color: ColorValue, val opacity: Float, val opacityDark: Float, val blend: Blend)
+data class Fill(val color: ColorValue, val opacity: Float, val opacityDark: Float, val blend: Blend, val gradient: Gradient? = null)
+
+/** A gradient's kind, as Figma has them. */
+enum class GradientType { LINEAR, RADIAL, ANGULAR, DIAMOND }
+
+/** One colour of a gradient at [position] (0..1 along it). */
+data class GradientStop(val color: ColorValue, val position: Float)
+
+/**
+ * A gradient fill (Figma's): [from] and [to] in the surface's own box (0..1 on each axis: (0, 0) top left, (1, 1) bottom
+ * right). Linear: along from -> to. Radial and diamond: centred on [from], reaching [to]. Angular: around [from], starting
+ * towards [to]. Up to four [stops].
+ */
+data class Gradient(val type: GradientType, val fromX: Float, val fromY: Float, val toX: Float, val toY: Float, val stops: List<GradientStop>)
+
+/** Where a stroke lies against the shape's edge (Figma's stroke alignment). */
+enum class StrokeAlign { INSIDE, CENTER, OUTSIDE }
+
+/** An outline along the shape's edge: [widthPt] wide, [align]ed, its colour at an opacity (light and dark), blended. */
+data class Stroke(val color: ColorValue, val widthPt: Float, val align: StrokeAlign, val opacity: Float, val opacityDark: Float, val blend: Blend)
 
 /** A drop or inner shadow, in points: offset, blur radius, spread; its colour and blend. */
 data class Shadow(val color: ColorValue, val dx: Float, val dy: Float, val blur: Float, val spread: Float, val blend: Blend)
@@ -148,4 +167,6 @@ data class Material(
     val fills: List<Fill>,
     val innerShadows: List<Shadow>,
     val shadows: List<Shadow>,
+    /** Outlines over everything else of the surface (Figma's strokes), in order. */
+    val strokes: List<Stroke> = emptyList(),
 )

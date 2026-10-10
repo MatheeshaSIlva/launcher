@@ -121,4 +121,36 @@ class ThemeFilesTest {
             }
         }
     }
+
+    // ------------------------------------------------------------------ paint v2: gradients and strokes (B2c)
+
+    @Test fun gradientFillsAndStrokesReadAndWriteBack() {
+        val t = Theme.parse("""{"name": "t", "tokens": {"m": {"material": {"frost": 8,
+            "fills": [["#ffffff", 0.2, "NORMAL"],
+                      {"gradient": {"type": "radial", "from": [0.5, 0.5], "to": [1, 0.5], "stops": [["#ff0000", 0], ["@primary/50", 0.6], ["#0000ff00", 1]]},
+                       "opacity": [0.8, 0.6], "blend": "SCREEN"}],
+            "innerShadows": [], "shadows": [],
+            "strokes": [{"color": "#00000026|#ffffff26", "width": 1.5, "align": "outside", "opacity": 1, "blend": "NORMAL"}]},
+            "src": "judged:test"}}}""")
+        val m = (t.entries.getValue("m").value as Value.Mat).material
+        assertEquals(2, m.fills.size)
+        val g = m.fills[1].gradient!!
+        assertEquals(dev.launcher.app.design.GradientType.RADIAL, g.type)
+        assertEquals(3, g.stops.size)
+        assertEquals(0.6f, g.stops[1].position)
+        assertEquals(0.8f, m.fills[1].opacity); assertEquals(0.6f, m.fills[1].opacityDark)
+        assertEquals(dev.launcher.app.design.Blend.SCREEN, m.fills[1].blend)
+        assertEquals(1, m.strokes.size)
+        assertEquals(dev.launcher.app.design.StrokeAlign.OUTSIDE, m.strokes[0].align)
+        assertEquals(1.5f, m.strokes[0].widthPt)
+        // Written back, read again: the same material (the plain fill keeps its short form).
+        val back = Theme.parse(Theme.write("t", t.entries))
+        assertEquals(t.entries.getValue("m").value, back.entries.getValue("m").value)
+    }
+
+    @Test fun aGradientNeedsTwoToFourStops() {
+        val one = """{"name": "t", "tokens": {"m": {"material": {"frost": 0, "fills": [{"gradient": {"type": "linear", "stops": [["#ffffff", 0]]}}],
+            "innerShadows": [], "shadows": []}, "src": "judged:test"}}}"""
+        assertTrue(runCatching { Theme.parse(one) }.isFailure)
+    }
 }

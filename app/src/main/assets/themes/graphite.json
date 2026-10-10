@@ -39,6 +39,15 @@
       0.5,
       "NORMAL"
      ]
+    ],
+    "strokes": [
+     {
+      "color": "#00000014|#ffffff1f",
+      "width": 1,
+      "align": "inside",
+      "opacity": 1,
+      "blend": "NORMAL"
+     }
     ]
    },
    "src": "judged:test theme: a solid graphite surface (Control Center's modules, Notification Center's platters)"
@@ -242,6 +251,54 @@
   "comp.cc.media.text-blend": {
    "choice": "NORMAL",
    "src": "judged:test theme: the player's text drawn as it is (iOS adds it to the dark glass: on a light surface it washed out)"
+  },
+  "sys.shape.corner-smoothing": {
+   "factor": 0.6,
+   "src": "judged:test theme: continuous corners"
+  },
+  "component.control.on-material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     {
+      "gradient": {
+       "type": "linear",
+       "from": [
+        0.5,
+        0
+       ],
+       "to": [
+        0.5,
+        1
+       ],
+       "stops": [
+        [
+         "#ffffff",
+         0
+        ],
+        [
+         "#d6d6dc",
+         1
+        ]
+       ]
+      },
+      "opacity": 1,
+      "blend": "NORMAL"
+     }
+    ],
+    "innerShadows": [],
+    "shadows": [],
+    "strokes": [
+     {
+      "color": "#00000026",
+      "width": 1,
+      "align": "inside",
+      "opacity": 1,
+      "blend": "NORMAL"
+     }
+    ]
+   },
+   "src": "judged:test theme: a light gradient on controls that are on"
   }
  }
 }

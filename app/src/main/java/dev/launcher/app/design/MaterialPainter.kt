@@ -40,6 +40,11 @@ fun Fill.scaled(k: Float): Fill = if (k == 1f) this else copy(opacity = opacity 
  * 4. The rim light (the glass's `light`): a thin highlight along the edge, strongest where the edge faces the light.
  * 5. Outside the shape, the drop shadows (the kit's thin rims and its soft shadow), blended over the backdrop. Shadows
  *    weaker than 3 % are skipped (the kit's 2 % shadow: invisible, and its reach was a third more pixels to shade).
+ * 6. The strokes (Figma's), inside, centred on or outside the edge, each with its blend mode, over everything else.
+ *
+ * Fills may be gradients (linear, radial, angular, diamond; up to [MAX_STOPS] stops) in the surface's own box. The shape
+ * is a rectangle with a radius per corner, its corners smoothed by the theme (`sys.shape.corner-smoothing`: 0 round,
+ * 1 continuous like iOS's icons).
  *
  * Uniforms are taken when a draw is recorded, so one painter draws every surface of a frame.
  *
@@ -57,6 +62,14 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val fillColors = FloatArray(4 * MAX_FILLS)
     private val fillModes = FloatArray(MAX_FILLS)
+    private val fillTypes = FloatArray(MAX_FILLS)
+    private val fillGeom = FloatArray(4 * MAX_FILLS)
+    private val fillStops = FloatArray(MAX_FILLS)
+    private val stopColors = FloatArray(4 * MAX_FILLS * MAX_STOPS)
+    private val stopPos = FloatArray(MAX_FILLS * MAX_STOPS)
+    private val strokeColors = FloatArray(4 * MAX_STROKES)
+    private val strokeGeom = FloatArray(4 * MAX_STROKES)
+    private val strokeModes = FloatArray(MAX_STROKES)
     private val innerColors = FloatArray(4 * MAX_SHADOWS)
     private val innerGeom = FloatArray(4 * MAX_SHADOWS)
     private val innerModes = FloatArray(MAX_SHADOWS)
@@ -179,6 +192,17 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         )
     }
 
+    /** A gradient's colours averaged (ARGB): what stands in for it where only one colour can be used. */
+    private fun averageColor(g: Gradient): Int {
+        var a = 0f; var r = 0f; var gr = 0f; var b = 0f
+        for (st in g.stops) {
+            val c = Design.color(st.color)
+            a += (c ushr 24) and 0xFF; r += (c shr 16) and 0xFF; gr += (c shr 8) and 0xFF; b += c and 0xFF
+        }
+        val n = g.stops.size.coerceAtLeast(1)
+        return (Math.round(a / n) shl 24) or (Math.round(r / n) shl 16) or (Math.round(gr / n) shl 8) or Math.round(b / n)
+    }
+
     /** [m]'s fills over a grey backdrop of brightness [g] (0..1): the resulting RGB. */
     private fun overGray(m: Material, g: Float): FloatArray = over(m, floatArrayOf(g, g, g))
 
@@ -188,7 +212,7 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         var c = backdrop.copyOf()
         for (f in m.fills) {
             val op = (f.opacity + (f.opacityDark - f.opacity) * dark)
-            val col = Design.color(f.color)
+            val col = f.gradient?.let { averageColor(it) } ?: Design.color(f.color)
             val k = op * ((col ushr 24) and 0xFF) / 255f
             if (k <= 0.001f) continue
             val s = floatArrayOf(((col shr 16) and 0xFF) / 255f, ((col shr 8) and 0xFF) / 255f, (col and 0xFF) / 255f)
@@ -211,9 +235,9 @@ class MaterialPainter private constructor(private val unitPx: Float) {
      */
     fun draw(c: Canvas, m: Material, w: Float, h: Float, radius: Float, screenX: Float, screenY: Float, screenScale: Float,
              alpha: Float = 1f, under: List<Fill> = emptyList(), press: Float = 0f, over: List<Fill> = emptyList(), overK: Float = 0f,
-             lightTurn: Float = 0f) {
+             lightTurn: Float = 0f, radii: FloatArray? = null) {
         if (alpha <= 0.003f || w <= 1f || h <= 1f) return
-        val reach = setUniforms(m, w, h, radius, screenX, screenY, screenScale, alpha, under, press, over, overK, lightTurn)
+        val reach = setUniforms(m, w, h, radius, screenX, screenY, screenScale, alpha, under, press, over, overK, lightTurn, radii)
         shader.setFloatUniform("local0", 0f, 0f)
         shader.setFloatUniform("clampSize", 0f, 0f)
         c.drawRect(-reach, -reach, w + reach, h + reach, paint)
@@ -244,7 +268,7 @@ class MaterialPainter private constructor(private val unitPx: Float) {
      */
     fun drawLive(canvas: Canvas, m: Material, shape: android.graphics.RectF, radius: Float, toScreen: Matrix?,
                  limit: android.graphics.RectF?, alpha: Float = 1f, under: List<Fill> = emptyList(), press: Float = 0f,
-                 contentKey: Long = NO_CONTENT_KEY, drawBehind: (Canvas) -> Unit): Boolean {
+                 contentKey: Long = NO_CONTENT_KEY, radii: FloatArray? = null, drawBehind: (Canvas) -> Unit): Boolean {
         if (!canvas.isHardwareAccelerated || shape.isEmpty || alpha <= 0.003f) return false
         val u = unitPx
         val sigma = m.frostNowPt() * u / 2f
@@ -320,7 +344,7 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         val oy = shape.top - top
         // The shader's coordinates are the node's: the surface starts at (ox, oy) in them and samples the node's content
         // where it is (no depth zoom, no reveal; kept inside what was recorded).
-        setUniforms(m, shape.width(), shape.height(), radius, ox, oy, 1f, alpha, under, press, emptyList(), 0f, 0f)
+        setUniforms(m, shape.width(), shape.height(), radius, ox, oy, 1f, alpha, under, press, emptyList(), 0f, 0f, radii)
         shader.setFloatUniform("local0", ox, oy)
         shader.setFloatUniform("clampSize", w.toFloat(), h.toFloat())
         shader.setFloatUniform("plain", 0f)
@@ -363,7 +387,8 @@ class MaterialPainter private constructor(private val unitPx: Float) {
 
     /** Sets every uniform of one surface; returns how far its drop shadows reach outside it (px). */
     private fun setUniforms(m: Material, w: Float, h: Float, radius: Float, screenX: Float, screenY: Float, screenScale: Float,
-                            alpha: Float, under: List<Fill>, press: Float, over: List<Fill>, overK: Float, lightTurn: Float): Float {
+                            alpha: Float, under: List<Fill>, press: Float, over: List<Fill>, overK: Float, lightTurn: Float,
+                            radii: FloatArray? = null): Float {
         val u = unitPx
         val dark = Appearance.dark
         // Fills: the ones under the surface first, then the material's own.
@@ -372,23 +397,72 @@ class MaterialPainter private constructor(private val unitPx: Float) {
             if (n >= MAX_FILLS) return
             val op = (f.opacity + (f.opacityDark - f.opacity) * dark) * k
             if (op <= 0.001f) return
-            val col = Design.color(f.color)
-            fillColors[n * 4] = ((col shr 16) and 0xFF) / 255f
-            fillColors[n * 4 + 1] = ((col shr 8) and 0xFF) / 255f
-            fillColors[n * 4 + 2] = (col and 0xFF) / 255f
-            fillColors[n * 4 + 3] = op * ((col ushr 24) and 0xFF) / 255f
+            val g = f.gradient
+            if (g == null) {
+                val col = Design.color(f.color)
+                fillColors[n * 4] = ((col shr 16) and 0xFF) / 255f
+                fillColors[n * 4 + 1] = ((col shr 8) and 0xFF) / 255f
+                fillColors[n * 4 + 2] = (col and 0xFF) / 255f
+                fillColors[n * 4 + 3] = op * ((col ushr 24) and 0xFF) / 255f
+                fillTypes[n] = 0f
+            } else {
+                // A gradient: its stops' colours (each with its own alpha), the fill's opacity on top.
+                fillColors[n * 4 + 3] = op
+                fillTypes[n] = (g.type.ordinal + 1).toFloat()
+                fillGeom[n * 4] = g.fromX; fillGeom[n * 4 + 1] = g.fromY; fillGeom[n * 4 + 2] = g.toX; fillGeom[n * 4 + 3] = g.toY
+                val count = g.stops.size.coerceAtMost(MAX_STOPS)
+                fillStops[n] = count.toFloat()
+                for (j in 0 until MAX_STOPS) {
+                    val st = g.stops[j.coerceAtMost(count - 1)]
+                    val col = Design.color(st.color)
+                    val o = (n * MAX_STOPS + j) * 4
+                    stopColors[o] = ((col shr 16) and 0xFF) / 255f
+                    stopColors[o + 1] = ((col shr 8) and 0xFF) / 255f
+                    stopColors[o + 2] = (col and 0xFF) / 255f
+                    stopColors[o + 3] = ((col ushr 24) and 0xFF) / 255f
+                    stopPos[n * MAX_STOPS + j] = if (j < count) st.position else 2f
+                }
+            }
             fillModes[n] = f.blend.ordinal.toFloat()
             n++
         }
         for (f in under) addFill(f, 1f)
         for (f in m.fills) addFill(f, 1f)
         if (overK > 0f) for (f in over) addFill(f, overK)
-        for (i in n until MAX_FILLS) { fillColors[i * 4 + 3] = 0f; fillModes[i] = 0f }
+        for (i in n until MAX_FILLS) { fillColors[i * 4 + 3] = 0f; fillModes[i] = 0f; fillTypes[i] = 0f }
         shadows(m.innerShadows, innerColors, innerGeom, innerModes, u, inner = true)
-        val reach = shadows(m.shadows, dropColors, dropGeom, dropModes, u, inner = false)
+        var reach = shadows(m.shadows, dropColors, dropGeom, dropModes, u, inner = false)
+        // Strokes: the band each covers, as distances from the edge (px, negative inside).
+        var sn = 0
+        for (st in m.strokes) {
+            if (sn >= MAX_STROKES) break
+            val op = st.opacity + (st.opacityDark - st.opacity) * dark
+            val col = Design.color(st.color)
+            val a = op * ((col ushr 24) and 0xFF) / 255f
+            if (a <= 0.003f || st.widthPt <= 0f) continue
+            val wpx = st.widthPt * u
+            val (lo, hi) = when (st.align) { StrokeAlign.INSIDE -> -wpx to 0f; StrokeAlign.CENTER -> -wpx / 2f to wpx / 2f; StrokeAlign.OUTSIDE -> 0f to wpx }
+            strokeColors[sn * 4] = ((col shr 16) and 0xFF) / 255f
+            strokeColors[sn * 4 + 1] = ((col shr 8) and 0xFF) / 255f
+            strokeColors[sn * 4 + 2] = (col and 0xFF) / 255f
+            strokeColors[sn * 4 + 3] = a
+            strokeGeom[sn * 4] = lo; strokeGeom[sn * 4 + 1] = hi
+            strokeModes[sn] = st.blend.ordinal.toFloat()
+            reach = maxOf(reach, hi + 1f)
+            sn++
+        }
+        for (i in sn until MAX_STROKES) strokeColors[i * 4 + 3] = 0f
         shader.setFloatUniform("dropReach", reach)
         shader.setFloatUniform("fillColor", fillColors)
         shader.setFloatUniform("fillMode", fillModes)
+        shader.setFloatUniform("fillType", fillTypes)
+        shader.setFloatUniform("fillGeom", fillGeom)
+        shader.setFloatUniform("fillStops", fillStops)
+        shader.setFloatUniform("stopColor", stopColors)
+        shader.setFloatUniform("stopPos", stopPos)
+        shader.setFloatUniform("strokeColor", strokeColors)
+        shader.setFloatUniform("strokeGeom", strokeGeom)
+        shader.setFloatUniform("strokeMode", strokeModes)
         shader.setFloatUniform("innerColor", innerColors)
         shader.setFloatUniform("innerGeom", innerGeom)
         shader.setFloatUniform("innerMode", innerModes)
@@ -400,7 +474,11 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         shader.setFloatUniform("size", w, h)
         shader.setFloatUniform("origin", screenX, screenY)
         shader.setFloatUniform("placeScale", screenScale)
-        shader.setFloatUniform("radius", radius.coerceAtMost(minOf(w, h) / 2f))
+        // Each corner's radius (top left, top right, bottom right, bottom left), at most half the shorter side.
+        val cap = minOf(w, h) / 2f
+        if (radii != null && radii.size >= 4) shader.setFloatUniform("radii", radii[0].coerceIn(0f, cap), radii[1].coerceIn(0f, cap), radii[2].coerceIn(0f, cap), radii[3].coerceIn(0f, cap))
+        else radius.coerceIn(0f, cap).let { shader.setFloatUniform("radii", it, it, it, it) }
+        shader.setFloatUniform("smoothing", smoothing())
         shader.setFloatUniform("depth", depth)
         shader.setFloatUniform("bend", (lens?.refraction ?: 0f) * depth)
         shader.setFloatUniform("dispersion", lens?.dispersion ?: 0f)
@@ -440,6 +518,18 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         return reach
     }
 
+    private var smoothVersion = -1
+    private var smoothK = 0f
+
+    /** The theme's corner smoothing (0 round .. 1 continuous). */
+    private fun smoothing(): Float {
+        if (smoothVersion != Design.version) {
+            smoothVersion = Design.version
+            smoothK = try { Design.num(SMOOTHING).coerceIn(0f, 1f) } catch (_: Throwable) { 0f }
+        }
+        return smoothK
+    }
+
     private var rimVersion = -1
     private var rimK = 1f
 
@@ -463,8 +553,13 @@ class MaterialPainter private constructor(private val unitPx: Float) {
          * dark backdrop they come out black, an outline the phone shows plainly at its real size.
          */
         val RIM = NumberKey("sys.glass.rim")
+        /** How continuous every surface's corners are (Figma's corner smoothing: 0 a circle's quarter, 1 iOS's icons). */
+        val SMOOTHING = NumberKey("sys.shape.corner-smoothing")
         const val MAX_FILLS = 8
         const val MAX_SHADOWS = 4
+        const val MAX_STROKES = 2
+        /** The most stops one gradient has ([Theme.MAX_STOPS]). */
+        const val MAX_STOPS = Theme.MAX_STOPS
         /** The rim light's width (pt): judged (the kit gives its strength, not its width). */
         const val RIM_PT = 1.2f
         /** No layers of its own: only the [draw]'s under and over fills over the backdrop. */
@@ -502,7 +597,8 @@ uniform float2 clampSize;
 uniform float2 size;
 uniform float2 origin;
 uniform float placeScale;
-uniform float radius;
+uniform float4 radii;
+uniform float smoothing;
 uniform float depth;
 uniform float bend;
 uniform float dispersion;
@@ -520,6 +616,14 @@ uniform float plain;
 uniform half3 plainColor;
 uniform half4 fillColor[$MAX_FILLS];
 uniform float fillMode[$MAX_FILLS];
+uniform float fillType[$MAX_FILLS];
+uniform float4 fillGeom[$MAX_FILLS];
+uniform float fillStops[$MAX_FILLS];
+uniform half4 stopColor[${MAX_FILLS * MAX_STOPS}];
+uniform float stopPos[${MAX_FILLS * MAX_STOPS}];
+uniform half4 strokeColor[$MAX_STROKES];
+uniform float4 strokeGeom[$MAX_STROKES];
+uniform float strokeMode[$MAX_STROKES];
 uniform half4 innerColor[$MAX_SHADOWS];
 uniform float4 innerGeom[$MAX_SHADOWS];
 uniform float innerMode[$MAX_SHADOWS];
@@ -527,9 +631,55 @@ uniform half4 dropColor[$MAX_SHADOWS];
 uniform float4 dropGeom[$MAX_SHADOWS];
 uniform float dropMode[$MAX_SHADOWS];
 
-float sdRoundRect(float2 p, float2 b, float r) {
-    float2 q = abs(p) - b + r;
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+// The radius of the corner [p] is nearest (top left, top right, bottom right, bottom left).
+float radiusAt(float2 p) { return p.x < 0.0 ? (p.y < 0.0 ? radii.x : radii.w) : (p.y < 0.0 ? radii.y : radii.z); }
+
+// A corner of radius [r] as drawn (in a box of half size [b]): its extent along the edges and its curve's exponent. Round
+// (2) without smoothing; smoothed, iOS's continuous corner: a superellipse reaching 1.528 r along each edge with the same
+// depth at 45 degrees as the circle (exponent 3.25). Where the sides leave no room (a circle, a capsule) the smoothing
+// gives way: a round shape stays round.
+float2 cornerOf(float r, float2 b) {
+    float hm = min(b.x, b.y);
+    r = min(r, hm);
+    float s = smoothing;
+    float ext = r * (1.0 + 0.528 * s);
+    if (ext > hm) {
+        s *= clamp((hm - r) / max(ext - r, 0.0001), 0.0, 1.0);
+        ext = r * (1.0 + 0.528 * s);
+    }
+    return float2(ext, 2.0 + 1.25 * s);
+}
+
+// How far a point is into a corner's curve of exponent [e] (2: a circle).
+float cornerLen(float2 q, float e) {
+    if (e < 2.001) return length(q);
+    float m = max(q.x, q.y);
+    if (m <= 0.0) return 0.0;
+    float2 r = q / m;
+    return m * pow(pow(r.x, e) + pow(r.y, e), 1.0 / e);
+}
+
+// The shape's signed distance: a rectangle of half size [b], each corner rounded by its radius grown by [g].
+float sdShape(float2 p, float2 b, float g) {
+    float2 ce = cornerOf(max(radiusAt(p) + g, 0.0), b);
+    float2 q = abs(p) - b + ce.x;
+    return cornerLen(max(q, float2(0.0)), ce.y) + min(max(q.x, q.y), 0.0) - ce.x;
+}
+
+// How much of a band from [lo] to [hi] (distances from the edge, negative inside) a pixel at [d] covers.
+float bandCov(float d, float lo, float hi) { return clamp(d - lo + 0.5, 0.0, 1.0) * clamp(hi - d + 0.5, 0.0, 1.0); }
+
+// Where a gradient is at [uv] (the surface's box, 0..1): along it (linear), out from its centre (radial, diamond), round
+// it (angular). [g]: from (xy) and to (zw).
+float gradT(float type, float4 g, float2 uv) {
+    float2 a = g.xy;
+    float2 v = uv - a;
+    float2 ab = g.zw - a;
+    if (type < 1.5) return dot(v, ab) / max(dot(ab, ab), 0.000001);
+    if (type < 2.5) return length(v) / max(length(ab), 0.000001);
+    if (type < 3.5) return fract((atan(v.y, v.x) - atan(ab.y, ab.x)) / 6.2831853);
+    float2 r = max(abs(ab), float2(0.000001));
+    return abs(v.x) / r.x + abs(v.y) / r.y;
 }
 
 half lum(half3 c) { return dot(c, half3(0.3, 0.59, 0.11)); }
@@ -626,13 +776,23 @@ half3 seen(float2 sp, float2 off, float t) {
 half4 dropShadows(float2 p, float2 hs, half3 b) {
     half3 col = b;
     half a = 0.0;
+    float d0 = sdShape(p, hs, 0.0);
     for (int i = 0; i < $MAX_SHADOWS; i++) {
         half4 sc = dropColor[i];
         if (sc.a > 0.0) {
             float4 g = dropGeom[i];
-            float ds = sdRoundRect(p - g.xy, max(hs + g.w, float2(0.0)), max(radius + g.w, 0.0));
+            float ds = sdShape(p - g.xy, max(hs + g.w, float2(0.0)), g.w);
             half k = half(gauss(ds, g.z)) * sc.a;
             col = mix(col, blendOf(col, sc.rgb, dropMode[i]), k);
+            a = max(a, k);
+        }
+    }
+    // The strokes' part outside the shape.
+    for (int i = 0; i < $MAX_STROKES; i++) {
+        half4 sc = strokeColor[i];
+        if (sc.a > 0.0) {
+            half k = half(bandCov(d0, strokeGeom[i].x, strokeGeom[i].y)) * sc.a;
+            col = mix(col, blendOf(col, sc.rgb, strokeMode[i]), k);
             a = max(a, k);
         }
     }
@@ -649,7 +809,7 @@ half4 liveOverlay(float2 p, float2 hs, float2 n, float inside, float d) {
         half4 sc = innerColor[i];
         if (sc.a > 0.0) {
             float4 gm = innerGeom[i];
-            float dh = sdRoundRect(p - gm.xy, max(hs - gm.w, float2(0.0)), max(radius - gm.w, 0.0));
+            float dh = sdShape(p - gm.xy, max(hs - gm.w, float2(0.0)), -gm.w);
             half k = half(1.0 - gauss(dh, gm.z)) * sc.a;
             half3 dl = (blendOf(g, sc.rgb, innerMode[i]) - g) * k;
             add += max(dl, half3(0.0));
@@ -663,6 +823,13 @@ half4 liveOverlay(float2 p, float2 hs, float2 n, float inside, float d) {
     res = res * (1.0 - dark) + half4(0.0, 0.0, 0.0, dark);
     half pa = half(press * 0.16);
     res = res * (1.0 - pa) + half4(pa);
+    for (int i = 0; i < $MAX_STROKES; i++) {
+        half4 sc = strokeColor[i];
+        if (sc.a > 0.0) {
+            half k = half(bandCov(d, strokeGeom[i].x, strokeGeom[i].y)) * sc.a;
+            res = res * (1.0 - k) + half4(sc.rgb * k, k);
+        }
+    }
     half cov = half(clamp(0.5 - d, 0.0, 1.0));
     res *= cov;
     if (d > -0.5) res += dropShadows(p, hs, g) * (1.0 - cov);
@@ -674,15 +841,21 @@ half4 main(float2 coordIn) {
     float2 coord = coordIn - local0;
     float2 hs = size * 0.5;
     float2 p = coord - hs;
-    float d = sdRoundRect(p, hs, radius);
+    float d = sdShape(p, hs, 0.0);
     // Beyond the drop shadows' reach nothing is drawn (a surface over kept content runs on a node as large as the screen).
     if (d > dropReach) return half4(0.0);
     // Where it samples: its place on screen, about home's depth centre as far as the wallpaper zooms (1: at rest).
     float2 sp = depthC + (origin + coord * placeScale - depthC) * depthK;
     if (d > 0.5) return dropShadows(p, hs, live > 0.5 ? liveBase : seen(sp, float2(0.0), 0.0)) * half(alpha);
-    float2 q = abs(p) - hs + radius;
+    float2 ce = cornerOf(radiusAt(p), hs);
+    float2 q = abs(p) - hs + ce.x;
     float2 sg = float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
-    float2 n = (q.x > 0.0 && q.y > 0.0) ? normalize(q) * sg : (q.x > q.y ? float2(sg.x, 0.0) : float2(0.0, sg.y));
+    float2 n;
+    if (q.x > 0.0 && q.y > 0.0) {
+        // The curve's normal (a superellipse's when smoothed).
+        float2 qq = q / max(q.x, q.y);
+        n = normalize(float2(pow(qq.x, ce.y - 1.0), pow(qq.y, ce.y - 1.0))) * sg;
+    } else n = q.x > q.y ? float2(sg.x, 0.0) : float2(0.0, sg.y);
     float inside = max(-d, 0.0);
     if (live > 0.5) return liveOverlay(p, hs, n, inside, d) * half(alpha);
     // The lens: bent outward near the edge (quarter-circle profile), red and blue apart.
@@ -691,17 +864,34 @@ half4 main(float2 coordIn) {
     float b = dp > 0.0 ? 1.0 - sqrt(1.0 - (1.0 - t) * (1.0 - t)) : 0.0;
     float2 off = n * b * bend * (dp / max(depth, 0.001)) * placeScale;
     half3 col = seen(sp, off, 1.0 - t);
-    // The fills, in order.
+    // The fills, in order (a gradient's colour where this pixel is in the surface's box).
+    float2 uv = coord / size;
     for (int i = 0; i < $MAX_FILLS; i++) {
         half4 fc = fillColor[i];
-        if (fc.a > 0.0) col = mix(col, blendOf(col, fc.rgb, fillMode[i]), fc.a);
+        if (fc.a > 0.0) {
+            half3 sc = fc.rgb;
+            half sa = 1.0;
+            if (fillType[i] > 0.5) {
+                float t = clamp(gradT(fillType[i], fillGeom[i], uv), 0.0, 1.0);
+                half4 gc = stopColor[i * $MAX_STOPS];
+                for (int j = 1; j < $MAX_STOPS; j++) {
+                    float p0 = stopPos[i * $MAX_STOPS + j - 1];
+                    float p1 = stopPos[i * $MAX_STOPS + j];
+                    if (float(j) < fillStops[i] && t >= p0)
+                        gc = mix(stopColor[i * $MAX_STOPS + j - 1], stopColor[i * $MAX_STOPS + j], half(clamp((t - p0) / max(p1 - p0, 0.000001), 0.0, 1.0)));
+                }
+                sc = gc.rgb;
+                sa = gc.a;
+            }
+            col = mix(col, blendOf(col, sc, fillMode[i]), fc.a * sa);
+        }
     }
     // The inner shadows: inside the shape, outside the shape moved by the offset and grown by -spread, softened.
     for (int i = 0; i < $MAX_SHADOWS; i++) {
         half4 sc = innerColor[i];
         if (sc.a > 0.0) {
             float4 g = innerGeom[i];
-            float dh = sdRoundRect(p - g.xy, max(hs - g.w, float2(0.0)), max(radius - g.w, 0.0));
+            float dh = sdShape(p - g.xy, max(hs - g.w, float2(0.0)), -g.w);
             half k = half(1.0 - gauss(dh, g.z)) * sc.a;
             col = mix(col, blendOf(col, sc.rgb, innerMode[i]), k);
         }
@@ -713,6 +903,11 @@ half4 main(float2 coordIn) {
     float rim = 1.0 - smoothstep(0.0, rimWidth, inside);
     float spec = rim * light * (pow(max(facing, 0.0), 1.8) + 0.45 * pow(max(-facing, 0.0), 1.8));
     col = min(col + half3(half(spec)), half3(1.0));
+    // The strokes, over everything (their part inside the shape; the rest is laid with the drop shadows).
+    for (int i = 0; i < $MAX_STROKES; i++) {
+        half4 sc = strokeColor[i];
+        if (sc.a > 0.0) col = mix(col, blendOf(col, sc.rgb, strokeMode[i]), half(bandCov(d, strokeGeom[i].x, strokeGeom[i].y)) * sc.a);
+    }
     half cov = half(clamp(0.5 - d, 0.0, 1.0));
     half4 res = half4(col, 1.0) * cov;
     // At the anti-aliased edge the rims continue under it.

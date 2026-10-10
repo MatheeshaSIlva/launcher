@@ -65,7 +65,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   user picks the wallpaper's colours (`sys.color.source`; adb: `DESIGN_RELOAD --es colors wallpaper|theme`).
   **Component catalogue** (`design/Components.kt`): shared styles as `component.*` tokens (notification card, control,
   slider, menu, badge, field, card, dock, sheet, panel...); the iOS layouts' `comp.*` tokens are aliases of them. A theme
-  restyles components through `component.*`; new layouts read `component.*`, never another layout's `comp.*`. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
+  restyles components through `component.*`; new layouts read `component.*`, never another layout's `comp.*`.
+  Paint v2: fills may be gradients (object form `{"gradient": ...}`), materials may have `strokes`, surfaces a radius per
+  corner, corners smoothing (`sys.shape.corner-smoothing`). In AGSL, uniform arrays are indexed only by loop indices and
+  constants (a function parameter as an index does not compile): gradient stops are read inside the fill loop. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.
