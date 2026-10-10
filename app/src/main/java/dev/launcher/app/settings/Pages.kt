@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -75,6 +76,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
@@ -170,7 +172,9 @@ private fun Part.detail(): String = when (this) {
 }
 
 /**
- * Which part is open and how far: [p] 0 is the tiles, 1 its page. One value moves everything (the tile growing into the
+ * Which part is open and how far: [p] 0 is the tiles, 1 its page. Opening one changes no composition and no layout (the
+ * S24 traced 14-19 ms of recomposition and 8-10 ms of layout in the first frame when it did): [open] and [p] are read in
+ * drawing and placement only, and everything a page needs is composed, laid out and placed ahead of time. One value moves everything (the tile growing into the
  * sheet, the sheet rising, the picture of home shrinking above it, the title, the page's groups arriving), so every frame
  * of a change only moves and fades what is already built (docs/PLAN_SETTINGS.md S1: the S24 lost 60-80 ms building a
  * page in the first frame of its push).
@@ -181,11 +185,13 @@ private class Studio {
     val p = Animatable(0f)
     /** Each tile's bounds in the sheet: where its page grows from and goes back to. */
     val tiles = HashMap<Part, Rect>()
-    /** How far each tile is pressed in (the growing one starts from the size it sank to). */
-    val press = HashMap<Part, Float>()
+    /** How far each tile is pressed in (the growing one starts from the size it sank to); read in drawing only. */
+    val press = Part.entries.associateWith { Animatable(0f) }
     var sheet: LayoutCoordinates? = null
     /** How many pages are built (ahead of time, one a frame, so opening one never builds it). */
     var built by mutableIntStateOf(0)
+    /** A finger is taking the page back. */
+    var dragging by mutableStateOf(false)
 }
 
 /** Where things are, in pixels: the sheet's two tops (at rest, a page open), the picture of home above it. */
@@ -235,24 +241,28 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         val statusPx = WindowInsets.statusBars.getTop(density).toFloat()
         val navPx = WindowInsets.navigationBars.getBottom(density).toFloat()
         val g = remember(look, statusPx, navPx) { Geometry(look, statusPx, navPx) }
-        val spec = look.motion<Float>(MotionTokens.SETTINGS_OPEN)
-        val open: (Part) -> Unit = { part ->
-            // From the tiles only (a tap on a fading tile while another page closes is not one).
-            if (st.p.value < 0.02f || st.open == part) {
-                st.open = part
-                st.built = Part.entries.size
-                scope.launch { try { st.p.animateTo(1f, spec) } catch (_: kotlinx.coroutines.CancellationException) { } }
+        val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.SETTINGS_OPEN))
+        val open: (Part) -> Unit = remember(st, scope) {
+            { part ->
+                // From the tiles only (a tap on a fading tile while another page closes is not one).
+                if (st.p.value < 0.02f || st.open == part) {
+                    st.open = part
+                    st.built = Part.entries.size
+                    scope.launch { try { st.p.animateTo(1f, spec.value) } catch (_: kotlinx.coroutines.CancellationException) { } }
+                }
             }
         }
-        val close: (Float) -> Unit = { velocity ->
-            scope.launch {
-                try {
-                    st.p.animateTo(0f, spec, velocity)
-                    st.open = null
-                } catch (_: kotlinx.coroutines.CancellationException) { }   // opened again on the way: it stays open
+        val close: (Float) -> Unit = remember(st, scope) {
+            { velocity ->
+                scope.launch {
+                    try {
+                        st.p.animateTo(0f, spec.value, velocity)
+                        st.open = null
+                    } catch (_: kotlinx.coroutines.CancellationException) { }   // opened again on the way: it stays open
+                }
             }
         }
-        BackHandler(enabled = st.open != null) { close(0f) }
+        BackToTiles(st, close)
         // The pages are built ahead, one a frame, once the app has come up.
         LaunchedEffect(Unit) {
             kotlinx.coroutines.delay(350)
@@ -261,12 +271,22 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                 st.built++
             }
         }
-        Box(Modifier.fillMaxSize().background(look.color(SettingsTokens.BACKGROUND))) {
+        // While a page moves (its spring, or a finger), the settings leave the accessibility tree: with an accessibility
+        // service on (gesture nav is one), Compose re-reads the whole tree every 100 ms while layers move (7-25 ms frames
+        // on the S24; none without the tree). At rest it is all there again, for whatever reads it.
+        val moving by remember { androidx.compose.runtime.derivedStateOf { st.p.isRunning || st.dragging } }
+        Box(Modifier.fillMaxSize().then(if (moving) Modifier.clearAndSetSemantics { } else Modifier).background(look.color(SettingsTokens.BACKGROUND))) {
             HomePicture(st, g)
             Header(st, g) { close(0f) }
             Sheet(st, g, open, close)
         }
     }
+}
+
+/** The system's Back closes the open page (its own composable: only it changes when a page opens). */
+@Composable
+private fun BackToTiles(st: Studio, close: (Float) -> Unit) {
+    BackHandler(enabled = st.open != null) { close(0f) }
 }
 
 /** Home as it is now, in the phone's shape; a new picture (after any change) fades in over the last. */
@@ -276,7 +296,15 @@ private fun HomePicture(st: Studio, g: Geometry) {
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var before by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     val fade = remember { Animatable(1f) }
-    LaunchedEffect(look.version) {
+    // Taken again after every change and whenever the settings come back to the front (home may have changed meanwhile).
+    var resumed by remember { mutableIntStateOf(0) }
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val o = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) resumed++ }
+        lifecycle.addObserver(o)
+        onDispose { lifecycle.removeObserver(o) }
+    }
+    LaunchedEffect(look.version, resumed) {
         kotlinx.coroutines.delay(150)
         val next = HomeBridge.home?.pictureNow() ?: return@LaunchedEffect
         before = shown
@@ -339,14 +367,13 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
             alpha = (1f - p * 2f).coerceIn(0f, 1f)
             translationY = -p * rise
         })
-        val part = st.open
-        if (part != null) BasicText(part.title, style = style, modifier = Modifier.graphicsLayer {
-            val p = st.p.value
+        for (part in Part.entries) BasicText(part.title, style = style, modifier = Modifier.graphicsLayer {
+            val p = if (st.open == part) st.p.value else 0f
             alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f)
             translationY = (1f - p) * rise
         })
     }
-    RoundButton(R.drawable.sym_back, "Back", st.open != null, onBack, Modifier
+    RoundButton(R.drawable.sym_back, "Back", { st.open != null }, onBack, Modifier
         .offset { IntOffset(look.pt(SettingsTokens.MARGIN).roundToInt(), g.headerTop.roundToInt()) }
         .graphicsLayer {
             val p = st.p.value.coerceIn(0f, 1f)
@@ -358,7 +385,7 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
 
 /** A round button (the theme's: iOS 27's glass circle, Graphite's solid one) with a symbol; it sinks when pressed. */
 @Composable
-private fun RoundButton(symbol: Int, label: String, enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun RoundButton(symbol: Int, label: String, enabled: () -> Boolean, onClick: () -> Unit, modifier: Modifier) {
     val look = LocalLook.current
     val size = look.pt(SettingsTokens.BUTTON_SIZE)
     val fill = look.color(SettingsTokens.BUTTON_FILL)
@@ -368,12 +395,12 @@ private fun RoundButton(symbol: Int, label: String, enabled: Boolean, onClick: (
     Box(
         modifier
             .size(look.dp(size))
-            .graphicsLayer { val s = 1f - 0.08f * press; scaleX = s; scaleY = s }
+            .pressScale { 1f - 0.08f * press }
             .drawBehind {
                 drawCircle(fill)
                 drawCircle(rim, style = Stroke(1f * look.unit))
             }
-            .then(if (enabled) Modifier.pointerInput(onClick) { rowTap({ pressed = it }, onClick) } else Modifier),
+            .pointerInput(onClick) { rowTap({ pressed = it && enabled() }) { if (enabled()) onClick() } },
         contentAlignment = Alignment.Center,
     ) {
         Image(painterResource(symbol), label, colorFilter = ColorFilter.tint(look.color(SettingsTokens.BUTTON_SYMBOL)),
@@ -413,9 +440,9 @@ private fun Sheet(st: Studio, g: Geometry, open: (Part) -> Unit, close: (Float) 
             .onPlaced { st.sheet = it },
     ) {
         StartContent(st, g, open)
-        GrowingTile(st)
+        for (part in Part.entries) GrowingTile(st, part)
         for ((i, part) in Part.entries.withIndex()) {
-            if (st.built > i || st.open == part) PageLayer(st, g, part, close)
+            if (st.built > i) PageLayer(st, g, part, close)
         }
         Box(
             Modifier.align(Alignment.TopCenter).padding(top = look.dp(7f * g.unit))
@@ -449,7 +476,7 @@ private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit) {
         Spacer(Modifier.height(look.dp(16f * g.unit)))
         for (row in listOf(listOf(Part.LAYOUTS, Part.LOOK), listOf(Part.MOTION, Part.PHONE))) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                for (part in row) Tile(st, part, open, Modifier.weight(1f).then(if (st.open == part) Modifier else back))
+                for (part in row) Tile(st, part, open, Modifier.weight(1f))
             }
             Spacer(Modifier.height(gap))
         }
@@ -463,10 +490,19 @@ private fun Chip(text: String, onClick: () -> Unit) {
     val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
     BasicText(text, style = look.text(SettingsTokens.CHIP_TEXT, look.color(SettingsTokens.CHIP_TEXT_COLOR)), maxLines = 1,
         modifier = Modifier
-            .graphicsLayer { val s = 1f - 0.05f * press; scaleX = s; scaleY = s }
+            .pressScale { 1f - 0.05f * press }
             .background(look.color(SettingsTokens.CHIP_FILL), RoundedCornerShape(look.dp(SettingsTokens.CHIP_CORNER)))
             .pointerInput(onClick) { rowTap({ pressed = it }, onClick) }
             .padding(horizontal = look.dp(12f * look.unit), vertical = look.dp(7f * look.unit)))
+}
+
+/**
+ * Pressed in: drawn smaller by [scale] around the centre. In drawing, not as a layer's transform: a layer that changes
+ * its transform makes Compose re-read the accessibility tree (see [SettingsApp]).
+ */
+private fun Modifier.pressScale(scale: () -> Float): Modifier = drawWithContent {
+    val s = scale()
+    if (s == 1f) drawContent() else scale(s) { this@drawWithContent.drawContent() }
 }
 
 /** A tile's fill: its colour by the theme's tint over the tile's own fill. */
@@ -499,18 +535,28 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
     val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
     val symbol = look.pt(SettingsTokens.TILE_SYMBOL)
     var pressed by remember { mutableStateOf(false) }
-    val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
-    st.press[part] = press
+    val press = st.press.getValue(part)
+    val pressIn = look.motion<Float>(MotionTokens.PRESS_IN)
+    val pressOut = look.motion<Float>(MotionTokens.PRESS_OUT)
+    LaunchedEffect(pressed) { press.animateTo(if (pressed) 1f else 0f, if (pressed) pressIn else pressOut) }
     Column(
         modifier
             .height(look.dp(SettingsTokens.TILE_HEIGHT))
             .onGloballyPositioned { co -> st.sheet?.let { s -> if (s.isAttached && co.isAttached) st.tiles[part] = s.localBoundingBoxOf(co) } }
             .graphicsLayer {
-                // The open tile is drawn by the growing one (it takes its place from the first frame).
-                alpha = if (st.open == part && st.p.value > 0f) 0f else 1f
-                val s = 1f - 0.04f * press
-                scaleX = s; scaleY = s
+                val p = st.p.value
+                if (st.open == part) {
+                    // The open tile is drawn by the growing one (it takes its place from the first frame).
+                    alpha = if (p > 0f) 0f else 1f
+                    scaleX = 1f; scaleY = 1f
+                } else {
+                    // The others step back and fade as the page grows over them.
+                    alpha = (1f - p * 1.8f).coerceIn(0f, 1f)
+                    val s = 1f - 0.05f * p.coerceIn(0f, 1f)
+                    scaleX = s; scaleY = s
+                }
             }
+            .pressScale { 1f - 0.04f * press.value }
             .background(tileFill(look, part), RoundedCornerShape(look.dp(SettingsTokens.TILE_CORNER)))
             .pointerInput(part) { rowTap({ pressed = it }) { open(part) } }
             .padding(look.dp(14f * look.unit)),
@@ -531,9 +577,8 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
  * into the sheet's as it grows; its symbol and name ride along and fade as the page arrives.
  */
 @Composable
-private fun GrowingTile(st: Studio) {
+private fun GrowingTile(st: Studio, part: Part) {
     val look = LocalLook.current
-    val part = st.open ?: return
     val bg = tileFill(look, part)
     val c = look.color(part.color)
     val fromCorner = look.pt(SettingsTokens.TILE_CORNER)
@@ -547,11 +592,12 @@ private fun GrowingTile(st: Studio) {
     val measurer = rememberTextMeasurer()
     val title = remember(part, look) { measurer.measure(part.title, look.text(SettingsTokens.TILE_TITLE, mix(look.color(SettingsTokens.ROW_LABEL), c, titleTint))) }
     Canvas(Modifier.fillMaxSize()) {
+        if (st.open != part) return@Canvas
         val p = st.p.value
         if (p <= 0f) return@Canvas
         val tile = st.tiles[part] ?: return@Canvas
         // From the size the tile sank to when pressed (it springs back out as it grows).
-        val sunk = 0.04f * (st.press[part] ?: 0f)
+        val sunk = 0.04f * st.press.getValue(part).value
         val from = Rect(tile.left + tile.width * sunk / 2f, tile.top + tile.height * sunk / 2f, tile.right - tile.width * sunk / 2f, tile.bottom - tile.height * sunk / 2f)
         val k = p.coerceIn(0f, 1.05f)
         val r = Rect(
@@ -585,18 +631,36 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
     counter.n = 0
     val m = look.dp(SettingsTokens.MARGIN)
     val fadePx = 18f * g.unit
+    // Only the open page is in the accessibility tree: with an accessibility service on (gesture nav is one), Compose
+    // scans the whole tree every 100 ms while anything moves (7-9 ms of the main thread on the S24 with every page in it).
+    val here by remember { androidx.compose.runtime.derivedStateOf { st.open == part } }
+    // Drawn once out of sight when built, so its first opening does not record it (25-45 ms on the S24).
+    var warm by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.withFrameNanos { }
+        androidx.compose.runtime.withFrameNanos { }
+        warm = false
+    }
     CompositionLocalProvider(LocalShown provides shown, LocalGroups provides counter) {
         Box(
             Modifier
                 .fillMaxSize()
-                .layout { measurable, c ->
-                    val pl = measurable.measure(c)
-                    layout(pl.width, pl.height) { if (st.open == part) pl.place(0, 0) }
+                .then(if (here) Modifier else Modifier.clearAndSetSemantics { })
+                // Laid out and placed from the start; while closed it waits out of sight (moved, not laid out, when it opens).
+                .graphicsLayer {
+                    val open = st.open == part
+                    translationX = if (open) 0f else g.w * 3f
+                    alpha = if ((open && st.p.value > 0f) || warm) 1f else 0f
+                    // Content scrolled up dissolves under the sheet's top edge.
+                    compositingStrategy = CompositingStrategy.Offscreen
                 }
-                .swipeBack(g, onMove = { f -> scope.launch { st.p.snapTo((1f - f).coerceIn(0f, 1f)) } },
-                    onEnd = { f, v -> if (f > 0.3f || v > 0.5f) close(-v) else scope.launch { st.p.animateTo(1f, look.motion(MotionTokens.SETTINGS_OPEN), -v) } })
-                // Content scrolled up dissolves under the sheet's top edge.
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .swipeBack(g, onMove = { f -> if (st.open == part) { st.dragging = true; scope.launch { st.p.snapTo((1f - f).coerceIn(0f, 1f)) } } },
+                    onEnd = { f, v ->
+                        st.dragging = false
+                        if (st.open != part) Unit
+                        else if (f > 0.3f || v > 0.5f) close(-v)
+                        else scope.launch { st.p.animateTo(1f, look.motion(MotionTokens.SETTINGS_OPEN), -v) }
+                    })
                 .drawWithContent {
                     drawContent()
                     drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 6f * g.unit, endY = 6f * g.unit + fadePx),

@@ -285,6 +285,12 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Seeking a Compose transition whose specs are springs runs ahead of the finger** (a seek maps the fraction to time, and
   a spring covers most of its distance early). Seek on linear specs while the finger drives, then spring the fraction
   yourself from the finger's speed (`settings/Pages.kt`, swipe back).
+- **Compose re-reads its whole accessibility tree every 100 ms while layers move, whenever any accessibility service is
+  on, and ours always is** (gesture nav; the S24 also has others): every frame where a `graphicsLayer` changes its
+  transform (translation, scale) counts as a layout change. The settings app lost 7-25 ms of its main thread every
+  ~110 ms of every transition (`checkForSemanticsChanges` in a Perfetto trace); with no tree, 0 missed refreshes. The
+  settings leave the tree while a page moves (`clearAndSetSemantics` while the spring runs or a finger drags) and press
+  effects scale in drawing, not as a layer. Any Compose surface with motion needs the same.
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

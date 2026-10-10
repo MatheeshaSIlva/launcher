@@ -254,7 +254,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     /** Home as it shows now (or would, behind another screen), exactly (the settings app's "Your setup"). Main thread. */
-    fun pictureNow(): android.graphics.Bitmap? = renderNow()
+    fun pictureNow(): android.graphics.Bitmap? {
+        // A clock built again behind (a new theme while the settings were open) has not set its time yet: it would show none.
+        for (c in clocks) c.refresh(animate = false)
+        return renderNow()
+    }
 
     /**
      * Home as it shows now (the last frame's display lists, drawn again on the GPU: glass and blur exact), or null. A view

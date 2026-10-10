@@ -161,6 +161,16 @@ step back, the sheet rises, the picture shrinks, the page's groups rise in a bea
 its tile. Pages are built one a frame after the app comes up and placed only while open. The bars' symbols follow the
 page's colour. Not yet: the sheet itself is not draggable (it moves with the page), no search.
 
+**S1 on the S24 (local builds, iOS 27 dark, 16 transitions: 6 opens, 6 Backs... each measured alone):** first build 1-6
+missed refreshes a transition (first frames 25-55 ms). A Perfetto trace: opening recomposed the whole app (open/close
+lambdas made anew, so all four pages recomposed: 14-19 ms) and placed the page for the first time (8-10 ms); fixed (stable
+actions, Back in its own composable, titles and growing shapes composed ahead, presses as Animatables read in drawing,
+pages always placed and moved out of sight). Then frames of 12-25 ms every ~110 ms: Compose re-reading its accessibility
+tree (our gesture service counts as accessibility; every layer transform counts as a layout change); with the tree left
+out while a page moves: 12 of 16 transitions with no missed refresh, the others 1 (a frame at the budget). Baseline was 3-10
+a transition. Known: right after a theme change made inside the settings, the picture's clock shows no time until home
+has drawn again (its glass has no size while built behind).
+
 ### Polish (between C1 and C2)
 
 Matheesha after C1: "pretty basic and barebones, which is fine for a first build. we need to turn this into a super
