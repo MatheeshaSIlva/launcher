@@ -125,7 +125,14 @@ Each phase ends with a check on the S24 and Matheesha's OK.
    - after a theme switch, closing an app sent its card into the top-left corner (home rebuilt behind the app): B4.
 
 **B. Foundation** (no visible change for iOS users)
-1. The setup file and the layout registry; today's iOS elements registered as the first layouts.
+1. The setup file and the layout registry; today's iOS elements registered as the first layouts. **Done 2026-10-10**:
+   `layout/Layouts.kt` (the five elements; per layout its id, name, origin, plain-words description, placements and
+   options with their limits, for the settings app to show) and `layout/Setup.kt` (`files/setup.json`, made from the
+   home settings of earlier builds on first start; everything read from it valid, invalid changes refused and logged;
+   listeners on the main thread). Home reads its drawer style and placement and its options through it (`HomeConfig`).
+   Test over adb: `am broadcast -a dev.launcher.app.SETUP -p dev.launcher.app --es element drawer --es placement
+   swipe-up` (or `--es layout ID`, `--es option KEY=VALUE`); applied when home next comes to the front (live switching
+   is B4). Checked on the emulator: migration, refusals, the drawer moved and labels toggled through the setup.
 2. Theme engine v2: variables, the paint model, component styles; the current iOS 27 tokens migrated into it with the
    same look (checked surface by surface against today's screenshots).
 3. Animation engine v2: roles, springs and beziers, presets; today's iOS motion as the first preset.

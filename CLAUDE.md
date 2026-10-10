@@ -46,6 +46,11 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Overlay windows** (`TYPE_APPLICATION_OVERLAY`, always `FLAG_HARDWARE_ACCELERATED`): gesture strip + full-display card window.
 - **Watchdog** (shell-side loop): restores animation scales and status bar if the app's heartbeat goes stale. Must exist
   before any feature that hides stock UI.
+- **Layouts** (`layout/`, plan `docs/PLAN_LAYOUTS_THEMES.md`): the five elements (status bar, shade, recents, drawer,
+  home), the layouts registered for each (`Layouts`: id, placements, options with limits) and the user's choice of each
+  (`Setup`, `files/setup.json`; never in a theme). `HomeConfig` reads the drawer and home options from it. Over adb:
+  `am broadcast -a dev.launcher.app.SETUP -p dev.launcher.app --es element ID [--es layout ID] [--es placement ID]
+  [--es option KEY=VALUE]`.
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").

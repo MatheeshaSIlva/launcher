@@ -11,6 +11,8 @@ class LauncherApp : Application() {
         dev.launcher.app.theme.Fonts.init(this)
         // The theme before the appearance: the appearance's palette is the theme's.
         dev.launcher.app.design.Design.init(this)
+        // The user's arrangement (which layout each element uses, where it lives): before home or gesture nav read it.
+        dev.launcher.app.layout.Setup.init(this)
         dev.launcher.app.theme.Appearance.init(this)
         // Dark mode switched anywhere (also while an app is in front): home crossfades at once, so it is already in the new
         // appearance (and its picture behind closing cards too) when it is next seen.
