@@ -1,9 +1,9 @@
 # Layouts, themes and animations: the plan
 
-Status: **proposed 2026-10-10**, waiting for Matheesha's OK. Replaces the "theme switches everything" approach of
-`docs/PIXEL_PROFILE.md` (the Pixel profile, parts 1-8, was a first run: on the S24 it was buggy, the blur in the App
-Library stopped working, the widget gallery stayed iOS, the shade's pull and Quick Settings' behaviour were not Pixel's,
-and switching back to iOS left things broken).
+Status: **agreed 2026-10-10** (phase A done: `main` back to the S24-checked build). Replaces the "theme switches
+everything" approach of `docs/PIXEL_PROFILE.md` (the Pixel profile, parts 1-8, was a first run: on the S24 the Pixel app
+drawer's blur stopped working after a moment, the widget gallery stayed iOS, the shade's pull and Quick Settings'
+behaviour were not Pixel's, it felt like a cheap copy, and after switching back to iOS the context menus were broken).
 
 ## What was decided (Q&A, 2026-10-10)
 
@@ -115,11 +115,14 @@ Ideas only (GPL-3.0): Kvaesitso, Neo Launcher, Smartspacer, Olauncher, Fossify L
 
 Each phase ends with a check on the S24 and Matheesha's OK.
 
-**A. Repair** (now)
-1. `main` back to the last S24-checked build (`5339fa9`) by reverting the Pixel commits; the Pixel work stays on branch
-   `pixel-v1` for parts to reuse later. UPDATE is safe again. (Needs OK.)
-2. The App Library's blur that stops after a moment on the S24: reproduce on the stable build, find the cause, fix.
-3. Write down every other thing that was broken after switching back to iOS, and fix what is in the stable build.
+**A. Repair** (done 2026-10-10)
+1. `main` back to the last S24-checked build (`5339fa9`) by reverting the Pixel commits (`8f9419c`); the Pixel work stays
+   on branch `pixel-v1` for parts to reuse later. UPDATE is safe again.
+2. What broke was all in the Pixel code, gone with the revert; carried into the rounds that rebuild those parts:
+   - the Pixel drawer's blur stopped after a moment, leaving it translucent (the App Library was fine): D4;
+   - after switching from Pixel back to iOS the context menus were broken: B4 (switching must leave every element
+     working; the cause found on `pixel-v1` first) and D6;
+   - after a theme switch, closing an app sent its card into the top-left corner (home rebuilt behind the app): B4.
 
 **B. Foundation** (no visible change for iOS users)
 1. The setup file and the layout registry; today's iOS elements registered as the first layouts.
