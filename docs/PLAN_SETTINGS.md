@@ -93,6 +93,33 @@ bar without a fade.
 
 The walkthrough comes late on purpose: what it walks through (layouts, themes) is still growing in phases D and E.
 
+### Polish (between C1 and C2)
+
+Matheesha after C1: "pretty basic and barebones, which is fine for a first build. we need to turn this into a super
+polished feeling app with motion, effects and attention to detail. we'll build it step by step and polish it along the
+way." The feel he chose: **expressive throughout** (bolder motion everywhere, parallax, playful springs, items that bounce
+in), on the preset's roles so a calmer preset calms the settings too.
+
+| Step | What |
+|---|---|
+| P1 | Scrolling and the top of a page: home's iOS scroll physics, a large title that stretches when pulled and slides under the bar, the compact title rising into the bar, content dissolving into the backdrop under it (no hard bar) |
+| P2 | Moving between pages: titles that fly, solid pages sliding over each other, a swipe back that follows the finger, groups rising in |
+| P3 | Rows: symbol tiles, press and haptics, a Liquid Glass switch, a drawn check, values that roll when they change |
+| P4 | "Your setup": the miniature crossfades when home changes, tilts with the finger, opens to full size |
+
+**P1 and P2 done (2026-10-10, checked on the emulator):** pages scroll on `IosScroller` (`settings/Scroll.kt`, the
+preset's rubber band and deceleration) and keep their place while in the stack. A row's name flies into the next page's
+large title and the page's title shrinks into the way back (shared elements; on taps and Back). Pages are solid sheets:
+each draws the blurred wallpaper fixed to the screen (`pageSurface`), the newer one slides over the older one both ways
+with a shadow from its left edge while the older moves a third of the way in parallax and dims (`component.page.
+beneath-dim`, `edge-shadow`, `edge-shadow-width`). A swipe right anywhere on a page pulls it back under the finger; let go
+past half way or thrown right it goes, else it springs back, on the push role from the finger's speed. Groups rise in one
+after another the first time a page opens. Found on the way: the backdrop stopped above the navigation bar (display
+metrics leave it out: the window's size is used), a wallpaper read late popped in (it fades in now, `motion.wallpaper.
+appear`), switching light/dark restarted the app at its start page (it keeps the page and crossfades), and a drag across a
+row counted as a tap (an iOS tap now: let go within the touch slop). Known: halfway through a light/dark crossfade, text
+blended from white to black is grey and faint for a moment (the shared `Appearance` blend, home too).
+
 ## Decided (2026-10-10)
 
 1. The settings open from an icon in the drawer ("Launcher settings"), from home's long press on empty space (the edit
@@ -100,3 +127,4 @@ The walkthrough comes late on purpose: what it walks through (layouts, themes) i
 2. Changes apply at once, with undo (a session history; risky changes undo themselves after 10 s unless confirmed).
 3. Cards with live miniatures at the top, grouped lists below; the theme reskins both.
 4. The Google Fonts family list is bundled with the app, fetched once from the public google/fonts repository.
+5. The settings' feel is expressive throughout (polish steps P1-P4 above), on the preset's motion roles.

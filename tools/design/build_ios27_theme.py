@@ -746,6 +746,9 @@ COMPONENT_SEEDS = {
     # The settings app's components (C1, docs/PLAN_SETTINGS.md); the kit exports no list or switch nodes: iOS 26/27's.
     'component.card.corner': {'pt': 26, 'src': "judged:iOS 26/27 grouped lists (inset sections)"},
     'component.page.margin': {'pt': 16, 'src': "kit:VariableID:10442:65 (Dimensions/Margin, iPhone)"},
+    'component.page.beneath-dim': {'light': '#0000001a', 'dark': '#00000066', 'src': "judged:the page beneath a sliding one dims (UIKit's navigation transition: black about 10 % in light)"},
+    'component.page.edge-shadow': {'light': '#00000026', 'dark': '#00000080', 'src': "judged:a sliding page's left edge casts a soft shadow on the page beneath (UIKit)"},
+    'component.page.edge-shadow-width': {'pt': 12, 'src': "judged:UIKit's navigation transition shadow"},
     'component.list-row.height': {'pt': 52, 'src': "judged:iOS 26/27 list rows (one line of body text)"},
     'component.list-row.padding': {'pt': 16, 'src': "kit:VariableID:10442:65 (Dimensions/Margin, iPhone)"},
     'component.list-row.separator-color': {'ref': 'sys.color.separator', 'src': "judged:rows are parted by the theme's separator"},

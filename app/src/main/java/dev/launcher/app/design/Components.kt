@@ -151,6 +151,9 @@ object Components {
 
     val PAGE = ComponentSpec("page", "Page", "A full screen of settings.", listOf(
         p("page", "margin", "Margin", "Space between the screen's edges and its content."),
+        p("page", "beneath-dim", "Dim beneath", "Laid over a page while the next one slides over it."),
+        p("page", "edge-shadow", "Edge shadow", "The shadow a sliding page casts from its left edge."),
+        p("page", "edge-shadow-width", "Edge shadow width", "How far that shadow reaches."),
     ))
 
     val DOCK = ComponentSpec("dock", "Dock", "The row of apps at the bottom of home.", listOf(

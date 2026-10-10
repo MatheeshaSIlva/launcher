@@ -50,7 +50,13 @@ class SettingsActivity : ComponentActivity() {
         @Suppress("DEPRECATION") window.statusBarColor = android.graphics.Color.TRANSPARENT
         @Suppress("DEPRECATION") window.navigationBarColor = android.graphics.Color.TRANSPARENT
         root = FrameLayout(this)
-        root.addView(ComposeView(this).apply { setContent { SettingsApp(onClose = { finish() }) } },
+        root.addView(ComposeView(this).apply {
+            setContent {
+                SettingsApp(onClose = { finish() }, beforeWallpaper = { first ->
+                    crossfade(if (first) MotionTokens.WALLPAPER_APPEAR else MotionTokens.WALLPAPER_CROSSFADE)
+                })
+            }
+        },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
         AppLog.log("[settings] opened")
@@ -69,16 +75,30 @@ class SettingsActivity : ComponentActivity() {
 
     /** The settings as they show now, held still over the page until the new look is drawn under it, then revealed. */
     private fun hold() {
-        // As it shows (a reveal under way included), then whatever was running gives way to it.
-        val old = ViewPicture.render(root) ?: return
+        val old = still() ?: return
+        // The content recomposes in the new look on the next frame; the reveal starts on the one after.
+        root.postOnAnimation { root.postOnAnimation { reveal(old) } }
+    }
+
+    /** Held as they show while the wallpaper under them changes (read late, or a new one), then faded out on [role]. */
+    private fun crossfade(role: dev.launcher.app.design.CurveKey) {
+        if (!::root.isInitialized || !root.isAttachedToWindow || root.width == 0) return
+        val old = still() ?: return
+        root.postOnAnimation { root.postOnAnimation { if (held === old) fade(old, role) } }
+    }
+
+    /** A still of the settings as they show (a reveal under way included) laid over them; whatever was running gives way. */
+    private fun still(): Bitmap? {
+        val old = ViewPicture.render(root) ?: return null
         coverAnim?.cancel()
+        cover?.animate()?.cancel()
+        held?.let { if (it !== old) it.recycle() }
         held = old
         val still = object : View(this) { override fun onDraw(c: Canvas) { if (!old.isRecycled) c.drawBitmap(old, 0f, 0f, null) } }
         cover?.let { root.removeView(it) }
         cover = still
         root.addView(still, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
-        // The content recomposes in the new look on the next frame; the reveal starts on the one after.
-        root.postOnAnimation { root.postOnAnimation { reveal(old) } }
+        return old
     }
 
     private fun reveal(old: Bitmap) {
@@ -106,9 +126,9 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
-    private fun fade(old: Bitmap) {
+    private fun fade(old: Bitmap, role: dev.launcher.app.design.CurveKey = MotionTokens.HOME_REBUILD) {
         val v = cover ?: return
-        v.animate().alpha(0f).timed(Motion.role(MotionTokens.HOME_REBUILD)).withEndAction { done(v, old) }.start()
+        v.animate().alpha(0f).timed(Motion.role(role)).withEndAction { done(v, old) }.start()
     }
 
     private fun done(v: View, old: Bitmap) {

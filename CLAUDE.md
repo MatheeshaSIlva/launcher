@@ -271,6 +271,12 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **An app's existing task brought back may send no window event** (Settings sends none, from the dock or a panel): never
   wait on the accessibility event alone; ask the system for the task in front (`topTaskPackage`). And while a panel holds
   our focus window, the launched app cannot take the focus at all: a launch from the shade lets it go.
+- **Predictive back did nothing in the settings app on the Android 17 emulator**: the system logged "Trigger back without
+  dispatching to animator" and our window then "ProgressAnimator was not in progress, skip onBackInvoked()" (neither
+  progress nor the back itself arrived). The settings app uses a plain back handler and its own swipe back instead.
+- **Seeking a Compose transition whose specs are springs runs ahead of the finger** (a seek maps the fraction to time, and
+  a spring covers most of its distance early). Seek on linear specs while the finger drives, then spring the fraction
+  yourself from the finger's speed (`settings/Pages.kt`, swipe back).
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

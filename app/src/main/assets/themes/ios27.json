@@ -2879,6 +2879,20 @@
    },
    "src": "kit:0:11292"
   },
+  "component.page.beneath-dim": {
+   "light": "#0000001a",
+   "dark": "#00000066",
+   "src": "judged:the page beneath a sliding one dims (UIKit's navigation transition: black about 10 % in light)"
+  },
+  "component.page.edge-shadow": {
+   "light": "#00000026",
+   "dark": "#00000080",
+   "src": "judged:a sliding page's left edge casts a soft shadow on the page beneath (UIKit)"
+  },
+  "component.page.edge-shadow-width": {
+   "pt": 12,
+   "src": "judged:UIKit's navigation transition shadow"
+  },
   "component.page.margin": {
    "pt": 16,
    "src": "kit:VariableID:10442:65 (Dimensions/Margin, iPhone)"

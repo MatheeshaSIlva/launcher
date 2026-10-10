@@ -85,15 +85,20 @@ class Look(
     }
 
     /** The page behind everything: the wallpaper heavily blurred under the appearance's veil (the App Library's). */
-    fun drawBackdrop(c: android.graphics.Canvas) {
+    fun drawBackdrop(c: android.graphics.Canvas, ox: Float = 0f, oy: Float = 0f) {
         val w = wallpaper
         if (w == null) {
             c.drawColor(Appearance.mix(0xFFF2F2F7.toInt(), 0xFF000000.toInt()))
             return
         }
-        c.drawBitmap(w.heavy, w.heavyMatrix(screenW, screenH), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        // Fixed to the screen: the canvas's origin is at [ox], [oy] in the window.
+        val m = android.graphics.Matrix(w.heavyMatrix(screenW, screenH))
+        m.postTranslate(-ox, -oy)
+        c.drawBitmap(w.heavy, m, backdropPaint)
         c.drawColor(Appearance.backdropVeil)
     }
+
+    private val backdropPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
 
     /** Glass [key] over the backdrop at [rect] (canvas coordinates, the canvas's origin at [ox], [oy] in the window). */
     fun drawGlass(c: android.graphics.Canvas, key: MaterialKey, rect: RectF, radius: Float, ox: Float, oy: Float, press: Float = 0f) {
@@ -125,20 +130,24 @@ val LocalLook = staticCompositionLocalOf<Look> { error("no Look: wrap the conten
 
 /** Gives [content] the theme as a [Look], made again whenever the design or the appearance changes. */
 @Composable
-fun SettingsTheme(content: @Composable () -> Unit) {
+fun SettingsTheme(beforeWallpaper: (first: Boolean) -> Unit = {}, content: @Composable () -> Unit) {
     var version by remember { mutableIntStateOf(0) }
     val ctx = LocalContext.current
     // Home's wallpaper (followed as it changes); read here if home has not (this app opened before home ever showed).
+    // [beforeWallpaper] is told just before a new one is drawn ([first]: the first, over the plain colour), so the
+    // settings can hold how they look and fade into it.
     var wallpaper by remember { mutableStateOf(Wallpaper.current) }
     DisposableEffect(Unit) {
-        val l: () -> Unit = { Wallpaper.current?.let { wallpaper = it } }
+        val l: () -> Unit = {
+            Wallpaper.current?.let { if (it !== wallpaper) { beforeWallpaper(wallpaper == null); wallpaper = it } }
+        }
         Wallpaper.addListener(android.os.Handler(android.os.Looper.getMainLooper()), l)
         onDispose { Wallpaper.removeListener(l) }
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         if (wallpaper == null) {
             val w = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Wallpaper.load(ctx.applicationContext) }
-            if (wallpaper == null) wallpaper = w
+            if (wallpaper == null && w != null) { beforeWallpaper(true); wallpaper = w }
         }
     }
     DisposableEffect(Unit) {
@@ -151,8 +160,13 @@ fun SettingsTheme(content: @Composable () -> Unit) {
     }
     val d = LocalDensity.current
     val dm = ctx.resources.displayMetrics
-    val w = dm.widthPixels
-    val h = dm.heightPixels
+    // The whole window, the bars' strips included (the display metrics leave the navigation bar out: the backdrop
+    // stopped above it and the window's own colour showed there).
+    val (w, h) = remember(dm.widthPixels, dm.heightPixels) {
+        val wm = ctx.getSystemService(android.view.WindowManager::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= 30) wm.currentWindowMetrics.bounds.let { it.width() to it.height() }
+        else android.graphics.Point().also { @Suppress("DEPRECATION") wm.defaultDisplay.getRealSize(it) }.let { it.x to it.y }
+    }
     val look = remember(version, d.density, d.fontScale, wallpaper) { Look(Scale.unitPx(ctx, minOf(w, h)), d.density, d.fontScale, w, h, version, wallpaper) }
     CompositionLocalProvider(LocalLook provides look) { content() }
 }

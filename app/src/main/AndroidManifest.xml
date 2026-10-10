@@ -103,6 +103,7 @@
         <!-- The settings app (docs/PLAN_SETTINGS.md): own task and own app-drawer entry. -->
         <activity
             android:name=".settings.SettingsActivity"
+            android:configChanges="uiMode"
             android:exported="true"
             android:label="Launcher settings"
             android:launchMode="singleTask"
