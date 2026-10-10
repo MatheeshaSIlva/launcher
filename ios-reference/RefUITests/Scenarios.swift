@@ -835,6 +835,140 @@ final class Scenarios: XCTestCase {
         wait(1.5)
     }
 
+    // MARK: - Apple's own apps
+
+    /// Apple's apps do not look like SpringBoard: solid grouped lists, glass only on bars and buttons. The Settings app is
+    /// the reference for the launcher's settings in the iOS theme: its pages, the large title collapsing, a push and the
+    /// way back (button, edge swipe held half way, a swipe from the middle), switches, choice rows, sliders, search.
+    private let prefs = XCUIApplication(bundleIdentifier: "com.apple.Preferences")
+
+    private func prefsTree(_ name: String) {
+        let a = XCTAttachment(string: prefs.debugDescription)
+        a.name = "\(name).txt"
+        a.lifetime = .keepAlways
+        add(a)
+        mark("tree \(name)")
+    }
+
+    /// Taps the row named `label` on the page shown, scrolling the page up a little at a time until it is on screen.
+    @discardableResult
+    private func openRow(_ label: String) -> Bool {
+        let e = prefs.staticTexts[label].firstMatch
+        for i in 0..<6 {
+            if e.exists && e.isHittable && e.frame.maxY < h * 0.82 { break }
+            drag("find-\(label)-\(i)", CGPoint(x: w / 2, y: h * 0.7), CGPoint(x: w / 2, y: h * 0.45), velocity: 400, hold: 0.4)
+            wait(0.8)
+        }
+        guard e.exists && e.isHittable else { mark("no row \(label)"); return false }
+        let f = e.frame
+        tap("open-\(label)", f.midX, f.midY)
+        return true
+    }
+
+    private func backButton(_ name: String) {
+        let b = prefs.navigationBars.buttons.firstMatch
+        guard b.exists else { mark("no back button"); return }
+        mark("back button at \(b.frame) label \(b.label)")
+        tap(name, b.frame.midX, b.frame.midY)
+    }
+
+    private func freshSettings() {
+        prefs.terminate()
+        wait(1)
+        prefs.activate()
+        wait(3)
+    }
+
+    func test50_settingsApp() {
+        freshSettings()
+        shot("settings-root")
+        prefsTree("settings-root")
+        // Scrolled slowly (held, no fling): the large title goes under the bar.
+        drag("scroll-up", CGPoint(x: w / 2, y: h * 0.7), CGPoint(x: w / 2, y: h * 0.55), velocity: 200, hold: 0.8)
+        wait(1)
+        shot("settings-scrolled-a")
+        drag("scroll-up-more", CGPoint(x: w / 2, y: h * 0.7), CGPoint(x: w / 2, y: h * 0.4), velocity: 300, hold: 0.8)
+        wait(1)
+        shot("settings-scrolled-b")
+        prefsTree("settings-scrolled")
+        // Pulled down past the top and held: the large title stretches?
+        drag("pull-down", CGPoint(x: w / 2, y: h * 0.3), CGPoint(x: w / 2, y: h * 0.75), velocity: 400, hold: 1.0)
+        wait(1.5)
+        shot("settings-pulled-back")
+        // Push and pop with the back button, three times.
+        for i in 1...3 {
+            guard openRow("General") else { break }
+            wait(2)
+            if i == 1 { shot("general"); prefsTree("general") }
+            backButton("back-\(i)")
+            wait(2)
+        }
+        // The way back by an edge swipe: held half way and let go, then a full one.
+        if openRow("General") {
+            wait(2)
+            drag("edge-half", CGPoint(x: 1, y: h * 0.5), CGPoint(x: w * 0.42, y: h * 0.5), velocity: 250, hold: 0.8)
+            wait(2)
+            shot("after-edge-half")
+            drag("edge-full", CGPoint(x: 1, y: h * 0.5), CGPoint(x: w * 0.9, y: h * 0.5), velocity: 900)
+            wait(2)
+            shot("after-edge-full")
+        }
+        // From the middle of the page (iOS 26 lets a swipe back start anywhere?).
+        if openRow("General") {
+            wait(2)
+            drag("middle-swipe", CGPoint(x: w * 0.3, y: h * 0.55), CGPoint(x: w * 0.9, y: h * 0.55), velocity: 900)
+            wait(2)
+            shot("after-middle-swipe")
+            if prefs.navigationBars.buttons.firstMatch.exists { backButton("back-after-middle"); wait(2) }
+        }
+        // Pages with other row kinds: info rows (About), choices with checks, switches.
+        if openRow("General") {
+            wait(2)
+            if openRow("About") { wait(2); shot("about"); prefsTree("about"); backButton("back-about"); wait(2) }
+            backButton("back-general")
+            wait(2)
+        }
+        if openRow("Home Screen & App Library") { wait(2); shot("home-screen"); prefsTree("home-screen"); backButton("back-home-screen"); wait(2) }
+        if openRow("Appearance") { wait(2); shot("appearance"); prefsTree("appearance"); backButton("back-appearance"); wait(2) }
+        if openRow("Accessibility") {
+            wait(2)
+            shot("accessibility")
+            if openRow("Display & Text Size") {
+                wait(2)
+                shot("display-text")
+                prefsTree("display-text")
+                // A switch flipped on and off (On/Off Labels changes nothing else).
+                let sw = prefs.switches["On/Off Labels"].firstMatch
+                if sw.exists {
+                    let f = sw.frame
+                    mark("switch at \(f)")
+                    tap("switch-on", f.maxX - 20, f.midY)
+                    wait(1.5)
+                    shot("switch-on")
+                    tap("switch-off", f.maxX - 20, f.midY)
+                    wait(1.5)
+                } else { mark("no On/Off Labels switch") }
+                backButton("back-display")
+                wait(2)
+            }
+            backButton("back-accessibility")
+            wait(2)
+        }
+        // Search: the pill at the bottom.
+        let search = prefs.searchFields.firstMatch
+        if search.exists {
+            mark("search at \(search.frame)")
+            tap("search", search.frame.midX, search.frame.midY)
+            wait(2)
+            shot("search-open")
+            prefsTree("search-open")
+            let cancel = prefs.buttons["Cancel"].firstMatch
+            if cancel.exists { tap("search-cancel", cancel.frame.midX, cancel.frame.midY) } else { XCUIDevice.shared.press(.home) }
+            wait(2)
+        } else { mark("no search field") }
+        home()
+    }
+
     // MARK: - Calibration
 
     /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the
