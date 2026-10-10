@@ -248,7 +248,8 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      linear", 1.8 s on a gentle curve (0.35, 0, 0.25, 1) with a slower landing (spring 0.6 / 0.6) "good". Cost: into iOS 27
      the GPU reached 12 ms a frame (its glass drawn under the old look for nothing), so items ahead of the front are not
      drawn until it reaches them (alpha 0); the reveal's shader is compiled off screen while home is idle (its first showing
-     compiled it inside a frame: 117 ms). The old look is taken the moment the design changes,
+     compiled it inside a frame: 117 ms). On the S24 after that (Graphite to iOS 27, both halves of the reveal measured):
+     GPU median 5.6-5.8 ms a frame, worst 8.6 ms (once), no refresh missed; the old look held in 9 ms, home built in 46 ms. The old look is taken the moment the design changes,
      rendered at once from the last frame's display lists on the GPU (a screen copy arrived ~8 frames late, and the dock's
      glass had already redrawn in the new theme: old, half new, old again, then the reveal). The rebuild runs next on the
      main thread (1-3 ms after the old look is held). Once on the emulator (iOS 27 to Graphite after a fresh install) a black
