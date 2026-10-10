@@ -218,9 +218,73 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** The design's structure the current build was made from ([dev.launcher.app.design.Design.structure]). */
     private var builtStructure = -1
 
-    /** Another theme, an edit of it, a font that arrived: what home built once from the design is built again. */
+    /**
+     * Another theme, an edit of it, a font that arrived: what home built once from the design is built again. On screen, home
+     * first covers itself with what it shows now, rendered at once from the last frame's display lists: from here on any of
+     * its views may draw again in the new values (the dock's glass did, frames before a screen copy arrived), and the new
+     * look must come from the old one exactly as it was.
+     */
     private val onDesign: () -> Unit = {
-        if (m != null && dev.launcher.app.design.Design.structure != builtStructure) requestRebuild("the theme changed")
+        if (m != null && dev.launcher.app.design.Design.structure != builtStructure) {
+            if (shownNow() && rebuildFrozen == null) {
+                val t0 = android.os.SystemClock.uptimeMillis()
+                renderNow()?.let { freeze(it) }
+                frozenAt = android.os.SystemClock.uptimeMillis()
+                AppLog.log("[home] the old look held (${frozenAt - t0} ms)")
+            }
+            requestRebuild("the theme changed")
+        }
+    }
+
+    private fun shownNow() = windowVisibility == View.VISIBLE && dev.launcher.app.GestureNav.homeVisible
+
+    /** The picture of the old look covering home until it is built again (null: none), and since when. */
+    private var rebuildFrozen: android.graphics.Bitmap? = null
+    private var frozenAt = 0L
+
+    private fun freeze(b: android.graphics.Bitmap) {
+        rebuildAnim?.cancel()
+        rebuildCover?.let { it.animate().cancel(); removeView(it) }
+        rebuildFrozen = b
+        val v = object : View(context) {
+            override fun onDraw(c: android.graphics.Canvas) { if (!b.isRecycled) c.drawBitmap(b, 0f, 0f, null) }
+        }
+        rebuildCover = v
+        addView(v, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+
+    /**
+     * Home as it shows now (the last frame's display lists, drawn again on the GPU: glass and blur exact), or null. A view
+     * already marked to draw again is recorded anew in it, so this is taken before anything changes.
+     */
+    private fun renderNow(): android.graphics.Bitmap? {
+        if (width == 0 || height == 0) return null
+        var reader: android.media.ImageReader? = null
+        var renderer: android.graphics.HardwareRenderer? = null
+        return try {
+            reader = android.media.ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 1,
+                android.hardware.HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or android.hardware.HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
+            renderer = android.graphics.HardwareRenderer()
+            renderer.setSurface(reader.surface)
+            val root = android.graphics.RenderNode("home-now")
+            root.setPosition(0, 0, width, height)
+            val c = root.beginRecording()
+            try { c.drawColor(android.graphics.Color.BLACK); draw(c) } finally { root.endRecording() }
+            renderer.setContentRoot(root)
+            renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
+            val image = reader.acquireNextImage()
+            val hb = image.hardwareBuffer
+            val b = hb?.let { android.graphics.Bitmap.wrapHardwareBuffer(it, android.graphics.ColorSpace.get(android.graphics.ColorSpace.Named.SRGB)) }
+            hb?.close()
+            image.close()
+            b
+        } catch (t: Throwable) {
+            AppLog.log("[home] no picture of home as it shows (${t.javaClass.simpleName}: ${t.message})")
+            null
+        } finally {
+            try { renderer?.destroy() } catch (_: Throwable) { }
+            try { reader?.close() } catch (_: Throwable) { }
+        }
     }
 
     /** The user's setup changed (the drawer's placement, home's options): applied at once, not when home next shows. */
@@ -228,11 +292,16 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private var rebuildPosted = false
 
-    /** Builds home again once the current change is complete (several notifications in a row make one rebuild). */
+    /**
+     * Builds home again once the current change is complete (several notifications in a row make one rebuild): next on the
+     * main thread, before frames or work queued meanwhile (the old look holds still until then).
+     */
     private fun requestRebuild(why: String) {
         if (rebuildPosted) return
         rebuildPosted = true
-        post { rebuildPosted = false; rebuild(why) }
+        val run = Runnable { rebuildPosted = false; rebuild(why) }
+        val h = handler
+        if (h == null) post(run) else h.postAtFrontOfQueue(run)
     }
 
     /**
@@ -248,12 +317,26 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         coldHoldWanted = false
         removeCallbacks(coldRetry)
         if (arrivalAnimating || arrivalHeld) { arrivalHeld = false; finishArrival() }
-        val shown = windowVisibility == View.VISIBLE && dev.launcher.app.GestureNav.homeVisible
-        AppLog.log("[home] $why: building home again" + if (shown) " (crossfading)" else " (behind)")
-        if (!shown) { buildBehind(); return }
-        snapshot { old ->
+        val shown = shownNow()
+        AppLog.log("[home] $why: building home again" + if (shown) " (revealing)" else " (behind)")
+        val frozen = rebuildFrozen
+        rebuildFrozen = null
+        if (!shown) {
+            if (frozen != null) { rebuildCover?.let { removeView(it) }; rebuildCover = null; frozen.recycle() }
+            buildBehind()
+            return
+        }
+        val old = frozen ?: renderNow()
+        if (old != null) {
+            val t0 = android.os.SystemClock.uptimeMillis()
             build()
-            if (old != null) coverWith(old)
+            AppLog.log("[home] built in ${android.os.SystemClock.uptimeMillis() - t0} ms" + if (frozen != null) ", ${t0 - frozenAt} ms after the old look was held" else "")
+            coverWith(old)
+            return
+        }
+        snapshot { copy ->
+            build()
+            if (copy != null) coverWith(copy)
         }
     }
 
@@ -289,10 +372,81 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     private var rebuildCover: View? = null
+    private var rebuildAnim: android.animation.ValueAnimator? = null
 
-    /** [old] over the new home, fading out on `motion.home.rebuild` (touches go to the new home meanwhile). */
+    /**
+     * [old] over the new home, giving way to it: the new look spreads from the bottom centre (where a change comes from:
+     * the gesture bar, the settings closing) on `motion.home.rebuild` ([ThemeReveal]), each item springing into place as
+     * the front passes it (`motion.home.rebuild-settle`). A crossfade where shaders cannot run. Touches go to the new home
+     * meanwhile.
+     */
     private fun coverWith(old: android.graphics.Bitmap) {
+        rebuildAnim?.cancel()
+        // (The still picture it replaces is this same image: recycled with the reveal at its end.)
         rebuildCover?.let { it.animate().cancel(); removeView(it) }
+        if (Build.VERSION.SDK_INT < 33) { fadeCover(old); return }
+        val reveal = try {
+            ThemeReveal(old, width.toFloat(), height.toFloat(), width / 2f, height.toFloat(), resources.displayMetrics.density * REVEAL_CELL_DP)
+        } catch (t: Throwable) {
+            AppLog.log("[home] the new look's reveal cannot be drawn (${t.javaClass.simpleName}: ${t.message}): crossfading")
+            fadeCover(old); return
+        }
+        var progress = 0f
+        var time = 0f
+        val v = object : View(context) {
+            override fun onDraw(c: android.graphics.Canvas) { if (!old.isRecycled) reveal.draw(c, progress, time) }
+        }
+        rebuildCover = v
+        addView(v, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        val curve = Motion.role(dev.launcher.app.motion.MotionTokens.HOME_REBUILD)
+        settleAsRevealed(reveal, dev.launcher.app.motion.CurveTiming(curve))
+        rebuildAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).timed(curve).apply {
+            addUpdateListener { a -> progress = a.animatedValue as Float; time = a.currentPlayTime / 1000f; v.invalidate() }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    removeView(v)
+                    if (rebuildCover === v) rebuildCover = null
+                    if (rebuildAnim === animation) rebuildAnim = null
+                    old.recycle()
+                    listener.onHomeSettled()
+                }
+            })
+            start()
+        }
+    }
+
+    /**
+     * The new home's items (the page shown, the dock's icons, the Search pill) start a little small and spring into place
+     * when the front reaches their centre (known after the next layout).
+     */
+    private fun settleAsRevealed(reveal: ThemeReveal, timing: dev.launcher.app.motion.CurveTiming) {
+        val items = ArrayList<View>()
+        pages.getOrNull(pos.roundToInt())?.let { p -> for (c in 0 until p.childCount) items += p.getChildAt(c) }
+        dock?.icons()?.let { items += it }
+        indicator?.let { items += it }
+        for (item in items) { item.scaleX = SETTLE_FROM; item.scaleY = SETTLE_FROM }
+        viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                viewTreeObserver.removeOnPreDrawListener(this)
+                val me = IntArray(2)
+                val at = IntArray(2)
+                getLocationOnScreen(me)
+                val settle = Motion.role(dev.launcher.app.motion.MotionTokens.HOME_REBUILD_SETTLE)
+                for (item in items) {
+                    item.getLocationOnScreen(at)
+                    val cx = at[0] - me[0] + item.width * item.scaleX / 2f
+                    val cy = at[1] - me[1] + item.height * item.scaleY / 2f
+                    val delay = timing.timeOf(reveal.progressAt(kotlin.math.hypot(cx - reveal.originX, cy - reveal.originY)))
+                    val k = dev.launcher.app.motion.MotionValue(SETTLE_FROM, 1000f, { s -> item.scaleX = s; item.scaleY = s })
+                    item.postDelayed({ k.animateTo(1f, settle) }, delay)
+                }
+                return true
+            }
+        })
+    }
+
+    /** [old] over the new home, fading out on `motion.home.rebuild` (where the reveal cannot be drawn). */
+    private fun fadeCover(old: android.graphics.Bitmap) {
         val v = object : View(context) {
             override fun onDraw(c: android.graphics.Canvas) { if (!old.isRecycled) c.drawBitmap(old, 0f, 0f, null) }
         }
@@ -1837,6 +1991,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     companion object {
+        /** How small an item starts as the new look reaches it, before it springs into place. */
+        const val SETTLE_FROM = 0.9f
         /** The most the arrival advances in one frame (s): a 60 Hz frame. */
         const val MAX_STEP_S = 1.0 / 60.0
         /** Sparkle grid and front wobble scale of the wallpaper reveal, shared by wallpaper and glass. */

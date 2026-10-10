@@ -238,6 +238,18 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      numerals again for new fonts. The App Switcher's names were in the phone's own font: now the theme's (Inter on iOS 27).
      Checked on the emulator: iOS 27 unchanged elsewhere; Manrope and Fraunces set and removed with no restart, every
      surface following (home, the status bar, Control Center, Notification Center and its clock).
+   - **B4c, the new look's reveal** (2026-10-10): the crossfade was "okay, but dismissive" on the S24 (Matheesha); the
+     reveal wave chosen of three (reveal, morph, cascade). The new look spreads from where the change came from (the
+     bottom centre for now: the gesture bar, the settings closing) behind a front of glass (`home/ThemeReveal`, one AGSL
+     pass over the old look): the old look bends outward and lifts as the edge reaches it, a bright rim with a soft shadow
+     behind it sweeps across, the wallpaper reveal's twinkle plays in the band; each item of the new home (the page's icons
+     and widgets, the dock's icons, the Search pill) starts at 90% and springs into place as the front reaches its centre
+     (`motion.home.rebuild` 0.8 s, `motion.home.rebuild-settle`). The old look is taken the moment the design changes,
+     rendered at once from the last frame's display lists on the GPU (a screen copy arrived ~8 frames late, and the dock's
+     glass had already redrawn in the new theme: old, half new, old again, then the reveal). The rebuild runs next on the
+     main thread (1-3 ms after the old look is held). Once on the emulator (iOS 27 to Graphite after a fresh install) a black
+     strip showed along the bottom 100 px while the old look was held; not reproduced in three runs since (the picture taken
+     was whole each time): to watch for on the S24.
    - Done with D1/D2: a second layout of an element switched both ways (the mechanism is the same: built again, published,
      crossfaded).
 

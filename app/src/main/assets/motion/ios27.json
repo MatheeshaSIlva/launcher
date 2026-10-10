@@ -558,13 +558,20 @@
   },
   "motion.home.rebuild": {
    "bezier": [
-    0.365,
+    0.4,
     0,
-    0.635,
+    0.2,
     1
    ],
-   "ms": 350,
-   "src": "judged:home's old look fading into the new one when it is built again in front of the user (B4)"
+   "ms": 800,
+   "src": "judged:the new look's front spreading over home from where the change came from (B4; Matheesha: a crossfade was dismissive, the reveal wave chosen)"
+  },
+  "motion.home.rebuild-settle": {
+   "spring": [
+    0.42,
+    0.62
+   ],
+   "src": "judged:each item springing into place as the new look's front passes it (a visible bounce)"
   },
   "motion.home.wallpaper-zoom": {
    "factor": 1.04,

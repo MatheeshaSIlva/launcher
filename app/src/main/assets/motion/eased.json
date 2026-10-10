@@ -476,6 +476,16 @@
    "ms": 480,
    "src": "judged:test preset: iOS 27's spring (0.38 s, damping 1.0) as a bezier (emphasized decelerate, 480 ms)"
   },
+  "motion.home.rebuild-settle": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 630,
+   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.62) as a bezier (back-out, 630 ms)"
+  },
   "motion.index.bubble-in": {
    "bezier": [
     0.3,

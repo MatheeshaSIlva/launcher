@@ -147,6 +147,12 @@ class CurveTiming(curve: Curve) {
     /** Progress [elapsedMs] after the start. */
     fun atMs(elapsedMs: Float): Float = at(elapsedMs / durationMs)
 
+    /** When the curve first reaches [progress] (ms after the start; its end if it never does). */
+    fun timeOf(progress: Float): Long {
+        for (i in 0..200) if (at(i / 200f) >= progress) return (durationMs * i / 200f).toLong()
+        return durationMs
+    }
+
     val interpolator = android.animation.TimeInterpolator { u -> at(u) }
 }
 
