@@ -342,6 +342,27 @@ class Resolver(private val layers: List<Map<String, Entry>>, private val palette
     fun keys(): Set<String> = layers.flatMapTo(LinkedHashSet()) { it.keys }
 }
 
+/**
+ * [this] material with every colour that names another token ([ColorValue.Ref]) replaced by that token's colour as
+ * [colorOf] gives it: a material resolved in one theme keeps that theme's colours wherever it is drawn (an element that
+ * follows a theme of its own; drawing code reads a material's colours through the main theme otherwise).
+ */
+fun Material.bindRefs(colorOf: (String) -> Value.Color): Material {
+    fun bind(c: ColorValue): ColorValue = when (c) {
+        is ColorValue.Ref -> colorOf(c.key).let { v ->
+            if (v.dynamic) ColorValue.Dynamic(v.lightSpec ?: Theme.hex(v.light), v.darkSpec ?: Theme.hex(v.dark)) else ColorValue.Literal(v.light, v.dark)
+        }
+        else -> c
+    }
+    fun bind(g: Gradient?): Gradient? = g?.copy(stops = g.stops.map { it.copy(color = bind(it.color)) })
+    return copy(
+        fills = fills.map { it.copy(color = bind(it.color), gradient = bind(it.gradient)) },
+        innerShadows = innerShadows.map { it.copy(color = bind(it.color)) },
+        shadows = shadows.map { it.copy(color = bind(it.color)) },
+        strokes = strokes.map { it.copy(color = bind(it.color)) },
+    )
+}
+
 /** How a theme's layers stack. Pure (no Android): unit-tested. */
 object ThemeLayers {
     /**

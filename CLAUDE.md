@@ -67,6 +67,11 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   dev.launcher.app [--es theme ID]`, or the token editor's Theme button. Colours may name the phone's palette (`@primary`,
   `@system_accent2_900/40`: Material You, looked up when drawn); every theme may have a `materialYou` section used when the
   user picks the wallpaper's colours (`sys.color.source`; adb: `DESIGN_RELOAD --es colors wallpaper|theme`).
+  **A theme per element** (`design/TokenParts`): an element's code reads only its own namespace (`comp.statusbar.*`,
+  `comp.nc/cc/banner.*`, `comp.switcher.*`, `comp.library/spotlight.*`, `comp.home/widgets/badge.*`, `comp.settings.*`;
+  a test checks it), aliases into `sys.*`/`component.*`; an element given its own theme resolves its namespace there
+  (materials' colour references bound in that theme). Default: everything follows the active theme. Stored in
+  `files/design/elements.json`; adb: `DESIGN_RELOAD --es element shade --es theme graphite` (`--es theme follow` undoes).
   **Component catalogue** (`design/Components.kt`): shared styles as `component.*` tokens (notification card, control,
   slider, menu, badge, field, card, dock, sheet, panel...); the iOS layouts' `comp.*` tokens are aliases of them. A theme
   restyles components through `component.*`; new layouts read `component.*`, never another layout's `comp.*`.

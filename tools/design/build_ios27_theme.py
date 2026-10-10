@@ -19,7 +19,7 @@ OUT = os.path.join(ROOT, 'app', 'src', 'main', 'assets', 'themes', 'ios27.json')
 # Motion is a layer of its own (B3, docs/PLAN_LAYOUTS_THEMES.md): every motion.* token goes to the iOS 27 animation preset.
 OUT_MOTION = os.path.join(ROOT, 'app', 'src', 'main', 'assets', 'motion', 'ios27.json')
 # Tokens renamed since an earlier build (the value written in the file moves with the name).
-RENAMES = {'comp.cc.motion.open': 'motion.cc.open'}
+RENAMES = {'comp.cc.motion.open': 'motion.cc.open', 'comp.cc.symbol-on-accent': 'comp.cc.symbol-on-accent-color'}
 
 
 def slug(name):
@@ -585,6 +585,7 @@ SEED = {
     'comp.cc.expanded.slider-symbol': {'pt': 34, 'src': 'judged:its symbol (as it was in code; smaller while the slider grows)'},
     'comp.cc.symbol': {'pt': 35, 'src': "measured:the kit's render at 3x (the camera, SF Pro Bold 19: 29.3 pt wide); our symbols fill 5/6 of their box"},
     'comp.cc.symbol-color': {'color': '#ffffff', 'src': 'kit:2524:24527'},
+    'comp.cc.symbol-on-accent-color': {'ref': 'component.control.accent-symbol-color', 'src': "judged:the shade's own name for a symbol on an accent well (its namespace follows its own theme)"},
     'comp.cc.wide.padding': {'pt': 14, 'src': 'kit:2547:2623'},
     'comp.cc.wide.gap': {'pt': 8, 'src': 'kit:2547:2623'},
     'comp.cc.well.size': {'pt': 40, 'src': 'kit:2543:2535'},

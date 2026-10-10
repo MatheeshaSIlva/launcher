@@ -10,7 +10,9 @@ enum class Element(val id: String, val title: String) {
     SHADE("shade", "Notifications and controls"),
     RECENTS("recents", "Recent apps"),
     DRAWER("drawer", "App drawer"),
-    HOME("home", "Home screen");
+    HOME("home", "Home screen"),
+    /** The launcher's own settings app: themed and laid out like the rest. */
+    SETTINGS("settings", "Settings");
 
     companion object {
         fun of(id: String?): Element? = entries.firstOrNull { it.id == id }
@@ -125,7 +127,13 @@ object Layouts {
         ),
     )
 
-    val ALL: List<LayoutSpec> = listOf(IOS_STATUS_BAR, IOS_SHADE, IOS_DECK, APP_LIBRARY, IOS_HOME)
+    val STUDIO = LayoutSpec(
+        Element.SETTINGS, "studio", "Studio", "Launcher",
+        "A live picture of your phone above a sheet of tiles; tap a part of the phone to change just that part.",
+        listOf(Placement("app", "An app", "Opened from the drawer, home's edit menu and a Control Center control.")),
+    )
+
+    val ALL: List<LayoutSpec> = listOf(IOS_STATUS_BAR, IOS_SHADE, IOS_DECK, APP_LIBRARY, IOS_HOME, STUDIO)
 
     fun of(e: Element): List<LayoutSpec> = ALL.filter { it.element == e }
     fun find(e: Element, id: String?): LayoutSpec? = ALL.firstOrNull { it.element == e && it.id == id }

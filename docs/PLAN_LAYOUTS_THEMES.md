@@ -80,6 +80,13 @@ behaviour were not Pixel's, it felt like a cheap copy, and after switching back 
   the design (`files/design/elements.json`: element -> theme id), never in a theme file. Measured on 2026-10-10: the
   status bar, shade, home, drawer and recents code already reads nothing outside its namespace (one shade key aside);
   the settings app reads 25 shared keys directly (its redesign gives it `comp.settings.*`).
+  **Done (2026-10-10, emulator):** `design/TokenParts` (namespace -> element), `Design.setElementTheme` (a resolver per
+  theme in use; a material's colour references bound in its theme; a colour reference made in code read by its own
+  namespace), `files/design/elements.json`, the settings app as an element (`Element.SETTINGS`, layout "studio"), the
+  shade's one shared read given an alias (`comp.cc.symbol-on-accent-color`); tests: namespaces, every `comp.*` namespace
+  owned, element code reads only its own, binding. Checked: Control Center in Graphite (its wells in Graphite's green)
+  over an iOS 27 home, and back. Known: the font roles (`sys.font.*`, labels read through `Fonts.text`) and
+  `Appearance`'s press fill and backdrop veil still come from the main theme.
 
 ### Animations (how everything moves)
 

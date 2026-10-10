@@ -50,12 +50,31 @@ object Design {
     private var motionChain: List<Theme> = emptyList()
     private var motionId = DEFAULT_MOTION
     private val motionUser = LinkedHashMap<String, Entry>()
-    /** The resolver and its cache, replaced as a whole on a change (surfaces read tokens on their own threads). */
-    private class State(val resolver: Resolver) { val cache = java.util.concurrent.ConcurrentHashMap<String, Value>() }
+    /**
+     * The resolver and its cache, replaced as a whole on a change (surfaces read tokens on their own threads). [bound]: a
+     * material's colour references are resolved here too (an element's own theme: drawing code reads a material's colours
+     * through the main theme).
+     */
+    private class State(val resolver: Resolver, val bound: Boolean = false) {
+        val cache = java.util.concurrent.ConcurrentHashMap<String, Value>()
+        fun value(key: String): Value = cache.getOrPut(key) {
+            val v = resolver.resolve(key)
+            if (bound && v is Value.Mat) Value.Mat(v.material.bindRefs { k -> resolver.resolve(k) as? Value.Color ?: throw IllegalStateException("token '$k' is not a colour") }) else v
+        }
+    }
     @Volatile private var state = State(Resolver(emptyList()))
     private val resolver get() = state.resolver
     private val listeners = LinkedHashSet<() -> Unit>()
     private val main = Handler(Looper.getMainLooper())
+
+    /** A theme ready to resolve: the files it is built on (base first) and the user's edits of it. */
+    private class Loaded(val id: String, val chain: List<Theme>, val edits: Map<String, Entry>)
+    private const val ELEMENTS = "design/elements.json"
+    /** Elements that follow a theme of their own (element -> theme id); the others follow the active theme. */
+    private val elementIds = LinkedHashMap<dev.launcher.app.layout.Element, String>()
+    private val elementThemes = HashMap<String, Loaded>()
+    /** Their resolvers (an element's namespace resolves there: [TokenParts]); empty when everything follows one theme. */
+    @Volatile private var parts: Map<dev.launcher.app.layout.Element, State> = emptyMap()
 
     /** Bumped on every change of a token (views keyed on it draw again). */
     @Volatile var version = 0
@@ -88,6 +107,7 @@ object Design {
             load(DEFAULT_THEME)
             try { File(appCtx.filesDir, ACTIVE).apply { parentFile?.mkdirs() }.writeText(DEFAULT_THEME) } catch (_: Throwable) { }
         }
+        loadElements()
         moveMotionEdits()
         motionId = try { File(appCtx.filesDir, ACTIVE_MOTION).takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null } } catch (_: Throwable) { null } ?: DEFAULT_MOTION
         if (!loadMotion(motionId)) {
@@ -110,6 +130,12 @@ object Design {
                 i.getStringExtra("colors")?.let { setColorSource(it); return }
                 val id = i.getStringExtra("theme")
                 val preset = i.getStringExtra("motion")
+                // --es element ID --es theme ID|follow: one element's own theme (follow: the active one again).
+                i.getStringExtra("element")?.let { e ->
+                    val el = dev.launcher.app.layout.Element.of(e) ?: run { AppLog.log("[design] no element '$e'"); return }
+                    setElementTheme(el, id?.takeIf { it != "follow" })
+                    return
+                }
                 if (id != null) setTheme(id)
                 if (preset != null) setMotion(preset)
                 if (id == null && preset == null) reload()
@@ -179,6 +205,9 @@ object Design {
     fun reload() {
         val theme = load(activeId)
         val motion = loadMotion(motionId)
+        // The elements' own themes too (a file pushed over adb shows at once there as well).
+        for (id in elementThemes.keys.toList()) prepare(id)?.let { elementThemes[id] = it }
+        rebuild()
         if (theme || motion) changedOutside("reloaded")
     }
 
@@ -198,7 +227,17 @@ object Design {
      * same kind as [DEFAULT_THEME]'s (a missing or mistyped token would fail where it is drawn); else nothing changes.
      */
     private fun load(id: String): Boolean {
-        val c = (try { chainOf(THEMES, id) } catch (t: Throwable) { AppLog.log("[design] theme '$id' cannot be used: ${t.message}"); return false })
+        val l = prepare(id) ?: return false
+        chain = l.chain
+        user.clear()
+        user.putAll(l.edits)
+        rebuild()
+        return true
+    }
+
+    /** Theme [id] read and checked (as [load] uses it), not made active; null if it cannot be used (logged). */
+    private fun prepare(id: String): Loaded? {
+        val c = (try { chainOf(THEMES, id) } catch (t: Throwable) { AppLog.log("[design] theme '$id' cannot be used: ${t.message}"); return null })
             .map { t -> if (t.entries.keys.none(::isMotion)) t else {
                 // Motion is the animation preset's: a theme's own (an older theme file) is not used.
                 AppLog.log("[design] theme '${t.name}': its motion tokens are not used (motion belongs to an animation preset)")
@@ -212,14 +251,63 @@ object Design {
         for (my in listOf(false, true)) {
             val layers = layersOf(c, edits, my)
             val problem = if (id == DEFAULT_THEME && c.size == 1) checkResolves(layers) else checkAgainstDefault(layers)
-            if (problem != null) { AppLog.log("[design] theme '$id' cannot be used" + (if (my) " in wallpaper colours" else "") + ": $problem"); return false }
+            if (problem != null) { AppLog.log("[design] theme '$id' cannot be used" + (if (my) " in wallpaper colours" else "") + ": $problem"); return null }
         }
-        chain = c
-        user.clear()
-        user.putAll(edits)
+        return Loaded(id, c, edits)
+    }
+
+    // ------------------------------------------------------------------ a theme per element
+
+    /** The theme [e] follows of its own (null: the active theme, as everything does by default). */
+    fun elementTheme(e: dev.launcher.app.layout.Element): String? = elementIds[e]
+
+    /** The name of the theme [e] is drawn in. */
+    fun elementThemeName(e: dev.launcher.app.layout.Element): String =
+        elementIds[e]?.let { elementThemes[it]?.chain?.lastOrNull()?.name } ?: themeName
+
+    /**
+     * [e] follows theme [id] from now on (remembered), or the active theme again (null); false if [id] cannot be used (the
+     * reason is logged), nothing changes then. Only [e] changes: its namespace resolves in that theme ([TokenParts]).
+     */
+    fun setElementTheme(e: dev.launcher.app.layout.Element, id: String?): Boolean {
+        if (id != null && elementThemes[id] == null) {
+            val l = prepare(id) ?: return false
+            elementThemes[id] = l
+        }
+        if (elementIds[e] == id) return true
+        if (id == null) elementIds.remove(e) else elementIds[e] = id
+        elementThemes.keys.retainAll(elementIds.values.toSet())
+        saveElements()
         rebuild()
+        changedOutside("${e.title}: " + (id?.let { "theme '${elementThemeName(e)}'" } ?: "follows the theme again"))
         return true
     }
+
+    private fun loadElements() {
+        val f = File(appCtx.filesDir, ELEMENTS)
+        if (!f.exists()) return
+        try {
+            val o = org.json.JSONObject(f.readText())
+            for (k in o.keys()) {
+                val e = dev.launcher.app.layout.Element.of(k) ?: continue
+                val id = o.getString(k)
+                val l = elementThemes[id] ?: prepare(id) ?: continue   // a theme that is gone: the element follows again
+                elementThemes[id] = l
+                elementIds[e] = id
+            }
+        } catch (t: Throwable) { AppLog.log("[design] element themes unreadable (${t.message}): everything follows the theme") }
+        if (elementIds.isNotEmpty()) AppLog.log("[design] own themes: " + elementIds.entries.joinToString { "${it.key.id}=${it.value}" })
+    }
+
+    private fun saveElements() = try {
+        val f = File(appCtx.filesDir, ELEMENTS)
+        f.parentFile?.mkdirs()
+        val o = org.json.JSONObject()
+        for ((e, id) in elementIds) o.put(e.id, id)
+        val tmp = File(f.path + ".tmp")
+        tmp.writeText(o.toString())
+        tmp.renameTo(f)
+    } catch (t: Throwable) { AppLog.log("[design] saving the element themes failed: ${t.message}") }
 
     /**
      * Loads animation preset [id] (with the ones it is built on) and its edits, if it holds motion tokens only and gives
@@ -312,6 +400,13 @@ object Design {
     private fun rebuild() {
         val layers = layersOf(chain, user, ThemeLayers.fromWallpaper(chain, user)) + motionChain.map { it.entries } + listOf(LinkedHashMap(motionUser))
         state = State(Resolver(layers) { name -> paletteColor(name) })
+        val byTheme = HashMap<String, State>()
+        parts = elementIds.mapNotNull { (e, id) ->
+            val l = elementThemes[id] ?: return@mapNotNull null
+            e to byTheme.getOrPut(id) {
+                State(Resolver(layersOf(l.chain, l.edits, ThemeLayers.fromWallpaper(l.chain, l.edits))) { name -> paletteColor(name) }, bound = true)
+            }
+        }.toMap()
     }
 
     /** The theme's colours come from the wallpaper (Material You) instead of its own. */
@@ -374,7 +469,12 @@ object Design {
 
     // ------------------------------------------------------------------ reading
 
-    private fun value(key: String): Value = state.let { st -> st.cache.getOrPut(key) { st.resolver.resolve(key) } }
+    private fun value(key: String): Value {
+        val p = parts
+        if (p.isEmpty()) return state.value(key)
+        val e = TokenParts.of(key) ?: return state.value(key)
+        return (p[e] ?: state).value(key)
+    }
 
     /** [k]'s colour at the current appearance (ARGB); palette colours looked up (cached). */
     fun color(k: ColorKey): Int {
@@ -386,8 +486,12 @@ object Design {
     /** A colour value's light and dark ARGB, its palette references looked up (the token editor shows them). */
     fun pair(v: Value.Color): Pair<Int, Int> = resolver.pair(v)
 
-    /** A material's colour (a literal or a token) at the current appearance. */
-    fun color(c: ColorValue): Int = resolver.colorPair(c).let { (l, d) -> Appearance.mix(l, d) }
+    /**
+     * A material's colour (a literal or a token) at the current appearance. A token is read as any other, by its own
+     * namespace (a reference made in code, as Control Center's lit wells, follows its element's theme).
+     */
+    fun color(c: ColorValue): Int =
+        if (c is ColorValue.Ref) color(ColorKey(c.key)) else resolver.colorPair(c).let { (l, d) -> Appearance.mix(l, d) }
 
     /** A blend token ([Blend]'s name; NORMAL if it is not one). */
     fun blend(k: ChoiceKey): Blend = try { Blend.valueOf(choice(k)) } catch (_: IllegalArgumentException) { Blend.NORMAL }

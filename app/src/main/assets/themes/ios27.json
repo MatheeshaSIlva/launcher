@@ -1979,6 +1979,10 @@
    "ref": "component.control.symbol-color",
    "src": "judged:the shared component style (component.control.symbol-color)"
   },
+  "comp.cc.symbol-on-accent-color": {
+   "ref": "component.control.accent-symbol-color",
+   "src": "judged:the shade's own name for a symbol on an accent well (its namespace follows its own theme)"
+  },
   "comp.cc.symbol-on-color": {
    "ref": "component.control.on-symbol-color",
    "src": "judged:the shared component style (component.control.on-symbol-color)"

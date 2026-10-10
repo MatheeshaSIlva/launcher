@@ -24,7 +24,7 @@ object CcTokens {
     /** A symbol on a lit (white) control. */
     val SYMBOL_ON = ColorKey("comp.cc.symbol-on-color")
     /** A symbol on a control's accent colour when it is on (the shared control component's). */
-    val SYMBOL_ON_ACCENT = ColorKey("component.control.accent-symbol-color")
+    val SYMBOL_ON_ACCENT = ColorKey("comp.cc.symbol-on-accent-color")
     val CHEVRON_COLOR = ColorKey("comp.cc.chevron-color")
     val ADD_FILL = ColorKey("comp.cc.add.fill-color")
     val MEDIA_PLACEHOLDER = ColorKey("comp.cc.media.placeholder-color")
