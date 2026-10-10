@@ -148,6 +148,19 @@ Build steps (each checked on the S24 before the next):
 | S3 | Tap a part of the picture to pick it (status bar, panels, recents, drawer, home); the rest dims, the sheet shows that part's theme and layout |
 | S4 | Motion (presets with a demo on the picture) and Phone |
 
+**Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
+page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
+
+**S1 built (2026-10-10, emulator):** `settings/Pages.kt` rewritten as the studio: the picture of home (a new one fades in
+over the last), a header (the title crossfading to the page's, a round back button growing in), the sheet laid out once
+at its open size and moved (`comp.settings.sheet.*`: iOS 27 a floating panel 8 pt in with 38 pt corners, Graphite flush
+with 22), chips (what you have now, each opening its page) and four tiles (a colour each, tinted by the theme's
+`tile.tint`); a tile grows into the sheet from the size it sank to (its symbol and name riding along, fading), the others
+step back, the sheet rises, the picture shrinks, the page's groups rise in a beat apart, all from one spring
+(`motion.settings.open`, 0.5 / 0.86); Back, the round button or a swipe right (following the finger) shrink the page into
+its tile. Pages are built one a frame after the app comes up and placed only while open. The bars' symbols follow the
+page's colour. Not yet: the sheet itself is not draggable (it moves with the page), no search.
+
 ### Polish (between C1 and C2)
 
 Matheesha after C1: "pretty basic and barebones, which is fine for a first build. we need to turn this into a super

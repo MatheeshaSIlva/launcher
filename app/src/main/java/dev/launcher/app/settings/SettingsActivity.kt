@@ -41,9 +41,29 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
+    /** The bars' symbols dark over a light page, light over a dark one (the status bar follows what the window says). */
+    private var lightBars: Boolean? = null
+    private val onLook: () -> Unit = { barsFollowPage() }
+
+    private fun barsFollowPage() {
+        val c = Design.color(SettingsTokens.BACKGROUND)
+        val light = (0.299 * android.graphics.Color.red(c) + 0.587 * android.graphics.Color.green(c) + 0.114 * android.graphics.Color.blue(c)) > 150
+        if (light == lightBars) return
+        lightBars = light
+        if (Build.VERSION.SDK_INT >= 30) {
+            val m = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(if (light) m else 0, m)
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = if (light) View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR else 0
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Design.addListener(onDesign)
+        Design.addListener(onLook)
+        dev.launcher.app.theme.Appearance.addListener(onLook)
         // Edge to edge: the page draws behind the bars (our own status bar is over it).
         if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)
         window.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS)
@@ -59,11 +79,14 @@ class SettingsActivity : ComponentActivity() {
         },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
+        barsFollowPage()
         AppLog.log("[settings] opened")
     }
 
     override fun onDestroy() {
         Design.removeListener(onDesign)
+        Design.removeListener(onLook)
+        dev.launcher.app.theme.Appearance.removeListener(onLook)
         coverAnim?.cancel()
         super.onDestroy()
     }

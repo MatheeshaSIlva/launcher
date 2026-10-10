@@ -2438,6 +2438,239 @@
    "color": "#00000059",
    "src": "judged:the soft shadow under the date and group names"
   },
+  "comp.settings.background": {
+   "ref": "ref.color.backgrounds-grouped.primary",
+   "src": "measured:iOS 27 Settings (run 15): a solid grouped grey page, black in dark"
+  },
+  "comp.settings.button.fill": {
+   "light": "#ffffffcc",
+   "dark": "#2c2c2ecc",
+   "src": "measured:iOS 27 Settings: the back button, a glass circle"
+  },
+  "comp.settings.button.rim": {
+   "light": "#ffffffe6",
+   "dark": "#ffffff1f",
+   "src": "judged:its bright rim"
+  },
+  "comp.settings.button.size": {
+   "pt": 44,
+   "src": "measured:iOS 27 Settings: the round back button, 44 pt at 16, 62"
+  },
+  "comp.settings.button.symbol-color": {
+   "ref": "sys.color.label.primary",
+   "src": "measured:iOS 27 Settings: a black chevron (white in dark)"
+  },
+  "comp.settings.chip.corner": {
+   "pt": 16,
+   "src": "judged:a capsule"
+  },
+  "comp.settings.chip.fill": {
+   "light": "#7878801f",
+   "dark": "#7878803d",
+   "src": "judged:iOS's fill colours (secondary) for a chip on the sheet"
+  },
+  "comp.settings.chip.text": {
+   "ref": "sys.type.footnote",
+   "src": "judged:draft D"
+  },
+  "comp.settings.chip.text-color": {
+   "ref": "sys.color.label.primary",
+   "src": "judged:the theme's primary label"
+  },
+  "comp.settings.color.layouts": {
+   "ref": "ref.color.accents.blue",
+   "src": "judged:a colour per part (Android 16's Settings, iOS Settings' icons)"
+  },
+  "comp.settings.color.look": {
+   "ref": "ref.color.accents.indigo",
+   "src": "judged:a colour per part"
+  },
+  "comp.settings.color.motion": {
+   "ref": "ref.color.accents.orange",
+   "src": "judged:a colour per part"
+  },
+  "comp.settings.color.phone": {
+   "ref": "ref.color.accents.green",
+   "src": "judged:a colour per part"
+  },
+  "comp.settings.group.corner": {
+   "ref": "component.card.corner",
+   "src": "judged:the theme's card corner"
+  },
+  "comp.settings.group.fill": {
+   "ref": "ref.color.backgrounds-grouped.secondary",
+   "src": "measured:iOS 27 Settings: solid white groups (#1C1C1E dark), no glass"
+  },
+  "comp.settings.hint-color": {
+   "ref": "sys.color.label.secondary",
+   "src": "judged:the theme's secondary label"
+  },
+  "comp.settings.margin": {
+   "ref": "component.page.margin",
+   "src": "judged:the page margin of every page"
+  },
+  "comp.settings.preview.corner": {
+   "factor": 0.15,
+   "src": "judged:the phone's corner, of the picture's width"
+  },
+  "comp.settings.preview.rim": {
+   "light": "#000000d9",
+   "dark": "#3a3a3cff",
+   "src": "judged:draft D: the phone's edge around the picture of home"
+  },
+  "comp.settings.preview.rim-width": {
+   "pt": 2.5,
+   "src": "judged:draft D"
+  },
+  "comp.settings.preview.shadow": {
+   "light": "#00000038",
+   "dark": "#00000099",
+   "src": "judged:draft D: the picture's soft shadow"
+  },
+  "comp.settings.row.check-color": {
+   "ref": "component.list-row.check-color",
+   "src": "judged:the theme's list row"
+  },
+  "comp.settings.row.detail": {
+   "ref": "component.list-row.detail",
+   "src": "judged:the theme's list row"
+  },
+  "comp.settings.row.detail-color": {
+   "ref": "component.list-row.detail-color",
+   "src": "judged:the theme's list row"
+  },
+  "comp.settings.row.height": {
+   "ref": "component.list-row.height",
+   "src": "judged:the theme's list row"
+  },
+  "comp.settings.row.label-color": {
+   "ref": "component.list-row.label-color",
+   "src": "judged:the theme's list row"
+  },
+  "comp.settings.row.padding": {
+   "ref": "component.list-row.padding",
+   "src": "judged:the theme's list row"
+  },
+  "comp.settings.row.separator-color": {
+   "ref": "component.list-row.separator-color",
+   "src": "judged:the theme's list row"
+  },
+  "comp.settings.row.title": {
+   "ref": "component.list-row.title",
+   "src": "judged:the theme's list row"
+  },
+  "comp.settings.section": {
+   "ref": "component.section.title",
+   "src": "judged:the theme's section heading (sentence case, iOS 27)"
+  },
+  "comp.settings.section-color": {
+   "ref": "component.section.title-color",
+   "src": "judged:the theme's section heading"
+  },
+  "comp.settings.sheet.corner": {
+   "pt": 38,
+   "src": "judged:iOS 26's floating sheets (rounder than cards, as the screen's corners)"
+  },
+  "comp.settings.sheet.fill": {
+   "light": "#ffffffcc",
+   "dark": "#1c1c1ef2",
+   "src": "judged:iOS 26 sheets at a partial height: a white floating panel (the elevated grey in dark); over a solid page nothing shows through"
+  },
+  "comp.settings.sheet.inset": {
+   "pt": 8,
+   "src": "judged:iOS 26's floating sheets keep a margin from the screen's edges"
+  },
+  "comp.settings.sheet.open": {
+   "factor": 0.36,
+   "src": "judged:draft D: the sheet's top with a page open (the picture smaller, still in sight)"
+  },
+  "comp.settings.sheet.rest": {
+   "factor": 0.55,
+   "src": "judged:draft D: where the sheet's top rests (of the screen's height), the picture of home above it"
+  },
+  "comp.settings.sheet.rim": {
+   "light": "#ffffffe6",
+   "dark": "#ffffff1f",
+   "src": "judged:the bright rim of iOS 26's glass sheets"
+  },
+  "comp.settings.sheet.shadow": {
+   "light": "#0000001a",
+   "dark": "#00000066",
+   "src": "judged:a soft shadow above the sheet"
+  },
+  "comp.settings.tile.corner": {
+   "pt": 26,
+   "src": "judged:iOS 26/27 grouped corners"
+  },
+  "comp.settings.tile.detail": {
+   "ref": "sys.type.caption1",
+   "src": "judged:draft D: what is under it now"
+  },
+  "comp.settings.tile.fill": {
+   "light": "#ffffff00",
+   "dark": "#ffffff00",
+   "src": "judged:draft D (iOS 27): a tile is its colour over the sheet"
+  },
+  "comp.settings.tile.gap": {
+   "pt": 10,
+   "src": "judged:draft D"
+  },
+  "comp.settings.tile.height": {
+   "pt": 116,
+   "src": "judged:draft D"
+  },
+  "comp.settings.tile.symbol": {
+   "pt": 34,
+   "src": "judged:draft D: the symbol's square"
+  },
+  "comp.settings.tile.symbol-color": {
+   "color": "#ffffff",
+   "src": "judged:a white symbol on its colour (iOS Settings' icons)"
+  },
+  "comp.settings.tile.symbol-corner": {
+   "pt": 10,
+   "src": "judged:draft D"
+  },
+  "comp.settings.tile.tint": {
+   "factor": 0.14,
+   "src": "judged:draft D: how much of its colour a tile takes (iOS 27: a light tint)"
+  },
+  "comp.settings.tile.title": {
+   "ref": "sys.type.headline",
+   "src": "judged:draft D: a tile's name"
+  },
+  "comp.settings.tile.title-tint": {
+   "factor": 1.0,
+   "src": "judged:draft D: a tile's name in its colour (0: the label colour)"
+  },
+  "comp.settings.title": {
+   "ref": "sys.type.headline",
+   "src": "measured:iOS 27 Settings: a page's small centred title"
+  },
+  "comp.settings.title-color": {
+   "ref": "sys.color.label.primary",
+   "src": "judged:the theme's primary label"
+  },
+  "comp.settings.toggle.height": {
+   "ref": "component.toggle.height",
+   "src": "judged:the theme's switch"
+  },
+  "comp.settings.toggle.knob-color": {
+   "ref": "component.toggle.knob-color",
+   "src": "judged:the theme's switch"
+  },
+  "comp.settings.toggle.off-color": {
+   "ref": "component.toggle.off-color",
+   "src": "judged:the theme's switch"
+  },
+  "comp.settings.toggle.on-color": {
+   "ref": "component.toggle.on-color",
+   "src": "judged:the theme's switch"
+  },
+  "comp.settings.toggle.width": {
+   "ref": "component.toggle.width",
+   "src": "judged:the theme's switch"
+  },
   "comp.spotlight.card.material": {
    "ref": "component.card.material",
    "src": "judged:the shared component style (component.card.material)"

@@ -797,6 +797,13 @@
    "factor": 0.55,
    "src": "judged:UIScrollView's rubber band"
   },
+  "motion.settings.open": {
+   "spring": [
+    0.5,
+    0.86
+   ],
+   "src": "judged:a tile of the settings opening into its page and back (draft D): expressive, its bounds settle without a bounce"
+  },
   "motion.sheet": {
    "spring": [
     0.45,

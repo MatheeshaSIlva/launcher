@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Four tiles in a grid (the settings' Layouts), drawn here. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,5.8C4,4.8 4.8,4 5.8,4H9.2C10.2,4 11,4.8 11,5.8V9.2C11,10.2 10.2,11 9.2,11H5.8C4.8,11 4,10.2 4,9.2ZM13,5.8C13,4.8 13.8,4 14.8,4H18.2C19.2,4 20,4.8 20,5.8V9.2C20,10.2 19.2,11 18.2,11H14.8C13.8,11 13,10.2 13,9.2ZM4,14.8C4,13.8 4.8,13 5.8,13H9.2C10.2,13 11,13.8 11,14.8V18.2C11,19.2 10.2,20 9.2,20H5.8C4.8,20 4,19.2 4,18.2ZM13,14.8C13,13.8 13.8,13 14.8,13H18.2C19.2,13 20,13.8 20,14.8V18.2C20,19.2 19.2,20 18.2,20H14.8C13.8,20 13,19.2 13,18.2Z" />
+</vector>

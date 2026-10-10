@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A shield with a check (the settings' Phone: Shizuku and safety), drawn here. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12,2.6L19.4,5.5V11.3C19.4,16.1 16.3,19.7 12,21.4C7.7,19.7 4.6,16.1 4.6,11.3V5.5ZM15.9,9.9L14.7,8.7L10.9,12.5L9.3,10.9L8.1,12.1L10.9,14.9Z" />
+</vector>

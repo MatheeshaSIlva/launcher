@@ -299,6 +299,73 @@
     ]
    },
    "src": "judged:test theme: a light gradient on controls that are on"
+  },
+  "comp.settings.background": {
+   "light": "#e4e4e9",
+   "dark": "#0e0e10",
+   "src": "judged:Graphite: a neutral grey page"
+  },
+  "comp.settings.sheet.fill": {
+   "light": "#efeff3f5",
+   "dark": "#1c1d21f5",
+   "src": "judged:Graphite: a flush, frosted sheet"
+  },
+  "comp.settings.sheet.rim": {
+   "light": "#0000000f",
+   "dark": "#ffffff14",
+   "src": "judged:Graphite: a hairline edge"
+  },
+  "comp.settings.sheet.corner": {
+   "pt": 22,
+   "src": "judged:Graphite: tighter corners"
+  },
+  "comp.settings.sheet.inset": {
+   "pt": 0,
+   "src": "judged:Graphite: the sheet meets the screen's edges"
+  },
+  "comp.settings.tile.fill": {
+   "light": "#ffffffbf",
+   "dark": "#2c2d32ff",
+   "src": "judged:Graphite: neutral tiles"
+  },
+  "comp.settings.tile.tint": {
+   "factor": 0,
+   "src": "judged:Graphite: no tint, the colour stays on the symbol"
+  },
+  "comp.settings.tile.title-tint": {
+   "factor": 0,
+   "src": "judged:Graphite: names in the label colour"
+  },
+  "comp.settings.tile.corner": {
+   "pt": 16,
+   "src": "judged:Graphite: tighter corners"
+  },
+  "comp.settings.tile.symbol-corner": {
+   "pt": 9,
+   "src": "judged:Graphite"
+  },
+  "comp.settings.chip.fill": {
+   "light": "#dcdce2",
+   "dark": "#2e2f35",
+   "src": "judged:Graphite: solid chips"
+  },
+  "comp.settings.chip.corner": {
+   "pt": 12,
+   "src": "judged:Graphite: tighter corners"
+  },
+  "comp.settings.button.fill": {
+   "light": "#dcdce2",
+   "dark": "#2e2f35",
+   "src": "judged:Graphite: a solid button"
+  },
+  "comp.settings.button.rim": {
+   "light": "#00000000",
+   "dark": "#00000000",
+   "src": "judged:Graphite: no rim"
+  },
+  "comp.settings.group.corner": {
+   "pt": 16,
+   "src": "judged:Graphite: tighter corners"
   }
  }
 }
