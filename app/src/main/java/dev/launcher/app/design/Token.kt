@@ -74,7 +74,10 @@ data class Spring(val response: Float, val damping: Float)
 enum class NumUnit { PT, FRACTION, PERCENT, DEGREES, MS, FACTOR }
 
 data class TextStyle(
-    /** A font family the app can draw ([dev.launcher.app.theme.Fonts]): "text" (optical size for text) or "display". */
+    /**
+     * The font: "text" or "display" (the theme's two families, `sys.font.text` and `sys.font.display`), or a family of
+     * its own ([dev.launcher.app.theme.FontFamily]: inter, system, system-serif, system-mono, google:Name).
+     */
     val family: String,
     val weight: Int,
     val sizePt: Float,

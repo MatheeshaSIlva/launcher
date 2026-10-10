@@ -117,6 +117,9 @@ object Design {
         changedOutside("reloaded")
     }
 
+    /** A Google font the theme names was downloaded (theme/Fonts): every surface draws again with it. */
+    fun fontArrived(name: String) = changedOutside("font '$name' arrived")
+
     private fun changedOutside(what: String) {
         version++
         AppLog.log("[design] $what: ${user.size} edited")
@@ -340,7 +343,7 @@ object Design {
  */
 /** [this] style on [p]: font, weight, size and letter spacing at [unitPx] pixels per point (line height is the caller's). */
 fun TextStyle.applyTo(p: android.graphics.Paint, unitPx: Float) {
-    p.typeface = if (family == "display") dev.launcher.app.theme.Fonts.display(weight) else dev.launcher.app.theme.Fonts.text(weight)
+    p.typeface = dev.launcher.app.theme.Fonts.of(family, weight, sizePt)
     p.textSize = sizePt * unitPx
     p.letterSpacing = if (sizePt > 0f) trackingPt / sizePt else 0f
 }

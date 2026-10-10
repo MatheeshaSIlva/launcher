@@ -68,7 +68,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   restyles components through `component.*`; new layouts read `component.*`, never another layout's `comp.*`.
   Paint v2: fills may be gradients (object form `{"gradient": ...}`), materials may have `strokes`, surfaces a radius per
   corner, corners smoothing (`sys.shape.corner-smoothing`). In AGSL, uniform arrays are indexed only by loop indices and
-  constants (a function parameter as an index does not compile): gradient stops are read inside the fill loop. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
+  constants (a function parameter as an index does not compile): gradient stops are read inside the fill loop.
+  Fonts (`theme/Fonts.kt`, `FontFamily`): `sys.font.text` / `sys.font.display` name a family (`inter`, `system`,
+  `system-serif`, `system-mono`, `google:Name`); Google fonts are downloaded through Play services' font provider into
+  `files/fonts/google/` (then instant, offline). Paints built once keep their font until rebuilt. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.

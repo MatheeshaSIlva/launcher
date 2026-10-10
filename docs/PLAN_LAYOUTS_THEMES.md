@@ -165,7 +165,21 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      superellipse of exponent 3.25 at full smoothing), giving way where the sides leave no room, so circles and capsules
      stay round. iOS 27: no gradients or strokes, smoothing 0 (round, as drawn so far; to judge against the kit later):
      Control Center and home pixel-identical. The Graphite test theme shows all three (emulator).
-   - **B2d, fonts**: any family per text style (bundled, the device's, Google Fonts downloaded on the phone).
+   - **B2d, fonts** (done 2026-10-10): a theme names two families, `sys.font.text` (body and labels) and
+     `sys.font.display` (large titles); a text style uses one of them (`"family": "text"|"display"`) or names its own.
+     Families (`theme/FontFamily.kt`): `inter` (bundled, variable; its optical sizes play SF's Text and Display cuts),
+     `system`, `system-serif`, `system-mono` (the phone's own; on One UI the font picked in its settings) and
+     `google:<Family Name>` (any family of fonts.google.com). Google fonts come from Google Play services' font provider,
+     asked directly as AndroidX does (no AndroidX dependency; the provider's signature checked against Google's two
+     certificates), one file per weight (rounded to 100) kept in `files/fonts/google/`: from then on they load at once,
+     offline too, from the first frame of a cold start. Until a font arrives the system's sans stands in; on arrival
+     (all weights asked for together) the design notifies once and the surfaces that follow tokens draw again. iOS 27:
+     `inter` for both, pixel-identical on the emulator. Checked on the emulator: Manrope and Fraunces downloaded (1.6 s
+     the first, ~0.1 s each further weight), Control Center switched live, everything after a restart, the glass
+     clock's numerals in Fraunces. Known, for B4 and C: paints made once when a view is built (home's labels, the
+     status bar) keep the font they got until they are rebuilt (B4's rebuild on a theme change); a font not yet on the
+     phone shows the fallback until it arrives (the settings app downloads first and applies after, C2). Over adb:
+     write `sys.font.text` into `files/design/user.json` (run-as) and `DESIGN_RELOAD`.
 3. Animation engine v2: roles, springs and beziers, presets; today's iOS motion as the first preset.
 4. Clean layout switching (teardown, rebuild, re-publish, transition), tested by switching every element back and forth.
 

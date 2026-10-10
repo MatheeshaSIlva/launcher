@@ -3731,6 +3731,14 @@
    "choice": "theme",
    "src": "judged:the theme's own colours until the user picks the wallpaper's (Material You)"
   },
+  "sys.font.display": {
+   "choice": "inter",
+   "src": "judged:Inter in place of SF Pro Display; its optical size 32 plays SF's Display cut"
+  },
+  "sys.font.text": {
+   "choice": "inter",
+   "src": "judged:Inter in place of SF Pro Text (SF is licensed for Apple platforms only); its optical size 14 plays SF's Text cut"
+  },
   "sys.glass.label.dark-from": {
    "factor": 0.56,
    "src": "judged:text on glass straight on the wallpaper is white (with its shadow) up to this brightness behind the tinted glass, dark only over clearly light glass (Matheesha: dark labels over a darker wallpaper were hard to read; the old blend 0.40-0.52 gave grey text)"

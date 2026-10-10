@@ -259,7 +259,7 @@ class DesignActivity : Activity() {
             { Value.Choice(f.text.toString().trim()) }
         }
         is Value.Text -> {
-            val fam = field(box, "family (text or display)", v.style.family, number = false)
+            val fam = field(box, "family (text, display, inter, system, system-serif, system-mono, google:Name)", v.style.family, number = false)
             val w = numberEditor(box, "weight", v.style.weight.toFloat(), 100f, 900f)
             val s = numberEditor(box, "size (pt)", v.style.sizePt, 6f, 80f)
             val l = numberEditor(box, "line height (pt)", v.style.lineHeightPt, 6f, 100f)
