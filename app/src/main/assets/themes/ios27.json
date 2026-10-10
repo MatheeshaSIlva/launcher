@@ -3403,6 +3403,10 @@
    "ref": "ref.color.separators.non-opaque",
    "src": "kit:VariableID:509:77495"
   },
+  "sys.color.source": {
+   "choice": "theme",
+   "src": "judged:the theme's own colours until the user picks the wallpaper's (Material You)"
+  },
   "sys.glass.label.dark-from": {
    "factor": 0.56,
    "src": "judged:text on glass straight on the wallpaper is white (with its shadow) up to this brightness behind the tinted glass, dark only over clearly light glass (Matheesha: dark labels over a darker wallpaper were hard to read; the old blend 0.40-0.52 gave grey text)"
@@ -3715,6 +3719,56 @@
   "sys.type.title2": {
    "ref": "ref.type.title2.emphasized",
    "src": "kit:text style Title2/Emphasized"
+  }
+ },
+ "materialYou": {
+  "ref.color.accents.blue": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.brown": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.cyan": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.green": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.indigo": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.mint": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.orange": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.pink": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.purple": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.red": {
+   "color": "@error",
+   "src": "judged:Material You: destructive red becomes the palette's error colour"
+  },
+  "ref.color.accents.teal": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.accents.yellow": {
+   "color": "@primary",
+   "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
   }
  }
 }

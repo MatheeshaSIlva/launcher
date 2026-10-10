@@ -641,6 +641,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private fun finishWallpaper(w: Wallpaper?) {
         if (wallpaper !== w) return
         Wallpaper.current = w
+        // A new wallpaper may bring new Material You colours (themes in the wallpaper's colours follow them).
+        dev.launcher.app.design.Design.onConfiguration()
         // The materials' strength follows how light the wallpaper is (see Appearance's veils).
         w?.let { dev.launcher.app.theme.Appearance.wallpaperLuma = it.meanLuminance }
         if (w == null) {

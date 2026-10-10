@@ -5,7 +5,14 @@ import org.json.JSONObject
 
 /** A token's value as a theme file holds it (before aliases are followed). */
 sealed class Value {
-    data class Color(val light: Int, val dark: Int) : Value()
+    /**
+     * A colour, light and dark (ARGB). With a [lightSpec] or [darkSpec] that mode's colour is the system's palette
+     * (`@primary`, `@system_accent2_900/40`: Material You, from the wallpaper), looked up when drawn; [light] and [dark]
+     * are then only what shows without a palette.
+     */
+    data class Color(val light: Int, val dark: Int, val lightSpec: String? = null, val darkSpec: String? = null) : Value() {
+        val dynamic get() = lightSpec != null || darkSpec != null
+    }
     data class Number(val v: Float, val unit: NumUnit) : Value()
     data class SpringV(val spring: Spring) : Value()
     data class Choice(val option: String) : Value()
@@ -42,6 +49,11 @@ class Theme(
     val entries: Map<String, Entry>,
     /** The theme this one is built on (its id: the file name without `.json`): only what differs is written here. */
     val extends: String? = null,
+    /**
+     * The theme in the wallpaper's colours (Material You): the tokens that change when the user turns them on
+     * (`sys.color.source` = "wallpaper"), usually its accents as palette roles. Any theme can have them.
+     */
+    val materialYou: Map<String, Entry> = emptyMap(),
 ) {
     companion object {
         const val FORMAT = 1
@@ -50,24 +62,32 @@ class Theme(
             val o = JSONObject(json)
             val format = o.optInt("format", FORMAT)
             require(format <= FORMAT) { "theme format $format is newer than this app's ($FORMAT)" }
-            val tokens = o.optJSONObject("tokens") ?: JSONObject()
+            return Theme(o.optString("name", "Untitled"), o.optString("author", ""), o.optString("version", ""),
+                entries(o.optJSONObject("tokens")), o.optString("extends").ifEmpty { null }, entries(o.optJSONObject("materialYou")))
+        }
+
+        private fun entries(tokens: JSONObject?): Map<String, Entry> {
             val out = LinkedHashMap<String, Entry>()
+            if (tokens == null) return out
             for (key in tokens.keys()) {
                 if (key.startsWith("_")) continue   // comments
                 val t = tokens.getJSONObject(key)
                 out[key] = Entry(parseValue(key, t), Provenance.parse(t.optString("src").ifEmpty { null }), t.optString("note").ifEmpty { null })
             }
-            return Theme(o.optString("name", "Untitled"), o.optString("author", ""), o.optString("version", ""), out,
-                o.optString("extends").ifEmpty { null })
+            return out
         }
+
+        /** A colour token's light or dark: a literal, or a palette reference kept as it is (resolved when drawn). */
+        private fun colorPart(s: String): Pair<Int, String?> = if (s.startsWith("@")) FALLBACK_SYSTEM to s else color(s) to null
 
         private fun parseValue(key: String, t: JSONObject): Value = when {
             t.has("ref") -> Value.Alias(t.getString("ref"))
             t.has("light") || t.has("dark") -> {
-                val l = color(t.optString("light").ifEmpty { t.getString("dark") })
-                Value.Color(l, if (t.has("dark")) color(t.getString("dark")) else l)
+                val l = colorPart(t.optString("light").ifEmpty { t.getString("dark") })
+                val d = if (t.has("dark")) colorPart(t.getString("dark")) else l
+                Value.Color(l.first, d.first, l.second, d.second)
             }
-            t.has("color") -> color(t.getString("color")).let { Value.Color(it, it) }
+            t.has("color") -> colorPart(t.getString("color")).let { Value.Color(it.first, it.first, it.second, it.second) }
             t.has("pt") -> Value.Number(t.getDouble("pt").toFloat(), NumUnit.PT)
             t.has("fraction") -> Value.Number(t.getDouble("fraction").toFloat(), NumUnit.FRACTION)
             t.has("percent") -> Value.Number(t.getDouble("percent").toFloat(), NumUnit.PERCENT)
@@ -107,11 +127,33 @@ class Theme(
 
         private fun <T> list(a: JSONArray?, f: (JSONArray) -> T): List<T> = if (a == null) emptyList() else List(a.length()) { f(a.getJSONArray(it)) }
 
-        /** `#rrggbb` / `#rrggbbaa` (alpha last), `#light|#dark`, or `{key}` (a colour token). */
+        /**
+         * `#rrggbb` / `#rrggbbaa` (alpha last), `#light|#dark`, `{key}` (a colour token), or the system's palette: `@role`
+         * (`@primary`), `@system_accent1_200`, with an alpha in percent (`@primary/40`), alone or as one side of `light|dark`.
+         */
         fun colorValue(s: String): ColorValue = when {
             s.startsWith("{") && s.endsWith("}") -> ColorValue.Ref(s.substring(1, s.length - 1))
+            '@' in s -> if ('|' in s) s.split('|').let { ColorValue.Dynamic(it[0], it[1]) } else ColorValue.Dynamic(s, s)
             '|' in s -> s.split('|').let { ColorValue.Literal(color(it[0]), color(it[1])) }
             else -> color(s).let { ColorValue.Literal(it, it) }
+        }
+
+        /** What a palette colour is when there is none to read (the unit tests, Android before 12). */
+        const val FALLBACK_SYSTEM = 0xFF808080.toInt()
+
+        /**
+         * A colour [spec] in the [dark] or light appearance: `#rrggbb[aa]`, or a palette reference: `@name` is the role's
+         * light or dark colour (`system_<name>_light` / `_dark`, Android 14's Material roles: `@primary`,
+         * `@surface_container_high`, `@on_surface_variant`), `@system_...` one exact palette colour (`@system_accent1_200`,
+         * both appearances); `/40` sets the alpha in percent. [palette] looks a name up (null: unknown, [FALLBACK_SYSTEM]).
+         */
+        fun resolveSpec(spec: String, dark: Boolean, palette: (String) -> Int?): Int {
+            if (!spec.startsWith("@")) return color(spec)
+            val body = spec.removePrefix("@")
+            val name = body.substringBefore('/')
+            val alpha = body.substringAfter('/', "").toIntOrNull()?.coerceIn(0, 100)
+            val c = (if (name.startsWith("system_")) palette(name) else palette("system_${name}_" + if (dark) "dark" else "light")) ?: FALLBACK_SYSTEM
+            return if (alpha == null) c else (Math.round(alpha * 255f / 100f) shl 24) or (c and 0xFFFFFF)
         }
 
         fun color(s: String): Int {
@@ -132,7 +174,11 @@ class Theme(
             val o = JSONObject()
             when (val v = e.value) {
                 is Value.Alias -> o.put("ref", v.key)
-                is Value.Color -> if (v.light == v.dark) o.put("color", hex(v.light)) else o.put("light", hex(v.light)).put("dark", hex(v.dark))
+                is Value.Color -> {
+                    val l = v.lightSpec ?: hex(v.light)
+                    val d = v.darkSpec ?: hex(v.dark)
+                    if (l == d) o.put("color", l) else o.put("light", l).put("dark", d)
+                }
                 is Value.Number -> o.put(when (v.unit) {
                     NumUnit.PT -> "pt"; NumUnit.FRACTION -> "fraction"; NumUnit.PERCENT -> "percent"
                     NumUnit.DEGREES -> "deg"; NumUnit.MS -> "ms"; NumUnit.FACTOR -> "factor"
@@ -151,6 +197,7 @@ class Theme(
         private fun colorString(c: ColorValue) = when (c) {
             is ColorValue.Ref -> "{${c.key}}"
             is ColorValue.Literal -> if (c.light == c.dark) hex(c.light) else hex(c.light) + "|" + hex(c.dark)
+            is ColorValue.Dynamic -> if (c.light == c.dark) c.light else c.light + "|" + c.dark
         }
 
         private fun writeMaterial(m: Material): JSONObject {
@@ -183,10 +230,11 @@ class Theme(
 }
 
 /**
- * Tokens resolved: a base theme with layers over it (the user's edits on top), aliases followed. Pure (no Android), so the
+ * Tokens resolved: a base theme with layers over it (the user's edits on top), aliases followed; palette colours looked up
+ * through [palette] (an `android.R.color` name to its colour; the unit tests give their own). Pure (no Android), so the
  * rules are unit-tested; [dev.launcher.app.design.Design] is the app's live instance.
  */
-class Resolver(private val layers: List<Map<String, Entry>>) {
+class Resolver(private val layers: List<Map<String, Entry>>, private val palette: (String) -> Int? = { null }) {
     /** The entry for [key] as the top-most layer that has it gives it (null: no layer has it). */
     fun entry(key: String): Entry? {
         for (i in layers.indices.reversed()) layers[i][key]?.let { return it }
@@ -206,14 +254,36 @@ class Resolver(private val layers: List<Map<String, Entry>>) {
         }
     }
 
-    /** The colour of [c] (a literal or a colour token) as light and dark ARGB. */
+    /** The colour of [c] (a literal, a colour token or palette colours) as light and dark ARGB. */
     fun colorPair(c: ColorValue): Pair<Int, Int> = when (c) {
         is ColorValue.Literal -> c.light to c.dark
-        is ColorValue.Ref -> (resolve(c.key) as? Value.Color ?: throw IllegalStateException("token '${c.key}' is not a colour")).let { it.light to it.dark }
+        is ColorValue.Ref -> pair(resolve(c.key) as? Value.Color ?: throw IllegalStateException("token '${c.key}' is not a colour"))
+        is ColorValue.Dynamic -> Theme.resolveSpec(c.light, false, palette) to Theme.resolveSpec(c.dark, true, palette)
     }
+
+    /** A colour value's light and dark ARGB (its palette references looked up). */
+    fun pair(v: Value.Color): Pair<Int, Int> =
+        (v.lightSpec?.let { Theme.resolveSpec(it, false, palette) } ?: v.light) to (v.darkSpec?.let { Theme.resolveSpec(it, true, palette) } ?: v.dark)
 
     /** Every key any layer defines. */
     fun keys(): Set<String> = layers.flatMapTo(LinkedHashSet()) { it.keys }
+}
+
+/** How a theme's layers stack. Pure (no Android): unit-tested. */
+object ThemeLayers {
+    /**
+     * The layers a theme resolves from: the themes it is built on (base first), their Material You sections when
+     * [materialYou] (all of them, the later winning), then the user's edits.
+     */
+    fun of(chain: List<Theme>, edits: Map<String, Entry>, materialYou: Boolean): List<Map<String, Entry>> {
+        val my = LinkedHashMap<String, Entry>()
+        if (materialYou) for (t in chain) my.putAll(t.materialYou)
+        return chain.map { it.entries } + (if (my.isEmpty()) emptyList() else listOf(my)) + listOf(LinkedHashMap(edits))
+    }
+
+    /** The user (or the theme) chose the wallpaper's colours (`sys.color.source` = "wallpaper"). */
+    fun fromWallpaper(chain: List<Theme>, edits: Map<String, Entry>): Boolean =
+        (try { Resolver(of(chain, edits, false)).resolve("sys.color.source") } catch (_: Throwable) { null } as? Value.Choice)?.option == "wallpaper"
 }
 
 /** Checks a theme against the theme the code is written for. Pure (no Android): unit-tested. */

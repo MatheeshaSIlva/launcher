@@ -173,7 +173,7 @@ class DesignActivity : Activity() {
         (texts.getChildAt(0) as TextView).text = key
         (texts.getChildAt(1) as TextView).text = summary(key)
         val v = try { Design.resolved(key) } catch (_: Throwable) { null }
-        swatch.background = if (v is Value.Color) GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, intArrayOf(v.light, v.dark)).apply {
+        swatch.background = if (v is Value.Color) GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, Design.pair(v).let { intArrayOf(it.first, it.second) }).apply {
             cornerRadius = px(6).toFloat(); setStroke(px(1), 0x40FFFFFF)
         } else null
         val src = if (Design.userEntry(key) != null) Provenance.User else Design.entry(key)?.src
@@ -195,7 +195,12 @@ class DesignActivity : Activity() {
     }
 
     private fun describe(v: Value): String = when (v) {
-        is Value.Color -> if (v.light == v.dark) Theme.hex(v.light) else "${Theme.hex(v.light)} / ${Theme.hex(v.dark)}"
+        is Value.Color -> {
+            val (l, d) = Design.pair(v)
+            val hexes = if (l == d) Theme.hex(l) else "${Theme.hex(l)} / ${Theme.hex(d)}"
+            // A palette colour (Material You) shows what it names and what it is now.
+            if (v.dynamic) "${listOfNotNull(v.lightSpec, v.darkSpec).distinct().joinToString(" / ")}  ($hexes)" else hexes
+        }
         is Value.Number -> "${fmt(v.v)} ${v.unit.name.lowercase()}"
         is Value.SpringV -> "spring ${fmt(v.spring.response)} s, damping ${fmt(v.spring.damping)}"
         is Value.Choice -> v.option
@@ -234,8 +239,9 @@ class DesignActivity : Activity() {
     /** The editor for a value of [v]'s kind, added to [box]; returns how to read the edited value. */
     private fun editorFor(box: LinearLayout, v: Value): () -> Value = when (v) {
         is Value.Color -> {
-            val light = colorEditor(box, "Light", v.light)
-            val dark = colorEditor(box, "Dark", v.dark);
+            val (l0, d0) = Design.pair(v)
+            val light = colorEditor(box, "Light", l0)
+            val dark = colorEditor(box, "Dark", d0);
             { Value.Color(light(), dark()) }
         }
         is Value.Number -> {

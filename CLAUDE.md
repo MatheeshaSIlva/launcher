@@ -60,7 +60,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `Scale` turns points into pixels. Themes: `assets/themes/<id>.json` (or `files/themes/<id>.json`, pushed with run-as;
   wins over the app's), `"extends"` another and hold only what differs; checked at load against iOS 27 (refused if a token
   the code reads is missing or of another kind); switch/reload: `am broadcast -a dev.launcher.app.DESIGN_RELOAD -p
-  dev.launcher.app [--es theme ID]`, or the token editor's Theme button. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
+  dev.launcher.app [--es theme ID]`, or the token editor's Theme button. Colours may name the phone's palette (`@primary`,
+  `@system_accent2_900/40`: Material You, looked up when drawn); every theme may have a `materialYou` section used when the
+  user picks the wallpaper's colours (`sys.color.source`; adb: `DESIGN_RELOAD --es colors wallpaper|theme`). Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). The token editor is `design/DesignActivity` ("Launcher design").
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.

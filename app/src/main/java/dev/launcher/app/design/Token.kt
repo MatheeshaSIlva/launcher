@@ -98,10 +98,15 @@ data class Fill(val color: ColorValue, val opacity: Float, val opacityDark: Floa
 /** A drop or inner shadow, in points: offset, blur radius, spread; its colour and blend. */
 data class Shadow(val color: ColorValue, val dx: Float, val dy: Float, val blur: Float, val spread: Float, val blend: Blend)
 
-/** A colour as a material refers to it: a literal (light and dark) or another colour token. */
+/**
+ * A colour as a material refers to it: a literal (light and dark), another colour token, or the system's palette
+ * ([Dynamic]: Material You colours from the wallpaper, looked up when drawn).
+ */
 sealed class ColorValue {
     data class Literal(val light: Int, val dark: Int) : ColorValue()
     data class Ref(val key: String) : ColorValue()
+    /** Light and dark as palette references (`@primary`, `@system_accent1_200/40`) or literals (`#rrggbb`). */
+    data class Dynamic(val light: String, val dark: String) : ColorValue()
 }
 
 /** The lens of Liquid Glass, as Apple's kit gives it (Figma's glass effect): see [Material]. */

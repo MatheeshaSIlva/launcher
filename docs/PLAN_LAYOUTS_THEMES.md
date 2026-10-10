@@ -134,7 +134,21 @@ Each phase ends with a check on the S24 and Matheesha's OK.
    swipe-up` (or `--es layout ID`, `--es option KEY=VALUE`); applied when home next comes to the front (live switching
    is B4). Checked on the emulator: migration, refusals, the drawer moved and labels toggled through the setup.
 2. Theme engine v2: variables, the paint model, component styles; the current iOS 27 tokens migrated into it with the
-   same look (checked surface by surface against today's screenshots).
+   same look (checked surface by surface against today's screenshots). In four steps:
+   - **B2a, colour sources** (done 2026-10-10): a colour may name the phone's palette (Material You): `@primary`,
+     `@surface_container_high`, `@system_accent2_900`, with an alpha (`@primary/40`); kept as written (a user's edit
+     keeps following the wallpaper) and looked up when drawn, again whenever the palette changes (a configuration change
+     or a new wallpaper). Every theme may carry a `materialYou` section: the tokens that change when the user turns the
+     wallpaper's colours on (`sys.color.source` = "wallpaper", kept with their edits of that theme). iOS 27's: every
+     accent becomes the palette's primary, red its error colour (judged). A theme that can no longer be loaded falls back
+     to iOS 27 and the fallback is remembered. Over adb: `DESIGN_RELOAD --es colors wallpaper|theme`, `--ez palette
+     true` (logs the palette). Known: Control Center draws its symbols on an accent in the same white as on glass, low
+     contrast on a pale primary; B2b gives controls their own "on" colours.
+   - **B2b, the component catalogue**: shared component styles every layout reads (panel, card, notification card,
+     control tile, toggle, slider, button, segmented control, chip, list row, menu, search field, badge, scrim, label);
+     today's per-layout tokens (`comp.nc.*`, `comp.cc.*`, `comp.home.*`...) become aliases of them, values unchanged.
+   - **B2c, paint v2**: gradient fills, strokes, per-corner radii and corner smoothing in the renderer.
+   - **B2d, fonts**: any family per text style (bundled, the device's, Google Fonts downloaded on the phone).
 3. Animation engine v2: roles, springs and beziers, presets; today's iOS motion as the first preset.
 4. Clean layout switching (teardown, rebuild, re-publish, transition), tested by switching every element back and forth.
 

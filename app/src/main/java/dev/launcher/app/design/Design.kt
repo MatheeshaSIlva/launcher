@@ -25,6 +25,11 @@ object Design {
     private const val ACTIVE = "design/theme.txt"
     /** How deep themes may be built on each other. */
     private const val MAX_EXTENDS = 6
+    /**
+     * Where the theme's colours come from: "theme" (its own) or "wallpaper" (Material You: the theme's `materialYou`
+     * section over it, its accents as the system palette's roles). A user's choice, kept with their edits of the theme.
+     */
+    val COLOR_SOURCE = ChoiceKey("sys.color.source")
 
     private lateinit var appCtx: Context
     /** The active theme and the ones it is built on, the base first. */
@@ -50,7 +55,13 @@ object Design {
         if (chain.isNotEmpty()) return
         appCtx = ctx.applicationContext
         activeId = try { File(appCtx.filesDir, ACTIVE).takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null } } catch (_: Throwable) { null } ?: DEFAULT_THEME
-        if (!load(activeId)) { activeId = DEFAULT_THEME; load(DEFAULT_THEME) }
+        if (!load(activeId)) {
+            // The remembered theme is gone (a removed file, an older build's): the default from now on, remembered too.
+            activeId = DEFAULT_THEME
+            load(DEFAULT_THEME)
+            try { File(appCtx.filesDir, ACTIVE).apply { parentFile?.mkdirs() }.writeText(DEFAULT_THEME) } catch (_: Throwable) { }
+        }
+        paletteAt = paletteStamp()
         AppLog.log("[design] theme '$themeName' (${chain.joinToString(" < ") { it.name }}) ${resolver.keys().size} tokens, ${user.size} edited")
         // Over adb, for fast iteration: the theme files and the edits are read again (a theme pushed to files/themes/ shows at
         // once), or another theme is chosen; everything drawn with tokens redraws.
@@ -58,6 +69,10 @@ object Design {
         // Senders must hold DUMP (adb's shell does; other apps cannot).
         val r = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: android.content.Intent) {
+                // --ez palette true: logs the system's colours (Material roles and tonal palettes), for theme work.
+                if (i.getBooleanExtra("palette", false)) { logPalette(); return }
+                // --es colors wallpaper|theme: the theme's colours from the wallpaper (Material You) or its own.
+                i.getStringExtra("colors")?.let { setColorSource(it); return }
                 val id = i.getStringExtra("theme")
                 if (id != null) setTheme(id) else reload()
             }
@@ -119,9 +134,12 @@ object Design {
             val f = File(appCtx.filesDir, userFile(id))
             if (f.exists()) Theme.parse(f.readText()).entries else emptyMap()
         } catch (t: Throwable) { AppLog.log("[design] edits of '$id' unreadable (${t.message}): ignored"); emptyMap() }
-        val layers = c.map { it.entries } + listOf(LinkedHashMap(edits))
-        val problem = if (id == DEFAULT_THEME && c.size == 1) checkResolves(layers) else checkAgainstDefault(layers)
-        if (problem != null) { AppLog.log("[design] theme '$id' cannot be used: $problem"); return false }
+        // Checked with and without its Material You section (either may be shown).
+        for (my in listOf(false, true)) {
+            val layers = layersOf(c, edits, my)
+            val problem = if (id == DEFAULT_THEME && c.size == 1) checkResolves(layers) else checkAgainstDefault(layers)
+            if (problem != null) { AppLog.log("[design] theme '$id' cannot be used" + (if (my) " in wallpaper colours" else "") + ": $problem"); return false }
+        }
         chain = c
         user.clear()
         user.putAll(edits)
@@ -168,8 +186,65 @@ object Design {
 
     private fun userFile(id: String) = if (id == DEFAULT_THEME) "design/user.json" else "design/user-$id.json"
 
+    private fun layersOf(c: List<Theme>, edits: Map<String, Entry>, materialYou: Boolean) = ThemeLayers.of(c, edits, materialYou)
+
     private fun rebuild() {
-        state = State(Resolver(chain.map { it.entries } + listOf(LinkedHashMap(user))))
+        state = State(Resolver(layersOf(chain, user, ThemeLayers.fromWallpaper(chain, user))) { name -> paletteColor(name) })
+    }
+
+    /** The theme's colours come from the wallpaper (Material You) instead of its own. */
+    val wallpaperColors: Boolean get() = (try { value(COLOR_SOURCE.name) } catch (_: Throwable) { null } as? Value.Choice)?.option == "wallpaper"
+
+    /** Turns the wallpaper's colours on ("wallpaper") or off ("theme") for the active theme (kept with its edits). */
+    fun setColorSource(source: String) {
+        if (source != "wallpaper" && source != "theme") { AppLog.log("[design] colours from '$source'? (wallpaper or theme)"); return }
+        set(COLOR_SOURCE.name, Value.Choice(source))
+        AppLog.log("[design] colours from the " + if (source == "wallpaper") "wallpaper (Material You)" else "theme")
+    }
+
+    // ------------------------------------------------------------------ the system's palette (Material You)
+
+    private val colorIds = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val palette = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private const val NO_COLOR = 0x00FFFFFE   // cached "no such colour" (never a real palette colour: transparent)
+    private var paletteAt = 0L
+
+    /** The palette colour [name] (an `android.R.color` field, `system_primary_dark`), cached until the palette changes. */
+    private fun paletteColor(name: String): Int? = palette.getOrPut(name) { systemColor(name) ?: NO_COLOR }.takeIf { it != NO_COLOR }
+
+    private fun systemColor(name: String): Int? {
+        if (android.os.Build.VERSION.SDK_INT < 31) return null
+        val id = colorIds.getOrPut(name) { try { android.R.color::class.java.getField(name).getInt(null) } catch (_: Throwable) { 0 } }
+        if (id == 0) return null
+        return try { appCtx.resources.getColor(id, null) } catch (_: Throwable) { null }
+    }
+
+    /** A fingerprint of the palette's key colours (equal: nothing to look up again). */
+    private fun paletteStamp(): Long {
+        var h = 17L
+        for (n in listOf("system_accent1_500", "system_accent2_500", "system_accent3_500", "system_neutral1_500", "system_neutral2_500"))
+            h = h * 31 + (systemColor(n) ?: 0)
+        return h
+    }
+
+    /**
+     * The configuration changed (the app's ComponentCallbacks): the palette may have changed with the wallpaper. Palette
+     * colours are looked up again and every surface draws again, on the same frame (a light/dark change crossfades on its own).
+     */
+    fun onConfiguration() {
+        if (chain.isEmpty()) return
+        val stamp = paletteStamp()
+        if (stamp == paletteAt) return
+        paletteAt = stamp
+        palette.clear()
+        rebuild()
+        changedOutside("the wallpaper's colours changed")
+    }
+
+    private fun logPalette() {
+        val names = android.R.color::class.java.fields.map { it.name }.filter { it.startsWith("system_") }.sorted()
+        val out = names.mapNotNull { n -> systemColor(n)?.let { "$n=#" + String.format("%08x", it).substring(2) } }
+        out.chunked(12).forEach { AppLog.log("[design] palette " + it.joinToString(" ")) }
     }
 
     fun addListener(l: () -> Unit) { listeners += l }
@@ -179,11 +254,15 @@ object Design {
 
     private fun value(key: String): Value = state.let { st -> st.cache.getOrPut(key) { st.resolver.resolve(key) } }
 
-    /** [k]'s colour at the current appearance (ARGB). */
+    /** [k]'s colour at the current appearance (ARGB); palette colours looked up (cached). */
     fun color(k: ColorKey): Int {
         val v = value(k.name) as? Value.Color ?: throw IllegalStateException("token $k is not a colour")
-        return Appearance.mix(v.light, v.dark)
+        if (!v.dynamic) return Appearance.mix(v.light, v.dark)
+        return resolver.pair(v).let { (l, d) -> Appearance.mix(l, d) }
     }
+
+    /** A colour value's light and dark ARGB, its palette references looked up (the token editor shows them). */
+    fun pair(v: Value.Color): Pair<Int, Int> = resolver.pair(v)
 
     /** A material's colour (a literal or a token) at the current appearance. */
     fun color(c: ColorValue): Int = resolver.colorPair(c).let { (l, d) -> Appearance.mix(l, d) }
