@@ -483,8 +483,8 @@
     0.55,
     1
    ],
-   "ms": 630,
-   "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.62) as a bezier (back-out, 630 ms)"
+   "ms": 900,
+   "src": "judged:test preset: iOS 27's spring (0.6 s, damping 0.6) as a bezier (back-out, 900 ms)"
   },
   "motion.index.bubble-in": {
    "bezier": [

@@ -558,20 +558,20 @@
   },
   "motion.home.rebuild": {
    "bezier": [
-    0.4,
+    0.35,
     0,
-    0.2,
+    0.25,
     1
    ],
-   "ms": 800,
-   "src": "judged:the new look's front spreading over home from where the change came from (B4; Matheesha: a crossfade was dismissive, the reveal wave chosen)"
+   "ms": 1800,
+   "src": "measured:tuned on the S24 with Matheesha (B4: a crossfade was dismissive, the reveal wave chosen; 0.8 s and 1.2 s felt fast and linear, 1.8 s on a gentle curve good)"
   },
   "motion.home.rebuild-settle": {
    "spring": [
-    0.42,
-    0.62
+    0.6,
+    0.6
    ],
-   "src": "judged:each item springing into place as the new look's front passes it (a visible bounce)"
+   "src": "measured:tuned on the S24 with Matheesha (each item springing into place as the new look's front passes it)"
   },
   "motion.home.wallpaper-zoom": {
    "factor": 1.04,

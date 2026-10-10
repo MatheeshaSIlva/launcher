@@ -417,14 +417,16 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     /**
      * The new home's items (the page shown, the dock's icons, the Search pill) start a little small and spring into place
-     * when the front reaches their centre (known after the next layout).
+     * when the front reaches their centre (known after the next layout). Until then they are not drawn at all (alpha 0: the
+     * renderer skips them): under the old look they would cost the GPU every frame for nothing (iOS 27's glass widgets
+     * took the reveal to 12 ms frames on the S24).
      */
     private fun settleAsRevealed(reveal: ThemeReveal, timing: dev.launcher.app.motion.CurveTiming) {
         val items = ArrayList<View>()
         pages.getOrNull(pos.roundToInt())?.let { p -> for (c in 0 until p.childCount) items += p.getChildAt(c) }
         dock?.icons()?.let { items += it }
         indicator?.let { items += it }
-        for (item in items) { item.scaleX = SETTLE_FROM; item.scaleY = SETTLE_FROM }
+        for (item in items) { item.scaleX = SETTLE_FROM; item.scaleY = SETTLE_FROM; item.alpha = 0f }
         viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 viewTreeObserver.removeOnPreDrawListener(this)
@@ -438,7 +440,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                     val cy = at[1] - me[1] + item.height * item.scaleY / 2f
                     val delay = timing.timeOf(reveal.progressAt(kotlin.math.hypot(cx - reveal.originX, cy - reveal.originY)))
                     val k = dev.launcher.app.motion.MotionValue(SETTLE_FROM, 1000f, { s -> item.scaleX = s; item.scaleY = s })
-                    item.postDelayed({ k.animateTo(1f, settle) }, delay)
+                    item.postDelayed({ item.alpha = 1f; k.animateTo(1f, settle) }, delay)
                 }
                 return true
             }
@@ -1618,8 +1620,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             Thread {
                 val list = try { w.apps() } catch (_: Throwable) { emptyList() }
                 post {
-                    if (picker === pk && isIdle && hasWindowFocus() && !HomeBridge.homeCovered) pk.warmUp(list)
-                    else if (++warmTries < 10) postDelayed(this, 2000L)
+                    if (picker === pk && isIdle && hasWindowFocus() && !HomeBridge.homeCovered) {
+                        pk.warmUp(list)
+                        // The new look's reveal too (its first showing compiled its shader inside a frame: 117 ms on the S24).
+                        if (Build.VERSION.SDK_INT >= 33) ThemeReveal.warmUp(resources.displayMetrics.density * REVEAL_CELL_DP)
+                    } else if (++warmTries < 10) postDelayed(this, 2000L)
                 }
             }.start()
         }

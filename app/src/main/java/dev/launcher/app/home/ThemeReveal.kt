@@ -44,8 +44,26 @@ class ThemeReveal(old: Bitmap, private val w: Float, private val h: Float, val o
         c.drawRect(0f, 0f, w, h, paint)
     }
 
-    private companion object {
-        val AGSL = """
+    companion object {
+        private var warmed = false
+
+        /** Compiles the reveal's pipeline off screen, once per process (while home is idle). */
+        fun warmUp(cellPx: Float) {
+            if (warmed) return
+            warmed = true
+            val soft = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888)
+            // A GPU bitmap, as the real one: the pipeline differs by the kind of image it samples.
+            val b = try { soft.copy(Bitmap.Config.HARDWARE, false) } catch (_: Throwable) { null } ?: soft
+            val r = ThemeReveal(b, 64f, 64f, 32f, 64f, cellPx)
+            val node = android.graphics.RenderNode("reveal-warm-up").apply {
+                setPosition(0, 0, 64, 64)
+                val c = beginRecording()
+                try { r.draw(c, 0.5f, 0.3f) } finally { endRecording() }
+            }
+            dev.launcher.app.design.GpuWarmUp.render(node, 64, 64, "the new look's reveal")
+        }
+
+        private val AGSL = """
 uniform shader oldImg;
 uniform float progress;
 uniform float time;

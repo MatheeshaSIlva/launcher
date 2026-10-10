@@ -244,7 +244,11 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      pass over the old look): the old look bends outward and lifts as the edge reaches it, a bright rim with a soft shadow
      behind it sweeps across, the wallpaper reveal's twinkle plays in the band; each item of the new home (the page's icons
      and widgets, the dock's icons, the Search pill) starts at 90% and springs into place as the front reaches its centre
-     (`motion.home.rebuild` 0.8 s, `motion.home.rebuild-settle`). The old look is taken the moment the design changes,
+     (`motion.home.rebuild`, `motion.home.rebuild-settle`). Tuned on the S24 with Matheesha: 0.8 s and 1.2 s felt "fast and
+     linear", 1.8 s on a gentle curve (0.35, 0, 0.25, 1) with a slower landing (spring 0.6 / 0.6) "good". Cost: into iOS 27
+     the GPU reached 12 ms a frame (its glass drawn under the old look for nothing), so items ahead of the front are not
+     drawn until it reaches them (alpha 0); the reveal's shader is compiled off screen while home is idle (its first showing
+     compiled it inside a frame: 117 ms). The old look is taken the moment the design changes,
      rendered at once from the last frame's display lists on the GPU (a screen copy arrived ~8 frames late, and the dock's
      glass had already redrawn in the new theme: old, half new, old again, then the reveal). The rebuild runs next on the
      main thread (1-3 ms after the old look is held). Once on the emulator (iOS 27 to Graphite after a fresh install) a black
