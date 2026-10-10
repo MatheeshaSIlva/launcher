@@ -474,6 +474,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     override fun animateDepth(from: Float, to: Float, velocity: Float, curve: dev.launcher.app.design.Curve, startNanos: Long) =
         screen.animateDepth(from, to, velocity, curve, startNanos)
 
+    override fun pictureNow(): android.graphics.Bitmap? = screen.pictureNow()
+
     override fun recordAsShown(): HomePicture? {
         if (screen.width == 0) return null
         // Nothing drawn since the last picture: it is exactly what shows (a new one would make gesture nav render its layers

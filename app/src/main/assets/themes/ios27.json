@@ -1591,6 +1591,10 @@
    "ref": "ref.color.grays.gray",
    "src": "judged:the iOS colour of this control (gray)"
   },
+  "comp.cc.accent.launcher-settings": {
+   "ref": "ref.color.accents.indigo",
+   "src": "judged:the iOS colour of this control (indigo)"
+  },
   "comp.cc.accent.live-captions": {
    "ref": "ref.color.accents.blue",
    "src": "judged:the iOS colour of this control (blue)"
@@ -2610,6 +2614,10 @@
    },
    "src": "judged:the platter title's type"
   },
+  "component.card.corner": {
+   "pt": 26,
+   "src": "judged:iOS 26/27 grouped lists (inset sections)"
+  },
   "component.card.material": {
    "ref": "sys.material.glass.dock",
    "src": "judged:the kit's widgets show the app's own background; ours sit on home's glass, the dock's"
@@ -2709,6 +2717,38 @@
   "component.field.material": {
    "ref": "sys.material.glass.small-active",
    "src": "kit:5720:33170 (the 48 pt search field: the small glass, active)"
+  },
+  "component.list-row.check-color": {
+   "ref": "sys.color.accent",
+   "src": "judged:a chosen row's check in the accent (iOS)"
+  },
+  "component.list-row.detail": {
+   "ref": "sys.type.subheadline",
+   "src": "judged:a row's value or description below or beside it"
+  },
+  "component.list-row.detail-color": {
+   "ref": "sys.color.label.secondary",
+   "src": "judged:the theme's secondary label"
+  },
+  "component.list-row.height": {
+   "pt": 52,
+   "src": "judged:iOS 26/27 list rows (one line of body text)"
+  },
+  "component.list-row.label-color": {
+   "ref": "sys.color.label.primary",
+   "src": "judged:the theme's primary label"
+  },
+  "component.list-row.padding": {
+   "pt": 16,
+   "src": "kit:VariableID:10442:65 (Dimensions/Margin, iPhone)"
+  },
+  "component.list-row.separator-color": {
+   "ref": "sys.color.separator",
+   "src": "judged:rows are parted by the theme's separator"
+  },
+  "component.list-row.title": {
+   "ref": "sys.type.body",
+   "src": "judged:a row's name in body text (iOS)"
   },
   "component.menu.corner": {
    "pt": 30,
@@ -2839,6 +2879,10 @@
    },
    "src": "kit:0:11292"
   },
+  "component.page.margin": {
+   "pt": 16,
+   "src": "kit:VariableID:10442:65 (Dimensions/Margin, iPhone)"
+  },
   "component.panel.material": {
    "ref": "ref.material.overlay.control-center",
    "src": "kit:2524:24518"
@@ -2889,6 +2933,14 @@
    "color": "#d9d9d9e6",
    "src": "kit:5592:28123 (#d9d9d9 linear dodge at 90 %)"
   },
+  "component.section.title": {
+   "ref": "sys.type.footnote",
+   "src": "judged:a group's heading above it (iOS grouped lists)"
+  },
+  "component.section.title-color": {
+   "ref": "sys.color.label.secondary",
+   "src": "judged:the theme's secondary label"
+  },
   "component.sheet.fallback-color": {
    "light": "#f2f2f7f2",
    "dark": "#202024e6",
@@ -2914,6 +2966,26 @@
   "component.slider.expanded-corner": {
    "pt": 46,
    "src": "judged:the expanded slider (as it was in code)"
+  },
+  "component.toggle.height": {
+   "pt": 28,
+   "src": "judged:iOS 26/27 switch (64 x 28)"
+  },
+  "component.toggle.knob-color": {
+   "color": "#ffffff",
+   "src": "judged:a white knob (iOS)"
+  },
+  "component.toggle.off-color": {
+   "ref": "sys.color.fill.primary",
+   "src": "judged:the theme's primary fill when off (iOS)"
+  },
+  "component.toggle.on-color": {
+   "ref": "ref.color.accents.green",
+   "src": "judged:iOS's switches are green when on (the wallpaper's primary in its colours)"
+  },
+  "component.toggle.width": {
+   "pt": 64,
+   "src": "judged:iOS 26/27 switch (64 x 28)"
   },
   "component.wallpaper-label.dark": {
    "color": "#1c1c1e",

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A painter's palette (the launcher's own settings), drawn here: a rounded palette with a thumb notch and four paint dots. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M12,2.5C6.75,2.5 2.5,6.75 2.5,12C2.5,17.25 6.75,21.5 12,21.5C13.24,21.5 14.1,20.5 14.1,19.38C14.1,18.85 13.9,18.37 13.55,18C13.22,17.64 13.03,17.18 13.03,16.66C13.03,15.55 13.93,14.65 15.04,14.65H17.2C19.6,14.65 21.5,12.7 21.5,10.3C21.5,5.96 17.25,2.5 12,2.5ZM6.6,13.1A1.6,1.6 0,1 1,6.6 9.9A1.6,1.6 0,1 1,6.6 13.1ZM9.4,8.9A1.6,1.6 0,1 1,9.4 5.7A1.6,1.6 0,1 1,9.4 8.9ZM14.6,8.9A1.6,1.6 0,1 1,14.6 5.7A1.6,1.6 0,1 1,14.6 8.9ZM17.4,13.1A1.6,1.6 0,1 1,17.4 9.9A1.6,1.6 0,1 1,17.4 13.1Z" />
+</vector>

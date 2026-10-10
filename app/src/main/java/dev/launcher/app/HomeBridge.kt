@@ -36,6 +36,8 @@ object HomeBridge {
          * with a [label], a late draw (or none) is logged.
          */
         fun afterNextDraw(then: () -> Unit, timeoutMs: Long = 150, label: String? = null)
+        /** Home as it shows, exactly (a GPU bitmap), or null. Main thread. */
+        fun pictureNow(): android.graphics.Bitmap?
     }
 
     @Volatile var home: Home? = null

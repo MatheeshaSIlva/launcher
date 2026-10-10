@@ -100,6 +100,20 @@
             </intent-filter>
         </activity>
 
+        <!-- The settings app (docs/PLAN_SETTINGS.md): own task and own app-drawer entry. -->
+        <activity
+            android:name=".settings.SettingsActivity"
+            android:exported="true"
+            android:label="Launcher settings"
+            android:launchMode="singleTask"
+            android:taskAffinity="dev.launcher.app.settings"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
         <!-- Notification counts for the icon badges (access granted through Shizuku, or in Settings). -->
         <service
             android:name=".BadgeListener"

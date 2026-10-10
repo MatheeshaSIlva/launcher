@@ -120,8 +120,37 @@ object Components {
         p("wallpaper-label", "shadow", "Shadow", "The soft shadow under light names."),
     ))
 
-    val CARD = ComponentSpec("card", "Card", "Widgets, App Library tiles and search results.", listOf(
+    val CARD = ComponentSpec("card", "Card", "Widgets, App Library tiles, search results and settings groups.", listOf(
         p("card", "material", "Surface", "What a card is made of."),
+        p("card", "corner", "Corner radius", "How round a card's corners are."),
+    ))
+
+    val LIST_ROW = ComponentSpec("list-row", "List row", "One line of a list: a setting, a choice.", listOf(
+        p("list-row", "height", "Height", "A row's height (it grows for a second line)."),
+        p("list-row", "padding", "Padding", "Space between a row's edge and its content."),
+        p("list-row", "separator-color", "Separator", "The line between two rows."),
+        p("list-row", "title", "Name text", "A row's name."),
+        p("list-row", "detail", "Detail text", "A row's value or description."),
+        p("list-row", "label-color", "Name colour", "The colour of a row's name."),
+        p("list-row", "detail-color", "Detail colour", "The colour of its value or description."),
+        p("list-row", "check-color", "Check colour", "The mark beside the chosen row."),
+    ))
+
+    val TOGGLE = ComponentSpec("toggle", "Toggle", "A switch that turns something on or off.", listOf(
+        p("toggle", "width", "Width", "The switch's width."),
+        p("toggle", "height", "Height", "The switch's height."),
+        p("toggle", "on-color", "Colour when on", "The track when it is on."),
+        p("toggle", "off-color", "Colour when off", "The track when it is off."),
+        p("toggle", "knob-color", "Knob colour", "The round knob that slides."),
+    ))
+
+    val SECTION = ComponentSpec("section", "Section heading", "The title above a group of rows.", listOf(
+        p("section", "title", "Text", "The heading's text."),
+        p("section", "title-color", "Colour", "The heading's colour."),
+    ))
+
+    val PAGE = ComponentSpec("page", "Page", "A full screen of settings.", listOf(
+        p("page", "margin", "Margin", "Space between the screen's edges and its content."),
     ))
 
     val DOCK = ComponentSpec("dock", "Dock", "The row of apps at the bottom of home.", listOf(
@@ -139,7 +168,8 @@ object Components {
         p("panel", "samsung-strength", "Samsung blur strength", "The strength of One UI's own blur behind the panel."),
     ))
 
-    val ALL = listOf(NOTIFICATION, CONTROL, SLIDER, ROUND_BUTTON, BUTTON, MENU, BADGE, REMOVE_BADGE, FIELD, WALLPAPER_LABEL, CARD, DOCK, SHEET, PANEL)
+    val ALL = listOf(NOTIFICATION, CONTROL, SLIDER, ROUND_BUTTON, BUTTON, MENU, BADGE, REMOVE_BADGE, FIELD, WALLPAPER_LABEL, CARD,
+        LIST_ROW, TOGGLE, SECTION, PAGE, DOCK, SHEET, PANEL)
 
     fun find(key: String): Pair<ComponentSpec, ComponentProp>? {
         for (c in ALL) for (p in c.props) if (p.key == key) return c to p

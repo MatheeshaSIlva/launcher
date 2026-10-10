@@ -1,6 +1,6 @@
 # The settings app: the plan (phase C)
 
-Status: **draft for Matheesha's review** (2026-10-10). Phase C of `docs/PLAN_LAYOUTS_THEMES.md`; builds on phase B (layouts,
+Status: **agreed 2026-10-10** (answers below, under "Decided"). Phase C of `docs/PLAN_LAYOUTS_THEMES.md`; builds on phase B (layouts,
 themes, animations and switching between them).
 
 ## What it must be (Matheesha's words, and the requirements)
@@ -77,13 +77,26 @@ Settings
 | C6 | First-run walkthrough and guides with motion graphics |
 | C7 | Undo and history, auto-revert for risky changes; the token editor moves under Expert |
 
+**C1 done (2026-10-10):** Compose added (the app's first AndroidX libraries: the debug APK went from 8 to 21 MB); the
+bridge (`settings/Ui.kt`: `SettingsTheme` gives Compose the theme as a `Look` made again on every design, appearance or
+setup change; text styles with the theme's fonts, colours, glass drawn by the launcher's renderer over the blurred
+wallpaper, motion roles as Compose springs and easings); `SettingsActivity` (own task, "Launcher settings" in the drawer)
+with its pages (`settings/Pages.kt`): the start page with "Your setup" (an exact picture of home, `HomePicture`-free: home's
+display lists drawn on the GPU, `design/ViewPicture`) and the sections; Layouts made from the layout registry (each
+element's layouts, where it lives, its options as toggles); Look (the themes, the wallpaper's colours); Motion (the
+presets); Phone (Shizuku's status, safe settings, the developer panel with the updater); Expert (the token editor). A theme
+chosen here applies at once: the settings app holds its old look and reveals the new one from the row tapped (home is built
+again behind it). New shared components: card corner, list row, toggle, section heading, page margin (`component.*`). Entry
+points: the drawer, home's edit menu ("Home Settings"), a Control Center control ("Launcher Settings", Utilities). Search and
+the basic/advanced split move to C3, where there are enough properties to search. Known: content scrolls under the status
+bar without a fade.
+
 The walkthrough comes late on purpose: what it walks through (layouts, themes) is still growing in phases D and E.
 
-## Open questions
+## Decided (2026-10-10)
 
-1. Where the settings open from (an icon in the drawer, home's long press on empty space, a Control Center control).
-2. Applying: at once with undo (proposed), or preview first and an Apply button.
-3. The settings app's own layout: cards with live miniatures at the top, grouped lists below (proposed), or one style
-   throughout (iOS Settings-like lists).
-4. Google Fonts search needs the list of families (about 1,700 names; no API key): a list bundled with the app from the
-   public google/fonts repository (Apache-2.0 / OFL metadata), refreshed with updates.
+1. The settings open from an icon in the drawer ("Launcher settings"), from home's long press on empty space (the edit
+   menu's "Home Settings"), and from a Control Center control.
+2. Changes apply at once, with undo (a session history; risky changes undo themselves after 10 s unless confirmed).
+3. Cards with live miniatures at the top, grouped lists below; the theme reskins both.
+4. The Google Fonts family list is bundled with the app, fetched once from the public google/fonts repository.

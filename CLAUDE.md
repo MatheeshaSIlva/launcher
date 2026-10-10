@@ -51,6 +51,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`Setup`, `files/setup.json`; never in a theme). `HomeConfig` reads the drawer and home options from it. Over adb:
   `am broadcast -a dev.launcher.app.SETUP -p dev.launcher.app --es element ID [--es layout ID] [--es placement ID]
   [--es option KEY=VALUE]`.
+- **Settings app** (`settings/`, plan `docs/PLAN_SETTINGS.md`): Jetpack Compose (`SettingsActivity`, own task), drawn with the
+  theme's tokens through `SettingsTheme`/`Look` (no Material components; glass by our renderer over the blurred wallpaper;
+  motion roles as Compose specs). Changes apply at once; a look change is revealed from the tap (`ThemeReveal`). Opened from
+  the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control.
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").

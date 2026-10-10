@@ -645,6 +645,7 @@ CONTROL_ACCENTS = {
     'vpn': 'blue', 'data-saver': 'green', 'video': 'gray', 'selfie': 'gray', 'voice-memo': 'red', 'recognize-music': 'blue',
     'translate': 'blue', 'magnifier': 'gray', 'wallet': 'gray', 'home': 'orange', 'text-size': 'gray', 'invert': 'gray',
     'grayscale': 'gray', 'extra-dim': 'yellow', 'live-captions': 'blue', 'accessibility': 'blue', 'app-tile': 'blue',
+    'launcher-settings': 'indigo',
 }
 for _c, _a in CONTROL_ACCENTS.items():
     if _a is None:
@@ -742,6 +743,24 @@ COMPONENT_ALIASES = {
 # New properties of the catalogue (no iOS token before).
 COMPONENT_SEEDS = {
     'component.control.accent-symbol-color': {'color': '#ffffff', 'src': "kit:2570:20609 (a symbol on an accent well: white)"},
+    # The settings app's components (C1, docs/PLAN_SETTINGS.md); the kit exports no list or switch nodes: iOS 26/27's.
+    'component.card.corner': {'pt': 26, 'src': "judged:iOS 26/27 grouped lists (inset sections)"},
+    'component.page.margin': {'pt': 16, 'src': "kit:VariableID:10442:65 (Dimensions/Margin, iPhone)"},
+    'component.list-row.height': {'pt': 52, 'src': "judged:iOS 26/27 list rows (one line of body text)"},
+    'component.list-row.padding': {'pt': 16, 'src': "kit:VariableID:10442:65 (Dimensions/Margin, iPhone)"},
+    'component.list-row.separator-color': {'ref': 'sys.color.separator', 'src': "judged:rows are parted by the theme's separator"},
+    'component.list-row.title': {'ref': 'sys.type.body', 'src': "judged:a row's name in body text (iOS)"},
+    'component.list-row.detail': {'ref': 'sys.type.subheadline', 'src': "judged:a row's value or description below or beside it"},
+    'component.list-row.label-color': {'ref': 'sys.color.label.primary', 'src': "judged:the theme's primary label"},
+    'component.list-row.detail-color': {'ref': 'sys.color.label.secondary', 'src': "judged:the theme's secondary label"},
+    'component.list-row.check-color': {'ref': 'sys.color.accent', 'src': "judged:a chosen row's check in the accent (iOS)"},
+    'component.toggle.width': {'pt': 64, 'src': "judged:iOS 26/27 switch (64 x 28)"},
+    'component.toggle.height': {'pt': 28, 'src': "judged:iOS 26/27 switch (64 x 28)"},
+    'component.toggle.on-color': {'ref': 'ref.color.accents.green', 'src': "judged:iOS's switches are green when on (the wallpaper's primary in its colours)"},
+    'component.toggle.off-color': {'ref': 'sys.color.fill.primary', 'src': "judged:the theme's primary fill when off (iOS)"},
+    'component.toggle.knob-color': {'color': '#ffffff', 'src': "judged:a white knob (iOS)"},
+    'component.section.title': {'ref': 'sys.type.footnote', 'src': "judged:a group's heading above it (iOS grouped lists)"},
+    'component.section.title-color': {'ref': 'sys.color.label.secondary', 'src': "judged:the theme's secondary label"},
 }
 
 

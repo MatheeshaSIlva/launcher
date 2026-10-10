@@ -253,39 +253,14 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         addView(v, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
+    /** Home as it shows now (or would, behind another screen), exactly (the settings app's "Your setup"). Main thread. */
+    fun pictureNow(): android.graphics.Bitmap? = renderNow()
+
     /**
      * Home as it shows now (the last frame's display lists, drawn again on the GPU: glass and blur exact), or null. A view
      * already marked to draw again is recorded anew in it, so this is taken before anything changes.
      */
-    private fun renderNow(): android.graphics.Bitmap? {
-        if (width == 0 || height == 0) return null
-        var reader: android.media.ImageReader? = null
-        var renderer: android.graphics.HardwareRenderer? = null
-        return try {
-            reader = android.media.ImageReader.newInstance(width, height, android.graphics.PixelFormat.RGBA_8888, 1,
-                android.hardware.HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or android.hardware.HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
-            renderer = android.graphics.HardwareRenderer()
-            renderer.setSurface(reader.surface)
-            val root = android.graphics.RenderNode("home-now")
-            root.setPosition(0, 0, width, height)
-            val c = root.beginRecording()
-            try { c.drawColor(android.graphics.Color.BLACK); draw(c) } finally { root.endRecording() }
-            renderer.setContentRoot(root)
-            renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
-            val image = reader.acquireNextImage()
-            val hb = image.hardwareBuffer
-            val b = hb?.let { android.graphics.Bitmap.wrapHardwareBuffer(it, android.graphics.ColorSpace.get(android.graphics.ColorSpace.Named.SRGB)) }
-            hb?.close()
-            image.close()
-            b
-        } catch (t: Throwable) {
-            AppLog.log("[home] no picture of home as it shows (${t.javaClass.simpleName}: ${t.message})")
-            null
-        } finally {
-            try { renderer?.destroy() } catch (_: Throwable) { }
-            try { reader?.close() } catch (_: Throwable) { }
-        }
-    }
+    private fun renderNow(): android.graphics.Bitmap? = dev.launcher.app.design.ViewPicture.render(this)
 
     /** The user's setup changed (the drawer's placement, home's options): applied at once, not when home next shows. */
     private val onSetup: () -> Unit = { setConfig(HomeConfig.load(context)) }
@@ -1881,6 +1856,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val modes = dev.launcher.app.theme.Appearance.Mode.entries
         items += dev.launcher.app.components.MenuPainter.Item("Appearance", choices = modes.map { it.title }, chosen = modes.indexOf(dev.launcher.app.theme.Appearance.mode),
             onChoice = { i -> dev.launcher.app.theme.Appearance.setMode(context, modes[i]) })
+        // The launcher's own settings (docs/PLAN_SETTINGS.md): editing ends, the settings open.
+        items += dev.launcher.app.components.MenuPainter.Item("Home Settings", glyph = dev.launcher.app.components.MenuPainter.Glyph.SLIDERS) {
+            editMode?.exit()
+            context.startActivity(android.content.Intent(context, dev.launcher.app.settings.SettingsActivity::class.java)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
         menu?.show((editBar as? EditMode.Bar)?.editButtonNode(), button, items)
     }
 
