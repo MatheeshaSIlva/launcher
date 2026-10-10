@@ -444,6 +444,14 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun layoutChanged() { screen.layoutForSaving()?.let { HomeModel.save(this, it) } }
 
+    override fun onRebuilt() {
+        drawnSinceRecord = true
+        val before = HomeBridge.preview
+        recordPreview()
+        // Gesture nav shows this picture behind the next close: the old look there would change at the handover.
+        AppLog.log("[home] built again behind: " + if (HomeBridge.preview !== before) "its picture recorded" else "its picture NOT recorded (home busy): recorded when it settles")
+    }
+
     fun onHomeSwipeUp() = screen.onHomeSwipeUp()
     fun hasOnTop(): Boolean = screen.hasOnTop()
 

@@ -179,7 +179,8 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      clock's numerals in Fraunces. Known, for B4 and C: paints made once when a view is built (home's labels, the
      status bar) keep the font they got until they are rebuilt (B4's rebuild on a theme change); a font not yet on the
      phone shows the fallback until it arrives (the settings app downloads first and applies after, C2). Over adb:
-     write `sys.font.text` into `files/design/user.json` (run-as) and `DESIGN_RELOAD`.
+     write `sys.font.text` into `files/design/user.json` (run-as) and `DESIGN_RELOAD`. On the S24 (2026-10-10): Manrope
+     downloaded through One UI's Play services in 0.4 s (the provider's signature accepted).
 3. Animation engine v2: roles, springs and beziers, presets; today's iOS motion as the first preset. In three steps:
    - **B3a, curves and presets** (done 2026-10-10): every motion role (`motion.*`) is a curve: a spring (`{"spring":
      [response, damping]}`) or a cubic bezier over a duration (`{"bezier": [x1, y1, x2, y2], "ms": 300}`, CSS's
@@ -215,6 +216,24 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      emulator's recorder skips frames in the close itself: that is judged on the S24). Real presets (Material
      Expressive, One UI, snappy, calm) come with the themes (E) and the settings app's curve editor (C2).
 4. Clean layout switching (teardown, rebuild, re-publish, transition), tested by switching every element back and forth.
+   What broke in the Pixel run, found on `pixel-v1` (emulator): home was built again from the design's listener while it
+   was behind another screen (the token editor); Android lays out no view of a stopped activity, so every icon published
+   for gesture nav was at 0,0 and the next close flew into the corner ("home (into the icon of ... at 0,0)"); the names
+   were missing after that rebuild too. The context menus worked in both reproductions (icon, widget; Pixel then iOS):
+   their failure needs another trigger, kept on every switch's test list (icons, widgets, dock, App Library, folders).
+   - **B4a, home built again live** (done 2026-10-10): one way in for every change: another theme, an edit of it, a font
+     that arrived (`Design.structure`, not bumped by the palette or the animation preset) and the user's setup (applied at
+     once, no longer when home next shows). On screen: a picture of the screen (PixelCopy of our window: glass and blur as
+     they are) covers home while it is built again, then fades on `motion.home.rebuild` (touches go to the new home). Not
+     on screen: built, laid out at once, its icons published and its picture recorded again (logged), so the next close
+     lands on the real icon over the new look. A rebuild is not an arrival: a cold start's held frame still waiting ends at
+     rest (it once took the new build's first frame: home came up black). Checked on the emulator: iOS 27 and Graphite
+     both ways on screen and behind an app (closes into the right icon, names, the clock's numerals, the wallpaper), the
+     drawer's placement changed on screen, menus after each switch, the animation tour.
+   - **B4b, fonts everywhere follow**: paints made once (the shade, the status bar, banners, menus) take the theme's new
+     fonts at once.
+   - Done with D1/D2: a second layout of an element switched both ways (the mechanism is the same: built again, published,
+     crossfaded).
 
 **C. Settings app** (Compose, themed by the active theme)
 1. Dashboard per element and per layer, live previews made of the real components in miniature.

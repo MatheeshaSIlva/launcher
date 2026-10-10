@@ -61,6 +61,14 @@ object Design {
     @Volatile var version = 0
         private set
 
+    /**
+     * Bumped when what is built from the design may have changed (another theme, an edit of it, a font that arrived), not
+     * by the palette or the animation preset: surfaces that build parts once (home, paints with a font) build them again
+     * (B4, docs/PLAN_LAYOUTS_THEMES.md).
+     */
+    @Volatile var structure = 0
+        private set
+
     val themeName get() = chain.lastOrNull()?.name ?: "none"
     val themeId get() = activeId
     val motionName get() = motionChain.lastOrNull()?.name ?: "none"
@@ -153,7 +161,7 @@ object Design {
         if (!loadMotion(id)) return false
         motionId = id
         try { File(appCtx.filesDir, ACTIVE_MOTION).apply { parentFile?.mkdirs() }.writeText(id) } catch (_: Throwable) { }
-        changedOutside("motion '$motionName'" + if (before != id) " (was $before)" else " (reloaded)")
+        changedOutside("motion '$motionName'" + if (before != id) " (was $before)" else " (reloaded)", structural = false)
         return true
     }
 
@@ -177,8 +185,9 @@ object Design {
     /** A Google font the theme names was downloaded (theme/Fonts): every surface draws again with it. */
     fun fontArrived(name: String) = changedOutside("font '$name' arrived")
 
-    private fun changedOutside(what: String) {
+    private fun changedOutside(what: String, structural: Boolean = true) {
         version++
+        if (structural) structure++
         AppLog.log("[design] $what: ${user.size + motionUser.size} edited")
         val run = Runnable { for (l in listeners.toList()) l() }
         if (Looper.myLooper() == Looper.getMainLooper()) run.run() else main.post(run)
@@ -351,7 +360,7 @@ object Design {
         paletteAt = stamp
         palette.clear()
         rebuild()
-        changedOutside("the wallpaper's colours changed")
+        changedOutside("the wallpaper's colours changed", structural = false)
     }
 
     private fun logPalette() {
@@ -411,12 +420,12 @@ object Design {
     /** The user changed [key] to [v] (saved at once, every surface draws again). */
     fun set(key: String, v: Value) {
         (if (isMotion(key)) motionUser else user)[key] = Entry(v, Provenance.User)
-        changed()
+        changed(structural = !isMotion(key))
     }
 
     /** Back to the theme's (or the animation preset's) value. */
     fun reset(key: String) {
-        if ((if (isMotion(key)) motionUser else user).remove(key) != null) changed()
+        if ((if (isMotion(key)) motionUser else user).remove(key) != null) changed(structural = !isMotion(key))
     }
 
     fun resetAll() {
@@ -426,9 +435,10 @@ object Design {
         changed()
     }
 
-    private fun changed() {
+    private fun changed(structural: Boolean = true) {
         rebuild()
         version++
+        if (structural) structure++
         save()
         val run = Runnable { for (l in listeners.toList()) l() }
         if (Looper.myLooper() == Looper.getMainLooper()) run.run() else main.post(run)

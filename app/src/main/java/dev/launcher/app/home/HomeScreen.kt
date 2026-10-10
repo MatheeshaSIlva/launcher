@@ -27,6 +27,7 @@ import dev.launcher.app.drawer.AppDrawer
 import dev.launcher.app.drawer.DrawerHost
 import dev.launcher.app.drawer.Drawers
 import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.timed
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -51,6 +52,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         fun onHomeSettled()
         /** The layout was edited (moved, removed, added): save it. */
         fun layoutChanged()
+        /** Home was built again while not on screen (laid out, icons published): its picture is recorded again. */
+        fun onRebuilt()
     }
 
     var cfg = HomeConfig()
@@ -142,6 +145,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        dev.launcher.app.design.Design.addListener(onDesign)
+        dev.launcher.app.layout.Setup.addListener(onSetup)
         viewTreeObserver.addOnGlobalLayoutListener(toneAfterLayout)
         dev.launcher.app.Badges.addListener(onBadges)
         dev.launcher.app.theme.Appearance.addListener(onAppearance)
@@ -149,6 +154,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     override fun onDetachedFromWindow() {
+        dev.launcher.app.design.Design.removeListener(onDesign)
+        dev.launcher.app.layout.Setup.removeListener(onSetup)
         viewTreeObserver.removeOnGlobalLayoutListener(toneAfterLayout)
         dev.launcher.app.Badges.removeListener(onBadges)
         dev.launcher.app.theme.Appearance.removeListener(onAppearance)
@@ -203,7 +210,100 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         cfg = c
         Icons.shape = c.iconShape
         pos = 0f; sheet = 0f
+        if (m == null) build() else rebuild("the setup changed")
+    }
+
+    // ================================================================== building again (B4, docs/PLAN_LAYOUTS_THEMES.md)
+
+    /** The design's structure the current build was made from ([dev.launcher.app.design.Design.structure]). */
+    private var builtStructure = -1
+
+    /** Another theme, an edit of it, a font that arrived: what home built once from the design is built again. */
+    private val onDesign: () -> Unit = {
+        if (m != null && dev.launcher.app.design.Design.structure != builtStructure) requestRebuild("the theme changed")
+    }
+
+    /** The user's setup changed (the drawer's placement, home's options): applied at once, not when home next shows. */
+    private val onSetup: () -> Unit = { setConfig(HomeConfig.load(context)) }
+
+    private var rebuildPosted = false
+
+    /** Builds home again once the current change is complete (several notifications in a row make one rebuild). */
+    private fun requestRebuild(why: String) {
+        if (rebuildPosted) return
+        rebuildPosted = true
+        post { rebuildPosted = false; rebuild(why) }
+    }
+
+    /**
+     * Everything above the wallpaper built again. On screen, the old look fades into the new over it (a picture of the
+     * screen as it was, taken first). Not on screen, home is laid out at once, so where its icons are (where gesture nav
+     * closes an app into) and its picture are current before it is seen: a home built behind an app and never laid out
+     * once sent the closing card into the screen's corner (the Pixel run).
+     */
+    private fun rebuild(why: String) {
+        if (m == null || width == 0 || height == 0) return
+        // Not an arrival: a cold start's hold still waiting, or an arrival under way, ends at rest (built again, a pending hold
+        // took the new build's first frame and home came up black).
+        coldHoldWanted = false
+        removeCallbacks(coldRetry)
+        if (arrivalAnimating || arrivalHeld) { arrivalHeld = false; finishArrival() }
+        val shown = windowVisibility == View.VISIBLE && dev.launcher.app.GestureNav.homeVisible
+        AppLog.log("[home] $why: building home again" + if (shown) " (crossfading)" else " (behind)")
+        if (!shown) { buildBehind(); return }
+        snapshot { old ->
+            build()
+            if (old != null) coverWith(old)
+        }
+    }
+
+    private fun buildBehind() {
         build()
+        measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
+        layout(left, top, right, bottom)
+        updateLabelTones(animate = false)
+        publishIcons()
+        listener.onRebuilt()
+    }
+
+    /** The screen as it shows now (our window: wallpaper, home, menus), or null if it cannot be copied. */
+    private fun snapshot(then: (android.graphics.Bitmap?) -> Unit) {
+        val win = (context as? android.app.Activity)?.window
+        if (win == null) { then(null); return }
+        val at = IntArray(2)
+        getLocationInWindow(at)
+        val bmp = try { android.graphics.Bitmap.createBitmap(width, height, android.graphics.Bitmap.Config.ARGB_8888) } catch (_: Throwable) { then(null); return }
+        try {
+            android.view.PixelCopy.request(win, android.graphics.Rect(at[0], at[1], at[0] + width, at[1] + height), bmp, { r ->
+                if (r != android.view.PixelCopy.SUCCESS) { bmp.recycle(); then(null); return@request }
+                // On the GPU before it is shown: a software bitmap is uploaded inside its first frame (5+ ms).
+                val hw = try { bmp.copy(android.graphics.Bitmap.Config.HARDWARE, false) } catch (_: Throwable) { null }
+                if (hw != null) bmp.recycle()
+                then(hw ?: bmp)
+            }, android.os.Handler(android.os.Looper.getMainLooper()))
+        } catch (t: Throwable) {
+            AppLog.log("[home] no picture of the screen to crossfade from: ${t.message}")
+            bmp.recycle()
+            then(null)
+        }
+    }
+
+    private var rebuildCover: View? = null
+
+    /** [old] over the new home, fading out on `motion.home.rebuild` (touches go to the new home meanwhile). */
+    private fun coverWith(old: android.graphics.Bitmap) {
+        rebuildCover?.let { it.animate().cancel(); removeView(it) }
+        val v = object : View(context) {
+            override fun onDraw(c: android.graphics.Canvas) { if (!old.isRecycled) c.drawBitmap(old, 0f, 0f, null) }
+        }
+        rebuildCover = v
+        addView(v, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        v.animate().alpha(0f).timed(Motion.role(dev.launcher.app.motion.MotionTokens.HOME_REBUILD)).withEndAction {
+            removeView(v)
+            if (rebuildCover === v) rebuildCover = null
+            old.recycle()
+            listener.onHomeSettled()
+        }.start()
     }
 
     fun setLayout(l: HomeLayout) {
@@ -314,6 +414,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (width == 0 || height == 0) return
         val metrics = HomeMetrics(width, height, topInset, bottomInset, deviceRadius, cfg)
         m = metrics
+        builtStructure = dev.launcher.app.design.Design.structure
         Icons.homeSize = metrics.iconSize
         fg.removeAllViews()
         stopAnimations()

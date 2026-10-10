@@ -77,6 +77,7 @@ object MotionRoles {
         r("wallpaper.appear", "Wallpaper appearing", "The wallpaper fading in when it is read late."),
         r("wallpaper.crossfade", "Wallpaper crossfade", "A new wallpaper fading in where its reveal cannot be drawn."),
         r("wallpaper.reveal", "Wallpaper reveal", "A new wallpaper's reveal."),
+        r("home.rebuild", "New look", "Home's old look fading into the new one (another theme, a changed layout)."),
     ))
 
     val EDIT = MotionGroup("Editing home", "Moving icons and widgets, and the edit buttons.", listOf(

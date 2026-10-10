@@ -230,6 +230,7 @@ SEED = {
     'motion.arrival.wallpaper': {'spring': [0.7, 1.0], 'src': 'judged:the wallpaper settling on a cold start'},
     'motion.arrival.zoom': {'factor': 1.18, 'src': 'judged:how far home is zoomed when it starts arriving'},
     'motion.arrival.wallpaper-zoom': {'factor': 1.06, 'src': 'judged:and the wallpaper'},
+    'motion.home.rebuild': {'bezier': [0.365, 0, 0.635, 1], 'ms': 350, 'src': "judged:home's old look fading into the new one when it is built again in front of the user (B4)"},
     'motion.clock.tick': {'bezier': [0.4, 0, 0.2, 1], 'ms': 420, 'src': "judged:the clock's numerals crossfading at the minute change"},
     'motion.clock.appear': {'bezier': [0.365, 0, 0.635, 1], 'ms': 240, 'src': "judged:the glass clock's numerals fading in (a first showing, a new size); as the code timed it before B3"},
     'motion.card.color': {'bezier': [0.365, 0, 0.635, 1], 'ms': 180, 'src': "judged:a launching card's colour blending into the app's real launch-screen colour; as the code timed it before B3"},

@@ -556,6 +556,16 @@
    "ms": 260,
    "src": "judged:the page dots turning back into the Search pill; as the code timed it before B3"
   },
+  "motion.home.rebuild": {
+   "bezier": [
+    0.365,
+    0,
+    0.635,
+    1
+   ],
+   "ms": 350,
+   "src": "judged:home's old look fading into the new one when it is built again in front of the user (B4)"
+  },
   "motion.home.wallpaper-zoom": {
    "factor": 1.04,
    "src": "judged:the wallpaper behind an open app"
