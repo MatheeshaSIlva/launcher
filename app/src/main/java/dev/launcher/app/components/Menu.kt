@@ -63,7 +63,7 @@ class MenuSpec(prefix: String) {
  * row) or of widget sizes where an item asks for one.
  */
 class MenuPainter(private val spec: MenuSpec, private val u: Float) {
-    enum class Glyph { GRID, MINUS, INFO, PLUS, SLIDERS, STYLE, TRASH, LABEL, WALLPAPER, LOCK, CLOSE, WIDGETS, APPS, SETTINGS }
+    enum class Glyph { GRID, MINUS, INFO, PLUS, SLIDERS, STYLE, TRASH, LABEL, WALLPAPER, LOCK, CLOSE }
 
     /**
      * A menu row; with [sizes] it is iOS's row of widget sizes (glyphs shaped like each size, [current] filled) and
@@ -282,8 +282,7 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
         glyphPaint.color = if (item.destructive) Design.color(spec.destructive) else Design.color(spec.label)
         val g = pt(9f)
         when (item.glyph) {
-            // (Android's symbols, used by the Pixel popups: iOS's menus draw them as its grid.)
-            Glyph.GRID, Glyph.WIDGETS, Glyph.APPS, Glyph.SETTINGS -> {
+            Glyph.GRID -> {
                 glyphPaint.style = Paint.Style.STROKE
                 val q = g * 0.85f
                 val gap = pt(2.2f)

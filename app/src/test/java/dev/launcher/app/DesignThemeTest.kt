@@ -53,43 +53,6 @@ class DesignThemeTest {
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
         }
-        // The Pixel shade's: every one there (any theme may pick that layout), of a kind its name says.
-        for (k in dev.launcher.app.shade.PxTokens.ALL) {
-            val v = r.resolve(k)
-            val want = when {
-                k == "comp.px.shade.background" -> Value.Mat::class
-                k.startsWith("motion.") -> Value.SpringV::class
-                k.startsWith("sys.layout") -> Value.Choice::class
-                k.endsWith("color") || k.endsWith("fill") || k.endsWith("-outline") || k.endsWith(".scrim") -> Value.Color::class
-                k.endsWith(".date") || k.endsWith(".clock") || k.endsWith(".title") || k.endsWith(".subtitle") || k.endsWith(".app") ||
-                    k.endsWith(".text") || k.endsWith(".section") -> Value.Text::class
-                else -> Value.Number::class
-            }
-            assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
-        }
-        // The "All apps" drawer's (Android 16's): the same.
-        for (k in dev.launcher.app.drawer.GridTokens.ALL) {
-            val v = r.resolve(k)
-            val want = when {
-                k.startsWith("sys.layout") -> Value.Choice::class
-                k.endsWith("color") || k.endsWith("fill") -> Value.Color::class
-                k.endsWith(".text") -> Value.Text::class
-                else -> Value.Number::class
-            }
-            assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
-        }
-        // Android's popups': the same.
-        for (k in dev.launcher.app.components.PxMenuTokens.ALL) {
-            val v = r.resolve(k)
-            val want = when {
-                k.startsWith("sys.layout") -> Value.Choice::class
-                k.endsWith(".material") -> Value.Mat::class
-                k.endsWith("fill") || k.endsWith(".label") || k.endsWith(".press") -> Value.Color::class
-                k.endsWith(".type") -> Value.Text::class
-                else -> Value.Number::class
-            }
-            assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
-        }
         // Control Center's: the same check, and a colour for every control.
         for (k in dev.launcher.app.shade.CcTokens.ALL) {
             val v = r.resolve(k)
@@ -144,15 +107,7 @@ class DesignThemeTest {
         for (k in dev.launcher.app.theme.PaletteTokens.COLORS) assertTrue(k, r.resolve(k) is Value.Color)
         for (k in dev.launcher.app.theme.PaletteTokens.NUMBERS) assertTrue(k, r.resolve(k) is Value.Number)
         // The status bar's.
-        for (k in dev.launcher.app.statusbar.StatusBarTokens.ALL) {
-            val v = r.resolve(k)
-            val ok = when {
-                k.startsWith("sys.layout") -> v is Value.Choice
-                k.endsWith("-color") -> v is Value.Color
-                else -> v is Value.Number
-            }
-            assertTrue(k, ok)
-        }
+        for (k in dev.launcher.app.statusbar.StatusBarTokens.ALL) assertTrue(k, r.resolve(k) is Value.Color)
         // The banners'.
         for (k in dev.launcher.app.shade.BannerView.ALL) {
             val v = r.resolve(k)

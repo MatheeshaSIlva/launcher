@@ -211,8 +211,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private val io = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var generation = 0
 
-    /** Opens the gallery; with [pkg], straight on that app's widgets once the list is read (Android's "Widgets" of an app). */
-    fun open(pkg: String? = null) {
+    fun open() {
         homeNodeKey = Long.MIN_VALUE   // home recorded anew for this opening
         // Listing providers and their labels and icons takes a while: the sheet rises at once, the rows settle in when ready.
         apps = emptyList()
@@ -223,12 +222,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val gen = ++generation
         io.execute {
             val found = try { host.widgetApps() } catch (t: Throwable) { dev.launcher.app.AppLog.log("[widgets] listing failed: ${t.message}"); emptyList() }
-            post {
-                if (gen == generation) {
-                    apps = found; listArrivedAt = SystemClock.uptimeMillis(); applyFilter(); invalidate()
-                    if (pkg != null) found.firstOrNull { it.pkg == pkg }?.let { openApp(it) }
-                }
-            }
+            post { if (gen == generation) { apps = found; listArrivedAt = SystemClock.uptimeMillis(); applyFilter(); invalidate() } }
         }
         app = null
         entries = emptyList()

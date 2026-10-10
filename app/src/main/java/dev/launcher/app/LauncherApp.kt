@@ -15,11 +15,7 @@ class LauncherApp : Application() {
         // Dark mode switched anywhere (also while an app is in front): home crossfades at once, so it is already in the new
         // appearance (and its picture behind closing cards too) when it is next seen.
         registerComponentCallbacks(object : android.content.ComponentCallbacks {
-            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
-                // A theme built on the system's colours first (they may have changed with the wallpaper), then the appearance.
-                dev.launcher.app.design.Design.onConfiguration()
-                dev.launcher.app.theme.Appearance.onConfiguration(newConfig)
-            }
+            override fun onConfigurationChanged(newConfig: android.content.res.Configuration) = dev.launcher.app.theme.Appearance.onConfiguration(newConfig)
             @Deprecated("Deprecated in Java") override fun onLowMemory() {}
         })
         dev.launcher.app.apps.Icons.init(this)

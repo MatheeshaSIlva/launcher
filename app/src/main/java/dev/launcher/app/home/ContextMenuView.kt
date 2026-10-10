@@ -42,12 +42,7 @@ class ContextMenuView(
 ) : View(ctx) {
     /** The menu's panel and rows (the menu component, `comp.home.menu.*`). */
     private val painter = MenuPainter(MenuSpec.HOME, m.u)
-    /** Android's popup instead (`sys.layout.menu` = "pixel", read at each [show]): no lift, no blur, a solid panel. */
-    private val pxMenu = dev.launcher.app.components.PixelMenu(dev.launcher.app.design.Scale.unitPx(ctx, minOf(m.w, m.h)))
-    /** The menu shown is Android's popup ([dev.launcher.app.components.PixelMenu]): the item stays where it is, home sharp. */
-    var pixel = false
-        private set
-    private val items get() = if (pixel) pxMenu.items else painter.items
+    private val items get() = painter.items
     private var lifted: RenderNode? = null
     // The item as it looked pressed (dimmed): over the lifted copy, fading away as the menu opens.
     private var liftedPressed: RenderNode? = null
@@ -60,8 +55,7 @@ class ContextMenuView(
     /** The item is shown again early, under the lifted copy fading into it ([handBack]); [onClosed] still runs at the end. */
     var onHandBack: (() -> Unit)? = null
 
-    // (Android's popup leaves home as it is: no blur, the item not lifted.)
-    private val k = SpringValue(0f, 1000f, { onProgress(if (pixel) 0f else it.coerceIn(0f, 1f)); invalidate() }, { onRest() })
+    private val k = SpringValue(0f, 1000f, { onProgress(it.coerceIn(0f, 1f)); invalidate() }, { onRest() })
 
     private val glass = dev.launcher.app.design.MaterialPainter.create(m.u)
     private val dim = Paint()
@@ -96,15 +90,8 @@ class ContextMenuView(
         liftedFades = false
         liftedHandsBack = false
         anchor.set(frame)
-        pixel = dev.launcher.app.components.PxMenuTokens.active()
-        if (pixel) {
-            val pu = dev.launcher.app.design.Scale.unitPx(context, minOf(m.w, m.h))
-            bounds.set(8f * pu, m.statusTop + 8f * pu, m.w - 8f * pu, m.h - m.navInset - 8f * pu)
-            pxMenu.layout(menu, anchor, bounds, options = picture == null)
-        } else {
-            bounds.set(m.libMargin, 0f, m.w - m.libMargin, m.h - m.bottomSafe)
-            painter.layout(menu, anchor, bounds, if (picture == null) 8f else 12f, fromLeft = picture == null)
-        }
+        bounds.set(m.libMargin, 0f, m.w - m.libMargin, m.h - m.bottomSafe)
+        painter.layout(menu, anchor, bounds, if (picture == null) 8f else 12f, fromLeft = picture == null)
         menu.firstOrNull { it.choices != null }?.let { choiceAt.snapTo(it.chosen.toFloat()) }
         visibility = VISIBLE
         k.animateTo(1f, Motion.profile.menuOpen)
@@ -138,7 +125,7 @@ class ContextMenuView(
         if (visibility != VISIBLE) return
         lifted = null
         liftedPressed = null
-        if (pixel) pxMenu.layout(emptyList(), anchor, bounds, false) else painter.layout(emptyList(), anchor, bounds, 8f, false)
+        painter.layout(emptyList(), anchor, bounds, 8f, false)
         onClosed = null
         pressed = -1
         k.animateTo(0f, Motion.profile.menuClose)
@@ -164,16 +151,6 @@ class ContextMenuView(
     override fun onDraw(c: Canvas) {
         val kv = k.value
         val kk = kv.coerceIn(0f, 1f)
-        if (pixel) {
-            // Android's popup over home as it is; the options popup's material blurs what is behind it.
-            pxMenu.draw(c, kv, pressed, choiceAt.value) { cc, panel, radius, matrix, alpha ->
-                matrix.invert(inverse)
-                visible.set(0f, 0f, width.toFloat(), height.toFloat())
-                inverse.mapRect(visible)
-                glass?.drawLive(cc, pxMenu.material, panel, radius, matrix, visible, alpha) { b -> drawBehind(b) } == true
-            }
-            return
-        }
         // Home behind: blurred (by home) under the scrim; the menu's glass sees exactly this, and adds only the dock's tint.
         val sc = Appearance.scrim
         dim.color = sc
@@ -222,7 +199,7 @@ class ContextMenuView(
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
         if (!isShowing) return false
-        val i = if (pixel) pxMenu.rowAt(e.x, e.y) else painter.rowAt(e.x, e.y)
+        val i = painter.rowAt(e.x, e.y)
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> if (i != pressed) { pressed = i; invalidate() }
             MotionEvent.ACTION_UP -> {
@@ -231,7 +208,7 @@ class ContextMenuView(
                 val choices = chosen?.choices
                 if (chosen != null && choices != null) {
                     // A choice: applied at once, the menu stays open (the change shows behind it); the highlight glides over.
-                    val j = if (pixel) pxMenu.choiceIndexAt(i, e.x, choices.size) else painter.choiceIndexAt(e.x, choices.size)
+                    val j = painter.choiceIndexAt(e.x, choices.size)
                     if (j != chosen.chosen) {
                         chosen.chosen = j
                         choiceAt.animateTo(j.toFloat(), Motion.profile.reflow)
@@ -246,7 +223,7 @@ class ContextMenuView(
                     // A size: applied at once and the menu closes onto the widget, which is already growing or shrinking
                     // to it (the lifted copy shows the old size: kept open, the menu would hide the change).
                     handBack()
-                    chosen.onSize?.invoke(sizes[if (pixel) pxMenu.sizeIndexAt(i, e.x, sizes.size) else painter.sizeIndexAt(e.x, sizes.size)])
+                    chosen.onSize?.invoke(sizes[painter.sizeIndexAt(e.x, sizes.size)])
                     dismiss()
                     return true
                 }

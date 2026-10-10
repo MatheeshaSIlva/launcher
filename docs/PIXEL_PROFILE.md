@@ -1,5 +1,11 @@
 # The Pixel profile (Android 16 as a Pixel shows it)
 
+> **Status (2026-10-10): withdrawn from `main`, kept for reference.** This first run made "Pixel" a theme that also
+> switched every layout; on the S24 it was buggy and broke iOS after switching back. Its code is on branch `pixel-v1`
+> (parts 1-8, up to `9920d65`); `main` went back to `5339fa9`. The new direction (layouts, themes and animations as three
+> separate layers) is `docs/PLAN_LAYOUTS_THEMES.md`. The measurements and reference captures below stay valid for the
+> Pixel layouts and theme built under that plan.
+
 Matheesha (2026-10-09): "let's try with the Pixel OS theme first. Not just the colours but the search, QS, notifications,
 recents, dock, App Library, everything." A theme (`assets/themes/pixel.json`, built on iOS 27) plus Android 16's own
 layouts where they differ from iOS's, chosen by layout tokens (`sys.layout.*`). Any theme may pick any layout; the Pixel

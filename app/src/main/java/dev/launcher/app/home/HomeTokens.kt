@@ -7,11 +7,6 @@ import dev.launcher.app.design.MaterialKey
  * The iOS 27 theme gives all of them the kit's dock material (`sys.material.glass.dock`); a theme may give each its own.
  */
 object HomeTokens {
-    /** Pixel's search bar's glyphs and hint (the bar itself: [SEARCH]'s material). */
-    val PX_SEARCH_LABEL = dev.launcher.app.design.ColorKey("comp.home.pixel.search-label")
-    /** The layout choice for home (`sys.layout.home`): "ios" or "pixel". */
-    val LAYOUT = dev.launcher.app.design.ChoiceKey("sys.layout.home")
-
     /** The dock's platter (kit 558:50551). */
     val DOCK = MaterialKey("comp.home.dock.material")
     /** The Search pill above the dock, and the page dots it turns into (kit 5593:10801). */

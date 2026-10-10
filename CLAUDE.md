@@ -49,10 +49,6 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").
-- **Pixel profile** (`docs/PIXEL_PROFILE.md`): theme `pixel.json` (Material You colours from the system palette, `@role`)
-  plus Android 16's layouts chosen by `sys.layout.*` tokens; the shade is `shade/PixelShadeView` (`comp.px.*`), home's
-  Pixel layout `HomeMetrics.pixel`, the drawer `drawer/AppGridView` ("All apps", `comp.grid.*`). Reference
-  captures of the stock Pixel UI: `tools/shots/pxref/` (emulator, our app disabled).
 - **Design system** (`design/`, plan in `docs/DESIGN_SYSTEM_PLAN.md`): every look value is a token in the active theme file
   (`assets/themes/ios27.json`: `ref.*` from Apple's kit with its ids, `sys.*` roles, `comp.*` per component), read through
   `Design` (light/dark blended at `Appearance.dark`, aliases followed, the user's edits from the token editor on top);
@@ -312,7 +308,13 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 
 ## Plan
 
-Build order (details and gates in `docs/REQUIREMENTS.md`): 1 Foundation → **2 Smooth core** → 3 Home and drawer → 4 Shade → 5 Themes and builder → 6 Glass and polish → 7 Release.
+**Current plan (2026-10-10): `docs/PLAN_LAYOUTS_THEMES.md`.** Layouts (per element, with placement and options), themes
+(the look only, Figma-equivalent properties, Material You on any theme) and animations are three separate layers, any
+combination valid; a Compose settings app themed by the active theme; elements one per round (status bar, shade, recents,
+drawer, home, context menu), each checked on the S24 before the next. A theme file never chooses a layout. The first
+Pixel attempt (a theme that switched layouts) is on branch `pixel-v1`, notes in `docs/PIXEL_PROFILE.md`.
+
+Original build order (details and gates in `docs/REQUIREMENTS.md`): 1 Foundation → **2 Smooth core** → 3 Home and drawer → 4 Shade → 5 Themes and builder → 6 Glass and polish → 7 Release.
 Phase 2 decides whether the whole idea works.
 
 **First tasks, in order**

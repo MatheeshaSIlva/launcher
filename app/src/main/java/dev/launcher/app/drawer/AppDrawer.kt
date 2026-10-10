@@ -103,6 +103,5 @@ internal fun screenOffset(v: View, out: FloatArray): FloatArray {
 object Drawers {
     fun create(style: DrawerStyle, ctx: Context, host: DrawerHost): AppDrawer = when (style) {
         DrawerStyle.APP_LIBRARY -> AppLibraryView(ctx, host)
-        DrawerStyle.GRID -> AppGridView(ctx, host)
     }
 }
