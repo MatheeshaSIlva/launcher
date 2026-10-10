@@ -22,6 +22,7 @@ import dev.launcher.app.Unlock
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
+import dev.launcher.app.motion.timed
 import dev.launcher.app.statusbar.StatusBarView
 import kotlin.math.abs
 import kotlin.math.max
@@ -972,19 +973,19 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     /**
      * Control Center's live background (the system blurring what is behind) turns into our own still picture of it, faded
-     * over [BACKDROP_HOLD_MS]: what launches from it comes up behind the panel, and the live blur showed it at once. Returns
+     * on `motion.cc.backdrop-hold`: what launches from it comes up behind the panel, and the live blur showed it at once. Returns
      * how long to wait before starting the app (0: nothing to hold, the background is our picture already).
      */
     private fun holdBackdrop(): Long {
         if (panel != Panel.CC || !liveBlur.available || backdrop.source == null) return 0L
         backdropHold?.cancel()
-        backdropHold = android.animation.ValueAnimator.ofFloat(backdrop.freeze, 1f).apply {
-            duration = BACKDROP_HOLD_MS
-            interpolator = android.view.animation.DecelerateInterpolator()
+        val hold = android.animation.ValueAnimator.ofFloat(backdrop.freeze, 1f).apply {
+            timed(Motion.role(dev.launcher.app.motion.MotionTokens.CC_BACKDROP_HOLD))
             addUpdateListener { a -> backdrop.freeze = a.animatedValue as Float }
             start()
         }
-        return BACKDROP_HOLD_MS
+        backdropHold = hold
+        return hold.duration
     }
 
     private val launchTimeout = Runnable {
@@ -1006,7 +1007,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         nav.quietStarts(false)
         launchFading = true
         if (panel != null) finishClose()
-        launchCard.animate().alpha(0f).setDuration(LAUNCH_FADE_MS).withEndAction {
+        launchCard.animate().alpha(0f).timed(Motion.role(dev.launcher.app.motion.MotionTokens.NC_LAUNCH_FADE)).withEndAction {
             launchCard.visibility = View.GONE
             launchCard.snapshot = null
             launchCard.icon = null
@@ -1252,11 +1253,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private companion object {
         /** A notification's app that is not in front this long after its card started: the card goes anyway. */
         const val LAUNCH_TIMEOUT_MS = 2500L
-        /** How long Control Center's background takes to turn from the live blur into our still picture before a launch (ms). */
-        const val BACKDROP_HOLD_MS = 120L
         /** How often a launch whose app has not said it is in front asks for the task in front (ms). */
         const val TOP_TASK_POLL_MS = 80L
-        const val LAUNCH_FADE_MS = 140L
         /** The size a banner's backdrop (the app behind) is blurred at (of the screen's). */
         const val BANNER_BAKE_SCALE = 0.25f
         /** What a launch from a button or control grows out of: a square this big (pt) around the touch. */

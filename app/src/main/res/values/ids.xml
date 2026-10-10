@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- View tag: the view's SpringTranslate (motion/SpringValue.kt). -->
+    <!-- View tag: the view's SpringTranslate (motion/MotionValue.kt). -->
     <item name="spring_translate" type="id" />
     <item name="drag_held" type="id" />
     <!-- View tag: transforms of this view and above are applied to its content as a whole (GlassView ignores them). -->

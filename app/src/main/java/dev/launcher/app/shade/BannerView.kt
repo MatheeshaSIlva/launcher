@@ -166,11 +166,11 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
                 p.setBackdrop(home, Design.color(BEHIND) or (0xFF shl 24))
                 val dim = Appearance.wallpaperDim
                 val under = if (home != null && dim > 0.001f) listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(0xFF000000.toInt(), 0xFF000000.toInt()), dim, dim, dev.launcher.app.design.Blend.NORMAL)) else emptyList()
-                val f = if (app == null) 0f else ((android.os.SystemClock.uptimeMillis() - appImageAt).toFloat() / APP_FADE_MS).coerceIn(0f, 1f)
+                val f = if (app == null) 0f else ((android.os.SystemClock.uptimeMillis() - appImageAt).toFloat() / appFade.get().durationMs).coerceIn(0f, 1f)
                 if (f < 1f) p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, under = under)
                 if (app != null) {
                     p.setBackdrop(app, Design.color(BEHIND) or (0xFF shl 24))
-                    p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, alpha = f * f * (3f - 2f * f))
+                    p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, alpha = appFade.get().at(f).coerceIn(0f, 1f))
                     if (f < 1f) postInvalidateOnAnimation()
                 }
             } else {
@@ -404,7 +404,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             if (backdropLogs < 8 && ask == appAsk) { backdropLogs++; dev.launcher.app.AppLog.log("[banner] over an app: its blurred picture ${if (img != null) "after ${android.os.SystemClock.uptimeMillis() - t0} ms" else "NONE (plain fallback)"}") }
             if (ask != appAsk || img == null) return@appBackdrop
             // Before the banner has come in: no fade from the fallback, it comes in as glass.
-            if (appImage == null) appImageAt = android.os.SystemClock.uptimeMillis() - if (entering != null) APP_FADE_MS.toLong() else 0L
+            if (appImage == null) appImageAt = android.os.SystemClock.uptimeMillis() - if (entering != null) appFade.get().durationMs else 0L
             entering?.let { s -> post { enter(s) } }
             appImage = img
             for (s in all) s.card.invalidate()
@@ -668,8 +668,8 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         const val SHOW_MS = 7000L
         // The banner's tokens (`comp.banner.*`; values and sources in assets/themes/ios27.json).
         val MATERIAL = MaterialKey("comp.banner.material")
-        /** A banner over an app: its glass fades from the app's flat colour to the app's picture this long (ms). */
-        const val APP_FADE_MS = 180f
+        /** A banner over an app: its glass fades from the app's flat colour to the app's picture (`motion.banner.app-fade`). */
+        private val appFade = dev.launcher.app.motion.RoleTiming(dev.launcher.app.motion.MotionTokens.BANNER_APP_FADE)
         /** How long a banner over an app waits for its glass's picture before it comes in on the plain fallback (ms). */
         const val BACKDROP_WAIT_MS = 150L
         val BEHIND = ColorKey("comp.banner.behind")

@@ -24,6 +24,7 @@ import dev.launcher.app.apps.AppEntry
 import dev.launcher.app.apps.Apps
 import dev.launcher.app.apps.LaunchStats
 import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.timed
 import kotlin.math.roundToInt
 
 /** One App Library tile: a title and its apps (best first). Category tiles with more than four apps open as a folder. */
@@ -187,23 +188,23 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
     }
 
     private fun crossfade(toList: Boolean) {
-        val d = Motion.profile.modeCrossfadeMs
+        val d = Motion.profile.modeCrossfade
         crossfading = true
         val showing = if (toList) listPane else tilesPane
         val hiding = if (toList) tilesPane else listPane
         showing.visibility = View.VISIBLE
-        showing.animate().alpha(1f).setDuration(d).start()
+        showing.animate().alpha(1f).timed(d).start()
         // The pane coming in takes touches from its first frame; the one fading out takes none (a tap on a tile right
         // after "Cancel" must open it, not land on the vanishing list).
         tilesPane.acceptsTouches = !toList
         listPane.acceptsTouches = toList
-        hiding.animate().alpha(0f).setDuration(d).withEndAction {
+        hiding.animate().alpha(0f).timed(d).withEndAction {
             hiding.visibility = View.GONE
             crossfading = false
             host.onDrawerSettled()
         }.start()
         cancel.visibility = View.VISIBLE
-        cancel.animate().alpha(if (toList) 1f else 0f).setDuration(d).withEndAction { if (!toList) cancel.visibility = View.GONE }.start()
+        cancel.animate().alpha(if (toList) 1f else 0f).timed(d).withEndAction { if (!toList) cancel.visibility = View.GONE }.start()
         searchBar.animateCancelSpace(if (toList) 1f else 0f, d)
         if (toList) listPane.scroller.jumpTo(0f)
     }
@@ -323,7 +324,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         tilesPane.alpha = 1f; tilesPane.visibility = View.VISIBLE
         tilesPane.acceptsTouches = true; listPane.acceptsTouches = false
         cancel.alpha = 0f; cancel.visibility = View.GONE
-        searchBar.animateCancelSpace(0f, 0)
+        searchBar.animateCancelSpace(0f, null)
         crossfading = false
         return true
     }
@@ -477,14 +478,14 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
      * Makes room for "Cancel" on the right (0 = none, 1 = full): the capsule animates (drawn), the text field takes its end
      * width at once (one layout, not one per frame). A new call (Cancel tapped while it opens) goes on from where it is.
      */
-    fun animateCancelSpace(to: Float, ms: Long) {
+    fun animateCancelSpace(to: Float, curve: dev.launcher.app.design.Curve?) {
         spaceAnim?.cancel()
         spaceAnim = null
         (edit.layoutParams as LayoutParams).rightMargin = (m.pt(12f) + to * m.pt(84f)).roundToInt()
         edit.requestLayout()
-        if (ms <= 0) { cancelSpace = to; invalidate(); return }
+        if (curve == null) { cancelSpace = to; invalidate(); return }
         spaceAnim = android.animation.ValueAnimator.ofFloat(cancelSpace, to).apply {
-            duration = ms
+            timed(curve)
             addUpdateListener { cancelSpace = it.animatedValue as Float; invalidate() }
             start()
         }

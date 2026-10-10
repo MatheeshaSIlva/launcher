@@ -193,9 +193,20 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      edits moved there once). iOS 27's preset: the 112 motion tokens as they were (`comp.cc.motion.open` became
      `motion.cc.open`), every value unchanged. Checked on the emulator: launch, close, App Library, Spotlight, menu,
      Control Center, Notification Center; the edits moved.
-   - **B3b, every animation a role**: the animations still timed in code (fades, crossfades, the status bar's, the
-     wallpaper's, Spotlight's) become roles with their current curves; the roles named and described for the settings
-     app (as the component catalogue).
+   - **B3b, every animation a role** (done 2026-10-10): the 30 animations still timed in code (the cards' colour, picture,
+     catch-up and final fades, the gesture pill, the status bar's hide, tone and lock fades, light and dark, the clock's
+     tick and first showing, the wallpaper's fade and reveal, the Search pill, Spotlight's clear button, widgets' new
+     layouts, the widget gallery's rows and previews, banners' glass, notification times, Control Center's backdrop hold,
+     an app opened from a notification, the unlock's hold) are roles now, each with the curve it had: an exact bezier
+     where the code's ease was one (cubic and quadratic ease-outs, smoothstep, Android's overshoot and accelerate), and
+     (0.365, 0, 0.635, 1) for Android's default ease (within 0.04% of it). Six duration tokens became curves; the
+     stagger delays became numbers (145 roles). Where code runs Android's own animators (their cancel and end-action
+     behaviour kept), a role gives them a duration and an interpolator (`CurveTiming`, `ValueAnimator.timed`,
+     `ViewPropertyAnimator.timed`): a bezier as it is, a spring sampled over its settling time; motion drawn from the
+     clock reads `RoleTiming`. Every role is named, described and grouped in plain words (`motion/MotionRoles.kt`,
+     12 groups; the App Switcher's geometry marked as layout behaviour, moving to the recents layout in D3); a test keeps
+     the catalogue and the preset in step. Checked on the emulator: the tour of B3a, light and dark, Spotlight's clear
+     button.
    - **B3c, a second preset**: a test preset in beziers (as Graphite is for themes), switched both ways on the emulator,
      grabs and interruptions included.
 4. Clean layout switching (teardown, rebuild, re-publish, transition), tested by switching every element back and forth.

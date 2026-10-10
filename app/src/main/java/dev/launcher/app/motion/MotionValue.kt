@@ -106,16 +106,17 @@ object Appear {
      * [v] grows from [from] of its size to full size (a little overshoot) while it fades in. Not a view a drag holds (the
      * dragged item's new view, tagged `drag_held`): the dragged copy lands on it and shows it (it faded in under the copy).
      */
-    fun grow(v: View, spec: Curve = Motion.profile.appear, from: Float = 0.7f, fadeMs: Long = Motion.profile.appearMs) {
+    fun grow(v: View, spec: Curve = Motion.profile.appear, from: Float = 0.7f, fade: Curve = Motion.profile.appearFade) {
         if (v.getTag(dev.launcher.app.R.id.drag_held) == true) { v.animate().cancel(); v.alpha = 0f; v.scaleX = 1f; v.scaleY = 1f; return }
         v.scaleX = from; v.scaleY = from
         v.alpha = 0f
         MotionValue(from, 100f, { k -> v.scaleX = k; v.scaleY = k }).animateTo(1f, spec)
-        v.animate().alpha(1f).setDuration(fadeMs).start()
+        v.animate().alpha(1f).timed(fade).start()
     }
 
     /** [v] shrinks and fades away, then [then] runs (removing it). */
-    fun vanish(v: View, ms: Long = Motion.profile.disappearMs, then: () -> Unit) {
-        v.animate().scaleX(0.6f).scaleY(0.6f).alpha(0f).setDuration(ms).withEndAction(then).start()
+    fun vanish(v: View, curve: Curve = Motion.profile.disappearFade, then: () -> Unit) {
+        v.animate().scaleX(0.6f).scaleY(0.6f).alpha(0f).timed(curve).withEndAction(then).start()
     }
 }
+

@@ -12,6 +12,7 @@ import android.widget.FrameLayout
 import dev.launcher.app.GlassStyle
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import dev.launcher.app.motion.timed
 
 /**
  * One home page: items flowed into the grid in order ([HomeModel.place]). Children are created by [makeView] (apps,
@@ -97,7 +98,7 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
         viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 viewTreeObserver.removeOnPreDrawListener(this)
-                if (v.parent === this@PageView) v.animate().alpha(1f).setDuration(dev.launcher.app.motion.Motion.profile.appearMs).start()
+                if (v.parent === this@PageView) v.animate().alpha(1f).timed(dev.launcher.app.motion.Motion.profile.appearFade).start()
                 return true
             }
         })
@@ -312,8 +313,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         buildMask(back, time) {
             tickAnim?.cancel()
             tickAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-                duration = dev.launcher.app.motion.Motion.profile.clockTickMs
-                interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+                timed(dev.launcher.app.motion.Motion.profile.clockTick)
                 addUpdateListener { a -> val k = a.animatedValue as Float; back.glass.alpha = k; from.glass.alpha = 1f - k }
                 addListener(object : android.animation.AnimatorListenerAdapter() {
                     override fun onAnimationEnd(animation: android.animation.Animator) {
@@ -333,7 +333,7 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         val from = n.glass.alpha
         if (from >= 1f) { onSettled?.invoke(); return }
         tickAnim = android.animation.ValueAnimator.ofFloat(from, 1f).apply {
-            duration = dev.launcher.app.motion.Motion.profile.appearMs + 60
+            timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CLOCK_APPEAR))
             addUpdateListener { a -> n.glass.alpha = a.animatedValue as Float }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) { tickAnim = null; onSettled?.invoke() }
@@ -700,7 +700,7 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
     /** 1 = "Search" showing, 0 = dots showing. */
     private var search = 1f
     private var fade: android.animation.ValueAnimator? = null
-    private val backToSearch = Runnable { fadeTo(1f, 260) }
+    private val backToSearch = Runnable { fadeTo(1f, dev.launcher.app.motion.MotionTokens.PILL_SHOW) }
 
     init {
         addView(glass, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -723,7 +723,7 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
     fun setMoving(moving: Boolean) {
         removeCallbacks(backToSearch)
         if (editing) return
-        if (moving) { if (pages > 1) fadeTo(0f, 140) } else postDelayed(backToSearch, 650)
+        if (moving) { if (pages > 1) fadeTo(0f, dev.launcher.app.motion.MotionTokens.PILL_HIDE) } else postDelayed(backToSearch, 650)
     }
 
     /** Edit mode: the dots stay (as on iOS). */
@@ -731,14 +731,14 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
         set(v) {
             field = v
             removeCallbacks(backToSearch)
-            fadeTo(if (v) 0f else 1f, 200)
+            fadeTo(if (v) 0f else 1f, dev.launcher.app.motion.MotionTokens.PILL_EDIT)
         }
 
-    private fun fadeTo(target: Float, ms: Long) {
+    private fun fadeTo(target: Float, role: dev.launcher.app.design.CurveKey) {
         if (search == target) return
         fade?.cancel()
         fade = android.animation.ValueAnimator.ofFloat(search, target).apply {
-            duration = ms
+            timed(dev.launcher.app.motion.Motion.role(role))
             addUpdateListener { search = it.animatedValue as Float; content.invalidate() }
             start()
         }

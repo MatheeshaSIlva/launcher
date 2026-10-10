@@ -36,6 +36,7 @@ import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.roundToInt
+import dev.launcher.app.motion.timed
 
 /** iOS widget sizes on the home grid (columns x rows). Extra large (iOS 27) fills a page. */
 enum class WidgetSize(val spanX: Int, val spanY: Int, val title: String) {
@@ -292,6 +293,7 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
     var crossfadeUntil = 0L
     private var fadeFrom: android.graphics.Picture? = null
     private var fadeStart = 0L
+    private var fadeTiming: dev.launcher.app.motion.CurveTiming? = null
 
     override fun updateAppWidget(remoteViews: android.widget.RemoteViews?) {
         val now = android.os.SystemClock.uptimeMillis()
@@ -303,6 +305,7 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
                 }
             } catch (_: Throwable) { null }
             fadeStart = now
+            fadeTiming = dev.launcher.app.motion.CurveTiming(Motion.role(dev.launcher.app.motion.MotionTokens.WIDGET_LAYOUT_FADE))
         }
         super.updateAppWidget(remoteViews)
         invalidate()
@@ -311,19 +314,15 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
         val p = fadeFrom ?: return
-        val f = ((android.os.SystemClock.uptimeMillis() - fadeStart) / LAYOUT_FADE_MS).coerceIn(0f, 1f)
-        if (f >= 1f) { fadeFrom = null; return }
-        // The old content over the new, fading out (eased).
-        val a = (255 * (1f - f) * (1f - f)).toInt()
+        val t = fadeTiming ?: run { fadeFrom = null; return }
+        val e = (android.os.SystemClock.uptimeMillis() - fadeStart).toFloat()
+        if (e >= t.durationMs) { fadeFrom = null; return }
+        // The old content over the new, fading out on its curve (`motion.widget.layout-fade`).
+        val a = (255 * (1f - t.atMs(e)).coerceIn(0f, 1f)).toInt()
         val l = canvas.saveLayerAlpha(0f, 0f, width.toFloat(), height.toFloat(), a)
         canvas.drawPicture(p)
         canvas.restoreToCount(l)
         postInvalidateOnAnimation()
-    }
-
-    private companion object {
-        /** How long a widget's new layout takes to crossfade in after a resize (ms). */
-        const val LAYOUT_FADE_MS = 220f
     }
 }
 
@@ -592,11 +591,11 @@ class AppWidgetFrame(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, val h
             card.addView(g, 0, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
             glass = g
             onGlassCreated?.invoke(g)
-            g.animate().alpha(1f).setDuration(Motion.profile.appearMs).start()
+            g.animate().alpha(1f).timed(Motion.profile.appearFade).start()
         } else {
             val g = glass ?: return
             glass = null
-            g.animate().alpha(0f).setDuration(Motion.profile.disappearMs).withEndAction { card.removeView(g) }.start()
+            g.animate().alpha(0f).timed(Motion.profile.disappearFade).withEndAction { card.removeView(g) }.start()
         }
     }
 

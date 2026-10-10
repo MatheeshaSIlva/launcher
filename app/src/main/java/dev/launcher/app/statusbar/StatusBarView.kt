@@ -34,6 +34,7 @@ import android.view.WindowInsets
 import dev.launcher.app.AppLog
 import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
+import dev.launcher.app.motion.timed
 import dev.launcher.app.shade.Notifs
 import dev.launcher.app.theme.Fonts
 import java.util.Calendar
@@ -120,10 +121,10 @@ class StatusBarView(ctx: Context) : View(ctx) {
         // Fades (and slides a touch upward) like the stock bar does, instead of vanishing or appearing in one frame.
         animate().cancel()
         if (hidden) {
-            animate().alpha(0f).translationY(-barHeight * 0.25f).setDuration(160).withEndAction { visibility = INVISIBLE }.start()
+            animate().alpha(0f).translationY(-barHeight * 0.25f).timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_HIDE)).withEndAction { visibility = INVISIBLE }.start()
         } else {
             visibility = VISIBLE
-            animate().alpha(1f).translationY(0f).setDuration(200).start()
+            animate().alpha(1f).translationY(0f).timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_SHOW)).start()
         }
         onHiddenChanged?.invoke(hidden)
     }
@@ -141,7 +142,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
         darkTarget = t
         darkAnim?.cancel()
         darkAnim = android.animation.ValueAnimator.ofFloat(dark, t).apply {
-            duration = 220
+            timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_TONE))
             addUpdateListener { dark = it.animatedValue as Float; invalidate() }
             start()
         }
@@ -157,8 +158,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
         lockTarget = t
         lockAnim?.cancel()
         lockAnim = android.animation.ValueAnimator.ofFloat(lockK, t).apply {
-            duration = 260
-            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+            timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_LOCK))
             addUpdateListener { lockK = it.animatedValue as Float; invalidate() }
             start()
         }

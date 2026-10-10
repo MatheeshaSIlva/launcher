@@ -118,3 +118,61 @@ object BezierMath {
         return s
     }
 }
+
+/**
+ * A role's curve for Android's own animators ([android.animation.ValueAnimator], [android.view.View.animate]) and for
+ * motion drawn from the clock: a duration and a 0..1 progress. A bezier as it is; a spring from rest to 1, over the time
+ * it takes to settle. Where code relies on those animators' own behaviour (cancel runs the end listener, an end action),
+ * this keeps it, and any role can still be either kind of curve.
+ */
+class CurveTiming(curve: Curve) {
+    private val mover = curve.mover().apply { start(0f, 0f, 1f) }
+    /** How long the curve runs (slow motion included), ms. */
+    val durationMs: Long = when (curve) {
+        is Curve.Ease -> (curve.ms * Motion.slow()).toLong().coerceAtLeast(1L)
+        is Curve.Spring -> {
+            var t = 0.0
+            while (t < 10.0 && !mover.settled(t, 0.001f)) t += 0.004
+            (t * 1000).toLong().coerceAtLeast(1L)
+        }
+    }
+
+    /** Progress (0..1, beyond for an overshoot) when [u] of [durationMs] has passed. */
+    fun at(u: Float): Float = when {
+        u <= 0f -> 0f
+        u >= 1f -> 1f
+        else -> mover.value(u * durationMs / 1000.0)
+    }
+
+    /** Progress [elapsedMs] after the start. */
+    fun atMs(elapsedMs: Float): Float = at(elapsedMs / durationMs)
+
+    val interpolator = android.animation.TimeInterpolator { u -> at(u) }
+}
+
+/** Runs this animator on [curve] (its duration and its shape), over [fraction] of its length (a partial way back). */
+fun android.animation.ValueAnimator.timed(curve: Curve, fraction: Float = 1f): android.animation.ValueAnimator = apply {
+    val t = CurveTiming(curve)
+    duration = (t.durationMs * fraction.coerceIn(0f, 1f)).toLong().coerceAtLeast(1L)
+    interpolator = t.interpolator
+}
+
+/** Runs this view animation on [curve] (its duration and its shape). */
+fun android.view.ViewPropertyAnimator.timed(curve: Curve): android.view.ViewPropertyAnimator = apply {
+    val t = CurveTiming(curve)
+    duration = t.durationMs
+    interpolator = t.interpolator
+}
+
+/** A role's [CurveTiming], made again only when the design changed: cheap to ask for in every frame. */
+class RoleTiming(private val key: dev.launcher.app.design.CurveKey) {
+    private var at = -1
+    private var t: CurveTiming? = null
+
+    fun get(): CurveTiming {
+        val v = dev.launcher.app.design.Design.version
+        val cur = t
+        if (cur != null && v == at) return cur
+        return CurveTiming(Motion.role(key)).also { t = it; at = v }
+    }
+}

@@ -42,6 +42,7 @@ import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+import dev.launcher.app.motion.timed
 
 /**
  * Spotlight (iOS 26): pulled down from any home page. The library's blurred material fades in behind; app suggestions sit
@@ -318,7 +319,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
         // Suggestions and results cross-fade (from where a crossfade under way is: typing then deleting at once reverses it).
         resultsAnim?.cancel()
         resultsAnim = android.animation.ValueAnimator.ofFloat(resultsShown, want).apply {
-            duration = (Motion.profile.modeCrossfadeMs * kotlin.math.abs(want - resultsShown)).toLong().coerceAtLeast(1)
+            timed(Motion.profile.modeCrossfade, kotlin.math.abs(want - resultsShown))
             addUpdateListener { setResultsShown(it.animatedValue as Float) }
             start()
         }
@@ -581,9 +582,9 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
             animate().cancel()
             if (on) {
                 if (visibility != View.VISIBLE) { visibility = View.VISIBLE; alpha = 0f; scaleX = 0.5f; scaleY = 0.5f }
-                animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(220).setInterpolator(android.view.animation.OvershootInterpolator(1.6f)).start()
+                animate().alpha(1f).scaleX(1f).scaleY(1f).timed(Motion.role(dev.launcher.app.motion.MotionTokens.FIELD_CLEAR_IN)).start()
             } else {
-                animate().alpha(0f).scaleX(0.5f).scaleY(0.5f).setDuration(160).setInterpolator(android.view.animation.AccelerateInterpolator())
+                animate().alpha(0f).scaleX(0.5f).scaleY(0.5f).timed(Motion.role(dev.launcher.app.motion.MotionTokens.FIELD_CLEAR_OUT))
                     .withEndAction { visibility = View.INVISIBLE }.start()
             }
         }

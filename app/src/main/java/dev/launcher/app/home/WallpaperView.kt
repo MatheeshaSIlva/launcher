@@ -5,7 +5,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.os.Build
 import android.view.View
-import android.view.animation.PathInterpolator
+import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.MotionTokens
+import dev.launcher.app.motion.timed
 import dev.launcher.app.AppLog
 import dev.launcher.app.Wallpaper
 import dev.launcher.app.WallpaperTransition
@@ -18,7 +20,7 @@ class WallpaperView(ctx: Context, private val cellPx: Float) : View(ctx) {
             val arrived = field == null && v != null && isAttachedToWindow && width > 0
             field = v
             // Read after home is on screen (the first start, a retry): fades in over the black ground instead of popping.
-            if (arrived && transition == null) { alpha = 0f; animate().alpha(1f).setDuration(320).start() }
+            if (arrived && transition == null) { alpha = 0f; animate().alpha(1f).timed(Motion.role(MotionTokens.WALLPAPER_APPEAR)).start() }
             invalidate()
         }
 
@@ -27,7 +29,7 @@ class WallpaperView(ctx: Context, private val cellPx: Float) : View(ctx) {
     private var time = 0f
     val transitioning get() = transition != null
 
-    /** Reveal transition from [from] to [to] (≈2.8 s); falls back to a short crossfade if the shader fails. */
+    /** Reveal transition from [from] to [to] (`motion.wallpaper.reveal`); falls back to a short crossfade if the shader fails. */
     fun transitionTo(from: Wallpaper, to: Wallpaper, onFrame: (Float, Float) -> Unit = { _, _ -> }, onEnd: () -> Unit) {
         val t = try {
             if (Build.VERSION.SDK_INT >= 33) WallpaperTransition(from, to, width, height, cellPx) else null
@@ -38,13 +40,12 @@ class WallpaperView(ctx: Context, private val cellPx: Float) : View(ctx) {
         if (t == null) {
             alpha = 0f
             wallpaper = to
-            animate().alpha(1f).setDuration(350).withEndAction(onEnd).start()
+            animate().alpha(1f).timed(Motion.role(MotionTokens.WALLPAPER_CROSSFADE)).withEndAction(onEnd).start()
             return
         }
         transition = t
         android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 2800
-            interpolator = PathInterpolator(0.45f, 0f, 0.3f, 1f)   // starts gently, eases out
+            timed(Motion.role(MotionTokens.WALLPAPER_REVEAL))   // iOS 27: starts gently, eases out
             addUpdateListener {
                 progress = it.animatedValue as Float
                 time = it.currentPlayTime / 1000f

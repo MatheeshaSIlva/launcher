@@ -890,6 +890,8 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         clearShown.animateTo(0f, Motion.profile.menuClose)
         closeMenu()
         performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+        // Clear All: one card flies off this long after the one before it; home comes `motion.switcher.clear-home` after the last.
+        val clearStagger = dev.launcher.app.design.Design.num(dev.launcher.app.motion.MotionTokens.SWITCHER_CLEAR_STAGGER).toLong()
         var n = 0
         for (i in cards.indices) {
             val c = cards[i]
@@ -897,13 +899,13 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
             frame(i, box)
             if (box.right <= 0f || box.left >= sw) continue
             val top = -(box.bottom - (c.lift?.value ?: 0f) + dp(40f))
-            postDelayed({ liftOf(c).animateTo(top, profile.flick, -dp(1600f)) }, n * CLEAR_STAGGER_MS)
+            postDelayed({ liftOf(c).animateTo(top, profile.flick, -dp(1600f)) }, n * clearStagger)
             n++
         }
         for (c in gone) listener.onRemove(c)
         invalidate()
         // (Still clearing while home comes: the closed cards stay in the deck until it goes, Clear All must not come back.)
-        postDelayed({ goHome() }, n * CLEAR_STAGGER_MS + CLEAR_HOME_AFTER_MS)
+        postDelayed({ goHome() }, n * clearStagger + dev.launcher.app.design.Design.num(dev.launcher.app.motion.MotionTokens.SWITCHER_CLEAR_HOME).toLong())
     }
 
     private fun cardAt(x: Float, y: Float): Card? {
@@ -992,9 +994,6 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         const val PICTURE_MARGIN = 4f
 
         const val CLEAR_LABEL = "Clear All"
-        /** Clear All: one card flies off this long after the one before it; home comes this long after the last. */
-        const val CLEAR_STAGGER_MS = 45L
-        const val CLEAR_HOME_AFTER_MS = 160L
         val CLEAR_PRESS get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.SWITCHER_CLEAR_PRESS)
     }
 }

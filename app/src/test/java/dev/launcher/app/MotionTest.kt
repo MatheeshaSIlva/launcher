@@ -109,4 +109,24 @@ class MotionTest {
         m.start(0f, 0f, 100f); s.start(0f, 0f, 100f)
         for (t in listOf(0.0, 0.1, 0.3, 0.6)) assertEquals(s.value(t), m.value(t), 1e-4f)
     }
+
+    @Test fun everyRoleIsNamedOnce() {
+        val tokens = preset("ios27").entries.keys
+        val named = dev.launcher.app.motion.MotionRoles.ALL.flatMap { g -> g.roles.map { it.key } }
+        assertEquals("named twice: ${named.groupBy { it }.filter { it.value.size > 1 }.keys}", named.size, named.toSet().size)
+        assertEquals("not named: ${tokens - named.toSet()}", emptySet<String>(), tokens - named.toSet())
+        assertEquals("named but not in the preset: ${named.toSet() - tokens}", emptySet<String>(), named.toSet() - tokens)
+        for (k in dev.launcher.app.motion.MotionTokens.CURVES + dev.launcher.app.motion.MotionTokens.NUMBERS) assertTrue("$k not named", k in named)
+    }
+
+    @Test fun aRoleAsAnimatorTimingKeepsItsShape() {
+        // A bezier as it is; a spring sampled over the time it takes to settle, ending on 1.
+        val e = dev.launcher.app.motion.CurveTiming(Curve.Ease(0.4f, 0f, 0.2f, 1f, 260f))
+        assertEquals(260L, e.durationMs)
+        assertEquals(0f, e.at(0f), 0f); assertEquals(1f, e.at(1f), 0f)
+        val s = dev.launcher.app.motion.CurveTiming(Curve.Spring(0.4f, 1f))
+        assertTrue("a critically damped 0.4 s spring settles in 0.3-1.5 s: ${s.durationMs}", s.durationMs in 300L..1500L)
+        assertEquals(1f, s.at(1f), 0f)
+        assertEquals(Spring(0.4f, 1f).apply { start(0f, 0f, 1f) }.value(0.1), s.atMs(100f), 1e-4f)
+    }
 }

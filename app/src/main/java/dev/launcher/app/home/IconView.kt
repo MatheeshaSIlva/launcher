@@ -16,6 +16,7 @@ import android.view.View
 import dev.launcher.app.apps.AppEntry
 import dev.launcher.app.apps.Icons
 import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.timed
 
 /**
  * An app on a home page or in the dock: the shaped icon, centred at the top, and (on pages) its label below.
@@ -90,7 +91,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
         labelAnim?.cancel()
         if (!animate || !showLabel) { labelK = to; invalidate(); return }
         labelAnim = ValueAnimator.ofFloat(labelK, to).apply {
-            duration = Motion.profile.appearMs
+            timed(Motion.profile.appearFade)
             addUpdateListener { labelK = it.animatedValue as Float; invalidate() }
             start()
         }
@@ -192,7 +193,7 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
         val p = Motion.profile
         dimAnim?.cancel()
         dimAnim = ValueAnimator.ofFloat(dim, if (down) p.iconPressDim else 0f).apply {
-            duration = if (down) p.iconPressInMs else p.iconPressOutMs
+            timed(if (down) p.iconPressIn else p.iconPressOut)
             addUpdateListener { dim = it.animatedValue as Float; invalidate() }
             start()
         }

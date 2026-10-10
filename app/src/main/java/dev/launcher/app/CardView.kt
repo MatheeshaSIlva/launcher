@@ -8,6 +8,10 @@ import android.graphics.Paint
 import android.graphics.drawable.Drawable
 import android.view.View
 import android.view.ViewOutlineProvider
+import dev.launcher.app.motion.CurveTiming
+import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.MotionTokens
+import dev.launcher.app.motion.timed
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -27,6 +31,7 @@ class CardView(context: Context) : View(context) {
     // launch screen, or an older snapshot): [fadeFrom] (null: the launch screen) since [fadeStart] (0: no fade).
     private var fadeFrom: Bitmap? = null
     private var fadeStart = 0L
+    private var fadeTiming: CurveTiming? = null
 
     /**
      * [b] as the card's picture, faded in over what the card shows now when the card is on screen (set directly while it is
@@ -37,15 +42,16 @@ class CardView(context: Context) : View(context) {
         val from = snapshot
         val onScreen = b != null && isShown && alpha > 0f && homePicture == null
         snapshot = b
-        if (onScreen) { fadeFrom = from; fadeStart = android.os.SystemClock.uptimeMillis() }
+        if (onScreen) { fadeFrom = from; fadeStart = android.os.SystemClock.uptimeMillis(); fadeTiming = CurveTiming(Motion.role(MotionTokens.CARD_SNAPSHOT)) }
     }
 
-    /** How far a [fadeToSnapshot] has come (1: done, or none), eased out. */
+    /** How far a [fadeToSnapshot] has come (1: done, or none), on its curve (`motion.card.snapshot`). */
     private fun fadeK(): Float {
         if (fadeStart == 0L) return 1f
-        val f = ((android.os.SystemClock.uptimeMillis() - fadeStart) / SNAPSHOT_FADE_MS).coerceIn(0f, 1f)
-        if (f >= 1f) { fadeStart = 0L; fadeFrom = null; return 1f }
-        return 1f - (1f - f) * (1f - f) * (1f - f)
+        val t = fadeTiming ?: return 1f
+        val e = (android.os.SystemClock.uptimeMillis() - fadeStart).toFloat()
+        if (e >= t.durationMs) { fadeStart = 0L; fadeFrom = null; return 1f }
+        return t.atMs(e).coerceIn(0f, 1f)
     }
     var icon: Drawable? = null
         set(v) { field = v; invalidate() }
@@ -63,7 +69,7 @@ class CardView(context: Context) : View(context) {
         placeholderColor = color   // ends any blend under way
         shownColor = from
         colorAnim = android.animation.ValueAnimator.ofArgb(from, color).apply {
-            duration = 180
+            timed(Motion.role(MotionTokens.CARD_COLOR))
             addUpdateListener { a -> shownColor = a.animatedValue as Int; invalidate() }
             start()
         }
@@ -240,6 +246,3 @@ class CardBadgeView(context: Context, private val card: CardView) : View(context
     init { card.badgeLayer = this }
     override fun onDraw(canvas: Canvas) = card.drawBadge(canvas)
 }
-
-/** How long a snapshot that arrived while its card was on screen takes to fade in over what the card showed (ms). */
-private const val SNAPSHOT_FADE_MS = 160f

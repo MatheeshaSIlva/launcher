@@ -41,6 +41,7 @@ import dev.launcher.app.apps.SplashColors
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.Mover
 import dev.launcher.app.motion.mover
+import dev.launcher.app.motion.timed
 
 /**
  * Our bottom-edge gesture navigation and app launch/close animations.
@@ -693,7 +694,7 @@ object GestureNav {
         if (hidden == stripHidden) return
         stripHidden = hidden
         (s as? android.view.ViewGroup)?.getChildAt(0)?.animate()?.alpha(if (hidden) 0f else 1f)
-            ?.setDuration(if (hidden) STRIP_OUT_MS else STRIP_IN_MS)?.start()
+            ?.timed(Motion.role(if (hidden) dev.launcher.app.motion.MotionTokens.STRIP_HIDE else dev.launcher.app.motion.MotionTokens.STRIP_SHOW))?.start()
         // Back to all of it with an explicit region: null does not reset the region the window manager has.
         if (Build.VERSION.SDK_INT >= 34) s.rootSurfaceControl?.setTouchableRegion(
             if (hidden) android.graphics.Region(-2, -2, -1, -1) else android.graphics.Region(0, 0, s.width.coerceAtLeast(1) * 4, s.height.coerceAtLeast(1) * 4))
@@ -933,7 +934,6 @@ object GestureNav {
 
     // ---- a home card that appears late: its snapshot takes 50-300 ms; until then the app itself is what the user sees
 
-    private const val CATCH_UP_MS = 120.0
     // A picture of the app in front younger than this is shown at once by a home gesture; kept that young in the background.
     private const val RECENT_MS = 10_000L
     private const val KEEP_FRESH_MS = 6_000L
@@ -941,6 +941,7 @@ object GestureNav {
     private const val SWITCHER_REFRESH_SETTLE_MS = 150L
     private const val KEEP_FRESH_MIN_GAP_MS = 1_200L
     private var catchUpAt = 0L          // nanoTime when a late card appeared during a drag (0 = not catching up)
+    private var catchUpTiming: dev.launcher.app.motion.CurveTiming? = null   // its curve (`motion.card.catch-up`)
     private var lastDragX = 0f
     private var lastDragY = 0f
     private var deferredRelease: FloatArray? = null   // [vx, vy] of a close released before its card could show
@@ -960,6 +961,7 @@ object GestureNav {
         // Only a card that is late (the finger has already travelled): one that shows at the start just follows the finger.
         if (fingerDown && travel0 <= 1f && lastTravel > dp(24)) {
             catchUpAt = System.nanoTime()
+            catchUpTiming = dev.launcher.app.motion.CurveTiming(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_CATCH_UP))
             dragHome(lastDragX, lastDragY)   // this very frame: full screen, exactly where the app is
             choreographer.postFrameCallback(catchUpFrame)
         }
@@ -1492,13 +1494,14 @@ object GestureNav {
         var fh = h
         if (catchUpAt != 0L) {
             // A late card glides from full screen (where the app is) to the finger.
-            val p = ((System.nanoTime() - catchUpAt) / 1e6 / CATCH_UP_MS).coerceIn(0.0, 1.0).toFloat()
-            val k = 1f - (1f - p) * (1f - p) * (1f - p)
+            val ct = catchUpTiming
+            val e = ((System.nanoTime() - catchUpAt) / 1e6).toFloat()
+            val k = ct?.atMs(e)?.coerceIn(0f, 1f) ?: 1f
             cx = sw / 2 + (cx - sw / 2) * k
             cy = sh / 2 + (cy - sh / 2) * k
             fw = sw + (fw - sw) * k
             fh = sh + (fh - sh) * k
-            if (p >= 1f) catchUpAt = 0L
+            if (ct == null || e >= ct.durationMs) catchUpAt = 0L
         }
         c.setFrame(cx, cy, fw, fh, deviceRadius + (grabR - deviceRadius) * b)
         c.iconMix = grabMix * b
@@ -1626,7 +1629,7 @@ object GestureNav {
         hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
         hiddenIconPkg = null
         AppLog.log("[nav] home touched during the close: the card fades where it is")
-        fadeOutCards(110, gen, overHome = true)
+        fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_HOME), gen, overHome = true)
     }
 
     // ---- touches during a close
@@ -1842,10 +1845,10 @@ object GestureNav {
         onSettled = {
             startApp()   // without a picture of home the app is only started now, so it cannot show early
             phase = Phase.HOLD
-            if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(90, g)
+            if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP), g)
             else awaitForeground(pkg, g) {
                 // Our own screens (the developer panel, safe settings) say when they have drawn (ownScreenDrawn).
-                if (lastFrontPkg == pkg || pkg == app.packageName) { fadeOutCards(90, g); return@awaitForeground }
+                if (lastFrontPkg == pkg || pkg == app.packageName) { fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP), g); return@awaitForeground }
                 // A window of another package can belong to the tapped app's own task (Settings showing Samsung's wallpaper
                 // picker, seen on the S24): only another task in front is the wrong app.
                 val s = ShizukuLink.service
@@ -1859,7 +1862,7 @@ object GestureNav {
                             AppLog.log("[front] WRONG APP after launching $pkg: $other is in front (top task $top); starting $pkg again")
                             bringBack(pkg, null)
                         }
-                        fadeOutCards(90, g)
+                        fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP), g)
                     }
                 }
             }
@@ -1931,8 +1934,6 @@ object GestureNav {
     private const val QUIET_BACK_MS = 1500L
     private const val QUIET_SETTLE_MS = 100L
     /** The gesture bar's pill fading out as a panel opens, and back in once it has closed. */
-    private const val STRIP_OUT_MS = 140L
-    private const val STRIP_IN_MS = 240L
     private var fingerDown = false
 
     private fun holdScalesOff() {
@@ -2179,17 +2180,17 @@ object GestureNav {
     }
 
     /**
-     * Fades the cards out over [ms]. [overHome]: the card is small over the picture of home, which fades with it (the real
+     * Fades the cards out on [curve]. [overHome]: the card is small over the picture of home, which fades with it (the real
      * home under it looks the same). Otherwise (the end of a launch) the card covers the whole screen and the picture goes at
      * once: fading it with the card let it show through the half-transparent card, a grey flash at the end of every launch
      * (screen-recorded on the S24 at 120 fps).
      */
-    private fun fadeOutCards(ms: Long, g: Int, overHome: Boolean = false) {
+    private fun fadeOutCards(curve: dev.launcher.app.design.Curve, g: Int, overHome: Boolean = false) {
         val r = root ?: return
         if (gen != g) return
         if (!overHome) backdrop?.alpha = 0f
         // Set (or cleared) every time: a view's animator keeps its update listener from one animation to the next.
-        r.animate().alpha(0f).setDuration(ms)
+        r.animate().alpha(0f).timed(curve)
             .setUpdateListener(if (overHome) android.animation.ValueAnimator.AnimatorUpdateListener { backdrop?.alpha = r.alpha } else null)
             .withEndAction { if (gen == g) hideCards() }.start()
     }

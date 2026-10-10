@@ -138,6 +138,11 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private val clockDate = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); textAlign = Paint.Align.CENTER }
     private val clockPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6FFFFFF.toInt(); typeface = Fonts.display(700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f }
     private val title = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.CENTER, Fonts.text(600)).toned { Appearance.label }
+    // Rows arriving or moving and previews fading in: their timelines (`motion.widgets.*`).
+    private val rowT = dev.launcher.app.motion.RoleTiming(dev.launcher.app.motion.MotionTokens.WIDGETS_ROW)
+    private val previewT = dev.launcher.app.motion.RoleTiming(dev.launcher.app.motion.MotionTokens.WIDGETS_PREVIEW)
+    private fun rowStagger(): Long = dev.launcher.app.design.Design.num(dev.launcher.app.motion.MotionTokens.WIDGETS_ROW_STAGGER).toLong()
+
     private val rowText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.label }
     private val rowSub = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.secondaryLabel }
     private val sectionText = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(600)).toned { Appearance.secondaryLabel }
@@ -561,9 +566,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     /** Rows and previews are still settling in. */
     private fun animatingArrivals(): Boolean {
         val now = SystemClock.uptimeMillis()
-        if (listArrivedAt != 0L && now - listArrivedAt < ROW_STAGGER_MS * 8 + ROW_FADE_MS) return true
-        if (rowMotion.values.any { now - it.start < ROW_FADE_MS } || now - featuredChangedAt < ROW_FADE_MS) return true
-        return previewShownAt.values.any { now - it < PREVIEW_FADE_MS }
+        if (listArrivedAt != 0L && now - listArrivedAt < rowStagger() * 8 + rowT.get().durationMs) return true
+        if (rowMotion.values.any { now - it.start < rowT.get().durationMs } || now - featuredChangedAt < rowT.get().durationMs) return true
+        return previewShownAt.values.any { now - it < previewT.get().durationMs }
     }
 
     // The sheet's buttons (`comp.widgets.button.material`) and cards (`comp.widgets.card.material`): over the blurred
@@ -695,7 +700,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     /** The list's content (the featured clock, the titles, the app rows), the canvas at the content's origin. */
     private fun drawListContent(c: Canvas) {
         var top = 0f
-        val featuredK = ((SystemClock.uptimeMillis() - featuredChangedAt).toFloat() / ROW_FADE_MS).coerceIn(0f, 1f)
+        val featuredK = rowT.get().atMs((SystemClock.uptimeMillis() - featuredChangedAt).toFloat()).coerceIn(0f, 1f)
         val featuredA = if (query.isEmpty()) featuredK else 1f - featuredK
         if (featuredA > 0f) {
             val fl = if (featuredA < 1f) c.saveLayerAlpha(0f, 0f, m.w.toFloat(), featuredH, (255 * featuredA).toInt()) else -1
@@ -727,14 +732,14 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             var rowAlpha = 1f
             var rise = 0f
             val mo = rowMotion[rowKey(a)]
-            if (mo != null && now - mo.start < ROW_FADE_MS) {
-                val f = ((now - mo.start).toFloat() / ROW_FADE_MS).coerceIn(0f, 1f)
+            if (mo != null && now - mo.start < rowT.get().durationMs) {
+                val f = rowT.get().atMs((now - mo.start).toFloat()).coerceIn(0f, 1f)
                 val e = 1f - (1f - f) * (1f - f) * (1f - f)
                 if (mo.fromY.isNaN()) { rowAlpha = e; rise = (1f - e) * m.pt(10f) }
                 else rise = (mo.fromY - rt) * (1f - e)   // glides from its old place
             } else if (listArrivedAt != 0L && query.isEmpty()) {
-                val t = now - listArrivedAt - min(i, 8) * ROW_STAGGER_MS
-                val f = (t.toFloat() / ROW_FADE_MS).coerceIn(0f, 1f)
+                val t = now - listArrivedAt - min(i, 8) * rowStagger()
+                val f = rowT.get().atMs(t.toFloat()).coerceIn(0f, 1f)
                 rowAlpha = f
                 rise = (1f - f) * (1f - f) * m.pt(10f)
             }
@@ -798,7 +803,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val rgt = kotlin.math.ceil(card.right).toInt() + pad
         val btm = kotlin.math.ceil(card.bottom).toInt() + pad
         val now = SystemClock.uptimeMillis()
-        val fading = clockGlasses.values.any { now - it.second < PREVIEW_FADE_MS }
+        val fading = clockGlasses.values.any { now - it.second < previewT.get().durationMs }
         var k = ((l * 31L + t) * 31 + rgt) * 31 + btm
         k = k * 31 + Math.round(down * 64f)
         k = k * 31 + previewDate.hashCode() * 17L + previewTime.hashCode()
@@ -934,7 +939,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             }
         }
         if (g != null && c.isHardwareAccelerated) {
-            val k = ((SystemClock.uptimeMillis() - g.second).toFloat() / PREVIEW_FADE_MS).coerceIn(0f, 1f)
+            val k = previewT.get().atMs((SystemClock.uptimeMillis() - g.second).toFloat()).coerceIn(0f, 1f)
             val gl = g.first
             gl.alpha = (255 * k).toInt()
             gl.tone = tone
@@ -1038,7 +1043,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         }
         val pv = previews[info]
         val shownAt = previewShownAt[info] ?: 0L
-        val fade = if (shownAt == 0L) 1f else ((SystemClock.uptimeMillis() - shownAt).toFloat() / PREVIEW_FADE_MS).coerceIn(0f, 1f)
+        val fade = if (shownAt == 0L) 1f else previewT.get().atMs((SystemClock.uptimeMillis() - shownAt).toFloat()).coerceIn(0f, 1f)
         c.save()
         path.reset()
         path.addRoundRect(box, rad, rad, Path.Direction.CW)
@@ -1231,10 +1236,4 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     }
 
     private fun smooth(t: Float) = t * t * (3f - 2f * t)
-
-    private companion object {
-        const val ROW_STAGGER_MS = 28L
-        const val ROW_FADE_MS = 240L
-        const val PREVIEW_FADE_MS = 260L
-    }
 }

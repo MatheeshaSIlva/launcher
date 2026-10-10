@@ -21,6 +21,7 @@ import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.hypot
 import kotlin.math.sin
+import dev.launcher.app.motion.timed
 
 /**
  * iOS edit mode ("jiggle mode") for the home screen: every icon and widget wiggles, a "–" badge removes it from home (apps
@@ -123,7 +124,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
     private fun stopJiggle() {
         jiggling = false
-        for (v in allItemViews()) v.animate().rotation(0f).setDuration(120).start()
+        val stop = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.JIGGLE_STOP)
+        for (v in allItemViews()) v.animate().rotation(0f).timed(stop).start()
     }
 
     private val jiggleFrame = object : Choreographer.FrameCallback {

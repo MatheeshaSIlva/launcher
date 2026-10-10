@@ -3,7 +3,7 @@ package dev.launcher.app.theme
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.res.Configuration
-import android.view.animation.PathInterpolator
+import dev.launcher.app.motion.timed
 
 /**
  * Light and dark appearance, as iOS has them: the materials (App Library, folders, Spotlight, menus, sheets) and the text
@@ -12,7 +12,7 @@ import android.view.animation.PathInterpolator
  * the same in both, as on iOS. Part of a theme's colour layer.
  *
  * Follows the system's dark mode unless the user picked one ([Mode]). A change never snaps: [dark] travels from 0 (light)
- * to 1 (dark) over [CHANGE_MS], and every colour here is read at draw time as a blend at that point, so every surface
+ * to 1 (dark) on `motion.appearance.change`, and every colour here is read at draw time as a blend at that point, so every surface
  * crossfades on the same frames. Main thread only.
  */
 object Appearance {
@@ -88,8 +88,7 @@ object Appearance {
         anim?.cancel()
         val from = dark
         anim = ValueAnimator.ofFloat(from, to).apply {
-            duration = (CHANGE_MS * kotlin.math.abs(to - from)).toLong().coerceAtLeast(1)
-            interpolator = PathInterpolator(0.4f, 0f, 0.2f, 1f)
+            timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.APPEARANCE_CHANGE), kotlin.math.abs(to - from))
             addUpdateListener { dark = it.animatedValue as Float; notifyListeners() }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 private var cancelled = false
@@ -227,5 +226,4 @@ object Appearance {
     /** The edit-mode remove badge: a light disc with a dark minus in light mode, as iOS. */
 
     private const val KEY = "mode"
-    private const val CHANGE_MS = 450L
 }

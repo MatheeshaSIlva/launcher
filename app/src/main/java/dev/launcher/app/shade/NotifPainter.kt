@@ -254,7 +254,7 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
 
     /** A time label's crossfade: [old] fading out as the current one fades in ([k] 0..1). */
     class TimeFade(var cur: String, var old: String, var at: Long) {
-        val k get() = ((android.os.SystemClock.uptimeMillis() - at).toFloat() / TIME_FADE_MS).coerceIn(0f, 1f)
+        val k get() = timeFade.get().atMs((android.os.SystemClock.uptimeMillis() - at).toFloat()).coerceIn(0f, 1f)
     }
     private val timeFades = HashMap<String, TimeFade>()
 
@@ -324,8 +324,8 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
     }
 
     companion object {
-        /** A time label changing ("now" to "1m ago"): its crossfade. */
-        const val TIME_FADE_MS = 300f
+        /** A time label changing ("now" to "1m ago"): its crossfade (`motion.nc.time-fade`). */
+        private val timeFade = dev.launcher.app.motion.RoleTiming(dev.launcher.app.motion.MotionTokens.NC_TIME_FADE)
         private val io = Executors.newSingleThreadExecutor()
     }
 }
