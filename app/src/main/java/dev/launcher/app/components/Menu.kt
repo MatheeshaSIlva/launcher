@@ -115,7 +115,20 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
      * Lays [menu] out for what it belongs to at [anchor] (host coordinates), within [bounds]: below it if it fits there,
      * else above, [gapPt] away; centred on it, or from its left edge when [fromLeft] and it is on the left half.
      */
+    // The design's structure the fonts were taken at: a menu kept from before a theme change takes the new ones as it opens.
+    private var fontsAt = Design.structure
+
+    private fun refreshFonts() {
+        if (fontsAt == Design.structure) return
+        fontsAt = Design.structure
+        Design.text(spec.type).applyTo(labels.paint, u)
+        labels.clear()
+        choiceText.paint.typeface = Fonts.text(500)
+        choiceText.clear()
+    }
+
     fun layout(menu: List<Item>, anchor: RectF, bounds: RectF, gapPt: Float, fromLeft: Boolean) {
+        refreshFonts()
         items = menu
         labels.clear()
         val longest = menu.maxOfOrNull { labels.paint.measureText(it.label) } ?: 0f

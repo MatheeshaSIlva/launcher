@@ -66,12 +66,14 @@ import java.util.concurrent.Executors
  */
 @SuppressLint("ViewConstructor")
 class StatusBarView(ctx: Context) : View(ctx) {
-    private val time = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); fontFeatureSettings = "'tnum'" }
-    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600) }
+    // The theme's fonts, kept when it changes (B4b: Fonts.Followers).
+    private val fonts = Fonts.Followers(this) { relayout(); invalidate() }
+    private val time = Paint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600); fontFeatureSettings = "'tnum'" }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600) }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val cut = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT); typeface = Fonts.text(700); textAlign = Paint.Align.CENTER
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT); fonts.text(this, 700); textAlign = Paint.Align.CENTER
         fontFeatureSettings = "'tnum'"
     }
     private val r = RectF()

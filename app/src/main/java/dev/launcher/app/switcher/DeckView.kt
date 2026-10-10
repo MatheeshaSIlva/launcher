@@ -231,9 +231,11 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     private val cardPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    // The theme's fonts, kept when it changes (B4b: Fonts.Followers).
+    private val fonts = dev.launcher.app.theme.Fonts.Followers(this)
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFFFFFFF.toInt()
-        typeface = Typeface.create(Typeface.DEFAULT, 600, false)
+        fonts.text(this, 600)   // the theme's (it was the phone's own font)
         textSize = dp(15f)
     }
     // Fades with the name (cards away from the focus, opening): FadingShadow.

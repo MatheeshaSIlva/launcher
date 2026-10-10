@@ -62,6 +62,7 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
     private fun sync() {
         if (tokens == Design.version) return
         tokens = Design.version
+        fonts.refresh()
         layouts.clear()
         padding = Design.num(NcTokens.PADDING); iconPt = Design.num(NcTokens.ICON); textX = Design.num(NcTokens.TEXT_X)
         textTop = Design.num(NcTokens.TEXT_TOP); minH = Design.num(NcTokens.MIN_HEIGHT)
@@ -80,11 +81,13 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
         return top + (lineH - (fm.descent - fm.ascent)) / 2f - fm.ascent
     }
 
-    private val title = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600) }
-    private val body = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(400) }
-    private val time = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(400); textAlign = Paint.Align.RIGHT }
-    private val callName = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600) }
-    private val callWhat = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(400) }
+    // The theme's fonts, kept when it changes (B4b): given again in [sync], which runs before every layout.
+    private val fonts = Fonts.Followers()
+    private val title = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600) }
+    private val body = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 400) }
+    private val time = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 400); textAlign = Paint.Align.RIGHT }
+    private val callName = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600) }
+    private val callWhat = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 400) }
     private val bmp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val rect = RectF()
     private val path = Path()

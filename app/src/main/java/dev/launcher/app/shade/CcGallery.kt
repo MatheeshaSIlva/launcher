@@ -40,9 +40,11 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     private val glyphs = Glyphs(ctx)
-    private val heading = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.display(700); color = 0xFFFFFFFF.toInt() }
-    private val section = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); color = 0x99FFFFFF.toInt() }
-    private val name = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(500); color = 0xD9FFFFFF.toInt(); textAlign = Paint.Align.CENTER }
+    // The theme's fonts, kept when it changes (B4b: Fonts.Followers).
+    private val fonts = Fonts.Followers(this) { requestLayout(); invalidate() }
+    private val heading = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.display(this, 700); color = 0xFFFFFFFF.toInt() }
+    private val section = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600); color = 0x99FFFFFF.toInt() }
+    private val name = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 500); color = 0xD9FFFFFF.toInt(); textAlign = Paint.Align.CENTER }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val rect = RectF()
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()

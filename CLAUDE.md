@@ -71,7 +71,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   constants (a function parameter as an index does not compile): gradient stops are read inside the fill loop.
   Fonts (`theme/Fonts.kt`, `FontFamily`): `sys.font.text` / `sys.font.display` name a family (`inter`, `system`,
   `system-serif`, `system-mono`, `google:Name`); Google fonts are downloaded through Play services' font provider into
-  `files/fonts/google/` (then instant, offline). Paints built once keep their font until rebuilt.
+  `files/fonts/google/` (then instant, offline). A paint made once takes its font through its view's
+  `Fonts.Followers` (`fonts.text(this, 600)`, never `typeface = Fonts.text(600)` outside home, which is built again on
+  every design change: `HomeScreen.rebuild`).
   **Motion is not the theme's**: animation presets (`assets/motion/<id>.json`, same file format, `ios27` the base) hold
   every `motion.*` role as a curve, a spring or a bezier (`{"bezier": [x1, y1, x2, y2], "ms": N}`); code asks
   `Motion.role(MotionTokens.X)` / `Motion.profile` and runs it through `Curve.mover()` / `MotionValue` (both kinds

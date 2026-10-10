@@ -230,8 +230,14 @@ Each phase ends with a check on the S24 and Matheesha's OK.
      rest (it once took the new build's first frame: home came up black). Checked on the emulator: iOS 27 and Graphite
      both ways on screen and behind an app (closes into the right icon, names, the clock's numerals, the wallpaper), the
      drawer's placement changed on screen, menus after each switch, the animation tour.
-   - **B4b, fonts everywhere follow**: paints made once (the shade, the status bar, banners, menus) take the theme's new
-     fonts at once.
+   - **B4b, fonts everywhere follow** (done 2026-10-10): paints made once outside home (the status bar, Control Center
+     with its expanded modules and gallery, Notification Center, notification cards, banners, the App Switcher) keep the
+     theme's fonts through `Fonts.Followers`: each view's set gives its paints the fonts again on the view's own thread
+     when the design's structure changed, then the view measures its text again; painters without a view refresh before
+     they lay out (menus as they open, notification cards with their tokens). Notification Center's glass clock makes its
+     numerals again for new fonts. The App Switcher's names were in the phone's own font: now the theme's (Inter on iOS 27).
+     Checked on the emulator: iOS 27 unchanged elsewhere; Manrope and Fraunces set and removed with no restart, every
+     surface following (home, the status bar, Control Center, Notification Center and its clock).
    - Done with D1/D2: a second layout of an element switched both ways (the mechanism is the same: built again, published,
      crossfaded).
 

@@ -59,9 +59,11 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     enum class Kind { CONNECTIVITY, BRIGHTNESS, VOLUME, FLASHLIGHT, TIMER, MEDIA, FOCUS }
 
     private val glyphs = Glyphs(ctx)
-    private val title = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); color = 0xFFFFFFFF.toInt() }
-    private val small = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(500); color = 0xB3FFFFFF.toInt() }
-    private val big = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.display(700); color = 0xFFFFFFFF.toInt(); textAlign = Paint.Align.CENTER }
+    // The theme's fonts, kept when it changes (B4b: Fonts.Followers).
+    private val fonts = Fonts.Followers()   // given again at the start of each draw (Control Center draws this)
+    private val title = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600); color = 0xFFFFFFFF.toInt() }
+    private val small = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 500); color = 0xB3FFFFFF.toInt() }
+    private val big = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.display(this, 700); color = 0xFFFFFFFF.toInt(); textAlign = Paint.Align.CENTER }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val artPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -186,6 +188,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
 
     /** Draws the expanded module, faded by [fade] (Control Center itself going away). */
     fun draw(c: Canvas, fade: Float) {
+        fonts.refresh()
         val kd = kind ?: return
         val kv = k.value
         if (kv <= 0.002f || fade <= 0.003f) return

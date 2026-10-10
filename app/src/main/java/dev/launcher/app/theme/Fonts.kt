@@ -16,8 +16,8 @@ import dev.launcher.app.design.Design
  * of SF's Text/Display split: small text uses the text cut, large titles the display cut.
  *
  * A Google font not yet on the phone is downloaded in the background; until it arrives the system's sans stands in, and
- * on arrival every surface that listens to the design draws again. Paints made earlier keep the font they were given
- * (a theme switch rebuilds them: B4).
+ * on arrival every surface that listens to the design draws again. Home is built again on a change of fonts (B4a);
+ * paints made once elsewhere follow through [Followers] (B4b).
  */
 object Fonts {
     val TEXT = ChoiceKey("sys.font.text")
@@ -40,6 +40,45 @@ object Fonts {
         "text" -> text(weight)
         "display" -> display(weight)
         else -> get(parse(family), weight, sizePt.toInt().coerceIn(14, 32))
+    }
+
+    // ------------------------------------------------------------------ paints that follow (B4b)
+
+    /**
+     * Paints that keep the theme's fonts: given their font with [text] / [display] (in place of `typeface = Fonts.text(w)`)
+     * and given it again by [refresh] when the design's structure changed (another theme, an edit, a font that arrived).
+     * With a [view] that happens on the view's own thread while it is attached, then [onChange] runs (text measured again);
+     * without one, the owner calls [refresh].
+     */
+    class Followers(private val view: android.view.View? = null, private val onChange: () -> Unit = { view?.invalidate() }) {
+        private val paints = ArrayList<Triple<android.graphics.Paint, Boolean, Int>>()
+        private var at = Design.structure
+        private val listener: () -> Unit = { view?.handler?.post { if (refresh()) onChange() } }
+
+        init {
+            view?.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                override fun onViewAttachedToWindow(v: android.view.View) {
+                    Design.addListener(listener)
+                    if (refresh()) onChange()
+                }
+                override fun onViewDetachedFromWindow(v: android.view.View) = Design.removeListener(listener)
+            })
+        }
+
+        /** [p] in the theme's text family at [weight], now and after every change. */
+        fun text(p: android.graphics.Paint, weight: Int) { paints += Triple(p, false, weight); p.typeface = Fonts.text(weight) }
+
+        /** [p] in the theme's display family at [weight], now and after every change. */
+        fun display(p: android.graphics.Paint, weight: Int) { paints += Triple(p, true, weight); p.typeface = Fonts.display(weight) }
+
+        /** Every paint given the theme's fonts again if the design changed since; true if it did. */
+        fun refresh(): Boolean {
+            val s = Design.structure
+            if (s == at) return false
+            at = s
+            for ((p, d, w) in paints) p.typeface = if (d) Fonts.display(w) else Fonts.text(w)
+            return true
+        }
     }
 
     // ------------------------------------------------------------------ the theme's families

@@ -88,7 +88,9 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
     private var u = 1f
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val label = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); textAlign = Paint.Align.CENTER }
+    // The theme's fonts, kept when it changes (B4b: Fonts.Followers).
+    private val fonts = Fonts.Followers(this) { restyle() }
+    private val label = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600); textAlign = Paint.Align.CENTER }
     private val r = RectF()
 
     init { clipChildren = false }

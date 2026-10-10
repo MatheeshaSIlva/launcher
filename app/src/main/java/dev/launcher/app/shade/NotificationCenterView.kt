@@ -98,12 +98,14 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun hnd(): Handler = handler ?: mainHandler
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
 
-    private val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600) }
-    private val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(400) }
-    private val timePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(400); textAlign = Paint.Align.RIGHT }
-    private val datePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); textAlign = Paint.Align.CENTER }
-    private val headPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.display(700) }
-    private val buttonPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Fonts.text(600); textAlign = Paint.Align.CENTER }
+    // The theme's fonts, kept when it changes (B4b: Fonts.Followers).
+    private val fonts = Fonts.Followers(this) { tokensChanged(); refreshClock() }
+    private val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600) }
+    private val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 400) }
+    private val timePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 400); textAlign = Paint.Align.RIGHT }
+    private val datePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600); textAlign = Paint.Align.CENTER }
+    private val headPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.display(this, 700) }
+    private val buttonPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600); textAlign = Paint.Align.CENTER }
     private val dateShadow = FadingShadow(0f, 0f, 0f, 0x59000000)
     private val headShadow = FadingShadow(0f, 0f, 0f, 0x59000000)
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -274,10 +276,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var clockText = ""
     private var dateText = ""
     private val digitPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFFFFF.toInt(); typeface = Fonts.display(700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
+        color = 0xFFFFFFFF.toInt(); fonts.display(this, 700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
     }
     private val solidDigits = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xF2FFFFFF.toInt(); typeface = Fonts.display(700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
+        color = 0xF2FFFFFF.toInt(); fonts.display(this, 700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
     }
 
     private fun clockBox(out: RectF): RectF = out.apply { set(36f * u, 110f * u, width - 36f * u, 206f * u) }
@@ -288,6 +290,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** What the glass numerals on screen were made for (a new minute or a new wallpaper makes them again). */
     private var clockMadeFor: Wallpaper? = null
     private var clockMadeText = ""
+    /** And with which fonts (the design's structure): another font makes them again. */
+    private var clockMadeFonts = -1
     private var clockLogs = 0
 
     private fun clockLog(msg: String) { if (clockLogs++ < 12) AppLog.log("[shade] clock: $msg") }
@@ -306,7 +310,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val t = java.text.SimpleDateFormat(if (is24) "H:mm" else "h:mm", locale).format(now)
         clockText = t
         val wp = wallpaper ?: return
-        if (clockGlass != null && clockMadeText == t && clockMadeFor === wp) return
+        if (clockGlass != null && clockMadeText == t && clockMadeFor === wp && clockMadeFonts == dev.launcher.app.design.Design.structure) return
         if (width == 0) return
         if (building) { buildAgain = true; return }
         val box = clockBox(RectF())
@@ -315,6 +319,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val baseline = dev.launcher.app.home.ClockNumerals.layout(digitPaint, box.width(), box.height(), is24)
         building = true
         buildAgain = false
+        val fontsAt = dev.launcher.app.design.Design.structure
         val paint = TextPaint(digitPaint)
         val vw = width
         val vh = height
@@ -333,6 +338,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                     clockGlass = g
                     clockMadeFor = wp
                     clockMadeText = t
+                    clockMadeFonts = fontsAt
                     if (old != null && progress > 0f) { clockGlassOld = old; clockFade.snapTo(0f); clockFade.animateTo(1f, CLOCK_TICK) }
                     else { clockGlassOld = null; clockFade.snapTo(1f) }
                     invalidate()
