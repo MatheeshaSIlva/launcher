@@ -2509,6 +2509,18 @@
    "ref": "ref.color.accents.green",
    "src": "judged:a colour per part"
   },
+  "comp.settings.field.fill": {
+   "ref": "ref.color.fills.tertiary",
+   "src": "judged:iOS's search field on a grouped page: a capsule in the tertiary fill"
+  },
+  "comp.settings.field.height": {
+   "pt": 36,
+   "src": "judged:iOS's search field (36 pt)"
+  },
+  "comp.settings.field.placeholder-color": {
+   "ref": "sys.color.label.secondary",
+   "src": "judged:iOS's search field: the magnifier and the placeholder in the secondary label"
+  },
   "comp.settings.glass": {
    "factor": 1,
    "src": "judged:Matheesha (2026-10-11): the overview's buttons as Liquid Glass (on the panel, over the blurred wallpaper), not coloured cards"
@@ -2578,6 +2590,11 @@
   "comp.settings.row.title": {
    "ref": "component.list-row.title",
    "src": "judged:the theme's list row"
+  },
+  "comp.settings.scrim": {
+   "light": "#00000033",
+   "dark": "#00000080",
+   "src": "judged:what is beneath a sheet of the settings (Google Fonts) dims, as under iOS's sheets"
   },
   "comp.settings.section": {
    "ref": "component.section.title",
@@ -3805,6 +3822,10 @@
   "comp.settings.chip.fill": {
    "color": "@surface_container_highest",
    "src": "judged:Material You: iOS's settings' chip as Android 14's tonal role (@surface_container_highest)"
+  },
+  "comp.settings.field.fill": {
+   "color": "@surface_container_highest",
+   "src": "judged:Material You: iOS's settings' search field as Android 14's tonal role (@surface_container_highest)"
   },
   "comp.settings.sheet.fill": {
    "light": "@surface_container_low/85",

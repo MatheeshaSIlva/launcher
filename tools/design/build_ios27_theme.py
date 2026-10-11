@@ -213,6 +213,7 @@ for _k, (_l, _d, _what) in {
     'comp.settings.sheet.fill': ('@surface_container_low/85', '@surface_container/95', "settings' sheet"),
     'comp.settings.button.fill': ('@surface_container_highest/80', '@surface_container_highest/80', "settings' round button"),
     'comp.settings.chip.fill': ('@surface_container_highest', '@surface_container_highest', "settings' chip"),
+    'comp.settings.field.fill': ('@surface_container_highest', '@surface_container_highest', "settings' search field"),
 }.items():
     MATERIAL_YOU[_k] = ({'color': _l} if _l == _d else {'light': _l, 'dark': _d}) | {'src': _MY_SRC.format(what=_what, roles=_l if _l == _d else _l + ' | ' + _d)}
 
@@ -872,6 +873,10 @@ COMPONENT_SEEDS = {
     'comp.settings.preview.corner': {'factor': 0.15, 'src': "judged:the phone's corner, of the picture's width"},
     'comp.settings.accent': {'ref': 'sys.color.accent', 'src': "judged:the theme's accent (Apply, a chosen chip)"},
     'comp.settings.accent-label': {'color': '#ffffff', 'src': "judged:white on the accent"},
+    'comp.settings.scrim': {'light': '#00000033', 'dark': '#00000080', 'src': "judged:what is beneath a sheet of the settings (Google Fonts) dims, as under iOS's sheets"},
+    'comp.settings.field.fill': {'ref': 'ref.color.fills.tertiary', 'src': "judged:iOS's search field on a grouped page: a capsule in the tertiary fill"},
+    'comp.settings.field.placeholder-color': {'ref': 'sys.color.label.secondary', 'src': "judged:iOS's search field: the magnifier and the placeholder in the secondary label"},
+    'comp.settings.field.height': {'pt': 36, 'src': "judged:iOS's search field (36 pt)"},
     'component.page.beneath-dim': {'light': '#0000001a', 'dark': '#00000066', 'src': "judged:the page beneath a sliding one dims (UIKit's navigation transition: black about 10 % in light)"},
     'component.page.edge-shadow': {'light': '#00000026', 'dark': '#00000080', 'src': "judged:a sliding page's left edge casts a soft shadow on the page beneath (UIKit)"},
     'component.page.edge-shadow-width': {'pt': 12, 'src': "judged:UIKit's navigation transition shadow"},

@@ -95,7 +95,9 @@ import dev.launcher.app.motion.MotionTokens
 import dev.launcher.app.motion.mover
 import dev.launcher.app.theme.Appearance
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.semantics
@@ -174,6 +176,10 @@ object SettingsTokens {
     val PREVIEW_SHADOW = ColorKey("comp.settings.preview.shadow")
     val PREVIEW_CORNER = NumberKey("comp.settings.preview.corner")
     val ACCENT = ColorKey("comp.settings.accent")
+    val SCRIM = ColorKey("comp.settings.scrim")
+    val FIELD_FILL = ColorKey("comp.settings.field.fill")
+    val FIELD_PLACEHOLDER = ColorKey("comp.settings.field.placeholder-color")
+    val FIELD_HEIGHT = NumberKey("comp.settings.field.height")
     val ACCENT_LABEL = ColorKey("comp.settings.accent-label")
 }
 
@@ -449,13 +455,18 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         val bar = remember { Animatable(0f) }
         val ctx = LocalContext.current
         BackToTiles(st, close, draft, onClose)
-        // The pages are built ahead, one a frame, once the app has come up.
+        // The pages are built ahead, one a frame, once the app has come up; then the font search's sheet, while nothing moves
+        // (built in a page's opening it would cost that opening a frame).
+        var sheetBuilt by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) {
             kotlinx.coroutines.delay(350)
             while (st.built < Part.entries.size) {
                 androidx.compose.runtime.withFrameNanos { }
                 st.built++
             }
+            androidx.compose.runtime.snapshotFlow { st.p.isRunning }.first { !it }
+            androidx.compose.runtime.withFrameNanos { }
+            sheetBuilt = true
         }
         // While a page moves (its spring, or a finger), the settings leave the accessibility tree: with an accessibility
         // service on (gesture nav is one), Compose re-reads the whole tree every 100 ms while layers move (7-25 ms frames
@@ -472,7 +483,8 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         // for services that do not read it (gesture nav's; the S24's own).
         val reader = screenReaderOn()
         val noTree = remember { Modifier.clearAndSetSemantics { } }
-        CompositionLocalProvider(LocalDraft provides draft, LocalStudio provides st, LocalScreenReader provides reader) {
+        val fontSearch = remember { FontSearch() }
+        CompositionLocalProvider(LocalDraft provides draft, LocalStudio provides st, LocalScreenReader provides reader, LocalFontSearch provides fontSearch) {
             // The page behind everything: the theme's colour, or (glass) the wallpaper blurred under the appearance's veil.
             val glass = Design.num(SettingsTokens.GLASS) > 0.5f
             val backdrop = if (glass) Modifier.drawBehind { drawIntoCanvas { look.drawBackdrop(it.nativeCanvas) } } else Modifier.background(look.color(SettingsTokens.BACKGROUND))
@@ -483,6 +495,8 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                 Header(st, g) { close(0f) }
                 Sheet(st, g, bar, open, close)
                 ApplyBar(draft, g, bar) { draft.apply(ctx) }
+                // Built after the pages (the first opening builds nothing).
+                if (sheetBuilt) FontSheet(fontSearch)
             }
         }
     }
@@ -1084,7 +1098,7 @@ private fun Chip(text: String, onClick: () -> Unit) {
  * Pressed in: drawn smaller by [scale] around the centre. In drawing, not as a layer's transform: a layer that changes
  * its transform makes Compose re-read the accessibility tree (see [SettingsApp]).
  */
-private fun Modifier.pressScale(scale: () -> Float): Modifier = drawWithContent {
+internal fun Modifier.pressScale(scale: () -> Float): Modifier = drawWithContent {
     val s = scale()
     if (s == 1f) drawContent() else scale(s) { this@drawWithContent.drawContent() }
 }
@@ -1468,17 +1482,47 @@ private fun FontRow(title: String, key: String, draft: Draft) {
     val first = remember { counter == null || counter.n++ == 0 }
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val ctx = LocalContext.current
+    val search = LocalFontSearch.current
     val chosen = draft.font(key)
-    val families = remember(look.version) {
-        FONT_FAMILIES.map { (id, _) -> androidx.compose.ui.text.font.FontFamily(dev.launcher.app.theme.Fonts.of(id, 500, 15f)) }
-    }
+    LaunchedEffect(Unit) { FontPicks.load(ctx) }
+    // The offered ones, then Google families found with the search (on either row), and the one chosen if it is neither.
+    val ids = (FONT_FAMILIES.map { it.first } + FontPicks.list.map { "google:$it" } + chosen).distinct()
+    val faces = ids.map { id -> androidx.compose.runtime.key(id) { rememberFace(id) } }
+    // A Google family shows once its face is here (it arrives in its own font, never in another first); the chosen at once.
+    val shown = ids.indices.filter { i -> !ids[i].startsWith("google:") || faces[i] != null || ids[i] == chosen }
+    fun nameOf(id: String) = FONT_FAMILIES.firstOrNull { it.first == id }?.second ?: id.removePrefix("google:")
     Column(Modifier.fillMaxWidth()
         .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
-        BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
+            // Any family on Google Fonts (a sheet over the settings); in sight on the row's own line.
+            TextButton("More Fonts", R.drawable.sym_search) {
+                search?.open(FontSearch.Request("$title font", { draft.font(key) }, { id -> draft.chooseFont(key, id) }))
+            }
+        }
         Spacer(Modifier.height(look.dp(8f * look.unit)))
-        val at = FONT_FAMILIES.indexOfFirst { it.first == chosen }
-        ChoiceChips(FONT_FAMILIES.map { it.second }, at, fonts = families) { i -> draft.chooseFont(key, FONT_FAMILIES[i].first) }
+        ChoiceChips(shown.map { nameOf(ids[it]) }, shown.indexOfFirst { ids[it] == chosen }, fonts = shown.map { faces[it] }) { i ->
+            draft.chooseFont(key, ids[shown[i]])
+        }
+    }
+}
+
+/** A button in words (and a symbol) in the accent, as iOS's plain buttons: pressed, it dims. */
+@Composable
+private fun TextButton(text: String, symbol: Int, onClick: () -> Unit) {
+    val look = LocalLook.current
+    var pressed by remember { mutableStateOf(false) }
+    val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+    val accent = look.color(SettingsTokens.ACCENT)
+    Row(Modifier.graphicsLayer { alpha = 1f - 0.65f * press }
+        .pointerInput(Unit) { rowTap({ pressed = it }, onClick) }
+        .padding(vertical = look.dp(4f * look.unit)),
+        verticalAlignment = Alignment.CenterVertically) {
+        Image(painterResource(symbol), null, colorFilter = ColorFilter.tint(accent), modifier = Modifier.size(look.dp(16f * look.unit)))
+        Spacer(Modifier.width(look.dp(4f * look.unit)))
+        BasicText(text, style = look.text(SettingsTokens.ROW_DETAIL, accent), maxLines = 1)
     }
 }
 
@@ -1558,40 +1602,112 @@ private fun ElementTheme(e: Element, themes: List<Design.ThemeInfo>, draft: Draf
     }
 }
 
-/** A row of chips, one chosen (its fill blends to the accent). */
+/**
+ * A row of chips, one chosen (its fill blends to the accent); [fonts]: each chip's name in a face of its own. A chip added
+ * after the row first showed grows in at its place (the others make room on the same motion).
+ */
 @Composable
-private fun ChoiceChips(names: List<String>, chosen: Int, modifier: Modifier = Modifier,
-                        fonts: List<androidx.compose.ui.text.font.FontFamily>? = null, onChoose: (Int) -> Unit) {
+internal fun ChoiceChips(names: List<String>, chosen: Int, modifier: Modifier = Modifier,
+                         fonts: List<androidx.compose.ui.text.font.FontFamily?>? = null, onChoose: (Int) -> Unit) {
     val look = LocalLook.current
     val scroll = rememberScrollState()
-    // The chosen chip kept in sight (glides there when it is chosen near an edge).
-    val xs = remember { HashMap<Int, IntRange>() }
-    LaunchedEffect(chosen) {
-        val r = xs[chosen] ?: return@LaunchedEffect
-        val view = scroll.viewportSize
-        if (view <= 0) return@LaunchedEffect
-        val to = when {
-            r.first - scroll.value < 0 -> r.first
-            r.last - scroll.value > view -> r.last - view
-            else -> return@LaunchedEffect
+    // The chosen chip kept in sight (glides there when it is chosen near an edge, or arrives there).
+    val xs = remember { HashMap<String, IntRange>() }
+    val born = remember { booleanArrayOf(false) }
+    androidx.compose.runtime.SideEffect { born[0] = true }
+    val chosenName = names.getOrNull(chosen)
+    // Kept in sight as the row changes: another chosen, a chip added or a face arrived (chips grow in, and one in its own
+    // font is wider than in the fallback, so the chosen one moves for a moment), and when the row is first placed (a page
+    // is built ahead and placed only as it opens). For that moment the scroll follows the chosen chip where it is on each
+    // frame, on one spring retargeted as it moves (a single scroll measured before a chip grew in stopped short of it).
+    // Not seen yet, it is there at once (the page opens with it in sight). A finger on the row takes over.
+    val seen = remember { booleanArrayOf(false) }
+    var placed by remember { mutableStateOf(false) }
+    LaunchedEffect(chosenName, names.size, fonts?.count { it != null }, placed) {
+        if (!placed) return@LaunchedEffect
+        val glide = Animatable(scroll.value.toFloat())
+        var target = Float.NaN
+        val until = android.os.SystemClock.uptimeMillis() + FOLLOW_MS
+        kotlinx.coroutines.coroutineScope {
+            var job: kotlinx.coroutines.Job? = null
+            while (android.os.SystemClock.uptimeMillis() < until && !scroll.isScrollInProgress) {
+                androidx.compose.runtime.withFrameNanos { }
+                val r = xs[chosenName] ?: continue
+                val view = scroll.viewportSize
+                if (view <= 0) continue
+                val want = when {
+                    r.first < scroll.value -> r.first
+                    r.last > scroll.value + view -> r.last - view
+                    else -> continue
+                }.toFloat()
+                if (!seen[0]) { scroll.dispatchRawDelta(want - scroll.value); continue }
+                if (want == target) continue
+                target = want
+                job?.cancel()
+                job = launch {
+                    val me = coroutineContext[kotlinx.coroutines.Job]
+                    glide.animateTo(want, look.motion(MotionTokens.NAV_PUSH)) {
+                        if (scroll.isScrollInProgress) me?.cancel() else scroll.dispatchRawDelta(value - scroll.value)
+                    }
+                }
+            }
+            seen[0] = true
+            if (scroll.isScrollInProgress) job?.cancel() else job?.join()
         }
-        scroll.animateScrollTo(to.coerceIn(0, scroll.maxValue), look.motion(MotionTokens.NAV_PUSH))
     }
-    Row(Modifier.horizontalScroll(scroll).then(modifier), horizontalArrangement = Arrangement.spacedBy(look.dp(6f * look.unit))) {
+    val gap = 6f * look.unit
+    val corner = look.pt(SettingsTokens.CHIP_CORNER)
+    val chipH = Design.text(SettingsTokens.CHIP_TEXT).lineHeightPt * look.unit + 14f * look.unit
+    Row(Modifier.onPlaced { if (!placed) placed = true }.horizontalScroll(scroll).then(modifier), verticalAlignment = Alignment.CenterVertically) {
         names.forEachIndexed { i, n ->
-            val k by animateFloatAsState(if (i == chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chip")
-            var pressed by remember { mutableStateOf(false) }
-            val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
-            val fill = mix(look.color(SettingsTokens.CHIP_FILL), look.color(SettingsTokens.ACCENT), k)
-            val text = mix(look.color(SettingsTokens.CHIP_TEXT_COLOR), look.color(SettingsTokens.ACCENT_LABEL), k)
-            val corner = look.pt(SettingsTokens.CHIP_CORNER)
-            BasicText(n, style = look.text(SettingsTokens.CHIP_TEXT, text).let { s -> fonts?.getOrNull(i)?.let { s.copy(fontFamily = it) } ?: s }, maxLines = 1,
-                modifier = Modifier
+            androidx.compose.runtime.key(n) {
+                val k by animateFloatAsState(if (i == chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chip")
+                var pressed by remember { mutableStateOf(false) }
+                val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+                val fill = mix(look.color(SettingsTokens.CHIP_FILL), look.color(SettingsTokens.ACCENT), k)
+                val text = mix(look.color(SettingsTokens.CHIP_TEXT_COLOR), look.color(SettingsTokens.ACCENT_LABEL), k)
+                val slot = remember { IntArray(1) }
+                // One height for every chip, the name centred in it (a face of its own may be taller: a script).
+                Box(Modifier
+                    // Where it will be once in (a chip growing in is read where it ends: its gap still opening, it
+                    // was scrolled to short of its end).
+                    .onPlaced { co -> slot[0] = co.positionInParent().x.toInt() }
+                    .chipArrival(born[0], if (i > 0) gap else 0f)
                     .pressScale { 1f - 0.05f * press }
                     .drawBehind { drawRoundRect(fill, cornerRadius = CornerRadius(corner)) }
                     .pointerInput(i, chosen) { rowTap({ pressed = it }) { if (i != chosen) onChoose(i) } }
-                    .onPlaced { co -> co.positionInParent().x.toInt().let { x -> xs[i] = x..(x + co.size.width) } }
-                    .padding(horizontal = look.dp(12f * look.unit), vertical = look.dp(7f * look.unit)))
+                    .onPlaced { co -> val x = slot[0] + (if (i > 0) gap.roundToInt() else 0); xs[n] = x..(x + co.size.width) }
+                    .height(look.dp(chipH))
+                    .padding(horizontal = look.dp(12f * look.unit)),
+                    contentAlignment = Alignment.Center) {
+                    BasicText(n, style = look.text(SettingsTokens.CHIP_TEXT, text).let { s -> fonts?.getOrNull(i)?.let { s.copy(fontFamily = it) } ?: s }, maxLines = 1)
+                }
+            }
+        }
+    }
+}
+
+/** How long a chip row keeps its chosen chip in sight after a change (chips growing in move it meanwhile). */
+private const val FOLLOW_MS = 900L
+
+/**
+ * A chip's room in its row ([lead]: the gap before it): there from the start in a row composed with it; one added later
+ * grows in (its room opening as it scales and fades up), on the appear role.
+ */
+private fun Modifier.chipArrival(rowShown: Boolean, lead: Float): Modifier = composed {
+    val look = LocalLook.current
+    val k = remember { Animatable(if (rowShown) 0f else 1f) }
+    LaunchedEffect(Unit) { if (k.value < 1f) k.animateTo(1f, look.motion(MotionTokens.APPEAR)) }
+    layout { m, c ->
+        val p = m.measure(c)
+        val a = k.value.coerceIn(0f, 1f)
+        layout(((lead + p.width) * a).roundToInt(), p.height) {
+            p.placeWithLayer((lead * a).roundToInt(), 0) {
+                alpha = a
+                scaleX = 0.7f + 0.3f * a
+                scaleY = scaleX
+                transformOrigin = TransformOrigin(0f, 0.5f)
+            }
         }
     }
 }
@@ -1987,7 +2103,7 @@ private fun BarButton(text: String, accent: Boolean, onClick: () -> Unit) {
 
 /** A line that rolls to its new words: the old ones rise and fade, the new come up from below. */
 @Composable
-private fun Rolling(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier, lines: Int = 1) {
+internal fun Rolling(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier, lines: Int = 1) {
     val look = LocalLook.current
     var now by remember { mutableStateOf(text) }
     var was by remember { mutableStateOf<String?>(null) }
@@ -2269,7 +2385,7 @@ private fun Toggle(on: Boolean) {
  * A tap as iOS counts one: let go near where it went down. A touch that moves past the touch slop (a scroll, a swipe back,
  * a drag across the row) or that something else takes is no tap; [pressed] follows the finger while it could still be one.
  */
-private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.rowTap(pressed: (Boolean) -> Unit, onTap: () -> Unit) {
+internal suspend fun androidx.compose.ui.input.pointer.PointerInputScope.rowTap(pressed: (Boolean) -> Unit, onTap: () -> Unit) {
     awaitEachGesture {
         val down = awaitFirstDown()
         pressed(true)

@@ -260,6 +260,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (coldHoldWanted || m == null || pages.isEmpty() || width == 0 || wallpaperView.wallpaper == null) return null
         // A clock built again behind (a new theme while the settings were open) has not set its time yet: it would show none.
         for (c in clocks) c.refresh(animate = false)
+        // Its numerals' shape still being built off the main thread, or fading in (home built again for a new font): not
+        // yet (the settings pictured a clock with a date and no time; they ask again).
+        if (clocks.any { it.animating }) return null
         // The wallpaper fading in (read just now): pictured as it will rest (the settings kept a black home with tinted glass).
         val wallA = wallpaperView.alpha
         if (wallA < 1f) wallpaperView.alpha = 1f

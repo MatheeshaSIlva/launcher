@@ -242,7 +242,23 @@ gallery (a card per layout with its own preview) waits for a second layout per e
 tertiary, surface and neutral in this appearance, `Design.systemPalette`), lit while the wallpaper's colours are chosen;
 Fonts chooses the text and the titles' family (`sys.font.text`, `sys.font.display`): Inter, the phone's, serif, mono and
 four from Google Fonts (downloaded the first time), each chip written in its own font; both wait for Apply (`Draft.fonts`).
-Still to come in C3: search across Google Fonts, and customising by component with previews.
+Still to come in C3: customising by component with previews.
+
+**C3, Google Fonts search (2026-10-11):** each font row has "More Fonts" on its title line (a chip at the end of the
+sideways row was out of sight). It opens a sheet over the settings: a search field, Google's categories as chips (All,
+Sans serif, Serif, Display, Handwriting, Mono), and the 60 best matches (the name, then names starting with it, spaces
+ignored, then a word starting with it, then containing it; the more popular first; no query: the most popular), each name
+in its own face. The list is Google Fonts' public one (`fonts.google.com/metadata/fonts`, 2.7 MB read as a stream, 1950
+families), kept as a small table (`files/fonts/google/families.tsv`, read again from Google when two weeks old, fetched
+only when the search opens; `theme/GoogleFontCatalog`). Previews are the regular cut through Play services' provider into
+the cache (`FontPreviews`, three at a time, one family at a time: two rows asking together wrote one file twice), only for
+rows on screen, and change nothing else (a theme's font arriving rebuilds every surface). A family chosen there waits for
+Apply and becomes a chip on both rows (kept: the last six). Motion: the sheet rises and follows a drag on its top
+(`motion.sheet`), the page beneath dims with it; rows glide to their new places as letters are typed, new ones fade and
+rise in, gone ones fade (all interruptible); a row's name crossfades into its face when it arrives; a new chip grows in and
+the row keeps the chosen chip in sight while it settles. The sheet is built after the pages and kept out of sight (built
+in its opening's first frame, the emulator showed nothing for 220 ms and then the sheet already up); only the rows near
+the visible part are built. Also: home's picture waits for a clock built again (a font change) to have its numerals.
 
 **S7 (2026-10-11; Matheesha on S6: "don't remove the panel overlay you had earlier. I just wanted the buttons to be glass
 themed. In the layout menu, the tabs feel more like buttons to filter results ... something like in the example c you made.

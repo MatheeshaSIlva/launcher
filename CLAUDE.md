@@ -93,7 +93,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   constants (a function parameter as an index does not compile): gradient stops are read inside the fill loop.
   Fonts (`theme/Fonts.kt`, `FontFamily`): `sys.font.text` / `sys.font.display` name a family (`inter`, `system`,
   `system-serif`, `system-mono`, `google:Name`); Google fonts are downloaded through Play services' font provider into
-  `files/fonts/google/` (then instant, offline). A paint made once takes its font through its view's
+  `files/fonts/google/` (then instant, offline); the settings' font search lists every family (`theme/GoogleFontCatalog`)
+  and previews them from the cache without touching the design (`FontPreviews`). A paint made once takes its font through its view's
   `Fonts.Followers` (`fonts.text(this, 600)`, never `typeface = Fonts.text(600)` outside home, which is built again on
   every design change: `HomeScreen.rebuild`).
   **Motion is not the theme's**: animation presets (`assets/motion/<id>.json`, same file format, `ios27` the base) hold
@@ -310,6 +311,9 @@ copy it wholesale — port the working pieces cleanly. File map:
   dispatching to animator" and our window then "ProgressAnimator was not in progress, skip onBackInvoked()" (neither
   progress nor the back itself arrived). The settings app uses a plain back handler (its own swipe back was removed: a
   scroll that started sideways took the page back).
+- **A drag that moves its own node reads the finger in that node's coordinates**: the font sheet's top, dragged, chased
+  the finger at half its speed and the release speed read 0. Read the finger on the window (`localToWindow` of the node's
+  coordinates) for anything that moves with the finger.
 - **Seeking a Compose transition whose specs are springs runs ahead of the finger** (a seek maps the fraction to time, and
   a spring covers most of its distance early). Seek on linear specs while the finger drives, then spring the fraction
   yourself from the finger's speed.
