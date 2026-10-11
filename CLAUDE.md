@@ -56,7 +56,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `SettingsTheme`/`Look` (no Material components; motion roles as Compose specs). Studio (draft D in Figma): a picture of
   home above a sheet of tiles; a tile grows into its page inside the sheet (`motion.settings.open`), one value moving
   everything; pages are built ahead and only placed while open (a page built in a transition's first frame cost the S24
-  60-80 ms); solid groups (no glass per card). Changes apply at once; a look change is revealed from the tap
+  60-80 ms); solid groups (no glass per card). Changes wait in a draft for Apply (`Draft`, `ApplyBar`, `Design.batch`:
+  one reveal for all of them); a look change is revealed from the tap
   (`ThemeReveal`). Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control.
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
@@ -281,16 +282,18 @@ copy it wholesale — port the working pieces cleanly. File map:
   our focus window, the launched app cannot take the focus at all: a launch from the shade lets it go.
 - **Predictive back did nothing in the settings app on the Android 17 emulator**: the system logged "Trigger back without
   dispatching to animator" and our window then "ProgressAnimator was not in progress, skip onBackInvoked()" (neither
-  progress nor the back itself arrived). The settings app uses a plain back handler and its own swipe back instead.
+  progress nor the back itself arrived). The settings app uses a plain back handler (its own swipe back was removed: a
+  scroll that started sideways took the page back).
 - **Seeking a Compose transition whose specs are springs runs ahead of the finger** (a seek maps the fraction to time, and
   a spring covers most of its distance early). Seek on linear specs while the finger drives, then spring the fraction
-  yourself from the finger's speed (`settings/Pages.kt`, swipe back).
+  yourself from the finger's speed.
 - **Compose re-reads its whole accessibility tree every 100 ms while layers move, whenever any accessibility service is
   on, and ours always is** (gesture nav; the S24 also has others): every frame where a `graphicsLayer` changes its
   transform (translation, scale) counts as a layout change. The settings app lost 7-25 ms of its main thread every
-  ~110 ms of every transition (`checkForSemanticsChanges` in a Perfetto trace); with no tree, 0 missed refreshes. The
-  settings leave the tree while a page moves (`clearAndSetSemantics` while the spring runs or a finger drags) and press
-  effects scale in drawing, not as a layer. Any Compose surface with motion needs the same.
+  ~110 ms of every transition (`checkForSemanticsChanges` in a Perfetto trace); with no tree, 0 missed refreshes.
+  Scrolling counts too (a long page lost 12-17 ms every ~117 ms of a scroll). The settings leave the tree while a page
+  moves (`clearAndSetSemantics` while the spring runs) or scrolls (`IosScrollState.moving`), and press effects scale in
+  drawing, not as a layer. Any Compose surface with motion needs the same.
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

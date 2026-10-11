@@ -215,12 +215,52 @@ object Design {
     fun fontArrived(name: String) = changedOutside("font '$name' arrived")
 
     private fun changedOutside(what: String, structural: Boolean = true) {
+        if (batching > 0) {
+            batchStructural = (batchStructural ?: false) || structural
+            AppLog.log("[design] $what (in a batch)")
+            return
+        }
         version++
         if (structural) structure++
         AppLog.log("[design] $what: ${user.size + motionUser.size} edited")
         val run = Runnable { for (l in listeners.toList()) l() }
         if (Looper.myLooper() == Looper.getMainLooper()) run.run() else main.post(run)
     }
+
+    private var batching = 0
+    /** What the changes in the running batch were (null: none yet; true: one was structural). */
+    private var batchStructural: Boolean? = null
+
+    /**
+     * Runs [block]'s changes (a theme, colours, element themes, a preset, edits) as one: the listeners hear of them once at
+     * the end, so whatever shows a change (home's reveal, the settings') shows it once (the settings' Apply).
+     */
+    fun batch(what: String, block: () -> Unit) {
+        batching++
+        try { block() } finally {
+            batching--
+            val s = batchStructural
+            if (batching == 0 && s != null) {
+                batchStructural = null
+                changedOutside(what, s)
+            }
+        }
+    }
+
+    /**
+     * Colour [k] as theme [id] gives it (light/dark blended now), whether or not it is in use: the settings show themes
+     * before they are applied. Null if the theme cannot be used.
+     */
+    fun previewColor(id: String, k: ColorKey): Int? {
+        val r = previews.getOrPut(id) {
+            val l = (if (id == activeId) Loaded(id, chain, user) else elementThemes[id] ?: prepare(id)) ?: return null
+            Resolver(layersOf(l.chain, l.edits, ThemeLayers.fromWallpaper(l.chain, l.edits))) { name -> paletteColor(name) }
+        }
+        val v = try { r.resolve(k.name) as? Value.Color } catch (_: Throwable) { null } ?: return null
+        return r.pair(v).let { (l, d) -> Appearance.mix(l, d) }
+    }
+
+    private val previews = HashMap<String, Resolver>()
 
     /**
      * Loads theme [id] (with the ones it is built on) and its edits, if the result has every token the code reads, of the
@@ -400,6 +440,7 @@ object Design {
     private fun rebuild() {
         val layers = layersOf(chain, user, ThemeLayers.fromWallpaper(chain, user)) + motionChain.map { it.entries } + listOf(LinkedHashMap(motionUser))
         state = State(Resolver(layers) { name -> paletteColor(name) })
+        previews.clear()
         val byTheme = HashMap<String, State>()
         parts = elementIds.mapNotNull { (e, id) ->
             val l = elementThemes[id] ?: return@mapNotNull null
@@ -541,9 +582,10 @@ object Design {
 
     private fun changed(structural: Boolean = true) {
         rebuild()
+        save()
+        if (batching > 0) { batchStructural = (batchStructural ?: false) || structural; return }
         version++
         if (structural) structure++
-        save()
         val run = Runnable { for (l in listeners.toList()) l() }
         if (Looper.myLooper() == Looper.getMainLooper()) run.run() else main.post(run)
     }

@@ -153,6 +153,8 @@ object SettingsTokens {
     val PREVIEW_RIM_WIDTH = NumberKey("comp.settings.preview.rim-width")
     val PREVIEW_SHADOW = ColorKey("comp.settings.preview.shadow")
     val PREVIEW_CORNER = NumberKey("comp.settings.preview.corner")
+    val ACCENT = ColorKey("comp.settings.accent")
+    val ACCENT_LABEL = ColorKey("comp.settings.accent-label")
 }
 
 /** The parts of the settings, a tile each: its name, its colour and its symbol. */
@@ -163,13 +165,90 @@ private enum class Part(val title: String, val color: ColorKey, val symbol: Int)
     PHONE("Phone", ColorKey("comp.settings.color.phone"), R.drawable.sym_shield),
 }
 
-/** What a part holds now, in a line (under its name on the tile). */
-private fun Part.detail(): String = when (this) {
+/** What a part holds (with the changes waiting to be applied), in a line under its name on the tile. */
+private fun Part.detail(d: Draft): String = when (this) {
     Part.LAYOUTS -> "${Element.entries.size} parts of the phone"
-    Part.LOOK -> Design.themeName + if (Design.wallpaperColors) " · wallpaper colours" else ""
-    Part.MOTION -> Design.motionName
+    Part.LOOK -> themeName(d.themeId()) + if (d.wallpaperColors()) " · wallpaper colours" else ""
+    Part.MOTION -> presetName(d.motionId())
     Part.PHONE -> if (dev.launcher.app.ShizukuLink.service != null) "Shizuku connected" else "Shizuku not running"
 }
+
+private fun themeName(id: String) = Design.themes().firstOrNull { it.id == id }?.name ?: id
+private fun presetName(id: String) = Design.motionPresets().firstOrNull { it.id == id }?.name ?: id
+
+/**
+ * The settings' changes, waiting for Apply (Matheesha: every change applied at once played the look's reveal again and
+ * again). The rows show the draft over what is applied; Apply applies it all as one ([Design.batch]: one reveal), Discard
+ * forgets it. Kept while the settings are open (going home and coming back keeps it).
+ */
+@Stable
+private class Draft {
+    var theme by mutableStateOf<String?>(null)
+    var colors by mutableStateOf<String?>(null)
+    var motion by mutableStateOf<String?>(null)
+    var appearance by mutableStateOf<Appearance.Mode?>(null)
+    /** An element's own theme (a theme id, or [FOLLOW]). */
+    val elements = androidx.compose.runtime.mutableStateMapOf<Element, String>()
+    /** A layout's choices: (element, "layout" | "placement" | "opt:" + an option's key) to the value. */
+    val setup = androidx.compose.runtime.mutableStateMapOf<Pair<Element, String>, Any>()
+    /** When Back was pressed with changes waiting (a second Back soon after discards them and leaves); 0: not. */
+    var backAt by androidx.compose.runtime.mutableLongStateOf(0L)
+
+    val count: Int get() = listOfNotNull(theme, colors, motion, appearance).size + elements.size + setup.size
+
+    fun themeId() = theme ?: Design.themeId
+    fun chooseTheme(id: String) { theme = id.takeIf { it != Design.themeId } }
+    fun wallpaperColors() = colors?.let { it == "wallpaper" } ?: Design.wallpaperColors
+    fun chooseColors(on: Boolean) { colors = (if (on) "wallpaper" else "theme").takeIf { on != Design.wallpaperColors } }
+    fun motionId() = motion ?: Design.motionPresetId
+    fun chooseMotion(id: String) { motion = id.takeIf { it != Design.motionPresetId } }
+    fun appearanceMode() = appearance ?: Appearance.mode
+    fun chooseAppearance(m: Appearance.Mode) { appearance = m.takeIf { it != Appearance.mode } }
+    /** The theme [e] follows of its own (null: the main one). */
+    fun elementTheme(e: Element): String? = if (e in elements) elements[e].takeIf { it != FOLLOW } else Design.elementTheme(e)
+    fun chooseElement(e: Element, id: String?) {
+        if (id == Design.elementTheme(e)) elements.remove(e) else elements[e] = id ?: FOLLOW
+    }
+    fun layout(e: Element): String = setup[e to "layout"] as? String ?: Setup.layout(e).id
+    fun chooseLayout(e: Element, id: String) = choose(e, "layout", id, Setup.layout(e).id)
+    fun placement(e: Element): String = setup[e to "placement"] as? String ?: Setup.placement(e).id
+    fun choosePlacement(e: Element, id: String) = choose(e, "placement", id, Setup.placement(e).id)
+    fun bool(e: Element, key: String, fallback: Boolean): Boolean = setup[e to "opt:$key"] as? Boolean ?: Setup.bool(e, key, fallback)
+    fun chooseBool(e: Element, key: String, v: Boolean, fallback: Boolean) = choose(e, "opt:$key", v, Setup.bool(e, key, fallback))
+    private fun choose(e: Element, what: String, v: Any, applied: Any) { if (v == applied) setup.remove(e to what) else setup[e to what] = v }
+
+    fun apply(ctx: android.content.Context) {
+        val n = count
+        if (n == 0) return
+        Design.batch("$n change" + (if (n == 1) "" else "s") + " applied from the settings") {
+            theme?.let { Design.setTheme(it) }
+            colors?.let { Design.setColorSource(it) }
+            for ((e, id) in elements) Design.setElementTheme(e, id.takeIf { it != FOLLOW })
+            motion?.let { Design.setMotion(it) }
+        }
+        appearance?.let { Appearance.setMode(ctx, it) }
+        for (e in setup.keys.map { it.first }.distinct()) {
+            val opts = setup.filterKeys { it.first == e && it.second.startsWith("opt:") }.mapKeys { it.key.second.removePrefix("opt:") }
+            Setup.set(e, layout = setup[e to "layout"] as? String, placement = setup[e to "placement"] as? String, options = opts)
+        }
+        discard()
+    }
+
+    fun discard() {
+        theme = null; colors = null; motion = null; appearance = null
+        elements.clear(); setup.clear(); backAt = 0L
+    }
+
+    companion object {
+        const val FOLLOW = "follow"
+        const val BACK_AGAIN_MS = 3000L
+    }
+}
+
+private val LocalDraft = staticCompositionLocalOf { Draft() }
+
+/** Home as it showed in each theme (kept whenever the settings take a picture): a theme shows before it is applied. */
+private object HomePictures { val byTheme = androidx.compose.runtime.mutableStateMapOf<String, android.graphics.Bitmap>() }
 
 /**
  * Which part is open and how far: [p] 0 is the tiles, 1 its page. Opening one changes no composition and no layout (the
@@ -190,8 +269,6 @@ private class Studio {
     var sheet: LayoutCoordinates? = null
     /** How many pages are built (ahead of time, one a frame, so opening one never builds it). */
     var built by mutableIntStateOf(0)
-    /** A finger is taking the page back. */
-    var dragging by mutableStateOf(false)
 }
 
 /** Where things are, in pixels: the sheet's two tops (at rest, a page open), the picture of home above it. */
@@ -212,10 +289,16 @@ private class Geometry(look: Look, statusPx: Float, val navPx: Float) {
     val previewH = (restTop - previewTop - gap).coerceAtLeast(60f * unit)
     val previewW = previewH * w / h
 
-    fun top(p: Float) = restTop + (openTop - restTop) * p
+    /** The Apply bar, and the room the sheet makes for it at rest (it rises by that much while changes wait). */
+    val barH = 56f * unit
+    val barRoom = barH + 20f * unit
+    val barTop = h - navPx - 12f * unit - barH
+
+    /** The sheet's top: where the page puts it, lifted by [bar] (0..1, the Apply bar showing) while the tiles show. */
+    fun top(p: Float, bar: Float = 0f) = restTop + (openTop - restTop) * p - bar * barRoom * (1f - p.coerceIn(0f, 1f))
 
     /** The picture's scale wherever the sheet is: it keeps fitting between the header and the sheet. */
-    fun previewScale(p: Float) = ((top(p) - previewTop - gap) / previewH).coerceIn(0.15f, 1.2f)
+    fun previewScale(p: Float, bar: Float = 0f) = ((top(p, bar) - previewTop - gap) / previewH).coerceIn(0.15f, 1.2f)
 }
 
 /** How far the page being composed is shown (0..1, read in drawing: the groups rise in with it). */
@@ -228,8 +311,9 @@ private val LocalGroups = staticCompositionLocalOf { GroupCounter() }
 
 /**
  * The settings app, "studio" layout (docs/PLAN_SETTINGS.md, draft D): a picture of the phone above a sheet of tiles;
- * a tile grows into its page inside the sheet, which rises as the picture shrinks; back (the button, the system's Back,
- * a swipe right) shrinks the page into its tile. Every colour, surface, corner, font and motion is the theme's.
+ * a tile grows into its page inside the sheet, which rises as the picture shrinks; back (the button, the system's Back)
+ * shrinks the page into its tile. Changes wait for Apply ([Draft]). Every colour, surface, corner, font and motion is
+ * the theme's.
  */
 @Composable
 fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit = {}) {
@@ -262,7 +346,10 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                 }
             }
         }
-        BackToTiles(st, close)
+        val draft = remember { Draft() }
+        val bar = remember { Animatable(0f) }
+        val ctx = LocalContext.current
+        BackToTiles(st, close, draft, onClose)
         // The pages are built ahead, one a frame, once the app has come up.
         LaunchedEffect(Unit) {
             kotlinx.coroutines.delay(350)
@@ -274,25 +361,36 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         // While a page moves (its spring, or a finger), the settings leave the accessibility tree: with an accessibility
         // service on (gesture nav is one), Compose re-reads the whole tree every 100 ms while layers move (7-25 ms frames
         // on the S24; none without the tree). At rest it is all there again, for whatever reads it.
-        val moving by remember { androidx.compose.runtime.derivedStateOf { st.p.isRunning || st.dragging } }
-        Box(Modifier.fillMaxSize().then(if (moving) Modifier.clearAndSetSemantics { } else Modifier).background(look.color(SettingsTokens.BACKGROUND))) {
-            HomePicture(st, g)
-            Header(st, g) { close(0f) }
-            Sheet(st, g, open, close)
+        val moving by remember { androidx.compose.runtime.derivedStateOf { st.p.isRunning || bar.isRunning } }
+        CompositionLocalProvider(LocalDraft provides draft) {
+            Box(Modifier.fillMaxSize().then(if (moving) Modifier.clearAndSetSemantics { } else Modifier).background(look.color(SettingsTokens.BACKGROUND))) {
+                HomePicture(st, g, bar)
+                Header(st, g) { close(0f) }
+                Sheet(st, g, bar, open, close)
+                ApplyBar(draft, g, bar) { draft.apply(ctx) }
+            }
         }
     }
 }
 
-/** The system's Back closes the open page (its own composable: only it changes when a page opens). */
+/**
+ * The system's Back closes the open page; on the tiles with changes waiting, it first says so (the bar), and a second Back
+ * soon after discards them and leaves. Its own composable: only it changes when a page opens.
+ */
 @Composable
-private fun BackToTiles(st: Studio, close: (Float) -> Unit) {
+private fun BackToTiles(st: Studio, close: (Float) -> Unit, draft: Draft, leave: () -> Unit) {
     BackHandler(enabled = st.open != null) { close(0f) }
+    BackHandler(enabled = st.open == null && draft.count > 0) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (draft.backAt != 0L && now - draft.backAt < Draft.BACK_AGAIN_MS) { draft.discard(); leave() } else draft.backAt = now
+    }
 }
 
 /** Home as it is now, in the phone's shape; a new picture (after any change) fades in over the last. */
 @Composable
-private fun HomePicture(st: Studio, g: Geometry) {
+private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     val look = LocalLook.current
+    var latest by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var before by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     val fade = remember { Animatable(1f) }
@@ -307,8 +405,16 @@ private fun HomePicture(st: Studio, g: Geometry) {
     LaunchedEffect(look.version, resumed) {
         kotlinx.coroutines.delay(150)
         val next = HomeBridge.home?.pictureNow() ?: return@LaunchedEffect
+        HomePictures.byTheme[Design.themeId] = next
+        latest = next
+    }
+    // The theme chosen and not yet applied shows as home looked in it (if the settings have seen it), else home as it is.
+    val draft = LocalDraft.current
+    val wanted = draft.theme?.let { HomePictures.byTheme[it] } ?: latest
+    LaunchedEffect(wanted) {
+        if (wanted == null || wanted === shown) return@LaunchedEffect
         before = shown
-        shown = next
+        shown = wanted
         fade.snapTo(0f)
         fade.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE))
         before = null
@@ -324,7 +430,7 @@ private fun HomePicture(st: Studio, g: Geometry) {
             .offset { IntOffset(((g.w - g.previewW) / 2f).roundToInt(), g.previewTop.roundToInt()) }
             .size(look.dp(g.previewW), look.dp(g.previewH))
             .graphicsLayer {
-                val s = g.previewScale(st.p.value)
+                val s = g.previewScale(st.p.value, bar.value)
                 scaleX = s; scaleY = s
                 transformOrigin = TransformOrigin(0.5f, 0f)
             }
@@ -413,7 +519,7 @@ private fun RoundButton(symbol: Int, label: String, enabled: () -> Boolean, onCl
  * a page, and the pages (built ahead, placed only while open).
  */
 @Composable
-private fun Sheet(st: Studio, g: Geometry, open: (Part) -> Unit, close: (Float) -> Unit) {
+private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Part) -> Unit, close: (Float) -> Unit) {
     val look = LocalLook.current
     val fill = look.color(SettingsTokens.SHEET_FILL)
     val rim = look.color(SettingsTokens.SHEET_RIM)
@@ -427,7 +533,7 @@ private fun Sheet(st: Studio, g: Geometry, open: (Part) -> Unit, close: (Float) 
         Modifier
             .offset { IntOffset(g.inset.roundToInt(), g.openTop.roundToInt()) }
             .size(look.dp(g.sheetW), look.dp(g.sheetH))
-            .graphicsLayer { translationY = g.top(st.p.value) - g.openTop }
+            .graphicsLayer { translationY = g.top(st.p.value, bar.value) - g.openTop }
             .drawBehind {
                 shadowPaint.color = page.toArgb()
                 shadowPaint.setShadowLayer(26f * g.unit, 0f, -2f * g.unit, shadow.toArgb())
@@ -468,10 +574,11 @@ private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = m, end = m, top = look.dp(26f * g.unit))) {
         BasicText("Your setup", style = look.text(SettingsTokens.SECTION, look.color(SettingsTokens.SECTION_COLOR)),
             modifier = back.padding(bottom = look.dp(8f * g.unit)))
+        val draft = LocalDraft.current
         Row(back.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(look.dp(6f * g.unit))) {
-            Chip(Design.themeName) { open(Part.LOOK) }
-            Chip(if (Design.wallpaperColors) "Wallpaper colours" else "Theme colours") { open(Part.LOOK) }
-            Chip(Design.motionName + " motion") { open(Part.MOTION) }
+            Chip(themeName(draft.themeId())) { open(Part.LOOK) }
+            Chip(if (draft.wallpaperColors()) "Wallpaper colours" else "Theme colours") { open(Part.LOOK) }
+            Chip(presetName(draft.motionId()) + " motion") { open(Part.MOTION) }
         }
         Spacer(Modifier.height(look.dp(16f * g.unit)))
         for (row in listOf(listOf(Part.LAYOUTS, Part.LOOK), listOf(Part.MOTION, Part.PHONE))) {
@@ -567,7 +674,7 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
         }
         Spacer(Modifier.weight(1f))
         BasicText(part.title, style = look.text(SettingsTokens.TILE_TITLE, mix(label, c, titleTint)), maxLines = 1)
-        BasicText(part.detail(), style = look.text(SettingsTokens.TILE_DETAIL, mix(detail, c, titleTint).copy(alpha = if (titleTint > 0f) 0.8f else detail.alpha)),
+        BasicText(part.detail(LocalDraft.current), style = look.text(SettingsTokens.TILE_DETAIL, mix(detail, c, titleTint).copy(alpha = if (titleTint > 0f) 0.8f else detail.alpha)),
             maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -645,7 +752,8 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
         Box(
             Modifier
                 .fillMaxSize()
-                .then(if (here) Modifier else Modifier.clearAndSetSemantics { })
+                // Out of the tree while it scrolls too (the Layouts page lost 12-17 ms every ~117 ms of a scroll on the S24).
+                .then(if (here && !scroll.moving) Modifier else Modifier.clearAndSetSemantics { })
                 // Laid out and placed from the start; while closed it waits out of sight (moved, not laid out, when it opens).
                 .graphicsLayer {
                     val open = st.open == part
@@ -654,13 +762,6 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
                     // Content scrolled up dissolves under the sheet's top edge.
                     compositingStrategy = CompositingStrategy.Offscreen
                 }
-                .swipeBack(g, onMove = { f -> if (st.open == part) { st.dragging = true; scope.launch { st.p.snapTo((1f - f).coerceIn(0f, 1f)) } } },
-                    onEnd = { f, v ->
-                        st.dragging = false
-                        if (st.open != part) Unit
-                        else if (f > 0.3f || v > 0.5f) close(-v)
-                        else scope.launch { st.p.animateTo(1f, look.motion(MotionTokens.SETTINGS_OPEN), -v) }
-                    })
                 .drawWithContent {
                     drawContent()
                     drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 6f * g.unit, endY = 6f * g.unit + fadePx),
@@ -675,75 +776,267 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
                     Part.MOTION -> MotionPage()
                     Part.PHONE -> PhonePage()
                 }
-                Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset)))
+                // Room below the last row for the Apply bar.
+                Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
             }
         }
-    }
-}
-
-/**
- * A rightward drag that starts more sideways than up or down takes the page back towards its tile, following the finger
- * ([onMove] with the fraction of the width); let go, [onEnd] gets the fraction and the speed (widths a second).
- */
-private fun Modifier.swipeBack(g: Geometry, onMove: (Float) -> Unit, onEnd: (Float, Float) -> Unit): Modifier = pointerInput(Unit) {
-    awaitEachGesture {
-        val down = awaitFirstDown(requireUnconsumed = false)
-        val tracker = VelocityTracker()
-        tracker.addPosition(down.uptimeMillis, down.position)
-        var x = 0f
-        val first = awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
-            if (over > 0f) { change.consume(); x = over }   // rightwards only
-        } ?: return@awaitEachGesture
-        val w = g.sheetW.coerceAtLeast(1f)
-        onMove(x / w)
-        horizontalDrag(first.id) { change ->
-            tracker.addPosition(change.uptimeMillis, change.position)
-            x += change.positionChange().x
-            onMove((x / w).coerceAtLeast(0f))
-            change.consume()
-        }
-        dev.launcher.app.AppLog.log("[settings] swipe back let go at ${"%.2f".format(x / w)}")
-        onEnd((x / w).coerceAtLeast(0f), tracker.calculateVelocity().x / w)
     }
 }
 
 // ------------------------------------------------------------------ the pages
 
+/**
+ * Look (docs/PLAN_SETTINGS.md S2): the theme as cards (home as it looked in each, once the settings have seen it), a
+ * theme for one part only, the wallpaper's colours, light and dark. All of it waits for Apply.
+ */
 @Composable
 private fun LookPage() {
-    Group("Theme") {
-        for (t in Design.themes()) CheckRow(t.name, if (t.builtIn) null else "From a file", t.id == Design.themeId) { Design.setTheme(t.id) }
+    val draft = LocalDraft.current
+    val themes = remember(LocalLook.current.version) { Design.themes() }
+    Group("Theme", "Everything follows it, unless a part has its own below.") {
+        ThemeCards(themes, draft)
+    }
+    Group("Only for one part") {
+        for (e in Element.entries) ElementTheme(e, themes, draft)
     }
     Group("Colours", "Any theme can take its accents from your wallpaper (Material You).") {
-        ToggleRow("Wallpaper colours", null, Design.wallpaperColors) { Design.setColorSource(if (it) "wallpaper" else "theme") }
+        ToggleRow("Wallpaper colours", null, draft.wallpaperColors()) { draft.chooseColors(it) }
+    }
+    Group("Appearance") {
+        Box(Modifier.padding(LocalLook.current.dp(SettingsTokens.ROW_PADDING))) {
+            ChoiceChips(Appearance.Mode.entries.map { it.title }, Appearance.Mode.entries.indexOf(draft.appearanceMode())) {
+                draft.chooseAppearance(Appearance.Mode.entries[it])
+            }
+        }
+    }
+}
+
+/** The themes side by side, each as home looks in it; the chosen one ringed in the accent. */
+@Composable
+private fun ThemeCards(themes: List<Design.ThemeInfo>, draft: Draft) {
+    val look = LocalLook.current
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    Row(Modifier.fillMaxWidth().padding(pad), horizontalArrangement = Arrangement.spacedBy(look.dp(14f * look.unit))) {
+        for (t in themes) {
+            val chosen = draft.themeId() == t.id
+            val k by animateFloatAsState(if (chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chosen")
+            var pressed by remember { mutableStateOf(false) }
+            val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+            val accent = look.color(SettingsTokens.ACCENT)
+            val w = 84f * look.unit
+            val h = w * look.screenH / look.screenW
+            val corner = w * Design.num(SettingsTokens.PREVIEW_CORNER)
+            Column(Modifier.pressScale { 1f - 0.05f * press }.pointerInput(t.id) { rowTap({ pressed = it }) { draft.chooseTheme(t.id) } },
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(look.dp(w), look.dp(h))
+                    .drawBehind {
+                        // The ring around the chosen one grows in.
+                        if (k > 0.001f) {
+                            val r = 4f * look.unit * k
+                            drawRoundRect(accent.copy(alpha = accent.alpha * k), Offset(-r, -r), Size(size.width + r * 2f, size.height + r * 2f),
+                                CornerRadius(corner + r), style = Stroke(2.5f * look.unit))
+                        }
+                    }
+                    .clip(RoundedCornerShape(look.dp(corner)))) {
+                    ThemeThumb(t.id)
+                }
+                Spacer(Modifier.height(look.dp(8f * look.unit)))
+                BasicText(t.name, style = look.text(SettingsTokens.ROW_DETAIL, mix(look.color(SettingsTokens.ROW_LABEL), accent, k)), maxLines = 1)
+            }
+        }
+    }
+}
+
+/** Home as it looked in theme [id]; one not seen yet: the wallpaper under that theme's sheet colour and accent. */
+@Composable
+private fun ThemeThumb(id: String) {
+    val look = LocalLook.current
+    val pic = HomePictures.byTheme[id]
+    if (pic != null) { Image(pic.asImageBitmap(), null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()); return }
+    val sheet = Design.previewColor(id, SettingsTokens.SHEET_FILL)?.let { Color(it) } ?: look.color(SettingsTokens.SHEET_FILL)
+    val accent = Design.previewColor(id, SettingsTokens.ACCENT)?.let { Color(it) } ?: look.color(SettingsTokens.ACCENT)
+    Canvas(Modifier.fillMaxSize()) {
+        val wp = look.wallpaper
+        if (wp != null) drawIntoCanvas { c ->
+            val m = wp.matrix(look.screenW, look.screenH)
+            m.postScale(size.width / look.screenW, size.height / look.screenH)
+            c.nativeCanvas.drawBitmap(wp.bitmap, m, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+        } else drawRect(look.color(SettingsTokens.BACKGROUND))
+        drawRoundRect(sheet, Offset(size.width * 0.08f, size.height * 0.58f), Size(size.width * 0.84f, size.height * 0.36f), CornerRadius(size.width * 0.1f))
+        drawCircle(accent, size.width * 0.08f, Offset(size.width * 0.5f, size.height * 0.76f))
+    }
+}
+
+/** One part's own theme: Follow (the main one) or any theme. */
+@Composable
+private fun ElementTheme(e: Element, themes: List<Design.ThemeInfo>, draft: Draft) {
+    val look = LocalLook.current
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val own = draft.elementTheme(e)
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        BasicText(e.title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
+        Spacer(Modifier.height(look.dp(8f * look.unit)))
+        val names = listOf("Follow") + themes.map { it.name }
+        val at = if (own == null) 0 else 1 + themes.indexOfFirst { it.id == own }.coerceAtLeast(0)
+        ChoiceChips(names, at) { i -> draft.chooseElement(e, if (i == 0) null else themes[i - 1].id) }
+    }
+}
+
+/** A row of chips, one chosen (its fill blends to the accent). */
+@Composable
+private fun ChoiceChips(names: List<String>, chosen: Int, onChoose: (Int) -> Unit) {
+    val look = LocalLook.current
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(look.dp(6f * look.unit))) {
+        names.forEachIndexed { i, n ->
+            val k by animateFloatAsState(if (i == chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chip")
+            var pressed by remember { mutableStateOf(false) }
+            val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+            val fill = mix(look.color(SettingsTokens.CHIP_FILL), look.color(SettingsTokens.ACCENT), k)
+            val text = mix(look.color(SettingsTokens.CHIP_TEXT_COLOR), look.color(SettingsTokens.ACCENT_LABEL), k)
+            val corner = look.pt(SettingsTokens.CHIP_CORNER)
+            BasicText(n, style = look.text(SettingsTokens.CHIP_TEXT, text), maxLines = 1,
+                modifier = Modifier
+                    .pressScale { 1f - 0.05f * press }
+                    .drawBehind { drawRoundRect(fill, cornerRadius = CornerRadius(corner)) }
+                    .pointerInput(i, chosen) { rowTap({ pressed = it }) { if (i != chosen) onChoose(i) } }
+                    .padding(horizontal = look.dp(12f * look.unit), vertical = look.dp(7f * look.unit)))
+        }
     }
 }
 
 @Composable
 private fun MotionPage() {
+    val draft = LocalDraft.current
     Group("Animations", "How everything moves. Each animation can be retimed in Expert for now.") {
-        for (p in Design.motionPresets()) CheckRow(p.name, null, p.id == Design.motionPresetId) { Design.setMotion(p.id) }
+        for (p in Design.motionPresets()) CheckRow(p.name, null, p.id == draft.motionId()) { draft.chooseMotion(p.id) }
     }
 }
 
 @Composable
 private fun LayoutsPage() {
+    val draft = LocalDraft.current
     for (e in Element.entries) {
-        val current = Setup.layout(e)
+        val current = Layouts.find(e, draft.layout(e)) ?: Setup.layout(e)
         val layouts = Layouts.of(e)
         Group(e.title, current.description) {
-            for (l in layouts) CheckRow(l.title, l.origin, l.id == current.id) { Setup.set(e, layout = l.id) }
+            for (l in layouts) CheckRow(l.title, l.origin, l.id == current.id) { draft.chooseLayout(e, l.id) }
         }
         if (current.placements.size > 1) {
-            val at = Setup.placement(e)
+            val at = draft.placement(e)
             Group("Where it lives") {
-                for (p in current.placements) CheckRow(p.title, p.description, p.id == at.id) { Setup.set(e, placement = p.id) }
+                for (p in current.placements) CheckRow(p.title, p.description, p.id == at) { draft.choosePlacement(e, p.id) }
             }
         }
         val toggles = current.options.filterIsInstance<Option.Toggle>()
         if (toggles.isNotEmpty()) Group("Options") {
-            for (o in toggles) ToggleRow(o.title, o.description, Setup.bool(e, o.key, o.default)) { Setup.set(e, options = mapOf(o.key to it)) }
+            for (o in toggles) ToggleRow(o.title, o.description, draft.bool(e, o.key, o.default)) { draft.chooseBool(e, o.key, it, o.default) }
         }
+    }
+}
+
+/**
+ * Apply and Discard, floating at the bottom while changes wait: it rises in with the first change (the sheet makes room
+ * above it), counts them, and after Back with changes waiting says what a second Back does.
+ */
+@Composable
+private fun ApplyBar(draft: Draft, g: Geometry, bar: Animatable<Float, *>, onApply: () -> Unit) {
+    val look = LocalLook.current
+    val n = draft.count
+    val spec = look.motion<Float>(MotionTokens.SHEET)
+    LaunchedEffect(n > 0) { bar.animateTo(if (n > 0) 1f else 0f, spec) }
+    val nudge = remember { Animatable(0f) }
+    LaunchedEffect(draft.backAt) {
+        if (draft.backAt == 0L) return@LaunchedEffect
+        nudge.snapTo(1f)
+        launch { nudge.animateTo(0f, look.motion(MotionTokens.APPEAR)) }
+        kotlinx.coroutines.delay(Draft.BACK_AGAIN_MS)
+        draft.backAt = 0L
+    }
+    var said by remember { mutableStateOf("") }
+    if (n > 0) said = when {
+        draft.backAt != 0L -> "Back again to discard"
+        n == 1 -> "1 change"
+        else -> "$n changes"
+    }
+    val m = look.pt(SettingsTokens.MARGIN)
+    val fill = look.color(SettingsTokens.BUTTON_FILL)
+    val rim = look.color(SettingsTokens.BUTTON_RIM)
+    val shadow = look.color(SettingsTokens.SHEET_SHADOW)
+    val page = look.color(SettingsTokens.BACKGROUND)
+    val shadowPaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
+    Box(
+        Modifier
+            .offset { IntOffset((g.inset + m).roundToInt(), g.barTop.roundToInt()) }
+            .size(look.dp(g.sheetW - m * 2f), look.dp(g.barH))
+            .graphicsLayer {
+                val k = bar.value
+                alpha = k.coerceIn(0f, 1f)
+                translationY = (1f - k) * (g.barH + 40f * g.unit)
+            }
+            .pressScale { 1f + 0.05f * nudge.value }
+            .drawBehind {
+                val r = size.height / 2f
+                shadowPaint.color = page.toArgb()
+                shadowPaint.setShadowLayer(20f * g.unit, 0f, 6f * g.unit, shadow.toArgb())
+                drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, r, r, shadowPaint) }
+                drawRoundRect(fill, cornerRadius = CornerRadius(r))
+                drawRoundRect(rim, cornerRadius = CornerRadius(r), style = Stroke(1f * g.unit))
+            },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        Row(Modifier.fillMaxSize().padding(start = look.dp(20f * look.unit), end = look.dp(7f * look.unit)), verticalAlignment = Alignment.CenterVertically) {
+            Rolling(said, look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), Modifier.weight(1f))
+            BarButton("Discard", accent = false) { draft.discard() }
+            Spacer(Modifier.width(look.dp(6f * look.unit)))
+            BarButton("Apply", accent = true, onClick = onApply)
+        }
+    }
+}
+
+@Composable
+private fun BarButton(text: String, accent: Boolean, onClick: () -> Unit) {
+    val look = LocalLook.current
+    var pressed by remember { mutableStateOf(false) }
+    val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+    val a = look.color(SettingsTokens.ACCENT)
+    val style = look.text(SettingsTokens.TITLE, if (accent) look.color(SettingsTokens.ACCENT_LABEL) else a)
+    BasicText(text, style = style, maxLines = 1, modifier = Modifier
+        .pressScale { 1f - 0.06f * press }
+        .drawBehind { if (accent) drawRoundRect(a, cornerRadius = CornerRadius(size.height / 2f)) }
+        .pointerInput(onClick) { rowTap({ pressed = it }, onClick) }
+        .padding(horizontal = look.dp(16f * look.unit), vertical = look.dp(10f * look.unit)))
+}
+
+/** A line that rolls to its new words: the old ones rise and fade, the new come up from below. */
+@Composable
+private fun Rolling(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier) {
+    val look = LocalLook.current
+    var now by remember { mutableStateOf(text) }
+    var was by remember { mutableStateOf<String?>(null) }
+    val k = remember { Animatable(1f) }
+    LaunchedEffect(text) {
+        if (text == now) return@LaunchedEffect
+        was = now
+        now = text
+        k.snapTo(0f)
+        k.animateTo(1f, look.motion(MotionTokens.APPEAR))
+        was = null
+    }
+    val rise = 14f * look.unit
+    Box(modifier) {
+        was?.let { w ->
+            BasicText(w, style = style, maxLines = 1, modifier = Modifier
+                .graphicsLayer { alpha = (1f - k.value).coerceIn(0f, 1f) }
+                .drawWithContent { translate(0f, -rise * k.value) { this@drawWithContent.drawContent() } })
+        }
+        BasicText(now, style = style, maxLines = 1, modifier = Modifier
+            .graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }
+            .drawWithContent { translate(0f, rise * (1f - k.value)) { this@drawWithContent.drawContent() } })
     }
 }
 

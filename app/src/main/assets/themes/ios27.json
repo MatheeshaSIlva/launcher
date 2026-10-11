@@ -2438,6 +2438,14 @@
    "color": "#00000059",
    "src": "judged:the soft shadow under the date and group names"
   },
+  "comp.settings.accent": {
+   "ref": "sys.color.accent",
+   "src": "judged:the theme's accent (Apply, a chosen chip)"
+  },
+  "comp.settings.accent-label": {
+   "color": "#ffffff",
+   "src": "judged:white on the accent"
+  },
   "comp.settings.background": {
    "ref": "ref.color.backgrounds-grouped.primary",
    "src": "measured:iOS 27 Settings (run 15): a solid grouped grey page, black in dark"

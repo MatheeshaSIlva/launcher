@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.verticalDrag
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -27,7 +28,10 @@ import kotlin.math.roundToInt
 class IosScrollState {
     var offset by mutableFloatStateOf(0f)
         private set
-    val scroller = IosScroller({ offset = it })
+    /** A finger drags it or it is still settling (what moves with it can leave the accessibility tree meanwhile). */
+    var moving by mutableStateOf(false)
+        internal set
+    val scroller = IosScroller({ offset = it }, { moving = false })
 }
 
 /**
@@ -41,6 +45,7 @@ fun Modifier.iosScroll(state: IosScrollState): Modifier = this
             val s = state.scroller
             val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
             if (s.isMovingVisibly()) { s.stop(); down.consume() } else if (s.isSettling) s.stop()
+            if (!s.isSettling) state.moving = false
             val tracker = VelocityTracker()
             tracker.addPosition(down.uptimeMillis, down.position)
             // From the slop on the content follows the finger 1:1 (it does not jump by the slop it took to decide).
@@ -49,6 +54,7 @@ fun Modifier.iosScroll(state: IosScrollState): Modifier = this
                 return@awaitEachGesture
             }
             tracker.addPosition(first.uptimeMillis, first.position)
+            state.moving = true
             s.beginDrag()
             verticalDrag(first.id) { change ->
                 tracker.addPosition(change.uptimeMillis, change.position)

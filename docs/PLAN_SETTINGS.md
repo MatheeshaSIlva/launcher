@@ -18,9 +18,11 @@ themes, animations and switching between them).
    `Layouts`); token keys only in the expert view.
 2. **See it, then it is set.** Every control has a live preview next to it, made of the real component drawn small (the
    real notification card, control, menu, dock), with the part a property changes highlighted while it is touched.
-3. **Changes apply at once and can always be undone.** No Apply buttons: a theme tapped is the theme (home takes it with
-   the reveal, the settings app too); one undo bar, and a history of the session. Changes that could leave the phone hard to
-   use (gestures, the shade) ask for a confirmation and undo themselves after 10 s without it.
+3. **Changes wait for Apply.** (Changed 2026-10-11, Matheesha: "every change is instant, so that transition animation
+   plays a lot of times if we make a lot of changes".) Choices go into a draft the rows show at once; a bar rises with the
+   first one (how many, Discard, Apply); Apply applies them all as one (one reveal), Discard forgets them. Back with changes
+   waiting first says so; a second Back discards and leaves. Changes that could leave the phone hard to use (gestures, the
+   shade) will still ask for a confirmation and undo themselves after 10 s without it.
 4. **Everything moves.** Screens, cards and values move on the animation preset's own roles (springs and curves), so the
    settings app moves the way the launcher does, and a motion preset changes it too.
 5. **Basic by default, everything in reach.** The basic view shows choices (layouts, themes, presets, a few options);
@@ -148,6 +150,19 @@ Build steps (each checked on the S24 before the next):
 | S3 | Tap a part of the picture to pick it (status bar, panels, recents, drawer, home); the rest dims, the sheet shows that part's theme and layout |
 | S4 | Motion (presets with a demo on the picture) and Phone |
 
+**2026-10-11 (Matheesha on S1: "the layouts section is a bit laggy. Swiping right goes back to the main screen - remove it -
+it is sometimes triggered just trying to scroll down. ... let's add an apply/discard changes system"):** the swipe back is
+gone (Back and the round button remain). The Layouts lag: scrolling missed 3-10 refreshes a scroll on the S24, frames of
+12-17 ms every ~117 ms: Compose's accessibility re-read again (scrolling counts as a layout change too); a page now leaves
+the tree while it scrolls (`IosScrollState.moving`, until the scroller settles). Apply and Discard: `Draft` in
+`settings/Pages.kt` (theme, colours, appearance, preset, each element's theme, layouts, placements, options), the bar
+(`ApplyBar`: rises with the sheet making room above it, a rolling count, Back's warning), `Design.batch` (listeners hear
+once: one reveal). Checked on the emulator: 2 changes applied as one design change and one home rebuild; Discard; Back
+twice. S2 started with it: Look shows the themes as cards (home as it looked in each, kept whenever the settings take its
+picture: `HomePictures`; one not seen yet shows the wallpaper under that theme's sheet colour and accent,
+`Design.previewColor`), a theme for each part (Follow or a theme, chips), the wallpaper's colours, light and dark; the
+picture above shows the chosen theme's home when known.
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 
@@ -202,7 +217,7 @@ blended from white to black is grey and faint for a moment (the shared `Appearan
 
 1. The settings open from an icon in the drawer ("Launcher settings"), from home's long press on empty space (the edit
    menu's "Home Settings"), and from a Control Center control.
-2. Changes apply at once, with undo (a session history; risky changes undo themselves after 10 s unless confirmed).
+2. Changes wait for Apply (a draft, one reveal for all of them; replaced "at once, with undo" on 2026-10-11).
 3. Cards with live miniatures at the top, grouped lists below; the theme reskins both.
 4. The Google Fonts family list is bundled with the app, fetched once from the public google/fonts repository.
 5. The settings' feel is expressive throughout (polish steps P1-P4 above), on the preset's motion roles.

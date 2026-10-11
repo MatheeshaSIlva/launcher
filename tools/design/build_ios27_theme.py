@@ -806,6 +806,8 @@ COMPONENT_SEEDS = {
     'comp.settings.preview.rim-width': {'pt': 2.5, 'src': "judged:draft D"},
     'comp.settings.preview.shadow': {'light': '#00000038', 'dark': '#00000099', 'src': "judged:draft D: the picture's soft shadow"},
     'comp.settings.preview.corner': {'factor': 0.15, 'src': "judged:the phone's corner, of the picture's width"},
+    'comp.settings.accent': {'ref': 'sys.color.accent', 'src': "judged:the theme's accent (Apply, a chosen chip)"},
+    'comp.settings.accent-label': {'color': '#ffffff', 'src': "judged:white on the accent"},
     'component.page.beneath-dim': {'light': '#0000001a', 'dark': '#00000066', 'src': "judged:the page beneath a sliding one dims (UIKit's navigation transition: black about 10 % in light)"},
     'component.page.edge-shadow': {'light': '#00000026', 'dark': '#00000080', 'src': "judged:a sliding page's left edge casts a soft shadow on the page beneath (UIKit)"},
     'component.page.edge-shadow-width': {'pt': 12, 'src': "judged:UIKit's navigation transition shadow"},
