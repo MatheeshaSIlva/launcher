@@ -170,6 +170,13 @@ while a page scrolls (the misses left are frames of 3-4 ms: presentation, not ou
 home exists until it shows): home's picture in each theme is now kept on disk (`files/design/home-pictures/<theme>.webp`,
 half size) and shown until a fresh one is taken; a cold start's held arrival is pictured at rest.
 
+**Scrolling interruptible (2026-10-11, Matheesha: "if the app is scrolling down and I want to scroll up I have to wait until
+the scrolling animation ends"):** a touch on a moving list consumed its own touch-down (so no row is tapped) and then, seeing
+that touch-down consumed in its next pass, gave the gesture up: the finger stopped the list but could not drag it until it
+lifted. And a flick whose whole travel arrived with the lift (one batch) was taken for no drag. `iosScroll` now reads every
+position itself: its own touch-down is skipped, a flick past the slop counts with its speed. Emulator: a drag started during
+a fling turns the list around.
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 
