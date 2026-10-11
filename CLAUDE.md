@@ -77,7 +77,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   user picks the wallpaper's colours (`sys.color.source`; adb: `DESIGN_RELOAD --es colors wallpaper|theme`). iOS 27's maps
   its backgrounds, fills, labels and separators to Android 14's tonal roles (`@surface_container...`, `@on_surface`), its
   white "on" states to the primary container, and tints every glass (a COLOR layer of `@system_accent1_500` and a faint
-  wash; written by the builder). A theme's own tokens win over the Material You of the theme it extends.
+  wash; written by the builder). A theme's own tokens win over the Material You of the theme it extends. The palette is
+  the phone's (Wallpaper & style) or made by `design/MaterialYou` from the wallpaper's main colour in a style (tonal,
+  vibrant, expressive, neutral, monochrome); `sys.color.style`, `sys.color.intensity` (chroma 0..2).
   **A theme per element** (`design/TokenParts`): an element's code reads only its own namespace (`comp.statusbar.*`,
   `comp.nc/cc/banner.*`, `comp.switcher.*`, `comp.library/spotlight.*`, `comp.home/widgets/badge.*`, `comp.settings.*`;
   a test checks it), aliases into `sys.*`/`component.*`; an element given its own theme resolves its namespace there

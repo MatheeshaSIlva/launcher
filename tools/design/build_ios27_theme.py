@@ -233,6 +233,8 @@ SEED = {
     'sys.font.text': {'choice': 'inter', 'src': "judged:Inter in place of SF Pro Text (SF is licensed for Apple platforms only); its optical size 14 plays SF's Text cut"},
     'sys.font.display': {'choice': 'inter', 'src': "judged:Inter in place of SF Pro Display; its optical size 32 plays SF's Display cut"},
     'sys.color.source': {'choice': 'theme', 'src': "judged:the theme's own colours until the user picks the wallpaper's (Material You)"},
+    'sys.color.style': {'choice': 'system', 'src': "judged:Material You's style: the phone's own palette (Wallpaper & style) until the user picks one (tonal, vibrant, expressive, neutral, monochrome)"},
+    'sys.color.intensity': {'factor': 1, 'src': "judged:how colourful the wallpaper's palette is (0 grey, 1 the style's own, 2 twice): the user's"},
     'sys.scale.policy': {'choice': 'reference-width', 'src': 'judged:the screen is as many points wide as iOS 27\'s iPhone, so proportions and, on the S24, physical sizes match it'},
     'sys.scale.reference-width': {'pt': 402, 'src': 'kit:the kit\'s iPhone 17 Pro frame, 402 x 874'},
     # Motion: every animation by its role (step 4; was motion/Motion.kt's iOS profile, same values).

@@ -40,6 +40,9 @@ object Design {
      * section over it, its accents as the system palette's roles). A user's choice, kept with their edits of the theme.
      */
     val COLOR_SOURCE = ChoiceKey("sys.color.source")
+    /** Material You's style (MaterialYou.Style: the phone's, tonal, vibrant...) and intensity (0 grey .. 1 .. 2). */
+    val COLOR_STYLE = ChoiceKey("sys.color.style")
+    val COLOR_INTENSITY = NumberKey("sys.color.intensity")
 
     private lateinit var appCtx: Context
     /** The active theme and the ones it is built on, the base first. */
@@ -469,6 +472,7 @@ object Design {
     private fun rebuild() {
         val layers = layersOf(chain, user, ThemeLayers.fromWallpaper(chain, user)) + motionChain.map { it.entries } + listOf(LinkedHashMap(motionUser))
         state = State(Resolver(layers) { name -> paletteColor(name) })
+        followYouSettings()
         previews.clear()
         motionPreviews.clear()
         val byTheme = HashMap<String, State>()
@@ -497,11 +501,43 @@ object Design {
     private const val NO_COLOR = 0x00FFFFFE   // cached "no such colour" (never a real palette colour: transparent)
     private var paletteAt = 0L
 
-    /** The palette colour [name] (an `android.R.color` field, `system_primary_dark`), cached until the palette changes. */
-    private fun paletteColor(name: String): Int? = palette.getOrPut(name) { systemColor(name) ?: NO_COLOR }.takeIf { it != NO_COLOR }
+    /**
+     * The palette colour [name] (an `android.R.color` field's name, `system_primary_dark`) in the chosen Material You style
+     * and intensity ([MaterialYou]), cached until the palette, the style or the intensity changes.
+     */
+    private fun paletteColor(name: String): Int? = palette.getOrPut(name) { youColor(name, myStyle, myIntensity) ?: NO_COLOR }.takeIf { it != NO_COLOR }
 
-    /** The system's palette colour [name] (`system_accent1_500`, `system_primary_light`), or null (none: Android before 12). */
+    /** Palette colour [name] in the current style (null: none: Android before 12). */
     fun systemPalette(name: String): Int? = paletteColor(name)
+
+    /** Palette colour [name] as style [style] at [intensity] would make it (the settings show a choice before it is applied). */
+    fun previewPalette(name: String, style: MaterialYou.Style, intensity: Float): Int? = youColor(name, style, intensity)
+
+    @Volatile private var myStyle = MaterialYou.Style.SYSTEM
+    @Volatile private var myIntensity = 1f
+    @Volatile private var seed: Int? = null
+    private val schemes = java.util.concurrent.ConcurrentHashMap<String, MaterialYou.Scheme>()
+
+    private fun youColor(name: String, style: MaterialYou.Style, intensity: Float): Int? {
+        if (style == MaterialYou.Style.SYSTEM) return systemColor(name)?.let { MaterialYou.scaleChroma(it, intensity) }
+        val s = seedColor() ?: return systemColor(name)
+        val scheme = schemes.getOrPut("${style.id}/$intensity/$s") { MaterialYou.scheme(s, style, intensity) }
+        return MaterialYou.color(scheme, name) ?: systemColor(name)
+    }
+
+    /** The wallpaper's main colour (the system's reading of it), else the system palette's primary. */
+    private fun seedColor(): Int? = seed ?: (try {
+        if (android.os.Build.VERSION.SDK_INT >= 27)
+            android.app.WallpaperManager.getInstance(appCtx).getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM)?.primaryColor?.toArgb()
+        else null
+    } catch (_: Throwable) { null } ?: systemColor("system_accent1_500"))?.also { seed = it }
+
+    /** The style and intensity in the design now (after a rebuild): the palette made again if they changed. */
+    private fun followYouSettings() {
+        val st = (try { value(COLOR_STYLE.name) } catch (_: Throwable) { null } as? Value.Choice)?.option.let { MaterialYou.Style.of(it) }
+        val k = (try { value(COLOR_INTENSITY.name) } catch (_: Throwable) { null } as? Value.Number)?.v ?: 1f
+        if (st != myStyle || k != myIntensity) { myStyle = st; myIntensity = k; palette.clear() }
+    }
 
     private fun systemColor(name: String): Int? {
         if (android.os.Build.VERSION.SDK_INT < 31) return null
@@ -527,6 +563,8 @@ object Design {
         val stamp = paletteStamp()
         if (stamp == paletteAt) return
         paletteAt = stamp
+        seed = null
+        schemes.clear()
         palette.clear()
         rebuild()
         changedOutside("the wallpaper's colours changed", structural = false)

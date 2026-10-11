@@ -276,6 +276,15 @@ wallpaper change, the transition in the settings is static"):**
   0-2 missed refreshes, most 0-1; the late frames left cost us 2-9 ms of CPU and 5-7 ms of GPU (not our frame's work).
   App Library folder: 2 missed refreshes, the icons in order.
 
+**C3, Material You's styles and intensity (2026-10-11; Matheesha: "allow the users to control the intensity ... aren't
+there different profiles for material you - expressive, tonal etc.?"):** Look's Colours has a Style (the phone's own
+palette, or one made here from the wallpaper's main colour in Android's styles: Tonal, Vibrant, Expressive, Neutral,
+Monochrome) and an Intensity slider (0 grey, 100 % the style's own, up to 200 %), both waiting for Apply, the swatches
+showing the choice live. `design/MaterialYou` makes the palettes (tonal palettes in CIELAB lightness, the styles' hues
+and chromas after Material's scheme definitions; Android's names `system_accent1_500` and the 14 roles) and scales "the
+phone's" palette's chroma for the intensity; tokens `sys.color.style`, `sys.color.intensity`. A settings slider
+(`SettingsSlider`: a drag that starts sideways is its, one that starts up or down the page's scroll).
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 

@@ -3322,6 +3322,10 @@
    "ref": "ref.color.fills.tertiary",
    "src": "kit:VariableID:509:77493"
   },
+  "sys.color.intensity": {
+   "factor": 1,
+   "src": "judged:how colourful the wallpaper's palette is (0 grey, 1 the style's own, 2 twice): the user's"
+  },
   "sys.color.label.primary": {
    "ref": "ref.color.labels.primary",
    "src": "kit:VariableID:507:29167"
@@ -3387,6 +3391,10 @@
   "sys.color.source": {
    "choice": "theme",
    "src": "judged:the theme's own colours until the user picks the wallpaper's (Material You)"
+  },
+  "sys.color.style": {
+   "choice": "system",
+   "src": "judged:Material You's style: the phone's own palette (Wallpaper & style) until the user picks one (tonal, vibrant, expressive, neutral, monochrome)"
   },
   "sys.font.display": {
    "choice": "inter",

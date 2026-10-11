@@ -213,10 +213,13 @@ private class Draft {
     val setup = androidx.compose.runtime.mutableStateMapOf<Pair<Element, String>, Any>()
     /** A font family chosen for a font token (`sys.font.text`, `sys.font.display`). */
     val fonts = androidx.compose.runtime.mutableStateMapOf<String, String>()
+    /** Material You's style and intensity (see [dev.launcher.app.design.MaterialYou]). */
+    var colorStyle by mutableStateOf<String?>(null)
+    var colorIntensity by mutableStateOf<Float?>(null)
     /** When Back was pressed with changes waiting (a second Back soon after discards them and leaves); 0: not. */
     var backAt by androidx.compose.runtime.mutableLongStateOf(0L)
 
-    val count: Int get() = listOfNotNull(theme, colors, motion, appearance).size + elements.size + setup.size + fonts.size
+    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, colorIntensity).size + elements.size + setup.size + fonts.size
 
     fun themeId() = theme ?: Design.themeId
     fun chooseTheme(id: String) { theme = id.takeIf { it != Design.themeId } }
@@ -238,6 +241,12 @@ private class Draft {
     fun bool(e: Element, key: String, fallback: Boolean): Boolean = setup[e to "opt:$key"] as? Boolean ?: Setup.bool(e, key, fallback)
     fun chooseBool(e: Element, key: String, v: Boolean, fallback: Boolean) = choose(e, "opt:$key", v, Setup.bool(e, key, fallback))
     private fun choose(e: Element, what: String, v: Any, applied: Any) { if (v == applied) setup.remove(e to what) else setup[e to what] = v }
+    fun colorStyle(): dev.launcher.app.design.MaterialYou.Style = dev.launcher.app.design.MaterialYou.Style.of(colorStyle ?: appliedStyle())
+    fun chooseColorStyle(s: dev.launcher.app.design.MaterialYou.Style) { colorStyle = s.id.takeIf { it != appliedStyle() } }
+    fun colorIntensity(): Float = colorIntensity ?: appliedIntensity()
+    fun chooseColorIntensity(k: Float) { colorIntensity = k.takeIf { kotlin.math.abs(it - appliedIntensity()) > 0.005f } }
+    private fun appliedStyle() = (try { Design.resolved(Design.COLOR_STYLE.name) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Choice)?.option ?: "system"
+    private fun appliedIntensity() = (try { Design.resolved(Design.COLOR_INTENSITY.name) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Number)?.v ?: 1f
     /** The family font token [key] has (the draft's, else the one in use). */
     fun font(key: String): String = fonts[key] ?: appliedFont(key)
     fun chooseFont(key: String, family: String) { if (family == appliedFont(key)) fonts.remove(key) else fonts[key] = family }
@@ -252,6 +261,8 @@ private class Draft {
             for ((e, id) in elements) Design.setElementTheme(e, id.takeIf { it != FOLLOW })
             motion?.let { Design.setMotion(it) }
             for ((k, family) in fonts) Design.set(k, dev.launcher.app.design.Value.Choice(family))
+            colorStyle?.let { Design.set(Design.COLOR_STYLE.name, dev.launcher.app.design.Value.Choice(it)) }
+            colorIntensity?.let { Design.set(Design.COLOR_INTENSITY.name, dev.launcher.app.design.Value.Number(it, dev.launcher.app.design.NumUnit.FACTOR)) }
         }
         appearance?.let { Appearance.setMode(ctx, it) }
         for (e in setup.keys.map { it.first }.distinct()) {
@@ -263,7 +274,7 @@ private class Draft {
 
     fun discard() {
         theme = null; colors = null; motion = null; appearance = null
-        elements.clear(); setup.clear(); fonts.clear(); backAt = 0L
+        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; colorIntensity = null; backAt = 0L
     }
 
     companion object {
@@ -1305,7 +1316,9 @@ private fun LookPage() {
     }
     Group("Colours", "Material You: any theme's surfaces, glass and accents take your wallpaper's colours.") {
         ToggleRow("Wallpaper colours", null, draft.wallpaperColors()) { draft.chooseColors(it) }
-        PaletteRow(draft.wallpaperColors())
+        ColourStyleRow(draft)
+        IntensityRow(draft)
+        PaletteRow(draft)
     }
     Group("Fonts", "Google fonts are downloaded the first time they are used, then work offline.") {
         FontRow("Text", "sys.font.text", draft)
@@ -1322,20 +1335,24 @@ private fun LookPage() {
 
 /** The wallpaper's palette (Material You's roles in this appearance), lit while the wallpaper's colours are chosen. */
 @Composable
-private fun PaletteRow(on: Boolean) {
+private fun PaletteRow(draft: Draft) {
     val look = LocalLook.current
-    val k by animateFloatAsState(if (on) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "palette")
+    val k by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "palette")
     val dark = Appearance.dark > 0.5f
-    val roles = remember(look.version) {
+    val style = draft.colorStyle()
+    val intensity = draft.colorIntensity()
+    // As the style and intensity chosen would make them (before Apply), each swatch easing to its new colour.
+    val roles = remember(look.version, style, intensity) {
         listOf("primary" to "Primary", "secondary" to "Secondary", "tertiary" to "Tertiary", "surface_container_highest" to "Surface", "outline" to "Neutral")
-            .map { (role, name) -> Color(dev.launcher.app.design.Theme.resolveSpec("@$role", dark) { Design.systemPalette(it) }) to name }
+            .map { (role, name) -> Color(dev.launcher.app.design.Theme.resolveSpec("@$role", dark) { Design.previewPalette(it, style, intensity) }) to name }
     }
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val swatch = 34f * look.unit
     Row(Modifier.fillMaxWidth().drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .padding(horizontal = pad, vertical = look.dp(12f * look.unit)), horizontalArrangement = Arrangement.SpaceBetween) {
-        for ((c, name) in roles) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        for ((target, name) in roles) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            val c by androidx.compose.animation.animateColorAsState(target, look.motion(MotionTokens.APPEAR_FADE), label = "swatch")
             Canvas(Modifier.size(look.dp(swatch))) {
                 // Off: quieter and a little smaller (the colours are not in use).
                 val s = 0.82f + 0.18f * k
@@ -1345,6 +1362,88 @@ private fun PaletteRow(on: Boolean) {
             Spacer(Modifier.height(look.dp(5f * look.unit)))
             BasicText(name, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)), maxLines = 1)
         }
+    }
+}
+
+/** Material You's style: the phone's own palette, or one made here from the wallpaper in Android's styles. */
+@Composable
+private fun ColourStyleRow(draft: Draft) {
+    val look = LocalLook.current
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val dim by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0.45f, look.motion(MotionTokens.CC_TOGGLE), label = "dim")
+    val styles = dev.launcher.app.design.MaterialYou.Style.entries
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .graphicsLayer { alpha = dim }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        BasicText("Style", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
+        Spacer(Modifier.height(look.dp(8f * look.unit)))
+        ChoiceChips(styles.map { it.title }, styles.indexOf(draft.colorStyle())) { i -> draft.chooseColorStyle(styles[i]) }
+    }
+}
+
+/** How colourful the wallpaper's palette is: a slider from grey through the style's own to twice that. */
+@Composable
+private fun IntensityRow(draft: Draft) {
+    val look = LocalLook.current
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val dim by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0.45f, look.motion(MotionTokens.CC_TOGGLE), label = "dim")
+    val k = draft.colorIntensity()
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .graphicsLayer { alpha = dim }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText("Intensity", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
+            Rolling("${(k * 100).roundToInt()} %", look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier)
+        }
+        Spacer(Modifier.height(look.dp(6f * look.unit)))
+        SettingsSlider(k / 2f) { v -> draft.chooseColorIntensity((v * 2f * 20f).roundToInt() / 20f) }
+    }
+}
+
+/**
+ * A slider (iOS's): a thin track filled in the accent up to a round knob. A drag along it moves the knob under the finger
+ * (a drag that starts mostly up or down is the page's scroll); a tap moves it there. [value] 0..1.
+ */
+@Composable
+private fun SettingsSlider(value: Float, onChange: (Float) -> Unit) {
+    val look = LocalLook.current
+    val track = look.color(SettingsTokens.CHIP_FILL)
+    val accent = look.color(SettingsTokens.ACCENT)
+    val knob = look.color(SettingsTokens.TOGGLE_KNOB)
+    val change = androidx.compose.runtime.rememberUpdatedState(onChange)
+    val shown by animateFloatAsState(value, look.motion(MotionTokens.CC_LEVEL), label = "slider")
+    val knobR = 13f * look.unit
+    Canvas(Modifier.fillMaxWidth().height(look.dp(32f * look.unit)).pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown()
+            val w = size.width - knobR * 2f
+            fun at(x: Float) = ((x - knobR) / w).coerceIn(0f, 1f)
+            val slop = viewConfiguration.touchSlop
+            var dragging = false
+            while (true) {
+                val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                val d = c.position - down.position
+                if (!dragging) {
+                    if (kotlin.math.abs(d.y) > slop && kotlin.math.abs(d.y) > kotlin.math.abs(d.x)) break   // the page's scroll
+                    if (kotlin.math.abs(d.x) > slop) dragging = true
+                }
+                if (dragging) { c.consume(); change.value(at(c.position.x)) }
+                if (!c.pressed) { if (!dragging) change.value(at(c.position.x)); break }
+            }
+        }
+    }) {
+        val cy = size.height / 2f
+        val th = 4f * look.unit
+        val w = size.width - knobR * 2f
+        val x = knobR + w * shown.coerceIn(0f, 1f)
+        drawRoundRect(track, Offset(knobR, cy - th / 2f), Size(w, th), CornerRadius(th / 2f))
+        drawRoundRect(accent, Offset(knobR, cy - th / 2f), Size(x - knobR, th), CornerRadius(th / 2f))
+        drawCircle(Color.Black.copy(alpha = 0.12f), knobR, Offset(x, cy + 1.5f * look.unit))
+        drawCircle(knob, knobR, Offset(x, cy))
     }
 }
 
