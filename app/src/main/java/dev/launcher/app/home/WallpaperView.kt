@@ -17,9 +17,10 @@ class WallpaperView(ctx: Context, private val cellPx: Float) : View(ctx) {
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     var wallpaper: Wallpaper? = null
         set(v) {
-            val arrived = field == null && v != null && isAttachedToWindow && width > 0
+            val arrived = field == null && v != null && isAttachedToWindow && width > 0 && windowVisibility == VISIBLE
             field = v
-            // Read after home is on screen (the first start, a retry): fades in over the black ground instead of popping.
+            // Read after home is on screen (the first start, a retry): fades in over the black ground instead of popping. Not
+            // while home is behind another screen (no one sees it; it waited there half faded, and the settings pictured it so).
             if (arrived && transition == null) { alpha = 0f; animate().alpha(1f).timed(Motion.role(MotionTokens.WALLPAPER_APPEAR)).start() }
             invalidate()
         }

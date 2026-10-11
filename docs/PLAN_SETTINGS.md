@@ -285,6 +285,16 @@ and chromas after Material's scheme definitions; Android's names `system_accent1
 phone's" palette's chroma for the intensity; tokens `sys.color.style`, `sys.color.intensity`. A settings slider
 (`SettingsSlider`: a drag that starts sideways is its, one that starts up or down the page's scroll).
 
+**Layouts' picker B (2026-10-11; Matheesha: "the tab control is a little crammed ... what are the alternatives?", chose
+B):** every element is its symbol (status bar, bell, recents, apps, home, gear), the chosen one wider on the thumb with its
+name beside the symbol (`SymbolSegmented`). One spring moves it all: the thumb slides and takes the new one's width, the
+old name fades as its segment narrows, the new one's comes as it widens; a drag along it carries the thumb under the
+finger (places spread evenly) and chooses where it is let go. Also fixed: after a cold start with the settings in front,
+home read its wallpaper behind them and began its fade-in there; the settings pictured it half faded (a black home with
+tinted glass, kept on disk as home's look) and without the bar (its picture had not come back in time). The wallpaper
+now fades in only when home can be seen, home's picture shows it at rest, the settings picture home again when its
+wallpaper arrives, and ask for the bar again if it did not come.
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 

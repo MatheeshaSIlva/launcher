@@ -257,9 +257,16 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     fun pictureNow(): android.graphics.Bitmap? {
         // Not shown yet in this process (its cold arrival still waits for the first time it is seen), or no wallpaper read
         // yet: home has never drawn at rest, and its picture was black (the settings kept it as home's look).
-        if (coldHoldWanted || m == null || pages.isEmpty() || width == 0 || dev.launcher.app.Wallpaper.current == null) return null
+        if (coldHoldWanted || m == null || pages.isEmpty() || width == 0 || wallpaperView.wallpaper == null) return null
         // A clock built again behind (a new theme while the settings were open) has not set its time yet: it would show none.
         for (c in clocks) c.refresh(animate = false)
+        // The wallpaper fading in (read just now): pictured as it will rest (the settings kept a black home with tinted glass).
+        val wallA = wallpaperView.alpha
+        if (wallA < 1f) wallpaperView.alpha = 1f
+        try { return pictureAtRest() } finally { if (wallA < 1f) wallpaperView.alpha = wallA }
+    }
+
+    private fun pictureAtRest(): android.graphics.Bitmap? {
         // After a cold start home holds its arrival's first frame (its icons out) until it shows: pictured at rest instead
         // (the settings showed the wallpaper alone), then held again.
         if (arrivalHeld && !arrivalAnimating) {

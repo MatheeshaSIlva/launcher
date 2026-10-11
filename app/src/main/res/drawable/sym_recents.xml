@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two app cards, one behind the other (the settings' Layouts picker: recent apps), drawn here. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillAlpha="0.5"
+        android:pathData="M6,2.5H12.5A2,2 0 0,1 14.5,4.5V5.5H10A3,3 0 0,0 7,8.5V16H6A2,2 0 0,1 4,14V4.5A2,2 0 0,1 6,2.5Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M10.5,7H18A2.5,2.5 0 0,1 20.5,9.5V19A2.5,2.5 0 0,1 18,21.5H10.5A2.5,2.5 0 0,1 8,19V9.5A2.5,2.5 0 0,1 10.5,7Z" />
+</vector>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A phone with its status bar (the settings' Layouts picker), drawn here. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M8,2H16A3,3 0 0,1 19,5V19A3,3 0 0,1 16,22H8A3,3 0 0,1 5,19V5A3,3 0 0,1 8,2ZM8,3.8A1.4,1.4 0 0,0 6.8,5.2V18.8A1.4,1.4 0 0,0 8,20.2H16A1.4,1.4 0 0,0 17.2,18.8V5.2A1.4,1.4 0 0,0 16,3.8Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8.2,5.4H11.6A0.7,0.7 0 0,1 11.6,6.8H8.2A0.7,0.7 0 0,1 8.2,5.4ZM13.4,5.4H15.8A0.7,0.7 0 0,1 15.8,6.8H13.4A0.7,0.7 0 0,1 13.4,5.4Z" />
+</vector>

@@ -666,7 +666,8 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
         lifecycle.addObserver(o)
         onDispose { lifecycle.removeObserver(o) }
     }
-    LaunchedEffect(look.version, resumed) {
+    // And when home's wallpaper arrives (after a start, home read it while the settings were in front).
+    LaunchedEffect(look.version, look.wallpaper, resumed) {
         kotlinx.coroutines.delay(150)
         // Home may not be up yet (the app just started with the settings in front): asked again for a few seconds.
         var home: android.graphics.Bitmap? = null
@@ -677,7 +678,13 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
         }
         if (home == null) return@LaunchedEffect
         // With our status bar on top, as the phone shows home (its picture has none: the bar is a window of its own).
-        val bar = HomeBridge.statusBarPicture()
+        // Asked again if it did not come (its thread busy with a frame on a slow phone: the picture had no bar).
+        var bar: android.graphics.Bitmap? = null
+        for (i in 0 until 3) {
+            bar = HomeBridge.statusBarPicture()
+            if (bar != null) break
+            kotlinx.coroutines.delay(300)
+        }
         val next = if (bar == null) home else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { HomePictures.withBar(home, bar) }
         HomePictures.keep(ctx, Design.themeId, next)
         latest = next
@@ -1678,7 +1685,7 @@ private fun Modifier.topFade(scroll: IosScrollState, unit: Float, fadePx: Float,
 
 /** The elements' short names, for the picker at the top of Layouts. */
 private val Element.short get() = when (this) {
-    Element.STATUS_BAR -> "Status"
+    Element.STATUS_BAR -> "Status bar"
     Element.SHADE -> "Shade"
     Element.RECENTS -> "Recents"
     Element.DRAWER -> "Drawer"
@@ -1735,10 +1742,118 @@ private fun LayoutsPager(st: Studio, g: Geometry, fadePx: Float, bandPaint: andr
     }
 }
 
-/** The segmented control of Layouts, reading the chosen element in its own scope. */
+/** The elements' symbols, for the picker at the top of Layouts. */
+private val Element.symbol get() = when (this) {
+    Element.STATUS_BAR -> R.drawable.sym_statusbar
+    Element.SHADE -> R.drawable.sym_bell
+    Element.RECENTS -> R.drawable.sym_recents
+    Element.DRAWER -> R.drawable.sym_apps
+    Element.HOME -> R.drawable.sym_home
+    Element.SETTINGS -> R.drawable.sym_settings
+}
+
+/** The picker of Layouts (Matheesha chose B: symbols, the chosen one with its name), reading the choice in its own scope. */
 @Composable
 private fun ElementPicker(st: Studio, choose: (Element) -> Unit) {
-    Segmented(Element.entries.map { it.short }, st.element.ordinal) { i -> choose(Element.entries[i]) }
+    SymbolSegmented(Element.entries.map { it.short }, Element.entries.map { it.symbol }, st.element.ordinal) { i -> choose(Element.entries[i]) }
+}
+
+/**
+ * A segmented control of symbols (option B for Layouts): every choice its symbol, the chosen one wider with its name beside
+ * it, on a thumb. Choosing another moves everything on one spring: the thumb slides and takes the new one's size, the old
+ * one's name fades as it narrows, the new one's comes as it widens (a choice further away flows through the ones between).
+ * A tap chooses; a drag along it carries the thumb under the finger and chooses where it is let go.
+ */
+@Composable
+private fun SymbolSegmented(names: List<String>, symbols: List<Int>, chosen: Int, onChoose: (Int) -> Unit) {
+    val look = LocalLook.current
+    val n = names.size
+    val at = remember { Animatable(chosen.toFloat()) }
+    var dragging by remember { mutableStateOf(false) }
+    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.NAV_PUSH))
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(chosen) { if (!dragging) at.animateTo(chosen.toFloat(), spec.value) }
+    val measurer = rememberTextMeasurer()
+    val label = look.color(SettingsTokens.ROW_LABEL)
+    val muted = look.color(SettingsTokens.ROW_DETAIL_COLOR)
+    val style = look.text(SettingsTokens.SEGMENT_TEXT, label).copy(fontWeight = androidx.compose.ui.text.font.FontWeight(600))
+    val texts = remember(names, look) { names.map { measurer.measure(it, style, maxLines = 1) } }
+    val painters = symbols.map { painterResource(it) }
+    val track = look.color(SettingsTokens.SEGMENT_TRACK)
+    val thumbFill = look.color(SettingsTokens.SEGMENT_THUMB)
+    val inset = 3f * look.unit
+    val iconSize = 19f * look.unit
+    val gap = 6f * look.unit
+    val choose = androidx.compose.runtime.rememberUpdatedState(onChoose)
+    // How much of the extra room each choice has at [p] (the thumb's place: an index, fractional on the way).
+    fun share(i: Int, p: Float) = (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f)
+    Canvas(
+        Modifier.fillMaxWidth().height(look.dp(SettingsTokens.SEGMENT_HEIGHT)).pointerInput(n) {
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                val h = size.height.toFloat()
+                val w = size.width.toFloat()
+                val slop = viewConfiguration.touchSlop
+                var moved = false
+                // Where a finger is as a place along the choices (their symbols at rest, evenly).
+                fun place(x: Float) = ((x - h / 2f) / (w - h) * (n - 1)).coerceIn(0f, (n - 1).toFloat())
+                while (true) {
+                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                    val dx = c.position.x - down.position.x
+                    if (!moved && kotlin.math.abs(dx) > slop) { moved = true; dragging = true }
+                    if (moved) { c.consume(); scope.launch { at.snapTo(place(c.position.x)) } }
+                    if (!c.pressed) break
+                }
+                // A tap: the choice whose segment it is now (the chosen one wider).
+                val to = if (moved) kotlin.math.round(at.value).toInt() else {
+                    var x = 0f
+                    val extra = w - n * h
+                    var hit = n - 1
+                    for (i in 0 until n) {
+                        val sw = h + extra * share(i, at.value)
+                        if (down.position.x < x + sw) { hit = i; break }
+                        x += sw
+                    }
+                    hit
+                }
+                dragging = false
+                scope.launch { at.animateTo(to.toFloat(), spec.value) }
+                choose.value(to)
+            }
+        },
+    ) {
+        val h = size.height
+        val w = size.width
+        val p = at.value
+        // Every segment at least as wide as it is high; the room left over goes to the chosen one (shared on the way).
+        val extra = (w - n * h).coerceAtLeast(0f)
+        drawRoundRect(track, cornerRadius = CornerRadius(h / 2f))
+        val lefts = FloatArray(n)
+        val widths = FloatArray(n)
+        var x = 0f
+        for (i in 0 until n) { lefts[i] = x; widths[i] = h + extra * share(i, p); x += widths[i] }
+        // The thumb: over the segment the place is in, moving into the next with it.
+        val i0 = p.toInt().coerceIn(0, n - 1)
+        val i1 = (i0 + 1).coerceAtMost(n - 1)
+        val f = (p - i0).coerceIn(0f, 1f)
+        val tl = lefts[i0] + (lefts[i1] - lefts[i0]) * f
+        val tw = widths[i0] + (widths[i1] - widths[i0]) * f
+        drawRoundRect(Color.Black.copy(alpha = 0.06f), Offset(tl + inset, inset + 1.5f * look.unit), Size(tw - inset * 2f, h - inset * 2f), CornerRadius((h - inset * 2f) / 2f))
+        drawRoundRect(thumbFill, Offset(tl + inset, inset), Size(tw - inset * 2f, h - inset * 2f), CornerRadius((h - inset * 2f) / 2f))
+        for (i in 0 until n) {
+            val k = share(i, p)
+            val t = texts[i]
+            // The symbol and the name side by side, centred in the segment (the name's room growing with it).
+            val content = iconSize + (gap + t.size.width) * k
+            val cx = lefts[i] + widths[i] / 2f
+            val sx = cx - content / 2f
+            val tint = ColorFilter.tint(mix(muted, label, k))
+            translate(sx, (h - iconSize) / 2f) { with(painters[i]) { draw(Size(iconSize, iconSize), colorFilter = tint) } }
+            if (k > 0.01f) clipRect(left = lefts[i], right = lefts[i] + widths[i]) {
+                drawText(t, topLeft = Offset(sx + iconSize + gap, (h - t.size.height) / 2f), alpha = k * k)
+            }
+        }
+    }
 }
 
 /** One element's page on Layouts: it slides in from its side and away, and takes the touches while it is the chosen one. */
@@ -1774,76 +1889,6 @@ private fun ElementColumn(st: Studio, e: Element, g: Geometry, contentTop: Float
                     Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
                 }
             }
-}
-
-/**
- * A segmented control (iOS's, draft C): the choices side by side in a capsule, the chosen one on a thumb that slides to it
- * (its name in the heavier weight, crossfading as the thumb passes). A tap chooses; a drag along it carries the thumb
- * under the finger and chooses where it is let go.
- */
-@Composable
-private fun Segmented(names: List<String>, chosen: Int, onChoose: (Int) -> Unit) {
-    val look = LocalLook.current
-    val n = names.size
-    val thumb = remember { Animatable(chosen.toFloat()) }
-    var dragging by remember { mutableStateOf(false) }
-    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.NAV_PUSH))
-    val scope = rememberCoroutineScope()
-    LaunchedEffect(chosen) { if (!dragging) thumb.animateTo(chosen.toFloat(), spec.value) }
-    val measurer = rememberTextMeasurer()
-    val label = look.color(SettingsTokens.ROW_LABEL)
-    val regular = look.text(SettingsTokens.SEGMENT_TEXT, label)
-    val heavy = regular.copy(fontWeight = androidx.compose.ui.text.font.FontWeight(600))
-    val light = remember(names, look) { names.map { measurer.measure(it, regular, maxLines = 1) } }
-    val bold = remember(names, look) { names.map { measurer.measure(it, heavy, maxLines = 1) } }
-    val track = look.color(SettingsTokens.SEGMENT_TRACK)
-    val thumbFill = look.color(SettingsTokens.SEGMENT_THUMB)
-    val inset = 2.5f * look.unit
-    val choose = androidx.compose.runtime.rememberUpdatedState(onChoose)
-    Canvas(
-        Modifier.fillMaxWidth().height(look.dp(SettingsTokens.SEGMENT_HEIGHT)).pointerInput(n) {
-            awaitEachGesture {
-                val down = awaitFirstDown()
-                val segW = size.width.toFloat() / n
-                val slop = viewConfiguration.touchSlop
-                var moved = false
-                val startThumb = thumb.value
-                while (true) {
-                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                    val dx = c.position.x - down.position.x
-                    if (!moved && kotlin.math.abs(dx) > slop) { moved = true; dragging = true }
-                    if (moved) {
-                        c.consume()
-                        // The thumb follows the finger (from where it was), within the track.
-                        val to = (startThumb + dx / segW).coerceIn(0f, (n - 1).toFloat())
-                        scope.launch { thumb.snapTo(to) }
-                    }
-                    if (!c.pressed) break
-                }
-                val at = if (moved) kotlin.math.round(thumb.value).toInt() else (down.position.x / segW).toInt().coerceIn(0, n - 1)
-                dragging = false
-                scope.launch { thumb.animateTo(at.toFloat(), spec.value) }
-                choose.value(at)
-            }
-        },
-    ) {
-        val segW = size.width / n
-        val h = size.height
-        drawRoundRect(track, cornerRadius = CornerRadius(h / 2f))
-        val x = thumb.value * segW
-        val tw = segW - inset * 2f
-        val th = h - inset * 2f
-        // The thumb: a soft shadow, then its fill.
-        drawRoundRect(Color.Black.copy(alpha = 0.06f), Offset(x + inset, inset + 1.5f * look.unit), Size(tw, th), CornerRadius(th / 2f))
-        drawRoundRect(thumbFill, Offset(x + inset, inset), Size(tw, th), CornerRadius(th / 2f))
-        for (i in 0 until n) {
-            val k = (1f - kotlin.math.abs(thumb.value - i)).coerceIn(0f, 1f)
-            val cx = segW * (i + 0.5f)
-            val l = light[i]; val b = bold[i]
-            if (k < 1f) drawText(l, topLeft = Offset(cx - l.size.width / 2f, (h - l.size.height) / 2f), alpha = 1f - k)
-            if (k > 0f) drawText(b, topLeft = Offset(cx - b.size.width / 2f, (h - b.size.height) / 2f), alpha = k)
-        }
-    }
 }
 
 /** One element on Layouts: its layouts, where it lives, its options. Waits for Apply like the rest. */
