@@ -272,6 +272,11 @@ copy it wholesale — port the working pieces cleanly. File map:
   down on it hides the list into a count ("● 12 Notifications") and that state lasts across tests in the same simulator:
   find platters on screen before pressing them. The Control Center gallery is another process: SpringBoard's tree has no
   labels for it (read the screenshots).
+- **Our overlay windows are one type (accessibility overlay) and stack in the order they were added.** The card window must
+  be under the shade's (status bar, banners): removing it on the lock screen and adding it again on unlock put it over
+  the shade, and the status bar and every banner vanished during each app open and close (the banners' "missing during
+  animations" was this, not One UI's blur). On the lock screen only the strip goes; a card window made while the shade
+  is up has the shade added again after it (`GestureNav.update`).
 - **A local `adb install` over our app starts the phone's other home app** (Lawnchair on the S24) while ours is replaced,
   locked or not: after every local install run `am start -a android.intent.action.MAIN -c android.intent.category.HOME -p
   dev.launcher.app` and check the focus. And gate every S24 screenshot on the focused window right before it: the phone can

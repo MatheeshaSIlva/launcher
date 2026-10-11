@@ -344,8 +344,20 @@ object GestureNav {
         val base = ready && SystemRestore.gestureFlagsActive && ShizukuLink.service != null
         // Gestures (the strip, the cards): not on the lock screen (it has its own swipe up to unlock).
         val wantNav = base && !locked
-        if (wantNav && strip == null) { ensureCardWindow(); addStrip() }
-        if (!wantNav && strip != null) removeNav()
+        if (wantNav && strip == null) {
+            // The card window must stay under the shade's (our status bar and banners are in it): windows of one type stack
+            // in the order they were added. One added while the shade is up would be over it, so the shade is added again
+            // after it (Matheesha: the status bar, and banners, vanished during every app open and close once the card
+            // window had been made again over it).
+            val restack = root == null && statusBar != null
+            if (restack) removeStatusBar()
+            ensureCardWindow()
+            addStrip()
+            if (restack) addStatusBar()
+            pollFloating()
+        }
+        // On the lock screen only the strip goes: the card window stays (empty, untouchable) where it is, under the shade.
+        if (!wantNav && strip != null) { if (base) removeStrip() else removeNav() }
         // Our iOS status bar and shade: on the lock screen too (one shade everywhere; the stock one stays blocked).
         val wantBar = base && SystemRestore.statusBarWanted(app) && (strip != null || locked)
         if (wantBar && statusBar == null) addStatusBar()
@@ -1040,7 +1052,18 @@ object GestureNav {
         removeNav()
     }
 
-    /** The gesture strip and the card window go (the status bar and the shade stay, as on the lock screen). */
+    /** The lock screen came: the strip goes, the cards are put away; the card window and its input stay (see [update]). */
+    private fun removeStrip() {
+        hideCards()
+        nav.removeCallbacks(scalesBack)
+        ShizukuLink.service?.let { s -> frontIo.execute { restoreScales(s) } }
+        nav.removeCallbacks(floatingPoll)
+        strip?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
+        strip = null
+        AppLog.log("[nav] gesture strip off (the card window stays, under the shade)")
+    }
+
+    /** The gesture strip and the card window go (gestures off; the shade goes too, see [removeAll]). */
     private fun removeNav() {
         hideCards()
         nav.removeCallbacks(scalesBack)
