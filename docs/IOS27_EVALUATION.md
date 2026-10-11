@@ -60,9 +60,8 @@ not Liquid Glass; banners take the dock's background) drawn whole over the blurr
 behind changes as a card starts (a launch or a quick switch: the app's kept picture, else its own launch colour; a close
 committed: home), not when the app's window reports (a banner showed the wallpaper over an app opening, a white plate
 over a dark app); the status bar takes the app's tone (the one it last asked for, else its launch colour's) the same way.
-Before: (over home the wallpaper, over an app its latest picture from the task snapshot; until it comes, the app's
-usual colour); when the window behind changes (an app opens or closes under a banner) the glass fades to the new picture
-(`motion.banner.app-fade`). One UI's live blur under them (`comp.banner.system-blur`) is off for iOS 27: on the S24
+Over home the picture is the wallpaper, over an app its latest picture from the task snapshot; when what is behind
+changes the glass fades to the new picture (`motion.banner.app-fade`). One UI's live blur under them (`comp.banner.system-blur`) is off for iOS 27: on the S24
 banners all but vanished during app opens and closes. Size, place and motion match iOS's.
 
 ## Home (seen in passing)
