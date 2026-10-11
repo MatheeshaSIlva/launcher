@@ -313,6 +313,11 @@ copy it wholesale — port the working pieces cleanly. File map:
   Scrolling counts too (a long page lost 12-17 ms every ~117 ms of a scroll). The settings leave the tree while a page
   moves (`clearAndSetSemantics` while the spring runs) or scrolls (`IosScrollState.moving`), and press effects scale in
   drawing, not as a layer. Any Compose surface with motion needs the same.
+- **Compose: nothing that moves may be read in composition.** Which page is open, the element chosen, a spring's value:
+  read them in drawing, layers or effects (`derivedStateOf` + `snapshotFlow`), never in a composable's body; a value
+  handed down (a `CompositionLocal`, a lambda) is made once (`remember`), or everything that reads it composes again. And
+  no file reading behind a call made in composition (`Design.themes()` parsed every theme file: cached now). The settings
+  lost 11-27 ms in the first frame of a page opening to each of these (S24, Perfetto: `Compose:recompose`).
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

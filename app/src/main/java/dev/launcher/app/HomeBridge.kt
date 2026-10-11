@@ -105,6 +105,15 @@ object HomeBridge {
     fun setVisibleIcons(m: Map<String, RectF>, badges: Set<String> = emptySet()) { icons = m; badged = badges }
     fun iconRect(pkg: String): RectF? = icons[pkg]
 
+    /** The dock's middle icon as home shows it (screen px), or null: where the settings' demo opens an app from. */
+    fun dockIcon(): RectF? {
+        val all = icons.values
+        val bottom = all.maxOfOrNull { it.centerY() } ?: return null
+        val row = all.filter { kotlin.math.abs(it.centerY() - bottom) < it.height() / 2f }
+        val mid = (row.minOf { it.left } + row.maxOf { it.right }) / 2f
+        return row.minByOrNull { kotlin.math.abs(it.centerX() - mid) }?.let { RectF(it) }
+    }
+
     /** Whether [pkg]'s icon a card flies into shows a badge (the card shows it too as it turns into the icon). */
     fun showsBadge(pkg: String): Boolean = pkg in badged
 

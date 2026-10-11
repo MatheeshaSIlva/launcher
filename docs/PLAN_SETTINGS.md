@@ -257,6 +257,25 @@ wallpaper change, the transition in the settings is static"):**
 - A look or wallpaper change while the settings are away is held and revealed when they show again
   (`SettingsActivity.deferred`): it played unseen and coming back showed the new look already still.
 
+**S8, measured and looked at on the S24 (2026-10-11, recordings at 120 fps, frame stats, Perfetto):**
+- Artefacts found and fixed: the segmented control showed whole from the first frame of the opening, over the tiles, and
+  went at the end of the closing (it now rises and falls with the page); a dark box behind the picture wherever it faded
+  (its shadow was cast by a shape in the page's colour and its rim filled under it: now an outward blur and a ring, inside
+  the faded layer, so they fade with it; drawn outside it they also ran up the zoomed phone's sides to the top of the
+  screen); the fade cut hard at about half strength while the picture pulled back (an end now fades as far as the phone
+  goes past the room); two elements' pages at half strength over each other mid-switch (each now shows only in the upper
+  part of its way); a long pan (the top to the bottom edge) slid through the whole phone at full zoom (it now pulls back a
+  little on the way); Motion's demo opened a black square from the middle of home (now the dock's middle icon grows into an
+  app's page, the icon fading into it).
+- Smoothness: a page opening composed the whole Phone page (its log read which page was open: 14 ms), every page's groups
+  (its rise value was made again: up to 27 ms), the picture and Layouts on an element switch (11 ms); a tap on Look or
+  Motion read and parsed every theme file (`Design.themes()`, now cached until a reload: 20 ms); the accessibility tree was
+  taken away and given back at every scroll's start and end (9-15 ms; now there only for a screen reader); a gradient
+  made every frame (the picture's fade, the hint's trail, the page fade) set off native-memory garbage collections. After:
+  every action of the bench (segment taps and drags, scrolls of Layouts, Look and Phone, every page opened and closed)
+  0-2 missed refreshes, most 0-1; the late frames left cost us 2-9 ms of CPU and 5-7 ms of GPU (not our frame's work).
+  App Library folder: 2 missed refreshes, the icons in order.
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 

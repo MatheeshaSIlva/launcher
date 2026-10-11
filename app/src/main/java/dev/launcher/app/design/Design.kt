@@ -149,8 +149,15 @@ object Design {
     /** A theme the app can use: its id (file name), its name, and whether it comes with the app. */
     data class ThemeInfo(val id: String, val name: String, val builtIn: Boolean)
 
+    // The lists of themes and presets, read once (each read parses every file: 10-20 ms, and the settings asked for it in
+    // a tile's composition, so a tap on Look recomposed for 20 ms on the S24); read again on [reload].
+    @Volatile private var themeList: List<ThemeInfo>? = null
+    @Volatile private var presetList: List<ThemeInfo>? = null
+
     /** The themes there are: the app's own, and the ones in `files/themes/` (which win over an app one of the same id). */
-    fun themes(): List<ThemeInfo> {
+    fun themes(): List<ThemeInfo> = themeList ?: readThemes().also { themeList = it }
+
+    private fun readThemes(): List<ThemeInfo> {
         val out = LinkedHashMap<String, ThemeInfo>()
         try {
             for (n in appCtx.assets.list(THEMES) ?: emptyArray()) if (n.endsWith(".json")) {
@@ -166,7 +173,9 @@ object Design {
     }
 
     /** The animation presets there are: the app's own, and the ones in `files/motion/`. */
-    fun motionPresets(): List<ThemeInfo> {
+    fun motionPresets(): List<ThemeInfo> = presetList ?: readPresets().also { presetList = it }
+
+    private fun readPresets(): List<ThemeInfo> {
         val out = LinkedHashMap<String, ThemeInfo>()
         try {
             for (n in appCtx.assets.list(PRESETS) ?: emptyArray()) if (n.endsWith(".json")) {
@@ -203,6 +212,8 @@ object Design {
 
     /** The active theme's files and the edits read again (written over adb): applied at once, as an edit in the editor is. */
     fun reload() {
+        themeList = null
+        presetList = null
         val theme = load(activeId)
         val motion = loadMotion(motionId)
         // The elements' own themes too (a file pushed over adb shows at once there as well).
