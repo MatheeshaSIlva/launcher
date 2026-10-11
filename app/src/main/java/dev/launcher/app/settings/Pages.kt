@@ -248,7 +248,47 @@ private class Draft {
 private val LocalDraft = staticCompositionLocalOf { Draft() }
 
 /** Home as it showed in each theme (kept whenever the settings take a picture): a theme shows before it is applied. */
-private object HomePictures { val byTheme = androidx.compose.runtime.mutableStateMapOf<String, android.graphics.Bitmap>() }
+private object HomePictures {
+    val byTheme = androidx.compose.runtime.mutableStateMapOf<String, android.graphics.Bitmap>()
+    private var loaded = false
+
+    private fun dir(ctx: android.content.Context) = java.io.File(ctx.filesDir, "design/home-pictures")
+
+    /**
+     * The last picture of home in every theme, from disk (off the main thread): after the app restarts there is no home
+     * to picture until home shows (the settings showed the wallpaper alone), and theme cards keep their pictures.
+     */
+    suspend fun load(ctx: android.content.Context) {
+        if (loaded) return
+        loaded = true
+        val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            (dir(ctx).listFiles() ?: emptyArray()).filter { it.name.endsWith(".webp") }.mapNotNull { f ->
+                val b = try { android.graphics.BitmapFactory.decodeFile(f.path) } catch (_: Throwable) { null } ?: return@mapNotNull null
+                // On the GPU before it is shown (a software bitmap is uploaded inside its first frame).
+                f.name.removeSuffix(".webp") to (b.copy(android.graphics.Bitmap.Config.HARDWARE, false) ?: b)
+            }
+        }
+        for ((id, b) in found) if (id !in byTheme) byTheme[id] = b
+    }
+
+    /** [b] is home in theme [id] now: kept, and saved (at half size) off the main thread. */
+    fun keep(ctx: android.content.Context, id: String, b: android.graphics.Bitmap) {
+        byTheme[id] = b
+        val app = ctx.applicationContext
+        Thread {
+            try {
+                val sw = b.copy(android.graphics.Bitmap.Config.ARGB_8888, false) ?: return@Thread
+                val half = android.graphics.Bitmap.createScaledBitmap(sw, sw.width / 2, sw.height / 2, true)
+                val d = dir(app).apply { mkdirs() }
+                val tmp = java.io.File(d, "$id.webp.tmp")
+                tmp.outputStream().use { half.compress(android.graphics.Bitmap.CompressFormat.WEBP_LOSSY, 85, it) }
+                tmp.renameTo(java.io.File(d, "$id.webp"))
+                if (half !== sw) half.recycle()
+                sw.recycle()
+            } catch (t: Throwable) { dev.launcher.app.AppLog.log("[settings] keeping home's picture failed: ${t.message}") }
+        }.start()
+    }
+}
 
 /**
  * Which part is open and how far: [p] 0 is the tiles, 1 its page. Opening one changes no composition and no layout (the
@@ -269,6 +309,8 @@ private class Studio {
     var sheet: LayoutCoordinates? = null
     /** How many pages are built (ahead of time, one a frame, so opening one never builds it). */
     var built by mutableIntStateOf(0)
+    /** Each page's scroll (kept while the settings are open: a page comes back where it was). */
+    val scrolls = Part.entries.associateWith { IosScrollState() }
 }
 
 /** Where things are, in pixels: the sheet's two tops (at rest, a page open), the picture of home above it. */
@@ -361,7 +403,8 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         // While a page moves (its spring, or a finger), the settings leave the accessibility tree: with an accessibility
         // service on (gesture nav is one), Compose re-reads the whole tree every 100 ms while layers move (7-25 ms frames
         // on the S24; none without the tree). At rest it is all there again, for whatever reads it.
-        val moving by remember { androidx.compose.runtime.derivedStateOf { st.p.isRunning || bar.isRunning } }
+        // Scrolling counts too: the rest of the tree alone still cost 4-5 ms a check while a page scrolled on the S24.
+        val moving by remember { androidx.compose.runtime.derivedStateOf { st.p.isRunning || bar.isRunning || st.scrolls.values.any { it.moving } } }
         CompositionLocalProvider(LocalDraft provides draft) {
             Box(Modifier.fillMaxSize().then(if (moving) Modifier.clearAndSetSemantics { } else Modifier).background(look.color(SettingsTokens.BACKGROUND))) {
                 HomePicture(st, g, bar)
@@ -390,6 +433,7 @@ private fun BackToTiles(st: Studio, close: (Float) -> Unit, draft: Draft, leave:
 @Composable
 private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     val look = LocalLook.current
+    val ctx = LocalContext.current
     var latest by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var before by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -405,12 +449,14 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     LaunchedEffect(look.version, resumed) {
         kotlinx.coroutines.delay(150)
         val next = HomeBridge.home?.pictureNow() ?: return@LaunchedEffect
-        HomePictures.byTheme[Design.themeId] = next
+        HomePictures.keep(ctx, Design.themeId, next)
         latest = next
     }
-    // The theme chosen and not yet applied shows as home looked in it (if the settings have seen it), else home as it is.
+    // The theme chosen and not yet applied shows as home looked in it (if the settings have seen it), else home as it is;
+    // with no home to picture yet (the app just started), as it last looked in this theme.
+    LaunchedEffect(Unit) { HomePictures.load(ctx) }
     val draft = LocalDraft.current
-    val wanted = draft.theme?.let { HomePictures.byTheme[it] } ?: latest
+    val wanted = draft.theme?.let { HomePictures.byTheme[it] } ?: latest ?: HomePictures.byTheme[Design.themeId]
     LaunchedEffect(wanted) {
         if (wanted == null || wanted === shown) return@LaunchedEffect
         before = shown
@@ -731,8 +777,7 @@ private fun GrowingTile(st: Studio, part: Part) {
 @Composable
 private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Unit) {
     val look = LocalLook.current
-    val scroll = remember { IosScrollState() }
-    val scope = rememberCoroutineScope()
+    val scroll = st.scrolls.getValue(part)
     val shown: () -> Float = { if (st.open == part) st.p.value.coerceIn(0f, 1f) else 0f }
     val counter = remember { GroupCounter() }
     counter.n = 0
@@ -752,8 +797,8 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
         Box(
             Modifier
                 .fillMaxSize()
-                // Out of the tree while it scrolls too (the Layouts page lost 12-17 ms every ~117 ms of a scroll on the S24).
-                .then(if (here && !scroll.moving) Modifier else Modifier.clearAndSetSemantics { })
+                // Only the open page is in the tree (the whole app leaves it while a page moves or scrolls: SettingsApp).
+                .then(if (here) Modifier else Modifier.clearAndSetSemantics { })
                 // Laid out and placed from the start; while closed it waits out of sight (moved, not laid out, when it opens).
                 .graphicsLayer {
                     val open = st.open == part

@@ -163,6 +163,13 @@ picture: `HomePictures`; one not seen yet shows the wallpaper under that theme's
 `Design.previewColor`), a theme for each part (Follow or a theme, chips), the wallpaper's colours, light and dark; the
 picture above shows the chosen theme's home when known.
 
+**On the S24 (2026-10-11):** scrolling Layouts, 3 scrolls each way: 3-10 missed refreshes a scroll before; 3-8 with only
+the page out of the accessibility tree (the rest of the tree still cost 4-5 ms a check); 0-2 with the whole app out of it
+while a page scrolls (the misses left are frames of 3-4 ms: presentation, not our work). Opening and closing pages:
+12 of 13 without a missed refresh, one with 1. The picture of home after the app restarted showed the wallpaper alone (no
+home exists until it shows): home's picture in each theme is now kept on disk (`files/design/home-pictures/<theme>.webp`,
+half size) and shown until a fresh one is taken; a cold start's held arrival is pictured at rest.
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 

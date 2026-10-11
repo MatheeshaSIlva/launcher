@@ -257,6 +257,14 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     fun pictureNow(): android.graphics.Bitmap? {
         // A clock built again behind (a new theme while the settings were open) has not set its time yet: it would show none.
         for (c in clocks) c.refresh(animate = false)
+        // After a cold start home holds its arrival's first frame (its icons out) until it shows: pictured at rest instead
+        // (the settings showed the wallpaper alone), then held again.
+        if (arrivalHeld && !arrivalAnimating) {
+            applyArrival(60.0)
+            val b = renderNow()
+            applyArrival(0.0)
+            return b
+        }
         return renderNow()
     }
 
