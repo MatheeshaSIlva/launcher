@@ -89,6 +89,16 @@ object GestureNav {
 
     /** Set by HomeActivity (resumed = in front). */
     @Volatile var homeVisible = false
+    /**
+     * The app a card is bringing up now (a launch, a quick switch) until its window comes to the front, and a close into home
+     * committed until home shows: what is behind the banners and the status bar changes with the card, not seconds later
+     * when the window reports (the emulator showed a banner's wallpaper glass over a white app opening, and the bar's white
+     * time over its white launch screen).
+     */
+    @Volatile private var bringing: String? = null
+    @Volatile private var closingHome = false
+    /** Each app's status bar tone as it last asked for it (true: black content), for its card as it opens. */
+    private val appDark = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
     private class Task(val id: Int, val pkg: String)
     // HOME_PULL: a swipe up on the home screen (no card); a hold opens the App Switcher, a release is the Home button.
@@ -417,6 +427,9 @@ object GestureNav {
         override fun frontPackage(): String? = frontNow
         override fun frontClass(): String? = frontNowClass
         override fun homeShown(): Boolean = homeVisible
+        override fun bringing(): String? = bringing
+        override fun closingHome(): Boolean = closingHome
+        override fun appColor(pkg: String): Int? = SplashColors.cached(pkg)
         override fun frontSince(): Long = frontNowAt
         override fun snapshotFor(pkg: String): Bitmap? = images[pkg]
         override fun topTaskPackage(): String? = ShizukuLink.service?.let { parseTasks(it.recentTasks(1)).firstOrNull()?.pkg }
@@ -448,7 +461,7 @@ object GestureNav {
         // Over the lock screen: its wallpaper (the front window there is the lock screen's or the fingerprint icon's,
         // which have no task to take a picture of; Control Center's glass showed its plain fallback).
         if (locked) { then(Wallpaper.current?.let { dev.launcher.app.shade.BackdropSource.Wall(it) }); return }
-        if (homeVisible) {
+        if ((homeVisible || closingHome) && bringing == null) {
             HomeBridge.preview?.let { then(dev.launcher.app.shade.BackdropSource.Home(it)) }
             HomeBridge.recordForGesture {
                 val p = HomeBridge.preview ?: return@recordForGesture
@@ -456,7 +469,7 @@ object GestureNav {
             }
             return
         }
-        val pkg = lastFrontPkg
+        val pkg = bringing ?: lastFrontPkg
         val kept = pkg?.let { images[it] }
         if (shadeLogs < 6) { shadeLogs++; AppLog.log("[shade] behind: $pkg, kept picture ${if (kept != null) "${SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L)} ms old" else "none"}${if (pkg != null && keptIsStale(pkg)) " (stale)" else ""}") }
         if (kept != null) then(dev.launcher.app.shade.BackdropSource.App(kept))
@@ -490,8 +503,11 @@ object GestureNav {
         val bar = statusBar ?: return
         nav.removeCallbacks(appearanceTick)
         nav.postDelayed(appearanceTick, 2500)
-        if (homeVisible) { bar.setDark(HomeBridge.homeStatusDark); bar.setHiddenByApp(false); return }
+        // A card on its way: its app's tone (or home's) was set as it started; the window in charge may still be home's.
+        bringing?.let { return }
+        if (closingHome || homeVisible) { bar.setDark(HomeBridge.homeStatusDark); bar.setHiddenByApp(false); return }
         val s = ShizukuLink.service ?: return
+        val askedFor = lastFrontPkg
         appearanceIo.execute {
             val out = try { s.windowAppearance() } catch (t: Throwable) { "ERROR: ${t.message}" }
             val dark = parseLightStatusBar(out)
@@ -499,8 +515,8 @@ object GestureNav {
             if (appearanceLogs < 3) { appearanceLogs++; AppLog.log("[statusbar] appearance (dark ${dark ?: "unknown"}, hidden ${hidden ?: "unknown"}) from: ${out.take(700)}") }
             nav.post {
                 val b = statusBar ?: return@post
-                if (homeVisible) return@post
-                if (dark != null) b.setDark(dark)
+                if (homeVisible || bringing != null || closingHome) return@post
+                if (dark != null) { b.setDark(dark); askedFor?.let { appDark[it] = dark } }
                 if (hidden != null) b.setHiddenByApp(hidden)
             }
         }
@@ -572,6 +588,8 @@ object GestureNav {
 
     fun onHomeShown() {
         homeVisible = true
+        closingHome = false
+        bringing = null   // a launch that never came up (home is back)
         // The app that was in front has just left it: the system's snapshot of it (taken as it left) is newer than ours.
         lastFrontPkg?.let { leftFrontAt[it] = SystemClock.uptimeMillis() }
         nav.post { refreshAppearance() }
@@ -584,6 +602,7 @@ object GestureNav {
         // the keyboard looked like the wrong app had come up (seen on the S24 after App Library search).
         if (isKeyboard(pkg, className)) return
         if (pkg != lastFrontPkg) AppLog.log("[front] now in front: $pkg ($className)")
+        if (pkg == bringing) bringing = null
         nav.post { refreshAppearance() }   // a different window may ask for a different status bar
         if (pkg != "com.android.systemui" && pkg != "android" && (pkg != app.packageName || className?.endsWith(".HomeActivity") == true || isOwnScreen(className))) {
             frontNow = pkg
@@ -1588,6 +1607,7 @@ object GestureNav {
             closeDepthFrom = depth0
             anim = Anim.HOME_COMMIT
             catchTouchesForHome(true)
+            cardGoesHome()
             endLabel = when {
                 target != null -> "home (into the icon of $pkg at ${target.centerX().toInt()},${target.centerY().toInt()})"
                 pkg == null -> "home (to centre; app NOT KNOWN yet at release: task lookup still running)"
@@ -1813,6 +1833,29 @@ object GestureNav {
 
     // ================================================================== LAUNCH
 
+    /**
+     * A card is bringing [pkg] up (a launch, a quick switch): the banners take it up as what is behind them, the status bar
+     * its tone (the one it last asked for, else the one its launch colour [color] wants), as the card starts.
+     */
+    private fun cardBrings(pkg: String, color: Int?) {
+        bringing = pkg
+        closingHome = false
+        val dark = appDark[pkg] ?: color?.let { luminance(it) > 0.6f } ?: HomeBridge.homeStatusDark
+        statusBar?.setDark(dark)
+        shade?.behindChanged()
+    }
+
+    /** A close into home is committed: the banners take up home, the status bar home's tone, as the card starts to go. */
+    private fun cardGoesHome() {
+        bringing = null
+        closingHome = true
+        statusBar?.setDark(HomeBridge.homeStatusDark)
+        shade?.behindChanged()
+    }
+
+    private fun luminance(c: Int): Float =
+        (0.2126f * ((c shr 16) and 0xFF) + 0.7152f * ((c shr 8) and 0xFF) + 0.0722f * (c and 0xFF)) / 255f
+
     private fun beginLaunch(pkg: String, iconRect: RectF, icon: Drawable?, start: () -> Unit) {
         if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH || !prepareCardWindow()) { main.post(start); return }
         val c = cur ?: run { main.post(start); return }
@@ -1871,6 +1914,7 @@ object GestureNav {
         sH = open.mover().apply { start(m[3], m[7], sh) }
         sDepth = Motion.profile.homeDepthOpen.mover().apply { start(depth0, 0f, 1f) }
         endLabel = "launch $pkg${if (reverse) " (reversed a closing card)" else ""}"
+        cardBrings(pkg, c.placeholderColor)
         val startApp = { runPendingStart() }
         onSettled = {
             startApp()   // without a picture of home the app is only started now, so it cannot show early
@@ -2158,6 +2202,7 @@ object GestureNav {
             sScale = Motion.profile.switchCommit.mover().apply { start(switchScale, 0f, 1f) }
             anim = Anim.SWITCH_COMMIT
             endLabel = "quick switch to ${if (toOlder) "an older" else "a newer"} app (${target.pkg})"
+            cardBrings(target.pkg, SplashColors.cached(target.pkg))
             onSettled = {
                 phase = Phase.HOLD
                 switchAt = SystemClock.uptimeMillis()

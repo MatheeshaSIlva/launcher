@@ -675,7 +675,7 @@ SEED = {
     'comp.cc.gallery.dim': {'color': '#00000080', 'src': 'judged:Control Center dims behind the gallery'},
     'comp.cc.gallery.corner': {'pt': 38, 'src': "judged:a sheet of iOS 27's size (the kit's sheets are rounded 38)"},
     # Banners (docs/IOS27_KIT.md "Banners"): Notification Center's platter (NotifPainter) on regular glass.
-    'comp.banner.material': {'ref': 'sys.material.glass.frosted-legible', 'src': "judged:the frosted glass that stays readable over any app (was the kit's Regular)"},
+    'comp.banner.material': {'ref': 'sys.material.glass.dock', 'src': "judged:Matheesha (2026-10-11): banners take the dock's background (the kit's dock glass); the frosted glass they had read as frost, not Liquid Glass"},
     'comp.banner.system-blur': {'factor': 0, 'src': "judged:1 lets One UI's own live blur sit under a banner's glass; off (Matheesha, S24: banners went missing during app opens and closes and their background did not look like iOS): our own glass over the blurred picture of what is behind, as Notification Center's"},
     'comp.banner.behind': {'ref': 'ref.color.backgrounds.primary', 'src': "judged:what is behind a banner (an app) is not known: an app's usual background in this appearance"},
     'comp.banner.corner': {'pt': 24, 'src': "kit:0:11292 (the platter)"},

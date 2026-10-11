@@ -244,6 +244,10 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **One UI's fingerprint icon** (`FP Iconview`, a system window above all of ours) hides only when the lock screen's window
   loses the focus. Over the lock screen `shade/FocusHolder` takes the focus, but never in a pull's first 500 ms: with the lock
   screen focused the window manager does not hand a pull from the top to the stock status bar, with our window focused it does.
+- **What is behind the banners and the status bar changes when a card starts, not when the window reports**: a launch from
+  home keeps home resumed until the app's window comes (2 s on the emulator), so asked then, a banner showed the wallpaper
+  over an app opening and the bar's white time sat on a white launch screen. `GestureNav.cardBrings`/`cardGoesHome` tell
+  them at the card's start.
 - **Whether home is in front: ask `GestureNav.homeVisible`** (HomeActivity's own onResume/onPause), not the accessibility
   window events: Home coming back with the Home key can report a plain FrameLayout, and the last event then still named
   the app (banners drew over an app's flat colour on home).

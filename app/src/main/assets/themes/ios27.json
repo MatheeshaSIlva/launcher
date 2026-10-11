@@ -3138,8 +3138,8 @@
    "src": "kit:0:11292"
   },
   "component.notification.floating-material": {
-   "ref": "sys.material.glass.frosted-legible",
-   "src": "judged:the frosted glass that stays readable over any app (was the kit's Regular)"
+   "ref": "sys.material.glass.dock",
+   "src": "judged:Matheesha (2026-10-11): banners take the dock's background (the kit's dock glass); the frosted glass they had read as frost, not Liquid Glass"
   },
   "component.notification.gap": {
    "pt": 8,

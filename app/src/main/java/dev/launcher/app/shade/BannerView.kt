@@ -72,6 +72,9 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
          * over it; [then] (this view's thread) may run twice (a fresher picture), or with null (none: over home, a secure app).
          */
         fun appBackdrop(radiusPx: Float, then: (dev.launcher.app.design.BackdropImage?) -> Unit)
+        /** The app behind the banners (a card bringing one up, else the one in front), and its own launch colour. */
+        fun appBehind(): String?
+        fun appColor(pkg: String): Int?
     }
 
     /**
@@ -190,7 +193,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     /** A banner's whole glass over [b] (the wallpaper's frost, an app's picture, or the app's usual colour). */
     private fun drawGlass(c: Canvas, p: MaterialPainter, s: Shown, w: Float, b: Behind, alpha: Float) {
         val home = if (b.home) wallpaperFrost() else null
-        p.setBackdrop(home ?: b.app, Design.color(BEHIND) or (0xFF shl 24))
+        p.setBackdrop(home ?: b.app, (b.color ?: Design.color(BEHIND)) or (0xFF shl 24))
         val dim = Appearance.wallpaperDim
         val under = if (home != null && dim > 0.001f) listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(0xFF000000.toInt(), 0xFF000000.toInt()), dim, dim, dev.launcher.app.design.Blend.NORMAL)) else emptyList()
         p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, alpha = alpha, under = under)
@@ -390,7 +393,8 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     private val wallpaperChanged: () -> Unit = { wallpaperFrost() }
 
     /** What a banner's glass shows behind it: the wallpaper (over home) or an app's blurred picture (null: its usual colour). */
-    private class Behind(val home: Boolean, val app: dev.launcher.app.design.BackdropImage?)
+    /** What is behind the banners: home, or [pkg] as its picture [app] (null: its own launch colour [color], else the theme's). */
+    private class Behind(val home: Boolean, val app: dev.launcher.app.design.BackdropImage?, val pkg: String? = null, val color: Int? = null)
 
     /** What is behind now, what it was before (fading out since [behindAt]; null: no fade). */
     private var behind = Behind(false, null)
@@ -422,16 +426,18 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             if (backdropLogs < 8) { backdropLogs++; dev.launcher.app.AppLog.log("[banner] over home: wallpaper frost ${if (wallpaperFrost() != null) "ready" else "NOT ready (plain fallback until it is)"}") }
             return
         }
-        if (fresh) { behind = Behind(false, null); behindWas = null }
+        val pkg = host.appBehind()
+        val color = pkg?.let { host.appColor(it) }
+        if (fresh) { behind = Behind(false, null, pkg, color); behindWas = null }
         val m = Design.material(MATERIAL)
         val sigma = dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * Appearance.dark, u)
         host.appBackdrop(dev.launcher.app.design.Blur.renderRadius(sigma)) { img ->
             if (backdropLogs < 8 && ask == appAsk) { backdropLogs++; dev.launcher.app.AppLog.log("[banner] over an app: its blurred picture ${if (img != null) "after ${android.os.SystemClock.uptimeMillis() - t0} ms" else "NONE (plain fallback)"}") }
             if (ask != appAsk) return@appBackdrop
-            // No picture (a secure app): its usual colour, but only instead of home's wallpaper (an older picture of the
-            // app stays rather than going flat).
-            if (img == null) { if (behind.home) behindNow(Behind(false, null)); return@appBackdrop }
-            behindNow(Behind(false, img))
+            // No picture (a secure app, an app never seen): its own launch colour, instead of home's wallpaper or another
+            // app's picture (an older picture of the same app stays rather than going flat).
+            if (img == null) { if (behind.home || behind.pkg != pkg) behindNow(Behind(false, null, pkg, color)); return@appBackdrop }
+            behindNow(Behind(false, img, pkg, color))
             entering?.let { s -> post { enter(s) } }
         }
     }

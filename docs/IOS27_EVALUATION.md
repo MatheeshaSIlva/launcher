@@ -55,8 +55,12 @@ and checked on the emulator only; nothing here has been on the S24 yet.
 
 ## Banners
 
-iOS's are glass showing what is behind. Ours (2026-10-11): the theme's frosted glass drawn whole over the blurred picture of
-what is behind (over home the wallpaper, over an app its latest picture from the task snapshot; until it comes, the app's
+iOS's are glass showing what is behind. Ours (2026-10-11): the dock's glass (Matheesha: the frosted glass read as frost,
+not Liquid Glass; banners take the dock's background) drawn whole over the blurred picture of what is behind. What is
+behind changes as a card starts (a launch or a quick switch: the app's kept picture, else its own launch colour; a close
+committed: home), not when the app's window reports (a banner showed the wallpaper over an app opening, a white plate
+over a dark app); the status bar takes the app's tone (the one it last asked for, else its launch colour's) the same way.
+Before: (over home the wallpaper, over an app its latest picture from the task snapshot; until it comes, the app's
 usual colour); when the window behind changes (an app opens or closes under a banner) the glass fades to the new picture
 (`motion.banner.app-fade`). One UI's live blur under them (`comp.banner.system-blur`) is off for iOS 27: on the S24
 banners all but vanished during app opens and closes. Size, place and motion match iOS's.

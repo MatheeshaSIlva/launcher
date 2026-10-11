@@ -58,6 +58,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         fun frontClass(): String?
         /** Home is in front (its activity resumed; our own overlays do not count as apps). */
         fun homeShown(): Boolean
+        /** The app a card is bringing up now (a launch, a quick switch: its window not in front yet), or null. */
+        fun bringing(): String?
+        /** A close into home is under way (the card goes to its icon; home is what is behind now). */
+        fun closingHome(): Boolean
+        /** [pkg]'s own launch colour (its launch screen's), if known. */
+        fun appColor(pkg: String): Int?
         fun frontSince(): Long
         /** The app's latest picture, if gesture navigation has one (its launch card shows it). */
         fun snapshotFor(pkg: String): android.graphics.Bitmap?
@@ -166,7 +172,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override val barHeight get() = this@Shade.barHeight
             // Home resumed: the window events alone left it out after Home came back with a plain FrameLayout event (the
             // banner then drew over the flat colour meant for an app, opaque dark in dark mode).
-            override fun overHome() = nav.homeShown() || (nav.frontPackage() == ctx.packageName && nav.frontClass()?.endsWith(".HomeActivity") == true)
+            // A card bringing an app up: the app, though home is still the activity in front. A close into home: home.
+            override fun overHome() = nav.closingHome() ||
+                (nav.bringing() == null && (nav.homeShown() || (nav.frontPackage() == ctx.packageName && nav.frontClass()?.endsWith(".HomeActivity") == true)))
+            override fun appBehind(): String? = nav.bringing() ?: nav.frontPackage()
+            override fun appColor(pkg: String): Int? = nav.appColor(pkg)
             override fun open(item: Notifs.Item) {
                 if (!locked) { if (Notifs.open(ctx, item) && panel != null) close(); return }
                 if (panel != null) close()
@@ -1013,6 +1023,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             launchCard.icon = null
             launchFading = false
         }.start()
+    }
+
+    /** A card started bringing an app up or going home: the banners take up what is behind them now (not when it settles). */
+    fun behindChanged() {
+        if (attached) banner.frontChanged()
     }
 
     fun frontChanged() {
