@@ -273,6 +273,7 @@ SEED = {
     'motion.sheet': {'spring': [0.45, 1.0], 'src': 'judged:a sheet presenting and dismissing (the widget gallery)'},
     'motion.sheet.push': {'spring': [0.42, 1.0], 'src': 'judged:a page pushed inside a sheet'},
     'motion.settings.open': {'spring': [0.5, 0.86], 'src': "judged:a tile of the settings opening into its page and back (draft D): expressive, its bounds settle without a bounce"},
+    'motion.settings.hint': {'bezier': [0.42, 0, 0.2, 1], 'ms': 820, 'src': "judged:the finger on the settings' picture showing where an element lives (a swipe: slow off, settling at its end)"},
     'motion.settings.focus': {'spring': [0.55, 0.9], 'src': "judged:the settings' picture of home zooming to the part a page is about (its frame taking that part's shape): unhurried, no bounce"},
     'motion.widget.resize': {'spring': [0.4, 0.86], 'src': 'judged:a widget changing size (the content crossfades)'},
     'motion.appear': {'spring': [0.42, 0.78], 'src': 'judged:something new on home growing into its place'},

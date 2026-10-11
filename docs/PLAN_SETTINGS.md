@@ -232,6 +232,12 @@ for the settings app overview for the IOS theme. make it follow the liquid glass
 - The picture of home is never taken before home has drawn at rest in this process (an all-black one was taken after a
   restart and kept as home's look).
 
+**C2, where it lives (2026-10-11):** on Layouts the picture shows how the chosen element is reached, again and again: a
+finger (a soft white dot with a trail, on the picture and zoomed with it) pulls down the top's left then its right (the
+shade), swipes up from the bottom edge and rests (recents), swipes from the edge or up (the drawer, by its placement);
+it follows the draft (a placement chosen before Apply shows at once). Each stroke on `motion.settings.hint`. The layout
+gallery (a card per layout with its own preview) waits for a second layout per element.
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 

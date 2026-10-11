@@ -804,6 +804,16 @@
    ],
    "src": "judged:the settings' picture of home zooming to the part a page is about (its frame taking that part's shape): unhurried, no bounce"
   },
+  "motion.settings.hint": {
+   "bezier": [
+    0.42,
+    0,
+    0.2,
+    1
+   ],
+   "ms": 820,
+   "src": "judged:the finger on the settings' picture showing where an element lives (a swipe: slow off, settling at its end)"
+  },
   "motion.settings.open": {
    "spring": [
     0.5,

@@ -487,6 +487,26 @@ private fun focusOf(e: Element?, placement: String, statusFrac: Float): Rect = w
 }
 
 /**
+ * How element [e] is reached in [placement], as the finger's strokes on the phone (fractions of the screen: from, to), shown
+ * one after another on the picture; [hold]: the finger rests at the end (the gesture is a hold). Null: nothing to show.
+ */
+private class Gesture(val strokes: List<Pair<Offset, Offset>>, val hold: Boolean = false)
+
+private fun gestureOf(e: Element?, placement: String): Gesture? = when (e) {
+    // Notifications from the top's left, controls from its right.
+    Element.SHADE -> Gesture(listOf(Offset(0.25f, 0.005f) to Offset(0.25f, 0.17f), Offset(0.78f, 0.005f) to Offset(0.78f, 0.17f)))
+    // Up from the bottom edge, then a rest.
+    Element.RECENTS -> Gesture(listOf(Offset(0.5f, 0.995f) to Offset(0.5f, 0.84f)), hold = true)
+    Element.DRAWER -> when (placement) {
+        "page-after-last" -> Gesture(listOf(Offset(0.82f, 0.5f) to Offset(0.18f, 0.5f)))
+        "page-before-first" -> Gesture(listOf(Offset(0.18f, 0.5f) to Offset(0.82f, 0.5f)))
+        "swipe-up" -> Gesture(listOf(Offset(0.5f, 0.86f) to Offset(0.5f, 0.62f)))
+        else -> null
+    }
+    else -> null
+}
+
+/**
  * Home as it is now, above the sheet; a new picture (after any change) fades in over the last. Whole, it is the phone in
  * its frame. Focused on a part (the element chosen on Layouts), it zooms to the full width with that part in the room above
  * the sheet, and fades away from it (below, behind the sheet; above, for a part at the phone's bottom edge): no frame, no
@@ -508,6 +528,38 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
         val spec = look.motion<Rect>(MotionTokens.SETTINGS_FOCUS)
         launch { zoom.animateTo(if (target.height >= 0.999f) 0f else 1f, look.motion(MotionTokens.SETTINGS_FOCUS)) }
         crop.animateTo(target, spec)
+    }
+    // On Layouts, a finger shows how the chosen element is reached (where it lives), again and again: [hintAt] the stroke,
+    // [hintT] how far along it (0..1), [hintA] how present the finger is.
+    val gesture = gestureOf(focused, focused?.let { draft.placement(it) } ?: "")
+    val hintAt = remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val hintT = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val hintA = remember { Animatable(0f) }
+    val hintOn by remember { androidx.compose.runtime.derivedStateOf { st.open == Part.LAYOUTS && !st.p.isRunning } }
+    LaunchedEffect(gesture?.strokes, gesture?.hold, hintOn) {
+        val gs = gesture
+        if (gs == null || !hintOn) { hintA.animateTo(0f, look.motion(MotionTokens.DISAPPEAR_FADE)); return@LaunchedEffect }
+        val travel = dev.launcher.app.motion.Motion.role(MotionTokens.SETTINGS_HINT)
+        hintA.snapTo(0f)
+        kotlinx.coroutines.delay(500)   // the picture's focus first
+        while (true) {
+            for (i in gs.strokes.indices) {
+                hintAt.intValue = i
+                hintT.floatValue = 0f
+                hintA.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE))
+                val m = travel.mover().apply { start(0f, 0f, 1f) }
+                val t0 = androidx.compose.runtime.withFrameNanos { it }
+                while (true) {
+                    val t = (androidx.compose.runtime.withFrameNanos { it } - t0) / 1e9
+                    hintT.floatValue = m.value(t).coerceIn(0f, 1f)
+                    if (m.settled(t, 0.002f)) { hintT.floatValue = 1f; break }
+                }
+                if (gs.hold) kotlinx.coroutines.delay(600)
+                hintA.animateTo(0f, look.motion(MotionTokens.DISAPPEAR_FADE))
+                kotlinx.coroutines.delay(250)
+            }
+            kotlinx.coroutines.delay(700)
+        }
     }
     // While Motion is open, an app opens and closes on the picture, again and again, on the chosen preset's own curves
     // (0: closed, 1: open; below 0: no demo).
@@ -591,6 +643,8 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
             val rim = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
             val image = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
             val mask = android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN) }
+            val hint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { style = android.graphics.Paint.Style.STROKE; strokeCap = android.graphics.Paint.Cap.ROUND }
+            val dot = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
             val path = android.graphics.Path()
             val frame = android.graphics.RectF()
             val src = android.graphics.Rect()
@@ -685,6 +739,23 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
                 paints.image.alpha = 255
                 paints.rim.color = appFill.toArgb()
                 nc.drawRoundRect(a.left, a.top, a.right, a.bottom, rc, rc, paints.rim)
+            }
+            // The finger showing how the element is reached: a soft white dot with a trail, on the picture (scaled with it).
+            val ha = hintA.value
+            val gs = gesture
+            if (ha > 0.003f && gs != null) {
+                val (from, to) = gs.strokes[hintAt.intValue.coerceIn(0, gs.strokes.lastIndex)]
+                val t = hintT.floatValue
+                val x0 = from.x * g.w; val y0 = from.y * g.h
+                val x = x0 + (to.x - from.x) * g.w * t
+                val y = y0 + (to.y - from.y) * g.h * t
+                val dot = g.w * 0.05f
+                paints.hint.shader = android.graphics.LinearGradient(x0, y0, x, y, 0x00FFFFFF, (((0x99 * ha).toInt()) shl 24) or 0xFFFFFF, android.graphics.Shader.TileMode.CLAMP)
+                paints.hint.strokeWidth = dot * 1.1f
+                if (t > 0.01f) nc.drawLine(x0, y0, x, y, paints.hint)
+                paints.dot.color = (((0xF2 * ha).toInt()) shl 24) or 0xFFFFFF
+                paints.dot.setShadowLayer(dot * 0.5f, 0f, dot * 0.12f, (((0x55 * ha).toInt()) shl 24))
+                nc.drawCircle(x, y, dot, paints.dot)
             }
             nc.restore()
             if (layered) {
