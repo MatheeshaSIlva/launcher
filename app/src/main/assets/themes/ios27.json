@@ -2481,6 +2481,10 @@
    "dark": "#7878803d",
    "src": "judged:iOS's fill colours (secondary) for a chip on the sheet"
   },
+  "comp.settings.chip.height": {
+   "pt": 34,
+   "src": "judged:a chip's capsule (its touch area the target's 44)"
+  },
   "comp.settings.chip.material": {
    "ref": "sys.material.glass.clear",
    "src": "judged:as the tiles"
@@ -2604,13 +2608,21 @@
    "ref": "component.section.title-color",
    "src": "judged:the theme's section heading"
   },
+  "comp.settings.segment.corner": {
+   "pt": 18,
+   "src": "judged:a taller segmented control's track (a capsule would round its thumb into an oval)"
+  },
   "comp.settings.segment.height": {
-   "pt": 36,
-   "src": "judged:draft C's segmented control (iOS's are 32; a little taller as the page's main choice)"
+   "pt": 58,
+   "src": "judged:Layouts' picker, a symbol over each name (Matheesha: far too small at 36 with symbols alone); every segment a 44 pt target and more"
+  },
+  "comp.settings.segment.symbol": {
+   "pt": 24,
+   "src": "judged:the symbols over the names (iOS's tab bar symbols are 25-28)"
   },
   "comp.settings.segment.text": {
-   "ref": "sys.type.footnote",
-   "src": "judged:iOS's segmented control labels (13 pt)"
+   "ref": "ref.type.caption2.regular",
+   "src": "judged:a name under each symbol, as iOS's tab bar (10-11 pt); six names fit a sixth of the S24's width each at 11 pt ('Status bar' in semibold at 12 did not)"
   },
   "comp.settings.segment.thumb": {
    "ref": "ref.color.miscellaneous.segmented-control-selected-fill",
@@ -2650,6 +2662,10 @@
    "light": "#0000001a",
    "dark": "#00000066",
    "src": "judged:a soft shadow above the sheet"
+  },
+  "comp.settings.target": {
+   "pt": 44,
+   "src": "kit:Apple's Human Interface Guidelines: a control's hit target is at least 44 x 44 pt (Android: 48 dp)"
   },
   "comp.settings.tile.corner": {
    "pt": 26,

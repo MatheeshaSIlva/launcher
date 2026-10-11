@@ -19,6 +19,7 @@ object GoogleFontCatalog {
     class Family(val name: String, val category: String, val weights: List<Int>, val rank: Int) {
         internal val lower = name.lowercase()
         internal val joined = lower.replace(" ", "")
+        internal val words = lower.split(' ')
     }
 
     /** Google's categories, as the list names them, and as the settings show them. */
@@ -81,7 +82,7 @@ object GoogleFontCatalog {
             val s = when {
                 f.lower == q -> 0
                 f.lower.startsWith(q) || f.joined.startsWith(qj) -> 1
-                f.lower.split(' ').any { it.startsWith(q) } -> 2
+                f.words.any { it.startsWith(q) } -> 2
                 f.lower.contains(q) || f.joined.contains(qj) -> 3
                 else -> continue
             }
@@ -186,10 +187,18 @@ object FontPreviews {
     fun kept(ctx: Context, name: String): Typeface? {
         faces[name]?.let { return it }
         val kept = GoogleFonts.file(ctx, name, 400)
-        if (kept.exists()) GoogleFonts.load(kept, 400)?.let { faces[name] = it; return it }
+        if (kept.exists()) GoogleFonts.load(kept, 400)?.let { warm(it, name); faces[name] = it; return it }
         val cache = cacheFile(ctx, name)
-        if (cache.exists()) GoogleFonts.load(cache, 400)?.let { faces[name] = it; return it }
+        if (cache.exists()) GoogleFonts.load(cache, 400)?.let { warm(it, name); faces[name] = it; return it }
         return null
+    }
+
+    /**
+     * The face's name measured once here, off the main thread: the font's tables are read and its glyphs shaped then, not
+     * in the first frame its row is laid out in (each new face cost the main thread a few ms as rows scrolled in).
+     */
+    private fun warm(tf: Typeface, name: String) {
+        try { android.graphics.Paint().apply { typeface = tf; textSize = 48f }.measureText(name) } catch (_: Throwable) { }
     }
 
     private fun cacheFile(ctx: Context, name: String) = File(ctx.cacheDir, "font-previews/" + name.replace(' ', '_') + "-400.ttf")
@@ -203,6 +212,6 @@ object FontPreviews {
         failedAt[name]?.let { if (android.os.SystemClock.uptimeMillis() - it < 60_000) return null }
         val why = try { GoogleFonts.download(ctx, name, 400, cache) } catch (t: Throwable) { t.toString() }
         if (why != null) { failedAt[name] = android.os.SystemClock.uptimeMillis(); AppLog.log("[fonts] preview of '$name': $why"); return null }
-        return GoogleFonts.load(cache, 400)?.also { faces[name] = it }
+        return GoogleFonts.load(cache, 400)?.also { warm(it, name); faces[name] = it }
     }
 }

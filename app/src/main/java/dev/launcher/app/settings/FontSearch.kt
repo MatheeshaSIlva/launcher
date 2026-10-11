@@ -28,6 +28,11 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
@@ -64,6 +69,9 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -95,8 +103,24 @@ internal class FontSearch {
     /** How far it is up (0 down, 1 open); a drag on its top moves it. */
     val p = Animatable(0f)
 
-    fun open(r: Request) { request = r; opened++ }
+    /** The last request (its title and check stay while the sheet goes down). Read with [request] to follow it. */
+    var last: Request? = null
+        private set
+
+    fun open(r: Request) { last = r; request = r; opened++ }
     internal fun gone() { request = null }
+
+    // Where the sheet is (set as it is laid out), so what it covers is not drawn ([coveredFrom]).
+    internal var top = 0f
+    internal var height = 0f
+    internal var cornerPx = 0f
+
+    /**
+     * From where down the sheet covers the screen now (its top edge plus its corners' depth), or past the screen's end
+     * when it is down. What lies beneath is drawn only above it (the settings under a sheet that covered them cost the
+     * GPU 7-8 ms a frame on the S24 as it scrolled).
+     */
+    fun coveredFrom(): Float = if (request == null) Float.POSITIVE_INFINITY else top + (1f - p.value.coerceIn(0f, 1f)) * height + cornerPx
 }
 
 internal val LocalFontSearch = staticCompositionLocalOf<FontSearch?> { null }
@@ -133,11 +157,11 @@ internal object FontPicks {
 internal fun rememberFace(id: String): FontFamily? {
     val ctx = LocalContext.current
     val look = LocalLook.current
-    if (!id.startsWith("google:")) return remember(id, look.version) { FontFamily(dev.launcher.app.theme.Fonts.of(id, 500, 15f)) }
+    if (!id.startsWith("google:")) return remember(id, look.version) { familyOf(dev.launcher.app.theme.Fonts.of(id, 500, 15f)) }
     val name = id.removePrefix("google:")
-    var face by remember(name) { mutableStateOf(FontPreviews.ready(name)?.let { FontFamily(it) }) }
+    var face by remember(name) { mutableStateOf(FontPreviews.ready(name)?.let { familyOf(it) }) }
     LaunchedEffect(name) {
-        if (face == null) withContext(FontPreviews.dispatcher) { FontPreviews.load(ctx, name) }?.let { face = FontFamily(it) }
+        if (face == null) withContext(FontPreviews.dispatcher) { FontPreviews.load(ctx, name) }?.let { face = familyOf(it) }
     }
     return face
 }
@@ -146,6 +170,7 @@ internal fun rememberFace(id: String): FontFamily? {
  * The sheet itself, over everything. Built with the settings (after their pages) and kept: out of sight and untouchable
  * while it is down, placed in front as it opens. Built in its opening's first frame it cost the emulator 220 ms (the sheet
  * appeared already up); drawn once out of sight when built, so its first opening records nothing either (as the pages).
+ * Its opening composes only what shows the request (its title) and the rows whose check changes.
  */
 @Composable
 internal fun FontSheet(search: FontSearch) {
@@ -156,16 +181,22 @@ internal fun FontSheet(search: FontSearch) {
     val density = LocalDensity.current
     val top = WindowInsets.statusBars.getTop(density) + 10f * look.unit
     val sheetH = look.screenH - top
-    val close: (Float) -> Unit = { v ->
-        focus.clearFocus()
-        keyboard?.hide()
-        scope.launch {
-            search.p.animateTo(0f, look.motion(MotionTokens.SHEET), v)
-            search.gone()
+    search.top = top
+    search.height = sheetH
+    search.cornerPx = look.pt(SettingsTokens.SHEET_CORNER)
+    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.SHEET))
+    val close: (Float) -> Unit = remember(search, scope, focus, keyboard) {
+        { v ->
+            focus.clearFocus()
+            keyboard?.hide()
+            scope.launch {
+                search.p.animateTo(0f, spec.value, v)
+                search.gone()
+            }
         }
     }
-    LaunchedEffect(search.opened) { if (search.opened > 0) search.p.animateTo(1f, look.motion(MotionTokens.SHEET)) }
-    BackHandler(enabled = search.request != null) { close(0f) }
+    LaunchedEffect(search.opened) { if (search.opened > 0) search.p.animateTo(1f, spec.value) }
+    SheetBack(search, close)
     var warm by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         androidx.compose.runtime.withFrameNanos { }
@@ -195,6 +226,21 @@ internal fun FontSheet(search: FontSearch) {
     }
 }
 
+/** Back puts the sheet away while it is up (its own scope: only it composes again as it opens and closes). */
+@Composable
+private fun SheetBack(search: FontSearch, close: (Float) -> Unit) {
+    BackHandler(enabled = search.request != null) { close(0f) }
+}
+
+/** The sheet's title: the row it chooses for (its own scope: the one thing that composes again as it opens). */
+@Composable
+private fun SheetTitle(search: FontSearch, modifier: Modifier) {
+    val look = LocalLook.current
+    search.request   // read: composed again when another row opens it
+    BasicText(search.last?.title ?: "", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.TITLE_COLOR)).copy(fontWeight = FontWeight(600)),
+        modifier = modifier)
+}
+
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.SheetContent(search: FontSearch, sheetH: Float, close: (Float) -> Unit) {
     val look = LocalLook.current
@@ -202,16 +248,14 @@ private fun androidx.compose.foundation.layout.ColumnScope.SheetContent(search: 
     val scope = rememberCoroutineScope()
     val focus = LocalFocusManager.current
     val pad = look.dp(SettingsTokens.ROW_PADDING)
-    // The row it chooses for (kept while it goes down: its title and check stay as they were).
-    val last = remember { arrayOfNulls<FontSearch.Request>(1) }
-    search.request?.let { last[0] = it }
-    val r = last[0]
-    var query by remember { mutableStateOf("") }
+    // The field keeps its own words: typing composes nothing here (it recomposed the whole sheet a letter on the S24).
+    val field = rememberTextFieldState()
     var category by remember { mutableIntStateOf(0) }
     val scroll = remember { IosScrollState() }
     // Down: the next opening starts afresh (no query, every category, the top of the list).
-    val down = search.request == null
-    LaunchedEffect(down) { if (down) { query = ""; category = 0; scroll.scroller.jumpTo(0f) } }
+    LaunchedEffect(search) {
+        snapshotFlow { search.request == null }.collect { down -> if (down) { field.clearText(); category = 0; scroll.scroller.jumpTo(0f) } }
+    }
     // Google's list: the one kept on the phone, read with the settings; read from Google only when the search opens.
     var families by remember { mutableStateOf(GoogleFontCatalog.cachedNow()) }
     var unreachable by remember { mutableStateOf(false) }
@@ -224,19 +268,33 @@ private fun androidx.compose.foundation.layout.ColumnScope.SheetContent(search: 
         val f = withContext(Dispatchers.IO) { GoogleFontCatalog.families(ctx) }
         if (f == null) unreachable = true else families = f
     }
-    val cat = if (category == 0) null else GoogleFontCatalog.CATEGORIES[category - 1].first
-    val results = remember(families, query, cat) { families?.let { GoogleFontCatalog.search(it, query, cat, RESULTS) } ?: emptyList() }
-    val heading = when {
-        families == null && unreachable -> "Google Fonts can't be reached"
-        families == null -> "Loading Google Fonts\u2026"
-        query.isNotBlank() && results.isEmpty() -> "No matches"
-        query.isNotBlank() -> "Matches"
-        else -> "Popular"
+    // Searched off the main thread as the words change (1950 names: 25 ms a letter on the S24 in composition); the list
+    // follows a frame later. A next letter cancels a search still running.
+    val results = remember { mutableStateOf<List<GoogleFontCatalog.Family>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { Triple(families, field.text.toString(), category) }.collectLatest { (all, q, c) ->
+            if (all == null) return@collectLatest
+            val cat = if (c == 0) null else GoogleFontCatalog.CATEGORIES[c - 1].first
+            results.value = withContext(Dispatchers.Default) { GoogleFontCatalog.search(all, q, cat, RESULTS) }
+        }
+    }
+    val heading by remember {
+        androidx.compose.runtime.derivedStateOf {
+            val asked = field.text.isNotBlank()
+            when {
+                families == null && unreachable -> "Google Fonts can't be reached"
+                families == null -> "Loading Google Fonts\u2026"
+                asked && results.value.isEmpty() -> "No matches"
+                asked -> "Matches"
+                else -> "Popular"
+            }
+        }
     }
 
     // The top: its grabber and title; dragged down, the sheet follows the finger and goes (or comes back up). The finger is
     // read on the window (this moves with the sheet: read here, the sheet chased it at half its speed and stood still).
     val at = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.SHEET))
     Box(Modifier.fillMaxWidth().height(look.dp(56f * look.unit)).onPlaced { at[0] = it }.pointerInput(sheetH) {
         awaitEachGesture {
             val first = awaitFirstDown(requireUnconsumed = false)
@@ -265,118 +323,162 @@ private fun androidx.compose.foundation.layout.ColumnScope.SheetContent(search: 
             if (dragging) {
                 val v = -tracker.calculateVelocity().y / sheetH
                 if (search.p.value < 0.8f || v < -1.5f) close(v)
-                else scope.launch { search.p.animateTo(1f, look.motion(MotionTokens.SHEET), v) }
+                else scope.launch { search.p.animateTo(1f, spec.value, v) }
             }
         }
     }) {
         val grabber = look.color(SettingsTokens.TITLE_COLOR).copy(alpha = 0.18f)
         Box(Modifier.align(Alignment.TopCenter).padding(top = look.dp(6f * look.unit)).size(look.dp(36f * look.unit), look.dp(5f * look.unit))
             .drawBehind { drawRoundRect(grabber, cornerRadius = CornerRadius(size.height / 2f)) })
-        BasicText(r?.title ?: "", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.TITLE_COLOR)).copy(fontWeight = FontWeight(600)),
-            modifier = Modifier.align(Alignment.Center).padding(top = look.dp(6f * look.unit)))
+        SheetTitle(search, Modifier.align(Alignment.Center).padding(top = look.dp(6f * look.unit)))
         RoundButton(R.drawable.sym_close, Modifier.align(Alignment.CenterEnd).padding(end = pad, top = look.dp(6f * look.unit))) { close(0f) }
     }
-    SearchField(query, { query = it }, "Search Google Fonts", Modifier.padding(horizontal = pad))
+    SearchField(field, "Search Google Fonts", Modifier.padding(horizontal = pad))
     Spacer(Modifier.height(look.dp(10f * look.unit)))
-    ChoiceChips(listOf("All") + GoogleFontCatalog.CATEGORIES.map { it.second }, category, Modifier.padding(horizontal = pad)) { category = it }
+    val categories = remember { listOf("All") + GoogleFontCatalog.CATEGORIES.map { it.second } }
+    ChoiceChips(categories, category, Modifier.padding(horizontal = pad)) { category = it }
     Spacer(Modifier.height(look.dp(18f * look.unit)))
     Rolling(heading, look.text(SettingsTokens.SECTION, look.color(SettingsTokens.SECTION_COLOR)),
         Modifier.padding(start = pad + pad, bottom = look.dp(6f * look.unit)))
 
     // The results: their own scroll (iOS's physics), above the keyboard while it is up; a scroll puts the keyboard away.
     LaunchedEffect(scroll) { snapshotFlow { scroll.moving }.collect { if (it) focus.clearFocus() } }
-    var viewport by remember { mutableIntStateOf(0) }
+    val viewport = remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val rowH = look.pt(SettingsTokens.ROW_HEIGHT)
     val nav = WindowInsets.navigationBars.getBottom(LocalDensity.current).toFloat()
     // The rows in sight and a few around them: only those are built (a list of sixty built at once cost a frame).
     val window = remember(rowH) {
         androidx.compose.runtime.derivedStateOf {
             val first = kotlin.math.floor(scroll.offset / rowH).toInt() - 3
-            first..(first + kotlin.math.ceil(viewport / rowH).toInt() + 6)
+            first..(first + kotlin.math.ceil(viewport.intValue / rowH).toInt() + 6)
         }
     }
-    val chosen = r?.chosen?.invoke()
-    Box(Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.ime.only(WindowInsetsSides.Bottom))
-        .onSizeChanged { viewport = it.height }.clip(androidx.compose.ui.graphics.RectangleShape).iosScroll(scroll)) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = pad)) {
-            GlidingRows(results, rowH, { window.value },
-                inView = { y -> !down && (y - scroll.offset).let { it > -rowH * 2f && it < viewport + rowH } }) { f, index, leaving ->
-                FontResultRow(f, index, chosen == "google:${f.name}", leaving) {
-                    val req = search.request ?: return@FontResultRow
-                    FontPicks.add(ctx, f.name)
-                    req.pick("google:${f.name}")
-                    close(0f)
-                }
+    // Made once, so a row composes again only when what it shows changes.
+    val inView: (Float) -> Boolean = remember(search, scroll, rowH) {
+        { y -> search.request != null && (y - scroll.offset).let { it > -rowH * 2f && it < viewport.intValue + rowH } }
+    }
+    val chosenOf: () -> String? = remember(search) { { search.last?.chosen?.invoke() } }
+    val onPick: (String) -> Unit = remember(search, ctx, close) {
+        { name ->
+            search.request?.let { req ->
+                FontPicks.add(ctx, name)
+                req.pick("google:$name")
+                close(0f)
             }
+        }
+    }
+    val windowOf: () -> IntRange = remember(window) { { window.value } }
+    val measurer = rememberTextMeasurer()
+    val paint = remember(look, measurer) { RowPaint(look, measurer, scope) }
+    Box(Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.ime.only(WindowInsetsSides.Bottom))
+        .onSizeChanged { viewport.intValue = it.height }.clip(androidx.compose.ui.graphics.RectangleShape).iosScroll(scroll)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = pad)) {
+            GlidingRows({ results.value }, rowH, windowOf) { g -> FontResultRow(g, paint, chosenOf, inView, onPick) }
             Spacer(Modifier.height(look.dp(24f * look.unit + nav)))
         }
     }
 }
 
+/** New rows built in one frame (each costs about 3 ms of the S24's main thread in a debug build). */
+private const val ROWS_A_FRAME = 2
+
 /** At most this many results show (the best matches; scrolling a list of 1700 to find one is no search). */
 private const val RESULTS = 60
 
+/** What every row draws the same way: its categories' words (measured once each) and the check. */
+@Stable
+private class RowPaint(val look: Look, val measurer: androidx.compose.ui.text.TextMeasurer, val scope: kotlinx.coroutines.CoroutineScope) {
+    private val categories = HashMap<String, androidx.compose.ui.text.TextLayoutResult>()
+    val detail = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR))
+    val check = look.color(SettingsTokens.ROW_CHECK)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val pressFill = androidx.compose.ui.graphics.Color(dev.launcher.app.theme.Appearance.pressFill)
+    val checkPath = androidx.compose.ui.graphics.Path()
+    fun category(name: String) = categories.getOrPut(name) { measurer.measure(name, detail, maxLines = 1) }
+}
+
 /**
  * One family: its name in its own face (the text font until that arrives, then fading into it; one on the phone already is
- * there at once), its category, a check.
+ * there at once), its category and the check drawn (a row is three nodes: rows arriving as letters are typed were laid
+ * out four texts each). Every argument is made once: it composes again only when its own check or face changes.
  */
 @Composable
-private fun FontResultRow(f: GoogleFontCatalog.Family, index: () -> Int, chosen: Boolean, leaving: () -> Boolean, onPick: () -> Unit) {
-    val look = LocalLook.current
+private fun FontResultRow(g: Glide, paint: RowPaint, chosenOf: () -> String?, inView: (Float) -> Boolean, onPick: (String) -> Unit) {
+    val look = paint.look
     val ctx = LocalContext.current
-    val inView = LocalInView.current
-    var pressed by remember { mutableStateOf(false) }
-    val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
-    val check by animateFloatAsState(if (chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "check")
-    var face by remember(f.name) { mutableStateOf(FontPreviews.ready(f.name)?.let { FontFamily(it) }) }
-    val arrive = remember(f.name) { Animatable(if (face != null) 1f else 0f) }
-    LaunchedEffect(f.name) {
+    val isChosen by remember(g) { androidx.compose.runtime.derivedStateOf { chosenOf() == "google:${g.name}" } }
+    // One animatable each (a row composed as it scrolls in: animateFloatAsState made two more effects and states a row).
+    val press = remember { Animatable(0f) }
+    val check = remember(g) { Animatable(if (isChosen) 1f else 0f) }
+    LaunchedEffect(isChosen) { check.animateTo(if (isChosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE)) }
+    var face by remember(g.name) { mutableStateOf(FontPreviews.ready(g.name)?.let { familyOf(it) }) }
+    val arrive = remember(g.name) { Animatable(if (face != null) 1f else 0f) }
+    // The text font's name only until its own face has faded in.
+    val fallback by remember(g.name) { androidx.compose.runtime.derivedStateOf { face == null || arrive.value < 1f } }
+    LaunchedEffect(g.name) {
         if (face != null) return@LaunchedEffect
         // On the phone: read now. Else downloaded only once it is on screen (a quick search does not download sixty fonts).
-        val tf = withContext(FontPreviews.dispatcher) { FontPreviews.kept(ctx, f.name) } ?: run {
-            snapshotFlow { inView() }.first { it }
-            withContext(FontPreviews.dispatcher) { FontPreviews.load(ctx, f.name) }
+        val tf = withContext(FontPreviews.dispatcher) { FontPreviews.kept(ctx, g.name) } ?: run {
+            snapshotFlow { inView(g.y.value) }.first { it }
+            withContext(FontPreviews.dispatcher) { FontPreviews.load(ctx, g.name) }
         } ?: return@LaunchedEffect
-        face = FontFamily(tf)
+        face = familyOf(tf)
         // Fades into its face where it can be seen; out of sight it simply has it.
-        if (inView()) arrive.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE)) else arrive.snapTo(1f)
+        if (inView(g.y.value)) arrive.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE)) else arrive.snapTo(1f)
     }
-    val pad = look.dp(SettingsTokens.ROW_PADDING)
-    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val pad = look.pt(SettingsTokens.ROW_PADDING)
     val label = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL))
-    val pressFill = androidx.compose.ui.graphics.Color(dev.launcher.app.theme.Appearance.pressFill)
-    Row(Modifier.fillMaxSize()
+    val faceStyle = remember(label, face) { face?.let { label.copy(fontFamily = it) } }
+    // Room on the right for the category and the check.
+    val endRoom = 120f * look.unit
+    Box(Modifier.fillMaxSize()
         .drawBehind {
-            if (press > 0.001f) drawRect(pressFill.copy(alpha = pressFill.alpha * press))
-            if (index() > 0) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f))
-        }
-        .pointerInput(f.name) { rowTap({ pressed = it }) { if (!leaving()) onPick() } }
-        .padding(horizontal = pad),
-        verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.weight(1f)) {
-            BasicText(f.name, style = label, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.graphicsLayer { alpha = 1f - arrive.value })
-            face?.let { ff ->
-                BasicText(f.name, style = label.copy(fontFamily = ff), maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.graphicsLayer { alpha = arrive.value })
+            if (press.value > 0.001f) drawRect(paint.pressFill.copy(alpha = paint.pressFill.alpha * press.value))
+            if (g.index > 0) drawRect(paint.separator, Offset(pad, 0f), Size(size.width - pad, 1f))
+            val checkW = 14f * look.unit
+            val right = size.width - pad
+            paint.category(g.categoryName).let { t ->
+                drawText(t, topLeft = Offset(right - checkW - 10f * look.unit - t.size.width, (size.height - t.size.height) / 2f))
+            }
+            if (check.value > 0.001f) {
+                // A check mark (iOS's): a short stroke down, a long one up, in the check colour.
+                val p = paint.checkPath.apply {
+                    reset()
+                    val cy = size.height / 2f
+                    moveTo(right - checkW, cy)
+                    lineTo(right - checkW * 0.62f, cy + checkW * 0.38f)
+                    lineTo(right, cy - checkW * 0.45f)
+                }
+                drawPath(p, paint.check.copy(alpha = paint.check.alpha * check.value),
+                    style = Stroke(2.2f * look.unit, cap = androidx.compose.ui.graphics.StrokeCap.Round, join = androidx.compose.ui.graphics.StrokeJoin.Round))
             }
         }
-        Spacer(Modifier.width(look.dp(10f * look.unit)))
-        val catName = GoogleFontCatalog.CATEGORIES.firstOrNull { it.first == f.category }?.second ?: f.category
-        BasicText(catName, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)), maxLines = 1)
-        Spacer(Modifier.width(look.dp(10f * look.unit)))
-        BasicText("\u2713", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_CHECK).copy(alpha = check)))
+        .pointerInput(g) {
+            rowTap({ down ->
+                paint.scope.launch { press.animateTo(if (down) 1f else 0f, look.motion(if (down) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT)) }
+            }) { if (!g.leaving) onPick(g.name) }
+        }
+        .padding(start = look.dp(pad), end = look.dp(endRoom)),
+        contentAlignment = Alignment.CenterStart) {
+        if (fallback) BasicText(g.name, style = label, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.graphicsLayer { alpha = 1f - arrive.value; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha })
+        if (faceStyle != null) BasicText(g.name, style = faceStyle, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.graphicsLayer { alpha = arrive.value; compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha })
     }
 }
 
-/** Whether a row's place in the list is on screen (or about to be), read where it is asked. */
-private val LocalInView = staticCompositionLocalOf<() -> Boolean> { { true } }
-
-private class Glide(val key: String, var item: GoogleFontCatalog.Family, y: Float, a: Float) {
+/** A row of the list: its family, where it is and is going, and whether it is on its way out. */
+@Stable
+private class Glide(val name: String, category: String, y: Float, a: Float) {
+    val categoryName = GoogleFontCatalog.CATEGORIES.firstOrNull { it.first == category }?.second ?: category
     val y = Animatable(y)
     val a = Animatable(a)
     var index by mutableIntStateOf(0)
     var leaving by mutableStateOf(false)
+    /** Composed now: only rows near the visible part are, and at most [ROWS_A_FRAME] are built in a frame. */
+    var built by mutableStateOf(false)
+    /** Rises and fades in as it is built (new, or brought into sight as the list changed). */
+    var appear = false
 }
 
 /**
@@ -386,19 +488,20 @@ private class Glide(val key: String, var item: GoogleFontCatalog.Family, y: Floa
  * in sight and a few around) are built, and only they move: the others simply take their places. Rows of height [rowH].
  */
 @Composable
-private fun GlidingRows(items: List<GoogleFontCatalog.Family>, rowH: Float, window: () -> IntRange, inView: (Float) -> Boolean,
-                        row: @Composable (GoogleFontCatalog.Family, () -> Int, () -> Boolean) -> Unit) {
+private fun GlidingRows(itemsOf: () -> List<GoogleFontCatalog.Family>, rowH: Float, window: () -> IntRange, row: @Composable (Glide) -> Unit) {
     val look = LocalLook.current
     val scope = rememberCoroutineScope()
     val glides = remember { mutableStateListOf<Glide>() }
     val height = remember { Animatable(0f) }
     val rise = 10f * look.unit
-    LaunchedEffect(items) {
+    LaunchedEffect(Unit) { snapshotFlow { itemsOf() }.collectLatest { items ->
         val seen = window()
         val at = HashMap<String, Int>(items.size * 2)
         items.forEachIndexed { i, f -> at[f.name] = i }
-        for (g in glides.toList()) if (g.key !in at && !g.leaving) {
-            if (g.index !in seen) { glides.remove(g); continue }
+        val byName = HashMap<String, Glide>(glides.size * 2)
+        for (g in glides) byName[g.name] = g
+        for (g in glides.toList()) if (g.name !in at && !g.leaving) {
+            if (!g.built) { glides.remove(g); continue }
             g.leaving = true
             scope.launch {
                 g.a.animateTo(0f, look.motion(MotionTokens.DISAPPEAR_FADE))
@@ -407,54 +510,91 @@ private fun GlidingRows(items: List<GoogleFontCatalog.Family>, rowH: Float, wind
         }
         items.forEachIndexed { i, f ->
             val to = i * rowH
-            val g = glides.firstOrNull { it.key == f.name }
+            val g = byName[f.name]
             if (g == null) {
-                if (i !in seen) { glides.add(Glide(f.name, f, to, 1f).also { it.index = i }); return@forEachIndexed }
-                val n = Glide(f.name, f, to + rise, 0f).also { it.index = i }
-                glides.add(n)
-                scope.launch { n.a.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE)) }
-                scope.launch { n.y.animateTo(to, look.motion(MotionTokens.REFLOW)) }
+                // In sight it rises and fades in as it is built; out of sight it is simply there when scrolled to.
+                val inSight = i in seen
+                glides.add(Glide(f.name, f.category, if (inSight) to + rise else to, if (inSight) 0f else 1f).also { it.index = i; it.appear = inSight })
             } else {
-                val moving = i in seen || g.index in seen
-                g.item = f
                 g.index = i
                 if (g.leaving) { g.leaving = false; scope.launch { g.a.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE)) } }
-                if (g.y.targetValue != to || g.y.value != to) scope.launch { if (moving) g.y.animateTo(to, look.motion(MotionTokens.REFLOW)) else g.y.snapTo(to) }
-            }
-        }
-        height.animateTo(items.size * rowH, look.motion(MotionTokens.REFLOW))
-    }
-    val groupFill = look.color(SettingsTokens.GROUP_FILL)
-    val corner = look.pt(SettingsTokens.GROUP_CORNER)
-    val shown = window()
-    Box(Modifier.fillMaxWidth()
-        .layout { m, c ->
-            val h = height.value.roundToInt().coerceAtLeast(0)
-            val p = m.measure(c.copy(minHeight = h, maxHeight = h))
-            layout(p.width, h) { p.place(0, 0) }
-        }
-        .drawBehind { if (size.height > 0.5f) drawRoundRect(groupFill, cornerRadius = CornerRadius(corner)) }
-        .clip(RoundedCornerShape(look.dp(corner)))) {
-        for (g in glides) if (g.index in shown) key(g.key) {
-            androidx.compose.runtime.CompositionLocalProvider(LocalInView provides { inView(g.y.value) }) {
-                Box(Modifier.fillMaxWidth().height(look.dp(rowH)).graphicsLayer { translationY = g.y.value; alpha = g.a.value.coerceIn(0f, 1f) }) {
-                    row(g.item, { g.index }, { g.leaving })
+                when {
+                    // On screen: it glides to its new place.
+                    g.built -> scope.launch { g.y.animateTo(to, look.motion(MotionTokens.REFLOW)) }
+                    // Brought into sight from out of it: it arrives as a new one does (it would pop in at its place).
+                    i in seen -> { g.appear = true; scope.launch { g.a.snapTo(0f); g.y.snapTo(to + rise) } }
+                    else -> scope.launch { g.y.snapTo(to) }
                 }
             }
         }
+        scope.launch { height.animateTo(items.size * rowH, look.motion(MotionTokens.REFLOW)) }
+    } }
+    // The builder: rows near the visible part are built, at most two a frame and the top first (ten built in one frame took
+    // it 75 ms on the S24); rows that arrive rise and fade in as they are built, so a new list arrives as a quick cascade.
+    // Rows far out of sight are let go, two a frame, once nothing waits to be built. A finger or a letter never waits.
+    LaunchedEffect(Unit) {
+        while (true) {
+            snapshotFlow { val w = window(); glides.any { !it.leaving && (it.index in w) != it.built } }.first { it }
+            val w = window()
+            val build = glides.filter { !it.built && !it.leaving && it.index in w }.sortedBy { it.index }.take(ROWS_A_FRAME)
+            for (g in build) {
+                g.built = true
+                if (g.appear) {
+                    g.appear = false
+                    scope.launch { g.a.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE)) }
+                    scope.launch { g.y.animateTo(g.index * rowH, look.motion(MotionTokens.REFLOW)) }
+                }
+            }
+            if (build.isEmpty()) for (g in glides.filter { it.built && !it.leaving && it.index !in w }.take(ROWS_A_FRAME)) g.built = false
+            androidx.compose.runtime.withFrameNanos { }
+        }
+    }
+    val groupFill = look.color(SettingsTokens.GROUP_FILL)
+    val corner = look.pt(SettingsTokens.GROUP_CORNER)
+    // The group's height follows on its spring; the rows inside are measured once (measured with the height, every row was
+    // measured again on every frame of it: 19 ms of layout as results arrived).
+    Box(Modifier.fillMaxWidth()
+        .drawBehind { if (size.height > 0.5f) drawRoundRect(groupFill, cornerRadius = CornerRadius(corner)) }
+        .clip(RoundedCornerShape(look.dp(corner)))
+        .layout { m, c ->
+            val h = height.value.roundToInt().coerceAtLeast(0)
+            val p = m.measure(c.copy(minHeight = 0, maxHeight = androidx.compose.ui.unit.Constraints.Infinity))
+            layout(p.width, h) { p.place(0, 0) }
+        }) {
+        // Keyed at the loop's top: a key inside the `if` sat in a positional group, so a row whose place in the list changed
+        // was not recognised and was built again (eleven rows rebuilt in one frame as a letter was typed).
+        for (g in glides.filter { it.built }) key(g.name) { GlideSlot(g, rowH, row) }
     }
 }
 
-/** A search field (iOS's): a capsule with a magnifier, the words, and a clear button that fades in while there are any. */
+/** A row's place: where its glide puts it, faded by it (its own scope: the list composing again leaves it alone). */
 @Composable
-private fun SearchField(value: String, onChange: (String) -> Unit, placeholder: String, modifier: Modifier) {
+private fun GlideSlot(g: Glide, rowH: Float, row: @Composable (Glide) -> Unit) {
+    val look = LocalLook.current
+    Box(Modifier.fillMaxWidth().height(look.dp(rowH)).graphicsLayer {
+        translationY = g.y.value
+        alpha = g.a.value.coerceIn(0f, 1f)
+        // Faded without a buffer of its own (rows fading together were an offscreen layer each).
+        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
+    }) {
+        row(g)
+    }
+}
+
+/**
+ * A search field (iOS's): a capsule with a magnifier, the words, and a clear button that fades in while there are any. It
+ * keeps its own words ([state]): typing composes only it.
+ */
+@Composable
+private fun SearchField(state: TextFieldState, placeholder: String, modifier: Modifier) {
     val look = LocalLook.current
     val fill = look.color(SettingsTokens.FIELD_FILL)
     val hint = look.color(SettingsTokens.FIELD_PLACEHOLDER)
     val text = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL))
     val focus = LocalFocusManager.current
-    val empty by animateFloatAsState(if (value.isEmpty()) 1f else 0f,
-        look.motion(if (value.isEmpty()) MotionTokens.FIELD_CLEAR_OUT else MotionTokens.FIELD_CLEAR_IN), label = "empty")
+    val isEmpty by remember(state) { androidx.compose.runtime.derivedStateOf { state.text.isEmpty() } }
+    val empty by animateFloatAsState(if (isEmpty) 1f else 0f,
+        look.motion(if (isEmpty) MotionTokens.FIELD_CLEAR_OUT else MotionTokens.FIELD_CLEAR_IN), label = "empty")
     Row(modifier.fillMaxWidth().height(look.dp(SettingsTokens.FIELD_HEIGHT))
         .background(fill, RoundedCornerShape(look.dp(look.pt(SettingsTokens.FIELD_HEIGHT) / 2f))),
         verticalAlignment = Alignment.CenterVertically) {
@@ -464,15 +604,15 @@ private fun SearchField(value: String, onChange: (String) -> Unit, placeholder: 
         Spacer(Modifier.width(look.dp(6f * look.unit)))
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             BasicText(placeholder, style = text.copy(color = hint), maxLines = 1, modifier = Modifier.graphicsLayer { alpha = empty })
-            BasicTextField(value, onChange, singleLine = true, textStyle = text,
+            BasicTextField(state = state, textStyle = text, lineLimits = TextFieldLineLimits.SingleLine,
                 cursorBrush = SolidColor(look.color(SettingsTokens.ACCENT)),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
+                onKeyboardAction = { focus.clearFocus() },
                 modifier = Modifier.fillMaxWidth())
         }
         // Clear: a filled circle with a cross, there while there are words.
         Canvas(Modifier.size(look.dp(36f * look.unit)).graphicsLayer { alpha = 1f - empty; scaleX = 0.6f + 0.4f * (1f - empty); scaleY = scaleX }
-            .pointerInput(Unit) { rowTap({}) { if (value.isNotEmpty()) onChange("") } }) {
+            .pointerInput(state) { rowTap({}) { state.clearText() } }) {
             val r = 8.5f * look.unit
             val c = center
             drawCircle(hint, r, c)
@@ -492,9 +632,10 @@ private fun RoundButton(symbol: Int, modifier: Modifier, onClick: () -> Unit) {
     var pressed by remember { mutableStateOf(false) }
     val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
     val fill = look.color(SettingsTokens.CHIP_FILL)
-    val size = 30f * look.unit
-    Box(modifier.size(look.dp(size)).pressScale { 1f - 0.08f * press }
-        .drawBehind { drawCircle(fill) }
+    val drawn = 30f * look.unit
+    // Drawn 30 pt across (iOS's sheet close), touched across the touch target.
+    Box(modifier.size(look.dp(SettingsTokens.TARGET)).pressScale { 1f - 0.08f * press }
+        .drawBehind { drawCircle(fill, radius = drawn / 2f) }
         .pointerInput(Unit) { rowTap({ pressed = it }, onClick) }, contentAlignment = Alignment.Center) {
         Image(painterResource(symbol), null, colorFilter = ColorFilter.tint(look.color(SettingsTokens.ROW_DETAIL_COLOR)),
             modifier = Modifier.size(look.dp(12f * look.unit)))

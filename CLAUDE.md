@@ -329,6 +329,14 @@ copy it wholesale — port the working pieces cleanly. File map:
   handed down (a `CompositionLocal`, a lambda) is made once (`remember`), or everything that reads it composes again. And
   no file reading behind a call made in composition (`Design.themes()` parsed every theme file: cached now). The settings
   lost 11-27 ms in the first frame of a page opening to each of these (S24, Perfetto: `Compose:recompose`).
+- **Compose compares font families by the wrapper's identity**: `FontFamily(typeface)` made again for the same typeface
+  is another font to it, so a text style built in composition with a new one made every text that composed again measure
+  again (the settings: 25 ms of layout in one frame). Styles and families are made once (`Look.text`, `familyOf`).
+- **A `key()` inside an `if` in a loop is matched by position**, not by key: when the list changed order, rows were not
+  recognised and were built anew (eleven in one frame). Filter first, key at the top of the loop body.
+- **One UI drops the display to 20-24 Hz when nothing is touched, and a key event does not wake it**: an animation started
+  by a scripted Back key waited 35-60 ms for buffers in its first frames (SurfaceFlinger `NextFrameInterval 24_Hz`). Start
+  benched animations with a tap, or read a key-started one knowing this.
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

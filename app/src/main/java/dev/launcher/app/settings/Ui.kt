@@ -70,12 +70,21 @@ class Look(
     fun dp(k: NumberKey): Dp = Dp(Design.num(k) * unit / density)
     fun dp(px: Float): Dp = Dp(px / density)
 
-    /** Text style [k] in [color]: the theme's font (any family it names), size, line height and tracking. */
-    fun text(k: TextKey, color: Color): TextStyle {
+    /**
+     * Text style [k] in [color]: the theme's font (any family it names), size, line height and tracking. One object per
+     * style and colour while this look lasts: a style made anew compares unequal (its font family is a new wrapper of the
+     * same typeface, and Compose compares those by identity), so every text that composed again was measured again
+     * (the font search lost 25 ms of layout in its opening frame on the S24, 35-85 ms a letter typed).
+     */
+    fun text(k: TextKey, color: Color): TextStyle = styles.getOrPut(k.name to color) { makeText(k, color) }
+
+    private val styles = HashMap<Pair<String, Color>, TextStyle>()
+
+    private fun makeText(k: TextKey, color: Color): TextStyle {
         val s = Design.text(k)
         return TextStyle(
             color = color,
-            fontFamily = FontFamily(Fonts.of(s.family, s.weight, s.sizePt)),
+            fontFamily = familyOf(Fonts.of(s.family, s.weight, s.sizePt)),
             fontWeight = FontWeight(s.weight.coerceIn(1, 1000)),
             fontSynthesis = FontSynthesis.None,
             fontSize = androidx.compose.ui.unit.TextUnit(s.sizePt * unit / density / fontScale, androidx.compose.ui.unit.TextUnitType.Sp),
@@ -185,3 +194,11 @@ fun Modifier.glass(key: MaterialKey, radiusPt: Float, press: () -> Float = { 0f 
             }
         }
 }
+
+/**
+ * The Compose font family of [typeface], one per typeface: Compose compares families by the wrapper's identity, so a new
+ * wrapper of the same typeface is another font to it (its texts measured again on every composition).
+ */
+internal fun familyOf(typeface: android.graphics.Typeface): FontFamily = synchronized(familyCache) { familyCache.getOrPut(typeface) { FontFamily(typeface) } }
+
+private val familyCache = java.util.WeakHashMap<android.graphics.Typeface, FontFamily>()
