@@ -489,6 +489,9 @@ object Design {
     /** The palette colour [name] (an `android.R.color` field, `system_primary_dark`), cached until the palette changes. */
     private fun paletteColor(name: String): Int? = palette.getOrPut(name) { systemColor(name) ?: NO_COLOR }.takeIf { it != NO_COLOR }
 
+    /** The system's palette colour [name] (`system_accent1_500`, `system_primary_light`), or null (none: Android before 12). */
+    fun systemPalette(name: String): Int? = paletteColor(name)
+
     private fun systemColor(name: String): Int? {
         if (android.os.Build.VERSION.SDK_INT < 31) return null
         val id = colorIds.getOrPut(name) { try { android.R.color::class.java.getField(name).getInt(null) } catch (_: Throwable) { 0 } }

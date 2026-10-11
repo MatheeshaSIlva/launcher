@@ -238,6 +238,12 @@ shade), swipes up from the bottom edge and rests (recents), swipes from the edge
 it follows the draft (a placement chosen before Apply shows at once). Each stroke on `motion.settings.hint`. The layout
 gallery (a card per layout with its own preview) waits for a second layout per element.
 
+**C3, colours and fonts (2026-10-11):** Look's Colours shows the wallpaper's palette (Material You's primary, secondary,
+tertiary, surface and neutral in this appearance, `Design.systemPalette`), lit while the wallpaper's colours are chosen;
+Fonts chooses the text and the titles' family (`sys.font.text`, `sys.font.display`): Inter, the phone's, serif, mono and
+four from Google Fonts (downloaded the first time), each chip written in its own font; both wait for Apply (`Draft.fonts`).
+Still to come in C3: search across Google Fonts, and customising by component with previews.
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 

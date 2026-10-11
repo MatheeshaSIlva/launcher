@@ -206,10 +206,12 @@ private class Draft {
     val elements = androidx.compose.runtime.mutableStateMapOf<Element, String>()
     /** A layout's choices: (element, "layout" | "placement" | "opt:" + an option's key) to the value. */
     val setup = androidx.compose.runtime.mutableStateMapOf<Pair<Element, String>, Any>()
+    /** A font family chosen for a font token (`sys.font.text`, `sys.font.display`). */
+    val fonts = androidx.compose.runtime.mutableStateMapOf<String, String>()
     /** When Back was pressed with changes waiting (a second Back soon after discards them and leaves); 0: not. */
     var backAt by androidx.compose.runtime.mutableLongStateOf(0L)
 
-    val count: Int get() = listOfNotNull(theme, colors, motion, appearance).size + elements.size + setup.size
+    val count: Int get() = listOfNotNull(theme, colors, motion, appearance).size + elements.size + setup.size + fonts.size
 
     fun themeId() = theme ?: Design.themeId
     fun chooseTheme(id: String) { theme = id.takeIf { it != Design.themeId } }
@@ -231,6 +233,10 @@ private class Draft {
     fun bool(e: Element, key: String, fallback: Boolean): Boolean = setup[e to "opt:$key"] as? Boolean ?: Setup.bool(e, key, fallback)
     fun chooseBool(e: Element, key: String, v: Boolean, fallback: Boolean) = choose(e, "opt:$key", v, Setup.bool(e, key, fallback))
     private fun choose(e: Element, what: String, v: Any, applied: Any) { if (v == applied) setup.remove(e to what) else setup[e to what] = v }
+    /** The family font token [key] has (the draft's, else the one in use). */
+    fun font(key: String): String = fonts[key] ?: appliedFont(key)
+    fun chooseFont(key: String, family: String) { if (family == appliedFont(key)) fonts.remove(key) else fonts[key] = family }
+    private fun appliedFont(key: String) = (try { Design.resolved(key) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Choice)?.option ?: "inter"
 
     fun apply(ctx: android.content.Context) {
         val n = count
@@ -240,6 +246,7 @@ private class Draft {
             colors?.let { Design.setColorSource(it) }
             for ((e, id) in elements) Design.setElementTheme(e, id.takeIf { it != FOLLOW })
             motion?.let { Design.setMotion(it) }
+            for ((k, family) in fonts) Design.set(k, dev.launcher.app.design.Value.Choice(family))
         }
         appearance?.let { Appearance.setMode(ctx, it) }
         for (e in setup.keys.map { it.first }.distinct()) {
@@ -251,7 +258,7 @@ private class Draft {
 
     fun discard() {
         theme = null; colors = null; motion = null; appearance = null
-        elements.clear(); setup.clear(); backAt = 0L
+        elements.clear(); setup.clear(); fonts.clear(); backAt = 0L
     }
 
     companion object {
@@ -1163,8 +1170,13 @@ private fun LookPage() {
     Group("Only for one part") {
         for (e in Element.entries) ElementTheme(e, themes, draft)
     }
-    Group("Colours", "Any theme can take its accents from your wallpaper (Material You).") {
+    Group("Colours", "Material You: any theme's surfaces, glass and accents take your wallpaper's colours.") {
         ToggleRow("Wallpaper colours", null, draft.wallpaperColors()) { draft.chooseColors(it) }
+        PaletteRow(draft.wallpaperColors())
+    }
+    Group("Fonts", "Google fonts are downloaded the first time they are used, then work offline.") {
+        FontRow("Text", "sys.font.text", draft)
+        FontRow("Titles", "sys.font.display", draft)
     }
     Group("Appearance") {
         Box(Modifier.padding(LocalLook.current.dp(SettingsTokens.ROW_PADDING))) {
@@ -1172,6 +1184,62 @@ private fun LookPage() {
                 draft.chooseAppearance(Appearance.Mode.entries[it])
             }
         }
+    }
+}
+
+/** The wallpaper's palette (Material You's roles in this appearance), lit while the wallpaper's colours are chosen. */
+@Composable
+private fun PaletteRow(on: Boolean) {
+    val look = LocalLook.current
+    val k by animateFloatAsState(if (on) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "palette")
+    val dark = Appearance.dark > 0.5f
+    val roles = remember(look.version) {
+        listOf("primary" to "Primary", "secondary" to "Secondary", "tertiary" to "Tertiary", "surface_container_highest" to "Surface", "outline" to "Neutral")
+            .map { (role, name) -> Color(dev.launcher.app.design.Theme.resolveSpec("@$role", dark) { Design.systemPalette(it) }) to name }
+    }
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val swatch = 34f * look.unit
+    Row(Modifier.fillMaxWidth().drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .padding(horizontal = pad, vertical = look.dp(12f * look.unit)), horizontalArrangement = Arrangement.SpaceBetween) {
+        for ((c, name) in roles) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Canvas(Modifier.size(look.dp(swatch))) {
+                // Off: quieter and a little smaller (the colours are not in use).
+                val s = 0.82f + 0.18f * k
+                drawCircle(c.copy(alpha = 0.3f + 0.7f * k), radius = this.size.minDimension / 2f * s)
+                drawCircle(Color.Black.copy(alpha = 0.08f), radius = this.size.minDimension / 2f * s, style = Stroke(1f * look.unit))
+            }
+            Spacer(Modifier.height(look.dp(5f * look.unit)))
+            BasicText(name, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)), maxLines = 1)
+        }
+    }
+}
+
+/** The font families offered for a font token: the bundled, the phone's, and a few from Google Fonts. */
+private val FONT_FAMILIES = listOf(
+    "inter" to "Inter", "system" to "The phone's", "system-serif" to "Serif", "system-mono" to "Mono",
+    "google:DM Sans" to "DM Sans", "google:Manrope" to "Manrope", "google:Outfit" to "Outfit", "google:Lora" to "Lora",
+)
+
+/** One font token's family, as chips each written in its own font. */
+@Composable
+private fun FontRow(title: String, key: String, draft: Draft) {
+    val look = LocalLook.current
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val chosen = draft.font(key)
+    val families = remember(look.version) {
+        FONT_FAMILIES.map { (id, _) -> androidx.compose.ui.text.font.FontFamily(dev.launcher.app.theme.Fonts.of(id, 500, 15f)) }
+    }
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
+        Spacer(Modifier.height(look.dp(8f * look.unit)))
+        val at = FONT_FAMILIES.indexOfFirst { it.first == chosen }
+        ChoiceChips(FONT_FAMILIES.map { it.second }, at, fonts = families) { i -> draft.chooseFont(key, FONT_FAMILIES[i].first) }
     }
 }
 
@@ -1253,7 +1321,8 @@ private fun ElementTheme(e: Element, themes: List<Design.ThemeInfo>, draft: Draf
 
 /** A row of chips, one chosen (its fill blends to the accent). */
 @Composable
-private fun ChoiceChips(names: List<String>, chosen: Int, modifier: Modifier = Modifier, onChoose: (Int) -> Unit) {
+private fun ChoiceChips(names: List<String>, chosen: Int, modifier: Modifier = Modifier,
+                        fonts: List<androidx.compose.ui.text.font.FontFamily>? = null, onChoose: (Int) -> Unit) {
     val look = LocalLook.current
     val scroll = rememberScrollState()
     // The chosen chip kept in sight (glides there when it is chosen near an edge).
@@ -1277,7 +1346,7 @@ private fun ChoiceChips(names: List<String>, chosen: Int, modifier: Modifier = M
             val fill = mix(look.color(SettingsTokens.CHIP_FILL), look.color(SettingsTokens.ACCENT), k)
             val text = mix(look.color(SettingsTokens.CHIP_TEXT_COLOR), look.color(SettingsTokens.ACCENT_LABEL), k)
             val corner = look.pt(SettingsTokens.CHIP_CORNER)
-            BasicText(n, style = look.text(SettingsTokens.CHIP_TEXT, text), maxLines = 1,
+            BasicText(n, style = look.text(SettingsTokens.CHIP_TEXT, text).let { s -> fonts?.getOrNull(i)?.let { s.copy(fontFamily = it) } ?: s }, maxLines = 1,
                 modifier = Modifier
                     .pressScale { 1f - 0.05f * press }
                     .drawBehind { drawRoundRect(fill, cornerRadius = CornerRadius(corner)) }
