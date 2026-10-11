@@ -92,6 +92,7 @@ import dev.launcher.app.layout.Layouts
 import dev.launcher.app.layout.Option
 import dev.launcher.app.layout.Setup
 import dev.launcher.app.motion.MotionTokens
+import dev.launcher.app.motion.mover
 import dev.launcher.app.theme.Appearance
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -483,6 +484,35 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>, pick
     val tags = remember(look) { Element.entries.associateWith { measurer.measure(it.title, tagStyle) } }
     // The status bar's band on the picture (a little taller to tap), the rest is home.
     val statusFrac = g.statusPx / g.h
+    // While Motion is open, an app opens and closes on the picture, again and again, on the chosen preset's own curves
+    // (0: closed, 1: open; below 0: no demo).
+    val demo = remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
+    val demoPreset = LocalDraft.current.motionId()
+    val motionOpen by remember { androidx.compose.runtime.derivedStateOf { st.open == Part.MOTION && !st.p.isRunning } }
+    LaunchedEffect(motionOpen, demoPreset) {
+        demo.floatValue = -1f
+        if (!motionOpen) return@LaunchedEffect
+        val opening = Design.previewCurve(demoPreset, MotionTokens.APP_OPEN) ?: dev.launcher.app.motion.Motion.role(MotionTokens.APP_OPEN)
+        val closing = Design.previewCurve(demoPreset, MotionTokens.APP_CLOSE_SIZE) ?: dev.launcher.app.motion.Motion.role(MotionTokens.APP_CLOSE_SIZE)
+        suspend fun run(c: dev.launcher.app.design.Curve, from: Float, to: Float) {
+            val m = c.mover().apply { start(from, 0f, to) }
+            val t0 = androidx.compose.runtime.withFrameNanos { it }
+            while (true) {
+                val t = (androidx.compose.runtime.withFrameNanos { it } - t0) / 1e9
+                demo.floatValue = m.value(t)
+                if (m.settled(t, 0.002f)) { demo.floatValue = to; break }
+            }
+        }
+        demo.floatValue = 0f
+        kotlinx.coroutines.delay(400)
+        while (true) {
+            run(opening, 0f, 1f)
+            kotlinx.coroutines.delay(650)
+            run(closing, 1f, 0f)
+            kotlinx.coroutines.delay(900)
+        }
+    }
+    val appFill = look.color(SettingsTokens.GROUP_FILL)
     var latest by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var before by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -554,9 +584,20 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>, pick
                 drawText(t, topLeft = Offset(x + padX, y + padY), alpha = k)
             }
             .clip(RoundedCornerShape(look.dp(corner)))
-            // Picked: the rest dims, the part is outlined in the accent.
+            // Picked: the rest dims, the part is outlined in the accent. And Motion's demo: an app opening over home.
             .drawWithContent {
                 drawContent()
+                val d = demo.floatValue
+                if (d >= 0f) {
+                    val k = d.coerceIn(-0.1f, 1.1f)
+                    val icon = size.width * 0.17f
+                    val from = Rect(size.width * 0.5f - icon / 2f, size.height * 0.6f, size.width * 0.5f + icon / 2f, size.height * 0.6f + icon)
+                    val r = Rect(from.left * (1f - k), from.top * (1f - k), from.right + (size.width - from.right) * k, from.bottom + (size.height - from.bottom) * k)
+                    // Home steps back a little as the app comes up, as it does on the phone.
+                    drawRect(Color.Black.copy(alpha = 0.25f * k.coerceIn(0f, 1f)))
+                    val c = icon * 0.23f + (corner - icon * 0.23f) * k.coerceIn(0f, 1f)
+                    drawRoundRect(appFill, r.topLeft, r.size, CornerRadius(c))
+                }
                 val e = st.picked ?: return@drawWithContent
                 val k = st.pick.value.coerceIn(0f, 1f)
                 if (k <= 0f) return@drawWithContent
@@ -1062,11 +1103,69 @@ private fun ChoiceChips(names: List<String>, chosen: Int, onChoose: (Int) -> Uni
     }
 }
 
+/**
+ * Motion (docs/PLAN_SETTINGS.md S4): the animation presets as cards, each drawing its own curve; the picture of home above
+ * plays an app opening and closing on the chosen one. Waits for Apply like the rest.
+ */
 @Composable
 private fun MotionPage() {
     val draft = LocalDraft.current
-    Group("Animations", "How everything moves. Each animation can be retimed in Expert for now.") {
-        for (p in Design.motionPresets()) CheckRow(p.name, null, p.id == draft.motionId()) { draft.chooseMotion(p.id) }
+    val ctx = LocalContext.current
+    val presets = remember(LocalLook.current.version) { Design.motionPresets() }
+    Group("Animations", "How everything moves. The picture above plays the one you choose.") {
+        PresetCards(presets, draft)
+    }
+    Group("Every animation", "Each one can be retimed on its own: a spring or a curve.") {
+        NavRow("Each animation", "In Expert, for now") {
+            ctx.startActivity(Intent(ctx, dev.launcher.app.design.DesignActivity::class.java))
+        }
+    }
+}
+
+/** The presets side by side, each with the curve its apps open on; the chosen one ringed in the accent. */
+@Composable
+private fun PresetCards(presets: List<Design.ThemeInfo>, draft: Draft) {
+    val look = LocalLook.current
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val accent = look.color(SettingsTokens.ACCENT)
+    val line = look.color(SettingsTokens.ROW_DETAIL_COLOR)
+    Row(Modifier.fillMaxWidth().padding(pad), horizontalArrangement = Arrangement.spacedBy(look.dp(12f * look.unit))) {
+        for (p in presets) {
+            val chosen = draft.motionId() == p.id
+            val k by animateFloatAsState(if (chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chosen")
+            var pressed by remember { mutableStateOf(false) }
+            val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+            // The curve its apps open on, sampled until it comes to rest (a spring overshoots above the line).
+            val points = remember<List<Pair<Float, Float>>>(p.id, look.version) {
+                val c = Design.previewCurve(p.id, MotionTokens.APP_OPEN) ?: return@remember emptyList()
+                val m = c.mover().apply { start(0f, 0f, 1f) }
+                var end = 0.2
+                while (end < 2.0 && !m.settled(end, 0.002f)) end += 0.05
+                (0..48).map { i -> val t = end * i / 48.0; (i / 48f) to m.value(t) }
+            }
+            val corner = look.pt(SettingsTokens.TILE_CORNER) * 0.7f
+            Column(Modifier.weight(1f).pressScale { 1f - 0.04f * press }
+                .pointerInput(p.id) { rowTap({ pressed = it }) { draft.chooseMotion(p.id) } }) {
+                Canvas(Modifier.fillMaxWidth().height(look.dp(84f * look.unit))) {
+                    drawRoundRect(look.color(SettingsTokens.CHIP_FILL), cornerRadius = CornerRadius(corner))
+                    if (k > 0.001f) drawRoundRect(accent.copy(alpha = accent.alpha * k), cornerRadius = CornerRadius(corner), style = Stroke(2.5f * look.unit))
+                    if (points.size > 1) {
+                        val inset = 14f * look.unit
+                        val w = size.width - inset * 2f
+                        val h = size.height - inset * 2f
+                        val path = androidx.compose.ui.graphics.Path()
+                        points.forEachIndexed { i, (x, y) ->
+                            val px = inset + x * w
+                            val py = inset + h - y.coerceIn(-0.2f, 1.25f) * h * 0.8f
+                            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+                        }
+                        drawPath(path, mix(line, accent, k), style = Stroke(2.5f * look.unit, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                    }
+                }
+                Spacer(Modifier.height(look.dp(8f * look.unit)))
+                BasicText(p.name, style = look.text(SettingsTokens.ROW_DETAIL, mix(look.color(SettingsTokens.ROW_LABEL), accent, k)), maxLines = 1)
+            }
+        }
     }
 }
 
@@ -1206,6 +1305,7 @@ private fun PhonePage() {
         }
     }
     Group("Updates") {
+        InfoRow("This build", (ctx.applicationContext as? dev.launcher.app.LauncherApp)?.buildStamp() ?: "?")
         NavRow("Developer panel", "Updates, status and the log") {
             ctx.startActivity(Intent(ctx, dev.launcher.app.DevActivity::class.java))
         }

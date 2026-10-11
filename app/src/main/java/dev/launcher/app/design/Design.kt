@@ -263,6 +263,24 @@ object Design {
     private val previews = HashMap<String, Resolver>()
 
     /**
+     * Curve [k] as animation preset [id] gives it (with the user's edits of it), whether or not it is in use: the settings
+     * play a preset before it is applied. Null if the preset cannot be read.
+     */
+    fun previewCurve(id: String, k: CurveKey): Curve? {
+        val r = motionPreviews.getOrPut(id) {
+            val c = try { chainOf(PRESETS, id) } catch (_: Throwable) { return null }
+            val edits = if (id == motionId) LinkedHashMap(motionUser) else try {
+                val f = File(appCtx.filesDir, motionEditsFile(id))
+                if (f.exists()) Theme.parse(f.readText()).entries.filterKeys(::isMotion) else emptyMap()
+            } catch (_: Throwable) { emptyMap() }
+            Resolver(c.map { it.entries } + listOf(LinkedHashMap(edits)))
+        }
+        return (try { r.resolve(k.name) } catch (_: Throwable) { null } as? Value.CurveV)?.curve
+    }
+
+    private val motionPreviews = HashMap<String, Resolver>()
+
+    /**
      * Loads theme [id] (with the ones it is built on) and its edits, if the result has every token the code reads, of the
      * same kind as [DEFAULT_THEME]'s (a missing or mistyped token would fail where it is drawn); else nothing changes.
      */
@@ -441,6 +459,7 @@ object Design {
         val layers = layersOf(chain, user, ThemeLayers.fromWallpaper(chain, user)) + motionChain.map { it.entries } + listOf(LinkedHashMap(motionUser))
         state = State(Resolver(layers) { name -> paletteColor(name) })
         previews.clear()
+        motionPreviews.clear()
         val byTheme = HashMap<String, State>()
         parts = elementIds.mapNotNull { (e, id) ->
             val l = elementThemes[id] ?: return@mapNotNull null

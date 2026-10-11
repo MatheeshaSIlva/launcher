@@ -183,6 +183,13 @@ the part is outlined in the accent with its name in a tag beside the picture, al
 role); Look opens from the tiles, glides to the part's row (`Studio.rowY`, the page's own scroller) and lights it; the same
 part again, or closing the page, lets it go.
 
+**S4 (2026-10-11, emulator):** Motion shows the animation presets as cards, each drawing the curve its apps open on (sampled
+from the preset's own `motion.app.open`, overshoot and all: `Design.previewCurve` reads any preset without applying it);
+while Motion is open the picture of home plays an app opening from an icon and closing into it, again and again, on the
+chosen preset's `app.open` and `app.close-size` (home dims behind it); a choice waits for Apply. "Each animation" leads to
+Expert for now. Phone shows the build. With this S1-S4 stand; what is left of the settings plan: C2's live previews of
+each layout, C3's fonts and properties by component, C5's Shizuku and permissions, C6 walkthrough, C7 history.
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 
