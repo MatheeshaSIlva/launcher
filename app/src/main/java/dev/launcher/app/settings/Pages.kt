@@ -229,10 +229,14 @@ private class Draft {
     /** Material You's style and intensity (see [dev.launcher.app.design.MaterialYou]). */
     var colorStyle by mutableStateOf<String?>(null)
     var colorIntensity by mutableStateOf<Float?>(null)
+    /** What the palette is made from ("wallpaper" or "#rrggbb") and key colours set by hand per palette ("auto" or "#rrggbb"). */
+    var colorSeed by mutableStateOf<String?>(null)
+    val colorKeys = androidx.compose.runtime.mutableStateMapOf<Char, String>()
     /** When Back was pressed with changes waiting (a second Back soon after discards them and leaves); 0: not. */
     var backAt by androidx.compose.runtime.mutableLongStateOf(0L)
 
-    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, colorIntensity).size + elements.size + setup.size + fonts.size
+    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, colorIntensity, colorSeed).size + elements.size + setup.size +
+        fonts.size + colorKeys.size
 
     fun themeId() = theme ?: Design.themeId
     fun chooseTheme(id: String) { theme = id.takeIf { it != Design.themeId } }
@@ -258,6 +262,23 @@ private class Draft {
     fun chooseColorStyle(s: dev.launcher.app.design.MaterialYou.Style) { colorStyle = s.id.takeIf { it != appliedStyle() } }
     fun colorIntensity(): Float = colorIntensity ?: appliedIntensity()
     fun chooseColorIntensity(k: Float) { colorIntensity = k.takeIf { kotlin.math.abs(it - appliedIntensity()) > 0.005f } }
+    /** The user's own colour the palette is made from (null: the wallpaper's), as it would be applied. */
+    fun seedColor(): Int? = Design.hexColor(colorSeed ?: appliedChoice(Design.COLOR_SEED.name, "wallpaper"))
+    fun chooseSeed(c: Int?) {
+        val v = c?.let { Design.hexOf(it) } ?: "wallpaper"
+        colorSeed = v.takeIf { it != appliedChoice(Design.COLOR_SEED.name, "wallpaper") }
+    }
+    /** Palette [p]'s key colour set by hand (null: the style's), as it would be applied. */
+    fun keyColor(p: Char): Int? = Design.hexColor(colorKeys[p] ?: appliedChoice(Design.COLOR_KEYS.getValue(p).name, "auto"))
+    fun chooseKey(p: Char, c: Int?) {
+        val v = c?.let { Design.hexOf(it) } ?: "auto"
+        if (v == appliedChoice(Design.COLOR_KEYS.getValue(p).name, "auto")) colorKeys.remove(p) else colorKeys[p] = v
+    }
+    /** Everything the palette would be made from once applied (the swatches show it before Apply). */
+    fun youChoice() = dev.launcher.app.design.MaterialYou.Choice(colorStyle(), colorIntensity(), seedColor(),
+        dev.launcher.app.design.MaterialYou.KEY_PALETTES.mapNotNull { (p, _) -> keyColor(p)?.let { p to it } }.toMap())
+    private fun appliedChoice(key: String, default: String) =
+        (try { Design.resolved(key) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Choice)?.option ?: default
     private fun appliedStyle() = (try { Design.resolved(Design.COLOR_STYLE.name) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Choice)?.option ?: "system"
     private fun appliedIntensity() = (try { Design.resolved(Design.COLOR_INTENSITY.name) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Number)?.v ?: 1f
     /** The family font token [key] has (the draft's, else the one in use). */
@@ -276,6 +297,8 @@ private class Draft {
             for ((k, family) in fonts) Design.set(k, dev.launcher.app.design.Value.Choice(family))
             colorStyle?.let { Design.set(Design.COLOR_STYLE.name, dev.launcher.app.design.Value.Choice(it)) }
             colorIntensity?.let { Design.set(Design.COLOR_INTENSITY.name, dev.launcher.app.design.Value.Number(it, dev.launcher.app.design.NumUnit.FACTOR)) }
+            colorSeed?.let { Design.set(Design.COLOR_SEED.name, dev.launcher.app.design.Value.Choice(it)) }
+            for ((p, v) in colorKeys) Design.set(Design.COLOR_KEYS.getValue(p).name, dev.launcher.app.design.Value.Choice(v))
         }
         appearance?.let { Appearance.setMode(ctx, it) }
         for (e in setup.keys.map { it.first }.distinct()) {
@@ -287,7 +310,7 @@ private class Draft {
 
     fun discard() {
         theme = null; colors = null; motion = null; appearance = null
-        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; colorIntensity = null; backAt = 0L
+        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); backAt = 0L
     }
 
     companion object {
@@ -1350,11 +1373,15 @@ private fun LookPage() {
     Group("Only for one part") {
         for (e in Element.entries) ElementTheme(e, themes, draft)
     }
-    Group("Colours", "Material You: any theme's surfaces, glass and accents take your wallpaper's colours.") {
-        ToggleRow("Wallpaper colours", null, draft.wallpaperColors()) { draft.chooseColors(it) }
+    // Which colour the editor below the palette is changing: the one it is made from ([SEED]), a palette's key, or none.
+    val editing = remember { mutableStateOf<Char?>(null) }
+    Group("Colours", "Material You: any theme's surfaces, glass and accents take your wallpaper's colours, or your own. Tap a colour to set it yourself.") {
+        ToggleRow("Material You", null, draft.wallpaperColors()) { draft.chooseColors(it) }
+        ColourSourceRow(draft, editing)
         ColourStyleRow(draft)
         IntensityRow(draft)
-        PaletteRow(draft)
+        PaletteRow(draft, editing)
+        ColourEditor(draft, editing)
     }
     Group("Fonts", "Google fonts are downloaded the first time they are used, then work offline.") {
         FontRow("Text", "sys.font.text", draft)
@@ -1371,33 +1398,196 @@ private fun LookPage() {
 
 /** The wallpaper's palette (Material You's roles in this appearance), lit while the wallpaper's colours are chosen. */
 @Composable
-private fun PaletteRow(draft: Draft) {
+private fun PaletteRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>) {
     val look = LocalLook.current
     val k by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "palette")
     val dark = Appearance.dark > 0.5f
-    val style = draft.colorStyle()
-    val intensity = draft.colorIntensity()
-    // As the style and intensity chosen would make them (before Apply), each swatch easing to its new colour.
-    val roles = remember(look.version, style, intensity) {
-        listOf("primary" to "Primary", "secondary" to "Secondary", "tertiary" to "Tertiary", "surface_container_highest" to "Surface", "outline" to "Neutral")
-            .map { (role, name) -> Color(dev.launcher.app.design.Theme.resolveSpec("@$role", dark) { Design.previewPalette(it, style, intensity) }) to name }
+    val choice = draft.youChoice()
+    // As the choice would make them (before Apply), each swatch easing to its new colour; a tap sets that palette's colour.
+    val roles = remember(look.version, choice) {
+        listOf(Triple("primary", "Primary", 'P'), Triple("secondary", "Secondary", 'S'), Triple("tertiary", "Tertiary", 'T'),
+            Triple("surface_container_highest", "Surface", 'N'), Triple("outline", "Neutral", 'V'))
+            .map { (role, name, p) -> Triple(Color(dev.launcher.app.design.Theme.resolveSpec("@$role", dark) { Design.previewPalette(it, choice) }), name, p) }
     }
+    val accent = look.color(SettingsTokens.ACCENT)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val swatch = 34f * look.unit
     Row(Modifier.fillMaxWidth().drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .padding(horizontal = pad, vertical = look.dp(12f * look.unit)), horizontalArrangement = Arrangement.SpaceBetween) {
-        for ((target, name) in roles) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        for ((target, name, p) in roles) Column(horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.pointerInput(p) { rowTap({}) { editing.value = if (editing.value == p) null else p } }) {
             val c by androidx.compose.animation.animateColorAsState(target, look.motion(MotionTokens.APPEAR_FADE), label = "swatch")
+            // Ringed while it is the one being changed; a dot under one the user set themselves.
+            val ring by animateFloatAsState(if (editing.value == p) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "ring")
+            val own by animateFloatAsState(if (draft.keyColor(p) != null) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "own")
             Canvas(Modifier.size(look.dp(swatch))) {
                 // Off: quieter and a little smaller (the colours are not in use).
-                val s = 0.82f + 0.18f * k
+                val s = 0.82f + 0.18f * k - 0.1f * ring
                 drawCircle(c.copy(alpha = 0.3f + 0.7f * k), radius = this.size.minDimension / 2f * s)
                 drawCircle(Color.Black.copy(alpha = 0.08f), radius = this.size.minDimension / 2f * s, style = Stroke(1f * look.unit))
+                if (ring > 0.001f) drawCircle(accent.copy(alpha = accent.alpha * ring), radius = this.size.minDimension / 2f - 1.2f * look.unit, style = Stroke(2.4f * look.unit))
+                if (own > 0.001f) drawCircle(accent.copy(alpha = accent.alpha * own), radius = 2.5f * look.unit,
+                    center = Offset(this.size.width / 2f, this.size.height + 0f))
             }
             Spacer(Modifier.height(look.dp(5f * look.unit)))
             BasicText(name, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)), maxLines = 1)
         }
+    }
+}
+
+/** The editor's target for the colour the palette is made from (the others are the palettes' letters). */
+private const val SEED = 'X'
+
+/** What the palette is made from: the wallpaper's main colour, or a colour of the user's own (its swatch opens the editor). */
+@Composable
+private fun ColourSourceRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>) {
+    val look = LocalLook.current
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val dim by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0.45f, look.motion(MotionTokens.CC_TOGGLE), label = "dim")
+    val seed = draft.seedColor()
+    val shownSeed by androidx.compose.animation.animateColorAsState(seed?.let { Color(it) } ?: Color.Transparent, look.motion(MotionTokens.APPEAR_FADE), label = "seed")
+    val showSeed by animateFloatAsState(if (seed != null) 1f else 0f, look.motion(MotionTokens.APPEAR), label = "showSeed")
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .graphicsLayer { alpha = dim }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText("Made from", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
+            // The user's colour, there while it is chosen: a tap opens the editor on it.
+            Canvas(Modifier.size(look.dp(SettingsTokens.TARGET)).graphicsLayer { alpha = showSeed; scaleX = 0.6f + 0.4f * showSeed; scaleY = scaleX }
+                .pointerInput(Unit) { rowTap({}) { if (draft.seedColor() != null) editing.value = if (editing.value == SEED) null else SEED } }) {
+                drawCircle(shownSeed, radius = 12f * look.unit)
+                drawCircle(Color.Black.copy(alpha = 0.1f), radius = 12f * look.unit, style = Stroke(1f * look.unit))
+            }
+        }
+        Spacer(Modifier.height(look.dp(2f * look.unit)))
+        ChoiceChips(listOf("Wallpaper", "Your colour"), if (seed == null) 0 else 1) { i ->
+            if (i == 0) { draft.chooseSeed(null); if (editing.value == SEED) editing.value = null }
+            else { draft.chooseSeed(Design.wallpaperSeed() ?: 0xFF3478F6.toInt()); editing.value = SEED }
+        }
+    }
+}
+
+/**
+ * The colour editor, opening in place under the palette for the colour being changed (the one the palette is made from, or a
+ * palette's key colour): a row of colours to start from, its hue, and how colourful it is (a palette takes a colour's hue and
+ * colourfulness; its lightness is the palette's own). Each change shows at once in the swatches above and waits for Apply.
+ */
+@Composable
+private fun ColourEditor(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>) {
+    val look = LocalLook.current
+    val t = editing.value
+    Box(Modifier.fillMaxWidth().animateContentSize(look.motion(MotionTokens.APPEAR))) {
+        if (t != null) androidx.compose.runtime.key(t) { ColourEditorBody(draft, t) { editing.value = null } }
+    }
+}
+
+@Composable
+private fun ColourEditorBody(draft: Draft, t: Char, done: () -> Unit) {
+    val look = LocalLook.current
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val my = dev.launcher.app.design.MaterialYou
+    // Where it starts: the colour set now, else what the palette is made of now.
+    val start = remember(t) {
+        val now = if (t == SEED) draft.seedColor() else draft.keyColor(t)
+        val shade = when (t) { 'P' -> "accent1"; 'S' -> "accent2"; 'T' -> "accent3"; 'N' -> "neutral1"; 'V' -> "neutral2"; else -> "accent1" }
+        now ?: Design.previewPalette("system_${shade}_500", draft.youChoice()) ?: 0xFF3478F6.toInt()
+    }
+    val lch = remember(t) { my.toLch(start) }
+    var hue by remember(t) { androidx.compose.runtime.mutableFloatStateOf(lch.third.toFloat()) }
+    var chroma by remember(t) { androidx.compose.runtime.mutableFloatStateOf(lch.second.toFloat().coerceIn(0f, MAX_CHROMA)) }
+    fun set(h: Float, c: Float) {
+        hue = h; chroma = c
+        val col = my.lch(KEY_TONE, c.toDouble(), h.toDouble())
+        if (t == SEED) draft.chooseSeed(col) else draft.chooseKey(t, col)
+    }
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE)) }
+    val name = if (t == SEED) "Your colour" else my.KEY_PALETTES.firstOrNull { it.first == t }?.second ?: ""
+    val own = if (t == SEED) true else draft.keyColor(t) != null
+    Column(Modifier.fillMaxWidth().graphicsLayer { alpha = appear.value }
+        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(name, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
+            if (own) {
+                TextButton("Reset", null) {
+                    if (t == SEED) draft.chooseSeed(null) else draft.chooseKey(t, null)
+                    done()
+                }
+                Spacer(Modifier.width(look.dp(12f * look.unit)))
+            }
+            TextButton("Done", null) { done() }
+        }
+        Spacer(Modifier.height(look.dp(6f * look.unit)))
+        // Colours to start from: a circle of hues.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            for (h in PRESET_HUES) {
+                val c = remember(h) { Color(my.lch(KEY_TONE, PRESET_CHROMA.toDouble(), h.toDouble())) }
+                val near = kotlin.math.abs(((hue - h + 540f) % 360f) - 180f) < 8f && kotlin.math.abs(chroma - PRESET_CHROMA) < 4f
+                val ring by animateFloatAsState(if (near) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "preset")
+                val accent = look.color(SettingsTokens.ACCENT)
+                Canvas(Modifier.size(look.dp(30f * look.unit)).pointerInput(h) { rowTap({}) { set(h, PRESET_CHROMA) } }) {
+                    drawCircle(c, radius = size.minDimension / 2f - 3f * look.unit * ring)
+                    if (ring > 0.001f) drawCircle(accent.copy(alpha = accent.alpha * ring), radius = size.minDimension / 2f - 0.8f * look.unit, style = Stroke(1.6f * look.unit))
+                }
+            }
+        }
+        Spacer(Modifier.height(look.dp(8f * look.unit)))
+        BasicText("Hue", style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
+        val hues = remember { Brush.horizontalGradient((0..12).map { Color(my.lch(KEY_TONE, 50.0, it * 30.0)) }) }
+        val now = Color(my.lch(KEY_TONE, chroma.toDouble(), hue.toDouble()))
+        ColourSlider(hue / 360f, hues, now) { v -> set(v * 360f, chroma) }
+        BasicText("Colourfulness", style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
+        val chromas = remember(hue.roundToInt()) { Brush.horizontalGradient(listOf(Color(my.lch(KEY_TONE, 0.0, hue.toDouble())), Color(my.lch(KEY_TONE, MAX_CHROMA.toDouble(), hue.toDouble())))) }
+        ColourSlider(chroma / MAX_CHROMA, chromas, now) { v -> set(hue, v * MAX_CHROMA) }
+    }
+}
+
+/** A key colour's lightness as the editor shows it (a palette takes only its hue and colourfulness). */
+private const val KEY_TONE = 60.0
+/** The editor's most colourful (CIELAB chroma; a colour past what the screen shows at that hue is brought within it). */
+private const val MAX_CHROMA = 90f
+private const val PRESET_CHROMA = 50f
+private val PRESET_HUES = listOf(25f, 55f, 85f, 135f, 185f, 215f, 255f, 285f, 315f, 345f)
+
+/** A slider over a coloured track ([brush]) with a knob in the colour it makes ([knob]): the colour editor's. [value] 0..1. */
+@Composable
+private fun ColourSlider(value: Float, brush: Brush, knob: Color, onChange: (Float) -> Unit) {
+    val look = LocalLook.current
+    val change = androidx.compose.runtime.rememberUpdatedState(onChange)
+    val ring = look.color(SettingsTokens.TOGGLE_KNOB)
+    val knobR = 13f * look.unit
+    Canvas(Modifier.fillMaxWidth().height(look.dp(SettingsTokens.TARGET)).pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown()
+            val w = size.width - knobR * 2f
+            fun at(x: Float) = ((x - knobR) / w).coerceIn(0f, 1f)
+            val slop = viewConfiguration.touchSlop
+            var dragging = false
+            while (true) {
+                val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                val d = c.position - down.position
+                if (!dragging) {
+                    if (kotlin.math.abs(d.y) > slop && kotlin.math.abs(d.y) > kotlin.math.abs(d.x)) break   // the page's scroll
+                    if (kotlin.math.abs(d.x) > slop) dragging = true
+                }
+                if (dragging) { c.consume(); change.value(at(c.position.x)) }
+                if (!c.pressed) { if (!dragging) change.value(at(c.position.x)); break }
+            }
+        }
+    }) {
+        val cy = size.height / 2f
+        val th = 10f * look.unit
+        val w = size.width - knobR * 2f
+        val x = knobR + w * value.coerceIn(0f, 1f)
+        drawRoundRect(brush, Offset(knobR, cy - th / 2f), Size(w, th), CornerRadius(th / 2f))
+        drawCircle(Color.Black.copy(alpha = 0.12f), knobR, Offset(x, cy + 1.5f * look.unit))
+        drawCircle(ring, knobR, Offset(x, cy))
+        drawCircle(knob, knobR - 3f * look.unit, Offset(x, cy))
     }
 }
 
@@ -1526,7 +1716,7 @@ private fun FontRow(title: String, key: String, draft: Draft) {
 
 /** A button in words (and a symbol) in the accent, as iOS's plain buttons: pressed, it dims. */
 @Composable
-private fun TextButton(text: String, symbol: Int, onClick: () -> Unit) {
+private fun TextButton(text: String, symbol: Int?, onClick: () -> Unit) {
     val look = LocalLook.current
     var pressed by remember { mutableStateOf(false) }
     val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
@@ -1537,8 +1727,10 @@ private fun TextButton(text: String, symbol: Int, onClick: () -> Unit) {
         .pointerInput(Unit) { rowTap({ pressed = it }, onClick) }
         .padding(start = look.dp(8f * look.unit)),
         verticalAlignment = Alignment.CenterVertically) {
-        Image(painterResource(symbol), null, colorFilter = ColorFilter.tint(accent), modifier = Modifier.size(look.dp(16f * look.unit)))
-        Spacer(Modifier.width(look.dp(4f * look.unit)))
+        if (symbol != null) {
+            Image(painterResource(symbol), null, colorFilter = ColorFilter.tint(accent), modifier = Modifier.size(look.dp(16f * look.unit)))
+            Spacer(Modifier.width(look.dp(4f * look.unit)))
+        }
         BasicText(text, style = look.text(SettingsTokens.ROW_DETAIL, accent), maxLines = 1)
     }
 }

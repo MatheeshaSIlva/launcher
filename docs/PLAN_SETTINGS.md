@@ -311,6 +311,16 @@ tinted glass, kept on disk as home's look) and without the bar (its picture had 
 now fades in only when home can be seen, home's picture shows it at rest, the settings picture home again when its
 wallpaper arrives, and ask for the bar again if it did not come.
 
+**C3, your own Material You colours (2026-10-12; Matheesha: "let the users choose their own primary colour or adjust all
+colours for the material you theming"):** Look's Colours: the toggle is "Material You"; "Made from" the wallpaper or your
+own colour (its swatch on the row reopens the editor); a tap on any swatch of the palette (primary, secondary, tertiary,
+surface, neutral) sets that palette's key colour by hand (a dot under the ones you set). The editor opens in place under
+the palette: ten colours to start from, hue and colourfulness sliders over their own colours (a palette takes a colour's
+hue and colourfulness, its lightness is the palette's), Reset and Done; everything shows at once in the swatches and waits
+for Apply. Tokens `sys.color.seed` ("wallpaper" or "#rrggbb") and `sys.color.key.*` ("auto" or "#rrggbb");
+`MaterialYou.Choice` makes the palette (a colour of one's own in "the phone's" style makes a tonal one; key colours replace
+only their palette, in any style).
+
 **Sizes and the font search's speed, measured on the S24 (2026-10-11; Matheesha: "the tabs in the layout is way to small.
 Please follow proper UI and UX rules. The more fonts popup is a bit laggy"):**
 - Every control's touch area is at least 44 x 44 pt (`comp.settings.target`, Apple's rule; Android's is 48 dp): chips

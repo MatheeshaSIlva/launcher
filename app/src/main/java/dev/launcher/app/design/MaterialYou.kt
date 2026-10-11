@@ -39,8 +39,39 @@ object MaterialYou {
         val neutral: TonalPalette, val neutralVariant: TonalPalette, val error: TonalPalette,
     )
 
-    /** The scheme of [style] from [seed] (ARGB), every chroma times [intensity]. */
-    fun scheme(seed: Int, style: Style, intensity: Float): Scheme {
+    /**
+     * Everything that makes the palette: the [style], how colourful ([intensity]), the colour it is made from ([seed]; null:
+     * the wallpaper's), and key colours the user set by hand ([keys]: 'P' primary, 'S' secondary, 'T' tertiary, 'N' neutral,
+     * 'V' neutral variant; each palette then takes that colour's hue and chroma).
+     */
+    data class Choice(val style: Style, val intensity: Float, val seed: Int? = null, val keys: Map<Char, Int> = emptyMap()) {
+        /** A key for caches of schemes made from it. */
+        val id: String get() = "${style.id}/$intensity/${seed ?: "w"}/" + keys.entries.sortedBy { it.key }.joinToString(",") { "${it.key}${it.value}" }
+    }
+
+    /** The palettes a key colour can be set for, with their names in the settings. */
+    val KEY_PALETTES = listOf('P' to "Primary", 'S' to "Secondary", 'T' to "Tertiary", 'N' to "Neutral", 'V' to "Neutral variant")
+
+    /** The scheme of [style] from [seed] (ARGB), every chroma times [intensity]; a palette in [keys] made from that colour. */
+    fun scheme(seed: Int, style: Style, intensity: Float, keys: Map<Char, Int> = emptyMap()): Scheme {
+        val base = styled(seed, style, intensity)
+        if (keys.isEmpty()) return base
+        val k = intensity.coerceIn(0f, 2f).toDouble()
+        fun own(c: Char, p: TonalPalette) = keys[c]?.let { val (_, ch, h) = toLch(it); TonalPalette(norm(h), ch * k) } ?: p
+        return Scheme(own('P', base.primary), own('S', base.secondary), own('T', base.tertiary), own('N', base.neutral),
+            own('V', base.neutralVariant), base.error)
+    }
+
+    /** The palette colour [name] is drawn from ('P', 'S', 'T', 'N', 'V', 'E'), or null if it is not one of Android's. */
+    fun paletteOf(name: String): Char? {
+        SHADE.matchEntire(name)?.let { m ->
+            return when (m.groupValues[1]) { "accent1" -> 'P'; "accent2" -> 'S'; "accent3" -> 'T'; "neutral1" -> 'N'; "neutral2" -> 'V'; else -> null }
+        }
+        ROLE.matchEntire(name)?.let { m -> return ROLES[m.groupValues[1]]?.palette }
+        return null
+    }
+
+    private fun styled(seed: Int, style: Style, intensity: Float): Scheme {
         val (_, c0, h) = toLch(seed)
         val k = intensity.coerceIn(0f, 2f).toDouble()
         fun p(hue: Double, chroma: Double) = TonalPalette(norm(hue), chroma * k)

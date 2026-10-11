@@ -3359,6 +3359,26 @@
    "factor": 1,
    "src": "judged:how colourful the wallpaper's palette is (0 grey, 1 the style's own, 2 twice): the user's"
   },
+  "sys.color.key.neutral": {
+   "choice": "auto",
+   "src": "judged:the neutral palette's key colour (surfaces): from the style (auto), or the user's (#rrggbb)"
+  },
+  "sys.color.key.neutral-variant": {
+   "choice": "auto",
+   "src": "judged:the neutral variant palette's key colour (outlines): from the style (auto), or the user's (#rrggbb)"
+  },
+  "sys.color.key.primary": {
+   "choice": "auto",
+   "src": "judged:the primary palette's key colour: from the style (auto), or the user's (#rrggbb)"
+  },
+  "sys.color.key.secondary": {
+   "choice": "auto",
+   "src": "judged:the secondary palette's key colour: from the style (auto), or the user's (#rrggbb)"
+  },
+  "sys.color.key.tertiary": {
+   "choice": "auto",
+   "src": "judged:the tertiary palette's key colour: from the style (auto), or the user's (#rrggbb)"
+  },
   "sys.color.label.primary": {
    "ref": "ref.color.labels.primary",
    "src": "kit:VariableID:507:29167"
@@ -3416,6 +3436,10 @@
    "light": "#00000014",
    "dark": "#ffffff1f",
    "src": "judged:a pressed row or button"
+  },
+  "sys.color.seed": {
+   "choice": "wallpaper",
+   "src": "judged:what Material You's palette is made from: the wallpaper's main colour, or a colour the user picks (#rrggbb)"
   },
   "sys.color.separator": {
    "ref": "ref.color.separators.non-opaque",

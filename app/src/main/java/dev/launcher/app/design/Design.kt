@@ -43,6 +43,15 @@ object Design {
     /** Material You's style (MaterialYou.Style: the phone's, tonal, vibrant...) and intensity (0 grey .. 1 .. 2). */
     val COLOR_STYLE = ChoiceKey("sys.color.style")
     val COLOR_INTENSITY = NumberKey("sys.color.intensity")
+    /** The colour Material You's palette is made from: "wallpaper" (its main colour) or one of the user's ("#rrggbb"). */
+    val COLOR_SEED = ChoiceKey("sys.color.seed")
+    /** Key colours the user set by hand, per palette (MaterialYou.KEY_PALETTES): "auto" or "#rrggbb". */
+    val COLOR_KEYS = mapOf('P' to ChoiceKey("sys.color.key.primary"), 'S' to ChoiceKey("sys.color.key.secondary"),
+        'T' to ChoiceKey("sys.color.key.tertiary"), 'N' to ChoiceKey("sys.color.key.neutral"), 'V' to ChoiceKey("sys.color.key.neutral-variant"))
+
+    /** "#rrggbb" as an opaque colour, else null ("wallpaper", "auto"). */
+    fun hexColor(s: String?): Int? = s?.takeIf { it.length == 7 && it[0] == '#' }?.substring(1)?.toLongOrNull(16)?.let { (0xFF000000 or it).toInt() }
+    fun hexOf(c: Int): String = "#%06x".format(c and 0xFFFFFF)
 
     private lateinit var appCtx: Context
     /** The active theme and the ones it is built on, the base first. */
@@ -505,23 +514,29 @@ object Design {
      * The palette colour [name] (an `android.R.color` field's name, `system_primary_dark`) in the chosen Material You style
      * and intensity ([MaterialYou]), cached until the palette, the style or the intensity changes.
      */
-    private fun paletteColor(name: String): Int? = palette.getOrPut(name) { youColor(name, myStyle, myIntensity) ?: NO_COLOR }.takeIf { it != NO_COLOR }
+    private fun paletteColor(name: String): Int? = palette.getOrPut(name) { youColor(name, myChoice) ?: NO_COLOR }.takeIf { it != NO_COLOR }
 
     /** Palette colour [name] in the current style (null: none: Android before 12). */
     fun systemPalette(name: String): Int? = paletteColor(name)
 
-    /** Palette colour [name] as style [style] at [intensity] would make it (the settings show a choice before it is applied). */
-    fun previewPalette(name: String, style: MaterialYou.Style, intensity: Float): Int? = youColor(name, style, intensity)
+    /** Palette colour [name] as [choice] would make it (the settings show a choice before it is applied). */
+    fun previewPalette(name: String, choice: MaterialYou.Choice): Int? = youColor(name, choice)
 
-    @Volatile private var myStyle = MaterialYou.Style.SYSTEM
-    @Volatile private var myIntensity = 1f
+    /** The wallpaper's main colour (what "wallpaper" makes the palette from), if there is one. */
+    fun wallpaperSeed(): Int? = seedColor()
+
+    @Volatile private var myChoice = MaterialYou.Choice(MaterialYou.Style.SYSTEM, 1f)
     @Volatile private var seed: Int? = null
     private val schemes = java.util.concurrent.ConcurrentHashMap<String, MaterialYou.Scheme>()
 
-    private fun youColor(name: String, style: MaterialYou.Style, intensity: Float): Int? {
-        if (style == MaterialYou.Style.SYSTEM) return systemColor(name)?.let { MaterialYou.scaleChroma(it, intensity) }
-        val s = seedColor() ?: return systemColor(name)
-        val scheme = schemes.getOrPut("${style.id}/$intensity/$s") { MaterialYou.scheme(s, style, intensity) }
+    private fun youColor(name: String, c: MaterialYou.Choice): Int? {
+        val own = MaterialYou.paletteOf(name)?.let { it in c.keys } == true
+        // The phone's own palette, unless the user's colour or a key colour of theirs makes this one.
+        if (c.style == MaterialYou.Style.SYSTEM && c.seed == null && !own) return systemColor(name)?.let { MaterialYou.scaleChroma(it, c.intensity) }
+        // A colour of one's own in "the phone's" style: the tonal one (the phone's palette comes from its wallpaper only).
+        val style = if (c.style == MaterialYou.Style.SYSTEM) MaterialYou.Style.TONAL else c.style
+        val s = c.seed ?: seedColor() ?: return systemColor(name)
+        val scheme = schemes.getOrPut("${c.id}/$s") { MaterialYou.scheme(s, style, c.intensity, c.keys) }
         return MaterialYou.color(scheme, name) ?: systemColor(name)
     }
 
@@ -534,9 +549,12 @@ object Design {
 
     /** The style and intensity in the design now (after a rebuild): the palette made again if they changed. */
     private fun followYouSettings() {
-        val st = (try { value(COLOR_STYLE.name) } catch (_: Throwable) { null } as? Value.Choice)?.option.let { MaterialYou.Style.of(it) }
+        fun choice(key: ChoiceKey) = (try { value(key.name) } catch (_: Throwable) { null } as? Value.Choice)?.option
+        val st = MaterialYou.Style.of(choice(COLOR_STYLE))
         val k = (try { value(COLOR_INTENSITY.name) } catch (_: Throwable) { null } as? Value.Number)?.v ?: 1f
-        if (st != myStyle || k != myIntensity) { myStyle = st; myIntensity = k; palette.clear() }
+        val keys = COLOR_KEYS.mapNotNull { (p, key) -> hexColor(choice(key))?.let { p to it } }.toMap()
+        val c = MaterialYou.Choice(st, k, hexColor(choice(COLOR_SEED)), keys)
+        if (c != myChoice) { myChoice = c; palette.clear() }
     }
 
     private fun systemColor(name: String): Int? {

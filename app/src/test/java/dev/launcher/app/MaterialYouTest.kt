@@ -38,6 +38,24 @@ class MaterialYouTest {
         assertTrue("$less < $more", less < more)
     }
 
+    @Test fun aKeyColourMakesOnlyItsPalette() {
+        val blue = 0xFF3478F6.toInt()
+        val plain = MaterialYou.scheme(orange, MaterialYou.Style.TONAL, 1f)
+        val keyed = MaterialYou.scheme(orange, MaterialYou.Style.TONAL, 1f, mapOf('T' to blue))
+        assertEquals(MaterialYou.toLch(blue).third, keyed.tertiary.hue, 0.5)
+        assertEquals(MaterialYou.toLch(blue).second, keyed.tertiary.chroma, 0.5)
+        assertEquals(plain.primary.hue, keyed.primary.hue, 0.001)
+        assertEquals(plain.neutral.chroma, keyed.neutral.chroma, 0.001)
+    }
+
+    @Test fun namesKnowTheirPalette() {
+        assertEquals('P', MaterialYou.paletteOf("system_accent1_500"))
+        assertEquals('V', MaterialYou.paletteOf("system_neutral2_100"))
+        assertEquals('T', MaterialYou.paletteOf("system_tertiary_container_dark"))
+        assertEquals('N', MaterialYou.paletteOf("system_surface_container_highest_light"))
+        assertEquals(null, MaterialYou.paletteOf("system_something_else"))
+    }
+
     @Test fun namesResolve() {
         val s = MaterialYou.scheme(orange, MaterialYou.Style.EXPRESSIVE, 1f)
         assertNotNull(MaterialYou.color(s, "system_accent1_500"))
