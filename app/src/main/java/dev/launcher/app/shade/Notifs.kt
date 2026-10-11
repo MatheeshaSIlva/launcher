@@ -6,10 +6,14 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.graphics.drawable.Icon
+import android.media.session.MediaController
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.Parcelable
+import android.os.SystemClock
 import android.os.UserHandle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -61,6 +65,8 @@ object Notifs {
         /** Its public version's title and text (what an app wants shown when its content is hidden), if it has one. */
         val publicTitle: CharSequence? = null,
         val publicText: CharSequence? = null,
+        /** A media notification's session (whether it still plays: [mediaLive]). */
+        val mediaToken: MediaSession.Token? = null,
     ) {
         /**
          * As the lock screen shows it when its content is hidden: the app's name (or its public version), "Notification",
@@ -111,10 +117,11 @@ object Notifs {
         }
         list.sortBy { order[it.key] ?: Int.MAX_VALUE }
         connected = true
+        watchMedia(s, list)
         publish(list)
     }
 
-    internal fun clear() { connected = false; publish(emptyList()) }
+    internal fun clear() { connected = false; watchMedia(null, emptyList()); publish(emptyList()) }
 
     private fun publish(list: List<Item>) {
         items = list
@@ -174,11 +181,15 @@ object Notifs {
             lockVisibility = if (lockVis != NotificationListenerService.Ranking.VISIBILITY_NO_OVERRIDE) lockVis else n.visibility,
             publicTitle = n.publicVersion?.extras?.getCharSequence(Notification.EXTRA_TITLE),
             publicText = n.publicVersion?.extras?.getCharSequence(Notification.EXTRA_TEXT),
+            mediaToken = mediaToken(x),
         )
     } catch (t: Throwable) {
         AppLog.log("[notifs] unreadable notification from ${sbn.packageName}: ${t.javaClass.simpleName}: ${t.message}")
         null
     }
+
+    @Suppress("DEPRECATION")
+    private fun mediaToken(x: android.os.Bundle): MediaSession.Token? = try { x.getParcelable(Notification.EXTRA_MEDIA_SESSION) as? MediaSession.Token } catch (_: Throwable) { null }
 
     @Suppress("DEPRECATION")
     private fun pendingExtra(x: android.os.Bundle, key: String): PendingIntent? = try { x.getParcelable(key) as? PendingIntent } catch (_: Throwable) { null }
@@ -209,6 +220,80 @@ object Notifs {
         item.importance >= NotificationManager.IMPORTANCE_HIGH && !item.suppressPeek && (!item.ongoing || item.urgent) && !item.summary &&
             (item.pkg != own || item.sbn.notification.channelId.let { it == dev.launcher.app.Badges.TEST_CHANNEL || it == dev.launcher.app.PopupStyle.CHANNEL }) &&
             (item.title != null || item.text != null)
+
+    // ------------------------------------------------------------------ media
+
+    /** A media notification's session, watched while the notification is there. */
+    private class MediaWatch(val controller: MediaController) {
+        var gone = false
+        var idleSeen = 0L
+        lateinit var callback: MediaController.Callback
+        fun until(now: Long): Long {
+            if (gone) return 0L
+            val s = try { controller.playbackState } catch (_: Throwable) { null }
+            if (Media.isPlaying(s?.state)) idleSeen = 0L else if (idleSeen == 0L) idleSeen = now
+            return Media.liveUntil(s, idleSeen, now)
+        }
+    }
+
+    private val watched = HashMap<MediaSession.Token, MediaWatch>()
+    private var mediaLiveKeys: Set<MediaSession.Token> = emptySet()
+    private val mediaExpire = Runnable { mediaCheck() }
+
+    /**
+     * Does [item]'s media still play (or paused not long ago)? A media notification can outlive what it played: Chrome
+     * keeps one for a tab whose session is gone (state NONE, inactive), and the stock shade hides such ones after a while
+     * (SystemUI's media timeout): ours do the same, at once when stopped, after [Media.IDLE_MS] when paused. Anything that
+     * is not media: true.
+     */
+    fun mediaLive(item: Item): Boolean {
+        val t = item.mediaToken ?: return true
+        return watched[t] == null || t in mediaLiveKeys
+    }
+
+    /** Watches the sessions of the media notifications in [list] (main thread); forgets the rest. */
+    private fun watchMedia(ctx: Context?, list: List<Item>) {
+        val tokens = list.mapNotNullTo(HashSet()) { it.mediaToken }
+        val it = watched.entries.iterator()
+        while (it.hasNext()) {
+            val (t, w) = it.next()
+            if (t !in tokens) { try { w.controller.unregisterCallback(w.callback) } catch (_: Throwable) { }; it.remove() }
+        }
+        if (ctx != null) for (t in tokens) if (t !in watched) {
+            val w = try { MediaWatch(MediaController(ctx, t)) } catch (_: Throwable) { continue }
+            w.callback = object : MediaController.Callback() {
+                override fun onPlaybackStateChanged(state: PlaybackState?) { mediaCheck() }
+                override fun onSessionDestroyed() { w.gone = true; mediaCheck() }
+            }
+            try { w.controller.registerCallback(w.callback, main) } catch (_: Throwable) { }
+            watched[t] = w
+        }
+        mediaLiveKeys = liveNow()
+    }
+
+    /** Which watched sessions are live now; schedules the next pause running out. */
+    private fun liveNow(): Set<MediaSession.Token> {
+        val now = SystemClock.elapsedRealtime()
+        var next = Long.MAX_VALUE
+        val live = HashSet<MediaSession.Token>()
+        for ((t, w) in watched) {
+            val u = w.until(now)
+            if (u > now) { live += t; if (u < next) next = u }
+        }
+        main.removeCallbacks(mediaExpire)
+        if (next != Long.MAX_VALUE) main.postDelayed(mediaExpire, next - now + 50)
+        return live
+    }
+
+    /** A session changed (or a pause ran out): if what is live changed, the shade hears it as a change of the list. */
+    private fun mediaCheck() {
+        val live = liveNow()
+        if (live == mediaLiveKeys) return
+        val gone = watched.filterKeys { it in mediaLiveKeys && it !in live }.values.map { it.controller.packageName }
+        if (gone.isNotEmpty()) AppLog.log("[notifs] media no longer playing: ${gone.joinToString()}")
+        mediaLiveKeys = live
+        publish(items)
+    }
 
     // ------------------------------------------------------------------ what the status bar shows
 

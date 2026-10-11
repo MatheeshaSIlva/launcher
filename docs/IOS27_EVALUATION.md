@@ -55,8 +55,11 @@ and checked on the emulator only; nothing here has been on the S24 yet.
 
 ## Banners
 
-Ours are a solid light platter; iOS's are clear glass showing what is behind. Over an app nothing behind is known to us
-(One UI blurs only whole screens, never a rectangle), so they stay solid; their size, place and motion match.
+iOS's are glass showing what is behind. Ours (2026-10-11): the theme's frosted glass drawn whole over the blurred picture of
+what is behind (over home the wallpaper, over an app its latest picture from the task snapshot; until it comes, the app's
+usual colour); when the window behind changes (an app opens or closes under a banner) the glass fades to the new picture
+(`motion.banner.app-fade`). One UI's live blur under them (`comp.banner.system-blur`) is off for iOS 27: on the S24
+banners all but vanished during app opens and closes. Size, place and motion match iOS's.
 
 ## Home (seen in passing)
 

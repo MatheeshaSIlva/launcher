@@ -75,11 +75,13 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     }
 
     /**
-     * The system blurs what is behind a banner live (One UI: [dev.launcher.app.design.SamsungBlur]): its glass draws only its
-     * own layers over that. Else the glass is drawn over our own blurred picture of what is behind (the wallpaper, the
-     * app's latest picture), which does not move with what is behind.
+     * The system blurs what is behind a banner live (One UI: [dev.launcher.app.design.SamsungBlur]) when the theme asks for
+     * it ([SYSTEM_BLUR]): its glass draws only its own layers over that. Else (iOS 27: on the S24 that blur dropped out while
+     * apps opened and closed, the banners all but vanishing, and it did not look like iOS) the glass is drawn whole over our
+     * own blurred picture of what is behind (the wallpaper, the app's latest picture), as Notification Center's platters.
      */
-    private var live = dev.launcher.app.design.SamsungBlur.available
+    private var liveFailed = false
+    private val live get() = !liveFailed && dev.launcher.app.design.SamsungBlur.available && Design.num(SYSTEM_BLUR) > 0.5f
 
     private val painter = NotifPainter(ctx, 3) { for (s in all) s.card.invalidate() }
     /** The renderer of the banners' glass (they draw on the shade's thread, one at a time). */
@@ -160,21 +162,14 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
                 // rims and shadow over it.
                 p.drawOverSystemBlur(c, Design.material(MATERIAL), w, s.h, radius(s))
             } else if (p != null) {
-                // Over home: the wallpaper, blurred to the glass's frost, where the banner rests. Over an app: its latest
-                // picture, blurred the same way, once it has come (a moment after the banner: until then the app's usual
-                // background colour, which the glass then fades from).
-                val home = if (host.overHome()) wallpaperFrost() else null
-                val app = if (home == null) appImage else null
-                p.setBackdrop(home, Design.color(BEHIND) or (0xFF shl 24))
-                val dim = Appearance.wallpaperDim
-                val under = if (home != null && dim > 0.001f) listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(0xFF000000.toInt(), 0xFF000000.toInt()), dim, dim, dev.launcher.app.design.Blend.NORMAL)) else emptyList()
-                val f = if (app == null) 0f else ((android.os.SystemClock.uptimeMillis() - appImageAt).toFloat() / appFade.get().durationMs).coerceIn(0f, 1f)
-                if (f < 1f) p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, under = under)
-                if (app != null) {
-                    p.setBackdrop(app, Design.color(BEHIND) or (0xFF shl 24))
-                    p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, alpha = appFade.get().at(f).coerceIn(0f, 1f))
-                    if (f < 1f) postInvalidateOnAnimation()
-                }
+                // What is behind ([behind]): over home the wallpaper, over an app its latest picture, both blurred to the
+                // glass's frost (until an app's picture has come, its usual background colour). When that changes (a
+                // picture came, an app opened or closed under the banner) the glass fades from the one to the other.
+                val was = behindWas
+                val f = if (was == null) 1f else ((android.os.SystemClock.uptimeMillis() - behindAt).toFloat() / appFade.get().durationMs).coerceIn(0f, 1f)
+                if (was != null && f < 1f) drawGlass(c, p, s, w, was, 1f)
+                drawGlass(c, p, s, w, behind, if (was == null || f >= 1f) 1f else appFade.get().at(f).coerceIn(0f, 1f))
+                if (was != null) { if (f < 1f) postInvalidateOnAnimation() else if (behindWas === was) behindWas = null }
             } else {
                 fill.color = Design.color(FLAT)
                 r.set(0f, 0f, w, s.h)
@@ -190,6 +185,15 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             for (i in s.buttons.indices) drawButton(c, s, i)
             c.restore()
         }
+    }
+
+    /** A banner's whole glass over [b] (the wallpaper's frost, an app's picture, or the app's usual colour). */
+    private fun drawGlass(c: Canvas, p: MaterialPainter, s: Shown, w: Float, b: Behind, alpha: Float) {
+        val home = if (b.home) wallpaperFrost() else null
+        p.setBackdrop(home ?: b.app, Design.color(BEHIND) or (0xFF shl 24))
+        val dim = Appearance.wallpaperDim
+        val under = if (home != null && dim > 0.001f) listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(0xFF000000.toInt(), 0xFF000000.toInt()), dim, dim, dev.launcher.app.design.Blend.NORMAL)) else emptyList()
+        p.draw(c, Design.material(MATERIAL), w, s.h, radius(s), margin(), top(), 1f, alpha = alpha, under = under)
     }
 
     private fun drawButton(c: Canvas, s: Shown, i: Int) {
@@ -338,7 +342,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         s.plateRadius = radius
         s.plateTint = tintNow
         if (radius <= 0 && (tintNow ushr 24) == 0) dev.launcher.app.design.SamsungBlur.clear(pl)
-        else if (!dev.launcher.app.design.SamsungBlur.set(pl, radius, radius(s), tintNow)) live = false
+        else if (!dev.launcher.app.design.SamsungBlur.set(pl, radius, radius(s), tintNow)) liveFailed = true
     }
 
     private fun drop(s: Shown) {
@@ -385,32 +389,57 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
 
     private val wallpaperChanged: () -> Unit = { wallpaperFrost() }
 
-    /** The app in front's picture, blurred to the glass's frost, for banners over it (see [Host.appBackdrop]). */
-    private var appImage: dev.launcher.app.design.BackdropImage? = null
-    private var appImageAt = 0L
+    /** What a banner's glass shows behind it: the wallpaper (over home) or an app's blurred picture (null: its usual colour). */
+    private class Behind(val home: Boolean, val app: dev.launcher.app.design.BackdropImage?)
+
+    /** What is behind now, what it was before (fading out since [behindAt]; null: no fade). */
+    private var behind = Behind(false, null)
+    private var behindWas: Behind? = null
+    private var behindAt = 0L
     private var appAsk = 0
 
     private var backdropLogs = 0
 
-    private fun askAppBackdrop() {
+    /** Behind the banners is now [b]: shown banners fade to it, one still waiting to come in comes in on it. */
+    private fun behindNow(b: Behind) {
+        val visible = all.any { it !== entering }
+        behindWas = if (visible) behind else null
+        behind = b
+        behindAt = android.os.SystemClock.uptimeMillis()
+        for (s in all) s.card.invalidate()
+    }
+
+    /**
+     * Asks what is behind the banners (a banner came, or the window in front changed under them): over home the wallpaper's
+     * frost, over an app its latest picture (which may come twice: a kept one, then a fresher one). [fresh]: no banner
+     * shows yet, nothing to fade from (until the picture comes, the app's usual colour).
+     */
+    private fun askBackdrop(fresh: Boolean) {
         val ask = ++appAsk
-        appImage = null
         val t0 = android.os.SystemClock.uptimeMillis()
         if (host.overHome()) {
+            if (fresh) { behind = Behind(true, null); behindWas = null } else if (!behind.home) behindNow(Behind(true, null))
             if (backdropLogs < 8) { backdropLogs++; dev.launcher.app.AppLog.log("[banner] over home: wallpaper frost ${if (wallpaperFrost() != null) "ready" else "NOT ready (plain fallback until it is)"}") }
             return
         }
+        if (fresh) { behind = Behind(false, null); behindWas = null }
         val m = Design.material(MATERIAL)
         val sigma = dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * Appearance.dark, u)
         host.appBackdrop(dev.launcher.app.design.Blur.renderRadius(sigma)) { img ->
             if (backdropLogs < 8 && ask == appAsk) { backdropLogs++; dev.launcher.app.AppLog.log("[banner] over an app: its blurred picture ${if (img != null) "after ${android.os.SystemClock.uptimeMillis() - t0} ms" else "NONE (plain fallback)"}") }
-            if (ask != appAsk || img == null) return@appBackdrop
-            // Before the banner has come in: no fade from the fallback, it comes in as glass.
-            if (appImage == null) appImageAt = android.os.SystemClock.uptimeMillis() - if (entering != null) appFade.get().durationMs else 0L
+            if (ask != appAsk) return@appBackdrop
+            // No picture (a secure app): its usual colour, but only instead of home's wallpaper (an older picture of the
+            // app stays rather than going flat).
+            if (img == null) { if (behind.home) behindNow(Behind(false, null)); return@appBackdrop }
+            behindNow(Behind(false, img))
             entering?.let { s -> post { enter(s) } }
-            appImage = img
-            for (s in all) s.card.invalidate()
         }
+    }
+
+    /** The window in front changed (an app opened or closed under the banners): their glass takes up what is behind now. */
+    fun frontChanged() {
+        if (live || all.none { !it.leaving }) return
+        askBackdrop(fresh = false)
     }
 
     /** A light/dark change or a token edit: every banner's layer is drawn again (and laid out, if its size changed). */
@@ -451,7 +480,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         // A ringing banner stays: what does not ring waits in Notification Center.
         if (cur != null && cur.item.urgent && !item.urgent) return
         cur?.let { leave(it, up = true, velocity = -1200f) }
-        if (!live) askAppBackdrop()
+        if (!live) askBackdrop(fresh = all.isEmpty())
         val s = Shown(item)
         s.height.snapTo(heightOf(s))
         all += s
@@ -463,7 +492,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         // [BACKDROP_WAIT_MS]; without a picture it comes in as before.
         // Over home the same for the wallpaper's frost (being made: just after a start or a new wallpaper).
         val overHome = host.overHome()
-        if (!live && (if (overHome) dev.launcher.app.Wallpaper.current != null && wallpaperFrost() == null else appImage == null)) {
+        if (!live && (if (overHome) dev.launcher.app.Wallpaper.current != null && wallpaperFrost() == null else behind.app == null)) {
             entering = s
             removeCallbacks(enterNow)
             postDelayed(enterNow, BACKDROP_WAIT_MS)
@@ -670,7 +699,8 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         const val SHOW_MS = 7000L
         // The banner's tokens (`comp.banner.*`; values and sources in assets/themes/ios27.json).
         val MATERIAL = MaterialKey("comp.banner.material")
-        /** A banner over an app: its glass fades from the app's flat colour to the app's picture (`motion.banner.app-fade`). */
+        val SYSTEM_BLUR = NumberKey("comp.banner.system-blur")
+        /** What is behind a banner changed (an app's picture came, an app opened or closed under it): its glass fades from the one to the other (`motion.banner.app-fade`). */
         private val appFade = dev.launcher.app.motion.RoleTiming(dev.launcher.app.motion.MotionTokens.BANNER_APP_FADE)
         /** How long a banner over an app waits for its glass's picture before it comes in on the plain fallback (ms). */
         const val BACKDROP_WAIT_MS = 150L

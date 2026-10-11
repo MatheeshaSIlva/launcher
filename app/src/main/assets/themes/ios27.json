@@ -1515,6 +1515,10 @@
    "ref": "sys.color.label.secondary",
    "src": "measured:iOS 27 Simulator run 4 (the time in grey)"
   },
+  "comp.banner.system-blur": {
+   "factor": 0,
+   "src": "judged:1 lets One UI's own live blur sit under a banner's glass; off (Matheesha, S24: banners went missing during app opens and closes and their background did not look like iOS): our own glass over the blurred picture of what is behind, as Notification Center's"
+  },
   "comp.cc.accent.accessibility": {
    "ref": "ref.color.accents.blue",
    "src": "judged:the iOS colour of this control (blue)"

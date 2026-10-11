@@ -1031,7 +1031,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     private val frontSettled = Runnable {
-        if (!attached || !Notifs.connected) return@Runnable
+        if (!attached) return@Runnable
+        // Banners' glass takes up what is behind them now (an app opened or closed under them).
+        banner.frontChanged()
+        if (!Notifs.connected) return@Runnable
         val shown = Notifs.items.firstOrNull { it.key == banner.ringing }
         if (shown != null) {
             if (ownScreenInFront(shown)) {

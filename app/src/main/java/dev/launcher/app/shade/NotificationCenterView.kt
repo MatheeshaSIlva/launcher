@@ -451,7 +451,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         // Cleared here and confirmed by the system since: forgotten.
         cleared.keys.retainAll(Notifs.items.mapTo(HashSet()) { it.key })
         var items = Notifs.items.filter { !it.summary || Notifs.items.none { o -> o !== it && o.groupKey == it.groupKey && !o.summary } }
-            .filter { !it.media || it.contentIntent != null && !host.media.active }
+            // Media shows as the player; a media notification only when no player shows and it still plays (or paused
+            // not long ago): Chrome keeps one for a tab whose session is gone.
+            .filter { !it.media || it.contentIntent != null && !host.media.active && Notifs.mediaLive(it) }
             .filter { it.key !in cleared }
         // Over the lock screen: what its settings allow (none at all, or their content hidden), as the stock lock screen.
         if (lockedNow) {

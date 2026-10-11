@@ -29,6 +29,10 @@ class Media(private val ctx: Context, private val handler: Handler) {
     private var position = 0L
     private var positionAt = 0L
     private var speed = 1f
+    /** Until when (elapsedRealtime) it is worth a player ([liveUntil]), and when we first saw it stop playing. */
+    private var until = 0L
+    private var idleSeen = 0L
+    private val expire = Runnable { changed() }
 
     private val listeners = ArrayList<() -> Unit>()
     fun addListener(l: () -> Unit) { listeners += l }
@@ -94,11 +98,19 @@ class Media(private val ctx: Context, private val handler: Handler) {
         position = st?.position ?: 0L
         positionAt = st?.lastPositionUpdateTime?.takeIf { it > 0 } ?: SystemClock.elapsedRealtime()
         speed = st?.playbackSpeed?.takeIf { it > 0f } ?: 1f
+        val now = SystemClock.elapsedRealtime()
+        if (c?.packageName != pkg || isPlaying(st?.state)) idleSeen = 0L
+        if (!isPlaying(st?.state) && idleSeen == 0L) idleSeen = now
         pkg = c?.packageName
+        until = liveUntil(st, idleSeen, now)
+        // Paused: the player goes when the pause has lasted long enough.
+        handler.removeCallbacks(expire)
+        if (until in (now + 1) until Long.MAX_VALUE) handler.postDelayed(expire, until - now + 50)
         changed()
     }
 
-    val active get() = controller != null && (title != null || playing)
+    /** Worth a player: something plays, or paused not long ago ([IDLE_MS]); stopped, or paused for long, it goes. */
+    val active get() = controller != null && (title != null || playing) && SystemClock.elapsedRealtime() < until
 
     fun playPause() {
         val t = controller?.transportControls ?: return
@@ -122,5 +134,30 @@ class Media(private val ctx: Context, private val handler: Handler) {
         }
         if (dev.launcher.app.Unlock.locked(ctx)) { dev.launcher.app.Unlock.then(ctx, "open ${c.packageName}") { go() }; return true }
         return go()
+    }
+
+    companion object {
+        /** Paused media goes from the shade after this long (Android's own: SystemUI's media timeout, 10 minutes). */
+        const val IDLE_MS = 10 * 60_000L
+
+        fun isPlaying(s: Int?) = when (s) {
+            PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING, PlaybackState.STATE_CONNECTING,
+            PlaybackState.STATE_FAST_FORWARDING, PlaybackState.STATE_REWINDING,
+            PlaybackState.STATE_SKIPPING_TO_NEXT, PlaybackState.STATE_SKIPPING_TO_PREVIOUS,
+            PlaybackState.STATE_SKIPPING_TO_QUEUE_ITEM -> true
+            else -> false
+        }
+
+        /**
+         * Until when (elapsedRealtime) media in state [s] is worth showing: while it plays, always; paused, [IDLE_MS]
+         * after the pause (the state's own time, else [idleSeen], when we first saw it stop); stopped, failed, never
+         * started or gone (Chrome keeps a notification for a tab whose session is gone: state NONE), not at all.
+         */
+        fun liveUntil(s: PlaybackState?, idleSeen: Long, now: Long): Long = when {
+            s == null -> 0L
+            isPlaying(s.state) -> Long.MAX_VALUE
+            s.state == PlaybackState.STATE_PAUSED -> (s.lastPositionUpdateTime.takeIf { it in 1..now } ?: idleSeen) + IDLE_MS
+            else -> 0L
+        }
     }
 }
