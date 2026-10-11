@@ -325,6 +325,13 @@ object GestureNav {
         }
         // What is under the status bar on home changed (the App Library opened, the appearance changed): follow at once.
         HomeBridge.onStatusDarkChanged = { nav.post { if (homeVisible) refreshAppearance() } }
+        // The settings' picture of home has our bar on top, as it shows there.
+        HomeBridge.statusBarPicture = { then ->
+            nav.post {
+                val b = try { statusBar?.pictureOnHome(HomeBridge.homeStatusDark) } catch (t: Throwable) { AppLog.log("[nav] no picture of the bar: ${t.message}"); null }
+                main.post { then(b) }
+            }
+        }
         // The app in front is the one a close will fly into home: home keeps a picture without its icon ready.
         HomeBridge.likelyClosing = { if (homeVisible) null else lastFrontPkg }
     }

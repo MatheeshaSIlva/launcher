@@ -96,6 +96,12 @@ import dev.launcher.app.motion.mover
 import dev.launcher.app.theme.Appearance
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.animateContentSize
 
 /**
  * The settings app's tokens: its own namespace (`comp.settings.*`, aliases into the shared ones), so the settings can
@@ -272,6 +278,14 @@ private object HomePictures {
         for ((id, b) in found) if (id !in byTheme) byTheme[id] = b
     }
 
+    /** Home's picture [home] with the status bar's [bar] across its top, on the GPU (any thread but main: a copy back). */
+    fun withBar(home: android.graphics.Bitmap, bar: android.graphics.Bitmap): android.graphics.Bitmap = try {
+        val sw = home.copy(android.graphics.Bitmap.Config.ARGB_8888, true) ?: home
+        val k = sw.width.toFloat() / bar.width
+        android.graphics.Canvas(sw).apply { scale(k, k); drawBitmap(bar, 0f, 0f, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)) }
+        (sw.copy(android.graphics.Bitmap.Config.HARDWARE, false) ?: sw).also { if (it !== sw) sw.recycle() }
+    } catch (t: Throwable) { dev.launcher.app.AppLog.log("[settings] no bar on home's picture: ${t.message}"); home }
+
     /** [b] is home in theme [id] now: kept, and saved (at half size) off the main thread. */
     fun keep(ctx: android.content.Context, id: String, b: android.graphics.Bitmap) {
         byTheme[id] = b
@@ -312,19 +326,11 @@ private class Studio {
     var built by mutableIntStateOf(0)
     /** Each page's scroll (kept while the settings are open: a page comes back where it was). */
     val scrolls = Part.entries.associateWith { IosScrollState() }
-    /** The part picked on the picture of home (the rest of the picture dims, its row on Look lights up), and how far. */
-    var picked by mutableStateOf<Element?>(null)
-    val pick = Animatable(0f)
-    /** Each part's row on Look, from the top of the page's content (where the page glides to when the part is picked). */
-    val rowY = HashMap<Element, Float>()
+    /** Where each element's section starts on Layouts (from the top of its content): the picture focuses on the one read. */
+    val sections = androidx.compose.runtime.mutableStateMapOf<Element, Float>()
 }
 
 private val LocalStudio = staticCompositionLocalOf<Studio?> { null }
-
-/** Where a page's content is (its rows measure themselves from it, whatever the scroll). */
-private class ContentPlace { var at: LayoutCoordinates? = null }
-
-private val LocalContentPlace = staticCompositionLocalOf { ContentPlace() }
 
 /** Where things are, in pixels: the sheet's two tops (at rest, a page open), the picture of home above it. */
 private class Geometry(look: Look, val statusPx: Float, val navPx: Float) {
@@ -391,38 +397,13 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                 }
             }
         }
-        val pickSpec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.APPEAR))
-        val unpick: () -> Unit = remember(st, scope) {
-            {
-                if (st.picked != null) scope.launch {
-                    try { st.pick.animateTo(0f, pickSpec.value); st.picked = null } catch (_: kotlinx.coroutines.CancellationException) { }
-                }
-            }
-        }
         val close: (Float) -> Unit = remember(st, scope) {
             { velocity ->
-                unpick()
                 scope.launch {
                     try {
                         st.p.animateTo(0f, spec.value, velocity)
                         st.open = null
                     } catch (_: kotlinx.coroutines.CancellationException) { }   // opened again on the way: it stays open
-                }
-            }
-        }
-        // A part tapped on the picture: Look opens (from the tiles), glides to its row and lights it up; the same part
-        // again lets it go.
-        val pickPart: (Element) -> Unit = remember(st, scope) {
-            { e ->
-                if (st.picked == e) unpick() else {
-                    st.picked = e
-                    scope.launch { try { st.pick.animateTo(1f, pickSpec.value) } catch (_: kotlinx.coroutines.CancellationException) { } }
-                    if (st.open == null) open(Part.LOOK)
-                    if (st.open == Part.LOOK) st.rowY[e]?.let { y ->
-                        val sc = st.scrolls.getValue(Part.LOOK)
-                        sc.moving = true
-                        sc.scroller.animateTo(y - 34f * g.unit)
-                    }
                 }
             }
         }
@@ -445,19 +426,13 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         val moving by remember { androidx.compose.runtime.derivedStateOf { st.p.isRunning || bar.isRunning || st.scrolls.values.any { it.moving } } }
         CompositionLocalProvider(LocalDraft provides draft, LocalStudio provides st) {
             Box(Modifier.fillMaxSize().then(if (moving) Modifier.clearAndSetSemantics { } else Modifier).background(look.color(SettingsTokens.BACKGROUND))) {
-                HomePicture(st, g, bar, pickPart)
+                HomePicture(st, g, bar)
                 Header(st, g) { close(0f) }
                 Sheet(st, g, bar, open, close)
                 ApplyBar(draft, g, bar) { draft.apply(ctx) }
             }
         }
     }
-}
-
-/** Where part [e] is on a picture of home [size] big (the status bar's band, or home below it). */
-private fun partRect(e: Element, size: Size, statusFrac: Float): Rect {
-    val bar = size.height * statusFrac
-    return if (e == Element.STATUS_BAR) Rect(0f, 0f, size.width, bar) else Rect(0f, bar, size.width, size.height)
 }
 
 /**
@@ -473,21 +448,53 @@ private fun BackToTiles(st: Studio, close: (Float) -> Unit, draft: Draft, leave:
     }
 }
 
-/** Home as it is now, in the phone's shape; a new picture (after any change) fades in over the last. */
+/**
+ * What part of the phone the picture shows, as fractions of the screen: all of it, or the part a page is about (the
+ * element whose section is being read on Layouts). Matheesha: the elements were too small to see on the picture.
+ */
+private fun focusOf(e: Element?, placement: String, statusFrac: Float): Rect = when (e) {
+    // The top of the screen, wide: the bar at close to its real size.
+    Element.STATUS_BAR -> Rect(0f, 0f, 1f, (statusFrac * 3f).coerceIn(0.08f, 0.16f))
+    // Where it is pulled from.
+    Element.SHADE -> Rect(0f, 0f, 1f, 0.22f)
+    // The bottom edge the home swipe starts from.
+    Element.RECENTS -> Rect(0f, 0.8f, 1f, 1f)
+    Element.DRAWER -> when (placement) {
+        "swipe-up" -> Rect(0f, 0.55f, 1f, 1f)
+        else -> Rect(0f, 0f, 1f, 1f)
+    }
+    else -> Rect(0f, 0f, 1f, 1f)
+}
+
+/**
+ * Home as it is now, in the phone's shape, above the sheet; a new picture (after any change) fades in over the last.
+ * It focuses on the part a page is about: the frame takes that part's shape (a wide strip for the status bar) and the
+ * picture zooms into it, one spring moving both. Drawn in one pass (no layer moves: see [SettingsApp]); it takes no
+ * touches.
+ */
 @Composable
-private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>, pickPart: (Element) -> Unit) {
+private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     val look = LocalLook.current
     val ctx = LocalContext.current
-    val measurer = rememberTextMeasurer()
-    val accent = look.color(SettingsTokens.ACCENT)
-    val tagStyle = look.text(SettingsTokens.CHIP_TEXT, look.color(SettingsTokens.ACCENT_LABEL))
-    val tags = remember(look) { Element.entries.associateWith { measurer.measure(it.title, tagStyle) } }
-    // The status bar's band on the picture (a little taller to tap), the rest is home.
     val statusFrac = g.statusPx / g.h
+    val draft = LocalDraft.current
+    // What it focuses on: on Layouts, the element whose section is at the top of what shows (once the page has come).
+    val focused by remember {
+        androidx.compose.runtime.derivedStateOf {
+            if (st.open != Part.LAYOUTS || st.p.targetValue < 0.5f) null else {
+                val at = st.scrolls.getValue(Part.LAYOUTS).offset + 160f * g.unit
+                Element.entries.filter { (st.sections[it] ?: Float.MAX_VALUE) <= at }.maxByOrNull { st.sections[it] ?: 0f }
+                    ?: Element.entries.first()
+            }
+        }
+    }
+    val target = focusOf(focused, focused?.let { draft.placement(it) } ?: "", statusFrac)
+    val crop = remember { Animatable(Rect(0f, 0f, 1f, 1f), Rect.VectorConverter) }
+    LaunchedEffect(target) { crop.animateTo(target, look.motion(MotionTokens.SETTINGS_FOCUS)) }
     // While Motion is open, an app opens and closes on the picture, again and again, on the chosen preset's own curves
     // (0: closed, 1: open; below 0: no demo).
     val demo = remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
-    val demoPreset = LocalDraft.current.motionId()
+    val demoPreset = draft.motionId()
     val motionOpen by remember { androidx.compose.runtime.derivedStateOf { st.open == Part.MOTION && !st.p.isRunning } }
     LaunchedEffect(motionOpen, demoPreset) {
         demo.floatValue = -1f
@@ -527,14 +534,23 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>, pick
     }
     LaunchedEffect(look.version, resumed) {
         kotlinx.coroutines.delay(150)
-        val next = HomeBridge.home?.pictureNow() ?: return@LaunchedEffect
+        // Home may not be up yet (the app just started with the settings in front): asked again for a few seconds.
+        var home: android.graphics.Bitmap? = null
+        for (i in 0 until 10) {
+            home = HomeBridge.home?.pictureNow()
+            if (home != null) break
+            kotlinx.coroutines.delay(500)
+        }
+        if (home == null) return@LaunchedEffect
+        // With our status bar on top, as the phone shows home (its picture has none: the bar is a window of its own).
+        val bar = HomeBridge.statusBarPicture()
+        val next = if (bar == null) home else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { HomePictures.withBar(home, bar) }
         HomePictures.keep(ctx, Design.themeId, next)
         latest = next
     }
     // The theme chosen and not yet applied shows as home looked in it (if the settings have seen it), else home as it is;
     // with no home to picture yet (the app just started), as it last looked in this theme.
     LaunchedEffect(Unit) { HomePictures.load(ctx) }
-    val draft = LocalDraft.current
     val wanted = draft.theme?.let { HomePictures.byTheme[it] } ?: latest ?: HomePictures.byTheme[Design.themeId]
     LaunchedEffect(wanted) {
         if (wanted == null || wanted === shown) return@LaunchedEffect
@@ -544,102 +560,95 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>, pick
         fade.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE))
         before = null
     }
-    val rim = look.color(SettingsTokens.PREVIEW_RIM)
+    val rim = look.color(SettingsTokens.PREVIEW_RIM).toArgb()
     val rimW = look.pt(SettingsTokens.PREVIEW_RIM_WIDTH)
-    val shadow = look.color(SettingsTokens.PREVIEW_SHADOW)
-    val page = look.color(SettingsTokens.BACKGROUND)
-    val corner = g.previewW * Design.num(SettingsTokens.PREVIEW_CORNER)
-    val shadowPaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
-    Box(
-        Modifier
-            .offset { IntOffset(((g.w - g.previewW) / 2f).roundToInt(), g.previewTop.roundToInt()) }
-            .size(look.dp(g.previewW), look.dp(g.previewH))
-            .graphicsLayer {
-                val s = g.previewScale(st.p.value, bar.value)
-                scaleX = s; scaleY = s
-                transformOrigin = TransformOrigin(0.5f, 0f)
-            }
-            .drawBehind {
-                // A soft shadow (cast by a shape in the page's own colour, so only the shadow shows), then the phone's edge.
-                shadowPaint.color = page.toArgb()
-                shadowPaint.setShadowLayer(18f * g.unit, 0f, 8f * g.unit, shadow.toArgb())
-                drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, corner, corner, shadowPaint) }
-                drawRoundRect(rim, Offset(-rimW, -rimW), Size(size.width + rimW * 2f, size.height + rimW * 2f), CornerRadius(corner + rimW))
-            }
-            // The picked part's name in a tag beside the picture.
-            .drawWithContent {
-                drawContent()
-                val e = st.picked ?: return@drawWithContent
-                val k = st.pick.value.coerceIn(0f, 1f)
-                if (k <= 0f) return@drawWithContent
-                val r = partRect(e, size, statusFrac)
-                val t = tags[e] ?: return@drawWithContent
-                val padX = 10f * g.unit
-                val padY = 5f * g.unit
-                val w = t.size.width + padX * 2f
-                val h = t.size.height + padY * 2f
-                val x = size.width + 10f * g.unit + (1f - k) * 8f * g.unit
-                val y = (r.center.y - h / 2f).coerceIn(0f, size.height - h)
-                drawRoundRect(accent.copy(alpha = accent.alpha * k), Offset(x, y), Size(w, h), CornerRadius(h / 2f))
-                drawText(t, topLeft = Offset(x + padX, y + padY), alpha = k)
-            }
-            .clip(RoundedCornerShape(look.dp(corner)))
-            // Picked: the rest dims, the part is outlined in the accent. And Motion's demo: an app opening over home.
-            .drawWithContent {
-                drawContent()
-                val d = demo.floatValue
-                if (d >= 0f) {
-                    val k = d.coerceIn(-0.1f, 1.1f)
-                    val icon = size.width * 0.17f
-                    val from = Rect(size.width * 0.5f - icon / 2f, size.height * 0.6f, size.width * 0.5f + icon / 2f, size.height * 0.6f + icon)
-                    val r = Rect(from.left * (1f - k), from.top * (1f - k), from.right + (size.width - from.right) * k, from.bottom + (size.height - from.bottom) * k)
-                    // Home steps back a little as the app comes up, as it does on the phone.
-                    drawRect(Color.Black.copy(alpha = 0.25f * k.coerceIn(0f, 1f)))
-                    val c = icon * 0.23f + (corner - icon * 0.23f) * k.coerceIn(0f, 1f)
-                    drawRoundRect(appFill, r.topLeft, r.size, CornerRadius(c))
-                }
-                val e = st.picked ?: return@drawWithContent
-                val k = st.pick.value.coerceIn(0f, 1f)
-                if (k <= 0f) return@drawWithContent
-                val r = partRect(e, size, statusFrac)
-                val dim = Color.Black.copy(alpha = 0.45f * k)
-                if (r.top > 0f) drawRect(dim, Offset.Zero, Size(size.width, r.top))
-                if (r.bottom < size.height) drawRect(dim, Offset(0f, r.bottom), Size(size.width, size.height - r.bottom))
-                val inset = 3f * g.unit
-                drawRoundRect(accent.copy(alpha = accent.alpha * k), Offset(r.left + inset, r.top + inset),
-                    Size(r.width - inset * 2f, r.height - inset * 2f), CornerRadius(minOf(corner, r.height / 2f) * 0.8f),
-                    style = Stroke(2.5f * g.unit))
-            }
-            .pointerInput(Unit) {
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    while (true) {
-                        val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
-                        if (c.isConsumed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop) return@awaitEachGesture
-                        if (!c.pressed) break
-                    }
-                    if (st.p.isRunning) return@awaitEachGesture
-                    val f = down.position.y / size.height
-                    pickPart(if (f < maxOf(statusFrac * 1.4f, 0.06f)) Element.STATUS_BAR else Element.HOME)
-                }
-            },
-    ) {
-        val b = before
-        val s = shown
-        if (b != null) Image(b.asImageBitmap(), null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize())
-        if (s != null) Image(s.asImageBitmap(), "Your home screen", contentScale = ContentScale.FillBounds,
-            modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fade.value })
-        else look.wallpaper?.let { wp ->
-            // Home has not shown since the app started: its wallpaper at least.
-            Canvas(Modifier.fillMaxSize()) {
-                drawIntoCanvas { c ->
-                    val m = wp.matrix(look.screenW, look.screenH)
-                    m.postScale(size.width / look.screenW, size.height / look.screenH)
-                    c.nativeCanvas.drawBitmap(wp.bitmap, m, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
-                }
-            }
+    val shadow = look.color(SettingsTokens.PREVIEW_SHADOW).toArgb()
+    val page = look.color(SettingsTokens.BACKGROUND).toArgb()
+    val cornerFrac = Design.num(SettingsTokens.PREVIEW_CORNER)
+    val margin = look.pt(SettingsTokens.MARGIN)
+    val wallpaper = look.wallpaper
+    val paints = remember {
+        object {
+            val shadow = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            val rim = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+            val image = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+            val path = android.graphics.Path()
+            val frame = android.graphics.RectF()
+            val src = android.graphics.Rect()
+            val dst = android.graphics.RectF()
+            val m = android.graphics.Matrix()
         }
     }
+    Box(Modifier.fillMaxSize().semantics { contentDescription = "Your home screen" }.drawBehind {
+        val p = st.p.value
+        val c = crop.value
+        val cw = c.width.coerceAtLeast(0.01f)
+        val ch = c.height.coerceAtLeast(0.01f)
+        // The room between the header and the sheet (as the sheet rises the picture shrinks, keeping to it), and the
+        // frame: the focus's shape fitted into it, in its middle.
+        val availH = (g.top(p, bar.value) - g.previewTop - 22f * g.unit).coerceAtLeast(60f * g.unit)
+        val availW = g.w - margin * 2f
+        val aspect = (cw * g.w) / (ch * g.h)
+        var fw = availW
+        var fh = fw / aspect
+        if (fh > availH) { fh = availH; fw = fh * aspect }
+        val fx = (g.w - fw) / 2f
+        val fy = g.previewTop + (availH - fh) / 2f
+        // Phone pixels to frame pixels.
+        val s = fw / (cw * g.w)
+        // The phone's corners as the zoom makes them, kept within the frame's shape.
+        val r = (g.w * cornerFrac * s).coerceAtMost(minOf(fw, fh) * 0.22f)
+        val f = paints.frame.apply { set(fx, fy, fx + fw, fy + fh) }
+        drawIntoCanvas { cv ->
+            val nc = cv.nativeCanvas
+            // A soft shadow (cast by a shape in the page's own colour, so only the shadow shows), then the phone's edge.
+            paints.shadow.color = page
+            paints.shadow.setShadowLayer(18f * g.unit, 0f, 8f * g.unit, shadow)
+            nc.drawRoundRect(f, r, r, paints.shadow)
+            paints.rim.color = rim
+            nc.drawRoundRect(fx - rimW, fy - rimW, fx + fw + rimW, fy + fh + rimW, r + rimW, r + rimW, paints.rim)
+            paints.path.rewind()
+            paints.path.addRoundRect(f, r, r, android.graphics.Path.Direction.CW)
+            nc.save()
+            nc.clipPath(paints.path)
+            nc.translate(fx - c.left * g.w * s, fy - c.top * g.h * s)
+            nc.scale(s, s)
+            // In phone pixels from here.
+            fun picture(b: android.graphics.Bitmap, alpha: Float) {
+                paints.image.alpha = (alpha * 255f).roundToInt().coerceIn(0, 255)
+                paints.src.set(0, 0, b.width, b.height)
+                paints.dst.set(0f, 0f, g.w, g.h)
+                nc.drawBitmap(b, paints.src, paints.dst, paints.image)
+            }
+            val sb = shown
+            val bb = before
+            if (bb != null) picture(bb, 1f)
+            if (sb != null) picture(sb, fade.value)
+            else if (wallpaper != null) {
+                // Home has not shown since the app started: its wallpaper at least.
+                paints.image.alpha = 255
+                paints.m.set(wallpaper.matrix(look.screenW, look.screenH))
+                paints.m.postScale(g.w / look.screenW, g.h / look.screenH)
+                nc.drawBitmap(wallpaper.bitmap, paints.m, paints.image)
+            }
+            // Motion's demo: an app opening over home.
+            val d = demo.floatValue
+            if (d >= 0f) {
+                val k = d.coerceIn(-0.1f, 1.1f)
+                val icon = g.w * 0.17f
+                val from = Rect(g.w * 0.5f - icon / 2f, g.h * 0.6f, g.w * 0.5f + icon / 2f, g.h * 0.6f + icon)
+                val a = Rect(from.left * (1f - k), from.top * (1f - k), from.right + (g.w - from.right) * k, from.bottom + (g.h - from.bottom) * k)
+                // Home steps back a little as the app comes up, as it does on the phone.
+                nc.drawColor(Color.Black.copy(alpha = 0.25f * k.coerceIn(0f, 1f)).toArgb())
+                val phoneCorner = g.w * cornerFrac
+                val rc = icon * 0.23f + (phoneCorner - icon * 0.23f) * k.coerceIn(0f, 1f)
+                paints.image.alpha = 255
+                paints.rim.color = appFill.toArgb()
+                nc.drawRoundRect(a.left, a.top, a.right, a.bottom, rc, rc, paints.rim)
+            }
+            nc.restore()
+        }
+    })
 }
 
 /** The title (the app's, then the open page's) and the round back button, both moving with the page. */
@@ -918,6 +927,7 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
     counter.n = 0
     val m = look.dp(SettingsTokens.MARGIN)
     val fadePx = 18f * g.unit
+    val bandPaint = remember { androidx.compose.ui.graphics.Paint() }
     // Only the open page is in the accessibility tree: with an accessibility service on (gesture nav is one), Compose
     // scans the whole tree every 100 ms while anything moves (7-9 ms of the main thread on the S24 with every page in it).
     val here by remember { androidx.compose.runtime.derivedStateOf { st.open == part } }
@@ -939,18 +949,25 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
                     val open = st.open == part
                     translationX = if (open) 0f else g.w * 3f
                     alpha = if ((open && st.p.value > 0f) || warm) 1f else 0f
-                    // Content scrolled up dissolves under the sheet's top edge.
-                    compositingStrategy = CompositingStrategy.Offscreen
                 }
+                // Content scrolled up dissolves under the sheet's top edge. Only that band goes through a layer of its own
+                // (the content is a layer: drawing it twice draws one list twice); the whole page in one cost a sheet-sized
+                // buffer every frame of a scroll.
                 .drawWithContent {
-                    drawContent()
-                    drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = 6f * g.unit, endY = 6f * g.unit + fadePx),
-                        blendMode = BlendMode.DstIn)
+                    val top = 6f * g.unit
+                    val end = top + fadePx
+                    clipRect(top = end) { this@drawWithContent.drawContent() }
+                    if (scroll.offset > 0f) drawIntoCanvas { cv ->
+                        cv.saveLayer(Rect(0f, top, size.width, end), bandPaint)
+                        clipRect(top = top, bottom = end) { this@drawWithContent.drawContent() }
+                        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = top, endY = end),
+                            topLeft = Offset(0f, top), size = Size(size.width, fadePx), blendMode = BlendMode.DstIn)
+                        cv.restore()
+                    } else clipRect(top = top, bottom = end) { this@drawWithContent.drawContent() }
                 },
         ) {
-            val place = remember { ContentPlace() }
-            Column(Modifier.fillMaxSize().iosScroll(scroll).onPlaced { place.at = it }.padding(horizontal = m)) {
-              CompositionLocalProvider(LocalContentPlace provides place) {
+            Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
+              run {
                 Spacer(Modifier.height(look.dp(26f * g.unit)))
                 when (part) {
                     Part.LAYOUTS -> LayoutsPage()
@@ -1059,19 +1076,8 @@ private fun ElementTheme(e: Element, themes: List<Design.ThemeInfo>, draft: Draf
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
     val own = draft.elementTheme(e)
-    val st = LocalStudio.current
-    val place = LocalContentPlace.current
-    val accent = look.color(SettingsTokens.ACCENT)
     Column(Modifier.fillMaxWidth()
-        .onGloballyPositioned { c -> place.at?.let { p -> if (p.isAttached && c.isAttached && st != null) st.rowY[e] = p.localPositionOf(c, Offset.Zero).y } }
-        .drawBehind {
-            // Picked on the picture of home: lit in the accent.
-            if (st != null && st.picked == e) {
-                val k = st.pick.value.coerceIn(0f, 1f)
-                if (k > 0f) drawRect(accent.copy(alpha = 0.14f * k))
-            }
-            if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f))
-        }
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         BasicText(e.title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
         Spacer(Modifier.height(look.dp(8f * look.unit)))
@@ -1172,7 +1178,8 @@ private fun PresetCards(presets: List<Design.ThemeInfo>, draft: Draft) {
 @Composable
 private fun LayoutsPage() {
     val draft = LocalDraft.current
-    for (e in Element.entries) {
+    val st = LocalStudio.current
+    for (e in Element.entries) Column(Modifier.onPlaced { st?.sections?.set(e, it.positionInParent().y) }) {
         val current = Layouts.find(e, draft.layout(e)) ?: Setup.layout(e)
         val layouts = Layouts.of(e)
         Group(e.title, current.description) {
@@ -1266,7 +1273,7 @@ private fun BarButton(text: String, accent: Boolean, onClick: () -> Unit) {
 
 /** A line that rolls to its new words: the old ones rise and fade, the new come up from below. */
 @Composable
-private fun Rolling(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier) {
+private fun Rolling(text: String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier, lines: Int = 1) {
     val look = LocalLook.current
     var now by remember { mutableStateOf(text) }
     var was by remember { mutableStateOf<String?>(null) }
@@ -1280,35 +1287,118 @@ private fun Rolling(text: String, style: androidx.compose.ui.text.TextStyle, mod
         was = null
     }
     val rise = 14f * look.unit
-    Box(modifier) {
+    // Several lines: the height follows the new words (from the old's).
+    Box(if (lines > 1) modifier.animateContentSize(look.motion(MotionTokens.APPEAR)) else modifier) {
         was?.let { w ->
-            BasicText(w, style = style, maxLines = 1, modifier = Modifier
+            BasicText(w, style = style, maxLines = lines, overflow = TextOverflow.Ellipsis, modifier = Modifier
                 .graphicsLayer { alpha = (1f - k.value).coerceIn(0f, 1f) }
                 .drawWithContent { translate(0f, -rise * k.value) { this@drawWithContent.drawContent() } })
         }
-        BasicText(now, style = style, maxLines = 1, modifier = Modifier
+        BasicText(now, style = style, maxLines = lines, overflow = TextOverflow.Ellipsis, modifier = Modifier
             .graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }
             .drawWithContent { translate(0f, rise * (1f - k.value)) { this@drawWithContent.drawContent() } })
     }
 }
 
+/**
+ * Phone: what the launcher needs from the phone, its updates, and the way out of trouble, in one place (Matheesha: the
+ * developer panel and the safe settings were apps of their own). All of it takes effect at once (nothing here waits for
+ * Apply). The plain safe settings screen stays for the Restore notification (it opens even if the themes cannot load).
+ */
 @Composable
 private fun PhonePage() {
     val ctx = LocalContext.current
-    Group("Shizuku", "The advanced features (the shade, gestures, app switching) work through Shizuku.") {
-        val on = dev.launcher.app.ShizukuLink.service != null
-        InfoRow("Status", if (on) "Connected" else "Not running")
+    val app = ctx.applicationContext as? dev.launcher.app.LauncherApp
+    val st = LocalStudio.current
+    // What it shows is read again whenever Shizuku comes or goes, the settings come back, or an action here is done.
+    var tick by remember { mutableIntStateOf(0) }
+    val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val l: () -> Unit = { main.post { tick++ } }
+        dev.launcher.app.ShizukuLink.addListener(l)
+        onDispose { dev.launcher.app.ShizukuLink.removeListener(l) }
     }
-    Group("Safety") {
-        NavRow("Safe settings", "Restore the system's status bar, gestures and animations") {
-            ctx.startActivity(Intent(ctx, dev.launcher.app.SafeSettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val o = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick++ }
+        lifecycle.addObserver(o)
+        onDispose { lifecycle.removeObserver(o) }
+    }
+    // The log's newest lines, while this page is open (a few times a second at most: each is laid out again).
+    val open = st == null || st.open == Part.PHONE
+    var log by remember { mutableStateOf("") }
+    var update by remember { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.DisposableEffect(open) {
+        if (!open) return@DisposableEffect onDispose { }
+        fun read() {
+            val all = dev.launcher.app.AppLog.text().lines()
+            log = all.takeLast(LOG_LINES).joinToString("\n")
+            update = all.lastOrNull { "[update]" in it }?.substringAfter("[update] ")
         }
+        read()
+        var pending = false
+        val l: (String) -> Unit = { if (!pending) { pending = true; main.postDelayed({ pending = false; read() }, 300) } }
+        dev.launcher.app.AppLog.addListener(l)
+        onDispose { dev.launcher.app.AppLog.removeListener(l) }
+    }
+    val shizuku = remember(tick) { dev.launcher.app.ShizukuLink.state() }
+    val connected = shizuku == dev.launcher.app.ShizukuLink.State.CONNECTED
+    fun settingsPage(action: String) {
+        try { ctx.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        catch (_: android.content.ActivityNotFoundException) { ctx.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    Group("Shizuku", "The advanced features (the shade, gestures, app switching, updates) work through Shizuku.") {
+        InfoRow("Status", when (shizuku) {
+            dev.launcher.app.ShizukuLink.State.CONNECTED -> "Connected"
+            dev.launcher.app.ShizukuLink.State.CONNECTING -> "Connecting"
+            dev.launcher.app.ShizukuLink.State.NO_PERMISSION -> "Not allowed yet"
+            dev.launcher.app.ShizukuLink.State.NOT_RUNNING -> "Not running"
+        })
+        if (!connected) ActionRow("Connect", "Start Shizuku first (wireless debugging)") { dev.launcher.app.ShizukuLink.connect() }
     }
     Group("Updates") {
-        InfoRow("This build", (ctx.applicationContext as? dev.launcher.app.LauncherApp)?.buildStamp() ?: "?")
-        NavRow("Developer panel", "Updates, status and the log") {
-            ctx.startActivity(Intent(ctx, dev.launcher.app.DevActivity::class.java))
+        InfoRow("This build", app?.buildStamp() ?: "?")
+        ActionRow("Check for updates", update) { app?.let { dev.launcher.app.Updater.update(it, force = false) } }
+        ActionRow("Install the newest again", "Even if it is the build you have") { app?.let { dev.launcher.app.Updater.update(it, force = true) } }
+    }
+    var restored by remember { mutableStateOf<String?>(null) }
+    Group("Safety", "If the status bar is missing, animations are off or the launcher misbehaves. Restarting the phone also brings the status bar back.") {
+        val hidden = remember(tick) { dev.launcher.app.SystemRestore.statusBarHidden(ctx) }
+        InfoRow("Status bar", if (hidden) "Ours (stock one hidden)" else "The phone's own")
+        InfoRow("Animations", remember(tick) { dev.launcher.app.SystemRestore.currentScales(ctx) })
+        InfoRow("Restore without Shizuku", if (remember(tick) { dev.launcher.app.SystemRestore.canWriteSecureSettings(ctx) }) "Ready" else "Connect Shizuku once")
+        InfoRow("Safety notification", if (remember(tick) { dev.launcher.app.SafetyNotification.canPost(ctx) }) "Allowed" else "Blocked")
+        ActionRow("Restore system", restored ?: "The status bar, gestures and animations as they were") {
+            restored = "Restoring..."
+            dev.launcher.app.DevTools.restore(ctx) { restored = it; tick++ }
         }
+        NavRow("Choose a different home app", null) { settingsPage(android.provider.Settings.ACTION_HOME_SETTINGS) }
+        NavRow("Animation scales", "Android's developer options") { settingsPage(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS) }
+    }
+    Group("Developer", "For testing the launcher. Each takes effect at once; what they find goes to the log below.") {
+        var gestures by remember(tick) { mutableStateOf(dev.launcher.app.SystemRestore.gesturesWanted(ctx)) }
+        ToggleRow("Gesture navigation", "The launcher's own gestures and app cards", gestures) { on ->
+            if (connected) { gestures = on; dev.launcher.app.DevTools.setGestures(ctx, on) { tick++ } } else dev.launcher.app.ShizukuLink.connect()
+        }
+        var bar by remember(tick) { mutableStateOf(dev.launcher.app.SystemRestore.statusBarWanted(ctx)) }
+        ToggleRow("Our status bar", "The phone's own hidden", bar) { on ->
+            if (connected) { bar = on; dev.launcher.app.DevTools.setOwnStatusBar(ctx, on) { tick++ } } else dev.launcher.app.ShizukuLink.connect()
+        }
+        ActionRow("Frame report", "Frames since the last report") { dev.launcher.app.DevTools.frameReport(ctx) }
+        ActionRow("Watchdog status", null) { dev.launcher.app.DevTools.watchdogStatus() }
+        ActionRow("Shell identity", null) { dev.launcher.app.DevTools.identity() }
+        ActionRow("Diagnose Shizuku restarts", "The system's log around them") { dev.launcher.app.DevTools.diagnoseRestarts() }
+        ActionRow("Probe: live cards", "Opens Settings and goes home through our transition") { dev.launcher.app.DevTools.probeLiveCards(ctx) }
+        ActionRow("Test: break the system", "Hides the phone's status bar and turns animations off, until Restore system") { dev.launcher.app.DevTools.breakSystem(ctx) }
+        ActionRow("Test: stop the shell service", "The phone's status bar should come back at once") { dev.launcher.app.DevTools.killService() }
+        ConfirmRow("Reset home layout", "Forgets your home pages; the launcher restarts", "Tap again to reset home") { dev.launcher.app.DevTools.resetHomeLayout(ctx) }
+    }
+    Group("Log") {
+        BasicText(log.ifEmpty { "Nothing yet." }, style = LocalLook.current.text(SettingsTokens.ROW_DETAIL, LocalLook.current.color(SettingsTokens.ROW_DETAIL_COLOR))
+            .copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)),
+            modifier = Modifier.fillMaxWidth().padding(LocalLook.current.dp(SettingsTokens.ROW_PADDING)))
+        ActionRow("Copy log", null) { dev.launcher.app.DevTools.copyLog(ctx) }
     }
     Group("Expert") {
         NavRow("Every value of the theme", "The token editor, for theme authors") {
@@ -1316,6 +1406,9 @@ private fun PhonePage() {
         }
     }
 }
+
+/** How many of the log's newest lines the Phone page shows. */
+private const val LOG_LINES = 40
 
 // ------------------------------------------------------------------ the parts
 
@@ -1359,7 +1452,7 @@ private fun Group(title: String?, note: String? = null, rows: @Composable () -> 
 
 /** One row: a name, an optional detail below it, something at its end; pressed, it lights up. */
 @Composable
-private fun BaseRow(title: String, detail: String?, onClick: (() -> Unit)?, end: @Composable () -> Unit) {
+private fun BaseRow(title: String, detail: String?, onClick: (() -> Unit)?, accent: Boolean = false, changing: Boolean = false, end: @Composable () -> Unit) {
     val look = LocalLook.current
     val counter = LocalRowCounter.current
     val first = remember { counter == null || counter.n++ == 0 }
@@ -1379,8 +1472,10 @@ private fun BaseRow(title: String, detail: String?, onClick: (() -> Unit)?, end:
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
-            if (detail != null) BasicText(detail, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
+            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(if (accent) SettingsTokens.ACCENT else SettingsTokens.ROW_LABEL)))
+            val detailStyle = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR))
+            if (changing) { if (detail != null) Rolling(detail, detailStyle, Modifier.fillMaxWidth(), lines = 6) }
+            else if (detail != null) BasicText(detail, style = detailStyle)
         }
         Spacer(Modifier.width(look.dp(12f * look.unit)))
         end()
@@ -1396,7 +1491,21 @@ private fun NavRow(title: String, detail: String?, onClick: () -> Unit) = BaseRo
 @Composable
 private fun InfoRow(title: String, value: String) = BaseRow(title, null, null) {
     val look = LocalLook.current
-    BasicText(value, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
+    Rolling(value, look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier)
+}
+
+/** Something to do, named in the accent (as iOS's button rows); what it reports rolls in under its name. */
+@Composable
+private fun ActionRow(title: String, detail: String?, onClick: () -> Unit) = BaseRow(title, detail, onClick, accent = true, changing = true) { }
+
+/** Something that cannot be undone: the first tap asks ([confirm] under its name), a second one within 3 s does it. */
+@Composable
+private fun ConfirmRow(title: String, detail: String, confirm: String, onConfirm: () -> Unit) {
+    var armedAt by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    LaunchedEffect(armedAt) { if (armedAt != 0L) { kotlinx.coroutines.delay(Draft.BACK_AGAIN_MS); armedAt = 0L } }
+    BaseRow(title, if (armedAt != 0L) confirm else detail, {
+        if (armedAt != 0L) onConfirm() else armedAt = android.os.SystemClock.uptimeMillis()
+    }, accent = true, changing = true) { }
 }
 
 /** A choice: the chosen row carries a check (it moves to the row tapped). */

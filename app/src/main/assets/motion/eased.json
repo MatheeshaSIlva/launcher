@@ -706,6 +706,16 @@
    "ms": 520,
    "src": "judged:test preset: iOS 27's spring (0.42 s, damping 1.0) as a bezier (emphasized decelerate, 520 ms)"
   },
+  "motion.settings.focus": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 690,
+   "src": "judged:test preset: iOS 27's spring (0.55 s, damping 0.9) as a bezier (emphasized decelerate, 690 ms)"
+  },
   "motion.settings.open": {
    "bezier": [
     0.3,

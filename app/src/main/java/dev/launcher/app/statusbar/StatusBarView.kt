@@ -177,6 +177,20 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private var ncDark = 0f
 
     /**
+     * The bar as it shows over home, at rest ([darkContent]: black content), as a picture the bar's height: the settings'
+     * picture of home has it on top (home's own picture has no bar, it is our window). On the bar's thread.
+     */
+    fun pictureOnHome(darkContent: Boolean): android.graphics.Bitmap? {
+        val h = barHeight
+        if (width == 0 || h == 0) return null
+        val b = android.graphics.Bitmap.createBitmap(width, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val was = floatArrayOf(dark, cc, nc, lockK)
+        dark = if (darkContent) 1f else 0f; cc = 0f; nc = 0f; lockK = 0f
+        try { draw(Canvas(b)) } finally { dark = was[0]; cc = was[1]; nc = was[2]; lockK = was[3] }
+        return b
+    }
+
+    /**
      * How far Control Center ([ccK]) and Notification Center ([ncK]) are open (0..1, they follow the finger), and whether
      * Notification Center's wallpaper wants black content ([ncDarkContent]). [ccRowY]: the centre of Control Center's
      * status row (px, in this view).

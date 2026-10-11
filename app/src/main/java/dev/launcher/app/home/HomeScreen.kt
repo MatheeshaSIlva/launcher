@@ -265,6 +265,13 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             applyArrival(0.0)
             return b
         }
+        // Mid-arrival (the settings opened over home as it came up): at rest too, then back where the arrival is.
+        if (arrivalAnimating) {
+            applyArrival(60.0)
+            val b = renderNow()
+            applyArrival(arrivalT)
+            return b
+        }
         return renderNow()
     }
 

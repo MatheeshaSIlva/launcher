@@ -58,7 +58,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   everything; pages are built ahead and only placed while open (a page built in a transition's first frame cost the S24
   60-80 ms); solid groups (no glass per card). Changes wait in a draft for Apply (`Draft`, `ApplyBar`, `Design.batch`:
   one reveal for all of them); a look change is revealed from the tap
-  (`ThemeReveal`). Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control.
+  (`ThemeReveal`). The picture of home (with our status bar drawn on it) takes no touches: it focuses on the part a page
+  is about (`motion.settings.focus`). Phone holds Shizuku, updates, safety and the developer tools with the log.
+  Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control.
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").
@@ -199,6 +201,8 @@ copy it wholesale — port the working pieces cleanly. File map:
   lock/unlock because Default USB configuration had data functions; fixed by "debugging only"/"No data transfer". Hence: status bar flags are set
   through the binder API with a token owned by our service (system drops them when it dies), never with `cmd` (those persist until reboot).
 - **Everything that changes system state must auto-restore and be recoverable without Shizuku** (notification action + safe-settings screen). A reboot always clears these in-memory flags.
+  The safe-settings screen (plain views) opens from the Restore notification only; the same and the developer tools are in
+  the settings app's Phone page (`DevTools`; the separate dev panel and its home entry are gone).
 - **The window manager takes a pull from the top edge away from us.** After 24 dp (within 500 ms) of a pull that starts in the
   top band, `DisplayPolicy.requestTransientBars` transfers the touch to SystemUI's status bar (`transferTouch`) unless the
   focused window shows its bars transiently: our shade window gets ACTION_CANCEL mid-pull. It cannot be blocked from an app

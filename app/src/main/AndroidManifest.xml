@@ -78,13 +78,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Developer panel (status, updater, tests, log), opened from the home screen. -->
-        <activity
-            android:name=".DevActivity"
-            android:exported="false"
-            android:icon="@mipmap/ic_dev"
-            android:label="Launcher dev" />
-
         <!-- The token editor (design system, docs/DESIGN_SYSTEM_PLAN.md): own task and own app-drawer entry. -->
         <activity
             android:name=".design.DesignActivity"
@@ -142,7 +135,8 @@
             android:label="Launcher preview"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
 
-        <!-- Fixed recovery screen: own task and own app-drawer entry, so it opens even if the home screen is broken. -->
+        <!-- Fixed recovery screen, opened from the Restore notification (and adb): own task, plain Android views, so it opens
+             even if the home screen or the themes are broken. Everything on it is also in the settings app (Phone). -->
         <activity
             android:name=".SafeSettingsActivity"
             android:exported="true"
@@ -150,12 +144,7 @@
             android:label="Launcher safe settings"
             android:launchMode="singleTask"
             android:taskAffinity="dev.launcher.app.safe"
-            android:theme="@android:style/Theme.DeviceDefault.DayNight">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:theme="@android:style/Theme.DeviceDefault.DayNight" />
 
         <receiver
             android:name=".RestoreReceiver"

@@ -7,7 +7,7 @@
 # the steps that show only our UI and Calculator/Clock (never the switcher: it shows other apps' pictures).
 #   DEVICE=<serial> [REC=1] tools/scenario_more.sh
 # Needs templates cut on this phone: tools/shots/tpl_calc.png (Calculator tile), tpl_util.png (Utilities cluster in the
-# library, scrolled as below), tpl_fclock.png (Clock inside the open Utilities folder), tpl_dev.png (DevActivity in the dock).
+# library, scrolled as below), tpl_fclock.png (Clock inside the open Utilities folder), tpl_dev.png (the "Launcher settings" icon in the dock; the dev panel is now part of it).
 cd "$(dirname "$0")/.."
 ADB="${ADB:-$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe}"
 D=(-s "$DEVICE")
@@ -81,7 +81,7 @@ reset; bar_up; sleep 2; measure folder_close; recpull fapp
 need HomeActivity "after folder close"; bar_up; sleep 1   # closes the folder
 home_p1
 rec dock 6; reset; find_tap tpl_dev.png dock; sleep 2
-need DevActivity "dock launch"; measure dock_launch
+need SettingsActivity "dock launch"; measure dock_launch
 reset; bar_up; sleep 2; measure dock_close; recpull dock
 need HomeActivity "after dock close"
 to_library

@@ -86,7 +86,7 @@ wallpaper, motion roles as Compose springs and easings); `SettingsActivity` (own
 with its pages (`settings/Pages.kt`): the start page with "Your setup" (an exact picture of home, `HomePicture`-free: home's
 display lists drawn on the GPU, `design/ViewPicture`) and the sections; Layouts made from the layout registry (each
 element's layouts, where it lives, its options as toggles); Look (the themes, the wallpaper's colours); Motion (the
-presets); Phone (Shizuku's status, safe settings, the developer panel with the updater); Expert (the token editor). A theme
+presets); Phone (Shizuku's status, updates, safety and the developer tools, in the page since S5); Expert (the token editor). A theme
 chosen here applies at once: the settings app holds its old look and reveals the new one from the row tapped (home is built
 again behind it). New shared components: card corner, list row, toggle, section heading, page margin (`component.*`). Entry
 points: the drawer, home's edit menu ("Home Settings"), a Control Center control ("Launcher Settings", Utilities). Search and
@@ -147,7 +147,7 @@ Build steps (each checked on the S24 before the next):
 |---|---|
 | S1 | The shell: the picture of home and the sheet (detents that follow the finger and spring on the preset), the tiles, a tile opening into its page inside the sheet and back (swipe or Back), today's pages restyled as grouped lists (solid groups: no glass per card); `comp.settings.*` tokens and motion roles; measured on the S24 |
 | S2 | Look: themes as cards (each drawn in its theme), "Use everywhere", "Only for" a part (the parts' own pages), the picture showing the theme being looked at |
-| S3 | Tap a part of the picture to pick it (status bar, panels, recents, drawer, home); the rest dims, the sheet shows that part's theme and layout |
+| S3 | Tap a part of the picture to pick it (status bar, panels, recents, drawer, home); the rest dims, the sheet shows that part's theme and layout (replaced in S5: the picture focuses on the part a page is about, and takes no touches) |
 | S4 | Motion (presets with a demo on the picture) and Phone |
 
 **2026-10-11 (Matheesha on S1: "the layouts section is a bit laggy. Swiping right goes back to the main screen - remove it -
@@ -189,6 +189,30 @@ while Motion is open the picture of home plays an app opening from an icon and c
 chosen preset's `app.open` and `app.close-size` (home dims behind it); a choice waits for Apply. "Each animation" leads to
 Expert for now. Phone shows the build. With this S1-S4 stand; what is left of the settings plan: C2's live previews of
 each layout, C3's fonts and properties by component, C5's Shizuku and permissions, C6 walkthrough, C7 history.
+
+**S5 (2026-10-11; Matheesha on S1-S4: "the layout page still feels a bit laggy - definitely not 120fps. I would also like
+if the preview screen zoomed in to focus on different elements. the preview itself does not have to be clickable - the
+elements are too small in the preview it's bad for UX. Also, now that we have a settings app, unite the dev screen and safe
+settings into it"):**
+- Scrolling: a page's content is a GPU layer of its own, moved by the layer (`iosScroll`: `placeRelativeWithLayer`, the
+  offset as its translation); placed by position, every row of a long page was drawn again into the page's list every
+  frame. The fade under the sheet's top edge no longer takes the whole page through an offscreen buffer every frame: the
+  content is drawn clipped below the band, and only the 18 pt band goes through a layer (the content's list drawn twice).
+  Not yet measured on the S24.
+- The picture focuses instead of being tapped (S3's picking is gone): on Layouts it follows the section being read (the
+  element whose section is at the top of what shows); the frame takes that part's shape and the picture zooms into it, one
+  spring (`motion.settings.focus`): the status bar a wide strip at about its real size, the shade's pull the top of the
+  screen, recents the bottom edge, the drawer as a sheet the lower half; home, the settings and the drawer as a page the
+  whole phone. Drawn in one pass (no layer moves). The picture of home now has our status bar on top (it is a window of its
+  own, so home's picture had none: the bar draws itself as over home, on its thread: `StatusBarView.pictureOnHome`,
+  `HomeBridge.statusBarPicture`), and home is pictured at rest even mid-arrival.
+- Phone holds what were two apps: Shizuku (status, Connect), Updates (the build, check, install again), Safety (the state
+  of the status bar, animation scales, restore without Shizuku, the notification; Restore system with its report; another
+  home app; animation scales), Developer (gestures and our status bar as switches, frame report, watchdog, identity, the
+  restart diagnosis, the live-card probe, the two recovery tests, reset home layout on a second tap) and the log (its
+  newest lines, live while the page is open; Copy). `DevTools` holds the actions; `DevActivity` and home's "Launcher Dev"
+  entry are gone; the plain safe settings screen stays, without a drawer entry, for the Restore notification (it opens
+  even if the themes cannot load).
 
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.

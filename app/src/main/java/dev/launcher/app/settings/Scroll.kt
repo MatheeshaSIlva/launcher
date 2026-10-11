@@ -89,5 +89,7 @@ fun Modifier.iosScroll(state: IosScrollState): Modifier = this
         val p = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
         val viewport = constraints.maxHeight
         state.scroller.setBounds(0f, (p.height - viewport).toFloat(), viewport.toFloat())
-        layout(constraints.maxWidth, viewport) { p.placeRelative(0, -state.offset.roundToInt()) }
+        // In a layer of its own, moved by the layer: a scroll changes one property each frame; nothing is placed or
+        // recorded again (placed by position, every row of a long page was drawn again into the page's list every frame).
+        layout(constraints.maxWidth, viewport) { p.placeRelativeWithLayer(0, 0) { translationY = -state.offset.roundToInt().toFloat() } }
     }

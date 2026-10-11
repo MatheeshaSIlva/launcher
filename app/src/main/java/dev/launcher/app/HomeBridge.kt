@@ -160,6 +160,20 @@ object HomeBridge {
     @Volatile var onStatusDarkChanged: (() -> Unit)? = null
 
     /**
+     * Set by gesture nav: our status bar as it shows over home, drawn on its own thread; [then] gets it on the main thread
+     * (null: no bar of ours).
+     */
+    @Volatile var statusBarPicture: (((android.graphics.Bitmap?) -> Unit) -> Unit)? = null
+
+    /** Our status bar as it shows over home (see [statusBarPicture]), or null; main thread. */
+    suspend fun statusBarPicture(): android.graphics.Bitmap? {
+        val ask = statusBarPicture ?: return null
+        return kotlinx.coroutines.withTimeoutOrNull(500) {
+            kotlinx.coroutines.suspendCancellableCoroutine { k -> ask { b -> if (k.isActive) k.resumeWith(Result.success(b)) } }
+        }
+    }
+
+    /**
      * A swipe on the bar began on home: home is recorded as it shows right now (the picture "at rest" can be seconds old: a
      * folder opened since, the library scrolled), then [then] runs. Any thread; [then] runs on the main thread.
      */

@@ -129,7 +129,7 @@ object Layouts {
 
     val STUDIO = LayoutSpec(
         Element.SETTINGS, "studio", "Studio", "Launcher",
-        "A live picture of your phone above a sheet of tiles; tap a part of the phone to change just that part.",
+        "A live picture of your phone above a sheet of tiles; the picture zooms to the part a page is about.",
         listOf(Placement("app", "An app", "Opened from the drawer, home's edit menu and a Control Center control.")),
     )
 

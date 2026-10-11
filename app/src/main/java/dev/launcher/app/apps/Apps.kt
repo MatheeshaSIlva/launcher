@@ -14,7 +14,6 @@ import android.os.Looper
 import android.os.UserHandle
 import android.os.UserManager
 import dev.launcher.app.AppLog
-import dev.launcher.app.DevActivity
 import dev.launcher.app.HomeActivity
 import java.text.Collator
 import java.util.concurrent.Executors
@@ -165,10 +164,6 @@ object Apps {
                 )
             }
         }
-        // The developer panel (updater, log) stays reachable from the App Library and search.
-        val dev = ComponentName(ctx, DevActivity::class.java)
-        out += AppEntry(keyFor(dev, android.os.Process.myUserHandle()), dev, android.os.Process.myUserHandle(), "Launcher Dev",
-            AppCategory.UTILITIES, 0L, true, null, internal = true)
         out.sortWith { a, b -> collator.compare(a.label, b.label) }
         return out
     }

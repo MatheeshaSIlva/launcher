@@ -102,6 +102,7 @@ object MotionRoles {
         r("sheet", "Sheet", "A sheet coming up and going (the widget gallery)."),
         r("sheet.push", "Page in a sheet", "A page pushed inside a sheet."),
         r("settings.open", "Settings: a tile opening", "A tile of the settings growing into its page, and the page back into it."),
+        r("settings.focus", "Settings: the picture focusing", "The picture of home zooming to the part a page is about, and back out."),
         r("mode-crossfade", "Results crossfade", "Tiles and the list, suggestions and results, crossfading."),
         r("index.scroll", "Index: scrolling", "The list gliding to a letter picked on the A-Z index."),
         r("index.bubble-in", "Index: letter in", "The letter bubble popping in."),

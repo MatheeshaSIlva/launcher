@@ -797,6 +797,13 @@
    "factor": 0.55,
    "src": "judged:UIScrollView's rubber band"
   },
+  "motion.settings.focus": {
+   "spring": [
+    0.55,
+    0.9
+   ],
+   "src": "judged:the settings' picture of home zooming to the part a page is about (its frame taking that part's shape): unhurried, no bounce"
+  },
   "motion.settings.open": {
    "spring": [
     0.5,
