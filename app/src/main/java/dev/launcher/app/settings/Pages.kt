@@ -311,10 +311,22 @@ private class Studio {
     var built by mutableIntStateOf(0)
     /** Each page's scroll (kept while the settings are open: a page comes back where it was). */
     val scrolls = Part.entries.associateWith { IosScrollState() }
+    /** The part picked on the picture of home (the rest of the picture dims, its row on Look lights up), and how far. */
+    var picked by mutableStateOf<Element?>(null)
+    val pick = Animatable(0f)
+    /** Each part's row on Look, from the top of the page's content (where the page glides to when the part is picked). */
+    val rowY = HashMap<Element, Float>()
 }
 
+private val LocalStudio = staticCompositionLocalOf<Studio?> { null }
+
+/** Where a page's content is (its rows measure themselves from it, whatever the scroll). */
+private class ContentPlace { var at: LayoutCoordinates? = null }
+
+private val LocalContentPlace = staticCompositionLocalOf { ContentPlace() }
+
 /** Where things are, in pixels: the sheet's two tops (at rest, a page open), the picture of home above it. */
-private class Geometry(look: Look, statusPx: Float, val navPx: Float) {
+private class Geometry(look: Look, val statusPx: Float, val navPx: Float) {
     val unit = look.unit
     val w = look.screenW.toFloat()
     val h = look.screenH.toFloat()
@@ -378,13 +390,38 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                 }
             }
         }
+        val pickSpec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.APPEAR))
+        val unpick: () -> Unit = remember(st, scope) {
+            {
+                if (st.picked != null) scope.launch {
+                    try { st.pick.animateTo(0f, pickSpec.value); st.picked = null } catch (_: kotlinx.coroutines.CancellationException) { }
+                }
+            }
+        }
         val close: (Float) -> Unit = remember(st, scope) {
             { velocity ->
+                unpick()
                 scope.launch {
                     try {
                         st.p.animateTo(0f, spec.value, velocity)
                         st.open = null
                     } catch (_: kotlinx.coroutines.CancellationException) { }   // opened again on the way: it stays open
+                }
+            }
+        }
+        // A part tapped on the picture: Look opens (from the tiles), glides to its row and lights it up; the same part
+        // again lets it go.
+        val pickPart: (Element) -> Unit = remember(st, scope) {
+            { e ->
+                if (st.picked == e) unpick() else {
+                    st.picked = e
+                    scope.launch { try { st.pick.animateTo(1f, pickSpec.value) } catch (_: kotlinx.coroutines.CancellationException) { } }
+                    if (st.open == null) open(Part.LOOK)
+                    if (st.open == Part.LOOK) st.rowY[e]?.let { y ->
+                        val sc = st.scrolls.getValue(Part.LOOK)
+                        sc.moving = true
+                        sc.scroller.animateTo(y - 34f * g.unit)
+                    }
                 }
             }
         }
@@ -405,15 +442,21 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         // on the S24; none without the tree). At rest it is all there again, for whatever reads it.
         // Scrolling counts too: the rest of the tree alone still cost 4-5 ms a check while a page scrolled on the S24.
         val moving by remember { androidx.compose.runtime.derivedStateOf { st.p.isRunning || bar.isRunning || st.scrolls.values.any { it.moving } } }
-        CompositionLocalProvider(LocalDraft provides draft) {
+        CompositionLocalProvider(LocalDraft provides draft, LocalStudio provides st) {
             Box(Modifier.fillMaxSize().then(if (moving) Modifier.clearAndSetSemantics { } else Modifier).background(look.color(SettingsTokens.BACKGROUND))) {
-                HomePicture(st, g, bar)
+                HomePicture(st, g, bar, pickPart)
                 Header(st, g) { close(0f) }
                 Sheet(st, g, bar, open, close)
                 ApplyBar(draft, g, bar) { draft.apply(ctx) }
             }
         }
     }
+}
+
+/** Where part [e] is on a picture of home [size] big (the status bar's band, or home below it). */
+private fun partRect(e: Element, size: Size, statusFrac: Float): Rect {
+    val bar = size.height * statusFrac
+    return if (e == Element.STATUS_BAR) Rect(0f, 0f, size.width, bar) else Rect(0f, bar, size.width, size.height)
 }
 
 /**
@@ -431,9 +474,15 @@ private fun BackToTiles(st: Studio, close: (Float) -> Unit, draft: Draft, leave:
 
 /** Home as it is now, in the phone's shape; a new picture (after any change) fades in over the last. */
 @Composable
-private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
+private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>, pickPart: (Element) -> Unit) {
     val look = LocalLook.current
     val ctx = LocalContext.current
+    val measurer = rememberTextMeasurer()
+    val accent = look.color(SettingsTokens.ACCENT)
+    val tagStyle = look.text(SettingsTokens.CHIP_TEXT, look.color(SettingsTokens.ACCENT_LABEL))
+    val tags = remember(look) { Element.entries.associateWith { measurer.measure(it.title, tagStyle) } }
+    // The status bar's band on the picture (a little taller to tap), the rest is home.
+    val statusFrac = g.statusPx / g.h
     var latest by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var before by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -487,7 +536,52 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
                 drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height, corner, corner, shadowPaint) }
                 drawRoundRect(rim, Offset(-rimW, -rimW), Size(size.width + rimW * 2f, size.height + rimW * 2f), CornerRadius(corner + rimW))
             }
-            .clip(RoundedCornerShape(look.dp(corner))),
+            // The picked part's name in a tag beside the picture.
+            .drawWithContent {
+                drawContent()
+                val e = st.picked ?: return@drawWithContent
+                val k = st.pick.value.coerceIn(0f, 1f)
+                if (k <= 0f) return@drawWithContent
+                val r = partRect(e, size, statusFrac)
+                val t = tags[e] ?: return@drawWithContent
+                val padX = 10f * g.unit
+                val padY = 5f * g.unit
+                val w = t.size.width + padX * 2f
+                val h = t.size.height + padY * 2f
+                val x = size.width + 10f * g.unit + (1f - k) * 8f * g.unit
+                val y = (r.center.y - h / 2f).coerceIn(0f, size.height - h)
+                drawRoundRect(accent.copy(alpha = accent.alpha * k), Offset(x, y), Size(w, h), CornerRadius(h / 2f))
+                drawText(t, topLeft = Offset(x + padX, y + padY), alpha = k)
+            }
+            .clip(RoundedCornerShape(look.dp(corner)))
+            // Picked: the rest dims, the part is outlined in the accent.
+            .drawWithContent {
+                drawContent()
+                val e = st.picked ?: return@drawWithContent
+                val k = st.pick.value.coerceIn(0f, 1f)
+                if (k <= 0f) return@drawWithContent
+                val r = partRect(e, size, statusFrac)
+                val dim = Color.Black.copy(alpha = 0.45f * k)
+                if (r.top > 0f) drawRect(dim, Offset.Zero, Size(size.width, r.top))
+                if (r.bottom < size.height) drawRect(dim, Offset(0f, r.bottom), Size(size.width, size.height - r.bottom))
+                val inset = 3f * g.unit
+                drawRoundRect(accent.copy(alpha = accent.alpha * k), Offset(r.left + inset, r.top + inset),
+                    Size(r.width - inset * 2f, r.height - inset * 2f), CornerRadius(minOf(corner, r.height / 2f) * 0.8f),
+                    style = Stroke(2.5f * g.unit))
+            }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    while (true) {
+                        val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
+                        if (c.isConsumed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop) return@awaitEachGesture
+                        if (!c.pressed) break
+                    }
+                    if (st.p.isRunning) return@awaitEachGesture
+                    val f = down.position.y / size.height
+                    pickPart(if (f < maxOf(statusFrac * 1.4f, 0.06f)) Element.STATUS_BAR else Element.HOME)
+                }
+            },
     ) {
         val b = before
         val s = shown
@@ -813,7 +907,9 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
                         blendMode = BlendMode.DstIn)
                 },
         ) {
-            Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
+            val place = remember { ContentPlace() }
+            Column(Modifier.fillMaxSize().iosScroll(scroll).onPlaced { place.at = it }.padding(horizontal = m)) {
+              CompositionLocalProvider(LocalContentPlace provides place) {
                 Spacer(Modifier.height(look.dp(26f * g.unit)))
                 when (part) {
                     Part.LAYOUTS -> LayoutsPage()
@@ -823,6 +919,7 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
                 }
                 // Room below the last row for the Apply bar.
                 Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
+              }
             }
         }
     }
@@ -921,8 +1018,19 @@ private fun ElementTheme(e: Element, themes: List<Design.ThemeInfo>, draft: Draf
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
     val own = draft.elementTheme(e)
+    val st = LocalStudio.current
+    val place = LocalContentPlace.current
+    val accent = look.color(SettingsTokens.ACCENT)
     Column(Modifier.fillMaxWidth()
-        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .onGloballyPositioned { c -> place.at?.let { p -> if (p.isAttached && c.isAttached && st != null) st.rowY[e] = p.localPositionOf(c, Offset.Zero).y } }
+        .drawBehind {
+            // Picked on the picture of home: lit in the accent.
+            if (st != null && st.picked == e) {
+                val k = st.pick.value.coerceIn(0f, 1f)
+                if (k > 0f) drawRect(accent.copy(alpha = 0.14f * k))
+            }
+            if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f))
+        }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         BasicText(e.title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
         Spacer(Modifier.height(look.dp(8f * look.unit)))

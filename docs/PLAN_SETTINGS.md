@@ -175,7 +175,13 @@ the scrolling animation ends"):** a touch on a moving list consumed its own touc
 that touch-down consumed in its next pass, gave the gesture up: the finger stopped the list but could not drag it until it
 lifted. And a flick whose whole travel arrived with the lift (one batch) was taken for no drag. `iosScroll` now reads every
 position itself: its own touch-down is skipped, a flick past the slop counts with its speed. Emulator: a drag started during
-a fling turns the list around.
+a fling turns the list around. On the S24 after it: Layouts scrolls 0-1 missed refreshes.
+
+**S3 (2026-10-11, emulator):** a part tapped on the picture of home: the status bar's band, or home below it (the panels,
+recents and the drawer are not on a picture of home: their rows on Look are the way to them). The rest of the picture dims,
+the part is outlined in the accent with its name in a tag beside the picture, all on one spring (`Studio.pick`, the appear
+role); Look opens from the tiles, glides to the part's row (`Studio.rowY`, the page's own scroller) and lights it; the same
+part again, or closing the page, lets it go.
 
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
