@@ -2481,6 +2481,10 @@
    "dark": "#7878803d",
    "src": "judged:iOS's fill colours (secondary) for a chip on the sheet"
   },
+  "comp.settings.chip.material": {
+   "ref": "sys.material.glass.small",
+   "src": "judged:a small glass capsule (iOS 26's small controls)"
+  },
   "comp.settings.chip.text": {
    "ref": "sys.type.footnote",
    "src": "judged:draft D"
@@ -2504,6 +2508,10 @@
   "comp.settings.color.phone": {
    "ref": "ref.color.accents.green",
    "src": "judged:a colour per part"
+  },
+  "comp.settings.glass": {
+   "factor": 1,
+   "src": "judged:Matheesha (2026-10-11): the overview's tiles as Liquid Glass over the blurred wallpaper, not coloured cards; the sheet turns solid only under an open page (iOS 26's sheets turn opaque when expanded)"
   },
   "comp.settings.group.corner": {
    "ref": "component.card.corner",
@@ -2630,6 +2638,10 @@
   "comp.settings.tile.height": {
    "pt": 116,
    "src": "judged:draft D"
+  },
+  "comp.settings.tile.material": {
+   "ref": "component.card.material",
+   "src": "judged:the theme's card glass (App Library's tiles, widgets)"
   },
   "comp.settings.tile.symbol": {
    "pt": 34,
@@ -3687,9 +3699,119 @@
   }
  },
  "materialYou": {
+  "comp.banner.flat-color": {
+   "light": "@surface_container_low/95",
+   "dark": "@surface_container_high/92",
+   "src": "judged:Material You: iOS's banner's plain fallback as Android 14's tonal role (@surface_container_low/95 | @surface_container_high/92)"
+  },
+  "comp.cc.gallery.entry": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#ffffff",
+      0.21,
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "comp.cc.gallery.sheet": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#272925",
+      0.85,
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "comp.nc.count.fill": {
+   "color": "@primary_container",
+   "src": "judged:Material You: iOS's Notification Center's count (white) as Android 14's tonal role (@primary_container)"
+  },
+  "comp.nc.count.label": {
+   "color": "@on_primary_container",
+   "src": "judged:Material You: iOS's Notification Center's count label as Android 14's tonal role (@on_primary_container)"
+  },
+  "comp.settings.button.fill": {
+   "color": "@surface_container_highest/80",
+   "src": "judged:Material You: iOS's settings' round button as Android 14's tonal role (@surface_container_highest/80)"
+  },
+  "comp.settings.chip.fill": {
+   "color": "@surface_container_highest",
+   "src": "judged:Material You: iOS's settings' chip as Android 14's tonal role (@surface_container_highest)"
+  },
+  "comp.settings.sheet.fill": {
+   "light": "@surface_container_low/85",
+   "dark": "@surface_container/95",
+   "src": "judged:Material You: iOS's settings' sheet as Android 14's tonal role (@surface_container_low/85 | @surface_container/95)"
+  },
+  "component.badge.fill": {
+   "color": "@error",
+   "src": "judged:Material You: iOS's badge (red) as Android 14's tonal role (@error)"
+  },
   "component.control.accent-symbol-color": {
    "color": "@on_primary",
    "src": "judged:Material You: a symbol on the primary is on-primary"
+  },
+  "component.control.on-symbol-color": {
+   "color": "@on_primary_container",
+   "src": "judged:Material You: iOS's symbol on a control that is on as Android 14's tonal role (@on_primary_container)"
+  },
+  "component.menu.fallback": {
+   "light": "@surface_container/95",
+   "dark": "@surface_container_high/85",
+   "src": "judged:Material You: iOS's menu's plain fallback as Android 14's tonal role (@surface_container/95 | @surface_container_high/85)"
+  },
+  "component.round-button.on-color": {
+   "color": "@primary_container",
+   "src": "judged:Material You: iOS's round button when on (white) as Android 14's tonal role (@primary_container)"
+  },
+  "component.sheet.fallback-color": {
+   "light": "@surface_container/95",
+   "dark": "@surface_container/90",
+   "src": "judged:Material You: iOS's sheet's plain fallback as Android 14's tonal role (@surface_container/95 | @surface_container/90)"
   },
   "ref.color.accents.blue": {
    "color": "@primary",
@@ -3738,6 +3860,1310 @@
   "ref.color.accents.yellow": {
    "color": "@primary",
    "src": "judged:Material You: the accents become the wallpaper's primary (as Android's)"
+  },
+  "ref.color.backgrounds-grouped.primary": {
+   "light": "@surface_container",
+   "dark": "@surface_container_lowest",
+   "src": "judged:Material You: iOS's grouped background as Android 14's tonal role (@surface_container | @surface_container_lowest)"
+  },
+  "ref.color.backgrounds-grouped.primary-elevated": {
+   "color": "@surface_container",
+   "src": "judged:Material You: iOS's grouped background as Android 14's tonal role (@surface_container)"
+  },
+  "ref.color.backgrounds-grouped.secondary": {
+   "light": "@surface_container_lowest",
+   "dark": "@surface_container",
+   "src": "judged:Material You: iOS's grouped background (cards) as Android 14's tonal role (@surface_container_lowest | @surface_container)"
+  },
+  "ref.color.backgrounds-grouped.secondary-elevated": {
+   "light": "@surface_container_lowest",
+   "dark": "@surface_container_high",
+   "src": "judged:Material You: iOS's grouped background (cards) as Android 14's tonal role (@surface_container_lowest | @surface_container_high)"
+  },
+  "ref.color.backgrounds-grouped.tertiary": {
+   "light": "@surface_container",
+   "dark": "@surface_container_high",
+   "src": "judged:Material You: iOS's grouped background as Android 14's tonal role (@surface_container | @surface_container_high)"
+  },
+  "ref.color.backgrounds-grouped.tertiary-elevated": {
+   "light": "@surface_container",
+   "dark": "@surface_container_highest",
+   "src": "judged:Material You: iOS's grouped background as Android 14's tonal role (@surface_container | @surface_container_highest)"
+  },
+  "ref.color.backgrounds.primary": {
+   "color": "@surface_container_lowest",
+   "src": "judged:Material You: iOS's background as Android 14's tonal role (@surface_container_lowest)"
+  },
+  "ref.color.backgrounds.primary-elevated": {
+   "light": "@surface_container_lowest",
+   "dark": "@surface_container",
+   "src": "judged:Material You: iOS's background as Android 14's tonal role (@surface_container_lowest | @surface_container)"
+  },
+  "ref.color.backgrounds.secondary": {
+   "color": "@surface_container",
+   "src": "judged:Material You: iOS's background as Android 14's tonal role (@surface_container)"
+  },
+  "ref.color.backgrounds.secondary-elevated": {
+   "light": "@surface_container",
+   "dark": "@surface_container_high",
+   "src": "judged:Material You: iOS's background as Android 14's tonal role (@surface_container | @surface_container_high)"
+  },
+  "ref.color.backgrounds.tertiary": {
+   "light": "@surface_container_lowest",
+   "dark": "@surface_container_high",
+   "src": "judged:Material You: iOS's background as Android 14's tonal role (@surface_container_lowest | @surface_container_high)"
+  },
+  "ref.color.backgrounds.tertiary-elevated": {
+   "light": "@surface_container_lowest",
+   "dark": "@surface_container_highest",
+   "src": "judged:Material You: iOS's background as Android 14's tonal role (@surface_container_lowest | @surface_container_highest)"
+  },
+  "ref.color.fills.primary": {
+   "light": "@on_surface_variant/20",
+   "dark": "@on_surface_variant/36",
+   "src": "judged:Material You: iOS's fill (its alpha kept) as Android 14's tonal role (@on_surface_variant/20 | @on_surface_variant/36)"
+  },
+  "ref.color.fills.quaternary": {
+   "light": "@on_surface_variant/8",
+   "dark": "@on_surface_variant/18",
+   "src": "judged:Material You: iOS's fill (its alpha kept) as Android 14's tonal role (@on_surface_variant/8 | @on_surface_variant/18)"
+  },
+  "ref.color.fills.secondary": {
+   "light": "@on_surface_variant/16",
+   "dark": "@on_surface_variant/32",
+   "src": "judged:Material You: iOS's fill (its alpha kept) as Android 14's tonal role (@on_surface_variant/16 | @on_surface_variant/32)"
+  },
+  "ref.color.fills.tertiary": {
+   "light": "@on_surface_variant/12",
+   "dark": "@on_surface_variant/24",
+   "src": "judged:Material You: iOS's fill (its alpha kept) as Android 14's tonal role (@on_surface_variant/12 | @on_surface_variant/24)"
+  },
+  "ref.color.labels.primary": {
+   "color": "@on_surface",
+   "src": "judged:Material You: iOS's label as Android 14's tonal role (@on_surface)"
+  },
+  "ref.color.labels.quaternary": {
+   "color": "@on_surface_variant/25",
+   "src": "judged:Material You: iOS's label as Android 14's tonal role (@on_surface_variant/25)"
+  },
+  "ref.color.labels.secondary": {
+   "color": "@on_surface_variant/90",
+   "src": "judged:Material You: iOS's label as Android 14's tonal role (@on_surface_variant/90)"
+  },
+  "ref.color.labels.tertiary": {
+   "color": "@on_surface_variant/50",
+   "src": "judged:Material You: iOS's label as Android 14's tonal role (@on_surface_variant/50)"
+  },
+  "ref.color.separators.non-opaque": {
+   "color": "@outline_variant",
+   "src": "judged:Material You: iOS's separator as Android 14's tonal role (@outline_variant)"
+  },
+  "ref.color.separators.opaque": {
+   "color": "@outline_variant",
+   "src": "judged:Material You: iOS's separator as Android 14's tonal role (@outline_variant)"
+  },
+  "ref.material.classic.chrome": {
+   "material": {
+    "frost": 50,
+    "frostDark": 100,
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.75,
+       0.0
+      ],
+      "HARD_LIGHT"
+     ],
+     [
+      "#1c1c1c",
+      [
+       0.0,
+       0.9
+      ],
+      "NORMAL"
+     ],
+     [
+      "#7c7c7c",
+      [
+       0.0,
+       1.0
+      ],
+      "OVERLAY"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.classic.regular": {
+   "material": {
+    "frost": 100,
+    "frostDark": 100,
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.25,
+       0.0
+      ],
+      "LINEAR_DODGE"
+     ],
+     [
+      "#ffffff",
+      [
+       0.6,
+       0.0
+      ],
+      "COLOR_DODGE"
+     ],
+     [
+      "#000000",
+      [
+       0.0,
+       0.41
+      ],
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.classic.thick": {
+   "material": {
+    "frost": 100,
+    "frostDark": 100,
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.34,
+       0.0
+      ],
+      "LINEAR_DODGE"
+     ],
+     [
+      "#ffffff",
+      [
+       0.84,
+       0.0
+      ],
+      "COLOR_DODGE"
+     ],
+     [
+      "#000000",
+      [
+       0.0,
+       0.6
+      ],
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.classic.thin": {
+   "material": {
+    "frost": 100,
+    "frostDark": 100,
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.05,
+       0.0
+      ],
+      "NORMAL"
+     ],
+     [
+      "#ffffff",
+      [
+       0.4,
+       0.0
+      ],
+      "COLOR_DODGE"
+     ],
+     [
+      "#000000",
+      [
+       0.0,
+       0.26
+      ],
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.classic.ultrathin": {
+   "material": {
+    "frost": 100,
+    "frostDark": 100,
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.07,
+       0.0
+      ],
+      "NORMAL"
+     ],
+     [
+      "#ffffff",
+      [
+       0.03,
+       0.0
+      ],
+      "COLOR_DODGE"
+     ],
+     [
+      "#000000",
+      [
+       0.0,
+       0.02
+      ],
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.control-center.button": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#121212",
+      1.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.control-center.on": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#6f6f6f",
+      1.0,
+      "COLOR_DODGE"
+     ],
+     [
+      "#ffffff",
+      0.65,
+      "SCREEN"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.control-center.well": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#111111",
+      0.6,
+      "LUMINOSITY"
+     ],
+     [
+      "#777777",
+      1.0,
+      "COLOR_DODGE"
+     ],
+     [
+      "#222222",
+      1.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.liquid-glass.clear": {
+   "material": {
+    "frost": 6,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.4,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#101010",
+      1.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#ffffff",
+      0.04,
+      "LUMINOSITY"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#e6e6e6",
+      0.0,
+      40.0,
+      30.0,
+      -40.0,
+      "LINEAR_BURN"
+     ],
+     [
+      "#282828",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000005",
+      0.0,
+      8.0,
+      15.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#cccccc",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.liquid-glass.dock": {
+   "material": {
+    "frost": 3,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.2,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#999999",
+      [
+       0.33,
+       0.0
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#333333",
+      [
+       0.0,
+       0.33
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#282828",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      -1.25,
+      0.25,
+      0.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      1.25,
+      0.25,
+      0.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000005",
+      0.0,
+      8.0,
+      15.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#cccccc",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.liquid-glass.regular": {
+   "material": {
+    "frost": 16,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.25,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.7,
+       0.0
+      ],
+      "LIGHTEN"
+     ],
+     [
+      "#bfbfbf",
+      [
+       0.1,
+       0.0
+      ],
+      "DARKEN"
+     ],
+     [
+      "#1a1a1a",
+      [
+       0.0,
+       0.7
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#1a1a1a",
+      [
+       0.0,
+       0.9
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#1a1a1a",
+      [
+       0.0,
+       1.0
+      ],
+      "LIGHTEN"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#282828|#1a1a1a",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828|#1a1a1a",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000040|#00000073",
+      0.0,
+      8.0,
+      48.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.liquid-glass.small": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#747480",
+      [
+       0.08,
+       0.0
+      ],
+      "NORMAL"
+     ],
+     [
+      "#767680",
+      [
+       0.0,
+       0.12
+      ],
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": [
+     [
+      "#ebebeb|#e6e6e6",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.liquid-glass.small-active": {
+   "material": {
+    "frost": 6,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.25,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#000000",
+      [
+       0.25,
+       0.0
+      ],
+      "NORMAL"
+     ],
+     [
+      "#ffffff",
+      [
+       0.25,
+       0.0
+      ],
+      "NORMAL"
+     ],
+     [
+      "#444444",
+      [
+       0.6,
+       0.0
+      ],
+      "LINEAR_DODGE"
+     ],
+     [
+      "#f8f8f8",
+      [
+       0.2,
+       0.0
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#999999",
+      [
+       0.0,
+       0.17
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#e6e6e6",
+      0.0,
+      40.0,
+      30.0,
+      -40.0,
+      "LINEAR_BURN"
+     ],
+     [
+      "#282828|#1a1a1a",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828|#1a1a1a",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000005|#0000000a",
+      0.0,
+      8.0,
+      15.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#e8e8e8|#a6a6a6",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0|#a6a6a6",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0|#a6a6a6",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.overlay.control-center": {
+   "material": {
+    "frost": 24,
+    "fills": [
+     [
+      "#000000",
+      0.5,
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "ref.material.overlay.lock-screen": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#000000",
+      0.25,
+      "NORMAL"
+     ],
+     [
+      "#000000",
+      0.05,
+      "LINEAR_BURN"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "sys.material.glass.frosted": {
+   "material": {
+    "frost": 16,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.2,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.15,
+       0.0
+      ],
+      "LIGHTEN"
+     ],
+     [
+      "#999999",
+      [
+       0.33,
+       0.0
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#333333",
+      [
+       0.0,
+       0.45
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#282828",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      -1.25,
+      0.25,
+      0.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      1.25,
+      0.25,
+      0.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000040|#00000073",
+      0.0,
+      8.0,
+      48.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "sys.material.glass.frosted-legible": {
+   "material": {
+    "frost": 16,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.25,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#ffffff",
+      [
+       0.35,
+       0.0
+      ],
+      "LIGHTEN"
+     ],
+     [
+      "#bfbfbf",
+      [
+       0.05,
+       0.0
+      ],
+      "DARKEN"
+     ],
+     [
+      "#1a1a1a",
+      [
+       0.0,
+       0.35
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#1a1a1a",
+      [
+       0.0,
+       0.45
+      ],
+      "LUMINOSITY"
+     ],
+     [
+      "#1a1a1a",
+      [
+       0.0,
+       0.5
+      ],
+      "LIGHTEN"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.32,
+       0.3
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent1_100|@system_accent1_800",
+      [
+       0.08,
+       0.1
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#282828|#1a1a1a",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828|#1a1a1a",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000040|#00000073",
+      0.0,
+      8.0,
+      48.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#dbdbdb|#a6a6a6",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
   }
  }
 }

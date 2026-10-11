@@ -175,6 +175,57 @@ MATERIAL_YOU = {
     'component.control.accent-symbol-color': {'color': '@on_primary', 'src': "judged:Material You: a symbol on the primary is on-primary"},
 }
 
+# Material You beyond the accents (Matheesha, 2026-10-11: "the material you theming for ios is scarce"): as Android tints its
+# surfaces, iOS's backgrounds, fills, labels and separators take the palette's tonal roles (light | dark), its "on" states
+# the primary container, and every glass a colour layer of the palette (tinted_material below).
+_MY_SRC = "judged:Material You: iOS's {what} as Android 14's tonal role ({roles})"
+for _k, (_l, _d, _what) in {
+    'ref.color.backgrounds.primary': ('@surface_container_lowest', '@surface_container_lowest', 'background'),
+    'ref.color.backgrounds.primary-elevated': ('@surface_container_lowest', '@surface_container', 'background'),
+    'ref.color.backgrounds.secondary': ('@surface_container', '@surface_container', 'background'),
+    'ref.color.backgrounds.secondary-elevated': ('@surface_container', '@surface_container_high', 'background'),
+    'ref.color.backgrounds.tertiary': ('@surface_container_lowest', '@surface_container_high', 'background'),
+    'ref.color.backgrounds.tertiary-elevated': ('@surface_container_lowest', '@surface_container_highest', 'background'),
+    'ref.color.backgrounds-grouped.primary': ('@surface_container', '@surface_container_lowest', 'grouped background'),
+    'ref.color.backgrounds-grouped.primary-elevated': ('@surface_container', '@surface_container', 'grouped background'),
+    'ref.color.backgrounds-grouped.secondary': ('@surface_container_lowest', '@surface_container', 'grouped background (cards)'),
+    'ref.color.backgrounds-grouped.secondary-elevated': ('@surface_container_lowest', '@surface_container_high', 'grouped background (cards)'),
+    'ref.color.backgrounds-grouped.tertiary': ('@surface_container', '@surface_container_high', 'grouped background'),
+    'ref.color.backgrounds-grouped.tertiary-elevated': ('@surface_container', '@surface_container_highest', 'grouped background'),
+    'ref.color.fills.primary': ('@on_surface_variant/20', '@on_surface_variant/36', 'fill (its alpha kept)'),
+    'ref.color.fills.secondary': ('@on_surface_variant/16', '@on_surface_variant/32', 'fill (its alpha kept)'),
+    'ref.color.fills.tertiary': ('@on_surface_variant/12', '@on_surface_variant/24', 'fill (its alpha kept)'),
+    'ref.color.fills.quaternary': ('@on_surface_variant/8', '@on_surface_variant/18', 'fill (its alpha kept)'),
+    'ref.color.labels.primary': ('@on_surface', '@on_surface', 'label'),
+    'ref.color.labels.secondary': ('@on_surface_variant/90', '@on_surface_variant/90', 'label'),
+    'ref.color.labels.tertiary': ('@on_surface_variant/50', '@on_surface_variant/50', 'label'),
+    'ref.color.labels.quaternary': ('@on_surface_variant/25', '@on_surface_variant/25', 'label'),
+    'ref.color.separators.non-opaque': ('@outline_variant', '@outline_variant', 'separator'),
+    'ref.color.separators.opaque': ('@outline_variant', '@outline_variant', 'separator'),
+    'component.badge.fill': ('@error', '@error', 'badge (red)'),
+    'component.round-button.on-color': ('@primary_container', '@primary_container', 'round button when on (white)'),
+    'component.control.on-symbol-color': ('@on_primary_container', '@on_primary_container', 'symbol on a control that is on'),
+    'comp.nc.count.fill': ('@primary_container', '@primary_container', "Notification Center's count (white)"),
+    'comp.nc.count.label': ('@on_primary_container', '@on_primary_container', "Notification Center's count label"),
+    'component.menu.fallback': ('@surface_container/95', '@surface_container_high/85', "menu's plain fallback"),
+    'component.sheet.fallback-color': ('@surface_container/95', '@surface_container/90', "sheet's plain fallback"),
+    'comp.banner.flat-color': ('@surface_container_low/95', '@surface_container_high/92', "banner's plain fallback"),
+    'comp.settings.sheet.fill': ('@surface_container_low/85', '@surface_container/95', "settings' sheet"),
+    'comp.settings.button.fill': ('@surface_container_highest/80', '@surface_container_highest/80', "settings' round button"),
+    'comp.settings.chip.fill': ('@surface_container_highest', '@surface_container_highest', "settings' chip"),
+}.items():
+    MATERIAL_YOU[_k] = ({'color': _l} if _l == _d else {'light': _l, 'dark': _d}) | {'src': _MY_SRC.format(what=_what, roles=_l if _l == _d else _l + ' | ' + _d)}
+
+# Every glass, tinted: a colour layer of the palette's accent over what it shows (its luminosity kept: the glass stays as
+# light or dark as it was), and a faint wash of the accent's light (dark) tone, as Android's tinted surfaces.
+MY_GLASS_TINT = [['@system_accent1_500', [0.32, 0.3], 'COLOR'], ['@system_accent1_100|@system_accent1_800', [0.08, 0.1], 'NORMAL']]
+
+
+def tinted_material(m):
+    t = json.loads(json.dumps(m))
+    t['fills'] = list(t.get('fills', [])) + json.loads(json.dumps(MY_GLASS_TINT))
+    return t
+
 # Seeds for the hand-written tiers (only used for keys missing from the theme file).
 SEED = {
     'sys.shape.corner-smoothing': {'factor': 0, 'src': "judged:round corners as the iOS surfaces have been drawn so far (iOS's own are continuous: to judge against the kit)"},
@@ -764,6 +815,9 @@ COMPONENT_SEEDS = {
     'comp.settings.sheet.inset': {'pt': 8, 'src': "judged:iOS 26's floating sheets keep a margin from the screen's edges"},
     'comp.settings.sheet.rest': {'factor': 0.55, 'src': "judged:draft D: where the sheet's top rests (of the screen's height), the picture of home above it"},
     'comp.settings.sheet.open': {'factor': 0.36, 'src': "judged:draft D: the sheet's top with a page open (the picture smaller, still in sight)"},
+    'comp.settings.glass': {'factor': 1, 'src': "judged:Matheesha (2026-10-11): the overview's tiles as Liquid Glass over the blurred wallpaper, not coloured cards; the sheet turns solid only under an open page (iOS 26's sheets turn opaque when expanded)"},
+    'comp.settings.tile.material': {'ref': 'component.card.material', 'src': "judged:the theme's card glass (App Library's tiles, widgets)"},
+    'comp.settings.chip.material': {'ref': 'sys.material.glass.small', 'src': "judged:a small glass capsule (iOS 26's small controls)"},
     'comp.settings.tile.fill': {'light': '#ffffff00', 'dark': '#ffffff00', 'src': "judged:draft D (iOS 27): a tile is its colour over the sheet"},
     'comp.settings.tile.tint': {'factor': 0.14, 'src': "judged:draft D: how much of its colour a tile takes (iOS 27: a light tint)"},
     'comp.settings.tile.title-tint': {'factor': 1.0, 'src': "judged:draft D: a tile's name in its colour (0: the label colour)"},
@@ -868,10 +922,15 @@ def main():
     tokens = dict(sorted(tokens.items(), key=lambda kv: (not kv[0].startswith('ref.'), kv[0])))
     motion = {k: v for k, v in tokens.items() if k.startswith('motion.')}
     tokens = {k: v for k, v in tokens.items() if not k.startswith('motion.')}
+    my = dict(MATERIAL_YOU)
+    for k, v in tokens.items():
+        if 'material' in v:
+            my[k] = {'material': tinted_material(v['material']),
+                     'src': "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"}
     theme = {'format': 1, 'name': 'iOS 27', 'author': 'Launcher (from Apple\'s iOS 27 UI kit)', 'version': '0.1',
              '_about': 'ref.* is generated by tools/design/build_ios27_theme.py from docs/tokens/ios27-kit.json; sys.* and comp.* are written here.',
              'tokens': tokens,
-             'materialYou': dict(sorted(MATERIAL_YOU.items()))}
+             'materialYou': dict(sorted(my.items()))}
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(theme, f, indent=1, ensure_ascii=False)

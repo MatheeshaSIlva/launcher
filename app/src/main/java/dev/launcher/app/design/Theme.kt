@@ -366,14 +366,13 @@ fun Material.bindRefs(colorOf: (String) -> Value.Color): Material {
 /** How a theme's layers stack. Pure (no Android): unit-tested. */
 object ThemeLayers {
     /**
-     * The layers a theme resolves from: the themes it is built on (base first), their Material You sections when
-     * [materialYou] (all of them, the later winning), then the user's edits.
+     * The layers a theme resolves from: the themes it is built on (base first), each followed by its Material You section
+     * when [materialYou], then the user's edits. A theme's own tokens win over the Material You of the themes it is built
+     * on (iOS 27's tinted glass does not replace a glass Graphite draws its own way); its own Material You wins over both.
      */
-    fun of(chain: List<Theme>, edits: Map<String, Entry>, materialYou: Boolean): List<Map<String, Entry>> {
-        val my = LinkedHashMap<String, Entry>()
-        if (materialYou) for (t in chain) my.putAll(t.materialYou)
-        return chain.map { it.entries } + (if (my.isEmpty()) emptyList() else listOf(my)) + listOf(LinkedHashMap(edits))
-    }
+    fun of(chain: List<Theme>, edits: Map<String, Entry>, materialYou: Boolean): List<Map<String, Entry>> =
+        chain.flatMap { t -> if (materialYou && t.materialYou.isNotEmpty()) listOf(t.entries, t.materialYou) else listOf(t.entries) } +
+            listOf(LinkedHashMap(edits))
 
     /** The user (or the theme) chose the wallpaper's colours (`sys.color.source` = "wallpaper"). */
     fun fromWallpaper(chain: List<Theme>, edits: Map<String, Entry>): Boolean =

@@ -366,6 +366,10 @@
   "comp.settings.group.corner": {
    "pt": 16,
    "src": "judged:Graphite: tighter corners"
+  },
+  "comp.settings.glass": {
+   "factor": 0,
+   "src": "judged:Graphite keeps its coloured tiles on a solid sheet"
   }
  }
 }

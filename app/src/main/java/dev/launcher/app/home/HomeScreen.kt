@@ -255,6 +255,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     /** Home as it shows now (or would, behind another screen), exactly (the settings app's "Your setup"). Main thread. */
     fun pictureNow(): android.graphics.Bitmap? {
+        // Not shown yet in this process (its cold arrival still waits for the first time it is seen), or no wallpaper read
+        // yet: home has never drawn at rest, and its picture was black (the settings kept it as home's look).
+        if (coldHoldWanted || m == null || pages.isEmpty() || width == 0 || dev.launcher.app.Wallpaper.current == null) return null
         // A clock built again behind (a new theme while the settings were open) has not set its time yet: it would show none.
         for (c in clocks) c.refresh(animate = false)
         // After a cold start home holds its arrival's first frame (its icons out) until it shows: pictured at rest instead

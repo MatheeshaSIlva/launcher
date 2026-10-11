@@ -214,6 +214,24 @@ settings into it"):**
   entry are gone; the plain safe settings screen stays, without a drawer entry, for the Restore notification (it opens
   even if the themes cannot load).
 
+**S6 (2026-10-11; Matheesha on S5: "don't clip the phone preview into a small box. Instead, make it fade towards below,
+behind the menu. The switching of the zoomed in place with scrolling is a bit odd ... I don't like the multicoloured cards
+for the settings app overview for the IOS theme. make it follow the liquid glass theme instead"):**
+- The picture: whole, it is the phone in its frame; focused, it zooms to the full width (the status bar at ~92 % of its
+  real size) with the part in the room above the sheet, and fades away from it (below, behind the sheet; above, for a part
+  at the phone's bottom edge, Recents), no frame and no box; the frame's shadow and rim go as it zooms. One spring for the
+  band and the zoom (`motion.settings.focus`); the fade is a layer the size of the room, only while focused.
+- Layouts: the elements in a picker at the top (it stays while the page scrolls), the chosen one's layouts, place and
+  options below; another element slides in from its side as the last slides away (each its own spring, `motion.sheet.push`,
+  interruptible), and the picture moves to it. The focus follows the choice, not the scroll.
+- iOS 27's overview is Liquid Glass (`comp.settings.glass` 1): the page is the wallpaper blurred under the appearance's veil
+  (the App Library's), the tiles and the chips glass (`comp.settings.tile.material`, `chip.material`), monochrome symbols
+  and names in the labels' colours; there is no sheet at rest, it turns solid under a page as it opens (iOS 26's sheets turn
+  opaque when expanded); the growing tile is glass giving way to it. Glass that moves with the sheet reads its place again
+  every frame (`movingGlass`). Graphite keeps its coloured tiles on a solid sheet (`glass` 0).
+- The picture of home is never taken before home has drawn at rest in this process (an all-black one was taken after a
+  restart and kept as home's look).
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 

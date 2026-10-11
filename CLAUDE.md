@@ -58,8 +58,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   everything; pages are built ahead and only placed while open (a page built in a transition's first frame cost the S24
   60-80 ms); solid groups (no glass per card). Changes wait in a draft for Apply (`Draft`, `ApplyBar`, `Design.batch`:
   one reveal for all of them); a look change is revealed from the tap
-  (`ThemeReveal`). The picture of home (with our status bar drawn on it) takes no touches: it focuses on the part a page
-  is about (`motion.settings.focus`). Phone holds Shizuku, updates, safety and the developer tools with the log.
+  (`ThemeReveal`). The picture of home (with our status bar drawn on it) takes no touches: it zooms to the element chosen
+  in Layouts' picker and fades away behind the sheet (`motion.settings.focus`). iOS 27's overview is glass over the blurred
+  wallpaper (`comp.settings.glass`), the sheet solid only under an open page. Phone holds Shizuku, updates, safety and the
+  developer tools with the log.
   Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control.
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
@@ -72,7 +74,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   the code reads is missing or of another kind); switch/reload: `am broadcast -a dev.launcher.app.DESIGN_RELOAD -p
   dev.launcher.app [--es theme ID]`, or the token editor's Theme button. Colours may name the phone's palette (`@primary`,
   `@system_accent2_900/40`: Material You, looked up when drawn); every theme may have a `materialYou` section used when the
-  user picks the wallpaper's colours (`sys.color.source`; adb: `DESIGN_RELOAD --es colors wallpaper|theme`).
+  user picks the wallpaper's colours (`sys.color.source`; adb: `DESIGN_RELOAD --es colors wallpaper|theme`). iOS 27's maps
+  its backgrounds, fills, labels and separators to Android 14's tonal roles (`@surface_container...`, `@on_surface`), its
+  white "on" states to the primary container, and tints every glass (a COLOR layer of `@system_accent1_500` and a faint
+  wash; written by the builder). A theme's own tokens win over the Material You of the theme it extends.
   **A theme per element** (`design/TokenParts`): an element's code reads only its own namespace (`comp.statusbar.*`,
   `comp.nc/cc/banner.*`, `comp.switcher.*`, `comp.library/spotlight.*`, `comp.home/widgets/badge.*`, `comp.settings.*`;
   a test checks it), aliases into `sys.*`/`component.*`; an element given its own theme resolves its namespace there

@@ -101,6 +101,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.animation.core.VectorConverter
+import dev.launcher.app.design.MaterialKey
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.composed
+import androidx.compose.ui.zIndex
 import androidx.compose.animation.animateContentSize
 
 /**
@@ -120,6 +124,10 @@ object SettingsTokens {
     val SHEET_INSET = NumberKey("comp.settings.sheet.inset")
     val SHEET_REST = NumberKey("comp.settings.sheet.rest")
     val SHEET_OPEN = NumberKey("comp.settings.sheet.open")
+    /** 1: the overview is glass over the blurred wallpaper (iOS 27's Liquid Glass); 0: coloured tiles on a solid sheet. */
+    val GLASS = NumberKey("comp.settings.glass")
+    val TILE_MATERIAL = MaterialKey("comp.settings.tile.material")
+    val CHIP_MATERIAL = MaterialKey("comp.settings.chip.material")
     val TILE_FILL = ColorKey("comp.settings.tile.fill")
     val TILE_TINT = NumberKey("comp.settings.tile.tint")
     val TILE_TITLE_TINT = NumberKey("comp.settings.tile.title-tint")
@@ -326,8 +334,12 @@ private class Studio {
     var built by mutableIntStateOf(0)
     /** Each page's scroll (kept while the settings are open: a page comes back where it was). */
     val scrolls = Part.entries.associateWith { IosScrollState() }
-    /** Where each element's section starts on Layouts (from the top of its content): the picture focuses on the one read. */
-    val sections = androidx.compose.runtime.mutableStateMapOf<Element, Float>()
+    /** The element Layouts shows (chosen at its top: the picture focuses on it), each one's presence (0..1), and scroll. */
+    var element by mutableStateOf(Element.STATUS_BAR)
+    val elementShown = Element.entries.associateWith { Animatable(if (it == Element.STATUS_BAR) 1f else 0f) }
+    /** The side each element slides to or from (-1 left, 1 right), set when it starts coming or going. */
+    val elementSide = Element.entries.associateWith { androidx.compose.runtime.mutableFloatStateOf(1f) }
+    val elementScrolls = Element.entries.associateWith { IosScrollState() }
 }
 
 private val LocalStudio = staticCompositionLocalOf<Studio?> { null }
@@ -423,9 +435,17 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         // service on (gesture nav is one), Compose re-reads the whole tree every 100 ms while layers move (7-25 ms frames
         // on the S24; none without the tree). At rest it is all there again, for whatever reads it.
         // Scrolling counts too: the rest of the tree alone still cost 4-5 ms a check while a page scrolled on the S24.
-        val moving by remember { androidx.compose.runtime.derivedStateOf { st.p.isRunning || bar.isRunning || st.scrolls.values.any { it.moving } } }
+        val moving by remember {
+            androidx.compose.runtime.derivedStateOf {
+                st.p.isRunning || bar.isRunning || st.scrolls.values.any { it.moving } ||
+                    st.elementShown.values.any { it.isRunning } || st.elementScrolls.values.any { it.moving }
+            }
+        }
         CompositionLocalProvider(LocalDraft provides draft, LocalStudio provides st) {
-            Box(Modifier.fillMaxSize().then(if (moving) Modifier.clearAndSetSemantics { } else Modifier).background(look.color(SettingsTokens.BACKGROUND))) {
+            // The page behind everything: the theme's colour, or (glass) the wallpaper blurred under the appearance's veil.
+            val glass = Design.num(SettingsTokens.GLASS) > 0.5f
+            val backdrop = if (glass) Modifier.drawBehind { drawIntoCanvas { look.drawBackdrop(it.nativeCanvas) } } else Modifier.background(look.color(SettingsTokens.BACKGROUND))
+            Box(Modifier.fillMaxSize().then(if (moving) Modifier.clearAndSetSemantics { } else Modifier).then(backdrop)) {
                 HomePicture(st, g, bar)
                 Header(st, g) { close(0f) }
                 Sheet(st, g, bar, open, close)
@@ -449,11 +469,11 @@ private fun BackToTiles(st: Studio, close: (Float) -> Unit, draft: Draft, leave:
 }
 
 /**
- * What part of the phone the picture shows, as fractions of the screen: all of it, or the part a page is about (the
- * element whose section is being read on Layouts). Matheesha: the elements were too small to see on the picture.
+ * What part of the phone the picture is about, as a band of the screen's height (top, bottom; always its full width): all
+ * of it, or the part the element chosen on Layouts lives in. Matheesha: the elements were too small to see on the picture.
  */
 private fun focusOf(e: Element?, placement: String, statusFrac: Float): Rect = when (e) {
-    // The top of the screen, wide: the bar at close to its real size.
+    // The top of the screen: the bar at close to its real size.
     Element.STATUS_BAR -> Rect(0f, 0f, 1f, (statusFrac * 3f).coerceIn(0.08f, 0.16f))
     // Where it is pulled from.
     Element.SHADE -> Rect(0f, 0f, 1f, 0.22f)
@@ -467,10 +487,11 @@ private fun focusOf(e: Element?, placement: String, statusFrac: Float): Rect = w
 }
 
 /**
- * Home as it is now, in the phone's shape, above the sheet; a new picture (after any change) fades in over the last.
- * It focuses on the part a page is about: the frame takes that part's shape (a wide strip for the status bar) and the
- * picture zooms into it, one spring moving both. Drawn in one pass (no layer moves: see [SettingsApp]); it takes no
- * touches.
+ * Home as it is now, above the sheet; a new picture (after any change) fades in over the last. Whole, it is the phone in
+ * its frame. Focused on a part (the element chosen on Layouts), it zooms to the full width with that part in the room above
+ * the sheet, and fades away from it (below, behind the sheet; above, for a part at the phone's bottom edge): no frame, no
+ * box (Matheesha: "don't clip the phone preview into a small box"). One spring moves the zoom and the fade
+ * (`motion.settings.focus`). Drawn in one pass (no layer moves: see [SettingsApp]); it takes no touches.
  */
 @Composable
 private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
@@ -478,19 +499,16 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     val ctx = LocalContext.current
     val statusFrac = g.statusPx / g.h
     val draft = LocalDraft.current
-    // What it focuses on: on Layouts, the element whose section is at the top of what shows (once the page has come).
-    val focused by remember {
-        androidx.compose.runtime.derivedStateOf {
-            if (st.open != Part.LAYOUTS || st.p.targetValue < 0.5f) null else {
-                val at = st.scrolls.getValue(Part.LAYOUTS).offset + 160f * g.unit
-                Element.entries.filter { (st.sections[it] ?: Float.MAX_VALUE) <= at }.maxByOrNull { st.sections[it] ?: 0f }
-                    ?: Element.entries.first()
-            }
-        }
-    }
+    // What it focuses on: on Layouts, the element chosen at its top (once the page is coming).
+    val focused by remember { androidx.compose.runtime.derivedStateOf { if (st.open == Part.LAYOUTS && st.p.targetValue >= 0.5f) st.element else null } }
     val target = focusOf(focused, focused?.let { draft.placement(it) } ?: "", statusFrac)
     val crop = remember { Animatable(Rect(0f, 0f, 1f, 1f), Rect.VectorConverter) }
-    LaunchedEffect(target) { crop.animateTo(target, look.motion(MotionTokens.SETTINGS_FOCUS)) }
+    val zoom = remember { Animatable(0f) }
+    LaunchedEffect(target) {
+        val spec = look.motion<Rect>(MotionTokens.SETTINGS_FOCUS)
+        launch { zoom.animateTo(if (target.height >= 0.999f) 0f else 1f, look.motion(MotionTokens.SETTINGS_FOCUS)) }
+        crop.animateTo(target, spec)
+    }
     // While Motion is open, an app opens and closes on the picture, again and again, on the chosen preset's own curves
     // (0: closed, 1: open; below 0: no demo).
     val demo = remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
@@ -572,6 +590,7 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
             val shadow = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
             val rim = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
             val image = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+            val mask = android.graphics.Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN) }
             val path = android.graphics.Path()
             val frame = android.graphics.RectF()
             val src = android.graphics.Rect()
@@ -582,36 +601,57 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     Box(Modifier.fillMaxSize().semantics { contentDescription = "Your home screen" }.drawBehind {
         val p = st.p.value
         val c = crop.value
-        val cw = c.width.coerceAtLeast(0.01f)
+        val z = zoom.value.coerceIn(0f, 1f)
         val ch = c.height.coerceAtLeast(0.01f)
-        // The room between the header and the sheet (as the sheet rises the picture shrinks, keeping to it), and the
-        // frame: the focus's shape fitted into it, in its middle.
-        val availH = (g.top(p, bar.value) - g.previewTop - 22f * g.unit).coerceAtLeast(60f * g.unit)
+        // The room between the header and the sheet (the sheet rises as a page opens: the room shrinks with it).
+        val sheetTop = g.top(p, bar.value)
+        val availH = (sheetTop - g.previewTop - 22f * g.unit).coerceAtLeast(60f * g.unit)
         val availW = g.w - margin * 2f
-        val aspect = (cw * g.w) / (ch * g.h)
-        var fw = availW
-        var fh = fw / aspect
-        if (fh > availH) { fh = availH; fw = fh * aspect }
-        val fx = (g.w - fw) / 2f
-        val fy = g.previewTop + (availH - fh) / 2f
-        // Phone pixels to frame pixels.
-        val s = fw / (cw * g.w)
-        // The phone's corners as the zoom makes them, kept within the frame's shape.
-        val r = (g.w * cornerFrac * s).coerceAtMost(minOf(fw, fh) * 0.22f)
-        val f = paints.frame.apply { set(fx, fy, fx + fw, fy + fh) }
+        // Whole: the phone fitted into the room, in its frame.
+        var fw0 = availW
+        var fh0 = fw0 * g.h / g.w
+        if (fh0 > availH) { fh0 = availH; fw0 = fh0 * g.w / g.h }
+        val s0 = fw0 / g.w
+        val x0 = (g.w - fw0) / 2f
+        val y0 = g.previewTop + (availH - fh0) / 2f
+        // Focused: the full width, the part in the room (as high in it as the part is on the phone).
+        val s1 = availW / g.w
+        val anchor = if (ch >= 0.999f) 0f else (c.top / (1f - ch)).coerceIn(0f, 1f)
+        val bandH = ch * g.h * s1
+        val bandY = g.previewTop + (availH - bandH) * anchor
+        val x1 = margin
+        val y1 = bandY - c.top * g.h * s1
+        val s = s0 + (s1 - s0) * z
+        val ox = x0 + (x1 - x0) * z
+        val oy = y0 + (y1 - y0) * z
+        // The phone's outline where it is now, its corners at its scale.
+        val r = g.w * cornerFrac * s
+        val f = paints.frame.apply { set(ox, oy, ox + g.w * s, oy + g.h * s) }
         drawIntoCanvas { cv ->
             val nc = cv.nativeCanvas
-            // A soft shadow (cast by a shape in the page's own colour, so only the shadow shows), then the phone's edge.
-            paints.shadow.color = page
-            paints.shadow.setShadowLayer(18f * g.unit, 0f, 8f * g.unit, shadow)
-            nc.drawRoundRect(f, r, r, paints.shadow)
-            paints.rim.color = rim
-            nc.drawRoundRect(fx - rimW, fy - rimW, fx + fw + rimW, fy + fh + rimW, r + rimW, r + rimW, paints.rim)
+            // Whole: a soft shadow (cast by a shape in the page's own colour, so only the shadow shows) and the phone's
+            // edge; both go as it zooms (there is no frame to cast them).
+            val frameA = 1f - z
+            if (frameA > 0.003f) {
+                paints.shadow.color = page
+                paints.shadow.alpha = (255 * frameA).toInt()
+                paints.shadow.setShadowLayer(18f * g.unit, 0f, 8f * g.unit, ((((shadow ushr 24) * frameA).toInt() shl 24) or (shadow and 0xFFFFFF)))
+                nc.drawRoundRect(f, r, r, paints.shadow)
+                paints.rim.color = rim
+                paints.rim.alpha = ((rim ushr 24) * frameA).toInt()
+                nc.drawRoundRect(f.left - rimW, f.top - rimW, f.right + rimW, f.bottom + rimW, r + rimW, r + rimW, paints.rim)
+            }
+            // Focused: it fades away from the part, towards the sheet (below) or the header (above), through a layer the size
+            // of the room it shows in.
+            val fadeTop = g.previewTop
+            val fadeBottom = sheetTop + 40f * g.unit
+            val layered = z > 0.003f
+            if (layered) nc.saveLayer(0f, fadeTop - 1f, g.w, fadeBottom + 1f, null)
             paints.path.rewind()
             paints.path.addRoundRect(f, r, r, android.graphics.Path.Direction.CW)
             nc.save()
             nc.clipPath(paints.path)
-            nc.translate(fx - c.left * g.w * s, fy - c.top * g.h * s)
+            nc.translate(ox, oy)
             nc.scale(s, s)
             // In phone pixels from here.
             fun picture(b: android.graphics.Bitmap, alpha: Float) {
@@ -647,6 +687,25 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
                 nc.drawRoundRect(a.left, a.top, a.right, a.bottom, rc, rc, paints.rim)
             }
             nc.restore()
+            if (layered) {
+                // Opaque over the part; towards the room's far side it fades out (the phone's own edge, when the part is at
+                // one, stays: nothing to fade there).
+                val bandTop = (bandY + (y0 - bandY) * (1f - z)).coerceIn(fadeTop, fadeBottom)
+                val bandBottom = (bandY + bandH).coerceIn(fadeTop, fadeBottom)
+                val atTop = c.top <= 0.001f
+                val atBottom = c.bottom >= 0.999f
+                val edge = 1f - z
+                val topA = if (atTop) 1f else edge
+                val bottomA = if (atBottom) 1f else edge
+                fun a(k: Float) = (255 * k).toInt().coerceIn(0, 255) shl 24
+                val t0 = 0f
+                val t1 = ((bandTop - fadeTop) / (fadeBottom - fadeTop)).coerceIn(0f, 1f)
+                val t2 = ((bandBottom - fadeTop) / (fadeBottom - fadeTop)).coerceIn(t1, 1f)
+                paints.mask.shader = android.graphics.LinearGradient(0f, fadeTop, 0f, fadeBottom,
+                    intArrayOf(a(topA), a(1f), a(1f), a(bottomA)), floatArrayOf(t0, t1, t2, 1f), android.graphics.Shader.TileMode.CLAMP)
+                nc.drawRect(0f, fadeTop - 1f, g.w, fadeBottom + 1f, paints.mask)
+                nc.restore()
+            }
         }
     })
 }
@@ -719,17 +778,24 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
     val shadowPaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
     // A sheet that meets the screen's edges takes its bottom corners past them.
     val below = if (g.inset < 0.5f) corner else 0f
+    // Glass: at rest there is no sheet (the tiles are glass on the blurred wallpaper); it turns solid under a page as it
+    // opens, as iOS 26's sheets do when they expand.
+    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
+    val solid: () -> Float = { if (glass) st.p.value.coerceIn(0f, 1f) else 1f }
     Box(
         Modifier
             .offset { IntOffset(g.inset.roundToInt(), g.openTop.roundToInt()) }
             .size(look.dp(g.sheetW), look.dp(g.sheetH))
             .graphicsLayer { translationY = g.top(st.p.value, bar.value) - g.openTop }
             .drawBehind {
+                val k = solid()
+                if (k <= 0.003f) return@drawBehind
                 shadowPaint.color = page.toArgb()
-                shadowPaint.setShadowLayer(26f * g.unit, 0f, -2f * g.unit, shadow.toArgb())
+                shadowPaint.alpha = (255 * k).toInt()
+                shadowPaint.setShadowLayer(26f * g.unit, 0f, -2f * g.unit, shadow.copy(alpha = shadow.alpha * k).toArgb())
                 drawIntoCanvas { it.nativeCanvas.drawRoundRect(0f, 0f, size.width, size.height + below, corner, corner, shadowPaint) }
-                drawRoundRect(fill, size = Size(size.width, size.height + below), cornerRadius = CornerRadius(corner))
-                drawRoundRect(rim, size = Size(size.width, size.height + below), cornerRadius = CornerRadius(corner), style = Stroke(1f * g.unit))
+                drawRoundRect(fill.copy(alpha = fill.alpha * k), size = Size(size.width, size.height + below), cornerRadius = CornerRadius(corner))
+                drawRoundRect(rim.copy(alpha = rim.alpha * k), size = Size(size.width, size.height + below), cornerRadius = CornerRadius(corner), style = Stroke(1f * g.unit))
             }
             .clip(RoundedCornerShape(topStart = look.dp(corner), topEnd = look.dp(corner),
                 bottomStart = look.dp(corner - below), bottomEnd = look.dp(corner - below)))
@@ -740,10 +806,11 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
         for ((i, part) in Part.entries.withIndex()) {
             if (st.built > i) PageLayer(st, g, part, close)
         }
+        val grabber = look.color(SettingsTokens.TITLE_COLOR).copy(alpha = 0.18f)
         Box(
             Modifier.align(Alignment.TopCenter).padding(top = look.dp(7f * g.unit))
                 .size(look.dp(36f * g.unit), look.dp(5f * g.unit))
-                .background(look.color(SettingsTokens.TITLE_COLOR).copy(alpha = 0.18f), RoundedCornerShape(50)),
+                .drawBehind { drawRoundRect(grabber.copy(alpha = grabber.alpha * solid()), cornerRadius = CornerRadius(size.height / 2f)) },
         )
     }
 }
@@ -785,10 +852,13 @@ private fun Chip(text: String, onClick: () -> Unit) {
     val look = LocalLook.current
     var pressed by remember { mutableStateOf(false) }
     val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
+    val st = LocalStudio.current
     BasicText(text, style = look.text(SettingsTokens.CHIP_TEXT, look.color(SettingsTokens.CHIP_TEXT_COLOR)), maxLines = 1,
         modifier = Modifier
             .pressScale { 1f - 0.05f * press }
-            .background(look.color(SettingsTokens.CHIP_FILL), RoundedCornerShape(look.dp(SettingsTokens.CHIP_CORNER)))
+            .then(if (glass) Modifier.movingGlass(SettingsTokens.CHIP_MATERIAL, look.pt(SettingsTokens.CHIP_CORNER), { press }) { st?.p?.value }
+                else Modifier.background(look.color(SettingsTokens.CHIP_FILL), RoundedCornerShape(look.dp(SettingsTokens.CHIP_CORNER))))
             .pointerInput(onClick) { rowTap({ pressed = it }, onClick) }
             .padding(horizontal = look.dp(12f * look.unit), vertical = look.dp(7f * look.unit)))
 }
@@ -800,6 +870,26 @@ private fun Chip(text: String, onClick: () -> Unit) {
 private fun Modifier.pressScale(scale: () -> Float): Modifier = drawWithContent {
     val s = scale()
     if (s == 1f) drawContent() else scale(s) { this@drawWithContent.drawContent() }
+}
+
+/**
+ * This element as glass [key] (corner [cornerPx]) where it is on screen now: its place is read again whenever it draws, and
+ * it draws again whenever [moving] changes (the sheet's spring): a glass that kept the place it rested at showed the wrong
+ * part of the wallpaper while the sheet moved.
+ */
+private fun Modifier.movingGlass(key: MaterialKey, cornerPx: Float, press: () -> Float, moving: () -> Float?): Modifier = composed {
+    val look = LocalLook.current
+    val at = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    val rect = remember { android.graphics.RectF() }
+    this
+        .onPlaced { at[0] = it }
+        .drawBehind {
+            moving()
+            val co = at[0]?.takeIf { it.isAttached } ?: return@drawBehind
+            val o = co.positionInWindow()
+            rect.set(0f, 0f, size.width, size.height)
+            drawIntoCanvas { look.drawGlass(it.nativeCanvas, key, rect, cornerPx, o.x, o.y, press()) }
+        }
 }
 
 /** A tile's fill: its colour by the theme's tint over the tile's own fill. */
@@ -827,7 +917,8 @@ private fun mix(a: Color, b: Color, t: Float) = Color(
 private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifier) {
     val look = LocalLook.current
     val c = look.color(part.color)
-    val titleTint = Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
+    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
+    val titleTint = if (glass) 0f else Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
     val label = look.color(SettingsTokens.ROW_LABEL)
     val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
     val symbol = look.pt(SettingsTokens.TILE_SYMBOL)
@@ -854,13 +945,16 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
                 }
             }
             .pressScale { 1f - 0.04f * press.value }
-            .background(tileFill(look, part), RoundedCornerShape(look.dp(SettingsTokens.TILE_CORNER)))
+            .then(if (glass) Modifier.movingGlass(SettingsTokens.TILE_MATERIAL, look.pt(SettingsTokens.TILE_CORNER), { press.value }) { st.p.value }
+                else Modifier.background(tileFill(look, part), RoundedCornerShape(look.dp(SettingsTokens.TILE_CORNER))))
             .pointerInput(part) { rowTap({ pressed = it }) { open(part) } }
             .padding(look.dp(14f * look.unit)),
     ) {
-        Box(Modifier.size(look.dp(symbol)).background(c, RoundedCornerShape(look.dp(SettingsTokens.TILE_SYMBOL_CORNER))), contentAlignment = Alignment.Center) {
-            Image(painterResource(part.symbol), null, colorFilter = ColorFilter.tint(look.color(SettingsTokens.TILE_SYMBOL_COLOR)),
-                modifier = Modifier.size(look.dp(symbol * 0.6f)))
+        // Glass: the symbol alone in the label's colour (no coloured square), the names in the labels' colours.
+        Box(Modifier.size(look.dp(symbol)).then(if (glass) Modifier else Modifier.background(c, RoundedCornerShape(look.dp(SettingsTokens.TILE_SYMBOL_CORNER)))),
+            contentAlignment = if (glass) Alignment.CenterStart else Alignment.Center) {
+            Image(painterResource(part.symbol), null, colorFilter = ColorFilter.tint(if (glass) label else look.color(SettingsTokens.TILE_SYMBOL_COLOR)),
+                modifier = Modifier.size(look.dp(symbol * if (glass) 0.8f else 0.6f)))
         }
         Spacer(Modifier.weight(1f))
         BasicText(part.title, style = look.text(SettingsTokens.TILE_TITLE, mix(label, c, titleTint)), maxLines = 1)
@@ -876,16 +970,19 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
 @Composable
 private fun GrowingTile(st: Studio, part: Part) {
     val look = LocalLook.current
+    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
     val bg = tileFill(look, part)
     val c = look.color(part.color)
+    val label = look.color(SettingsTokens.ROW_LABEL)
+    val glassRect = remember { android.graphics.RectF() }
     val fromCorner = look.pt(SettingsTokens.TILE_CORNER)
     val toCorner = look.pt(SettingsTokens.SHEET_CORNER)
     val pad = 14f * look.unit
     val symbol = look.pt(SettingsTokens.TILE_SYMBOL)
     val symbolCorner = look.pt(SettingsTokens.TILE_SYMBOL_CORNER)
     val glyph = painterResource(part.symbol)
-    val glyphColor = ColorFilter.tint(look.color(SettingsTokens.TILE_SYMBOL_COLOR))
-    val titleTint = Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
+    val glyphColor = ColorFilter.tint(if (glass) label else look.color(SettingsTokens.TILE_SYMBOL_COLOR))
+    val titleTint = if (glass) 0f else Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
     val measurer = rememberTextMeasurer()
     val title = remember(part, look) { measurer.measure(part.title, look.text(SettingsTokens.TILE_TITLE, mix(look.color(SettingsTokens.ROW_LABEL), c, titleTint))) }
     Canvas(Modifier.fillMaxSize()) {
@@ -903,13 +1000,22 @@ private fun GrowingTile(st: Studio, part: Part) {
         )
         val corner = fromCorner + (toCorner - fromCorner) * k.coerceIn(0f, 1f)
         val colour = (1f - (p - 0.25f) / 0.6f).coerceIn(0f, 1f)
-        drawRoundRect(bg.copy(alpha = bg.alpha * colour), r.topLeft, r.size, CornerRadius(corner))
+        if (glass) {
+            // The tile's glass grows with it, at its place over the wallpaper, and gives way to the sheet turning solid.
+            val at = st.sheet?.takeIf { it.isAttached }?.positionInWindow() ?: Offset.Zero
+            glassRect.set(r.left, r.top, r.right, r.bottom)
+            if (colour > 0.003f) drawIntoCanvas { look.drawGlass(it.nativeCanvas, SettingsTokens.TILE_MATERIAL, glassRect, corner, at.x, at.y, alpha = colour) }
+        } else drawRoundRect(bg.copy(alpha = bg.alpha * colour), r.topLeft, r.size, CornerRadius(corner))
         val content = (1f - p / 0.35f).coerceIn(0f, 1f)
         if (content > 0f) {
             translate(r.left + pad, r.top + pad) {
-                drawRoundRect(c.copy(alpha = c.alpha * content), Offset.Zero, Size(symbol, symbol), CornerRadius(symbolCorner))
-                translate(symbol * 0.2f, symbol * 0.2f) {
-                    with(glyph) { draw(Size(symbol * 0.6f, symbol * 0.6f), alpha = content, colorFilter = glyphColor) }
+                if (glass) {
+                    with(glyph) { draw(Size(symbol * 0.8f, symbol * 0.8f), alpha = content, colorFilter = glyphColor) }
+                } else {
+                    drawRoundRect(c.copy(alpha = c.alpha * content), Offset.Zero, Size(symbol, symbol), CornerRadius(symbolCorner))
+                    translate(symbol * 0.2f, symbol * 0.2f) {
+                        with(glyph) { draw(Size(symbol * 0.6f, symbol * 0.6f), alpha = content, colorFilter = glyphColor) }
+                    }
                 }
             }
             drawText(title, topLeft = Offset(r.left + pad, from.bottom - from.top + r.top - pad - title.size.height - 16f * look.unit), alpha = content)
@@ -950,27 +1056,14 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
                     translationX = if (open) 0f else g.w * 3f
                     alpha = if ((open && st.p.value > 0f) || warm) 1f else 0f
                 }
-                // Content scrolled up dissolves under the sheet's top edge. Only that band goes through a layer of its own
-                // (the content is a layer: drawing it twice draws one list twice); the whole page in one cost a sheet-sized
-                // buffer every frame of a scroll.
-                .drawWithContent {
-                    val top = 6f * g.unit
-                    val end = top + fadePx
-                    clipRect(top = end) { this@drawWithContent.drawContent() }
-                    if (scroll.offset > 0f) drawIntoCanvas { cv ->
-                        cv.saveLayer(Rect(0f, top, size.width, end), bandPaint)
-                        clipRect(top = top, bottom = end) { this@drawWithContent.drawContent() }
-                        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = top, endY = end),
-                            topLeft = Offset(0f, top), size = Size(size.width, fadePx), blendMode = BlendMode.DstIn)
-                        cv.restore()
-                    } else clipRect(top = top, bottom = end) { this@drawWithContent.drawContent() }
-                },
+                .then(if (part == Part.LAYOUTS) Modifier else Modifier.topFade(scroll, g.unit, fadePx, bandPaint)),
         ) {
-            Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
+            if (part == Part.LAYOUTS) LayoutsPager(st, g, fadePx, bandPaint)
+            else Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
               run {
                 Spacer(Modifier.height(look.dp(26f * g.unit)))
                 when (part) {
-                    Part.LAYOUTS -> LayoutsPage()
+                    Part.LAYOUTS -> Unit
                     Part.LOOK -> LookPage()
                     Part.MOTION -> MotionPage()
                     Part.PHONE -> PhonePage()
@@ -1089,9 +1182,23 @@ private fun ElementTheme(e: Element, themes: List<Design.ThemeInfo>, draft: Draf
 
 /** A row of chips, one chosen (its fill blends to the accent). */
 @Composable
-private fun ChoiceChips(names: List<String>, chosen: Int, onChoose: (Int) -> Unit) {
+private fun ChoiceChips(names: List<String>, chosen: Int, modifier: Modifier = Modifier, onChoose: (Int) -> Unit) {
     val look = LocalLook.current
-    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(look.dp(6f * look.unit))) {
+    val scroll = rememberScrollState()
+    // The chosen chip kept in sight (glides there when it is chosen near an edge).
+    val xs = remember { HashMap<Int, IntRange>() }
+    LaunchedEffect(chosen) {
+        val r = xs[chosen] ?: return@LaunchedEffect
+        val view = scroll.viewportSize
+        if (view <= 0) return@LaunchedEffect
+        val to = when {
+            r.first - scroll.value < 0 -> r.first
+            r.last - scroll.value > view -> r.last - view
+            else -> return@LaunchedEffect
+        }
+        scroll.animateScrollTo(to.coerceIn(0, scroll.maxValue), look.motion(MotionTokens.NAV_PUSH))
+    }
+    Row(Modifier.horizontalScroll(scroll).then(modifier), horizontalArrangement = Arrangement.spacedBy(look.dp(6f * look.unit))) {
         names.forEachIndexed { i, n ->
             val k by animateFloatAsState(if (i == chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chip")
             var pressed by remember { mutableStateOf(false) }
@@ -1104,6 +1211,7 @@ private fun ChoiceChips(names: List<String>, chosen: Int, onChoose: (Int) -> Uni
                     .pressScale { 1f - 0.05f * press }
                     .drawBehind { drawRoundRect(fill, cornerRadius = CornerRadius(corner)) }
                     .pointerInput(i, chosen) { rowTap({ pressed = it }) { if (i != chosen) onChoose(i) } }
+                    .onPlaced { co -> co.positionInParent().x.toInt().let { x -> xs[i] = x..(x + co.size.width) } }
                     .padding(horizontal = look.dp(12f * look.unit), vertical = look.dp(7f * look.unit)))
         }
     }
@@ -1175,26 +1283,117 @@ private fun PresetCards(presets: List<Design.ThemeInfo>, draft: Draft) {
     }
 }
 
+/**
+ * Content scrolled up dissolves under the top edge: drawn clipped below an [fadePx] band, and only that band through a layer
+ * of its own (the content is a layer: drawing it twice draws one list twice); the whole page in one cost a sheet-sized
+ * buffer every frame of a scroll.
+ */
+private fun Modifier.topFade(scroll: IosScrollState, unit: Float, fadePx: Float, paint: androidx.compose.ui.graphics.Paint): Modifier = drawWithContent {
+    val top = 6f * unit
+    val end = top + fadePx
+    clipRect(top = end) { this@drawWithContent.drawContent() }
+    if (scroll.offset > 0f) drawIntoCanvas { cv ->
+        cv.saveLayer(Rect(0f, top, size.width, end), paint)
+        clipRect(top = top, bottom = end) { this@drawWithContent.drawContent() }
+        drawRect(Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = top, endY = end),
+            topLeft = Offset(0f, top), size = Size(size.width, fadePx), blendMode = BlendMode.DstIn)
+        cv.restore()
+    } else clipRect(top = top, bottom = end) { this@drawWithContent.drawContent() }
+}
+
+/** The elements' short names, for the picker at the top of Layouts. */
+private val Element.short get() = when (this) {
+    Element.STATUS_BAR -> "Status bar"
+    Element.SHADE -> "Shade"
+    Element.RECENTS -> "Recents"
+    Element.DRAWER -> "Drawer"
+    Element.HOME -> "Home"
+    Element.SETTINGS -> "Settings"
+}
+
+/**
+ * Layouts: the elements in a picker at the top (it stays while the rest scrolls), the chosen one's layouts, place and options
+ * below; the picture of home above focuses on the chosen one. Another element: its page slides in from its side as the last
+ * one slides away (each its own spring, interruptible), and the picture moves to it. (Matheesha: following the scroll
+ * through one long page to decide the focus was odd.)
+ */
 @Composable
-private fun LayoutsPage() {
-    val draft = LocalDraft.current
-    val st = LocalStudio.current
-    for (e in Element.entries) Column(Modifier.onPlaced { st?.sections?.set(e, it.positionInParent().y) }) {
-        val current = Layouts.find(e, draft.layout(e)) ?: Setup.layout(e)
-        val layouts = Layouts.of(e)
-        Group(e.title, current.description) {
-            for (l in layouts) CheckRow(l.title, l.origin, l.id == current.id) { draft.chooseLayout(e, l.id) }
-        }
-        if (current.placements.size > 1) {
-            val at = draft.placement(e)
-            Group("Where it lives") {
-                for (p in current.placements) CheckRow(p.title, p.description, p.id == at) { draft.choosePlacement(e, p.id) }
+private fun LayoutsPager(st: Studio, g: Geometry, fadePx: Float, bandPaint: androidx.compose.ui.graphics.Paint) {
+    val look = LocalLook.current
+    val scope = rememberCoroutineScope()
+    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.NAV_PUSH))
+    val m = look.dp(SettingsTokens.MARGIN)
+    val slide = 48f * g.unit
+    val choose: (Element) -> Unit = remember(st, scope) {
+        { e ->
+            val was = st.element
+            if (e != was) {
+                st.element = e
+                for (o in Element.entries) {
+                    val shown = st.elementShown.getValue(o)
+                    // The one coming in comes from the side it is on (from the last one); the ones going leave towards theirs.
+                    if (o == e) st.elementSide.getValue(o).floatValue = if (o.ordinal > was.ordinal) 1f else -1f
+                    else if (shown.value > 0.001f || shown.isRunning) st.elementSide.getValue(o).floatValue = if (o.ordinal > e.ordinal) 1f else -1f
+                    scope.launch { try { shown.animateTo(if (o == e) 1f else 0f, spec.value) } catch (_: kotlinx.coroutines.CancellationException) { } }
+                }
             }
         }
-        val toggles = current.options.filterIsInstance<Option.Toggle>()
-        if (toggles.isNotEmpty()) Group("Options") {
-            for (o in toggles) ToggleRow(o.title, o.description, draft.bool(e, o.key, o.default)) { draft.chooseBool(e, o.key, it, o.default) }
+    }
+    val pickerTop = 22f * g.unit
+    val pickerH = look.pt(SettingsTokens.ROW_HEIGHT)
+    val contentTop = pickerTop + pickerH + 6f * g.unit
+    Box(Modifier.fillMaxSize()) {
+        for (e in Element.entries) {
+            val shown = st.elementShown.getValue(e)
+            val side = st.elementSide.getValue(e)
+            val scroll = st.elementScrolls.getValue(e)
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(top = look.dp(contentTop))
+                    // The chosen one takes the touches (the one going is under it while both show).
+                    .zIndex(if (st.element == e) 1f else 0f)
+                    .graphicsLayer {
+                        val k = shown.value.coerceIn(0f, 1f)
+                        // Out of sight once gone (not laid out again when it comes).
+                        translationX = if (k <= 0.001f) g.w * 3f else side.floatValue * (1f - k) * slide
+                        alpha = k
+                    }
+                    .topFade(scroll, g.unit, fadePx, bandPaint),
+            ) {
+                Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
+                    Spacer(Modifier.height(look.dp(10f * g.unit)))
+                    ElementLayouts(e)
+                    // Room below the last row for the Apply bar.
+                    Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
+                }
+            }
         }
+        // The picker, over the pages' tops.
+        Box(Modifier.zIndex(2f).padding(top = look.dp(pickerTop)).fillMaxWidth().height(look.dp(pickerH)), contentAlignment = Alignment.CenterStart) {
+            ChoiceChips(Element.entries.map { it.short }, st.element.ordinal, Modifier.padding(horizontal = m)) { i -> choose(Element.entries[i]) }
+        }
+    }
+}
+
+/** One element on Layouts: its layouts, where it lives, its options. Waits for Apply like the rest. */
+@Composable
+private fun ElementLayouts(e: Element) {
+    val draft = LocalDraft.current
+    val current = Layouts.find(e, draft.layout(e)) ?: Setup.layout(e)
+    val layouts = Layouts.of(e)
+    Group(e.title, current.description) {
+        for (l in layouts) CheckRow(l.title, l.origin, l.id == current.id) { draft.chooseLayout(e, l.id) }
+    }
+    if (current.placements.size > 1) {
+        val at = draft.placement(e)
+        Group("Where it lives") {
+            for (p in current.placements) CheckRow(p.title, p.description, p.id == at) { draft.choosePlacement(e, p.id) }
+        }
+    }
+    val toggles = current.options.filterIsInstance<Option.Toggle>()
+    if (toggles.isNotEmpty()) Group("Options") {
+        for (o in toggles) ToggleRow(o.title, o.description, draft.bool(e, o.key, o.default)) { draft.chooseBool(e, o.key, it, o.default) }
     }
 }
 
