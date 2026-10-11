@@ -11,6 +11,7 @@ class LauncherApp : Application() {
         dev.launcher.app.theme.Fonts.init(this)
         // The theme before the appearance: the appearance's palette is the theme's.
         dev.launcher.app.design.Design.init(this)
+        resources.configuration.let { dev.launcher.app.design.Design.onScale(it.densityDpi, it.fontScale) }
         // The user's arrangement (which layout each element uses, where it lives): before home or gesture nav read it.
         dev.launcher.app.layout.Setup.init(this)
         dev.launcher.app.theme.Appearance.init(this)
@@ -18,7 +19,8 @@ class LauncherApp : Application() {
         // appearance (and its picture behind closing cards too) when it is next seen.
         registerComponentCallbacks(object : android.content.ComponentCallbacks {
             override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
-                // The palette first (it may have changed with the wallpaper), then the appearance.
+                // The scale (Display size, Font size), the palette (it may have changed with the wallpaper), the appearance.
+                dev.launcher.app.design.Design.onScale(newConfig.densityDpi, newConfig.fontScale)
                 dev.launcher.app.design.Design.onConfiguration()
                 dev.launcher.app.theme.Appearance.onConfiguration(newConfig)
             }

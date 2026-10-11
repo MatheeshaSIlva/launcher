@@ -105,7 +105,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   clock-drawn motion through `RoleTiming`; new roles are named in `motion/MotionRoles.kt` (a test checks it). Switch:
   `DESIGN_RELOAD --es motion ID`. Test preset: `eased` (every spring as a bezier; `tools/design/build_test_presets.py`). Theme seeds and motion seeds both live in the builder, which
   writes the two files. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
-  value came from (kit, measured, judged). The token editor is `design/DesignActivity` (opened from the settings app: Phone, Expert; no drawer entry).
+  value came from (kit, measured, judged). Points to pixels: one unit everywhere, `Scale.unitPx` (policy `adaptive`: 402 pt
+  across a phone, never larger than the dp at the phone's default density, times the Display size's zoom; text through
+  `Design.text` follows the Font size up to 130 %, not the status bar nor home's labels; a change rebuilds everything).
+  The token editor is `design/DesignActivity` (opened from the settings app: Phone, Expert; no drawer entry).
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.
   Notification Center is on it (step 2a, tokens `comp.nc.*` in `shade/NcTokens.kt`), and Control Center with its expanded

@@ -575,7 +575,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** (Re)creates everything above the wallpaper for the current size, insets and config. */
     private fun build() {
         if (width == 0 || height == 0) return
-        val metrics = HomeMetrics(width, height, topInset, bottomInset, deviceRadius, cfg)
+        val metrics = HomeMetrics(width, height, topInset, bottomInset, deviceRadius, cfg, dev.launcher.app.design.Scale.unitPx(context, minOf(width, height)))
         m = metrics
         builtStructure = dev.launcher.app.design.Design.structure
         Icons.homeSize = metrics.iconSize

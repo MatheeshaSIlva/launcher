@@ -66,6 +66,21 @@ Original plan: A `design/` package: tokens for colour (light/dark), materials,
 shape and spacing, type, motion roles; how points become pixels (today 1 pt = width / 402; the policy becomes a token so
 Android's display size and font size can be honoured later); the iOS 27 profile as data with provenance; unit tests.
 
+**Scaling (2026-10-12; Matheesha: "does it match the system scaling values?", then "go ahead with the scaling plan").**
+One unit everywhere: `Scale.unitPx` (home, the status bar, the switcher, Control Center's gallery, the shade and the launch
+cards had their own `width / 402`). Policy `adaptive` (`sys.scale.policy`): a phone's short side is 402 points (on the S24
+an element is its size on an iPhone 17 Pro; unchanged at the default display size), never larger than Android's dp at the
+phone's default density (a tablet or a foldable shows more, as an iPad, rather than everything larger), times how far the
+phone's Display size is from its default. Text follows the Font size (Apple's Dynamic Type) through `Design.text`, up to
+130 % (`Scale.TEXT_MAX`: what the rows and fields are made for), except the status bar and home's labels (iOS keeps them).
+A change of either rebuilds every surface (`Design.onScale`, from the app's configuration callback). Checked on the
+emulator at 420 (default), 480 and 360 dpi: home, App Library, Control Center, Notification Center and the settings fit
+and scale (home's columns tighten or spread; Control Center keeps its grid, centred, as a larger iPhone does); at 130 %
+text the notifications, banners, Control Center and the settings grow and fit. Settings, Look, Size: "Follow the phone's
+display and font size" (on: `adaptive`; off: `reference-width`, iPhone sizes and text whatever the phone says). The S24
+was set to a smaller Display size (density 420, default 480) and 90 % text: following them, everything there is about
+12 % smaller than before (text in the shade 10 % more).
+
 **Step 2: one material system.** One material spec (backdrop source: wallpaper, picture of what is behind, or live; blur;
 lens; fills with blend modes; rims; shadows) and one renderer replacing the four. Surfaces move over one per issue:
 2a Notification Center (platters, collapsed stack, buttons, clock), 2b Control Center (controls, expanded modules,

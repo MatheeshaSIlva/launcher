@@ -341,7 +341,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private val ccOffset = MotionValue(0f, 1f, { cc.pullOffset = it; if (panel == Panel.CC) applyProgress() })
 
-    private fun u() = min(root.width, root.height).coerceAtLeast(1) / 402f
+    private fun u() = dev.launcher.app.design.Scale.unitPx(ctx, min(root.width, root.height).coerceAtLeast(1))
 
     /**
      * The pull over which Control Center comes in (blur, controls), px (`comp.cc.motion.open-travel`). iOS 27 is fully

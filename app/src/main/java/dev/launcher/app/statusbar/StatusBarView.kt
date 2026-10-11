@@ -98,8 +98,8 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private val cm get() = context.getSystemService(ConnectivityManager::class.java)
     private val tm get() = context.getSystemService(TelephonyManager::class.java)
 
-    /** One point of the iOS layout in px. */
-    private val u get() = width / 402f
+    /** One point of the iOS layout in px (the design system's: it follows the phone's Display size). */
+    private val u get() = dev.launcher.app.design.Scale.unitPx(context)
 
     init {
         // Not from our own window's insets: an overlay above the status bar is never told the bar is visible (that hid this

@@ -481,6 +481,7 @@ object Design {
     private fun rebuild() {
         val layers = layersOf(chain, user, ThemeLayers.fromWallpaper(chain, user)) + motionChain.map { it.entries } + listOf(LinkedHashMap(motionUser))
         state = State(Resolver(layers) { name -> paletteColor(name) })
+        scaledText.clear()
         followYouSettings()
         previews.clear()
         motionPreviews.clear()
@@ -576,6 +577,22 @@ object Design {
      * The configuration changed (the app's ComponentCallbacks): the palette may have changed with the wallpaper. Palette
      * colours are looked up again and every surface draws again, on the same frame (a light/dark change crossfades on its own).
      */
+    private var scaleAt = ""
+
+    /**
+     * The phone's display size or font size is now [densityDpi] and [fontScale] (any configuration change: only a change of
+     * these counts): every surface is built again at the new scale.
+     */
+    fun onScale(densityDpi: Int, fontScale: Float) {
+        val stamp = "$densityDpi/$fontScale"
+        if (stamp == scaleAt) return
+        val first = scaleAt.isEmpty()
+        scaleAt = stamp
+        if (first || chain.isEmpty()) return
+        rebuild()
+        changedOutside("the display size or the font size changed ($stamp)", structural = true)
+    }
+
     fun onConfiguration() {
         if (chain.isEmpty()) return
         val stamp = paletteStamp()
@@ -634,7 +651,21 @@ object Design {
 
     fun curve(k: CurveKey): Curve = (value(k.name) as? Value.CurveV ?: throw IllegalStateException("token $k is not a curve")).curve
     fun choice(k: ChoiceKey): String = (value(k.name) as? Value.Choice ?: throw IllegalStateException("token $k is not a choice")).option
-    fun text(k: TextKey): TextStyle = (value(k.name) as? Value.Text ?: throw IllegalStateException("token $k is not a text style")).style
+    /**
+     * Text style [k], at the phone's Font size where its part follows it (Apple's Dynamic Type: notifications, controls,
+     * menus, the settings; not the status bar nor home's labels, as on iOS), up to [Scale.TEXT_MAX]: size, line height and
+     * tracking together, so what is laid out by them grows with it.
+     */
+    fun text(k: TextKey): TextStyle = scaledText.getOrPut(k.name) {
+        val s = (value(k.name) as? Value.Text ?: throw IllegalStateException("token $k is not a text style")).style
+        val f = Scale.textScale(k.name)
+        if (f == 1f) s else s.copy(sizePt = s.sizePt * f, lineHeightPt = s.lineHeightPt * f, trackingPt = s.trackingPt * f)
+    }
+
+    private val scaledText = java.util.concurrent.ConcurrentHashMap<String, TextStyle>()
+
+    /** The app's context, for what the design system reads of the phone (its font size). */
+    internal val context: Context get() = appCtx
     fun material(k: MaterialKey): Material = (value(k.name) as? Value.Mat ?: throw IllegalStateException("token $k is not a material")).material
 
     // ------------------------------------------------------------------ the token editor's side
@@ -694,9 +725,12 @@ object Design {
 }
 
 /**
- * How points become pixels: the theme's policy (`sys.scale.policy`). "reference-width": the screen's short side is
+ * How points become pixels: the theme's policy (`sys.scale.policy`). "adaptive": a phone's short side is
  * `sys.scale.reference-width` points wide (iOS 27's iPhone: 402 pt; on the S24 an element comes out the size it is on an
- * iPhone 17 Pro); "density": one point is one Android dp (follows the system's display size).
+ * iPhone 17 Pro), but a point is never larger than Android's own dp at the phone's default display size (a tablet or a
+ * foldable shows more, as an iPad does, rather than everything larger); and either way it follows the phone's Display size
+ * setting (how far it is from the default). "reference-width": the short side is always that many points (no Display
+ * size); "density": one point is one Android dp.
  */
 /** [this] style on [p]: font, weight, size and letter spacing at [unitPx] pixels per point (line height is the caller's). */
 fun TextStyle.applyTo(p: android.graphics.Paint, unitPx: Float) {
@@ -731,7 +765,33 @@ object Scale {
 
     fun unitPx(ctx: Context, shortSidePx: Int): Float = when (Design.choice(POLICY)) {
         "density" -> ctx.resources.displayMetrics.density
-        else -> shortSidePx / Design.num(REFERENCE_WIDTH)
+        "reference-width" -> shortSidePx / Design.num(REFERENCE_WIDTH)
+        else -> {
+            // The phone's own density at its default display size, and how far the Display size setting is from it.
+            val stable = android.util.DisplayMetrics.DENSITY_DEVICE_STABLE / 160f
+            val zoom = ctx.resources.displayMetrics.density / stable
+            minOf(shortSidePx / Design.num(REFERENCE_WIDTH), stable) * zoom
+        }
+    }
+
+    /** The most text grows with the phone's Font size (the layouts' rows and fields are made for this much). */
+    const val TEXT_MAX = 1.3f
+    /** Parts whose text keeps its size whatever the Font size (iOS: the status bar and home's labels). */
+    private val FIXED_TEXT = listOf("comp.statusbar.", "comp.home.")
+
+    /** How much text style [name] grows with the phone's Font size (1: not at all). */
+    fun textScale(name: String): Float {
+        if (FIXED_TEXT.any { name.startsWith(it) }) return 1f
+        // Sizes kept to iOS's (the user's choice): text too.
+        if ((try { Design.choice(POLICY) } catch (_: Throwable) { "adaptive" }) == "reference-width") return 1f
+        val f = try { Design.context.resources.configuration.fontScale } catch (_: Throwable) { 1f }
+        return f.coerceIn(0.85f, TEXT_MAX)
+    }
+
+    /** One point in pixels on [ctx]'s display (its short side), for views that are not the size of the screen. */
+    fun unitPx(ctx: Context): Float {
+        val dm = ctx.resources.displayMetrics
+        return unitPx(ctx, minOf(dm.widthPixels, dm.heightPixels))
     }
 
 }

@@ -5,7 +5,7 @@ import kotlin.math.roundToInt
 
 /**
  * Every size and position of the home screen, measured from Apple's own full-resolution press images and scaled to this
- * display. [u] is one iOS point: home values come from the iOS 26 Home Screen on an iPhone 16 Pro (402 x 874 pt, a
+ * display. [u] is one iOS point (the design system's: `Scale.unitPx`, which follows the phone's Display size): home values come from the iOS 26 Home Screen on an iPhone 16 Pro (402 x 874 pt, a
  * 2.17 aspect like the S24's), App Library values from iOS's App Library (measured on an iPhone 11 Pro) in the same points.
  * Recomputed when the size, the insets or the config change. All values in px.
  *
@@ -21,8 +21,8 @@ class HomeMetrics(
     bottomInset: Int,
     deviceRadius: Float,
     val cfg: HomeConfig,
+    val u: Float,
 ) {
-    val u = w / 402f
     fun pt(v: Float) = v * u
 
     // ---- home pages

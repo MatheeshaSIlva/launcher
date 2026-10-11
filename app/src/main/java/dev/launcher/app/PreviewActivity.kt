@@ -44,7 +44,7 @@ class PreviewActivity : Activity() {
         fun fillIcons() {
             if (icons.childCount > 0 || !dev.launcher.app.apps.Apps.loaded) return
             val dm = resources.displayMetrics
-            val m = dev.launcher.app.home.HomeMetrics(dm.widthPixels, dm.heightPixels, h, h, 0f, dev.launcher.app.home.HomeConfig())
+            val m = dev.launcher.app.home.HomeMetrics(dm.widthPixels, dm.heightPixels, h, h, 0f, dev.launcher.app.home.HomeConfig(), dev.launcher.app.design.Scale.unitPx(this))
             for ((i, e) in dev.launcher.app.apps.Apps.all.take(4).withIndex()) {
                 val v = dev.launcher.app.home.IconView(this, m, true)
                 v.bind(e)

@@ -242,7 +242,7 @@ SEED = {
     'sys.color.key.tertiary': {'choice': 'auto', 'src': "judged:the tertiary palette's key colour: from the style (auto), or the user's (#rrggbb)"},
     'sys.color.key.neutral': {'choice': 'auto', 'src': "judged:the neutral palette's key colour (surfaces): from the style (auto), or the user's (#rrggbb)"},
     'sys.color.key.neutral-variant': {'choice': 'auto', 'src': "judged:the neutral variant palette's key colour (outlines): from the style (auto), or the user's (#rrggbb)"},
-    'sys.scale.policy': {'choice': 'reference-width', 'src': 'judged:the screen is as many points wide as iOS 27\'s iPhone, so proportions and, on the S24, physical sizes match it'},
+    'sys.scale.policy': {'choice': 'adaptive', 'src': "judged:a phone is as many points wide as iOS 27's iPhone (on the S24 an element is its size on an iPhone 17 Pro), never larger than Android's dp (tablets show more), and the phone's Display size scales it (Matheesha: match the system's scaling)"},
     'sys.scale.reference-width': {'pt': 402, 'src': 'kit:the kit\'s iPhone 17 Pro frame, 402 x 874'},
     # Motion: every animation by its role (step 4; was motion/Motion.kt's iOS profile, same values).
     'motion.app.open': {'spring': [0.42, 0.92], 'src': 'measured:tuned on the S24 (launch and close "really smooth", close elasticity reduced on request)'},

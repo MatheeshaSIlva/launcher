@@ -97,7 +97,7 @@ class CcGallery(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     private fun layoutEntries() {
-        u = min(width, height) / 402f
+        u = dev.launcher.app.design.Scale.unitPx(context, min(width, height))
         val cell = 56f * u
         val gap = 22f * u
         val labelH = 28f * u

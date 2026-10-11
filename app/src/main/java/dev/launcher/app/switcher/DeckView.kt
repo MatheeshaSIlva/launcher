@@ -719,7 +719,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     // ------------------------------------------------------------------ an app's menu (a tap on its name)
 
-    private val u get() = sw / 402f
+    private val u get() = dev.launcher.app.design.Scale.unitPx(context)
     private val menu by lazy { dev.launcher.app.components.MenuPainter(dev.launcher.app.components.MenuSpec.SWITCHER, u) }
     private val menuGlass by lazy { dev.launcher.app.design.MaterialPainter.create(u) }
     private var menuCard: Card? = null

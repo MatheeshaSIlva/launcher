@@ -232,10 +232,12 @@ private class Draft {
     /** What the palette is made from ("wallpaper" or "#rrggbb") and key colours set by hand per palette ("auto" or "#rrggbb"). */
     var colorSeed by mutableStateOf<String?>(null)
     val colorKeys = androidx.compose.runtime.mutableStateMapOf<Char, String>()
+    /** Whether sizes follow the phone's Display size and Font size ("adaptive") or keep iOS's ("reference-width"). */
+    var scalePolicy by mutableStateOf<String?>(null)
     /** When Back was pressed with changes waiting (a second Back soon after discards them and leaves); 0: not. */
     var backAt by androidx.compose.runtime.mutableLongStateOf(0L)
 
-    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, colorIntensity, colorSeed).size + elements.size + setup.size +
+    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, colorIntensity, colorSeed, scalePolicy).size + elements.size + setup.size +
         fonts.size + colorKeys.size
 
     fun themeId() = theme ?: Design.themeId
@@ -262,6 +264,11 @@ private class Draft {
     fun chooseColorStyle(s: dev.launcher.app.design.MaterialYou.Style) { colorStyle = s.id.takeIf { it != appliedStyle() } }
     fun colorIntensity(): Float = colorIntensity ?: appliedIntensity()
     fun chooseColorIntensity(k: Float) { colorIntensity = k.takeIf { kotlin.math.abs(it - appliedIntensity()) > 0.005f } }
+    fun followsPhoneSize(): Boolean = (scalePolicy ?: appliedChoice(dev.launcher.app.design.Scale.POLICY.name, "adaptive")) == "adaptive"
+    fun chooseFollowsPhoneSize(on: Boolean) {
+        val v = if (on) "adaptive" else "reference-width"
+        scalePolicy = v.takeIf { it != appliedChoice(dev.launcher.app.design.Scale.POLICY.name, "adaptive") }
+    }
     /** The user's own colour the palette is made from (null: the wallpaper's), as it would be applied. */
     fun seedColor(): Int? = Design.hexColor(colorSeed ?: appliedChoice(Design.COLOR_SEED.name, "wallpaper"))
     fun chooseSeed(c: Int?) {
@@ -298,6 +305,7 @@ private class Draft {
             colorStyle?.let { Design.set(Design.COLOR_STYLE.name, dev.launcher.app.design.Value.Choice(it)) }
             colorIntensity?.let { Design.set(Design.COLOR_INTENSITY.name, dev.launcher.app.design.Value.Number(it, dev.launcher.app.design.NumUnit.FACTOR)) }
             colorSeed?.let { Design.set(Design.COLOR_SEED.name, dev.launcher.app.design.Value.Choice(it)) }
+            scalePolicy?.let { Design.set(dev.launcher.app.design.Scale.POLICY.name, dev.launcher.app.design.Value.Choice(it)) }
             for ((p, v) in colorKeys) Design.set(Design.COLOR_KEYS.getValue(p).name, dev.launcher.app.design.Value.Choice(v))
         }
         appearance?.let { Appearance.setMode(ctx, it) }
@@ -310,7 +318,7 @@ private class Draft {
 
     fun discard() {
         theme = null; colors = null; motion = null; appearance = null
-        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); backAt = 0L
+        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); scalePolicy = null; backAt = 0L
     }
 
     companion object {
@@ -1393,6 +1401,9 @@ private fun LookPage() {
                 draft.chooseAppearance(Appearance.Mode.entries[it])
             }
         }
+    }
+    Group("Size", "On: everything follows the phone's Display size, and text its Font size (up to 130 %), as Android's own apps do. Off: iPhone sizes whatever the phone's settings.") {
+        ToggleRow("Follow the phone's display and font size", null, draft.followsPhoneSize()) { draft.chooseFollowsPhoneSize(it) }
     }
 }
 

@@ -1129,7 +1129,7 @@ object GestureNav {
         c.snapshot = bitmap
         c.icon = pkg?.let { iconFor(it) }
         c.badge = pkg?.let { if (HomeBridge.showsBadge(it)) Badges.count(it) else 0 } ?: 0
-        c.unitPx = sw / 402f
+        c.unitPx = dev.launcher.app.design.Scale.unitPx(app)
         c.minIconSize = Icons.homeSize.toFloat()
         // Without a snapshot the card shows the app's launch screen: its splash colour behind its icon.
         if (pkg != null) {
@@ -1886,7 +1886,7 @@ object GestureNav {
             c.homePicture = null
             c.icon = icon
             c.badge = if (HomeBridge.showsBadgeAt(pkg, iconRect)) Badges.count(pkg) else 0   // as the icon it grows out of
-            c.unitPx = sw / 402f
+            c.unitPx = dev.launcher.app.design.Scale.unitPx(app)
             c.snapshot = images[pkg]
             c.minIconSize = iconRect.width()
             // The app's own launch-screen colour (resolved ahead of time for home's apps), else the icon's colour.
