@@ -78,7 +78,8 @@
             </intent-filter>
         </activity>
 
-        <!-- The token editor (design system, docs/DESIGN_SYSTEM_PLAN.md): own task and own app-drawer entry. -->
+        <!-- The token editor (design system, docs/DESIGN_SYSTEM_PLAN.md): own task, opened from the settings app (Phone,
+             Expert; Motion's "Each animation") and adb; no app-drawer entry of its own. -->
         <activity
             android:name=".design.DesignActivity"
             android:exported="true"
@@ -86,12 +87,7 @@
             android:label="Launcher design"
             android:launchMode="singleTask"
             android:taskAffinity="dev.launcher.app.design"
-            android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- The settings app (docs/PLAN_SETTINGS.md): own task and own app-drawer entry. -->
         <activity
