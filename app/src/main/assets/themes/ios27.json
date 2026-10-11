@@ -2609,20 +2609,20 @@
    "src": "judged:the theme's section heading"
   },
   "comp.settings.segment.corner": {
-   "pt": 18,
-   "src": "judged:a taller segmented control's track (a capsule would round its thumb into an oval)"
+   "pt": 24,
+   "src": "judged:a capsule (half the control's height)"
   },
   "comp.settings.segment.height": {
-   "pt": 58,
-   "src": "judged:Layouts' picker, a symbol over each name (Matheesha: far too small at 36 with symbols alone); every segment a 44 pt target and more"
+   "pt": 48,
+   "src": "judged:Layouts' picker (option B: symbols, the chosen one named; Matheesha: far too small at 36): above the 44 pt target"
   },
   "comp.settings.segment.symbol": {
-   "pt": 24,
-   "src": "judged:the symbols over the names (iOS's tab bar symbols are 25-28)"
+   "pt": 22,
+   "src": "judged:the symbols (iOS's segmented controls carry 17-22 pt symbols)"
   },
   "comp.settings.segment.text": {
-   "ref": "ref.type.caption2.regular",
-   "src": "judged:a name under each symbol, as iOS's tab bar (10-11 pt); six names fit a sixth of the S24's width each at 11 pt ('Status bar' in semibold at 12 did not)"
+   "ref": "sys.type.footnote",
+   "src": "judged:the chosen one's name beside its symbol (13 pt semibold; 'Status bar' fits the room the others leave on the S24)"
   },
   "comp.settings.segment.thumb": {
    "ref": "ref.color.miscellaneous.segmented-control-selected-fill",

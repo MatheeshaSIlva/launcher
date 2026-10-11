@@ -315,10 +315,11 @@ wallpaper arrives, and ask for the bar again if it did not come.
 Please follow proper UI and UX rules. The more fonts popup is a bit laggy"):**
 - Every control's touch area is at least 44 x 44 pt (`comp.settings.target`, Apple's rule; Android's is 48 dp): chips
   are drawn 34 pt high in a 44 pt touch strip, More Fonts and the sheet's close the target's height, the slider and the
-  Apply bar's buttons 44 pt. Layouts' picker: six equal segments (57 x 58 pt on the S24), each its symbol (24 pt) over
-  its name (11 pt, as iOS's tab bar; a name wider than its thumb is set a little smaller: "Status bar" in semibold at
-  12 pt was wider than a sixth of the width), the chosen one's semibold and in the label colour. Apple and Android both
-  advise five segments at most on a phone; with six, the names have to fit a sixth.
+  Apply bar's buttons 44 pt. Layouts' picker: option B again (Matheesha: "only show the label of the active tab, just
+  like the example B"; a round with a name under every symbol came first), at the rules' sizes: 48 pt high, symbols
+  22 pt, the chosen one's name 13 pt semibold beside its symbol; the others share what the chosen one leaves once the
+  longest name ("Status bar") fits it, each at least a 44 pt target (47 x 48 pt on the S24); a phone too narrow for that
+  sets the names smaller.
 - The font search, before -> after (frame stats per action, S24): a letter typed 2-8 missed refreshes (main-thread frames
   of 50-117 ms) -> 0-2; a scroll of the results 4-11 -> 1-6; the opening's first frame 51 -> 27 ms; the GPU per frame
   under the open sheet 7.5 -> 5 ms. What it was: every `look.text()` made a new font family (Compose compares them by

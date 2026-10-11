@@ -1897,11 +1897,11 @@ private fun ElementPicker(st: Studio, choose: (Element) -> Unit) {
 }
 
 /**
- * The picker of Layouts (option B, sized to Apple's and Android's touch rules after Matheesha found it far too small: the
- * other choices were 34 pt symbols with no names). Six equal segments, each a target of 57 x 56 pt on the S24, with its
- * symbol (22 pt) over its name (12 pt), on a sliding thumb: the chosen one's symbol and name in the label colour, its name
- * semibold, the others in the secondary colour. One spring moves the thumb and crossfades the colours and weights; a tap
- * chooses, a drag along it carries the thumb under the finger and chooses where it is let go.
+ * The picker of Layouts: option B (Matheesha's choice), at the touch rules' sizes. Every choice is its symbol; the chosen
+ * one is wider, on the thumb, with its name beside its symbol. The others are each at least a 44 pt target (on the S24
+ * 47 x 48 pt: the room left once the longest name fits), symbols 22 pt, the name 13 pt semibold. One spring moves it all:
+ * the thumb slides and takes the new one's width, the old name fades as its segment narrows, the new one's comes as it
+ * widens. A tap chooses; a drag along it carries the thumb under the finger and chooses where it is let go.
  */
 @Composable
 private fun SymbolSegmented(names: List<String>, symbols: List<Int>, chosen: Int, onChoose: (Int) -> Unit) {
@@ -1915,39 +1915,45 @@ private fun SymbolSegmented(names: List<String>, symbols: List<Int>, chosen: Int
     val measurer = rememberTextMeasurer()
     val label = look.color(SettingsTokens.ROW_LABEL)
     val muted = look.color(SettingsTokens.ROW_DETAIL_COLOR)
-    val base = look.text(SettingsTokens.SEGMENT_TEXT, label)
-    val inset = 2f * look.unit
-    // Each name in both weights (the chosen one semibold), crossfaded as the thumb arrives; one wider than the thumb is set
-    // a little smaller to fit it ("Status bar" in semibold was wider than a sixth of the S24's width at 12 pt).
-    var segWidth by remember { mutableIntStateOf(0) }
-    val texts = remember(names, look, segWidth) {
-        val room = segWidth - inset * 2f - 4f * look.unit
-        fun fit(name: String, weight: Int): androidx.compose.ui.text.TextLayoutResult {
-            val style = base.copy(fontWeight = androidx.compose.ui.text.font.FontWeight(weight))
-            val t = measurer.measure(name, style, maxLines = 1)
-            if (room <= 0f || t.size.width <= room) return t
-            return measurer.measure(name, style.copy(fontSize = style.fontSize * (room / t.size.width)), maxLines = 1)
-        }
-        names.map { name -> fit(name, 500) to fit(name, 600) }
-    }
+    val style = look.text(SettingsTokens.SEGMENT_TEXT, label).copy(fontWeight = androidx.compose.ui.text.font.FontWeight(600))
     val painters = symbols.map { painterResource(it) }
     val track = look.color(SettingsTokens.SEGMENT_TRACK)
     val thumbFill = look.color(SettingsTokens.SEGMENT_THUMB)
+    val inset = 3f * look.unit
     val iconSize = look.pt(SettingsTokens.SEGMENT_SYMBOL)
-    val corner = look.pt(SettingsTokens.SEGMENT_CORNER)
-    val gap = 4f * look.unit
+    val gap = 6f * look.unit
+    val pad = 12f * look.unit
+    val target = look.pt(SettingsTokens.TARGET)
+    var width by remember { mutableIntStateOf(0) }
+    // The widths: the others share what the chosen one leaves once the longest name fits it, each at least a target; on a
+    // phone too narrow for that, the names are set smaller until they fit.
+    val layout = remember(names, look, width) {
+        var texts = names.map { measurer.measure(it, style, maxLines = 1) }
+        val w = width.toFloat()
+        var base = if (w <= 0f) target else (w - (iconSize + gap + texts.maxOf { it.size.width } + pad * 2f)) / (n - 1)
+        if (w > 0f && base < target) {
+            base = target
+            val room = w - (n - 1) * base - iconSize - gap - pad * 2f
+            val widest = texts.maxOf { it.size.width }
+            if (room > 0f && widest > room) texts = names.map { measurer.measure(it, style.copy(fontSize = style.fontSize * (room / widest)), maxLines = 1) }
+        }
+        base to texts
+    }
+    val (base, texts) = layout
     val choose = androidx.compose.runtime.rememberUpdatedState(onChoose)
+    // How much of the chosen one's extra room each choice has at [p] (the thumb's place: an index, fractional on the way).
+    fun share(i: Int, p: Float) = (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f)
     Canvas(
         Modifier.fillMaxWidth().height(look.dp(SettingsTokens.SEGMENT_HEIGHT))
-            .onSizeChanged { segWidth = it.width / n }
-            .pointerInput(n) {
+            .onSizeChanged { width = it.width }
+            .pointerInput(n, base) {
             awaitEachGesture {
                 val down = awaitFirstDown()
-                val segW = size.width.toFloat() / n
+                val w = size.width.toFloat()
                 val slop = viewConfiguration.touchSlop
                 var moved = false
-                // Where a finger is as a place along the choices (a segment's middle is its index).
-                fun place(x: Float) = (x / segW - 0.5f).coerceIn(0f, (n - 1).toFloat())
+                // Where a finger is as a place along the choices (spread evenly over the control).
+                fun place(x: Float) = ((x - base / 2f) / (w - base) * (n - 1)).coerceIn(0f, (n - 1).toFloat())
                 while (true) {
                     val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                     val dx = c.position.x - down.position.x
@@ -1955,8 +1961,18 @@ private fun SymbolSegmented(names: List<String>, symbols: List<Int>, chosen: Int
                     if (moved) { c.consume(); scope.launch { at.snapTo(place(c.position.x)) } }
                     if (!c.pressed) break
                 }
-                val to = if (moved) kotlin.math.round(at.value).toInt()
-                    else (down.position.x / segW).toInt().coerceIn(0, n - 1)
+                // A tap: the choice whose segment it is now (the chosen one wider).
+                val to = if (moved) kotlin.math.round(at.value).toInt() else {
+                    val extra = w - n * base
+                    var x = 0f
+                    var hit = n - 1
+                    for (i in 0 until n) {
+                        val sw = base + extra * share(i, at.value)
+                        if (down.position.x < x + sw) { hit = i; break }
+                        x += sw
+                    }
+                    hit
+                }
                 dragging = false
                 scope.launch { at.animateTo(to.toFloat(), spec.value) }
                 choose.value(to)
@@ -1964,25 +1980,35 @@ private fun SymbolSegmented(names: List<String>, symbols: List<Int>, chosen: Int
         },
     ) {
         val h = size.height
-        val segW = size.width / n
+        val w = size.width
         val p = at.value
-        drawRoundRect(track, cornerRadius = CornerRadius(corner))
-        // The thumb: one segment wide, where the place is.
-        val tl = segW * p + inset
-        val thumbR = (corner - inset).coerceAtLeast(0f)
-        drawRoundRect(Color.Black.copy(alpha = 0.06f), Offset(tl, inset + 1.5f * look.unit), Size(segW - inset * 2f, h - inset * 2f), CornerRadius(thumbR))
-        drawRoundRect(thumbFill, Offset(tl, inset), Size(segW - inset * 2f, h - inset * 2f), CornerRadius(thumbR))
+        val extra = (w - n * base).coerceAtLeast(0f)
+        val r = minOf(look.pt(SettingsTokens.SEGMENT_CORNER), h / 2f)
+        drawRoundRect(track, cornerRadius = CornerRadius(r))
+        val lefts = FloatArray(n)
+        val widths = FloatArray(n)
+        var x = 0f
+        for (i in 0 until n) { lefts[i] = x; widths[i] = base + extra * share(i, p); x += widths[i] }
+        // The thumb: over the segment the place is in, moving into the next with it.
+        val i0 = p.toInt().coerceIn(0, n - 1)
+        val i1 = (i0 + 1).coerceAtMost(n - 1)
+        val f = (p - i0).coerceIn(0f, 1f)
+        val tl = lefts[i0] + (lefts[i1] - lefts[i0]) * f
+        val tw = widths[i0] + (widths[i1] - widths[i0]) * f
+        val tr = (r - inset).coerceAtLeast(0f)
+        drawRoundRect(Color.Black.copy(alpha = 0.06f), Offset(tl + inset, inset + 1.5f * look.unit), Size(tw - inset * 2f, h - inset * 2f), CornerRadius(tr))
+        drawRoundRect(thumbFill, Offset(tl + inset, inset), Size(tw - inset * 2f, h - inset * 2f), CornerRadius(tr))
         for (i in 0 until n) {
-            val k = (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f)
-            val (regular, bold) = texts[i]
-            val cx = segW * (i + 0.5f)
-            val block = iconSize + gap + bold.size.height
-            val top = (h - block) / 2f
-            translate(cx - iconSize / 2f, top) { with(painters[i]) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(mix(muted, label, k))) } }
-            val ty = top + iconSize + gap
-            // The secondary colour's name (regular) gives way to the label colour's (semibold) as the thumb arrives.
-            if (k < 0.999f) drawText(regular, color = muted, topLeft = Offset(cx - regular.size.width / 2f, ty), alpha = 1f - k)
-            if (k > 0.001f) drawText(bold, color = label, topLeft = Offset(cx - bold.size.width / 2f, ty), alpha = k)
+            val k = share(i, p)
+            val t = texts[i]
+            // The symbol and the name side by side, centred in the segment (the name's room growing with it).
+            val content = iconSize + (gap + t.size.width) * k
+            val cx = lefts[i] + widths[i] / 2f
+            val sx = cx - content / 2f
+            translate(sx, (h - iconSize) / 2f) { with(painters[i]) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(mix(muted, label, k))) } }
+            if (k > 0.01f) clipRect(left = lefts[i], right = lefts[i] + widths[i]) {
+                drawText(t, topLeft = Offset(sx + iconSize + gap, (h - t.size.height) / 2f), alpha = k * k)
+            }
         }
     }
 }
