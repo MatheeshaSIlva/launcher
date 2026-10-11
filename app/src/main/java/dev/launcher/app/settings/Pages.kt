@@ -127,6 +127,10 @@ object SettingsTokens {
     /** 1: the overview is glass over the blurred wallpaper (iOS 27's Liquid Glass); 0: coloured tiles on a solid sheet. */
     val GLASS = NumberKey("comp.settings.glass")
     val TILE_MATERIAL = MaterialKey("comp.settings.tile.material")
+    val SEGMENT_TRACK = ColorKey("comp.settings.segment.track")
+    val SEGMENT_THUMB = ColorKey("comp.settings.segment.thumb")
+    val SEGMENT_HEIGHT = NumberKey("comp.settings.segment.height")
+    val SEGMENT_TEXT = TextKey("comp.settings.segment.text")
     val CHIP_MATERIAL = MaterialKey("comp.settings.chip.material")
     val TILE_FILL = ColorKey("comp.settings.tile.fill")
     val TILE_TINT = NumberKey("comp.settings.tile.tint")
@@ -766,21 +770,22 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
             }
             nc.restore()
             if (layered) {
-                // Opaque over the part; towards the room's far side it fades out (the phone's own edge, when the part is at
-                // one, stays: nothing to fade there).
-                val bandTop = (bandY + (y0 - bandY) * (1f - z)).coerceIn(fadeTop, fadeBottom)
-                val bandBottom = (bandY + bandH).coerceIn(fadeTop, fadeBottom)
-                val atTop = c.top <= 0.001f
-                val atBottom = c.bottom >= 0.999f
-                val edge = 1f - z
-                val topA = if (atTop) 1f else edge
-                val bottomA = if (atBottom) 1f else edge
+                // Opaque over the part (where it is on screen now); towards the room's far side it fades out over at least
+                // [fadeLen]. Everything here changes continuously with the springs: how much an end fades grows with how far
+                // the part is from the phone's edge there (at the edge itself, nothing to fade), and the fade's length never
+                // shrinks to nothing (a fade that ran out of room went sharp for a moment, then soft again).
+                val span = fadeBottom - fadeTop
+                val fadeLen = minOf(span * 0.45f, 160f * g.unit)
+                val needTop = (c.top / 0.04f).coerceIn(0f, 1f) * z
+                val needBottom = ((1f - c.bottom) / 0.04f).coerceIn(0f, 1f) * z
+                val partTop = oy + c.top * g.h * s
+                val partBottom = oy + c.bottom * g.h * s
+                val solidTop = maxOf(partTop, fadeTop + fadeLen * needTop).coerceIn(fadeTop, fadeBottom)
+                val solidBottom = minOf(partBottom, fadeBottom - fadeLen * needBottom).coerceIn(solidTop, fadeBottom)
                 fun a(k: Float) = (255 * k).toInt().coerceIn(0, 255) shl 24
-                val t0 = 0f
-                val t1 = ((bandTop - fadeTop) / (fadeBottom - fadeTop)).coerceIn(0f, 1f)
-                val t2 = ((bandBottom - fadeTop) / (fadeBottom - fadeTop)).coerceIn(t1, 1f)
                 paints.mask.shader = android.graphics.LinearGradient(0f, fadeTop, 0f, fadeBottom,
-                    intArrayOf(a(topA), a(1f), a(1f), a(bottomA)), floatArrayOf(t0, t1, t2, 1f), android.graphics.Shader.TileMode.CLAMP)
+                    intArrayOf(a(1f - needTop), a(1f), a(1f), a(1f - needBottom)),
+                    floatArrayOf(0f, (solidTop - fadeTop) / span, (solidBottom - fadeTop) / span, 1f), android.graphics.Shader.TileMode.CLAMP)
                 nc.drawRect(0f, fadeTop - 1f, g.w, fadeBottom + 1f, paints.mask)
                 nc.restore()
             }
@@ -856,10 +861,8 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
     val shadowPaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
     // A sheet that meets the screen's edges takes its bottom corners past them.
     val below = if (g.inset < 0.5f) corner else 0f
-    // Glass: at rest there is no sheet (the tiles are glass on the blurred wallpaper); it turns solid under a page as it
-    // opens, as iOS 26's sheets do when they expand.
-    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
-    val solid: () -> Float = { if (glass) st.p.value.coerceIn(0f, 1f) else 1f }
+    // The panel is there at rest too (glass is for the buttons on it: Matheesha).
+    val solid: () -> Float = { 1f }
     Box(
         Modifier
             .offset { IntOffset(g.inset.roundToInt(), g.openTop.roundToInt()) }
@@ -935,7 +938,7 @@ private fun Chip(text: String, onClick: () -> Unit) {
     BasicText(text, style = look.text(SettingsTokens.CHIP_TEXT, look.color(SettingsTokens.CHIP_TEXT_COLOR)), maxLines = 1,
         modifier = Modifier
             .pressScale { 1f - 0.05f * press }
-            .then(if (glass) Modifier.movingGlass(SettingsTokens.CHIP_MATERIAL, look.pt(SettingsTokens.CHIP_CORNER), { press }) { st?.p?.value }
+            .then(if (glass) Modifier.movingGlass(SettingsTokens.CHIP_MATERIAL, look.pt(SettingsTokens.CHIP_CORNER), { press }, panelUnder(look)) { st?.p?.value }
                 else Modifier.background(look.color(SettingsTokens.CHIP_FILL), RoundedCornerShape(look.dp(SettingsTokens.CHIP_CORNER))))
             .pointerInput(onClick) { rowTap({ pressed = it }, onClick) }
             .padding(horizontal = look.dp(12f * look.unit), vertical = look.dp(7f * look.unit)))
@@ -955,7 +958,7 @@ private fun Modifier.pressScale(scale: () -> Float): Modifier = drawWithContent 
  * it draws again whenever [moving] changes (the sheet's spring): a glass that kept the place it rested at showed the wrong
  * part of the wallpaper while the sheet moved.
  */
-private fun Modifier.movingGlass(key: MaterialKey, cornerPx: Float, press: () -> Float, moving: () -> Float?): Modifier = composed {
+private fun Modifier.movingGlass(key: MaterialKey, cornerPx: Float, press: () -> Float, under: List<dev.launcher.app.design.Fill>, moving: () -> Float?): Modifier = composed {
     val look = LocalLook.current
     val at = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     val rect = remember { android.graphics.RectF() }
@@ -966,8 +969,16 @@ private fun Modifier.movingGlass(key: MaterialKey, cornerPx: Float, press: () ->
             val co = at[0]?.takeIf { it.isAttached } ?: return@drawBehind
             val o = co.positionInWindow()
             rect.set(0f, 0f, size.width, size.height)
-            drawIntoCanvas { look.drawGlass(it.nativeCanvas, key, rect, cornerPx, o.x, o.y, press()) }
+            drawIntoCanvas { look.drawGlass(it.nativeCanvas, key, rect, cornerPx, o.x, o.y, press(), under = under) }
         }
+}
+
+/** What glass on the panel shows through: the panel's own fill over the page (the blurred wallpaper). */
+private fun panelUnder(look: Look): List<dev.launcher.app.design.Fill> {
+    val c = look.color(SettingsTokens.SHEET_FILL).toArgb()
+    val a = ((c ushr 24) and 0xFF) / 255f
+    val opaque = c or (0xFF shl 24)
+    return listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(opaque, opaque), a, a, dev.launcher.app.design.Blend.NORMAL))
 }
 
 /** A tile's fill: its colour by the theme's tint over the tile's own fill. */
@@ -1023,7 +1034,7 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
                 }
             }
             .pressScale { 1f - 0.04f * press.value }
-            .then(if (glass) Modifier.movingGlass(SettingsTokens.TILE_MATERIAL, look.pt(SettingsTokens.TILE_CORNER), { press.value }) { st.p.value }
+            .then(if (glass) Modifier.movingGlass(SettingsTokens.TILE_MATERIAL, look.pt(SettingsTokens.TILE_CORNER), { press.value }, panelUnder(look)) { st.p.value }
                 else Modifier.background(tileFill(look, part), RoundedCornerShape(look.dp(SettingsTokens.TILE_CORNER))))
             .pointerInput(part) { rowTap({ pressed = it }) { open(part) } }
             .padding(look.dp(14f * look.unit)),
@@ -1053,6 +1064,7 @@ private fun GrowingTile(st: Studio, part: Part) {
     val c = look.color(part.color)
     val label = look.color(SettingsTokens.ROW_LABEL)
     val glassRect = remember { android.graphics.RectF() }
+    val under = panelUnder(look)
     val fromCorner = look.pt(SettingsTokens.TILE_CORNER)
     val toCorner = look.pt(SettingsTokens.SHEET_CORNER)
     val pad = 14f * look.unit
@@ -1082,7 +1094,7 @@ private fun GrowingTile(st: Studio, part: Part) {
             // The tile's glass grows with it, at its place over the wallpaper, and gives way to the sheet turning solid.
             val at = st.sheet?.takeIf { it.isAttached }?.positionInWindow() ?: Offset.Zero
             glassRect.set(r.left, r.top, r.right, r.bottom)
-            if (colour > 0.003f) drawIntoCanvas { look.drawGlass(it.nativeCanvas, SettingsTokens.TILE_MATERIAL, glassRect, corner, at.x, at.y, alpha = colour) }
+            if (colour > 0.003f) drawIntoCanvas { look.drawGlass(it.nativeCanvas, SettingsTokens.TILE_MATERIAL, glassRect, corner, at.x, at.y, alpha = colour, under = under) }
         } else drawRoundRect(bg.copy(alpha = bg.alpha * colour), r.topLeft, r.size, CornerRadius(corner))
         val content = (1f - p / 0.35f).coerceIn(0f, 1f)
         if (content > 0f) {
@@ -1443,7 +1455,7 @@ private fun Modifier.topFade(scroll: IosScrollState, unit: Float, fadePx: Float,
 
 /** The elements' short names, for the picker at the top of Layouts. */
 private val Element.short get() = when (this) {
-    Element.STATUS_BAR -> "Status bar"
+    Element.STATUS_BAR -> "Status"
     Element.SHADE -> "Shade"
     Element.RECENTS -> "Recents"
     Element.DRAWER -> "Drawer"
@@ -1479,9 +1491,9 @@ private fun LayoutsPager(st: Studio, g: Geometry, fadePx: Float, bandPaint: andr
             }
         }
     }
-    val pickerTop = 22f * g.unit
-    val pickerH = look.pt(SettingsTokens.ROW_HEIGHT)
-    val contentTop = pickerTop + pickerH + 6f * g.unit
+    val pickerTop = 24f * g.unit
+    val pickerH = look.pt(SettingsTokens.SEGMENT_HEIGHT)
+    val contentTop = pickerTop + pickerH + 10f * g.unit
     Box(Modifier.fillMaxSize()) {
         for (e in Element.entries) {
             val shown = st.elementShown.getValue(e)
@@ -1509,9 +1521,80 @@ private fun LayoutsPager(st: Studio, g: Geometry, fadePx: Float, bandPaint: andr
                 }
             }
         }
-        // The picker, over the pages' tops.
-        Box(Modifier.zIndex(2f).padding(top = look.dp(pickerTop)).fillMaxWidth().height(look.dp(pickerH)), contentAlignment = Alignment.CenterStart) {
-            ChoiceChips(Element.entries.map { it.short }, st.element.ordinal, Modifier.padding(horizontal = m)) { i -> choose(Element.entries[i]) }
+        // The picker, over the pages' tops: a segmented control (draft C), the page's main choice.
+        Box(Modifier.zIndex(2f).padding(top = look.dp(pickerTop)).fillMaxWidth().height(look.dp(pickerH)).padding(horizontal = m),
+            contentAlignment = Alignment.Center) {
+            Segmented(Element.entries.map { it.short }, st.element.ordinal) { i -> choose(Element.entries[i]) }
+        }
+    }
+}
+
+/**
+ * A segmented control (iOS's, draft C): the choices side by side in a capsule, the chosen one on a thumb that slides to it
+ * (its name in the heavier weight, crossfading as the thumb passes). A tap chooses; a drag along it carries the thumb
+ * under the finger and chooses where it is let go.
+ */
+@Composable
+private fun Segmented(names: List<String>, chosen: Int, onChoose: (Int) -> Unit) {
+    val look = LocalLook.current
+    val n = names.size
+    val thumb = remember { Animatable(chosen.toFloat()) }
+    var dragging by remember { mutableStateOf(false) }
+    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.NAV_PUSH))
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(chosen) { if (!dragging) thumb.animateTo(chosen.toFloat(), spec.value) }
+    val measurer = rememberTextMeasurer()
+    val label = look.color(SettingsTokens.ROW_LABEL)
+    val regular = look.text(SettingsTokens.SEGMENT_TEXT, label)
+    val heavy = regular.copy(fontWeight = androidx.compose.ui.text.font.FontWeight(600))
+    val light = remember(names, look) { names.map { measurer.measure(it, regular, maxLines = 1) } }
+    val bold = remember(names, look) { names.map { measurer.measure(it, heavy, maxLines = 1) } }
+    val track = look.color(SettingsTokens.SEGMENT_TRACK)
+    val thumbFill = look.color(SettingsTokens.SEGMENT_THUMB)
+    val inset = 2.5f * look.unit
+    val choose = androidx.compose.runtime.rememberUpdatedState(onChoose)
+    Canvas(
+        Modifier.fillMaxWidth().height(look.dp(SettingsTokens.SEGMENT_HEIGHT)).pointerInput(n) {
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                val segW = size.width.toFloat() / n
+                val slop = viewConfiguration.touchSlop
+                var moved = false
+                val startThumb = thumb.value
+                while (true) {
+                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                    val dx = c.position.x - down.position.x
+                    if (!moved && kotlin.math.abs(dx) > slop) { moved = true; dragging = true }
+                    if (moved) {
+                        c.consume()
+                        // The thumb follows the finger (from where it was), within the track.
+                        val to = (startThumb + dx / segW).coerceIn(0f, (n - 1).toFloat())
+                        scope.launch { thumb.snapTo(to) }
+                    }
+                    if (!c.pressed) break
+                }
+                val at = if (moved) kotlin.math.round(thumb.value).toInt() else (down.position.x / segW).toInt().coerceIn(0, n - 1)
+                dragging = false
+                scope.launch { thumb.animateTo(at.toFloat(), spec.value) }
+                choose.value(at)
+            }
+        },
+    ) {
+        val segW = size.width / n
+        val h = size.height
+        drawRoundRect(track, cornerRadius = CornerRadius(h / 2f))
+        val x = thumb.value * segW
+        val tw = segW - inset * 2f
+        val th = h - inset * 2f
+        // The thumb: a soft shadow, then its fill.
+        drawRoundRect(Color.Black.copy(alpha = 0.06f), Offset(x + inset, inset + 1.5f * look.unit), Size(tw, th), CornerRadius(th / 2f))
+        drawRoundRect(thumbFill, Offset(x + inset, inset), Size(tw, th), CornerRadius(th / 2f))
+        for (i in 0 until n) {
+            val k = (1f - kotlin.math.abs(thumb.value - i)).coerceIn(0f, 1f)
+            val cx = segW * (i + 0.5f)
+            val l = light[i]; val b = bold[i]
+            if (k < 1f) drawText(l, topLeft = Offset(cx - l.size.width / 2f, (h - l.size.height) / 2f), alpha = 1f - k)
+            if (k > 0f) drawText(b, topLeft = Offset(cx - b.size.width / 2f, (h - b.size.height) / 2f), alpha = k)
         }
     }
 }

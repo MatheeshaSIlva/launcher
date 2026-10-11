@@ -216,9 +216,10 @@ for _k, (_l, _d, _what) in {
 }.items():
     MATERIAL_YOU[_k] = ({'color': _l} if _l == _d else {'light': _l, 'dark': _d}) | {'src': _MY_SRC.format(what=_what, roles=_l if _l == _d else _l + ' | ' + _d)}
 
-# Every glass, tinted: a colour layer of the palette's accent over what it shows (its luminosity kept: the glass stays as
-# light or dark as it was), and a faint wash of the accent's light (dark) tone, as Android's tinted surfaces.
-MY_GLASS_TINT = [['@system_accent1_500', [0.32, 0.3], 'COLOR'], ['@system_accent1_100|@system_accent1_800', [0.08, 0.1], 'NORMAL']]
+# Every glass, tinted: a colour layer of the palette's accent over what it shows (its luminosity kept), and a wash of the
+# palette's secondary tone (light, or dark in dark mode), as Android's tinted surfaces. (The colour layer alone changed
+# nothing over a wallpaper of the palette's own colours, which is the usual case: Matheesha saw no change on the S24.)
+MY_GLASS_TINT = [['@system_accent1_500', [0.25, 0.25], 'COLOR'], ['@system_accent2_100|@system_accent2_800', [0.24, 0.3], 'NORMAL']]
 
 
 def tinted_material(m):
@@ -816,9 +817,13 @@ COMPONENT_SEEDS = {
     'comp.settings.sheet.inset': {'pt': 8, 'src': "judged:iOS 26's floating sheets keep a margin from the screen's edges"},
     'comp.settings.sheet.rest': {'factor': 0.55, 'src': "judged:draft D: where the sheet's top rests (of the screen's height), the picture of home above it"},
     'comp.settings.sheet.open': {'factor': 0.36, 'src': "judged:draft D: the sheet's top with a page open (the picture smaller, still in sight)"},
-    'comp.settings.glass': {'factor': 1, 'src': "judged:Matheesha (2026-10-11): the overview's tiles as Liquid Glass over the blurred wallpaper, not coloured cards; the sheet turns solid only under an open page (iOS 26's sheets turn opaque when expanded)"},
-    'comp.settings.tile.material': {'ref': 'component.card.material', 'src': "judged:the theme's card glass (App Library's tiles, widgets)"},
-    'comp.settings.chip.material': {'ref': 'sys.material.glass.small', 'src': "judged:a small glass capsule (iOS 26's small controls)"},
+    'comp.settings.glass': {'factor': 1, 'src': "judged:Matheesha (2026-10-11): the overview's buttons as Liquid Glass (on the panel, over the blurred wallpaper), not coloured cards"},
+    'comp.settings.segment.track': {'ref': 'ref.color.fills.tertiary', 'src': "judged:iOS's segmented control: its track a tertiary fill"},
+    'comp.settings.segment.thumb': {'ref': 'ref.color.miscellaneous.segmented-control-selected-fill', 'src': "kit:the segmented control's selected fill"},
+    'comp.settings.segment.height': {'pt': 36, 'src': "judged:draft C's segmented control (iOS's are 32; a little taller as the page's main choice)"},
+    'comp.settings.segment.text': {'ref': 'sys.type.footnote', 'src': "judged:iOS's segmented control labels (13 pt)"},
+    'comp.settings.tile.material': {'ref': 'sys.material.glass.clear', 'src': "judged:clear glass on the light panel: white with its rims and lens (iOS 26's glass buttons over light content); the card glass made for the wallpaper read grey there"},
+    'comp.settings.chip.material': {'ref': 'sys.material.glass.clear', 'src': "judged:as the tiles"},
     'comp.settings.tile.fill': {'light': '#ffffff00', 'dark': '#ffffff00', 'src': "judged:draft D (iOS 27): a tile is its colour over the sheet"},
     'comp.settings.tile.tint': {'factor': 0.14, 'src': "judged:draft D: how much of its colour a tile takes (iOS 27: a light tint)"},
     'comp.settings.tile.title-tint': {'factor': 1.0, 'src': "judged:draft D: a tile's name in its colour (0: the label colour)"},

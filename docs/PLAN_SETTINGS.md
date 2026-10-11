@@ -244,6 +244,19 @@ Fonts chooses the text and the titles' family (`sys.font.text`, `sys.font.displa
 four from Google Fonts (downloaded the first time), each chip written in its own font; both wait for Apply (`Draft.fonts`).
 Still to come in C3: search across Google Fonts, and customising by component with previews.
 
+**S7 (2026-10-11; Matheesha on S6: "don't remove the panel overlay you had earlier. I just wanted the buttons to be glass
+themed. In the layout menu, the tabs feel more like buttons to filter results ... something like in the example c you made.
+Also, during the animations, the fades become sharp and then goes back to fade ... If I come back to settings after a
+wallpaper change, the transition in the settings is static"):**
+- The panel is back at rest; the tiles and the chips on it are clear glass over it (they sample the panel's fill over the
+  blurred wallpaper: `Look.drawGlass(under = ...)`); the card glass made for the wallpaper read grey on the panel.
+- Layouts' picker is a segmented control (draft C): a capsule track, a thumb that slides to the chosen element (its name
+  turning semibold as the thumb passes), tap or drag along it (the thumb follows the finger, settles where it is let go).
+- The picture's fade is continuous: how much each end fades grows with how far the part is from the phone's edge there,
+  and the fade never runs out of room (it went sharp for a moment when the part's band reached the end of the room).
+- A look or wallpaper change while the settings are away is held and revealed when they show again
+  (`SettingsActivity.deferred`): it played unseen and coming back showed the new look already still.
+
 **Baseline (S24, 2da9d45, Graphite dark):** every push and back lost 60-80 ms of the main thread in its first frame (the
 page built and composed then), 3-10 missed refreshes a transition, the swipe back ~10; GPU ~6 ms; scrolling clean.
 

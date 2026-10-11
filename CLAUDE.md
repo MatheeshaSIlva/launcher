@@ -59,9 +59,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   60-80 ms); solid groups (no glass per card). Changes wait in a draft for Apply (`Draft`, `ApplyBar`, `Design.batch`:
   one reveal for all of them); a look change is revealed from the tap
   (`ThemeReveal`). The picture of home (with our status bar drawn on it) takes no touches: it zooms to the element chosen
-  in Layouts' picker and fades away behind the sheet (`motion.settings.focus`). iOS 27's overview is glass over the blurred
-  wallpaper (`comp.settings.glass`), the sheet solid only under an open page. Phone holds Shizuku, updates, safety and the
-  developer tools with the log.
+  in Layouts' segmented control and fades away behind the sheet (`motion.settings.focus`). iOS 27's overview: the page is
+  the blurred wallpaper, the panel on it, its buttons clear glass (`comp.settings.glass`). Phone holds Shizuku, updates,
+  safety and the developer tools with the log.
   Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control.
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
@@ -272,6 +272,10 @@ copy it wholesale — port the working pieces cleanly. File map:
   down on it hides the list into a count ("● 12 Notifications") and that state lasts across tests in the same simulator:
   find platters on screen before pressing them. The Control Center gallery is another process: SpringBoard's tree has no
   labels for it (read the screenshots).
+- **A local `adb install` over our app starts the phone's other home app** (Lawnchair on the S24) while ours is replaced,
+  locked or not: after every local install run `am start -a android.intent.action.MAIN -c android.intent.category.HOME -p
+  dev.launcher.app` and check the focus. And gate every S24 screenshot on the focused window right before it: the phone can
+  lock between two steps, and a screenshot of the lock screen can show notifications (delete such a shot unviewed).
 - **Git Bash path conversion**: `MSYS_NO_PATHCONV=1` is needed for adb paths like `/sdcard/...`, but exported for a whole
   command it also stops `tools/device.sh install` from converting the APK's path: the install fails quietly and the old
   build keeps running. Set it per adb call, never for the scripts. (An install while the app starts can also crash it in

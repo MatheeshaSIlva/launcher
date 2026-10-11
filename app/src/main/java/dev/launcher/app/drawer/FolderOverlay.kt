@@ -49,6 +49,21 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         var openedAt = 0L
         val scroller = IosScroller({ invalidate() }, { lib.settled() })
 
+        /**
+         * Each app's cell in the folder's grid. The ones the tile shows take the first cells in the same arrangement as on
+         * the tile (top to bottom, then left to right), so on their way from the tile to the grid none crosses another
+         * (in plain order the tile's lower left icon went up past the upper right one, and the small ones across the
+         * grid: Matheesha, "shuffles the icons"); the rest follow in their order.
+         */
+        val cellOf = IntArray(tile.apps.size) { it }.also { cells ->
+            val shown = tile.apps.indices.mapNotNull { i ->
+                lib.tilesPane.tileIconRect(tile, i, 0f, 0f, 1f, RectF())?.let { r -> Triple(i, r.centerX(), r.centerY()) }
+            }
+            var cell = 0
+            for (row in shown.sortedWith(compareBy({ it.third }, { it.second })).chunked(m.folderColumns))
+                for (e in row.sortedBy { it.second }) cells[e.first] = cell++
+        }
+
         init {
             val n = tile.apps.size
             val content = ceil(n / m.folderColumns.toFloat()) * rowPitch
@@ -101,8 +116,9 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         // ---- geometry (panel coordinates when fully open)
 
         fun iconRect(i: Int, out: RectF): RectF {
-            val col = i % m.folderColumns
-            val row = i / m.folderColumns
+            val cell = cellOf[i]
+            val col = cell % m.folderColumns
+            val row = cell / m.folderColumns
             val l = panel.left + pad + col * cellW + (cellW - m.iconSize) / 2f
             val t = panel.top + pad + row * rowPitch - scroller.position
             return out.apply { set(l, t, l + m.iconSize, t + m.iconSize) }
@@ -142,6 +158,7 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
     private val labels = LabelPainter(m.labelTextSize, 0xFFFFFFFF.toInt(), Paint.Align.CENTER, dev.launcher.app.theme.Fonts.text(450))
         .toned { dev.launcher.app.theme.Appearance.label }.shadowed(m.pt(2f))
     private val r = RectF()
+    private val r2 = RectF()
     private val at = RectF()
     private var pressed = -1
     // This touch is the second tap of a double tap on the tile that just opened the folder: it does nothing (it used to land
@@ -359,23 +376,31 @@ internal class FolderOverlay(ctx: Context, private val lib: AppLibraryView) : Vi
         clip.reset()
         clip.addRoundRect(cur, radius, radius, Path.Direction.CW)
         c.clipPath(clip)
-        // The panel's content grows with it, as one: the tile's own arrangement (its large icons and the small ones of its
-        // fourth slot) rides on the frame, growing, and fades out early; the folder's grid, scaled with the frame, fades in
-        // as it comes. Nothing travels across anything (Matheesha: each of the tile's icons flying to its cell shuffled
-        // them: the ones from the tile's lower half crossed the others' paths). Closing is the same backwards, ending on
-        // the tile exactly. The names come once the grid is nearly in place.
+        // iOS: the icons the tile shows (its large ones, the small ones of its fourth slot) fly from their places in the tile
+        // to their cells in the folder's grid, growing, as the panel opens (and back as it closes), never crossing (their
+        // cells keep the tile's arrangement: [Panel.cellOf]); the apps the tile does not show come in where they belong in
+        // the grid, which is scaled with the panel. (The tile's icons and the grid used to crossfade.) The names come once
+        // the icons are nearly in place.
         val s = cur.width() / panel.width()
-        val tileA = 1f - smooth(0f, 0.3f, p)
-        if (tileA > 0f) lib.tilesPane.drawTileIcons(c, t, cur.left, cur.top, cur.width() / pn.from.width(), (255 * tileA).toInt(), skipHidden = true)
-        val gridA = smooth(0.2f, 0.65f, p)
+        val restA = smooth(0.25f, 0.8f, p)
         val labelA = (255 * smooth(0.7f, 1f, p)).toInt()
-        if (gridA > 0f) for (i in t.apps.indices) {
+        // The ones coming in first, the flying ones over them (their paths cross the grid).
+        for (pass in 0..1) for (i in t.apps.indices) {
             pn.iconRect(i, r)                                    // the cell, the folder fully open
-            if (r.bottom < panel.top - m.labelBaseline || r.top > panel.bottom) continue
-            at.set(cur.left + (r.left - panel.left) * s, cur.top + (r.top - panel.top) * s, 0f, 0f)
-            at.right = at.left + r.width() * s
-            at.bottom = at.top + r.height() * s
-            val a = (255 * gridA).toInt()
+            val from = lib.tilesPane.tileIconRect(t, i, pn.from.left, pn.from.top, 1f, r2)
+            if ((from != null) != (pass == 1)) continue
+            val a: Int
+            if (from != null) {
+                // From its place in the tile to its cell, with the panel's own progress (so it keeps its place in the frame).
+                at.set(lerp(from.left, r.left, p), lerp(from.top, r.top, p), lerp(from.right, r.right, p), lerp(from.bottom, r.bottom, p))
+                a = 255
+            } else {
+                if (restA <= 0f || r.bottom < panel.top - m.labelBaseline || r.top > panel.bottom) continue
+                at.set(cur.left + (r.left - panel.left) * s, cur.top + (r.top - panel.top) * s, 0f, 0f)
+                at.right = at.left + r.width() * s
+                at.bottom = at.top + r.height() * s
+                a = (255 * restA).toInt()
+            }
             val e = t.apps[i]
             if (!lib.isHidden(e, at)) lib.iconPainter.draw(c, e, at, dimmed = i == pressedIcon, alpha = a)
             if (labelA > 0) {

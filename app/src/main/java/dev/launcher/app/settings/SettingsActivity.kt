@@ -32,6 +32,13 @@ class SettingsActivity : ComponentActivity() {
     private var touchX = -1f
     private var touchY = -1f
     private var touchAt = 0L
+    /**
+     * In front ([onResume] to [onPause]). A look or a wallpaper that changes while the settings are away (the wallpaper
+     * changed in the system's picker, the palette with it) is held as it was and its transition plays when they show
+     * again ([deferred]): it used to play unseen, and coming back showed the new look already still.
+     */
+    private var showing = false
+    private var deferred: (() -> Unit)? = null
 
     /** Registered before the content's own listener, so the old look is held before it draws in the new one. */
     private val onDesign: () -> Unit = {
@@ -83,6 +90,18 @@ class SettingsActivity : ComponentActivity() {
         AppLog.log("[settings] opened")
     }
 
+    override fun onResume() {
+        super.onResume()
+        showing = true
+        // The new look is drawn under the held one on the next frame; the transition starts on the one after.
+        deferred?.let { go -> deferred = null; root.postOnAnimation { root.postOnAnimation { go() } } }
+    }
+
+    override fun onPause() {
+        showing = false
+        super.onPause()
+    }
+
     override fun onDestroy() {
         Design.removeListener(onDesign)
         Design.removeListener(onLook)
@@ -99,15 +118,17 @@ class SettingsActivity : ComponentActivity() {
     /** The settings as they show now, held still over the page until the new look is drawn under it, then revealed. */
     private fun hold() {
         val old = still() ?: return
-        // The content recomposes in the new look on the next frame; the reveal starts on the one after.
-        root.postOnAnimation { root.postOnAnimation { reveal(old) } }
+        // The content recomposes in the new look on the next frame; the reveal starts on the one after (or once the settings
+        // show again).
+        if (showing) root.postOnAnimation { root.postOnAnimation { reveal(old) } } else deferred = { reveal(old) }
     }
 
     /** Held as they show while the wallpaper under them changes (read late, or a new one), then faded out on [role]. */
     private fun crossfade(role: dev.launcher.app.design.CurveKey) {
         if (!::root.isInitialized || !root.isAttachedToWindow || root.width == 0) return
         val old = still() ?: return
-        root.postOnAnimation { root.postOnAnimation { if (held === old) fade(old, role) } }
+        // Away: the whole change (the wallpaper, and the palette with it) is revealed as one when the settings show again.
+        if (showing) root.postOnAnimation { root.postOnAnimation { if (held === old) fade(old, role) } } else deferred = { reveal(old) }
     }
 
     /** A still of the settings as they show (a reveal under way included) laid over them; whatever was running gives way. */

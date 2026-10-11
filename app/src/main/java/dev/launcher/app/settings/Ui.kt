@@ -101,8 +101,9 @@ class Look(
     private val backdropPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
 
     /** Glass [key] over the backdrop at [rect] (canvas coordinates, the canvas's origin at [ox], [oy] in the window). */
-    fun drawGlass(c: android.graphics.Canvas, key: MaterialKey, rect: RectF, radius: Float, ox: Float, oy: Float, press: Float = 0f, alpha: Float = 1f) {
-        if (!glass.draw(c, key, rect, radius, ox, oy, Appearance.backdropVeil, alpha = alpha, press = press)) {
+    fun drawGlass(c: android.graphics.Canvas, key: MaterialKey, rect: RectF, radius: Float, ox: Float, oy: Float, press: Float = 0f,
+                  alpha: Float = 1f, under: List<dev.launcher.app.design.Fill> = emptyList()) {
+        if (!glass.draw(c, key, rect, radius, ox, oy, Appearance.backdropVeil, under = under, alpha = alpha, press = press)) {
             // No wallpaper copy: a plain translucent fill in the appearance's colours.
             val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = Appearance.mix(0xB3FFFFFF.toInt(), 0x80303033.toInt()) }
             p.alpha = (p.alpha * alpha).toInt()

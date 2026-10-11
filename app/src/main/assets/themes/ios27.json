@@ -2482,8 +2482,8 @@
    "src": "judged:iOS's fill colours (secondary) for a chip on the sheet"
   },
   "comp.settings.chip.material": {
-   "ref": "sys.material.glass.small",
-   "src": "judged:a small glass capsule (iOS 26's small controls)"
+   "ref": "sys.material.glass.clear",
+   "src": "judged:as the tiles"
   },
   "comp.settings.chip.text": {
    "ref": "sys.type.footnote",
@@ -2511,7 +2511,7 @@
   },
   "comp.settings.glass": {
    "factor": 1,
-   "src": "judged:Matheesha (2026-10-11): the overview's tiles as Liquid Glass over the blurred wallpaper, not coloured cards; the sheet turns solid only under an open page (iOS 26's sheets turn opaque when expanded)"
+   "src": "judged:Matheesha (2026-10-11): the overview's buttons as Liquid Glass (on the panel, over the blurred wallpaper), not coloured cards"
   },
   "comp.settings.group.corner": {
    "ref": "component.card.corner",
@@ -2587,6 +2587,22 @@
    "ref": "component.section.title-color",
    "src": "judged:the theme's section heading"
   },
+  "comp.settings.segment.height": {
+   "pt": 36,
+   "src": "judged:draft C's segmented control (iOS's are 32; a little taller as the page's main choice)"
+  },
+  "comp.settings.segment.text": {
+   "ref": "sys.type.footnote",
+   "src": "judged:iOS's segmented control labels (13 pt)"
+  },
+  "comp.settings.segment.thumb": {
+   "ref": "ref.color.miscellaneous.segmented-control-selected-fill",
+   "src": "kit:the segmented control's selected fill"
+  },
+  "comp.settings.segment.track": {
+   "ref": "ref.color.fills.tertiary",
+   "src": "judged:iOS's segmented control: its track a tertiary fill"
+  },
   "comp.settings.sheet.corner": {
    "pt": 38,
    "src": "judged:iOS 26's floating sheets (rounder than cards, as the screen's corners)"
@@ -2640,8 +2656,8 @@
    "src": "judged:draft D"
   },
   "comp.settings.tile.material": {
-   "ref": "component.card.material",
-   "src": "judged:the theme's card glass (App Library's tiles, widgets)"
+   "ref": "sys.material.glass.clear",
+   "src": "judged:clear glass on the light panel: white with its rims and lens (iOS 26's glass buttons over light content); the card glass made for the wallpaper read grey there"
   },
   "comp.settings.tile.symbol": {
    "pt": 34,
@@ -3716,16 +3732,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -3747,16 +3763,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -3994,16 +4010,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4045,16 +4061,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4096,16 +4112,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4147,16 +4163,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4198,16 +4214,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4229,16 +4245,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4265,16 +4281,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4306,16 +4322,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4350,16 +4366,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4458,16 +4474,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4598,16 +4614,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4690,16 +4706,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4773,16 +4789,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4862,16 +4878,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4898,16 +4914,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -4956,16 +4972,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
@@ -5096,16 +5112,16 @@
      [
       "@system_accent1_500",
       [
-       0.32,
-       0.3
+       0.25,
+       0.25
       ],
       "COLOR"
      ],
      [
-      "@system_accent1_100|@system_accent1_800",
+      "@system_accent2_100|@system_accent2_800",
       [
-       0.08,
-       0.1
+       0.24,
+       0.3
       ],
       "NORMAL"
      ]
