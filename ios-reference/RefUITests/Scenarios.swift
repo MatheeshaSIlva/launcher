@@ -969,6 +969,106 @@ final class Scenarios: XCTestCase {
         home()
     }
 
+    // MARK: - Landscape (Matheesha, 2026-10-13: "fix both issues. observe IOS first")
+
+    /// A point on the host app's screen as it is turned now ([nx], [ny] fractions of its width and height).
+    private func hostPt(_ nx: CGFloat, _ ny: CGFloat) -> XCUICoordinate {
+        host.coordinate(withNormalizedOffset: CGVector(dx: nx, dy: ny))
+    }
+
+    private func hostDrag(_ name: String, _ a: (CGFloat, CGFloat), _ b: (CGFloat, CGFloat), velocity: CGFloat = 1500, press: TimeInterval = 0.05, hold: TimeInterval = 0) {
+        mark("drag \(name) begin \(a) -> \(b) v\(Int(velocity)) hold \(hold) (host fractions, \(Int(host.frame.width))x\(Int(host.frame.height)))")
+        hostPt(a.0, a.1).press(forDuration: press, thenDragTo: hostPt(b.0, b.1), withVelocity: XCUIGestureVelocity(rawValue: velocity), thenHoldForDuration: hold)
+        mark("drag \(name) lifted")
+    }
+
+    /// The host app full screen with its pattern, the device turned to landscape.
+    private func landscapeHost() {
+        host.launchArguments = ["-pattern"]
+        host.launch()
+        wait(1.5)
+        XCUIDevice.shared.orientation = .landscapeLeft
+        wait(2.5)
+        mark("landscape host \(host.frame) springboard \(sb.frame)")
+    }
+
+    private func portrait() {
+        XCUIDevice.shared.orientation = .portrait
+        wait(2)
+    }
+
+    /// Control Center in landscape over an app: where everything goes (screenshot and tree), how it opens and closes, its
+    /// edit mode, whether it scrolls; Notification Center beside it for comparison.
+    func test60_ccLandscape() {
+        landscapeHost()
+        shot("land-app")
+        for i in 1...3 {
+            hostDrag("land-cc-open-\(i)", (0.93, 0.005), (0.93, 0.62))
+            wait(2)
+            if i == 1 { shot("land-cc-open"); tree("land-cc-open") }
+            hostDrag("land-cc-close-\(i)", (0.5, 0.99), (0.5, 0.45))
+            wait(2)
+        }
+        // A pull held part way: the panel under the finger in landscape.
+        hostDrag("land-cc-hold", (0.93, 0.005), (0.93, 0.3), velocity: 300, hold: 1.0)
+        wait(2)
+        shot("land-cc-after-hold")
+        // Does it scroll (up, then down)?
+        hostDrag("land-cc-scroll-up", (0.5, 0.8), (0.5, 0.25), velocity: 800, hold: 0.3)
+        wait(1.5)
+        shot("land-cc-scrolled-up")
+        tree("land-cc-scrolled-up")
+        hostDrag("land-cc-scroll-down", (0.5, 0.3), (0.5, 0.85), velocity: 800, hold: 0.3)
+        wait(1.5)
+        shot("land-cc-scrolled-down")
+        // Edit mode in landscape.
+        hostPt(0.5, 0.92).press(forDuration: 1.3)
+        mark("land-cc-edit long press")
+        wait(2)
+        shot("land-cc-edit")
+        tree("land-cc-edit")
+        hostDrag("land-cc-edit-scroll", (0.5, 0.8), (0.5, 0.25), velocity: 800, hold: 0.3)
+        wait(1.5)
+        shot("land-cc-edit-scrolled")
+        hostPt(0.5, 0.97).tap()
+        mark("land-cc-edit done")
+        wait(1.5)
+        hostDrag("land-cc-close", (0.5, 0.99), (0.5, 0.45))
+        wait(2)
+        // Notification Center in landscape.
+        hostDrag("land-nc-open", (0.1, 0.005), (0.1, 0.62))
+        wait(2)
+        shot("land-nc-open")
+        tree("land-nc-open")
+        hostDrag("land-nc-close", (0.5, 0.99), (0.5, 0.45))
+        wait(2)
+        portrait()
+        home()
+    }
+
+    /// Going home from an app in landscape (home stays upright on an iPhone): the swipe up, three times at the usual
+    /// speed, then held part way (the card under the finger), then the App Switcher from landscape.
+    func test61_homeFromLandscape() {
+        for i in 1...3 {
+            landscapeHost()
+            if i == 1 { shot("land-before-home") }
+            hostDrag("land-home-\(i)", (0.5, 0.99), (0.5, 0.45), velocity: 2000)
+            wait(3)
+            if i == 1 { shot("land-after-home"); tree("land-after-home") }
+        }
+        landscapeHost()
+        hostDrag("land-card-hold", (0.5, 0.99), (0.5, 0.7), velocity: 250, hold: 1.5)
+        wait(2.5)
+        shot("land-after-card-hold")
+        landscapeHost()
+        hostDrag("land-switcher", (0.5, 0.99), (0.5, 0.55), velocity: 500, hold: 1.0)
+        wait(2)
+        shot("land-switcher")
+        tree("land-switcher")
+        portrait()
+        home()
+    }
+
     // MARK: - Calibration
 
     /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the
