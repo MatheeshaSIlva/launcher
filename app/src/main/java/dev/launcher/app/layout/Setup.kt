@@ -68,6 +68,7 @@ object Setup {
     }
 
     fun bool(e: Element, key: String, fallback: Boolean): Boolean = option(e, key) as? Boolean ?: fallback
+    fun int(e: Element, key: String, fallback: Int): Int = option(e, key) as? Int ?: fallback
 
     /**
      * Changes [e]'s layout, placement and/or options (null: unchanged; an option value of null: back to its default).

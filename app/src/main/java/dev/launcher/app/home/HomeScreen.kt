@@ -577,6 +577,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         if (width == 0 || height == 0) return
         val metrics = HomeMetrics(width, height, topInset, bottomInset, deviceRadius, cfg, dev.launcher.app.design.Scale.unitPx(context, minOf(width, height)))
         m = metrics
+        HomeMetrics.frame = HomeMetrics.Frame(width, height, topInset, bottomInset)
         builtStructure = dev.launcher.app.design.Design.structure
         Icons.homeSize = metrics.iconSize
         fg.removeAllViews()
@@ -653,6 +654,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun bindLayout() {
         val metrics = m ?: return
         val l = layout ?: return
+        // Fewer columns, rows or dock icons than the layout was made for: what no longer fits moves on (and is kept so).
+        if (HomeModel.fit(l, metrics.cfg)) listener.layoutChanged()
         pagesLayer.removeAllViews()
         pages.clear()
         clocks.clear()

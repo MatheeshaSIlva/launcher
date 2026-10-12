@@ -616,7 +616,7 @@ class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
     }
 
     /** Left edge (in the dock) of slot [i] of [n] icons. */
-    fun slotLeft(i: Int, n: Int): Float = m.w / 2f + (i - (n - 1) / 2f) * m.dockIconPitch - m.iconSize / 2f - m.dockInset
+    fun slotLeft(i: Int, n: Int): Float = m.w / 2f + (i - (n - 1) / 2f) * m.dockPitch(n) - m.iconSize / 2f - m.dockInset
 
     private val laidLeft = java.util.IdentityHashMap<View, Int>()
 

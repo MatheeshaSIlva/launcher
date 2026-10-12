@@ -39,6 +39,52 @@ object Grid {
         return items.mapNotNull { at[it] }
     }
 
+    /**
+     * Fits [l] to a grid of [cols] x [rows] with [dockSlots] in the dock (the user's counts): items keep their cells where
+     * those still exist; what no longer fits a page (fewer columns or rows) moves on to the next, in reading order, taking
+     * its first free cells (a new last page if needed), and dock icons past the count go to the first free cell from the
+     * last page on. Returns true if anything moved.
+     */
+    fun fit(l: HomeLayout, cols: Int, rows: Int, dockSlots: Int): Boolean {
+        fun at(it: HomeItem) = (it.col.toLong() shl 32) or (it.row.toLong() and 0xffffffffL)
+        val before = java.util.IdentityHashMap<HomeItem, Long>()
+        for (p in l.pages) for (it in p) before[it] = at(it)
+        var moved = false
+        var carry = ArrayList<HomeItem>()
+        var i = 0
+        while (i < l.pages.size || carry.isNotEmpty()) {
+            if (i == l.pages.size) l.pages += mutableListOf<HomeItem>()
+            val page = l.pages[i]
+            if (carry.isNotEmpty()) {
+                // Carried items take this page's first free cells, ahead of its own items that have none yet.
+                for (c in carry) { c.col = -1; c.row = -1 }
+                val own = page.filter { it.col >= 0 && it.row >= 0 }
+                val rest = page.filter { it.col < 0 || it.row < 0 }
+                page.clear(); page += own; page += carry; page += rest
+                carry = ArrayList()
+                moved = true
+            }
+            val placed = java.util.Collections.newSetFromMap(java.util.IdentityHashMap<HomeItem, Boolean>())
+            for (p in place(page, cols, rows)) placed += p.item
+            if (placed.size < page.size) {
+                carry.addAll(page.filter { it !in placed })
+                page.removeAll { it !in placed }
+                moved = true
+            }
+            i++
+        }
+        while (l.dock.size > dockSlots) {
+            val key = l.dock.removeAt(l.dock.size - 1)
+            var page = l.pages.last()
+            var cell = firstFree(page, 1, 1, cols, rows)
+            if (cell == null) { page = mutableListOf(); l.pages += page; cell = intArrayOf(0, 0) }
+            page += HomeItem.App(key).apply { col = cell[0]; row = cell[1] }
+            moved = true
+        }
+        if (!moved) moved = l.pages.any { p -> p.any { before[it] != at(it) } }
+        return moved
+    }
+
     /** The first free cell (reading order) where an [sx] x [sy] block fits, or null. */
     fun firstFree(items: List<HomeItem>, sx: Int, sy: Int, cols: Int, rows: Int): IntArray? =
         firstFit(occupancy(items, cols, rows), sx, sy, cols, rows)

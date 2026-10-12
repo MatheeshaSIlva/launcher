@@ -263,6 +263,8 @@ private class Draft {
     fun choosePlacement(e: Element, id: String) = choose(e, "placement", id, Setup.placement(e).id)
     fun bool(e: Element, key: String, fallback: Boolean): Boolean = setup[e to "opt:$key"] as? Boolean ?: Setup.bool(e, key, fallback)
     fun chooseBool(e: Element, key: String, v: Boolean, fallback: Boolean) = choose(e, "opt:$key", v, Setup.bool(e, key, fallback))
+    fun int(e: Element, key: String, fallback: Int): Int = setup[e to "opt:$key"] as? Int ?: Setup.int(e, key, fallback)
+    fun chooseInt(e: Element, key: String, v: Int, fallback: Int) = choose(e, "opt:$key", v, Setup.int(e, key, fallback))
     private fun choose(e: Element, what: String, v: Any, applied: Any) { if (v == applied) setup.remove(e to what) else setup[e to what] = v }
     fun colorStyle(): dev.launcher.app.design.MaterialYou.Style = dev.launcher.app.design.MaterialYou.Style.of(colorStyle ?: appliedStyle())
     fun chooseColorStyle(s: dev.launcher.app.design.MaterialYou.Style) { colorStyle = s.id.takeIf { it != appliedStyle() } }
@@ -292,6 +294,11 @@ private class Draft {
         if (followsPhoneSize()) { sizeFactor = snap(dev.launcher.app.design.Scale.phoneZoom(ctx)).takeIf { kotlin.math.abs(it - dev.launcher.app.design.Scale.sizeFactor()) > 0.001f }; choosePolicy("custom") }
         chooseText0(v)
     }
+    /** One point in pixels on a screen [shortSidePx] across, as the draft's sizes would make it (the room a grid has). */
+    fun unit(ctx: android.content.Context, shortSidePx: Int): Float = dev.launcher.app.design.Scale.unitFor(ctx, shortSidePx, scalePolicy(),
+        sizeFactor ?: dev.launcher.app.design.Scale.sizeFactor())
+    /** Home's own text size as the draft's sizes would make it ([dev.launcher.app.design.Scale.homeText]). */
+    fun homeText(): Float = when (scalePolicy()) { "adaptive", "density" -> 1f; else -> textFactor ?: dev.launcher.app.design.Scale.textFactor() }
     private fun chooseText0(v: Float) { textFactor = v.takeIf { kotlin.math.abs(it - dev.launcher.app.design.Scale.textFactor()) > 0.001f } }
     /** The user's own colour the palette is made from (null: the wallpaper's), as it would be applied. */
     fun seedColor(): Int? = Design.hexColor(colorSeed ?: appliedChoice(Design.COLOR_SEED.name, "wallpaper"))
@@ -2319,9 +2326,113 @@ private fun ElementLayouts(e: Element) {
             for (p in current.placements) CheckRow(p.title, p.description, p.id == at) { draft.choosePlacement(e, p.id) }
         }
     }
+    val counts = current.options.filterIsInstance<Option.Count>()
+    if (counts.isNotEmpty()) {
+        val room = roomOf(e, draft, LocalContext.current)
+        Group("Grid", roomNote(e, room)) {
+            for (o in counts) {
+                val v = draft.int(e, o.key, o.default)
+                // Up to what fits at the size chosen (Look, Size); a count past it (the size grew since) can only come down.
+                val top = minOf(o.max, room[o.key] ?: o.max)
+                StepperRow(o.title, o.description, v, minus = v > o.min, plus = v < top) { draft.chooseInt(e, o.key, it, o.default) }
+            }
+        }
+    }
     val toggles = current.options.filterIsInstance<Option.Toggle>()
     if (toggles.isNotEmpty()) Group("Options") {
         for (o in toggles) ToggleRow(o.title, o.description, draft.bool(e, o.key, o.default)) { draft.chooseBool(e, o.key, it, o.default) }
+    }
+}
+
+/**
+ * How many of each of [e]'s counts fit at the size the draft would apply (key: an option's; absent: no limit from the
+ * room). Home: columns, rows and dock icons at iOS's icon size on the screen home was last laid out on.
+ */
+private fun roomOf(e: Element, draft: Draft, ctx: android.content.Context): Map<String, Int> = when (e) {
+    Element.HOME -> {
+        val f = dev.launcher.app.home.HomeMetrics.frame
+        if (f == null) emptyMap() else {
+            val r = dev.launcher.app.home.HomeMetrics.room(f, draft.unit(ctx, minOf(f.w, f.h)), draft.bool(e, "show-labels", true), draft.homeText())
+            mapOf("columns" to r.columns, "rows" to r.rows, "dock-icons" to r.dock)
+        }
+    }
+    Element.SHADE -> dev.launcher.app.home.HomeMetrics.frame?.let { f ->
+        mapOf(dev.launcher.app.shade.CcGrid.COLUMNS to dev.launcher.app.shade.CcGrid.room(minOf(f.w, f.h), draft.unit(ctx, minOf(f.w, f.h))))
+    } ?: emptyMap()
+    Element.DRAWER -> dev.launcher.app.home.HomeMetrics.frame?.let { f ->
+        mapOf("columns" to dev.launcher.app.home.HomeMetrics.roomTiles(minOf(f.w, f.h), draft.unit(ctx, minOf(f.w, f.h))))
+    } ?: emptyMap()
+    else -> emptyMap()
+}
+
+/** What the room allows, in words, under [e]'s grid. */
+private fun roomNote(e: Element, room: Map<String, Int>): String? = when {
+    e == Element.HOME && room.isNotEmpty() ->
+        "At this size there is room for ${room["columns"]} across, ${room["rows"]} down and ${room["dock-icons"]} in the dock. A smaller size (Look, Size) makes room for more."
+    e == Element.SHADE && room.isNotEmpty() ->
+        "At this size there is room for ${room.values.first()} controls across. A smaller size (Look, Size) makes room for more."
+    e == Element.DRAWER && room.isNotEmpty() ->
+        "At this size there is room for ${room.values.first()} tiles across. A smaller size (Look, Size) makes room for more."
+    else -> null
+}
+
+/** A count: its name and what it is, the number (rolling to a new one) and iOS's stepper. */
+@Composable
+private fun StepperRow(title: String, detail: String?, value: Int, minus: Boolean, plus: Boolean, onChange: (Int) -> Unit) = BaseRow(title, detail, null) {
+    val look = LocalLook.current
+    Rolling("$value", look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier)
+    Spacer(Modifier.width(look.dp(12f * look.unit)))
+    Stepper(minus, plus, { onChange(value - 1) }, { onChange(value + 1) })
+}
+
+/**
+ * iOS's stepper: a capsule (94 x 32 pt) with a minus and a plus either side of a hairline, each half a full touch target
+ * (the target's height). A half lights while pressed; one that cannot go further fades.
+ */
+@Composable
+private fun Stepper(minus: Boolean, plus: Boolean, onMinus: () -> Unit, onPlus: () -> Unit) {
+    val look = LocalLook.current
+    val fill = look.color(SettingsTokens.CHIP_FILL)
+    val label = look.color(SettingsTokens.ROW_LABEL)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val pressFill = Color(Appearance.pressFill)
+    val minusOn by animateFloatAsState(if (minus) 1f else 0.3f, look.motion(MotionTokens.CC_TOGGLE), label = "minus")
+    val plusOn by animateFloatAsState(if (plus) 1f else 0.3f, look.motion(MotionTokens.CC_TOGGLE), label = "plus")
+    var pressedMinus by remember { mutableStateOf(false) }
+    var pressedPlus by remember { mutableStateOf(false) }
+    val pm by animateFloatAsState(if (pressedMinus) 1f else 0f, look.motion(if (pressedMinus) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "pm")
+    val pp by animateFloatAsState(if (pressedPlus) 1f else 0f, look.motion(if (pressedPlus) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "pp")
+    val minusNow = androidx.compose.runtime.rememberUpdatedState(if (minus) onMinus else null)
+    val plusNow = androidx.compose.runtime.rememberUpdatedState(if (plus) onPlus else null)
+    val w = 94f * look.unit
+    val h = 32f * look.unit
+    Row(Modifier.height(look.dp(SettingsTokens.TARGET)).width(look.dp(w))
+        .drawBehind {
+            val top = (size.height - h) / 2f
+            val r = CornerRadius(h / 2f)
+            drawRoundRect(fill, Offset(0f, top), Size(size.width, h), r)
+            // The pressed half, inside the capsule's shape.
+            fun lit(k: Float, left: Boolean) {
+                if (k < 0.001f) return
+                clipRect(left = if (left) 0f else size.width / 2f, right = if (left) size.width / 2f else size.width) {
+                    drawRoundRect(pressFill.copy(alpha = pressFill.alpha * k), Offset(0f, top), Size(size.width, h), r)
+                }
+            }
+            lit(pm, true); lit(pp, false)
+            val lh = h * 0.56f
+            drawRect(separator, Offset(size.width / 2f - 0.5f * look.unit, (size.height - lh) / 2f), Size(1f * look.unit, lh))
+            val arm = 6.5f * look.unit
+            val stroke = 2f * look.unit
+            val cy = size.height / 2f
+            val mx = size.width / 4f
+            val px = size.width * 3f / 4f
+            val round = androidx.compose.ui.graphics.StrokeCap.Round
+            drawLine(label.copy(alpha = label.alpha * minusOn), Offset(mx - arm, cy), Offset(mx + arm, cy), stroke, round)
+            drawLine(label.copy(alpha = label.alpha * plusOn), Offset(px - arm, cy), Offset(px + arm, cy), stroke, round)
+            drawLine(label.copy(alpha = label.alpha * plusOn), Offset(px, cy - arm), Offset(px, cy + arm), stroke, round)
+        }) {
+        Box(Modifier.weight(1f).fillMaxSize().pointerInput(Unit) { rowTap({ pressedMinus = it && minusNow.value != null }) { minusNow.value?.invoke() } })
+        Box(Modifier.weight(1f).fillMaxSize().pointerInput(Unit) { rowTap({ pressedPlus = it && plusNow.value != null }) { plusNow.value?.invoke() } })
     }
 }
 

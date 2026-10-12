@@ -46,7 +46,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Overlay windows** (`TYPE_APPLICATION_OVERLAY`, always `FLAG_HARDWARE_ACCELERATED`): gesture strip + full-display card window.
 - **Watchdog** (shell-side loop): restores animation scales and status bar if the app's heartbeat goes stale. Must exist
   before any feature that hides stock UI.
-- **Layouts** (`layout/`, plan `docs/PLAN_LAYOUTS_THEMES.md`): the five elements (status bar, shade, recents, drawer,
+- **Layouts** (`layout/`, plan `docs/PLAN_LAYOUTS_THEMES.md`; counts as options with the room the size leaves: home's
+  columns, rows and dock icons, Control Center's columns, the App Library's tile columns): the five elements (status bar, shade, recents, drawer,
   home), the layouts registered for each (`Layouts`: id, placements, options with limits) and the user's choice of each
   (`Setup`, `files/setup.json`; never in a theme). `HomeConfig` reads the drawer and home options from it. Over adb:
   `am broadcast -a dev.launcher.app.SETUP -p dev.launcher.app --es element ID [--es layout ID] [--es placement ID]

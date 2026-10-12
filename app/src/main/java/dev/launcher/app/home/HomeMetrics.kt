@@ -28,10 +28,22 @@ class HomeMetrics(
     /** Home's own text grown with the user's own text size (the settings' Size; not the phone's Font size, as on iOS). */
     private val tf = dev.launcher.app.design.Scale.homeText()
 
-    // ---- home pages
-    val iconSize = (64 * u).roundToInt()
-    private val sideInset = 30.1f * u
-    val columnPitch = (w - 2 * sideInset - iconSize) / max(1, cfg.columns - 1)
+    // ---- home pages: the user's columns and rows (Layouts, Home screen; Matheesha: a smaller size frees room for more).
+    //      Icons are iOS's 64 pt; the counts the settings offer are those that fit at that size ([room]); counts that no
+    //      longer fit (the size grew since) make the icons smaller rather than overlap. The side margins are iOS's while
+    //      the columns leave that much room, else as wide as the gaps between the icons.
+    private val columns = cfg.columns.coerceAtLeast(2)
+    private val rows = cfg.rows.coerceAtLeast(1)
+    private val dockSlots = cfg.dockSlots.coerceAtLeast(1)
+    val iconSize = minOf(
+        ICON * u,
+        (w - (columns + 1) * MIN_GAP * u) / columns,
+        pageArea(h, topInset, bottomInset, u, ICON * u) / rows - rowExtra(u, cfg.showLabels, tf),
+        (w - 2 * DOCK_INSET * u - 2 * DOCK_PAD * u - (dockSlots - 1) * DOCK_GAP * u) / dockSlots,
+    ).roundToInt()
+    private val evenGap = (w - columns * iconSize) / (columns + 1f)
+    private val sideInset = if (evenGap >= 28.5f * u) 30.1f * u else evenGap
+    val columnPitch = (w - 2 * sideInset - iconSize) / max(1, columns - 1)
     fun columnCenterX(col: Int) = sideInset + iconSize / 2f + col * columnPitch
     /** Inter at this size has SF 11's cap height (Inter's caps are taller: 0.727 em against SF's 0.705). */
     val labelTextSize = 10.7f * u * tf
@@ -39,12 +51,14 @@ class HomeMetrics(
     val labelBaseline = (8.6f + 7.8f * tf) * u
 
     // ---- dock (iOS 26: a floating glass platter, concentric with the display's corners)
-    val dockInset = 17.5f * u
+    val dockInset = DOCK_INSET * u
     val dockHeight = iconSize + 37 * u
     val dockBottom = h - max(17.5f * u, bottomInset * 0.75f)
     val dockTop = dockBottom - dockHeight
     val dockRadius = max(deviceRadius - dockInset, dockHeight * 0.385f).coerceAtMost(dockHeight / 2f)
-    val dockIconPitch = 89.4f * u
+    /** From one dock icon to the next with [n] in the dock: iOS's 89.4 pt, closer when more must fit (17.4 pt kept inside). */
+    fun dockPitch(n: Int): Float =
+        if (n <= 1) 0f else minOf(89.4f * u, (w - 2 * dockInset - 2 * DOCK_PAD * u - iconSize) / (n - 1))
 
     // ---- Search pill / page indicator (a clear glass capsule above the dock)
     val indicatorHeight = 29.6f * u
@@ -55,7 +69,7 @@ class HomeMetrics(
 
     // ---- grid: icons sit at the top of evenly spaced rows
     val gridTop = max(89.5f * u, topInset + 16 * u)
-    val cellHeight = (indicatorTop - 13 * u - gridTop) / cfg.rows
+    val cellHeight = (indicatorTop - 13 * u - gridTop) / rows
     fun cellLeft(col: Int) = columnCenterX(col) - columnPitch / 2f
     fun cellTop(row: Int) = gridTop + row * cellHeight
 
@@ -112,4 +126,49 @@ class HomeMetrics(
     val folderColumns = 4
     val folderRadius = 34 * u
     val folderTitleSize = 28 * u * tf
+
+    /** How many columns, rows and dock icons fit at iOS's icon size. */
+    data class Room(val columns: Int, val rows: Int, val dock: Int)
+
+    /** Where home was last laid out (its size and insets, px): the settings measure the room a choice leaves on it. */
+    data class Frame(val w: Int, val h: Int, val topInset: Int, val bottomInset: Int)
+
+    companion object {
+        /** iOS's home icon (pt). */
+        const val ICON = 64f
+        /** The least room between two icons on a page (pt): their names need it. */
+        const val MIN_GAP = 16f
+        /** The dock's inset from the screen's sides, the room kept inside it beside its icons, the least between two (pt). */
+        const val DOCK_INSET = 17.5f
+        const val DOCK_PAD = 17.4f
+        const val DOCK_GAP = 10f
+
+        @Volatile var frame: Frame? = null
+
+        /** The height (px) the page grid has at [u] with icons of [icon] px: from below the status bar to above the Search pill. */
+        fun pageArea(h: Int, topInset: Int, bottomInset: Int, u: Float, icon: Float): Float {
+            val dockBottom = h - max(17.5f * u, bottomInset * 0.75f)
+            val indicatorTop = dockBottom - (icon + 37 * u) - 19.4f * u - 29.6f * u
+            return indicatorTop - 13 * u - max(89.5f * u, topInset + 16 * u)
+        }
+
+        /** What a row needs under its icon (px): the name and a little room, or only the room without names. */
+        fun rowExtra(u: Float, labels: Boolean, tf: Float): Float = if (labels) (8.6f + 7.8f * tf + 3f + 8f) * u else 12f * u
+
+        /** The smallest App Library tile the room counts (pt): its icons three quarters of home's. */
+        const val TILE_MIN = 125f
+
+        /** How many App Library tiles fit across [w] px at [u] pixels a point, none smaller than [TILE_MIN]. */
+        fun roomTiles(w: Int, u: Float): Int = ((w - 2 * 23.3f * u + 18.2f * u) / ((TILE_MIN + 18.2f) * u)).toInt()
+
+        /** The room on [f] at [u] pixels a point (names shown or not, text at [tf]). */
+        fun room(f: Frame, u: Float, labels: Boolean, tf: Float): Room {
+            val icon = ICON * u
+            return Room(
+                columns = ((f.w - MIN_GAP * u) / (icon + MIN_GAP * u)).toInt(),
+                rows = (pageArea(f.h, f.topInset, f.bottomInset, u, icon) / (icon + rowExtra(u, labels, tf))).toInt(),
+                dock = ((f.w - 2 * DOCK_INSET * u - 2 * DOCK_PAD * u + DOCK_GAP * u) / (icon + DOCK_GAP * u)).toInt(),
+            )
+        }
+    }
 }

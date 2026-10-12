@@ -24,7 +24,26 @@ class CcItem(val control: Control, var col: Int, var row: Int, var w: Int, var h
  * own cells, empty cells are allowed. Moving or resizing a control onto others moves those on to the nearest free place
  * after their own (reading order), as iOS's Control Center does. Pure logic (CcLayoutTest).
  */
-class CcLayout(val cols: Int, var rows: Int, val items: MutableList<CcItem>) {
+class CcLayout(cols: Int, var rows: Int, val items: MutableList<CcItem>) {
+    var cols = cols
+        private set
+
+    /**
+     * The page [n] columns wide (the user's count, or what fits at the size): controls past its right edge move to the first
+     * free place in reading order (rows added below if the page is full); the others keep theirs. Not saved: the saved page
+     * keeps the user's arrangement for when the columns come back.
+     */
+    fun setColumns(n: Int) {
+        if (n == cols) return
+        cols = n
+        val out = items.filter { it.col + it.w > cols }.sortedBy { it.row * 100 + it.col }
+        for (o in out) { o.col = -100; o.row = -100 }
+        for (o in out) {
+            var at = firstFree(o.w, o.h, except = o)
+            while (at == null) { rows++; at = firstFree(o.w, o.h, except = o) }
+            o.col = at[0]; o.row = at[1]
+        }
+    }
 
     fun at(col: Int, row: Int): CcItem? = items.firstOrNull { it.overlaps(col, row, 1, 1) }
 

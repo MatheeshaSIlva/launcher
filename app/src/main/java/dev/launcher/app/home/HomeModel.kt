@@ -189,6 +189,14 @@ object HomeModel {
         return HomeLayout(pages, dock, apps.map { it.key }.toMutableSet())
     }
 
+    /** Fits [l] to [cfg]'s grid ([Grid.fit]); true if anything moved (logged). */
+    fun fit(l: HomeLayout, cfg: HomeConfig): Boolean {
+        val pagesBefore = l.pages.size
+        val moved = Grid.fit(l, cfg.columns, cfg.rows, cfg.dockSlots)
+        if (moved) AppLog.log("[home] fitted to ${cfg.columns} x ${cfg.rows}, dock ${cfg.dockSlots}: ${l.pages.size} pages (were $pagesBefore)")
+        return moved
+    }
+
     /**
      * Removes apps that are gone and (if [HomeConfig.newAppsOnHome]) adds newly installed ones after the last item, on a new
      * page when the last is full. Returns true if the layout changed.

@@ -20,6 +20,8 @@ import android.view.ViewConfiguration
 import dev.launcher.app.R
 import dev.launcher.app.design.Design
 import dev.launcher.app.design.Scale
+import dev.launcher.app.layout.Element
+import dev.launcher.app.layout.Setup
 import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.design.Curve
@@ -135,6 +137,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         return true
     }
     private var layout: CcLayout? = null
+    /** The grid's columns: the user's count (Layouts, Notifications and controls), at most what fits at this size. */
+    private var cols = 4
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -143,7 +147,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         syncTokens()
         val l = layout
         if (l == null) {
-            layout = CcLayout.fromJson(prefs.getString(KEY, null), 4, rows)?.takeIf { it.items.isNotEmpty() } ?: CcLayout.default(4, rows)
+            layout = CcLayout.fromJson(prefs.getString(KEY, null), cols, rows)?.takeIf { it.items.isNotEmpty() } ?: CcLayout.default(cols, rows)
             layout!!.items.removeAll { !host.state.available(it.control) }
         } else l.rows = max(rows, l.usedRows())
         rebuildAnims(animate = false)
@@ -155,7 +159,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         cell = sf.pt(CcTokens.CELL)
         gap = sf.pt(CcTokens.GAP)
         pitch = cell + gap
-        val gridW = 4 * cell + 3 * gap
+        cols = Setup.int(Element.SHADE, CcGrid.COLUMNS, 4).coerceAtMost(CcGrid.room(width, u)).coerceAtLeast(4)
+        layout?.setColumns(cols)
+        val gridW = cols * cell + (cols - 1) * gap
         gridLeft = (width - gridW) / 2f
         gridTopRest = sf.pt(CcTokens.GRID_TOP)
         gridTopEdit = sf.pt(CcTokens.GRID_TOP_EDIT)
@@ -183,9 +189,13 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         Design.addListener(tokensChanged)
+        Setup.addListener(tokensChanged)
         AppTiles.addListener(android.os.Handler(android.os.Looper.myLooper() ?: android.os.Looper.getMainLooper()), tilesChanged)
     }
-    override fun onDetachedFromWindow() { Design.removeListener(tokensChanged); AppTiles.removeListener(tilesChanged); super.onDetachedFromWindow() }
+    override fun onDetachedFromWindow() {
+        Design.removeListener(tokensChanged); Setup.removeListener(tokensChanged); AppTiles.removeListener(tilesChanged)
+        super.onDetachedFromWindow()
+    }
 
     private fun save() { layout?.let { prefs.edit().putString(KEY, it.toJson()).apply() } }
 
@@ -499,7 +509,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         slotsNode.setPosition(0, 0, width, height)
         val c = slotsNode.beginRecording()
         try {
-            for (r in 0 until l.rows) for (col in 0 until 4) {
+            for (r in 0 until l.rows) for (col in 0 until l.cols) {
                 if (l.at(col, r) != null) continue
                 val x = gridLeft + col * pitch
                 val y = gridTopEdit + r * pitch
@@ -1281,9 +1291,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val top = gridTop()
         a.x.snapTo(x - dragDX - gridLeft)
         a.y.snapTo(y - dragDY - top)
-        val col = ((a.x.value + cell / 2f) / pitch).toInt().coerceIn(0, 4 - a.item.w)
+        val col = ((a.x.value + cell / 2f) / pitch).toInt().coerceIn(0, cols - a.item.w)
         val row = ((a.y.value + cell / 2f) / pitch).toInt().coerceIn(0, (layout?.rows ?: rows) - a.item.h)
-        val target = row * 4 + col
+        val target = row * cols + col
         if (target != pendingCell) {
             pendingCell = target
             removeCallbacks(applyMove)
@@ -1297,8 +1307,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val a = dragged ?: return@Runnable
         val l = layout ?: return@Runnable
         if (pendingCell < 0) return@Runnable
-        val col = pendingCell % 4
-        val row = pendingCell / 4
+        val col = pendingCell % cols
+        val row = pendingCell / cols
         if (a.item.col == col && a.item.row == row) return@Runnable
         if (l.moveTo(a.item, col, row)) {
             for (o in anims.values) if (o !== a) syncTarget(o, true)
@@ -1309,7 +1319,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun resizeTo(a: Anim, x: Float, y: Float) {
         val l = layout ?: return
         placementOf(a, gridTop(), 1f, place)
-        val wantW = ((x - place.left + gap / 2f) / pitch).roundToInt().coerceIn(1, 4)
+        val wantW = ((x - place.left + gap / 2f) / pitch).roundToInt().coerceIn(1, minOf(4, cols))
         val wantH = ((y - place.top + gap / 2f) / pitch).roundToInt().coerceIn(1, 4)
         val best = a.item.control.sizes.minByOrNull { abs(it.w - wantW) * 2 + abs(it.h - wantH) * 2 } ?: return
         if (best.w == a.item.w && best.h == a.item.h) return
@@ -1350,5 +1360,19 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val LIFT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_LIFT)
         val DROP get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_DROP)
         val STRETCH_BACK get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_STRETCH_BACK)
+    }
+}
+
+/** Control Center's columns: the user's count (the shade layout's option) and the room for them. */
+object CcGrid {
+    const val COLUMNS = "cc-columns"
+    /** The least room either side of the grid (pt). */
+    private const val MIN_SIDE = 20f
+
+    /** How many columns of iOS-sized controls fit [widthPx] across at [u] pixels a point. */
+    fun room(widthPx: Int, u: Float): Int {
+        val cell = Design.num(CcTokens.CELL) * u
+        val gap = Design.num(CcTokens.GAP) * u
+        return ((widthPx - 2 * MIN_SIDE * u + gap) / (cell + gap)).toInt()
     }
 }

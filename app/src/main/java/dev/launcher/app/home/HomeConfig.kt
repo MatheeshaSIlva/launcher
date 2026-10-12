@@ -35,8 +35,8 @@ enum class DrawerStyle(val id: String, val title: String) {
 
 /**
  * The home screen's layout settings, as home reads them. Defaults are iOS. The drawer's style and placement and the home
- * options are kept in the user's [dev.launcher.app.layout.Setup] (the home and drawer elements); the rest is fixed for
- * now (the home layout round, D5, makes them options).
+ * options (the grid's columns, rows and dock icons among them) are kept in the user's [dev.launcher.app.layout.Setup] (the home
+ * and drawer elements); the icon shape is the theme's for now.
  */
 data class HomeConfig(
     val columns: Int = 4,
@@ -58,8 +58,11 @@ data class HomeConfig(
     /** Into the user's setup (saved there). */
     @Suppress("UNUSED_PARAMETER")
     fun save(ctx: Context) {
-        Setup.set(Element.DRAWER, layout = drawerStyle.id, placement = drawerPlacement.id)
+        Setup.set(Element.DRAWER, layout = drawerStyle.id, placement = drawerPlacement.id, options = mapOf("columns" to libraryColumns))
         Setup.set(Element.HOME, options = mapOf(
+            "columns" to columns,
+            "rows" to rows,
+            "dock-icons" to dockSlots,
             "show-labels" to showLabels,
             "show-widget-labels" to showWidgetLabels,
             "new-apps-on-home" to newAppsOnHome,
@@ -70,6 +73,10 @@ data class HomeConfig(
         /** From the user's setup. */
         @Suppress("UNUSED_PARAMETER")
         fun load(ctx: Context): HomeConfig = HomeConfig(
+            columns = Setup.int(Element.HOME, "columns", 4),
+            rows = Setup.int(Element.HOME, "rows", 6),
+            dockSlots = Setup.int(Element.HOME, "dock-icons", 4),
+            libraryColumns = Setup.int(Element.DRAWER, "columns", 2),
             drawerPlacement = DrawerPlacement.of(Setup.placement(Element.DRAWER).id),
             drawerStyle = DrawerStyle.of(Setup.layout(Element.DRAWER).id),
             newAppsOnHome = Setup.bool(Element.HOME, "new-apps-on-home", true),

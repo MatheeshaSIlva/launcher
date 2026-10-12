@@ -95,6 +95,9 @@ object Layouts {
         "Notification Center and Control Center as two panels.",
         listOf(Placement("split-top", "Pull from the top: notifications on the left, controls on the right",
             "Pull down from the top edge left of the camera for notifications, right of it for the controls.")),
+        options = listOf(
+            Option.Count("cc-columns", "Control columns", "Controls across Control Center.", 4, 4, 6),
+        ),
     )
 
     val IOS_DECK = LayoutSpec(
@@ -114,6 +117,9 @@ object Layouts {
         Element.DRAWER, "app-library", "App Library", "iOS 27",
         "Your apps sorted into categories, with a search field on top and an A-Z list.",
         DRAWER_PLACEMENTS,
+        options = listOf(
+            Option.Count("columns", "Columns", "Category tiles across; more make them smaller.", 2, 2, 4),
+        ),
     )
 
     val IOS_HOME = LayoutSpec(
@@ -121,6 +127,9 @@ object Layouts {
         "Pages of icons and widgets, a dock at the bottom.",
         listOf(Placement("home", "Home", "What the Home gesture and the Home key show.")),
         options = listOf(
+            Option.Count("columns", "Columns", "Icons across a page.", 4, 3, 7),
+            Option.Count("rows", "Rows", "Icons down a page.", 6, 4, 10),
+            Option.Count("dock-icons", "Dock", "Icons in the dock.", 4, 3, 6),
             Option.Toggle("show-labels", "App names", "Names under the icons on your home pages.", true),
             Option.Toggle("show-widget-labels", "Widget names", "Names under the widgets on your home pages.", true),
             Option.Toggle("new-apps-on-home", "Add new apps to home", "Newly installed apps get an icon on your last page.", true),

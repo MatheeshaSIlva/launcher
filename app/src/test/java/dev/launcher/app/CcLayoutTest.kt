@@ -18,6 +18,19 @@ class CcLayoutTest {
 
     @Test fun defaultHasNoOverlaps() = noOverlaps(CcLayout.default(4, 7))
 
+    @Test fun fewerColumnsMoveTheLastColumnOn() {
+        val l = CcLayout.default(5, 7)
+        val wide = l.add(Control.DARK_MODE)!!.also { l.moveTo(it, 4, 0) }
+        assertEquals(4, wide.col)
+        val keep = l.items.filter { it !== wide }.map { it to (it.col to it.row) }
+        l.setColumns(4)
+        noOverlaps(l)
+        for ((it, at) in keep) assertEquals(at, it.col to it.row)   // the rest stay where they were
+        assertEquals(2, wide.col); assertEquals(5, wide.row)          // the first free cell in reading order
+        l.setColumns(5)
+        assertEquals(2, wide.col)                                      // more room: nothing moves
+    }
+
     @Test fun addFillsFirstGap() {
         val l = CcLayout.default(4, 7)
         val i = l.add(Control.DARK_MODE)

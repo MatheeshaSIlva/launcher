@@ -47,6 +47,16 @@ behaviour were not Pixel's, it felt like a cheap copy, and after switching back 
   "title text"), never through one OS's tokens: the same Pixel shade layout draws in iOS glass or in One UI's look.
 - Geometry that belongs to the structure (how many tile columns, where the panel docks, row counts, gestures) is the
   layout's; sizes that are part of a look (paddings, radii, text sizes, icon size) are the theme's.
+- **Room for more** (2026-10-12; Matheesha: "when smaller scaling frees up more space (qs panel, home screen), allow users
+  to use that space to add more icons and controls"): counts are layout options (`Option.Count`), shown in the settings
+  as a Grid group of steppers whose upper end is what fits at the size chosen (Look, Size; the draft's size, before
+  Apply), with a line saying how much room there is. iOS's icon grid: columns 3-7, rows 4-10, dock 3-6 (icons stay
+  64 pt; a page needs 16 pt between icons and room for the names; at iPhone size exactly iOS's 4 x 6 and 4; the S24
+  following its Display size 5 x 7 and 5); fewer columns, rows or dock icons move what no longer fits on to the next page's
+  first free cells (`Grid.fit`), counts past the room (the size grew since) make the icons smaller rather than overlap.
+  Control Center: 4-6 columns of iOS-sized controls (20 pt kept either side; the count past the room falls back to what
+  fits, controls past the edge move to the first free place, the saved page kept). App Library: 2-4 tile columns (a tile
+  is 166.6 pt where there is room, more columns share the width down to 125 pt).
 
 ### Themes (how everything looks)
 
