@@ -353,6 +353,13 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **One UI drops the display to 20-24 Hz when nothing is touched, and a key event does not wake it**: an animation started
   by a scripted Back key waited 35-60 ms for buffers in its first frames (SurfaceFlinger `NextFrameInterval 24_Hz`). Start
   benched animations with a tap, or read a key-started one knowing this.
+- **Our overlay windows are never told whether the status bar shows** (they lie above it); an application overlay (under
+  it) is, the moment it changes: `statusbar/BarWatch`, one invisible pixel (`docs/STATUS_BAR.md`). Android then posts
+  "Launcher is displaying over other apps" (also with a foreground service running): `Notifs` leaves it out. And Android
+  16+ writes `dumpsys window` insets as `InsetsSource ... type=statusBars ... visible=false` (not `mType=... mVisible=`):
+  a parser of the old form never saw an app hide the bar. A swipe from the top while an app hides the bar is seen in the
+  touchscreen's raw events by the shell (`TouchStream.watchEdge`); the kernel reports an axis only when it changes (a straight
+  swipe down never says x). Home is locked to portrait (it rotated into a broken layout with auto-rotate on).
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

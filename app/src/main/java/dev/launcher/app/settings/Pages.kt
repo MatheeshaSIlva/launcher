@@ -2623,6 +2623,9 @@ private fun PhonePage() {
             if (connected) { bar = on; dev.launcher.app.DevTools.setOwnStatusBar(ctx, on) { tick++ } } else dev.launcher.app.ShizukuLink.connect()
         }
         ActionRow("Frame report", "Frames since the last report") { dev.launcher.app.DevTools.frameReport(ctx) }
+        ActionRow("Status bar test", "An app that puts the bars in every state (full screen, landscape...)") {
+            ctx.startActivity(Intent(ctx, dev.launcher.app.BarsTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
         ActionRow("Watchdog status", null) { dev.launcher.app.DevTools.watchdogStatus() }
         ActionRow("Shell identity", null) { dev.launcher.app.DevTools.identity() }
         ActionRow("Diagnose Shizuku restarts", "The system's log around them") { dev.launcher.app.DevTools.diagnoseRestarts() }

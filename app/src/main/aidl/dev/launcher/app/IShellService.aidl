@@ -6,6 +6,7 @@ import android.app.PendingIntent;
 import android.content.Intent;
 import android.os.Bundle;
 import dev.launcher.app.ITouchStream;
+import dev.launcher.app.ITopEdge;
 
 // Runs in the Shizuku user-service process (uid 2000 via wireless debugging).
 // Transaction codes are explicit so the app and an older still-running service never disagree.
@@ -101,6 +102,13 @@ interface IShellService {
     // receiving it; the shade keeps following the finger from this stream. Starts at once; a second call replaces the first.
     void watchTouch(in ITouchStream listener) = 29;
     void stopTouch() = 30;
+
+    // While an app hides the status bar (immersive): tells [listener] when a finger comes down within [band] of the
+    // screen's top edge and moves [travel] down (fractions of the screen's height, in screen coordinates for display
+    // [rotation]), as the system shows the bars for a moment then. Only reads /dev/input, never takes the touch from the
+    // app; one thread asleep until a touch. Runs until stopEdge; a second call replaces the first.
+    void watchEdge(in ITopEdge listener, int rotation, float band, float travel) = 32;
+    void stopEdge() = 33;
 
     // Sends a notification's PendingIntent as the user's tap, with the same instant remote transition as startNoAnim (no
     // system animation: our card grows out of the notification). Returns "result <code>" or "ERROR: ...".

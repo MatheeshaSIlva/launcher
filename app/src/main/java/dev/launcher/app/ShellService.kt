@@ -255,7 +255,7 @@ class ShellService : IShellService.Stub() {
     }
 
     override fun windowAppearance(): String =
-        shell("dumpsys window displays | grep -i -E 'appearance|mType=statusBars|mTopFullscreenOpaqueWindowState|SystemUiControlling' | head -40", 3000)
+        shell("dumpsys window displays | grep -i -E 'appearance|type=statusBars|ShowingTransientTypes|mTopFullscreenOpaqueWindowState|SystemUiControlling' | head -40", 3000)
 
     override fun noAnimStats(): String = try { instant.stats() } catch (t: Throwable) { "ERROR: ${describe(t)}" }
 
@@ -301,6 +301,10 @@ class ShellService : IShellService.Stub() {
     override fun watchTouch(listener: ITouchStream) = touchStream.watch(listener)
 
     override fun stopTouch() = touchStream.stop()
+
+    override fun watchEdge(listener: ITopEdge, rotation: Int, band: Float, travel: Float) = touchStream.watchEdge(listener, rotation, band, travel)
+
+    override fun stopEdge() = touchStream.stopEdge()
 
     // ---------------------------------------------------------------- brightness (Control Center's slider)
 

@@ -63,6 +63,7 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:resumeWhilePausing="true"
+            android:screenOrientation="portrait"
             android:stateNotNeeded="true"
             android:taskAffinity=""
             android:windowSoftInputMode="adjustPan">
@@ -123,6 +124,16 @@
             android:showWhenLocked="true"
             android:taskAffinity="dev.launcher.app.unlock"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- Test only: an app that puts the system bars in every state (docs/STATUS_BAR.md; Phone, Developer). -->
+        <activity
+            android:name=".BarsTestActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:exported="true"
+            android:label="Status bar test"
+            android:launchMode="singleTask"
+            android:taskAffinity="dev.launcher.app.barstest"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
 
         <!-- Component previews for visual checks (adb shell am start -n dev.launcher.app/.PreviewActivity). Shows UI only. -->
         <activity

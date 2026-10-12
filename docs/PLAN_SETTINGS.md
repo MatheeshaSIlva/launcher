@@ -74,6 +74,8 @@ Settings
 | C1 | Foundation: Compose added, the token bridge, the shell (navigation with shared-element motion, search, basic/advanced), the start screen with "Your setup" |
 | C2 | Layouts: the five element pages (today: one layout each; the drawer's placements and home's options) |
 | C3 | Look: theme gallery (preview scope), Material You with the palette, fonts with Google Fonts search, customise by component with previews |
+| C3b | Customise the pre-defined layouts (Matheesha, 2026-10-12: "make the pre-defined layouts to be customized as well"): each layout's own properties beyond its counts (where its parts sit, their sizes and spacing, which parts show), with a live preview, saved per layout in the setup |
+| C3c | Widgets follow the theme (Matheesha, 2026-10-12): our widgets (the clock and the ones to come) drawn from the theme's tokens and components, so a theme restyles them as it does everything else; Android's widgets on the theme's platter, corners and colours (their inside is the app's) |
 | C4 | Motion: preset gallery with demos, the curve editor, roles by group |
 | C5 | Phone: Shizuku and permissions with status, safety, updates, backup |
 | C6 | First-run walkthrough and guides with motion graphics |

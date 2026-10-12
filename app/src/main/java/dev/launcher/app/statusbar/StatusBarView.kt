@@ -115,26 +115,64 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     private var loggedInsets = false
 
-    /** The app in front hides the status bar (immersive): so do we. */
+    /**
+     * The app in front hides the status bar (immersive, a full-screen video, a game): so do we, unless a swipe from the top
+     * shows it for a moment ([showTransient]) or a panel is open (docs/STATUS_BAR.md).
+     */
     fun setHiddenByApp(hidden: Boolean) {
         if (hidden == hiddenByApp) return
         hiddenByApp = hidden
-        AppLog.log("[statusbar] ${if (hidden) "hidden (the app in front is full screen)" else "shown"}")
-        // Fades (and slides a touch upward) like the stock bar does, instead of vanishing or appearing in one frame.
-        animate().cancel()
-        if (hidden) {
-            animate().alpha(0f).translationY(-barHeight * 0.25f).timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_HIDE)).withEndAction { visibility = INVISIBLE }.start()
-        } else {
-            visibility = VISIBLE
-            animate().alpha(1f).translationY(0f).timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_SHOW)).start()
-        }
-        onHiddenChanged?.invoke(hidden)
+        AppLog.log("[statusbar] ${if (hidden) "hidden (the app in front is full screen)" else "shown (the app in front shows it)"}")
+        if (!hidden) { transientUntil = 0L; removeCallbacks(transientEnd) }
+        sync()
     }
 
     var hiddenByApp = false
         private set
 
-    /** Told when the app in front hides or shows the status bar (the shade takes touches on the bar only while it shows). */
+    /**
+     * A swipe from the top over an app that hides the bar: it shows for [ms] (as Android shows its bars for a moment; the
+     * shade can be pulled from it then), again from now on every swipe.
+     */
+    fun showTransient(ms: Long) {
+        if (!hiddenByApp) return
+        transientUntil = android.os.SystemClock.uptimeMillis() + ms
+        removeCallbacks(transientEnd)
+        postDelayed(transientEnd, ms)
+        AppLog.log("[statusbar] shown for a moment (a swipe from the top)")
+        sync()
+    }
+
+    private var transientUntil = 0L
+    private val transientEnd = Runnable { transientUntil = 0L; sync() }
+
+    /** Shown for a moment over an app that hides the bar. */
+    val transient get() = hiddenByApp && transientUntil > android.os.SystemClock.uptimeMillis()
+
+    /** A panel is open (or opening): the bar shows with it whatever the app in front asks for. */
+    private val panelOpen get() = cc > 0.001f || nc > 0.001f
+
+    /** Whether the bar shows now (and the shade takes touches on it). */
+    val showing get() = !hiddenByApp || transient || panelOpen
+
+    private var shownNow = true
+
+    /** Fades (and slides a touch upward) like the stock bar does, instead of vanishing or appearing in one frame. */
+    private fun sync() {
+        val want = showing
+        if (want == shownNow) return
+        shownNow = want
+        animate().cancel()
+        if (!want) {
+            animate().alpha(0f).translationY(-barHeight * 0.25f).timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_HIDE)).withEndAction { visibility = INVISIBLE }.start()
+        } else {
+            visibility = VISIBLE
+            animate().alpha(1f).translationY(0f).timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_SHOW)).start()
+        }
+        onHiddenChanged?.invoke(!want)
+    }
+
+    /** Told when the bar comes or goes (the shade takes touches on the bar only while it shows). */
     var onHiddenChanged: ((Boolean) -> Unit)? = null
 
     /** Black content (the app asks for a light status bar, or home's wallpaper is light under it). */
@@ -198,6 +236,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
     fun setPanel(ccK: Float, ncK: Float, ncDarkContent: Float, ccRowY: Float) {
         if (ccK == cc && ncK == nc && ncDarkContent == ncDark && ccRowY == ccRow) return
         cc = ccK; nc = ncK; ncDark = ncDarkContent; ccRow = ccRowY
+        sync()
         invalidate()
     }
 

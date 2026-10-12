@@ -45,6 +45,99 @@ internal class TouchStream {
 
     fun stop() { gen.incrementAndGet() }
 
+    // ---------------------------------------------------------------- the top edge (while an app hides the status bar)
+
+    private val edgeGen = AtomicInteger()
+    private var debugLogs = 0
+
+    /**
+     * Watches every touchscreen for a finger that comes down within [band] of the screen's top edge and moves [travel]
+     * down (fractions of the screen's height, screen coordinates for display [rotation]); tells [listener] once per such
+     * finger. Asleep in poll() between touches; until [stopEdge] or the next call.
+     */
+    fun watchEdge(listener: ITopEdge, rotation: Int, band: Float, travel: Float) {
+        val g = edgeGen.incrementAndGet()
+        Thread({ runEdge(g, listener, rotation, band, travel) }, "touch-edge").apply { isDaemon = true; start() }
+    }
+
+    fun stopEdge() { edgeGen.incrementAndGet() }
+
+    /** One finger (a multi-touch slot) during the edge watch, in screen fractions. */
+    private class Finger {
+        var down = false
+        var started = false
+        var x = -1f
+        var y = -1f
+        var startY = 0f
+        var fromEdge = false
+        var told = false
+    }
+
+    private fun runEdge(g: Int, listener: ITopEdge, rotation: Int, band: Float, travel: Float) {
+        val list = devices ?: discover().also { devices = it }
+        android.util.Log.i("Launcher", "[touch-edge] watching ${list.size} touchscreens, rotation $rotation, band $band, travel $travel")
+        if (list.isEmpty()) return
+        val fds = ArrayList<FileDescriptor>()
+        try {
+            for (d in list) fds += Os.open(d.path, OsConstants.O_RDONLY or OsConstants.O_NONBLOCK, 0)
+            val polls = Array(fds.size) { i -> StructPollfd().apply { fd = fds[i]; events = OsConstants.POLLIN.toShort() } }
+            val fingers = Array(fds.size) { Array(MAX_SLOTS) { Finger() } }
+            val slots = IntArray(fds.size)
+            val buf = ByteArray(EVENT * 64)
+            while (edgeGen.get() == g) {
+                // Long waits: nothing runs while nobody touches (it is woken by a touch, or checks it is still wanted).
+                if (Os.poll(polls, 1000) <= 0) continue
+                for (i in polls.indices) {
+                    if ((polls[i].revents.toInt() and OsConstants.POLLIN) == 0) continue
+                    val n = try { Os.read(fds[i], buf, 0, buf.size) } catch (_: Throwable) { 0 }
+                    var off = 0
+                    val d = list[i]
+                    val fs = fingers[i]
+                    while (off + EVENT <= n) {
+                        val type = u16(buf, off + 16)
+                        val code = u16(buf, off + 18)
+                        val value = s32(buf, off + 20)
+                        off += EVENT
+                        val f = fs[slots[i].coerceIn(0, MAX_SLOTS - 1)]
+                        when {
+                            type == EV_ABS && code == ABS_MT_SLOT -> slots[i] = value
+                            type == EV_ABS && code == ABS_MT_TRACKING_ID -> if (value == -1) { f.down = false } else {
+                                f.down = true; f.started = false; f.told = false; f.fromEdge = false
+                            }
+                            type == EV_ABS && code == ABS_MT_POSITION_X -> f.x = value / d.maxX.toFloat()
+                            type == EV_ABS && code == ABS_MT_POSITION_Y -> f.y = value / d.maxY.toFloat()
+                            type == EV_SYN && code == SYN_REPORT -> for (k in fs) {
+                                if (!k.down) continue
+                                // The panel's natural coordinates to the screen's, for the display's rotation. The kernel
+                                // reports an axis only when it changes (a straight swipe down never says x): only the
+                                // axis that runs down the screen is needed, the other is taken as the middle until known.
+                                val down = if (rotation == 1 || rotation == 3) k.x else k.y
+                                if (down < 0f) continue
+                                val across = (if (rotation == 1 || rotation == 3) k.y else k.x).let { if (it < 0f) 0.5f else it }
+                                val sy = when (rotation) { 2 -> 1f - down; 1 -> 1f - down; else -> down }
+                                val sx = when (rotation) { 2 -> 1f - across; 3 -> 1f - across; else -> across }
+                                if (!k.started) {
+                                    k.started = true; k.startY = sy; k.fromEdge = sy <= band
+                                    if (debugLogs < 20) { debugLogs++; android.util.Log.i("Launcher", "[touch-edge] down on ${d.path} at y $sy (raw ${k.x}, ${k.y}), from the edge ${k.fromEdge}") }
+                                    continue
+                                }
+                                if (k.fromEdge && !k.told && sy - k.startY >= travel) {
+                                    k.told = true
+                                    android.util.Log.i("Launcher", "[touch-edge] swipe from the top edge (x $sx)")
+                                    if (edgeGen.get() == g) try { listener.onEdgeSwipe(sx) } catch (_: Throwable) { return }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            android.util.Log.i("Launcher", "[touch-edge] failed: ${t.javaClass.simpleName}: ${t.message}")
+        } finally {
+            for (fd in fds) try { Os.close(fd) } catch (_: Throwable) { }
+        }
+    }
+
     private fun run(g: Int, listener: ITouchStream) {
         val list = devices ?: discover().also { devices = it; android.util.Log.i("Launcher", "[touch-stream] touchscreens: ${it.joinToString { d -> "${d.path} (${d.maxX}x${d.maxY})" }}") }
         if (list.isEmpty()) return
@@ -147,6 +240,7 @@ internal class TouchStream {
         const val BTN_TOUCH = 0x14a
         const val ABS_MT_SLOT = 0x2f
         const val ABS_MT_TRACKING_ID = 0x39
+        const val MAX_SLOTS = 10
         const val ABS_MT_POSITION_X = 0x35
         const val ABS_MT_POSITION_Y = 0x36
         /** No pull lasts longer than this: the stream ends whatever happens. */

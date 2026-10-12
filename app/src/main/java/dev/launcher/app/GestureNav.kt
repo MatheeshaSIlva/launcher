@@ -405,10 +405,82 @@ object GestureNav {
             AppLog.log("[statusbar] on (${h}px), with our shade")
             reapplyFlags()   // now the stock clock and icons can go, and the stock shade
             refreshAppearance()
+            main.post { barWatch.attach() }
+        }
+    }
+
+    /**
+     * What the window manager says of the status bar, the moment it changes (BarWatch): whether the app in front hides it
+     * (it was asked of dumpsys on window changes and every 2.5 s: a video going full screen kept our bar for up to 2.5 s, and
+     * on Android 16+ the answer was never read: the bar never hid), and its height in this rotation.
+     */
+    private val barWatch by lazy {
+        dev.launcher.app.statusbar.BarWatch(app, app.getSystemService(WindowManager::class.java), main) { visible, h ->
+            nav.post {
+                barVisible = visible
+                shade?.setBarHeight(h)
+                applyBarVisible()
+            }
+        }
+    }
+
+    /** The window manager's word on the status bar (null: BarWatch is not on; dumpsys answers, see [refreshAppearance]). */
+    private var barVisible: Boolean? = null
+
+    /** Our bar hides with the app's: not on home (home never hides it), nor while a card is on its way (its app decides). */
+    private fun applyBarVisible() {
+        val bar = statusBar ?: return
+        val v = barVisible ?: return
+        if (homeVisible || closingHome || bringing != null) { bar.setHiddenByApp(false); watchEdge(false); return }
+        bar.setHiddenByApp(!v)
+        watchEdge(!v)
+    }
+
+    /**
+     * While an app hides the status bar: a swipe from the top edge shows ours for a moment (the system shows its own bars
+     * for a moment then: ours stand in for them), from which the shade can be pulled. Seen in the touchscreen's raw events by
+     * the shell (it never takes the touch: taps at the top of a game or a video still reach it).
+     */
+    private fun watchEdge(on: Boolean) {
+        val s = ShizukuLink.service
+        val r = try { wm?.defaultDisplay?.rotation ?: 0 } catch (_: Throwable) { 0 }
+        val key = if (on && s != null) r else -1
+        if (key == edgeWatching) return
+        edgeWatching = key
+        AppLog.log("[statusbar] top edge ${if (key < 0) "no longer watched" else "watched (rotation $r)"}${if (on && s == null) ": no shell service" else ""}")
+        frontIo.execute {
+            try {
+                if (key < 0) s?.stopEdge() else {
+                    // The screen's height in this rotation.
+                    val h = (try { wm?.maximumWindowMetrics?.bounds?.height() } catch (_: Throwable) { null } ?: sh.toInt()).coerceAtLeast(1).toFloat()
+                    val band = (max(shade?.barHeight ?: 0, dp(24).toInt()) / h).coerceAtMost(0.1f)
+                    s!!.watchEdge(edgeListener, r, band, EDGE_TRAVEL_DP * density / h)
+                }
+            } catch (t: Throwable) { AppLog.log("[statusbar] top edge watch failed: ${t.javaClass.simpleName}: ${t.message}") }
+        }
+    }
+
+    /** The rotation the top edge is watched in (-1: not watched). */
+    @Volatile private var edgeWatching = -1
+
+    // The shell service came or went (a restart ends its watch): watched again from scratch where it should be.
+    private val shellChanged: () -> Unit = { nav.post { edgeWatching = -1; applyBarVisible() } }
+    init { ShizukuLink.addListener(shellChanged) }
+
+    private val edgeListener = object : dev.launcher.app.ITopEdge.Stub() {
+        override fun onEdgeSwipe(x: Float) {
+            nav.post {
+                val bar = statusBar ?: return@post
+                if (!bar.hiddenByApp) return@post
+                bar.showTransient(TRANSIENT_BAR_MS)
+            }
         }
     }
 
     private fun removeStatusBar() {
+        main.post { barWatch.detach() }
+        barVisible = null
+        watchEdge(false)
         shade?.detach()
         nav.removeCallbacks(appearanceTick)
         if (statusBarShown) { statusBarShown = false; reapplyFlags() }   // stock clock, icons and shade back
@@ -503,9 +575,12 @@ object GestureNav {
         val bar = statusBar ?: return
         nav.removeCallbacks(appearanceTick)
         nav.postDelayed(appearanceTick, 2500)
+        // Not on yet (the overlay permission came later, through Shizuku): again now.
+        if (!barWatch.attached) main.post { if (statusBarShown && !barWatch.attached) barWatch.attach() }
         // A card on its way: its app's tone (or home's) was set as it started; the window in charge may still be home's.
         bringing?.let { return }
-        if (closingHome || homeVisible) { bar.setDark(HomeBridge.homeStatusDark); bar.setHiddenByApp(false); return }
+        if (closingHome || homeVisible) { bar.setDark(HomeBridge.homeStatusDark); bar.setHiddenByApp(false); watchEdge(false); return }
+        applyBarVisible()
         val s = ShizukuLink.service ?: return
         val askedFor = lastFrontPkg
         appearanceIo.execute {
@@ -517,17 +592,24 @@ object GestureNav {
                 val b = statusBar ?: return@post
                 if (homeVisible || bringing != null || closingHome) return@post
                 if (dark != null) { b.setDark(dark); askedFor?.let { appDark[it] = dark } }
-                if (hidden != null) b.setHiddenByApp(hidden)
+                // Only when the window manager does not tell us itself (BarWatch off: no overlay permission).
+                if (hidden != null && barVisible == null) { b.setHiddenByApp(hidden); watchEdge(hidden) }
             }
         }
     }
 
-    /** True if the status bar's insets source is not visible (an immersive app hid it); null if not found. */
+    /**
+     * True if the status bar's insets source is not visible (an immersive app hid it); null if not found. Android 16+
+     * writes it "InsetsSource id=... type=statusBars ... visible=false" (older: "mType=statusBars ... mVisible=false"); a
+     * bar shown for a moment (a swipe) is "mShowingTransientTypes=statusBars".
+     */
     private fun parseStatusBarHidden(out: String): Boolean? {
-        val line = out.lines().firstOrNull { it.contains("mType=statusBars") } ?: return null
+        val lines = out.lines()
+        val line = lines.firstOrNull { it.contains("InsetsSource ") && it.contains("type=statusBars") }
+            ?: lines.firstOrNull { it.contains("mType=statusBars") } ?: return null
         return when {
-            line.contains("mVisible=false") -> true
-            line.contains("mVisible=true") -> false
+            line.contains("visible=false") || line.contains("mVisible=false") -> true
+            line.contains("visible=true") || line.contains("mVisible=true") -> false
             else -> null
         }
     }
@@ -2754,6 +2836,10 @@ object GestureNav {
     }
 
     private const val HOLD_RADIUS_DP = 12f
+    /** How far a finger from the top edge moves down before the hidden status bar shows for a moment (dp). */
+    private const val EDGE_TRAVEL_DP = 20f
+    /** How long the hidden status bar shows after a swipe from the top (ms; about as long as Android shows its bars). */
+    private const val TRANSIENT_BAR_MS = 2500L
     private const val HOME_PULL_DEPTH = 0.6f   // how far home recedes at most while a swipe up on it goes on
     private const val SWITCHER_DIM = 0.28f              // home behind the deck: darkened by this much
     private const val SWITCHER_PREFS = "switcher"

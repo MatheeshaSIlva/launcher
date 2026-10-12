@@ -109,6 +109,7 @@ object Notifs {
         val r = NotificationListenerService.Ranking()
         val list = ArrayList<Item>(active.size)
         for (sbn in active) {
+            if (isOwnOverlayNote(sbn, s.packageName)) continue
             val ranked = ranking != null && ranking.getRanking(sbn.key, r)
             val importance = if (ranked) r.importance else NotificationManager.IMPORTANCE_DEFAULT
             val noPeek = ranked && (r.suppressedVisualEffects and NotificationManager.Policy.SUPPRESSED_EFFECT_PEEK) != 0
@@ -128,6 +129,13 @@ object Notifs {
         version++
         for ((h, l) in listeners) h.post(l)
     }
+
+    /**
+     * Android's "Launcher is displaying over other apps" (the system's, for our status bar's watch window, statusbar/BarWatch):
+     * about our own window, so not shown in our shade (nor as an icon or a banner).
+     */
+    private fun isOwnOverlayNote(sbn: StatusBarNotification, ownPkg: String): Boolean =
+        sbn.packageName == "android" && sbn.tag == "com.android.server.wm.AlertWindowNotification - $ownPkg"
 
     private fun read(sbn: StatusBarNotification, importance: Int, noPeek: Boolean, lockVis: Int): Item? = try {
         val n = sbn.notification

@@ -238,6 +238,20 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private fun NavLink.powerMenu() { (ctx as? android.accessibilityservice.AccessibilityService)?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_POWER_DIALOG) }
 
+    /**
+     * The status bar is [h] px tall now (the window manager's, in this rotation: One UI's landscape bar is not its portrait
+     * one): the bar, the touches it takes and the back gesture's exclusion follow.
+     */
+    fun setBarHeight(h: Int) {
+        if (h <= 0 || h == barHeight) return
+        AppLog.log("[statusbar] height ${barHeight}px -> ${h}px")
+        barHeight = h
+        bar.barHeight = h
+        bar.requestLayout()
+        bar.invalidate()
+        if (attached) updateTouchable()
+    }
+
     /** Adds the window (status bar height [h] px). Returns false if the window manager refused it. */
     fun attach(h: Int): Boolean {
         if (attached) return true
@@ -1186,7 +1200,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val r = when {
             panel != null && regionOpen -> Region(0, 0, root.width.coerceAtLeast(1) * 4, root.height.coerceAtLeast(1) * 4)
             else -> {
-                val r = if (bar.hiddenByApp) Region(NO_TOUCH) else Region(0, 0, root.width.coerceAtLeast(10000), barHeight)
+                val r = if (!bar.showing) Region(NO_TOUCH) else Region(0, 0, root.width.coerceAtLeast(10000), barHeight)
                 bannerArea?.let { a -> r.op(a.left.toInt(), a.top.toInt(), a.right.toInt(), a.bottom.toInt(), Region.Op.UNION) }
                 r
             }
