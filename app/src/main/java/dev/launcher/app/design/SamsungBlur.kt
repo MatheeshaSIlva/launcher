@@ -17,12 +17,21 @@ object SamsungBlur {
 
     /**
      * Its colour treatment: brightness mapped linearly from 0..1 to [low]..[high], [saturation] more colour (0: as it is; the
-     * colour's strength grows by about 1.9 times this, measured on the S24).
+     * colour's strength grows by about [CHROMA_PER_SATURATION] times this, measured on the S24).
      */
     data class Look(val low: Float, val high: Float, val saturation: Float)
 
-    /** Measured on the S24: chroma grows by 1 + this times the curve's saturation value. */
-    private const val CHROMA_PER_SATURATION = 1.9f
+    /**
+     * Measured on the S24: chroma grows by 1 + this times the curve's saturation value (1.9 on a probe card in light; 1.67
+     * fitted 2026-10-12 against our glass over the same wallpaper, dark, the dock's material: with [SPAN_GAIN], brightness
+     * 0.672 x + 0.061 against the glass's 0.671 x + 0.062, colour kept 1.00 against 1.02).
+     */
+    private const val CHROMA_PER_SATURATION = 1.67f
+    /**
+     * The brightness range asked of the curve is widened by this: Samsung's map leaves it narrower (and its saturation
+     * darkens), measured with [CHROMA_PER_SATURATION].
+     */
+    private const val SPAN_GAIN = 1.11f
 
     private var builder: Class<*>? = null
     private var modeWindow = 0
@@ -59,8 +68,9 @@ object SamsungBlur {
             if (look != null && (look.low > 0.002f || look.high < 0.998f || look.saturation > 0.002f)) {
                 val f = Float::class.javaPrimitiveType
                 // (Its saturation 0 turns the whole curve off: a hair of it keeps the brightness map.)
+                val high = (look.low + (look.high - look.low) * SPAN_GAIN).coerceAtMost(1f)
                 x = b.getMethod("setColorCurve", f, f, f, f, f, f).invoke(x, (look.saturation / CHROMA_PER_SATURATION).coerceAtLeast(0.001f),
-                    0f, 0f, 255f, look.low * 255f, look.high * 255f)!!
+                    0f, 0f, 255f, look.low * 255f, high * 255f)!!
             }
             setEnabled?.invoke(v, true)
             setInfo!!.invoke(v, b.getMethod("build").invoke(x))

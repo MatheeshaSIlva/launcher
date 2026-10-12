@@ -78,10 +78,13 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     }
 
     /**
-     * The system blurs what is behind a banner live (One UI: [dev.launcher.app.design.SamsungBlur]) when the theme asks for
-     * it ([SYSTEM_BLUR]): its glass draws only its own layers over that. Else (iOS 27: on the S24 that blur dropped out while
-     * apps opened and closed, the banners all but vanishing, and it did not look like iOS) the glass is drawn whole over our
-     * own blurred picture of what is behind (the wallpaper, the app's latest picture), as Notification Center's platters.
+     * The system blurs what is behind a banner live (One UI: [dev.launcher.app.design.SamsungBlur]; Matheesha: banners must
+     * be live, as Control Center) when the theme asks for it ([SYSTEM_BLUR]): the blur takes the material's colour
+     * treatment (its fills' brightness map and the colour they keep), and the glass draws only its own layers over it (its
+     * rims, light and shadow; a lens cannot bend what the system draws). Else (no such blur on the phone) the glass is drawn
+     * whole over our own blurred picture of what is behind (the wallpaper, the app's latest picture), as Notification
+     * Center's platters. (iOS 27 had it off once: banners all but vanished during app opens and closes; that was the card
+     * window stacked over the shade's, since fixed.)
      */
     private var liveFailed = false
     private val live get() = !liveFailed && dev.launcher.app.design.SamsungBlur.available && Design.num(SYSTEM_BLUR) > 0.5f
@@ -145,9 +148,9 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         val card = Card(this)
         /** Behind the card, exactly its platter: the system's live blur where it has one ([live]). */
         val plate: View? = if (live) View(context) else null
-        /** The blur radius and tint the plate was last given (-1: none yet). */
+        /** The blur radius and strength (0..64) the plate was last given (-1: none yet). */
         var plateRadius = -1
-        var plateTint = 0
+        var plateStrength = -1
     }
 
     /** A banner's platter in its own layer: drawn when its notification changes, moved by its transform. */
@@ -160,7 +163,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             c.save()
             c.translate(m, m)
             val p = mp
-            if (p != null && live) {
+            if (p != null && s.plate != null && !liveFailed) {
                 // The system blurs what is behind live (the plate under this card); the glass adds only its own light,
                 // rims and shadow over it.
                 p.drawOverSystemBlur(c, Design.material(MATERIAL), w, s.h, radius(s))
@@ -322,7 +325,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
 
     /**
      * The plate takes the platter's place and transform, and the system's blur under it fades with the card (the blur does
-     * not follow a view's alpha: its radius and tint are scaled instead).
+     * not follow a view's alpha: its radius and colour treatment are scaled instead).
      */
     private fun placePlate(s: Shown, pl: View, bw: Float, scale: Float, m: Float) {
         val lp = pl.layoutParams as? LayoutParams
@@ -339,13 +342,13 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         val mat = Design.material(MATERIAL)
         val sigma = dev.launcher.app.design.Blur.sigmaPx(mat.frostPt + (mat.frostDarkPt - mat.frostPt) * Appearance.dark, u)
         val radius = Math.round(dev.launcher.app.design.SamsungBlur.radiusFor(sigma) * a)
-        val tint = mp?.systemTint(mat) ?: 0
-        val tintNow = (Math.round(((tint ushr 24) and 0xFF) * a) shl 24) or (tint and 0xFFFFFF)
-        if (radius == s.plateRadius && tintNow == s.plateTint) return
+        val strength = Math.round(a * 64f)
+        if (radius == s.plateRadius && strength == s.plateStrength) return
         s.plateRadius = radius
-        s.plateTint = tintNow
-        if (radius <= 0 && (tintNow ushr 24) == 0) dev.launcher.app.design.SamsungBlur.clear(pl)
-        else if (!dev.launcher.app.design.SamsungBlur.set(pl, radius, radius(s), tintNow)) liveFailed = true
+        s.plateStrength = strength
+        val p = mp
+        if (strength == 0 || p == null) dev.launcher.app.design.SamsungBlur.clear(pl)
+        else if (!dev.launcher.app.design.SamsungBlur.set(pl, radius, radius(s), 0, p.systemLook(mat, strength / 64f))) liveFailed = true
     }
 
     private fun drop(s: Shown) {
@@ -458,7 +461,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         for (s in all) {
             val h = heightOf(s)
             if (abs(s.height.target - h) > 0.5f) s.height.animateTo(h, RESIZE)
-            s.plateRadius = -1   // its tint follows the appearance
+            s.plateRadius = -1   // its colour treatment follows the appearance and the material
             place(s)
             s.card.invalidate()
         }

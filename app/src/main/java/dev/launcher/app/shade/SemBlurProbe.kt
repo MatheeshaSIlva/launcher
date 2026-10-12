@@ -162,7 +162,10 @@ internal class SemBlurProbe(private val ctx: Context, private val wm: WindowMana
         val sigma = dev.launcher.app.design.Blur.sigmaPx(mat.frostPt + (mat.frostDarkPt - mat.frostPt) * dev.launcher.app.theme.Appearance.dark, u)
         val plate = View(ctx)
         frame.addView(plate, FrameLayout.LayoutParams(w.toInt(), h.toInt()).apply { leftMargin = margin.toInt(); topMargin = top1.toInt() })
-        val look = mp.systemLook(mat)
+        // Calibration (S24): --ef sat X multiplies the saturation, --ef span X the brightness range (about its low end).
+        val base = mp.systemLook(mat)
+        val span = i.getFloatExtra("span", 1f)
+        val look = base.copy(high = base.low + (base.high - base.low) * span, saturation = base.saturation * i.getFloatExtra("sat", 1f))
         val tint = if (i.getBooleanExtra("tint", false)) mp.systemTint(mat) else 0
         val ok = dev.launcher.app.design.SamsungBlur.set(plate, dev.launcher.app.design.SamsungBlur.radiusFor(sigma), radius, tint, if (tint == 0) look else null)
         val label = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { textSize = 15f * u; color = dev.launcher.app.design.Design.color(BannerView.LABEL) }

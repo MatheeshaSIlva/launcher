@@ -61,8 +61,12 @@ behind changes as a card starts (a launch or a quick switch: the app's kept pict
 committed: home), not when the app's window reports (a banner showed the wallpaper over an app opening, a white plate
 over a dark app); the status bar takes the app's tone (the one it last asked for, else its launch colour's) the same way.
 Over home the picture is the wallpaper, over an app its latest picture from the task snapshot; when what is behind
-changes the glass fades to the new picture (`motion.banner.app-fade`). One UI's live blur under them (`comp.banner.system-blur`) is off for iOS 27: on the S24
-banners all but vanished during app opens and closes. Size, place and motion match iOS's.
+changes the glass fades to the new picture (`motion.banner.app-fade`). On One UI the blur is live (2026-10-12; Matheesha:
+"I need it to be actually live, just like the qs panel"): the system blurs what is behind each banner (`SemBlurInfo` on a
+plate under it) with the dock material's colour treatment, fitted on the S24 (brightness 0.672 x + 0.061 against our
+glass's 0.671 x + 0.062, colour kept 1.00 against 1.02), and the glass adds its rims, light and shadow; the lens cannot
+bend what the system draws. SurfaceFlinger shows the banner's blur region (1038 x 178 px, radius 19); a test banner over
+home: 0 missed refreshes, GPU 2.1 ms a frame. Other phones keep the glass over a picture. Size, place and motion match iOS's.
 
 ## Home (seen in passing)
 

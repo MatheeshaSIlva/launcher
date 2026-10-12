@@ -180,10 +180,13 @@ copy it wholesale — port the working pieces cleanly. File map:
   translation and scale, works inside a GPU layer, takes `setBackgroundCornerRadius`; it ignores the view's alpha (fade it by
   re-applying a smaller radius each frame: works). Radius = 4.7 x Gaussian sigma (measured). `setColorCurve(sat, curve, minX,
   maxX, minY, maxY)`: ranges 0..255 (a linear map), sat 0 turns the whole curve off, chroma grows ~1 + 1.9 x sat; `curve` did
-  nothing visible. Banners can use it (`comp.banner.system-blur` 1: `BannerView` plates, the glass drawing only its own
-  layers over it: `MaterialPainter.drawOverSystemBlur`, `systemLook`); iOS 27 has it off: Matheesha saw banners all but
-  vanish while apps opened and closed, and the look was not iOS's (the blur dropping out during transitions is our
-  reading, not measured). Probe: `TEST_SHADE --es do semblur` (`shade/SemBlurProbe`).
+  nothing visible. Banners use it (`comp.banner.system-blur` 1, on in iOS 27 since 2026-10-12: Matheesha wants them live
+  as Control Center; `BannerView` plates with the material's colour curve `systemLook`, the glass drawing only its own
+  layers over it: `MaterialPainter.drawOverSystemBlur`). Fitted on the S24 against our glass over the same wallpaper
+  (`SemBlurProbe` glass mode, `--ef sat`/`--ef span`): chroma 1.67 per saturation, the brightness range widened 1.11.
+  Check it in `dumpsys SurfaceFlinger` ("Blur Regions": our window's region, radius, curve), never by screenshot. (It was
+  off once because banners vanished during app opens and closes: that was the card window over the shade's.) Probe:
+  `TEST_SHADE --es do semblur` (`shade/SemBlurProbe`).
 - **A media notification can outlive its session** (Chrome keeps one for a tab whose session is gone: inactive, state
   NONE), and Android's own shade hides paused media after 10 minutes. Ours: `Notifs.mediaLive` / `Media.active` (stopped:
   at once, paused: after `Media.IDLE_MS`); read the session from the notification's own token, not the active-session list
