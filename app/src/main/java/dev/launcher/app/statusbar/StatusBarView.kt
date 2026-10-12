@@ -1,5 +1,6 @@
 package dev.launcher.app.statusbar
 
+import kotlin.math.max
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
@@ -152,8 +153,21 @@ class StatusBarView(ctx: Context) : View(ctx) {
     /** A panel is open (or opening): the bar shows with it whatever the app in front asks for. */
     private val panelOpen get() = cc > 0.001f || nc > 0.001f
 
+    /**
+     * Held back whatever the app asks: home shown turned under an app's landscape (a close; upright-only home is shown at the
+     * phone's natural way up until the display turns): the bar along the landscape top would run down home's side.
+     */
+    fun setSuppressed(on: Boolean) {
+        if (on == suppressed) return
+        suppressed = on
+        AppLog.log("[statusbar] ${if (on) "held back (home shown turned)" else "back"}")
+        sync()
+    }
+
+    private var suppressed = false
+
     /** Whether the bar shows now (and the shade takes touches on it). */
-    val showing get() = !hiddenByApp || transient || panelOpen
+    val showing get() = !suppressed && (!hiddenByApp || transient || panelOpen)
 
     private var shownNow = true
 
@@ -231,16 +245,18 @@ class StatusBarView(ctx: Context) : View(ctx) {
     /**
      * How far Control Center ([ccK]) and Notification Center ([ncK]) are open (0..1, they follow the finger), and whether
      * Notification Center's wallpaper wants black content ([ncDarkContent]). [ccRowY]: the centre of Control Center's
-     * status row (px, in this view).
+     * status row (px, in this view); [ccRowInset]: how far in from each side the row runs (0: the bar's own sides; in
+     * landscape the grid's, as iOS 27 lines its one status line up with the controls).
      */
-    fun setPanel(ccK: Float, ncK: Float, ncDarkContent: Float, ccRowY: Float) {
-        if (ccK == cc && ncK == nc && ncDarkContent == ncDark && ccRowY == ccRow) return
-        cc = ccK; nc = ncK; ncDark = ncDarkContent; ccRow = ccRowY
+    fun setPanel(ccK: Float, ncK: Float, ncDarkContent: Float, ccRowY: Float, ccRowInset: Float = 0f) {
+        if (ccK == cc && ncK == nc && ncDarkContent == ncDark && ccRowY == ccRow && ccRowInset == ccInset) return
+        cc = ccK; nc = ncK; ncDark = ncDarkContent; ccRow = ccRowY; ccInset = ccRowInset
         sync()
         invalidate()
     }
 
     private var ccRow = 0f
+    private var ccInset = 0f
     private var rowAlpha = 1f
 
     /** Control Center's status row fades while its edit mode is on (iOS hides it there). */
@@ -643,21 +659,23 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val y = cy + (rowY - cy) * cc
         // In Control Center's edit mode the row goes (iOS).
         val rightK = 1f - cc * (1f - rowAlpha)
-        var leftX = SIDE_PT * u
+        // Further in than the bar's own sides (landscape: the grid's), as the panel opens.
+        val inset = max(0f, ccInset - SIDE_PT * u) * smooth(cc)
+        var leftX = SIDE_PT * u + max(0f, ccInset - SIDE_PT * u)
         for (s in listOf(cellSlot, typeSlot, wifiSlot, vpnSlot)) {
             val ccX = leftX
             if (s.wanted) leftX += s.width + 5.6f * u
             drawSlot(c, s, s.x.value + (ccX - s.x.value) * smooth(cc), y, content, rightK)
         }
         // The percentage appears beside the battery (the battery's own number fades out of it).
-        drawSlot(c, boltSlot, boltSlot.x.value, y, content, rightK)
-        drawSlot(c, batterySlot, batterySlot.x.value, y, content, rightK)
+        drawSlot(c, boltSlot, boltSlot.x.value - inset, y, content, rightK)
+        drawSlot(c, batterySlot, batterySlot.x.value - inset, y, content, rightK)
         if (cc > 0f && rightK > 0f) {
             label.color = content
             label.alpha = (255 * cc.coerceIn(0f, 1f) * rightK).toInt()
             label.textSize = 15f * u
             pctLabel.set(pctText, animate = true)
-            val right = batterySlot.x.value - 5f * u   // the bolt is on the battery's other side
+            val right = batterySlot.x.value - inset - 5f * u   // the bolt is on the battery's other side
             val w = pctSlotWidth()
             pctLabel.draw(c, right - w + (1f - cc) * w * 0.3f, y + 0.727f * label.textSize / 2f, label, 1f)
             label.alpha = 255

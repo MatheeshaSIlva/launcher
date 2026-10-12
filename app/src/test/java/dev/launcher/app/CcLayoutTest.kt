@@ -18,6 +18,25 @@ class CcLayoutTest {
 
     @Test fun defaultHasNoOverlaps() = noOverlaps(CcLayout.default(4, 7))
 
+    @Test fun landscapeFlowsThePageAcross() {
+        // iOS 27 (Simulator): six 1x1 controls, two rows of four and two upright, are one row of six in landscape.
+        val l = CcLayout(4, 7, mutableListOf())
+        val ids = listOf(Control.SCAN_CODE, Control.TIMER, Control.CALCULATOR, Control.CAMERA, Control.FLASHLIGHT, Control.DARK_MODE)
+        val items = ids.map { l.add(it)!! }
+        val at = l.flowed(8)
+        assertEquals((0 until 6).map { listOf(it, 0) }, items.map { at[it]!!.toList() })
+        assertEquals(0, items[4].col); assertEquals(1, items[4].row)   // the page keeps its own places
+        // The default page (modules of every size) flows without overlaps, in reading order where it can.
+        val d = CcLayout.default(4, 7)
+        val f = d.flowed(8)
+        for (a in d.items) for (b in d.items) if (a !== b) {
+            val pa = f[a]!!; val pb = f[b]!!
+            assertFalse("$a overlaps $b", pa[0] < pb[0] + b.w && pb[0] < pa[0] + a.w && pa[1] < pb[1] + b.h && pb[1] < pa[1] + a.h)
+        }
+        assertTrue(d.items.all { f[it]!![0] + it.w <= 8 })
+        assertTrue(d.items.maxOf { f[it]!![1] + it.h } <= 3)   // three rows across a landscape screen
+    }
+
     @Test fun fewerColumnsMoveTheLastColumnOn() {
         val l = CcLayout.default(5, 7)
         val wide = l.add(Control.DARK_MODE)!!.also { l.moveTo(it, 4, 0) }

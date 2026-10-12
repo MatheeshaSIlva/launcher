@@ -115,6 +115,8 @@ object GestureNav {
     private var sw = 0f
     private var sh = 0f
     private var deviceRadius = 0f
+    /** The display's rotation when it was last read (Surface.ROTATION_*): 1 and 3 are landscape. */
+    private var displayRotation = 0
 
     // ------------------------------------------------------------------ state (nav thread)
     private var phase = Phase.IDLE
@@ -324,6 +326,7 @@ object GestureNav {
 
     fun init(app: LauncherApp) {
         this.app = app
+        try { app.getSystemService(android.hardware.display.DisplayManager::class.java).registerDisplayListener(displayTurned, main) } catch (_: Throwable) { }
         // A picture of home without the card's icon arrives a moment after a gesture starts: use it as soon as it does.
         HomeBridge.onPreviewReady = { pkg ->
             nav.post { if (cardPkg == pkg && backdrop?.picture != null && !pictureDropped) backdrop?.picture = HomeBridge.previewFor(pkg) }
@@ -430,6 +433,9 @@ object GestureNav {
     /** Our bar hides with the app's: not on home (home never hides it), nor while a card is on its way (its app decides). */
     private fun applyBarVisible() {
         val bar = statusBar ?: return
+        // Home (upright only) shown turned under a landscape display: no bar until the display has turned too.
+        val displayTurned = try { wm?.defaultDisplay?.rotation?.let { it == android.view.Surface.ROTATION_90 || it == android.view.Surface.ROTATION_270 } } catch (_: Throwable) { null } == true
+        bar.setSuppressed(displayTurned && (homeVisible || closingHome))
         val v = barVisible ?: return
         if (homeVisible || closingHome || bringing != null) { bar.setHiddenByApp(false); watchEdge(false); return }
         bar.setHiddenByApp(!v)
@@ -466,6 +472,21 @@ object GestureNav {
     // The shell service came or went (a restart ends its watch): watched again from scratch where it should be.
     private val shellChanged: () -> Unit = { nav.post { edgeWatching = -1; applyBarVisible() } }
     init { ShizukuLink.addListener(shellChanged) }
+
+    // The display turned (an app in landscape, home back upright): the bar's hold and the top edge's side follow at once
+    // (the window manager tells BarWatch's window only once it has redrawn for the turn, a second later on the emulator).
+    private val displayTurned = object : android.hardware.display.DisplayManager.DisplayListener {
+        private var last = -1
+        override fun onDisplayAdded(id: Int) {}
+        override fun onDisplayRemoved(id: Int) {}
+        override fun onDisplayChanged(id: Int) {
+            if (id != android.view.Display.DEFAULT_DISPLAY) return
+            val r = try { app.getSystemService(android.hardware.display.DisplayManager::class.java).getDisplay(id)?.rotation } catch (_: Throwable) { null } ?: return
+            if (r == last) return
+            last = r
+            nav.post { applyBarVisible() }
+        }
+    }
 
     private val edgeListener = object : dev.launcher.app.ITopEdge.Stub() {
         override fun onEdgeSwipe(x: Float) {
@@ -805,6 +826,20 @@ object GestureNav {
     private var stripHidden = false
 
     /**
+     * The pill is away while a close over a turned display hands over to home: Android hides the strip's window as home
+     * starts and shows it again only once the display has turned (it went in one frame), so the pill fades out with the
+     * close and back in, at the bottom of the upright screen, as the session ends.
+     */
+    private var pillAwayForTurn = false
+        set(v) { if (field != v) { field = v; applyPill() } }
+
+    private fun applyPill() {
+        val hidden = stripHidden || pillAwayForTurn
+        (strip as? android.view.ViewGroup)?.getChildAt(0)?.animate()?.alpha(if (hidden) 0f else 1f)
+            ?.timed(Motion.role(if (hidden) dev.launcher.app.motion.MotionTokens.STRIP_HIDE else dev.launcher.app.motion.MotionTokens.STRIP_SHOW))?.start()
+    }
+
+    /**
      * While a panel of the shade is open the gesture bar is not there (Matheesha: it got in the way of the panels): its
      * pill fades out and the strip takes no touches (a swipe up from the bottom closes the panel, the shade's own). A
      * touchable region, not a window change: no relayout.
@@ -813,8 +848,7 @@ object GestureNav {
         val s = strip ?: return
         if (hidden == stripHidden) return
         stripHidden = hidden
-        (s as? android.view.ViewGroup)?.getChildAt(0)?.animate()?.alpha(if (hidden) 0f else 1f)
-            ?.timed(Motion.role(if (hidden) dev.launcher.app.motion.MotionTokens.STRIP_HIDE else dev.launcher.app.motion.MotionTokens.STRIP_SHOW))?.start()
+        applyPill()
         // Back to all of it with an explicit region: null does not reset the region the window manager has.
         if (Build.VERSION.SDK_INT >= 34) s.rootSurfaceControl?.setTouchableRegion(
             if (hidden) android.graphics.Region(-2, -2, -1, -1) else android.graphics.Region(0, 0, s.width.coerceAtLeast(1) * 4, s.height.coerceAtLeast(1) * 4))
@@ -828,6 +862,7 @@ object GestureNav {
         display.getRealMetrics(dm)
         sw = dm.widthPixels.toFloat()
         sh = dm.heightPixels.toFloat()
+        displayRotation = display.rotation
         deviceRadius = if (Build.VERSION.SDK_INT >= 31) {
             display.getRoundedCorner(RoundedCorner.POSITION_TOP_LEFT)?.radius?.toFloat() ?: dp(32)
         } else dp(32)
@@ -910,7 +945,42 @@ object GestureNav {
             input?.resize(sw.toInt(), sh.toInt())
         }
         deck?.setScreen(sw, sh, deviceRadius)
+        orientBackdrop()
         return true
+    }
+
+    /** The display is turned from the phone's natural way up (an app in landscape): home is not (it is upright only). */
+    private val turned get() = displayRotation == android.view.Surface.ROTATION_90 || displayRotation == android.view.Surface.ROTATION_270
+
+    /** How far home is turned on this display (degrees, about the screen's centre): what Android shows it at (fixed rotation). */
+    private val homeTurn get() = when (displayRotation) {
+        android.view.Surface.ROTATION_90 -> -90f
+        android.view.Surface.ROTATION_270 -> 90f
+        else -> 0f
+    }
+
+    /**
+     * Home is upright only: over an app in landscape the picture of home is laid out at home's size and turned to the
+     * phone's natural way up, as Android shows the real home when it comes (fixed rotation), so the two line up when it
+     * takes over (it was drawn unturned in the landscape screen: home's left part upright, the app beside it).
+     */
+    private fun orientBackdrop() {
+        val b = backdrop ?: return
+        val lp = b.layoutParams as? FrameLayout.LayoutParams ?: return
+        val w = if (turned) sh.toInt() else FrameLayout.LayoutParams.MATCH_PARENT
+        val h = if (turned) sw.toInt() else FrameLayout.LayoutParams.MATCH_PARENT
+        if (lp.width != w || lp.height != h) { lp.width = w; lp.height = h; b.layoutParams = lp }
+        b.rotation = homeTurn
+        b.translationX = if (turned) (sw - sh) / 2f else 0f
+        b.translationY = if (turned) (sh - sw) / 2f else 0f
+    }
+
+    /** [r] on home (its own, upright coordinates) where it shows on this display (turned with home in landscape). */
+    private fun homeToScreen(r: android.graphics.RectF): android.graphics.RectF = when (displayRotation) {
+        // Home's width is the landscape screen's height: (x, y) shows at (y, sh - x) turned one way, at (sw - y, x) the other.
+        android.view.Surface.ROTATION_90 -> android.graphics.RectF(r.top, sh - r.right, r.bottom, sh - r.left)
+        android.view.Surface.ROTATION_270 -> android.graphics.RectF(sw - r.bottom, r.left, sw - r.top, r.right)
+        else -> r
     }
 
     // The card window (always added) and whether it is at window alpha 1.
@@ -924,6 +994,11 @@ object GestureNav {
      * rounded corners.
      */
     private class CardHost(ctx: Context) : FrameLayout(ctx) {
+        override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+            super.onConfigurationChanged(newConfig)
+            onCardWindowTurned()
+        }
+
         var holes: List<RectF> = emptyList()
             set(v) { if (field != v) { field = v; invalidate() } }
         var holeRadius = 0f
@@ -1098,6 +1173,10 @@ object GestureNav {
     /** Ends the card session: window invisible (kept), icon back, everything pending forgotten. */
     private fun hideCards() {
         catchTouchesForHome(false)
+        // A cover asked for a close that never started home has nothing to hand over to.
+        if (coverAsked && !homeStarted) TurnCover.dismiss()
+        coverAsked = false
+        pillAwayForTurn = false
         gen++
         animating = false
         onSettled = null
@@ -1126,6 +1205,7 @@ object GestureNav {
         nxt?.visibility = View.GONE
         cur?.snapshot = null
         cur?.homePicture = null
+        cur?.iconTurn = 0f
         switchFromHome = false
         // A card that ended inside an icon is fully "icon": reused as is, the next switch drew a huge icon over the snapshot.
         cur?.iconMix = 0f
@@ -1660,15 +1740,25 @@ object GestureNav {
         val vH = sh * ds
         val g = gen
         if (commit) {
-            if (homeVisible && !appStarted) homeRequestedAt = 0L else startHome()
+            // Home is upright only. Started now over a display turned for an app in landscape, Android would turn the display
+            // as soon as home is up, in the middle of the card's flight (the rest of the close drawn sideways): over a turned
+            // display home starts as the card lands, and the display turns once home has taken over (a cut: by then home,
+            // shown turned to the phone's natural way up as our picture of it was, already looks right; iOS turns nothing).
+            val deferHome = turned
+            if (!deferHome) { if (homeVisible && !appStarted) homeRequestedAt = 0L else startHome() }
+            // Android hides our windows from home's start until the display has turned: something under the card must
+            // look like home by then (TurnCover).
+            else { showTurnCover(); pillAwayForTurn = true }
             val pkg = cardPkg
-            val target = pkg?.let { HomeBridge.iconRect(it) }
+            val target = pkg?.let { HomeBridge.iconRect(it) }?.let { homeToScreen(it) }
             val size = target?.width() ?: (sw * 0.3f)
             val sizeH = target?.height() ?: (sh * 0.3f)
             switchAt = 0L   // going home ends any run of quick switches
             // As it will show on home (it may have changed while the app was open); none for an icon without badges (the
             // App Library's: the count appeared on the card and went as the card turned into the icon).
             c.badge = pkg?.let { if (target != null && HomeBridge.showsBadge(it)) Badges.count(it) else 0 } ?: 0
+            // Home is shown turned under a landscape app: the icon the card becomes is upright on home (iOS).
+            c.iconTurn = homeTurn
             hideIcon(if (target != null) pkg else null)
             cardIconSize = size
             beginCardSprings(toIcon = target != null)
@@ -1688,7 +1778,8 @@ object GestureNav {
             sDepth = mp.homeDepthClose.mover().apply { start(depth0, 0f, 0f) }
             closeDepthFrom = depth0
             anim = Anim.HOME_COMMIT
-            catchTouchesForHome(true)
+            // (Not over a turned display: home is laid out upright, the touches would land beside what they were aimed at.)
+            if (!deferHome) catchTouchesForHome(true)
             cardGoesHome()
             endLabel = when {
                 target != null -> "home (into the icon of $pkg at ${target.centerX().toInt()},${target.centerY().toInt()})"
@@ -1697,8 +1788,21 @@ object GestureNav {
             } + "; front report ${lastFrontPkg ?: "-"}, top task ${recentList.firstOrNull()?.pkg ?: "-"}"
             onSettled = {
                 phase = Phase.HOLD
-                // The picture of home is on top of the real one: swap only once the real home has drawn.
-                whenHomeDrawn(g) {
+                if (deferHome) {
+                    // The real icon is back now (under the card: unseen), so home already shows it when it comes; the card
+                    // window is hidden by Android as home starts (the cover shows the same under it) and the cards go with
+                    // the turn (see onCardWindowTurned).
+                    hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
+                    hiddenIconPkg = null
+                    whenCoverShown(g) { shown ->
+                        if (!shown) AppLog.log("[nav] no cover under the card in time: home starts anyway (the app may show while the display turns)")
+                        holdingForTurn = g
+                        nav.postDelayed({ if (holdingForTurn == g) { holdingForTurn = -1; AppLog.log("[nav] the display did not turn upright in time: the picture goes anyway"); if (gen == g) hideCards() } }, HOME_SHOWN_TIMEOUT_MS)
+                        TurnCover.handedOver()
+                        startHome()
+                    }
+                } else whenHomeDrawn(g) {
+                    // The picture of home is on top of the real one: swap only once the real home has drawn.
                     if (target != null && pkg != null) {
                         // The real icon back first; the card (now the icon) goes only once home has drawn a frame with it:
                         // never a frame with neither (a fixed delay left a gap whenever home's draw came late).
@@ -1840,6 +1944,72 @@ object GestureNav {
         check()
     }
 
+    /** The card session (gen) whose close into home waits for the display to turn upright (-1: none). */
+    private var holdingForTurn = -1
+
+    /** Whether this card session asked for a [TurnCover], when, and whether its start failed. */
+    private var coverAsked = false
+    private var coverAskedAt = 0L
+    @Volatile private var coverFailed = false
+
+    /**
+     * Starts the cover that stands in for home while a close over a turned display hands over (it lies under the card window,
+     * over the app; the shell's own start, so no system animation and nothing waiting on one).
+     */
+    private fun showTurnCover() {
+        if (Build.VERSION.SDK_INT < 30) return
+        coverAsked = true
+        coverAskedAt = SystemClock.uptimeMillis()
+        coverFailed = false
+        TurnCover.expect()
+        val hideBars = barVisible == false
+        frontIo.execute {
+            val ok = try { NoAnimStarts.start(TurnCover.intent(app, hideBars), Process.myUserHandle().hashCode()) } catch (_: Throwable) { false }
+            if (!ok) { AppLog.log("[nav] the cover for a close over a turned display could not be started"); coverFailed = true; TurnCover.handedOver() }
+        }
+    }
+
+    /**
+     * Runs [then] (nav thread) with true once the cover is on screen: the shell saw the start transaction of our transition
+     * for it committed (its first frame drawn is not enough: the transition was ready up to 300 ms later on the emulator,
+     * and home started in between showed the app for a frame). False after [COVER_TIMEOUT_MS], or at once without a cover.
+     */
+    private fun whenCoverShown(g: Int, then: (Boolean) -> Unit) {
+        val since = coverAskedAt
+        val deadline = SystemClock.uptimeMillis() + COVER_TIMEOUT_MS
+        val component = android.content.ComponentName(app, TurnCover::class.java).flattenToString()
+        fun check() {
+            if (gen != g) return
+            if (!coverAsked || coverFailed) { then(false); return }
+            frontIo.execute {
+                val at = try { ShizukuLink.service?.transitionShownAt(component) } catch (_: Throwable) { null }
+                nav.post {
+                    if (gen != g) return@post
+                    when {
+                        at == null -> then(false)
+                        at >= since -> { AppLog.log("[nav] cover on screen ${at - since} ms after it was asked for"); then(true) }
+                        SystemClock.uptimeMillis() > deadline -> then(false)
+                        else -> nav.postDelayed({ check() }, 8)
+                    }
+                }
+            }
+        }
+        check()
+    }
+
+    /**
+     * The card window was given the display's new orientation (home in front, upright): a close that landed over a turned
+     * display ends here. Android has kept the window hidden since home started (the cover and then home showed the same
+     * picture) and shows it again once it has drawn for the turn: by then it is empty.
+     */
+    private fun onCardWindowTurned() {
+        val g = holdingForTurn
+        if (g < 0) return
+        holdingForTurn = -1
+        root?.visibility = View.INVISIBLE
+        if (gen == g) hideCards()
+    }
+
     // Card fades out as it shrinks (closing an app that has no icon on the home screen).
     private var springFade = false
 
@@ -1931,6 +2101,7 @@ object GestureNav {
     private fun cardGoesHome() {
         bringing = null
         closingHome = true
+        applyBarVisible()
         statusBar?.setDark(HomeBridge.homeStatusDark)
         shade?.behindChanged()
     }
@@ -2838,6 +3009,13 @@ object GestureNav {
     private const val HOLD_RADIUS_DP = 12f
     /** How far a finger from the top edge moves down before the hidden status bar shows for a moment (dp). */
     private const val EDGE_TRAVEL_DP = 20f
+    /**
+     * How long a close over a turned display waits, once its card has landed, for the cover to be on screen (ms): the first
+     * start after an install took 2 s on the emulator; home started without it showed the app until home came.
+     */
+    private const val COVER_TIMEOUT_MS = 1200L
+    /** How long a close into home, started as its card landed, waits for the display to turn upright (ms). */
+    private const val HOME_SHOWN_TIMEOUT_MS = 3000L
     /** How long the hidden status bar shows after a swipe from the top (ms; about as long as Android shows its bars). */
     private const val TRANSIENT_BAR_MS = 2500L
     private const val HOME_PULL_DEPTH = 0.6f   // how far home recedes at most while a swipe up on it goes on

@@ -624,6 +624,9 @@ SEED = {
     'comp.cc.grid.top': {'pt': 132.3, 'src': 'measured:iOS 27 Simulator, accessibility frames (the kit: 132)'},
     'comp.cc.grid.top-edit': {'pt': 86, 'src': 'measured:iOS 27 Simulator, edit mode'},
     'comp.cc.status.row-y': {'pt': 104.2, 'src': 'measured:iOS 27 Simulator, accessibility frames (the kit: 91.7)'},
+    'comp.cc.grid.top-landscape': {'pt': 45.7, 'src': 'measured:iOS 27 Simulator in landscape (874 x 402 pt), accessibility frames: the first row of controls at 45.7, under one status line'},
+    'comp.cc.grid.side-landscape': {'pt': 100, 'src': 'judged:iOS 27 Simulator in landscape: 8 columns centred, 103.3 pt each side at 874 pt (the 62 pt landscape safe area and the 38 pt portrait margin; the columns that fit within it)'},
+    'comp.cc.status.row-y-landscape': {'pt': 32.3, 'src': 'measured:iOS 27 Simulator in landscape: Carrier 23.3-41.3 pt, the battery 25.7-39.4 (no + and power there)'},
     'comp.cc.module.corner': {'pt': 30, 'src': 'kit:2547:2662 (2x2)'},
     'comp.cc.slider.corner': {'pt': 34, 'src': 'kit:2570:20682'},
     # Control Center's colours that were in code (judged before; kept as they were).

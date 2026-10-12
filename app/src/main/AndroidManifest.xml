@@ -125,6 +125,18 @@
             android:taskAffinity="dev.launcher.app.unlock"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Under the card while a close from an app in landscape hands over to home (TurnCover.kt): the picture of home,
+             turned as Android shows the upright-only home there. Started by the shell (our own instant transition), hence
+             exported; translucent, so the display keeps the app's orientation. -->
+        <activity
+            android:name=".TurnCover"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|keyboardHidden"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity="dev.launcher.app.cover"
+            android:theme="@style/TurnCover" />
+
         <!-- Test only: an app that puts the system bars in every state (docs/STATUS_BAR.md; Phone, Developer). -->
         <activity
             android:name=".BarsTestActivity"

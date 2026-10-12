@@ -31,6 +31,8 @@ struct ContentView: View {
     var body: some View {
         if ProcessInfo.processInfo.arguments.contains("-calibrate") {
             CalibrationView()
+        } else if ProcessInfo.processInfo.arguments.contains("-pattern") {
+            PatternView()
         } else {
             VStack(spacing: 16) {
                 Text("Reference host").font(.title)
@@ -41,6 +43,36 @@ struct ContentView: View {
                 status = ok ? "authorized" : "denied"
             }
         }
+    }
+}
+
+/// A full-screen pattern (numbered coloured tiles, edge to edge) for the landscape scenarios: what the app shows can be
+/// followed through a blur and through the card that shrinks it into its icon.
+struct PatternView: View {
+    private let colors: [Color] = [.red, .orange, .yellow, .green, .mint, .teal, .cyan, .blue, .indigo, .purple, .pink, .brown]
+
+    var body: some View {
+        GeometryReader { g in
+            let cols = g.size.width > g.size.height ? 8 : 4
+            let size = g.size.width / CGFloat(cols)
+            let rows = Int(ceil(g.size.height / size))
+            VStack(spacing: 0) {
+                ForEach(0..<rows, id: \.self) { r in
+                    HStack(spacing: 0) {
+                        ForEach(0..<cols, id: \.self) { c in
+                            let i = r * cols + c
+                            ZStack {
+                                colors[i % colors.count]
+                                Text("\(i)").font(.system(size: size * 0.35, weight: .bold)).foregroundColor(.white)
+                            }
+                            .frame(width: size, height: size)
+                        }
+                    }
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityIdentifier("pattern")
     }
 }
 

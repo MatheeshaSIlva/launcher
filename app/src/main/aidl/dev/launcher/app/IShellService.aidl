@@ -113,4 +113,9 @@ interface IShellService {
     // Sends a notification's PendingIntent as the user's tap, with the same instant remote transition as startNoAnim (no
     // system animation: our card grows out of the notification). Returns "result <code>" or "ERROR: ...".
     String sendNoAnim(in PendingIntent pi) = 31;
+
+    // When (uptime ms, the same clock in every process) a start of [component] (package/class) through our instant
+    // transition was last on screen (its start transaction committed); 0 if never. A close over a turned display starts
+    // home only once its cover is.
+    long transitionShownAt(String component) = 34;
 }

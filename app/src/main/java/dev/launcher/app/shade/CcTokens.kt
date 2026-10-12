@@ -66,6 +66,10 @@ object CcTokens {
     val GRID_TOP = NumberKey("comp.cc.grid.top")
     val GRID_TOP_EDIT = NumberKey("comp.cc.grid.top-edit")
     val ROW_Y = NumberKey("comp.cc.status.row-y")
+    // In landscape (iOS 27: one status line, the controls flowed across the width under it).
+    val GRID_TOP_LANDSCAPE = NumberKey("comp.cc.grid.top-landscape")
+    val GRID_SIDE_LANDSCAPE = NumberKey("comp.cc.grid.side-landscape")
+    val ROW_Y_LANDSCAPE = NumberKey("comp.cc.status.row-y-landscape")
 
     // "+" and power.
     val BUTTON = MaterialKey("comp.cc.button.material")
@@ -107,7 +111,7 @@ object CcTokens {
 
     val ALL = listOf(OPEN_TRAVEL, BACKGROUND, SAMSUNG_STRENGTH, MODULE, ON, WELL, CORNER, SLIDER_CORNER, SYMBOL, SYMBOL_COLOR, WIDE_PADDING,
         WIDE_GAP, WELL_SIZE, WELL_SYMBOL, TITLE, TITLE_LARGE, DETAIL, LABEL_COLOR, DETAIL_COLOR, DETAIL_BLEND, CELL, GAP,
-        GRID_TOP, GRID_TOP_EDIT, ROW_Y, BUTTON, BUTTON_SIZE, BUTTON_INSET_X, BUTTON_TOP, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR,
+        GRID_TOP, GRID_TOP_EDIT, ROW_Y, GRID_TOP_LANDSCAPE, GRID_SIDE_LANDSCAPE, ROW_Y_LANDSCAPE, BUTTON, BUTTON_SIZE, BUTTON_INSET_X, BUTTON_TOP, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR,
         CONN_BIG, CONN_SMALL, CONN_SYMBOL_BIG, CONN_SYMBOL_SMALL, ART, ART_CORNER, ART_X, ART_Y, OUTPUT, MEDIA_TITLE,
         MEDIA_TEXT_COLOR, MEDIA_TEXT_BLEND, TRANSPORT, PLAY, GALLERY_SHEET, GALLERY_ENTRY, GALLERY_DIM, GALLERY_CORNER,
         SLIDER_COVER, EXPANDED_SLIDER_WIDTH, EXPANDED_SLIDER_HEIGHT, EXPANDED_SLIDER_CORNER, EXPANDED_SLIDER_SYMBOL,

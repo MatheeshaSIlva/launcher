@@ -75,7 +75,14 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         window.statusBarColor = Color.TRANSPARENT
         @Suppress("DEPRECATION")
         window.navigationBarColor = Color.TRANSPARENT
-        window.attributes = window.attributes.apply { layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS }
+        window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            // Home is upright only: coming from an app in landscape it is shown turned to the phone's natural way up (Android's
+            // fixed rotation, our picture of it under the closing card: as iOS) and the display turns after. Home already
+            // looks right then: the turn is a cut, not Android's rotation (a screenshot spun with black corners). (Seamless
+            // rotation instead left our overlays waiting to redraw for 2 s on the Android 17 emulator.)
+            rotationAnimation = WindowManager.LayoutParams.ROTATION_ANIMATION_JUMPCUT
+        }
         // Bars that "show transiently by swipe" (nothing is hidden on home, so nothing changes on screen): with the default
         // behaviour the window manager hands a pull from the top edge over to the stock status bar after 24 dp
         // (DisplayPolicy.requestTransientBars), and our shade would lose the finger. With this it keeps it on home.

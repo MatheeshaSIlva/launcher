@@ -24,8 +24,10 @@ import java.util.concurrent.TimeUnit
  * - Otherwise [available] is false and Control Center keeps its own blurred picture of what was behind (BackdropView).
  *
  * The window lives on a thread of its own: each change of its parameters is a relayout (10-50 ms of the window's thread),
- * which must never land on the shade's thread while a finger moves. It is hidden (no layer, nothing to compose) whenever
- * Control Center is closed. Changes are coalesced: a frame sends only the latest strength.
+ * which must never land on the shade's thread while a finger moves. Whenever Control Center is closed it is one empty
+ * pixel without blur (nothing to compose), never a GONE view: the window manager waits for every window of ours to draw
+ * before it turns the display, and a GONE view never draws (Android 17: every rotation stood still 2 s, its sync timeout,
+ * laid out in the new orientation but shown in the old). Changes are coalesced: a frame sends only the latest strength.
  */
 class LiveBlur(ctx: Context, private val wm: WindowManager) {
     enum class Mode { SAMSUNG, STANDARD, NONE }
@@ -78,7 +80,8 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
                 if (added) { try { wm.removeView(view) } catch (_: Throwable) { }; added = false }
                 shownNow = false
                 strengthNow = -1f
-                view.visibility = View.GONE
+                view.visibility = View.VISIBLE
+                lp.width = 1; lp.height = 1
                 if (mode == Mode.SAMSUNG) setupSamsung()
                 wm.addView(view, lp)
                 added = true
@@ -124,7 +127,8 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         if (show == shownNow && (k == strengthNow || !show)) return@Runnable
         try {
             if (show != shownNow) {
-                view.visibility = if (show) View.VISIBLE else View.GONE
+                val size = if (show) WindowManager.LayoutParams.MATCH_PARENT else 1
+                lp.width = size; lp.height = size
                 shownNow = show
             }
             writeStrength(k)
@@ -153,12 +157,12 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
     private fun prewarm() {
         if (!added || failed) return
         try {
-            view.visibility = View.VISIBLE
+            lp.width = WindowManager.LayoutParams.MATCH_PARENT; lp.height = WindowManager.LayoutParams.MATCH_PARENT
             writeStrength(0.02f)
             wm.updateViewLayout(view, lp)
             h.postDelayed({
                 if (shownNow || failed) return@postDelayed
-                try { view.visibility = View.GONE; writeStrength(0f); wm.updateViewLayout(view, lp) } catch (_: Throwable) { }
+                try { lp.width = 1; lp.height = 1; writeStrength(0f); wm.updateViewLayout(view, lp) } catch (_: Throwable) { }
             }, 250)
         } catch (t: Throwable) {
             AppLog.log("[blur] prewarm failed: ${t.message}")

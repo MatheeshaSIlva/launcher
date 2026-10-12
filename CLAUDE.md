@@ -360,6 +360,15 @@ copy it wholesale — port the working pieces cleanly. File map:
   a parser of the old form never saw an app hide the bar. A swipe from the top while an app hides the bar is seen in the
   touchscreen's raw events by the shell (`TouchStream.watchEdge`); the kernel reports an axis only when it changes (a straight
   swipe down never says x). Home is locked to portrait (it rotated into a broken layout with auto-rotate on).
+- **Android hides every overlay window of ours while a fixed rotation is on** (AsyncRotationController: any window type
+  past the application types, ours all are): from the moment an upright-only home is started over a turned display until
+  the display has turned and each window has drawn again. Anything that must stay on screen then is an activity's window
+  (`TurnCover`, under the card during a close from a landscape app; home starts once the shell saw its transition
+  committed, `transitionShownAt`: its first frame drawn was up to 300 ms early). Its window draws the picture as its
+  background (a view inside the bars' insets for a few frames left black bands), with transparent bar colours.
+- **A rotation waits for every visible window of ours to draw in the new orientation**, and a window whose view is GONE
+  never draws: LiveBlur's hidden window held each rotation for its 2 s timeout (now a visible 1 x 1 window). Seamless
+  rotation (`ROTATION_ANIMATION_SEAMLESS`) left all our overlays waiting to draw; home uses the jump cut.
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

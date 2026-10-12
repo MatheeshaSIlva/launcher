@@ -259,6 +259,8 @@ class ShellService : IShellService.Stub() {
 
     override fun noAnimStats(): String = try { instant.stats() } catch (t: Throwable) { "ERROR: ${describe(t)}" }
 
+    override fun transitionShownAt(component: String): Long = instant.shownAt(component)
+
     override fun probeLiveTransition(component: String, homeComponent: String): String = try {
         LiveTransitionProbe(systemService("activity_task", ATM_STUB)).run(component, homeComponent)
     } catch (t: Throwable) {

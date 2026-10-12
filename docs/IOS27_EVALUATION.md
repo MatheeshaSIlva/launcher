@@ -51,6 +51,7 @@ and checked on the emulator only; nothing here has been on the S24 yet.
 | Gallery | Sections, a "Search Controls" field | 4 sections, no search | 7 sections in iOS's order (Connectivity, Media & Sound, Camera, Clock, Display & Focus, Accessibility, Utilities); no search yet |
 | Pages | Up to 5 pages, dots on the right (favourites, music, home, connectivity) | One page | Not built |
 | Status row | "Carrier" next to the signal | Signal and Wi-Fi only | Not changed |
+| Landscape | The page flowed across the width (8 columns at 874 pt, first row at 45.7 pt), one status line, no + nor power | The portrait column, cut off | Fixed (2026-10-13): the same flow, columns as fit, the status row lined up with the grid; edit mode portrait-only as iOS |
 | Controls' glass while the grid is pulled | Exact | Samples where the control rests (up to ~60 pt off while pulled; under the blur it hardly shows) | Not changed (drawing every control's glass anew each frame cost the S24 8-10 ms of GPU) |
 
 ## Banners
@@ -69,6 +70,9 @@ bend what the system draws. SurfaceFlinger shows the banner's blur region (1038 
 home: 0 missed refreshes, GPU 2.1 ms a frame. Other phones keep the glass over a picture. Size, place and motion match iOS's.
 
 ## Home (seen in passing)
+
+Going home from an app in landscape (2026-10-13, `test61_homeFromLandscape`): iOS keeps home upright (turned with the
+phone), the card turns into the upright icon, nothing spins. Ours matches (docs/STATUS_BAR.md, "Found during the walk").
 
 Home's glass clock now has iOS's lock-screen material (above). iOS's home screen has no lock-screen clock at all (it shows
 widgets); the clock widget is ours, styled after the lock screen.

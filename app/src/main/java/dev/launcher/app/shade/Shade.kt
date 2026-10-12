@@ -394,7 +394,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 val bk = kotlin.math.sqrt(k)
                 if (live) liveBlur.set(bk, true)
                 backdrop.set(ccBlurRadius() * bk, ccDim() * bk, (p / 0.12f).coerceIn(0f, 1f))
-                bar.setPanel(k * (1f - launchBarK()), 0f, 0f, cc.statusRowY)
+                bar.setPanel(k * (1f - launchBarK()), 0f, 0f, cc.statusRowY, cc.statusRowInset)
                 bar.setRowAlpha(1f - editK)
             }
             Panel.NC -> {

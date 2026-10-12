@@ -139,6 +139,15 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var layout: CcLayout? = null
     /** The grid's columns: the user's count (Layouts, Notifications and controls), at most what fits at this size. */
     private var cols = 4
+    /** Wider than tall (a display turned for an app in landscape). */
+    private val landscape get() = width > height
+    /** The columns shown: [cols] upright, as many as fit across in landscape. */
+    private var shownCols = 4
+    /** In landscape, where each control is shown (the page flowed across [shownCols]); null upright: its own place. */
+    private var flowed: java.util.IdentityHashMap<CcItem, IntArray>? = null
+
+    /** Where [it] is shown: (column, row). */
+    private fun shownAt(it: CcItem): IntArray = flowed?.get(it) ?: intArrayOf(it.col, it.row)
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
@@ -159,13 +168,17 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         cell = sf.pt(CcTokens.CELL)
         gap = sf.pt(CcTokens.GAP)
         pitch = cell + gap
-        cols = Setup.int(Element.SHADE, CcGrid.COLUMNS, 4).coerceAtMost(CcGrid.room(width, u)).coerceAtLeast(4)
+        cols = Setup.int(Element.SHADE, CcGrid.COLUMNS, 4).coerceAtMost(CcGrid.room(min(width, height), u)).coerceAtLeast(4)
         layout?.setColumns(cols)
-        val gridW = cols * cell + (cols - 1) * gap
+        // Landscape (iOS 27): the page flowed across as many columns as fit within the sides, centred, under one status
+        // line; the page itself keeps its portrait places.
+        shownCols = if (landscape) max(cols, ((width - 2 * sf.pt(CcTokens.GRID_SIDE_LANDSCAPE) + gap) / pitch).toInt()) else cols
+        flowed = if (landscape) layout?.flowed(shownCols) else null
+        val gridW = shownCols * cell + (shownCols - 1) * gap
         gridLeft = (width - gridW) / 2f
-        gridTopRest = sf.pt(CcTokens.GRID_TOP)
+        gridTopRest = sf.pt(if (landscape) CcTokens.GRID_TOP_LANDSCAPE else CcTokens.GRID_TOP)
         gridTopEdit = sf.pt(CcTokens.GRID_TOP_EDIT)
-        rowY = sf.pt(CcTokens.ROW_Y)
+        rowY = sf.pt(if (landscape) CcTokens.ROW_Y_LANDSCAPE else CcTokens.ROW_Y)
         btnR = sf.pt(CcTokens.BUTTON_SIZE) / 2f
         btnY = sf.pt(CcTokens.BUTTON_TOP) + btnR
         rows = max(4, ((height - gridTopRest - 96f * u + gap) / pitch).toInt())
@@ -244,6 +257,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** Every control's springs go to where the layout says (snapping when [animate] is false or a control is new). */
     private fun rebuildAnims(animate: Boolean) {
         val l = layout ?: return
+        // Landscape: where the page flows across (again after every change of what is on it).
+        flowed = if (landscape) l.flowed(shownCols) else null
         anims.keys.retainAll { k -> l.items.any { it === k } || anims[k]?.removing == true }
         for (item in l.items) {
             val a = animOf(item)
@@ -256,8 +271,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun syncTarget(a: Anim, animate: Boolean) {
         val it = a.item
-        val tx = it.col * pitch
-        val ty = it.row * pitch
+        val at = shownAt(it)
+        val tx = at[0] * pitch
+        val ty = at[1] * pitch
         val tw = it.w * cell + (it.w - 1) * gap
         val th = it.h * cell + (it.h - 1) * gap
         if (!animate) { a.x.snapTo(tx); a.y.snapTo(ty); a.w.snapTo(tw); a.h.snapTo(th); return }
@@ -299,6 +315,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** The status row's centre now (px): the status bar's right group rides on it. */
     val statusRowY get() = rowY + pullOffset
 
+    /** How far in the status row runs (px; 0: the bar's own sides): in landscape lined up with the grid (iOS 27: 6 pt in). */
+    val statusRowInset get() = if (landscape) gridLeft + 6f * u else 0f
+
     /** The controls' opacity for how present the panel is: quickly in, and they outlast the blur when it closes. */
     private fun presence(): Float = kotlin.math.sqrt(progress.coerceIn(0f, 1f))
 
@@ -327,6 +346,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     fun enterEdit() {
         if (editing) return
+        // Not in landscape: there the page is shown flowed across, not as it is arranged (iOS hides "+" there too).
+        if (landscape) return
         if (host.locked) { host.unlockToEdit(); return }
         performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         editK.animateTo(1f, EDIT)
@@ -413,7 +434,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val edit = editK.value.coerceIn(0f, 1f)
         val top = gridTop()
         val ex = expanded.presence
-        drawTopButtons(c, (1f - edit) * (1f - ex))
+        // Not in landscape (iOS 27: one status line there, no "+" nor power).
+        if (!landscape) drawTopButtons(c, (1f - edit) * (1f - ex))
         if (edit > 0.001f) drawEmptySlots(c, top, edit)
         else if (warmSlots && slotsNode.hasDisplayList()) { slotsNode.setAlpha(0.003f); c.drawRenderNode(slotsNode); warmSlots = false }
         for (a in anims.values) if (a !== dragged) drawItem(c, a, top, edit)
@@ -605,8 +627,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val dt = cy - p.h * p.scale / 2f
         val radius = radiusFor(p.w, p.h)
         // Where it rests (the glass samples the backdrop there).
-        val restX = gridLeft + a.item.col * pitch
-        val restY = (if (editK.target > 0.5f) gridTopEdit else gridTopRest) + a.item.row * pitch - max(0f, a.stretch.value)
+        val at = shownAt(a.item)
+        val restX = gridLeft + at[0] * pitch
+        val restY = (if (editK.target > 0.5f) gridTopEdit else gridTopRest) + at[1] * pitch - max(0f, a.stretch.value)
         // What it shows changed: drawn again now. Only where it rests changed (edit mode moved the grid, the backdrop's
         // picture arrived): a few controls a frame (all at once cost an 11 ms GPU frame on the S24); the others keep their
         // look a frame or two longer, which does not show under the blur.
@@ -1077,8 +1100,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun downNormal(x: Float, y: Float) {
         // The top buttons.
-        if (hypot(x - buttonX(0), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 0; plusPress.animateTo(1f, PRESS_IN); return }
-        if (hypot(x - buttonX(1), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 1; powerPress.animateTo(1f, PRESS_IN); return }
+        if (!landscape && hypot(x - buttonX(0), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 0; plusPress.animateTo(1f, PRESS_IN); return }
+        if (!landscape && hypot(x - buttonX(1), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 1; powerPress.animateTo(1f, PRESS_IN); return }
         val a = hit(x, y)
         if (a == null) {
             mode = Mode.EMPTY

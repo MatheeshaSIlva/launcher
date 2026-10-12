@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- TurnCover: no starting window, no window animation, edge to edge (it draws the whole display itself). -->
+    <style name="TurnCover" parent="@android:style/Theme.Translucent.NoTitleBar">
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <!-- The window draws the bars' backgrounds itself otherwise (black under the navigation bar for a few frames). -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+</resources>

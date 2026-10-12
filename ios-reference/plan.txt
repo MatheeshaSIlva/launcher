@@ -1,3 +1,2 @@
-normal: test50_settingsApp
-setup dark
-normal@dark: test50_settingsApp
+normal: test00_setupControls test60_ccLandscape test61_homeFromLandscape
+slow 5: test61_homeFromLandscape test60_ccLandscape

@@ -115,6 +115,29 @@ class CcLayout(cols: Int, var rows: Int, val items: MutableList<CcItem>) {
 
     fun remove(item: CcItem) { items.remove(item) }
 
+    /**
+     * Where each control goes when the page is laid out [n] columns wide (iOS 27's landscape Control Center): in reading
+     * order, each at the first free place from the top (a row of four and a row of two became one row of six). The page
+     * itself keeps its own places (what the user arranged in portrait). By identity: (column, row).
+     */
+    fun flowed(n: Int): java.util.IdentityHashMap<CcItem, IntArray> {
+        val out = java.util.IdentityHashMap<CcItem, IntArray>()
+        val wide = CcLayout(n, Int.MAX_VALUE / 4, mutableListOf())
+        for (it in items.sortedWith(compareBy({ it.row }, { it.col }))) {
+            val w = it.w.coerceAtMost(n)
+            var r = 0
+            var at: IntArray? = null
+            // First free place in reading order (rows grow as needed).
+            while (at == null) {
+                for (c in 0..n - w) if (wide.items.none { o -> o.overlaps(c, r, w, it.h) }) { at = intArrayOf(c, r); break }
+                r++
+            }
+            wide.items += CcItem(it.control, at[0], at[1], w, it.h, it.tile)
+            out[it] = at
+        }
+        return out
+    }
+
     /** The lowest row any control reaches (exclusive). */
     fun usedRows(): Int = items.maxOfOrNull { it.row + it.h } ?: 0
 

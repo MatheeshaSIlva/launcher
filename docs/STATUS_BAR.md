@@ -41,14 +41,23 @@ emulator (Android 17) and the S24 (One UI, Android 16).
 | A card launching or closing | the arriving app's state | tone at the card's start | tone at the card's start; hidden state applied when the app arrives (shown during the card) | emulator |
 | Lock screen, a panel open, banners | | shown | shown (a panel open keeps it shown over a full-screen app) | emulator |
 
-## Found, not the bar itself (next)
+## Found during the walk, fixed after (2026-10-13; iOS 27 captured first, `test60_ccLandscape`, `test61_homeFromLandscape`)
 
-- **Control Center in landscape**: its portrait column, cut off below (S24: about 2 rows of controls fit under the grid's
-  132 pt top in a landscape screen 402 pt tall). Needs a landscape arrangement (the page in two blocks side by side under a
-  lower top, or iOS's own: to be captured), with edit mode.
-- **Going home from a landscape app** (any app that forces landscape: games, videos): home is drawn upright inside the
-  landscape screen under the shrinking card, the app shows again for a few frames, then the display turns. The close needs
-  the rotation handled (home laid out in its own orientation, the card's target turned with it).
+- **Control Center in landscape** showed its portrait column, cut off below. iOS 27 flows the same page across the width:
+  the controls in reading order, each at the first free place, as many columns as fit within the sides (8 at 874 pt), the
+  first row at 45.7 pt under one status line (Carrier, signal, battery lined up with the grid; no + nor power). Ours does
+  the same (`CcLayout.flowed`, `comp.cc.grid.*-landscape`); the page keeps its portrait places, and edit mode stays
+  portrait-only (iOS shows no + in landscape).
+- **Going home from a landscape app**: home was drawn upright inside the landscape screen under the card, the app showed
+  again, then the display turned with a spin. iOS 27: home upright behind (turned with the phone's natural way up), the
+  card not turned, turning into the upright icon, no rotation animation. Ours now: the picture of home is laid out turned
+  as Android will show the upright-only home, the card flies to the icon's turned place and turns into it upright, home
+  starts only as the card lands (started earlier, Android turned the display mid-flight), the display turns with a jump
+  cut (HomeActivity's `ROTATION_ANIMATION_JUMPCUT`), the status bar waits for the turn. Android hides every overlay window
+  of ours from home's start until the turn (AsyncRotationController): a cover activity (`TurnCover`, started by the shell
+  as the close begins) draws the same picture under the card, and home starts once the shell has seen it on screen. On the
+  emulator no frame of the app shows any more (recorded frame by frame); the gesture pill fades out with the close and
+  back in at the bottom of the upright screen.
 - Stock status bar chips that ignore the disable flags draw under our time on the emulator (a stopwatch, a call); One UI's
   not seen yet. Our bar does not make room for them.
 - The tone over an app is still polled (dumpsys every 2.5 s and on window changes): an app that turns its bar from light to

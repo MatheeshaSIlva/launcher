@@ -60,11 +60,13 @@ class InstantTransitions(private val atm: Any) {
                         val finishOnce = { if (done.compareAndSet(false, true)) finish(cb) }
                         var waiting = false
                         try {
-                            if (info != null && t != null) showOpening(info, t)
+                            val opened = if (info != null && t != null) showOpening(info, t) else emptyList()
                             if (t != null && Build.VERSION.SDK_INT >= 31) {
                                 val since = SystemClock.uptimeMillis()
                                 t.addTransactionCommittedListener({ it.run() }) {
-                                    val ms = SystemClock.uptimeMillis() - since
+                                    val now = SystemClock.uptimeMillis()
+                                    for (c in opened) shown[c] = now
+                                    val ms = now - since
                                     lastCommitMs = ms
                                     if (ms > maxCommitMs) maxCommitMs = ms
                                     finishOnce()
@@ -89,10 +91,14 @@ class InstantTransitions(private val atm: Any) {
         }
     }
 
-    /** Opening windows end visible and untransformed (the system's start state may prepare them for an animation). */
-    private fun showOpening(info: Any, t: SurfaceControl.Transaction) {
+    /**
+     * Opening windows end visible and untransformed (the system's start state may prepare them for an animation). Returns
+     * the activities they show (package/class, the top one of each task).
+     */
+    private fun showOpening(info: Any, t: SurfaceControl.Transaction): List<String> {
         val changes = info.javaClass.getMethod("getChanges").invoke(info) as List<*>
         lastInfo = describe(info, changes)
+        val opened = ArrayList<String>()
         for (ch in changes) {
             ch ?: continue
             val mode = ch.javaClass.getMethod("getMode").invoke(ch) as Int
@@ -100,7 +106,21 @@ class InstantTransitions(private val atm: Any) {
             val leash = ch.javaClass.getMethod("getLeash").invoke(ch) as? SurfaceControl ?: continue
             t.setVisibility(leash, true)
             t.setAlpha(leash, 1f)
+            try {
+                val task = ch.javaClass.getMethod("getTaskInfo").invoke(ch)
+                (task?.javaClass?.getField("topActivity")?.get(task) as? android.content.ComponentName)?.let { opened += it.flattenToString() }
+            } catch (_: Throwable) { }
         }
+        return opened
+    }
+
+    // When each activity (package/class) last came on screen through our transition (uptime ms).
+    private val shown = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** When [component] (package/class, or package/.Class) last came on screen through our transition (uptime ms), else 0. */
+    fun shownAt(component: String): Long {
+        val c = android.content.ComponentName.unflattenFromString(component)?.flattenToString() ?: component
+        return shown[c] ?: 0L
     }
 
     // What the last transition handed us, for the log: its type and each change's mode, flags and task (diagnosing a case

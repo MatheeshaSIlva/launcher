@@ -94,6 +94,12 @@ class CardView(context: Context) : View(context) {
         set(v) { if (field != v) { field = v; invalidate() } }
     /** One iOS point in px, for the badge's size. */
     var unitPx = 2.7f
+    /**
+     * How far home is turned from this card's screen (degrees; an app in landscape closing into upright-only home, as iOS
+     * shows it: the card stays as the app was, the icon it becomes is upright on home). The icon turns as it comes in.
+     */
+    var iconTurn = 0f
+        set(v) { if (field != v) { field = v; invalidate() } }
 
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
 
@@ -193,7 +199,10 @@ class CardView(context: Context) : View(context) {
     private fun drawIcon(canvas: Canvas, d: Drawable, size: Float, alpha: Int) {
         d.setBounds((cx - size / 2).roundToInt(), (cy - size / 2).roundToInt(), (cx + size / 2).roundToInt(), (cy + size / 2).roundToInt())
         d.alpha = alpha
+        val turn = iconTurn * iconMix
+        if (turn != 0f) { canvas.save(); canvas.rotate(turn, cx, cy) }
         d.draw(canvas)
+        if (turn != 0f) canvas.restore()
     }
 
     /**
@@ -219,7 +228,10 @@ class CardView(context: Context) : View(context) {
         val alphaNow = (a * alpha).roundToInt()
         if (alphaNow <= 0) return
         iconRect.set(cx - size / 2, cy - size / 2, cx + size / 2, cy + size / 2)
+        val turn = iconTurn * iconMix
+        if (turn != 0f) { canvas.save(); canvas.rotate(turn, cx, cy) }
         dev.launcher.app.components.CountBadge.draw(canvas, iconRect, badge, unitPx * (size / minIconSize.coerceAtLeast(1f)).coerceIn(0.5f, 1f), alphaNow)
+        if (turn != 0f) canvas.restore()
     }
 
     /** The unclipped view above this card that draws its badge ([drawBadge]); redrawn whenever this card is. */
