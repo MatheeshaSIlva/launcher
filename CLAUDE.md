@@ -107,7 +107,11 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   writes the two files. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). Points to pixels: one unit everywhere, `Scale.unitPx` (policy `adaptive`: 402 pt
   across a phone, never larger than the dp at the phone's default density, times the Display size's zoom; text through
-  `Design.text` follows the Font size up to 130 %, not the status bar nor home's labels; a change rebuilds everything).
+  `Design.text` follows the Font size up to 130 %, not the status bar nor home's labels; policy `custom`: the same base
+  times the user's `sys.scale.size` and text times `sys.scale.text` (all but the status bar; home's own text through
+  `HomeMetrics` and `Scale.homeText`); a change rebuilds everything). A view that keeps the unit in a field measures it
+  again on every design change, not only in `onSizeChanged` (the window keeps its size when the unit changes: Control
+  Center and Notification Center stayed small after Follow was turned off).
   The token editor is `design/DesignActivity` (opened from the settings app: Phone, Expert; no drawer entry).
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.

@@ -125,6 +125,14 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        fit(w, h)
+    }
+
+    /**
+     * Everything sized for [w] x [h] at the design's point now: on a new size, and when the point itself changed (the
+     * settings' Size, the phone's Display size) with the size unchanged (Matheesha: turning Follow off left the panels small).
+     */
+    private fun fit(w: Int, h: Int) {
         val nu = Scale.unitPx(context, min(w, h))
         if (mp == null || nu != u) { mp = MaterialPainter.create(nu); flat = MaterialPainter.create(nu) }
         u = nu
@@ -153,7 +161,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** A token changed (the token editor): everything is laid out and drawn again; sizes move there on their springs. */
     private val tokensChanged: () -> Unit = {
         hnd().post {
-            if (width > 0) {
+            if (width > 0 && Scale.unitPx(context, min(width, height)) != u) fit(width, height)
+            else if (width > 0) {
                 syncTokens()
                 frosts.clear()
                 bgKey = Long.MIN_VALUE

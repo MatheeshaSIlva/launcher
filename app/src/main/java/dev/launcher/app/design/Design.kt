@@ -724,14 +724,6 @@ object Design {
     }
 }
 
-/**
- * How points become pixels: the theme's policy (`sys.scale.policy`). "adaptive": a phone's short side is
- * `sys.scale.reference-width` points wide (iOS 27's iPhone: 402 pt; on the S24 an element comes out the size it is on an
- * iPhone 17 Pro), but a point is never larger than Android's own dp at the phone's default display size (a tablet or a
- * foldable shows more, as an iPad does, rather than everything larger); and either way it follows the phone's Display size
- * setting (how far it is from the default). "reference-width": the short side is always that many points (no Display
- * size); "density": one point is one Android dp.
- */
 /** [this] style on [p]: font, weight, size and letter spacing at [unitPx] pixels per point (line height is the caller's). */
 fun TextStyle.applyTo(p: android.graphics.Paint, unitPx: Float) {
     p.typeface = dev.launcher.app.theme.Fonts.of(family, weight, sizePt)
@@ -759,33 +751,73 @@ fun Blend.toBlendMode(): android.graphics.BlendMode? = when (this) {
     Blend.SATURATION -> android.graphics.BlendMode.SATURATION
 }
 
+/**
+ * How points become pixels: the policy (`sys.scale.policy`, the theme's default, the user's choice in the settings' Size).
+ * "adaptive": a phone's short side is `sys.scale.reference-width` points wide (iOS 27's iPhone: 402 pt; on the S24 an
+ * element comes out the size it is on an iPhone 17 Pro), but a point is never larger than Android's own dp at the phone's
+ * default display size (a tablet or a foldable shows more, as an iPad does, rather than everything larger), times the
+ * phone's Display size setting (how far it is from the default); text follows its Font size. "custom": the same base times
+ * the user's own sizes, `sys.scale.size` for everything and `sys.scale.text` for text (1: an iPhone's), whatever the
+ * phone's settings. "reference-width": the short side is always that many points, times the user's sizes; "density": one
+ * point is one Android dp.
+ */
 object Scale {
     val POLICY = ChoiceKey("sys.scale.policy")
     val REFERENCE_WIDTH = NumberKey("sys.scale.reference-width")
+    /** The user's own size of everything (policy "custom"): a factor of an iPhone's. */
+    val SIZE = NumberKey("sys.scale.size")
+    /** The user's own size of text (policy "custom"): a factor of an iPhone's. */
+    val TEXT = NumberKey("sys.scale.text")
 
-    fun unitPx(ctx: Context, shortSidePx: Int): Float = when (Design.choice(POLICY)) {
-        "density" -> ctx.resources.displayMetrics.density
-        "reference-width" -> shortSidePx / Design.num(REFERENCE_WIDTH)
-        else -> {
-            // The phone's own density at its default display size, and how far the Display size setting is from it.
-            val stable = android.util.DisplayMetrics.DENSITY_DEVICE_STABLE / 160f
-            val zoom = ctx.resources.displayMetrics.density / stable
-            minOf(shortSidePx / Design.num(REFERENCE_WIDTH), stable) * zoom
+    const val SIZE_MIN = 0.7f
+    const val SIZE_MAX = 1.3f
+    const val TEXT_MIN = 0.75f
+    /** The most text grows (the layouts' rows and fields are made for this much). */
+    const val TEXT_MAX = 1.3f
+    /** Parts whose text keeps its size whatever the phone's Font size (iOS: the status bar and home's labels). */
+    private val FIXED_TEXT = listOf("comp.statusbar.", "comp.home.")
+    /** Parts whose text keeps its size whatever the user's own text size (the status bar: its height is the phone's). */
+    private const val BAR_TEXT = "comp.statusbar."
+
+    fun policy(): String = try { Design.choice(POLICY) } catch (_: Throwable) { "adaptive" }
+    private fun factor(k: NumberKey, min: Float, max: Float) = (try { Design.num(k) } catch (_: Throwable) { 1f }).coerceIn(min, max)
+    /** The user's own sizes as applied (1 when the policy does not use them). */
+    fun sizeFactor(): Float = factor(SIZE, SIZE_MIN, SIZE_MAX)
+    fun textFactor(): Float = factor(TEXT, TEXT_MIN, TEXT_MAX)
+
+    fun unitPx(ctx: Context, shortSidePx: Int): Float = unitFor(ctx, shortSidePx, policy(), sizeFactor())
+
+    /** One point in pixels under [policy] with the user's size [size] (the settings measure a choice before it is applied). */
+    fun unitFor(ctx: Context, shortSidePx: Int, policy: String, size: Float): Float {
+        val base = minOf(shortSidePx / Design.num(REFERENCE_WIDTH), stable())
+        return when (policy) {
+            "density" -> ctx.resources.displayMetrics.density
+            "reference-width" -> shortSidePx / Design.num(REFERENCE_WIDTH) * size
+            "custom" -> base * size
+            else -> base * phoneZoom(ctx)
         }
     }
 
-    /** The most text grows with the phone's Font size (the layouts' rows and fields are made for this much). */
-    const val TEXT_MAX = 1.3f
-    /** Parts whose text keeps its size whatever the Font size (iOS: the status bar and home's labels). */
-    private val FIXED_TEXT = listOf("comp.statusbar.", "comp.home.")
+    /** The phone's own density at its default display size (px per dp). */
+    private fun stable() = android.util.DisplayMetrics.DENSITY_DEVICE_STABLE / 160f
 
-    /** How much text style [name] grows with the phone's Font size (1: not at all). */
-    fun textScale(name: String): Float {
-        if (FIXED_TEXT.any { name.startsWith(it) }) return 1f
-        // Sizes kept to iOS's (the user's choice): text too.
-        if ((try { Design.choice(POLICY) } catch (_: Throwable) { "adaptive" }) == "reference-width") return 1f
-        val f = try { Design.context.resources.configuration.fontScale } catch (_: Throwable) { 1f }
-        return f.coerceIn(0.85f, TEXT_MAX)
+    /** How far the phone's Display size setting is from its default (1: the default; 0.875: everything 12.5 % smaller). */
+    fun phoneZoom(ctx: Context): Float = ctx.resources.displayMetrics.density / stable()
+
+    /** The phone's Font size as text follows it (within what the layouts are made for). */
+    fun phoneText(ctx: Context): Float = ctx.resources.configuration.fontScale.coerceIn(0.85f, TEXT_MAX)
+
+    /** How much text style [name] is grown or shrunk (1: an iPhone's size). */
+    fun textScale(name: String): Float = when (policy()) {
+        "adaptive" -> if (FIXED_TEXT.any { name.startsWith(it) }) 1f else try { phoneText(Design.context) } catch (_: Throwable) { 1f }
+        "density" -> 1f
+        else -> if (name.startsWith(BAR_TEXT)) 1f else textFactor()
+    }
+
+    /** How much home's own text (its labels, the App Library's) is grown: the user's own text size only (not the phone's: iOS). */
+    fun homeText(): Float = when (policy()) {
+        "adaptive", "density" -> 1f
+        else -> textFactor()
     }
 
     /** One point in pixels on [ctx]'s display (its short side), for views that are not the size of the screen. */

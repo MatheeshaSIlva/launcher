@@ -25,15 +25,18 @@ class HomeMetrics(
 ) {
     fun pt(v: Float) = v * u
 
+    /** Home's own text grown with the user's own text size (the settings' Size; not the phone's Font size, as on iOS). */
+    private val tf = dev.launcher.app.design.Scale.homeText()
+
     // ---- home pages
     val iconSize = (64 * u).roundToInt()
     private val sideInset = 30.1f * u
     val columnPitch = (w - 2 * sideInset - iconSize) / max(1, cfg.columns - 1)
     fun columnCenterX(col: Int) = sideInset + iconSize / 2f + col * columnPitch
     /** Inter at this size has SF 11's cap height (Inter's caps are taller: 0.727 em against SF's 0.705). */
-    val labelTextSize = 10.7f * u
-    /** From the icon's bottom edge to the label's baseline. */
-    val labelBaseline = 16.4f * u
+    val labelTextSize = 10.7f * u * tf
+    /** From the icon's bottom edge to the label's baseline (8.6 pt of gap, then the cap height). */
+    val labelBaseline = (8.6f + 7.8f * tf) * u
 
     // ---- dock (iOS 26: a floating glass platter, concentric with the display's corners)
     val dockInset = 17.5f * u
@@ -67,7 +70,7 @@ class HomeMetrics(
 
     // ---- Search pill (iOS 26: "Search" at rest, page dots while the pages move)
     val searchPillWidth = 78 * u
-    val searchPillText = 11.2f * u
+    val searchPillText = 11.2f * u * tf
 
     // ---- App Library, in the same unit as everything else (iOS points are absolute: one scale for home, library, lists
     //      and folders, so text and icons keep the same proportions everywhere). Measured on iOS (pt): side margin 23.3, gap
@@ -75,26 +78,32 @@ class HomeMetrics(
     //      the tile, icons the rest (63.7 here, the home icon's size); tile corners 0.142 of the tile; label SF 13 with its
     //      baseline 17 below the tile; 35.3 from a tile's bottom to the next row; search field 46.7 tall, 13 below the
     //      status bar, tiles 25.6 below it.
+    //      A tile is 166.6 pt wherever there is more room (a smaller Display size, a tablet: Matheesha saw the tiles grow
+    //      while everything else shrank), the grid centred; more columns share the width and shrink the tiles.
+    /** The side margin of the library's pages and of the sheets that share its look (Spotlight, the widget gallery). */
     val libMargin = 23.3f * u
     private val libGap = 18.2f * u
-    val tileSize = (w - 2 * libMargin - libGap) / 2f
-    fun tileLeft(col: Int) = libMargin + col * (tileSize + libGap)
+    val libColumns = cfg.libraryColumns.coerceAtLeast(1)
+    val tileSize = minOf(166.6f * u, (w - 2 * libMargin - (libColumns - 1) * libGap) / libColumns)
+    /** The tiles' (and the search field's) side margin: the grid centred. */
+    val libSide = (w - libColumns * tileSize - (libColumns - 1) * libGap) / 2f
+    fun tileLeft(col: Int) = libSide + col * (tileSize + libGap)
     val tilePad = tileSize * 0.0734f
     val tileIconGap = tileSize * 0.088f
     val tileIcon = (tileSize - 2 * tilePad - tileIconGap) / 2f
     val tileRadius = tileSize * 0.142f
     /** SF 13 cap height in Inter. */
-    val tileLabelSize = 12.6f * u
-    val tileLabelBaseline = 17f * u
+    val tileLabelSize = 12.6f * u * tf
+    val tileLabelBaseline = (7.8f + 9.2f * tf) * u
     val tileRowPitch = tileSize + 35.3f * u
     val searchTop = max(topInset.toFloat(), 44 * u) + 13 * u
     val searchHeight = 46.7f * u
     val tilesTop = searchTop + searchHeight + 25.6f * u
     val listRow = 56 * u
     val listIcon = 40 * u
-    val listText = 16.5f * u
+    val listText = 16.5f * u * tf
     val listHeader = 30 * u
-    val listHeaderText = 13 * u
+    val listHeaderText = 13 * u * tf
     val listSideIndex = 22 * u
     val bottomSafe = bottomInset + 8 * u
 
@@ -102,5 +111,5 @@ class HomeMetrics(
     val folderSide = 18 * u
     val folderColumns = 4
     val folderRadius = 34 * u
-    val folderTitleSize = 28 * u
+    val folderTitleSize = 28 * u * tf
 }

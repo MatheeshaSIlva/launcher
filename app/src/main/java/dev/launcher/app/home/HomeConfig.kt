@@ -42,6 +42,8 @@ data class HomeConfig(
     val columns: Int = 4,
     val rows: Int = 6,
     val dockSlots: Int = 4,
+    /** The App Library's tiles across. */
+    val libraryColumns: Int = 2,
     val drawerStyle: DrawerStyle = DrawerStyle.APP_LIBRARY,
     val drawerPlacement: DrawerPlacement = DrawerPlacement.PAGE_AFTER_LAST,
     /** System (icons as Android draws them) until a shape is picked in settings. */

@@ -232,12 +232,16 @@ private class Draft {
     /** What the palette is made from ("wallpaper" or "#rrggbb") and key colours set by hand per palette ("auto" or "#rrggbb"). */
     var colorSeed by mutableStateOf<String?>(null)
     val colorKeys = androidx.compose.runtime.mutableStateMapOf<Char, String>()
-    /** Whether sizes follow the phone's Display size and Font size ("adaptive") or keep iOS's ("reference-width"). */
+    /** Whether sizes follow the phone's Display size and Font size ("adaptive") or are the user's own ("custom"). */
     var scalePolicy by mutableStateOf<String?>(null)
+    /** The user's own size of everything and of text (factors of an iPhone's; used when not following the phone). */
+    var sizeFactor by mutableStateOf<Float?>(null)
+    var textFactor by mutableStateOf<Float?>(null)
     /** When Back was pressed with changes waiting (a second Back soon after discards them and leaves); 0: not. */
     var backAt by androidx.compose.runtime.mutableLongStateOf(0L)
 
-    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, colorIntensity, colorSeed, scalePolicy).size + elements.size + setup.size +
+    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, colorIntensity, colorSeed, scalePolicy, sizeFactor, textFactor).size +
+        elements.size + setup.size +
         fonts.size + colorKeys.size
 
     fun themeId() = theme ?: Design.themeId
@@ -264,11 +268,31 @@ private class Draft {
     fun chooseColorStyle(s: dev.launcher.app.design.MaterialYou.Style) { colorStyle = s.id.takeIf { it != appliedStyle() } }
     fun colorIntensity(): Float = colorIntensity ?: appliedIntensity()
     fun chooseColorIntensity(k: Float) { colorIntensity = k.takeIf { kotlin.math.abs(it - appliedIntensity()) > 0.005f } }
-    fun followsPhoneSize(): Boolean = (scalePolicy ?: appliedChoice(dev.launcher.app.design.Scale.POLICY.name, "adaptive")) == "adaptive"
+    fun scalePolicy(): String = scalePolicy ?: appliedChoice(dev.launcher.app.design.Scale.POLICY.name, "adaptive")
+    fun followsPhoneSize(): Boolean = scalePolicy() == "adaptive"
+    /** Follow the phone, or the user's own sizes (as they were set: 100 % is an iPhone's, Matheesha's "proper size"). */
     fun chooseFollowsPhoneSize(on: Boolean) {
-        val v = if (on) "adaptive" else "reference-width"
+        choosePolicy(if (on) "adaptive" else "custom")
+        if (on) { sizeFactor = null; textFactor = null }   // the phone's sizes: the user's own wait as they were
+    }
+    private fun choosePolicy(v: String) {
         scalePolicy = v.takeIf { it != appliedChoice(dev.launcher.app.design.Scale.POLICY.name, "adaptive") }
     }
+    /** The size of everything as it would be applied: the phone's Display size when following it, else the user's own. */
+    fun size(ctx: android.content.Context): Float =
+        if (followsPhoneSize()) dev.launcher.app.design.Scale.phoneZoom(ctx) else sizeFactor ?: dev.launcher.app.design.Scale.sizeFactor()
+    fun text(ctx: android.content.Context): Float =
+        if (followsPhoneSize()) dev.launcher.app.design.Scale.phoneText(ctx) else textFactor ?: dev.launcher.app.design.Scale.textFactor()
+    /** A size of the user's own; moved while following the phone, the other one starts where the phone has it (nothing jumps). */
+    fun chooseSize(ctx: android.content.Context, v: Float) {
+        if (followsPhoneSize()) { chooseText0(snap(dev.launcher.app.design.Scale.phoneText(ctx))); choosePolicy("custom") }
+        sizeFactor = v.takeIf { kotlin.math.abs(it - dev.launcher.app.design.Scale.sizeFactor()) > 0.001f }
+    }
+    fun chooseText(ctx: android.content.Context, v: Float) {
+        if (followsPhoneSize()) { sizeFactor = snap(dev.launcher.app.design.Scale.phoneZoom(ctx)).takeIf { kotlin.math.abs(it - dev.launcher.app.design.Scale.sizeFactor()) > 0.001f }; choosePolicy("custom") }
+        chooseText0(v)
+    }
+    private fun chooseText0(v: Float) { textFactor = v.takeIf { kotlin.math.abs(it - dev.launcher.app.design.Scale.textFactor()) > 0.001f } }
     /** The user's own colour the palette is made from (null: the wallpaper's), as it would be applied. */
     fun seedColor(): Int? = Design.hexColor(colorSeed ?: appliedChoice(Design.COLOR_SEED.name, "wallpaper"))
     fun chooseSeed(c: Int?) {
@@ -306,6 +330,8 @@ private class Draft {
             colorIntensity?.let { Design.set(Design.COLOR_INTENSITY.name, dev.launcher.app.design.Value.Number(it, dev.launcher.app.design.NumUnit.FACTOR)) }
             colorSeed?.let { Design.set(Design.COLOR_SEED.name, dev.launcher.app.design.Value.Choice(it)) }
             scalePolicy?.let { Design.set(dev.launcher.app.design.Scale.POLICY.name, dev.launcher.app.design.Value.Choice(it)) }
+            sizeFactor?.let { Design.set(dev.launcher.app.design.Scale.SIZE.name, dev.launcher.app.design.Value.Number(it, dev.launcher.app.design.NumUnit.FACTOR)) }
+            textFactor?.let { Design.set(dev.launcher.app.design.Scale.TEXT.name, dev.launcher.app.design.Value.Number(it, dev.launcher.app.design.NumUnit.FACTOR)) }
             for ((p, v) in colorKeys) Design.set(Design.COLOR_KEYS.getValue(p).name, dev.launcher.app.design.Value.Choice(v))
         }
         appearance?.let { Appearance.setMode(ctx, it) }
@@ -318,12 +344,14 @@ private class Draft {
 
     fun discard() {
         theme = null; colors = null; motion = null; appearance = null
-        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); scalePolicy = null; backAt = 0L
+        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); scalePolicy = null; sizeFactor = null; textFactor = null; backAt = 0L
     }
 
     companion object {
         const val FOLLOW = "follow"
         const val BACK_AGAIN_MS = 3000L
+        /** A size on the sliders' steps (5 %). */
+        fun snap(v: Float) = kotlin.math.round(v * 20f) / 20f
     }
 }
 
@@ -1402,8 +1430,12 @@ private fun LookPage() {
             }
         }
     }
-    Group("Size", "On: everything follows the phone's Display size, and text its Font size (up to 130 %), as Android's own apps do. Off: iPhone sizes whatever the phone's settings.") {
+    Group("Size", "Following the phone: everything takes its Display size, text its Font size, as Android's own apps do. Off, or a slider moved: your own sizes, whatever the phone's (100 % is an iPhone's).") {
+        val ctx = LocalContext.current
         ToggleRow("Follow the phone's display and font size", null, draft.followsPhoneSize()) { draft.chooseFollowsPhoneSize(it) }
+        val phone = draft.followsPhoneSize()
+        SizeRow("Everything", draft.size(ctx), phone, dev.launcher.app.design.Scale.SIZE_MIN, dev.launcher.app.design.Scale.SIZE_MAX) { draft.chooseSize(ctx, it) }
+        SizeRow("Text", draft.text(ctx), phone, dev.launcher.app.design.Scale.TEXT_MIN, dev.launcher.app.design.Scale.TEXT_MAX) { draft.chooseText(ctx, it) }
     }
 }
 
@@ -1617,6 +1649,27 @@ private fun ColourStyleRow(draft: Draft) {
         BasicText("Style", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
         Spacer(Modifier.height(look.dp(8f * look.unit)))
         ChoiceChips(styles.map { it.title }, styles.indexOf(draft.colorStyle())) { i -> draft.chooseColorStyle(styles[i]) }
+    }
+}
+
+/**
+ * A size (the settings' Size): its name, how big it is now ("the phone's" while it follows the phone), and a slider over
+ * [min]..[max] in 5 % steps.
+ */
+@Composable
+private fun SizeRow(title: String, value: Float, phone: Boolean, min: Float, max: Float, onChange: (Float) -> Unit) {
+    val look = LocalLook.current
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
+            Rolling((if (phone) "The phone's · " else "") + "${(value * 100).roundToInt()} %", look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier)
+        }
+        Spacer(Modifier.height(look.dp(6f * look.unit)))
+        SettingsSlider((value - min) / (max - min)) { t -> onChange(Draft.snap(min + t * (max - min)).coerceIn(min, max)) }
     }
 }
 

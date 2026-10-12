@@ -53,7 +53,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
         invalidate()
     }
 
-    private fun rows() = ceil(lib.tiles.size / 2f).toInt()
+    private fun rows() = ceil(lib.tiles.size / m.libColumns.toFloat()).toInt()
     private fun contentHeight() = m.tilesTop + rows() * m.tileRowPitch + m.bottomSafe
 
     private fun updateBounds() {
@@ -81,15 +81,15 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
 
     // ------------------------------------------------------------------ geometry
 
-    private fun tileTop(i: Int) = m.tilesTop + (i / 2) * m.tileRowPitch - scroller.position
+    private fun tileTop(i: Int) = m.tilesTop + (i / m.libColumns) * m.tileRowPitch - scroller.position
     private fun tileRect(i: Int, out: RectF): RectF {
-        val l = m.tileLeft(i % 2)
+        val l = m.tileLeft(i % m.libColumns)
         val t = tileTop(i)
         return out.apply { set(l, t, l + m.tileSize, t + m.tileSize) }
     }
 
     private fun slotRect(i: Int, slot: Int, out: RectF): RectF {
-        val l = m.tileLeft(i % 2) + m.tilePad + (slot % 2) * (m.tileIcon + m.tileIconGap)
+        val l = m.tileLeft(i % m.libColumns) + m.tilePad + (slot % 2) * (m.tileIcon + m.tileIconGap)
         val t = tileTop(i) + m.tilePad + (slot / 2) * (m.tileIcon + m.tileIconGap)
         return out.apply { set(l, t, l + m.tileIcon, t + m.tileIcon) }
     }
@@ -106,8 +106,9 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     private fun largeCount(i: Int): Int { val t = lib.tiles[i]; return if (t.expandable) 3 else min(4, t.apps.size) }
 
     private fun visibleTiles(): IntRange {
-        val first = max(0, floor((scroller.position - m.tilesTop) / m.tileRowPitch).toInt()) * 2
-        val last = min(lib.tiles.size - 1, (ceil((scroller.position + height - m.tilesTop) / m.tileRowPitch).toInt() + 1) * 2 - 1)
+        val n = m.libColumns
+        val first = max(0, floor((scroller.position - m.tilesTop) / m.tileRowPitch).toInt()) * n
+        val last = min(lib.tiles.size - 1, (ceil((scroller.position + height - m.tilesTop) / m.tileRowPitch).toInt() + 1) * n - 1)
         return first..last
     }
 

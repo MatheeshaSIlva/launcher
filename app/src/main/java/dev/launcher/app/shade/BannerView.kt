@@ -450,6 +450,11 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
 
     /** A light/dark change or a token edit: every banner's layer is drawn again (and laid out, if its size changed). */
     fun restyle() {
+        // The point itself may have changed (the settings' Size, the phone's Display size) while the window kept its size.
+        if (width > 0) {
+            val nu = Scale.unitPx(context, min(width, height))
+            if (nu != u) { mp = MaterialPainter.create(nu); u = nu; painter.u = u; wallpaperFrost() }
+        }
         for (s in all) {
             val h = heightOf(s)
             if (abs(s.height.target - h) > 0.5f) s.height.animateTo(h, RESIZE)

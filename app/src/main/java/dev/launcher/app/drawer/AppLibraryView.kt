@@ -72,8 +72,8 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         addView(listPane, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         listPane.visibility = View.GONE
         listPane.alpha = 0f
-        addView(searchBar, LayoutParams((m.w - 2 * m.libMargin).roundToInt(), m.searchHeight.roundToInt()).apply {
-            leftMargin = m.libMargin.roundToInt()
+        addView(searchBar, LayoutParams((m.w - 2 * m.libSide).roundToInt(), m.searchHeight.roundToInt()).apply {
+            leftMargin = m.libSide.roundToInt()
             topMargin = m.searchTop.roundToInt()
         })
         cancel.apply {
@@ -87,7 +87,7 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         }
         addView(cancel, LayoutParams(m.pt(76f).roundToInt(), m.searchHeight.roundToInt()).apply {
             gravity = Gravity.TOP or Gravity.END
-            rightMargin = m.libMargin.roundToInt()
+            rightMargin = m.libSide.roundToInt()
             topMargin = m.searchTop.roundToInt()
         })
         addView(folder, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))

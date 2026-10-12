@@ -171,7 +171,12 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** A token changed (the token editor): laid out and drawn again; the controls move to their new places on springs. */
     private val tokensChanged: () -> Unit = {
         (handler ?: android.os.Handler(android.os.Looper.getMainLooper())).post {
-            if (width > 0) { syncTokens(); rebuildAnims(animate = progress > 0f); slotsKey = Long.MIN_VALUE }
+            if (width > 0) {
+                // The point itself may have changed (the settings' Size, the phone's Display size): the grid is measured again.
+                val nu = Scale.unitPx(context, min(width, height))
+                if (nu != u) { u = nu; host.surfaces.unit(u) }
+                syncTokens(); rebuildAnims(animate = progress > 0f); slotsKey = Long.MIN_VALUE
+            }
         }
     }
 

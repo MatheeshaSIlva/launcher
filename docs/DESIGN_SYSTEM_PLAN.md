@@ -80,6 +80,18 @@ text the notifications, banners, Control Center and the settings grow and fit. S
 display and font size" (on: `adaptive`; off: `reference-width`, iPhone sizes and text whatever the phone says). The S24
 was set to a smaller Display size (density 420, default 480) and 90 % text: following them, everything there is about
 12 % smaller than before (text in the shade 10 % more).
+*Second round (Matheesha: "turning off follow didn't revert the qs and notification panels to its proper size ...
+following works well but not implemented properly in the app library. Give the user the ability to set custom scaling
+values for element and text separately"):* Control Center, Notification Center and the banners took their unit in
+`onSizeChanged` only (the window keeps its size when the unit changes): they measure it again on every design change.
+The App Library's tiles filled the width (two columns), so at a smaller scale they grew while everything else shrank: a
+tile is now its 166.6 pt wherever there is more room, the grid (and its search field) centred; more columns share the
+width (the layout option, next round). Size has two sliders, Everything (70-130 %) and Text (75-130 %): following the
+phone they show its values (88 % and 90 % on the S24); turning Follow off, or moving a slider, makes them the user's own
+(policy `custom`: the base unit times `sys.scale.size`, text times `sys.scale.text`, home's labels included, the status
+bar's text not: its height is the phone's). 100 % is an iPhone's (Follow off restores exactly that). Checked on the
+emulator at 360 dpi: Control Center and Notification Center go back to iPhone size without a restart; at 80 % and 130 %
+text home, the App Library, Control Center and Notification Center shrink and their text grows.
 
 **Step 2: one material system.** One material spec (backdrop source: wallpaper, picture of what is behind, or live; blur;
 lens; fills with blend modes; rims; shadows) and one renderer replacing the four. Surfaces move over one per issue:
