@@ -1210,6 +1210,45 @@ final class Scenarios: XCTestCase {
         home()
     }
 
+    /// Home's own gestures beside the pages (2026-10-14): the Search pill pressed and slid (iOS scrubs through the pages),
+    /// a quick swipe on it, a swipe right on the first page (the Today View), and a dock icon held.
+    func test72_homeGestures() {
+        shot("home-start")
+        tree("home-start")
+        let search = sb.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "Search")).firstMatch
+        let f = search.exists ? search.frame : CGRect(x: w / 2 - 40, y: h - 140, width: 80, height: 30)
+        mark("search pill at \(f)")
+        // Pressed and slid slowly to the right, held at the end, then lifted.
+        drag("pill-scrub-right", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX + 140, y: f.midY), velocity: 120, press: 0.6, hold: 0.8)
+        wait(1.0)
+        shot("pill-after-scrub-right")
+        tree("pill-after-scrub-right")
+        wait(2.5)
+        shot("pill-later")
+        // Back, sliding left.
+        drag("pill-scrub-left", CGPoint(x: f.midX, y: f.midY), CGPoint(x: f.midX - 140, y: f.midY), velocity: 120, press: 0.6, hold: 0.8)
+        wait(1.0)
+        shot("pill-after-scrub-left")
+        home()
+        // A quick swipe across the pill (no hold first).
+        drag("pill-swipe", CGPoint(x: f.midX + 60, y: f.midY), CGPoint(x: f.midX - 80, y: f.midY), velocity: 1500)
+        wait(1.0)
+        shot("pill-after-swipe")
+        home()
+        // A swipe right on the first page: the Today View.
+        drag("today", CGPoint(x: w * 0.15, y: h * 0.45), CGPoint(x: w * 0.85, y: h * 0.45), velocity: 1200)
+        wait(1.5)
+        shot("today")
+        tree("today")
+        home()
+        // A dock icon held.
+        longPress("dock-hold", w * 0.37, h - 70, 1.0)
+        wait(1.5)
+        shot("dock-held")
+        tree("dock-held")
+        home()
+    }
+
     // MARK: - Calibration
 
     /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the
