@@ -2017,3 +2017,13 @@ The adb test notification takes `--ez avatar true` (a 4:3 gradient, to check the
 its size in its matrix, the canvas moved to the place: a new shader and matrix per draw were native allocations every
 frame for every photo while a list scrolled.
 
+**Search fields with a hardware keyboard**: Enter in Spotlight launched its top hit twice (a hardware Enter calls a
+field's editor action on its key down and again on its key up; the second start reversed the first's card). Spotlight,
+the App Library's search and the widget gallery's take one action per Go or Enter now (`components/onGo`). Checked on
+the emulator: one launch.
+
+**Home's gestures beside the pages, against iOS 27** (Simulator capture `test72_homeGestures`): holding the Search pill
+enters edit mode with the pill turned into page dots (no scrubbing), a swipe across the pill turns the page, a tap opens
+Spotlight; ours does the same (checked on the emulator). A swipe right on the first page opens iOS's Today View: we have
+none (a page of its own, to plan with Matheesha).
+

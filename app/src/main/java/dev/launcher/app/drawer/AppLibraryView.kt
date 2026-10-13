@@ -1,5 +1,6 @@
 package dev.launcher.app.drawer
 
+import dev.launcher.app.components.onGo
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -441,7 +442,7 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 override fun afterTextChanged(s: Editable?) { lib.onQuery(s?.toString().orEmpty()) }
             })
-            setOnEditorActionListener { _, _, _ -> lib.launchFirstResult(); true }
+            onGo { lib.launchFirstResult() }
         }
         addView(edit, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
             leftMargin = m.pt(38f).roundToInt()

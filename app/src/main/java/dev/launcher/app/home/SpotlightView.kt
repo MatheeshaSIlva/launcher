@@ -1,5 +1,6 @@
 package dev.launcher.app.home
 
+import dev.launcher.app.components.onGo
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
@@ -497,10 +498,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
                         onQuery(s?.toString().orEmpty())
                     }
                 })
-                setOnEditorActionListener { _, _, _ ->
-                    results.firstResult()?.let { first -> launch(first, results.iconRectOf(first) ?: RectF()) }
-                    true
-                }
+                onGo { results.firstResult()?.let { first -> launch(first, results.iconRectOf(first) ?: RectF()) } }
             }
             addView(edit, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
                 leftMargin = m.pt(42f).roundToInt()

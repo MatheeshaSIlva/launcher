@@ -1,5 +1,6 @@
 package dev.launcher.app.home
 
+import dev.launcher.app.components.onGo
 import android.annotation.SuppressLint
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
@@ -201,7 +202,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
                 override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
                 override fun afterTextChanged(s: Editable?) { setQuery(s?.toString().orEmpty()) }
             })
-            setOnEditorActionListener { _, _, _ -> hideKeyboard(); true }
+            onGo { hideKeyboard() }
         }
         addView(edit, LayoutParams((m.w - 2 * m.libMargin - m.pt(76f)).roundToInt(), fieldH.roundToInt()).apply {
             leftMargin = (m.libMargin + m.pt(38f)).roundToInt()
