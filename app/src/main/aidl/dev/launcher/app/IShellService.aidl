@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import dev.launcher.app.ITouchStream;
 import dev.launcher.app.ITopEdge;
+import dev.launcher.app.IWindowWatch;
 
 // Runs in the Shizuku user-service process (uid 2000 via wireless debugging).
 // Transaction codes are explicit so the app and an older still-running service never disagree.
@@ -130,4 +131,10 @@ interface IShellService {
     // auto-enter: YouTube while a video plays): "" if not, else "auto" and, if the app gave one, its source rect hint
     // (where the video is in its window, px): "auto l t r b".
     String pipHint(String pkg) = 36;
+
+    // The live frames of the windows whose names contain one of [names] (a mini player's package): [listener] is told each
+    // time they move, resize, come or go (SurfaceFlinger's window information: also while SystemUI moves a mini player under
+    // the finger). Replaces the previous watch; "ok" or "ERROR: ...". stopWindows ends it.
+    String watchWindows(in IWindowWatch listener, in String[] names) = 37;
+    void stopWindows() = 38;
 }

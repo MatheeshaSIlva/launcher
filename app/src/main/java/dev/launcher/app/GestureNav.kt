@@ -702,6 +702,11 @@ object GestureNav {
     /** From NavAccessibilityService: a window of [pkg] came to the front. */
     fun onWindowStateChanged(pkg: String?, className: String? = null) {
         if (pkg == null) return
+        // An app back in front from its mini player while the App Switcher is open (its expand button): the deck makes way.
+        // (Our own windows, the switcher's among them, come with our package: ours floats only as its test app.)
+        if (pkg != app.packageName || className == PipTestActivity::class.java.name) {
+            nav.post { if (phase == Phase.SWITCHER && pkg in switcherFloating) switcherAppCameForward(pkg) }
+        }
         // The keyboard is not the app in front: taken for it, a close aimed at the keyboard's package and a launch that showed
         // the keyboard looked like the wrong app had come up (seen on the S24 after App Library search).
         if (isKeyboard(pkg, className)) return
@@ -953,7 +958,7 @@ object GestureNav {
             host.holeRadius = dp(16)
             pollFloating()
             d.setScreen(sw, sh, deviceRadius)
-            input = dev.launcher.app.switcher.SwitcherInput({ e -> nav.post { onSwitcherTouch(e); e.recycle() } }, { nav.post { floatingTouched() } })
+            input = dev.launcher.app.switcher.SwitcherInput({ e -> nav.post { onSwitcherTouch(e); e.recycle() } }, { nav.post { floatingPressed() } })
                 .also { it.attach(ctx, wm, sw.toInt(), sh.toInt()) }
         } catch (t: Throwable) {
             AppLog.log("[nav] card window FAILED: ${t.javaClass.simpleName}: ${t.message}")
@@ -1020,8 +1025,10 @@ object GestureNav {
     /**
      * The card window's content view. Floating windows (picture-in-picture, pop-up windows) lie above every app but under
      * our overlay: whatever we draw over them hides them, so a video vanished for the length of every launch and close.
-     * The window leaves [holes] where they are (nothing drawn there: the floating window shows through, live), with their
-     * rounded corners.
+     * The window leaves [holes] where they are (cleared: the floating window shows through, live), with their rounded
+     * corners. Each hole is a small view on top of everything that clears what is under it ([Punch]): moved, only where it
+     * was and where it is are drawn again. (A clip of the whole window around it drew all of it every frame: a mini player
+     * dragged in the App Switcher cost the S24's GPU 10.9 ms a frame, the deck scrolling 6.1.)
      */
     private class CardHost(ctx: Context) : FrameLayout(ctx) {
         override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
@@ -1030,28 +1037,70 @@ object GestureNav {
         }
 
         var holes: List<RectF> = emptyList()
-            set(v) { if (field != v) { field = v; invalidate() } }
+            set(v) { if (field != v) { field = v; placeHoles() } }
         var holeRadius = 0f
-        private val path = android.graphics.Path()
+            set(v) { field = v; for (p in punches) p.invalidate() }
+        private val punches = ArrayList<Punch>()
 
-        override fun dispatchDraw(canvas: Canvas) {
-            if (holes.isEmpty()) { super.dispatchDraw(canvas); return }
-            canvas.save()
-            for (h in holes) {
-                path.reset()
-                path.addRoundRect(h, holeRadius, holeRadius, android.graphics.Path.Direction.CW)
-                canvas.clipOutPath(path)
+        private fun placeHoles() {
+            while (punches.size < holes.size) Punch(context, this).also { punches += it; addView(it, LayoutParams(0, 0)) }
+            for (i in punches.indices) {
+                val p = punches[i]
+                val h = holes.getOrNull(i)
+                if (h == null) { if (p.visibility != GONE) { p.visibility = GONE; p.forget() }; continue }
+                if (p.visibility != VISIBLE) p.visibility = VISIBLE
+                p.place(h)
             }
-            super.dispatchDraw(canvas)
-            canvas.restore()
+        }
+
+        override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+            super.onLayout(changed, l, t, r, b)
+            placeHoles()   // a layout pass puts them at their layout size (0 x 0): back where they are
+        }
+
+        // The holes stay above every other child.
+        override fun onViewAdded(child: View) {
+            super.onViewAdded(child)
+            if (child !is Punch && punches.isNotEmpty()) post { for (p in punches) p.bringToFront() }
+        }
+    }
+
+    /**
+     * One hole: clears its rounded rectangle. Moved by translation (a property of its own render node) on whole pixels, the
+     * shape exact inside: a change of a child's bounds makes Android record its parent again, and the whole window counted
+     * as changed (traced on the S24: every frame drawn whole while a mini player moved). Its bounds only ever grow, to the
+     * largest hole it has held (a hole drawn inside a moving window shrinks and grows every frame).
+     */
+    private class Punch(ctx: Context, private val host: CardHost) : View(ctx) {
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)
+        }
+        private val shape = RectF()
+        private val next = RectF()
+
+        fun place(h: RectF) {
+            val x = kotlin.math.floor(h.left)
+            val y = kotlin.math.floor(h.top)
+            val w = kotlin.math.ceil(h.right - x).toInt()
+            val hh = kotlin.math.ceil(h.bottom - y).toInt()
+            if (w > right - left || hh > bottom - top || left != 0 || top != 0) setLeftTopRightBottom(0, 0, max(w, right - left), max(hh, bottom - top))
+            translationX = x
+            translationY = y
+            next.set(h.left - x, h.top - y, h.right - x, h.bottom - y)
+            if (next != shape) { shape.set(next); invalidate() }
+        }
+
+        /** No hole now: its bounds may shrink to the next one's. */
+        fun forget() = setLeftTopRightBottom(0, 0, 0, 0)
+
+        override fun onDraw(c: Canvas) {
+            c.drawRoundRect(shape, host.holeRadius, host.holeRadius, paint)
         }
     }
 
     // ---- floating windows (nav thread): where they are, asked of the shell every FLOATING_POLL_MS (a few ms of a worker's
     // time), at the start of every card session, and every FLOATING_BUSY_MS while cards show (a PiP window can be dragged).
     private var floating: List<RectF> = emptyList()
-    /** When (uptime ms) the floating windows last changed (one came, went or moved). */
-    private var floatingChangedAt = 0L
     /** The app of each of [floating]. */
     private var floatingPkgs: List<String> = emptyList()
     private var floatingLogged = ""
@@ -1088,7 +1137,6 @@ object GestureNav {
                 floatingPkgs = pkgs
                 if (rects != floating) {
                     floating = rects
-                    floatingChangedAt = SystemClock.uptimeMillis()
                     val note = lines.joinToString("; ")
                     if (note != floatingLogged) { floatingLogged = note; AppLog.log("[nav] floating windows: ${note.ifEmpty { "none" }}") }
                     applyFloating()
@@ -1097,18 +1145,291 @@ object GestureNav {
         }
     }
 
-    /** The holes and the touchable regions (during a close, in the App Switcher) leave the floating windows alone. */
+    /**
+     * The holes (the card window draws nothing there: the floating windows under it show) and the touchable regions (during a
+     * close, in the App Switcher) leave the floating windows alone, where they really are ([live]) or else where the poll
+     * last saw them.
+     */
     private fun applyFloating() {
-        // A floating window being moved by the finger, or settling after it: its hole follows that instead (see below).
-        if (dragged != null) { dragTarget(floating); return }
-        // The app being closed went into picture-in-picture: the card flies into it, and its window stays covered (no hole)
-        // until the card is there and it has settled.
-        val i = pipCoverPkg?.let { floatingPkgs.indexOf(it) } ?: -1
-        if (i >= 0 && i < floating.size) flyIntoFloating(floating[i])
-        val shown = if (i >= 0 && i < floating.size) floating.filterIndexed { k, _ -> k != i } else floating
-        cardWindow?.holes = shown
-        input?.setHoles(shown)
+        updateWatch()
+        val holes = ArrayList<RectF>(floating.size)
+        val touchHoles = ArrayList<RectF>(floating.size)
+        for (i in floating.indices) {
+            val pkg = floatingPkgs.getOrNull(i)
+            // The app being closed went into picture-in-picture: the card flies into it, and its window stays covered (no
+            // hole) until the card is there and it has settled.
+            if (pkg != null && pkg == pipCoverPkg) { flyIntoFloating(floating[i]); continue }
+            val at = pkg?.let { live[it] }
+            touchHoles += at?.let { RectF(it) } ?: floating[i]
+            holes += at?.let { r -> RectF(r).apply { liveInset[pkg]?.let { inset(it[0], it[1]) } } } ?: floating[i]
+        }
+        cardWindow?.holes = holes
+        // A window moved by the finger keeps that touch whatever the region says: the region follows once it is still.
+        pendingInputHoles = touchHoles
+        nav.removeCallbacks(inputHolesNow)
+        nav.postDelayed(inputHolesNow, INPUT_HOLES_MS)
         if (catching) cardWindow?.rootSurfaceControl?.setTouchableRegion(fullRegion())
+    }
+
+    private var pendingInputHoles: List<RectF> = emptyList()
+    private val inputHolesNow = Runnable { input?.setHoles(pendingInputHoles) }
+
+    // ---- where the floating windows really are (the shell's window watch)
+
+    /**
+     * The live frames (display px) of the watched apps' windows: SurfaceFlinger's window information through the shell
+     * ([WindowWatch]), which follows a mini player wherever SystemUI moves it (dragged, snapped, flung, resized, expanding).
+     * Its task's bounds, which the poll reads, change only once it has settled (Matheesha: the mini player was "absolutely
+     * broken" in the App Switcher: its hole was guessed from the finger and lagged, overshot and jumped).
+     */
+    private val live = HashMap<String, RectF>()
+    /** The apps watched now (the order the shell numbers them in). */
+    @Volatile private var watched: List<String> = emptyList()
+    /** The shell the watch was asked of. */
+    private var watchShell: IShellService? = null
+    /** When the closing app's live frame last changed (uptime ms). */
+    private var pipMovedAt = 0L
+    private var watchLogs = 0
+
+    /**
+     * Reports reach the nav thread later than they come when it is busy (the emulator: 57 ms on average, up to 225, queued
+     * one behind another; the hole trailed the mini player by 300-500 px): only the newest waiting one is taken.
+     */
+    private class LiveReport(val names: List<String>, val which: IntArray, val frames: FloatArray, val at: Long)
+    private val liveInbox = java.util.concurrent.atomic.AtomicReference<LiveReport?>(null)
+
+    private val windowWatch = object : dev.launcher.app.IWindowWatch.Stub() {
+        override fun onWindows(which: IntArray, frames: FloatArray, at: Long) {
+            if (liveInbox.getAndSet(LiveReport(watched, which, frames, at)) == null) nav.post(takeLive)
+        }
+    }
+
+    private val takeLive = Runnable {
+        val r = liveInbox.getAndSet(null) ?: return@Runnable
+        if (r.names === watched) onLive(r.which, r.frames, r.at)
+    }
+
+    /** Watches the floating windows' apps (and the app being closed into one) while the App Switcher or a close shows them. */
+    private fun updateWatch() {
+        if (phase == Phase.SWITCHER) switcherFloating.addAll(floatingPkgs)
+        val want = if (phase == Phase.SWITCHER || pipCoverPkg != null) (floatingPkgs + switcherFloating + listOfNotNull(pipCoverPkg)).distinct() else emptyList()
+        // Registered again with a new shell (one that restarted lost its watch), or once there is one.
+        val s = ShizukuLink.service
+        if (want == watched && (want.isEmpty() || watchShell === s)) return
+        watched = want
+        watchShell = s
+        live.clear()
+        liveExact.clear()
+        liveV.clear()
+        liveInset.clear()
+        liveTrail.clear()
+        livePressAt = 0L
+        s ?: return
+        tasksIo.execute {
+            try {
+                if (want.isEmpty()) s.stopWindows()
+                else {
+                    // Activity windows are named "<id> <package>/<activity>" (ours: only the mini player test app floats).
+                    val r = s.watchWindows(windowWatch, want.map { if (it == app.packageName) "$it/${PipTestActivity::class.java.name}" else "$it/" }.toTypedArray())
+                    if (r != "ok" && watchLogs++ < 3) AppLog.log("[nav] window watch failed: $r (the poll's places stand in)")
+                }
+            } catch (_: Throwable) { }
+        }
+    }
+
+    private fun onLive(which: IntArray, frames: FloatArray, at: Long) {
+        noteLive(at)
+        val now = HashMap<String, RectF>()
+        for (i in which.indices) {
+            val pkg = watched.getOrNull(which[i]) ?: continue
+            val r = RectF(frames[i * 4], frames[i * 4 + 1], frames[i * 4 + 2], frames[i * 4 + 3])
+            now[pkg] = now[pkg]?.apply { union(r) } ?: r
+        }
+        val cp = pipCoverPkg
+        if (cp != null && now[cp] != liveExact[cp]) pipMovedAt = SystemClock.uptimeMillis()
+        // How fast each moves (px/ms): its hole is drawn where it will be when our frame shows ([placeLive]). Taken over the
+        // reports of the last [LIVE_TRAIL_MS], timed by when they reached the shell (not us) and counted in whole refreshes:
+        // SystemUI moves a dragged mini player unevenly (a refresh without a step, then two), and a speed from one report
+        // to the next swung with it.
+        val f = frameMs()
+        val gap = at - liveAt
+        for ((pkg, r) in now) {
+            val was = liveExact[pkg]
+            val v = liveV.getOrPut(pkg) { FloatArray(2) }
+            val trail = liveTrail.getOrPut(pkg) { ArrayDeque() }
+            // Setting off from rest, the first step says nothing of the speed: SystemUI starts a drag with a jump of its touch
+            // slop (taken as a speed, the hole shot 30-60 px ahead of the mini player). The speed counts from there.
+            if (was == null || gap > LIVE_SETOFF_MS || was.width() != r.width() || was.height() != r.height()) trail.clear()
+            trail.addLast(LiveSample(at, r.centerX(), r.centerY()))
+            while (trail.size > 2 && at - trail.first().at > LIVE_TRAIL_MS) trail.removeFirst()
+            val o = trail.first()
+            if (trail.size >= 2) {
+                val dt = max(1, Math.round((at - o.at) / f)) * f
+                v[0] = (r.centerX() - o.x) / dt
+                v[1] = (r.centerY() - o.y) / dt
+            } else { v[0] = 0f; v[1] = 0f }
+            if (livePressAt != 0L && was != null && (r.centerX() != was.centerX() || r.centerY() != was.centerY())) livePressMoved = true
+        }
+        if (liveAt != 0L && gap in 0..LIVE_EVERY_MAX_MS) liveEvery = if (liveEvery == 0f) gap.toFloat() else liveEvery * 0.8f + gap * 0.2f
+        liveAt = at
+        liveExact.clear()
+        liveExact.putAll(now)
+        // In the App Switcher, a mini player grown to the whole screen is its app coming back (its expand button): the deck
+        // makes way.
+        if (phase == Phase.SWITCHER) for ((pkg, r) in now) if (pkg in switcherFloating && fullScreen(r)) switcherAppCameForward(pkg)
+        // The holes follow in the next frame (placed for the moment it is drawn).
+        startLiveFrames()
+    }
+
+    /** The live frames as reported, their speeds (px/ms) and when the last report came; [live] is where they show when we draw. */
+    private val liveExact = HashMap<String, RectF>()
+    private val liveV = HashMap<String, FloatArray>()
+    private class LiveSample(val at: Long, val x: Float, val y: Float)
+    private val liveTrail = HashMap<String, ArrayDeque<LiveSample>>()
+    /** When the newest report reached the shell (uptime ms), and how far apart they come (ms, smoothed). */
+    private var liveAt = 0L
+    private var liveEvery = 0f
+
+    /**
+     * How far each floating window's hole is drawn inside it (px, across and down) while it moves. The hole is drawn where
+     * the window should be by the time our frame shows; measured on the S24 (a mini player dragged in the App Switcher at
+     * ~1,100 px/s, the hole against the video frame by frame), that guess is right to within about a refresh either way, and
+     * a hole outside the window showed a strip of home behind it (4-20 px), while one a little inside is never seen: the
+     * deck's edge covers the window's for a moment instead. Follows the speed at once, eases back to nothing as it slows.
+     */
+    private val liveInset = HashMap<String, FloatArray>()
+    /**
+     * When a finger came down on a floating window in the App Switcher (uptime ms; 0: none). SystemUI starts a drag with a
+     * jump of its touch slop (~22 px on the S24) that the reports show only two or three refreshes later: from the press the
+     * hole is drawn [LIVE_PRESS_INSET_DP] inside (eased in, like a pressed button), until the window has moved and stopped
+     * (or for [LIVE_PRESS_MS] if it never moves: a tap opens its controls).
+     */
+    private var livePressAt = 0L
+    /** The pressed window has moved since (a drag): the press lasts until it is still. */
+    private var livePressMoved = false
+    private var liveFrameAt = 0L
+    private var liveFramesOn = false
+
+    private val liveFrame = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            val more = stepLive(frameTimeNanos)
+            applyFloating()
+            if (more) choreographer.postFrameCallback(this) else { liveFramesOn = false; liveFrameAt = 0L; logLive() }
+        }
+    }
+
+    // How the reports came while a window moved (logged once it is still): how often, and how long from the shell to us.
+    private var liveN = 0
+    private var liveFirstAt = 0L
+    private var liveLastAt = 0L
+    private var liveGapMax = 0L
+    private var liveLateSum = 0L
+    private var liveLateMax = 0L
+
+    private fun noteLive(at: Long) {
+        val late = SystemClock.uptimeMillis() - at
+        if (liveN == 0) liveFirstAt = at else liveGapMax = max(liveGapMax, at - liveLastAt)
+        liveLastAt = at
+        liveN++
+        liveLateSum += late
+        liveLateMax = max(liveLateMax, late)
+    }
+
+    private fun logLive() {
+        if (liveN >= 4) {
+            val span = liveLastAt - liveFirstAt
+            AppLog.log("[nav] live frames: $liveN reports over $span ms (every ${span / (liveN - 1)} ms, longest gap " +
+                "$liveGapMax ms), ${liveLateSum / liveN} ms from the shell to us (most $liveLateMax)")
+        }
+        liveN = 0; liveGapMax = 0L; liveLateSum = 0L; liveLateMax = 0L
+    }
+
+    private fun floatingPressed() {
+        if (phase != Phase.SWITCHER || liveExact.isEmpty()) return
+        livePressAt = SystemClock.uptimeMillis()
+        livePressMoved = false
+        startLiveFrames()
+    }
+
+    private fun startLiveFrames() {
+        if (liveFramesOn) return
+        liveFramesOn = true
+        choreographer.postFrameCallback(liveFrame)
+    }
+
+    /**
+     * One frame of the holes' motion: a window whose reports stopped ([LIVE_QUIET_FRAMES] refreshes without one, or two and
+     * a half of the usual gaps between two) has stopped: its lead runs out within a few refreshes instead of carrying the
+     * hole on past it; each inset follows its window's speed. True while anything still moves.
+     */
+    private fun stepLive(frameTimeNanos: Long): Boolean {
+        val f = frameMs()
+        val dt = if (liveFrameAt == 0L) f else ((frameTimeNanos - liveFrameAt) / 1e6f).coerceIn(1f, 50f)
+        liveFrameAt = frameTimeNanos
+        val nowMs = frameTimeNanos / 1_000_000L
+        val quiet = nowMs - liveAt > max(LIVE_QUIET_FRAMES * f, 2.5f * liveEvery)
+        val stop = exp(-dt / LIVE_STOP_MS)
+        val ease = 1f - exp(-dt / LIVE_INSET_EASE_MS)
+        val easeIn = 1f - exp(-dt / LIVE_PRESS_IN_MS)
+        val most = LIVE_INSET_MAX_DP * density
+        if (livePressAt != 0L && (if (livePressMoved) quiet else nowMs - livePressAt > LIVE_PRESS_MS)) livePressAt = 0L
+        val press = if (livePressAt != 0L) LIVE_PRESS_INSET_DP * density else 0f
+        var moving = livePressAt != 0L
+        for ((pkg, v) in liveV) {
+            if (quiet) for (k in 0..1) { v[k] *= stop; if (abs(v[k]) < LIVE_STILL_PX_MS) v[k] = 0f }
+            val ins = liveInset.getOrPut(pkg) { FloatArray(2) }
+            for (k in 0..1) {
+                // Motion takes the inset at once (the guess is off from that frame on), a press eases it in, both ease out.
+                val speed = min(abs(v[k]) * f * LIVE_INSET_FRAMES, most)
+                val want = max(speed, press)
+                var next = ins[k]
+                if (press > next) next += (press - next) * easeIn
+                next = max(next, speed)
+                if (next > want) next += (want - next) * ease
+                if (abs(next - want) < 0.3f) next = want
+                ins[k] = next
+                if (v[k] != 0f || next != 0f) moving = true
+            }
+        }
+        placeLive(nowMs)
+        return moving
+    }
+
+    /**
+     * Where each watched window shows when the frame drawn for [nowMs] (its vsync, uptime ms) does: on from the place
+     * reported at its speed, for as long as the report is old by then plus [LIVE_PIPE_FRAMES] refreshes (a mini player
+     * flung in the App Switcher left a strip of the wallpaper behind it and cut its front edge).
+     */
+    private fun placeLive(nowMs: Long) {
+        // A report that is late by more than two of the usual gaps is not carried further (the window is stopping).
+        val f = frameMs()
+        val age = min((nowMs - liveAt).toFloat(), 2f * max(f, liveEvery))
+        val ahead = (age + LIVE_PIPE_FRAMES * f).coerceIn(0f, LIVE_AHEAD_MAX_MS)
+        live.clear()
+        for ((pkg, r) in liveExact) {
+            val v = liveV[pkg]
+            live[pkg] = if (v == null) RectF(r) else RectF(r).apply { offset(v[0] * ahead, v[1] * ahead) }
+        }
+    }
+
+    /** One refresh of the display (ms). */
+    private fun frameMs(): Float =
+        1000f / ((try { wm?.defaultDisplay?.refreshRate } catch (_: Throwable) { null } ?: 60f).coerceAtLeast(30f))
+
+    /** The apps that were floating while this App Switcher was open (an app back from its mini player is one of them). */
+    private val switcherFloating = HashSet<String>()
+
+    private fun fullScreen(r: RectF) = r.width() >= sw * 0.9f && r.height() >= sh * 0.9f
+
+    /** An app came back to the screen from its mini player while the App Switcher was open: the deck fades away over it. */
+    private var switcherLeaving = false
+
+    private fun switcherAppCameForward(pkg: String) {
+        if (phase != Phase.SWITCHER || switcherLeaving) return
+        switcherLeaving = true
+        AppLog.log("[switcher] $pkg came back from its mini player: the switcher makes way")
+        val g = gen
+        root?.animate()?.alpha(0f)?.timed(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP))?.withEndAction { if (gen == g) hideCards() }?.start()
     }
 
     // ---- the app being closed goes into picture-in-picture (the mini player)
@@ -1184,115 +1505,29 @@ object GestureNav {
         applyFloating()
     }
 
-    /** Runs [then] once a mini player the close sent the card into has settled ([PIP_SETTLE_MS] after it came), at once otherwise. */
-    private fun whenPipSettled(g: Int, then: () -> Unit) {
-        val wait = if (pipFlight) floatingChangedAt + PIP_SETTLE_MS - SystemClock.uptimeMillis() else 0L
-        if (wait <= 0) { then(); return }
-        nav.postDelayed({ if (gen == g) then() }, wait)
-    }
-
-    // ---- a floating window (the mini player) moved in the App Switcher
-
     /**
-     * The floating window under a touch in the App Switcher (it takes the touch itself) and where it is shown now. SystemUI
-     * moves it with the finger without telling anyone its place until it has settled, so its hole follows the finger, read
-     * from the touchscreen by the shell, then springs to where it settles (Matheesha: it could not be moved there at all).
+     * Runs [then] once the app being closed has stopped moving on the screen: its mini player at rest in its corner (its live
+     * frame still for [PIP_STILL_MS]), or no mini player coming (its window still full-screen, or gone, for an app that does
+     * not go into one by itself); at the latest after [maxMs]. Android hides our windows as home starts over a turned display:
+     * started during the mini player's entry, that showed the video full size, turning and shrinking.
      */
-    private var dragged: RectF? = null
-    private var draggedFrom: RectF? = null
-    private var dragShown = RectF()
-    private var dragRef: FloatArray? = null
-    private var dragSettleUntil = 0L
-    private val dragSpring = arrayOf(RectF(), RectF())   // the spring's start and end
-    private val dragK by lazy { dev.launcher.app.motion.MotionValue(0f, 100f, { k -> placeDragged(k) }) }
-
-    private fun floatingTouched() {
-        if (phase != Phase.SWITCHER || floating.isEmpty()) return
-        val s = ShizukuLink.service ?: return
-        draggedFrom = null
-        dragRef = null
-        dragged = RectF()
-        try { s.watchTouch(dragStream) } catch (_: Throwable) { dragged = null }
-    }
-
-    private val dragStream = object : dev.launcher.app.ITouchStream.Stub() {
-        override fun onTouch(action: Int, x: Float, y: Float, timeNanos: Long) { nav.post { onDragRaw(action, x, y) } }
-    }
-
-    /** The touchscreen's (0..1, the panel's natural way up) [x], [y] on this display (px). */
-    private fun rawToScreen(x: Float, y: Float): FloatArray = when (displayRotation) {
-        android.view.Surface.ROTATION_90 -> floatArrayOf(y * sw, (1f - x) * sh)
-        android.view.Surface.ROTATION_270 -> floatArrayOf((1f - y) * sw, x * sh)
-        android.view.Surface.ROTATION_180 -> floatArrayOf((1f - x) * sw, (1f - y) * sh)
-        else -> floatArrayOf(x * sw, y * sh)
-    }
-
-    private fun onDragRaw(action: Int, x: Float, y: Float) {
-        if (dragged == null) return
-        val p = rawToScreen(x, y)
-        if (action == 2) {
-            val ref = dragRef
-            if (ref == null) {
-                // The first report: the floating window under the finger is the one it moves (the touch was elsewhere
-                // outside the switcher, e.g. the status bar: nothing to follow).
-                val from = floating.firstOrNull { RectF(it).apply { inset(-dp(12), -dp(12)) }.contains(p[0], p[1]) }
-                    ?: run { dragged = null; try { ShizukuLink.service?.stopTouch() } catch (_: Throwable) { }; return }
-                draggedFrom = from
-                dragRef = p
-                dragShown.set(from)
+    private fun whenPipSettled(g: Int, maxMs: Long, then: () -> Unit) {
+        val deadline = SystemClock.uptimeMillis() + maxMs
+        val waitsForPip = pipCoverPkg != null && pipCoverPkg == autoPipPkg
+        fun check() {
+            if (gen != g) return
+            val now = SystemClock.uptimeMillis()
+            val r = pipCoverPkg?.let { liveExact[it] }
+            val inPip = r != null && !fullScreen(r)
+            val settled = if (inPip) now - pipMovedAt >= PIP_STILL_MS else !waitsForPip
+            if (settled || now >= deadline) {
+                if (!settled) AppLog.log("[nav] the mini player had not settled in ${maxMs} ms: going on")
+                then()
                 return
             }
-            val from = draggedFrom ?: return
-            dragShown.set(from)
-            dragShown.offset(p[0] - ref[0], p[1] - ref[1])
-            dragK.stop()
-            showDragged()
-            return
+            nav.postDelayed({ check() }, 8)
         }
-        // Lifted: SystemUI takes it to the nearest side edge (kept within the screen); the hole goes there with it and to
-        // its real place as soon as that is known.
-        val from = draggedFrom ?: run { dragged = null; return }
-        val margin = kotlin.math.min(from.left, sw - from.right).coerceAtLeast(0f)
-        val w = dragShown.width()
-        val h = dragShown.height()
-        val left = if (dragShown.centerX() < sw / 2f) margin else sw - margin - w
-        val top = dragShown.top.coerceIn(kotlin.math.min(from.top, margin), kotlin.math.max(from.bottom, sh - margin) - h)
-        springDragged(RectF(left, top, left + w, top + h))
-        dragSettleUntil = SystemClock.uptimeMillis() + DRAG_SETTLE_MS
-        // Its real place comes from the poll: often until it has settled.
-        for (t in longArrayOf(80, 200, 350, 550, 800, DRAG_SETTLE_MS)) nav.postDelayed({ refreshFloating() }, t)
-        nav.postDelayed({ if (SystemClock.uptimeMillis() >= dragSettleUntil) { dragged = null; applyFloating() } }, DRAG_SETTLE_MS + 150)
-    }
-
-    /** The floating windows' places came while one settles: its hole springs to its new place. */
-    private fun dragTarget(list: List<RectF>) {
-        val from = draggedFrom ?: return
-        val now = list.firstOrNull { sameSize(it, from) } ?: return
-        if (dragRef != null && SystemClock.uptimeMillis() < dragSettleUntil) springDragged(now)
-    }
-
-    private fun springDragged(to: RectF) {
-        dragSpring[0].set(dragShown)
-        dragSpring[1].set(to)
-        dragK.snapTo(0f)
-        dragK.animateTo(1f, Motion.role(dev.launcher.app.motion.MotionTokens.SWITCHER_REFLOW), 0f)
-    }
-
-    private fun placeDragged(k: Float) {
-        val a = dragSpring[0]
-        val b = dragSpring[1]
-        dragShown.set(a.left + (b.left - a.left) * k, a.top + (b.top - a.top) * k, a.right + (b.right - a.right) * k, a.bottom + (b.bottom - a.bottom) * k)
-        showDragged()
-    }
-
-    private fun sameSize(a: RectF, b: RectF) = kotlin.math.abs(a.width() - b.width()) < 2f && kotlin.math.abs(a.height() - b.height()) < 2f
-
-    private fun showDragged() {
-        val from = draggedFrom ?: return
-        // The one it is (by its size: its place is what changes) where it shows now.
-        val list = floating.map { if (sameSize(it, from)) RectF(dragShown) else it }
-        cardWindow?.holes = list
-        input?.setHoles(list)
+        check()
     }
 
     /**
@@ -1403,9 +1638,10 @@ object GestureNav {
     /** Ends the card session: window invisible (kept), icon back, everything pending forgotten. */
     private fun hideCards() {
         catchTouchesForHome(false)
-        if (dragged != null) { dragged = null; dragK.stop() }
         pipFlight = false
-        if (pipCoverPkg != null) { pipCoverPkg = null; applyFloating() }
+        switcherLeaving = false
+        switcherFloating.clear()
+        pipCoverPkg = null
         // A cover asked for a close that never started home has nothing to hand over to.
         if (coverAsked && !homeStarted) TurnCover.dismiss()
         coverAsked = false
@@ -1416,6 +1652,7 @@ object GestureNav {
         waitingFor = null
         nav.removeCallbacks(waitTimeout)
         phase = Phase.IDLE
+        updateWatch()
         anim = Anim.NONE
         pendingFresh = false
         grabbedFull = false
@@ -1829,6 +2066,13 @@ object GestureNav {
     private fun onTasks(fresh: Boolean) {
         val f = fg ?: return
         if (!fresh || switchFromHome) return   // a switch from home keeps home as its card
+        if (phase == Phase.DRAG_SWITCH && runAwaitsLookup) {
+            // The run started before this lookup: built again from it, the neighbours put right while the finger still drags.
+            runAwaitsLookup = false
+            val o = older?.pkg
+            newRun(f)
+            if (switchList.getOrNull(1)?.pkg != o) { showNeighbours(); layoutSwitch(offset, switchScale) }
+        }
         if (phase == Phase.DRAG_HOME || phase == Phase.DRAG_SWITCH) {
             cardPkg = f.pkg
             // The latest picture at once, even if the app changed since: the card follows the finger from the first frame and
@@ -1995,6 +2239,8 @@ object GestureNav {
             // If it goes into picture-in-picture on the way, the card flies there (see flyIntoFloating): looked for soon.
             pipCoverPkg = pkg
             pipFlight = false
+            pipMovedAt = 0L
+            updateWatch()
             for (d in longArrayOf(90, 160, 240, 330, 450)) nav.postDelayed({ if (gen == g && pipCoverPkg != null) refreshFloating() }, d)
             val target = pkg?.let { HomeBridge.iconRect(it) }?.let { homeToScreen(it) }
             val size = target?.width() ?: (sw * 0.3f)
@@ -2043,23 +2289,19 @@ object GestureNav {
                     hiddenIconPkg = null
                     whenCoverShown(g) { shown ->
                         if (!shown) AppLog.log("[nav] no cover under the card in time: home starts anyway (the app may show while the display turns)")
-                        // A window that went floating during this close (the app into picture-in-picture: YouTube playing,
-                        // as soon as the cover covered it) is still moving into its corner under our card: Android hides
-                        // our windows as home starts, and the app's video showed full size, turning and shrinking. Home
-                        // starts once that has played out.
-                        val settle = if (floatingChangedAt >= coverAskedAt) floatingChangedAt + PIP_SETTLE_MS - SystemClock.uptimeMillis() else 0L
-                        if (settle > 0) AppLog.log("[nav] a window went floating during the close: home starts in $settle ms, when it has settled")
-                        nav.postDelayed({
-                            if (gen != g) return@postDelayed
+                        // The app going into picture-in-picture (YouTube playing, as soon as the cover covered it) may still
+                        // be moving into its corner under our card: Android hides our windows as home starts, and the app's
+                        // video showed full size, turning and shrinking. Home starts once it is still.
+                        whenPipSettled(g, PIP_SETTLE_MAX_MS) {
                             // The mini player takes over from the card where it is (before Android hides our windows).
                             releasePipCover()
                             holdingForTurn = g
                             nav.postDelayed({ if (holdingForTurn == g) { holdingForTurn = -1; AppLog.log("[nav] the display did not turn upright in time: the picture goes anyway"); if (gen == g) hideCards() } }, HOME_SHOWN_TIMEOUT_MS)
                             TurnCover.handedOver()
                             startHome()
-                        }, settle.coerceAtLeast(0L))
+                        }
                     }
-                } else if (pipFlight) whenPipSettled(g) {
+                } else if (pipFlight) whenPipSettled(g, PIP_SETTLE_MAX_MS) {
                     // Into the mini player: it takes over from the card once it has settled, and the picture of home goes
                     // once home has drawn a current frame.
                     releasePipCover()
@@ -2640,29 +2882,43 @@ object GestureNav {
         }
         // Continue the run if it is recent and we are on the app it left us in; else start a new run from the recents.
         val now = SystemClock.uptimeMillis()
-        val runGoesOn = now - switchAt < SWITCH_RUN_MS && switchList.getOrNull(switchIndex)?.pkg == cardPkg
-        if (!runGoesOn) {
-            val list = recentList.switchable().toMutableList()
-            val f = fg
-            if (f != null && list.firstOrNull()?.pkg != f.pkg) { list.removeAll { it.pkg == f.pkg }; list.add(0, f) }
-            switchList = list
-            switchIndex = 0
-        }
-        older = switchList.getOrNull(switchIndex + 1)
-        // Sideways only ever goes through apps, never back to home (a run that started on home keeps it out).
-        newer = switchList.getOrNull(switchIndex - 1)?.takeIf { it !== homeTask }
+        val runGoesOn = now - switchAt < SWITCH_RUN_MS && switchList.getOrNull(switchIndex)?.pkg == (cardPkg ?: lastFrontPkg)
+        // A quick flick turns sideways before the task lookup is back (the app in front not known yet): the new run is built
+        // from the previous gesture's order with the app the window events put in front, and again when the lookup comes
+        // (onTasks). Built from the old order alone, the app in front came second and "one older" switched to itself (S24).
+        runAwaitsLookup = !runGoesOn && fg == null
+        if (!runGoesOn) newRun(fg ?: lastFrontPkg?.let { p -> recentList.firstOrNull { it.pkg == p } })
         cur?.iconMix = 0f
         offset = 0f
         switchScale = 1f
         backdrop?.picture = null
         root?.setBackgroundColor(0xFF000000.toInt())   // what is revealed beside the cards
-        prv?.let { pc -> setCardContent(pc, older?.pkg, older?.let { images[it.pkg] }); pc.visibility = if (older != null) View.VISIBLE else View.GONE }
-        nxt?.let { nc -> setCardContent(nc, newer?.pkg, newer?.let { images[it.pkg] }); nc.visibility = if (newer != null) View.VISIBLE else View.GONE }
-        loadNeighbourImages()
+        showNeighbours()
         layoutSwitch(0f, 1f)
         maybeShow()
         stats.start()
     }
+
+    /** The run's apps from the newest recent, [front] (the app in front) first. */
+    private fun newRun(front: Task?) {
+        val list = recentList.switchable().toMutableList()
+        if (front != null && list.firstOrNull()?.pkg != front.pkg) { list.removeAll { it.pkg == front.pkg }; list.add(0, front) }
+        switchList = list
+        switchIndex = 0
+    }
+
+    /** The cards beside the current one: the run's next older and newer apps. */
+    private fun showNeighbours() {
+        older = switchList.getOrNull(switchIndex + 1)
+        // Sideways only ever goes through apps, never back to home (a run that started on home keeps it out).
+        newer = switchList.getOrNull(switchIndex - 1)?.takeIf { it !== homeTask }
+        prv?.let { pc -> setCardContent(pc, older?.pkg, older?.let { images[it.pkg] }); pc.visibility = if (older != null) View.VISIBLE else View.GONE }
+        nxt?.let { nc -> setCardContent(nc, newer?.pkg, newer?.let { images[it.pkg] }); nc.visibility = if (newer != null) View.VISIBLE else View.GONE }
+        loadNeighbourImages()
+    }
+
+    /** The current run was started before the task lookup of this gesture was back. */
+    private var runAwaitsLookup = false
 
     /** Home switch: the run is home followed by the recent apps (known once the task list has arrived). */
     private fun refreshHomeSwitch() {
@@ -2908,6 +3164,7 @@ object GestureNav {
         if (list.isEmpty()) return
         if (fromHome) { enterSwitcherFromHome(list); return }
         phase = Phase.SWITCHER
+        updateWatch()
         switcherHeld = true
         switcherHomeAsked = false
         nav.removeCallbacks(holdCheck)
@@ -3007,6 +3264,7 @@ object GestureNav {
         val d = deck ?: return
         gen++
         phase = Phase.SWITCHER
+        updateWatch()
         switcherHeld = true
         switcherHomeAsked = false
         nav.removeCallbacks(holdCheck)
@@ -3289,10 +3547,38 @@ object GestureNav {
     /** How long after the cover's first frame was drawn it counts as shown (ms): about a refresh at 60 Hz. */
     private const val COVER_FRAME_MS = 17L
     /**
-     * How long a window that went floating takes to settle (ms): Android's picture-in-picture entry ran 450-490 ms from when
-     * our poll first saw its bounds (S24, YouTube).
+     * How many refreshes after its vsync a frame of ours shows, counted against a window SurfaceFlinger moved as it reported
+     * it (the S24, a mini player flung in the App Switcher and measured against the recording: 3.3).
      */
-    private const val PIP_SETTLE_MS = 600L
+    private const val LIVE_PIPE_FRAMES = 3.3f
+    /** A window's speed is taken over its reports of this long (ms): about four refreshes at 120 Hz. */
+    private const val LIVE_TRAIL_MS = 34L
+    /** The furthest ahead a hole is ever drawn (ms of the window's motion). */
+    private const val LIVE_AHEAD_MAX_MS = 120f
+    /** The gaps between reports that count towards the usual one (ms; longer ones are pauses). */
+    private const val LIVE_EVERY_MAX_MS = 60L
+    /** A report after this long without one (ms) is a window setting off from rest (SystemUI skips up to ~30 ms mid-motion). */
+    private const val LIVE_SETOFF_MS = 50L
+    /** No report for this many refreshes (or two and a half of the usual gaps): the window has stopped, its lead runs out. */
+    private const val LIVE_QUIET_FRAMES = 3f
+    /** How fast a stopped window's lead runs out (ms, time constant). */
+    private const val LIVE_STOP_MS = 12f
+    /** Below this speed (px/ms) a window is still. */
+    private const val LIVE_STILL_PX_MS = 0.02f
+    /** How far a moving window's hole is drawn inside it: its motion over this many refreshes, at most [LIVE_INSET_MAX_DP]. */
+    private const val LIVE_INSET_FRAMES = 1.25f
+    private const val LIVE_INSET_MAX_DP = 8f
+    /** How quickly the inset goes once the window slows (ms, time constant). */
+    private const val LIVE_INSET_EASE_MS = 60f
+    /** A floating window pressed in the App Switcher: its hole this far inside it (dp), eased in (ms, time constant) ... */
+    private const val LIVE_PRESS_INSET_DP = 8f
+    private const val LIVE_PRESS_IN_MS = 30f
+    /** ... until it has moved and stopped, or for this long if it never moves (ms). */
+    private const val LIVE_PRESS_MS = 250L
+    /** How long the mini player's live frame stays still before it counts as settled (ms). */
+    private const val PIP_STILL_MS = 60L
+    /** The longest a close waits for the mini player to settle (ms): Android's entry ran ~450-490 ms on the S24 (YouTube). */
+    private const val PIP_SETTLE_MAX_MS = 1000L
     /** How long a close into home, started as its card landed, waits for the display to turn upright (ms). */
     private const val HOME_SHOWN_TIMEOUT_MS = 3000L
     /** How long the hidden status bar shows after a swipe from the top (ms; about as long as Android shows its bars). */
@@ -3310,8 +3596,8 @@ object GestureNav {
     private const val REMOVE_AFTER_MS = 650L    // a flicked card's app is closed once the deck is still
     private const val FLOATING_POLL_MS = 2500L  // floating windows (PiP, pop-ups) are looked up this often while idle
     private const val FLOATING_BUSY_MS = 300L   // ... and this often while cards show (a PiP window can be dragged)
-    /** How long a floating window let go in the App Switcher takes to settle (SystemUI's snap to the edge), ms. */
-    private const val DRAG_SETTLE_MS = 1100L
+    /** How long after the floating windows last changed the App Switcher's input window leaves them out where they are (ms). */
+    private const val INPUT_HOLES_MS = 80L
     private const val SWITCHER_PREFETCH = 3     // pictures fetched at the touch (the rest as the deck shows their cards)
     private const val IMAGES_MAX = 16          // pictures kept between gestures
     private const val SWITCHER_HOME_FLICK_DP = 900f     // a flick up faster than this after the hold goes home

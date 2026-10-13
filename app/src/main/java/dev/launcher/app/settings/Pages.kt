@@ -2626,6 +2626,9 @@ private fun PhonePage() {
         ActionRow("Status bar test", "An app that puts the bars in every state (full screen, landscape...)") {
             ctx.startActivity(Intent(ctx, dev.launcher.app.BarsTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
+        ActionRow("Mini player test", "An app that goes into a mini player when left, as a video does (a fixed picture)") {
+            ctx.startActivity(Intent(ctx, dev.launcher.app.PipTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
         ActionRow("Watchdog status", null) { dev.launcher.app.DevTools.watchdogStatus() }
         ActionRow("Shell identity", null) { dev.launcher.app.DevTools.identity() }
         ActionRow("Diagnose Shizuku restarts", "The system's log around them") { dev.launcher.app.DevTools.diagnoseRestarts() }

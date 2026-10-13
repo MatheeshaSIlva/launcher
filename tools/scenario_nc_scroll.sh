@@ -54,17 +54,17 @@ for i in $(seq 1 "$N"); do
   echo "== run $i"
   home
   reset; pull_nc; sleep 1.4; measure nc_open
-  need LauncherStatusBar "nc open"
+  need "LauncherStatusBar\|LauncherFocus" "nc open"
   # It opens collapsed: fanned out by the test hook, never by a tap (the front notification may be a real one).
   reset; "$ADB" "${D[@]}" shell am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do nc_expand >/dev/null
   sleep 1.4; measure nc_expand
-  need LauncherStatusBar "nc expanded"
+  need "LauncherStatusBar\|LauncherFocus" "nc expanded"
   reset; scroll_up; sleep 1.6; measure scroll_up
-  need LauncherStatusBar "after scroll up"
+  need "LauncherStatusBar\|LauncherFocus" "after scroll up"
   reset; scroll_down; sleep 1.6; measure scroll_down
-  need LauncherStatusBar "after scroll down"
+  need "LauncherStatusBar\|LauncherFocus" "after scroll down"
   reset; scroll_up; sleep 0.2; scroll_up; sleep 1.6; measure scroll_up_twice
-  need LauncherStatusBar "after scroll up twice"
+  need "LauncherStatusBar\|LauncherFocus" "after scroll up twice"
   reset; bar_up; sleep 1.4; measure nc_close
 done
 cleanup

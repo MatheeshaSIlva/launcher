@@ -202,7 +202,10 @@ copy it wholesale — port the working pieces cleanly. File map:
   the recorded root): a layered child is drawn in software inside the recording and the glass shader crashes the app.
 - **Glass over live content (`MaterialPainter.drawLive`: menus, search fields, the widget gallery's sheet) must never be drawn
   inside a clip or a smaller layer** (clipToOutline, a parent's clip, view alpha < 1): the effect's input is cut there and the
-  edges break. Use the paint form (`MaterialPainter.draw` over a backdrop image) for anything clipped.
+  edges break. Use the paint form (`MaterialPainter.draw` over a backdrop image) for anything clipped. With a content key
+  (what is behind kept blurred) its node covers the whole limit only for a surface that grows (the gallery's sheet); one
+  that keeps its size (the App Switcher's Clear All) keeps a node around itself, and an unchanged surface is drawn again
+  without a new effect (a new one re-runs the shader over the node: Clear All ran it over the whole screen every frame).
 - **Text-shaped glass needs a distance field, not a blurred mask**: a blur wide enough for a lens turns a whole thin stroke
   into "edge". Judge glass offline only with the app's own pipeline at the device's real size (`docs/design/clock_proto.py`).
 - **Glass and transforms**: a glass surface's uniforms are recorded into its display list; a parent moving it does not redraw
@@ -382,12 +385,35 @@ copy it wholesale — port the working pieces cleanly. File map:
   anything covers it). The cover over it must be opaque from its theme (`TurnCover`): translucent (even switched to opaque
   in onCreate), home behind it became visible sideways, got Android's fixed rotation early (our overlays hidden mid-flight)
   and was relaunched in landscape (black, then the cold-start arrival). And home starts only once the PiP entry has played
-  out (`PIP_SETTLE_MS` after our poll saw it): started earlier, Android hid our windows and its own PiP animation showed
-  the video full size, turning and shrinking. In the App Switcher a PiP lies under our windows: the input window leaves it
-  out of its touchable region and is told of touches there (FLAG_WATCH_OUTSIDE_TOUCH), and the card window's hole follows
-  the finger from the shell's raw stream (SystemUI does not report its place until it has settled). A close of an app that
-  will enter PiP (the shell reads its task's PiP parameters: auto-enter, source rect hint) flies the card into the mini
-  player, cropping in on the video, and keeps it covered until it has settled.
+  out (its live frame still, `whenPipSettled`): started earlier, Android hid our windows and its own PiP animation showed
+  the video full size, turning and shrinking. A close of an app that will enter PiP (the shell reads its task's PiP
+  parameters: auto-enter, source rect hint) flies the card into the mini player, cropping in on the video, and keeps it
+  covered until it has settled. The mini player's jump to its upright place at the display's turn is Android's and cannot
+  be animated by us: our windows are hidden from home's start until the turn (above), One UI's crossfade is the spin, a
+  seamless rotation moved it the same way.
+- **Where a mini player really is: SurfaceFlinger's window information** (`WindowWatch` in the shell, through
+  `android.window.WindowInfosListenerForTest`; its task's bounds change only once it has settled, the finger's raw stream
+  guessed). The S24 reports every refresh, 0-4 ms to us; the Android 17 emulator every 30-150 ms. Our hole shows ~3.3
+  refreshes after a report's state did, so it is drawn ahead at the window's speed (taken over ~4 refreshes of reports:
+  SystemUI moves a dragged PiP unevenly, and its drag starts with a jump of the touch slop that must not count as speed),
+  a little inside the window while it moves (a hole outside showed a strip of home), from the touch-down on
+  (FLAG_WATCH_OUTSIDE_TOUCH on the switcher's input window). SurfaceFlinger waits for every listener's answer before it
+  sends the next report, input's included: the shell's handler stays light. A busy nav thread queued reports (the
+  emulator: 57 ms late on average): only the newest waiting one is taken. Screen recording on the S24 halves the report
+  rate and adds missed refreshes: judge alignment from recordings, timing from unrecorded frame stats.
+- **Android refuses an app's own entry into picture-in-picture while another app's mini player is up** (auto-enter and
+  entry from a pause; `checkEnterPictureInPictureState`): test with one mini player at a time. The test app
+  (`PipTestActivity`, Phone, Developer, "Mini player test"; `am start -n dev.launcher.app/.PipTestActivity [--es orient
+  landscape] [--ez pip true]`) shows a fixed bright picture; "pip" enters at once (allowed while resumed: it replaces
+  another app's). Without seamless resizing Android shows the app's icon over a plain colour while a PiP resizes.
+- **A small view moved by its bounds makes Android record its parent again** (`View.setFrame` marks the parent
+  invalidated), and the renderer then redraws all of the parent: the mini player's hole, moved with
+  `setLeftTopRightBottom`, redrew the whole card window every frame (GPU 10.5 ms a frame on the S24). Move small things by
+  translation (a property of their own node): only where they were and are is drawn again (7.1 ms). Check the redrawn area
+  in a Perfetto trace ("Drawing L T R B" on the RenderThread).
+- **A quick flick turns sideways before the gesture's task lookup is back** (~50 ms): the run of quick switches was built
+  from the previous gesture's order without the app in front, and "one older" switched to the app already in front. It
+  now takes the app in front from the window events and is built again when the lookup comes.
 - **A start whose transition another handler plays never calls our remote transition** (a close into picture-in-picture:
   Android's PiP handler takes it). `NoAnimStarts` once read two such starts as "the system never hands ours over" and
   switched instant starts off for the session; it now remembers a phone where ours were seen called, and needs six silent

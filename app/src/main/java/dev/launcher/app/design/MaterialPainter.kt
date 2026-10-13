@@ -247,6 +247,20 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     /** With a content key: what is behind, blurred, kept from frame to frame (see [drawLive]). */
     private val behind by lazy { android.graphics.RenderNode("material-behind") }
     private var behindKey = NO_CONTENT_KEY
+    // The last kept surface drawn (see drawLive): what it was drawn with, and whether its shape has grown since.
+    private var lastM: Material? = null
+    private val lastShape = android.graphics.RectF()
+    private var lastRadius = 0f
+    private var lastAlpha = 0f
+    private var lastPress = 0f
+    private var lastUnder: List<Fill> = emptyList()
+    private val lastLimit = android.graphics.RectF()
+    private var lastUnit = 0f
+    private var lastDark = 0f
+    private var lastRadii: FloatArray? = null
+    private var lastKeepW = -1f
+    private var lastKeepH = -1f
+    private var keepWhole = false
     private val behindBounds = android.graphics.Rect()
     private var behindRadius = -1f
     private var behindScale = 1f
@@ -271,6 +285,16 @@ class MaterialPainter private constructor(private val unitPx: Float) {
                  contentKey: Long = NO_CONTENT_KEY, radii: FloatArray? = null, drawBehind: (Canvas) -> Unit): Boolean {
         if (!canvas.isHardwareAccelerated || shape.isEmpty || alpha <= 0.003f) return false
         val u = unitPx
+        val keep = contentKey != NO_CONTENT_KEY && limit != null
+        // The same kept surface as the last time (its shape, look, fade, press, and what is behind it): drawn again as it was.
+        // A new effect object makes the renderer run the shader over the node again: Clear All did, on every frame the App
+        // Switcher's deck moved under it (traced on the S24).
+        if (keep && node.hasDisplayList() && contentKey == behindKey && m === lastM && shape == lastShape && radius == lastRadius &&
+            alpha == lastAlpha && press == lastPress && under == lastUnder && limit == lastLimit && u == lastUnit &&
+            Appearance.dark == lastDark && (radii?.contentEquals(lastRadii) ?: (lastRadii == null))) {
+            canvas.drawRenderNode(node)
+            return true
+        }
         val sigma = m.frostNowPt() * u / 2f
         val bend = (m.lens?.depthPt ?: 0f) * (m.lens?.refraction ?: 0f) * u
         val margin = maxOf(sigma * 3f + bend, reach(m)) + u
@@ -278,11 +302,13 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         var t = shape.top - margin
         var r = shape.right + margin
         var b = shape.bottom + margin
-        val keep = contentKey != NO_CONTENT_KEY && limit != null
-        // Kept content: the surface's node as large as what is behind (all of [limit]) and never resized while the surface
-        // moves: a node around the shape (the gallery's sheet growing as it rose) was a new layer, a new GPU image, at every
-        // frame. Outside the shadows' reach the shader returns at once.
-        if (keep) { l = limit!!.left; t = limit.top; r = limit.right; b = limit.bottom }
+        // Kept content under a surface that grows (the gallery's sheet as it rises): the surface's node as large as what is
+        // behind (all of [limit]) and never resized: a node around the growing shape was a new layer, a new GPU image, at
+        // every frame (outside the shadows' reach the shader returns at once). One that keeps its size (Clear All) keeps a
+        // node around itself: screen-sized, its shader ran over every pixel of the screen each frame.
+        if (keep && lastKeepW >= 0f && (kotlin.math.abs(shape.width() - lastKeepW) > 0.5f || kotlin.math.abs(shape.height() - lastKeepH) > 0.5f)) keepWhole = true
+        if (keep) { lastKeepW = shape.width(); lastKeepH = shape.height() }
+        if (keep && keepWhole) { l = limit!!.left; t = limit.top; r = limit.right; b = limit.bottom }
         else if (limit != null) { l = maxOf(l, limit.left); t = maxOf(t, limit.top); r = minOf(r, limit.right); b = minOf(b, limit.bottom) }
         val left = kotlin.math.floor(l).toInt()
         val top = kotlin.math.floor(t).toInt()
@@ -354,6 +380,10 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         val fx = RenderEffect.createRuntimeShaderEffect(shader, "backdrop")
         node.setRenderEffect(if (keep || br < 0.5f) fx else RenderEffect.createChainEffect(fx, RenderEffect.createBlurEffect(br, br, Shader.TileMode.CLAMP)))
         canvas.drawRenderNode(node)
+        if (keep) {
+            lastM = m; lastShape.set(shape); lastRadius = radius; lastAlpha = alpha; lastPress = press; lastUnder = under
+            lastLimit.set(limit!!); lastUnit = u; lastDark = Appearance.dark; lastRadii = radii?.copyOf()
+        } else lastM = null
         // Back to what paint draws expect (the backdrop image, depth and reveal are set again by their own calls).
         shader.setFloatUniform("plain", if (backdrop == null) 1f else 0f)
         return true

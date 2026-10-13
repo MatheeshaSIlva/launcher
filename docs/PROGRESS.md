@@ -1823,3 +1823,46 @@ Not themable yet: the glass clock's numerals (GlassDrawable), layouts (step 6 an
 Checked on the S24 too (Control Center over Samsung's live blur, home): solid modules over the blurred background, the
 accent green. A first version turned the "on" plate green too: a toggle's own colour (rotation lock's red) then sat on
 green; the theme keeps iOS's white plate.
+
+## The mini player, round 5, and a performance pass (2026-10-13, S24)
+
+Matheesha: the mini player's move from landscape to portrait is not animated; the mini player in the App Switcher is
+"absolutely broken"; fix every other issue found, test everything again, look for performance issues.
+
+- **The mini player in the App Switcher.** Its hole follows SurfaceFlinger's window information (`WindowWatch`; the
+  finger-following of round 3 guessed and jumped). On the S24 a report comes every refresh (every 8-9 ms, 0-4 ms to our
+  thread). Measured against a recording of the test app's fixed picture, frame by frame (`holelag`): the hole's centre is
+  2-3 px from the mini player's while it moves (spread 7-10 px at 500-2,000 px/s), drawn a little inside it while it
+  moves, so no strip of home shows beside it; from the touch-down the hole eases inside (it hides the touch slop's jump).
+  A recording halves the report rate; the start of a fling that is not held first still trails for 2-3 refreshes.
+- **Its cost.** Moving the hole made the card window draw whole every frame (GPU 10.5-10.9 ms median a frame, 110 of 120
+  frames over 8.3 ms): the hole is now a small view moved by translation, only the area it leaves and enters is drawn again
+  (7.1 ms median, 1 frame of 120 over 8.3 ms, none late). Clear All's glass ran its shader over a screen-sized node every
+  frame the deck moved: now a node around the button (652 x 423 px) drawn again unchanged while nothing about it changes.
+- **The move at the display's turn cannot be animated by us**: the mini player is Android's window, and from the moment
+  home starts until the display has turned Android hides every window of ours; One UI's crossfade is the spin, a seamless
+  rotation moved it the same way. It jumps at the cut (One UI's own home not compared).
+- **Found and fixed: quick switch to the app already in front.** A quick flick sideways can come before the gesture's task
+  lookup (~50 ms): the run was built from the previous gesture's order and "one older" was the app in front (the switch
+  scenario stopped on its 4th round). Now 16 switches in a row land right, 0-2 missed refreshes each.
+- **Test tools.** `PipTestActivity` (Phone, Developer, "Mini player test"): an app with a mini player showing a fixed
+  bright picture, entered when left (as YouTube) or at once (`--ez pip true`), portrait or landscape. Android refuses an
+  app's own entry while another app's mini player is up. The scenario scripts' icon templates (tools/shots, not in git)
+  had to be cut again (the App Library and dock look changed); `scenario_nc_scroll.sh` accepts the focus window.
+
+Performance pass (S24, frame stats of what the screen showed; missed refreshes per step, GPU median ms):
+
+| scenario | result |
+| --- | --- |
+| quick switch (16) | 0-2 missed each; GPU 2-3 (one run 8) |
+| App Library launch / close (3+3) | launches 0; closes 0-1 |
+| Spotlight close (3) | 0-1; GPU 2-2.6 |
+| home's motion | page to App Library 2-3; library scroll, list open/close 0-1; folder open 0 (GPU 12-16); folder close 0-1; App Library to page 1 by the bar 1-6; by a swipe 0; Spotlight 0; pull on home 0 (GPU 12) |
+| launches and closes | folder, dock, grabbed launch, sideways from home: 0-1 |
+| App Switcher | open over an app 2-5 (GPU 10-11, one 27-34 ms frame); a card opened 0-2 (GPU 12-16); home 0; open over home 0 (GPU 6-7); long deck scroll 1; flick away 0 |
+| shade (3 runs) | Control Center open/close/edit 0-1 (edit out GPU 13-14); Notification Center open/close 0; banner 0-1 |
+| Notification Center, long list (3 runs) | open 0; stack fanning out **2-18** (GPU 10-16); scroll 0; close 0 |
+
+Not fixed, next for the performance work: the stack fanning out (worse than on 10-08: 0-2), the App Switcher opening over
+an app and a card opening from it (GPU over the 8.3 ms a frame has; its first frames import the cards' pictures, ~8-12 ms
+on the render thread), page to App Library (2-3). Thermal status 0 throughout (skin 37-38 C).

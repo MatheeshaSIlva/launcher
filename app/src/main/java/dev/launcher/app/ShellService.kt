@@ -299,6 +299,10 @@ class ShellService : IShellService.Stub() {
 
     private fun readInt(o: Any, name: String): Int? = try { o.javaClass.getField(name).get(o) as? Int } catch (_: Throwable) { null }
 
+    override fun watchWindows(listener: IWindowWatch, names: Array<String>): String = WindowWatch.watch(listener, names)
+
+    override fun stopWindows() = WindowWatch.stop()
+
     override fun pipHint(pkg: String): String = try {
         val atm = systemService("activity_task", ATM_STUB)
         val ms = atm.javaClass.methods.filter { it.name == "getTasks" }

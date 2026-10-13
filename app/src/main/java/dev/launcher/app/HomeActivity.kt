@@ -79,8 +79,10 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
             layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
             // Home is upright only: coming from an app in landscape it is shown turned to the phone's natural way up (Android's
             // fixed rotation, our picture of it under the closing card: as iOS) and the display turns after. Home already
-            // looks right then: the turn is a cut, not Android's rotation (a screenshot spun with black corners). (Seamless
-            // rotation instead left our overlays waiting to redraw for 2 s on the Android 17 emulator.)
+            // looks right then: the turn is a cut, not Android's rotation (a screenshot spun with black corners). A mini player
+            // jumps at the cut to the place Android gives it upright; nothing of ours can move it: One UI plays a crossfade
+            // as the same spin, and a seamless rotation moved it the same way. (Seamless rotation also left our overlays
+            // waiting to redraw for 2 s on the Android 17 emulator.)
             rotationAnimation = WindowManager.LayoutParams.ROTATION_ANIMATION_JUMPCUT
         }
         // Bars that "show transiently by swipe" (nothing is hidden on home, so nothing changes on screen): with the default

@@ -22,7 +22,8 @@ import kotlin.math.ceil
  *
  * Floating windows (picture-in-picture: the mini player) are left out of it ([setHoles]): they lie under our windows, and
  * the card window leaves holes where they are, so they show and take their own touches (Matheesha: the mini player could
- * not be moved in the App Switcher). A touch that lands there is reported to [onOutside] (it starts the mini player's drag).
+ * not be moved in the App Switcher). A finger that comes down there is reported to [onOutside] (nothing else: Android
+ * tells a window only that a touch went down outside it).
  */
 class SwitcherInput(private val onEvent: (MotionEvent) -> Unit, private val onOutside: () -> Unit = {}) {
     private val thread = HandlerThread("switcher-input").apply { start() }

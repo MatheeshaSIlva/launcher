@@ -148,6 +148,18 @@
             android:taskAffinity="dev.launcher.app.barstest"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
 
+        <!-- Test only: an app with a mini player showing a fixed picture (the mini player's tests; PipTestActivity). -->
+        <activity
+            android:name=".PipTestActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:exported="true"
+            android:label="PiP test"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:taskAffinity="dev.launcher.app.piptest"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
         <!-- Component previews for visual checks (adb shell am start -n dev.launcher.app/.PreviewActivity). Shows UI only. -->
         <activity
             android:name=".PreviewActivity"
