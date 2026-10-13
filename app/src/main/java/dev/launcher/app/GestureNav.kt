@@ -568,7 +568,7 @@ object GestureNav {
         val kept = pkg?.let { images[it] }
         if (shadeLogs < 6) { shadeLogs++; AppLog.log("[shade] behind: $pkg, kept picture ${if (kept != null) "${SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L)} ms old" else "none"}${if (pkg != null && keptIsStale(pkg)) " (stale)" else ""}") }
         if (kept != null) then(dev.launcher.app.shade.BackdropSource.App(kept))
-        val fresh = kept == null || pkg == null || keptIsStale(pkg) || SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L) > 2_000L
+        val fresh = kept == null || keptIsStale(pkg) || SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L) > 2_000L
         val s = ShizukuLink.service ?: run { if (kept == null) then(null); return }
         if (!fresh) return
         tasksIo.execute {
@@ -2494,7 +2494,7 @@ object GestureNav {
                     HomeBridge.afterHomeDraw { nav.post { if (gen == g) hideCards() } }
                 } else whenHomeDrawn(g) {
                     // The picture of home is on top of the real one: swap only once the real home has drawn.
-                    if (target != null && pkg != null) {
+                    if (target != null) {
                         // The real icon back first; the card (now the icon) goes only once home has drawn a frame with it:
                         // never a frame with neither (a fixed delay left a gap whenever home's draw came late).
                         hiddenIconPkg = null
