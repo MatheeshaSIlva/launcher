@@ -37,7 +37,8 @@ object Badges {
         }
         // A notification that alerts (high importance), for checking banners:
         //   adb shell am broadcast -a dev.launcher.app.TEST_NOTIFY -p dev.launcher.app --es title T --es text X [--ei id N]
-        //   (... --ei id N --ez cancel true: removes it again; --es open PACKAGE: a tap opens that app)
+        //   (... --ei id N --ez cancel true: removes it again; --es open PACKAGE: a tap opens that app; --ez avatar true:
+        //   with a picture, wider than tall, to check how pictures are cropped and rounded)
         val notify = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: android.content.Intent) {
                 val nm = c.getSystemService(android.app.NotificationManager::class.java)
@@ -49,6 +50,7 @@ object Badges {
                     .setContentText(i.getStringExtra("text") ?: "A notification that alerts.")
                     .setAutoCancel(true)
                     .apply {
+                        if (i.getBooleanExtra("avatar", false)) setLargeIcon(android.graphics.drawable.Icon.createWithBitmap(testPicture()))
                         val open = i.getStringExtra("open")?.let { c.packageManager.getLaunchIntentForPackage(it) }
                         // Made like a current app's (target SDK 35+): its creator does not lend the right to start
                         // activities from the background, so a test shows whether our tap alone brings the app forward.
@@ -69,6 +71,16 @@ object Badges {
         // Senders must hold DUMP: adb's shell does, other apps cannot.
         if (android.os.Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(r, f, android.Manifest.permission.DUMP, null, Context.RECEIVER_EXPORTED)
         else ctx.registerReceiver(r, f, android.Manifest.permission.DUMP, null)
+    }
+
+    /** A test notification's picture: a gradient 4:3 wide, orange to blue (a crop shows as the ends cut off). */
+    private fun testPicture(): android.graphics.Bitmap {
+        val b = android.graphics.Bitmap.createBitmap(160, 120, android.graphics.Bitmap.Config.ARGB_8888)
+        val p = android.graphics.Paint().apply {
+            shader = android.graphics.LinearGradient(0f, 0f, 160f, 0f, 0xFFFF6B35.toInt(), 0xFF3366FF.toInt(), android.graphics.Shader.TileMode.CLAMP)
+        }
+        android.graphics.Canvas(b).drawRect(0f, 0f, 160f, 120f, p)
+        return b
     }
 
     /** The channel of the adb test notifications (the only notifications of ours that show banners). */

@@ -4,12 +4,9 @@ import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapShader
 import android.graphics.Canvas
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Shader
 import android.text.TextPaint
 import android.text.TextUtils
 import android.view.HapticFeedbackConstants
@@ -17,6 +14,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import dev.launcher.app.R
+import dev.launcher.app.components.MenuPainter
+import dev.launcher.app.components.MenuSpec
 import dev.launcher.app.design.Design
 import dev.launcher.app.design.Scale
 import dev.launcher.app.layout.Element
@@ -85,7 +84,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val small = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 500); color = 0xB3FFFFFF.toInt() }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
-    private val artPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val artwork = dev.launcher.app.design.RoundedBitmaps(capacity = 2)
     private val rect = RectF()
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
 
@@ -122,12 +121,13 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             if (c == Control.BRIGHTNESS) host.state.setBrightness(v, final) else host.state.setVolume(v, final)
             this@ControlCenterView.invalidate()
         }
-        override fun expandProgress(k: Float) { host.editProgress(max(editK.value.coerceIn(0f, 1f), k)); this@ControlCenterView.invalidate() }
+        override fun expandProgress(k: Float) { syncEditProgress(k); this@ControlCenterView.invalidate() }
         override fun closeAll() = host.close()
     })
 
-    /** Back: an expanded module goes back into place first. */
+    /** Back: a control's menu closes, an expanded module goes back into place first. */
     fun onBack(): Boolean {
+        if (menuOpen) { closeMenu(); return true }
         if (!expanded.isOpen) return false
         expanded.close()
         return true
@@ -337,7 +337,11 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         return local * local * (3f - 2f * local)
     }
 
-    private val editK: MotionValue = MotionValue(0f, 100f, { host.editProgress(max(it.coerceIn(0f, 1f), expanded.presence)); invalidate() })
+    private val editK: MotionValue = MotionValue(0f, 100f, { syncEditProgress(); invalidate() })
+
+    /** The status row fades with edit mode, an expanded module ([ex]: how present it is) and a control's menu. */
+    private fun syncEditProgress(ex: Float = expanded.presence) =
+        host.editProgress(maxOf(editK.value.coerceIn(0f, 1f), ex, menuK.value.coerceIn(0f, 1f)))
     val editing get() = editK.target > 0.5f
 
     fun enterEdit() {
@@ -350,7 +354,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     fun exitEdit(animate: Boolean = true) {
-        if (!animate) { editK.snapTo(0f); host.editProgress(0f); return }
+        if (!animate) { editK.snapTo(0f); syncEditProgress(); return }
         if (!editing) return
         editK.animateTo(0f, EDIT)
         save()
@@ -360,6 +364,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     fun onClosed() {
         closeK.snapTo(0f)
         expanded.dismissNow()
+        menuOf = null; menuFromHold = false; menuPressed = -1
+        menuK.snapTo(0f)
         exitEdit(animate = false)
         cancelTouch()
         for (a in anims.values) { a.press.snapTo(0f); a.subPress.snapTo(0f); a.lift.snapTo(0f) }
@@ -430,12 +436,15 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val edit = editK.value.coerceIn(0f, 1f)
         val top = gridTop()
         val ex = expanded.presence
+        val mk = if (menuOf != null) menuK.value.coerceIn(0f, 1f) else 0f
         // Not in landscape (iOS 27: one status line there, no "+" nor power).
-        if (!landscape) drawTopButtons(c, (1f - edit) * (1f - ex))
+        if (!landscape) drawTopButtons(c, (1f - edit) * (1f - ex) * (1f - mk))
         if (edit > 0.001f) drawEmptySlots(c, top, edit)
         else if (warmSlots && slotsNode.hasDisplayList()) { slotsNode.setAlpha(0.003f); c.drawRenderNode(slotsNode); warmSlots = false }
-        for (a in anims.values) if (a !== dragged) drawItem(c, a, top, edit)
+        for (a in anims.values) if (a !== dragged && a !== menuOf) drawItem(c, a, top, edit)
         dragged?.let { drawItem(c, it, top, edit) }
+        // A held control with its menu: above the others, the menu above it.
+        menuOf?.let { drawItem(c, it, top, edit); drawMenu(c) }
         if (edit > 0.001f) drawAddButton(c, edit)
         expanded.draw(c, presence())
     }
@@ -602,6 +611,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         // A module grown into its large form: the others fade away, and it gives way to its large form at once.
         val ex = expanded.presence
         if (ex > 0f) out.alpha *= if (expanded.control == it.control) (1f - ex * 6f).coerceAtLeast(0f) else 1f - ex
+        // A control's menu: the held control lifts a little, the others fade back.
+        val mk = menuK.value.coerceIn(0f, 1f)
+        if (mk > 0f && menuOf != null) { if (a === menuOf) out.scale *= 1f + MENU_LIFT * mk else out.alpha *= 1f - MENU_FADE * mk }
         return true
     }
 
@@ -897,16 +909,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         rect.set(ax, ay, ax + artSize, ay + artSize)
         val art = m.art
         if (art != null && !art.isRecycled) {
-            val sh = BitmapShader(art, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-            val mat = Matrix()
-            val s = max(artSize / art.width, artSize / art.height)
-            mat.setScale(s, s)
-            mat.postTranslate(ax + (artSize - art.width * s) / 2f, ay + (artSize - art.height * s) / 2f)
-            sh.setLocalMatrix(mat)
-            artPaint.shader = sh
-            artPaint.alpha = (255 * alpha).toInt()
-            c.drawRoundRect(rect, artR, artR, artPaint)
-            artPaint.shader = null
+            artwork.draw(c, art, rect, artR, alpha)
         } else {
             host.surfaces.well(c, ax, ay, artSize, artSize, artR, recX + ax, recY + ay, 1f, alpha)
             glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), sf.pt(CcTokens.WELL_SYMBOL), alpha(Design.color(CcTokens.MEDIA_PLACEHOLDER), alpha))
@@ -997,7 +1000,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     // ------------------------------------------------------------------ touch
 
-    private enum class Mode { NONE, PRESS, SLIDER, CLOSE, EMPTY, BUTTON, EDIT_PRESS, DRAG, RESIZE, REMOVE, ADD, EDIT_EMPTY }
+    private enum class Mode { NONE, PRESS, SLIDER, CLOSE, EMPTY, BUTTON, EDIT_PRESS, DRAG, RESIZE, REMOVE, ADD, EDIT_EMPTY, MENU }
     private var mode = Mode.NONE
     private var downX = 0f
     private var downY = 0f
@@ -1063,6 +1066,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (menuOf != null && (mode == Mode.MENU || menuK.target > 0f)) { menuTouch(e); return true }
         if (expanded.isOpen) { expanded.onTouch(e); return true }
         val x = e.x
         val y = e.y
@@ -1097,7 +1101,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun downNormal(x: Float, y: Float) {
         // The top buttons.
         if (!landscape && hypot(x - buttonX(0), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 0; plusPress.animateTo(1f, PRESS_IN); return }
-        if (!landscape && hypot(x - buttonX(1), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 1; powerPress.animateTo(1f, PRESS_IN); return }
+        // Power: held until the phone vibrates, as iOS's (a tap does nothing: the power menu is not a tap away).
+        if (!landscape && hypot(x - buttonX(1), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 1; powerPress.animateTo(1f, PRESS_IN); postDelayed(longPress, LONG_MS); return }
         val a = hit(x, y)
         if (a == null) {
             mode = Mode.EMPTY
@@ -1159,7 +1164,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             }
             Mode.CLOSE -> host.closeDrag(1, dy, 0f)
             Mode.SLIDER -> slide(sliding ?: return, y, final = false)
-            Mode.BUTTON -> if (far) { plusPress.animateTo(0f, PRESS_OUT); powerPress.animateTo(0f, PRESS_OUT); mode = Mode.NONE }
+            Mode.BUTTON -> if (far) { removeCallbacks(longPress); plusPress.animateTo(0f, PRESS_OUT); powerPress.animateTo(0f, PRESS_OUT); mode = Mode.NONE }
             Mode.ADD -> if (far) { addPress.animateTo(0f, PRESS_OUT); mode = Mode.NONE }
             Mode.EDIT_PRESS -> if (far) {
                 val a = touched ?: return
@@ -1192,7 +1197,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             Mode.EMPTY -> if (!longFired) host.close()
             Mode.BUTTON -> {
                 plusPress.animateTo(0f, PRESS_OUT); powerPress.animateTo(0f, PRESS_OUT)
-                if (button == 0) enterEdit() else host.powerMenu()
+                if (button == 0) enterEdit()
             }
             Mode.ADD -> { addPress.animateTo(0f, PRESS_OUT); host.openGallery() }
             Mode.REMOVE -> touched?.let { remove(it) }
@@ -1215,13 +1220,21 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         longFired = true
         when (mode) {
             Mode.EMPTY -> { mode = Mode.NONE; enterEdit() }
+            Mode.BUTTON -> if (button == 1) {
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                powerPress.animateTo(0f, PRESS_OUT)
+                mode = Mode.NONE
+                host.powerMenu()
+            }
             Mode.PRESS -> {
                 val a = touched ?: return
                 performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 a.press.animateTo(0f, PRESS_OUT); a.subPress.animateTo(0f, PRESS_OUT)
                 val st = host.state
-                // A module grows into its large form (iOS 18+); anything else opens its settings.
+                // A module grows into its large form (iOS 18+), a control with choices shows them (the camera's: iOS's
+                // "touch and hold to take a selfie, record a video, or take a photo"); anything else opens its settings.
                 if (expandFrom(a)) { mode = Mode.NONE; return }
+                if (a.sub == null && openMenu(a)) { mode = Mode.MENU; menuFromHold = true; return }
                 val ctl = (a.sub as? Control) ?: a.item.control
                 when (ctl.kind) {
                     Control.Kind.MEDIA -> if (host.media.open()) host.close()
@@ -1260,8 +1273,116 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                     SUB_NEXT -> m.next()
                     SUB_PREV -> m.previous()
                     SUB_OUTPUT -> host.launch(Intent(android.provider.Settings.Panel.ACTION_VOLUME))
-                    else -> if (m.open()) host.close()
+                    // The player itself: it grows into the large player, as iOS's does (its artwork there opens the app).
+                    else -> if (!expandFrom(a) && m.open()) host.close()
                 }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ a control's menu (the camera held)
+
+    /**
+     * A control's menu, as iOS's held Camera shows Take Photo, Take Selfie and Record Video: it grows out of the held
+     * control, which lifts a little while the others fade back. With the finger still down a row is chosen by sliding onto
+     * it and lifting there; lifted anywhere else the menu stays for a tap. A tap outside it, or Back, closes it.
+     */
+    private var menuOf: Anim? = null
+    private var menuPainter: MenuPainter? = null
+    private var menuU = 0f
+    private val menuK: MotionValue = MotionValue(0f, 100f, { syncEditProgress(); invalidate() }) {
+        if (menuK.value <= 0.001f) { menuOf = null; menuPressed = -1; invalidate() }
+    }
+    private var menuPressed = -1
+    /** This touch is the finger that held the control (its lift away from a row keeps the menu). */
+    private var menuFromHold = false
+    private val menuAnchor = RectF()
+    private val menuBounds = RectF()
+    private val menuAt = FloatArray(2)
+    private val menuSymbols = HashMap<Int, android.graphics.drawable.Drawable>()
+
+    private val menuOpen get() = menuOf != null && menuK.target > 0f
+
+    private fun menuSymbol(res: Int) = menuSymbols.getOrPut(res) { context.getDrawable(res)!!.mutate() }
+
+    /** What [a]'s control offers when held: the camera's modes this phone's camera app takes. None: it has no menu. */
+    private fun menuItems(a: Anim): List<MenuPainter.Item> {
+        if (a.item.control != Control.CAMERA) return emptyList()
+        val st = host.state
+        fun row(label: String, symbol: Int, c: Control): MenuPainter.Item? {
+            val i = st.intentFor(c)?.takeIf { st.resolves(it) } ?: return null
+            return MenuPainter.Item(label, symbol = menuSymbol(symbol)) { closeMenu(); host.launch(i) }
+        }
+        return listOfNotNull(row("Take Photo", R.drawable.sym_camera, Control.CAMERA), row("Take Selfie", R.drawable.sym_selfie, Control.SELFIE),
+            row("Record Video", R.drawable.sym_video, Control.VIDEO))
+    }
+
+    /** Opens [a]'s menu, growing out of it where it is drawn now. False if it has none. */
+    private fun openMenu(a: Anim): Boolean {
+        val items = menuItems(a)
+        if (items.isEmpty()) return false
+        val p = menuPainter?.takeIf { menuU == u } ?: MenuPainter(MenuSpec.CC, u).also { menuPainter = it; menuU = u }
+        placementOf(a, gridTop(), editK.value, place)
+        menuAnchor.set(place.left, place.top, place.left + place.w, place.top + place.h)
+        // Within the grid's columns: lined up with the control's outer edge when it is at a side, as iOS's menus hang.
+        menuBounds.set(gridLeft, 40f * u, gridLeft + shownCols * cell + (shownCols - 1) * gap, height - 24f * u)
+        p.layout(items, menuAnchor, menuBounds, Design.num(CcTokens.MENU_GAP), fromLeft = true)
+        menuOf = a
+        menuPressed = -1
+        menuK.animateTo(1f, Motion.profile.menuOpen)
+        return true
+    }
+
+    private fun closeMenu() { if (menuOpen) menuK.animateTo(0f, Motion.profile.menuClose) }
+
+    /** The menu's glass (Control Center's, over the picture behind it) and its rows, fading with the panel. */
+    private fun drawMenu(c: Canvas) {
+        val p = menuPainter ?: return
+        val sf = host.surfaces
+        val mat = p.material
+        p.draw(c, menuK.value * presence(), menuPressed, 0f) { cc, r, radius, mx, alpha ->
+            menuAt[0] = r.left; menuAt[1] = r.top
+            mx.mapPoints(menuAt)
+            cc.save()
+            cc.translate(r.left, r.top)
+            sf.draw(cc, mat, r.width(), r.height(), radius, menuAt[0], menuAt[1], mx.mapRadius(1f), alpha)
+            cc.restore()
+            true
+        }
+    }
+
+    private fun menuTouch(e: MotionEvent) {
+        val p = menuPainter ?: return
+        val i = p.rowAt(e.x, e.y)
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                cancelTouch()
+                mode = Mode.MENU
+                menuFromHold = false
+                if (i != menuPressed) { menuPressed = i; invalidate() }
+            }
+            MotionEvent.ACTION_MOVE -> if (i != menuPressed) {
+                // Sliding over the rows ticks on each, as iOS's menus do.
+                if (i >= 0) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                menuPressed = i
+                invalidate()
+            }
+            MotionEvent.ACTION_UP -> {
+                val fromHold = menuFromHold
+                menuFromHold = false
+                mode = Mode.NONE
+                menuPressed = -1
+                invalidate()
+                vt?.recycle(); vt = null
+                val item = p.items.getOrNull(i)
+                if (item != null) item.action() else if (!fromHold) closeMenu()
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                menuFromHold = false
+                mode = Mode.NONE
+                menuPressed = -1
+                invalidate()
+                vt?.recycle(); vt = null
             }
         }
     }
@@ -1366,6 +1487,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val LEAVE_STAGGER = 0.45f
         const val LEAVE_PULL = 0.16f
         const val LEAVE_SHRINK = 0.22f
+        /** A control's menu: how much the held control grows, how far the others fade back. Judged (as home's lifted icon). */
+        const val MENU_LIFT = 0.05f
+        const val MENU_FADE = 0.8f
         val CLOSE_STYLE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_CLOSE_STYLE)
         val PRESS_IN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_PRESS_IN)
         val PRESS_OUT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_PRESS_OUT)

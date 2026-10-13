@@ -2,12 +2,9 @@ package dev.launcher.app.shade
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.BitmapShader
 import android.graphics.Canvas
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
-import android.graphics.Shader
 import android.text.TextPaint
 import android.text.TextUtils
 import android.view.HapticFeedbackConstants
@@ -64,8 +61,12 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     private val big = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.display(this, 700); color = 0xFFFFFFFF.toInt(); textAlign = Paint.Align.CENTER }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
-    private val artPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val artwork = dev.launcher.app.design.RoundedBitmaps(capacity = 2)
     private val rect = RectF()
+    // A press held on an item (the connectivity module's): its list or settings, as iOS's held Wi-Fi shows its networks.
+    private val handler = android.os.Handler(android.os.Looper.myLooper() ?: android.os.Looper.getMainLooper())
+    private val hold = Runnable { held() }
+    private var heldFired = false
 
     var control: Control? = null
         private set
@@ -363,16 +364,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         rect.set(r.left + pad, r.top + pad, r.left + pad + art, r.top + pad + art)
         val bmp = m.art
         if (bmp != null && !bmp.isRecycled) {
-            val sh = BitmapShader(bmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-            val mat = Matrix()
-            val s = max(art / bmp.width, art / bmp.height)
-            mat.setScale(s, s)
-            mat.postTranslate(rect.left + (art - bmp.width * s) / 2f, rect.top + (art - bmp.height * s) / 2f)
-            sh.setLocalMatrix(mat)
-            artPaint.shader = sh
-            artPaint.alpha = (255 * a).toInt()
-            c.drawRoundRect(rect, pt(14f), pt(14f), artPaint)
-            artPaint.shader = null
+            artwork.draw(c, bmp, rect, pt(14f), a)
         } else {
             host.surfaces.well(c, rect.left, rect.top, art, art, pt(14f), rect.left, rect.top, 1f, a)
             glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), pt(28f), alpha(Design.color(CcTokens.MEDIA_PLACEHOLDER), a))
@@ -488,8 +480,11 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = x; downY = y; moved = false; sliding = false
+                heldFired = false
+                handler.removeCallbacks(hold)
                 if (closing) { pressed = -2; return }
                 pressed = partAt(kd, x, y)
+                if (kd == Kind.CONNECTIVITY && pressed >= 0) handler.postDelayed(hold, HOLD_MS)
                 if (pressed == P_SLIDER) {
                     sliding = true
                     slideFrom = sliderValue(kd)
@@ -497,15 +492,16 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
                 } else if (pressed >= 0 || pressed <= M_PREV) press.animateTo(1f, PRESS_IN)
             }
             MotionEvent.ACTION_MOVE -> {
-                if (hypot(x - downX, y - downY) > pt(8f)) moved = true
+                if (hypot(x - downX, y - downY) > pt(8f)) { moved = true; handler.removeCallbacks(hold) }
                 if (sliding) slide(kd, y, final = false)
                 else if (pressed == M_VOLUME) volumeAt(x, final = false)
                 else if (moved && pressed != -1) { press.animateTo(0f, PRESS_OUT) }
             }
             MotionEvent.ACTION_UP -> {
+                handler.removeCallbacks(hold)
                 press.animateTo(0f, PRESS_OUT)
                 when {
-                    pressed == -2 -> {}
+                    pressed == -2 || heldFired -> {}
                     sliding -> { slide(kd, y, final = true); sliding = false }
                     pressed == M_VOLUME -> volumeAt(x, final = true)
                     pressed == -1 -> if (!moved) close()
@@ -514,12 +510,23 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
                 pressed = -1
             }
             MotionEvent.ACTION_CANCEL -> {
+                handler.removeCallbacks(hold)
                 press.animateTo(0f, PRESS_OUT)
                 if (sliding) slide(kd, y, final = true)
                 sliding = false
                 pressed = -1
             }
         }
+        host.invalidate()
+    }
+
+    private fun held() {
+        if (kind != Kind.CONNECTIVITY || pressed < 0 || moved) return
+        val ctl = connItems().getOrNull(pressed) ?: return
+        heldFired = true
+        press.animateTo(0f, PRESS_OUT)
+        host.haptic(HapticFeedbackConstants.LONG_PRESS)
+        host.launch(host.state.listFor(ctl))
         host.invalidate()
     }
 
@@ -638,6 +645,8 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
 
     private companion object {
         const val ROW_PT = 106f
+        /** A press held this long on an item is a hold (ms; Control Center's own). */
+        const val HOLD_MS = 450L
         const val P_SLIDER = 100
         const val P_PANEL = 101
         const val M_PREV = -10

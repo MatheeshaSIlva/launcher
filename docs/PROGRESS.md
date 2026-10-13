@@ -1990,3 +1990,30 @@ settings' preview instead of opening a separate app; and the edit menu closed at
   the display's size setting changes). Not yet seen on the S24.
 - **The settings are upright only** (as home, and iOS's Settings on an iPhone): turned to landscape their picture of
   home was squeezed into a wide phone and Back slid that into home.
+
+## iOS's tap and hold, control by control; pictures in Notification Center (2026-10-14, emulator)
+
+Matheesha: "check how each button behaves in the qs panel of ios - one tap, long press etc. and make sure ours align".
+iOS 27's Control Center was captured in the Simulator (`test70_ccEveryControl`, `test71_ccParts`: a fresh simulator's
+Control Center is empty and its gallery has no system controls, so most of it came from Apple's iPhone User Guide for
+iOS 27). Differences found and fixed (table in docs/IOS27_EVALUATION.md, "Control Center"):
+- **Power**: held until the phone vibrates (a tap did open the power menu).
+- **Camera held**: iOS's menu (Take Photo, Take Selfie, Record Video), the menu component (`MenuSpec.CC`: the modules'
+  glass, so Material You's tint follows it; `comp.cc.menu-gap` 10 pt) growing out of the held control, which lifts while
+  the others and the status row fade back. With the finger still down a row is chosen by sliding onto it (a tick on each)
+  and lifting; lifted elsewhere the menu stays for a tap; a tap outside or Back closes it. Rows only for what the camera
+  app takes. Checked on the emulator: hold, slide to Take Selfie (the camera opened), tap outside, Back.
+- **Now Playing tapped** grows into the large player (it opened the app).
+- **Wi-Fi held in the expanded connectivity module**: Android's Internet panel (iOS shows its networks there).
+- Not changed: Wi-Fi and Bluetooth turn off when tapped (iOS only disconnects them for a while; Android has no such call
+  for an app).
+
+**Pictures in Notification Center**: a notification with a picture (a sender's photo) showed the app's icon in its
+platter while its banner showed the photo. A picture loads after the platter's first draw, and the platter's recorded
+content was not drawn again when it arrived. It is now (the recording's key includes whether the picture has loaded).
+The adb test notification takes `--ez avatar true` (a 4:3 gradient, to check the crop and the rounding).
+
+**Pictures drawn rounded** (artwork, photos: `design/RoundedBitmaps`) keep one shader per picture with only the scale for
+its size in its matrix, the canvas moved to the place: a new shader and matrix per draw were native allocations every
+frame for every photo while a list scrolled.
+

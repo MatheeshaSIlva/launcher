@@ -514,12 +514,22 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
         else -> null
     }?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
+    /**
+     * What a control held in the expanded connectivity module shows, as iOS shows Wi-Fi's networks there: Android's
+     * Internet panel for Wi-Fi (its networks, over what is behind), else the control's settings.
+     */
+    fun listFor(c: Control): Intent? = when (c) {
+        Control.WIFI -> Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY).takeIf { resolves(it) }?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        else -> null
+    } ?: settingsFor(c)
+
     /** The launch screen of the first of [pkgs] that is installed. */
     private fun launcherOf(pkgs: List<String>): Intent? = pkgs.firstNotNullOfOrNull { p ->
         try { ctx.packageManager.getLaunchIntentForPackage(p) } catch (_: Throwable) { null }
     }
 
-    private fun resolves(i: Intent) = try { ctx.packageManager.resolveActivity(i, 0) != null } catch (_: Throwable) { false }
+    /** Whether some app takes [i]. */
+    fun resolves(i: Intent) = try { ctx.packageManager.resolveActivity(i, 0) != null } catch (_: Throwable) { false }
 
     /** Starts [i] from our process (it is visible, so it may). */
     fun start(i: Intent?): Boolean {

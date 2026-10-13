@@ -50,6 +50,8 @@ class MenuSpec(prefix: String) {
         val SWITCHER = MenuSpec("comp.switcher.menu")
         /** Notification Center's long look (the kit's expanded notification: clear glass, white labels). */
         val NC = MenuSpec("comp.nc.menu")
+        /** A control's menu in Control Center (iOS's held Camera: clear glass, white labels, in both appearances). */
+        val CC = MenuSpec("comp.cc.menu")
     }
 }
 

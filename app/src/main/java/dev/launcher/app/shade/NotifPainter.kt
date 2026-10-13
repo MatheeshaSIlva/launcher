@@ -2,13 +2,10 @@ package dev.launcher.app.shade
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapShader
 import android.graphics.Canvas
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.Shader
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.text.Layout
@@ -88,7 +85,7 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
     private val time = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 400); textAlign = Paint.Align.RIGHT }
     private val callName = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600) }
     private val callWhat = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 400) }
-    private val bmp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val rounded = dev.launcher.app.design.RoundedBitmaps()
     private val rect = RectF()
     private val path = Path()
 
@@ -241,6 +238,13 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
     }
 
     private val avatars = HashMap<String, Drawable?>()
+
+    /**
+     * Whether [item]'s picture has loaded (it is drawn in place of the app's icon from then on): a picture loads after the
+     * first draw, so what was recorded before it holds the app's icon.
+     */
+    fun pictureLoaded(item: Notifs.Item): Boolean = item.avatar != null && avatars[item.key + "|" + item.postTime] != null
+
     private fun avatarOf(item: Notifs.Item): Drawable? {
         val ic = item.avatar ?: return null
         val key = item.key + "|" + item.postTime
@@ -307,19 +311,7 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
         c.restore()
     }
 
-    fun drawRounded(c: Canvas, b: Bitmap, r: RectF, radius: Float, a: Float) {
-        val sh = BitmapShader(b, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-        val m = Matrix()
-        val s = max(r.width() / b.width, r.height() / b.height)
-        m.setScale(s, s)
-        m.postTranslate(r.left + (r.width() - b.width * s) / 2f, r.top + (r.height() - b.height * s) / 2f)
-        sh.setLocalMatrix(m)
-        bmp.shader = sh
-        bmp.alpha = (255 * a).roundToInt()
-        c.drawRoundRect(r, radius, radius, bmp)
-        bmp.shader = null
-        bmp.alpha = 255
-    }
+    fun drawRounded(c: Canvas, b: Bitmap, r: RectF, radius: Float, a: Float) = rounded.draw(c, b, r, radius, a)
 
     private fun fade(color: Int, k: Float): Int {
         val a = (((color ushr 24) and 0xFF) * k.coerceIn(0f, 1f)).roundToInt()

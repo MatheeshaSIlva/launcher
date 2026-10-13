@@ -1931,6 +1931,70 @@
    "pt": 24,
    "src": "measured:the kit's render at 3x (previous, next: 20 pt)"
   },
+  "comp.cc.menu-gap": {
+   "pt": 10,
+   "src": "judged:as Notification Center's long look (the kit's 10 pt between the card and its menu)"
+  },
+  "comp.cc.menu.corner": {
+   "ref": "component.menu.corner",
+   "src": "judged:the menu component's (component.menu.corner)"
+  },
+  "comp.cc.menu.destructive": {
+   "ref": "component.menu.destructive",
+   "src": "judged:the menu component's (component.menu.destructive)"
+  },
+  "comp.cc.menu.fallback": {
+   "ref": "component.menu.fallback",
+   "src": "judged:the menu component's (component.menu.fallback)"
+  },
+  "comp.cc.menu.grow-from": {
+   "ref": "component.menu.grow-from",
+   "src": "judged:the menu component's (component.menu.grow-from)"
+  },
+  "comp.cc.menu.label": {
+   "color": "#ffffff",
+   "src": "judged:white, as Control Center's labels in both appearances"
+  },
+  "comp.cc.menu.label-x": {
+   "ref": "component.menu.label-x",
+   "src": "judged:the menu component's (component.menu.label-x)"
+  },
+  "comp.cc.menu.material": {
+   "ref": "comp.cc.module.material",
+   "src": "judged:the glass of Control Center's modules around it (Material You's tint with it)"
+  },
+  "comp.cc.menu.pad-bottom": {
+   "ref": "component.menu.pad-bottom",
+   "src": "judged:the menu component's (component.menu.pad-bottom)"
+  },
+  "comp.cc.menu.pad-top": {
+   "ref": "component.menu.pad-top",
+   "src": "judged:the menu component's (component.menu.pad-top)"
+  },
+  "comp.cc.menu.press": {
+   "color": "#ffffff26",
+   "src": "judged:a pressed row on the clear glass (as Notification Center's menu)"
+  },
+  "comp.cc.menu.row": {
+   "ref": "component.menu.row",
+   "src": "judged:the menu component's (component.menu.row)"
+  },
+  "comp.cc.menu.symbol": {
+   "ref": "component.menu.symbol",
+   "src": "judged:the menu component's (component.menu.symbol)"
+  },
+  "comp.cc.menu.symbol-x": {
+   "ref": "component.menu.symbol-x",
+   "src": "judged:the menu component's (component.menu.symbol-x)"
+  },
+  "comp.cc.menu.type": {
+   "ref": "component.menu.type",
+   "src": "judged:the menu component's (component.menu.type)"
+  },
+  "comp.cc.menu.width": {
+   "ref": "component.menu.width",
+   "src": "judged:the menu component's (component.menu.width)"
+  },
   "comp.cc.module.corner": {
    "ref": "component.control.corner",
    "src": "judged:the shared component style (component.control.corner)"

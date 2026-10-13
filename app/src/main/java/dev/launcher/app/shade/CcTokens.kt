@@ -103,6 +103,9 @@ object CcTokens {
     val GALLERY_DIM = ColorKey("comp.cc.gallery.dim")
     val GALLERY_CORNER = NumberKey("comp.cc.gallery.corner")
 
+    /** Between a held control and its menu (the menu itself: [dev.launcher.app.components.MenuSpec.CC]). */
+    val MENU_GAP = NumberKey("comp.cc.menu-gap")
+
     /** A control's colour (its toggled-on fill or glyph): `comp.cc.accent.<control>`. */
     fun accent(c: Control) = ColorKey("comp.cc.accent." + c.name.lowercase().replace('_', '-'))
 
@@ -117,5 +120,5 @@ object CcTokens {
         SLIDER_COVER, EXPANDED_SLIDER_WIDTH, EXPANDED_SLIDER_HEIGHT, EXPANDED_SLIDER_CORNER, EXPANDED_SLIDER_SYMBOL,
         SYMBOL_ON, SYMBOL_ON_ACCENT, CHEVRON_COLOR, ADD_FILL, MEDIA_PLACEHOLDER, MEDIA_TRACK, MEDIA_PROGRESS, MEDIA_LEVEL, MEDIA_SECONDARY,
         EDIT_BADGE, EDIT_BADGE_MINUS, EDIT_HANDLE, EDIT_HANDLE_SHADOW, GALLERY_GRABBER, GALLERY_HEADING, GALLERY_SECTION,
-        GALLERY_NAME).map { it.name }
+        GALLERY_NAME, MENU_GAP).map { it.name } + dev.launcher.app.components.MenuSpec.CC.all
 }

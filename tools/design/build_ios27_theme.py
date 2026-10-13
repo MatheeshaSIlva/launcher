@@ -649,6 +649,14 @@ SEED = {
     'comp.nc.menu.press': {'color': '#ffffff26', 'src': 'judged:a pressed row on the clear glass (as before)'},
     'comp.nc.menu.fallback': {'ref': 'comp.home.menu.fallback', 'src': "judged:as home's menus"},
     'comp.nc.menu.grow-from': {'factor': 0.6, 'src': 'judged:the menu grows out of the card from 60 % of its size (as before)'},
+    # A control's menu in Control Center (iOS's held Camera: Take Photo, Take Selfie, Record Video): the menu component's
+    # shape, Control Center's clear glass and white labels (the same in both appearances, as everything there).
+    **{'comp.cc.menu.' + _k: {'ref': 'component.menu.' + _k, 'src': "judged:the menu component's (component.menu." + _k + ")"}
+       for _k in ('corner', 'width', 'row', 'pad-top', 'pad-bottom', 'symbol-x', 'label-x', 'type', 'symbol', 'grow-from', 'destructive', 'fallback')},
+    'comp.cc.menu-gap': {'pt': 10, 'src': "judged:as Notification Center's long look (the kit's 10 pt between the card and its menu)"},
+    'comp.cc.menu.material': {'ref': 'comp.cc.module.material', 'src': "judged:the glass of Control Center's modules around it (Material You's tint with it)"},
+    'comp.cc.menu.label': {'color': '#ffffff', 'src': "judged:white, as Control Center's labels in both appearances"},
+    'comp.cc.menu.press': {'color': '#ffffff26', 'src': "judged:a pressed row on the clear glass (as Notification Center's menu)"},
     'comp.nc.look.dim': {'color': '#00000066', 'src': 'judged:the rest of Notification Center dims behind a long look (the kit does not show it)'},
     'comp.nc.look.blur': {'pt': 25, 'src': 'judged:the list behind the long look is out of focus (the kit does not show it); a blur radius as the kit gives them (sigma 12.5 pt)'},
     # Control Center (docs/tokens/ios27-kit.json "controlCenter"; geometry of the running system where it differs: docs/IOS27_KIT.md)

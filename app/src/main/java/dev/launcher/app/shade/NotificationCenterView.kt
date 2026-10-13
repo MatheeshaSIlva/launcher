@@ -935,6 +935,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         mixIn(Math.round(b.height).toLong()); mixIn(b.count.toLong()); mixIn(Math.round(b.stack.value * 255f).toLong())
         mixIn(Math.round(Appearance.dark * 255f).toLong()); mixIn(Design.version.toLong())
         mixIn(b.item?.let { it.key.hashCode().toLong() * 7 + it.postTime } ?: 0L); mixIn(width.toLong())
+        // Its picture (a sender's photo) loads after the first draw: recorded again when it has.
+        mixIn(if (b.item?.let { painter.pictureLoaded(it) } == true) 1L else 0L)
         // "now" -> "1m ago": the label itself (the wall clock's minute lagged it by up to a minute), and its crossfade.
         val fading = b.kind == Kind.PLATTER && b.item?.let { painter.timeFadeProgress(it.key) < 1f } == true
         if (b.kind == Kind.PLATTER) b.item?.let { mixIn(painter.timeLabel(it.postTime).hashCode().toLong()); mixIn(Math.round(painter.timeFadeProgress(it.key) * 64f).toLong()) }
