@@ -68,6 +68,11 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         fun onKeep(card: Card, keep: Boolean)
         /** How an app's details page (App Info) looks while it starts: its launch-screen colour and icon. */
         fun detailsLook(): Pair<Int, Drawable?>
+        /**
+         * Haptic feedback [constant] (HapticFeedbackConstants): through a window that can give it (the deck may be in the
+         * switcher's own window, drawn by a host that has none of its own).
+         */
+        fun haptic(constant: Int)
     }
 
     /** One recent app. [snapshot] may arrive later (or never: then its launch screen, colour and icon, stands in). */
@@ -110,7 +115,9 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     var scroll = 0f
         private set
-    private val scrollAnim = MotionValue(0f, 100f, onChange = { scroll = it; invalidate(); updatePictures() }, onRest = { listener.onSettled("deck came to rest") })
+    // In thousandths of a card: it comes to rest within half a unit, under a pixel (a card is ~500 px of travel on a phone).
+    // In hundredths, the last frame jumped the deck by a pixel onto its place (S24 recording, after every scroll and entry).
+    private val scrollAnim = MotionValue(0f, 1000f, onChange = { scroll = it; invalidate(); updatePictures() }, onRest = { listener.onSettled("deck came to rest") })
 
     // Entry: card 0 morphs from where the finger had it ([from]) into its slot; the others slide in from the left.
     private val from = RectF()
@@ -131,6 +138,9 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
 
     /** Whether the deck takes touches: shown, and neither opening an app nor going home. */
     val interactive get() = visibility == VISIBLE && openCard == null && homeK == 0f
+
+    /** A finger is on the deck (scrolling, lifting a card, on Clear All or the menu). */
+    val fingerOn get() = dragging || clearPressed || menuPressed >= 0
 
     init { setWillNotDraw(false) }
 
@@ -627,6 +637,16 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         openAnim.animateTo(1f, profile.open, 0f)
     }
 
+    /**
+     * Back (the switcher's own window has the focus): opened from an app, that app comes back (its card); from home, home
+     * does (Android's recents: Back returns to the app you came from).
+     */
+    fun back() {
+        if (!interactive) return
+        val first = cards.firstOrNull()
+        if (slidingIn || first == null) goHome() else open(first)
+    }
+
     fun goHome() {
         if (openCard != null || homeK > 0f) return
         closeMenu()
@@ -753,7 +773,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         menuCard = c
         menuPressed = -1
         menuK.animateTo(1f, Motion.profile.menuOpen)
-        performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+        listener.haptic(android.view.HapticFeedbackConstants.LONG_PRESS)
     }
 
     private fun closeMenu() { if (menuCard != null && menuK.target > 0f) menuK.animateTo(0f, Motion.profile.menuClose) }
@@ -891,7 +911,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         clearShown.snapTo(placeClear().coerceAtLeast(clearShown.value))
         clearShown.animateTo(0f, Motion.profile.menuClose)
         closeMenu()
-        performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM)
+        listener.haptic(android.view.HapticFeedbackConstants.CONFIRM)
         // Clear All: one card flies off this long after the one before it; home comes `motion.switcher.clear-home` after the last.
         val clearStagger = dev.launcher.app.design.Design.num(dev.launcher.app.motion.MotionTokens.SWITCHER_CLEAR_STAGGER).toLong()
         var n = 0

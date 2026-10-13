@@ -138,6 +138,20 @@
             android:taskAffinity="dev.launcher.app.cover"
             android:theme="@style/TurnCover" />
 
+        <!-- The App Switcher's window among the apps (switcher/SwitcherActivity.kt; under a mini player): translucent, its
+             own task, out of recents; started by the shell (our own instant transition), hence exported. Drawn in software:
+             its window shows nothing of its own, and its frames on the render thread (each a new screen-sized buffer) held up
+             the deck's frames, which share that thread (a repeated frame at the handover, S24 trace). -->
+        <activity
+            android:name=".switcher.SwitcherActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|keyboardHidden|keyboard|navigation"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:hardwareAccelerated="false"
+            android:screenOrientation="locked"
+            android:taskAffinity="dev.launcher.app.switcher"
+            android:theme="@style/SwitcherWindow" />
+
         <!-- Test only: an app that puts the system bars in every state (docs/STATUS_BAR.md; Phone, Developer). -->
         <activity
             android:name=".BarsTestActivity"

@@ -44,6 +44,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   disable flags, animation scales, app launch, silent install). Windows created *from* this process do not work, so
   everything visible lives in the app process.
 - **Overlay windows** (`TYPE_APPLICATION_OVERLAY`, always `FLAG_HARDWARE_ACCELERATED`): gesture strip + full-display card window.
+  Every overlay of ours lies above a mini player (picture-in-picture); while the App Switcher is open with one up (Android
+  14+), the deck moves into an activity's window under it (`switcher/SwitcherActivity`, a translucent activity of its own
+  task drawn in software, showing a `SurfaceControlViewHost` that gesture nav's thread draws: `switcher/SwitcherHost`), in
+  one frame of both windows (`SurfaceSyncGroup`), and back into the card window when an app or home is chosen.
 - **Watchdog** (shell-side loop): restores animation scales and status bar if the app's heartbeat goes stale. Must exist
   before any feature that hides stock UI.
 - **Layouts** (`layout/`, plan `docs/PLAN_LAYOUTS_THEMES.md`; counts as options with the room the size leaves: home's
@@ -411,6 +415,25 @@ copy it wholesale — port the working pieces cleanly. File map:
   `setLeftTopRightBottom`, redrew the whole card window every frame (GPU 10.5 ms a frame on the S24). Move small things by
   translation (a property of their own node): only where they were and are is drawn again (7.1 ms). Check the redrawn area
   in a Perfetto trace ("Drawing L T R B" on the RenderThread).
+- **Every window of our process draws on one render thread**: a frame of any of them that takes long holds up the frames
+  of the others (gesture nav's thread waits in `postAndWait`). A window holding a SurfaceView does not allocate its
+  buffers ahead (it requests transparent regions; `ViewRootImpl` then skips `allocateBuffers`): each of its first frames
+  allocated a screen-sized buffer on the render thread (3.8 ms on the S24) and the deck's next frame missed its refresh
+  (a repeated frame at the App Switcher's handover). The switcher's activity draws nothing and is drawn in software
+  (`android:hardwareAccelerated="false"`): its frames never reach the render thread. In a software window frame-commit
+  callbacks never run and `applyTransactionOnDraw` applies at once (the deck's surface is embedded before the window's
+  first frame; "on screen" is `onEnterAnimationComplete`). Making a hidden `SurfaceControlViewHost`'s view visible cost
+  its thread a 4 ms relayout and the render thread an 11 ms first frame (buffers, the blurred picture of home): the
+  switcher's window content is drawn ahead while a mini player is up and nothing moves (`updateSwitcherWarmth`).
+- **What moves from one window into another must look the same in both, frame for frame**: the switcher's dim was its
+  window's background, under the picture of home that the window holds (in the card window the dim is the root, above
+  the picture): the background brightened in one frame at the handover (S24 recording, 150 to 183 of 255). Check a
+  handover's frames for a step in the background's brightness and for a repeated frame (`tools/shots`, per-frame diff).
+- **`MotionValue` rests within half a unit of its scale**: the deck's scroll in hundredths of a card (~2.5 px a unit) ended
+  with a 1 px jump onto its place; thousandths now. Give a value a scale with a unit under a pixel.
+- **SurfaceFlinger's composite on the S24 takes 6-8 ms while the App Switcher is open** (with or without a mini player;
+  ~3 ms otherwise), most of it the display's present (several screen-sized layers: our status bar's full-screen window,
+  the card window, the app under it): little room is left, and one late composite repeats a frame. Not addressed yet.
 - **A quick flick turns sideways before the gesture's task lookup is back** (~50 ms): the run of quick switches was built
   from the previous gesture's order without the app in front, and "one older" switched to the app already in front. It
   now takes the app in front from the window events and is built again when the lookup comes.

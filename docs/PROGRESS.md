@@ -1866,3 +1866,46 @@ Performance pass (S24, frame stats of what the screen showed; missed refreshes p
 Not fixed, next for the performance work: the stack fanning out (worse than on 10-08: 0-2), the App Switcher opening over
 an app and a card opening from it (GPU over the 8.3 ms a frame has; its first frames import the cards' pictures, ~8-12 ms
 on the render thread), page to App Library (2-3). Thermal status 0 throughout (skin 37-38 C).
+
+## The App Switcher in its own window under the mini player (2026-10-14, S24 and emulator)
+
+Matheesha: the mini player over the App Switcher was "not good at all"; is there really no way to bring it in front of the
+deck instead of cutting a hole for it? There is: every overlay of ours lies above a mini player, an activity's window
+under it (as Android's own recents do). "Quality is a high priority: even the slightest mistake or gap breaks the
+immersion."
+
+- **What it does.** While the switcher is open with a mini player up (Android 14+), the deck moves from the card window
+  into the window of a translucent activity of its own task (`switcher/SwitcherActivity`), which shows a
+  `SurfaceControlViewHost` drawn by gesture nav's thread (`switcher/SwitcherHost`): the mini player floats over the deck
+  as over any app, with its shadow, its controls, its dismiss target and Android's own expand. The move is one frame of
+  both windows (`SurfaceSyncGroup`), any time, mid-animation; the deck goes back the same way when an app or home is
+  chosen, and the leaving runs in the card window as before. The window is started with "no user action" and stays
+  translucent: the app under it keeps playing and does not go into a mini player of its own (YouTube, checked earlier).
+  Back in that window works as the bar's swipe (the app last used, or home). The app expanding from its mini player
+  grows over the deck; the switcher closes once it is covered. Until the window shows (about 0.1 s) and on Android 13
+  and older the deck stays in the card window with the hole, as before.
+- **Found on the S24 and fixed.** (1) The background's dim snapped off at the handover (brightness 150 to 183 of 255 in
+  one frame, then undimmed): the dim was the window container's background, under the picture of home it holds; it is a
+  view above the picture now, as in the card window. (2) The deck's last frame at rest jumped a pixel onto its place
+  (its spring rested within 0.005 of a card, ~2.5 px): thousandths of a card now. (3) A frame repeated at the handover
+  in 3 of 4 openings from home: the activity's empty window allocated a screen-sized buffer on the render thread for
+  each of its first frames (3.8 ms; a window holding a SurfaceView does not allocate ahead), and the deck's frame waited
+  behind it. The activity is drawn in software now (its frames never reach the render thread), the deck's surface is in
+  it before its first frame, and "on screen" is its finished opening transition. (4) Asking for the window cost the
+  opening a dropped frame (a 4 ms relayout on gesture nav's thread and an 11 ms first frame on the render thread): the
+  window's content is drawn ahead while a mini player is up and nothing moves, its copy of home blurred only.
+- **Measured on the S24** (test app's mini player; harmless recents only: Clock, Calculator, Settings, Galaxy Store,
+  Galaxy Wearable; nothing captured of other apps). Window on screen 103-164 ms after the switcher opened. Openings over
+  an app and from home, 10 runs: 0 dropped frames in 6 (both unrecorded runs among them), 1-2 in 3 (recorded, two of
+  them also traced), and once a 94 ms freeze (the first recorded run after installing; not seen again). Before: 1-3 in
+  most. No repeated frame at the handover from home in 2 recorded runs (before: 3 of 4); background brightness
+  continuous through both handovers. Unrecorded, the whole run (open, scroll, mini player dragged over the deck, a card
+  opened): 0 missed refreshes, card window GPU median 5.3 ms. SurfaceFlinger's composite after the handover: median 2.2
+  ms (with the hardware-drawn window: 7.6 ms). The plain switcher (no mini player, `scenario_switcher.sh`): 0-1 missed
+  per step, as before. Screen recording adds SurfaceFlinger work (composites of 9-12 ms before the handover): judge
+  timing from unrecorded runs.
+- **Not on the S24**: Clear All in that window and the screen turned off with it open (they would close Matheesha's apps
+  and lock a secure phone): both checked on the emulator. YouTube's own mini player with this build: to be checked.
+- **Known**: SurfaceFlinger's composite takes 6-8 ms on the S24 whenever the App Switcher is open in the card window
+  (several screen-sized layers, our full-screen status bar window among them); while a mini player is up, the window's
+  content holds a few screen-sized buffers.

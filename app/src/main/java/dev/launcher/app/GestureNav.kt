@@ -327,6 +327,7 @@ object GestureNav {
     fun init(app: LauncherApp) {
         this.app = app
         NoAnimStarts.init(app)
+        dev.launcher.app.switcher.SwitcherHost.thread = nav
         try { app.getSystemService(android.hardware.display.DisplayManager::class.java).registerDisplayListener(displayTurned, main) } catch (_: Throwable) { }
         // A picture of home without the card's icon arrives a moment after a gesture starts: use it as soon as it does.
         HomeBridge.onPreviewReady = { pkg ->
@@ -601,6 +602,9 @@ object GestureNav {
         if (!barWatch.attached) main.post { if (statusBarShown && !barWatch.attached) barWatch.attach() }
         // A card on its way: its app's tone (or home's) was set as it started; the window in charge may still be home's.
         bringing?.let { return }
+        // The deck in the switcher's own window (which covers home or the app): the bar keeps the tone it had as the switcher
+        // opened (the window in charge is ours now; asked, it recoloured the bar the moment the deck moved there).
+        if (win == Win.HOLDS) return
         if (closingHome || homeVisible) { bar.setDark(HomeBridge.homeStatusDark); bar.setHiddenByApp(false); watchEdge(false); return }
         applyBarVisible()
         val s = ShizukuLink.service ?: return
@@ -702,6 +706,8 @@ object GestureNav {
     /** From NavAccessibilityService: a window of [pkg] came to the front. */
     fun onWindowStateChanged(pkg: String?, className: String? = null) {
         if (pkg == null) return
+        // The App Switcher's own window (under a mini player): the switcher, not an app in front.
+        if (className == dev.launcher.app.switcher.SwitcherActivity::class.java.name) return
         // An app back in front from its mini player while the App Switcher is open (its expand button): the deck makes way.
         // (Our own windows, the switcher's among them, come with our package: ours floats only as its test app.)
         if (pkg != app.packageName || className == PipTestActivity::class.java.name) {
@@ -737,7 +743,7 @@ object GestureNav {
     /** One of our own full-screen activities other than home (an accessibility window event's class name). */
     private fun isOwnScreen(className: String?): Boolean =
         className != null && className.startsWith(app.packageName + ".") && className.endsWith("Activity") &&
-            !className.endsWith(".HomeActivity") && '$' !in className
+            !className.endsWith(".HomeActivity") && !className.endsWith(".SwitcherActivity") && '$' !in className
 
     private var keyboards: Set<String> = emptySet()
     private var keyboardsAt = 0L
@@ -956,6 +962,7 @@ object GestureNav {
             cardWindow = host; windowShown = false
             root = r; backdrop = b; prv = p; nxt = n; cur = c; deck = d
             host.holeRadius = dp(16)
+            setUpSwitcherWindow(ctx)
             pollFloating()
             d.setScreen(sw, sh, deviceRadius)
             input = dev.launcher.app.switcher.SwitcherInput({ e -> nav.post { onSwitcherTouch(e); e.recycle() } }, { nav.post { floatingPressed() } })
@@ -978,6 +985,7 @@ object GestureNav {
             lp.height = sh.toInt()
             try { wm?.updateViewLayout(host, lp) } catch (_: Throwable) { }
             input?.resize(sw.toInt(), sh.toInt())
+            a11y?.let { setUpSwitcherWindow(it) }
         }
         deck?.setScreen(sw, sh, deviceRadius)
         orientBackdrop()
@@ -999,8 +1007,8 @@ object GestureNav {
      * phone's natural way up, as Android shows the real home when it comes (fixed rotation), so the two line up when it
      * takes over (it was drawn unturned in the landscape screen: home's left part upright, the app beside it).
      */
-    private fun orientBackdrop() {
-        val b = backdrop ?: return
+    private fun orientBackdrop(view: View? = backdrop) {
+        val b = view ?: return
         val lp = b.layoutParams as? FrameLayout.LayoutParams ?: return
         val w = if (turned) sh.toInt() else FrameLayout.LayoutParams.MATCH_PARENT
         val h = if (turned) sw.toInt() else FrameLayout.LayoutParams.MATCH_PARENT
@@ -1101,8 +1109,9 @@ object GestureNav {
     // ---- floating windows (nav thread): where they are, asked of the shell every FLOATING_POLL_MS (a few ms of a worker's
     // time), at the start of every card session, and every FLOATING_BUSY_MS while cards show (a PiP window can be dragged).
     private var floating: List<RectF> = emptyList()
-    /** The app of each of [floating]. */
+    /** The app of each of [floating], and its windowing mode (picture-in-picture: [WINDOWING_MODE_PINNED]). */
     private var floatingPkgs: List<String> = emptyList()
+    private var floatingModes: List<Int> = emptyList()
     private var floatingLogged = ""
 
     private val floatingPoll = object : Runnable {
@@ -1121,6 +1130,7 @@ object GestureNav {
         tasksIo.execute {
             val lines = try { s.floatingWindows() } catch (_: Throwable) { emptyArray() }
             val pkgs = ArrayList<String>()
+            val modes = ArrayList<Int>()
             val rects = lines.mapNotNull { line ->
                 val p = line.split(' ')
                 if (p.size < 7) return@mapNotNull null
@@ -1131,10 +1141,13 @@ object GestureNav {
                 // A pop-up window the size of the screen is not floating over anything.
                 if (r - l >= sw - 1f && b - t >= sh - 1f) return@mapNotNull null
                 pkgs += p[1]
+                modes += p[2].toIntOrNull() ?: 0
                 RectF(l, t, r, b)
             }
             nav.post {
                 floatingPkgs = pkgs
+                floatingModes = modes
+                updateSwitcherWarmth()
                 if (rects != floating) {
                     floating = rects
                     val note = lines.joinToString("; ")
@@ -1163,7 +1176,7 @@ object GestureNav {
             touchHoles += at?.let { RectF(it) } ?: floating[i]
             holes += at?.let { r -> RectF(r).apply { liveInset[pkg]?.let { inset(it[0], it[1]) } } } ?: floating[i]
         }
-        cardWindow?.holes = holes
+        cardWindow?.holes = if (win == Win.HOLDS) emptyList() else holes
         // A window moved by the finger keeps that touch whatever the region says: the region follows once it is still.
         pendingInputHoles = touchHoles
         nav.removeCallbacks(inputHolesNow)
@@ -1427,6 +1440,9 @@ object GestureNav {
     private fun switcherAppCameForward(pkg: String) {
         if (phase != Phase.SWITCHER || switcherLeaving) return
         switcherLeaving = true
+        // The deck in the switcher's own window: the app grows over it (Android's expand) and the switcher goes once it is
+        // covered (onWindowLost); gone sooner, what lies under the window showed beside the growing app.
+        if (win == Win.HOLDS) { AppLog.log("[switcher] $pkg came back from its mini player: the switcher goes once covered"); return }
         AppLog.log("[switcher] $pkg came back from its mini player: the switcher makes way")
         val g = gen
         root?.animate()?.alpha(0f)?.timed(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP))?.withEndAction { if (gen == g) hideCards() }?.start()
@@ -1637,6 +1653,7 @@ object GestureNav {
 
     /** Ends the card session: window invisible (kept), icon back, everything pending forgotten. */
     private fun hideCards() {
+        if (win != Win.NONE) endSwitcherWindow()
         catchTouchesForHome(false)
         pipFlight = false
         switcherLeaving = false
@@ -3107,14 +3124,25 @@ object GestureNav {
     private var switcherHeld = false          // the swipe that opened the switcher is still down
     private var switcherDownY = 0f
     private var switcherHomeAsked = false
+    /**
+     * This switcher was opened over home (a swipe up on home that rested), not over an app. Kept apart from [homeVisible]:
+     * the switcher's own window pauses home under it (opened from home, a tap on the app last used was taken for "still in
+     * front" and home came back instead).
+     */
+    private var switcherOverHome = false
     private var openedAt = 0L
     private var depthAtSwitcher = 1f
 
     // Home behind the deck: from the drag's depth to fully receded and dimmed (0..1).
     private var switcherGround = 0   // opaque ground behind the deck when there is no picture of home (else 0)
     private val switcherBg = dev.launcher.app.motion.MotionValue(0f, 300f, onChange = { k ->
-        backdrop?.depth = depthAtSwitcher + (1f - depthAtSwitcher) * k
-        root?.setBackgroundColor(if (switcherGround != 0) switcherGround else ((SWITCHER_DIM * k * 255).toInt().coerceIn(0, 255)) shl 24)
+        val depth = depthAtSwitcher + (1f - depthAtSwitcher) * k
+        val ground = if (switcherGround != 0) switcherGround else ((SWITCHER_DIM * k * 255).toInt().coerceIn(0, 255)) shl 24
+        backdrop?.depth = depth
+        root?.setBackgroundColor(ground)
+        // The switcher's own window shows the same while the deck is there (until then it stays as it is, under the card window:
+        // drawing it every frame cost both threads 2-3 ms a frame of the opening; the handover brings it up to date).
+        if (win == Win.HOLDS) { back2?.depth = depth; dim2?.setBackgroundColor(ground) }
     })
 
     private val holdCheck = Runnable { maybeEnterSwitcher() }
@@ -3162,6 +3190,7 @@ object GestureNav {
         val first = if (fromHome) null else tasks.firstOrNull { it.pkg == cardPkg } ?: fg?.takeIf { it.pkg == cardPkg }
         val list = (listOfNotNull(first) + tasks.filter { it.id != first?.id }).take(SWITCHER_MAX_CARDS)
         if (list.isEmpty()) return
+        switcherOverHome = fromHome
         if (fromHome) { enterSwitcherFromHome(list); return }
         phase = Phase.SWITCHER
         updateWatch()
@@ -3185,6 +3214,7 @@ object GestureNav {
         depthAtSwitcher = backdrop?.depth ?: 1f
         switcherBg.snapTo(0f)
         switcherBg.animateTo(1f, Motion.profile.switcher.enter, 0f)
+        maybeAskSwitcherWindow()
         // Pictures for the cards without an up-to-date one come as each card comes into view (deckListener.onWantPicture).
         refreshSwitcherCard()
         stats.reset(); stats.start()
@@ -3289,6 +3319,7 @@ object GestureNav {
         showCards()
         switcherBg.snapTo(0f)
         switcherBg.animateTo(1f, Motion.profile.switcher.enter, 0f)
+        maybeAskSwitcherWindow()
         stats.reset(); stats.start()
         AppLog.log("[switcher] open from home: ${cards.size} apps${listNote()} (${cards.take(8).joinToString { it.pkg.substringAfterLast('.') }}); ${pictureAges(cards)}")
     }
@@ -3353,7 +3384,7 @@ object GestureNav {
                     val vy = vt?.yVelocity ?: 0f
                     // A flick up after the hold goes home (iOS); otherwise the deck stays, focused on the previous app.
                     if (e.actionMasked == MotionEvent.ACTION_UP && -vy > SWITCHER_HOME_FLICK_DP * density) d.goHome()
-                    else { d.heldRelease(vt?.xVelocity ?: 0f); input?.show() }
+                    else { d.heldRelease(vt?.xVelocity ?: 0f); if (win != Win.HOLDS) input?.show() }
                 }
             }
         }
@@ -3367,6 +3398,7 @@ object GestureNav {
     private fun onSwitcherTouch(e: MotionEvent) {
         val d = deck ?: return
         if (phase != Phase.SWITCHER || switcherHeld) return
+        if (handOverWhenFree && (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL)) nav.post(handOverIfFree)
         if (e.actionMasked == MotionEvent.ACTION_DOWN) {
             if (!d.interactive) return
             barTouch = e.rawY > sh - (strip?.height ?: dp(24).toInt())
@@ -3378,6 +3410,252 @@ object GestureNav {
             return
         }
         d.onTouch(e)
+    }
+
+    // ---- the App Switcher's own window (switcher/SwitcherActivity, SwitcherHost): the deck there while a mini player is up
+
+    /**
+     * What that window shows: home behind the deck ([back2], following [backdrop]), the dim over it ([dim2], following the
+     * card window root's background), the deck while it is there. The dim is a view of its own above the picture, as in the
+     * card window (there the root, above the picture): as this container's background it lay under the picture, unseen, and
+     * the switcher's background went bright at the handover (S24 recording).
+     */
+    private var stage2: FrameLayout? = null
+    private var back2: PreviewView? = null
+    private var dim2: View? = null
+    /** The next session's window content is drawn ahead ([updateSwitcherWarmth]), with this picture of home in its layers. */
+    private var winWarm = false
+    private var warmPic: HomePicture? = null
+    /** NONE: no window. ASKED: started, the deck still in the card window. HOLDS: the deck is in it. BACK: the deck left it. */
+    private enum class Win { NONE, ASKED, HOLDS, BACK }
+    private var win = Win.NONE
+    private var winSession = 0
+    private var deckIndex = -1
+    private var windowTouchLogs = 0
+    /** The window showed while a finger was on the deck: the deck moves there when it lifts. */
+    private var handOverWhenFree = false
+    private val handOverIfFree = Runnable {
+        if (handOverWhenFree && win == Win.ASKED && phase == Phase.SWITCHER && deck?.interactive == true && deck?.fingerOn != true) {
+            handOverWhenFree = false
+            handOverToWindow()
+        }
+    }
+    private val deckInWindow get() = deck?.parent != null && deck?.parent === stage2
+
+    /** The window's content: made once with the card window, laid out at its size (again after a size change). */
+    private fun setUpSwitcherWindow(ctx: Context) {
+        if (Build.VERSION.SDK_INT < 34) return
+        val st = stage2 ?: FrameLayout(ctx).also { s ->
+            val b2 = PreviewView(ctx).apply { lazySharp = true }
+            s.addView(b2, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            val dm = View(ctx)
+            s.addView(dm, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            // Hidden between sessions: a spare host whose content draws nothing holds no screen-sized buffers.
+            s.visibility = View.INVISIBLE
+            back2 = b2
+            dim2 = dm
+            stage2 = s
+        }
+        dev.launcher.app.switcher.SwitcherHost.listener = switcherWindowListener
+        val dsp = (app.getSystemService(Context.DISPLAY_SERVICE) as? android.hardware.display.DisplayManager)
+            ?.getDisplay(android.view.Display.DEFAULT_DISPLAY) ?: return
+        dev.launcher.app.switcher.SwitcherHost.setUp(ctx, dsp, st, sw.toInt(), sh.toInt())
+    }
+
+    /**
+     * While a mini player is up and nothing moves, the next session's window content is laid out and drawn once ahead, with
+     * the picture of home the next gesture will show (the one the card window's backdrop is kept ready with): done when the
+     * switcher asked for it, its relayout cost gesture nav's thread 4 ms and its first frame (buffers, the blurred picture)
+     * the render thread 11 ms inside the switcher's opening (a dropped frame, S24 trace). Let go when no mini player is left
+     * (it holds a few screen-sized buffers). Called with every look at the floating windows and once a spare host is made.
+     */
+    private fun updateSwitcherWarmth() {
+        if (Build.VERSION.SDK_INT < 34 || win != Win.NONE) return
+        val st = stage2 ?: return
+        val b2 = back2 ?: return
+        val want = floatingModes.any { it == WINDOWING_MODE_PINNED } && dev.launcher.app.switcher.SwitcherHost.ready &&
+            NoAnimStarts.usable
+        if (!want) {
+            if (winWarm) { st.visibility = View.INVISIBLE; winWarm = false; warmPic = null }
+            return
+        }
+        if (phase != Phase.IDLE || fingerDown) return   // the next look, once nothing moves
+        if (!winWarm) {
+            st.visibility = View.VISIBLE
+            b2.alpha = 1f
+            b2.depth = 1f
+            dim2?.setBackgroundColor(0)
+            winWarm = true
+            AppLog.log("[switcher] a mini player is up: its window's content is drawn ahead")
+        }
+        val pic = if (homeVisible) HomeBridge.preview else HomeBridge.previewFor(lastFrontPkg)
+        if (pic != null && pic !== warmPic) { b2.prewarm(pic); warmPic = pic }
+    }
+
+    /**
+     * A mini player is on screen: the switcher asks for its own window, under the mini player (see SwitcherHost), and the deck
+     * moves there as soon as it shows (any moment: the move is one frame of both windows). Until then, and on Android 13 and
+     * older, the deck stays in the card window, the mini player showing through a hole.
+     */
+    private fun maybeAskSwitcherWindow() {
+        if (win != Win.NONE || !dev.launcher.app.switcher.SwitcherHost.ready || !NoAnimStarts.usable) return
+        if (floatingModes.none { it == WINDOWING_MODE_PINNED }) return
+        val st = stage2 ?: return
+        val b2 = back2 ?: return
+        val s = gen
+        // What it shows is the card window's backdrop and dim (brought up to date again when the deck moves in). Drawn ahead
+        // while the mini player was up (updateSwitcherWarmth): the same picture is already in its layers.
+        st.visibility = View.VISIBLE
+        orientBackdrop(b2)   // turned as the card window's is, over an app in landscape
+        b2.alpha = 1f
+        b2.picture = backdrop?.picture
+        b2.depth = backdrop?.depth ?: 1f
+        dim2?.setBackgroundColor((root?.background as? android.graphics.drawable.ColorDrawable)?.color ?: 0)
+        if (!dev.launcher.app.switcher.SwitcherHost.begin(s)) return
+        if (!winWarm) AppLog.log("[switcher] its window was not drawn ahead")
+        winWarm = false
+        warmPic = null
+        win = Win.ASKED
+        winSession = s
+        val i = dev.launcher.app.switcher.SwitcherHost.intent(app, s)
+        frontIo.execute {
+            if (!NoAnimStarts.start(i, Process.myUserHandle().hashCode())) nav.post {
+                if (winSession == s && win == Win.ASKED) { AppLog.log("[switcher] its window could not be started"); endSwitcherWindow() }
+            }
+        }
+        AppLog.log("[switcher] a mini player is up: the deck moves to the switcher's own window once it shows")
+    }
+
+    private val switcherWindowListener = object : dev.launcher.app.switcher.SwitcherHost.Listener {
+        override fun onWindowShown(s: Int) {
+            if (s != winSession || win != Win.ASKED) return
+            // Leaving already (an app chosen, home): the deck finishes where it is.
+            if (phase != Phase.SWITCHER || deck?.interactive != true) return
+            // A finger on the deck (through the card window's input window): once it lifts (moved mid-touch, the touch
+            // was cancelled under the finger).
+            if (deck?.fingerOn == true) { handOverWhenFree = true; return }
+            handOverToWindow()
+        }
+
+        override fun onWindowLost(s: Int) {
+            if (s != winSession) return
+            when (win) {
+                // Something came over it (the mini player's app expanded, a launch from the shade, the lock screen...): the
+                // switcher is gone with it, nothing animates (it is covered).
+                Win.HOLDS -> { AppLog.log("[switcher] something came over its window: the switcher closes"); hideCards() }
+                // It never held the deck: the switcher goes on in the card window.
+                Win.ASKED -> endSwitcherWindow()
+                else -> {}
+            }
+        }
+
+        override fun onWindowBack(s: Int) {
+            if (s == winSession && win == Win.HOLDS) deck?.back()
+        }
+
+        override fun onWindowTouch(e: MotionEvent) {
+            if (e.actionMasked == MotionEvent.ACTION_DOWN && windowTouchLogs++ < 3) AppLog.log("[switcher] its window: touch at ${e.x.toInt()},${e.y.toInt()} (raw ${e.rawX.toInt()},${e.rawY.toInt()})")
+            if (win == Win.HOLDS && phase == Phase.SWITCHER) onSwitcherTouch(e)
+            e.recycle()
+        }
+    }
+
+    /**
+     * The deck moves into the switcher's own window, in the same frame as the card window goes clear (one transaction of both
+     * windows' frames): nothing moves on screen but the mini player's shadow, which shows from then on.
+     */
+    private fun handOverToWindow() {
+        if (Build.VERSION.SDK_INT < 34) return
+        val d = deck ?: return
+        val r = root ?: return
+        val st = stage2 ?: return
+        val cardRoot = cardWindow?.rootSurfaceControl ?: return
+        val winRoot = st.rootSurfaceControl ?: return
+        val sync = android.window.SurfaceSyncGroup("switcher-in")
+        sync.add(cardRoot, null)
+        sync.add(winRoot) {
+            back2?.depth = backdrop?.depth ?: 1f
+            dim2?.setBackgroundColor((r.background as? android.graphics.drawable.ColorDrawable)?.color ?: 0)
+            deckIndex = r.indexOfChild(d)
+            r.removeView(d)
+            st.addView(d, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            r.alpha = 0f   // the card window's backdrop and dim go with it (Stage mirrors its fade onto the backdrop)
+            win = Win.HOLDS
+            applyFloating()   // no holes in the card window now
+        }
+        sync.markSyncReady()
+        input?.hide()
+        AppLog.log("[switcher] the deck is in its own window, under the mini player")
+    }
+
+    /**
+     * The switcher is leaving (an app opens, home comes): the card window takes the deck back in the same frame (one
+     * transaction of both windows' frames), with its backdrop, dim and the mini player's hole, and the leaving runs there
+     * as always; the switcher's window is left showing nothing (it goes with the session, and may linger a frame over what
+     * comes next: clear, it is never seen).
+     */
+    private fun leaveSwitcherWindow() {
+        when (win) {
+            Win.HOLDS -> deckBackToCardWindow(shown = true)
+            Win.ASKED -> { clearSwitcherWindow(); win = Win.BACK }
+            else -> {}
+        }
+    }
+
+    private fun clearSwitcherWindow() {
+        back2?.alpha = 0f
+        dim2?.setBackgroundColor(0)
+    }
+
+    private fun deckBackToCardWindow(shown: Boolean) {
+        val d = deck ?: return
+        val r = root ?: return
+        val st = stage2 ?: return
+        val move = {
+            if (d.parent === st) {
+                st.removeView(d)
+                r.addView(d, deckIndex.coerceIn(0, r.childCount),
+                    FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            }
+            if (shown) r.alpha = 1f
+            clearSwitcherWindow()
+            win = Win.BACK
+            applyFloating()   // the mini player's hole, where it is now (the card window covers it again)
+        }
+        val cardRoot = cardWindow?.rootSurfaceControl
+        val winRoot = st.rootSurfaceControl
+        if (shown && Build.VERSION.SDK_INT >= 34 && cardRoot != null && winRoot != null) {
+            val sync = android.window.SurfaceSyncGroup("switcher-out")
+            sync.add(cardRoot, null)
+            sync.add(winRoot) { move() }
+            sync.markSyncReady()
+            AppLog.log("[switcher] the deck is back in the card window")
+        } else move()
+    }
+
+    /** The session's window goes (the deck back in the card window first); a new spare host is made once nothing moves. */
+    private fun endSwitcherWindow() {
+        val s = winSession
+        if (win == Win.HOLDS || deckInWindow) deckBackToCardWindow(shown = false)
+        win = Win.NONE
+        winSession = 0
+        handOverWhenFree = false
+        back2?.picture = null
+        stage2?.visibility = View.INVISIBLE
+        winWarm = false
+        warmPic = null
+        dev.launcher.app.switcher.SwitcherHost.end(s)
+        nav.post { refreshAppearance() }
+        nav.removeCallbacks(spareLater)
+        nav.postDelayed(spareLater, SPARE_AFTER_MS)
+    }
+
+    private val spareLater: Runnable = object : Runnable {
+        override fun run() {
+            if (phase != Phase.IDLE || fingerDown) { nav.postDelayed(this, SPARE_AFTER_MS); return }
+            dev.launcher.app.switcher.SwitcherHost.makeSpare()
+            updateSwitcherWarmth()
+        }
     }
 
     private val pendingRemovals = ArrayList<dev.launcher.app.switcher.DeckView.Card>()
@@ -3412,6 +3690,7 @@ object GestureNav {
 
     private val deckListener = object : dev.launcher.app.switcher.DeckView.Listener {
         override fun onOpenStart(card: dev.launcher.app.switcher.DeckView.Card) {
+            leaveSwitcherWindow()
             // The input window stays until the cards are gone (hideCards): removing it now made the window manager and the
             // compositor change windows in the middle of the animation.
             openedAt = SystemClock.uptimeMillis()
@@ -3431,7 +3710,8 @@ object GestureNav {
                 return
             }
             // The app the swipe started in is still in front underneath unless home was asked for or it was closed.
-            val stillInFront = !homeVisible && card.taskId == recentList.switchable().firstOrNull()?.id && !homeStarted && lastFrontPkg == card.pkg
+            val stillInFront = !switcherOverHome && !homeVisible && card.taskId == recentList.switchable().firstOrNull()?.id &&
+                !homeStarted && lastFrontPkg == card.pkg
             cardPkg = card.pkg
             if (!stillInFront) bringBack(card.pkg, Task(card.taskId, card.pkg))
             stats.reset(); stats.start()
@@ -3446,14 +3726,20 @@ object GestureNav {
         }
 
         override fun drawBehind(c: Canvas) {
-            backdrop?.draw(c)
+            // The copy in the window the deck is in (a view of the other window's tree drawn here would share its nodes).
+            (if (deckInWindow) back2 else backdrop)?.draw(c)
             val bg = (root?.background as? android.graphics.drawable.ColorDrawable)?.color ?: 0
             if (bg != 0) c.drawColor(bg)
         }
 
         override fun behindKey(): Long {
             val bg = (root?.background as? android.graphics.drawable.ColorDrawable)?.color ?: 0
-            return (System.identityHashCode(backdrop?.picture).toLong() * 31 + ((backdrop?.depth ?: 0f) * 1000f).toLong()) * 31 + bg
+            return ((System.identityHashCode(backdrop?.picture).toLong() * 31 + ((backdrop?.depth ?: 0f) * 1000f).toLong()) * 31 + bg) * 2 +
+                (if (deckInWindow) 1 else 0)
+        }
+
+        override fun haptic(constant: Int) {
+            strip?.performHapticFeedback(constant)
         }
 
         override fun isKept(pkg: String): Boolean = pkg in keepOpen
@@ -3475,6 +3761,7 @@ object GestureNav {
         }
 
         override fun onHomeStart() {
+            leaveSwitcherWindow()
             if (switcherHomeAsked) return
             switcherHomeAsked = true
             // Home with every icon now that it will sharpen (only the small blurred copy shows yet: cheap to re-render).
@@ -3537,6 +3824,10 @@ object GestureNav {
     }
 
     private const val HOLD_RADIUS_DP = 12f
+    /** WindowConfiguration's picture-in-picture windowing mode (a hidden constant). */
+    private const val WINDOWING_MODE_PINNED = 2
+    /** How long after a switcher session the next spare host for its window is made (ms; once nothing moves). */
+    private const val SPARE_AFTER_MS = 800L
     /** How far a finger from the top edge moves down before the hidden status bar shows for a moment (dp). */
     private const val EDGE_TRAVEL_DP = 20f
     /**
@@ -3687,7 +3978,13 @@ object GestureNav {
         // on the S24). A launch starts sharp and a close fully blurred, so only half of them show at first.
         private var pendingSharp: HomePicture? = null
         private var pendingLow: HomePicture? = null
-        private val applyPending = Runnable { applySharp(); applyLow() }
+        private val applyPending = Runnable { if (!lazySharp) applySharp(); applyLow() }
+
+        /**
+         * Shown blurred only (the App Switcher's own window): the sharp layers take a picture only once they show (drawn),
+         * never ahead: two screen-sized layers rendered for nothing.
+         */
+        var lazySharp = false
 
         private fun applySharp() { pendingSharp?.let { wallpaperLayer.pic = it.wallpaper; contentLayer.pic = it.content }; pendingSharp = null }
         private fun applyLow() { pendingLow?.let { lowWallpaper.pic = it.wallpaper; lowContent.pic = it.content }; pendingLow = null }
@@ -3695,7 +3992,7 @@ object GestureNav {
         private fun setPics(p: HomePicture, staggered: Boolean) {
             removeCallbacks(applyPending)
             pendingSharp = p; pendingLow = p
-            if (!staggered) { applySharp(); applyLow(); return }
+            if (!staggered) { if (!lazySharp) applySharp(); applyLow(); return }
             postOnAnimation(applyPending)
             invalidate()
         }
