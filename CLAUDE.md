@@ -67,7 +67,12 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   in Layouts' segmented control and fades away behind the sheet (`motion.settings.focus`). iOS 27's overview: the page is
   the blurred wallpaper, the panel on it, its buttons clear glass (`comp.settings.glass`). Phone holds Shizuku, updates,
   safety and the developer tools with the log.
-  Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control.
+  Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control. From the edit menu
+  home slides into them (`settings/SettingsEntry`, `EntryState`): home pictures itself at rest with our bar on it, their
+  first frame waits for it and shows it over the whole screen (the screen's own corners, no frame), and once the window
+  is on screen it shrinks into the picture above the sheet as the sheet rises; Back on the tiles plays it the other way,
+  the card window holds home's picture while they go back at rest underneath (their App Switcher card) and home comes
+  (`GestureNav.ownScreenToHome`). Their task is the one of ours in the App Switcher (`switchable`: by activity class).
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").
@@ -200,7 +205,13 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Stock notification launch animation** (SystemUI) still plays even with animation scales at 0; solved by replacing the shade so taps go through us (re-test).
 - **Status bar race**: a restore-on-start can clear freshly set flags; set flags only after restore has finished.
 - **Never change an overlay window's layout params at the start of a gesture** (alpha, flags, size): each change is a
-  10-50 ms window manager re-layout on that window's thread. The card window stays at alpha 1.
+  10-50 ms window manager re-layout on that window's thread. The card window stays at alpha 1. An activity window's bar
+  flags (`setSystemBarsAppearance`) are a relayout too, at its next frame: the settings change theirs at a slide's end and
+  tell our bar mid-slide (`GestureNav.ownScreenTone`, which holds off reading our window's stale flags meanwhile).
+- **A first frame held back (`OnPreDrawListener` returning false) holds the window's opening transition**: count any
+  "it should be on screen by now" timer from that frame's commit (`registerFrameCommitCallback`), never from before it.
+  Counted from home's picture arriving, the settings slid in before their window showed: their first composition after a
+  start took 0.6-0.8 s on the emulator. A key pressed meanwhile waits in InputDispatcher until the window has the focus.
 - **Recording home into a Picture costs ~20 ms of main thread**: never inside an animation frame (settle callbacks run inside
   the last frame); reuse the last picture when home has not drawn since. **No GPU layer on any view inside home** (only on
   the recorded root): a layered child is drawn in software inside the recording and the glass shader crashes the app.

@@ -98,6 +98,7 @@
             android:label="Launcher settings"
             android:launchMode="singleTask"
             android:taskAffinity="dev.launcher.app.settings"
+            android:theme="@style/Settings"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

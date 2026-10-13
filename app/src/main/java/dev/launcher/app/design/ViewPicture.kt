@@ -14,12 +14,17 @@ import dev.launcher.app.AppLog
 /**
  * A view as it shows now, exactly: its last frame's display lists drawn again on the GPU off screen (glass, blur and shaders
  * as they are), as a GPU bitmap. A child already marked to draw again is recorded anew in it, so a look about to change is
- * taken before anything draws in the new values (B4c: home's old look, the settings app's). Main thread.
+ * taken before anything draws in the new values (B4c: home's old look, the settings app's). [render]: the view's thread.
  */
 object ViewPicture {
-    fun render(v: View): Bitmap? {
-        val w = v.width
-        val h = v.height
+    fun render(v: View): Bitmap? = draw(v.width, v.height, v.javaClass.simpleName) { c -> c.drawColor(Color.BLACK); v.draw(c) }
+
+    /**
+     * What [block] draws on a [w] x [h] canvas, rendered on the GPU into a GPU bitmap ([what] names it in the log). Any
+     * thread for bitmaps alone (home's picture with the status bar's on it: drawn through the CPU it was read back from the
+     * GPU, drawn and uploaded again, 200-570 ms on the emulator); a view's display lists only on its own thread ([render]).
+     */
+    fun draw(w: Int, h: Int, what: String, block: (android.graphics.Canvas) -> Unit): Bitmap? {
         if (w == 0 || h == 0) return null
         var reader: ImageReader? = null
         var renderer: HardwareRenderer? = null
@@ -30,7 +35,7 @@ object ViewPicture {
             val root = RenderNode("view-picture")
             root.setPosition(0, 0, w, h)
             val c = root.beginRecording()
-            try { c.drawColor(Color.BLACK); v.draw(c) } finally { root.endRecording() }
+            try { block(c) } finally { root.endRecording() }
             renderer.setContentRoot(root)
             renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
             val image = reader.acquireNextImage()
@@ -40,7 +45,7 @@ object ViewPicture {
             image.close()
             b
         } catch (t: Throwable) {
-            AppLog.log("[design] no picture of ${v.javaClass.simpleName} as it shows (${t.javaClass.simpleName}: ${t.message})")
+            AppLog.log("[design] no picture of $what as it shows (${t.javaClass.simpleName}: ${t.message})")
             null
         } finally {
             try { renderer?.destroy() } catch (_: Throwable) { }

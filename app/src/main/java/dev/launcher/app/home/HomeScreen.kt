@@ -48,6 +48,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         fun launch(e: AppEntry, iconOnScreen: RectF, icon: Drawable?)
         /** The system's wallpaper picker, opening out of [from] (screen px). */
         fun openWallpaperPicker(from: RectF)
+        /** The launcher's settings, home sliding into their picture of it (home shows at rest now). */
+        fun openSettings()
         /** Everything came to rest: a good moment to record the picture of home. */
         fun onHomeSettled()
         /** The layout was edited (moved, removed, added): save it. */
@@ -893,6 +895,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         return false
     }
 
+    /** When home was last touched (uptime ms: a finger down anywhere on it, menus included). */
+    private var touchedAt = 0L
+
     private fun track(e: MotionEvent) {
         if (e.actionMasked == MotionEvent.ACTION_DOWN) { vt?.recycle(); vt = VelocityTracker.obtain() }
         vt?.addMovement(e)
@@ -903,6 +908,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
                 downX = e.x; downY = e.y
+                touchedAt = e.eventTime
                 drag = Drag.NONE
                 HomeBridge.onHomeTouched?.invoke()
                 pendingDragView = null
@@ -1897,8 +1903,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun showEditMenu(button: RectF) {
         val items = arrayListOf(
             dev.launcher.app.components.MenuPainter.Item("Add Widget", glyph = dev.launcher.app.components.MenuPainter.Glyph.PLUS) { openWidgetPicker() },
-            // Android's convenience (iOS changes it from the lock screen): the system's own picker, out of the Edit button.
-            dev.launcher.app.components.MenuPainter.Item("Change Wallpaper", glyph = dev.launcher.app.components.MenuPainter.Glyph.WALLPAPER) { listener.openWallpaperPicker(RectF(button)) },
+            // Android's convenience (iOS changes it from the lock screen): the system's own picker, out of the Edit button once
+            // the menu has closed into it.
+            dev.launcher.app.components.MenuPainter.Item("Change Wallpaper", glyph = dev.launcher.app.components.MenuPainter.Glyph.WALLPAPER,
+                afterClose = { listener.openWallpaperPicker(RectF(button)) }),
             dev.launcher.app.components.MenuPainter.Item(if (cfg.showLabels) "Hide App Names" else "Show App Names", glyph = dev.launcher.app.components.MenuPainter.Glyph.LABEL) { setAppLabelsShown(!cfg.showLabels) },
         )
         items += dev.launcher.app.components.MenuPainter.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = dev.launcher.app.components.MenuPainter.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) }
@@ -1906,13 +1914,43 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val modes = dev.launcher.app.theme.Appearance.Mode.entries
         items += dev.launcher.app.components.MenuPainter.Item("Appearance", choices = modes.map { it.title }, chosen = modes.indexOf(dev.launcher.app.theme.Appearance.mode),
             onChoice = { i -> dev.launcher.app.theme.Appearance.setMode(context, modes[i]) })
-        // The launcher's own settings (docs/PLAN_SETTINGS.md): editing ends, the settings open.
-        items += dev.launcher.app.components.MenuPainter.Item("Home Settings", glyph = dev.launcher.app.components.MenuPainter.Glyph.SLIDERS) {
-            editMode?.exit()
-            context.startActivity(android.content.Intent(context, dev.launcher.app.settings.SettingsActivity::class.java)
-                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-        }
+        // The launcher's own settings (docs/PLAN_SETTINGS.md): editing ends with the menu; once home is at rest it slides into
+        // the settings' picture of it (Matheesha: not a separate app opening).
+        items += dev.launcher.app.components.MenuPainter.Item("Home Settings", glyph = dev.launcher.app.components.MenuPainter.Glyph.SLIDERS,
+            afterClose = { whenAtRest { listener.openSettings() } }) { editMode?.exit() }
         menu?.show((editBar as? EditMode.Bar)?.editButtonNode(), button, items)
+        menu?.liftedFollows = editBar   // editing may end with the menu (Home Settings): the button's copy leaves with the bar
+    }
+
+    /**
+     * Runs [then] (after the frame) once home shows at rest: no menu, edit mode's bar gone, no icon still wiggling, nothing
+     * moving; checked every frame, and after [maxMs] whatever it shows. A picture of home is taken next (it must show home
+     * as it will stay).
+     */
+    private fun whenAtRest(maxMs: Long = 700L, then: () -> Unit) {
+        val asked = android.os.SystemClock.uptimeMillis()
+        val deadline = asked + maxMs
+        val check = object : Runnable {
+            override fun run() {
+                when {
+                    atRest() -> post(then)
+                    android.os.SystemClock.uptimeMillis() <= deadline -> postOnAnimation(this)
+                    // Touched again meanwhile and still not at rest (a swipe under way, edit mode again): the finger's way wins.
+                    touchedAt > asked -> dev.launcher.app.AppLog.log("[home] not opened: home was touched meanwhile and is not at rest")
+                    else -> post(then)
+                }
+            }
+        }
+        postOnAnimation(check)
+    }
+
+    private fun atRest(): Boolean {
+        if (menu?.closedEnough == false || editMode?.active == true || sceneBlurK() > 0.005f || !isIdle) return false
+        // The edit bar fading up and away (its last few per cent are not seen), the icons coming to rest from their wiggle.
+        val bar = editBar
+        if (bar != null && bar.visibility == View.VISIBLE && bar.alpha > 0.01f) return false
+        val page = pages.getOrNull(pos.roundToInt())
+        return page?.itemViews()?.all { it.rotation == 0f } != false && dock?.icons()?.all { it.rotation == 0f } != false
     }
 
     fun openWidgetPicker() {

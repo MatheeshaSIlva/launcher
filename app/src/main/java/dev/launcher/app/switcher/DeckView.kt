@@ -787,6 +787,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
                 val item = menu.items.getOrNull(i)
                 closeMenu()
                 item?.action?.invoke()
+                item?.afterClose?.invoke()   // (none of the deck's items opens anything over it)
                 invalidate()
             }
             MotionEvent.ACTION_CANCEL -> { menuPressed = -1; invalidate() }

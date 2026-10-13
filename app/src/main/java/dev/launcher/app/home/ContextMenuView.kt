@@ -55,7 +55,22 @@ class ContextMenuView(
     /** The item is shown again early, under the lifted copy fading into it ([handBack]); [onClosed] still runs at the end. */
     var onHandBack: (() -> Unit)? = null
 
-    private val k = MotionValue(0f, 1000f, { onProgress(it.coerceIn(0f, 1f)); invalidate() }, { onRest() })
+    /**
+     * The lifted copy moves and fades with this view (set after [show]): the Edit button's copy leaves with the edit bar
+     * when editing ends as the menu closes (Home Settings). Left where it was lifted, it stayed after the bar had gone
+     * and vanished as the menu came to rest.
+     */
+    var liftedFollows: View? = null
+        set(v) { field = v; followFromY = v?.translationY ?: 0f }
+    private var followFromY = 0f
+
+    private val k = MotionValue(0f, 1000f, { onProgress(it.coerceIn(0f, 1f)); invalidate(); runAfterClose() }, { onRest() })
+
+    /**
+     * What the chosen item opens once the menu has closed ([MenuPainter.Item.afterClose]): it covers home, and home going
+     * out of sight closes a menu at once (Matheesha: Change Wallpaper and Home Settings cut the menu's close short).
+     */
+    private var afterClose: (() -> Unit)? = null
 
     private val glass = dev.launcher.app.design.MaterialPainter.create(m.u)
     private val dim = Paint()
@@ -67,6 +82,8 @@ class ContextMenuView(
     private val bounds = RectF()
 
     val isShowing get() = visibility == VISIBLE && k.target > 0f
+    /** Shows no more to the eye: closed, or in the last per cent of closing (what an item opens may come now). */
+    val closedEnough get() = visibility != VISIBLE || (k.target == 0f && k.value <= CLOSED_ENOUGH)
     /** Opening (or open), as opposed to closing. */
     val opening get() = k.target > 0f
 
@@ -82,9 +99,11 @@ class ContextMenuView(
      */
     fun show(picture: RenderNode?, frame: RectF, menu: List<MenuPainter.Item>, pressed: RenderNode? = null) {
         // The previous menu may still be closing: its item shows again now (its "closed" would be replaced and lost, leaving
-        // that item invisible on home).
+        // that item invisible on home), and what it was to open once closed is not opened.
         onClosed?.invoke()
         onClosed = null
+        afterClose = null
+        liftedFollows = null
         lifted = picture
         liftedPressed = pressed
         liftedFades = false
@@ -123,6 +142,7 @@ class ContextMenuView(
 
     fun handOff() {
         if (visibility != VISIBLE) return
+        afterClose = null
         lifted = null
         liftedPressed = null
         painter.layout(emptyList(), anchor, bounds, 8f, false)
@@ -133,6 +153,7 @@ class ContextMenuView(
 
     /** At once (home went out of sight). */
     fun dismissNow(runClosed: Boolean = false) {
+        afterClose = null   // home went out of sight first: what the item was to open is not opened now
         k.snapTo(0f)
         onProgress(0f)
         visibility = GONE
@@ -146,6 +167,15 @@ class ContextMenuView(
         visibility = GONE
         onClosed?.invoke()
         onClosed = null
+        runAfterClose()
+    }
+
+    // Once the menu shows no more (its blur and scrim under a pixel's worth), after the frame (what it opens records home).
+    private fun runAfterClose() {
+        val a = afterClose ?: return
+        if (k.target != 0f || k.value > CLOSED_ENOUGH) return
+        afterClose = null
+        post(a)
     }
 
     override fun onDraw(c: Canvas) {
@@ -158,18 +188,21 @@ class ContextMenuView(
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), dim)
         panelTint.color = sc
         panelTint.alpha = (android.graphics.Color.alpha(sc) * kk).toInt()
-        // The pressed item, lifted (slightly bigger), above the blur.
-        lifted?.let { p ->
+        // The pressed item, lifted (slightly bigger), above the blur; with what it follows, where that is now and as faded.
+        val follows = liftedFollows
+        val followA = follows?.alpha?.coerceIn(0f, 1f) ?: 1f
+        lifted?.takeIf { followA > 0.003f }?.let { p ->
             val s = if (liftedFades) 0.6f + 0.46f * kk else 1f + 0.06f * kv
             c.save()
-            c.translate(anchor.centerX(), anchor.centerY())
+            c.translate(anchor.centerX(), anchor.centerY() + (follows?.let { it.translationY - followFromY } ?: 0f))
             c.scale(s, s)
             c.translate(-anchor.width() / 2f, -anchor.height() / 2f)
             if (liftedFades || liftedHandsBack) {
-                val l = c.saveLayerAlpha(0f, 0f, anchor.width(), anchor.height(), (255 * kk).toInt())
+                val l = c.saveLayerAlpha(0f, 0f, anchor.width(), anchor.height(), (255 * kk * followA).toInt())
                 c.drawRenderNode(p)
                 c.restoreToCount(l)
             } else {
+                val fl = if (followA < 1f) c.saveLayerAlpha(0f, 0f, anchor.width(), anchor.height(), (255 * followA).toInt()) else -1
                 c.drawRenderNode(p)
                 // Pressed (dimmed) at first, clear once open: the press fades as it lifts (it went at once).
                 val pk = if (opening) 1f - kk else 0f
@@ -180,6 +213,7 @@ class ContextMenuView(
                         c.restoreToCount(l)
                     }
                 }
+                if (fl >= 0) c.restoreToCount(fl)
             }
             c.restore()
         }
@@ -229,6 +263,7 @@ class ContextMenuView(
                 }
                 if (chosen != null && chosen.destructive) liftedFades = true
                 dismiss()
+                chosen?.afterClose?.let { afterClose = it }   // (before the action: a menu it shows drops it)
                 chosen?.action?.invoke()
             }
             MotionEvent.ACTION_CANCEL -> { pressed = -1; invalidate() }
@@ -237,6 +272,9 @@ class ContextMenuView(
     }
 
     companion object {
+        /** How far open the menu may still be when an item's [MenuPainter.Item.afterClose] runs (its blur ~0.3 px). */
+        private const val CLOSED_ENOUGH = 0.01f
+
         /** A copy of what [draw] draws ([w] x [h] px), recorded for the GPU: views inside are drawn as they show. */
         fun record(w: Int, h: Int, draw: (Canvas) -> Unit): RenderNode = RenderNode("lifted").apply {
             setPosition(0, 0, maxOf(1, w), maxOf(1, h))

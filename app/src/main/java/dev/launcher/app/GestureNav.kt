@@ -100,7 +100,7 @@ object GestureNav {
     /** Each app's status bar tone as it last asked for it (true: black content), for its card as it opens. */
     private val appDark = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
 
-    private class Task(val id: Int, val pkg: String)
+    private class Task(val id: Int, val pkg: String, val cls: String? = null)
     // HOME_PULL: a swipe up on the home screen (no card); a hold opens the App Switcher, a release is the Home button.
     private enum class Phase { IDLE, DRAG_HOME, DRAG_SWITCH, ANIM, HOLD, SWITCHER, HOME_PULL }
     private enum class Anim { NONE, HOME_COMMIT, HOME_CANCEL, LAUNCH, SWITCH_COMMIT, SWITCH_CANCEL }
@@ -609,6 +609,7 @@ object GestureNav {
         applyBarVisible()
         val s = ShizukuLink.service ?: return
         val askedFor = lastFrontPkg
+        val askedAt = SystemClock.uptimeMillis()
         appearanceIo.execute {
             val out = try { s.windowAppearance() } catch (t: Throwable) { "ERROR: ${t.message}" }
             val dark = parseLightStatusBar(out)
@@ -617,7 +618,10 @@ object GestureNav {
             nav.post {
                 val b = statusBar ?: return@post
                 if (homeVisible || bringing != null || closingHome) return@post
-                if (dark != null) { b.setDark(dark); askedFor?.let { appDark[it] = dark } }
+                // (Not over a tone one of our screens set itself since: read before it, the window's flags were the old ones;
+                // nor while it holds the tone, its window's flags waiting.)
+                val held = askedFor == app.packageName && SystemClock.uptimeMillis() < ownToneUntil
+                if (dark != null && askedAt >= ownToneAt && !held) { b.setDark(dark); askedFor?.let { appDark[it] = dark } }
                 // Only when the window manager does not tell us itself (BarWatch off: no overlay permission).
                 if (hidden != null && barVisible == null) { b.setHiddenByApp(hidden); watchEdge(hidden) }
             }
@@ -701,6 +705,120 @@ object GestureNav {
         // The app that was in front has just left it: the system's snapshot of it (taken as it left) is newer than ours.
         lastFrontPkg?.let { leftFrontAt[it] = SystemClock.uptimeMillis() }
         nav.post { refreshAppearance() }
+    }
+
+    /** When one of our own screens last set the status bar's tone itself (uptime ms; see [ownScreenTone]). */
+    @Volatile private var ownToneAt = 0L
+    /** Until when (uptime ms) readings of our own windows' flags are not taken ([ownScreenTone]'s hold). */
+    @Volatile private var ownToneUntil = 0L
+
+    /**
+     * One of our own screens says what is under the status bar now (dark: dark content, for something light), as the
+     * settings slide from or into home: the bar follows at once (the window's own flags are read only when windows change,
+     * and a reading asked before this is not taken). For [holdMs] no reading of our own app's window is taken at all: its
+     * flags wait for the slide's end (a change of them is a relayout of the window, a missed frame mid-slide), and read
+     * meanwhile (the 2.5 s tick, a window event) they recoloured the bar. Any thread.
+     */
+    fun ownScreenTone(dark: Boolean, holdMs: Long = 0L) {
+        val now = SystemClock.uptimeMillis()
+        ownToneAt = now
+        ownToneUntil = now + holdMs
+        nav.post {
+            if (homeVisible || bringing != null || closingHome || win == Win.HOLDS) return@post
+            statusBar?.setDark(dark)
+        }
+    }
+
+    /**
+     * One of our own screens (the settings) has slid back into home and shows [picture] (home as it shows, our status bar
+     * on it) over the whole screen. The card window holds the same picture over everything while [atRest] puts that screen
+     * back at rest underneath (its last frame is what the system keeps of it: its card in the App Switcher, and how it shows
+     * when it comes back; left showing home, its card was a picture of home), home comes to the front without an animation,
+     * and once home has drawn the picture goes. [atRest] runs on the main thread and calls its argument once that frame is
+     * drawn. Any thread.
+     */
+    fun ownScreenToHome(picture: android.graphics.Bitmap, atRest: (() -> Unit) -> Unit) = nav.post {
+        val host = cardWindow
+        if (host == null || !prepareCardWindow()) {
+            AppLog.log("[nav] no card window for home's picture: home comes at once")
+            main.post { atRest { frontIo.execute { startHomeQuietly() } } }
+            return@post
+        }
+        val g = ++coverGen
+        setWindowShown(true)
+        val cover = homeCover ?: CoverView(host.context).also { c ->
+            host.addView(c, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+            homeCover = c
+        }
+        cover.picture = picture
+        cover.visibility = View.VISIBLE
+        coverAt = SystemClock.uptimeMillis()
+        host.viewTreeObserver.registerFrameCommitCallback {
+            // On screen a refresh after its frame is committed: the screen under it may change from then on.
+            nav.postDelayed({
+                if (g != coverGen) return@postDelayed
+                AppLog.log("[nav] home's picture is over our screen (${SystemClock.uptimeMillis() - coverAt} ms): it goes back at rest under it")
+                main.post { atRest { nav.post { if (g == coverGen) coverHome(g) } } }
+            }, COVER_SHOWN_MS)
+        }
+        cover.invalidate()
+        // Never left up: whatever happens, it goes.
+        nav.postDelayed({ if (g == coverGen) uncover("timed out") }, COVER_MAX_MS)
+    }
+
+    // ---- home's picture over one of our screens going back into home (ownScreenToHome)
+
+    private var homeCover: CoverView? = null
+    private var coverGen = 0
+    private var coverAt = 0L
+
+    /** A picture over the whole card window (home's, as one of our screens hands back to it). */
+    private class CoverView(ctx: Context) : View(ctx) {
+        private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+        private val dst = RectF()
+        var picture: android.graphics.Bitmap? = null
+            set(v) { if (field !== v) { field = v; invalidate() } }
+
+        override fun onDraw(c: Canvas) {
+            val b = picture ?: return
+            dst.set(0f, 0f, width.toFloat(), height.toFloat())
+            c.drawBitmap(b, null, dst, paint)
+        }
+    }
+
+    /** The screen under the cover is at rest: home comes to the front; the cover goes a refresh after home has drawn. */
+    private fun coverHome(g: Int) {
+        val asked = SystemClock.uptimeMillis()
+        AppLog.log("[nav] our screen is at rest under home's picture (${asked - coverAt} ms): home comes")
+        frontIo.execute { startHomeQuietly() }
+        fun check() {
+            if (g != coverGen) return
+            val drawn = homeVisible && HomeBridge.homeDrawnAt >= asked
+            if (drawn || SystemClock.uptimeMillis() - asked > COVER_HOME_WAIT_MS) {
+                nav.postDelayed({ if (g == coverGen) uncover(if (drawn) "home drew ${HomeBridge.homeDrawnAt - asked} ms after it was asked for" else "home did not draw in time") }, COVER_SHOWN_MS)
+            } else nav.postDelayed({ check() }, 8)
+        }
+        check()
+    }
+
+    private fun uncover(why: String) {
+        coverGen++
+        val c = homeCover ?: return
+        if (c.visibility != View.VISIBLE) return
+        c.visibility = View.GONE
+        c.picture = null
+        AppLog.log("[nav] home's picture over our screen goes after ${SystemClock.uptimeMillis() - coverAt} ms ($why)")
+    }
+
+    /** Home to the front with no animation and nothing of a gesture's state touched (blocking: the front queue). */
+    private fun startHomeQuietly() {
+        try {
+            val home = Intent(app, HomeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (!NoAnimStarts.start(home, Process.myUserHandle().hashCode())) app.startActivity(home, noAnimation(app))
+        } catch (t: Throwable) {
+            AppLog.log("[nav] home could not be brought back (${t.javaClass.simpleName}); using the shell")
+            ShizukuLink.service?.runDetached("am start -a android.intent.action.MAIN -c android.intent.category.HOME")
+        }
     }
 
     /** From NavAccessibilityService: a window of [pkg] came to the front. */
@@ -1815,6 +1933,7 @@ object GestureNav {
         val raw = MotionEvent.obtain(e).apply { setLocation(e.rawX, e.rawY) }
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                if (homeCover?.visibility == View.VISIBLE) uncover("a touch on the bar")   // a gesture's cards are under it
                 vt?.recycle()
                 vt = VelocityTracker.obtain().also { it.addMovement(raw) }
                 downX = e.rawX
@@ -2068,11 +2187,14 @@ object GestureNav {
 
     private fun parseTasks(lines: Array<String>) = lines.mapNotNull { line ->
         val parts = line.split(' ')
-        parts.getOrNull(0)?.toIntOrNull()?.let { Task(it, parts.getOrElse(1) { "?" }) }
+        parts.getOrNull(0)?.toIntOrNull()?.let { Task(it, parts.getOrElse(1) { "?" }, parts.getOrNull(2)?.takeIf { c -> c != "?" }) }
     }
 
-    /** Our own tasks (home, the dev panel) are not apps to switch between or go back to. */
-    private fun List<Task>.switchable() = filter { it.pkg != app.packageName }
+    /**
+     * The apps to switch between or go back to: not our own tasks (home's, the test and expert screens'), except the
+     * launcher's settings, an app of its own (Matheesha: it belongs in the App Switcher).
+     */
+    private fun List<Task>.switchable() = filter { it.pkg != app.packageName || it.cls == SETTINGS_CLASS }
 
     // The home screen's shaped icon when it has one (the card must turn into exactly what home shows), else the system's.
     private fun iconFor(pkg: String): Drawable? = Icons.drawableFor(pkg) ?: icons[pkg] ?: try {
@@ -2919,7 +3041,9 @@ object GestureNav {
     /** The run's apps from the newest recent, [front] (the app in front) first. */
     private fun newRun(front: Task?) {
         val list = recentList.switchable().toMutableList()
-        if (front != null && list.firstOrNull()?.pkg != front.pkg) { list.removeAll { it.pkg == front.pkg }; list.add(0, front) }
+        // The app in front by its package; our own tasks by their id (the settings are not the token editor in front).
+        val same: (Task) -> Boolean = { t -> t.pkg == front?.pkg && (t.pkg != app.packageName || t.id == front.id) }
+        if (front != null && list.firstOrNull()?.let(same) != true) { list.removeAll(same); list.add(0, front) }
         switchList = list
         switchIndex = 0
     }
@@ -3187,7 +3311,9 @@ object GestureNav {
         if (!prepareCardWindow()) return
         val fromHome = phase == Phase.HOME_PULL
         val tasks = switcherRecents().switchable()
-        val first = if (fromHome) null else tasks.firstOrNull { it.pkg == cardPkg } ?: fg?.takeIf { it.pkg == cardPkg }
+        // (Our own tasks by their id: with the token editor in front, the settings' task is not the app the swipe began in.)
+        val first = if (fromHome) null else tasks.firstOrNull { it.pkg == cardPkg && (it.pkg != app.packageName || it.id == fg?.id) }
+            ?: fg?.takeIf { it.pkg == cardPkg }
         val list = (listOfNotNull(first) + tasks.filter { it.id != first?.id }).take(SWITCHER_MAX_CARDS)
         if (list.isEmpty()) return
         switcherOverHome = fromHome
@@ -3826,6 +3952,14 @@ object GestureNav {
     private const val HOLD_RADIUS_DP = 12f
     /** WindowConfiguration's picture-in-picture windowing mode (a hidden constant). */
     private const val WINDOWING_MODE_PINNED = 2
+    /** A cover counts as on screen this long after its frame was committed (ms: a refresh at 60 Hz). */
+    private const val COVER_SHOWN_MS = 17L
+    /** Home's picture over one of our screens stays this long at most (ms). */
+    private const val COVER_MAX_MS = 1500L
+    /** How long the cover waits for home to draw once it was asked to come (ms). */
+    private const val COVER_HOME_WAIT_MS = 700L
+    /** The launcher's settings (the one task of ours that is an app in the App Switcher). */
+    private val SETTINGS_CLASS = dev.launcher.app.settings.SettingsActivity::class.java.name
     /** How long after a switcher session the next spare host for its window is made (ms; once nothing moves). */
     private const val SPARE_AFTER_MS = 800L
     /** How far a finger from the top edge moves down before the hidden status bar shows for a moment (dp). */

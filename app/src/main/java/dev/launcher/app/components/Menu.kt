@@ -75,6 +75,11 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
                val sizes: List<WidgetSize>? = null, val current: WidgetSize? = null, val onSize: ((WidgetSize) -> Unit)? = null,
                /** A segmented row of [choices] ([chosen] highlighted): [onChoice] runs for the one tapped; the menu stays open. */
                val choices: List<String>? = null, var chosen: Int = 0, val onChoice: ((Int) -> Unit)? = null,
+               /**
+                * Runs once the menu has closed ([action] runs at the tap): for what covers home (an app or the settings
+                * opening). Opened at the tap, home went out of sight with the menu still closing and it was gone at once.
+                */
+               val afterClose: (() -> Unit)? = null,
                val action: () -> Unit = {})
 
     private fun pt(v: Float) = v * u

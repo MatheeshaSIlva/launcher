@@ -51,7 +51,8 @@ interface IShellService {
     // Brings a recent task to the front (IActivityTaskManager.startActivityFromRecents).
     String switchToTask(int taskId) = 12;
 
-    // Recent tasks as "taskId packageName", most recent first (the home task is not listed).
+    // Recent tasks as "taskId packageName activityClass", most recent first (the home task is not listed; builds before
+    // 2026-10-14 sent no class).
     String[] recentTasks(int max) = 13;
 
     // 14, 15: retired (mirrorDisplay probe; it crashed the system on the S24). Do not reuse these codes.

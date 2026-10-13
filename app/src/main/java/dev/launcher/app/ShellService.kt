@@ -124,8 +124,10 @@ class ShellService : IShellService.Stub() {
         recentTaskInfos(max).mapNotNull { t ->
             val id = readInt(t, "taskId") ?: readInt(t, "persistentId") ?: return@mapNotNull null
             val cn = (readField(t, "baseActivity") ?: readField(t, "realActivity")) as? android.content.ComponentName
-            val pkg = cn?.packageName ?: (readField(t, "baseIntent") as? android.content.Intent)?.component?.packageName ?: "?"
-            "$id $pkg"
+            val base = cn ?: (readField(t, "baseIntent") as? android.content.Intent)?.component
+            val pkg = base?.packageName ?: "?"
+            // The activity too: which of the app's own tasks is its settings (the one of ours the App Switcher shows).
+            "$id $pkg ${base?.className ?: "?"}"
         }.toTypedArray()
     } catch (t: Throwable) {
         emptyArray()

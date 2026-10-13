@@ -15,6 +15,13 @@
         <item name="android:enforceNavigationBarContrast">false</item>
     </style>
 
+    <!-- The launcher's settings (settings/SettingsActivity): no starting window. Opened from home's edit menu its first frame
+         is home's picture (it slides into the settings from there); the system's splash went up first and finished the
+         opening transition under it, so the window was never said to be on screen. -->
+    <style name="Settings" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowDisablePreview">true</item>
+    </style>
+
     <!-- The App Switcher's activity (switcher/SwitcherActivity): translucent (the app under it keeps running, and does not go
          into its mini player), nothing of its own drawn, no window animation, edge to edge. -->
     <style name="SwitcherWindow" parent="@android:style/Theme.DeviceDefault.NoActionBar">

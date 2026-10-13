@@ -1909,3 +1909,45 @@ immersion."
 - **Known**: SurfaceFlinger's composite takes 6-8 ms on the S24 whenever the App Switcher is open in the card window
   (several screen-sized layers, our full-screen status bar window among them); while a mini player is up, the window's
   content holds a few screen-sized buffers.
+
+## Home Settings slides home into the settings; the settings in the App Switcher; the edit menu closes first (2026-10-14, emulator)
+
+Matheesha: add Launcher Settings to the App Switcher; "Home Settings" in home's edit menu should slide home into the
+settings' preview instead of opening a separate app; and the edit menu closed at once, without its animation, for
+"Change Wallpaper" and "Home Settings" ("it is noticeable").
+
+- **The edit menu closes first.** A menu item may open what covers home only once the menu has closed
+  (`MenuPainter.Item.afterClose`, run when the menu is within 1 % of closed); opened at the tap, home went out of sight
+  mid-close and the menu was gone at once. "Change Wallpaper": the menu closes into the Edit button, then the picker's
+  card grows out of it. "Home Settings": editing ends with the menu (the lifted Edit button leaves with the bar,
+  `ContextMenuView.liftedFollows`), and once home is at rest (no menu, the bar gone, no icon wiggling, nothing moving)
+  the settings open. A new touch that leaves home moving at the deadline (700 ms: a swipe, edit mode again) cancels it.
+- **Home slides into the settings** (`settings/SettingsEntry`, `EntryState`, `SettingsActivity.beginEntry`). Home
+  pictures itself as it shows, our status bar on it (drawn together on the GPU: `ViewPicture.draw`; the old CPU copy read
+  the picture back from the GPU, 200-570 ms on the emulator), before the settings start. Their first frame waits for
+  it and shows it over the whole screen, cut to the screen's own corners and without the preview's rim and shadow
+  (which fade in over the first 30 % of the slide; at full size they drew a dark frame round the screen). Once the shell
+  saw the opening committed (or the opening transition finished, or 400 ms after that first frame was drawn) one spring
+  (`motion.settings.open`) shrinks it into the picture above the sheet as the sheet rises from below the screen and the
+  title comes in. The status bar keeps home's tone while the picture is under it: our bar is told mid-slide
+  (`GestureNav.ownScreenTone`) and the window's own flags change at the slide's end (a change of them is a relayout:
+  a frame of the slide); readings of our window meanwhile are not taken.
+- **Back on the tiles slides back** into a fresh picture of home (its clock as it is now). At the end the card window
+  holds that picture over everything (`GestureNav.ownScreenToHome`), the settings go back at rest underneath (that frame
+  is their App Switcher card), home comes to the front without an animation, and once it has drawn the picture goes.
+  Back during the slide in turns it round from where it is and how fast it moves. Left half-way (a swipe home) nothing
+  is covered later; a new opening from home stops a slide still playing (`EntryState.jump`).
+- **The settings in the App Switcher**: the shell's recent tasks name each task's activity now; our own tasks stay out
+  of the switcher and the quick switch, except the settings' (matched by class, and by task id where the package is ours).
+- **Checked on the emulator** (the S24 was not connected; the host was busy, so emulator timing says little: the slide
+  drew 6-12 frames). Recorded frame by frame: the settings' first frame matches home (only the emulator's stock status
+  bar chip differs), the slide back's last frame, the cover and home itself line up to the pixel, no dark frame at
+  either end. Back during the slide in, Back from the settings restored from their card, the settings opened plainly
+  (from the drawer: Back finishes them, no slide), Change Wallpaper (menu closes in ~0.3 s, then the card). Logs per
+  opening: "[settings] their first frame ... drawn", "home slides in (why) N ms after they opened", "home slid in/out:
+  N frames in M ms, longest ...".
+- **To check on the S24**: the slide's smoothness (frame stats of the settings window), the delay from the tap to the
+  slide (the emulator: 0.5 s warm, 1.0-1.4 s after a start, most of it the settings' first composition), the
+  switcher card's picture (the emulator has no task snapshots for the shell), Samsung's wallpaper picker after the
+  menu's close. Seen on the emulator only: Pixel's wallpaper picker starts a second activity and shows 2 s late, and our
+  launch card gives up before it (home shows in between); the existing launch path, not this change.

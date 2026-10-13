@@ -427,6 +427,28 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (!GestureNav.launchApp(pkg, from, icon, start)) start()
     }
 
+    /**
+     * "Home Settings" in the edit menu, home now at rest: the settings start (their first frame waits for home's picture) and
+     * home is pictured as it shows, our status bar on it, and handed over ([SettingsEntry]): they show it over the whole
+     * screen, then slide it into their picture of home (Matheesha: home slides into the settings, not an app opening).
+     */
+    override fun openSettings() {
+        // Left meanwhile (a swipe while home came to rest): nothing opens over whatever is in front now.
+        if (!resumed) { AppLog.log("[home] home settings: home was left first"); return }
+        AppLog.log("[home] home settings: home slides into them")
+        val e = dev.launcher.app.settings.SettingsEntry
+        val i = Intent(this, dev.launcher.app.settings.SettingsActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).putExtra(e.FROM_HOME, true)
+        e.offerHome {
+            io.execute {
+                val ok = try { NoAnimStarts.start(i, android.os.Process.myUserHandle().hashCode()) } catch (_: Throwable) { false }
+                if (!ok) runOnUiThread {
+                    try { startActivity(i, GestureNav.noAnimation(this)) } catch (t: Throwable) { AppLog.log("[home] settings failed: ${t.message}") }
+                }
+            }
+        }
+    }
+
     private fun wallpaperPickerIntent(): Intent {
         val pm = packageManager
         Intent("com.samsung.intent.action.WALLPAPER_SETTING").resolveActivity(pm)?.let { return Intent().setComponent(it) }

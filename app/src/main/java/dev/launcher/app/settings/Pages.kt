@@ -388,13 +388,8 @@ private object HomePictures {
         for ((id, b) in found) if (id !in byTheme) byTheme[id] = b
     }
 
-    /** Home's picture [home] with the status bar's [bar] across its top, on the GPU (any thread but main: a copy back). */
-    fun withBar(home: android.graphics.Bitmap, bar: android.graphics.Bitmap): android.graphics.Bitmap = try {
-        val sw = home.copy(android.graphics.Bitmap.Config.ARGB_8888, true) ?: home
-        val k = sw.width.toFloat() / bar.width
-        android.graphics.Canvas(sw).apply { scale(k, k); drawBitmap(bar, 0f, 0f, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)) }
-        (sw.copy(android.graphics.Bitmap.Config.HARDWARE, false) ?: sw).also { if (it !== sw) sw.recycle() }
-    } catch (t: Throwable) { dev.launcher.app.AppLog.log("[settings] no bar on home's picture: ${t.message}"); home }
+    /** Home's picture [home] with the status bar's [bar] across its top, drawn together on the GPU (any thread but main). */
+    fun withBar(home: android.graphics.Bitmap, bar: android.graphics.Bitmap): android.graphics.Bitmap = SettingsEntry.withBar(home, bar)
 
     /** [b] is home in theme [id] now: kept, and saved (at half size) off the main thread. */
     fun keep(ctx: android.content.Context, id: String, b: android.graphics.Bitmap) {
@@ -424,7 +419,10 @@ private object HomePictures {
  * page in the first frame of its push).
  */
 @Stable
-private class Studio {
+private class Studio(
+    /** Home sliding in (and back out): the picture, the sheet and the title move with it. */
+    val entry: EntryState,
+) {
     var open by mutableStateOf<Part?>(null)
     val p = Animatable(0f)
     /** Each tile's bounds in the sheet: where its page grows from and goes back to. */
@@ -477,6 +475,21 @@ private class Geometry(look: Look, val statusPx: Float, val navPx: Float) {
 
     /** The picture's scale wherever the sheet is: it keeps fitting between the header and the sheet. */
     fun previewScale(p: Float, bar: Float = 0f) = ((top(p, bar) - previewTop - gap) / previewH).coerceIn(0.15f, 1.2f)
+
+    /** How far below its place the sheet waits while home slides in: off the screen, its shadow too. */
+    val enterDrop = h - restTop + 48f * unit
+
+    /**
+     * Where home's picture, shrinking from the whole screen into its place at the tiles, leaves the status bar over the page
+     * (0..1 of the slide): its top, at the slide's value times its top at rest, passes the bar's height.
+     */
+    val toneAt: Float = run {
+        val availH = (restTop - previewTop - 22f * unit).coerceAtLeast(60f * unit)
+        val availW = w - look.pt(SettingsTokens.MARGIN) * 2f
+        val fh = minOf(availW * h / w, availH)
+        val restY = previewTop + (availH - fh) / 2f
+        (statusPx / restY.coerceAtLeast(1f)).coerceIn(0.05f, 0.9f)
+    }
 }
 
 /** How far the page being composed is shown (0..1, read in drawing: the groups rise in with it). */
@@ -494,10 +507,11 @@ private val LocalGroups = staticCompositionLocalOf { GroupCounter() }
  * the theme's.
  */
 @Composable
-fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit = {}) {
+fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit = {}, entry: EntryState = remember { EntryState() },
+                toHome: () -> Unit = onClose) {
     SettingsTheme(beforeWallpaper) {
         val look = LocalLook.current
-        val st = remember { Studio() }
+        val st = remember(entry) { Studio(entry) }
         val scope = rememberCoroutineScope()
         val density = LocalDensity.current
         val statusPx = WindowInsets.statusBars.getTop(density).toFloat()
@@ -527,12 +541,59 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         val draft = remember { Draft() }
         val bar = remember { Animatable(0f) }
         val ctx = LocalContext.current
-        BackToTiles(st, close, draft, onClose)
+        BackToTiles(st, close, draft, onClose, toHome)
+        androidx.compose.runtime.SideEffect {
+            entry.toneAt = g.toneAt
+            // Coming from home again with a page left open: back at the tiles at once (unseen: home's picture covers all).
+            entry.reset = { st.open = null; scope.launch { st.p.snapTo(0f) } }
+        }
+        // Home sliding in (and back out, Back on the tiles): one spring moves home's picture between the whole screen and its
+        // place, the sheet up from below the screen and the title in (EntryState). The status bar keeps home's tone while the
+        // picture is under it.
+        LaunchedEffect(entry) {
+            androidx.compose.runtime.snapshotFlow { entry.runs }.collectLatest { n ->
+                if (n == 0) return@collectLatest
+                val to = entry.target
+                // A jump: the slide that played (if any) is cancelled by now; where it is was set with it.
+                if (entry.instant) { entry.enter.floatValue = to; entry.velocity = 0f; return@collectLatest }
+                val done = entry.done
+                entry.done = null
+                var home = entry.enter.floatValue < entry.toneAt
+                entry.moving = true
+                // For the log: its frames as the main thread drew them (what the screen showed: tools/framestats.py).
+                val t0 = android.os.SystemClock.uptimeMillis()
+                var frames = 0
+                var last = 0L
+                var longest = 0L
+                var longestAt = 0f
+                try {
+                    // (From where it is and how fast it moves: Back while home slides in turns it round, no jump.)
+                    androidx.compose.animation.core.animate(entry.enter.floatValue, to, entry.velocity, spec.value) { v, speed ->
+                        entry.velocity = speed
+                        val now = android.os.SystemClock.uptimeMillis()
+                        if (last != 0L && now - last > longest) { longest = now - last; longestAt = v }
+                        last = now
+                        frames++
+                        entry.enter.floatValue = v
+                        val h = v < entry.toneAt
+                        if (h != home) { home = h; entry.onTone?.invoke(h) }
+                    }
+                } finally { entry.moving = false }
+                entry.velocity = 0f
+                dev.launcher.app.AppLog.log("[settings] home slid ${if (to >= 1f) "in" else "out"}: $frames frames in ${last - t0} ms, " +
+                    "longest $longest ms (at ${"%.2f".format(longestAt)})")
+                if (to >= 1f) entry.picture = null   // taken in by the picture of home by now
+                entry.onRest?.invoke()
+                done?.invoke()
+            }
+        }
         // The pages are built ahead, one a frame, once the app has come up; then the font search's sheet, while nothing moves
         // (built in a page's opening it would cost that opening a frame).
         var sheetBuilt by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) {
             kotlinx.coroutines.delay(350)
+            // Not while home slides in: a page built in one of its frames would cost it that frame.
+            androidx.compose.runtime.snapshotFlow { entry.moving || entry.enter.floatValue < 1f }.first { !it }
             while (st.built < Part.entries.size) {
                 androidx.compose.runtime.withFrameNanos { }
                 st.built++
@@ -547,7 +608,7 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         // Scrolling counts too: the rest of the tree alone still cost 4-5 ms a check while a page scrolled on the S24.
         val moving by remember {
             androidx.compose.runtime.derivedStateOf {
-                st.p.isRunning || bar.isRunning || st.scrolls.values.any { it.moving } ||
+                st.p.isRunning || bar.isRunning || entry.moving || st.scrolls.values.any { it.moving } ||
                     st.elementShown.values.any { it.isRunning } || st.elementScrolls.values.any { it.moving }
             }
         }
@@ -574,7 +635,7 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                     HomePicture(st, g, bar)
                     Header(st, g) { close(0f) }
                     Sheet(st, g, bar, open, close)
-                    ApplyBar(draft, g, bar) { draft.apply(ctx) }
+                    ApplyBar(draft, g, bar, st.entry) { draft.apply(ctx) }
                 }
                 // Built after the pages (the first opening builds nothing).
                 if (sheetBuilt) FontSheet(fontSearch)
@@ -602,12 +663,15 @@ private fun screenReaderOn(): Boolean {
  * soon after discards them and leaves. Its own composable: only it changes when a page opens.
  */
 @Composable
-private fun BackToTiles(st: Studio, close: (Float) -> Unit, draft: Draft, leave: () -> Unit) {
+private fun BackToTiles(st: Studio, close: (Float) -> Unit, draft: Draft, leave: () -> Unit, toHome: () -> Unit) {
     BackHandler(enabled = st.open != null) { close(0f) }
     BackHandler(enabled = st.open == null && draft.count > 0) {
         val now = android.os.SystemClock.uptimeMillis()
-        if (draft.backAt != 0L && now - draft.backAt < Draft.BACK_AGAIN_MS) { draft.discard(); leave() } else draft.backAt = now
+        if (draft.backAt != 0L && now - draft.backAt < Draft.BACK_AGAIN_MS) { draft.discard(); if (st.entry.fromHome) toHome() else leave() }
+        else draft.backAt = now
     }
+    // Opened from home's edit menu: back into home the way it came (home's picture growing back over the whole screen).
+    BackHandler(enabled = st.open == null && draft.count == 0 && st.entry.fromHome) { toHome() }
 }
 
 /**
@@ -647,6 +711,9 @@ private fun gestureOf(e: Element?, placement: String): Gesture? = when (e) {
     }
     else -> null
 }
+
+/** Home sliding in: its frame (rim, shadow) is there in full from this far along the slide (0..1). */
+private const val FRAME_IN = 0.3f
 
 /**
  * Home as it is now, above the sheet; a new picture (after any change) fades in over the last. Whole, it is the phone in
@@ -764,6 +831,8 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     // And when home's wallpaper arrives (after a start, home read it while the settings were in front).
     LaunchedEffect(look.version, look.wallpaper, resumed) {
         kotlinx.coroutines.delay(150)
+        // Home handed over its picture as it slid in (it is current): no other one taken in its frames.
+        if (st.entry.moving || st.entry.enter.floatValue < 1f) return@LaunchedEffect
         // Home may not be up yet (the app just started with the settings in front): asked again for a few seconds.
         var home: android.graphics.Bitmap? = null
         for (i in 0 until 10) {
@@ -787,6 +856,24 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     // The theme chosen and not yet applied shows as home looked in it (if the settings have seen it), else home as it is;
     // with no home to picture yet (the app just started), as it last looked in this theme.
     LaunchedEffect(Unit) { HomePictures.load(ctx) }
+    // Home's picture handed over as it slides in is the newest: taken in at once (it is what shows); a fresh one before it
+    // slides back out, with the usual fade.
+    LaunchedEffect(st.entry) {
+        androidx.compose.runtime.snapshotFlow { st.entry.picture to st.entry.fresh }.collect { (handed, fresh) ->
+            if (handed != null && shown !== handed) {
+                HomePictures.keep(ctx, Design.themeId, handed)
+                latest = handed
+                before = null
+                shown = handed
+                fade.snapTo(1f)
+            }
+            if (fresh != null) {
+                st.entry.fresh = null
+                HomePictures.keep(ctx, Design.themeId, fresh)
+                latest = fresh
+            }
+        }
+    }
     val wanted = draft.theme?.let { HomePictures.byTheme[it] } ?: latest ?: HomePictures.byTheme[Design.themeId]
     LaunchedEffect(wanted) {
         if (wanted == null || wanted === shown) return@LaunchedEffect
@@ -801,6 +888,12 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     val shadow = look.color(SettingsTokens.PREVIEW_SHADOW).toArgb()
     val page = look.color(SettingsTokens.BACKGROUND).toArgb()
     val cornerFrac = Design.num(SettingsTokens.PREVIEW_CORNER)
+    // The screen's own corners (px): home's picture filling the screen as it slides in is cut as the screen is, so its
+    // first and last frames are home itself (cut to the picture's corners, with its rim, they showed a dark frame).
+    val view = androidx.compose.ui.platform.LocalView.current
+    val screenCorner = remember(view) {
+        if (android.os.Build.VERSION.SDK_INT >= 31) view.display?.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_LEFT)?.radius?.toFloat() ?: 0f else 0f
+    }
     val margin = look.pt(SettingsTokens.MARGIN)
     val wallpaper = look.wallpaper
     val paints = remember {
@@ -853,11 +946,17 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
         val bandY = g.previewTop + (availH - bandH) * anchor
         val x1 = margin
         val y1 = bandY - c.top * g.h * s1
-        val s = s0 + (s1 - s0) * z
-        val ox = x0 + (x1 - x0) * z
-        val oy = y0 + (y1 - y0) * z
-        // The phone's outline where it is now, its corners at its scale.
-        val r = g.w * cornerFrac * s
+        val sRest = s0 + (s1 - s0) * z
+        val oxRest = x0 + (x1 - x0) * z
+        val oyRest = y0 + (y1 - y0) * z
+        // Home sliding in from the whole screen (or back out to it): from there to here on the slide's one value (past its
+        // end a little as the spring settles; never larger than the screen).
+        val e = st.entry.enter.floatValue.coerceAtLeast(0f)
+        val s = 1f + (sRest - 1f) * e
+        val ox = oxRest * e
+        val oy = oyRest * e
+        // The phone's outline where it is now, its corners at its scale (the screen's own over the whole screen).
+        val r = screenCorner + (g.w * cornerFrac * s - screenCorner) * e
         val f = paints.frame.apply { set(ox, oy, ox + g.w * s, oy + g.h * s) }
         drawIntoCanvas { cv ->
             val nc = cv.nativeCanvas
@@ -874,7 +973,8 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
             if (layered) nc.saveLayer(0f, fadeTop - 1f, g.w, fadeBottom + 1f, null)
             // (Inside the layer: as the picture zooms they fade with it at the room's ends; drawn outside, they ran up the
             // zoomed phone's sides to the top of the screen.)
-            val frameA = 1f - zoom.value.coerceIn(0f, 1f)
+            // (And while home slides in: none over the whole screen, there by the time it is well inside it.)
+            val frameA = (1f - zoom.value.coerceIn(0f, 1f)) * (e / FRAME_IN).coerceIn(0f, 1f)
             if (frameA > 0.003f) {
                 paints.shadow.color = ((((shadow ushr 24) * frameA).toInt() shl 24) or (shadow and 0xFFFFFF))
                 if (paints.shadow.maskFilter == null) paints.shadow.maskFilter = android.graphics.BlurMaskFilter(18f * g.unit, android.graphics.BlurMaskFilter.Blur.OUTER)
@@ -902,11 +1002,14 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
                 paints.dst.set(0f, 0f, g.w, g.h)
                 nc.drawBitmap(b, paints.src, paints.dst, paints.image)
             }
-            val sb = shown
-            val bb = before
+            // Home's own picture as it slid in, until it is taken in (its first frames: the effect taking it in comes after).
+            val handed = st.entry.picture?.takeIf { it !== shown }
+            val sb = if (handed != null) null else shown
+            val bb = if (handed != null) null else before
+            if (handed != null) picture(handed, 1f)
             if (bb != null) picture(bb, 1f)
             if (sb != null) picture(sb, fade.value)
-            else if (wallpaper != null) {
+            else if (handed == null && wallpaper != null) {
                 // Home has not shown since the app started: its wallpaper at least.
                 paints.image.alpha = 255
                 paints.m.set(wallpaper.matrix(look.screenW, look.screenH))
@@ -1033,8 +1136,10 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
     Box(Modifier.fillMaxWidth().offset { IntOffset(0, g.headerTop.roundToInt()) }.height(look.dp(g.buttonSize)), contentAlignment = Alignment.Center) {
         BasicText("Settings", style = style, modifier = Modifier.graphicsLayer {
             val p = st.p.value
-            alpha = (1f - p * 2f).coerceIn(0f, 1f)
-            translationY = -p * rise
+            // In as home's picture has made room for it (the slide's second half).
+            val e = ((st.entry.enter.floatValue - 0.45f) / 0.55f).coerceIn(0f, 1f)
+            alpha = (1f - p * 2f).coerceIn(0f, 1f) * e
+            translationY = -p * rise + (1f - e) * rise
         })
         for (part in Part.entries) BasicText(part.title, style = style, modifier = Modifier.graphicsLayer {
             val p = if (st.open == part) st.p.value else 0f
@@ -1098,7 +1203,7 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
         Modifier
             .offset { IntOffset(g.inset.roundToInt(), g.openTop.roundToInt()) }
             .size(look.dp(g.sheetW), look.dp(g.sheetH))
-            .graphicsLayer { translationY = g.top(st.p.value, bar.value) - g.openTop }
+            .graphicsLayer { translationY = g.top(st.p.value, bar.value) - g.openTop + (1f - st.entry.enter.floatValue.coerceAtLeast(0f)) * g.enterDrop }
             .drawBehind {
                 val k = solid()
                 if (k <= 0.003f) return@drawBehind
@@ -1169,7 +1274,7 @@ private fun Chip(text: String, onClick: () -> Unit) {
     BasicText(text, style = look.text(SettingsTokens.CHIP_TEXT, look.color(SettingsTokens.CHIP_TEXT_COLOR)), maxLines = 1,
         modifier = Modifier
             .pressScale { 1f - 0.05f * press }
-            .then(if (glass) Modifier.movingGlass(SettingsTokens.CHIP_MATERIAL, look.pt(SettingsTokens.CHIP_CORNER), { press }, panelUnder(look)) { st?.p?.value }
+            .then(if (glass) Modifier.movingGlass(SettingsTokens.CHIP_MATERIAL, look.pt(SettingsTokens.CHIP_CORNER), { press }, panelUnder(look)) { st?.let { it.p.value + it.entry.enter.floatValue } }
                 else Modifier.background(look.color(SettingsTokens.CHIP_FILL), RoundedCornerShape(look.dp(SettingsTokens.CHIP_CORNER))))
             .pointerInput(onClick) { rowTap({ pressed = it }, onClick) }
             .padding(horizontal = look.dp(12f * look.unit), vertical = look.dp(7f * look.unit)))
@@ -1265,7 +1370,7 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
                 }
             }
             .pressScale { 1f - 0.04f * press.value }
-            .then(if (glass) Modifier.movingGlass(SettingsTokens.TILE_MATERIAL, look.pt(SettingsTokens.TILE_CORNER), { press.value }, panelUnder(look)) { st.p.value }
+            .then(if (glass) Modifier.movingGlass(SettingsTokens.TILE_MATERIAL, look.pt(SettingsTokens.TILE_CORNER), { press.value }, panelUnder(look)) { st.p.value + st.entry.enter.floatValue }
                 else Modifier.background(tileFill(look, part), RoundedCornerShape(look.dp(SettingsTokens.TILE_CORNER))))
             .pointerInput(part) { rowTap({ pressed = it }) { open(part) } }
             .padding(look.dp(14f * look.unit)),
@@ -2441,7 +2546,7 @@ private fun Stepper(minus: Boolean, plus: Boolean, onMinus: () -> Unit, onPlus: 
  * above it), counts them, and after Back with changes waiting says what a second Back does.
  */
 @Composable
-private fun ApplyBar(draft: Draft, g: Geometry, bar: Animatable<Float, *>, onApply: () -> Unit) {
+private fun ApplyBar(draft: Draft, g: Geometry, bar: Animatable<Float, *>, entry: EntryState, onApply: () -> Unit) {
     val look = LocalLook.current
     val n = draft.count
     val spec = look.motion<Float>(MotionTokens.SHEET)
@@ -2473,7 +2578,7 @@ private fun ApplyBar(draft: Draft, g: Geometry, bar: Animatable<Float, *>, onApp
             .graphicsLayer {
                 val k = bar.value
                 alpha = k.coerceIn(0f, 1f)
-                translationY = (1f - k) * (g.barH + 40f * g.unit)
+                translationY = (1f - k) * (g.barH + 40f * g.unit) + (1f - entry.enter.floatValue.coerceAtLeast(0f)) * g.enterDrop
             }
             .pressScale { 1f + 0.05f * nudge.value }
             .drawBehind {
