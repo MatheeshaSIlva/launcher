@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- TurnCover: no starting window, no window animation, edge to edge (it draws the whole display itself). -->
-    <style name="TurnCover" parent="@android:style/Theme.Translucent.NoTitleBar">
+    <!-- TurnCover: opaque from its first moment (translucent, home behind it became visible sideways when the app went
+         into picture-in-picture), no window animation, edge to edge (it draws the whole display itself). -->
+    <style name="TurnCover" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowIsTranslucent">false</item>
         <item name="android:windowDisablePreview">true</item>
         <item name="android:windowAnimationStyle">@null</item>
         <item name="android:windowLayoutInDisplayCutoutMode">always</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/black</item>
         <!-- The window draws the bars' backgrounds itself otherwise (black under the navigation bar for a few frames). -->
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

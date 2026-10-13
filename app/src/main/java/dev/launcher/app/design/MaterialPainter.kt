@@ -139,23 +139,15 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     /**
      * [m] as a surface over the system's live blur ([SamsungBlur], drawn behind it by the system with [systemTint]): only
      * what the material lays over its frosted backdrop (inner shadows, the rim's light, drop shadows and rims, a press).
-     * The lens's bending needs the backdrop's pixels, which the system never gives: with [lens] the band along the edge
-     * where the lens visibly bends is drawn whole over the backdrop set by [setBackdrop] (a picture of what is behind, at
-     * [screenX], [screenY] as [draw] places it, with [under] as there) and fades into the live blur inward (Matheesha: no
-     * refraction showed on the banners). Without it the lens is left out. [overlay] false: that band alone (to fade one
-     * picture's band into another's over a first draw).
+     * The lens's bending needs the backdrop's pixels and is left out. Same placement as [draw].
      */
-    fun drawOverSystemBlur(c: Canvas, m: Material, w: Float, h: Float, radius: Float, alpha: Float = 1f, press: Float = 0f,
-                           lens: Boolean = false, overlay: Boolean = true, screenX: Float = 0f, screenY: Float = 0f,
-                           under: List<Fill> = emptyList()) {
-        if (alpha <= 0.003f || w <= 1f || h <= 1f || (!lens && !overlay)) return
+    fun drawOverSystemBlur(c: Canvas, m: Material, w: Float, h: Float, radius: Float, alpha: Float = 1f, press: Float = 0f) {
+        if (alpha <= 0.003f || w <= 1f || h <= 1f) return
         val base = overGray(m, 0.5f)
         shader.setFloatUniform("live", 1f)
-        shader.setFloatUniform("liveLens", if (!lens) 0f else if (overlay) 1f else 2f)
         shader.setFloatUniform("liveBase", base[0], base[1], base[2])
-        draw(c, m, w, h, radius, screenX, screenY, 1f, alpha = alpha, under = under, press = press)
+        draw(c, m, w, h, radius, 0f, 0f, 1f, alpha = alpha, press = press)
         shader.setFloatUniform("live", 0f)
-        shader.setFloatUniform("liveLens", 0f)
     }
 
     /**
@@ -620,9 +612,6 @@ uniform float dropReach;
 // and shade laid over; [liveBase] is about what the system shows there (blurred, tinted).
 uniform float live;
 uniform half3 liveBase;
-// Over the live blur, the lens's band along the edge drawn whole over [backdrop] (a picture of what is behind), fading
-// into the live blur where the bending no longer shows (1); that band alone (2), to fade one picture's into another's.
-uniform float liveLens;
 uniform float plain;
 uniform half3 plainColor;
 uniform half4 fillColor[$MAX_FILLS];
@@ -847,8 +836,6 @@ half4 liveOverlay(float2 p, float2 hs, float2 n, float inside, float d) {
     return res;
 }
 
-half4 glassAt(float2 p, float2 hs, float2 n, float inside, float d, float2 sp, float2 coord);
-
 half4 main(float2 coordIn) {
     // Where this pixel is on the surface ([local0]: the surface's top-left in this shader's coordinates; 0 as a paint).
     float2 coord = coordIn - local0;
@@ -859,7 +846,7 @@ half4 main(float2 coordIn) {
     if (d > dropReach) return half4(0.0);
     // Where it samples: its place on screen, about home's depth centre as far as the wallpaper zooms (1: at rest).
     float2 sp = depthC + (origin + coord * placeScale - depthC) * depthK;
-    if (d > 0.5) return live > 0.5 && liveLens > 1.5 ? half4(0.0) : dropShadows(p, hs, live > 0.5 ? liveBase : seen(sp, float2(0.0), 0.0)) * half(alpha);
+    if (d > 0.5) return dropShadows(p, hs, live > 0.5 ? liveBase : seen(sp, float2(0.0), 0.0)) * half(alpha);
     float2 ce = cornerOf(radiusAt(p), hs);
     float2 q = abs(p) - hs + ce.x;
     float2 sg = float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
@@ -870,23 +857,7 @@ half4 main(float2 coordIn) {
         n = normalize(float2(pow(qq.x, ce.y - 1.0), pow(qq.y, ce.y - 1.0))) * sg;
     } else n = q.x > q.y ? float2(sg.x, 0.0) : float2(0.0, sg.y);
     float inside = max(-d, 0.0);
-    if (live > 0.5) {
-        half4 ov = liveLens > 1.5 ? half4(0.0) : liveOverlay(p, hs, n, inside, d);
-        if (liveLens > 0.5) {
-            // Whole glass over the picture where the lens moves it by more than ~2 pt (the outer 55 % of its depth), mixed
-            // into the live blur over the inner part of that.
-            float dpl = min(depth, 0.45 * min(size.x, size.y));
-            float tl = dpl > 0.0 ? clamp(inside / dpl, 0.0, 1.0) : 1.0;
-            half wl = half(1.0 - smoothstep(0.2, 0.55, tl));
-            if (wl > 0.0) ov = mix(ov, glassAt(p, hs, n, inside, d, sp, coord), wl);
-        }
-        return ov * half(alpha);
-    }
-    return glassAt(p, hs, n, inside, d, sp, coord) * half(alpha);
-}
-
-// The whole glass at this pixel over [backdrop], premultiplied (before the surface's alpha).
-half4 glassAt(float2 p, float2 hs, float2 n, float inside, float d, float2 sp, float2 coord) {
+    if (live > 0.5) return liveOverlay(p, hs, n, inside, d) * half(alpha);
     // The lens: bent outward near the edge (quarter-circle profile), red and blue apart.
     float dp = min(depth, 0.45 * min(size.x, size.y));
     float t = dp > 0.0 ? clamp(inside / dp, 0.0, 1.0) : 1.0;
@@ -941,7 +912,7 @@ half4 glassAt(float2 p, float2 hs, float2 n, float inside, float d, float2 sp, f
     half4 res = half4(col, 1.0) * cov;
     // At the anti-aliased edge the rims continue under it.
     if (d > -0.5) res += dropShadows(p, hs, seen(sp, float2(0.0), 0.0)) * (1.0 - cov);
-    return res;
+    return res * half(alpha);
 }
 """
     }

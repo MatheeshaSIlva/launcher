@@ -164,25 +164,9 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             c.translate(m, m)
             val p = mp
             if (p != null && s.plate != null && !liveFailed) {
-                // The system blurs what is behind live (the plate under this card); the glass adds its own light, rims and
-                // shadow over it, and along the edge its lens over our picture of what is behind (where there is one: a
-                // plain colour bent shows nothing), fading into the live blur inward. When the picture changes (it came,
-                // an app opened or closed under the banner) that band fades from the one to the other.
-                val was = behindWas
-                val f = if (was == null) 1f else ((android.os.SystemClock.uptimeMillis() - behindAt).toFloat() / appFade.get().durationMs).coerceIn(0f, 1f)
-                val fading = was != null && f < 1f
-                val g = if (fading) appFade.get().at(f).coerceIn(0f, 1f) else 1f
-                val now = lensOver(p, behind)
-                val before = if (fading) lensOver(p, was!!, set = false) else null
-                if (now != null && (before != null || !fading)) {
-                    lensOver(p, behind)
-                    p.drawOverSystemBlur(c, Design.material(MATERIAL), w, s.h, radius(s), lens = true, screenX = margin(), screenY = top(), under = now)
-                } else p.drawOverSystemBlur(c, Design.material(MATERIAL), w, s.h, radius(s))
-                if (fading) {
-                    if (before != null) { lensOver(p, was!!); p.drawOverSystemBlur(c, Design.material(MATERIAL), w, s.h, radius(s), alpha = 1f - g, lens = true, overlay = false, screenX = margin(), screenY = top(), under = before) }
-                    else if (now != null) { lensOver(p, behind); p.drawOverSystemBlur(c, Design.material(MATERIAL), w, s.h, radius(s), alpha = g, lens = true, overlay = false, screenX = margin(), screenY = top(), under = now) }
-                }
-                if (was != null) { if (f < 1f) postInvalidateOnAnimation() else if (behindWas === was) behindWas = null }
+                // The system blurs what is behind live (the plate under this card); the glass adds only its own light,
+                // rims and shadow over it.
+                p.drawOverSystemBlur(c, Design.material(MATERIAL), w, s.h, radius(s))
             } else if (p != null) {
                 // What is behind ([behind]): over home the wallpaper, over an app its latest picture, both blurred to the
                 // glass's frost (until an app's picture has come, its usual background colour). When that changes (a
@@ -207,18 +191,6 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
             for (i in s.buttons.indices) drawButton(c, s, i)
             c.restore()
         }
-    }
-
-    /**
-     * [b]'s picture as the glass's backdrop for the lens's band over the live blur ([set] false: only asks), and the fills
-     * under the glass with it; null if there is no picture (a plain colour bent shows nothing).
-     */
-    private fun lensOver(p: MaterialPainter, b: Behind, set: Boolean = true): List<dev.launcher.app.design.Fill>? {
-        val home = if (b.home) wallpaperFrost() else null
-        val pic = home ?: b.app ?: return null
-        if (set) p.setBackdrop(pic, (b.color ?: Design.color(BEHIND)) or (0xFF shl 24))
-        val dim = Appearance.wallpaperDim
-        return if (home != null && dim > 0.001f) listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(0xFF000000.toInt(), 0xFF000000.toInt()), dim, dim, dev.launcher.app.design.Blend.NORMAL)) else emptyList()
     }
 
     /** A banner's whole glass over [b] (the wallpaper's frost, an app's picture, or the app's usual colour). */
@@ -475,7 +447,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
 
     /** The window in front changed (an app opened or closed under the banners): their glass takes up what is behind now. */
     fun frontChanged() {
-        if (all.none { !it.leaving }) return
+        if (live || all.none { !it.leaving }) return
         askBackdrop(fresh = false)
     }
 
@@ -522,7 +494,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         // A ringing banner stays: what does not ring waits in Notification Center.
         if (cur != null && cur.item.urgent && !item.urgent) return
         cur?.let { leave(it, up = true, velocity = -1200f) }
-        askBackdrop(fresh = all.isEmpty())
+        if (!live) askBackdrop(fresh = all.isEmpty())
         val s = Shown(item)
         s.height.snapTo(heightOf(s))
         all += s

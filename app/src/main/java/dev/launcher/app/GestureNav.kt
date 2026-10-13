@@ -512,8 +512,7 @@ object GestureNav {
 
     private val shadeLink = object : dev.launcher.app.shade.Shade.NavLink {
         override fun backdrop(then: (dev.launcher.app.shade.BackdropSource?) -> Unit) = shadeBackdrop(then)
-        // The band at the bottom of an open panel where a swipe up closes it: Android's gesture height (the strip is lower).
-        override fun stripHeight(): Int = max(if (stripHeight > 0) stripHeight else dp(20).toInt(), systemDimen("navigation_bar_gesture_height"))
+        override fun stripHeight(): Int = if (stripHeight > 0) stripHeight else dp(20).toInt()
         override fun shadeChanged(open: Boolean) {
             nav.post { stripUnderShade(open) }
             if (!open) refreshAppearance()
@@ -800,17 +799,15 @@ object GestureNav {
     private fun addStrip() {
         val ctx = a11y ?: return
         val wm = wm ?: return
-        // 20 dp, about iOS's (~20 pt), or the navigation bar if taller: an overlay takes every touch in its band (it cannot
-        // let an app's drag through as Android's own gestures do), and at Android's gesture height (32 dp) it lay over the
-        // bottom of apps' content (Matheesha: TikTok's seek bar could hardly be scrubbed). Taps in it reach the app anyway
-        // (tapToApp).
-        val navBar = if (Build.VERSION.SDK_INT >= 30) try { wm.currentWindowMetrics.windowInsets.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars()).bottom } catch (_: Throwable) { 0 } else 0
-        val h = max(dp(20).toInt(), navBar)
+        // Android's gesture height (One UI: 32 dp). An overlay takes every touch in its band and cannot let an app's drag
+        // through as Android's own gestures do (StripForward: taps reach the app), so it lies over the bottom of some apps'
+        // content (TikTok's seek bar); at 20 dp swipes home were missed half the time (Matheesha), so it stays this tall.
+        val h = max(dp(20).toInt(), systemDimen("navigation_bar_gesture_height").takeIf { it > 0 } ?: systemDimen("navigation_bar_height"))
         val stripView = FrameLayout(ctx)
         val pill = View(ctx).apply {
             background = GradientDrawable().apply { setColor(0x99FFFFFF.toInt()); cornerRadius = dp(2) }
         }
-        // Its centre 10 dp above the bottom edge, as it was in the taller strip.
+        // Its centre 10 dp above the bottom edge.
         stripView.addView(pill, FrameLayout.LayoutParams(dp(108).toInt(), dp(4).toInt(), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(8).toInt() })
         stripView.setOnTouchListener { _, e -> onTouch(e) }
         val lp = overlayParams(WindowManager.LayoutParams.MATCH_PARENT, h, touchable = true).apply {
@@ -955,7 +952,7 @@ object GestureNav {
             host.holeRadius = dp(16)
             pollFloating()
             d.setScreen(sw, sh, deviceRadius)
-            input = dev.launcher.app.switcher.SwitcherInput { e -> nav.post { onSwitcherTouch(e); e.recycle() } }
+            input = dev.launcher.app.switcher.SwitcherInput({ e -> nav.post { onSwitcherTouch(e); e.recycle() } }, { nav.post { floatingTouched() } })
                 .also { it.attach(ctx, wm, sw.toInt(), sh.toInt()) }
         } catch (t: Throwable) {
             AppLog.log("[nav] card window FAILED: ${t.javaClass.simpleName}: ${t.message}")
@@ -1052,6 +1049,8 @@ object GestureNav {
     // ---- floating windows (nav thread): where they are, asked of the shell every FLOATING_POLL_MS (a few ms of a worker's
     // time), at the start of every card session, and every FLOATING_BUSY_MS while cards show (a PiP window can be dragged).
     private var floating: List<RectF> = emptyList()
+    /** When (uptime ms) the floating windows last changed (one came, went or moved). */
+    private var floatingChangedAt = 0L
     private var floatingLogged = ""
 
     private val floatingPoll = object : Runnable {
@@ -1083,6 +1082,7 @@ object GestureNav {
             nav.post {
                 if (rects != floating) {
                     floating = rects
+                    floatingChangedAt = SystemClock.uptimeMillis()
                     val note = lines.joinToString("; ")
                     if (note != floatingLogged) { floatingLogged = note; AppLog.log("[nav] floating windows: ${note.ifEmpty { "none" }}") }
                     applyFloating()
@@ -1091,10 +1091,117 @@ object GestureNav {
         }
     }
 
-    /** The holes and the touchable region (during a close) leave the floating windows alone. */
+    /** The holes and the touchable regions (during a close, in the App Switcher) leave the floating windows alone. */
     private fun applyFloating() {
+        // A floating window being moved by the finger, or settling after it: its hole follows that instead (see below).
+        if (dragged != null) { dragTarget(floating); return }
         cardWindow?.holes = floating
+        input?.setHoles(floating)
         if (catching) cardWindow?.rootSurfaceControl?.setTouchableRegion(fullRegion())
+    }
+
+    // ---- a floating window (the mini player) moved in the App Switcher
+
+    /**
+     * The floating window under a touch in the App Switcher (it takes the touch itself) and where it is shown now. SystemUI
+     * moves it with the finger without telling anyone its place until it has settled, so its hole follows the finger, read
+     * from the touchscreen by the shell, then springs to where it settles (Matheesha: it could not be moved there at all).
+     */
+    private var dragged: RectF? = null
+    private var draggedFrom: RectF? = null
+    private var dragShown = RectF()
+    private var dragRef: FloatArray? = null
+    private var dragSettleUntil = 0L
+    private val dragSpring = arrayOf(RectF(), RectF())   // the spring's start and end
+    private val dragK by lazy { dev.launcher.app.motion.MotionValue(0f, 100f, { k -> placeDragged(k) }) }
+
+    private fun floatingTouched() {
+        if (phase != Phase.SWITCHER || floating.isEmpty()) return
+        val s = ShizukuLink.service ?: return
+        draggedFrom = null
+        dragRef = null
+        dragged = RectF()
+        try { s.watchTouch(dragStream) } catch (_: Throwable) { dragged = null }
+    }
+
+    private val dragStream = object : dev.launcher.app.ITouchStream.Stub() {
+        override fun onTouch(action: Int, x: Float, y: Float, timeNanos: Long) { nav.post { onDragRaw(action, x, y) } }
+    }
+
+    /** The touchscreen's (0..1, the panel's natural way up) [x], [y] on this display (px). */
+    private fun rawToScreen(x: Float, y: Float): FloatArray = when (displayRotation) {
+        android.view.Surface.ROTATION_90 -> floatArrayOf(y * sw, (1f - x) * sh)
+        android.view.Surface.ROTATION_270 -> floatArrayOf((1f - y) * sw, x * sh)
+        android.view.Surface.ROTATION_180 -> floatArrayOf((1f - x) * sw, (1f - y) * sh)
+        else -> floatArrayOf(x * sw, y * sh)
+    }
+
+    private fun onDragRaw(action: Int, x: Float, y: Float) {
+        if (dragged == null) return
+        val p = rawToScreen(x, y)
+        if (action == 2) {
+            val ref = dragRef
+            if (ref == null) {
+                // The first report: the floating window under the finger is the one it moves (the touch was elsewhere
+                // outside the switcher, e.g. the status bar: nothing to follow).
+                val from = floating.firstOrNull { RectF(it).apply { inset(-dp(12), -dp(12)) }.contains(p[0], p[1]) }
+                    ?: run { dragged = null; try { ShizukuLink.service?.stopTouch() } catch (_: Throwable) { }; return }
+                draggedFrom = from
+                dragRef = p
+                dragShown.set(from)
+                return
+            }
+            val from = draggedFrom ?: return
+            dragShown.set(from)
+            dragShown.offset(p[0] - ref[0], p[1] - ref[1])
+            dragK.stop()
+            showDragged()
+            return
+        }
+        // Lifted: SystemUI takes it to the nearest side edge (kept within the screen); the hole goes there with it and to
+        // its real place as soon as that is known.
+        val from = draggedFrom ?: run { dragged = null; return }
+        val margin = kotlin.math.min(from.left, sw - from.right).coerceAtLeast(0f)
+        val w = dragShown.width()
+        val h = dragShown.height()
+        val left = if (dragShown.centerX() < sw / 2f) margin else sw - margin - w
+        val top = dragShown.top.coerceIn(kotlin.math.min(from.top, margin), kotlin.math.max(from.bottom, sh - margin) - h)
+        springDragged(RectF(left, top, left + w, top + h))
+        dragSettleUntil = SystemClock.uptimeMillis() + DRAG_SETTLE_MS
+        // Its real place comes from the poll: often until it has settled.
+        for (t in longArrayOf(80, 200, 350, 550, 800, DRAG_SETTLE_MS)) nav.postDelayed({ refreshFloating() }, t)
+        nav.postDelayed({ if (SystemClock.uptimeMillis() >= dragSettleUntil) { dragged = null; applyFloating() } }, DRAG_SETTLE_MS + 150)
+    }
+
+    /** The floating windows' places came while one settles: its hole springs to its new place. */
+    private fun dragTarget(list: List<RectF>) {
+        val from = draggedFrom ?: return
+        val now = list.firstOrNull { sameSize(it, from) } ?: return
+        if (dragRef != null && SystemClock.uptimeMillis() < dragSettleUntil) springDragged(now)
+    }
+
+    private fun springDragged(to: RectF) {
+        dragSpring[0].set(dragShown)
+        dragSpring[1].set(to)
+        dragK.snapTo(0f)
+        dragK.animateTo(1f, Motion.role(dev.launcher.app.motion.MotionTokens.SWITCHER_REFLOW), 0f)
+    }
+
+    private fun placeDragged(k: Float) {
+        val a = dragSpring[0]
+        val b = dragSpring[1]
+        dragShown.set(a.left + (b.left - a.left) * k, a.top + (b.top - a.top) * k, a.right + (b.right - a.right) * k, a.bottom + (b.bottom - a.bottom) * k)
+        showDragged()
+    }
+
+    private fun sameSize(a: RectF, b: RectF) = kotlin.math.abs(a.width() - b.width()) < 2f && kotlin.math.abs(a.height() - b.height()) < 2f
+
+    private fun showDragged() {
+        val from = draggedFrom ?: return
+        // The one it is (by its size: its place is what changes) where it shows now.
+        val list = floating.map { if (sameSize(it, from)) RectF(dragShown) else it }
+        cardWindow?.holes = list
+        input?.setHoles(list)
     }
 
     /**
@@ -1205,6 +1312,7 @@ object GestureNav {
     /** Ends the card session: window invisible (kept), icon back, everything pending forgotten. */
     private fun hideCards() {
         catchTouchesForHome(false)
+        if (dragged != null) { dragged = null; dragK.stop() }
         // A cover asked for a close that never started home has nothing to hand over to.
         if (coverAsked && !homeStarted) TurnCover.dismiss()
         coverAsked = false
@@ -1833,10 +1941,19 @@ object GestureNav {
                     hiddenIconPkg = null
                     whenCoverShown(g) { shown ->
                         if (!shown) AppLog.log("[nav] no cover under the card in time: home starts anyway (the app may show while the display turns)")
-                        holdingForTurn = g
-                        nav.postDelayed({ if (holdingForTurn == g) { holdingForTurn = -1; AppLog.log("[nav] the display did not turn upright in time: the picture goes anyway"); if (gen == g) hideCards() } }, HOME_SHOWN_TIMEOUT_MS)
-                        TurnCover.handedOver()
-                        startHome()
+                        // A window that went floating during this close (the app into picture-in-picture: YouTube playing,
+                        // as soon as the cover covered it) is still moving into its corner under our card: Android hides
+                        // our windows as home starts, and the app's video showed full size, turning and shrinking. Home
+                        // starts once that has played out.
+                        val settle = if (floatingChangedAt >= coverAskedAt) floatingChangedAt + PIP_SETTLE_MS - SystemClock.uptimeMillis() else 0L
+                        if (settle > 0) AppLog.log("[nav] a window went floating during the close: home starts in $settle ms, when it has settled")
+                        nav.postDelayed({
+                            if (gen != g) return@postDelayed
+                            holdingForTurn = g
+                            nav.postDelayed({ if (holdingForTurn == g) { holdingForTurn = -1; AppLog.log("[nav] the display did not turn upright in time: the picture goes anyway"); if (gen == g) hideCards() } }, HOME_SHOWN_TIMEOUT_MS)
+                            TurnCover.handedOver()
+                            startHome()
+                        }, settle.coerceAtLeast(0L))
                     }
                 } else whenHomeDrawn(g) {
                     // The picture of home is on top of the real one: swap only once the real home has drawn.
@@ -2024,7 +2141,11 @@ object GestureNav {
                     if (gen != g) return@post
                     when {
                         at == null -> then(false)
-                        at >= since -> { AppLog.log("[nav] cover on screen ${at - since} ms after it was asked for"); then(true) }
+                        // On screen (the shell saw its transition committed) with its own first frame drawn a refresh ago.
+                        at >= since && TurnCover.drawnAt >= since && SystemClock.uptimeMillis() - TurnCover.drawnAt >= COVER_FRAME_MS -> {
+                            AppLog.log("[nav] cover on screen ${at - since} ms after it was asked for (drawn after ${TurnCover.drawnAt - since} ms)")
+                            then(true)
+                        }
                         SystemClock.uptimeMillis() > deadline -> then(false)
                         else -> nav.postDelayed({ check() }, 8)
                     }
@@ -3051,6 +3172,13 @@ object GestureNav {
      * start after an install took 2 s on the emulator; home started without it showed the app until home came.
      */
     private const val COVER_TIMEOUT_MS = 1200L
+    /** How long after the cover's first frame was drawn it counts as shown (ms): about a refresh at 60 Hz. */
+    private const val COVER_FRAME_MS = 17L
+    /**
+     * How long a window that went floating takes to settle (ms): Android's picture-in-picture entry ran 450-490 ms from when
+     * our poll first saw its bounds (S24, YouTube).
+     */
+    private const val PIP_SETTLE_MS = 600L
     /** How long a close into home, started as its card landed, waits for the display to turn upright (ms). */
     private const val HOME_SHOWN_TIMEOUT_MS = 3000L
     /** How long the hidden status bar shows after a swipe from the top (ms; about as long as Android shows its bars). */
@@ -3068,6 +3196,8 @@ object GestureNav {
     private const val REMOVE_AFTER_MS = 650L    // a flicked card's app is closed once the deck is still
     private const val FLOATING_POLL_MS = 2500L  // floating windows (PiP, pop-ups) are looked up this often while idle
     private const val FLOATING_BUSY_MS = 300L   // ... and this often while cards show (a PiP window can be dragged)
+    /** How long a floating window let go in the App Switcher takes to settle (SystemUI's snap to the edge), ms. */
+    private const val DRAG_SETTLE_MS = 1100L
     private const val SWITCHER_PREFETCH = 3     // pictures fetched at the touch (the rest as the deck shows their cards)
     private const val IMAGES_MAX = 16          // pictures kept between gestures
     private const val SWITCHER_HOME_FLICK_DP = 900f     // a flick up faster than this after the hold goes home

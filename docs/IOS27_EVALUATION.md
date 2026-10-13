@@ -66,10 +66,9 @@ changes the glass fades to the new picture (`motion.banner.app-fade`). On One UI
 "I need it to be actually live, just like the qs panel"): the system blurs what is behind each banner (`SemBlurInfo` on a
 plate under it) with the dock material's colour treatment, fitted on the S24 (brightness 0.672 x + 0.061 against our
 glass's 0.671 x + 0.062, colour kept 1.00 against 1.02), and the glass adds its rims, light and shadow. The lens cannot
-bend what the system draws (Matheesha, 2026-10-13: no refraction showed): along the edge, where the lens moves what is
-behind by more than ~2 pt (the outer half of its 30 pt depth), the whole glass is drawn over our picture of what is
-behind (the wallpaper, the app's latest picture), fading into the live blur inward; over an app whose content moves (a
-video) that band shows the picture from when the banner came. SurfaceFlinger shows the banner's blur region (1038 x 178 px, radius 19); a test banner over
+bend what the system draws (Matheesha, 2026-10-13: no refraction showed). Tried: along the edge, where the lens moves what
+is behind by more than ~2 pt, the whole glass over our picture of what is behind, fading into the live blur inward; taken
+out the same day (Matheesha: it broke the whole live look). SurfaceFlinger shows the banner's blur region (1038 x 178 px, radius 19); a test banner over
 home: 0 missed refreshes, GPU 2.1 ms a frame. Other phones keep the glass over a picture. Size, place and motion match iOS's.
 
 ## Home (seen in passing)

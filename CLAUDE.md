@@ -182,9 +182,9 @@ copy it wholesale — port the working pieces cleanly. File map:
   maxX, minY, maxY)`: ranges 0..255 (a linear map), sat 0 turns the whole curve off, chroma grows ~1 + 1.9 x sat; `curve` did
   nothing visible. Banners use it (`comp.banner.system-blur` 1, on in iOS 27 since 2026-10-12: Matheesha wants them live
   as Control Center; `BannerView` plates with the material's colour curve `systemLook`, the glass drawing only its own
-  layers over it: `MaterialPainter.drawOverSystemBlur`; the lens cannot bend what the system draws, so the band along the
-  edge where it visibly bends is drawn whole over our picture of what is behind and fades into the live blur inward:
-  `lens = true`, crossfaded when the picture changes). Fitted on the S24 against our glass over the same wallpaper
+  layers over it: `MaterialPainter.drawOverSystemBlur`). The lens cannot bend what the system draws: a band along the edge
+  drawn whole over our picture of what is behind, fading into the live blur, was tried (b7e9ee5) and taken out (Matheesha:
+  it broke the whole live look). Fitted on the S24 against our glass over the same wallpaper
   (`SemBlurProbe` glass mode, `--ef sat`/`--ef span`): chroma 1.67 per saturation, the brightness range widened 1.11.
   Check it in `dumpsys SurfaceFlinger` ("Blur Regions": our window's region, radius, curve), never by screenshot. (It was
   off once because banners vanished during app opens and closes: that was the card window over the shade's.) Probe:
@@ -375,8 +375,17 @@ copy it wholesale — port the working pieces cleanly. File map:
   their swipes (MONITOR_INPUT, which the shell lacks); ours is a window and takes every touch in its band. Injecting the
   touch into the app works only once the finger has lifted (taps: `StripForward`, aimed at the app's uid, after the strip
   lets touches through): while the finger is down Android refuses a DOWN from that device (it is touching the strip),
-  from any other device too, and an injected CANCEL of the real touch ("Inconsistent event"). So the strip is only 20 dp
-  (about iOS's), below the content apps put at the bottom (TikTok's seek bar sat in the old 32 dp band).
+  from any other device too, and an injected CANCEL of the real touch ("Inconsistent event"). A drag inside the band
+  (TikTok's seek bar) stays ours. The strip keeps Android's gesture height (32 dp): at 20 dp swipes home were missed half
+  the time (Matheesha).
+- **An app that goes into picture-in-picture mid-close takes the screen with it** (YouTube playing does, the moment
+  anything covers it). The cover over it must be opaque from its theme (`TurnCover`): translucent (even switched to opaque
+  in onCreate), home behind it became visible sideways, got Android's fixed rotation early (our overlays hidden mid-flight)
+  and was relaunched in landscape (black, then the cold-start arrival). And home starts only once the PiP entry has played
+  out (`PIP_SETTLE_MS` after our poll saw it): started earlier, Android hid our windows and its own PiP animation showed
+  the video full size, turning and shrinking. In the App Switcher a PiP lies under our windows: the input window leaves it
+  out of its touchable region and is told of touches there (FLAG_WATCH_OUTSIDE_TOUCH), and the card window's hole follows
+  the finger from the shell's raw stream (SystemUI does not report its place until it has settled).
 - **`Window.getInsetsController()` is null until the window has its decor**: asked in an activity's onCreate before
   `setContentView`, it crashed the launcher on every close from a full-screen video (`TurnCover`); use
   `window.decorView.windowInsetsController`.

@@ -15,8 +15,7 @@ import java.util.concurrent.Executors
  *
  * Only a touch that has ended can be handed over: Android refuses a new touch from a device that is touching (the strip
  * holds the finger's), and refuses an injected CANCEL of a touch the injector did not start ("Inconsistent event"), so a
- * drag cannot be moved to the app while the finger is down. Drags at the bottom of an app stay clear of the strip by its
- * height instead (GestureNav.addStrip).
+ * drag cannot be moved to the app while the finger is down (a seek bar inside the strip's band cannot be dragged).
  *
  * Nav thread; the injections run in order on a thread of their own.
  */

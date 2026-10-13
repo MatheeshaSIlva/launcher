@@ -52,6 +52,16 @@ class TurnCover : Activity() {
         // The window's own background, not a view: the window draws it over its whole size whatever its content's insets
         // (a view laid out inside the bars, for a few frames as home started, left them to the window's black fallback).
         window.setBackgroundDrawable(CoverDrawable(this))
+        // Its own first frame (an opaque activity in a new task may show a starting window first: the shell's word that the
+        // cover's transition is on screen can be the starting window's).
+        val decor = window.decorView
+        decor.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
+            override fun onDraw() {
+                decor.post { decor.viewTreeObserver.removeOnDrawListener(this) }
+                if (drawnAt < createdAt) drawnAt = android.os.SystemClock.uptimeMillis()
+            }
+        })
+        createdAt = android.os.SystemClock.uptimeMillis()
         // The system bars as the app had them (shown or hidden), so nothing about them changes under the card. Through the
         // decor view, which makes it (the window's own controller is null until then: asked first, it crashed the launcher
         // on every close from a full-screen video).
@@ -121,6 +131,10 @@ class TurnCover : Activity() {
         // Main thread only.
         private var current: TurnCover? = null
         private var wanted = false
+        private var createdAt = 0L
+        /** When (uptime ms) a cover last drew its first frame (any thread). */
+        @Volatile var drawnAt = 0L
+            private set
         /** When (uptime ms) the cover last failed to set itself up (any thread). */
         @Volatile var failedAt = 0L
             private set

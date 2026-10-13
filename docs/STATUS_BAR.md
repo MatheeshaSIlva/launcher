@@ -63,6 +63,11 @@ emulator (Android 17) and the S24 (One UI, Android 16).
   longer take the launcher down. Recorded on the S24 from full-screen YouTube: the cover on screen 150-190 ms after the
   release (the card's flight ~580 ms), no frame of the app, the glass clock kept (home no longer rebuilds for the 1 px
   the status bar reads shorter while home is shown turned).
+- Then (Matheesha: "horrendous"): closing a *playing* video. YouTube goes into picture-in-picture as soon as the cover
+  covers it; the translucent cover let home show behind it sideways (relaunched in landscape: black, then its cold-start
+  arrival), and starting home while the PiP entry still played exposed it (the video full size, turning into the corner).
+  Now the cover is opaque from its theme and home starts once the PiP has settled; recorded on the S24: the card into
+  the turned home, the mini player in its corner (black for 2-3 frames), the cut upright; nothing else moves.
 - Stock status bar chips that ignore the disable flags draw under our time on the emulator (a stopwatch, a call); One UI's
   not seen yet. Our bar does not make room for them.
 - The tone over an app is still polled (dumpsys every 2.5 s and on window changes): an app that turns its bar from light to
