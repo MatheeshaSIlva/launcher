@@ -1112,7 +1112,7 @@ object GestureNav {
             wm.addView(host, lp)
             cardWindow = host; windowShown = false
             root = r; backdrop = b; prv = p; nxt = n; cur = c; deck = d
-            host.holeRadius = dp(16)
+            host.holeRadius = pipCornerRadius()
             setUpSwitcherWindow(ctx)
             pollFloating()
             d.setScreen(sw, sh, deviceRadius)
@@ -1192,6 +1192,7 @@ object GestureNav {
     private class CardHost(ctx: Context) : FrameLayout(ctx) {
         override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
             super.onConfigurationChanged(newConfig)
+            holeRadius = pipCornerRadius()   // (the display's size setting changes it with the density)
             onCardWindowTurned()
         }
 
@@ -1651,7 +1652,7 @@ object GestureNav {
         sDepth = mp.homeDepthClose.mover().apply { start(d0, dv, dTo) }
         springStartNs = System.nanoTime()
         beginCardSprings(toIcon = false)
-        springRadiusEnd = cardWindow?.holeRadius ?: dp(16)
+        springRadiusEnd = cardWindow?.holeRadius ?: pipCornerRadius()
         springAlpha0 = c.alpha
         springFade = false
         // The card closes in on the video, as Android's own entry does (the app's hint), else on the middle of the app.
@@ -1900,6 +1901,17 @@ object GestureNav {
         root = null; backdrop = null; prv = null; nxt = null; cur = null; deck = null; input = null
         AppLog.log("[nav] gesture strip off")
     }
+
+    /**
+     * The radius Android gives a mini player's corners (px): SystemUI's own `pip_corner_radius` (One UI 8: 12 dp, AOSP 16
+     * dp). The hole the card window leaves for it and the card flying into it take it: at 16 dp on the S24 its corners
+     * changed whenever the App Switcher's deck moved between the card window and its own window (Matheesha).
+     */
+    private fun pipCornerRadius(): Float = try {
+        val res = app.packageManager.getResourcesForApplication("com.android.systemui")
+        val id = res.getIdentifier("pip_corner_radius", "dimen", "com.android.systemui")
+        if (id != 0) res.getDimension(id) else dp(16)
+    } catch (_: Throwable) { dp(16) }
 
     private fun systemDimen(name: String): Int {
         val id = app.resources.getIdentifier(name, "dimen", "android")

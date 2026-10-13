@@ -90,7 +90,8 @@
             android:taskAffinity="dev.launcher.app.design"
             android:windowSoftInputMode="adjustResize" />
 
-        <!-- The settings app (docs/PLAN_SETTINGS.md): own task and own app-drawer entry. -->
+        <!-- The settings app (docs/PLAN_SETTINGS.md): own task and own app-drawer entry. Upright only, as home and iOS's
+             Settings on an iPhone: turned, its picture of home was squeezed into a wide phone and Back slid that into home. -->
         <activity
             android:name=".settings.SettingsActivity"
             android:configChanges="uiMode"
@@ -98,6 +99,7 @@
             android:label="Launcher settings"
             android:launchMode="singleTask"
             android:taskAffinity="dev.launcher.app.settings"
+            android:screenOrientation="portrait"
             android:theme="@style/Settings"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>

@@ -1983,3 +1983,10 @@ settings' preview instead of opening a separate app; and the edit menu closed at
   the menu vanished as the card began), edit mode at once there, and if that changed how home looks its pictures are taken
   again, so the close back from the picker shows home as it will be (no menu, no edit mode). Recorded on the emulator,
   opening and closing.
+- **The mini player's corners in the App Switcher** changed whenever the deck moved between the card window and its
+  own window: the card window's hole for it was cut at 16 dp (AOSP's `pip_corner_radius`), One UI 8's is 12 dp
+  (`cmd overlay lookup com.android.systemui com.android.systemui:dimen/pip_corner_radius`; 31.5 px at the S24's display
+  size against our 42). The hole and the card flying into a mini player take SystemUI's own value now (read again when
+  the display's size setting changes). Not yet seen on the S24.
+- **The settings are upright only** (as home, and iOS's Settings on an iPhone): turned to landscape their picture of
+  home was squeezed into a wide phone and Back slid that into home.
