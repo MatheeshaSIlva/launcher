@@ -1069,6 +1069,147 @@ final class Scenarios: XCTestCase {
         home()
     }
 
+    // MARK: - Every Control Center control, tapped and held (2026-10-14, Matheesha: "check how each button behaves in
+    // the qs panel of ios - one tap, long press - and make sure ours align")
+
+    /// A file-safe name for a label.
+    private func slug(_ s: String) -> String {
+        let a = s.lowercased().map { $0.isLetter || $0.isNumber ? $0 : "-" }
+        return String(a.prefix(28))
+    }
+
+    /// Control Center's controls as they show now: every element with a label inside the grid (between the status row and
+    /// the bottom), one per place (a module and its own parts listed separately), top to bottom, left to right.
+    private func ccControls() -> [(String, CGRect)] {
+        var out: [(String, CGRect)] = []
+        let all = sb.buttons.allElementsBoundByIndex + sb.sliders.allElementsBoundByIndex + sb.switches.allElementsBoundByIndex
+        for e in all {
+            let f = e.frame
+            let l = e.label
+            if l.isEmpty || f.width < 20 || f.height < 20 || f.width > w * 0.95 { continue }
+            if f.minY < 100 || f.maxY > h * 0.9 { continue }
+            if out.contains(where: { abs($0.1.midX - f.midX) < 6 && abs($0.1.midY - f.midY) < 6 }) { continue }
+            out.append((l, f))
+        }
+        return out.sorted { abs($0.1.minY - $1.1.minY) > 8 ? $0.1.minY < $1.1.minY : $0.1.minX < $1.1.minX }
+    }
+
+    /// Adds each of [names] the gallery offers (a fresh simulator's Control Center has few controls).
+    private func addControls(_ names: [String]) {
+        openCC()
+        wait(2)
+        for n in names {
+            longPress("cc-empty", w / 2, h * 0.93, 1.3)
+            wait(1.5)
+            let add = sb.buttons["Add a Control"]
+            guard add.waitForExistence(timeout: 3) else { mark("no Add a Control"); break }
+            add.tap()
+            wait(2)
+            let c = sb.buttons[n].firstMatch
+            if c.waitForExistence(timeout: 3) {
+                mark("add control \(n)")
+                c.tap()
+            } else {
+                mark("control \(n) not offered")
+                drag("gallery-down", CGPoint(x: w / 2, y: h * 0.12), CGPoint(x: w / 2, y: h * 0.9), velocity: 1500)
+            }
+            wait(2)
+            tap("cc-edit-done", w / 2, h * 0.96)
+            wait(1.5)
+        }
+        home()
+    }
+
+    func test70_ccEveryControl() {
+        addControls(["Flashlight", "Timer", "Calculator", "Camera", "Dark Mode", "Low Power Mode", "Orientation Lock",
+                     "Silent Mode", "Alarm", "Stopwatch", "Quick Note", "Voice Memo", "Text Size", "Magnifier", "Screen Recording"])
+        openCC()
+        wait(2)
+        shot("cc-all")
+        tree("cc-all")
+        let controls = ccControls()
+        mark("cc controls: " + controls.map { "\($0.0) \($0.1)" }.joined(separator: "; "))
+        for (n, c) in controls.enumerated() {
+            let (label, f) = c
+            let name = String(format: "%02d-", n) + slug(label)
+            // A tap, from a fresh Control Center.
+            home()
+            openCC("cc-open-tap-\(n)")
+            wait(2)
+            tap("tap-" + name, f.midX, f.midY)
+            wait(1.8)
+            shot("tap-" + name)
+            tree("tap-" + name)
+            // A long press, from a fresh Control Center.
+            home()
+            openCC("cc-open-hold-\(n)")
+            wait(2)
+            longPress("hold-" + name, f.midX, f.midY, 1.0)
+            wait(1.5)
+            shot("hold-" + name)
+            tree("hold-" + name)
+        }
+        home()
+    }
+
+    func test71_ccParts() {
+        // Now Playing's parts (its artwork, its title, its middle), the "+" and the power button, and inside the expanded
+        // connectivity module Wi-Fi and Bluetooth held (their lists on iOS).
+        openCC()
+        wait(2)
+        let media = sb.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@ OR label CONTAINS[c] %@", "Not Playing", "Now Playing")).firstMatch
+        if media.exists {
+            let f = media.frame
+            mark("media at \(f)")
+            for (part, x, y) in [("art", f.minX + f.width * 0.25, f.minY + f.height * 0.28), ("title", f.midX, f.minY + f.height * 0.6),
+                                 ("middle", f.midX, f.midY)] {
+                home(); openCC(); wait(2)
+                tap("media-" + part, x, y)
+                wait(1.8)
+                shot("media-tap-" + part)
+                tree("media-tap-" + part)
+            }
+        } else {
+            mark("no media module")
+        }
+        for (part, x) in [("plus", 36.0), ("power", Double(w) - 36.0)] {
+            home(); openCC(); wait(2)
+            tap("top-" + part, CGFloat(x), 70)
+            wait(1.8)
+            shot("top-tap-" + part)
+            tree("top-tap-" + part)
+            home(); openCC(); wait(2)
+            longPress("top-hold-" + part, CGFloat(x), 70, 1.0)
+            wait(1.5)
+            shot("top-hold-" + part)
+        }
+        home(); openCC(); wait(2)
+        let wifi = sb.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", "Wi-Fi")).firstMatch
+        if wifi.exists {
+            let f = wifi.frame
+            longPress("conn-expand", f.midX, f.midY, 1.0)
+            wait(2)
+            shot("conn-expanded")
+            tree("conn-expanded")
+            for n in ["Wi-Fi", "Bluetooth", "Airplane Mode", "Cellular", "AirDrop", "Personal Hotspot"] {
+                let e = sb.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS[c] %@", n)).firstMatch
+                if !e.exists { mark("expanded: no \(n)"); continue }
+                let g = e.frame
+                longPress("conn-hold-" + slug(n), g.midX, g.midY, 1.0)
+                wait(1.8)
+                shot("conn-hold-" + slug(n))
+                tree("conn-hold-" + slug(n))
+                // Back to the expanded module (a list closes with a tap outside it).
+                home(); openCC(); wait(2)
+                longPress("conn-expand-again", f.midX, f.midY, 1.0)
+                wait(2)
+            }
+        } else {
+            mark("no Wi-Fi in Control Center")
+        }
+        home()
+    }
+
     // MARK: - Calibration
 
     /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the
