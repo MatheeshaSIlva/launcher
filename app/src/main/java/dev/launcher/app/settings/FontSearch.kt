@@ -109,6 +109,8 @@ internal class FontSearch {
 
     fun open(r: Request) { last = r; request = r; opened++ }
     internal fun gone() { request = null }
+    /** Down at once, unseen (left open, the settings open from home again: it covered home's picture). */
+    internal suspend fun closeNow() { p.snapTo(0f); request = null }
 
     // Where the sheet is (set as it is laid out), so what it covers is not drawn ([coveredFrom]).
     internal var top = 0f

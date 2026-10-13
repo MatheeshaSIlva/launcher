@@ -542,10 +542,17 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         val bar = remember { Animatable(0f) }
         val ctx = LocalContext.current
         BackToTiles(st, close, draft, onClose, toHome)
+        val fontSearch = remember { FontSearch() }
+        val focus = androidx.compose.ui.platform.LocalFocusManager.current
         androidx.compose.runtime.SideEffect {
             entry.toneAt = g.toneAt
-            // Coming from home again with a page left open: back at the tiles at once (unseen: home's picture covers all).
-            entry.reset = { st.open = null; scope.launch { st.p.snapTo(0f) } }
+            // Coming from home again with a page (or the font search) left open: back at the tiles at once (unseen: home's
+            // picture covers all).
+            entry.reset = {
+                st.open = null
+                focus.clearFocus()
+                scope.launch { st.p.snapTo(0f); fontSearch.closeNow() }
+            }
         }
         // Home sliding in (and back out, Back on the tiles): one spring moves home's picture between the whole screen and its
         // place, the sheet up from below the screen and the title in (EntryState). The status bar keeps home's tone while the
@@ -617,7 +624,6 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         // for services that do not read it (gesture nav's; the S24's own).
         val reader = screenReaderOn()
         val noTree = remember { Modifier.clearAndSetSemantics { } }
-        val fontSearch = remember { FontSearch() }
         CompositionLocalProvider(LocalDraft provides draft, LocalStudio provides st, LocalScreenReader provides reader, LocalFontSearch provides fontSearch) {
             // The page behind everything: the theme's colour, or (glass) the wallpaper blurred under the appearance's veil.
             val glass = Design.num(SettingsTokens.GLASS) > 0.5f
