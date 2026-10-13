@@ -229,13 +229,26 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
         try { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Throwable) { pkg }
     }
 
-    private val icons = HashMap<String, Drawable?>()
-    fun appIcon(pkg: String): Drawable? = icons.getOrPut(pkg) {
+    // An app's icon as home shows it (made again when home renders a new one: a new shape), else the system's until home has
+    // rendered it once (just after a start). Kept once for good, the system's icon stayed for the whole session, and a new
+    // shape never reached the shade.
+    private val icons = HashMap<String, Pair<android.graphics.Bitmap, Drawable>>()
+    private val systemIcons = HashMap<String, Drawable?>()
+
+    fun appIcon(pkg: String): Drawable? {
         // Our own notifications carry the launcher's icon (by package, the shaped icon of whichever of our entries came
         // last: the developer panel's).
-        if (pkg == ctx.packageName) try { ctx.getDrawable(dev.launcher.app.R.mipmap.ic_launcher) } catch (_: Throwable) { null }
-        else Icons.drawableFor(pkg) ?: try { ctx.packageManager.getApplicationIcon(pkg) } catch (_: Throwable) { null }
+        if (pkg == ctx.packageName) return systemIcons.getOrPut(pkg) { try { ctx.getDrawable(dev.launcher.app.R.mipmap.ic_launcher) } catch (_: Throwable) { null } }
+        val b = Icons.bitmapFor(pkg)
+        if (b != null) {
+            icons[pkg]?.let { (kept, d) -> if (kept === b) return d }
+            return android.graphics.drawable.BitmapDrawable(ctx.resources, b).also { icons[pkg] = b to it }
+        }
+        return systemIcons.getOrPut(pkg) { try { ctx.packageManager.getApplicationIcon(pkg) } catch (_: Throwable) { null } }
     }
+
+    /** Which icon [pkg] has now (changes when home renders a new one): what was recorded with another is out of date. */
+    fun iconKey(pkg: String): Int = System.identityHashCode(Icons.bitmapFor(pkg))
 
     private val avatars = HashMap<String, Drawable?>()
 

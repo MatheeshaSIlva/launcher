@@ -144,10 +144,13 @@ object Icons {
     }
 
     /** The shaped icon of [pkg] as a drawable (any thread); null until it has been rendered once at the home size. */
-    fun drawableFor(pkg: String): Drawable? = byPkg[pkg]?.let { BitmapDrawable(ctx.resources, it) }
+    fun drawableFor(pkg: String): Drawable? = bitmapFor(pkg)?.let { BitmapDrawable(ctx.resources, it) }
 
-    /** Forget every rendered icon (shape changed, icon pack switched). */
-    fun clear() { cache.evictAll(); byPkg.clear() }
+    /**
+     * The shaped icon of [pkg] as home last rendered it at its size (any thread; a new one after a new shape): null until it
+     * has been rendered once.
+     */
+    fun bitmapFor(pkg: String): Bitmap? = byPkg[pkg]
 
     private fun cacheKey(key: String, size: Int) = "$key|$size|${shape.name}"
 

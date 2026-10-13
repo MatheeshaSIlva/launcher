@@ -935,14 +935,17 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         mixIn(Math.round(b.height).toLong()); mixIn(b.count.toLong()); mixIn(Math.round(b.stack.value * 255f).toLong())
         mixIn(Math.round(Appearance.dark * 255f).toLong()); mixIn(Design.version.toLong())
         mixIn(b.item?.let { it.key.hashCode().toLong() * 7 + it.postTime } ?: 0L); mixIn(width.toLong())
-        // Its picture (a sender's photo) loads after the first draw: recorded again when it has.
+        // Its picture (a sender's photo) loads after the first draw, and its app's icon may be the system's until home has
+        // rendered its own: recorded again when either changes.
         mixIn(if (b.item?.let { painter.pictureLoaded(it) } == true) 1L else 0L)
+        mixIn(b.item?.let { painter.iconKey(it.pkg).toLong() } ?: 0L)
         // "now" -> "1m ago": the label itself (the wall clock's minute lagged it by up to a minute), and its crossfade.
         val fading = b.kind == Kind.PLATTER && b.item?.let { painter.timeFadeProgress(it.key) < 1f } == true
         if (b.kind == Kind.PLATTER) b.item?.let { mixIn(painter.timeLabel(it.postTime).hashCode().toLong()); mixIn(Math.round(painter.timeFadeProgress(it.key) * 64f).toLong()) }
         if (b.kind == Kind.MEDIA) {
             val md = host.media
             mixIn((md.title?.hashCode() ?: 0).toLong()); mixIn((md.artist?.hashCode() ?: 0).toLong()); mixIn(System.identityHashCode(md.art).toLong())
+            mixIn(md.pkg?.let { painter.iconKey(it).toLong() } ?: 0L)
             mixIn(if (md.playing) 1L else 0L); mixIn(if (md.active) 1L else 0L); mixIn(md.positionNow() / 250L)
             mixIn(Math.round(pressOf("prev") * 64f).toLong()); mixIn(Math.round(pressOf("play") * 64f).toLong()); mixIn(Math.round(pressOf("next") * 64f).toLong())
         }
