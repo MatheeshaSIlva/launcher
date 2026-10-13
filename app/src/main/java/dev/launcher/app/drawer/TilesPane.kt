@@ -38,6 +38,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val r = RectF()
     private val r2 = RectF()
+    private val r3 = RectF()
 
     private sealed class Target {
         data class App(val tile: Int, val slot: Int) : Target()
@@ -263,7 +264,7 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
             if (!skipHidden || !lib.isHidden(e, r2)) lib.iconPainter.draw(c, e, r2, dimmed = dimSlot == s, alpha = alpha)
         }
         if (tile.expandable) {
-            val sl = slot(3, RectF())
+            val sl = slot(3, r3)
             for (j in 0 until min(4, tile.apps.size - 3)) lib.iconPainter.draw(c, tile.apps[3 + j], miniRect(sl, j, r2), dimmed = dimSlot == 3, alpha = alpha)
         }
     }

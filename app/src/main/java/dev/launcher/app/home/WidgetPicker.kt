@@ -615,7 +615,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         // The search field: the dock's glass over the sheet and the list behind it (the text itself is the field laid over it).
         r.set(m.libMargin, headerH, m.w - m.libMargin, headerH + fieldH)
         val pushX = -push.value.coerceIn(0f, 1f) * m.w * 0.3f
-        val fieldShape = RectF(r)
+        val fieldShape = fieldR.apply { set(r) }
         if (!fieldGlass.drawAt(c, pushX, sheetY(), fieldShape, fieldH / 2f) { cc -> drawBehindField(cc, pushX, fieldShape) })
             glassShape(c, r, fieldH / 2f, sheetY(), fallback = fieldFill, fallbackAlpha = 0x1F, key = HomeTokens.FIELD)
         val lx = m.libMargin + m.pt(18f)
@@ -629,6 +629,10 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     // The scroll edge above the search field: the content fades out between these (sheet coordinates).
     private val contentFadeTop get() = headerH - m.pt(2f)
     private val contentFadeEnd get() = headerH + m.pt(10f)
+    /** The search field's shape (its own: what is behind it is drawn with [r] as scratch). */
+    private val fieldR = RectF()
+    /** An entry card's clock preview. */
+    private val clockR = RectF()
     private val contentFade = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_IN) }
     private var contentFadeAt = Float.NaN
 
@@ -1036,7 +1040,8 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
             val fs = min((box.width() - 2 * padH) / m.widgetWidth(e.size.spanX), (box.height() - 2 * padV) / m.widgetHeight(e.size.spanY)) * (m.widgetWidth(e.size.spanX) / m.widgetWidth(4))
             val bw = m.widgetWidth(4) * fs
             val bh = m.widgetHeight(2) * fs
-            drawClockPreview(c, RectF(box.centerX() - bw / 2f, box.centerY() - bh / 2f, box.centerX() + bw / 2f, box.centerY() + bh / 2f), fs, sheetY(), box)
+            clockR.set(box.centerX() - bw / 2f, box.centerY() - bh / 2f, box.centerX() + bw / 2f, box.centerY() + bh / 2f)
+            drawClockPreview(c, clockR, fs, sheetY(), box)
             return
         }
         val pv = previews[info]

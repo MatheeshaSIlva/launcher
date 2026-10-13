@@ -154,13 +154,14 @@ interface HomeWidgetView {
 object ResizeHandle {
     private val arc = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x59000000; style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+    private val rect = RectF()
 
-    /** Draws the handle for a card whose bottom-right corner is ([x], [y]) with corner radius [r]. */
+    /** Draws the handle for a card whose bottom-right corner is ([x], [y]) with corner radius [r] (main thread). */
     fun draw(c: Canvas, x: Float, y: Float, r: Float, m: HomeMetrics, k: Float = 1f) {
         if (k <= 0f) return
         val a = k.coerceIn(0f, 1f)
         val rr = r + m.pt(1f)
-        val rect = RectF(x - 2 * rr, y - 2 * rr, x, y)
+        rect.set(x - 2 * rr, y - 2 * rr, x, y)
         shadow.strokeWidth = m.pt(6f)
         arc.strokeWidth = m.pt(4f)
         shadow.alpha = (0x59 * a).toInt()

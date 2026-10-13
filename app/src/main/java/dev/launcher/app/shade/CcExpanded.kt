@@ -63,6 +63,8 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val artwork = dev.launcher.app.design.RoundedBitmaps(capacity = 2)
     private val rect = RectF()
+    /** Where the panel is drawn this frame ([rect] is scratch for what draws inside it). */
+    private val frame = RectF()
     // A press held on an item (the connectivity module's): its list or settings, as iOS's held Wi-Fi shows its networks.
     private val handler = android.os.Handler(android.os.Looper.myLooper() ?: android.os.Looper.getMainLooper())
     private val hold = Runnable { held() }
@@ -194,7 +196,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         val t = kv.coerceAtLeast(0f)
         rect.set(lerp(from.left, target.left, t), lerp(from.top, target.top, t), lerp(from.right, target.right, t), lerp(from.bottom, target.bottom, t))
         val radius = lerp(fromRadius, targetRadius, t.coerceIn(0f, 1f)).coerceAtMost(min(rect.width(), rect.height()) / 2f)
-        val frame = RectF(rect)
+        frame.set(rect)
         // The panel takes over from the module at once (it is drawn where the module is); what it shows fades in once it has
         // grown a little, and goes first when it closes.
         val content = ((kv - 0.25f) / 0.6f).coerceIn(0f, 1f) * panelAlpha

@@ -129,6 +129,9 @@ internal class SearchList(
     private val bubbleRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x4DFFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(1f) }
     private val fade = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
     private val r = RectF()
+    // The top hit's card and icon (their own: the card's glass is given a rectangle that [r] would change under it).
+    private val hitCard = RectF()
+    private val hitIcon = RectF()
     private var pressed: AppEntry? = null
     private var scrubbing = false
     private var scrubLetter = ' '
@@ -448,9 +451,10 @@ internal class SearchList(
                 // The best match, highlighted in a glass card (iOS Spotlight's Top Hit).
                 cardRect(t, r)
                 val save = c.saveLayerAlpha(r.left - 1, r.top - 1, r.right + 1, r.bottom + 1, alpha)
-                drawCard?.invoke(c, RectF(r)) ?: c.drawRoundRect(r, m.pt(26f), m.pt(26f), press(1f))
+                hitCard.set(r)
+                drawCard?.invoke(c, hitCard) ?: c.drawRoundRect(r, m.pt(26f), m.pt(26f), press(1f))
                 if (pressed?.key == row.e.key) c.drawRoundRect(r, m.pt(26f), m.pt(26f), press(1f))
-                val icon = topIconRect(t, RectF())
+                val icon = topIconRect(t, hitIcon)
                 if (!isHidden(row.e, icon)) icons.draw(c, row.e, icon)
                 val tx = icon.right + m.pt(14f)
                 val maxW = r.right - m.pt(14f) - tx
