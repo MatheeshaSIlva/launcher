@@ -469,6 +469,17 @@ copy it wholesale — port the working pieces cleanly. File map:
   home shows under the growing card until the app covers it (the edit menu vanished as Change Wallpaper's card began).
   The card window's launch backdrop is a recording of home, which leaves the menu and its blur out: a launch from an open
   menu draws home as it shows (`HomeActivity.pictureAsShown`, a GPU render).
+- **What is recorded must be recorded again when what it shows arrives later**: a notification's picture (loaded off the
+  main thread after the platter's first draw) and an app's shaped icon (rendered by home, the system's until then) were
+  kept in Notification Center's recorded content as they first drew (the app's icon in place of a sender's photo for the
+  whole session). Put such inputs in the recording's key (`NotifPainter.pictureLoaded`, `iconKey`).
+- **A hardware Enter calls a field's editor action twice** (its key down and its key up, actionId IME_NULL): Spotlight
+  launched its top hit twice. Fields act once per Go or Enter through `components/onGo`.
+- **One UI's own home turns a landscape app's mini player upright during the swipe; we cannot.** Its launcher moves the
+  app's own window during the gesture and hands SystemUI the mini player's place (`IPip.startSwipePipToHome`, a shell
+  interface SystemUI gives only the phone's recents component). Ours draws a card; from home's start until the display has
+  turned Android hides our windows, and the mini player moves upright then (One UI's crossfade, ~180 ms on the S24).
+  Flying the card upright instead would show the real mini player in its old corner for those frames.
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
@@ -497,6 +508,9 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
   `settings put secure enabled_accessibility_services dev.launcher.app/dev.launcher.app.NavAccessibilityService`.
 - `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
 - Do not run `uiautomator dump` while gesture nav is on (it unbinds accessibility services).
+- Scripted swipes on a busy emulator arrive as a few coarse events: a release's speed uses only the last 100 ms of
+  samples, so a 120-300 ms `input swipe` can read as still and not turn a page (home's pages, the deck); swipe past
+  halfway, and check a pulled panel really stayed open (its log, the focus) before tapping into it.
 - What only the S24 can show (Samsung blur, One UI quirks, real frame pacing) is reported to Matheesha as unverified.
 - Smoothness on the S24 is measured from what the screen showed: `tools/scenario_spotlight_close.sh`, `scenario_library.sh`,
   `scenario_switch.sh` run launches/closes/switches N times and print per-animation missed refreshes and GPU/CPU per frame

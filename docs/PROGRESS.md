@@ -2027,3 +2027,21 @@ enters edit mode with the pill turned into page dots (no scrubbing), a swipe acr
 Spotlight; ours does the same (checked on the emulator). A swipe right on the first page opens iOS's Today View: we have
 none (a page of its own, to plan with Matheesha).
 
+**Later the same morning (emulator)**: the shade's app icons follow home's (the system's icon was kept for the whole
+session when the shade drew before home had rendered the app's; the platter is recorded again when its icon changes);
+the theme cards keep only pictures of one of home's pages (opened from the App Library, a card showed the library); no
+rectangles made per frame in Spotlight's top hit, the App Library's tiles, the resize handle, Control Center's expanded
+module or the widget gallery; two always-true checks removed (no compiler warnings left but Android's deprecations).
+Walked through on the emulator, tap by tap: home (icon and dock menus, edit mode and its menu, Spotlight, App Library,
+search, launches and closes), Control Center (every control's tap and hold above, edit mode, the gallery, add and remove),
+Notification Center (fan out, swipe to its buttons, clear, long look, open, a group's two-step Clear), banners (tap,
+swipe away), the App Switcher (open from an app and from home, scroll, a card's menu and Close, flick away, Clear All),
+the settings (every tile, Back, a theme applied and back, opened from the App Library), Home Settings and Back (key, edge
+swipe, after gesture nav's service restarted).
+
+**The mini player turning upright mid-swipe from a landscape app** (Matheesha: One UI's own home does it): not possible
+for us (see CLAUDE.md: One UI's launcher moves the app's own window through an interface only the system's recents
+launcher gets; Android hides our windows while the display turns, ~180 ms on the S24 between home's start and the turn
+in round 5's recording, the mini player still in its landscape corner then). Flying our card upright would leave the
+real mini player showing in its old corner for those frames.
+
