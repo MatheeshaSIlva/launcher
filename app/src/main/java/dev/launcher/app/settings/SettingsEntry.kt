@@ -25,8 +25,11 @@ object SettingsEntry {
     /** The intent extra: opened from home's edit menu. */
     const val FROM_HOME = "dev.launcher.app.settings.FROM_HOME"
 
-    /** Home's picture with our status bar on it, and whether the bar's content is dark over it (a light home). */
-    class Handed(val picture: Bitmap, val barDark: Boolean)
+    /**
+     * Home's picture with our status bar on it, whether the bar's content is dark over it (a light home), and whether home
+     * showed one of its pages as they rest ([HomeBridge.Home.showsPage]).
+     */
+    class Handed(val picture: Bitmap, val barDark: Boolean, val page: Boolean)
 
     private val main = Handler(Looper.getMainLooper())
     private val baker = Executors.newSingleThreadExecutor { r -> Thread(r, "settings-picture") }
@@ -48,6 +51,7 @@ object SettingsEntry {
         val dark = HomeBridge.homeStatusDark
         val ask = HomeBridge.statusBarPicture
         var home: Bitmap? = null
+        var homePage = false
         var homeKnown = false
         var bar: Bitmap? = null
         var barKnown = ask == null
@@ -62,7 +66,7 @@ object SettingsEntry {
                 val pic = if (b == null) h else withBar(h, b)
                 AppLog.log("[settings] home's picture ready ${SystemClock.uptimeMillis() - t0} ms after home was asked (home pictured in " +
                     "$homeMs ms, ${if (b == null) "no bar" else "the bar's picture after $barMs ms"})")
-                offer(Handed(pic, dark))
+                offer(Handed(pic, dark, homePage))
             }
         }
         if (ask != null) {
@@ -73,11 +77,12 @@ object SettingsEntry {
                 if (!done) { done = true; main.removeCallbacks(timeout); bar = b; barKnown = true; barMs = SystemClock.uptimeMillis() - t0; ready() }
             }
         }
-        val first = HomeBridge.home?.pictureNow()
+        val first = pictureOfHome()
         start()
         // Home may not picture itself this moment (its clock changing the minute): again on the next frames.
         homePictureSoon(first) { h ->
             home = h
+            homePage = pictureWasPage
             homeMs = SystemClock.uptimeMillis() - t0
             homeKnown = true
             ready()
@@ -94,7 +99,7 @@ object SettingsEntry {
         val choreographer = android.view.Choreographer.getInstance()
         val retry = object : android.view.Choreographer.FrameCallback {
             override fun doFrame(frameTimeNanos: Long) {
-                val p = HomeBridge.home?.pictureNow()
+                val p = pictureOfHome()
                 when {
                     p != null -> then(p)
                     SystemClock.uptimeMillis() > deadline -> { AppLog.log("[settings] home gave no picture of itself in $maxMs ms"); then(null) }
@@ -103,6 +108,16 @@ object SettingsEntry {
             }
         }
         choreographer.postFrameCallback(retry)
+    }
+
+    /** Whether the last picture of home taken showed one of its pages as they rest (theme cards take only those). Main thread. */
+    var pictureWasPage = false
+        private set
+
+    /** Home's picture as it shows now (null: it declined), noting whether it showed one of its pages. Main thread. */
+    private fun pictureOfHome(): Bitmap? {
+        val h = HomeBridge.home ?: return null
+        return h.pictureNow()?.also { pictureWasPage = h.showsPage() }
     }
 
     /** Home's picture for the settings opening now (null: none could be taken; they open at rest). Any thread. */
@@ -143,7 +158,7 @@ object SettingsEntry {
      * of itself, asked again for a moment). Main thread: home renders itself (~10-20 ms), the bar is drawn on its own thread,
      * the two are put together on the GPU off the main thread.
      */
-    fun homePicture(then: (Bitmap?) -> Unit) = homePictureSoon(HomeBridge.home?.pictureNow()) { h ->
+    fun homePicture(then: (Bitmap?) -> Unit) = homePictureSoon(pictureOfHome()) { h ->
         if (h == null) then(null) else withBarOn(h, then)
     }
 
@@ -217,6 +232,9 @@ class EntryState {
     var picture by mutableStateOf<Bitmap?>(null)
     /** A newer picture of home for the preview to take in with its fade (before sliding back into home). */
     var fresh by mutableStateOf<Bitmap?>(null)
+    /** Whether [picture] and [fresh] show one of home's pages as they rest (theme cards keep only such pictures). */
+    var handedPage = false
+    var freshPage = false
     /** Opened from home's edit menu: Back on the tiles goes back into home the same way. */
     var fromHome by mutableStateOf(false)
     /** A slide asked for ([request]), counted for the effect that plays it. */

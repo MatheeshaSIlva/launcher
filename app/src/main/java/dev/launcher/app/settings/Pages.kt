@@ -386,8 +386,13 @@ private object HomePictures {
     /** Home's picture [home] with the status bar's [bar] across its top, drawn together on the GPU (any thread but main). */
     fun withBar(home: android.graphics.Bitmap, bar: android.graphics.Bitmap): android.graphics.Bitmap = SettingsEntry.withBar(home, bar)
 
-    /** [b] is home in theme [id] now: kept, and saved (at half size) off the main thread. */
-    fun keep(ctx: android.content.Context, id: String, b: android.graphics.Bitmap) {
+    /**
+     * [b] is home in theme [id] now: kept, and saved (at half size) off the main thread. Only a picture of one of home's pages
+     * as they rest ([page]): the theme's card is home as it looked in it (opened from the App Library, the card showed
+     * the App Library).
+     */
+    fun keep(ctx: android.content.Context, id: String, b: android.graphics.Bitmap, page: Boolean) {
+        if (!page) return
         byTheme[id] = b
         val app = ctx.applicationContext
         Thread {
@@ -836,6 +841,7 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
             kotlinx.coroutines.delay(500)
         }
         if (home == null) return@LaunchedEffect
+        val page = HomeBridge.home?.showsPage() == true
         // With our status bar on top, as the phone shows home (its picture has none: the bar is a window of its own).
         // Asked again if it did not come (its thread busy with a frame on a slow phone: the picture had no bar).
         var bar: android.graphics.Bitmap? = null
@@ -845,7 +851,7 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
             kotlinx.coroutines.delay(300)
         }
         val next = if (bar == null) home else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { HomePictures.withBar(home, bar) }
-        HomePictures.keep(ctx, Design.themeId, next)
+        HomePictures.keep(ctx, Design.themeId, next, page)
         latest = next
     }
     // The theme chosen and not yet applied shows as home looked in it (if the settings have seen it), else home as it is;
@@ -856,7 +862,7 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     LaunchedEffect(st.entry) {
         androidx.compose.runtime.snapshotFlow { st.entry.picture to st.entry.fresh }.collect { (handed, fresh) ->
             if (handed != null && shown !== handed) {
-                HomePictures.keep(ctx, Design.themeId, handed)
+                HomePictures.keep(ctx, Design.themeId, handed, st.entry.handedPage)
                 latest = handed
                 before = null
                 shown = handed
@@ -864,7 +870,7 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
             }
             if (fresh != null) {
                 st.entry.fresh = null
-                HomePictures.keep(ctx, Design.themeId, fresh)
+                HomePictures.keep(ctx, Design.themeId, fresh, st.entry.freshPage)
                 latest = fresh
             }
         }

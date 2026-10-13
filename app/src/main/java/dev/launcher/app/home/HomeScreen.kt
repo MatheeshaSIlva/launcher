@@ -1611,6 +1611,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** A menu, the widget gallery, edit mode or Spotlight is open (see HomeBridge.hasOnTop; read from gesture nav's thread). */
     fun hasOnTop(): Boolean = menu?.isShowing == true || picker?.isOpen == true || editMode?.active == true || spotlight?.isOpen == true
 
+    /** One of home's pages shows as it rests: no App Library or drawer, nothing on top. */
+    fun showsPage(): Boolean = m != null && pages.isNotEmpty() && drawerProgress() == 0f && sheet == 0f && !hasOnTop()
+
     fun onHomeSwipeUp() {
         // An open App Library folder is on top too: the swipe closes it, as iOS closes an expanded category.
         if (drawerProgress() > 0.5f && drawer?.closeTop() == true) return

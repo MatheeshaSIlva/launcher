@@ -533,6 +533,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun pictureNow(): android.graphics.Bitmap? = screen.pictureNow()
 
+    override fun showsPage(): Boolean = screen.showsPage()
+
     override fun recordAsShown(): HomePicture? {
         if (screen.width == 0) return null
         // Nothing drawn since the last picture: it is exactly what shows (a new one would make gesture nav render its layers

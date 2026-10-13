@@ -208,6 +208,7 @@ class SettingsActivity : ComponentActivity() {
                 homeTone = null
                 barsFollowPage(tell = false)
             } else {
+                entry.handedPage = h.page
                 entry.picture = h.picture
                 entryTone = h.barDark
                 homeTone = h.barDark
@@ -253,6 +254,7 @@ class SettingsActivity : ComponentActivity() {
         SettingsEntry.homePicture { pic ->
             if (gen != exitGen) return@homePicture
             if (pic == null || !showing) { exiting = false; if (pic == null) finish(); return@homePicture }
+            entry.freshPage = SettingsEntry.pictureWasPage
             entry.fresh = pic
             entryTone = dev.launcher.app.HomeBridge.homeStatusDark
             AppLog.log("[settings] sliding back into home")
