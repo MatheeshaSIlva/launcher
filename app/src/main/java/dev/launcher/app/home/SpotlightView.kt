@@ -9,7 +9,6 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.os.Build
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
@@ -23,9 +22,6 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
-import dev.launcher.app.AppLog
-import dev.launcher.app.GlassDrawable
-import dev.launcher.app.GlassStyle
 import dev.launcher.app.motion.Mover
 import dev.launcher.app.motion.mover
 import dev.launcher.app.Wallpaper

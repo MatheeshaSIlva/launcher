@@ -12,10 +12,8 @@ import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
-import dev.launcher.app.R
 import dev.launcher.app.design.Design
 import dev.launcher.app.motion.IosScroller
-import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs

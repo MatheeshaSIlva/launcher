@@ -33,7 +33,6 @@ import android.text.format.DateFormat
 import android.view.View
 import android.view.WindowInsets
 import dev.launcher.app.AppLog
-import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.motion.timed
 import dev.launcher.app.shade.Notifs

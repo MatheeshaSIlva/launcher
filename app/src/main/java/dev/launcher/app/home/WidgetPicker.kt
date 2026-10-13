@@ -5,7 +5,6 @@ import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -127,7 +126,6 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private val lensGlyph = Paint(glyph).apply { color = 0x99FFFFFF.toInt(); strokeWidth = m.pt(1.7f) }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
     private val cardFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x1FFFFFFF }
-    private val cardRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x26FFFFFF; style = Paint.Style.STROKE; strokeWidth = m.pt(0.8f) }
     private val cardShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0x4D000000
         maskFilter = android.graphics.BlurMaskFilter(m.pt(18f), android.graphics.BlurMaskFilter.Blur.NORMAL)
@@ -174,7 +172,6 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     }
     private val r = RectF()
     private val path = Path()
-    private val toScreen = Matrix()
     private var pressed: String? = null
     private var imeInset = 0
 

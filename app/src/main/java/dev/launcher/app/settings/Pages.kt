@@ -9,8 +9,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
-import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,7 +54,6 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -67,8 +64,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
-import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
@@ -461,9 +456,6 @@ private class Geometry(look: Look, val statusPx: Float, val navPx: Float) {
     val buttonSize = look.pt(SettingsTokens.BUTTON_SIZE)
     val headerTop = statusPx + 6f * unit
     val previewTop = headerTop + buttonSize + 14f * unit
-    private val gap = 22f * unit
-    val previewH = (restTop - previewTop - gap).coerceAtLeast(60f * unit)
-    val previewW = previewH * w / h
 
     /** The Apply bar, and the room the sheet makes for it at rest (it rises by that much while changes wait). */
     val barH = 56f * unit
@@ -472,9 +464,6 @@ private class Geometry(look: Look, val statusPx: Float, val navPx: Float) {
 
     /** The sheet's top: where the page puts it, lifted by [bar] (0..1, the Apply bar showing) while the tiles show. */
     fun top(p: Float, bar: Float = 0f) = restTop + (openTop - restTop) * p - bar * barRoom * (1f - p.coerceIn(0f, 1f))
-
-    /** The picture's scale wherever the sheet is: it keeps fitting between the header and the sheet. */
-    fun previewScale(p: Float, bar: Float = 0f) = ((top(p, bar) - previewTop - gap) / previewH).coerceIn(0.15f, 1.2f)
 
     /** How far below its place the sheet waits while home slides in: off the screen, its shadow too. */
     val enterDrop = h - restTop + 48f * unit

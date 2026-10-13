@@ -273,8 +273,6 @@ internal class SearchList(
         return out.apply { set(l, t, l + m.iconSize, t + m.iconSize) }
     }
 
-    private fun onScreen(top: Float) = top + m.listRow > contentTop - m.listRow && top < height - bottomSpace
-
     fun iconRectOf(e: AppEntry): RectF? {
         val now = System.nanoTime()
         for (s in rows) {
@@ -321,9 +319,6 @@ internal class SearchList(
     private val hasIndex get() = !spotlight && query.isEmpty() && sections.isNotEmpty()
 
     private fun inIndex(x: Float) = hasIndex && x > width - m.listSideIndex * 1.6f
-
-    /** Centre y of [letter]'s tick in the index. */
-    private fun letterY(letter: Char) = indexTop() + (indexBottom() - indexTop()) * ((LETTERS.indexOf(letter) + 0.5f) / LETTERS.size)
 
     private fun scrubTo(y: Float, first: Boolean) {
         val k = ((y - indexTop()) / (indexBottom() - indexTop())).coerceIn(0f, 0.999f)

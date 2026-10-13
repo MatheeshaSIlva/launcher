@@ -517,9 +517,6 @@ object Design {
      */
     private fun paletteColor(name: String): Int? = palette.getOrPut(name) { youColor(name, myChoice) ?: NO_COLOR }.takeIf { it != NO_COLOR }
 
-    /** Palette colour [name] in the current style (null: none: Android before 12). */
-    fun systemPalette(name: String): Int? = paletteColor(name)
-
     /** Palette colour [name] as [choice] would make it (the settings show a choice before it is applied). */
     fun previewPalette(name: String, choice: MaterialYou.Choice): Int? = youColor(name, choice)
 

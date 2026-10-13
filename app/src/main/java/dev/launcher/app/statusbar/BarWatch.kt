@@ -3,7 +3,6 @@ package dev.launcher.app.statusbar
 import android.content.Context
 import android.graphics.PixelFormat
 import android.os.Build
-import android.os.Handler
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
@@ -16,7 +15,7 @@ import dev.launcher.app.AppLog
  * told what any app is: the bar hidden by the app in front (immersive), shown again, its height in this rotation. One
  * invisible pixel, never touched, never focused. Needs "display over other apps" (granted through Shizuku).
  */
-class BarWatch(private val ctx: Context, private val wm: WindowManager, private val handler: Handler,
+class BarWatch(private val ctx: Context, private val wm: WindowManager,
                private val changed: (visible: Boolean, heightPx: Int) -> Unit) {
     private var view: View? = null
     private var last: Triple<Boolean, Int, Int>? = null

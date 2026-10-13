@@ -156,18 +156,6 @@ data class Lens(
     val lightAngle: Float,
 )
 
-/** Where a surface gets what is behind it (a component's choice, not the material's: one material, any backdrop). */
-enum class Backdrop {
-    /** The wallpaper (home, Notification Center, the lock screen's look). */
-    WALLPAPER,
-    /** A picture of what was behind when the surface appeared (an app, home), blurred once. */
-    PICTURE,
-    /** What is behind, live (the system's blur behind a window; whole screen only). */
-    LIVE,
-    /** Nothing: only the material's own fills. */
-    NONE,
-}
-
 /**
  * A material: a surface's look over what is behind it. Apple's kit draws every one as a frost (a background blur), an
  * optional lens (Liquid Glass), fills with blend modes, inner shadows (the lit edges) and drop shadows (a soft shadow and

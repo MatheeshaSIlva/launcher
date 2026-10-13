@@ -328,11 +328,6 @@ object Notifs {
         try { service?.cancelNotification(item.key) } catch (t: Throwable) { AppLog.log("[notifs] clear failed: ${t.message}") }
     }
 
-    /** Removes every notification that can be cleared. Any thread. */
-    fun cancelAll() = main.post {
-        try { service?.cancelAllNotifications() } catch (t: Throwable) { AppLog.log("[notifs] clear all failed: ${t.message}") }
-    }
-
     /**
      * Opens [item] as a tap on it would (its content intent), and removes it if it asks to be. Returns false if it has
      * nothing to open. Any thread.

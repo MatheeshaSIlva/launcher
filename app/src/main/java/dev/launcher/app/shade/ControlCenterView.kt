@@ -8,7 +8,6 @@ import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import android.text.TextPaint
@@ -26,7 +25,6 @@ import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
-import dev.launcher.app.theme.FadingShadow
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
 import kotlin.math.hypot
@@ -85,12 +83,10 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val fonts = Fonts.Followers(this) { tokensChanged() }
     private val title = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600); color = 0xFFFFFFFF.toInt() }
     private val small = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 500); color = 0xB3FFFFFF.toInt() }
-    private val titleShadow = FadingShadow(0f, 0f, 0f, 0)
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val artPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val rect = RectF()
-    private val path = Path()
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
 
     // ------------------------------------------------------------------ geometry (px)

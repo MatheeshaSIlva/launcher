@@ -15,7 +15,6 @@ import android.view.View
 import android.view.ViewConfiguration
 import dev.launcher.app.R
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.Fonts

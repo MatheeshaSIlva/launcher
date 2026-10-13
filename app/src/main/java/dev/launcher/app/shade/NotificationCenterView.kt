@@ -4,8 +4,6 @@ import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
@@ -15,8 +13,6 @@ import android.graphics.drawable.Drawable
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.text.Layout
-import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import android.view.HapticFeedbackConstants
@@ -30,7 +26,6 @@ import dev.launcher.app.GlassMask
 import dev.launcher.app.GlassStyle
 import dev.launcher.app.R
 import dev.launcher.app.Wallpaper
-import dev.launcher.app.apps.Icons
 import dev.launcher.app.design.BackdropImage
 import dev.launcher.app.design.Blend
 import dev.launcher.app.design.ColorValue
@@ -45,7 +40,6 @@ import dev.launcher.app.design.frostNowPt
 import dev.launcher.app.design.scaled
 import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.IosScroller
-import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
 import dev.launcher.app.theme.FadingShadow
@@ -1272,18 +1266,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         c.restore()
     }
 
-    private fun smooth(t: Float): Float { val x = t.coerceIn(0f, 1f); return x * x * (3f - 2f * x) }
-
     private fun alpha(color: Int, k: Float): Int {
         val a = (((color ushr 24) and 0xFF) * k.coerceIn(0f, 1f)).roundToInt()
         return (a shl 24) or (color and 0xFFFFFF)
-    }
-
-    private fun mix(a: Int, b: Int, t: Float): Int {
-        if (t <= 0f) return a
-        if (t >= 1f) return b
-        fun ch(s: Int) = ((((a shr s) and 0xFF) + ((((b shr s) and 0xFF) - ((a shr s) and 0xFF)) * t)) + 0.5f).toInt() shl s
-        return ch(24) or ch(16) or ch(8) or ch(0)
     }
 
     // ------------------------------------------------------------------ the long look (press and hold)

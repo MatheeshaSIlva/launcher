@@ -6,7 +6,6 @@ import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
-import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 import android.text.TextPaint
@@ -17,7 +16,6 @@ import dev.launcher.app.R
 import dev.launcher.app.design.Design
 import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.Motion
-import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Fonts
 import kotlin.math.abs
@@ -67,7 +65,6 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
     private val artPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val path = Path()
     private val rect = RectF()
 
     var control: Control? = null
@@ -637,13 +634,6 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     private fun alpha(color: Int, k: Float): Int {
         val a = (((color ushr 24) and 0xFF) * k.coerceIn(0f, 1f)).roundToInt()
         return (a shl 24) or (color and 0xFFFFFF)
-    }
-
-    private fun mix(a: Int, b: Int, t: Float): Int {
-        if (t <= 0f) return a
-        if (t >= 1f) return b
-        fun ch(s: Int) = ((((a shr s) and 0xFF) + ((((b shr s) and 0xFF) - ((a shr s) and 0xFF)) * t)) + 0.5f).toInt() shl s
-        return ch(24) or ch(16) or ch(8) or ch(0)
     }
 
     private companion object {

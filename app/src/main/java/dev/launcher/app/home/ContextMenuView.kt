@@ -8,7 +8,6 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RenderNode
 import android.graphics.RectF
-import android.graphics.drawable.Drawable
 import android.view.MotionEvent
 import android.view.View
 import dev.launcher.app.components.MenuPainter
@@ -16,8 +15,6 @@ import dev.launcher.app.components.MenuSpec
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
-import dev.launcher.app.design.Design
-import dev.launcher.app.theme.Fonts
 
 /**
  * iOS's long-press menu for a home icon, widget or button: home blurs and dims behind (the blur is applied by home through

@@ -420,7 +420,7 @@ object GestureNav {
      * on Android 16+ the answer was never read: the bar never hid), and its height in this rotation.
      */
     private val barWatch by lazy {
-        dev.launcher.app.statusbar.BarWatch(app, app.getSystemService(WindowManager::class.java), main) { visible, h ->
+        dev.launcher.app.statusbar.BarWatch(app, app.getSystemService(WindowManager::class.java)) { visible, h ->
             nav.post {
                 barVisible = visible
                 shade?.setBarHeight(h)

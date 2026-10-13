@@ -30,7 +30,4 @@ object TokenParts {
         for ((prefix, e) in OWNERS) if (key.startsWith(prefix)) return e
         return null
     }
-
-    /** The namespaces of [e] (for the token editor and the tests). */
-    fun prefixes(e: Element): List<String> = OWNERS.filter { it.second == e }.map { it.first }
 }
