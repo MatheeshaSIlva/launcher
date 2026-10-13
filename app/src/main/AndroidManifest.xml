@@ -58,7 +58,7 @@
         <activity
             android:name=".HomeActivity"
             android:clearTaskOnLaunch="true"
-            android:configChanges="uiMode"
+            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
             android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTask"

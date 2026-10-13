@@ -299,6 +299,28 @@ class ShellService : IShellService.Stub() {
 
     private fun readInt(o: Any, name: String): Int? = try { o.javaClass.getField(name).get(o) as? Int } catch (_: Throwable) { null }
 
+    override fun pipHint(pkg: String): String = try {
+        val atm = systemService("activity_task", ATM_STUB)
+        val ms = atm.javaClass.methods.filter { it.name == "getTasks" }
+        val m = ms.firstOrNull { it.parameterTypes.size == 4 } ?: ms.firstOrNull { it.parameterTypes.size == 3 } ?: ms.firstOrNull { it.parameterTypes.size == 1 }
+        val list = when (m?.parameterTypes?.size) {
+            4 -> m.invoke(atm, 10, false, false, 0)
+            3 -> m.invoke(atm, 10, false, false)
+            1 -> m.invoke(atm, 10)
+            else -> null
+        } as? List<*> ?: emptyList<Any>()
+        list.filterNotNull().firstNotNullOfOrNull { t ->
+            val cn = (readField(t, "topActivity") ?: readField(t, "baseActivity")) as? android.content.ComponentName
+            if (cn?.packageName != pkg) return@firstNotNullOfOrNull null
+            val params = readField(t, "pictureInPictureParams") ?: return@firstNotNullOfOrNull null
+            if ((params.javaClass.getMethod("isAutoEnterEnabled").invoke(params) as? Boolean) != true) return@firstNotNullOfOrNull null
+            val hint = try { params.javaClass.getMethod("getSourceRectHint").invoke(params) as? android.graphics.Rect } catch (_: Throwable) { null }
+            if (hint != null && !hint.isEmpty) "auto ${hint.left} ${hint.top} ${hint.right} ${hint.bottom}" else "auto"
+        } ?: ""
+    } catch (t: Throwable) {
+        ""
+    }
+
     // ---------------------------------------------------------------- raw touch (a shade pull the system took over)
 
     private val touchStream = TouchStream()

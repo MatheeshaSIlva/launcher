@@ -19,6 +19,20 @@ object NoAnimStarts {
     /** The system was seen calling our transition: from then on nothing global needs to change around gestures. */
     @Volatile var confirmed = false
         private set
+    private var prefs: android.content.SharedPreferences? = null
+    private var refusedLogs = 0
+
+    /**
+     * Remembers across processes that the system hands our transitions over on this phone: a start whose transition another
+     * handler takes (a close into picture-in-picture: Android's PiP handler plays it) never calls ours, and the first two
+     * starts after an update being such closes turned instant starts off for the whole session (the landscape close's cover
+     * could not start).
+     */
+    fun init(ctx: android.content.Context) {
+        val p = ctx.getSharedPreferences("instant_transitions", android.content.Context.MODE_PRIVATE)
+        prefs = p
+        if (p.getBoolean(KEY_CONFIRMED, false)) confirmed = true
+    }
     private val checker = Executors.newSingleThreadScheduledExecutor()
     @Volatile private var checkPending = false
 
@@ -30,7 +44,7 @@ object NoAnimStarts {
     fun send(pi: android.app.PendingIntent): Boolean = call("send ${pi.creatorPackage}") { it.sendNoAnim(pi) }
 
     private inline fun call(what: String, op: (IShellService) -> String): Boolean {
-        if (!usable) return false
+        if (!usable) { if (refusedLogs++ < 3) AppLog.log("[nav] $what: our own transitions are off for this session"); return false }
         val s = ShizukuLink.service ?: return false
         val r = try { op(s) } catch (t: Throwable) { "ERROR: ${t.javaClass.simpleName}: ${t.message}" }
         if (r.startsWith("ERROR")) {
@@ -60,13 +74,18 @@ object NoAnimStarts {
                 invoked > 0 -> {
                     if (!confirmed) AppLog.log("[nav] starts skip the system animation through our own transition; system animation scales stay as they are")
                     confirmed = true
+                    prefs?.edit()?.putBoolean(KEY_CONFIRMED, true)?.apply()
                     AppLog.log("[nav] own transitions: $stats")
                 }
-                requests >= 2 -> {
+                // Never seen called after a good number of starts (some are taken by other handlers: picture-in-picture),
+                // and never on this phone before.
+                requests >= 6 && !confirmed -> {
                     usable = false
                     AppLog.log("[nav] the system did not hand our transitions over ($stats): back to switching system animations off around gestures")
                 }
             }
         }, 1500, TimeUnit.MILLISECONDS)
     }
+
+    private const val KEY_CONFIRMED = "confirmed"
 }

@@ -569,17 +569,29 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        if (w != oldw || h != oldh) {
-            if (oldw != 0) AppLog.log("[home] size changed (${oldw}x$oldh -> ${w}x$h): rebuilding")
-            post { build() }
-        }
+        if (w == oldw && h == oldh) return
+        // Home is upright only (it handles orientation changes itself, never relaunched for them). Given a sideways size for
+        // a moment (its configuration followed an app's landscape while it was in the background, until it comes back
+        // turned), it keeps its upright layout, and coming back to the size it was built for is no change: a rebuild in the
+        // middle of a close from a landscape app showed it black and played its arrival.
+        if (m != null && (w > h || (w == builtW && h == builtH))) return
+        if (oldw != 0) AppLog.log("[home] size changed (${oldw}x$oldh -> ${w}x$h): rebuilding")
+        post { build() }
     }
+
+    // The size home was last built for.
+    private var builtW = 0
+    private var builtH = 0
 
     /** (Re)creates everything above the wallpaper for the current size, insets and config. */
     private fun build() {
         if (width == 0 || height == 0) return
+        // Never laid out sideways once it has an upright layout (see onSizeChanged): it keeps that one.
+        if (m != null && width > height) return
         val metrics = HomeMetrics(width, height, topInset, bottomInset, deviceRadius, cfg, dev.launcher.app.design.Scale.unitPx(context, minOf(width, height)))
         m = metrics
+        builtW = width
+        builtH = height
         HomeMetrics.frame = HomeMetrics.Frame(width, height, topInset, bottomInset)
         builtStructure = dev.launcher.app.design.Design.structure
         Icons.homeSize = metrics.iconSize

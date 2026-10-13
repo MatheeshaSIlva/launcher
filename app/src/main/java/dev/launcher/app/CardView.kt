@@ -165,15 +165,34 @@ class CardView(context: Context) : View(context) {
         drawLaunchScreen(canvas, l, t, contentAlpha, d)
     }
 
+    /**
+     * Where in the app (display px, the full-screen app's) the card closes in on: going into picture-in-picture, the video
+     * ([focusMix] 0: the whole picture covers the frame, 1: this part of it does).
+     */
+    var focus: android.graphics.RectF? = null
+        set(v) { field = v; invalidate() }
+    var focusMix = 0f
+        set(v) { if (field != v) { field = v; invalidate() } }
+    private val src = android.graphics.RectF()
+
     /** [b] covering the frame, keeping its aspect (it is a full-display image), at [alpha]. */
     private fun drawCover(canvas: Canvas, b: Bitmap, alpha: Int) {
         if (alpha <= 0) return
-        val s = max(w / b.width, h / b.height)
+        // The part of the picture that covers the frame: all of it, or on the way to [focus].
+        src.set(0f, 0f, b.width.toFloat(), b.height.toFloat())
+        val f = focus
+        if (f != null && focusMix > 0f && width > 0) {
+            val bs = b.width / width.toFloat()
+            val k = focusMix.coerceIn(0f, 1f)
+            src.set(src.left + (f.left * bs - src.left) * k, src.top + (f.top * bs - src.top) * k,
+                src.right + (f.right * bs - src.right) * k, src.bottom + (f.bottom * bs - src.bottom) * k)
+        }
+        val s = max(w / max(1f, src.width()), h / max(1f, src.height()))
         canvas.save()
         canvas.translate(cx, cy)
         canvas.scale(s, s)
         paint.alpha = alpha
-        canvas.drawBitmap(b, -b.width / 2f, -b.height / 2f, paint)
+        canvas.drawBitmap(b, -src.centerX(), -src.centerY(), paint)
         canvas.restore()
     }
 

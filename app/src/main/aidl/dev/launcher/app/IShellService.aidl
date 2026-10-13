@@ -125,4 +125,9 @@ interface IShellService {
     // waitForResult: returns whether a window of that uid took it (a DOWN aimed while the strip is still in the way is
     // refused); else queued and true.
     boolean injectTouch(int action, float x, float y, long downTime, long eventTime, int deviceId, int targetUid, boolean waitForResult) = 35;
+
+    // Whether [pkg]'s visible task will go into picture-in-picture by itself when the user leaves it (its PiP parameters'
+    // auto-enter: YouTube while a video plays): "" if not, else "auto" and, if the app gave one, its source rect hint
+    // (where the video is in its window, px): "auto l t r b".
+    String pipHint(String pkg) = 36;
 }

@@ -68,6 +68,17 @@ emulator (Android 17) and the S24 (One UI, Android 16).
   arrival), and starting home while the PiP entry still played exposed it (the video full size, turning into the corner).
   Now the cover is opaque from its theme and home starts once the PiP has settled; recorded on the S24: the card into
   the turned home, the mini player in its corner (black for 2-3 frames), the cut upright; nothing else moves.
+- Then (Matheesha: "test and see for yourself"), on the S24: the card faded out in mid-air and the mini player popped
+  in beside it (a black box, the video wiping in); in portrait the card was the whole YouTube page squeezed into the mini
+  player's shape; once the cover could not start at all (our instant transitions had been switched off for the session:
+  the first two starts after the update were closes into PiP, which Android's PiP handler plays, so ours was never
+  called); once home was relaunched for an orientation change (its configuration had followed the app's landscape in
+  the background). Now: the shell says, while the finger drags, whether the app will go into PiP and where its video is
+  (its PiP parameters); the card does not fade early, flies into the mini player as soon as it is there (springs
+  retargeted from where they are), closing in on the video as Android's own entry does, and the mini player stays covered
+  until it has settled under the card. Instant transitions, once confirmed on a phone, stay on; home handles orientation
+  changes itself and never lays itself out sideways. Recorded on the S24 (landscape and portrait, playing and paused):
+  0-2 dropped frames.
 - Stock status bar chips that ignore the disable flags draw under our time on the emulator (a stopwatch, a call); One UI's
   not seen yet. Our bar does not make room for them.
 - The tone over an app is still polled (dumpsys every 2.5 s and on window changes): an app that turns its bar from light to

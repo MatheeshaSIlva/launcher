@@ -326,6 +326,7 @@ object GestureNav {
 
     fun init(app: LauncherApp) {
         this.app = app
+        NoAnimStarts.init(app)
         try { app.getSystemService(android.hardware.display.DisplayManager::class.java).registerDisplayListener(displayTurned, main) } catch (_: Throwable) { }
         // A picture of home without the card's icon arrives a moment after a gesture starts: use it as soon as it does.
         HomeBridge.onPreviewReady = { pkg ->
@@ -1051,6 +1052,8 @@ object GestureNav {
     private var floating: List<RectF> = emptyList()
     /** When (uptime ms) the floating windows last changed (one came, went or moved). */
     private var floatingChangedAt = 0L
+    /** The app of each of [floating]. */
+    private var floatingPkgs: List<String> = emptyList()
     private var floatingLogged = ""
 
     private val floatingPoll = object : Runnable {
@@ -1068,6 +1071,7 @@ object GestureNav {
         val s = ShizukuLink.service ?: return
         tasksIo.execute {
             val lines = try { s.floatingWindows() } catch (_: Throwable) { emptyArray() }
+            val pkgs = ArrayList<String>()
             val rects = lines.mapNotNull { line ->
                 val p = line.split(' ')
                 if (p.size < 7) return@mapNotNull null
@@ -1077,9 +1081,11 @@ object GestureNav {
                 val b = p[6].toFloatOrNull() ?: return@mapNotNull null
                 // A pop-up window the size of the screen is not floating over anything.
                 if (r - l >= sw - 1f && b - t >= sh - 1f) return@mapNotNull null
+                pkgs += p[1]
                 RectF(l, t, r, b)
             }
             nav.post {
+                floatingPkgs = pkgs
                 if (rects != floating) {
                     floating = rects
                     floatingChangedAt = SystemClock.uptimeMillis()
@@ -1095,9 +1101,94 @@ object GestureNav {
     private fun applyFloating() {
         // A floating window being moved by the finger, or settling after it: its hole follows that instead (see below).
         if (dragged != null) { dragTarget(floating); return }
-        cardWindow?.holes = floating
-        input?.setHoles(floating)
+        // The app being closed went into picture-in-picture: the card flies into it, and its window stays covered (no hole)
+        // until the card is there and it has settled.
+        val i = pipCoverPkg?.let { floatingPkgs.indexOf(it) } ?: -1
+        if (i >= 0 && i < floating.size) flyIntoFloating(floating[i])
+        val shown = if (i >= 0 && i < floating.size) floating.filterIndexed { k, _ -> k != i } else floating
+        cardWindow?.holes = shown
+        input?.setHoles(shown)
         if (catching) cardWindow?.rootSurfaceControl?.setTouchableRegion(fullRegion())
+    }
+
+    // ---- the app being closed goes into picture-in-picture (the mini player)
+
+    /**
+     * The app being closed home, while its card is on the way: if it goes into picture-in-picture (YouTube playing does as
+     * home or the cover comes), the card flies into the mini player instead of fading out in mid-air (iOS: the video goes
+     * into its window), and the mini player stays covered meanwhile: its entry (black at first, the video sliding in) is
+     * not seen. Cleared once it has settled under the card ([releasePipCover]).
+     */
+    private var pipCoverPkg: String? = null
+    /** The card is on its way into the mini player. */
+    private var pipFlight = false
+    /** The app whose card is under the finger goes into picture-in-picture by itself (asked as its drag began), else null. */
+    @Volatile private var autoPipPkg: String? = null
+    /** Where its video is (its PiP source rect hint, display px), if it said. */
+    @Volatile private var autoPipHint: RectF? = null
+
+    /** Asks the shell, off the nav thread, whether [pkg] will go into picture-in-picture as it is left, and where its video is. */
+    private fun askAutoPip(pkg: String?) {
+        autoPipPkg = null
+        autoPipHint = null
+        pkg ?: return
+        val s = ShizukuLink.service ?: return
+        tasksIo.execute {
+            val a = (try { s.pipHint(pkg) } catch (_: Throwable) { "" }).split(' ')
+            if (a.firstOrNull() != "auto") return@execute
+            if (a.size >= 5) autoPipHint = RectF(a[1].toFloat(), a[2].toFloat(), a[3].toFloat(), a[4].toFloat())
+            autoPipPkg = pkg
+        }
+    }
+    // The card's corners at the end of a flight into a frame other than the screen's (the mini player's), and its alpha
+    // when it set off (a fade already begun goes back up on the way).
+    private var springRadiusEnd = 0f
+    private var springAlpha0 = 1f
+
+    private fun flyIntoFloating(r: RectF) {
+        if (pipFlight || !animating || anim != Anim.HOME_COMMIT) return
+        val c = cur ?: return
+        pipFlight = true
+        val t = max(0L, System.nanoTime() - springStartNs) / 1e9
+        val m = floatArrayOf(sCx.value(t), sCy.value(t), sW.value(t), sH.value(t), sCx.velocity(t), sCy.velocity(t), sW.velocity(t), sH.velocity(t))
+        val d0 = sDepth.value(t)
+        val dv = sDepth.velocity(t)
+        val dTo = sDepth.target
+        val mp = Motion.profile
+        // From where it is and as fast as it goes: a new target, no jump.
+        sCx = mp.appClosePosition.mover().apply { start(m[0], m[4], r.centerX()) }
+        sCy = mp.appClosePosition.mover().apply { start(m[1], m[5], r.centerY()) }
+        sW = mp.appCloseSize.mover().apply { start(m[2], m[6], r.width()) }
+        sH = mp.appCloseSize.mover().apply { start(m[3], m[7], r.height()) }
+        sDepth = mp.homeDepthClose.mover().apply { start(d0, dv, dTo) }
+        springStartNs = System.nanoTime()
+        beginCardSprings(toIcon = false)
+        springRadiusEnd = cardWindow?.holeRadius ?: dp(16)
+        springAlpha0 = c.alpha
+        springFade = false
+        // The card closes in on the video, as Android's own entry does (the app's hint), else on the middle of the app.
+        c.focus = autoPipHint?.takeIf { cardPkg == autoPipPkg } ?: RectF(0f, 0f, sw, sh)
+        c.focusMix = 0f
+        // It was headed into its icon: the icon is shown again (home shows it; the card no longer becomes it).
+        hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
+        hiddenIconPkg = null
+        c.badge = 0
+        endLabel = "home (into the mini player of $cardPkg at ${r.centerX().toInt()},${r.centerY().toInt()})"
+        AppLog.log("[nav] $cardPkg went into picture-in-picture: its card flies into it")
+    }
+
+    /** The mini player under the card has settled: its window shows (the card, there too, is cut out with it). */
+    private fun releasePipCover() {
+        if (pipCoverPkg == null) return
+        pipCoverPkg = null
+        applyFloating()
+    }
+
+    /** Runs [then] once a mini player the close sent the card into has settled ([PIP_SETTLE_MS] after it came), at once otherwise. */
+    private fun whenPipSettled(g: Int, then: () -> Unit) {
+        val wait = if (pipFlight) floatingChangedAt + PIP_SETTLE_MS - SystemClock.uptimeMillis() else 0L
+        if (wait <= 0) { then(); return }
+        nav.postDelayed({ if (gen == g) then() }, wait)
     }
 
     // ---- a floating window (the mini player) moved in the App Switcher
@@ -1313,6 +1404,8 @@ object GestureNav {
     private fun hideCards() {
         catchTouchesForHome(false)
         if (dragged != null) { dragged = null; dragK.stop() }
+        pipFlight = false
+        if (pipCoverPkg != null) { pipCoverPkg = null; applyFloating() }
         // A cover asked for a close that never started home has nothing to hand over to.
         if (coverAsked && !homeStarted) TurnCover.dismiss()
         coverAsked = false
@@ -1346,6 +1439,8 @@ object GestureNav {
         cur?.snapshot = null
         cur?.homePicture = null
         cur?.iconTurn = 0f
+        cur?.focus = null
+        cur?.focusMix = 0f
         switchFromHome = false
         // A card that ended inside an icon is fully "icon": reused as is, the next switch drew a huge icon over the snapshot.
         cur?.iconMix = 0f
@@ -1795,6 +1890,8 @@ object GestureNav {
         val c = cur ?: return
         val f = fg
         cardPkg = f?.pkg
+        // Whether it will go into picture-in-picture as it is left (its close then flies into the mini player).
+        askAutoPip(f?.pkg ?: lastFrontPkg)
         setCardContent(c, f?.pkg, fgFresh ?: recentImage(f?.pkg))
         c.iconMix = 0f
         c.setFrame(sw / 2, sh / 2, sw, sh, deviceRadius)
@@ -1895,6 +1992,10 @@ object GestureNav {
             // look like home by then (TurnCover).
             else { showTurnCover(); pillAwayForTurn = true }
             val pkg = cardPkg
+            // If it goes into picture-in-picture on the way, the card flies there (see flyIntoFloating): looked for soon.
+            pipCoverPkg = pkg
+            pipFlight = false
+            for (d in longArrayOf(90, 160, 240, 330, 450)) nav.postDelayed({ if (gen == g && pipCoverPkg != null) refreshFloating() }, d)
             val target = pkg?.let { HomeBridge.iconRect(it) }?.let { homeToScreen(it) }
             val size = target?.width() ?: (sw * 0.3f)
             val sizeH = target?.height() ?: (sh * 0.3f)
@@ -1910,6 +2011,7 @@ object GestureNav {
             // Not on the home screen: the card shrinks to the centre and fades out on the way, instead of turning into an icon
             // that would then linger and fade.
             springFade = target == null
+            springFadeFrom = if (pkg != null && pkg == autoPipPkg) 0.7f else 0.25f
             val tx = target?.centerX() ?: (sw / 2)
             val ty = target?.centerY() ?: (sh / 2)
             // The close looks and lasts the same however fast the flick was: only a little of the finger's motion towards the
@@ -1949,12 +2051,19 @@ object GestureNav {
                         if (settle > 0) AppLog.log("[nav] a window went floating during the close: home starts in $settle ms, when it has settled")
                         nav.postDelayed({
                             if (gen != g) return@postDelayed
+                            // The mini player takes over from the card where it is (before Android hides our windows).
+                            releasePipCover()
                             holdingForTurn = g
                             nav.postDelayed({ if (holdingForTurn == g) { holdingForTurn = -1; AppLog.log("[nav] the display did not turn upright in time: the picture goes anyway"); if (gen == g) hideCards() } }, HOME_SHOWN_TIMEOUT_MS)
                             TurnCover.handedOver()
                             startHome()
                         }, settle.coerceAtLeast(0L))
                     }
+                } else if (pipFlight) whenPipSettled(g) {
+                    // Into the mini player: it takes over from the card once it has settled, and the picture of home goes
+                    // once home has drawn a current frame.
+                    releasePipCover()
+                    HomeBridge.afterHomeDraw { nav.post { if (gen == g) hideCards() } }
                 } else whenHomeDrawn(g) {
                     // The picture of home is on top of the real one: swap only once the real home has drawn.
                     if (target != null && pkg != null) {
@@ -2168,8 +2277,9 @@ object GestureNav {
         if (gen == g) hideCards()
     }
 
-    // Card fades out as it shrinks (closing an app that has no icon on the home screen).
+    // Card fades out as it shrinks (closing an app that has no icon on the home screen), from this far into the shrink.
     private var springFade = false
+    private var springFadeFrom = 0.25f
 
     /** The part of a release velocity that a close keeps: towards the target only, at most [RELEASE_CARRY]. */
     private fun towards(v: Float, from: Float, to: Float): Float {
@@ -2191,6 +2301,7 @@ object GestureNav {
         springR0 = c.radius
         springMix0 = c.iconMix
         springToIcon = toIcon
+        springRadiusEnd = deviceRadius
     }
 
     /** Shared by HOME and LAUNCH: frame, corners and icon crossfade from the springs. */
@@ -2207,15 +2318,18 @@ object GestureNav {
             radius = springR0 + (target * Icons.shape.clipFraction() - springR0) * q
             c.iconMix = max(springMix0 * (1f - q), 1f - ((w - target) / (target * 1.5f)).coerceIn(0f, 1f))
         } else {
-            // To full screen (opening, or springing back): corners to the display's, any icon fades as the card grows.
-            radius = springR0 + (deviceRadius - springR0) * q
+            // To full screen (opening, or springing back): corners to the display's, any icon fades as the card grows. (Into
+            // the mini player: to its corners.)
+            radius = springR0 + (springRadiusEnd - springR0) * q
+            if (pipFlight) { c.alpha = springAlpha0 + (1f - springAlpha0) * q; c.focusMix = q }
             c.iconMix = springMix0 * (1f - ((w - springW0) / (max(springW0, dp(40)) * 1.5f)).coerceIn(0f, 1f))
         }
         var r = radius
         if (springFade) {
-            // The app itself, smaller, with the display's corner shape scaled down, fading away.
+            // The app itself, smaller, with the display's corner shape scaled down, fading away (late for an app going into
+            // picture-in-picture: its mini player is told of ~150-300 ms in and the card flies into it, never half faded).
             c.iconMix = 0f
-            c.alpha = 1f - ((q - 0.25f) / 0.6f).coerceIn(0f, 1f)
+            c.alpha = 1f - ((q - springFadeFrom) / (0.85f - springFadeFrom)).coerceIn(0f, 1f)
             r = deviceRadius * (w / sw)
         }
         c.setFrame(sCx.value(t), sCy.value(t), w, h, r)

@@ -385,7 +385,13 @@ copy it wholesale — port the working pieces cleanly. File map:
   out (`PIP_SETTLE_MS` after our poll saw it): started earlier, Android hid our windows and its own PiP animation showed
   the video full size, turning and shrinking. In the App Switcher a PiP lies under our windows: the input window leaves it
   out of its touchable region and is told of touches there (FLAG_WATCH_OUTSIDE_TOUCH), and the card window's hole follows
-  the finger from the shell's raw stream (SystemUI does not report its place until it has settled).
+  the finger from the shell's raw stream (SystemUI does not report its place until it has settled). A close of an app that
+  will enter PiP (the shell reads its task's PiP parameters: auto-enter, source rect hint) flies the card into the mini
+  player, cropping in on the video, and keeps it covered until it has settled.
+- **A start whose transition another handler plays never calls our remote transition** (a close into picture-in-picture:
+  Android's PiP handler takes it). `NoAnimStarts` once read two such starts as "the system never hands ours over" and
+  switched instant starts off for the session; it now remembers a phone where ours were seen called, and needs six silent
+  starts before giving up. HomeActivity handles orientation changes itself (portrait only; never relaunched for them).
 - **`Window.getInsetsController()` is null until the window has its decor**: asked in an activity's onCreate before
   `setContentView`, it crashed the launcher on every close from a full-screen video (`TurnCover`); use
   `window.decorView.windowInsetsController`.
