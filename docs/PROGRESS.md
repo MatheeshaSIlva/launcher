@@ -1951,3 +1951,35 @@ settings' preview instead of opening a separate app; and the edit menu closed at
   switcher card's picture (the emulator has no task snapshots for the shell), Samsung's wallpaper picker after the
   menu's close. Seen on the emulator only: Pixel's wallpaper picker starts a second activity and shows 2 s late, and our
   launch card gives up before it (home shows in between); the existing launch path, not this change.
+
+## Matheesha's round of 2026-10-14: the freeze after Home Settings, Material You in Control Center, Change Wallpaper
+
+- **Home froze after Home Settings and a swipe back** (S24 log 02:38). Two causes. (1) The card window is made again when
+  gesture nav's service restarts (the S24's did at 02:33:50); the cover that holds home's picture as the settings hand
+  back was made once and stayed in the old window: it never showed, the hand-back waited for its frame, timed out and
+  never brought home, and the settings sat on their last frame (home's picture) taking no touch. The cover is now made in
+  the card window it is shown in (and dropped with the window); it counts as on screen only once a frame that drew it is
+  committed; if it is not on screen within 350 ms home comes anyway, a timeout brings home if nothing else did, and the
+  settings slide back in if home has not come 3 s after the slide (never stuck on home's picture). Reproduced on the
+  emulator (gesture nav restarted, then Home Settings and Back) and fixed. (2) At 02:38:01 the minute changed: home declines
+  to picture itself while its clock crossfades, the settings were told "no picture" and set themselves at rest, and the
+  jump to home's end asked for at the start of that opening was played after it: they stayed on a full-screen picture of
+  home. Home's picture is now asked again every frame for up to 0.9 s (home also waits for a clock's change before it
+  counts as at rest), and opening at rest is a jump too (the last one asked for wins). A settings screen made again (a
+  configuration change, the process restored) no longer takes its first intent for a new opening from home (it held its
+  first frame 700 ms for a picture that never came).
+- **Material You in Control Center**: controls that were on looked off, their symbols dim, those off bright (dark mode
+  worst). A surface takes at most N fill layers; the palette's tint adds two to every glass, so a lit well (its module's
+  four, its own five, the accent) lost the accent: every "on" well drew as off while its symbol turned to the "on"
+  colour. The renderer takes 12 now (and says once in the log if a surface ever has more). And Control Center keeps one
+  look in both appearances, as iOS's does: in the wallpaper's colours its accents are tone 50 of the palette's primary (a
+  white symbol on them; red stays the light-mode error colour), its lit controls stay light with dark symbols, and its
+  glass takes the dark wash in both appearances (the light wash paled the wells under their white symbols). Checked on
+  the emulator in light and dark, wallpaper colours and the theme's.
+- **Change Wallpaper** opens the picker at once out of the Edit button, the menu kept as it is under the growing card
+  (`MenuPainter.Item.keepsOpen`); behind the card, home exactly as it shows, the menu and its blur included (a GPU render:
+  the recording of home leaves the menu and blur out, and the card's first frame showed home without them). Home closes its
+  menus, edit mode and searches only once it is out of sight (onStop; at onPause a launch still shows home under its card:
+  the menu vanished as the card began), edit mode at once there, and if that changed how home looks its pictures are taken
+  again, so the close back from the picker shows home as it will be (no menu, no edit mode). Recorded on the emulator,
+  opening and closing.

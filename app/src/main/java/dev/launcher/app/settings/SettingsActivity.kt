@@ -140,9 +140,17 @@ class SettingsActivity : ComponentActivity() {
         },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
-        if (intent?.getBooleanExtra(SettingsEntry.FROM_HOME, false) == true) beginEntry()
+        // Made again (a configuration change, the process restored): the intent is still the one that first opened them,
+        // not a new opening from home (it held their first frame for a picture of home that never came).
+        if (savedInstanceState == null && intent?.getBooleanExtra(SettingsEntry.FROM_HOME, false) == true) beginEntry()
+        else if (savedInstanceState?.getBoolean(KEY_FROM_HOME) == true) entry.fromHome = true
         barsFollowPage(tell = false)
         AppLog.log("[settings] opened" + if (entry.fromHome) " from home" else "")
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_FROM_HOME, entry.fromHome)
     }
 
     override fun onNewIntent(intent: android.content.Intent) {
@@ -194,8 +202,9 @@ class SettingsActivity : ComponentActivity() {
         SettingsEntry.take(HOME_PICTURE_WAIT_MS) { h ->
             holdFirstFrame = false
             if (h == null) {
-                // No picture of home: they open at rest, in their own tone.
-                entry.enter.floatValue = 1f
+                // No picture of home: they open at rest, in their own tone (a jump: one asked for earlier in this opening is
+                // still to be played, and played after this it left them on home's picture).
+                entry.jump(1f)
                 homeTone = null
                 barsFollowPage(tell = false)
             } else {
@@ -240,7 +249,9 @@ class SettingsActivity : ComponentActivity() {
     private fun exitToHome() {
         if (exiting) return
         exiting = true
+        val gen = ++exitGen
         SettingsEntry.homePicture { pic ->
+            if (gen != exitGen) return@homePicture
             if (pic == null || !showing) { exiting = false; if (pic == null) finish(); return@homePicture }
             entry.fresh = pic
             entryTone = dev.launcher.app.HomeBridge.homeStatusDark
@@ -257,14 +268,24 @@ class SettingsActivity : ComponentActivity() {
                 }
                 dev.launcher.app.GestureNav.ownScreenToHome(pic) { drawn ->
                     // Under home's copy: at rest again, for the frame the system keeps (and the next time they show).
-                    entry.enter.floatValue = 1f
+                    entry.jump(1f)
                     entry.picture = null
                     root.viewTreeObserver.registerFrameCommitCallback { drawn() }
                     root.invalidate()
                 }
+                // Never left on home's picture taking no touch: if home has not come by now, they slide back in.
+                root.postDelayed({
+                    if (gen != exitGen || !exiting || !showing) return@postDelayed
+                    AppLog.log("[settings] home did not come after sliding back into it: they slide in again")
+                    exiting = false
+                    entry.request(1f, null)
+                }, EXIT_STUCK_MS)
             }
         }
     }
+
+    /** Counts the slides back into home: what one waits for is not a later one's. */
+    private var exitGen = 0
 
     override fun onResume() {
         super.onResume()
@@ -280,8 +301,11 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
-        // Out of sight: whatever comes next shows them in their own tone (the window's flags; gesture nav reads them then).
+        // Out of sight: whatever comes next shows them in their own tone (the window's flags; gesture nav reads them then),
+        // at rest (home came without their frame at rest under its picture: they show at rest when they come back).
+        if (exiting) { entry.jump(1f); entry.picture = null }
         exiting = false
+        exitGen++
         if (homeTone != null) { homeTone = null; barsFollowPage(tell = false) }
     }
 
@@ -368,8 +392,12 @@ class SettingsActivity : ComponentActivity() {
     }
 
     private companion object {
-        /** The first frame waits this long for home's picture at most (ms); then they open at rest. */
-        const val HOME_PICTURE_WAIT_MS = 700L
+        /** The first frame waits this long for home's picture at most (ms; home may take ~0.9 s to give one); then at rest. */
+        const val HOME_PICTURE_WAIT_MS = 1200L
+        /** A slide back into home not handed over to home this long after it began is undone (ms). */
+        const val EXIT_STUCK_MS = 3000L
+        /** The saved state: opened from home (Back slides back into it). */
+        const val KEY_FROM_HOME = "fromHome"
         /** Without word that the window is on screen, home slides in this long after its first frame was drawn (ms). */
         const val SLIDE_FALLBACK_MS = 400L
         /** How long the shell is asked whether the window is on screen (ms, from the moment the settings were asked for). */

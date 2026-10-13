@@ -391,6 +391,8 @@ abstract class WidgetFrameView(ctx: Context, protected val m: HomeMetrics, spanX
         }
     private val editK = MotionValue(0f, 100f, { invalidate() })
 
+    override fun settleEdit() = editK.snapTo(if (editing) 1f else 0f)
+
     /** The remove badge and resize handle grow in again (a dragged copy without them has just landed on this widget). */
     fun growEditBadge() {
         if (!editing) return

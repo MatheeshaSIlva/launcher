@@ -252,6 +252,12 @@ class ContextMenuView(
                     invalidate()
                     return true
                 }
+                if (chosen != null && chosen.keepsOpen) {
+                    // What it opens covers home with the menu as it is; home going out of sight closes it (dismissNow).
+                    invalidate()
+                    chosen.action()
+                    return true
+                }
                 val sizes = chosen?.sizes
                 if (chosen != null && sizes != null) {
                     // A size: applied at once and the menu closes onto the widget, which is already growing or shrinking

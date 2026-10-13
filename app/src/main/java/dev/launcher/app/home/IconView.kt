@@ -54,6 +54,9 @@ class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: 
         }
     private val editK = dev.launcher.app.motion.MotionValue(0f, 100f, { invalidate() })
 
+    /** Its edit look as [editing] says, at once (home out of sight: nothing to animate). */
+    fun settleEdit() = editK.snapTo(if (editing) 1f else 0f)
+
     /** The remove badge grows in again (a dragged copy without one has just landed on this icon). */
     fun growEditBadge() {
         if (!editing) return

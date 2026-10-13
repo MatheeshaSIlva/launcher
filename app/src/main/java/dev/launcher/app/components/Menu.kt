@@ -80,6 +80,11 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
                 * opening). Opened at the tap, home went out of sight with the menu still closing and it was gone at once.
                 */
                val afterClose: (() -> Unit)? = null,
+               /**
+                * [action] opens something over home at once and the menu stays as it is under it, closed unseen once home is
+                * out of sight (Change Wallpaper: Matheesha, the picker need not wait for the menu's close).
+                */
+               val keepsOpen: Boolean = false,
                val action: () -> Unit = {})
 
     private fun pt(v: Float) = v * u

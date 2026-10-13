@@ -424,7 +424,11 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         // Fills: the ones under the surface first, then the material's own.
         var n = 0
         fun addFill(f: Fill, k: Float) {
-            if (n >= MAX_FILLS) return
+            if (n >= MAX_FILLS) {
+                // Said once: a layer left out changes the surface's look (an "on" fill was, and the control looked off).
+                if (!overflowLogged) { overflowLogged = true; AppLog.log("[design] a surface has more than $MAX_FILLS fills: the rest are left out") }
+                return
+            }
             val op = (f.opacity + (f.opacityDark - f.opacity) * dark) * k
             if (op <= 0.001f) return
             val g = f.gradient
@@ -585,7 +589,13 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         val RIM = NumberKey("sys.glass.rim")
         /** How continuous every surface's corners are (Figma's corner smoothing: 0 a circle's quarter, 1 iOS's icons). */
         val SMOOTHING = NumberKey("sys.shape.corner-smoothing")
-        const val MAX_FILLS = 8
+        /**
+         * Fills one surface can have (under, its own, over). The palette's tint adds two to every glass: a lit well in
+         * Control Center is its module's four, its own five and the accent (with 8 the accent was left out and every
+         * control looked off in the wallpaper's colours).
+         */
+        const val MAX_FILLS = 12
+        @Volatile private var overflowLogged = false
         const val MAX_SHADOWS = 4
         const val MAX_STROKES = 2
         /** The most stops one gradient has ([Theme.MAX_STOPS]). */

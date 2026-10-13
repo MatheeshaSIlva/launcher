@@ -52,8 +52,17 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun onStop() {
         widgets?.stop()
+        // Out of sight now (an app's window covers it): what was open on home closes, unseen.
+        hidden()
         super.onStop()
     }
+
+    /**
+     * Home is out of sight: menus, the gallery, edit mode and searches end at once ([HomeScreen.onHidden]), and if that
+     * changed how home looks, the pictures of it a close shows are taken again. Not at the pause of a launch: home stays in
+     * sight under the card until the app covers it (Change Wallpaper's menu, kept open over the picker, vanished as it began).
+     */
+    private fun hidden() { if (screen.onHidden()) recordAfterHidden() }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -331,7 +340,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         screen.removeCallbacks(unlockCheck)
         screen.removeCallbacks(sleepWatch)
         GestureNav.homeVisible = false
-        if (screen.onHidden()) recordAfterSearchEnded()
+        // The screen going off: out of sight now (else at onStop, once an app covers home).
+        if (sleeping) hidden()
         // Going to sleep: home takes the arrival's first frame now (unseen with the screen off), so the first frame the unlock
         // reveals is it. After onHidden: Spotlight or a menu has closed by then. A pause with the screen on keeps a held frame
         // (One UI pauses home for its biometric screen during the unlock); arriveIfDue lets it go if home is seen too late.
@@ -415,6 +425,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         val pkg = intent.component?.packageName ?: "android"
         val icon = try { packageManager.getApplicationIcon(pkg) } catch (_: Throwable) { null }
         AppLog.log("[home] change wallpaper: ${intent.component?.flattenToShortString() ?: intent.action}")
+        lastLaunched = pkg
         val start = {
             try {
                 val i = Intent(intent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -423,8 +434,23 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
                 AppLog.log("[home] wallpaper picker failed: ${t.message}")
             }
         }
-        HomeBridge.putWithout(pkg, recordWithout(pkg))
+        // The edit menu stays open under the card (its item keeps it so): behind the card, home exactly as it shows, the menu
+        // and its blur included (a recording of home leaves both out: the card's first frame showed home without them).
+        HomeBridge.putWithout(pkg, pictureAsShown() ?: recordWithout(pkg))
         if (!GestureNav.launchApp(pkg, from, icon, start)) start()
+    }
+
+    /**
+     * Home as it shows now, everything on it (a menu open over it, its blur and glass), rendered on the GPU into one picture
+     * for gesture nav's backdrop; null without home's own copy of the wallpaper (the system's cannot be drawn here).
+     */
+    private fun pictureAsShown(): HomePicture? {
+        if (wallpaper == null) return null
+        val b = dev.launcher.app.design.ViewPicture.render(screen) ?: return null
+        val p = android.graphics.Picture()
+        p.beginRecording(b.width, b.height).drawBitmap(b, 0f, 0f, null)
+        p.endRecording()
+        return HomePicture(null, p)
     }
 
     /**
@@ -573,11 +599,12 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private var lastLaunched: String? = null
 
     /**
-     * Spotlight or App Library search ended behind an app opened from it: the pictures of home a close shows were recorded
-     * at the launch, with the search open (the close showed Spotlight, then home snapped back without it). Recorded again as
-     * home looks now, laid out here first (a window going to the background gets no more layout passes).
+     * Home looks different since it went out of sight: Spotlight or App Library search, a menu or edit mode ended behind an
+     * app opened from it. The pictures of home a close shows were recorded at the launch, with them open (the close showed
+     * Spotlight, or the edit menu over Change Wallpaper's picker, then home snapped back without it). Recorded again as home
+     * looks now, laid out here first (a window going to the background gets no more layout passes).
      */
-    private fun recordAfterSearchEnded() {
+    private fun recordAfterHidden() {
         if (screen.width == 0) return
         screen.measure(
             View.MeasureSpec.makeMeasureSpec(screen.width, View.MeasureSpec.EXACTLY),
@@ -591,7 +618,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         recorded()
         val pkg = lastLaunched ?: return
         if (!HomeBridge.hasWithout(pkg)) HomeBridge.putWithout(pkg, recordWithout(pkg))
-        AppLog.log("[home] search ended behind $pkg: pictures of home recorded again")
+        AppLog.log("[home] home changed out of sight behind $pkg: pictures of home recorded again")
     }
 
     /** Records home at rest (nothing moving, no icon hidden) as the picture gesture nav draws behind cards. */

@@ -49,8 +49,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         fun layoutChanged()
         /** An item left home (an Android widget's id must be given back). */
         fun itemRemoved(item: HomeItem)
-        /** Edit mode began or ended (indicator dots, edit bar, publishing). */
-        fun editingChanged(active: Boolean)
+        /** Edit mode began or ended (indicator dots, edit bar, publishing); [now]: at once (home is out of sight). */
+        fun editingChanged(active: Boolean, now: Boolean = false)
         /** "Edit" in the edit bar: the edit menu, anchored at [button] (home coordinates). */
         fun showEditMenu(button: RectF)
         /** The iOS sizes [widget] can take. */
@@ -73,12 +73,17 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         host.editingChanged(true)
     }
 
-    fun exit() {
+    /**
+     * Editing ends. [now]: at once, nothing animating (home is out of sight: the picture of it a close shows behind its card
+     * is taken right after, and taken mid-way it kept the badges and the bar that home then no longer showed).
+     */
+    fun exit(now: Boolean = false) {
         if (!active) return
         if (drag != null) drop()
         active = false
         setBadges(false)
-        stopJiggle()
+        if (now) for (v in allItemViews()) when (v) { is IconView -> v.settleEdit(); is HomeWidgetView -> v.settleEdit() }
+        stopJiggle(now)
         updateExclusion(force = true)
         // Empty pages go (the first page always stays).
         val l = host.layout
@@ -88,7 +93,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             l.pages.addAll(keep)
             host.layoutChanged()
         }
-        host.editingChanged(false)
+        host.editingChanged(false, now)
     }
 
     private fun allItemViews(): List<View> = host.pageViews.flatMap { it.itemViews() } + (host.dockView?.icons() ?: emptyList())
@@ -122,8 +127,9 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         Choreographer.getInstance().postFrameCallback(jiggleFrame)
     }
 
-    private fun stopJiggle() {
+    private fun stopJiggle(now: Boolean = false) {
         jiggling = false
+        if (now) { for (v in allItemViews()) { v.animate().cancel(); v.rotation = 0f }; return }
         val stop = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.JIGGLE_STOP)
         for (v in allItemViews()) v.animate().rotation(0f).timed(stop).start()
     }
@@ -820,8 +826,10 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             shown.animateTo(1f, Motion.profile.editBar)
         }
 
-        fun hide() {
+        /** Up and away; [now]: at once (home is out of sight). */
+        fun hide(now: Boolean = false) {
             if (visibility != View.VISIBLE) return
+            if (now) { shown.snapTo(0f); visibility = View.GONE; return }
             shown.animateTo(0f, Motion.profile.editBar)
         }
 

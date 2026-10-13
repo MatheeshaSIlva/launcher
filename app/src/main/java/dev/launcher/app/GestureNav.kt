@@ -740,28 +740,50 @@ object GestureNav {
     fun ownScreenToHome(picture: android.graphics.Bitmap, atRest: (() -> Unit) -> Unit) = nav.post {
         val host = cardWindow
         if (host == null || !prepareCardWindow()) {
+            // The screen keeps showing home's picture (its last frame) until home covers it.
             AppLog.log("[nav] no card window for home's picture: home comes at once")
-            main.post { atRest { frontIo.execute { startHomeQuietly() } } }
+            frontIo.execute { startHomeQuietly() }
             return@post
         }
         val g = ++coverGen
         setWindowShown(true)
-        val cover = homeCover ?: CoverView(host.context).also { c ->
+        // Made in this card window: one made in a window gesture nav had before (it is made again when its service restarts)
+        // is in no window and never showed; the screen then stayed on home's picture taking no touch (Matheesha: "home
+        // freezes completely" after Home Settings and Back).
+        val cover = homeCover?.takeIf { it.parent === host } ?: CoverView(host.context).also { c ->
             host.addView(c, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             homeCover = c
         }
         cover.picture = picture
+        cover.drawnAt = 0L
         cover.visibility = View.VISIBLE
         coverAt = SystemClock.uptimeMillis()
-        host.viewTreeObserver.registerFrameCommitCallback {
-            // On screen a refresh after its frame is committed: the screen under it may change from then on.
-            nav.postDelayed({
-                if (g != coverGen) return@postDelayed
-                AppLog.log("[nav] home's picture is over our screen (${SystemClock.uptimeMillis() - coverAt} ms): it goes back at rest under it")
-                main.post { atRest { nav.post { if (g == coverGen) coverHome(g) } } }
-            }, COVER_SHOWN_MS)
+        coverUp = false
+        homeAsked = false
+        // Over our screen once a frame that drew it is committed (a frame of the window without it, one that produced no
+        // buffer, does not count), and a refresh later on screen: the screen under it may change from then on.
+        fun whenCommitted() {
+            host.viewTreeObserver.registerFrameCommitCallback {
+                if (g != coverGen) return@registerFrameCommitCallback
+                if (cover.drawnAt < coverAt) { whenCommitted(); cover.invalidate(); return@registerFrameCommitCallback }
+                nav.postDelayed({
+                    if (g != coverGen || coverUp) return@postDelayed
+                    coverUp = true
+                    AppLog.log("[nav] home's picture is over our screen (${SystemClock.uptimeMillis() - coverAt} ms): it goes back at rest under it")
+                    main.post { atRest { nav.post { if (g == coverGen) coverHome(g) } } }
+                }, COVER_SHOWN_MS)
+            }
         }
+        whenCommitted()
         cover.invalidate()
+        // Not on screen in time: home comes anyway (the screen shows home's picture meanwhile, the settings' last frame) and
+        // the settings stay as they are underneath, their card in the App Switcher showing home's picture until they show.
+        nav.postDelayed({
+            if (g != coverGen || coverUp) return@postDelayed
+            coverUp = true
+            AppLog.log("[nav] home's picture did not show over our screen in ${SystemClock.uptimeMillis() - coverAt} ms: home comes at once")
+            coverHome(g)
+        }, COVER_SHOW_WAIT_MS)
         // Never left up: whatever happens, it goes.
         nav.postDelayed({ if (g == coverGen) uncover("timed out") }, COVER_MAX_MS)
     }
@@ -771,6 +793,10 @@ object GestureNav {
     private var homeCover: CoverView? = null
     private var coverGen = 0
     private var coverAt = 0L
+    /** The cover counted as on screen (or given up on): what follows runs once. */
+    private var coverUp = false
+    /** Home was asked to come for the current cover. */
+    private var homeAsked = false
 
     /** A picture over the whole card window (home's, as one of our screens hands back to it). */
     private class CoverView(ctx: Context) : View(ctx) {
@@ -778,11 +804,14 @@ object GestureNav {
         private val dst = RectF()
         var picture: android.graphics.Bitmap? = null
             set(v) { if (field !== v) { field = v; invalidate() } }
+        /** When it last drew its picture (uptime ms). */
+        var drawnAt = 0L
 
         override fun onDraw(c: Canvas) {
             val b = picture ?: return
             dst.set(0f, 0f, width.toFloat(), height.toFloat())
             c.drawBitmap(b, null, dst, paint)
+            drawnAt = SystemClock.uptimeMillis()
         }
     }
 
@@ -790,6 +819,7 @@ object GestureNav {
     private fun coverHome(g: Int) {
         val asked = SystemClock.uptimeMillis()
         AppLog.log("[nav] our screen is at rest under home's picture (${asked - coverAt} ms): home comes")
+        homeAsked = true
         frontIo.execute { startHomeQuietly() }
         fun check() {
             if (g != coverGen) return
@@ -802,12 +832,15 @@ object GestureNav {
     }
 
     private fun uncover(why: String) {
-        coverGen++
+        val g = coverGen++
         val c = homeCover ?: return
         if (c.visibility != View.VISIBLE) return
         c.visibility = View.GONE
         c.picture = null
         AppLog.log("[nav] home's picture over our screen goes after ${SystemClock.uptimeMillis() - coverAt} ms ($why)")
+        // Timed out before home was asked for (the settings never said they were at rest): home comes now, never leaving
+        // the settings on home's picture.
+        if (!homeAsked && why == "timed out") { homeAsked = true; AppLog.log("[nav] home comes after the cover timed out (cover $g)"); frontIo.execute { startHomeQuietly() } }
     }
 
     /** Home to the front with no animation and nothing of a gesture's state touched (blocking: the front queue). */
@@ -1861,6 +1894,8 @@ object GestureNav {
         cardWindow?.let { try { wm?.removeView(it) } catch (_: Throwable) { } }
         input?.quit()
         strip = null
+        // (The cover was in that window: a new one is made in the next, and any hand-back under way gives way.)
+        coverGen++; homeCover = null
         cardWindow = null; windowShown = false; warm = null
         root = null; backdrop = null; prv = null; nxt = null; cur = null; deck = null; input = null
         AppLog.log("[nav] gesture strip off")
@@ -3954,6 +3989,8 @@ object GestureNav {
     private const val WINDOWING_MODE_PINNED = 2
     /** A cover counts as on screen this long after its frame was committed (ms: a refresh at 60 Hz). */
     private const val COVER_SHOWN_MS = 17L
+    /** A cover not on screen this long after it was asked for is given up on: home comes at once (ms). */
+    private const val COVER_SHOW_WAIT_MS = 350L
     /** Home's picture over one of our screens stays this long at most (ms). */
     private const val COVER_MAX_MS = 1500L
     /** How long the cover waits for home to draw once it was asked to come (ms). */

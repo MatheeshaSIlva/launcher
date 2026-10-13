@@ -133,6 +133,8 @@ class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (
 /** A widget on a home page as home and edit mode see it: a remove badge and resize handle, a size, a name, glass. */
 interface HomeWidgetView {
     var editing: Boolean
+    /** Its edit look as [editing] says, at once (home out of sight: nothing to animate). */
+    fun settleEdit()
     /** Leaves the edit controls out of what is drawn (the lifted copy of a dragged widget), without animating them. */
     var editBadgeHidden: Boolean
     /** The remove badge's centre in the widget's view. */
@@ -733,6 +735,14 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
             removeCallbacks(backToSearch)
             fadeTo(if (v) 0f else 1f, dev.launcher.app.motion.MotionTokens.PILL_EDIT)
         }
+
+    /** Edit mode ended while home is out of sight: the Search pill back at once. */
+    fun endEditNow() {
+        editing = false
+        fade?.cancel()
+        search = 1f
+        content.invalidate()
+    }
 
     private fun fadeTo(target: Float, role: dev.launcher.app.design.CurveKey) {
         if (search == target) return

@@ -458,6 +458,17 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Pictures of home draw the glass clock through its live shader**: when home rebuilds (any inset change used to do it,
   also a 1 px one: shown turned under a landscape app the status bar reads a pixel shorter), every picture drawn again
   after that loses the numerals. Home ignores inset changes up to 2 px (`HomeScreen.INSET_SLOP_PX`).
+- **A view made for one window dies with that window**: the card window is made again whenever gesture nav's service
+  restarts, and a view kept in a field (the cover that hands the settings back to home) stayed in the removed window, never
+  drew, and the hand-back waited for it forever (the settings stuck on home's picture: "home freezes"). Make such views in
+  the window they show in (`parent === host`), drop them with it, and never let a wait for a frame be the only way out.
+- **A surface has a fill budget** (`MaterialPainter.MAX_FILLS`, now 12): under, own and over fills share it, and Material
+  You adds two tint layers to every glass. Past it, layers were left out silently (a lit Control Center well lost its
+  accent and looked off). The painter logs the first overflow.
+- **Home closes what is open on it when it is out of sight: onStop, not onPause.** A launch pauses home at its start, but
+  home shows under the growing card until the app covers it (the edit menu vanished as Change Wallpaper's card began).
+  The card window's launch backdrop is a recording of home, which leaves the menu and its blur out: a launch from an open
+  menu draws home as it shows (`HomeActivity.pictureAsShown`, a GPU render).
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

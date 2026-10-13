@@ -3805,6 +3805,204 @@
    "dark": "@surface_container_high/92",
    "src": "judged:Material You: iOS's banner's plain fallback as Android 14's tonal role (@surface_container_low/95 | @surface_container_high/92)"
   },
+  "comp.cc.accent.accessibility": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.airplane": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.alarm": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.app-tile": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.bluetooth": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.brightness": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.calculator": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.cellular": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.connectivity": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.data-saver": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.extra-dim": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.flashlight": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.focus": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.home": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.hotspot": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.launcher-settings": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.live-captions": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.location": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.low-power": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.media": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.mirroring": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.nfc": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.notes": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.quick-share": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.recognize-music": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.rotation-lock": {
+   "color": "@system_error_light",
+   "src": "judged:Material You in Control Center: the palette's light-mode error colour, in both appearances (iOS's look does not change with them)"
+  },
+  "comp.cc.accent.silent": {
+   "color": "@system_error_light",
+   "src": "judged:Material You in Control Center: the palette's light-mode error colour, in both appearances (iOS's look does not change with them)"
+  },
+  "comp.cc.accent.stopwatch": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.timer": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.translate": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.voice-memo": {
+   "color": "@system_error_light",
+   "src": "judged:Material You in Control Center: the palette's light-mode error colour, in both appearances (iOS's look does not change with them)"
+  },
+  "comp.cc.accent.volume": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.vpn": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.accent.wifi": {
+   "color": "@system_accent1_500",
+   "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
+  },
+  "comp.cc.background.material": {
+   "material": {
+    "frost": 24,
+    "fills": [
+     [
+      "#000000",
+      0.5,
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.25,
+       0.25
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent2_800",
+      [
+       0.3,
+       0.3
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You in Control Center: its glass takes the palette's colour layer and the dark wash in both appearances (its glass is one in both, as iOS's)"
+  },
+  "comp.cc.button.material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#121212",
+      1.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.25,
+       0.25
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent2_800",
+      [
+       0.3,
+       0.3
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You in Control Center: its glass takes the palette's colour layer and the dark wash in both appearances (its glass is one in both, as iOS's)"
+  },
   "comp.cc.gallery.entry": {
    "material": {
     "frost": 0,
@@ -3867,6 +4065,149 @@
    },
    "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
   },
+  "comp.cc.module.material": {
+   "material": {
+    "frost": 6,
+    "lens": {
+     "refraction": 0.7,
+     "depth": 30,
+     "dispersion": 0.2,
+     "splay": 0.2,
+     "light": 0.4,
+     "lightAngle": 0
+    },
+    "fills": [
+     [
+      "#101010",
+      1.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#ffffff",
+      0.04,
+      "LUMINOSITY"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.25,
+       0.25
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent2_800",
+      [
+       0.3,
+       0.3
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [
+     [
+      "#e6e6e6",
+      0.0,
+      40.0,
+      30.0,
+      -40.0,
+      "LINEAR_BURN"
+     ],
+     [
+      "#282828",
+      0.0,
+      -40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "#282828",
+      0.0,
+      40.0,
+      10.0,
+      -40.0,
+      "LINEAR_DODGE"
+     ]
+    ],
+    "shadows": [
+     [
+      "#00000005",
+      0.0,
+      8.0,
+      15.0,
+      0.0,
+      "NORMAL"
+     ],
+     [
+      "#cccccc",
+      0.0,
+      0.0,
+      0.0,
+      0.5,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0",
+      -1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ],
+     [
+      "#d0d0d0",
+      1.25,
+      0.0,
+      0.0,
+      -0.75,
+      "LINEAR_BURN"
+     ]
+    ]
+   },
+   "src": "judged:Material You in Control Center: its glass takes the palette's colour layer and the dark wash in both appearances (its glass is one in both, as iOS's)"
+  },
+  "comp.cc.well.material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#111111",
+      0.6,
+      "LUMINOSITY"
+     ],
+     [
+      "#777777",
+      1.0,
+      "COLOR_DODGE"
+     ],
+     [
+      "#222222",
+      1.0,
+      "LINEAR_DODGE"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.25,
+       0.25
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent2_800",
+      [
+       0.3,
+       0.3
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You in Control Center: its glass takes the palette's colour layer and the dark wash in both appearances (its glass is one in both, as iOS's)"
+  },
   "comp.nc.count.fill": {
    "color": "@primary_container",
    "src": "judged:Material You: iOS's Notification Center's count (white) as Android 14's tonal role (@primary_container)"
@@ -3897,12 +4238,12 @@
    "src": "judged:Material You: iOS's badge (red) as Android 14's tonal role (@error)"
   },
   "component.control.accent-symbol-color": {
-   "color": "@on_primary",
-   "src": "judged:Material You: a symbol on the primary is on-primary"
+   "color": "@system_on_primary_light",
+   "src": "judged:Material You in Control Center: the palette's light-mode on-primary (a symbol on the accent), in both appearances (iOS's look does not change with them)"
   },
   "component.control.on-symbol-color": {
-   "color": "@on_primary_container",
-   "src": "judged:Material You: iOS's symbol on a control that is on as Android 14's tonal role (@on_primary_container)"
+   "color": "@system_on_primary_container_light",
+   "src": "judged:Material You in Control Center: the palette's light-mode on-primary-container (a symbol on a lit control), in both appearances (iOS's look does not change with them)"
   },
   "component.menu.fallback": {
    "light": "@surface_container/95",
@@ -3910,8 +4251,8 @@
    "src": "judged:Material You: iOS's menu's plain fallback as Android 14's tonal role (@surface_container/95 | @surface_container_high/85)"
   },
   "component.round-button.on-color": {
-   "color": "@primary_container",
-   "src": "judged:Material You: iOS's round button when on (white) as Android 14's tonal role (@primary_container)"
+   "color": "@system_primary_container_light",
+   "src": "judged:Material You in Control Center: the palette's light-mode primary container (a lit round button, iOS's white), in both appearances (iOS's look does not change with them)"
   },
   "component.sheet.fallback-color": {
    "light": "@surface_container/95",
@@ -4376,10 +4717,10 @@
       "COLOR"
      ],
      [
-      "@system_accent2_100|@system_accent2_800",
+      "@system_accent2_100",
       [
        0.24,
-       0.3
+       0.24
       ],
       "NORMAL"
      ]
@@ -4387,7 +4728,7 @@
     "innerShadows": [],
     "shadows": []
    },
-   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+   "src": "judged:Material You in Control Center: the lit white takes the palette's colour layer and the light wash in both appearances (the dark wash greyed it)"
   },
   "ref.material.control-center.well": {
    "material": {

@@ -1588,17 +1588,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
      * the pictures of it that a close shows behind its card must be recorded again.
      */
     fun onHidden(): Boolean {
+        // Whether home looks different now: the pictures of it a close shows behind its card are then recorded again (taken
+        // with a menu or edit mode on, the close ended on a home that no longer showed them: Matheesha, Change Wallpaper).
+        var changed = menu?.visibility == View.VISIBLE || picker?.isOpen == true
         menu?.dismissNow(runClosed = true)
         picker?.closeNow()
         if (editMode?.dragging == true) editMode?.externalUp()
         externalTouch = false
         pendingExternal = null
         // A widget's setup screen (adding it from the gallery) is part of editing: home comes back still editing, as iOS.
-        if (widgets?.busy != true) editMode?.exit()
-        var searchEnded = false
-        spotlight?.takeIf { it.visibility == View.VISIBLE }?.let { it.closeNow(); searchEnded = true }
-        if (drawer?.endSearchNow() == true) searchEnded = true
-        return searchEnded
+        if (widgets?.busy != true && editMode?.active == true) { editMode?.exit(now = true); changed = true }
+        spotlight?.takeIf { it.visibility == View.VISIBLE }?.let { it.closeNow(); changed = true }
+        if (drawer?.endSearchNow() == true) changed = true
+        return changed
     }
 
     /**
@@ -1903,10 +1905,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun showEditMenu(button: RectF) {
         val items = arrayListOf(
             dev.launcher.app.components.MenuPainter.Item("Add Widget", glyph = dev.launcher.app.components.MenuPainter.Glyph.PLUS) { openWidgetPicker() },
-            // Android's convenience (iOS changes it from the lock screen): the system's own picker, out of the Edit button once
-            // the menu has closed into it.
+            // Android's convenience (iOS changes it from the lock screen): the system's own picker, out of the Edit button at
+            // once, over the menu as it is (Matheesha: it need not wait for the menu's close); home out of sight closes it.
             dev.launcher.app.components.MenuPainter.Item("Change Wallpaper", glyph = dev.launcher.app.components.MenuPainter.Glyph.WALLPAPER,
-                afterClose = { listener.openWallpaperPicker(RectF(button)) }),
+                keepsOpen = true) { listener.openWallpaperPicker(RectF(button)) },
             dev.launcher.app.components.MenuPainter.Item(if (cfg.showLabels) "Hide App Names" else "Show App Names", glyph = dev.launcher.app.components.MenuPainter.Glyph.LABEL) { setAppLabelsShown(!cfg.showLabels) },
         )
         items += dev.launcher.app.components.MenuPainter.Item(if (cfg.showWidgetLabels) "Hide Widget Names" else "Show Widget Names", glyph = dev.launcher.app.components.MenuPainter.Glyph.LABEL) { setWidgetLabelsShown(!cfg.showWidgetLabels) }
@@ -1946,6 +1948,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun atRest(): Boolean {
         if (menu?.closedEnough == false || editMode?.active == true || sceneBlurK() > 0.005f || !isIdle) return false
+        // A clock changing the minute (crossfading its numerals): home pictures itself only once it has.
+        if (clocks.any { it.animating }) return false
         // The edit bar fading up and away (its last few per cent are not seen), the icons coming to rest from their wiggle.
         val bar = editBar
         if (bar != null && bar.visibility == View.VISIBLE && bar.alpha > 0.01f) return false
@@ -1992,10 +1996,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         override fun itemRemoved(item: HomeItem) {
             if (item is HomeItem.Widget && item.kind == HomeItem.Widget.APP) widgets?.delete(item.id)
         }
-        override fun editingChanged(active: Boolean) {
+        override fun editingChanged(active: Boolean, now: Boolean) {
             if (active) widgets?.prewarmApps()   // "Add Widget" is a tap away
-            (editBar as? EditMode.Bar)?.let { if (active) it.show() else it.hide() }
-            indicator?.editing = active
+            (editBar as? EditMode.Bar)?.let { if (active) it.show() else it.hide(now) }
+            if (!active && now) indicator?.endEditNow() else indicator?.editing = active
             if (!active) {
                 // Pages emptied while editing are gone from the layout: match the views to it.
                 if (pages.size != (layout?.pages?.size ?: pages.size)) bindLayout()

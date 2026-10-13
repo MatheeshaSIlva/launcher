@@ -73,11 +73,36 @@ object SettingsEntry {
                 if (!done) { done = true; main.removeCallbacks(timeout); bar = b; barKnown = true; barMs = SystemClock.uptimeMillis() - t0; ready() }
             }
         }
-        home = HomeBridge.home?.pictureNow()
-        homeMs = SystemClock.uptimeMillis() - t0
-        homeKnown = true
+        val first = HomeBridge.home?.pictureNow()
         start()
-        ready()
+        // Home may not picture itself this moment (its clock changing the minute): again on the next frames.
+        homePictureSoon(first) { h ->
+            home = h
+            homeMs = SystemClock.uptimeMillis() - t0
+            homeKnown = true
+            ready()
+        }
+    }
+
+    /**
+     * Home's picture: [first] if it was taken, else asked again every frame (home declines while its clock changes the
+     * minute, or before it has shown once) for [maxMs] at most; null if never. Main thread.
+     */
+    private fun homePictureSoon(first: Bitmap?, maxMs: Long = PICTURE_RETRY_MS, then: (Bitmap?) -> Unit) {
+        if (first != null) { then(first); return }
+        val deadline = SystemClock.uptimeMillis() + maxMs
+        val choreographer = android.view.Choreographer.getInstance()
+        val retry = object : android.view.Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                val p = HomeBridge.home?.pictureNow()
+                when {
+                    p != null -> then(p)
+                    SystemClock.uptimeMillis() > deadline -> { AppLog.log("[settings] home gave no picture of itself in $maxMs ms"); then(null) }
+                    else -> choreographer.postFrameCallback(this)
+                }
+            }
+        }
+        choreographer.postFrameCallback(retry)
     }
 
     /** Home's picture for the settings opening now (null: none could be taken; they open at rest). Any thread. */
@@ -114,11 +139,15 @@ object SettingsEntry {
     }
 
     /**
-     * Home as it shows now with our status bar across its top ([then] gets it on the main thread; null: home has no picture
-     * yet). Main thread: home renders itself (~10-20 ms), the bar is drawn on its own thread, the two are put together here.
+     * Home as it shows now with our status bar across its top ([then] gets it on the main thread; null: home gave no picture
+     * of itself, asked again for a moment). Main thread: home renders itself (~10-20 ms), the bar is drawn on its own thread,
+     * the two are put together on the GPU off the main thread.
      */
-    fun homePicture(then: (Bitmap?) -> Unit) {
-        val home = HomeBridge.home?.pictureNow() ?: return then(null)
+    fun homePicture(then: (Bitmap?) -> Unit) = homePictureSoon(HomeBridge.home?.pictureNow()) { h ->
+        if (h == null) then(null) else withBarOn(h, then)
+    }
+
+    private fun withBarOn(home: Bitmap, then: (Bitmap?) -> Unit) {
         val ask = HomeBridge.statusBarPicture ?: return then(home)
         var done = false
         val timeout = Runnable { if (!done) { done = true; then(home) } }
@@ -170,6 +199,8 @@ object SettingsEntry {
     private const val SHOWN_MARGIN_MS = 17L
     /** An offer older than this is not the settings opening now's (ms). */
     private const val STALE_MS = 3000L
+    /** Home declining to picture itself is asked again for this long (ms; a clock's minute change takes ~0.5 s). */
+    private const val PICTURE_RETRY_MS = 900L
     /** The bar's picture is waited for this long at most (ms; its thread busy with a frame). */
     private const val BAR_TIMEOUT_MS = 250L
 }
