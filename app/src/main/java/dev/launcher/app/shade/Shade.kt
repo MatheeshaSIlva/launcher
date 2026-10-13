@@ -353,7 +353,14 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * travel ([ccPull]) while it holds them, then back on [CC_SETTLE], which overshoots a little upwards (measured: 8-9 pt
      * on a ~70 pt return); a little above their place (negative) as they fade out closing.
      */
-    private val ccOffset = MotionValue(0f, 1f, { cc.pullOffset = it; if (panel == Panel.CC) applyProgress() })
+    private val ccOffset = MotionValue(0f, 1f, { cc.pullOffset = it; if (panel == Panel.CC || leavingPanel == Panel.CC) applyProgress() })
+
+    /**
+     * A panel on its way out while the other one is pulled in (Matheesha: pulled from the right as Notification Center was
+     * closing, Notification Center opened again): it finishes its close by itself, on [leaving], under the new pull.
+     */
+    private var leavingPanel: Panel? = null
+    private val leaving = MotionValue(0f, 1000f, { applyProgress() }) { endLeaving() }
 
     private fun u() = dev.launcher.app.design.Scale.unitPx(ctx, min(root.width, root.height).coerceAtLeast(1))
 
@@ -379,35 +386,40 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var lastPullDy = 0f
 
     private fun applyProgress() {
-        val p = progress.value
-        val k = p.coerceIn(0f, 1f)
-        when (panel) {
-            Panel.CC -> {
-                cc.progress = p
-                val u = u()
-                // Live where the system can blur behind a window (the app or home keeps moving under it), else our
-                // blurred picture of what was behind.
-                val live = liveBlur.available
-                backdrop.live = live
-                // The background on the controls' own curve (they show at the square root of the progress): linear, the
-                // blur was all but gone while the controls still showed at a third (it cleared in one frame as they faded).
-                val bk = kotlin.math.sqrt(k)
-                if (live) liveBlur.set(bk, true)
-                backdrop.set(ccBlurRadius() * bk, ccDim() * bk, (p / 0.12f).coerceIn(0f, 1f))
-                bar.setPanel(k * (1f - launchBarK()), 0f, 0f, cc.statusRowY, cc.statusRowInset)
-                bar.setRowAlpha(1f - editK)
-            }
-            Panel.NC -> {
-                nc.progress = p
-                bar.setPanel(0f, k * (1f - launchBarK()), nc.wantsDarkContent(), 0f)
-            }
-            null -> {
-                cc.progress = 0f
-                nc.progress = 0f
-                backdrop.set(0f, 0f, 0f)
-                bar.setPanel(0f, 0f, 0f, 0f)
-            }
+        val ccP = shownProgress(Panel.CC)
+        val ncP = shownProgress(Panel.NC)
+        if (ccP != null) {
+            cc.progress = ccP
+            // Live where the system can blur behind a window (the app or home keeps moving under it), else our blurred
+            // picture of what was behind.
+            val live = liveBlur.available
+            backdrop.live = live
+            // The background on the controls' own curve (they show at the square root of the progress): linear, the blur
+            // was all but gone while the controls still showed at a third (it cleared in one frame as they faded).
+            val bk = kotlin.math.sqrt(ccP.coerceIn(0f, 1f))
+            if (live) liveBlur.set(bk, true)
+            backdrop.set(ccBlurRadius() * bk, ccDim() * bk, (ccP / 0.12f).coerceIn(0f, 1f))
+            bar.setRowAlpha(1f - editK)
         }
+        if (ncP != null) nc.progress = ncP
+        if (ccP == null && ncP == null) {
+            cc.progress = 0f
+            nc.progress = 0f
+            backdrop.set(0f, 0f, 0f)
+        }
+        val l = 1f - launchBarK()
+        bar.setPanel(
+            (ccP ?: 0f).coerceIn(0f, 1f) * l, (ncP ?: 0f).coerceIn(0f, 1f) * l,
+            if (ncP != null) nc.wantsDarkContent() else 0f,
+            if (ccP != null) cc.statusRowY else 0f, if (ccP != null) cc.statusRowInset else 0f,
+        )
+    }
+
+    /** [p]'s progress while it shows (the panel pulled or open, or one on its way out under it), else null. */
+    private fun shownProgress(p: Panel): Float? = when (p) {
+        panel -> progress.value
+        leavingPanel -> leaving.value
+        else -> null
     }
 
     private fun rested() {
@@ -423,8 +435,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private fun begin(p: Panel) {
         if (panel == p) return
-        if (panel != null) finishClose()
+        // Pulled again from its side while it was still on its way out under the other one: caught where it is.
+        val back = if (leavingPanel == p) leaving.value.also { leaving.stop(); leavingPanel = null } else -1f
+        // The other panel finishes closing by itself (snapped shut, it vanished in one frame under the new pull).
+        panel?.let { if (progress.value > 0.0005f) letGo(it) else finishClose() }
         panel = p
+        if (back >= 0f) progress.snapTo(back)
         // A ringing banner (a call) stays over the panel; the others rest in Notification Center.
         banner.clear(keepRinging = true)
         // The touchable region widens once the finger lifts (openFully): changed while the window holds the touch, the
@@ -484,36 +500,74 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun finishClose() {
         val was = panel
         panel = null
-        ccOffset.snapTo(0f)
         progress.snapTo(0f)
         applyProgress()
-        cc.onClosed()
-        nc.onClosed()
-        liveBlur.set(0f, false)
-        gallery.dismissNow()
-        backdrop.source = null
-        surfaces.setBackdrop(null, null)
+        for (p in Panel.entries) if (p != leavingPanel) cleanUp(p)
         handler.removeCallbacks(focusWhenIdle)
         focusHolder.release()
-        backdropHold?.cancel()
-        backdropHold = null
-        backdrop.freeze = 0f
         regionOpen = false
         updateTouchable()
         nav.shadeChanged(false)
         if (was != null) AppLog.log("[shade] closed")
     }
 
+    /** What [p] leaves behind once it is out of sight. */
+    private fun cleanUp(p: Panel) {
+        if (p == Panel.NC) { nc.onClosed(); return }
+        ccOffset.snapTo(0f)
+        cc.onClosed()
+        liveBlur.set(0f, false)
+        gallery.dismissNow()
+        backdrop.source = null
+        surfaces.setBackdrop(null, null)
+        backdropHold?.cancel()
+        backdropHold = null
+        backdrop.freeze = 0f
+    }
+
+    /**
+     * [old] makes way for the other panel: it goes on closing by itself, from where it is and as fast as it was going
+     * ([leaving]), while the new pull drives [progress].
+     */
+    private fun letGo(old: Panel) {
+        // A third change in a row: the panel let go before is all but gone by now and goes at once.
+        endLeaving()
+        leavingPanel = old
+        leaving.snapTo(progress.value)
+        leaving.animateTo(0f, if (old == Panel.NC) NC_CLOSE else CC_CLOSE, progress.velocity.coerceAtMost(0f))
+        if (old == Panel.CC && !(ccOffset.isAnimating && ccOffset.target < 0f)) { cc.closing(true); ccOffset.animateTo(-8f * u(), CC_CLOSE) }
+        panel = null
+        progress.snapTo(0f)
+        handler.removeCallbacks(focusWhenIdle)
+        focusHolder.release()
+        AppLog.log("[shade] ${if (old == Panel.CC) "Control Center" else "Notification Center"} closes under the other panel")
+    }
+
+    /** The panel that was let go is out of sight (or must go now). */
+    private fun endLeaving() {
+        val p = leavingPanel ?: return
+        leavingPanel = null
+        leaving.stop()
+        if (p == Panel.CC) { cc.progress = 0f; backdrop.set(0f, 0f, 0f) } else nc.progress = 0f
+        cleanUp(p)
+        applyProgress()
+    }
+
     /** Closes the open panel (animated). */
     fun close(velocity: Float = progress.velocity) {
         if (panel == null) return
+        // The focus (for Back) goes as the panel starts closing: held, the window manager hands a pull from the top to the
+        // stock status bar, and a pull of the other panel during the close came only through the touchscreen's raw events.
+        // (Over the lock screen it stays to the end: it hides One UI's fingerprint icon.)
+        handler.removeCallbacks(focusWhenIdle)
+        if (!locked) focusHolder.release()
         progress.animateTo(0f, if (panel == Panel.NC) NC_CLOSE else CC_CLOSE, velocity.coerceAtMost(0f))
         // iOS 27: the controls lift a few points as they fade; ours also fold back into the corner (ControlCenterView.closing).
         if (panel == Panel.CC) { cc.closing(true); ccOffset.animateTo(-8f * u(), CC_CLOSE) }
     }
 
     /** Gone at once (the screen went off). */
-    fun closeNow() { if (panel != null) finishClose() }
+    fun closeNow() { endLeaving(); if (panel != null) finishClose() }
 
     private fun openFully(velocity: Float) {
         if (locked) focusHolder.take()
@@ -547,12 +601,15 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 banner.hits(e.rawX, e.rawY) -> Touch.BANNER
                 gallery.isOpen -> Touch.GALLERY
                 panel == null -> Touch.PULL
+                // From the bar while the panel closes: a new pull (its side chooses the panel), not a touch on the panel.
+                closingByItself() && e.rawY <= barHeight + slop -> Touch.PULL
                 e.rawY > root.height - nav.stripHeight() * 1.3f -> Touch.BOTTOM
                 else -> Touch.PANEL
             }
             when (touch) {
                 Touch.PULL -> {
                     pulling = false
+                    pullFrom = -1f
                     takenOver = false
                     pullPanel = if (e.rawX >= ccZoneLeft()) Panel.CC else Panel.NC
                     startStream()
@@ -638,9 +695,17 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (!pulling) {
             if (dy < slop || abs(x - downX) > abs(dy) * 1.5f) return
             pulling = true
+            // The panel itself on its way out (from the bar on its own side): caught where it is, the finger moves it on.
+            pullFrom = when (pullPanel) {
+                panel -> progress.value
+                leavingPanel -> leaving.value
+                else -> -1f
+            }
+            pullOffsetFrom = if (pullFrom >= 0f && pullPanel == Panel.CC) ccOffset.value else 0f
             begin(pullPanel)
             progress.stop()
             ccOffset.stop()
+            if (pullFrom >= 0f && panel == Panel.CC) cc.closing(false)
             downY = y
         }
         follow(y, y - downY)
@@ -649,9 +714,23 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     /** The open panel follows the finger at [y], [dy] past where it took the panel. */
     private fun follow(y: Float, dy: Float) {
         if (locked && !focusHolder.held && SystemClock.uptimeMillis() - touchDownAt > HANDOVER_MS) focusHolder.take()
-        progress.snapTo(fingerProgress(y, dy))
-        if (panel == Panel.CC) { lastPullDy = dy; ccOffset.snapTo(ccPull(dy)) }
+        progress.snapTo(if (pullFrom >= 0f) caughtProgress(dy) else fingerProgress(y, dy))
+        if (panel == Panel.CC) { lastPullDy = dy; ccOffset.snapTo(pullOffsetFrom + ccPull(dy)) }
     }
+
+    /** Where the pulled panel was when the pull caught it on its way out (-1: the pull brought it from closed). */
+    private var pullFrom = -1f
+    private var pullOffsetFrom = 0f
+
+    /** A panel caught on its way out, [dy] after: moved on by the finger's travel from where it was. */
+    private fun caughtProgress(dy: Float): Float {
+        val raw = pullFrom + dy / travel()
+        return if (panel == Panel.CC) raw.coerceIn(0f, 1f)
+        else if (raw > 1f) 1f + Motion.rubberBand((raw - 1f) * travel(), root.height.toFloat()) / travel() else raw.coerceAtLeast(0f)
+    }
+
+    /** The panel is closing by itself (no finger holds it). */
+    private fun closingByItself() = panel != null && progress.isAnimating && progress.target <= 0f
 
     // ---- the raw stream: the finger after the system took the touch (see TouchStream)
 

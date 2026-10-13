@@ -512,7 +512,8 @@ object GestureNav {
 
     private val shadeLink = object : dev.launcher.app.shade.Shade.NavLink {
         override fun backdrop(then: (dev.launcher.app.shade.BackdropSource?) -> Unit) = shadeBackdrop(then)
-        override fun stripHeight(): Int = if (stripHeight > 0) stripHeight else dp(20).toInt()
+        // The band at the bottom of an open panel where a swipe up closes it: Android's gesture height (the strip is lower).
+        override fun stripHeight(): Int = max(if (stripHeight > 0) stripHeight else dp(20).toInt(), systemDimen("navigation_bar_gesture_height"))
         override fun shadeChanged(open: Boolean) {
             nav.post { stripUnderShade(open) }
             if (!open) refreshAppearance()
@@ -799,13 +800,18 @@ object GestureNav {
     private fun addStrip() {
         val ctx = a11y ?: return
         val wm = wm ?: return
-        val h = max(dp(20).toInt(), systemDimen("navigation_bar_gesture_height").takeIf { it > 0 } ?: systemDimen("navigation_bar_height"))
+        // 20 dp, about iOS's (~20 pt), or the navigation bar if taller: an overlay takes every touch in its band (it cannot
+        // let an app's drag through as Android's own gestures do), and at Android's gesture height (32 dp) it lay over the
+        // bottom of apps' content (Matheesha: TikTok's seek bar could hardly be scrubbed). Taps in it reach the app anyway
+        // (tapToApp).
+        val navBar = if (Build.VERSION.SDK_INT >= 30) try { wm.currentWindowMetrics.windowInsets.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars()).bottom } catch (_: Throwable) { 0 } else 0
+        val h = max(dp(20).toInt(), navBar)
         val stripView = FrameLayout(ctx)
         val pill = View(ctx).apply {
             background = GradientDrawable().apply { setColor(0x99FFFFFF.toInt()); cornerRadius = dp(2) }
         }
-        stripView.addView(pill, FrameLayout.LayoutParams(dp(108).toInt(), dp(4).toInt(), Gravity.CENTER))
-        pill.translationY = dp(6)   // a little lower than centre, closer to the bottom edge
+        // Its centre 10 dp above the bottom edge, as it was in the taller strip.
+        stripView.addView(pill, FrameLayout.LayoutParams(dp(108).toInt(), dp(4).toInt(), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL).apply { bottomMargin = dp(8).toInt() })
         stripView.setOnTouchListener { _, e -> onTouch(e) }
         val lp = overlayParams(WindowManager.LayoutParams.MATCH_PARENT, h, touchable = true).apply {
             gravity = Gravity.BOTTOM
@@ -845,14 +851,40 @@ object GestureNav {
      * touchable region, not a window change: no relayout.
      */
     private fun stripUnderShade(hidden: Boolean) {
-        val s = strip ?: return
-        if (hidden == stripHidden) return
+        if (strip == null || hidden == stripHidden) return
         stripHidden = hidden
         applyPill()
+        applyStripRegion()
+    }
+
+    /** The strip lets touches through to the app under it while a tap is handed over ([StripForward]). */
+    private var stripLetThrough = false
+
+    private fun applyStripRegion() {
+        val s = strip ?: return
         // Back to all of it with an explicit region: null does not reset the region the window manager has.
         if (Build.VERSION.SDK_INT >= 34) s.rootSurfaceControl?.setTouchableRegion(
-            if (hidden) android.graphics.Region(-2, -2, -1, -1) else android.graphics.Region(0, 0, s.width.coerceAtLeast(1) * 4, s.height.coerceAtLeast(1) * 4))
+            if (stripHidden || stripLetThrough) android.graphics.Region(-2, -2, -1, -1)
+            else android.graphics.Region(0, 0, s.width.coerceAtLeast(1) * 4, s.height.coerceAtLeast(1) * 4))
     }
+
+    private val forward by lazy { StripForward(nav) { on -> if (on != stripLetThrough) { stripLetThrough = on; applyStripRegion() } } }
+
+    /**
+     * A tap on the strip over an app is the app's: handed to it once the finger has lifted ([StripForward]). Only to another
+     * app whose uid is known (the injection is aimed at its windows alone), and where the strip can let touches through
+     * (Android 14+).
+     */
+    private fun tapToApp(up: MotionEvent) {
+        if (Build.VERSION.SDK_INT < 34) return
+        val pkg = lastFrontPkg ?: return
+        if (pkg == app.packageName) return
+        val uid = uids.getOrPut(pkg) { try { app.packageManager.getApplicationInfo(pkg, 0).uid } catch (_: Throwable) { -1 } }
+        if (uid < 0) return
+        forward.tap(up, uid)
+    }
+
+    private val uids = HashMap<String, Int>()
 
     @Suppress("DEPRECATION")
     private fun readDisplay() {
@@ -1336,6 +1368,8 @@ object GestureNav {
                 else {
                     finishHomePull()
                     hideCards(); pendingFresh = true; prefetch(fresh = true)
+                    // Over an app the touch may be a tap for the app (see tapToApp): kept until it is known whose it is.
+                    if (!homeVisible) forward.reset(e)
                     // On home: it is recorded as it shows right now and rendered ahead, so a swipe up can show it receding from
                     // its first frame (the picture from when home last came to rest can be out of date: a folder opened since).
                     // Something open on top of home (the widget gallery, a menu, edit mode, Spotlight): the swipe closes it
@@ -1366,6 +1400,7 @@ object GestureNav {
                 vt?.addMovement(raw)
                 val dx = e.rawX - downX
                 val dy = downY - e.rawY
+                if (pendingFresh && !homeVisible) forward.hold(e)
                 if (pendingFresh && !homeVisible) {
                     if (dy > dp(10) && dy > abs(dx)) { pendingFresh = false; beginHome() }
                     else if (abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) { pendingFresh = false; beginSwitch() }
@@ -1396,6 +1431,8 @@ object GestureNav {
                 val vy = vt?.yVelocity ?: 0f
                 val up = e.actionMasked == MotionEvent.ACTION_UP
                 nav.removeCallbacks(holdCheck)
+                // A touch over an app that started nothing of ours (a tap) is the app's.
+                if (pendingFresh && !homeVisible && up) tapToApp(e)
                 when {
                     phase == Phase.HOME_PULL -> releaseHomePull(up)
                     phase == Phase.DRAG_HOME -> releaseHome(up, vx, vy)
@@ -1980,7 +2017,7 @@ object GestureNav {
         val component = android.content.ComponentName(app, TurnCover::class.java).flattenToString()
         fun check() {
             if (gen != g) return
-            if (!coverAsked || coverFailed) { then(false); return }
+            if (!coverAsked || coverFailed || TurnCover.failedAt >= since) { then(false); return }
             frontIo.execute {
                 val at = try { ShizukuLink.service?.transitionShownAt(component) } catch (_: Throwable) { null }
                 nav.post {

@@ -555,7 +555,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val radius = if (Build.VERSION.SDK_INT >= 31) insets.getRoundedCorner(RoundedCorner.POSITION_BOTTOM_LEFT)?.radius?.toFloat() ?: 0f else 0f
         val minBottom = (20 * resources.displayMetrics.density).roundToInt()   // our gesture strip is at least this tall
         val b = maxOf(bottom, minBottom)
-        if (top != topInset || b != bottomInset || radius != deviceRadius) {
+        // A pixel or two is no change: shown turned under an app in landscape, Android gives the status bar a pixel less, and
+        // back once the display has turned; home rebuilt twice in every close from landscape (its pictures, still on screen
+        // then, lost the clock's numerals with the clock they drew).
+        if (abs(top - topInset) > INSET_SLOP_PX || abs(b - bottomInset) > INSET_SLOP_PX || radius != deviceRadius) {
             if (m != null) AppLog.log("[home] insets changed (top $topInset->$top, bottom $bottomInset->$b, corner $deviceRadius->$radius): rebuilding")
             topInset = top; bottomInset = b; deviceRadius = radius
             build()
@@ -2012,6 +2015,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     companion object {
+        /** Inset changes up to this (px) leave home as it is (see onApplyWindowInsets). */
+        private const val INSET_SLOP_PX = 2
         /** How small an item starts as the new look reaches it, before it springs into place. */
         const val SETTLE_FROM = 0.9f
         /** The most the arrival advances in one frame (s): a 60 Hz frame. */

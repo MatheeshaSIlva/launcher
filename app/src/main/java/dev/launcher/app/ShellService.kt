@@ -261,6 +261,9 @@ class ShellService : IShellService.Stub() {
 
     override fun transitionShownAt(component: String): Long = instant.shownAt(component)
 
+    override fun injectTouch(action: Int, x: Float, y: Float, downTime: Long, eventTime: Long, deviceId: Int, targetUid: Int, waitForResult: Boolean): Boolean =
+        TouchInjector.inject(action, x, y, downTime, eventTime, deviceId, targetUid, waitForResult)
+
     override fun probeLiveTransition(component: String, homeComponent: String): String = try {
         LiveTransitionProbe(systemService("activity_task", ATM_STUB)).run(component, homeComponent)
     } catch (t: Throwable) {

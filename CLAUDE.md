@@ -182,7 +182,9 @@ copy it wholesale — port the working pieces cleanly. File map:
   maxX, minY, maxY)`: ranges 0..255 (a linear map), sat 0 turns the whole curve off, chroma grows ~1 + 1.9 x sat; `curve` did
   nothing visible. Banners use it (`comp.banner.system-blur` 1, on in iOS 27 since 2026-10-12: Matheesha wants them live
   as Control Center; `BannerView` plates with the material's colour curve `systemLook`, the glass drawing only its own
-  layers over it: `MaterialPainter.drawOverSystemBlur`). Fitted on the S24 against our glass over the same wallpaper
+  layers over it: `MaterialPainter.drawOverSystemBlur`; the lens cannot bend what the system draws, so the band along the
+  edge where it visibly bends is drawn whole over our picture of what is behind and fades into the live blur inward:
+  `lens = true`, crossfaded when the picture changes). Fitted on the S24 against our glass over the same wallpaper
   (`SemBlurProbe` glass mode, `--ef sat`/`--ef span`): chroma 1.67 per saturation, the brightness range widened 1.11.
   Check it in `dumpsys SurfaceFlinger` ("Blur Regions": our window's region, radius, curve), never by screenshot. (It was
   off once because banners vanished during app opens and closes: that was the card window over the shade's.) Probe:
@@ -369,6 +371,18 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **A rotation waits for every visible window of ours to draw in the new orientation**, and a window whose view is GONE
   never draws: LiveBlur's hidden window held each rotation for its 2 s timeout (now a visible 1 x 1 window). Seamless
   rotation (`ROTATION_ANIMATION_SEAMLESS`) left all our overlays waiting to draw; home uses the jump cut.
+- **An overlay strip cannot hand a drag to the app under it.** Android's own gestures spy on every touch and take only
+  their swipes (MONITOR_INPUT, which the shell lacks); ours is a window and takes every touch in its band. Injecting the
+  touch into the app works only once the finger has lifted (taps: `StripForward`, aimed at the app's uid, after the strip
+  lets touches through): while the finger is down Android refuses a DOWN from that device (it is touching the strip),
+  from any other device too, and an injected CANCEL of the real touch ("Inconsistent event"). So the strip is only 20 dp
+  (about iOS's), below the content apps put at the bottom (TikTok's seek bar sat in the old 32 dp band).
+- **`Window.getInsetsController()` is null until the window has its decor**: asked in an activity's onCreate before
+  `setContentView`, it crashed the launcher on every close from a full-screen video (`TurnCover`); use
+  `window.decorView.windowInsetsController`.
+- **Pictures of home draw the glass clock through its live shader**: when home rebuilds (any inset change used to do it,
+  also a 1 px one: shown turned under a landscape app the status bar reads a pixel shorter), every picture drawn again
+  after that loses the numerals. Home ignores inset changes up to 2 px (`HomeScreen.INSET_SLOP_PX`).
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

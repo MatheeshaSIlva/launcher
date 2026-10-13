@@ -118,4 +118,11 @@ interface IShellService {
     // transition was last on screen (its start transaction committed); 0 if never. A close over a turned display starts
     // home only once its cover is.
     long transitionShownAt(String component) = 34;
+
+    // One touch event injected as the touchscreen's (INJECT_EVENTS) for the app under the gesture strip: a MotionEvent
+    // action (DOWN, MOVE, UP, CANCEL), screen x/y, downTime/eventTime (uptime ms), as input device deviceId (the finger's
+    // own: Android refuses a second device's touch while one touches). Into windows of targetUid only (-1: any window).
+    // waitForResult: returns whether a window of that uid took it (a DOWN aimed while the strip is still in the way is
+    // refused); else queued and true.
+    boolean injectTouch(int action, float x, float y, long downTime, long eventTime, int deviceId, int targetUid, boolean waitForResult) = 35;
 }

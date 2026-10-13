@@ -58,6 +58,11 @@ emulator (Android 17) and the S24 (One UI, Android 16).
   as the close begins) draws the same picture under the card, and home starts once the shell has seen it on screen. On the
   emulator no frame of the app shows any more (recorded frame by frame); the gesture pill fades out with the close and
   back in at the bottom of the upright screen.
+- After that, on the S24 (Matheesha: it crashed the launcher): the cover asked its window for the insets controller before
+  the window had its decor (only when the app hides the bars: a full-screen video). Fixed, and the cover's setup can no
+  longer take the launcher down. Recorded on the S24 from full-screen YouTube: the cover on screen 150-190 ms after the
+  release (the card's flight ~580 ms), no frame of the app, the glass clock kept (home no longer rebuilds for the 1 px
+  the status bar reads shorter while home is shown turned).
 - Stock status bar chips that ignore the disable flags draw under our time on the emulator (a stopwatch, a call); One UI's
   not seen yet. Our bar does not make room for them.
 - The tone over an app is still polled (dumpsys every 2.5 s and on window changes): an app that turns its bar from light to
