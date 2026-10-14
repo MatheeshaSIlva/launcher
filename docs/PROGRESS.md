@@ -2194,3 +2194,7 @@ be on a mid range phone". Found by reading what runs between gestures (996f425 a
   cold Photos after 73 ms, Contacts after 298-593 ms.
 - Still to measure on the S24: GPU memory (Control Center, Notification Center and their backdrop keep screen-sized layers
   while closed), the frame pacing of quick App Library swipes with a real finger, the rapid launches.
+- The picture of the app in front stays as it is (Matheesha, 2026-10-15): taken every 6 s and 0.4 s after its screen
+  settles (at most every 1.2 s), on top of the one taken at a touch on the bar. Capturing only at the touch was weighed:
+  the card must show 15-40 ms after the touch, and a capture took 14-24 ms on One UI 9 (three samples) but 70-130 ms
+  after a minute in an app on One UI 8. The log sums the periodic captures up every 20 (`kept pictures, last 20`).
