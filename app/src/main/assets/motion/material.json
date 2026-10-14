@@ -1,0 +1,802 @@
+{
+ "format": 1,
+ "name": "Material",
+ "description": "Android 16's springs",
+ "author": "Launcher (Material 3 Expressive's motion tokens, androidx v0_14_0)",
+ "version": "0.1",
+ "extends": "ios27",
+ "_about": "Android 16's motion on iOS 27's roles: Material 3 Expressive's springs by each role's kind and size, a bounce only where iOS 27 has one. Written by tools/design/build_material_preset.py.",
+ "tokens": {
+  "motion.app.cancel": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.app.close-position": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.app.close-size": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.app.open": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.appear": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.appear.fade": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.arrival": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.arrival.wallpaper": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.banner.back": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.banner.fly": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.banner.fly-fade": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.banner.in": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.banner.out": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.banner.resize": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.cc.appear": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.cc.close": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.cc.close-style": {
+   "spring": [
+    0.1019,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, fast spring (stiffness 3800, damping 1)"
+  },
+  "motion.cc.drop": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.cc.edit": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.cc.expanded.close": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.cc.expanded.level": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.cc.expanded.open": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.cc.gallery.close": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.cc.gallery.open": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.cc.leave": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.cc.level": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.cc.lift": {
+   "spring": [
+    0.2221,
+    0.6
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast spring (stiffness 800, damping 0.6)"
+  },
+  "motion.cc.open": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.cc.press-in": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.cc.press-out": {
+   "spring": [
+    0.2221,
+    0.6
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast spring (stiffness 800, damping 0.6)"
+  },
+  "motion.cc.reflow": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.cc.resize": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.cc.settle": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.cc.stretch-back": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.cc.toggle": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.clock.appear": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.clock.tick": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, slow spring (stiffness 800, damping 1)"
+  },
+  "motion.disappear.fade": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.drawer": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.edit.bar": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.edit.drag-lift": {
+   "spring": [
+    0.2221,
+    0.6
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast spring (stiffness 800, damping 0.6)"
+  },
+  "motion.edit.drag-settle": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.edit.jiggle-stop": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.edit.press-in": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.edit.press-out": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.edit.reflow": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.field.clear-in": {
+   "spring": [
+    0.2221,
+    0.6
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast spring (stiffness 800, damping 0.6)"
+  },
+  "motion.field.clear-out": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.folder.close": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.folder.open": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.home.depth-close": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.home.depth-open": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.home.label-tone": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, slow spring (stiffness 800, damping 1)"
+  },
+  "motion.home.page-snap": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.home.pill-edit": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.home.pill-hide": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.home.pill-show": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.home.rebuild-settle": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.icon.press-in": {
+   "spring": [
+    0.1019,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, fast spring (stiffness 3800, damping 1)"
+  },
+  "motion.icon.press-out": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.index.bubble-in": {
+   "spring": [
+    0.2221,
+    0.6
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast spring (stiffness 800, damping 0.6)"
+  },
+  "motion.index.bubble-out": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.index.follow": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.index.scroll": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.menu.close": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.menu.open": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.mode-crossfade": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.nc.appear": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.nc.clock-tick": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, slow spring (stiffness 800, damping 1)"
+  },
+  "motion.nc.close": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.nc.confirm": {
+   "spring": [
+    0.2221,
+    0.6
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast spring (stiffness 800, damping 0.6)"
+  },
+  "motion.nc.hold": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.nc.leave": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.nc.menu-close": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.nc.menu-open": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.nc.open": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.nc.reflow": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.nc.swipe-back": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.nc.swipe-out": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.nc.time-fade": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.nc.toggle": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.press-in": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.press-out": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.scroll.overscroll-return": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.settings.focus": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.settings.open": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.sheet": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.sheet.push": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.statusbar.appear": {
+   "spring": [
+    0.2221,
+    0.6
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast spring (stiffness 800, damping 0.6)"
+  },
+  "motion.statusbar.hide": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.statusbar.leave": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.statusbar.level": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.statusbar.lock": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.statusbar.move": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.statusbar.roll": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.statusbar.show": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.statusbar.tone": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.strip.hide": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.strip.show": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.switch.cancel": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.switch.commit": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.switcher.clear-press": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
+  "motion.switcher.enter": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.switcher.flick": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.switcher.home": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.switcher.open": {
+   "spring": [
+    0.4443,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, slow, critically damped: iOS 27 does not overshoot here spring (stiffness 200, damping 1)"
+  },
+  "motion.switcher.reflow": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.switcher.scroll": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
+  "motion.wallpaper.appear": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, slow spring (stiffness 800, damping 1)"
+  },
+  "motion.wallpaper.crossfade": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, slow spring (stiffness 800, damping 1)"
+  },
+  "motion.widget.layout-fade": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.widget.resize": {
+   "spring": [
+    0.3223,
+    0.8
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default spring (stiffness 380, damping 0.8)"
+  },
+  "motion.widgets.preview": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  }
+ }
+}

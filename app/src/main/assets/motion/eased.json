@@ -1,6 +1,8 @@
 {
  "format": 1,
  "name": "Eased (test)",
+ "description": "Every motion on a curve",
+ "test": true,
  "author": "Launcher",
  "version": "0.1",
  "extends": "ios27",

@@ -76,7 +76,7 @@ Settings
 | C3 | Look: theme gallery (preview scope), Material You with the palette, fonts with Google Fonts search, customise by component with previews |
 | C3b | Customise the pre-defined layouts (Matheesha, 2026-10-12: "make the pre-defined layouts to be customized as well"): each layout's own properties beyond its counts (where its parts sit, their sizes and spacing, which parts show), with a live preview, saved per layout in the setup |
 | C3c | Widgets follow the theme (Matheesha, 2026-10-12): our widgets (the clock and the ones to come) drawn from the theme's tokens and components, so a theme restyles them as it does everything else; Android's widgets on the theme's platter, corners and colours (their inside is the app's) |
-| C4 | Motion: preset gallery with demos, the curve editor, roles by group |
+| C4 | Motion: preset gallery with demos, the curve editor, roles by group (plan: `docs/PLAN_MOTION.md`) |
 | C5 | Phone: Shizuku and permissions with status, safety, updates, backup |
 | C6 | First-run walkthrough and guides with motion graphics |
 | C7 | Undo and history, auto-revert for risky changes; the token editor moves under Expert |
@@ -245,6 +245,9 @@ tertiary, surface and neutral in this appearance, `Design.systemPalette`), lit w
 Fonts chooses the text and the titles' family (`sys.font.text`, `sys.font.display`): Inter, the phone's, serif, mono and
 four from Google Fonts (downloaded the first time), each chip written in its own font; both wait for Apply (`Draft.fonts`).
 Still to come in C3: customising by component with previews.
+
+**C4a, Motion's presets and fine-tuning (2026-10-14):** Speed and Bounce for each preset, the Material preset, preset cards
+playing their curves, a banner in the picture's demo; details in `docs/PLAN_MOTION.md`.
 
 **C3, Google Fonts search (2026-10-11):** each font row has "More Fonts" on its title line (a chip at the end of the
 sideways row was out of sight). It opens a sheet over the settings: a search field, Google's categories as chips (All,

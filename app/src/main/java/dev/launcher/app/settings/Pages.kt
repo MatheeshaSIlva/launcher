@@ -45,7 +45,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -88,6 +90,7 @@ import dev.launcher.app.layout.Element
 import dev.launcher.app.layout.Layouts
 import dev.launcher.app.layout.Option
 import dev.launcher.app.layout.Setup
+import dev.launcher.app.motion.MotionAdjust
 import dev.launcher.app.motion.MotionTokens
 import dev.launcher.app.motion.mover
 import dev.launcher.app.theme.Appearance
@@ -197,7 +200,7 @@ private enum class Part(val title: String, val color: ColorKey, val symbol: Int)
 private fun Part.detail(d: Draft): String = when (this) {
     Part.LAYOUTS -> "${Element.entries.size} parts of the phone"
     Part.LOOK -> themeName(d.themeId()) + if (d.wallpaperColors()) " · wallpaper colours" else ""
-    Part.MOTION -> presetName(d.motionId())
+    Part.MOTION -> presetName(d.motionId()) + (d.motionChangeCount(d.motionId()).takeIf { it > 0 }?.let { " · $it change" + if (it == 1) "" else "s" } ?: "")
     Part.PHONE -> if (dev.launcher.app.ShizukuLink.service != null) "Shizuku connected" else "Shizuku not running"
 }
 
@@ -232,12 +235,18 @@ private class Draft {
     /** The user's own size of everything and of text (factors of an iPhone's; used when not following the phone). */
     var sizeFactor by mutableStateOf<Float?>(null)
     var textFactor by mutableStateOf<Float?>(null)
+    /**
+     * Animation presets' tokens changed here, per preset ((preset, token) to the value: the whole preset's speed and bounce,
+     * and each animation with C4b), and presets whose changes of yours all go on Apply ([resetMotion]).
+     */
+    val motionEdits = androidx.compose.runtime.mutableStateMapOf<Pair<String, String>, dev.launcher.app.design.Value>()
+    val motionCleared = androidx.compose.runtime.mutableStateMapOf<String, Boolean>()
     /** When Back was pressed with changes waiting (a second Back soon after discards them and leaves); 0: not. */
     var backAt by androidx.compose.runtime.mutableLongStateOf(0L)
 
     val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, colorIntensity, colorSeed, scalePolicy, sizeFactor, textFactor).size +
         elements.size + setup.size +
-        fonts.size + colorKeys.size
+        fonts.size + colorKeys.size + motionEdits.size + motionCleared.size
 
     fun themeId() = theme ?: Design.themeId
     fun chooseTheme(id: String) { theme = id.takeIf { it != Design.themeId } }
@@ -245,6 +254,47 @@ private class Draft {
     fun chooseColors(on: Boolean) { colors = (if (on) "wallpaper" else "theme").takeIf { on != Design.wallpaperColors } }
     fun motionId() = motion ?: Design.motionPresetId
     fun chooseMotion(id: String) { motion = id.takeIf { it != Design.motionPresetId } }
+
+    /** Number [k] of animation preset [preset] as it would be applied: this draft's, else yours, else the preset's own. */
+    fun motionNumber(preset: String, k: NumberKey): Float =
+        (motionEdits[preset to k.name] as? dev.launcher.app.design.Value.Number)?.v ?: appliedMotionNumber(preset, k)
+    private fun appliedMotionNumber(preset: String, k: NumberKey): Float = Design.previewNumber(preset, k, edits = preset !in motionCleared) ?: 1f
+    private fun ownMotionNumber(preset: String, k: NumberKey): Float = Design.previewNumber(preset, k, edits = false) ?: 1f
+    fun chooseMotionNumber(preset: String, k: NumberKey, v: Float) {
+        if (kotlin.math.abs(v - appliedMotionNumber(preset, k)) < 0.001f) motionEdits.remove(preset to k.name)
+        else motionEdits[preset to k.name] = dev.launcher.app.design.Value.Number(v, dev.launcher.app.design.NumUnit.FACTOR)
+    }
+    fun motionSpeed(preset: String) = motionNumber(preset, MotionTokens.ADJUST_SPEED)
+    fun motionBounce(preset: String) = motionNumber(preset, MotionTokens.ADJUST_BOUNCE)
+
+    /** Role [k] of animation preset [preset] as it would run once applied (yours, at the draft's speed and bounce). */
+    fun motionCurve(preset: String, k: dev.launcher.app.design.CurveKey): dev.launcher.app.design.Curve {
+        val raw = (motionEdits[preset to k.name] as? dev.launcher.app.design.Value.CurveV)?.curve
+            ?: Design.previewCurve(preset, k, edits = preset !in motionCleared, adjusted = false)
+            ?: return dev.launcher.app.motion.Motion.role(k)
+        return MotionAdjust.apply(raw, motionSpeed(preset), motionBounce(preset))
+    }
+
+    /** How many of [preset]'s animations you changed, as it would be applied (its speed and bounce aside). */
+    fun motionRoleChanges(preset: String): Int = if (preset in motionCleared) 0 else Design.motionEdits(preset).keys.count { it !in OVERALL_MOTION }
+    private fun speedChanged(preset: String) = kotlin.math.abs(motionSpeed(preset) - ownMotionNumber(preset, MotionTokens.ADJUST_SPEED)) > 0.001f
+    private fun bounceChanged(preset: String) = kotlin.math.abs(motionBounce(preset) - ownMotionNumber(preset, MotionTokens.ADJUST_BOUNCE)) > 0.001f
+    /** Your changes to [preset] as it would be applied: its animations, and its speed and bounce as one each. */
+    fun motionChangeCount(preset: String): Int = motionRoleChanges(preset) + (if (speedChanged(preset)) 1 else 0) + (if (bounceChanged(preset)) 1 else 0)
+    /** What you changed in [preset], in a few words for its card (null: nothing). */
+    fun motionSummary(preset: String): String? {
+        val parts = ArrayList<String>()
+        if (speedChanged(preset)) parts += "Speed ${(motionSpeed(preset) * 100).roundToInt()} %"
+        if (bounceChanged(preset)) parts += motionBounce(preset).let { if (it < 0.001f) "No bounce" else "Bounce ${(it * 100).roundToInt()} %" }
+        val n = motionRoleChanges(preset)
+        if (n > 0) parts += "$n change" + if (n == 1) "" else "s"
+        return when (parts.size) { 0 -> null; 1 -> parts[0]; else -> motionChangeCount(preset).let { "$it changes" } }
+    }
+    /** Everything of yours in [preset] goes (on Apply): it is as it comes again. */
+    fun resetMotion(preset: String) {
+        for (k in motionEdits.keys.filter { it.first == preset }) motionEdits.remove(k)
+        if (Design.motionEdits(preset).keys.any { it != MotionTokens.DEBUG_SLOW.name }) motionCleared[preset] = true
+    }
     fun appearanceMode() = appearance ?: Appearance.mode
     fun chooseAppearance(m: Appearance.Mode) { appearance = m.takeIf { it != Appearance.mode } }
     /** The theme [e] follows of its own (null: the main one). */
@@ -326,6 +376,9 @@ private class Draft {
             theme?.let { Design.setTheme(it) }
             colors?.let { Design.setColorSource(it) }
             for ((e, id) in elements) Design.setElementTheme(e, id.takeIf { it != FOLLOW })
+            // A preset's changes before the choice of preset (one being chosen loads them).
+            for (id in motionCleared.keys) Design.clearMotionEdits(id)
+            for ((pk, v) in motionEdits) Design.setMotionEdit(pk.first, pk.second, v)
             motion?.let { Design.setMotion(it) }
             for ((k, family) in fonts) Design.set(k, dev.launcher.app.design.Value.Choice(family))
             colorStyle?.let { Design.set(Design.COLOR_STYLE.name, dev.launcher.app.design.Value.Choice(it)) }
@@ -347,11 +400,14 @@ private class Draft {
     fun discard() {
         theme = null; colors = null; motion = null; appearance = null
         elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); scalePolicy = null; sizeFactor = null; textFactor = null; backAt = 0L
+        motionEdits.clear(); motionCleared.clear()
     }
 
     companion object {
         const val FOLLOW = "follow"
         const val BACK_AGAIN_MS = 3000L
+        /** A preset's tokens that are not one animation's: its overall speed and bounce, and slow motion (Developer's). */
+        private val OVERALL_MOTION = setOf(MotionTokens.ADJUST_SPEED.name, MotionTokens.ADJUST_BOUNCE.name, MotionTokens.DEBUG_SLOW.name)
         /** A size on the sliders' steps (5 %). */
         fun snap(v: Float) = kotlin.math.round(v * 20f) / 20f
     }
@@ -782,40 +838,48 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
         }
         }
     }
-    // While Motion is open, an app opens and closes on the picture, again and again, on the chosen preset's own curves
-    // (0: closed, 1: open; below 0: no demo).
+    // While Motion is open, an app opens and closes on the picture, then a banner drops in and goes, again and again, on
+    // the chosen preset's own curves as they would be applied (0: closed, 1: open; below 0: not showing). The banner is
+    // where a preset's bounce shows (iOS 27's app opening hardly overshoots).
     val demo = remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
+    val demoBanner = remember { androidx.compose.runtime.mutableFloatStateOf(-1f) }
     // Where the demo's app opens from: the dock's middle icon as home shows it (else a place in the dock); read as it starts.
     val demoIconAt = remember { arrayOfNulls<android.graphics.RectF>(1) }
     val demoPreset = draft.motionId()
     val motionOpen by remember { androidx.compose.runtime.derivedStateOf { st.open == Part.MOTION && !st.p.isRunning } }
     LaunchedEffect(motionOpen, demoPreset) {
         demo.floatValue = -1f
+        demoBanner.floatValue = -1f
         if (!motionOpen) return@LaunchedEffect
-        val opening = Design.previewCurve(demoPreset, MotionTokens.APP_OPEN) ?: dev.launcher.app.motion.Motion.role(MotionTokens.APP_OPEN)
-        val closing = Design.previewCurve(demoPreset, MotionTokens.APP_CLOSE_SIZE) ?: dev.launcher.app.motion.Motion.role(MotionTokens.APP_CLOSE_SIZE)
-        suspend fun run(c: dev.launcher.app.design.Curve, from: Float, to: Float) {
+        suspend fun run(c: dev.launcher.app.design.Curve, from: Float, to: Float, v: androidx.compose.runtime.MutableFloatState) {
             val m = c.mover().apply { start(from, 0f, to) }
             val t0 = androidx.compose.runtime.withFrameNanos { it }
             while (true) {
                 val t = (androidx.compose.runtime.withFrameNanos { it } - t0) / 1e9
-                demo.floatValue = m.value(t)
-                if (m.settled(t, 0.002f)) { demo.floatValue = to; break }
+                v.floatValue = m.value(t)
+                if (m.settled(t, 0.002f)) { v.floatValue = to; break }
             }
         }
         demoIconAt[0] = HomeBridge.dockIcon()
         demo.floatValue = 0f
         kotlinx.coroutines.delay(400)
         while (true) {
-            run(opening, 0f, 1f)
+            // The draft's curves, read at each run: a speed or bounce being chosen shows on the next one.
+            run(draft.motionCurve(demoPreset, MotionTokens.APP_OPEN), 0f, 1f, demo)
             kotlinx.coroutines.delay(650)
-            run(closing, 1f, 0f)
-            kotlinx.coroutines.delay(900)
+            run(draft.motionCurve(demoPreset, MotionTokens.APP_CLOSE_SIZE), 1f, 0f, demo)
+            kotlinx.coroutines.delay(700)
+            run(draft.motionCurve(demoPreset, MotionTokens.BANNER_IN), 0f, 1f, demoBanner)
+            kotlinx.coroutines.delay(1100)
+            run(draft.motionCurve(demoPreset, MotionTokens.BANNER_OUT), 1f, 0f, demoBanner)
+            demoBanner.floatValue = -1f
+            kotlinx.coroutines.delay(700)
         }
     }
     val appFill = look.color(SettingsTokens.GROUP_FILL)
     val appPage = look.color(SettingsTokens.BACKGROUND)
     val appInk = look.color(SettingsTokens.ROW_LABEL)
+    val appAccent = look.color(SettingsTokens.ACCENT)
     var latest by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var shown by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var before by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -857,6 +921,7 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     // The theme chosen and not yet applied shows as home looked in it (if the settings have seen it), else home as it is;
     // with no home to picture yet (the app just started), as it last looked in this theme.
     LaunchedEffect(Unit) { HomePictures.load(ctx) }
+    LaunchedEffect(Unit) { SettingsPrefs.load(ctx) }
     // Home's picture handed over as it slides in is the newest: taken in at once (it is what shows); a fresh one before it
     // slides back out, with the usual fade.
     LaunchedEffect(st.entry) {
@@ -1062,6 +1127,33 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
                     paints.image.alpha = 255
                 }
                 nc.restore()
+            }
+            // The demo's banner: out of the camera at the top, growing from a small pill as it comes down to its place (past
+            // it and back as the preset bounces), and back up into it; in the theme's colours as the app's page is (a stand-in
+            // until the real banner is drawn here: docs/PLAN_MOTION.md, C4d).
+            val bk = demoBanner.floatValue
+            if (bk >= 0f) {
+                val grow = bk.coerceIn(0f, 1f) + (bk - bk.coerceIn(0f, 1f)) * 0.25f   // its size takes a little of the bounce
+                val restW = g.w * 0.96f; val restH = g.h * 0.08f; val restT = g.h * 0.067f
+                val fromW = g.w * 0.3f; val fromH = g.h * 0.04f; val fromT = g.h * 0.013f
+                val bw = fromW + (restW - fromW) * grow
+                val bh = fromH + (restH - fromH) * grow
+                val bt = fromT + (restT - fromT) * bk
+                val bl = (g.w - bw) / 2f
+                val ba = (bk / 0.2f).coerceIn(0f, 1f)
+                paints.rim.color = appFill.copy(alpha = appFill.alpha * 0.96f * ba).toArgb()
+                nc.drawRoundRect(bl, bt, bl + bw, bt + bh, bh * 0.36f, bh * 0.36f, paints.rim)
+                // Its app's icon and two lines of text.
+                val ic = bh * 0.52f
+                val ix = bl + bh * 0.24f
+                val iy = bt + (bh - ic) / 2f
+                paints.rim.color = appAccent.copy(alpha = appAccent.alpha * ba).toArgb()
+                nc.drawRoundRect(ix, iy, ix + ic, iy + ic, ic * 0.23f, ic * 0.23f, paints.rim)
+                val tx = ix + ic + bh * 0.2f
+                paints.rim.color = appInk.copy(alpha = appInk.alpha * 0.7f * ba).toArgb()
+                nc.drawRoundRect(tx, bt + bh * 0.3f, tx + bw * 0.32f, bt + bh * 0.43f, bh * 0.065f, bh * 0.065f, paints.rim)
+                paints.rim.color = appInk.copy(alpha = appInk.alpha * 0.3f * ba).toArgb()
+                nc.drawRoundRect(tx, bt + bh * 0.57f, tx + bw * 0.55f, bt + bh * 0.68f, bh * 0.055f, bh * 0.055f, paints.rim)
             }
             // The finger showing how the element is reached: a soft white dot with a trail, on the picture (scaled with it).
             val ha = hintA.value
@@ -2104,17 +2196,34 @@ private fun Modifier.chipArrival(rowShown: Boolean, lead: Float): Modifier = com
 }
 
 /**
- * Motion (docs/PLAN_SETTINGS.md S4): the animation presets as cards, each drawing its own curve; the picture of home above
- * plays an app opening and closing on the chosen one. Waits for Apply like the rest.
+ * Motion (docs/PLAN_MOTION.md, C4a): the animation presets as cards, each playing its curve (the picture of home above plays
+ * the chosen one: an app opening and closing, a banner dropping in), the whole preset's speed and bounce, and every
+ * animation (in Expert until C4b). Waits for Apply like the rest.
  */
 @Composable
 private fun MotionPage() {
     val draft = LocalDraft.current
     val ctx = LocalContext.current
-    val presets = remember(LocalLook.current.version) { Design.motionPresets() }
-    Group("Animations", "How everything moves. The picture above plays the one you choose.") {
-        PresetCards(presets, draft)
+    val look = LocalLook.current
+    val st = LocalStudio.current
+    val all = remember(look.version) { Design.motionPresets() }
+    val chosen = draft.motionId()
+    // Presets made for testing show when Developer asks for them, or while one is in use; the default first, tests last.
+    val presets = all.filter { !it.test || SettingsPrefs.testPresets || it.id == chosen || it.id == Design.motionPresetId }
+        .sortedWith(compareBy({ it.test }, { it.id != Design.DEFAULT_MOTION }, { it.name }))
+    // The cards' dots run on one clock while the page is open and at rest (read in drawing only).
+    val clock = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    LaunchedEffect(st) {
+        androidx.compose.runtime.snapshotFlow { st == null || (st.open == Part.MOTION && !st.p.isRunning) }.collectLatest { open ->
+            if (!open) return@collectLatest
+            val t0 = androidx.compose.runtime.withFrameNanos { it } - (clock.floatValue * 1e9).toLong()
+            while (true) clock.floatValue = (androidx.compose.runtime.withFrameNanos { it } - t0) / 1e9f
+        }
     }
+    Group("Presets", "How everything moves. The picture above plays the one you choose.") {
+        PresetCards(presets, draft, clock)
+    }
+    FineTune(draft)
     Group("Every animation", "Each one can be retimed on its own: a spring or a curve.") {
         NavRow("Each animation", "In Expert, for now") {
             ctx.startActivity(Intent(ctx, dev.launcher.app.design.DesignActivity::class.java))
@@ -2122,51 +2231,185 @@ private fun MotionPage() {
     }
 }
 
-/** The presets side by side, each with the curve its apps open on; the chosen one ringed in the accent. */
+/**
+ * The presets side by side, each drawing the curve a banner drops in on (a motion that bounces, so a preset's bounce shows as
+ * well as its pace; iOS 27's app opening hardly overshoots), at its speed and bounce as it would be applied, with a dot
+ * running along it on its own timing, again and again; the chosen one ringed in the accent. One time axis for all of
+ * them, so a quicker preset rises sooner and a slower one later (it glides to fit the slowest). Two share the row; more
+ * keep that width and scroll sideways, the next one peeking in.
+ */
 @Composable
-private fun PresetCards(presets: List<Design.ThemeInfo>, draft: Draft) {
+private fun PresetCards(presets: List<Design.ThemeInfo>, draft: Draft, clock: androidx.compose.runtime.FloatState) {
     val look = LocalLook.current
     val pad = look.dp(SettingsTokens.ROW_PADDING)
-    val accent = look.color(SettingsTokens.ACCENT)
-    val line = look.color(SettingsTokens.ROW_DETAIL_COLOR)
-    Row(Modifier.fillMaxWidth().padding(pad), horizontalArrangement = Arrangement.spacedBy(look.dp(12f * look.unit))) {
-        for (p in presets) {
-            val chosen = draft.motionId() == p.id
-            val k by animateFloatAsState(if (chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chosen")
-            var pressed by remember { mutableStateOf(false) }
-            val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
-            // The curve its apps open on, sampled until it comes to rest (a spring overshoots above the line).
-            val points = remember<List<Pair<Float, Float>>>(p.id, look.version) {
-                val c = Design.previewCurve(p.id, MotionTokens.APP_OPEN) ?: return@remember emptyList()
-                val m = c.mover().apply { start(0f, 0f, 1f) }
-                var end = 0.2
-                while (end < 2.0 && !m.settled(end, 0.002f)) end += 0.05
-                (0..48).map { i -> val t = end * i / 48.0; (i / 48f) to m.value(t) }
-            }
-            val corner = look.pt(SettingsTokens.TILE_CORNER) * 0.7f
-            Column(Modifier.weight(1f).pressScale { 1f - 0.04f * press }
-                .pointerInput(p.id) { rowTap({ pressed = it }) { draft.chooseMotion(p.id) } }) {
-                Canvas(Modifier.fillMaxWidth().height(look.dp(84f * look.unit))) {
-                    drawRoundRect(look.color(SettingsTokens.CHIP_FILL), cornerRadius = CornerRadius(corner))
-                    if (k > 0.001f) drawRoundRect(accent.copy(alpha = accent.alpha * k), cornerRadius = CornerRadius(corner), style = Stroke(2.5f * look.unit))
-                    if (points.size > 1) {
-                        val inset = 14f * look.unit
-                        val w = size.width - inset * 2f
-                        val h = size.height - inset * 2f
-                        val path = androidx.compose.ui.graphics.Path()
-                        points.forEachIndexed { i, (x, y) ->
-                            val px = inset + x * w
-                            val py = inset + h - y.coerceIn(-0.2f, 1.25f) * h * 0.8f
-                            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
-                        }
-                        drawPath(path, mix(line, accent, k), style = Stroke(2.5f * look.unit, cap = androidx.compose.ui.graphics.StrokeCap.Round))
-                    }
-                }
-                Spacer(Modifier.height(look.dp(8f * look.unit)))
-                BasicText(p.name, style = look.text(SettingsTokens.ROW_DETAIL, mix(look.color(SettingsTokens.ROW_LABEL), accent, k)), maxLines = 1)
+    val gap = look.dp(12f * look.unit)
+    val curves = presets.map { draft.motionCurve(it.id, MotionTokens.BANNER_IN) }
+    val runs = remember(curves) { curves.map { CurveRun.of(it) } }
+    val axis = animateFloatAsState(maxOf(0.6f, runs.maxOfOrNull { it.duration } ?: 0.6f) * 1.08f, look.motion(MotionTokens.SETTINGS_FOCUS), label = "axis")
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val room = maxWidth - pad * 2
+        val cardW = if (presets.size <= 2) (room - gap) / 2 else room * 0.44f
+        val scroll = rememberScrollState()
+        Row(Modifier.fillMaxWidth().then(if (presets.size > 2) Modifier.horizontalScroll(scroll) else Modifier).padding(pad),
+            horizontalArrangement = Arrangement.spacedBy(gap)) {
+            presets.forEachIndexed { i, p ->
+                androidx.compose.runtime.key(p.id) { PresetCard(p, runs[i], draft, clock, axis, Modifier.width(cardW)) }
             }
         }
     }
+}
+
+/** How long a preset's dot rests at the end of its curve before it runs again (s). */
+private const val PRESET_DOT_REST = 0.7f
+
+@Composable
+private fun PresetCard(p: Design.ThemeInfo, run: CurveRun, draft: Draft, clock: androidx.compose.runtime.FloatState,
+                       axis: androidx.compose.runtime.State<Float>, modifier: Modifier) {
+    val look = LocalLook.current
+    val accent = look.color(SettingsTokens.ACCENT)
+    val line = look.color(SettingsTokens.ROW_DETAIL_COLOR)
+    val fill = look.color(SettingsTokens.CHIP_FILL)
+    val chosen = draft.motionId() == p.id
+    val k = animateFloatAsState(if (chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chosen")
+    var pressed by remember { mutableStateOf(false) }
+    val press = animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+    val corner = look.pt(SettingsTokens.TILE_CORNER) * 0.7f
+    val unit = look.unit
+    Column(modifier.pressScale { 1f - 0.04f * press.value }
+        .pointerInput(p.id) { rowTap({ pressed = it }) { draft.chooseMotion(p.id) } }) {
+        Box(Modifier.fillMaxWidth().height(look.dp(84f * unit)).drawWithCache {
+            val inset = 14f * unit
+            val w = size.width - inset * 2f
+            val h = size.height - inset * 2f
+            fun yOf(v: Float) = inset + h - v.coerceIn(-0.2f, 1.25f) * h * 0.8f
+            val ax = axis.value
+            fun xOf(t: Float) = inset + (t / ax).coerceAtMost(1f) * w
+            // The curve, made again only when it or the axis changes (never in a frame of the dot's).
+            val path = androidx.compose.ui.graphics.Path()
+            for (i in run.values.indices) {
+                val x = xOf(i * run.step)
+                val y = yOf(run.values[i])
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4f * unit, 4f * unit))
+            onDrawBehind {
+                val kk = k.value
+                drawRoundRect(fill, cornerRadius = CornerRadius(corner))
+                if (kk > 0.001f) drawRoundRect(accent.copy(alpha = accent.alpha * kk.coerceIn(0f, 1f)), cornerRadius = CornerRadius(corner), style = Stroke(2.5f * unit))
+                // Where it comes to rest.
+                drawLine(line.copy(alpha = line.alpha * 0.4f), Offset(inset, yOf(1f)), Offset(inset + w, yOf(1f)), strokeWidth = 1f * unit, pathEffect = dash)
+                val ink = mix(line, accent, kk.coerceIn(0f, 1f))
+                drawPath(path, ink, style = Stroke(2.5f * unit, cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                // The dot: along the curve on its own timing, a rest at its end, again (it fades out at the end of the rest
+                // and in at the start, so it never jumps back).
+                val loop = run.duration + PRESET_DOT_REST
+                val t = clock.floatValue % loop
+                val tt = t.coerceAtMost(run.duration)
+                val a = minOf((t / 0.12f).coerceIn(0f, 1f), ((loop - t) / 0.25f).coerceIn(0f, 1f))
+                if (a > 0.003f) drawCircle(ink.copy(alpha = ink.alpha * a), 4.5f * unit, Offset(xOf(tt), yOf(run.at(tt))))
+            }
+        })
+        Spacer(Modifier.height(look.dp(8f * unit)))
+        BasicText(p.name, style = look.text(SettingsTokens.ROW_DETAIL, mix(look.color(SettingsTokens.ROW_LABEL), accent, k.value.coerceIn(0f, 1f))), maxLines = 1,
+            overflow = TextOverflow.Ellipsis)
+        Rolling(draft.motionSummary(p.id) ?: p.description, look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier, lines = 2)
+    }
+}
+
+/**
+ * A curve run once from rest (0 to 1), sampled for drawing: how far along it is at a time ([at]), and how long it runs
+ * until it rests (a bezier: its length).
+ */
+private class CurveRun(val step: Float, val values: FloatArray) {
+    val duration: Float get() = step * (values.size - 1)
+
+    fun at(t: Float): Float {
+        val i = (t / step).coerceAtLeast(0f)
+        val i0 = i.toInt().coerceAtMost(values.size - 1)
+        val i1 = (i0 + 1).coerceAtMost(values.size - 1)
+        return values[i0] + (values[i1] - values[i0]) * (i - i0)
+    }
+
+    companion object {
+        private const val STEP = 1f / 240f
+        private const val LONGEST = 4.0
+
+        fun of(c: dev.launcher.app.design.Curve): CurveRun {
+            val m = c.mover().apply { start(0f, 0f, 1f) }
+            var end = 0.0
+            while (end < LONGEST && !m.settled(end, 0.002f)) end += STEP
+            val n = (end / STEP).roundToInt().coerceAtLeast(1)
+            return CurveRun(STEP, FloatArray(n + 1) { i -> if (i == n) 1f else m.value(i * STEP.toDouble()) })
+        }
+    }
+}
+
+/**
+ * The whole preset at once (docs/PLAN_MOTION.md): its speed (every curve's time) and its bounce (how far whatever bounces
+ * goes past its place), and back to the preset as it comes. Shown at once on the cards and the picture above; waits for
+ * Apply. The speed's slider doubles and halves evenly either side of the preset's own.
+ */
+@Composable
+private fun FineTune(draft: Draft) {
+    val id = draft.motionId()
+    val name = presetName(id)
+    Group("Fine-tune", "For $name as a whole: every animation faster or slower, every bounce further or calmer.") {
+        val speed = draft.motionSpeed(id)
+        SliderRow("Speed", "${(speed * 100).roundToInt()} %", speedToSlider(speed)) { t ->
+            draft.chooseMotionNumber(id, MotionTokens.ADJUST_SPEED, sliderToSpeed(t))
+        }
+        val bounce = draft.motionBounce(id)
+        SliderRow("Bounce", if (bounce < 0.001f) "None" else "${(bounce * 100).roundToInt()} %", bounce / MotionAdjust.BOUNCE_MAX) { t ->
+            draft.chooseMotionNumber(id, MotionTokens.ADJUST_BOUNCE, Draft.snap(t * MotionAdjust.BOUNCE_MAX))
+        }
+        val n = draft.motionRoleChanges(id)
+        Reveal(draft.motionChangeCount(id) > 0) {
+            ActionRow("Reset all", "Back to $name as it comes" + if (n > 0) " ($n change" + (if (n == 1) "" else "s") + " to its animations)" else "") {
+                draft.resetMotion(id)
+            }
+        }
+    }
+}
+
+/** The speed slider's place (0..1) for a speed: 50 % at the start, the preset's own in the middle, 200 % at the end. */
+private fun speedToSlider(speed: Float) = ((kotlin.math.ln(speed) / kotlin.math.ln(2f)) + 1f) / 2f
+
+private fun sliderToSpeed(t: Float) = Draft.snap(Math.pow(2.0, (t * 2f - 1f).toDouble()).toFloat()).coerceIn(MotionAdjust.SPEED_MIN, MotionAdjust.SPEED_MAX)
+
+/** A value set with a slider: its name and the value now (rolling as it changes) above, the slider ([position] 0..1) below. */
+@Composable
+private fun SliderRow(title: String, value: String, position: Float, onChange: (Float) -> Unit) {
+    val look = LocalLook.current
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
+            Rolling(value, look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier)
+        }
+        Spacer(Modifier.height(look.dp(6f * look.unit)))
+        SettingsSlider(position, onChange)
+    }
+}
+
+/**
+ * [content] showing or not: its height and its alpha grow from nothing and back on the appear role (it stays composed, so
+ * it never pops in or out, and a group's rows keep their order for the separators).
+ */
+@Composable
+private fun Reveal(visible: Boolean, content: @Composable () -> Unit) {
+    val look = LocalLook.current
+    val k = animateFloatAsState(if (visible) 1f else 0f, look.motion(MotionTokens.APPEAR), label = "reveal")
+    Box(Modifier.fillMaxWidth().clipToBounds()
+        .layout { m, c ->
+            val placeable = m.measure(c)
+            layout(placeable.width, (placeable.height * k.value.coerceIn(0f, 1f)).roundToInt()) { placeable.place(0, 0) }
+        }
+        .graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }) { content() }
 }
 
 /**
@@ -2728,6 +2971,8 @@ private fun PhonePage() {
         ToggleRow("Our status bar", "The phone's own hidden", bar) { on ->
             if (connected) { bar = on; dev.launcher.app.DevTools.setOwnStatusBar(ctx, on) { tick++ } } else dev.launcher.app.ShizukuLink.connect()
         }
+        ToggleRow("Test animation presets", "Shown in Motion with the others", SettingsPrefs.testPresets) { on -> SettingsPrefs.setTestPresets(ctx, on) }
+        SlowRow()
         ActionRow("Frame report", "Frames since the last report") { dev.launcher.app.DevTools.frameReport(ctx) }
         ActionRow("Status bar test", "An app that puts the bars in every state (full screen, landscape...)") {
             ctx.startActivity(Intent(ctx, dev.launcher.app.BarsTestActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -2752,6 +2997,32 @@ private fun PhonePage() {
     Group("Expert") {
         NavRow("Every value of the theme", "The token editor, for theme authors") {
             ctx.startActivity(Intent(ctx, dev.launcher.app.design.DesignActivity::class.java))
+        }
+    }
+}
+
+/**
+ * Slow animations, for checking them frame by frame (as iOS's): every animation of the preset in use this many times
+ * slower (`motion.debug.slow`, an edit of the preset), at once as everything on Phone.
+ */
+@Composable
+private fun SlowRow() {
+    val look = LocalLook.current
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val factors = listOf(1f, 2f, 4f, 10f)
+    val now = (try { Design.resolved(MotionTokens.DEBUG_SLOW.name) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Number)?.v ?: 1f
+    val chosen = factors.indexOfFirst { kotlin.math.abs(it - now) < 0.01f }.coerceAtLeast(0)
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        BasicText("Slow animations", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
+        BasicText("Every animation this many times slower, to check it frame by frame",
+            style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
+        Spacer(Modifier.height(look.dp(8f * look.unit)))
+        ChoiceChips(listOf("Off", "2×", "4×", "10×"), chosen) { i ->
+            if (i == 0) Design.reset(MotionTokens.DEBUG_SLOW.name)
+            else Design.set(MotionTokens.DEBUG_SLOW.name, dev.launcher.app.design.Value.Number(factors[i], dev.launcher.app.design.NumUnit.FACTOR))
         }
     }
 }

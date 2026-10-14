@@ -2088,3 +2088,11 @@ of the fan-out took 16.9-18.5 ms on the shade's thread after this (traced). Stil
 every frame of it (it counts from the frame's issue to the GPU's fence, buffer waits included: the same with a bare
 material, so not the glass).
 
+
+## Motion: presets and fine-tuning (C4a, 2026-10-14, emulator)
+
+The settings' Motion page (plan: `docs/PLAN_MOTION.md`): preset cards playing the curve a banner drops in on, the
+picture's demo with a banner after the app, Speed and Bounce for each preset (applied everywhere a curve is read:
+`MotionAdjust`), Reset all, and a second real preset, Material (Android 16's springs, bouncing only where iOS 27 does).
+Developer gained "Test animation presets" and "Slow animations". Checked on the emulator (details in the plan), 96 unit
+tests; the S24 was not connected, so its frame rates on the page are not measured yet.

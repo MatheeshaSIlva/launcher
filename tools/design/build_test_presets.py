@@ -32,7 +32,8 @@ def main():
         out[k] = {'bezier': BOUNCE if springy else SETTLE, 'ms': ms,
                   'src': f"judged:test preset: iOS 27's spring ({response} s, damping {damping}) as a bezier "
                          f"({'back-out' if springy else 'emphasized decelerate'}, {ms} ms)"}
-    preset = {'format': 1, 'name': 'Eased (test)', 'author': 'Launcher', 'version': '0.1', 'extends': 'ios27',
+    preset = {'format': 1, 'name': 'Eased (test)', 'description': 'Every motion on a curve', 'test': True, 'author': 'Launcher',
+              'version': '0.1', 'extends': 'ios27',
               '_about': 'A test animation preset built on iOS 27: every spring role as a bezier curve (Material\'s emphasized '
                         'decelerate, or a gentle back-out where iOS 27 overshoots). Written by tools/design/build_test_presets.py.',
               'tokens': dict(sorted(out.items()))}

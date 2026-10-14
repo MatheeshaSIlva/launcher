@@ -913,7 +913,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         closeMenu()
         listener.haptic(android.view.HapticFeedbackConstants.CONFIRM)
         // Clear All: one card flies off this long after the one before it; home comes `motion.switcher.clear-home` after the last.
-        val clearStagger = dev.launcher.app.design.Design.num(dev.launcher.app.motion.MotionTokens.SWITCHER_CLEAR_STAGGER).toLong()
+        val clearStagger = dev.launcher.app.motion.Motion.ms(dev.launcher.app.motion.MotionTokens.SWITCHER_CLEAR_STAGGER)
         var n = 0
         for (i in cards.indices) {
             val c = cards[i]
@@ -927,7 +927,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         for (c in gone) listener.onRemove(c)
         invalidate()
         // (Still clearing while home comes: the closed cards stay in the deck until it goes, Clear All must not come back.)
-        postDelayed({ goHome() }, n * clearStagger + dev.launcher.app.design.Design.num(dev.launcher.app.motion.MotionTokens.SWITCHER_CLEAR_HOME).toLong())
+        postDelayed({ goHome() }, n * clearStagger + dev.launcher.app.motion.Motion.ms(dev.launcher.app.motion.MotionTokens.SWITCHER_CLEAR_HOME))
     }
 
     private fun cardAt(x: Float, y: Float): Card? {

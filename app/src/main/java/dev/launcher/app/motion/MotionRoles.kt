@@ -199,7 +199,13 @@ object MotionRoles {
         r("debug.slow", "Slow motion", "Every animation this many times slower (1: normal)."),
     ))
 
-    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE, TESTING)
+    /** The whole preset at once (the Motion page's Fine-tune, docs/PLAN_MOTION.md): not one animation's, so not in the groups. */
+    val FINE_TUNE = MotionGroup("Fine-tune", "The whole preset at once.", listOf(
+        r("adjust.speed", "Speed", "Every animation this much faster (1: the preset's own; 2: in half the time)."),
+        r("adjust.bounce", "Bounce", "How far animations that bounce go past their place (1: the preset's own; 0: not at all)."),
+    ))
+
+    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE)
 
     fun find(key: String): Pair<MotionGroup, MotionRole>? {
         for (g in ALL) for (r in g.roles) if (r.key == key) return g to r

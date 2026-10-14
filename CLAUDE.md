@@ -113,7 +113,12 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `Motion.role(MotionTokens.X)` / `Motion.profile` and runs it through `Curve.mover()` / `MotionValue` (both kinds
   interruptible). Code never times an animation with a literal: Android's animators take a role through `.timed(curve)`,
   clock-drawn motion through `RoleTiming`; new roles are named in `motion/MotionRoles.kt` (a test checks it). Switch:
-  `DESIGN_RELOAD --es motion ID`. Test preset: `eased` (every spring as a bezier; `tools/design/build_test_presets.py`). Theme seeds and motion seeds both live in the builder, which
+  `DESIGN_RELOAD --es motion ID`. Test preset: `eased` (every spring as a bezier; `tools/design/build_test_presets.py`;
+  `"test": true`, shown in the settings only with Developer's switch). `material`: Material 3 Expressive's springs
+  (`tools/design/build_material_preset.py`), bouncing only where iOS 27 does (code that never saw an overshoot is never
+  handed one: an int alpha past 255 flashes, an edge-anchored panel shows a gap). A preset's Speed and Bounce
+  (`motion.adjust.*`, the settings' Fine-tune) apply where a curve is read (`Design.curve` through `motion/MotionAdjust`;
+  Bounce scales existing overshoot only); times a motion is staged by go through `Motion.ms` (speed and slow motion). Theme seeds and motion seeds both live in the builder, which
   writes the two files. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). Points to pixels: one unit everywhere, `Scale.unitPx` (policy `adaptive`: 402 pt
   across a phone, never larger than the dp at the phone's default density, times the Display size's zoom; text through

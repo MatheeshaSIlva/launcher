@@ -1,10 +1,19 @@
 {
  "format": 1,
  "name": "iOS 27",
+ "description": "Measured on iOS 27",
  "author": "Launcher (measured on iOS 27 and tuned on the S24)",
  "version": "0.1",
  "_about": "The iOS 27 animation preset: every motion role (motion.*) as a spring or a bezier curve. Written by tools/design/build_ios27_theme.py (its seeds); kept as edited here once written.",
  "tokens": {
+  "motion.adjust.bounce": {
+   "factor": 1,
+   "src": "judged:the preset's own bounce (the settings' Fine-tune: every overshoot scaled by it)"
+  },
+  "motion.adjust.speed": {
+   "factor": 1,
+   "src": "judged:the preset's own speed (the settings' Fine-tune: every curve's time divided by it)"
+  },
   "motion.app.cancel": {
    "spring": [
     0.38,

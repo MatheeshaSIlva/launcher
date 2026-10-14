@@ -8,6 +8,7 @@ import dev.launcher.app.design.ThemeCheck
 import dev.launcher.app.design.Value
 import dev.launcher.app.motion.BezierMath
 import dev.launcher.app.motion.Ease
+import dev.launcher.app.motion.MotionAdjust
 import dev.launcher.app.motion.mover
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -117,6 +118,59 @@ class MotionTest {
         assertEquals("not named: ${tokens - named.toSet()}", emptySet<String>(), tokens - named.toSet())
         assertEquals("named but not in the preset: ${named.toSet() - tokens}", emptySet<String>(), named.toSet() - tokens)
         for (k in dev.launcher.app.motion.MotionTokens.CURVES + dev.launcher.app.motion.MotionTokens.NUMBERS) assertTrue("$k not named", k in named)
+    }
+
+    /** How far past its target a curve goes, of its travel (sampled from rest to rest). */
+    private fun overshoot(c: Curve): Float {
+        val m = c.mover().apply { start(0f, 0f, 1f) }
+        var peak = 0f
+        for (i in 0..4000) peak = maxOf(peak, m.value(i * 0.001))
+        return peak - 1f
+    }
+
+    @Test fun speedAndBounceLeaveACurveAsItIsAtOne() {
+        val s = Curve.Spring(0.42f, 0.78f)
+        val e = Curve.Ease(0.333f, 1.533f, 0.667f, 1f, 220f)
+        assertTrue(MotionAdjust.apply(s, 1f, 1f) === s)
+        assertTrue(MotionAdjust.apply(e, 1f, 1f) === e)
+    }
+
+    @Test fun speedDividesTime() {
+        assertEquals(Curve.Spring(0.21f, 0.78f), MotionAdjust.apply(Curve.Spring(0.42f, 0.78f), 2f, 1f))
+        assertEquals(Curve.Ease(0.4f, 0f, 0.2f, 1f, 400f), MotionAdjust.apply(Curve.Ease(0.4f, 0f, 0.2f, 1f, 200f), 0.5f, 1f))
+    }
+
+    @Test fun bounceScalesTheOvershootAndNeverAddsOne() {
+        val banner = Curve.Spring(0.64f, 0.61f)
+        val os = overshoot(banner)
+        assertEquals(MotionAdjust.overshoot(0.61f).toFloat(), os, 0.002f)
+        // Twice as far past, half as far, not at all.
+        assertEquals(os * 2f, overshoot(MotionAdjust.apply(banner, 1f, 2f)), 0.004f)
+        assertEquals(os / 2f, overshoot(MotionAdjust.apply(banner, 1f, 0.5f)), 0.003f)
+        assertEquals(Curve.Spring(0.64f, 1f), MotionAdjust.apply(banner, 1f, 0f))
+        // A spring that does not overshoot keeps not overshooting.
+        assertEquals(Curve.Spring(0.4f, 1f), MotionAdjust.apply(Curve.Spring(0.4f, 1f), 1f, 2f))
+        // The damping for an overshoot is the inverse of the overshoot for a damping.
+        for (d in listOf(0.2f, 0.5f, 0.78f, 0.95f)) assertEquals(d, MotionAdjust.dampingFor(MotionAdjust.overshoot(d)), 1e-4f)
+        // A bezier's handles past its ends scale, those within stay.
+        val popIn = MotionAdjust.apply(Curve.Ease(0.333f, 1.533f, 0.667f, 1f, 220f), 1f, 2f) as Curve.Ease
+        assertEquals(2.066f, popIn.y1, 1e-5f)
+        assertEquals(1f, popIn.y2, 0f)
+        assertEquals(220f, popIn.ms, 0f)
+        assertEquals(Curve.Ease(0.4f, 0f, 0.2f, 1f, 300f), MotionAdjust.apply(Curve.Ease(0.4f, 0f, 0.2f, 1f, 300f), 1f, 2f))
+        assertEquals(-0.2f, (MotionAdjust.apply(Curve.Ease(0.3f, -0.4f, 0.6f, 1f, 300f), 1f, 0.5f) as Curve.Ease).y1, 1e-6f)
+    }
+
+    @Test fun materialBouncesOnlyWhereIos27Does() {
+        // Code that never saw an overshoot is never handed one (docs/PLAN_MOTION.md, C4a).
+        val ios = preset("ios27").entries
+        val material = preset("material")
+        assertEquals("ios27", material.extends)
+        for ((k, e) in material.entries) {
+            val c = (e.value as Value.CurveV).curve
+            if (overshoot(c) < 1e-4f) continue
+            assertTrue("$k bounces in Material and not in iOS 27", overshoot((ios.getValue(k).value as Value.CurveV).curve) > 1e-3f)
+        }
     }
 
     @Test fun aRoleAsAnimatorTimingKeepsItsShape() {

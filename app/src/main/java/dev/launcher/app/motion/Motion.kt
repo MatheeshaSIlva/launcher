@@ -95,6 +95,15 @@ object Motion {
      */
     fun slow(): Float = try { Design.num(MotionTokens.DEBUG_SLOW).coerceIn(1f, 20f) } catch (_: Throwable) { 1f }
 
+    /** The preset's overall speed (Fine-tune; 1 = its own): curves take it where they are read ([MotionAdjust]). */
+    fun speed(): Float = try { Design.num(MotionTokens.ADJUST_SPEED).coerceIn(MotionAdjust.SPEED_MIN, MotionAdjust.SPEED_MAX) } catch (_: Throwable) { 1f }
+
+    /**
+     * A time a motion is staged by ([k], in ms: one card after another, home after the last), at the preset's speed and in
+     * slow motion as the curves are.
+     */
+    fun ms(k: dev.launcher.app.design.NumberKey): Long = (Design.num(k) * slow() / speed()).toLong()
+
     /** A role's curve from the animation preset ([MotionTokens]); read when an animation starts. */
     fun role(k: CurveKey): Curve = Design.curve(k)
 

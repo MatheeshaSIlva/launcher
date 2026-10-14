@@ -140,7 +140,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     // Rows arriving or moving and previews fading in: their timelines (`motion.widgets.*`).
     private val rowT = dev.launcher.app.motion.RoleTiming(dev.launcher.app.motion.MotionTokens.WIDGETS_ROW)
     private val previewT = dev.launcher.app.motion.RoleTiming(dev.launcher.app.motion.MotionTokens.WIDGETS_PREVIEW)
-    private fun rowStagger(): Long = dev.launcher.app.design.Design.num(dev.launcher.app.motion.MotionTokens.WIDGETS_ROW_STAGGER).toLong()
+    private fun rowStagger(): Long = dev.launcher.app.motion.Motion.ms(dev.launcher.app.motion.MotionTokens.WIDGETS_ROW_STAGGER)
 
     private val rowText = LabelPainter(m.pt(17f), Color.WHITE, Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.label }
     private val rowSub = LabelPainter(m.pt(13f), 0x99FFFFFF.toInt(), Paint.Align.LEFT, Fonts.text(400)).toned { Appearance.secondaryLabel }

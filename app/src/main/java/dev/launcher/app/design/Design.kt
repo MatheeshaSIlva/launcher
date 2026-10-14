@@ -69,6 +69,8 @@ object Design {
      */
     private class State(val resolver: Resolver, val bound: Boolean = false) {
         val cache = java.util.concurrent.ConcurrentHashMap<String, Value>()
+        /** Curves as code reads them: a motion role's at the preset's speed and bounce ([curve]). */
+        val curves = java.util.concurrent.ConcurrentHashMap<String, Curve>()
         fun value(key: String): Value = cache.getOrPut(key) {
             val v = resolver.resolve(key)
             if (bound && v is Value.Mat) Value.Mat(v.material.bindRefs { k -> resolver.resolve(k) as? Value.Color ?: throw IllegalStateException("token '$k' is not a colour") }) else v
@@ -158,8 +160,11 @@ object Design {
         else appCtx.registerReceiver(r, f, android.Manifest.permission.DUMP, null)
     }
 
-    /** A theme the app can use: its id (file name), its name, and whether it comes with the app. */
-    data class ThemeInfo(val id: String, val name: String, val builtIn: Boolean)
+    /**
+     * A theme (or an animation preset) the app can use: its id (file name), its name, whether it comes with the app, a line
+     * on what it is, and whether it is for testing (the settings show those only when asked to).
+     */
+    data class ThemeInfo(val id: String, val name: String, val builtIn: Boolean, val description: String = "", val test: Boolean = false)
 
     // The lists of themes and presets, read once (each read parses every file: 10-20 ms, and the settings asked for it in
     // a tile's composition, so a tap on Look recomposed for 20 ms on the S24); read again on [reload].
@@ -192,12 +197,12 @@ object Design {
         try {
             for (n in appCtx.assets.list(PRESETS) ?: emptyArray()) if (n.endsWith(".json")) {
                 val id = n.removeSuffix(".json")
-                readFile(PRESETS, id)?.let { out[id] = ThemeInfo(id, it.name, true) }
+                readFile(PRESETS, id)?.let { out[id] = ThemeInfo(id, it.name, true, it.description, it.test) }
             }
         } catch (_: Throwable) { }
         File(appCtx.filesDir, PRESETS).listFiles()?.filter { it.name.endsWith(".json") }?.forEach { f ->
             val id = f.name.removeSuffix(".json")
-            readFile(PRESETS, id)?.let { out[id] = ThemeInfo(id, it.name, false) }
+            readFile(PRESETS, id)?.let { out[id] = ThemeInfo(id, it.name, false, it.description, it.test) }
         }
         return out.values.toList()
     }
@@ -226,6 +231,7 @@ object Design {
     fun reload() {
         themeList = null
         presetList = null
+        presetChains.clear()
         val theme = load(activeId)
         val motion = loadMotion(motionId)
         // The elements' own themes too (a file pushed over adb shows at once there as well).
@@ -286,22 +292,75 @@ object Design {
     private val previews = HashMap<String, Resolver>()
 
     /**
-     * Curve [k] as animation preset [id] gives it (with the user's edits of it), whether or not it is in use: the settings
-     * play a preset before it is applied. Null if the preset cannot be read.
+     * Curve [k] as animation preset [id] gives it, whether or not it is in use (the settings play a preset before it is
+     * applied): with the user's edits of it ([edits]), at its own speed and bounce ([adjusted]: as code would read it).
+     * Null if the preset cannot be read.
      */
-    fun previewCurve(id: String, k: CurveKey): Curve? {
-        val r = motionPreviews.getOrPut(id) {
-            val c = try { chainOf(PRESETS, id) } catch (_: Throwable) { return null }
-            val edits = if (id == motionId) LinkedHashMap(motionUser) else try {
-                val f = File(appCtx.filesDir, motionEditsFile(id))
-                if (f.exists()) Theme.parse(f.readText()).entries.filterKeys(::isMotion) else emptyMap()
-            } catch (_: Throwable) { emptyMap() }
-            Resolver(c.map { it.entries } + listOf(LinkedHashMap(edits)))
-        }
-        return (try { r.resolve(k.name) } catch (_: Throwable) { null } as? Value.CurveV)?.curve
+    fun previewCurve(id: String, k: CurveKey, edits: Boolean = true, adjusted: Boolean = true): Curve? {
+        val r = presetResolver(id, edits) ?: return null
+        val c = (try { r.resolve(k.name) } catch (_: Throwable) { null } as? Value.CurveV)?.curve ?: return null
+        if (!adjusted) return c
+        fun num(n: NumberKey) = (try { r.resolve(n.name) } catch (_: Throwable) { null } as? Value.Number)?.v ?: 1f
+        return dev.launcher.app.motion.MotionAdjust.apply(c, num(dev.launcher.app.motion.MotionTokens.ADJUST_SPEED),
+            num(dev.launcher.app.motion.MotionTokens.ADJUST_BOUNCE))
     }
 
+    /** Number [k] as animation preset [id] gives it (with the user's edits of it, or [edits] false: the preset's own). */
+    fun previewNumber(id: String, k: NumberKey, edits: Boolean = true): Float? =
+        (try { presetResolver(id, edits)?.resolve(k.name) } catch (_: Throwable) { null } as? Value.Number)?.v
+
+    /** Animation preset [id] resolved on its own (its files, and with [edits] the user's edits of it); cached until a change. */
+    private fun presetResolver(id: String, edits: Boolean): Resolver? = (if (edits) motionPreviews else motionOwn).getOrPut(id) {
+        val c = presetChains.getOrPut(id) { try { chainOf(PRESETS, id) } catch (_: Throwable) { return null } }
+        Resolver(c.map { it.entries } + if (edits) listOf(LinkedHashMap(motionEdits(id))) else emptyList())
+    }
+
+    /**
+     * Presets' files as read (with the ones they are built on), kept until the files are read again ([reload]): a design
+     * change makes the previews again from them, and parsing three preset files in a frame of Apply's reveal cost it.
+     */
+    private val presetChains = HashMap<String, List<Theme>>()
+
     private val motionPreviews = HashMap<String, Resolver>()
+    private val motionOwn = HashMap<String, Resolver>()
+    private val savedEdits = HashMap<String, Map<String, Entry>>()
+
+    /** The user's edits of animation preset [id] (the active one's as they are now, another's as saved). */
+    fun motionEdits(id: String): Map<String, Entry> = if (id == motionId) LinkedHashMap(motionUser) else savedEdits.getOrPut(id) {
+        try {
+            val f = File(appCtx.filesDir, motionEditsFile(id))
+            if (f.exists()) Theme.parse(f.readText()).entries.filterKeys(::isMotion) else emptyMap()
+        } catch (_: Throwable) { emptyMap() }
+    }
+
+    /**
+     * The user set [key] of animation preset [id] to [v] (null, or the preset's own value: back to the preset's), active or
+     * not (the settings' Apply): saved at once; for the active preset every surface draws again.
+     */
+    fun setMotionEdit(id: String, key: String, v: Value?) {
+        if (!isMotion(key)) return
+        val own = try { presetResolver(id, edits = false)?.resolve(key) } catch (_: Throwable) { null }
+        val value = v?.takeIf { it != own }
+        if (id == motionId) { if (value == null) reset(key) else set(key, value); return }
+        val have = LinkedHashMap(motionEdits(id))
+        if (value == null) { if (have.remove(key) == null) return } else have[key] = Entry(value, Provenance.User)
+        writeEdits(File(appCtx.filesDir, motionEditsFile(id)), have)
+        forgetPreset(id)
+    }
+
+    /** Every edit of animation preset [id] forgotten: it is as it comes again. */
+    fun clearMotionEdits(id: String) {
+        if (id == motionId) {
+            if (motionUser.isEmpty()) return
+            motionUser.clear()
+            changed(structural = false)
+            return
+        }
+        try { File(appCtx.filesDir, motionEditsFile(id)).delete() } catch (_: Throwable) { }
+        forgetPreset(id)
+    }
+
+    private fun forgetPreset(id: String) { motionPreviews.remove(id); savedEdits.remove(id) }
 
     /**
      * Loads theme [id] (with the ones it is built on) and its edits, if the result has every token the code reads, of the
@@ -485,6 +544,8 @@ object Design {
         followYouSettings()
         previews.clear()
         motionPreviews.clear()
+        motionOwn.clear()
+        savedEdits.clear()
         val byTheme = HashMap<String, State>()
         parts = elementIds.mapNotNull { (e, id) ->
             val l = elementThemes[id] ?: return@mapNotNull null
@@ -646,7 +707,23 @@ object Design {
     /** [k] (a length in points) in pixels, at [unitPx] pixels per point ([Scale.unitPx]). */
     fun pt(k: NumberKey, unitPx: Float): Float = num(k) * unitPx
 
-    fun curve(k: CurveKey): Curve = (value(k.name) as? Value.CurveV ?: throw IllegalStateException("token $k is not a curve")).curve
+    /**
+     * [k]'s curve as code runs it: an animation role's at the preset's overall speed and bounce
+     * ([dev.launcher.app.motion.MotionAdjust]; the token editor shows and edits the role's own, [resolved]).
+     */
+    fun curve(k: CurveKey): Curve {
+        val s = state
+        s.curves[k.name]?.let { return it }
+        val raw = (value(k.name) as? Value.CurveV ?: throw IllegalStateException("token $k is not a curve")).curve
+        val c = if (!isMotion(k.name)) raw else {
+            fun num(n: NumberKey) = (try { s.value(n.name) } catch (_: Throwable) { null } as? Value.Number)?.v ?: 1f
+            dev.launcher.app.motion.MotionAdjust.apply(raw,
+                num(dev.launcher.app.motion.MotionTokens.ADJUST_SPEED).coerceIn(dev.launcher.app.motion.MotionAdjust.SPEED_MIN, dev.launcher.app.motion.MotionAdjust.SPEED_MAX),
+                num(dev.launcher.app.motion.MotionTokens.ADJUST_BOUNCE).coerceIn(0f, dev.launcher.app.motion.MotionAdjust.BOUNCE_MAX))
+        }
+        s.curves[k.name] = c
+        return c
+    }
     fun choice(k: ChoiceKey): String = (value(k.name) as? Value.Choice ?: throw IllegalStateException("token $k is not a choice")).option
     /**
      * Text style [k], at the phone's Font size where its part follows it (Apple's Dynamic Type: notifications, controls,
@@ -708,9 +785,12 @@ object Design {
     }
 
     private fun save() {
-        for ((name, edits) in listOf(userFile(activeId) to user, motionEditsFile(motionId) to motionUser)) try {
-            val f = File(appCtx.filesDir, name)
-            if (edits.isEmpty() && !f.exists()) continue
+        for ((name, edits) in listOf(userFile(activeId) to user, motionEditsFile(motionId) to motionUser)) writeEdits(File(appCtx.filesDir, name), edits)
+    }
+
+    private fun writeEdits(f: File, edits: Map<String, Entry>) {
+        try {
+            if (edits.isEmpty() && !f.exists()) return
             f.parentFile?.mkdirs()
             val tmp = File(f.path + ".tmp")
             tmp.writeText(Theme.write("user", edits))

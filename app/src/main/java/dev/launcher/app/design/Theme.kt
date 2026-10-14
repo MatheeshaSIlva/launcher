@@ -55,6 +55,10 @@ class Theme(
      * (`sys.color.source` = "wallpaper"), usually its accents as palette roles. Any theme can have them.
      */
     val materialYou: Map<String, Entry> = emptyMap(),
+    /** A line on what it is, for the settings (an animation preset: "Measured on iOS 27"). */
+    val description: String = "",
+    /** Made for testing the launcher: the settings show it only when asked to (Phone, Developer). */
+    val test: Boolean = false,
 ) {
     companion object {
         const val FORMAT = 1
@@ -64,7 +68,8 @@ class Theme(
             val format = o.optInt("format", FORMAT)
             require(format <= FORMAT) { "theme format $format is newer than this app's ($FORMAT)" }
             return Theme(o.optString("name", "Untitled"), o.optString("author", ""), o.optString("version", ""),
-                entries(o.optJSONObject("tokens")), o.optString("extends").ifEmpty { null }, entries(o.optJSONObject("materialYou")))
+                entries(o.optJSONObject("tokens")), o.optString("extends").ifEmpty { null }, entries(o.optJSONObject("materialYou")),
+                o.optString("description"), o.optBoolean("test", false))
         }
 
         private fun entries(tokens: JSONObject?): Map<String, Entry> {
