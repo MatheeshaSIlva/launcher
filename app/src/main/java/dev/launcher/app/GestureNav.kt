@@ -272,6 +272,17 @@ object GestureNav {
      */
     private var keepFreshLogs = 0
 
+    // How long these captures take, from asking to having the picture (ms): summed up in the log every [KEPT_STATS_EVERY].
+    private val keptTimes = ArrayList<Long>()
+
+    private fun noteKeptCapture(ms: Long) = synchronized(keptTimes) {
+        keptTimes += ms
+        if (keptTimes.size < KEPT_STATS_EVERY) return@synchronized
+        val t = keptTimes.sorted()
+        AppLog.log("[nav] kept pictures, last ${t.size}: median ${t[t.size / 2]} ms, 90% within ${t[t.size * 9 / 10]} ms, longest ${t.last()} ms")
+        keptTimes.clear()
+    }
+
     private val keepFresh = object : Runnable {
         override fun run() {
             nav.removeCallbacks(this)
@@ -290,7 +301,9 @@ object GestureNav {
                 snapIo.execute {
                     val t0 = SystemClock.uptimeMillis()
                     val b = try { snapshot(s, task.id, true) } catch (_: Throwable) { null }
-                    if (keepFreshLogs < 3) { keepFreshLogs++; AppLog.log("[nav] kept a recent picture of $pkg (${SystemClock.uptimeMillis() - t0} ms, ${b?.config})") }
+                    val ms = SystemClock.uptimeMillis() - t0
+                    if (keepFreshLogs < 3) { keepFreshLogs++; AppLog.log("[nav] kept a recent picture of $pkg ($ms ms, ${b?.config})") }
+                    if (b != null) noteKeptCapture(ms)
                     if (b != null) nav.post { if (lastFrontPkg == pkg) { remember(pkg, b, t0); if (phase == Phase.IDLE) warm?.bitmap = b } }
                 }
             }
@@ -1781,6 +1794,8 @@ object GestureNav {
     // A picture of the app in front younger than this is shown at once by a home gesture; kept that young in the background.
     private const val RECENT_MS = 10_000L
     private const val KEEP_FRESH_MS = 6_000L
+    /** The periodic captures' times are summed up in the log after this many ([noteKeptCapture]). */
+    private const val KEPT_STATS_EVERY = 20
     private const val KEEP_FRESH_SETTLE_MS = 400L
     private const val SWITCHER_REFRESH_SETTLE_MS = 150L
     private const val KEEP_FRESH_MIN_GAP_MS = 1_200L
