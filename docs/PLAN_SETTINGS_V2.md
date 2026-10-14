@@ -1,6 +1,6 @@
 # The settings, second structure: less on screen, everything in reach (proposal, 2026-10-14)
 
-Status: **proposal**, to agree with Matheesha before anything is built. Matheesha (2026-10-14): "the current motion
+Status: **agreed 2026-10-15** (Matheesha's answers below, under "Decided"). Matheesha (2026-10-14): "the current motion
 settings looks a bit cluttered with lots of lines of settings. is there any way we make it less cluttered and reduce
 cognitive load, and make every setting understandable to the user? We should rethink the settings ui and ux to make it
 properly accommodate the increasing complexity of the settings. I'm fine with significant changes if it requires."
@@ -194,3 +194,20 @@ is moving them into the new pages and writing the moments.
 2. Motion as moments with Speed and Bounce each, every animation under "Every detail", the 13 glue animations out of the
    settings: yes?
 3. Testing tools behind the build number (seven taps), or keep them on Phone?
+
+## Decided (Matheesha, 2026-10-15)
+
+1. Structure **B**: Look and Motion for the whole phone, then one tile per part, then Phone.
+2. Motion as **moments**, each with a style, Speed and Bounce; every animation one level down (Every detail).
+3. The 13 glue animations **leave the settings** and follow their moment (Expert keeps them).
+4. Testing tools **hidden until the build number is tapped seven times**.
+5. Transition styles: presets bundle styles; the first moment is opening and closing apps; build every style in
+   `docs/MOTION_STYLES.md` except those that are today's (his list: opening and closing apps: container transform,
+   slide up, circle reveal, fade and scale, dolly zoom, genie; banners: island morph, slide down, pop; folders: dolly
+   zoom, pop out in place, sheet; home pages: parallax, cube, stack, carousel, cascade, crossfade; switching apps: shared
+   axis, deck, cube, crossfade; entering the App Switcher: tilted stack, grid; a new look: circle, wipe, ink, dissolve;
+   Control Center: one sheet, cascade, unfold from the finger; unlocking: ripple, cascade, focus). "The more options for
+   the user, the better. This is more than enough for the first version of our app that we will ship. Afterwards, we can
+   gather user feedback to add more layouts, animations and more."
+
+Before any of it: One UI 9's breakage and the app's speed under fast use (his priority, 2026-10-15).
