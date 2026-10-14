@@ -18,7 +18,7 @@ object DevFiles {
     private const val OUT = "dev-out"
 
     /** What export copies (each a file or a folder under the app's files). */
-    private val EXPORTED = listOf("design", "themes", "motion", "setup.json")
+    private val EXPORTED = listOf("design", "themes", "motion", "setup.json", "home_layout.json")
 
     fun run(ctx: Context, what: String, path: String?, reload: () -> Unit) {
         val ext = ctx.getExternalFilesDir(null) ?: run { AppLog.log("[dev] no external folder for files"); return }

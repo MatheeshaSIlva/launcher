@@ -241,6 +241,15 @@ copy it wholesale — port the working pieces cleanly. File map:
   (what is behind kept blurred) its node covers the whole limit only for a surface that grows (the gallery's sheet); one
   that keeps its size (the App Switcher's Clear All) keeps a node around itself, and an unchanged surface is drawn again
   without a new effect (a new one re-runs the shader over the node: Clear All ran it over the whole screen every frame).
+- **One UI 9 renders with Vulkan, and live glass broke when only part of its window redrew**: the App Library's search
+  field showed a dark rectangle the size of its text box once the cursor blinked (the field's glass came out cut there
+  until something redrew it all). While live glass shows on home (App Library, Spotlight, a menu, the widget gallery),
+  `HomeScreen.onDescendantInvalidated` marks the whole window changed. A window's frames on the S24 are full redraws
+  anyway (Perfetto "Drawing 0 0 1080 2340"); what a partial change cost was the glass, not the time.
+- **A blur looks about as strong as the logarithm of its radius**: Control Center's live blur, its radius falling in step
+  with the panel, stayed a heavy blur after the controls had gone and then cleared at once (Matheesha's video). `LiveBlur`
+  sets the radius on that scale, (1 + max)^k - 1. And One UI 9 has no `View.semSetBlurEnabled`: a null `SemBlurInfo`
+  clears a view's blur (`SamsungBlur.clear`).
 - **Text-shaped glass needs a distance field, not a blurred mask**: a blur wide enough for a lens turns a whole thin stroke
   into "edge". Judge glass offline only with the app's own pipeline at the device's real size (`docs/design/clock_proto.py`).
 - **Glass and transforms**: a glass surface's uniforms are recorded into its display list; a parent moving it does not redraw
@@ -602,6 +611,11 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
   and `/sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq` before judging a number. CPU profiles of the debug build:
   `simpleperf record --app dev.launcher.app -g -f 4000 --duration N -o /data/local/tmp/x.data` (`-p PID` is refused),
   `simpleperf report-sample --show-callchain` for per-callee sums.
+- Traces: `DEVICE=... tools/trace.sh start NAME [SECS]`, act, `tools/trace.sh pull NAME` (config `tools/perfetto_launcher.cfg`:
+  scheduling, CPU frequency, the app's sections, graphics, input, window manager, SurfaceFlinger's frame timeline), then
+  `python tools/trace_slices.py tools/shots/NAME.pftrace [MIN_MS]`; missed frames per window are in
+  `actual_frame_timeline_slice` (jank types "App Deadline Missed", "Dropped Frame"). `DESIGN_RELOAD --es files export`
+  also copies `home_layout.json` (the dock and pages, for checking a layout without run-as).
 - `dumpsys gfxinfo ... framestats` keeps only a window's last ~120 frames (one second at 120 Hz): reset just before a
   step and read it within a second; a longer window reads only its last second (sample several, or trace).
 - `tools/frame_glitch.py REC.mp4 X Y W H [THR] [OUTDIR]` finds 1-4 frame flickers in a region of a recording (how the dock's

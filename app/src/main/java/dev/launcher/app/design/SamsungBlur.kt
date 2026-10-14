@@ -82,8 +82,14 @@ object SamsungBlur {
         }
     }
 
-    /** [v] blurs nothing. */
+    /**
+     * [v] blurs nothing. One UI 9 has no `semSetBlurEnabled`; there a null blur info clears it (`View.semSetBlurInfo(null)`
+     * drops the view's blur mode).
+     */
     fun clear(v: View) {
-        try { setEnabled?.invoke(v, false) } catch (_: Throwable) { }
+        try {
+            val e = setEnabled
+            if (e != null) e.invoke(v, false) else if (available) setInfo?.invoke(v, null)
+        } catch (_: Throwable) { }
     }
 }

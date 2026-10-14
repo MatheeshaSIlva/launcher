@@ -92,6 +92,23 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var editMode: EditMode? = null
     private var editBar: View? = null
     private var menu: ContextMenuView? = null
+
+    /**
+     * Live glass (MaterialPainter.drawLive: the App Library's and Spotlight's search fields, the long-press menus, the widget
+     * gallery) samples what is behind it through a render effect, and an effect drawn under a clip loses what lies outside
+     * the clip (CLAUDE.md). One UI 9 renders with Vulkan and redraws only what changed: a blinking cursor redrew only the
+     * field's text box, and the glass inside it came out cut, a dark rectangle in the App Library's search field until
+     * something redrew the whole field. While such glass shows, any change in this window marks the whole window as
+     * changed (home's own display list is recorded again: a few child references; the children keep theirs).
+     */
+    override fun onDescendantInvalidated(child: View, target: View) {
+        super.onDescendantInvalidated(child, target)
+        if (isAttachedToWindow && liveGlassShows()) invalidate()
+    }
+
+    private fun liveGlassShows(): Boolean =
+        drawerProgress() > 0f || spotlight?.visibility == View.VISIBLE || menu?.visibility == View.VISIBLE ||
+            picker?.visibility == View.VISIBLE
     private var editTouch = false
     private var enteredByPress = false     // this touch's long press started edit mode: its lift does not leave it again
     private var pendingDragView: View? = null

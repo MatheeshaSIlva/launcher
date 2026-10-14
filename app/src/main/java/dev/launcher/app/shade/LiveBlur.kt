@@ -151,9 +151,14 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         }
     }
 
-    /** Samsung's view blur at strength [k] (its radius: it does not follow the view's alpha). */
+    /**
+     * Samsung's view blur at strength [k] (its radius: it does not follow the view's alpha). A blur looks about as strong as
+     * the logarithm of its radius: a radius that fell in step with Control Center stayed a heavy blur until its last frames
+     * and then cleared at once (Matheesha's video: the panel gone, home still blurred for half a second, then sharp in one
+     * frame). The radius follows [k] on that scale instead, (1 + max)^k - 1, so the blur clears as the controls fade.
+     */
     private fun viewBlur(k: Float) {
-        val r = Math.round(maxBlurPx * k)
+        val r = if (k <= 0f) 0 else Math.round(Math.pow(1.0 + maxBlurPx, k.toDouble()) - 1.0).toInt()
         if (r <= 0) dev.launcher.app.design.SamsungBlur.clear(view)
         else if (!dev.launcher.app.design.SamsungBlur.set(view, r, 0f, 0)) throw IllegalStateException("Samsung view blur refused")
         view.invalidate()
