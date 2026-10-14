@@ -305,6 +305,16 @@ object Design {
             num(dev.launcher.app.motion.MotionTokens.ADJUST_BOUNCE))
     }
 
+    /** Token [key] as animation preset [id] gives it (with the user's edits of it, or [edits] false: the preset's own). */
+    fun presetValue(id: String, key: String, edits: Boolean = true): Value? = try { presetResolver(id, edits)?.resolve(key) } catch (_: Throwable) { null }
+
+    /** [key] as preset [id]'s files hold it (its source with it), or null. */
+    fun presetEntry(id: String, key: String): Entry? {
+        val c = presetChains.getOrPut(id) { try { chainOf(PRESETS, id) } catch (_: Throwable) { return null } }
+        for (t in c.asReversed()) t.entries[key]?.let { return it }
+        return null
+    }
+
     /** Number [k] as animation preset [id] gives it (with the user's edits of it, or [edits] false: the preset's own). */
     fun previewNumber(id: String, k: NumberKey, edits: Boolean = true): Float? =
         (try { presetResolver(id, edits)?.resolve(k.name) } catch (_: Throwable) { null } as? Value.Number)?.v

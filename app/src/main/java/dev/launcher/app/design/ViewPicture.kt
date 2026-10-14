@@ -39,6 +39,10 @@ object ViewPicture {
             renderer.setContentRoot(root)
             renderer.createRenderRequest().setWaitForPresent(true).syncAndDraw()
             val image = reader.acquireNextImage()
+            // "Presented" is queued, not drawn: the GPU may still be drawing into the buffer. Wrapped at once it was read half
+            // drawn wherever the GPU was behind (after a cold start on the emulator: the settings' picture of home cut off
+            // halfway, the rest transparent, and kept so). Its fence says when it is done.
+            if (android.os.Build.VERSION.SDK_INT >= 33) image.fence.use { if (it.isValid) it.awaitForever() }
             val hb = image.hardwareBuffer
             val b = hb?.let { Bitmap.wrapHardwareBuffer(it, ColorSpace.get(ColorSpace.Named.SRGB)) }
             hb?.close()

@@ -118,7 +118,11 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`tools/design/build_material_preset.py`), bouncing only where iOS 27 does (code that never saw an overshoot is never
   handed one: an int alpha past 255 flashes, an edge-anchored panel shows a gap). A preset's Speed and Bounce
   (`motion.adjust.*`, the settings' Fine-tune) apply where a curve is read (`Design.curve` through `motion/MotionAdjust`;
-  Bounce scales existing overshoot only); times a motion is staged by go through `Motion.ms` (speed and slow motion). Theme seeds and motion seeds both live in the builder, which
+  Bounce scales existing overshoot only); times a motion is staged by go through `Motion.ms` (speed and slow motion).
+  Every role can be changed on its own in the settings' Motion (C4b, `docs/PLAN_MOTION.md`): groups as pages, an editor
+  per role (`settings/MotionPages`: spring or curve, a graph with handles, sliders, shapes), samples on the picture of
+  home (`settings/MotionSamples`), the graph's arithmetic in `motion/CurveFit` (springs fitted to curves and back); kept as
+  the preset's user edits (`files/design/motion-edits-<id>.json`). Theme seeds and motion seeds both live in the builder, which
   writes the two files. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). Points to pixels: one unit everywhere, `Scale.unitPx` (policy `adaptive`: 402 pt
   across a phone, never larger than the dp at the phone's default density, times the Display size's zoom; text through
@@ -375,6 +379,28 @@ copy it wholesale — port the working pieces cleanly. File map:
   again (the settings: 25 ms of layout in one frame). Styles and families are made once (`Look.text`, `familyOf`).
 - **A `key()` inside an `if` in a loop is matched by position**, not by key: when the list changed order, rows were not
   recognised and were built anew (eleven in one frame). Filter first, key at the top of the loop body.
+- **A `SnapshotStateMap` invalidates every reader at every write**: the draft's motion edits change at each step of a
+  slider, and every row and group count on Motion's pages that read one key of it worked itself out again (~140 a step,
+  8 ms of the S24's main thread). One state per key for one-key readers (`Draft.motionCells`), derived states for counts,
+  and a value that changes in a composable of its own. Likewise: an effect keyed on a state composes its whole composable
+  again when it changes (`LaunchedEffect(motionOpen)` in the picture of home: 2 missed refreshes at each push and pop),
+  follow it with `snapshotFlow` from `LaunchedEffect(Unit)`; a list made in composition (`listOf(...)` for chips) is a
+  new one each time and the callee composes again; an `onPlaced` that reads coordinates places its node again in every
+  frame anything above it moves (53 chips in a page's slide: 4-13 ms a frame): measure sizes instead.
+- **Build what a tap opens at the tap, and start its motion two frames later** (the row stays lit meanwhile): built in
+  a slide's first frame, the slide began late with a jump; built while a finger rested on the row, a scroll starting
+  there stuttered. And a new kind of drawing compiles its GPU pipeline inside its first frame after every update (the
+  curve graph's stroke: 99 ms of the render thread): draw one off screen while home is idle (`settings/MotionWarmUp`).
+- **Loops nobody drives count a long frame as a short one** (Motion's demo, samples, the cards' dots: at most 1/30 s a
+  frame): a stall pauses them; counted from the clock they jumped ahead after it. A finger-driven or started motion keeps
+  real time.
+- **The debug build is debuggable, and Compose's code runs ~2× slower for it on the S24** (a page built in 91 ms against
+  42; the emulator 5×): ART runs debuggable code interpreted until it is hot. `./gradlew assembleBench` builds the same
+  code, same key, not debuggable (installs over the debug build and back; run-as does not work while it is on; Perfetto
+  still shows its app sections) to see what a release would do. CI builds debug until Matheesha decides otherwise.
+- **"Presented" is not drawn**: a `HardwareRenderer` drawing into an `ImageReader` returns when the buffer is queued, and
+  the GPU may still be drawing into it. Wrapped at once, the settings' picture of home came out half drawn after a cold
+  start (the rest transparent) and was kept so. `ViewPicture` waits for the image's fence (API 33+).
 - **One UI drops the display to 20-24 Hz when nothing is touched, and a key event does not wake it**: an animation started
   by a scripted Back key waited 35-60 ms for buffers in its first frames (SurfaceFlinger `NextFrameInterval 24_Hz`). Start
   benched animations with a tap, or read a key-started one knowing this.

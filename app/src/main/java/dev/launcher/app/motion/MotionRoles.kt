@@ -207,6 +207,14 @@ object MotionRoles {
 
     val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE)
 
+    /**
+     * What the settings' Motion lets a person retime, by group (docs/PLAN_MOTION.md): every animation but the App Switcher's
+     * geometry and gestures (behaviour: the Recents layout's options, D3), slow motion (Developer) and the preset's overall
+     * speed and bounce (Motion's Fine-tune).
+     */
+    val EDITABLE: List<MotionGroup> = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE)
+        .map { g -> MotionGroup(g.title, g.description, g.roles.filter { !it.behaviour }) }
+
     fun find(key: String): Pair<MotionGroup, MotionRole>? {
         for (g in ALL) for (r in g.roles) if (r.key == key) return g to r
         return null

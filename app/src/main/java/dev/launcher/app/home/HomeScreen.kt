@@ -1660,6 +1660,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                         pk.warmUp(list)
                         // The new look's reveal too (its first showing compiled its shader inside a frame: 117 ms on the S24).
                         if (Build.VERSION.SDK_INT >= 33) ThemeReveal.warmUp(resources.displayMetrics.density * REVEAL_CELL_DP)
+                        // And the settings' curve graphs (their first opening: 99 ms of compiling inside its frame).
+                        dev.launcher.app.settings.MotionWarmUp.warmUp(m?.u ?: 0f)
                     } else if (++warmTries < 10) postDelayed(this, 2000L)
                 }
             }.start()

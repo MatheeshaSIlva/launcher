@@ -38,6 +38,16 @@ class Spring(private val response: Float, private val damping: Float) : dev.laun
             val x = e * (a * cos(wd * t) + b * sin(wd * t))
             val v = e * ((-z * omega) * (a * cos(wd * t) + b * sin(wd * t)) + (-a * wd * sin(wd * t) + b * wd * cos(wd * t)))
             x to v
+        } else if (z > 1.0 + 1e-6) {
+            // Overdamped (a bounce below none: it settles more gently than a critically damped spring, without overshoot).
+            val s = omega * sqrt(z * z - 1)
+            val r1 = -z * omega + s
+            val r2 = -z * omega - s
+            val c2 = (v0 - r1 * x0) / (r2 - r1)
+            val c1 = x0 - c2
+            val e1 = exp(r1 * t)
+            val e2 = exp(r2 * t)
+            (c1 * e1 + c2 * e2) to (r1 * c1 * e1 + r2 * c2 * e2)
         } else {
             val e = exp(-omega * t)
             val x = (x0 + (v0 + omega * x0) * t) * e

@@ -329,5 +329,64 @@ search across the settings (with C3's); sharing presets.
 - Found on the S24 and fixed: under wallpaper colours in dark mode the Apply button's white label sat on the palette's
   light primary; the settings' accent label is the palette's on-primary there (`comp.settings.accent-label` in the
   theme's Material You section), checked on the phone.
-- For C4b: our `Spring` treats any damping above 1 as 1 (Compose's springs do not): the editor's "gentler than no bounce"
-  needs the overdamped case in `Spring` first.
+- For C4b: our `Spring` treated any damping above 1 as 1 (Compose's springs do not): the editor's "gentler than no bounce"
+  needed the overdamped case in `Spring` first (done in C4b, with `CurveFit`'s graph of the same motion).
+
+## C4b, every animation (2026-10-14, emulator and S24)
+
+- **Groups**: Motion lists the eleven groups (`MotionRoles.EDITABLE`); a group with changes shows "N changed" on a line of
+  its own under its words (opening and closing; beside the words it made them wrap again). Tapped, its page is pushed
+  inside the sheet (`motion.sheet.push`): Motion gives way a third to the left and fades, the page comes from the right,
+  the header's title crosses over, the picture of home focuses where the group plays (`MotionSamples.focus`). Back, the
+  round button or the system's, pops it. One page is built at a time, when it is tapped (below).
+- **A group's page**: its animations (the curve drawn small, the name, the value in words, taking the accent once changed),
+  then its Amounts (numbers). Tapped, an animation's editor opens in place under it, one at a time.
+- **The editor**: what it is and where the value comes from ("Measured on iOS 27", "Your change, waiting for Apply"...);
+  Spring | Curve (switching fits the one to the other, `CurveFit`; switched back without touching the other kind, it is
+  exactly what it was); the graph: time across, gliding to fit, the preset's own curve faint behind yours once changed
+  (fading in and out), a dot in step with the sample, a spring's handle on its first peak or, when its bounce is too small
+  to show (SwiftUI's under ~15 %: iOS 27's app opening at 8 % peaked after it had settled, past the graph's end), where it
+  reaches 98 %; a bezier's two handles. A handle moves by what the finger moves (grabbed off its middle it does not jump),
+  up and down for the bounce, sideways for the duration; a small bounce moved along the line is kept, a peak brought down
+  to the line loses its bounce. Duration (log slider: springs 0.05-2 s, curves 30-4000 ms), Bounce (−40 % to 80 %), "Settles
+  in 1.1 s · goes 9 % past", shapes (Smooth, Snappy, Bouncy; Ease out, Ease in and out, Emphasized, Linear), Slow (the sample
+  at a quarter speed), Reset (fading in and out in its place), Done. Switching the kind folds one kind's slider and shapes
+  away as the other's open. Numbers: a slider with each number's range and unit. Everything waits for Apply (the draft per
+  preset; Apply writes each preset's file).
+- **Samples**: the Apps group's on home's picture (the dock's middle icon growing into the app and back, home stepping
+  back); the other groups' are stand-ins of their kind of motion where their element is, until their element's own step.
+  A sample fades out where it is and the next fades in at its start; the demo on Motion fades out when a group comes (it
+  was cut mid-run) and a preset chosen no longer restarts it (the next run takes it).
+- **Building and smoothness** (S24, debug build, Perfetto; frame stats keep only the last ~120 frames, so drags were
+  traced):
+  - A group's page is built when tapped, its row lit until its slide starts two frames later: the first push of a group
+    costs one 79-96 ms frame before the slide; pushed again, 0 missed refreshes. All 142 rows built ahead held the main
+    thread for seconds (emulator); built while a finger rested on a row, a scroll starting there stuttered.
+  - The header, the Back handler, the page's z-order and the picture's demo read the push in composition: 2 missed
+    refreshes at each push's start and pop's end. Read in drawing and through `snapshotFlow` now: three push/pop cycles,
+    no frame over 12 ms.
+  - An editor is built when tapped (a 70 ms frame) and opens from the next frame. The first opening after an update
+    compiled the graph's stroke pipeline inside its frame (99 ms on the render thread, a 109 ms frame): warmed off screen
+    while home is idle (`settings/MotionWarmUp`, with the widget gallery's).
+  - Drags: each step of a slider changed the draft's map, and every reader of it worked itself out again (each row's value
+    and curve, each group's count on Motion: ~140 checks a step). Now one state per (preset, token) (`Draft.motionCells`),
+    the row's value in a composable of its own, chip names made once, the slider and the graph each one follower (not a
+    coroutine a step), the preset cards held still while a group's page covers them, values under the finger changing at
+    once (`Rolling(instant)`). A step's frame went from ~24 ms to 13-16 ms: dragging runs at 60-80 fps on the debug build,
+    still short of 120.
+  - Motion's loops (the cards' dots, the demo, the samples) count a long frame as 1/30 s: a stall pauses them, never
+    makes them jump.
+- **Debug build or not** (S24, same code and key, `./gradlew assembleBench`: the debug build without debugging; JIT only,
+  as right after an update): a group's page built in 42 ms instead of 91, an editor in 33 instead of 70, frames over 8 ms
+  in a 0.9 s drag 14-27 (median ~10 ms) instead of 35-39 (median 13-16). The emulator showed 5× (267 ms against 49).
+  Whether CI should build that way is Matheesha's call (run-as, which the tests use for files, does not work on it).
+- **Found on the way and fixed**: the demo crashed the settings when home had published its icons before laying them
+  out (`HomeBridge.dockIcon` on rectangles of no size); after a cold start the settings' picture of home came out cut off
+  halfway with the rest transparent, and was kept so: `ViewPicture` wrapped its buffer when it was queued, before the GPU
+  had drawn it (it waits for the buffer's fence now; checked on the emulator after cold starts, not on the S24).
+- Checked on the emulator: every group's page, the editors of springs, curves and numbers, handle drags (a small bounce
+  kept), Spring → Curve → Spring (exact), Bouncy, Reset (fading), Done, Slow, Reset all, Discard, Apply (the preset's file
+  written, then cleared by Reset and Apply), the count line opening and closing, Fine-tune's sliders.
+- Open: the first push of a group and the first opening of an editor each cost one long frame on the debug build (before
+  their motion starts); drags at 60-80 fps on the debug build; C4a's page-slide misses at 200 % not measured again (the
+  phone was locked); the other groups' samples are stand-ins.

@@ -7,6 +7,7 @@ import dev.launcher.app.design.Theme
 import dev.launcher.app.design.ThemeCheck
 import dev.launcher.app.design.Value
 import dev.launcher.app.motion.BezierMath
+import dev.launcher.app.motion.CurveFit
 import dev.launcher.app.motion.Ease
 import dev.launcher.app.motion.MotionAdjust
 import dev.launcher.app.motion.mover
@@ -171,6 +172,63 @@ class MotionTest {
             if (overshoot(c) < 1e-4f) continue
             assertTrue("$k bounces in Material and not in iOS 27", overshoot((ios.getValue(k).value as Value.CurveV).curve) > 1e-3f)
         }
+    }
+
+    @Test fun bounceIsSwiftUisAndBack() {
+        for (d in listOf(0.3f, 0.61f, 1f, 1.25f, 2f)) assertEquals(d, CurveFit.dampingOf(CurveFit.bounceOf(d)), 1e-5f)
+        assertEquals(0f, CurveFit.bounceOf(1f), 0f)
+        assertEquals(0.3f, CurveFit.bounceOf(0.7f), 1e-6f)
+        assertEquals(-0.2f, CurveFit.bounceOf(1.25f), 1e-6f)
+    }
+
+    @Test fun theGraphsCurveIsTheSpringThatRuns() {
+        // Bouncy, critically damped and overdamped (a bounce below none), against the spring the launcher runs.
+        for (c in listOf(Curve.Spring(0.64f, 0.61f), Curve.Spring(0.4f, 1f), Curve.Spring(0.4f, 1.6f))) {
+            val s = Spring(c.response, c.damping).apply { start(0f, 0f, 1f) }
+            for (t in listOf(0.02f, 0.1f, 0.25f, 0.6f, 1.5f)) assertEquals("$c at $t", s.value(t.toDouble()), CurveFit.at(c, t), 1e-4f)
+            // Settled by its settle time, and an overdamped one never overshoots.
+            val end = CurveFit.settleTime(c)
+            assertTrue("$c settles by $end", abs(1f - CurveFit.at(c, end)) <= 0.0021f && abs(1f - CurveFit.at(c, end * 1.5f)) <= 0.0021f)
+            if (c.damping >= 1f) for (i in 0..200) assertTrue(CurveFit.at(c, i * 0.01f) <= 1f + 1e-6f)
+        }
+        assertEquals(0.5f, CurveFit.at(Curve.Ease(0f, 0f, 1f, 1f, 200f), 0.1f), 1e-5f)
+    }
+
+    @Test fun theSpringsHandleMovesTheSpring() {
+        // Moved where it already is, a handle gives the same spring back (a small bounce too: iOS 27's app opening, 8 %, goes
+        // too little past to show and keeps it); moved up, the spring bounces further.
+        for (c in listOf(Curve.Spring(0.64f, 0.61f), Curve.Spring(0.42f, 0.86f), Curve.Spring(0.42f, 0.92f), Curve.Spring(0.5f, 0.97f),
+                Curve.Spring(0.4f, 1f), Curve.Spring(0.5f, 1.3f))) {
+            val (t, v) = CurveFit.handleOf(c)
+            val back = CurveFit.springFromHandle(t, v, c)
+            assertEquals("$c", c.response, back.response, 0.005f)
+            assertEquals("$c", c.damping, back.damping, 0.005f)
+            // The handle lies on the curve, within the time it takes to settle (the graph's axis is drawn to fit both).
+            assertEquals("$c", CurveFit.at(c, t), v, 0.002f)
+            if (!CurveFit.bouncesVisibly(c)) assertTrue("$c", t <= CurveFit.settleTime(c, 0.005f))
+        }
+        val (t, _) = CurveFit.handleOf(Curve.Spring(0.64f, 0.61f))
+        assertTrue(CurveFit.springFromHandle(t, 1.2f, Curve.Spring(0.64f, 0.61f)).damping < 0.61f)
+        // Brought down to the line, a peak loses its bounce; a small bounce moved along the line keeps it.
+        assertEquals(1f, CurveFit.springFromHandle(t, 1f, Curve.Spring(0.64f, 0.61f)).damping, 1e-6f)
+        assertEquals(0.92f, CurveFit.springFromHandle(0.3f, 0.98f, Curve.Spring(0.42f, 0.92f)).damping, 1e-6f)
+    }
+
+    @Test fun aSpringBecomesACurveThatRunsLikeIt() {
+        for ((c, tol) in listOf(Curve.Spring(0.42f, 0.92f) to 0.03f, Curve.Spring(0.4f, 1f) to 0.03f, Curve.Spring(0.64f, 0.61f) to 0.08f)) {
+            val e = CurveFit.easeLike(c)
+            val d = e.ms / 1000f
+            for (i in 1..20) { val tt = d * i / 21f; assertEquals("$c as $e at $tt", CurveFit.at(c, tt), CurveFit.at(e, tt), tol) }
+        }
+        // A spring starts from rest: an ease in and out starts slower than one can, Material's emphasized curve leaves faster
+        // (0.15 apart at most). A curve with no overshoot gives a spring with no bounce, and the other way round.
+        for ((e, tol) in listOf(Curve.Ease(0.4f, 0f, 0.2f, 1f, 300f) to 0.15f, Curve.Ease(0.05f, 0.7f, 0.1f, 1f, 500f) to 0.15f)) {
+            val s = CurveFit.springLike(e)
+            assertTrue("$s bounces", s.damping >= 1f)
+            for (i in 1..20) { val tt = e.ms / 1000f * i / 21f; assertEquals("$e as $s at $tt", CurveFit.at(e, tt), CurveFit.at(s, tt), tol) }
+        }
+        val calm = CurveFit.easeLike(Curve.Spring(0.4f, 1f))
+        assertTrue("$calm overshoots", calm.y1 in 0f..1f && calm.y2 in 0f..1f)
     }
 
     @Test fun aRoleAsAnimatorTimingKeepsItsShape() {

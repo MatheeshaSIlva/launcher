@@ -2099,3 +2099,16 @@ tests. On the S24 (fd7c240): Motion at rest a steady 120 fps, its controls 0 mis
 settings' own slide from 73-78 frames to 43-47, Material's shade and launches 0-1 missed; the settings' page slides miss
 more at 200 % in their first frames (layout and recording every frame on every page: open, for C4b). The Apply label
 under wallpaper colours in dark mode is now the palette's on-primary.
+
+## Motion: every animation (C4b, 2026-10-14, emulator and S24)
+
+Motion's groups as pages pushed inside the sheet (the picture focusing where the group plays), each animation with its
+editor in place: Spring | Curve, a graph with handles that move by the finger, Duration and Bounce, shapes, Slow, Reset,
+Done; numbers with their own sliders; the Apps group's samples on home's picture, stand-ins for the rest. Details and
+measurements in `docs/PLAN_MOTION.md` (C4b). On the S24 (debug build): pushes and pops 0 missed refreshes once a page is
+built (its first push builds it: one 80-96 ms frame before the slide), an editor builds in one 70 ms frame before it
+opens, drags run at 60-80 fps (each step 13-16 ms; 24 before per-token state in the draft). The same code without
+debugging builds pages and editors in less than half the time (42 and 33 ms): a question for Matheesha. Fixed on the way:
+the demo's crash on icons of no size after a start, the settings' picture of home cut off after a cold start (`ViewPicture`
+now waits for the GPU's fence), a small bounce's handle past the graph's end, and a pipeline compiled inside the first
+editor's frame after every update (warmed while home is idle). 100 unit tests.

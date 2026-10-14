@@ -28,6 +28,17 @@ android {
         }
     }
 
+    buildTypes {
+        // For measuring only (CI builds debug): the debug build, same key, not debuggable. ART runs a debuggable app's code
+        // slower (Compose ~2x on the S24, 5x on the emulator): this shows what a release would do. run-as does not work on it.
+        create("bench") {
+            initWith(getByName("debug"))
+            isDebuggable = false
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("debug")
+        }
+    }
+
     buildFeatures {
         aidl = true
         compose = true
