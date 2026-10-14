@@ -2121,3 +2121,19 @@ curve where it shows (drawn values and knobs, layers for the graph and sliders),
 builds in ~90 ms instead of 139; the pages fade draw by draw with their pipelines warmed while home is idle, so the
 slide's first frame no longer allocates buffers (24 ms of the render thread before, 8-14 now) and nothing compiles inside
 a frame after an update; the header's titles hand over without crossing. The phone was warm (CPUs capped at 2.0 GHz).
+
+## The build is not debuggable; One UI 9 on the S24 (2026-10-14)
+
+- **Not debuggable** (bccbcaa, Matheesha's call): CI ships `assembleDebug` with `isDebuggable = false` and the libraries'
+  baseline profile as `Launcher.dm`; UPDATE installs both in one session. Checked on the S24: 531dda1 came in through
+  UPDATE as `speed-profile [reason=install-dm]`. The app's files go in and out through its external folder (no run-as):
+  `DESIGN_RELOAD --es files import|export|remove`.
+- **One UI 9 (Android 17) broke two things** (Matheesha's phone updated the same day; c1e6372): app pictures (every App
+  Switcher card, close card and warm launch showed the app's launch screen: Android 17 moved task snapshots into
+  `ITaskSnapshotManager` and deprecated `TaskSnapshot.getHardwareBuffer()`, the buffer now read from its field) and Control
+  Center's live blur (our overlay window gets no dim layer any more, so the dim turned into a blur showed nothing; Samsung's
+  view blur on a full-screen view now). Checked on the S24 (recordings of Calculator's launch and close, SurfaceFlinger's
+  blur region with Control Center open, the App Switcher's 27 pictures in the log) and on the Android 17 emulator (the deck
+  shows real pictures there too). Every other hidden call we make still exists in One UI 9's framework. Not reproduced yet:
+  the App Library's search field after a pull of the shade (pulls of both panels and from the middle over the App Library
+  left it as it was). Not checked: a pull over an app (needs a real finger), picture-in-picture.
