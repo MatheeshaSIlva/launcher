@@ -36,7 +36,17 @@ object NoAnimStarts {
     private val checker = Executors.newSingleThreadScheduledExecutor()
     @Volatile private var checkPending = false
 
-    fun start(intent: Intent, userId: Int): Boolean = call("start ${intent.component?.packageName}") { it.startNoAnim(intent, userId) }
+    fun start(intent: Intent, userId: Int): Boolean {
+        val ok = call("start ${intent.component?.packageName}") { it.startNoAnim(intent, userId) }
+        if (ok) intent.component?.packageName?.let { started[it] = android.os.SystemClock.uptimeMillis() }
+        return ok
+    }
+
+    // When each package was last started through our transition (uptime ms): a launch waits for its app to show only then.
+    private val started = java.util.concurrent.ConcurrentHashMap<String, Long>()
+
+    /** When [pkg] was last started through our transition (uptime ms), else 0. */
+    fun startedAt(pkg: String): Long = started[pkg] ?: 0L
 
     fun switchToTask(taskId: Int): Boolean = call("switch to task $taskId") { it.switchToTaskNoAnim(taskId) }
 

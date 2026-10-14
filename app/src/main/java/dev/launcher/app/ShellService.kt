@@ -317,6 +317,8 @@ class ShellService : IShellService.Stub() {
 
     override fun transitionShownAt(component: String): Long = instant.shownAt(component)
 
+    override fun packageShownAt(pkg: String): Long = instant.packageShownAt(pkg)
+
     override fun injectTouch(action: Int, x: Float, y: Float, downTime: Long, eventTime: Long, deviceId: Int, targetUid: Int, waitForResult: Boolean): Boolean =
         TouchInjector.inject(action, x, y, downTime, eventTime, deviceId, targetUid, waitForResult)
 

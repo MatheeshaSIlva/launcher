@@ -108,7 +108,12 @@ class InstantTransitions(private val atm: Any) {
             t.setAlpha(leash, 1f)
             try {
                 val task = ch.javaClass.getMethod("getTaskInfo").invoke(ch)
-                (task?.javaClass?.getField("topActivity")?.get(task) as? android.content.ComponentName)?.let { opened += it.flattenToString() }
+                // The top activity, and the ones the task was started for: its top can be another package's (a permission
+                // dialog over Contacts), and a launch asks whether the app it started shows.
+                for (f in arrayOf("topActivity", "baseActivity", "realActivity", "origActivity")) {
+                    val c = try { task?.javaClass?.getField(f)?.get(task) as? android.content.ComponentName } catch (_: Throwable) { null }
+                    c?.flattenToString()?.let { if (it !in opened) opened += it }
+                }
             } catch (_: Throwable) { }
         }
         return opened
@@ -121,6 +126,14 @@ class InstantTransitions(private val atm: Any) {
     fun shownAt(component: String): Long {
         val c = android.content.ComponentName.unflattenFromString(component)?.flattenToString() ?: component
         return shown[c] ?: 0L
+    }
+
+    /** When any activity of [pkg] last came on screen through our transition (uptime ms), else 0. */
+    fun packageShownAt(pkg: String): Long {
+        val prefix = "$pkg/"
+        var at = 0L
+        for ((c, t) in shown) if (c.startsWith(prefix) && t > at) at = t
+        return at
     }
 
     // What the last transition handed us, for the log: its type and each change's mode, flags and task (diagnosing a case

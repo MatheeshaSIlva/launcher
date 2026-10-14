@@ -2603,6 +2603,8 @@ object GestureNav {
     private var closeFading = false
     /** How often a picture of home waits for a finger to leave home before it is rendered ahead ([prewarmHome]; ms). */
     private const val PREWARM_RETRY_MS = 250L
+    /** The longest a launch card waits for its app's window to be on screen once the app is in front ([whenAppShown]; ms). */
+    private const val APP_SHOWN_MAX_MS = 600L
     /** How long a picture of home waits for home's own next frame before it goes anyway ([homeTouchedDuringClose]). */
     private const val HOME_FRESH_MS = 1500L
 
@@ -3184,13 +3186,15 @@ object GestureNav {
         endLabel = "launch $pkg${if (reverse) " (reversed a closing card)" else ""}"
         cardBrings(pkg, c.placeholderColor)
         val startApp = { runPendingStart() }
+        // The card goes once the app's window is on screen, not only reported in front (see [whenAppShown]).
+        val fadeOut = { whenAppShown(pkg, since, g) { fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP), g) } }
         onSettled = {
             startApp()   // without a picture of home the app is only started now, so it cannot show early
             phase = Phase.HOLD
-            if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP), g)
+            if (lastFrontPkg == pkg && lastFrontAt >= since) fadeOut()
             else awaitForeground(pkg, g) {
                 // Our own screens (the developer panel, safe settings) say when they have drawn (ownScreenDrawn).
-                if (lastFrontPkg == pkg || pkg == app.packageName) { fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP), g); return@awaitForeground }
+                if (lastFrontPkg == pkg || pkg == app.packageName) { fadeOut(); return@awaitForeground }
                 // A window of another package can belong to the tapped app's own task (Settings showing Samsung's wallpaper
                 // picker, seen on the S24): only another task in front is the wrong app.
                 val s = ShizukuLink.service
@@ -3203,8 +3207,8 @@ object GestureNav {
                             // Not the app that was tapped: ask for the tapped one again.
                             AppLog.log("[front] WRONG APP after launching $pkg: $other is in front (top task $top); starting $pkg again")
                             bringBack(pkg, null)
-                        }
-                        fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP), g)
+                            fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_APP), g)
+                        } else fadeOut()
                     }
                 }
             }
@@ -3558,6 +3562,46 @@ object GestureNav {
 
     private var waitingFor: Pair<String, Runnable>? = null
     private val waitTimeout = Runnable { val w = waitingFor; waitingFor = null; w?.second?.run() }
+
+    private val shownIo = Executors.newSingleThreadExecutor()
+
+    /**
+     * Runs [then] (nav thread) once [pkg]'s window is on screen: the start transaction of our own transition for it
+     * committed after [since] (the system plays a transition only once the window coming has drawn), at the latest
+     * [APP_SHOWN_MAX_MS] from now, unless the session moved on. The window events say an app is in front when its window
+     * is added, before it has drawn: on a slow phone the launch card faded away over nothing (home showed for a moment
+     * between the card and the app's launch screen, seen on the emulator with a cold start). Without our transitions (or an
+     * older shell service) at once, as before.
+     */
+    private fun whenAppShown(pkg: String, since: Long, g: Int, then: () -> Unit) {
+        val s = ShizukuLink.service
+        // (Only a start of ours since the launch began reports when it shows: a start the system animated does not.)
+        if (s == null || !NoAnimStarts.confirmed || pkg == app.packageName || NoAnimStarts.startedAt(pkg) < since) { then(); return }
+        val asked = SystemClock.uptimeMillis()
+        val deadline = asked + APP_SHOWN_MAX_MS
+        fun check() {
+            if (gen != g) return
+            shownIo.execute {
+                val at = try { s.packageShownAt(pkg) } catch (_: Throwable) { -1L }
+                nav.post {
+                    if (gen != g) return@post
+                    when {
+                        at < 0L || at >= since -> {
+                            val waited = SystemClock.uptimeMillis() - asked
+                            if (waited > 20) AppLog.log("[nav] $pkg on screen $waited ms after it was reported in front: the card waited for it")
+                            then()
+                        }
+                        SystemClock.uptimeMillis() > deadline -> {
+                            AppLog.log("[nav] $pkg not seen on screen ${APP_SHOWN_MAX_MS} ms after it was reported in front: the card goes anyway")
+                            then()
+                        }
+                        else -> nav.postDelayed({ check() }, 8)
+                    }
+                }
+            }
+        }
+        check()
+    }
 
     /** Runs [then] once a window of [pkg] is in front (accessibility event), or after 500 ms, unless the session moved on. */
     private fun awaitForeground(pkg: String, g: Int, then: () -> Unit) {

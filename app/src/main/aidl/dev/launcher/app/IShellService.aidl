@@ -138,4 +138,8 @@ interface IShellService {
     // the finger). Replaces the previous watch; "ok" or "ERROR: ...". stopWindows ends it.
     String watchWindows(in IWindowWatch listener, in String[] names) = 37;
     void stopWindows() = 38;
+
+    // When (uptime ms) a window of [pkg] last came on screen through our instant transition (any of its activities; the
+    // system plays a transition once the window coming has drawn), 0 if never. A launch's card goes only once the app shows.
+    long packageShownAt(String pkg) = 39;
 }

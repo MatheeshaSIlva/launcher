@@ -2172,3 +2172,25 @@ doesn't feel 120 fps". Two causes, both in a tap on home while a closing card wa
   landing; a page swipe during a close (the card fades where it is); reopening the closing app (it reverses, as before;
   the previous build faded the card out and popped it back). One icon of the closing app in every frame. Not checked: the
   S24 (locked), frame timing.
+
+## Less work behind quick use (2026-10-15, emulator; S24 not checked yet)
+
+Matheesha: "going to and back from the app library rapidly also feels less than 60hz ... imagine how the performance would
+be on a mid range phone". Found by reading what runs between gestures (996f425 and the next commit):
+- Home recorded its picture 120 ms after every settle (~20 ms of its main thread; a finger resting on home still counts as
+  idle), and gesture nav then rendered it into the card window's layers on the render thread every window of ours shares:
+  quick swipes to the App Library and back kept landing on both. Now after 350 ms of rest with no finger on home, and the
+  render only once the finger is up. A launch records its own picture at the tap, as before.
+- The status bar was a full-screen view in the shade's window: each step of its animations (the tone as the App Library
+  comes, a minute, a level) redrew the whole window (S24 trace: 256 full-window frames in a few App Library swipes). It is
+  as tall as the bar while no panel shows. The emulator redraws whole windows anyway: the gain shows only on the S24.
+- The card window's picture of the wallpaper had a screen-sized GPU layer of its own (10 MB of a 121 MB budget that was
+  at 112): it is drawn directly (one bitmap, home's texture).
+- A launch's card faded as soon as the window events said the app was in front, which is when its window is added, not
+  drawn: on the emulator home showed for a frame between our card and a cold app's launch screen (the window manager still
+  had home on top). The card now waits until the app's window is on screen (the shell's own transition for that start
+  committed: `packageShownAt`, by the task's top, base and real activities; a permission dialog over Contacts is another
+  package's top), at most 600 ms, and only for starts that went through our transition. Emulator: a warm Clock at once, a
+  cold Photos after 73 ms, Contacts after 298-593 ms.
+- Still to measure on the S24: GPU memory (Control Center, Notification Center and their backdrop keep screen-sized layers
+  while closed), the frame pacing of quick App Library swipes with a real finger, the rapid launches.
