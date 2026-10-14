@@ -188,14 +188,15 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
 
     init {
-        setLayerType(LAYER_TYPE_HARDWARE, null)
-        alpha = 0f   // closed until the first pull (the setter is not run for the first value)
+        alpha = 0f   // closed until the first pull (the setter is not run for the first value); its layer comes with it
     }
 
     private fun sheetY(): Float = -(1f - min(progress, 1f)) * height + max(0f, progress - 1f) * height * 0.0f
 
     /** About to open: what it shows is brought up to date (wallpaper, clock, notifications). */
     fun prepare() {
+        // Its own GPU layer again (let go while closed, see [onClosed]): the sheet slides as that layer.
+        if (layerType != LAYER_TYPE_HARDWARE) setLayerType(LAYER_TYPE_HARDWARE, null)
         prerecordAsked = false
         prerecorded = 0
         removeCallbacks(prerecord)
@@ -240,6 +241,12 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         collapsed = true
         expanded.clear()
         readNotifs(animate = false)
+        // Out of sight, its two screen-sized GPU layers go (the sheet's, drawn anew at every opening anyway, and the
+        // wallpaper's): 20 MB of the GPU cache's budget (S24: 121 MB, all but full while they were kept), which every
+        // gesture's new layers and blurs had to free first. They come back as the next pull begins ([prepare]).
+        setLayerType(LAYER_TYPE_NONE, null)
+        bgNode.discardDisplayList()
+        bgKey = Long.MIN_VALUE
     }
 
     /** Back: closes a menu or a revealed swipe first. */
