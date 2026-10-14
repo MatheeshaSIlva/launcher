@@ -2112,3 +2112,12 @@ debugging builds pages and editors in less than half the time (42 and 33 ms): a 
 the demo's crash on icons of no size after a start, the settings' picture of home cut off after a cold start (`ViewPicture`
 now waits for the GPU's fence), a small bounce's handle past the graph's end, and a pipeline compiled inside the first
 editor's frame after every update (warmed while home is idle). 100 unit tests.
+
+## Motion C4b on the S24, and the editor's drags (2026-10-14)
+
+The CI build f3eb85a on the S24, then fixes measured there (details in `docs/PLAN_MOTION.md`, C4b): the editor reads its
+curve where it shows (drawn values and knobs, layers for the graph and sliders), so slider drags went from 60-80 fps to
+~110 (9-12 missed refreshes a second; the handle 1; 0-1 not debuggable); a row is one drawn node, so a group's page
+builds in ~90 ms instead of 139; the pages fade draw by draw with their pipelines warmed while home is idle, so the
+slide's first frame no longer allocates buffers (24 ms of the render thread before, 8-14 now) and nothing compiles inside
+a frame after an update; the header's titles hand over without crossing. The phone was warm (CPUs capped at 2.0 GHz).

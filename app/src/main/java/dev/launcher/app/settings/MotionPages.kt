@@ -26,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,11 +42,17 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import dev.launcher.app.design.Curve
 import dev.launcher.app.design.CurveKey
@@ -60,11 +67,11 @@ import dev.launcher.app.motion.MotionRole
 import dev.launcher.app.motion.MotionTokens
 import dev.launcher.app.motion.mover
 import dev.launcher.app.theme.Appearance
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlin.math.abs
-import kotlin.math.roundToInt
 
 // The settings' Motion (docs/PLAN_MOTION.md): the presets and their fine-tuning (C4a), and every animation by group, each
 // with its editor and its sample on the picture of home (C4b).
@@ -143,6 +150,9 @@ internal fun MotionPager(st: Studio, g: Geometry, fadePx: Float, bandPaint: andr
                 val k = st.motionPush.value.coerceIn(0f, 1f)
                 translationX = -g.w / 3f * k
                 alpha = 1f - k
+                // Faded draw by draw, not through a page-sized buffer (made and filled in a push's first frame, it cost the
+                // S24's render thread 13 ms there; the pages hold no glass or pictures that overlap).
+                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
             }
             .topFade(main, g.unit, fadePx, bandPaint)) {
             Column(Modifier.fillMaxSize().iosScroll(main).padding(horizontal = m)) {
@@ -183,6 +193,8 @@ private fun GroupPage(st: Studio, g: Geometry, grp: MotionGroup, fadePx: Float, 
                 // Out of sight unless it is the one pushed (moved, never laid out again).
                 translationX = if (!on) g.w * 3f else (1f - k.coerceIn(0f, 1f)) * g.w * 0.4f
                 alpha = (k / 0.7f).coerceIn(0f, 1f)
+                // (Faded draw by draw, as Motion's page: no page-sized buffer.)
+                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
             }
             .topFade(scroll, g.unit, fadePx, bandPaint)) {
             Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
@@ -198,11 +210,12 @@ private fun GroupPage(st: Studio, g: Geometry, grp: MotionGroup, fadePx: Float, 
 private fun GroupRoles(st: Studio, grp: MotionGroup) {
     val curves = grp.roles.filter { it.key in MotionTokens.CURVES }
     val numbers = grp.roles.filter { it.key in MotionTokens.NUMBERS }
+    val kit = rememberRowKit()
     Group(null, grp.description + " Tap one to change it: the picture above plays it.") {
-        for (r in curves) androidx.compose.runtime.key(r.key) { RoleRow(st, r) }
+        for (r in curves) androidx.compose.runtime.key(r.key) { RoleRow(st, r, kit) }
     }
     if (numbers.isNotEmpty()) Group("Amounts", "Numbers that shape these animations: how far, how blurred, how long between.") {
-        for (r in numbers) androidx.compose.runtime.key(r.key) { RoleRow(st, r) }
+        for (r in numbers) androidx.compose.runtime.key(r.key) { RoleRow(st, r, kit) }
     }
 }
 
@@ -262,88 +275,220 @@ private const val PAGE_GONE = 0.002f
 internal const val LOOP_STEP_MAX = 1f / 30f
 
 /**
+ * What every animation's row on a group's page draws and moves with, made once per page (and design), not per row: sizes,
+ * colours, the paints its words are drawn with, the motion of a press, of taking the accent and of new words, and the
+ * page's coroutine scope the rows' animations run on.
+ */
+private class RowKit(
+    val unit: Float, val pad: Float, val rowH: Float, val glyph: Float, val title: LinePaint, val value: LinePaint,
+    val label: Color, val detail: Color, val accent: Color, val chipFill: Color, val separator: Color, val pressFill: Color,
+    val pressIn: androidx.compose.animation.core.AnimationSpec<Float>, val pressOut: androidx.compose.animation.core.AnimationSpec<Float>,
+    val inkSpec: androidx.compose.animation.core.AnimationSpec<Float>, val rollSpec: androidx.compose.animation.core.AnimationSpec<Float>,
+    val scope: kotlinx.coroutines.CoroutineScope,
+)
+
+@Composable
+private fun rememberRowKit(): RowKit {
+    val look = LocalLook.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val resolver = androidx.compose.ui.platform.LocalFontFamilyResolver.current
+    val scope = rememberCoroutineScope()
+    return remember(look.version, look, density, resolver, scope) {
+        val u = look.unit
+        val label = look.color(SettingsTokens.ROW_LABEL)
+        val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
+        val title = LinePaints.of(look.text(SettingsTokens.ROW_TITLE, label), density, resolver)
+        val value = LinePaints.of(look.text(SettingsTokens.ROW_DETAIL, detail), density, resolver)
+        val glyph = 28f * u
+        val rowH = maxOf(look.pt(SettingsTokens.ROW_HEIGHT), glyph + 16f * u, title.line.first + 16f * u, value.line.first + 16f * u)
+        RowKit(u, look.pt(SettingsTokens.ROW_PADDING), rowH, glyph, title, value, label, detail, look.color(SettingsTokens.ACCENT),
+            look.color(SettingsTokens.CHIP_FILL), look.color(SettingsTokens.ROW_SEPARATOR), Color(Appearance.pressFill),
+            look.motion(MotionTokens.PRESS_IN), look.motion(MotionTokens.PRESS_OUT), look.motion(MotionTokens.CC_TOGGLE),
+            look.motion(MotionTokens.APPEAR), scope)
+    }
+}
+
+/** A row's own moving parts, each made when it first moves (most rows are never pressed, changed or given new words). */
+@Stable
+private class RowMotion(changed: Boolean, words: String) {
+    var press by mutableStateOf<Animatable<Float, androidx.compose.animation.core.AnimationVector1D>?>(null)
+    var ink by mutableStateOf<Animatable<Float, androidx.compose.animation.core.AnimationVector1D>?>(null)
+    var roll by mutableStateOf<Animatable<Float, androidx.compose.animation.core.AnimationVector1D>?>(null)
+    var now by mutableStateOf(words)
+    var was by mutableStateOf<String?>(null)
+    // Plain: read only where the states above already make the row draw again.
+    var inkTo = changed
+    var lastOpen = false
+    var building = false
+    var unwarm: kotlinx.coroutines.Job? = null
+    var titleFor = Float.NaN
+    var titleShown = ""
+}
+
+/**
  * One animation: its curve drawn small, its name, its value in words (in the accent once changed); tapped, its editor opens
- * in place under it (one at a time) and the picture plays it.
+ * in place under it (one at a time) and the picture plays it. Drawn whole by one node in a layer of its own (a dozen small
+ * composables a row took a group's page of 24 rows ~80 ms to build on the S24's debug build); its words rolling, its
+ * accent and its press are animations made when first needed.
  */
 @Composable
-private fun RoleRow(st: Studio, role: MotionRole) {
-    val look = LocalLook.current
+private fun RoleRow(st: Studio, role: MotionRole, kit: RowKit) {
     val draft = LocalDraft.current
     val key = role.key
     // Read through derived states: every step of a slider changes the draft, and only the row whose value it changed should
     // compose again (every row of the page did, each step).
-    val v = look.version
+    val v = LocalLook.current.version
     val raw = remember(draft, key, v) { androidx.compose.runtime.derivedStateOf { draft.motionRaw(draft.motionId(), key) } }
-    val changedState = remember(draft, key, v) { androidx.compose.runtime.derivedStateOf { draft.motionChanged(draft.motionId(), key) } }
-    val changed by changedState
+    val words by remember(raw) { androidx.compose.runtime.derivedStateOf { valueText(key, raw.value) } }
+    val changed by remember(draft, key, v) { androidx.compose.runtime.derivedStateOf { draft.motionChanged(draft.motionId(), key) } }
     val glyph = remember(draft, key, v) {
         androidx.compose.runtime.derivedStateOf { if (key in MotionTokens.CURVES) draft.motionCurve(draft.motionId(), CurveKey(key)) else null }
     }
     val open by remember(st, key) { androidx.compose.runtime.derivedStateOf { st.motionRole == key } }
     val counter = LocalRowCounter.current
     val first = remember { counter == null || counter.n++ == 0 }
-    var pressed by remember { mutableStateOf(false) }
+    val m = remember { RowMotion(changed, words) }
     // Its editor is built when tapped, in the frame before it opens (built in its opening's first frame, it cost that frame
     // and the opening a jump); the row stays lit meanwhile. Kept a little after it closes, for a quick change of mind.
     var warm by remember { mutableStateOf(false) }
-    var opening by remember { mutableStateOf(false) }
-    val down = pressed || opening
-    val press by animateFloatAsState(if (down) 1f else 0f, look.motion(if (down) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
-    // Changed, its value and curve take the accent over a moment (and lose it the same way on Reset or Discard), in drawing.
-    val ink = animateFloatAsState(if (changed) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "changed")
-    val accent = look.color(SettingsTokens.ACCENT)
-    val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
-    val inkColor = remember(accent, detail) { androidx.compose.ui.graphics.ColorProducer { mix(detail, accent, ink.value.coerceIn(0f, 1f)) } }
-    val pad = look.dp(SettingsTokens.ROW_PADDING)
-    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
-    val pressFill = Color(Appearance.pressFill)
-    val scope = rememberCoroutineScope()
-    val toggle: () -> Unit = remember(st, key, scope) {
+    var everOpened by remember { mutableStateOf(false) }
+    val pressTo: (Boolean) -> Unit = remember(m, kit) {
+        { down ->
+            val a = m.press ?: Animatable(0f).also { m.press = it }
+            kit.scope.launch { a.animateTo(if (down) 1f else 0f, if (down) kit.pressIn else kit.pressOut) }
+        }
+    }
+    val toggle: () -> Unit = remember(st, key, m, kit) {
         {
             if (st.motionRole == key) st.motionRole = null
             else if (warm) st.motionRole = key
-            else {
+            else if (!m.building) {
+                everOpened = true
                 warm = true
-                opening = true
-                scope.launch {
+                m.building = true
+                pressTo(true)
+                kit.scope.launch {
                     try {
                         androidx.compose.runtime.withFrameNanos { }
                         androidx.compose.runtime.withFrameNanos { }
                         st.motionRole = key
-                    } finally { opening = false }
+                    } finally { m.building = false; pressTo(false) }
                 }
             }
         }
     }
-    LaunchedEffect(open, warm) { if (!open && warm && !opening) { kotlinx.coroutines.delay(1500); warm = false } }
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().heightIn(min = look.dp(SettingsTokens.ROW_HEIGHT))
-            .drawBehind {
-                if (press > 0.001f) drawRect(pressFill.copy(alpha = pressFill.alpha * press))
-                if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f))
-            }
-            .pointerInput(key) { rowTap({ pressed = it }, toggle) }
-            .padding(horizontal = pad, vertical = look.dp(8f * look.unit)),
-            verticalAlignment = Alignment.CenterVertically) {
-            RoleGlyph(key in MotionTokens.CURVES, { glyph.value }, { ink.value })
-            Spacer(Modifier.width(look.dp(12f * look.unit)))
-            BasicText(role.title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Spacer(Modifier.width(look.dp(8f * look.unit)))
-            RoleValue(st, key, raw, look.text(SettingsTokens.ROW_DETAIL, detail), inkColor)
+    // What changed since the last composition starts moving: the accent, new words (at once under a dragged finger), and
+    // the editor let go of a while after it closed. (Read here, in the body: read only inside the effect, a change was not
+    // seen and the row kept its old words.)
+    val ch = changed
+    val w = words
+    val isOpen = open
+    androidx.compose.runtime.SideEffect {
+        if (ch != m.inkTo) {
+            m.inkTo = ch
+            val a = m.ink ?: Animatable(if (ch) 0f else 1f).also { m.ink = it }
+            kit.scope.launch { a.animateTo(if (ch) 1f else 0f, kit.inkSpec) }
         }
-        OpenReveal(open, warm) { RoleEditor(st, role) }
+        if (w != m.now) {
+            if (st.motionLive) {
+                m.was = null
+                m.now = w
+                m.roll?.let { r -> kit.scope.launch { r.snapTo(1f) } }
+            } else {
+                m.was = m.now
+                m.now = w
+                val r = m.roll ?: Animatable(1f).also { m.roll = it }
+                kit.scope.launch {
+                    r.snapTo(0f)
+                    r.animateTo(1f, kit.rollSpec)
+                    m.was = null
+                }
+            }
+        }
+        if (isOpen != m.lastOpen) {
+            m.lastOpen = isOpen
+            m.unwarm?.cancel()
+            if (!isOpen) m.unwarm = kit.scope.launch { kotlinx.coroutines.delay(1500); if (st.motionRole != key && !m.building) warm = false }
+        }
     }
-}
-
-/**
- * An animation's value in its row, in a composable of its own: a slider's every step changes it, and only this composes
- * again (the whole row did).
- */
-@Composable
-private fun RoleValue(st: Studio, key: String, raw: androidx.compose.runtime.State<Value?>, style: androidx.compose.ui.text.TextStyle,
-                      ink: androidx.compose.ui.graphics.ColorProducer) {
-    Rolling(valueText(key, raw.value), style, Modifier, color = ink, instant = st.motionLive)
+    val rowH = with(androidx.compose.ui.platform.LocalDensity.current) { kit.rowH.toDp() }
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(rowH)
+            .semantics(mergeDescendants = true) {
+                contentDescription = role.title + ", " + m.now
+                onClick { toggle(); true }
+            }
+            .pointerInput(key, kit) { rowTap({ d -> if (!m.building) pressTo(d) }, toggle) }
+            .graphicsLayer()
+            .drawWithCache {
+                val u = kit.unit
+                val side = kit.glyph
+                val gx = kit.pad
+                val gy = (size.height - side) / 2f
+                val ins = side * 0.2f
+                val gw = side - ins * 2f
+                val gh = side - ins * 2f
+                val c = glyph.value
+                val path = androidx.compose.ui.graphics.Path()
+                if (c != null) {
+                    val d = CurveFit.settleTime(c, 0.01f).coerceAtLeast(0.05f)
+                    for (i in 0..24) {
+                        val y = CurveFit.at(c, d * i / 24f).coerceIn(-0.2f, 1.35f)
+                        val x = gx + ins + gw * i / 24f
+                        val yy = gy + ins + gh - y * gh * 0.74f
+                        if (i == 0) path.moveTo(x, yy) else path.lineTo(x, yy)
+                    }
+                }
+                val stroke = Stroke(1.6f * u, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                val rise = 14f * u
+                onDrawBehind {
+                    val press = m.press?.value ?: 0f
+                    if (press > 0.001f) drawRect(kit.pressFill.copy(alpha = kit.pressFill.alpha * press))
+                    if (!first) drawRect(kit.separator, Offset(kit.pad, 0f), Size(size.width - kit.pad, 1f))
+                    val ink = mix(kit.detail, kit.accent, (m.ink?.value ?: if (m.inkTo) 1f else 0f).coerceIn(0f, 1f))
+                    // The curve drawn small on its tile (a number: three rising bars).
+                    drawRoundRect(kit.chipFill, Offset(gx, gy), Size(side, side), CornerRadius(side * 0.26f))
+                    if (c != null) drawPath(path, ink, style = stroke)
+                    else for (i in 0..2) {
+                        val bw = gw / 5f
+                        val bh = gh * (0.35f + 0.3f * i)
+                        drawRoundRect(ink, Offset(gx + ins + i * bw * 2f, gy + ins + gh - bh), Size(bw, bh), CornerRadius(bw / 2f))
+                    }
+                    drawIntoCanvas { cv ->
+                        val nc = cv.nativeCanvas
+                        // The value, against the right edge, rolling to new words.
+                        val vp = kit.value.paint
+                        val right = size.width - kit.pad
+                        val vBase = (size.height - kit.value.line.first) / 2f + kit.value.line.second
+                        val k = m.roll?.value?.coerceIn(0f, 1f) ?: 1f
+                        val old = m.was
+                        val now = m.now
+                        val wNow = vp.measureText(now)
+                        val wOld = if (old != null) vp.measureText(old) else 0f
+                        fun words(t: String, w: Float, a: Float, dy: Float) {
+                            if (a <= 0.003f) return
+                            vp.color = ink.copy(alpha = ink.alpha * a).toArgb()
+                            nc.drawText(t, right - w, vBase + dy, vp)
+                        }
+                        if (old != null) {
+                            words(old, wOld, 1f - k, -rise * k)
+                            words(now, wNow, k, rise * (1f - k))
+                        } else words(now, wNow, 1f, 0f)
+                        // The name, in what the value leaves (cut with an ellipsis if it must be).
+                        val tp = kit.title.paint
+                        val left = gx + side + 12f * u
+                        val avail = right - maxOf(wNow, wOld) - 8f * u - left
+                        if (avail != m.titleFor) {
+                            m.titleFor = avail
+                            m.titleShown = android.text.TextUtils.ellipsize(role.title, tp, avail.coerceAtLeast(0f), android.text.TextUtils.TruncateAt.END).toString()
+                        }
+                        tp.color = kit.label.toArgb()
+                        nc.drawText(m.titleShown, left, (size.height - kit.title.line.first) / 2f + kit.title.line.second, tp)
+                    }
+                }
+            })
+        if (everOpened) OpenReveal(isOpen, warm) { RoleEditor(st, role) }
+    }
 }
 
 /**
@@ -364,46 +509,6 @@ private fun OpenReveal(visible: Boolean, warm: Boolean, content: @Composable () 
         .graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }) { content() }
 }
 
-/**
- * An animation's curve drawn small on a tile (a number: three rising bars); in the accent once you changed it ([ink], 0..1).
- * Both are read in drawing: a change draws the tile again and composes nothing.
- */
-@Composable
-private fun RoleGlyph(isCurve: Boolean, curve: () -> Curve?, ink: () -> Float) {
-    val look = LocalLook.current
-    val side = 28f * look.unit
-    val fill = look.color(SettingsTokens.CHIP_FILL)
-    val accent = look.color(SettingsTokens.ACCENT)
-    val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
-    val unit = look.unit
-    Box(Modifier.size(look.dp(side)).drawWithCache {
-        val path = androidx.compose.ui.graphics.Path()
-        val ins = size.width * 0.2f
-        val w = size.width - ins * 2f
-        val h = size.height - ins * 2f
-        val curve = if (isCurve) curve() else null
-        if (curve != null) {
-            val d = CurveFit.settleTime(curve, 0.01f).coerceAtLeast(0.05f)
-            for (i in 0..24) {
-                val v = CurveFit.at(curve, d * i / 24f).coerceIn(-0.2f, 1.35f)
-                val x = ins + w * i / 24f
-                val y = ins + h - v * h * 0.74f
-                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-        }
-        onDrawBehind {
-            val c = mix(detail, accent, ink().coerceIn(0f, 1f))
-            drawRoundRect(fill, cornerRadius = CornerRadius(size.width * 0.26f))
-            if (curve != null) drawPath(path, c, style = Stroke(1.6f * unit, cap = androidx.compose.ui.graphics.StrokeCap.Round))
-            else for (i in 0..2) {
-                val bw = w / 5f
-                val bh = h * (0.35f + 0.3f * i)
-                drawRoundRect(c, Offset(ins + i * bw * 2f, ins + h - bh), Size(bw, bh), CornerRadius(bw / 2f))
-            }
-        }
-    })
-}
-
 /** An animation's value in words: a spring's duration and bounce, a curve's length, a number in its unit. */
 private fun valueText(key: String, v: Value?): String = when (v) {
     is Value.CurveV -> when (val c = v.curve) {
@@ -417,7 +522,20 @@ private fun valueText(key: String, v: Value?): String = when (v) {
     else -> ""
 }
 
-private fun fmt(f: String, v: Float) = String.format(java.util.Locale.ROOT, f, v)
+/**
+ * [v] as [f] says ("%.2f s": two decimals, then " s"), without `String.format` (slow where code runs interpreted, as in the
+ * debug build: every step of a slider formatted its values).
+ */
+private fun fmt(f: String, v: Float): String {
+    if (f.length < 4 || f[0] != '%' || f[1] != '.' || f[3] != 'f' || f[2] !in '0'..'9') return String.format(java.util.Locale.ROOT, f, v)
+    val digits = f[2] - '0'
+    var p = 1L
+    repeat(digits) { p *= 10 }
+    val n = kotlin.math.round(abs(v.toDouble()) * p).toLong()
+    val sign = if (v < 0f && n != 0L) "-" else ""
+    val whole = n / p
+    return (if (digits == 0) "$sign$whole" else "$sign$whole." + (n % p).toString().padStart(digits, '0')) + f.substring(4)
+}
 private fun seconds(s: Float) = if (s < 1f) fmt("%.2f s", s) else fmt("%.1f s", s)
 private fun percent(b: Float) = "${(b * 100).roundToInt()} %"
 private fun millis(ms: Float) = if (ms < 1000f) "${ms.roundToInt()} ms" else seconds(ms / 1000f)
@@ -466,14 +584,21 @@ private fun sourceLine(draft: Draft, preset: String, key: String): String = when
     }
 }
 
-/** An animation's editor, under its row: a curve's (spring or bezier) or a number's. */
+/**
+ * An animation's editor, under its row: a curve's (spring or bezier) or a number's. The value is handed down as state and
+ * read where it shows (drawing, a few small composables): a slider's every step composed the whole editor again.
+ */
 @Composable
 private fun RoleEditor(st: Studio, role: MotionRole) {
     val draft = LocalDraft.current
-    val preset = draft.motionId()
-    when (val v = draft.motionRaw(preset, role.key)) {
-        is Value.CurveV -> CurveEditor(st, draft, preset, role, v.curve)
-        is Value.Number -> NumberEditor(st, draft, preset, role, v)
+    val look = LocalLook.current
+    val key = role.key
+    val raw = remember(draft, key, look.version) { androidx.compose.runtime.derivedStateOf { draft.motionRaw(draft.motionId(), key) } }
+    // Only its kind decides what is composed.
+    val kind by remember(raw) { androidx.compose.runtime.derivedStateOf { when (raw.value) { is Value.CurveV -> 1; is Value.Number -> 2; else -> 0 } } }
+    when (kind) {
+        1 -> CurveEditor(st, draft, role, raw)
+        2 -> NumberEditor(st, draft, role, raw)
         else -> Unit
     }
 }
@@ -492,32 +617,66 @@ private val KINDS = listOf("Spring", "Curve")
 private val SPRING_SHAPE_NAMES = SPRING_SHAPES.map { it.first }
 private val EASE_SHAPE_NAMES = EASE_SHAPES.map { it.first }
 
+/** What a curve makes, in words (and the preset's own pace, when Fine-tune changed it). */
+private fun curveInfo(c: Curve, speed: Float): String {
+    val past = when (c) {
+        is Curve.Spring -> MotionAdjust.overshoot(c.damping).toFloat()
+        is Curve.Ease -> ((0..40).maxOf { CurveFit.at(c, c.ms / 1000f * it / 40f) } - 1f).coerceAtLeast(0f)
+    }
+    return "Settles in " + seconds(CurveFit.settleTime(c)) + (if (past >= 0.005f) " · goes ${(past * 100).roundToInt()} % past" else "") +
+        (if (abs(speed - 1f) > 0.001f) " · plays at ${(speed * 100).roundToInt()} % speed" else "")
+}
+
 /**
  * A curve's editor (docs/PLAN_MOTION.md): what it is and where its value comes from, Spring | Curve (switching fits the one
  * to the other), the graph (its handle or handles dragged), a spring's duration and bounce or a curve's length, what that
  * makes ("settles in, goes past"), shapes to start from, and Slow (the sample at a quarter speed), Reset, Done. Everything
- * waits for Apply and plays on the picture at once.
+ * waits for Apply and plays on the picture at once. The curve ([raw]) is read where it shows; what is composed changes only
+ * with its kind (a switch folds one kind's slider and shapes away as the other's open).
  */
 @Composable
-private fun CurveEditor(st: Studio, draft: Draft, preset: String, role: MotionRole, curve: Curve) {
+private fun CurveEditor(st: Studio, draft: Draft, role: MotionRole, raw: androidx.compose.runtime.State<Value?>) {
     val look = LocalLook.current
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val key = role.key
-    val own = (draft.motionOwn(preset, key) as? Value.CurveV)?.curve
     val scope = rememberCoroutineScope()
     var fitting by remember { mutableStateOf(false) }
+    // The last of each kind, shown by the kind that folds away after a switch.
+    val lastSpring = remember { arrayOfNulls<Curve.Spring>(1) }
+    val lastEase = remember { arrayOfNulls<Curve.Ease>(1) }
+    val curve: () -> Curve = remember(raw) {
+        {
+            when (val c = (raw.value as? Value.CurveV)?.curve) {
+                is Curve.Spring -> c.also { lastSpring[0] = it }
+                is Curve.Ease -> c.also { lastEase[0] = it }
+                null -> lastSpring[0] ?: lastEase[0] ?: Motion.role(MotionTokens.APPEAR)
+            }
+        }
+    }
+    val spring: () -> Curve.Spring? = remember(curve) { { (curve() as? Curve.Spring) ?: lastSpring[0] } }
+    val ease: () -> Curve.Ease? = remember(curve) { { (curve() as? Curve.Ease) ?: lastEase[0] } }
+    val isSpring by remember(curve) { androidx.compose.runtime.derivedStateOf { curve() is Curve.Spring } }
+    // As the preset comes (for Reset and the graph's faint curve); the preset's speed (the info, the graph's dot).
+    val own = remember(draft, key, look.version) { (draft.motionOwn(draft.motionId(), key) as? Value.CurveV)?.curve }
+    val ownShown = remember(own, curve) { androidx.compose.runtime.derivedStateOf { own?.takeIf { it != curve() } } }
+    val speed: () -> Float = remember(draft) { { draft.motionSpeed(draft.motionId()) } }
     // Read when used (a lambda kept by a control may be from an earlier composition).
     fun current(): Curve? = (draft.motionRaw(draft.motionId(), key) as? Value.CurveV)?.curve
     fun set(c: Curve) = draft.chooseMotionValue(draft.motionId(), key, Value.CurveV(c))
     val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
+    // A drag: the graph follows at once (it morphs only into a shape, Reset or the other kind) and values change at once.
+    var sliding by remember { mutableStateOf(false) }
+    val slide: (Boolean) -> Unit = remember(st) { { sliding = it; st.motionLive = it } }
+    val live: () -> Boolean = remember { { sliding } }
+    val instant: () -> Boolean = remember(st) { { st.motionLive } }
     Column(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = look.dp(10f * look.unit))) {
         BasicText(role.description, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_LABEL)))
-        Rolling(sourceLine(draft, preset, key), look.text(SettingsTokens.ROW_DETAIL, detail), Modifier)
+        SourceLine(draft, key)
         Spacer(Modifier.height(look.dp(10f * look.unit)))
         // Switched back without touching the other kind: exactly what it was (fitted back, it read the same and counted as a
         // change).
         val switched = remember { arrayOfNulls<Curve>(2) }
-        ChoiceChips(KINDS, if (curve is Curve.Spring) 0 else 1) { i ->
+        ChoiceChips(KINDS, if (isSpring) 0 else 1) { i ->
             val now = current() ?: return@ChoiceChips
             if ((i == 0) == (now is Curve.Spring) || fitting) return@ChoiceChips
             val before = switched[0]
@@ -537,61 +696,50 @@ private fun CurveEditor(st: Studio, draft: Draft, preset: String, role: MotionRo
             }
         }
         Spacer(Modifier.height(look.dp(8f * look.unit)))
-        // While a slider is dragged the graph follows it at once (it morphs only into a shape, Reset or the other kind).
-        var sliding by remember { mutableStateOf(false) }
-        val slide: (Boolean) -> Unit = remember(st) { { sliding = it; st.motionLive = it } }
-        val live: () -> Boolean = remember { { sliding } }
-        CurveGraph(st, key, curve, own?.takeIf { it != curve }, draft.motionSpeed(preset), live) { set(it) }
-        // Spring | Curve switched: the duration's slider stays (its knob glides to the other kind's place), the bounce's and
-        // the shapes of the kind that goes fold away as the other's open (the last spring shown while it folds).
-        val lastSpring = remember { arrayOfNulls<Curve.Spring>(1) }
-        val lastEase = remember { arrayOfNulls<Curve.Ease>(1) }
-        if (curve is Curve.Spring) lastSpring[0] = curve
-        if (curve is Curve.Ease) lastEase[0] = curve
-        val durText = when (curve) { is Curve.Spring -> seconds(curve.response); is Curve.Ease -> millis(curve.ms) }
-        val durPos = when (curve) {
-            is Curve.Spring -> logPos(curve.response, SPRING_MIN, SPRING_MAX)
-            is Curve.Ease -> logPos(curve.ms, EASE_MIN, EASE_MAX)
-        }
-        EditorSlider("Duration", durText, durPos, slide) { t ->
+        CurveGraph(st, key, curve, ownShown, speed, live) { set(it) }
+        // The duration's slider stays through a switch (its knob glides to the other kind's place).
+        EditorSlider("Duration",
+            { when (val c = curve()) { is Curve.Spring -> seconds(c.response); is Curve.Ease -> millis(c.ms) } },
+            { when (val c = curve()) { is Curve.Spring -> logPos(c.response, SPRING_MIN, SPRING_MAX); is Curve.Ease -> logPos(c.ms, EASE_MIN, EASE_MAX) } },
+            slide) { t ->
             when (val now = current()) {
                 is Curve.Spring -> set(Curve.Spring(snapTo(logVal(t, SPRING_MIN, SPRING_MAX), 0.01f).coerceIn(SPRING_MIN, SPRING_MAX), now.damping))
                 is Curve.Ease -> set(now.copy(ms = snapTo(logVal(t, EASE_MIN, EASE_MAX), 10f).coerceIn(EASE_MIN, EASE_MAX)))
                 null -> Unit
             }
         }
-        OpenReveal(curve is Curve.Spring, false) {
-            val s = (curve as? Curve.Spring) ?: lastSpring[0] ?: return@OpenReveal
-            val b = CurveFit.bounceOf(s.damping)
-            EditorSlider("Bounce", if (abs(b) < 0.005f) "None" else percent(b), (b - BOUNCE_MIN) / (BOUNCE_MAX - BOUNCE_MIN), slide) { t ->
+        OpenReveal(isSpring, false) {
+            fun bounce() = spring()?.let { CurveFit.bounceOf(it.damping) } ?: 0f
+            EditorSlider("Bounce", { bounce().let { b -> if (abs(b) < 0.005f) "None" else percent(b) } },
+                { (bounce() - BOUNCE_MIN) / (BOUNCE_MAX - BOUNCE_MIN) }, slide) { t ->
                 val now = current() as? Curve.Spring ?: return@EditorSlider
                 set(Curve.Spring(now.response, CurveFit.dampingOf(snapTo(BOUNCE_MIN + t * (BOUNCE_MAX - BOUNCE_MIN), 0.01f).coerceIn(BOUNCE_MIN, BOUNCE_MAX))))
             }
         }
-        // What it makes, in words (and the preset's own pace, when Fine-tune changed it).
-        val past = when (curve) {
-            is Curve.Spring -> MotionAdjust.overshoot(curve.damping).toFloat()
-            is Curve.Ease -> ((0..40).maxOf { CurveFit.at(curve, curve.ms / 1000f * it / 40f) } - 1f).coerceAtLeast(0f)
-        }
-        val speed = draft.motionSpeed(preset)
-        val info = "Settles in " + seconds(CurveFit.settleTime(curve)) + (if (past >= 0.005f) " · goes ${(past * 100).roundToInt()} % past" else "") +
-            (if (abs(speed - 1f) > 0.001f) " · plays at ${(speed * 100).roundToInt()} % speed" else "")
         Spacer(Modifier.height(look.dp(4f * look.unit)))
-        Rolling(info, look.text(SettingsTokens.ROW_DETAIL, detail), Modifier, instant = st.motionLive)
+        DrawnLine({ curveInfo(curve(), speed()) }, look.text(SettingsTokens.ROW_DETAIL, detail), Modifier.fillMaxWidth(), instant = instant)
         Spacer(Modifier.height(look.dp(10f * look.unit)))
         // Shapes to start from (each keeps the duration); the other kind's fold away on a switch.
-        OpenReveal(curve is Curve.Spring, false) {
-            val s = (curve as? Curve.Spring) ?: lastSpring[0] ?: return@OpenReveal
-            val chosen = SPRING_SHAPES.indexOfFirst { abs(CurveFit.bounceOf(s.damping) - it.second) < 0.005f }
-            ChoiceChips(SPRING_SHAPE_NAMES, if (curve is Curve.Spring) chosen else -1) { i ->
+        OpenReveal(isSpring, false) {
+            val chosen by remember(spring) {
+                androidx.compose.runtime.derivedStateOf {
+                    if (curve() !is Curve.Spring) -1
+                    else spring()?.let { s -> SPRING_SHAPES.indexOfFirst { abs(CurveFit.bounceOf(s.damping) - it.second) < 0.005f } } ?: -1
+                }
+            }
+            ChoiceChips(SPRING_SHAPE_NAMES, chosen) { i ->
                 val now = current() as? Curve.Spring ?: return@ChoiceChips
                 set(Curve.Spring(now.response, CurveFit.dampingOf(SPRING_SHAPES[i].second)))
             }
         }
-        OpenReveal(curve is Curve.Ease, false) {
-            val e = (curve as? Curve.Ease) ?: lastEase[0] ?: return@OpenReveal
-            val chosen = EASE_SHAPES.indexOfFirst { (_, s) -> abs(e.x1 - s[0]) < 0.005f && abs(e.y1 - s[1]) < 0.005f && abs(e.x2 - s[2]) < 0.005f && abs(e.y2 - s[3]) < 0.005f }
-            ChoiceChips(EASE_SHAPE_NAMES, if (curve is Curve.Ease) chosen else -1) { i ->
+        OpenReveal(!isSpring, false) {
+            val chosen by remember(ease) {
+                androidx.compose.runtime.derivedStateOf {
+                    if (curve() !is Curve.Ease) -1
+                    else ease()?.let { e -> EASE_SHAPES.indexOfFirst { (_, s) -> abs(e.x1 - s[0]) < 0.005f && abs(e.y1 - s[1]) < 0.005f && abs(e.x2 - s[2]) < 0.005f && abs(e.y2 - s[3]) < 0.005f } } ?: -1
+                }
+            }
+            ChoiceChips(EASE_SHAPE_NAMES, chosen) { i ->
                 val now = current() as? Curve.Ease ?: return@ChoiceChips
                 val s = EASE_SHAPES[i].second
                 set(Curve.Ease(s[0], s[1], s[2], s[3], now.ms))
@@ -601,17 +749,26 @@ private fun CurveEditor(st: Studio, draft: Draft, preset: String, role: MotionRo
     }
 }
 
-/** A number's editor: what it is, where its value comes from, its slider, Reset and Done. */
+/** Where an animation's value comes from, in plain words; composed again only when that changes (not at a slider's steps). */
 @Composable
-private fun NumberEditor(st: Studio, draft: Draft, preset: String, role: MotionRole, v: Value.Number) {
+private fun SourceLine(draft: Draft, key: String) {
+    val look = LocalLook.current
+    val line by remember(draft, key, look.version) { androidx.compose.runtime.derivedStateOf { sourceLine(draft, draft.motionId(), key) } }
+    Rolling(line, look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier)
+}
+
+/** A number's editor: what it is, where its value comes from, its slider, Reset and Done; the value read where it shows. */
+@Composable
+private fun NumberEditor(st: Studio, draft: Draft, role: MotionRole, raw: androidx.compose.runtime.State<Value?>) {
     val look = LocalLook.current
     val pad = look.dp(SettingsTokens.ROW_PADDING)
-    val spec = NUMBERS[role.key] ?: NumberSpec(v.v * 0.5f, v.v * 1.5f + 1f, 0.01f) { fmt("%.2f", it) }
-    val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
+    val first = remember { (raw.value as? Value.Number)?.v ?: 1f }
+    val spec = NUMBERS[role.key] ?: remember { NumberSpec(first * 0.5f, first * 1.5f + 1f, 0.01f) { fmt("%.2f", it) } }
+    val value: () -> Float = remember(raw) { { (raw.value as? Value.Number)?.v ?: first } }
     Column(Modifier.fillMaxWidth().padding(start = pad, end = pad, bottom = look.dp(10f * look.unit))) {
         BasicText(role.description, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_LABEL)))
-        Rolling(sourceLine(draft, preset, role.key), look.text(SettingsTokens.ROW_DETAIL, detail), Modifier)
-        EditorSlider(role.title, spec.text(v.v), (v.v - spec.min) / (spec.max - spec.min), { st.motionLive = it }) { t ->
+        SourceLine(draft, role.key)
+        EditorSlider(role.title, { spec.text(value()) }, { (value() - spec.min) / (spec.max - spec.min) }, { st.motionLive = it }) { t ->
             val now = draft.motionRaw(draft.motionId(), role.key) as? Value.Number ?: return@EditorSlider
             draft.chooseMotionValue(draft.motionId(), role.key, Value.Number(snapTo(spec.min + t * (spec.max - spec.min), spec.step).coerceIn(spec.min, spec.max), now.unit))
         }
@@ -623,12 +780,14 @@ private fun NumberEditor(st: Studio, draft: Draft, preset: String, role: MotionR
 @Composable
 private fun EditorButtons(st: Studio, draft: Draft, key: String) {
     val look = LocalLook.current
+    // (Derived: composed again when Reset comes or goes, not at every step of a slider.)
+    val changed by remember(draft, key, look.version) { androidx.compose.runtime.derivedStateOf { draft.motionChanged(draft.motionId(), key) } }
     Spacer(Modifier.height(look.dp(4f * look.unit)))
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         EditorButton(if (st.sampleSlow) "Full speed" else "Slow", true) { st.sampleSlow = !st.sampleSlow }
         Spacer(Modifier.weight(1f))
         // Reset keeps its place and fades in and out with the change (nothing beside it moves).
-        EditorButton("Reset", draft.motionChanged(draft.motionId(), key)) {
+        EditorButton("Reset", changed) {
             val p = draft.motionId()
             draft.motionOwn(p, key)?.let { draft.chooseMotionValue(p, key, it) }
         }
@@ -654,17 +813,23 @@ private fun EditorButton(text: String, shown: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** A value set with a slider inside an editor: its name and the value now above, the slider ([position] 0..1) below. */
+/**
+ * A value set with a slider inside an editor: its name and the value now above (drawn, not laid out), the slider below;
+ * [value] and [position] (0..1) are read in drawing.
+ */
 @Composable
-private fun EditorSlider(title: String, value: String, position: Float, onDrag: ((Boolean) -> Unit)? = null, onChange: (Float) -> Unit) {
+private fun EditorSlider(title: String, value: () -> String, position: () -> Float, onDrag: ((Boolean) -> Unit)? = null, onChange: (Float) -> Unit) {
     val look = LocalLook.current
+    val st = LocalStudio.current
+    val instant: () -> Boolean = remember(st) { { st?.motionLive == true } }
     Column(Modifier.fillMaxWidth().padding(top = look.dp(6f * look.unit))) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
-            Rolling(value, look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier,
-                instant = LocalStudio.current?.motionLive == true)
+        // The value drawn over the row's right end: its width changing never lays the name out again.
+        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
+            DrawnLine(value, look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier.fillMaxWidth(),
+                end = true, instant = instant)
         }
-        SettingsSlider(position.coerceIn(0f, 1f), onDrag, onChange)
+        SettingsSlider({ position().coerceIn(0f, 1f) }, onDrag, onChange)
     }
 }
 
@@ -677,7 +842,8 @@ private fun EditorSlider(title: String, value: String, position: Float, onDrag: 
  * the other kind's, fading in as the last's fade out); while a handle or a slider is dragged it follows at once ([live]).
  */
 @Composable
-private fun CurveGraph(st: Studio, key: String, curve: Curve, own: Curve?, speed: Float, live: () -> Boolean, onChange: (Curve) -> Unit) {
+private fun CurveGraph(st: Studio, key: String, curve: () -> Curve, own: androidx.compose.runtime.State<Curve?>, speed: () -> Float,
+                       live: () -> Boolean, onChange: (Curve) -> Unit) {
     val look = LocalLook.current
     val fill = look.color(SettingsTokens.CHIP_FILL)
     val accent = look.color(SettingsTokens.ACCENT)
@@ -685,19 +851,22 @@ private fun CurveGraph(st: Studio, key: String, curve: Curve, own: Curve?, speed
     val knob = look.color(SettingsTokens.TOGGLE_KNOB)
     val unit = look.unit
     val change = androidx.compose.runtime.rememberUpdatedState(onChange)
-    val now = androidx.compose.runtime.rememberUpdatedState(curve)
+    // The curve as it is (read in drawing, by the gestures and by the follower below: nothing here composes at a step).
+    val now = remember(curve) { androidx.compose.runtime.derivedStateOf { curve() } }
     var held by remember { mutableStateOf<Float?>(null) }
     // Long enough for the curve to settle, the preset's own behind it, and the handle (a spring's peak can come later).
     fun span(c: Curve) = maxOf(CurveFit.settleTime(c, 0.005f), if (c is Curve.Spring) CurveFit.handleOf(c).first * 1.06f else 0f)
-    val want = maxOf(span(curve), own?.let { span(it) } ?: 0f, 0.25f) * 1.12f
-    val axis = animateFloatAsState(held ?: want, look.motion(MotionTokens.CC_LEVEL), label = "axis")
+    fun want() = maxOf(span(now.value), own.value?.let { span(it) } ?: 0f, 0.25f) * 1.12f
+    val axisSpec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.CC_LEVEL))
+    val axis = remember { Animatable(want()) }
+    LaunchedEffect(Unit) { androidx.compose.runtime.snapshotFlow { held ?: want() }.collectLatest { axis.animateTo(it, axisSpec.value) } }
     // What shows: [from] (a function of time: the last curve, or the blend that showed when this one came) into [target];
     // the handles from where they showed. Set when a new curve comes (morph back to 0), read in drawing.
     val morph = remember { Animatable(1f) }
     val levelSpec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.CC_LEVEL))
-    val target = remember { arrayOf(curve) }
-    val from = remember { arrayOf<(Float) -> Float>({ t -> CurveFit.at(curve, t) }) }
-    val fromHandles = remember { arrayOf(Handles.of(curve)) }
+    val target = remember { arrayOf(now.value) }
+    val from = remember { arrayOf<(Float) -> Float>({ t -> CurveFit.at(target[0], t) }) }
+    val fromHandles = remember { arrayOf(Handles.of(now.value)) }
     LaunchedEffect(Unit) { androidx.compose.runtime.snapshotFlow { now.value }.collectLatest { curve ->
         val last = target[0]
         if (last == curve) return@collectLatest
@@ -721,8 +890,9 @@ private fun CurveGraph(st: Studio, key: String, curve: Curve, own: Curve?, speed
     } }
     // The preset's own curve behind yours: faded in as you change it, out as you go back (drawn as it last was meanwhile).
     val lastOwn = remember { arrayOfNulls<Curve>(1) }
-    if (own != null) lastOwn[0] = own
-    val ownK = animateFloatAsState(if (own != null) 1f else 0f, look.motion(if (own != null) MotionTokens.APPEAR_FADE else MotionTokens.DISAPPEAR_FADE), label = "own")
+    val ownNow = own.value
+    if (ownNow != null) lastOwn[0] = ownNow
+    val ownK = animateFloatAsState(if (ownNow != null) 1f else 0f, look.motion(if (ownNow != null) MotionTokens.APPEAR_FADE else MotionTokens.DISAPPEAR_FADE), label = "own")
     val path = remember { androidx.compose.ui.graphics.Path() }
     val ownPath = remember { androidx.compose.ui.graphics.Path() }
     val dash = remember(unit) { androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(5f * unit, 5f * unit)) }
@@ -730,7 +900,7 @@ private fun CurveGraph(st: Studio, key: String, curve: Curve, own: Curve?, speed
     val padY = 14f * unit
     val yMin = -0.12f
     val yMax = 1.45f
-    Canvas(Modifier.fillMaxWidth().height(look.dp(160f * unit)).pointerInput(key) {
+    Canvas(Modifier.fillMaxWidth().height(look.dp(160f * unit)).graphicsLayer().pointerInput(key) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false)
             val c0 = now.value
@@ -823,7 +993,7 @@ private fun CurveGraph(st: Studio, key: String, curve: Curve, own: Curve?, speed
         val sm = st.sample
         val t = sm.t.floatValue
         if (sm.role == key && t >= 0f) {
-            val tr = (t * speed).coerceAtMost(ax)
+            val tr = (t * speed()).coerceAtMost(ax)
             val v = if (mk >= 1f) CurveFit.at(b, tr) else a(tr) + (CurveFit.at(b, tr) - a(tr)) * mk
             drawCircle(accent.copy(alpha = accent.alpha * sm.alpha.value), 5f * unit, Offset(xOf(tr), yOf(v)))
         }

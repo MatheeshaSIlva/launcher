@@ -387,6 +387,17 @@ copy it wholesale — port the working pieces cleanly. File map:
   follow it with `snapshotFlow` from `LaunchedEffect(Unit)`; a list made in composition (`listOf(...)` for chips) is a
   new one each time and the callee composes again; an `onPlaced` that reads coordinates places its node again in every
   frame anything above it moves (53 chips in a page's slide: 4-13 ms a frame): measure sizes instead.
+- **State read only inside a `SideEffect` (or an effect's lambda) is not followed by composition**: a row that compared its
+  words with the last ones there never composed again when they changed (it kept the old value). Read the state in the
+  composable's body, act on it in the effect.
+- **A fading layer is drawn through a buffer of its size** (Compose's default compositing with alpha below 1): two pages
+  fading in a push allocated and filled two page-sized buffers in its first frame (13 ms of the render thread on the S24).
+  `CompositingStrategy.ModulateAlpha` fades draw by draw (fine where nothing on the page overlaps much: no glass, no
+  pictures under text), but its translucent draws use pipelines of their own: warm them off screen (`MotionWarmUp`), or
+  the first use after an update compiles them inside a frame (142 ms).
+- **Many small composables per list row cost ~3 ms a row to build on the debug build** (Motion's rows: a dozen each).
+  Rows that only show, and are many, are one node that draws its parts (Android's text paint, `LinePaints`), with their
+  animations made when first needed (`RoleRow`).
 - **Build what a tap opens at the tap, and start its motion two frames later** (the row stays lit meanwhile): built in
   a slide's first frame, the slide began late with a jump; built while a finger rested on the row, a scroll starting
   there stuttered. And a new kind of drawing compiles its GPU pipeline inside its first frame after every update (the
@@ -565,6 +576,11 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - When the S24 is connected (USB or wireless adb, `DEVICE=<serial>`): animations are checked frame by frame with
   `tools/device.sh rec NAME [SECS]` … `recpull NAME [WAIT]` (screenrecord captures every composed frame, 120 fps; contact
   sheets and frame times land in `tools/shots/NAME/`; needs `pip install imageio-ffmpeg`). Frame logs give the numbers.
+- **A warm S24 caps its CPUs** (after an hour of tracing: processor 51 °C, both clusters at 2.0 GHz of 2.6 and 3.2):
+  timings drift by 2-3x within minutes. Compare builds interleaved, not an hour apart, and check `dumpsys thermalservice`
+  and `/sys/devices/system/cpu/cpu*/cpufreq/scaling_max_freq` before judging a number. CPU profiles of the debug build:
+  `simpleperf record --app dev.launcher.app -g -f 4000 --duration N -o /data/local/tmp/x.data` (`-p PID` is refused),
+  `simpleperf report-sample --show-callchain` for per-callee sums.
 - `dumpsys gfxinfo ... framestats` keeps only a window's last ~120 frames (one second at 120 Hz): reset just before a
   step and read it within a second; a longer window reads only its last second (sample several, or trace).
 - `tools/frame_glitch.py REC.mp4 X Y W H [THR] [OUTDIR]` finds 1-4 frame flickers in a region of a recording (how the dock's

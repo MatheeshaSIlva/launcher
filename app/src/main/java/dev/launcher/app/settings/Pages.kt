@@ -1058,7 +1058,9 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
             val m = android.graphics.Matrix()
         }
     }
-    Box(Modifier.fillMaxSize().semantics { contentDescription = "Your home screen" }.drawBehind {
+    // (A layer of its own: it draws again in every frame its demo or a sample moves, and drawn in its parent's list it
+    // re-recorded the whole screen's.)
+    Box(Modifier.fillMaxSize().semantics { contentDescription = "Your home screen" }.graphicsLayer().drawBehind {
         val p = st.p.value
         val c = crop.value
         // A long way from one part to another (the top to the bottom edge) pulls back a little on the way, as a camera
@@ -1316,6 +1318,13 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     })
 }
 
+/** How far (pt) a page's title slides as a page pushed over it takes the header. */
+private const val TITLE_SLIDE = 60f
+
+/** How far into a push the leaving title is gone, and from where the coming one shows (they barely overlap). */
+private const val TITLE_OUT = 0.45f
+private const val TITLE_IN = 0.35f
+
 /** The title (the app's, then the open page's) and the round back button, both moving with the page. */
 @Composable
 private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
@@ -1332,10 +1341,12 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
         })
         for (part in Part.entries) BasicText(part.title, style = style, modifier = Modifier.graphicsLayer {
             val p = if (st.open == part) st.p.value else 0f
-            // Motion's own name gives way to a group's as the group's page comes over it.
-            val under = if (part == Part.MOTION) 1f - st.motionPush.value.coerceIn(0f, 1f) else 1f
-            alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f) * under
+            // Motion's own name gives way to a group's as the group's page comes over it: it slides left and is gone before
+            // the group's has come in from the right (crossing at the same strength, the two read as one jumble halfway).
+            val k = if (part == Part.MOTION) st.motionPush.value.coerceIn(0f, 1f) else 0f
+            alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f) * (1f - k / TITLE_OUT).coerceIn(0f, 1f)
             translationY = (1f - p) * rise
+            translationX = -k * TITLE_SLIDE * g.unit
         })
         // The last group pushed keeps its title here (faded with the push): a group coming or going composes nothing, unless
         // it is another group (the header composed again at each push's start and pop's end: 2 missed refreshes, S24).
@@ -1344,8 +1355,8 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
             BasicText(grp.title, style = style, maxLines = 1, modifier = Modifier.graphicsLayer {
                 val p = if (st.open == Part.MOTION) st.p.value else 0f
                 val k = if (st.motionGroup === grp) st.motionPush.value.coerceIn(0f, 1f) else 0f
-                alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f) * k
-                translationX = (1f - k) * 40f * g.unit
+                alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f) * ((k - TITLE_IN) / (1f - TITLE_IN)).coerceIn(0f, 1f)
+                translationX = (1f - k) * TITLE_SLIDE * g.unit
             })
         }
     }
@@ -2025,6 +2036,16 @@ private fun IntensityRow(draft: Draft) {
  */
 @Composable
 internal fun SettingsSlider(value: Float, onDrag: ((Boolean) -> Unit)? = null, onChange: (Float) -> Unit) {
+    val now = androidx.compose.runtime.rememberUpdatedState(value)
+    SettingsSlider({ now.value }, onDrag, onChange)
+}
+
+/**
+ * The same, its place read from [position] in drawing: a value that changes at every step of a drag (an editor's) draws the
+ * slider again and composes nothing.
+ */
+@Composable
+internal fun SettingsSlider(position: () -> Float, onDrag: ((Boolean) -> Unit)? = null, onChange: (Float) -> Unit) {
     val look = LocalLook.current
     val track = look.color(SettingsTokens.CHIP_FILL)
     val accent = look.color(SettingsTokens.ACCENT)
@@ -2033,15 +2054,17 @@ internal fun SettingsSlider(value: Float, onDrag: ((Boolean) -> Unit)? = null, o
     val drag = androidx.compose.runtime.rememberUpdatedState(onDrag)
     // Under the finger while dragged (it trailed behind on a spring); a value set any other way glides there.
     var held by remember { mutableStateOf(false) }
-    val now = androidx.compose.runtime.rememberUpdatedState(value)
-    val glide = remember { Animatable(value) }
+    val read = androidx.compose.runtime.rememberUpdatedState(position)
+    val now = remember { androidx.compose.runtime.derivedStateOf { read.value() } }
+    val glide = remember { Animatable(now.value) }
     val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.CC_LEVEL))
     // One follower for every change (keyed on the value, a drag launched a coroutine at every step).
     LaunchedEffect(Unit) {
         androidx.compose.runtime.snapshotFlow { now.value to held }.collectLatest { (v, h) -> if (h) glide.snapTo(v) else glide.animateTo(v, spec.value) }
     }
     val knobR = 13f * look.unit
-    Canvas(Modifier.fillMaxWidth().height(look.dp(SettingsTokens.TARGET)).pointerInput(Unit) {
+    // In a layer of its own: redrawn at every step of a drag, it re-recorded everything around it in its page's list.
+    Canvas(Modifier.fillMaxWidth().height(look.dp(SettingsTokens.TARGET)).graphicsLayer().pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown()
             val w = size.width - knobR * 2f
@@ -2287,11 +2310,16 @@ internal fun ChoiceChips(names: List<String>, chosen: Int, modifier: Modifier = 
     Row(Modifier.onPlaced { if (!placed) placed = true }.horizontalScroll(scroll).then(modifier), verticalAlignment = Alignment.CenterVertically) {
         names.forEachIndexed { i, n ->
             androidx.compose.runtime.key(n) {
-                val k by animateFloatAsState(if (i == chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chip")
+                // The chosen one's fill and label read in drawing (mixed here, every frame of a chip's fade composed the
+                // whole row again).
+                val k = animateFloatAsState(if (i == chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chip")
                 var pressed by remember { mutableStateOf(false) }
                 val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
-                val fill = mix(look.color(SettingsTokens.CHIP_FILL), look.color(SettingsTokens.ACCENT), k)
-                val text = mix(look.color(SettingsTokens.CHIP_TEXT_COLOR), look.color(SettingsTokens.ACCENT_LABEL), k)
+                val fillOff = look.color(SettingsTokens.CHIP_FILL)
+                val fillOn = look.color(SettingsTokens.ACCENT)
+                val textOff = look.color(SettingsTokens.CHIP_TEXT_COLOR)
+                val textOn = look.color(SettingsTokens.ACCENT_LABEL)
+                val label = remember(textOff, textOn) { androidx.compose.ui.graphics.ColorProducer { mix(textOff, textOn, k.value) } }
                 // One height for every chip, the name centred in it (a face of its own may be taller: a script).
                 Box(Modifier
                     // Its room once in, measured (a chip growing in is read where it ends: its gap still opening, it was
@@ -2300,13 +2328,14 @@ internal fun ChoiceChips(names: List<String>, chosen: Int, modifier: Modifier = 
                     .pressScale { 1f - 0.05f * press }
                     .drawBehind {
                         val r = minOf(corner, chipH / 2f)
-                        drawRoundRect(fill, Offset(0f, (size.height - chipH) / 2f), Size(size.width, chipH), CornerRadius(r))
+                        drawRoundRect(mix(fillOff, fillOn, k.value), Offset(0f, (size.height - chipH) / 2f), Size(size.width, chipH), CornerRadius(r))
                     }
                     .pointerInput(i, chosen) { rowTap({ pressed = it }) { if (i != chosen) onChoose(i) } }
                     .height(look.dp(targetH))
                     .padding(horizontal = look.dp(12f * look.unit)),
                     contentAlignment = Alignment.Center) {
-                    BasicText(n, style = look.text(SettingsTokens.CHIP_TEXT, text).let { s -> fonts?.getOrNull(i)?.let { s.copy(fontFamily = it) } ?: s }, maxLines = 1)
+                    BasicText(n, style = look.text(SettingsTokens.CHIP_TEXT, textOff).let { s -> fonts?.getOrNull(i)?.let { s.copy(fontFamily = it) } ?: s },
+                        maxLines = 1, color = label)
                 }
             }
         }
@@ -2858,6 +2887,107 @@ internal fun Rolling(text: String, style: androidx.compose.ui.text.TextStyle, mo
             .graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }
             .drawWithContent { translate(0f, rise * (1f - k.value)) { this@drawWithContent.drawContent() } })
     }
+}
+
+/** A text style as Android's own paint draws it, and its line's height and baseline as Compose lays it out. */
+internal class LinePaint(val paint: android.text.TextPaint, val line: Pair<Int, Float>)
+
+/** [LinePaint]s by style, made once each (bounded: a design change brings new styles). */
+internal object LinePaints {
+    private val made = HashMap<Any, LinePaint>()
+
+    fun of(style: androidx.compose.ui.text.TextStyle, density: androidx.compose.ui.unit.Density,
+           resolver: androidx.compose.ui.text.font.FontFamily.Resolver): LinePaint {
+        val key = listOf(style, density.density, density.fontScale, resolver)
+        made[key]?.let { return it }
+        if (made.size > 24) made.clear()
+        val measurer = androidx.compose.ui.text.TextMeasurer(resolver, density, androidx.compose.ui.unit.LayoutDirection.Ltr, 0)
+        val line = measurer.measure("0", style, maxLines = 1, softWrap = false).let { it.size.height to it.firstBaseline }
+        val paint = android.text.TextPaint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            (resolver.resolve(style.fontFamily, style.fontWeight ?: androidx.compose.ui.text.font.FontWeight.Normal,
+                style.fontStyle ?: androidx.compose.ui.text.font.FontStyle.Normal,
+                style.fontSynthesis ?: androidx.compose.ui.text.font.FontSynthesis.All).value as? android.graphics.Typeface)?.let { typeface = it }
+            textSize = with(density) { if (style.fontSize != androidx.compose.ui.unit.TextUnit.Unspecified) style.fontSize.toPx() else 14f * density.density * density.fontScale }
+            val ls = style.letterSpacing
+            if (ls.isSp) letterSpacing = with(density) { ls.toPx() } / textSize else if (ls.isEm) letterSpacing = ls.value
+            style.fontFeatureSettings?.let { fontFeatureSettings = it }
+        }
+        return LinePaint(paint, line).also { made[key] = it }
+    }
+}
+
+/**
+ * One line of words drawn from [text] (read in drawing, and laid out by itself): a value under a dragged finger changes at
+ * every step, and as laid-out text it composed and measured its row again with each (an editor's sliders: 13-16 ms a step
+ * on the S24's debug build). It rolls to new words as [Rolling] does, at once while [instant]. A line high; as wide as
+ * its words unless the modifier sets the width, and while [instant] it only grows (what is beside it lays out again
+ * seldom). [end]: drawn against its right edge. [color], when given, is read in drawing.
+ */
+@Composable
+internal fun DrawnLine(text: () -> String, style: androidx.compose.ui.text.TextStyle, modifier: Modifier = Modifier, end: Boolean = false,
+                       instant: () -> Boolean = { false }, color: androidx.compose.ui.graphics.ColorProducer? = null) {
+    val look = LocalLook.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val resolver = androidx.compose.ui.platform.LocalFontFamilyResolver.current
+    // Drawn with Android's own text paint (shaped natively): Compose's text, laid out at every step of a drag, was most of a
+    // step's layout where code runs interpreted (the debug build). One paint and line per style for every line (made per
+    // line, a group's page of rows took 45 ms more to build); Compose measures the line's height and baseline once, so it
+    // sits as a laid-out line does.
+    val pl = remember(style, density, resolver) { LinePaints.of(style, density, resolver) }
+    val paint = pl.paint
+    val line = pl.line
+    val read = androidx.compose.runtime.rememberUpdatedState(text)
+    val quick = androidx.compose.runtime.rememberUpdatedState(instant)
+    var now by remember { mutableStateOf(text()) }
+    var was by remember { mutableStateOf<String?>(null) }
+    val k = remember { Animatable(1f) }
+    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.APPEAR))
+    LaunchedEffect(Unit) {
+        // While [instant] the words are read where they are drawn, not here (worked out here as well, every step of a drag
+        // made them twice more); they are taken back at once when it ends.
+        var live = false
+        androidx.compose.runtime.snapshotFlow { if (quick.value()) null else read.value() }.collectLatest { t ->
+            if (t == null) { live = true; return@collectLatest }
+            if (live) { live = false; was = null; now = t; k.snapTo(1f); return@collectLatest }
+            if (t == now) return@collectLatest
+            was = now
+            now = t
+            k.snapTo(0f)
+            k.animateTo(1f, spec.value)
+            was = null
+        }
+    }
+    val rise = 14f * look.unit
+    val held = remember { intArrayOf(0) }
+    Box(modifier
+        .layout { m, c ->
+            // Its width only matters where the modifier leaves it free (a fixed width never reads the words).
+            val width = if (c.hasFixedWidth) c.maxWidth else {
+                val live = quick.value()
+                val w = kotlin.math.ceil(paint.measureText(if (live) read.value() else now)).toInt()
+                (if (live) maxOf(held[0], w) else w).also { held[0] = it }.coerceIn(c.minWidth, c.maxWidth)
+            }
+            val p = m.measure(androidx.compose.ui.unit.Constraints.fixed(width, line.first))
+            layout(width, line.first) { p.place(0, 0) }
+        }
+        // (A layer of its own: its words change at every step of a drag, and drawn in the page's list they re-recorded it.)
+        .graphicsLayer()
+        .drawBehind {
+            val live = quick.value()
+            val kk = if (live) 1f else k.value.coerceIn(0f, 1f)
+            val ink = color?.invoke() ?: style.color
+            drawIntoCanvas { cv ->
+                fun words(t: String, a: Float, dy: Float) {
+                    if (a <= 0.003f) return
+                    paint.color = ink.copy(alpha = ink.alpha * a).toArgb()
+                    val x = if (end) size.width - paint.measureText(t) else 0f
+                    cv.nativeCanvas.drawText(t, x, line.second + dy, paint)
+                }
+                val old = was
+                if (!live && old != null) words(old, 1f - kk, -rise * kk)
+                words(if (live) read.value() else now, kk, rise * (1f - kk))
+            }
+        })
 }
 
 /**

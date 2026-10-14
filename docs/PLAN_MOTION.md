@@ -387,6 +387,31 @@ search across the settings (with C3's); sharing presets.
 - Checked on the emulator: every group's page, the editors of springs, curves and numbers, handle drags (a small bounce
   kept), Spring → Curve → Spring (exact), Bouncy, Reset (fading), Done, Slow, Reset all, Discard, Apply (the preset's file
   written, then cleared by Reset and Apply), the count line opening and closing, Fine-tune's sliders.
-- Open: the first push of a group and the first opening of an editor each cost one long frame on the debug build (before
-  their motion starts); drags at 60-80 fps on the debug build; C4a's page-slide misses at 200 % not measured again (the
-  phone was locked); the other groups' samples are stand-ins.
+- **On the S24 again (the CI build f3eb85a, then fixes; debug build; the phone warm after an hour of tracing: processor
+  51 °C, both CPU clusters capped at 2.0 GHz, so these are on the slow side)**:
+  - The editor's drags, 60-80 fps: a step composed the whole editor (every value laid out as text, each slider and the
+    graph keyed on the value). Now the editor gets its curve as state and reads it where it shows: the sliders' knobs and
+    the values beside them are drawn (`DrawnLine`, Android's own text paint, one per style for all lines: `LinePaints`),
+    the graph and the sliders are layers of their own, the chips' colours are read in drawing, `String.format` gave way to
+    a plain formatter. A ~1 s slider drag now misses 9-12 refreshes (~110 fps), the graph's handle 1; on the same code not
+    debuggable, 0-1 each.
+  - A group's page took one 139 ms frame to build (Apps, 12 rows): each row was a dozen small composables (~3.3 ms each on
+    the debug build, traced with simpleperf). A row is now one node drawing its tile, name and value (in a layer of its
+    own), its press, accent and rolling words animations made when first needed on the page's one scope, its editor's
+    reveal composed only once the row has been opened: 87-90 ms for Apps, 94 ms for Home (24 rows).
+  - The slide's first frame took the render thread 24 ms (2 missed refreshes as it started): the two pages fading were
+    drawn through page-sized buffers, allocated and filled then. They fade draw by draw now (no glass or overlapping
+    pictures on them; the look is the same), 8-14 ms; their translucent draws need pipelines of their own, compiled in
+    the first push after an update (4, 142 ms in one frame) unless warmed: home's idle warm-up draws them, the scrolled
+    page's top band too (`MotionWarmUp.warmFading`, 59 ms off screen). After an update: none compiled in any frame.
+  - The header's two titles crossed at the same strength halfway (a jumble): the leaving one is gone by 45 % of the
+    push, the coming one shows from 35 %.
+  - Found on the emulator before the phone: the drawn row kept its old words and colour after a change (its value read
+    only inside a `SideEffect`, which composition does not follow).
+  - Not reproduced: a 60 ms gap near the end of the first push in one screen recording (traces of the same push showed
+    none; recording on the S24 adds gaps).
+  - Frame stats now: pops 0, pushes 0-2 once built, an editor's opening ~10 (its one build frame), handle drag 1, slider
+    drags 9-12 over a second.
+- Open: the first push of a group (~90 ms) and the first opening of an editor (~70 ms) still cost one frame before their
+  motion on the debug build (about half that not debuggable); C4a's page slides at 200 % not measured again; the other
+  groups' samples are stand-ins.
