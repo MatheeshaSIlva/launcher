@@ -79,7 +79,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Design system** (`design/`, plan in `docs/DESIGN_SYSTEM_PLAN.md`): every look value is a token in the active theme file
   (`assets/themes/ios27.json`: `ref.*` from Apple's kit with its ids, `sys.*` roles, `comp.*` per component), read through
   `Design` (light/dark blended at `Appearance.dark`, aliases followed, the user's edits from the token editor on top);
-  `Scale` turns points into pixels. Themes: `assets/themes/<id>.json` (or `files/themes/<id>.json`, pushed with run-as;
+  `Scale` turns points into pixels. Themes: `assets/themes/<id>.json` (or `files/themes/<id>.json`, pushed with
+  `DESIGN_RELOAD --es files import`;
   wins over the app's), `"extends"` another and hold only what differs; checked at load against iOS 27 (refused if a token
   the code reads is missing or of another kind); switch/reload: `am broadcast -a dev.launcher.app.DESIGN_RELOAD -p
   dev.launcher.app [--es theme ID]`, or the token editor's Theme button. Colours may name the phone's palette (`@primary`,
@@ -338,7 +339,7 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Keystore**: debug builds are signed with a committed keystore so CI builds install over each other. Keep that pattern (new key file for this app).
 - **Never `am force-stop dev.launcher.app` on the phone**: it disables our accessibility service (gesture nav, the shade)
   and once left stock gestures blocked with no strip. Install local builds with `adb install -r -d` alone, then check the
-  log for "gesture strip on". Token experiments without a reinstall: write `files/design/user.json` (run-as) and send
+  log for "gesture strip on". Token experiments without a reinstall: put `design/user.json` in the inbox (below) and send
   `am broadcast -a dev.launcher.app.DESIGN_RELOAD -p dev.launcher.app`.
 - **The renderer's GPU cache has a budget** (S24: 121 MB, `dumpsys gfxinfo` "Max resource usage"). Each RenderEffect or
   layer is a screen-sized image and its filtered output another; past the budget every frame frees and allocates images
@@ -405,10 +406,19 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Loops nobody drives count a long frame as a short one** (Motion's demo, samples, the cards' dots: at most 1/30 s a
   frame): a stall pauses them; counted from the clock they jumped ahead after it. A finger-driven or started motion keeps
   real time.
-- **The debug build is debuggable, and Compose's code runs ~2× slower for it on the S24** (a page built in 91 ms against
-  42; the emulator 5×): ART runs debuggable code interpreted until it is hot. `./gradlew assembleBench` builds the same
-  code, same key, not debuggable (installs over the debug build and back; run-as does not work while it is on; Perfetto
-  still shows its app sections) to see what a release would do. CI builds debug until Matheesha decides otherwise.
+- **The build is not debuggable (since 2026-10-14, Matheesha's call)**: a debuggable app's code runs interpreted until
+  hot, and Compose ran ~2x slower for it on the S24 (a page built in 91 ms against 42; the emulator 5x). `assembleDebug`
+  (the build type CI ships, signed with the committed key) has `isDebuggable = false`; the manifest's `<profileable
+  android:shell="true">` keeps simpleperf and heap dumps working, Perfetto shows the app's sections as before. With it
+  comes the libraries' baseline profile as dex metadata (`baselineProfiles/0/app-debug.dm`): installed with the APK
+  (`tools/device.sh install` uses `adb install-multiple`; UPDATE a session with both), Android compiles the profiled code
+  at install (`pm art dump dev.launcher.app`: `speed-profile [reason=install-dm]`), so the first start after an update
+  is not interpreted either. **There is no run-as**: files go in and out through the app's external folder,
+  `/sdcard/Android/data/dev.launcher.app/files/` (adb reads and writes it): push to `dev-in/<path>` and send
+  `DESIGN_RELOAD --es files import` (copied over `files/<path>`, the inbox emptied, design reloaded); `--es files export`
+  copies `design/`, `themes/`, `motion/` and `setup.json` to `dev-out/` (ends with `dev-out/.done`) for `adb pull`;
+  `--es files remove --es path P` deletes `files/P` (`design/DevFiles.kt`). Backups of the phone's design files are an
+  export and a pull (byte-exact).
 - **"Presented" is not drawn**: a `HardwareRenderer` drawing into an `ImageReader` returns when the buffer is queued, and
   the GPU may still be drawing into it. Wrapped at once, the settings' picture of home came out half drawn after a cold
   start (the rest transparent) and was kept so. `ViewPicture` waits for the image's fence (API 33+).
@@ -535,12 +545,14 @@ copy it wholesale — port the working pieces cleanly. File map:
 ## Build, release, update pipeline (to recreate in this repo)
 
 1. GitHub Actions on push to `main`: `./gradlew assembleDebug -PbuildSha=${GITHUB_SHA}`; `versionName` = first 7 chars of the sha.
-2. Publish a rolling prerelease tagged `latest` with the APK, release notes = full sha: **updated in place** (tag moved,
+2. Publish a rolling prerelease tagged `latest` with the APK (`Launcher.apk`) and its baseline profile's dex metadata
+   (`Launcher.dm`), release notes = full sha: **updated in place** (tag moved,
    `gh release upload --clobber`, `gh release edit --draft=false --notes SHA`; `gh release create` only if none exists).
    Deleting and recreating it at once left it a draft (GitHub deletes the old tag in the background, after the new release
    took it): a draft is not public and the phone's updater got 404.
-3. App shows `BUILD <sha7>` in its first log line; **UPDATE** compares that to the release, downloads inside the shell process, runs
-   `pm install -r -d /data/local/tmp/update.apk`, then `am start`; if still alive after ~9 s it prints the installer's output.
+3. App shows `BUILD <sha7>` in its first log line; **UPDATE** compares that to the release, downloads the APK and the
+   `.dm` inside the shell process, installs both in one session (`pm install-create/-write/-commit`; the APK alone if the
+   `.dm` is missing or refused), then `am start`; if still alive after ~12 s it prints the installer's output.
 4. Publish build logs to an orphan `ci-logs` branch so a cloud session can read failures without log paste.
 5. The repo must be public for the updater (no auth on the phone).
 

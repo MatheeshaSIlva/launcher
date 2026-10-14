@@ -55,6 +55,9 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
+        <!-- Not debuggable (fast code); profilers and traces still attach from the shell (simpleperf, heap dumps). -->
+        <profileable android:shell="true" />
+
         <activity
             android:name=".HomeActivity"
             android:clearTaskOnLaunch="true"

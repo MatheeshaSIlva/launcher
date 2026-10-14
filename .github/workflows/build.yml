@@ -38,21 +38,28 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Launcher-debug
-          path: app/build/outputs/apk/debug/*.apk
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/debug/baselineProfiles/0/*.dm
       - name: Publish rolling "latest" release (used by the in-app updater)
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/*.apk /tmp/Launcher.apk
+          # The baseline profile's dex metadata (the build is not debuggable): the updater installs it with the APK, so
+          # Android compiles the profiled code at install.
+          dm=app/build/outputs/apk/debug/baselineProfiles/0/app-debug.dm
+          if [ -f "$dm" ]; then cp "$dm" /tmp/Launcher.dm; fi
+          files="/tmp/Launcher.apk"; if [ -f /tmp/Launcher.dm ]; then files="$files /tmp/Launcher.dm"; fi
           # One release, updated in place. Deleting it with its tag and creating it again at once left it a draft (not
           # public: the phone's updater got 404): GitHub deletes the tag in the background, after the new release took it.
           if gh release view latest >/dev/null 2>&1; then
             gh api -X PATCH "repos/${GITHUB_REPOSITORY}/git/refs/tags/latest" -f sha="${GITHUB_SHA}" -F force=true >/dev/null               || gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" -f ref=refs/tags/latest -f sha="${GITHUB_SHA}" >/dev/null
-            gh release upload latest /tmp/Launcher.apk --clobber
+            gh release upload latest $files --clobber
             gh release edit latest --draft=false --prerelease --title "latest build" --notes "${GITHUB_SHA}"
           else
-            gh release create latest /tmp/Launcher.apk --prerelease --target "${GITHUB_SHA}" --title "latest build" --notes "${GITHUB_SHA}"
+            gh release create latest $files --prerelease --target "${GITHUB_SHA}" --title "latest build" --notes "${GITHUB_SHA}"
             gh release edit latest --draft=false --prerelease
           fi
           gh api "repos/${GITHUB_REPOSITORY}/releases/tags/latest" --jq '"release: draft=\(.draft) notes=\(.body)"'

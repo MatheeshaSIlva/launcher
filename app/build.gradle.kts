@@ -29,13 +29,13 @@ android {
     }
 
     buildTypes {
-        // For measuring only (CI builds debug): the debug build, same key, not debuggable. ART runs a debuggable app's code
-        // slower (Compose ~2x on the S24, 5x on the emulator): this shows what a release would do. run-as does not work on it.
-        create("bench") {
-            initWith(getByName("debug"))
+        // The build CI ships and the phone runs (UPDATE), signed with the committed key, is not debuggable: ART runs a
+        // debuggable app's code interpreted until it is hot (Compose ~2x slower on the S24, 5x on the emulator; Matheesha,
+        // 2026-10-14). It also gets the libraries' baseline profiles (assets/dexopt and a .dm next to the APK, installed
+        // with it: compiled ahead of time from the first start). run-as does not work on it: files go in and out through
+        // DESIGN_RELOAD --es files import|export (CLAUDE.md); profilers attach through <profileable> in the manifest.
+        getByName("debug") {
             isDebuggable = false
-            signingConfig = signingConfigs.getByName("debug")
-            matchingFallbacks += listOf("debug")
         }
     }
 

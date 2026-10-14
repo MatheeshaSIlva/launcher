@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Drive a device or emulator for visual checks (Claude uses this to look at a build before Matheesha does).
-#   tools/device.sh install                 build is assumed done: installs app-debug.apk and makes it the home app
+#   tools/device.sh install                 build is assumed done: installs app-debug.apk (+ its .dm) and makes it home
 #   tools/device.sh home                    go home
 #   tools/device.sh shot NAME               screenshot to tools/shots/NAME.png
 #   tools/device.sh tap X Y | long X Y [MS] | swipe X1 Y1 X2 Y2 [MS] | drag X1 Y1 X2 Y2 [HOLD_MS]
@@ -18,7 +18,12 @@ mkdir -p "$here/shots"
 cmd=$1; shift || true
 case "$cmd" in
   install)
-    "$ADB" "${DEV[@]}" install -r -d "$here/../app/build/outputs/apk/debug/app-debug.apk" | tail -1
+    # With the baseline profile's dex metadata when the build made one (not debuggable: Android compiles the profiled
+    # code at install, so the first start is not interpreted). adb pairs app-debug.dm with app-debug.apk by name.
+    apk="$here/../app/build/outputs/apk/debug/app-debug.apk"
+    dm="$here/../app/build/outputs/apk/debug/baselineProfiles/0/app-debug.dm"
+    if [ -f "$dm" ]; then "$ADB" "${DEV[@]}" install-multiple -r -d "$apk" "$dm" | tail -1
+    else "$ADB" "${DEV[@]}" install -r -d "$apk" | tail -1; fi
     "$ADB" "${DEV[@]}" shell cmd package set-home-activity $PKG/.HomeActivity >/dev/null
     "$ADB" "${DEV[@]}" shell am start -a android.intent.action.MAIN -c android.intent.category.HOME >/dev/null ;;
   home) "$ADB" "${DEV[@]}" shell input keyevent KEYCODE_HOME ;;
