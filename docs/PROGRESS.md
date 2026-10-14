@@ -2146,3 +2146,29 @@ a frame after an update; the header's titles hand over without crossing. The pho
   Control Center's group pushed the first time 0 (its build's longest frame 11.8 ms of CPU; one 80-96 ms frame on the debug
   build), popped 0, pushed again 2, an editor opening 0, its Duration dragged 1 in 114 frames (9-12 a second on the debug
   build), back to home 0. The update itself: the APK (18 MB) and its profile (7 KB) installed in one session.
+
+## Opening apps one after another: the landing card (2026-10-15, emulator; S24 not checked yet)
+
+Matheesha: "try opening apps one after the other really fast and you can see there are duplicate icons sometimes and it
+doesn't feel 120 fps". Two causes, both in a tap on home while a closing card was still flying:
+- The touch made the card fade where it was and showed its icon at once: two of the same icon until the next app's card
+  cut the fading one off. The next launch then started home's picture sharp, so the blur of the close snapped away and
+  came back.
+- Now a touch only hands home over from the picture to the real home (once home has drawn a frame of its own, never on a
+  short timer: a home busy coming to the front shows its last frame, at rest and sharp). The card keeps landing; only a
+  drag (pages, the App Library's list, Spotlight: its icon moves) makes it fade where it is, as before.
+- A tap on another app hands the closing card to a second card, the lander (`GestureNav.landingFor`): its own springs
+  continue the flight (same roles, from where it is and as fast as it goes), drawn zoomed with home's picture as home
+  recedes again behind the new app, so it lands where its icon shows. Its icon (and badge) stays out of the new picture
+  through a patch from the picture without it (`PreviewView.setPatch`: a piece of another picture inside the icon's
+  rectangle, on the quarter-size grid so the two meet on pixel edges, rendered only into layers that show). Over a sharp
+  home it hands over within a pixel; over a home already blurring again it dissolves into its blurred icon over its last
+  pixels (110 ms). A tap once the card is in its icon needs none of this (the new picture shows the icon there).
+- The new launch starts home from the depth it has (no snap), and from a home still blurred the tapped icon stays in the
+  picture, blurred like home, while the new card comes in over it as it grows (opaque at 1.4 times the icon); the picture
+  without the icon goes on once the card covers it. Before, the tapped icon snapped into focus in one frame.
+- Checked on the Android 17 emulator in slow motion (4x and 10x: there home takes over a second to come to the front, so
+  at full speed every tap arrives after the card has landed): a hand-over early in the flight, one late, one after the
+  landing; a page swipe during a close (the card fades where it is); reopening the closing app (it reverses, as before;
+  the previous build faded the card out and popped it back). One icon of the closing app in every frame. Not checked: the
+  S24 (locked), frame timing.

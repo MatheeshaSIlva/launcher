@@ -915,6 +915,23 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** When home was last touched (uptime ms: a finger down anywhere on it, menus included). */
     private var touchedAt = 0L
 
+    // Gesture nav is told once per touch that it moved past the slop, whoever takes it (pages, the App Library's list,
+    // Spotlight): a card closing into an icon then gets out of the way, since its icon moves.
+    private var movedX = 0f
+    private var movedY = 0f
+    private var moved = false
+
+    override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { movedX = e.x; movedY = e.y; moved = false }
+            MotionEvent.ACTION_MOVE -> if (!moved && (abs(e.x - movedX) > slop || abs(e.y - movedY) > slop)) {
+                moved = true
+                HomeBridge.onHomeDragged?.invoke()
+            }
+        }
+        return super.dispatchTouchEvent(e)
+    }
+
     private fun track(e: MotionEvent) {
         if (e.actionMasked == MotionEvent.ACTION_DOWN) { vt?.recycle(); vt = VelocityTracker.obtain() }
         vt?.addMovement(e)

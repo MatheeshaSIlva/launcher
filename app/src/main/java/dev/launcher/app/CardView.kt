@@ -121,8 +121,14 @@ class CardView(context: Context) : View(context) {
      * frames at 16.7 ms in every such close). With a single image the fade can apply to the draw itself; only home as a
      * card (two pictures) or a snapshot crossing into the icon overlap.
      */
-    override fun hasOverlappingRendering(): Boolean = homePicture != null || fadeStart != 0L ||
-        (snapshot != null && icon != null && iconMix > 0f && iconMix < 1f)
+    override fun hasOverlappingRendering(): Boolean = !flatFade && (homePicture != null || fadeStart != 0L ||
+        (snapshot != null && icon != null && iconMix > 0f && iconMix < 1f))
+
+    /**
+     * The card's alpha applies to each thing it draws, never through a display-sized layer, overlapping or not: a card
+     * coming in over its blurred icon for a few frames ([GestureNav]'s soft start), where the difference cannot be seen.
+     */
+    var flatFade = false
 
     fun setFrame(cx: Float, cy: Float, w: Float, h: Float, radius: Float) {
         this.cx = cx; this.cy = cy; this.w = max(1f, w); this.h = max(1f, h); this.radius = radius

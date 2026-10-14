@@ -112,6 +112,7 @@ object GestureNav {
     private var cur: CardView? = null
     private var prv: CardView? = null   // older app (left) during a switch
     private var nxt: CardView? = null   // newer app (right) during a switch
+    private var land: CardView? = null  // a closing card still landing in its icon while another app opens ([handToLander])
     private var sw = 0f
     private var sh = 0f
     private var deviceRadius = 0f
@@ -334,6 +335,7 @@ object GestureNav {
             nav.post { if (cardPkg == pkg && backdrop?.picture != null && !pictureDropped) backdrop?.picture = HomeBridge.previewFor(pkg) }
         }
         HomeBridge.onHomeTouched = { nav.post { homeTouchedDuringClose(); readyForLaunch() } }
+        HomeBridge.onHomeDragged = { nav.post { homeDraggedDuringClose() } }
         // Home settled into a new look: rendered into the layers now, while nothing moves, not at the next gesture's start.
         HomeBridge.onPreviewChanged = { p ->
             nav.post { if (phase == Phase.IDLE && root?.visibility != View.VISIBLE && homeVisible) backdrop?.prewarm(p) }
@@ -1076,6 +1078,7 @@ object GestureNav {
         val p = CardView(ctx).apply { visibility = View.GONE }
         val n = CardView(ctx).apply { visibility = View.GONE }
         val c = CardView(ctx)
+        val l = CardView(ctx).apply { visibility = View.GONE }
         // The picture of home sits under the cards but outside their container, always in the drawing tree (at alpha 0 while
         // no card shows): a view that leaves the tree loses its GPU layers, and re-allocating them cost ~12-20 ms of the
         // first frame of every gesture (traced on the S24). The container mirrors its visibility and fade onto it.
@@ -1085,6 +1088,10 @@ object GestureNav {
         r.mirror = b
         r.addView(p, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         r.addView(n, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // Under the current card: a closing card that keeps landing while the next app grows over it (the lander), and its
+        // badge.
+        r.addView(l, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        r.addView(CardBadgeView(ctx, l), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         r.addView(c, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         // The current card's notification badge, above it and unclipped (it reaches past the icon's corner).
         r.addView(CardBadgeView(ctx, c), FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -1111,7 +1118,7 @@ object GestureNav {
         try {
             wm.addView(host, lp)
             cardWindow = host; windowShown = false
-            root = r; backdrop = b; prv = p; nxt = n; cur = c; deck = d
+            root = r; backdrop = b; prv = p; nxt = n; cur = c; land = l; deck = d
             host.holeRadius = pipCornerRadius()
             setUpSwitcherWindow(ctx)
             pollFloating()
@@ -1840,6 +1847,10 @@ object GestureNav {
         HomeBridge.homeCovered = false
         pictureDropped = false
         closeDepthFrom = -1f
+        closeFading = false
+        softPicture = null
+        cur?.flatFade = false
+        endLander()   // (after the picture went: its patch is then taken out without rendering home again for nothing)
         prv?.visibility = View.GONE
         nxt?.visibility = View.GONE
         cur?.snapshot = null
@@ -1898,7 +1909,7 @@ object GestureNav {
         // (The cover was in that window: a new one is made in the next, and any hand-back under way gives way.)
         coverGen++; homeCover = null
         cardWindow = null; windowShown = false; warm = null
-        root = null; backdrop = null; prv = null; nxt = null; cur = null; deck = null; input = null
+        root = null; backdrop = null; prv = null; nxt = null; cur = null; land = null; deck = null; input = null
         AppLog.log("[nav] gesture strip off")
     }
 
@@ -2456,6 +2467,7 @@ object GestureNav {
             val depth0 = depthNow()
             sDepth = mp.homeDepthClose.mover().apply { start(depth0, 0f, 0f) }
             closeDepthFrom = depth0
+            closeFading = false
             anim = Anim.HOME_COMMIT
             // (Not over a turned display: home is laid out upright, the touches would land beside what they were aimed at.)
             if (!deferHome) catchTouchesForHome(true)
@@ -2544,19 +2556,265 @@ object GestureNav {
     private var pictureDropped = false
 
     /**
-     * Home was touched while a closing card is still flying: the touch belongs to home (swiping pages, opening another
-     * app), so the card gets out of the way at once (fades where it is) and its icon is back.
+     * Home was touched while a closing card is still flying: the touch belongs to home (a tap on another app, a swipe).
+     * Touches only reach home once it is the window in front, so the real home (running the same depth spring) takes over
+     * from the picture of it, which goes once home has drawn a frame with its own blur (dropped at once, a frame of sharp
+     * home could show). The card keeps landing in its icon: a tap that opens another app hands it to the lander
+     * ([landingFor]); a drag moves home's icons, and the card then gets out of the way ([homeDraggedDuringClose]). (It used
+     * to fade where it was, with its icon back at once: two of the same icon until the next app's card cut it.)
      */
     private fun homeTouchedDuringClose() {
-        if (anim != Anim.HOME_COMMIT || root?.visibility != View.VISIBLE) return
-        // Touches only reach home once it is the window in front: the real home (running the same depth spring) can show.
+        if (anim != Anim.HOME_COMMIT || root?.visibility != View.VISIBLE || pictureDropped) return
+        val g = gen
+        pictureDropped = true
+        HomeBridge.homeCovered = false
+        // Never on a timer alone: a home busy coming to the front (a slow phone) still shows its last frame, as it was
+        // before the app opened (at rest, sharp), and the picture stands in for it meanwhile.
+        if (backdrop?.picture != null) HomeBridge.afterHomeDraw(HOME_FRESH_MS) { nav.post { if (gen == g && pictureDropped) backdrop?.picture = null } }
+        AppLog.log("[nav] home touched during the close: home takes over behind the card")
+    }
+
+    /**
+     * A touch on home became a drag (pages, the App Library, Spotlight) while a closing card is still on screen: the icon it
+     * flies into moves with home, so the card fades where it is and the icon is back.
+     */
+    private fun homeDraggedDuringClose() {
+        if (anim != Anim.HOME_COMMIT || root?.visibility != View.VISIBLE || closeFading) return
+        closeFading = true
         backdrop?.picture = null
         HomeBridge.homeCovered = false
         pictureDropped = true
         hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
         hiddenIconPkg = null
-        AppLog.log("[nav] home touched during the close: the card fades where it is")
+        AppLog.log("[nav] home dragged during the close: the card fades where it is")
         fadeOutCards(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_HOME), gen, overHome = true)
+    }
+
+    // The closing card is fading where it is ([homeDraggedDuringClose]).
+    private var closeFading = false
+    /** How long a picture of home waits for home's own next frame before it goes anyway ([homeTouchedDuringClose]). */
+    private const val HOME_FRESH_MS = 1500L
+
+    // ---- the lander: a closing card that keeps landing in its icon while another app opens
+    //
+    // Opening apps one after another quickly (close one, tap the next before its card has landed) used to cut the closing
+    // card mid-air and start the picture of home sharp (its blur snapped away, then came back). The closing card now goes
+    // on into its icon on [land], under the new card, with springs of its own that continue its flight (same roles, from
+    // where it is and as fast as it goes). Home recedes again behind the new app meanwhile, so the card is drawn zoomed
+    // with home's picture and lands where the icon shows; the icon stays left out of that picture (a patch from the picture
+    // without it, [PreviewView.setPatch]) until it has landed. Over a blurred home the landed card then fades into its icon.
+
+    private var landPkg: String? = null
+    private var lCx: Mover = Spring(0.5f, 0.86f)
+    private var lCy: Mover = Spring(0.5f, 0.86f)
+    private var lW: Mover = Spring(0.44f, 0.9f)
+    private var lH: Mover = Spring(0.44f, 0.9f)
+    private var landStartNs = 0L
+    // As [springW0], [springR0], [springMix0] of the close it continues, and its fade ([springFade]) when it has no icon.
+    private var landW0 = 0f
+    private var landR0 = 0f
+    private var landMix0 = 0f
+    private var landFade = false
+    private var landFadeFrom = 0.25f
+    private var landSettled = false
+    private var landGen = 0
+
+    /** Home's picture zooms its content by this at [depth] (about the middle of the screen). */
+    private fun contentZoom(depth: Float) = 1f + depth * (Motion.profile.homeContentZoom - 1f)
+
+    /** Home's depth in the frame at [frameNs]: from the card springs (the same value they give the picture), else as shown. */
+    private fun depthAt(frameNs: Long): Float =
+        if (animating && anim != Anim.SWITCH_COMMIT && anim != Anim.SWITCH_CANCEL) sDepth.value(max(0L, frameNs - springStartNs) / 1e9)
+        else backdrop?.depth ?: 0f
+
+    /** A closing card that can go on landing: [start] starts it ([keep]: where the new app's icon is on home). */
+    private class Landing(val without: HomePicture?, val start: (keep: RectF?) -> Unit)
+
+    /**
+     * When the card closing now can go on landing while [pkg] opens: what starts it (once the launch has set home's
+     * picture) and the picture of home without its icon (none for a card fading on its way to the middle), else null.
+     * Reads the close as it is: call before [hideCards].
+     */
+    private fun landingFor(pkg: String): Landing? {
+        val c = cur ?: return null
+        val l = land ?: return null
+        val from = cardPkg ?: return null
+        if (root?.visibility != View.VISIBLE || anim != Anim.HOME_COMMIT || !animating || pipFlight || closeFading || from == pkg) return null
+        // Home is laid out upright: over a turned display the card flies in other coordinates (none of this).
+        if (turned || homeTurn != 0f) return null
+        // Into its icon (left out of the new picture of home with one recorded without it), or fading on its way to the
+        // middle (no icon on home).
+        val icon = if (springToIcon) HomeBridge.iconRect(from) else null
+        val without = if (springToIcon && HomeBridge.hasWithout(from)) HomeBridge.previewFor(from) else null
+        if (springToIcon && (icon == null || without == null || hiddenIconPkg != from)) return null
+        if (!springToIcon && !springFade) return null
+        val now = System.nanoTime()
+        val t = max(0L, now - springStartNs) / 1e9
+        // Already in its icon (a tap as it lands): the new picture of home shows the icon right there, nothing to land.
+        fun at(m: Mover) = abs(m.value(t) - m.target) < 1f && abs(m.velocity(t)) < 60f
+        if (springToIcon && c.iconMix >= 0.99f && at(sCx) && at(sCy) && at(sW) && at(sH)) return null
+        val z = contentZoom(depthNow())
+        val ox = sw / 2f
+        val oy = sh / 2f
+        // Its frame and speed in home's own (unzoomed) coordinates: drawn zoomed with home from here on, it starts exactly
+        // where it is.
+        val mp = Motion.profile
+        val x = mp.appClosePosition.mover().apply { start(ox + (sCx.value(t) - ox) / z, sCx.velocity(t) / z, sCx.target) }
+        val y = mp.appClosePosition.mover().apply { start(oy + (sCy.value(t) - oy) / z, sCy.velocity(t) / z, sCy.target) }
+        val w = mp.appCloseSize.mover().apply { start(sW.value(t) / z, sW.velocity(t) / z, sW.target) }
+        val h = mp.appCloseSize.mover().apply { start(sH.value(t) / z, sH.velocity(t) / z, sH.target) }
+        val w0 = springW0; val r0 = springR0; val mix0 = springMix0
+        val fade = springFade; val fadeFrom = springFadeFrom
+        val snapshot = c.snapshot; val icn = c.icon; val color = c.placeholderColor; val minIcon = c.minIconSize
+        val unit = c.unitPx; val badge = c.badge; val alpha = c.alpha; val mix = c.iconMix
+        val cx = c.cx; val cy = c.cy; val cw = c.w; val ch = c.h; val cr = c.radius
+        // The new card's session must not show the icon again (hideCards would): it stays hidden on the real home until
+        // the new app's icon is hidden in its place, once the picture of home covers home again.
+        if (springToIcon) hiddenIconPkg = null
+        return Landing(without) { keep ->
+            endLander()
+            landPkg = from
+            lCx = x; lCy = y; lW = w; lH = h
+            landStartNs = now
+            landW0 = w0; landR0 = r0; landMix0 = mix0
+            landFade = fade; landFadeFrom = fadeFrom
+            landSettled = false
+            l.animate().cancel()
+            l.homePicture = null
+            l.snapshot = snapshot
+            l.icon = icn
+            l.placeholderColor = color
+            l.minIconSize = minIcon
+            l.unitPx = unit
+            l.badge = badge
+            l.iconTurn = 0f
+            l.focus = null
+            l.focusMix = 0f
+            l.alpha = alpha
+            l.iconMix = mix
+            l.setFrame(cx, cy, cw, ch, cr)
+            l.visibility = View.VISIBLE
+            if (icon != null && without != null) {
+                // Its icon and badge (which reaches past the icon's corner) left out of home's picture.
+                val m = icon.width() * 0.2f
+                landPatchFrom = without
+                landPatchRect = RectF(icon.left - m, icon.top - m, icon.right + m, icon.bottom + m)
+                landPatchKeep = keep?.let { k -> val km = k.width() * 0.2f; RectF(k.left - km, k.top - km, k.right + km, k.bottom + km) }
+                // (A launch that comes in over its blurred icon shows the picture without this icon first: the patch
+                // goes on with the new app's picture, [softSwap].)
+                if (softPicture == null) applyLandPatch()
+            }
+            choreographer.postFrameCallback(landFrame)
+            AppLog.log("[nav] $from keeps landing while ${cardPkg ?: "the next app"} opens")
+        }
+    }
+
+    // The picture without the landing card's icon, where the icon is (with its badge), and where the new app's icon is
+    // (left alone): the patch on the new app's picture of home.
+    private var landPatchFrom: HomePicture? = null
+    private var landPatchRect: RectF? = null
+    private var landPatchKeep: RectF? = null
+    // The lander reached its icon before the new app's picture of home went on ([softSwap]): it waits there, as the icon.
+    private var landWaiting = false
+
+    private fun applyLandPatch() {
+        val from = landPatchFrom ?: return
+        if (landPkg == null || landSettled) return
+        backdrop?.setPatch(from.content, landPatchRect, landPatchKeep)
+    }
+
+    private val landFrame = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (landPkg == null) return
+            val settled = applyLander(frameTimeNanos)
+            if (landFade) { if (settled || (land?.alpha ?: 0f) <= 0f) endLander() }
+            else if (!landSettled && landerArrived(frameTimeNanos)) { landSettled = true; landed(frameTimeNanos) }
+            if (landPkg != null) choreographer.postFrameCallback(this)
+        }
+    }
+
+    /** Home's blur (px) in the frame at [frameNs], as the picture of it draws it. */
+    private fun homeBlurAt(frameNs: Long) =
+        depthAt(frameNs).coerceIn(0f, 1f) * Motion.profile.homeDepthBlur * app.resources.displayMetrics.density
+
+    /**
+     * The lander shows where its icon is. Over a sharp home: within a pixel and nearly still (it then simply goes, looking
+     * exactly like the icon). Over a home blurring again behind the new app: within a sixth of the icon, so it does not
+     * stay sharp in a blurred home while its springs settle; it dissolves into its blurred icon over its last pixels.
+     */
+    private fun landerArrived(frameNs: Long): Boolean {
+        val t = max(0L, frameNs - landStartNs) / 1e9
+        val z = contentZoom(depthAt(frameNs))
+        val blurred = homeBlurAt(frameNs) >= 0.5f
+        val tol = if (blurred) max(1.5f, lW.target * z / 6f) else 1f
+        fun near(m: Mover) = abs(m.value(t) - m.target) * z < tol && (blurred || abs(m.velocity(t)) * z < 60f)
+        return near(lCx) && near(lCy) && near(lW) && near(lH)
+    }
+
+    /** The lander's frame at [frameNs] (zoomed with home's picture); true once its springs have settled. */
+    private fun applyLander(frameNs: Long): Boolean {
+        val l = land ?: return true
+        val t = max(0L, frameNs - landStartNs) / 1e9
+        val w = lW.value(t)
+        val h = lH.value(t)
+        val target = lW.target
+        val q = if (abs(target - landW0) > 1f) ((w - landW0) / (target - landW0)).coerceIn(0f, 1f) else 1f
+        val r: Float
+        if (landFade) {
+            l.iconMix = 0f
+            l.alpha = 1f - ((q - landFadeFrom) / (0.85f - landFadeFrom)).coerceIn(0f, 1f)
+            r = deviceRadius * (w / sw)
+        } else {
+            // As [applyCardSprings] into an icon: corners to the icon's, the picture crossfading into the icon at the end.
+            r = landR0 + (target * Icons.shape.clipFraction() - landR0) * q
+            l.iconMix = max(landMix0 * (1f - q), 1f - ((w - target) / (target * 1.5f)).coerceIn(0f, 1f))
+        }
+        val z = contentZoom(depthAt(frameNs))
+        val ox = sw / 2f
+        val oy = sh / 2f
+        l.setFrame(ox + (lCx.value(t) - ox) * z, oy + (lCy.value(t) - oy) * z, w * z, h * z, r * z)
+        return lCx.settled(t) && lCy.settled(t) && lW.settled(t) && lH.settled(t)
+    }
+
+    /**
+     * The lander is at its icon ([landerArrived]): the icon is back in home's picture under it, and the card goes. Over a
+     * home that is already blurring again behind the new app it fades into its (blurred) icon, still flying its last
+     * pixels and following home's zoom; over a sharp home it simply goes (it looks exactly like the icon).
+     */
+    private fun landed(frameNs: Long) {
+        val l = land ?: return endLander()
+        // Home's picture still shows the one without its icon (the new app's comes in over its blurred icon first): it
+        // stays as the icon until that picture goes ([softSwap]).
+        if (softPicture != null) { landWaiting = true; return }
+        backdrop?.setPatch(null, null, null)
+        if (l.alpha <= 0f || homeBlurAt(frameNs) < 0.5f) { endLander(); return }
+        val g = landGen
+        l.animate().alpha(0f).timed(Motion.role(dev.launcher.app.motion.MotionTokens.CARD_FADE_HOME))
+            .setUpdateListener(null)
+            .withEndAction { if (landGen == g) endLander() }.start()
+    }
+
+    /** The lander goes (if any): hidden, its icon back in home's picture and on home. */
+    private fun endLander() {
+        val from = landPkg ?: return
+        landGen++
+        landPkg = null
+        landPatchFrom = null; landPatchRect = null; landPatchKeep = null
+        landWaiting = false
+        choreographer.removeFrameCallback(landFrame)
+        // Normally shown again on home already, when the new app's icon was hidden in its place (one hidden icon at a time);
+        // never left hidden if that did not happen (home ignores this unless that very icon is the hidden one).
+        if (hiddenIconPkg != from) HomeBridge.setIconHidden(from, false)
+        land?.let { l ->
+            l.animate().cancel()
+            l.visibility = View.GONE
+            l.alpha = 1f
+            l.snapshot = null
+            l.icon = null
+            l.iconMix = 0f
+            l.badge = 0
+        }
+        backdrop?.setPatch(null, null, null)
     }
 
     // ---- touches during a close
@@ -2751,6 +3009,7 @@ object GestureNav {
             radius = springR0 + (springRadiusEnd - springR0) * q
             if (pipFlight) { c.alpha = springAlpha0 + (1f - springAlpha0) * q; c.focusMix = q }
             c.iconMix = springMix0 * (1f - ((w - springW0) / (max(springW0, dp(40)) * 1.5f)).coerceIn(0f, 1f))
+            if (softPicture != null) softStartStep(c, w)
         }
         var r = radius
         if (springFade) {
@@ -2763,6 +3022,33 @@ object GestureNav {
         c.setFrame(sCx.value(t), sCy.value(t), w, h, r)
         backdrop?.depth = sDepth.value(t)
         return sCx.settled(t) && sCy.settled(t) && sW.settled(t) && sH.settled(t)
+    }
+
+    // A launch from a home still blurred ([beginLaunch]): the picture of home without the tapped icon, put on once the card
+    // covers that icon (null: none waiting).
+    private var softPicture: HomePicture? = null
+    /** Home's blur (px) from which a launch comes in over its blurred icon; below it the icon looks sharp anyway. */
+    private const val SOFT_START_BLUR_PX = 1.5f
+    /** The soft start's card is opaque, and covers its icon's blur, once it has grown by this much. */
+    private const val SOFT_FADE_GROWTH = 0.4f
+
+    /** The soft start's card comes in over its blurred icon as it grows (into focus), and covers it by [SOFT_FADE_GROWTH]. */
+    private fun softStartStep(c: CardView, w: Float) {
+        val grown = (w - springW0) / max(1f, springW0)
+        c.alpha = (grown / SOFT_FADE_GROWTH).coerceIn(0f, 1f)
+        if (grown >= SOFT_FADE_GROWTH) softSwap()
+    }
+
+    /**
+     * The card covers its icon: home's picture without that icon goes on (the icon was showing, blurred, under the card
+     * coming in), with the patch of a card still landing, or that card, already in its icon, goes now.
+     */
+    private fun softSwap() {
+        val p = softPicture ?: return
+        softPicture = null
+        cur?.let { it.alpha = 1f; it.flatFade = false }
+        backdrop?.picture = p
+        if (landWaiting) { landWaiting = false; landed(System.nanoTime()) } else applyLandPatch()
     }
 
     /** Current card frame and velocity: from the springs if they are running, else at rest. */
@@ -2815,9 +3101,13 @@ object GestureNav {
         // Tapping the icon of the app whose card is closing into it reopens it from where the card is (open/close the same
         // app within 0.1 s must stay smooth).
         val reverse = root?.visibility == View.VISIBLE && cardPkg == pkg
+        if (reverse) softSwap()   // (a card still coming in over its icon: as it would be once over it)
         // Where the card starts and how fast it moves: from where it is if this is the same app (reversal), else the icon.
         val m = if (reverse) cardMotion() else floatArrayOf(iconRect.centerX(), iconRect.centerY(), iconRect.width(), iconRect.height(), 0f, 0f, 0f, 0f)
-        val depth0 = if (reverse) depthNow() else 0f
+        // Another app's card still closing goes on landing (read before hideCards ends its session).
+        val landing = if (!reverse) landingFor(pkg) else null
+        // Home recedes from where it is: a close under way has it part way (it started sharp, and the blur snapped away).
+        val depth0 = if (reverse || (root?.visibility == View.VISIBLE && anim == Anim.HOME_COMMIT)) depthNow() else 0f
         if (!reverse) hideCards()
         gen++
         val g = gen
@@ -2849,8 +3139,22 @@ object GestureNav {
             c.iconMix = 1f
             prv?.visibility = View.GONE
             root?.setBackgroundColor(0)
-            backdrop?.picture = picture
-            backdrop?.depth = 0f
+            // From a home still blurred (another app's card was closing): the tapped icon stays in the picture, blurred like
+            // home, and the card comes in over it as it grows (into focus, [softStartStep]); the picture without the icon
+            // goes on once the card covers it. (Started sharp over a blurred home, the tapped icon snapped into focus.)
+            val blur0 = depth0.coerceIn(0f, 1f) * Motion.profile.homeDepthBlur * app.resources.displayMetrics.density
+            val first = if (picture == null || blur0 < SOFT_START_BLUR_PX) null
+                else if (landing != null) landing.without ?: HomeBridge.preview else HomeBridge.preview
+            softPicture = if (first != null) picture else null
+            c.flatFade = first != null
+            c.alpha = if (first != null) 0f else 1f
+            backdrop?.picture = first ?: picture
+            backdrop?.depth = depth0
+            // (Where this app's icon is on home, at rest: the landing card's patch leaves it alone.)
+            landing?.start?.invoke(HomeBridge.iconRect(pkg) ?: RectF(iconRect).also { r ->
+                val z = contentZoom(depth0)
+                r.set(sw / 2 + (r.left - sw / 2) / z, sh / 2 + (r.top - sh / 2) / z, sw / 2 + (r.right - sw / 2) / z, sh / 2 + (r.bottom - sh / 2) / z)
+            })
         }
         appStarted = false
         pendingStart = Runnable(start)
@@ -4127,14 +4431,36 @@ object GestureNav {
                 set(v) {
                     if (field === v) return
                     field = v
+                    stale = false
                     invalidate()
                 }
+
+            // Inside [patchArea], another picture is drawn instead of [pic] (see [PreviewView.setPatch]).
+            private var patch: Picture? = null
+            private var patchArea: android.graphics.Path? = null
+            // The patch changed while the layer did not show: rendered again only once it shows ([freshen]). A hidden GPU
+            // layer is still rendered when it changes (a whole screen of home, for nothing).
+            private var stale = false
+
+            fun setPatch(p: Picture?, area: android.graphics.Path?, showing: Boolean) {
+                if (patch === p && patchArea === area) return
+                patch = p
+                patchArea = area
+                if (showing) { stale = false; invalidate() } else stale = true
+            }
+
+            fun freshen() { if (stale) { stale = false; invalidate() } }
 
             override fun onDraw(canvas: Canvas) {
                 val p = pic ?: return
                 val s = scale()
                 if (s != 1f) canvas.scale(s, s)
-                canvas.drawPicture(p)
+                val pp = patch
+                val area = patchArea
+                if (pp == null || area == null) { canvas.drawPicture(p); return }
+                // Whole pixels both ways (the area is on the quarter-size grid): no seam where the two pictures meet.
+                canvas.save(); canvas.clipOutPath(area); canvas.drawPicture(p); canvas.restore()
+                canvas.save(); canvas.clipPath(area); canvas.drawPicture(pp); canvas.restore()
             }
         }
 
@@ -4217,6 +4543,38 @@ object GestureNav {
             super.dispatchDraw(canvas)
         }
 
+        /**
+         * Draws [src] (a picture of home's content) instead of the picture inside [rect] (home's own coordinates), except
+         * inside [keep]: a closing card still landing in its icon while another app opens leaves that icon out (the
+         * picture shown is the new app's, without that app's icon, which [keep] is). Null: none.
+         */
+        fun setPatch(src: Picture?, rect: RectF?, keep: RectF?) {
+            val area = if (src == null || rect == null) null else android.graphics.Path().apply {
+                // Out to whole pixels of the quarter-size copy, so both layers cut it on pixel edges.
+                fun grid(r: RectF) = RectF(
+                    Math.floor(r.left / 4.0).toFloat() * 4f, Math.floor(r.top / 4.0).toFloat() * 4f,
+                    Math.ceil(r.right / 4.0).toFloat() * 4f, Math.ceil(r.bottom / 4.0).toFloat() * 4f
+                )
+                addRect(grid(rect), android.graphics.Path.Direction.CW)
+                if (keep != null) op(android.graphics.Path().apply { addRect(grid(keep), android.graphics.Path.Direction.CW) }, android.graphics.Path.Op.DIFFERENCE)
+            }
+            val visible = shown && alpha > 0f
+            contentLayer.setPatch(src, area, visible && contentLayer.alpha > 0f)
+            lowContent.setPatch(src, area, visible && low.alpha > 0f)
+        }
+
+        // A patch set while a layer did not show is rendered once it does.
+        private fun freshen() {
+            if (!shown || alpha <= 0f) return
+            if (contentLayer.alpha > 0f) contentLayer.freshen()
+            if (low.alpha > 0f) lowContent.freshen()
+        }
+
+        override fun setAlpha(alpha: Float) {
+            super.setAlpha(alpha)
+            freshen()
+        }
+
         /** What home looked like (null: nothing shows here). The layers keep the last picture while hidden. */
         var picture: HomePicture? = null
             set(v) {
@@ -4257,6 +4615,7 @@ object GestureNav {
             val sharp = if (shown && mix < 1f) 1f else 0f
             wallpaperLayer.alpha = sharp
             contentLayer.alpha = sharp
+            freshen()
         }
 
         private companion object {

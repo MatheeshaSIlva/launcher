@@ -590,6 +590,11 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - Scripted swipes on a busy emulator arrive as a few coarse events: a release's speed uses only the last 100 ms of
   samples, so a 120-300 ms `input swipe` can read as still and not turn a page (home's pages, the deck); swipe past
   halfway, and check a pulled panel really stayed open (its log, the focus) before tapping into it.
+- **A tap during a close cannot be scripted at full speed on the emulator.** An `input tap` right after an `input swipe`
+  never reaches the input dispatcher (not in `dumpsys input`'s RecentQueue, exit code 0); send the tap as touchscreen
+  events (`adb emu event send`, as `tools/kswipe.sh`), the flick with `input swipe` (console flicks are slow and open the
+  App Switcher). And there home takes ~1 s to come to the front, so every tap lands after the card: slow motion first
+  (`design/motion-edits-ios27.json` with `"motion.debug.slow": {"factor": 4}` through the inbox; `--es files remove` undoes).
 - What only the S24 can show (Samsung blur, One UI quirks, real frame pacing) is reported to Matheesha as unverified.
 - Smoothness on the S24 is measured from what the screen showed: `tools/scenario_spotlight_close.sh`, `scenario_library.sh`,
   `scenario_switch.sh` run launches/closes/switches N times and print per-animation missed refreshes and GPU/CPU per frame

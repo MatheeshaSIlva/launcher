@@ -143,8 +143,8 @@ object HomeBridge {
         h.afterNextDraw(then, timeoutMs = 600, label = "icon handover")
     }
 
-    /** Runs [then] (main thread) once home has drawn its next frame and it has been queued, or after 150 ms. Any thread. */
-    fun afterHomeDraw(then: () -> Unit) = main.post { home?.afterNextDraw(then) ?: then() }
+    /** Runs [then] (main thread) once home has drawn its next frame and it has been queued, or after [timeoutMs]. Any thread. */
+    fun afterHomeDraw(timeoutMs: Long = 150, then: () -> Unit) = main.post { home?.afterNextDraw(then, timeoutMs) ?: then() }
 
     /**
      * The real home takes over the depth animation from the picture: same curve, same start ([startNanos], System.nanoTime
@@ -216,6 +216,12 @@ object HomeBridge {
         }
     }
 
-    /** Set by gesture nav: home was touched (a closing card should get out of the way). Called on the main thread. */
+    /** Set by gesture nav: home was touched (home takes over behind a closing card). Called on the main thread. */
     @Volatile var onHomeTouched: (() -> Unit)? = null
+
+    /**
+     * Set by gesture nav: a touch on home moved past the touch slop (pages, the App Library, Spotlight: icons move, a closing
+     * card gets out of the way). Called on the main thread, once per touch.
+     */
+    @Volatile var onHomeDragged: (() -> Unit)? = null
 }
