@@ -1,7 +1,8 @@
 # The settings app: the plan (phase C)
 
 Status: **agreed 2026-10-10** (answers below, under "Decided"). Phase C of `docs/PLAN_LAYOUTS_THEMES.md`; builds on phase B (layouts,
-themes, animations and switching between them).
+themes, animations and switching between them). A second structure (the whole phone and its parts, three depths on
+every page, Motion as moments) is proposed in `docs/PLAN_SETTINGS_V2.md` (2026-10-14, not yet agreed).
 
 ## What it must be (Matheesha's words, and the requirements)
 

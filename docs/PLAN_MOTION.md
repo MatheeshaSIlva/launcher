@@ -1,7 +1,9 @@
 # The Motion page: the plan (step C4)
 
 Status: **agreed 2026-10-14** (Matheesha: "per preset, material yes, groups as pages"). Step C4 of
-`docs/PLAN_SETTINGS.md` ("Motion: preset gallery with demos, the curve editor, roles by group").
+`docs/PLAN_SETTINGS.md` ("Motion: preset gallery with demos, the curve editor, roles by group"). After C4b Matheesha found
+Motion cluttered: moments instead of groups, and transition styles per moment, are proposed in `docs/PLAN_SETTINGS_V2.md`
+and `docs/MOTION_STYLES.md` (2026-10-14, not yet agreed).
 
 ## What it must do
 
