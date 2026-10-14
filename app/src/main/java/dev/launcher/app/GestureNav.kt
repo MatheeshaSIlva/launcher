@@ -3671,8 +3671,15 @@ object GestureNav {
      * older, the deck stays in the card window, the mini player showing through a hole.
      */
     private fun maybeAskSwitcherWindow() {
-        if (win != Win.NONE || !dev.launcher.app.switcher.SwitcherHost.ready || !NoAnimStarts.usable) return
+        if (win != Win.NONE || !NoAnimStarts.usable) return
         if (floatingModes.none { it == WINDOWING_MODE_PINNED }) return
+        // No host made yet (the switcher opened again soon after its last session): made once the deck rests, and asked then.
+        if (!dev.launcher.app.switcher.SwitcherHost.ready) {
+            AppLog.log("[switcher] a mini player is up but its window's host is not made yet: the deck moves there once it rests")
+            nav.removeCallbacks(spareLater)
+            nav.postDelayed(spareLater, SPARE_SWITCHER_POLL_MS)
+            return
+        }
         val st = stage2 ?: return
         val b2 = back2 ?: return
         val s = gen
@@ -3823,11 +3830,31 @@ object GestureNav {
         nav.postDelayed(spareLater, SPARE_AFTER_MS)
     }
 
+    /**
+     * Makes the next session's host once nothing moves. Also while the App Switcher is open without one (it opened again
+     * within a second of the last session, before its host was made): once the deck rests, then the deck moves under the
+     * mini player mid-session. That session had kept the deck in the card window throughout, and a mini player dragged fast
+     * left the hole chasing it: home showed through (Matheesha, S24 log 12:29:43).
+     */
     private val spareLater: Runnable = object : Runnable {
+        private var tries = 0
         override fun run() {
-            if (phase != Phase.IDLE || fingerDown) { nav.postDelayed(this, SPARE_AFTER_MS); return }
+            nav.removeCallbacks(this)
+            val d = deck
+            val resting = phase == Phase.SWITCHER && win == Win.NONE && d != null && d.interactive && !d.moving && !d.fingerOn
+            if (!resting && (phase != Phase.IDLE || fingerDown)) {
+                nav.postDelayed(this, if (phase == Phase.SWITCHER && win == Win.NONE) SPARE_SWITCHER_POLL_MS else SPARE_AFTER_MS)
+                return
+            }
             dev.launcher.app.switcher.SwitcherHost.makeSpare()
-            updateSwitcherWarmth()
+            if (!dev.launcher.app.switcher.SwitcherHost.ready) {
+                // The last session's host still holds what the window shows (it is released a moment after it ended).
+                if (tries++ < SPARE_TRIES) nav.postDelayed(this, SPARE_SWITCHER_POLL_MS)
+                else { tries = 0; AppLog.log("[switcher] its window's host could not be made") }
+                return
+            }
+            tries = 0
+            if (resting) maybeAskSwitcherWindow() else updateSwitcherWarmth()
         }
     }
 
@@ -4011,6 +4038,10 @@ object GestureNav {
     private val SETTINGS_CLASS = dev.launcher.app.settings.SettingsActivity::class.java.name
     /** How long after a switcher session the next spare host for its window is made (ms; once nothing moves). */
     private const val SPARE_AFTER_MS = 800L
+    /** While the App Switcher is open without its window's host: how often it looks for the deck at rest (ms). */
+    private const val SPARE_SWITCHER_POLL_MS = 100L
+    /** How many times it waits for the last session's host to let go before giving up (each [SPARE_SWITCHER_POLL_MS]). */
+    private const val SPARE_TRIES = 20
     /** How far a finger from the top edge moves down before the hidden status bar shows for a moment (dp). */
     private const val EDGE_TRAVEL_DP = 20f
     /**

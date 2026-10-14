@@ -2045,3 +2045,15 @@ launcher gets; Android hides our windows while the display turns, ~180 ms on the
 in round 5's recording, the mini player still in its landscape corner then). Flying our card upright would leave the
 real mini player showing in its old corner for those frames.
 
+## The mini player in the App Switcher, once more (2026-10-14, S24)
+
+Matheesha: dragged fast, the mini player still showed home around it in the App Switcher. His log: the App Switcher
+opened from home at 12:29:40 moved its deck into its own window under the mini player (as built on 10-14), but opened again
+1.2 s after that session ended (12:29:43) it never asked for the window: the window's host for the next session is made
+0.8 s after a session ends and only when nothing moves, and it was not there yet. That whole session kept the deck in the
+card window, the mini player showing through the hole that chases it, and a fast drag outran the hole. Now a session
+that opens without a host has it made once the deck rests (14 ms on the S24) and moves the deck under the mini player
+then, mid-session (the last session's host is waited for if it has not let go yet). S24, local build: opened again 0.9 s
+after the last session, the deck was in its own window 123 ms after the host was made; two fast drags of the test app's
+mini player across the Clock card, recorded: only the deck around it in every frame, nothing of home.
+
