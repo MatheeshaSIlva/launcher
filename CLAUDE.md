@@ -480,6 +480,12 @@ copy it wholesale — port the working pieces cleanly. File map:
   interface SystemUI gives only the phone's recents component). Ours draws a card; from home's start until the display has
   turned Android hides our windows, and the mini player moves upright then (One UI's crossfade, ~180 ms on the S24).
   Flying the card upright instead would show the real mini player in its old corner for those frames.
+- **A view with a hardware layer that only moves (translation, alpha) is not drawn again**: Notification Center's sheet
+  slides in as a layer, so work started from its onDraw "once it is open" never ran (the stack's content recorded ahead);
+  start such work where the motion is set (its progress setter). And framestats' "GPU ms" counts from the frame's issue to
+  its GPU fence, buffer waits included: values stuck near 16.6 ms with a bare material are waiting, not drawing (judge the
+  misses, and look in a trace before blaming a shader). The first run after an update reads the app's code and fonts from
+  disk (`folio_wait_bit_common` in the trace): judge a step after a warm-up run.
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

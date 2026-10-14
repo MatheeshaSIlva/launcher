@@ -182,6 +182,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             translationY = sheetY()
             alpha = if (v <= 0.002f) 0f else 1f
             if (was <= 0.002f && v > 0.002f) invalidate()
+            // Open and collapsed (the sheet only moves its layer: nothing is drawn as it comes to rest): the stack's
+            // notifications are recorded ahead once it has settled (see [prerecord]).
+            if (v >= 1f && !prerecordAsked && collapsed) { prerecordAsked = true; postOnAnimationDelayed(prerecord, PRERECORD_DELAY_MS) }
         }
 
     init {
@@ -193,6 +196,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     /** About to open: what it shows is brought up to date (wallpaper, clock, notifications). */
     fun prepare() {
+        prerecordAsked = false
+        prerecorded = 0
+        removeCallbacks(prerecord)
         collapsed = true
         wallpaper = Wallpaper.current
         warmFrost()
@@ -213,12 +219,14 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
      * never taps a notification, and a long list is what it measures).
      */
     fun expandList() {
+        removeCallbacks(prerecord)
         collapsed = false
         expanded += groups.map { it.first }
         relayout(animate = true)
     }
 
     fun onClosed() {
+        removeCallbacks(prerecord)
         painter.resetTimeFades()
         stopTicking()
         revealed?.swipe?.snapTo(0f)
@@ -879,8 +887,12 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         order.clear()
         order.addAll(blocks.values)
         order.sortWith(backToFront)
+        // Where each notification's glass is this frame: one lying wholly behind an opaque notification in front of it is
+        // not drawn (see [hidden]).
+        while (shapes.size < order.size) shapes += Shape()
+        for ((i, b) in order.withIndex()) shapeOf(b, top, shapes[i], held)
         // The collapsed stack's peeking parts lie under the notification in front: drawn first.
-        for (pass in 0..1) for (b in order) {
+        for (pass in 0..1) for ((i, b) in order.withIndex()) {
             if (b === held) continue
             if ((b.kind == Kind.PEEK || b.kind == Kind.MORE) != (pass == 0)) continue
             val a = b.appear.value.coerceIn(0f, 1.1f)
@@ -893,7 +905,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             if (f <= 0.003f) continue
             when (b.kind) {
                 Kind.PEEK, Kind.MORE -> drawPeek(c, b, y, min(a, 1f) * f)
-                Kind.MEDIA, Kind.PLATTER -> drawLayered(c, b, top, y, a, f)
+                Kind.MEDIA, Kind.PLATTER -> if (!hidden(i)) drawLayered(c, b, top, y, a, f)
                 Kind.HEADER -> drawHeader(c, b, y, a * headK * f, sheetY)
             }
         }
@@ -902,6 +914,80 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     private val order = ArrayList<Block>()
+
+    /** A notification's glass as drawn this frame (screen px): its rectangle and corner, and what may be left out under it. */
+    private class Shape {
+        val r = RectF()
+        var radius = 0f
+        /** Its glass is opaque now (fully in: nothing behind it shows through). */
+        var opaque = false
+        /** All it draws lies within its glass (no stack shelves below it, no swipe actions beside it). */
+        var simple = false
+    }
+    private val shapes = ArrayList<Shape>()
+
+    /** Where [b]'s glass is drawn this frame (as [drawLayered] places it), into [out]. */
+    private fun shapeOf(b: Block, top: Float, out: Shape, held: Block?) {
+        out.opaque = false
+        out.simple = false
+        if (b === held || (b.kind != Kind.PLATTER && b.kind != Kind.MEDIA)) return
+        val y = top + b.y.value
+        val present = b.appear.value.coerceIn(0f, 1f)
+        val glassA = min(1f, present / GLASS_FIRST) * topFade(y, b.height)
+        val s = 0.92f + 0.08f * present
+        val sw = if (b.kind == Kind.PLATTER) b.swipe.value else 0f
+        val ps = if (b.kind == Kind.PLATTER) 1f - 0.02f * b.press.value else 1f
+        val h = b.shownH()
+        val w2 = width / 2f
+        val cy = y + h / 2f
+        val x0 = margin + sw
+        val cx = x0 + platterW / 2f
+        out.r.set(w2 + (cx + (x0 - cx) * ps - w2) * s, cy + (y - cy) * ps * s,
+            w2 + (cx + (x0 + platterW - cx) * ps - w2) * s, cy + (y + h - cy) * ps * s)
+        out.radius = min(Design.pt(NcTokens.CORNER, u) * ps * s, min(out.r.width(), out.r.height()) / 2f)
+        out.opaque = glassA >= 0.999f
+        out.simple = b.kind == Kind.PLATTER && b.stack.value <= 0.002f && abs(sw) < 1f
+    }
+
+    /**
+     * Whether the notification at [i] of [order] lies wholly behind an opaque one drawn after it (in front): a stack
+     * fanning out begins with every notification it gathers in its place behind the front one, and drawing them all (their
+     * glass and content, 39 at once on the S24) made its first frames 25-90 ms long.
+     */
+    private fun hidden(i: Int): Boolean {
+        val back = shapes[i]
+        if (!back.simple) return false
+        // The rims reach a little past the glass; continuous corners (smoothing) bend in earlier than a circle's.
+        val m = COVER_MARGIN_PT * u
+        val k = if (Design.num(MaterialPainter.SMOOTHING) > 0.001f) COVER_SMOOTH_CORNER else 1f
+        for (j in i + 1 until order.size) {
+            val f = shapes[j]
+            if (f.opaque && within(back.r, back.radius, m, f.r, min(f.radius * k, min(f.r.width(), f.r.height()) / 2f))) return true
+        }
+        return false
+    }
+
+    /** Whether the rounded rectangle [b] (corner [rb]) grown by [m] lies within the rounded rectangle [f] (corner [rf]). */
+    private fun within(b: RectF, rb: Float, m: Float, f: RectF, rf: Float): Boolean {
+        if (b.left - m < f.left || b.top - m < f.top || b.right + m > f.right || b.bottom + m > f.bottom) return false
+        // Its corners' arcs (its straight edges lie inside once their ends do: f is convex).
+        val r = rb + m
+        for (corner in 0 until 4) {
+            val left = corner == 0 || corner == 3
+            val upper = corner < 2
+            val ox = if (left) b.left - m + r else b.right + m - r
+            val oy = if (upper) b.top - m + r else b.bottom + m - r
+            for (a in ARC_STEPS.indices) {
+                val px = ox + (if (left) -r else r) * ARC_COS[a]
+                val py = oy + (if (upper) -r else r) * ARC_SIN[a]
+                val dx = max(max(f.left + rf - px, px - (f.right - rf)), 0f)
+                val dy = max(max(f.top + rf - py, py - (f.bottom - rf)), 0f)
+                if (dx * dx + dy * dy > rf * rf) return false
+            }
+        }
+        return true
+    }
+
     private val backToFront = Comparator<Block> { a, b ->
         val c = b.y.value.compareTo(a.y.value)
         if (c != 0) c else b.targetY.compareTo(a.targetY)
@@ -930,6 +1016,19 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
      */
     private fun drawLayered(c: Canvas, b: Block, top: Float, y: Float, a: Float, f: Float) {
         val m = 2f * u
+        // "now" -> "1m ago": the time label's crossfade draws it again each frame until it is done.
+        val fading = b.kind == Kind.PLATTER && b.item?.let { painter.timeFadeProgress(it.key) < 1f } == true
+        recordContent(b)
+        if (fading) postInvalidateOnAnimation()
+        val present = min(a, 1f)
+        val alpha = min(1f, present / GLASS_FIRST) * f
+        val contentA = ((present - CONTENT_AFTER) / (1f - CONTENT_AFTER)).coerceIn(0f, 1f) * f
+        if (alpha <= 0.003f) return
+        drawRecorded(c, b, y, m, present, alpha, contentA)
+    }
+
+    /** What [b] shows (icon, text, the player's controls) folded into one number: its display list is recorded again when it changes. */
+    private fun contentKey(b: Block): Long {
         var k = 17L
         fun mixIn(v: Long) { k = k * 31 + v }
         mixIn(Math.round(b.height).toLong()); mixIn(b.count.toLong()); mixIn(Math.round(b.stack.value * 255f).toLong())
@@ -940,7 +1039,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         mixIn(if (b.item?.let { painter.pictureLoaded(it) } == true) 1L else 0L)
         mixIn(b.item?.let { painter.iconKey(it.pkg).toLong() } ?: 0L)
         // "now" -> "1m ago": the label itself (the wall clock's minute lagged it by up to a minute), and its crossfade.
-        val fading = b.kind == Kind.PLATTER && b.item?.let { painter.timeFadeProgress(it.key) < 1f } == true
         if (b.kind == Kind.PLATTER) b.item?.let { mixIn(painter.timeLabel(it.postTime).hashCode().toLong()); mixIn(Math.round(painter.timeFadeProgress(it.key) * 64f).toLong()) }
         if (b.kind == Kind.MEDIA) {
             val md = host.media
@@ -949,17 +1047,54 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             mixIn(if (md.playing) 1L else 0L); mixIn(if (md.active) 1L else 0L); mixIn(md.positionNow() / 250L)
             mixIn(Math.round(pressOf("prev") * 64f).toLong()); mixIn(Math.round(pressOf("play") * 64f).toLong()); mixIn(Math.round(pressOf("next") * 64f).toLong())
         }
-        if (k != b.key || !b.node.hasDisplayList()) {
-            b.node.setPosition(0, 0, width, kotlin.math.ceil(max(b.height, max(b.fullH, b.stackH)) + 2 * m).toInt())
-            val rc = b.node.beginRecording()
-            try { if (b.kind == Kind.MEDIA) drawMediaContent(rc, b, m, 1f) else drawPlatterContent(rc, b, m, 1f) } finally { b.node.endRecording() }
-            b.key = k
-            if (b.kind == Kind.PLATTER && b.item?.let { painter.timeFadeProgress(it.key) < 1f } == true) postInvalidateOnAnimation()
-        } else if (fading) postInvalidateOnAnimation()
-        val present = min(a, 1f)
-        val alpha = min(1f, present / GLASS_FIRST) * f
-        val contentA = ((present - CONTENT_AFTER) / (1f - CONTENT_AFTER)).coerceIn(0f, 1f) * f
-        if (alpha <= 0.003f) return
+        return k
+    }
+
+    /** Records [b]'s content again if what it shows changed (see [contentKey]); true if it did. */
+    private fun recordContent(b: Block): Boolean {
+        val k = contentKey(b)
+        if (k == b.key && b.node.hasDisplayList()) return false
+        val m = 2f * u
+        b.node.setPosition(0, 0, width, kotlin.math.ceil(max(b.height, max(b.fullH, b.stackH)) + 2 * m).toInt())
+        val rc = b.node.beginRecording()
+        try { if (b.kind == Kind.MEDIA) drawMediaContent(rc, b, m, 1f) else drawPlatterContent(rc, b, m, 1f) } finally { b.node.endRecording() }
+        b.key = k
+        return true
+    }
+
+    private var prerecordAsked = false
+    // How many the current opening has recorded ahead, and since when (for the log).
+    private var prerecorded = 0
+    private var prerecordFrom = 0L
+
+    /**
+     * While Notification Center rests open with its stack collapsed, the notifications the stack gathers have their content
+     * recorded ahead, a few a frame: fanned out, they all came into view in one frame, and recording them there (~1.5 ms
+     * each) made it 19-30 ms long (S24). Stops as soon as anything moves or a finger is down; what is left is recorded as
+     * it comes into view, as before.
+     */
+    private val prerecord: Runnable = object : Runnable {
+        override fun run() {
+            val busy = when {
+                !collapsed -> "fanned out"
+                progress < 1f -> "not open"
+                mode != Mode.NONE || menu != null -> "touched"
+                blocks.values.any { it.y.isAnimating || it.appear.isAnimating } -> "moving"
+                else -> null
+            }
+            if (busy != null) { if (prerecorded > 0) AppLog.log("[nc] recorded $prerecorded notifications ahead, then stopped ($busy)"); prerecorded = 0; return }
+            if (prerecorded == 0) prerecordFrom = android.os.SystemClock.uptimeMillis()
+            var n = 0
+            for (b in blocks.values) {
+                if (b.kind != Kind.PLATTER && b.kind != Kind.MEDIA) continue
+                if (recordContent(b)) { prerecorded++; if (++n >= PRERECORD_PER_FRAME) { postOnAnimation(this); return } }
+            }
+            if (prerecorded > 0) AppLog.log("[nc] recorded $prerecorded notifications ahead in ${android.os.SystemClock.uptimeMillis() - prerecordFrom} ms")
+            prerecorded = 0
+        }
+    }
+
+    private fun drawRecorded(c: Canvas, b: Block, y: Float, m: Float, present: Float, alpha: Float, contentA: Float) {
         // Grown in about its centre; a press shrinks the platter itself a little (not its stack).
         val s = 0.92f + 0.08f * present
         val sw = if (b.kind == Kind.PLATTER) b.swipe.value else 0f
@@ -1750,6 +1885,17 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val LOOK_HANDOVER = 0.003f
         /** A platter coming in: its glass is whole at this much of its presence; its content shows from [CONTENT_AFTER] on. */
         const val GLASS_FIRST = 0.4f
+        /** A notification left out under another: how far past its glass its rims reach (pt), and how much sooner a
+         *  continuous corner bends in than a circle's (judged: Figma's smoothing reaches 1.528 r along the edge). */
+        const val COVER_MARGIN_PT = 2f
+        /** The stack's notifications recorded ahead: how many a frame, from how long after Notification Center came to rest (ms). */
+        const val PRERECORD_PER_FRAME = 3
+        const val PRERECORD_DELAY_MS = 150L
+        const val COVER_SMOOTH_CORNER = 1.6f
+        /** Points along a quarter circle where a corner's arc is checked (0 to 90 degrees). */
+        val ARC_STEPS = floatArrayOf(0f, 22.5f, 45f, 67.5f, 90f)
+        val ARC_COS = FloatArray(ARC_STEPS.size) { kotlin.math.cos(Math.toRadians(ARC_STEPS[it].toDouble())).toFloat() }
+        val ARC_SIN = FloatArray(ARC_STEPS.size) { kotlin.math.sin(Math.toRadians(ARC_STEPS[it].toDouble())).toFloat() }
         const val CONTENT_AFTER = 0.35f
         /** The gap between the list at rest and the top of the flashlight and camera buttons (pt). */
         const val LIST_ABOVE_BUTTONS_PT = 10f

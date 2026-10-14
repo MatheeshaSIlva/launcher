@@ -2057,3 +2057,34 @@ then, mid-session (the last session's host is waited for if it has not let go ye
 after the last session, the deck was in its own window 123 ms after the host was made; two fast drags of the test app's
 mini player across the Clock card, recorded: only the deck around it in every frame, nothing of home.
 
+## Performance pass (2026-10-14, S24, build 48f4c2d + local)
+
+Missed refreshes per step (what the screen showed, `tools/framestats.py`), against round 5 (2026-10-13):
+
+| scenario | now | round 5 |
+| --- | --- | --- |
+| quick switch (10 + 10) | 0-1 each | 0-2 |
+| App Library launch / close (4 + 4) | 0-1 | launches 0, closes 0-1 |
+| Spotlight launch / close (3 + 3) | 0-1 | 0-1 |
+| page to App Library | 3 | 2-3 |
+| library scroll, list open / close | 0, 0, 1 | 0-1 |
+| folder open / close by the bar (5 runs) | 0 / 0-2 (one run 6) | 0 / 0-1 |
+| App Library to page 1 by the bar / by a swipe | 3 / 0 | 1-6 / 0 |
+| Spotlight open / close, pull on home | 1 / 0, 0 | 0 |
+| launches and closes (folder, dock, grabbed), cancel, sideways | 0-1 | 0-1 |
+| App Switcher: over an app / a card opened / home / from home | 2 (one 32 ms UI frame, as before) / 0 / 0 / 1 | 2-5 / 0-2 / 0 / 0 |
+| long deck scroll, flick away | 3, 0 | 1, 0 |
+| Control Center open, close, edit in / out, Notification Center open / close, banner (3 runs) | 0-1 each | 0-1 |
+| Notification Center's stack fanning out | before: 17, 0, 0 (and 23, 13, 4 in other batches); after the change below: 0, 1, 0, 0, 0 (the first after new notifications: 10) | 2-18 |
+
+**The stack fanning out**: a trace showed its first frame drawing every notification the stack gathers (39 platters' glass
+and content at once: 25-92 ms on the shade's thread; the platters' glass itself was not the cost: with a bare material
+the GPU time and the misses were the same). Two changes: a notification lying wholly behind an opaque one in front is not
+drawn (`NotificationCenterView.hidden`, a rounded-rectangle containment test, conservative at the corners), and while
+Notification Center rests open and collapsed the gathered notifications have their content recorded ahead, three a frame
+("[nc] recorded N notifications ahead in M ms": 7-14 of them in 17-34 ms; 58 with the phone's own list). The first frame
+of the fan-out took 16.9-18.5 ms on the shade's thread after this (traced). Still open: the first fan-out after an update
+(the app's code and fonts read from disk, `folio_wait_bit_common` in the trace) and framestats' "GPU ms" near 16 ms in
+every frame of it (it counts from the frame's issue to the GPU's fence, buffer waits included: the same with a bare
+material, so not the glass).
+
