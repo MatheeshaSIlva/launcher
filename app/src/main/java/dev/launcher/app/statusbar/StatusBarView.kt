@@ -1,6 +1,7 @@
 package dev.launcher.app.statusbar
 
 import kotlin.math.max
+import kotlin.math.min
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.content.BroadcastReceiver
@@ -250,6 +251,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
     fun setPanel(ccK: Float, ncK: Float, ncDarkContent: Float, ccRowY: Float, ccRowInset: Float = 0f) {
         if (ccK == cc && ncK == nc && ncDarkContent == ncDark && ccRowY == ccRow && ccRowInset == ccInset) return
         cc = ccK; nc = ncK; ncDark = ncDarkContent; ccRow = ccRowY; ccInset = ccRowInset
+        // (Laid out again within this frame: the panels call this from their animation, before it is drawn.)
+        val t = ccK > 0f || ncK > 0f
+        if (t != tall) { tall = t; requestLayout() }
         sync()
         invalidate()
     }
@@ -617,6 +621,8 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
+        // Only taller or shorter (a panel came or went, [tall]): nothing on the bar moves, nor may it snap.
+        if (w == oldw) return
         settled = false
         relayout()
     }
@@ -636,8 +642,21 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     /** The bar's own height: the view may be taller (it reaches down to Control Center's status row). */
-    var barHeight = 0
-        get() = if (field > 0) field else height
+    var barHeight: Int
+        get() = if (barH > 0) barH else height
+        set(v) { barH = v }
+    private var barH = 0
+
+    // As tall as the bar itself while no panel shows, the whole window while one does (Control Center's status row is
+    // further down). A view that changes is drawn again whole: full screen, every step of every animation of the bar (a
+    // minute ticking, the tone turning as the App Library comes in, a level moving) redrew the shade's whole window (a
+    // trace on the S24: 256 full-window frames in a few App Library swipes).
+    private var tall = false
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val full = MeasureSpec.getSize(heightMeasureSpec)
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), if (tall || barH <= 0) full else min(full, barH))
+    }
 
     override fun onDraw(c: Canvas) {
         if (width == 0) return

@@ -337,6 +337,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         val sleeping = !screenOn()
         if (sleeping) markArrivalDue("paused")
         resumed = false
+        HomeBridge.touching = false   // (a touch cut off by the pause never sends its lift)
         screen.removeCallbacks(unlockCheck)
         screen.removeCallbacks(sleepWatch)
         GestureNav.homeVisible = false
@@ -494,9 +495,15 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     // later instead, when nothing moves (recordPreview skips it while home is moving; the next settle records).
     private val recordPreviewLater = Runnable { recordPreview() }
 
+    /**
+     * Once home has rested a moment with no finger on it: recording it costs ~20 ms of this thread, and gesture nav then
+     * renders the picture into its layers on the one render thread all our windows share. Recorded 120 ms after every
+     * settle, both landed on the next swipe when the App Library was swiped to and back quickly (it felt slower than 60 Hz).
+     * A launch records what it needs at the tap anyway.
+     */
     private fun recordPreviewSoon() {
         screen.removeCallbacks(recordPreviewLater)
-        screen.postDelayed(recordPreviewLater, 120)
+        screen.postDelayed(recordPreviewLater, RECORD_AFTER_SETTLE_MS)
     }
 
     override fun layoutChanged() { screen.layoutForSaving()?.let { HomeModel.save(this, it) } }
@@ -626,6 +633,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     /** Records home at rest (nothing moving, no icon hidden) as the picture gesture nav draws behind cards. */
     private fun recordPreview() {
         if (screen.width == 0 || !screen.isIdle || screen.wallpaperView.transitioning || screen.hiddenPkg != null) return
+        // A finger resting on home is often a swipe about to start (home counts as idle until it moves): later.
+        if (HomeBridge.touching) { recordPreviewSoon(); return }
         // The clock stops updating while home is in the background: make it show the time now before recording.
         for (c in screen.clocks) c.refresh(animate = false)
         HomeBridge.setPreview(record() ?: return)
@@ -743,5 +752,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         const val SLEEP_POLL_MS = 50L
         /** A cold start's first showing this soon after gesture nav brought home forward is that close, not an arrival (ms). */
         const val COLD_VIA_NAV_MS = 3000L
+        /** Home is recorded once it has rested this long after settling (and no finger is on it; ms). */
+        const val RECORD_AFTER_SETTLE_MS = 350L
     }
 }

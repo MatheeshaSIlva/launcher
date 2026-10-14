@@ -220,6 +220,12 @@ object HomeBridge {
     @Volatile var onHomeTouched: (() -> Unit)? = null
 
     /**
+     * A finger is on home now. Work that can wait (recording home, rendering its picture ahead) waits for it to lift: a
+     * swipe that starts on a resting finger is a page or the App Library coming, and its first frames must not wait for it.
+     */
+    @Volatile var touching = false
+
+    /**
      * Set by gesture nav: a touch on home moved past the touch slop (pages, the App Library, Spotlight: icons move, a closing
      * card gets out of the way). Called on the main thread, once per touch.
      */

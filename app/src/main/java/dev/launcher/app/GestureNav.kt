@@ -337,9 +337,7 @@ object GestureNav {
         HomeBridge.onHomeTouched = { nav.post { homeTouchedDuringClose(); readyForLaunch() } }
         HomeBridge.onHomeDragged = { nav.post { homeDraggedDuringClose() } }
         // Home settled into a new look: rendered into the layers now, while nothing moves, not at the next gesture's start.
-        HomeBridge.onPreviewChanged = { p ->
-            nav.post { if (phase == Phase.IDLE && root?.visibility != View.VISIBLE && homeVisible) backdrop?.prewarm(p) }
-        }
+        HomeBridge.onPreviewChanged = { p -> nav.post { prewarmHome(p) } }
         // What is under the status bar on home changed (the App Library opened, the appearance changed): follow at once.
         HomeBridge.onStatusDarkChanged = { nav.post { if (homeVisible) refreshAppearance() } }
         // The settings' picture of home has our bar on top, as it shows there.
@@ -1753,6 +1751,17 @@ object GestureNav {
     /** Home was touched: a launch may follow, so the card window must be ready (it stays so). */
     private fun readyForLaunch() = setWindowShown(true)
 
+    /**
+     * Home settled into a new look ([p]): rendered into the layers now, while nothing moves, not at the next gesture's start.
+     * Not while a finger is on home (rendering home takes the render thread all our windows share for a frame or two, and a
+     * swipe starting there would wait): once it has lifted, if [p] is still the latest picture.
+     */
+    private fun prewarmHome(p: HomePicture) {
+        if (phase != Phase.IDLE || root?.visibility == View.VISIBLE || !homeVisible || HomeBridge.preview !== p) return
+        if (HomeBridge.touching) { nav.postDelayed({ prewarmHome(p) }, PREWARM_RETRY_MS); return }
+        backdrop?.prewarm(p)
+    }
+
     private fun showCards() {
         val r = root ?: return
         if (backdrop?.picture != null) HomeBridge.homeCovered = true
@@ -2592,6 +2601,8 @@ object GestureNav {
 
     // The closing card is fading where it is ([homeDraggedDuringClose]).
     private var closeFading = false
+    /** How often a picture of home waits for a finger to leave home before it is rendered ahead ([prewarmHome]; ms). */
+    private const val PREWARM_RETRY_MS = 250L
     /** How long a picture of home waits for home's own next frame before it goes anyway ([homeTouchedDuringClose]). */
     private const val HOME_FRESH_MS = 1500L
 
@@ -4424,8 +4435,8 @@ object GestureNav {
         // starts underneath. The GPU layers are kept for good, and so is the last picture while no card shows: a trace on
         // the S24 showed every gesture re-allocating both full-screen layers and re-rendering home into them (~25 ms of the
         // first frame), though home had usually not changed.
-        private class Layer(ctx: Context, private val scale: () -> Float = { 1f }) : View(ctx) {
-            init { setLayerType(LAYER_TYPE_HARDWARE, null) }
+        private class Layer(ctx: Context, cached: Boolean = true, private val scale: () -> Float = { 1f }) : View(ctx) {
+            init { if (cached) setLayerType(LAYER_TYPE_HARDWARE, null) }
 
             var pic: Picture? = null
                 set(v) {
@@ -4464,7 +4475,10 @@ object GestureNav {
             }
         }
 
-        private val wallpaperLayer = Layer(ctx)
+        // The wallpaper's picture is one bitmap (and dark mode's dim): drawn as it is each frame, it costs what drawing a layer
+        // of it costs, and the bitmap is the texture home already holds. Its own screen-sized layer took 10 MB of the GPU
+        // cache's budget (S24: 121 MB, all but full), which every gesture's new layers and blurs then had to free first.
+        private val wallpaperLayer = Layer(ctx, cached = false)
         private val contentLayer = Layer(ctx)
 
         // The blur is done on a quarter-size copy of the picture and scaled up: blurring the full-size composite every frame

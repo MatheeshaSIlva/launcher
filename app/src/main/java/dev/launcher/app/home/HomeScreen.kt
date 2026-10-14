@@ -923,11 +923,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun dispatchTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { movedX = e.x; movedY = e.y; moved = false }
+            MotionEvent.ACTION_DOWN -> { movedX = e.x; movedY = e.y; moved = false; HomeBridge.touching = true }
             MotionEvent.ACTION_MOVE -> if (!moved && (abs(e.x - movedX) > slop || abs(e.y - movedY) > slop)) {
                 moved = true
                 HomeBridge.onHomeDragged?.invoke()
             }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> HomeBridge.touching = false
         }
         return super.dispatchTouchEvent(e)
     }
