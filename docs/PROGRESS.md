@@ -2137,3 +2137,12 @@ a frame after an update; the header's titles hand over without crossing. The pho
   shows real pictures there too). Every other hidden call we make still exists in One UI 9's framework. Not reproduced yet:
   the App Library's search field after a pull of the shade (pulls of both panels and from the middle over the App Library
   left it as it was). Not checked: a pull over an app (needs a real finger), picture-in-picture.
+- **Smoothness on One UI 9, not debuggable** (c1e6372 installed through UPDATE, phone cool: AP 47 °C, CPUs uncapped;
+  missed refreshes per animation, from what the screen showed): App Library launches of Calculator 0, 2, 0, 0 and closes
+  into its icon 0, 1, 0, 0; Spotlight launches closed to the centre 1, 0, 0; quick switches Clock and Calculator 0, 1, 1, 0,
+  1, 1; App Switcher in 1, a card opened 0, home 0, in from home 3 (one frame of 22.6 ms GPU), opened from home 0; shade
+  (two runs) Control Center open 0/0, closed by a tap 1/0, edit in 1/1, out 0/0, closed from the bar 0/0, Notification
+  Center open 0/0, closed 0/0, a banner 1/2; the settings app: Motion opening 0, the Speed slider dragged 0, a scroll 0,
+  Control Center's group pushed the first time 0 (its build's longest frame 11.8 ms of CPU; one 80-96 ms frame on the debug
+  build), popped 0, pushed again 2, an editor opening 0, its Duration dragged 1 in 114 frames (9-12 a second on the debug
+  build), back to home 0. The update itself: the APK (18 MB) and its profile (7 KB) installed in one session.
