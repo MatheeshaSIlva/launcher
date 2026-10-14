@@ -2198,3 +2198,19 @@ be on a mid range phone". Found by reading what runs between gestures (996f425 a
   settles (at most every 1.2 s), on top of the one taken at a touch on the bar. Capturing only at the touch was weighed:
   the card must show 15-40 ms after the touch, and a capture took 14-24 ms on One UI 9 (three samples) but 70-130 ms
   after a minute in an app on One UI 8. The log sums the periodic captures up every 20 (`kept pictures, last 20`).
+
+## The flicker when opening apps during a close (2026-10-15, S24)
+
+Matheesha (on 2c276d5): no more duplicate icons, everything smooth, but "a full screen flicker" when opening an app while
+another's close is still playing. Recorded on the S24 at 120 fps with temporary logs: at the tap, home took over from the
+picture of it behind the card (the old reason: touches go to home, the window in front), and the next app's launch put a
+picture back one or two frames later. The picture blurs a quarter-size copy and scales it up, which looks about twice as
+blurred as home's own blur at the same radius (home's log: radius 6-7.5 px at the touch, as the picture's): the whole
+screen sharpened for a frame or two and blurred again. Now:
+- A touch during a close changes nothing on screen: the card keeps landing over the picture, and a tap that opens an app
+  hands it to the lander with that app's picture (no frame of the real home).
+- A drag during a close (pages, the App Library: its icon moves) fades the picture out with the card instead of cutting it,
+  and home blurs as the picture looks (`home/DepthBlur`: the copy's blur at its own size seen at full size, with the
+  softness of the quarter-size copy; shared constants with GestureNav's PreviewView).
+- Checked on the S24: three opens during a close, recorded frame by frame: home's blur eases and builds again with no sharp
+  frame between (before: frames 153-155 of the recording visibly sharper than those around them).

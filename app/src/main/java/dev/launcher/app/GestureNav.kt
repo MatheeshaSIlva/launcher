@@ -2580,32 +2580,26 @@ object GestureNav {
     private var pictureDropped = false
 
     /**
-     * Home was touched while a closing card is still flying: the touch belongs to home (a tap on another app, a swipe).
-     * Touches only reach home once it is the window in front, so the real home (running the same depth spring) takes over
-     * from the picture of it, which goes once home has drawn a frame with its own blur (dropped at once, a frame of sharp
-     * home could show). The card keeps landing in its icon: a tap that opens another app hands it to the lander
-     * ([landingFor]); a drag moves home's icons, and the card then gets out of the way ([homeDraggedDuringClose]). (It used
-     * to fade where it was, with its icon back at once: two of the same icon until the next app's card cut it.)
+     * Home was touched while a closing card is still flying (the touch goes to home, the window in front). Nothing on screen
+     * changes for it: the card keeps landing over the picture of home. A tap that opens another app hands the card to the
+     * lander ([landingFor]) and puts that app's picture of home in; a drag moves home's icons, and the card then gets out of
+     * the way ([homeDraggedDuringClose]). (Home used to take over from the picture at the touch: the picture blurs a
+     * quarter-size copy, which looks about twice as blurred as home's own blur at the same radius, so home turned sharp for
+     * a frame or two before the next app's picture blurred it again: Matheesha's full-screen flicker, opening apps quickly.)
      */
     private fun homeTouchedDuringClose() {
-        if (anim != Anim.HOME_COMMIT || root?.visibility != View.VISIBLE || pictureDropped) return
-        val g = gen
-        pictureDropped = true
-        HomeBridge.homeCovered = false
-        // Never on a timer alone: a home busy coming to the front (a slow phone) still shows its last frame, as it was
-        // before the app opened (at rest, sharp), and the picture stands in for it meanwhile.
-        if (backdrop?.picture != null) HomeBridge.afterHomeDraw(HOME_FRESH_MS) { nav.post { if (gen == g && pictureDropped) backdrop?.picture = null } }
-        AppLog.log("[nav] home touched during the close: home takes over behind the card")
+        if (anim != Anim.HOME_COMMIT || root?.visibility != View.VISIBLE) return
+        AppLog.log("[nav] home touched during the close: the card keeps landing")
     }
 
     /**
      * A touch on home became a drag (pages, the App Library, Spotlight) while a closing card is still on screen: the icon it
-     * flies into moves with home, so the card fades where it is and the icon is back.
+     * flies into moves with home, so the card fades where it is and its icon is back, and the picture of home fades with it
+     * into the real home (blurring as the picture looks, [HomeScreen]'s depth; cut at once, home's blur snapped).
      */
     private fun homeDraggedDuringClose() {
         if (anim != Anim.HOME_COMMIT || root?.visibility != View.VISIBLE || closeFading) return
         closeFading = true
-        backdrop?.picture = null
         HomeBridge.homeCovered = false
         pictureDropped = true
         hiddenIconPkg?.let { HomeBridge.setIconHidden(it, false) }
@@ -2620,8 +2614,6 @@ object GestureNav {
     private const val PREWARM_RETRY_MS = 250L
     /** The longest a launch card waits for its app's window to be on screen once the app is in front ([whenAppShown]; ms). */
     private const val APP_SHOWN_MAX_MS = 600L
-    /** How long a picture of home waits for home's own next frame before it goes anyway ([homeTouchedDuringClose]). */
-    private const val HOME_FRESH_MS = 1500L
 
     // ---- the lander: a closing card that keeps landing in its icon while another app opens
     //
@@ -4545,7 +4537,7 @@ object GestureNav {
         // allocated at each gesture's first frame. A blur looks the same from a quarter-size image, at 1/16 of the pixels.
         // [low] keeps the blurred result in its own (small) layer, so the blur is evaluated at that size and not at the
         // scaled-up size; it fades over the sharp layers for the first few pixels of blur, where the low resolution would show.
-        private var lowScale = 0.25f
+        private var lowScale = dev.launcher.app.home.DepthBlur.LOW_SCALE
         private val lowWallpaper = Layer(ctx) { lowScale }
         private val lowContent = Layer(ctx) { lowScale }
         private val lowBlur = FrameLayout(ctx)
@@ -4693,8 +4685,9 @@ object GestureNav {
 
         private companion object {
             // Below this blur (dp, at full size) the quarter-size copy would look soft rather than blurred: up to it the
-            // blurred copy (at this radius) fades in over the sharp picture.
-            const val MIN_LOW_BLUR_DP = 3f
+            // blurred copy (at this radius) fades in over the sharp picture. Shared with home's own blur, which matches
+            // this picture's look (DepthBlur).
+            const val MIN_LOW_BLUR_DP = dev.launcher.app.home.DepthBlur.MIN_LOW_BLUR_DP
         }
     }
 

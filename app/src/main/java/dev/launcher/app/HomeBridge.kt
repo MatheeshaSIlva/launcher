@@ -143,8 +143,8 @@ object HomeBridge {
         h.afterNextDraw(then, timeoutMs = 600, label = "icon handover")
     }
 
-    /** Runs [then] (main thread) once home has drawn its next frame and it has been queued, or after [timeoutMs]. Any thread. */
-    fun afterHomeDraw(timeoutMs: Long = 150, then: () -> Unit) = main.post { home?.afterNextDraw(then, timeoutMs) ?: then() }
+    /** Runs [then] (main thread) once home has drawn its next frame and it has been queued, or after 150 ms. Any thread. */
+    fun afterHomeDraw(then: () -> Unit) = main.post { home?.afterNextDraw(then) ?: then() }
 
     /**
      * The real home takes over the depth animation from the picture: same curve, same start ([startNanos], System.nanoTime

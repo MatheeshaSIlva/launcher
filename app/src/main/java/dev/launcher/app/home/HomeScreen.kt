@@ -1484,10 +1484,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             dev.launcher.app.GlassDepth.cy = height / 2f
             if (!HomeBridge.homeCovered) for (g in glassViews()) g.invalidate()
         }
-        // The same blur as the picture of home behind the cards (GestureNav), so taking over from it changes nothing; skipped
-        // while that picture covers home (the work would be invisible).
+        // The blur the picture of home behind the cards shows at this depth (GestureNav: a blurred quarter-size copy, which
+        // looks blurrier than this blur at the same radius: DepthBlur), so taking over from it changes nothing; skipped while
+        // that picture covers home (the work would be invisible).
         if (Build.VERSION.SDK_INT >= 31) {
-            val r = if (HomeBridge.homeCovered) 0f else d.coerceIn(0f, 1f) * mp.homeDepthBlur * resources.displayMetrics.density
+            val density = resources.displayMetrics.density
+            val r = if (HomeBridge.homeCovered) 0f else DepthBlur.homeRadius(d.coerceIn(0f, 1f) * mp.homeDepthBlur * density, density)
             setRenderEffect(if (r < 0.5f) null else android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP))
         }
     }

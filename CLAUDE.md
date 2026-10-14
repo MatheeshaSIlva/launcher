@@ -250,6 +250,10 @@ copy it wholesale — port the working pieces cleanly. File map:
   with the panel, stayed a heavy blur after the controls had gone and then cleared at once (Matheesha's video). `LiveBlur`
   sets the radius on that scale, (1 + max)^k - 1. And One UI 9 has no `View.semSetBlurEnabled`: a null `SemBlurInfo`
   clears a view's blur (`SamsungBlur.clear`).
+- **The picture of home behind cards is blurrier than home's own blur at the same radius** (it blurs a quarter-size copy
+  and scales it up: about twice the look). Handing over from one to the other mid-flight pulsed the whole screen sharp
+  for a frame (opening an app during a close). Never swap them mid-motion: keep the picture until something replaces
+  it, fade between them, and home's own depth blur follows the picture's look (`home/DepthBlur`).
 - **Text-shaped glass needs a distance field, not a blurred mask**: a blur wide enough for a lens turns a whole thin stroke
   into "edge". Judge glass offline only with the app's own pipeline at the device's real size (`docs/design/clock_proto.py`).
 - **Glass and transforms**: a glass surface's uniforms are recorded into its display list; a parent moving it does not redraw
