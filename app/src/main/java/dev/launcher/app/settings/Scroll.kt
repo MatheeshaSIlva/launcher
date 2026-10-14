@@ -39,7 +39,24 @@ class IosScrollState {
  * whole travel arrives with the lift (one batch of events), turns the list around (Matheesha: reversing a fling had to wait
  * for it to end; a flick that lifted before a separate move past the slop was taken for no drag).
  */
-fun Modifier.iosScroll(state: IosScrollState): Modifier = this
+fun Modifier.iosScroll(state: IosScrollState): Modifier = scroll(state, null)
+
+/**
+ * As [iosScroll], for content in a sheet that rises before it scrolls: the first [lift] px of the offset move the sheet
+ * (the caller moves it, by [IosScrollState.offset] up to [lift]: the part of the sheet below the screen comes into sight)
+ * and the content stays; past them the content scrolls, to [room] px past its end (what covers the sheet's bottom now: the
+ * Apply bar while it shows). The sheet rises only as far as the content needs, and a fling carries on from one into the
+ * other. [contentOffset] is how far the content itself has scrolled.
+ */
+fun Modifier.liftScroll(state: IosScrollState, lift: () -> Float, room: () -> Float): Modifier = scroll(state, lift, room)
+
+/** How far content under [liftScroll] has scrolled in its sheet (past the lift [lift]; negative while pulled down). */
+fun contentOffset(state: IosScrollState, lift: Float): Float = contentOffset(state.offset, lift)
+
+/** The same for a scroll [offset]: within the lift the sheet moves and the content stays. */
+fun contentOffset(offset: Float, lift: Float): Float = if (offset < 0f) offset else (offset - lift).coerceAtLeast(0f)
+
+private fun Modifier.scroll(state: IosScrollState, lift: (() -> Float)?, room: (() -> Float)? = null): Modifier = this
     .pointerInput(state) {
         awaitEachGesture {
             val s = state.scroller
@@ -88,8 +105,15 @@ fun Modifier.iosScroll(state: IosScrollState): Modifier = this
     .layout { measurable, constraints ->
         val p = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
         val viewport = constraints.maxHeight
-        state.scroller.setBounds(0f, (p.height - viewport).toFloat(), viewport.toFloat())
+        // (Read here: the room for the lift changes with what moves the sheet, and the bounds with it.)
+        val l = lift?.invoke() ?: 0f
+        state.scroller.setBounds(0f, p.height - viewport + l + (room?.invoke() ?: 0f), viewport.toFloat())
         // In a layer of its own, moved by the layer: a scroll changes one property each frame; nothing is placed or
         // recorded again (placed by position, every row of a long page was drawn again into the page's list every frame).
-        layout(constraints.maxWidth, viewport) { p.placeRelativeWithLayer(0, 0) { translationY = -state.offset.roundToInt().toFloat() } }
+        layout(constraints.maxWidth, viewport) {
+            p.placeRelativeWithLayer(0, 0) {
+                // Pulled down past its top it follows the finger; within the lift the sheet moves instead.
+                translationY = -(if (lift == null) state.offset else contentOffset(state, lift())).roundToInt().toFloat()
+            }
+        }
     }

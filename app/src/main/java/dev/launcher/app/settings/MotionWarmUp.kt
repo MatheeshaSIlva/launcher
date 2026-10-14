@@ -109,6 +109,19 @@ internal object MotionWarmUp {
                 }
                 c.drawRect(0f, 0f, w.toFloat(), 30f * unit, fade)
                 c.restoreToCount(band)
+                // Look's page fades the same way under its own pages (SubPager): its theme cards are pictures drawn scaled
+                // in a rounded clip (a node clipped to its outline, as Compose's clip draws them).
+                val card = RenderNode("motion-warm-up-card").apply {
+                    setPosition(0, 0, (84f * unit).toInt(), (180f * unit).toInt())
+                    setOutline(android.graphics.Outline().apply { setRoundRect(0, 0, (84f * unit).toInt(), (180f * unit).toInt(), 14f * unit) })
+                    setClipToOutline(true)
+                    val cc = beginRecording()
+                    try {
+                        val pic = android.graphics.Bitmap.createBitmap(32, 64, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(0xFF8090A0.toInt()) }
+                        cc.drawBitmap(pic, null, android.graphics.RectF(0f, 0f, 84f * unit, 180f * unit), Paint(Paint.FILTER_BITMAP_FLAG))
+                    } finally { endRecording() }
+                }
+                c.drawRenderNode(card)
             } finally { endRecording() }
         }
         val root = RenderNode("motion-warm-up-faded-root").apply {

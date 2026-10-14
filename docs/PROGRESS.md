@@ -2214,3 +2214,40 @@ screen sharpened for a frame or two and blurred again. Now:
   softness of the quarter-size copy; shared constants with GestureNav's PreviewView).
 - Checked on the S24: three opens during a close, recorded frame by frame: home's blur eases and builds again with no sharp
   frame between (before: frames 153-155 of the recording visibly sharper than those around them).
+
+## Settings v2, step V1: the whole phone, its parts, Phone (2026-10-15, emulator; S24 not checked yet)
+
+Structure B of `docs/PLAN_SETTINGS_V2.md` (Matheesha's choice): the start page holds eight tiles, two across: Look and
+Motion (the whole phone), Home, Apps, App Library, Notifications & Control Center, Status bar, and Phone. "Layouts" is no
+longer a room, and "Your setup"'s chips are gone (the Look and Motion tiles say the same).
+- **The tiles scroll, the sheet first.** At rest the sheet shows two and a half rows. A scroll up lifts the sheet to where
+  a page puts it (the picture of home shrinks above it, as when a page opens), then scrolls the tiles in it; one offset
+  moves both, so a fling carries on from one into the other, and the sheet rises only as far as the tiles need
+  (`liftScroll`, `Studio.lifted`). Once the sheet has risen, all eight show on the emulator. The tiles' glass is drawn
+  again as they move. Every tile is as tall as the tallest needs (`TileGrid`: "Notifications & Control Center" takes two
+  lines; at least the theme's 116 pt). A tile opens from where it is now: its bounds, its name's and its detail line's
+  are read at the tap, and the growing tile draws all three where the tile had them (the detail line used to vanish in
+  the growth's first frame).
+- **A part's page** (`PartPage`): its layout (one line while it has one: "Icon grid · iOS 27"; "iOS 27" once where the
+  name is the design's), where it lives (choices for the App Library's three places; the finger on the picture shows how
+  it is reached, noted only where there is a finger), its counts and switches (as Layouts had them, with the room note),
+  and its own theme ("Follows Look" or any theme: what Look's "Only for one part" was). The picture zooms to the part as
+  on Layouts.
+- **Look, calmer:** Theme cards; Colours as one choice (The theme's, The wallpaper's, Your own) with the palette under it
+  and "Adjust colours" a row away (style, intensity, each palette's own colour); Light & dark; Fonts and Size as rows
+  with what they hold now, each a page; the settings' own theme last ("These settings").
+- **Pages one level down** (`SubPager`, `Sub`) slide in as Motion's groups do (built at the tap, the row lit meanwhile,
+  sliding two frames later; the header's title gives way to theirs; Back and the round button go back first).
+- **Phone, calmer:** Shizuku (Connect only while not connected), Updates, Safety, About. Seven taps on the build turn the
+  developer tools on (a line counts down from the third tap, Android's way); they show on Phone as "Developer tools" (the
+  tests, slow animations, what the launcher did to the phone, the log, "Install the newest again") and the token editor,
+  until switched off on their page (`SettingsPrefs.developer`, kept). Test presets show in Motion only with them on.
+- **Home sliding in from the edit menu** (and back out) takes the lift into account: the sheet drops from wherever it
+  rests (it stayed half in sight while home grew back over the screen from a lifted sheet, then vanished), the Apply bar
+  with it, and the status bar's tone switches where the picture really is.
+- The search field of V1 waits for V3, where it searches (a field that did nothing would be the one dead control).
+- New colours for the parts' tiles (`comp.settings.color.home/apps/library/shade/statusbar`; Layouts' blue is Home's).
+- Checked on the emulator, screenshots and recordings: the start page at rest and lifted; Home, Apps, App Library,
+  Notifications & Control Center and Status bar pages with their focus and fingers; Look with each sub-page and the
+  colours' three choices; Phone, the seven taps, Developer on and off; Motion and a group page; the edit menu's Home
+  Settings in and Back out from a lifted sheet. 107 unit tests.

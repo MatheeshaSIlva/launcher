@@ -45,7 +45,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
@@ -69,9 +68,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -102,12 +99,10 @@ import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.layout.positionInParent
 import androidx.compose.animation.core.VectorConverter
 import dev.launcher.app.design.MaterialKey
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.composed
-import androidx.compose.ui.zIndex
 import androidx.compose.animation.animateContentSize
 
 /**
@@ -188,20 +183,40 @@ object SettingsTokens {
     val ACCENT_LABEL = ColorKey("comp.settings.accent-label")
 }
 
-/** The parts of the settings, a tile each: its name, its colour and its symbol. */
-internal enum class Part(val title: String, val color: ColorKey, val symbol: Int) {
-    LAYOUTS("Layouts", ColorKey("comp.settings.color.layouts"), R.drawable.sym_grid),
+/**
+ * The settings' tiles (docs/PLAN_SETTINGS_V2.md, structure B): Look and Motion for the whole phone, one per part of the phone
+ * ([element]: its layout, where it lives, its options and its own theme, all on its page), and Phone. Each has its name, its
+ * colour and its symbol.
+ */
+internal enum class Part(val title: String, val color: ColorKey, val symbol: Int, val element: Element? = null) {
     LOOK("Look", ColorKey("comp.settings.color.look"), R.drawable.sym_palette),
     MOTION("Motion", ColorKey("comp.settings.color.motion"), R.drawable.sym_spring),
+    HOME("Home", ColorKey("comp.settings.color.home"), R.drawable.sym_home, Element.HOME),
+    APPS("Apps", ColorKey("comp.settings.color.apps"), R.drawable.sym_recents, Element.RECENTS),
+    LIBRARY("App Library", ColorKey("comp.settings.color.library"), R.drawable.sym_apps, Element.DRAWER),
+    SHADE("Notifications & Control Center", ColorKey("comp.settings.color.shade"), R.drawable.sym_bell, Element.SHADE),
+    STATUS_BAR("Status bar", ColorKey("comp.settings.color.statusbar"), R.drawable.sym_statusbar, Element.STATUS_BAR),
     PHONE("Phone", ColorKey("comp.settings.color.phone"), R.drawable.sym_shield),
 }
 
 /** What a part holds (with the changes waiting to be applied), in a line under its name on the tile. */
-private fun Part.detail(d: Draft): String = when (this) {
-    Part.LAYOUTS -> "${Element.entries.size} parts of the phone"
-    Part.LOOK -> themeName(d.themeId()) + if (d.wallpaperColors()) " · wallpaper colours" else ""
-    Part.MOTION -> presetName(d.motionId()) + (d.motionChangeCount(d.motionId()).takeIf { it > 0 }?.let { " · $it change" + if (it == 1) "" else "s" } ?: "")
-    Part.PHONE -> if (dev.launcher.app.ShizukuLink.service != null) "Shizuku connected" else "Shizuku not running"
+private fun Part.detail(d: Draft): String {
+    val e = element ?: return when (this) {
+        Part.LOOK -> themeName(d.themeId()) + if (d.wallpaperColors()) " · wallpaper colours" else ""
+        Part.MOTION -> presetName(d.motionId()) + (d.motionChangeCount(d.motionId()).takeIf { it > 0 }?.let { " · $it change" + if (it == 1) "" else "s" } ?: "")
+        else -> if (dev.launcher.app.ShizukuLink.service != null) "Shizuku connected" else "Shizuku not running"
+    }
+    val l = Layouts.find(e, d.layout(e)) ?: Setup.layout(e)
+    fun count(key: String) = (l.option(key) as? Option.Count)?.let { d.int(e, key, it.default) }
+    val what = when (e) {
+        Element.HOME -> "${count("columns")} × ${count("rows")}, ${count("dock-icons")} in the dock"
+        Element.SHADE -> "${count(dev.launcher.app.shade.CcGrid.COLUMNS)} controls across"
+        Element.DRAWER -> (l.placement(d.placement(e)) ?: l.defaultPlacement).title
+        Element.STATUS_BAR -> l.origin
+        else -> l.title
+    }
+    // A theme of its own, after it.
+    return d.elementTheme(e)?.let { "$what · ${themeName(it)}" } ?: what
 }
 
 private fun themeName(id: String) = Design.themes().firstOrNull { it.id == id }?.name ?: id
@@ -514,8 +529,16 @@ internal class Studio(
 ) {
     var open by mutableStateOf<Part?>(null)
     val p = Animatable(0f)
-    /** Each tile's bounds in the sheet: where its page grows from and goes back to. */
+    /** The Apply bar showing (0..1): the sheet makes room above it while the tiles show. */
+    val bar = Animatable(0f)
+    /** Each tile's bounds in the sheet, and its name's, as its page starts growing: where the page grows from and goes back to. */
     val tiles = HashMap<Part, Rect>()
+    val tileTitles = HashMap<Part, Rect>()
+    val tileDetails = HashMap<Part, Rect>()
+    /** Where each tile, its name and its line under it are laid out (their bounds are read when one is opened: the tiles scroll). */
+    val tileAt = HashMap<Part, LayoutCoordinates>()
+    val tileTitleAt = HashMap<Part, LayoutCoordinates>()
+    val tileDetailAt = HashMap<Part, LayoutCoordinates>()
     /** How far each tile is pressed in (the growing one starts from the size it sank to); read in drawing only. */
     val press = Part.entries.associateWith { Animatable(0f) }
     var sheet: LayoutCoordinates? = null
@@ -523,12 +546,27 @@ internal class Studio(
     var built by mutableIntStateOf(0)
     /** Each page's scroll (kept while the settings are open: a page comes back where it was). */
     val scrolls = Part.entries.associateWith { IosScrollState() }
-    /** The element Layouts shows (chosen at its top: the picture focuses on it), each one's presence (0..1), and scroll. */
-    var element by mutableStateOf(Element.STATUS_BAR)
-    val elementShown = Element.entries.associateWith { Animatable(if (it == Element.STATUS_BAR) 1f else 0f) }
-    /** The side each element slides to or from (-1 left, 1 right), set when it starts coming or going. */
-    val elementSide = Element.entries.associateWith { androidx.compose.runtime.mutableFloatStateOf(1f) }
-    val elementScrolls = Element.entries.associateWith { IosScrollState() }
+    /**
+     * The tiles' scroll: its first [Geometry.liftRoom] lifts the sheet (to where a page puts it; the picture of home shrinks
+     * above it), the rest scrolls the tiles in it ([liftScroll]).
+     */
+    val start = IosScrollState()
+    /** How far (px) the sheet has risen for the tiles' scroll now. */
+    fun lifted(g: Geometry): Float = start.offset.coerceIn(0f, g.liftRoom(bar.value))
+    /**
+     * The sub-page pushed over the open part's page (Look's colours, fonts and size; Phone's developer tools; null: none), how
+     * far it is in, each one's scroll, and the way back from each part's (set by its pager). [subTitled]: the last one pushed
+     * (its title stays in the header, faded out, after its page has gone).
+     */
+    private val pushedSub = mutableStateOf<Sub?>(null)
+    var sub: Sub?
+        get() = pushedSub.value
+        set(v) { pushedSub.value = v; if (v != null && v !== subTitled) subTitled = v }
+    var subTitled by mutableStateOf<Sub?>(null)
+        private set
+    val subPush = Animatable(0f)
+    val subScrolls = Sub.entries.associateWith { IosScrollState() }
+    val popSubs = HashMap<Part, () -> Unit>()
     /**
      * Motion's group pages (docs/PLAN_MOTION.md, C4b): the group pushed over Motion (null: none), how far its page is in
      * (0..1), the animation whose editor is open on it, each page's scroll, what the picture plays for them, at a quarter
@@ -576,22 +614,33 @@ internal class Geometry(look: Look, val statusPx: Float, val navPx: Float) {
     val barRoom = barH + 20f * unit
     val barTop = h - navPx - 12f * unit - barH
 
-    /** The sheet's top: where the page puts it, lifted by [bar] (0..1, the Apply bar showing) while the tiles show. */
-    fun top(p: Float, bar: Float = 0f) = restTop + (openTop - restTop) * p - bar * barRoom * (1f - p.coerceIn(0f, 1f))
+    /**
+     * The sheet's top: where the page puts it ([p]); with the tiles showing, lifted by [bar] (0..1, the Apply bar showing) and
+     * by [lifted] px (the tiles scrolled: [Studio.lifted]), never past where a page puts it.
+     */
+    fun top(p: Float, bar: Float = 0f, lifted: Float = 0f): Float {
+        val rest = (restTop - bar * barRoom - lifted).coerceAtLeast(openTop)
+        return rest + (openTop - rest) * p
+    }
 
-    /** How far below its place the sheet waits while home slides in: off the screen, its shadow too. */
-    val enterDrop = h - restTop + 48f * unit
+    /** How far the tiles' scroll can lift the sheet (to where a page puts it) with the Apply bar at [bar]. */
+    fun liftRoom(bar: Float) = (restTop - bar * barRoom - openTop).coerceAtLeast(0f)
+
+    /** Where the sheet's top waits while home slides in: off the screen, its shadow too. */
+    val belowTop = h + 48f * unit
+
+    private val margin = look.pt(SettingsTokens.MARGIN)
 
     /**
-     * Where home's picture, shrinking from the whole screen into its place at the tiles, leaves the status bar over the page
-     * (0..1 of the slide): its top, at the slide's value times its top at rest, passes the bar's height.
+     * Where home's picture, shrinking from the whole screen into its place above the sheet (its top at [sheetTop]), leaves the
+     * status bar over the page (0..1 of the slide): its top, at the slide's value times its top at rest, passes the bar's height.
      */
-    val toneAt: Float = run {
-        val availH = (restTop - previewTop - 22f * unit).coerceAtLeast(60f * unit)
-        val availW = w - look.pt(SettingsTokens.MARGIN) * 2f
+    fun toneAt(sheetTop: Float): Float {
+        val availH = (sheetTop - previewTop - 22f * unit).coerceAtLeast(60f * unit)
+        val availW = w - margin * 2f
         val fh = minOf(availW * h / w, availH)
         val restY = previewTop + (availH - fh) / 2f
-        (statusPx / restY.coerceAtLeast(1f)).coerceIn(0.05f, 0.9f)
+        return (statusPx / restY.coerceAtLeast(1f)).coerceIn(0.05f, 0.9f)
     }
 }
 
@@ -625,6 +674,16 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
             { part ->
                 // From the tiles only (a tap on a fading tile while another page closes is not one).
                 if (st.p.value < 0.02f || st.open == part) {
+                    // Where it grows from: the tile where it is now (the tiles scroll), its name's place in it.
+                    if (st.open != part) {
+                        val s = st.sheet?.takeIf { it.isAttached }
+                        val t = st.tileAt[part]?.takeIf { it.isAttached }
+                        if (s != null && t != null) {
+                            st.tiles[part] = s.localBoundingBoxOf(t, clipBounds = false)
+                            st.tileTitleAt[part]?.takeIf { it.isAttached }?.let { st.tileTitles[part] = s.localBoundingBoxOf(it, clipBounds = false) }
+                            st.tileDetailAt[part]?.takeIf { it.isAttached }?.let { st.tileDetails[part] = s.localBoundingBoxOf(it, clipBounds = false) }
+                        }
+                    }
                     st.open = part
                     st.built = Part.entries.size
                     scope.launch { try { st.p.animateTo(1f, spec.value) } catch (_: kotlinx.coroutines.CancellationException) { } }
@@ -642,20 +701,24 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
             }
         }
         val draft = remember { Draft() }
-        val bar = remember { Animatable(0f) }
+        val bar = st.bar
         val ctx = LocalContext.current
         BackToTiles(st, close, draft, onClose, toHome)
         val fontSearch = remember { FontSearch() }
         val focus = androidx.compose.ui.platform.LocalFocusManager.current
         androidx.compose.runtime.SideEffect {
-            entry.toneAt = g.toneAt
-            // Coming from home again with a page (or the font search) left open: back at the tiles at once (unseen: home's
-            // picture covers all).
+            // Coming from home again with a page (or the font search) left open: back at the tiles at once, at their top
+            // (unseen: home's picture covers all).
             entry.reset = {
                 st.open = null
                 focus.clearFocus()
+                st.start.scroller.jumpTo(0f)
                 scope.launch { st.p.snapTo(0f); fontSearch.closeNow() }
             }
+        }
+        // Where home's picture at the tiles leaves the status bar to the page, as the sheet is now (the tiles' scroll lifts it).
+        LaunchedEffect(g) {
+            androidx.compose.runtime.snapshotFlow { g.toneAt(g.top(0f, bar.value, st.lifted(g))) }.collect { entry.toneAt = it }
         }
         // Home sliding in (and back out, Back on the tiles): one spring moves home's picture between the whole screen and its
         // place, the sheet up from below the screen and the title in (EntryState). The status bar keeps home's tone while the
@@ -718,8 +781,8 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         // Scrolling counts too: the rest of the tree alone still cost 4-5 ms a check while a page scrolled on the S24.
         val moving by remember {
             androidx.compose.runtime.derivedStateOf {
-                st.p.isRunning || bar.isRunning || entry.moving || st.scrolls.values.any { it.moving } ||
-                    st.elementShown.values.any { it.isRunning } || st.elementScrolls.values.any { it.moving } ||
+                st.p.isRunning || bar.isRunning || entry.moving || st.scrolls.values.any { it.moving } || st.start.moving ||
+                    st.subPush.isRunning || st.subScrolls.values.any { it.moving } ||
                     st.motionPush.isRunning || st.motionScrolls.values.any { it.moving }
             }
         }
@@ -743,9 +806,16 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                     else drawContent()
                 }) {
                     HomePicture(st, g, bar)
-                    Header(st, g) { val pop = st.popGroup; if (st.open == Part.MOTION && st.motionGroup != null && pop != null) pop() else close(0f) }
+                    Header(st, g) {
+                        // A pushed page goes back to its part's page first (once it is on its way back, the part's page closes).
+                        val pop = st.popGroup
+                        val sub = st.sub
+                        if (st.open == Part.MOTION && st.motionGroup != null && pop != null) pop()
+                        else if (sub != null && sub.part == st.open && st.subPush.targetValue >= 0.5f) st.popSubs[sub.part]?.invoke() ?: close(0f)
+                        else close(0f)
+                    }
                     Sheet(st, g, bar, open, close)
-                    ApplyBar(draft, g, bar, st.entry) { draft.apply(ctx) }
+                    ApplyBar(draft, g, st) { draft.apply(ctx) }
                 }
                 // Built after the pages (the first opening builds nothing).
                 if (sheetBuilt) FontSheet(fontSearch)
@@ -839,10 +909,10 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     val ctx = LocalContext.current
     val statusFrac = g.statusPx / g.h
     val draft = LocalDraft.current
-    // What it focuses on: on Layouts, the element chosen at its top (once the page is coming); and how that element is
-    // reached. Both are read by the effects and the drawing only: composing anything here when a page opens or another
-    // element is chosen cost the first frame 11-27 ms on the S24.
-    val focusedState = remember { androidx.compose.runtime.derivedStateOf { if (st.open == Part.LAYOUTS && st.p.targetValue >= 0.5f) st.element else null } }
+    // What it focuses on: the part of the phone whose page is open (once the page is coming); and how that part is reached.
+    // Both are read by the effects and the drawing only: composing anything here when a page opens cost the first frame
+    // 11-27 ms on the S24.
+    val focusedState = remember { androidx.compose.runtime.derivedStateOf { st.open?.element?.takeIf { st.p.targetValue >= 0.5f } } }
     // Motion's group pages: the part the group (or the open animation) plays in.
     val motionFocus = remember(statusFrac) {
         androidx.compose.runtime.derivedStateOf {
@@ -867,12 +937,12 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
             crop.animateTo(target, focusSpec.value)
         }
     }
-    // On Layouts, a finger shows how the chosen element is reached (where it lives), again and again: [hintAt] the stroke,
+    // On a part's page, a finger shows how the part is reached (where it lives), again and again: [hintAt] the stroke,
     // [hintT] how far along it (0..1), [hintA] how present the finger is.
     val hintAt = remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val hintT = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val hintA = remember { Animatable(0f) }
-    val hintOnState = remember { androidx.compose.runtime.derivedStateOf { st.open == Part.LAYOUTS && !st.p.isRunning } }
+    val hintOnState = remember { androidx.compose.runtime.derivedStateOf { st.open?.element != null && !st.p.isRunning } }
     LaunchedEffect(gestureState) {
         androidx.compose.runtime.snapshotFlow { gestureState.value?.takeIf { hintOnState.value } }.collectLatest { gs ->
         if (gs == null) { hintA.animateTo(0f, look.motion(MotionTokens.DISAPPEAR_FADE)); return@collectLatest }
@@ -1072,8 +1142,8 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
         val dip = kotlin.math.sin(Math.PI * along).toFloat() * (travel / 0.6f).coerceIn(0f, 1f)
         val z = zoom.value.coerceIn(0f, 1f) * (1f - 0.35f * dip)
         val ch = c.height.coerceAtLeast(0.01f)
-        // The room between the header and the sheet (the sheet rises as a page opens: the room shrinks with it).
-        val sheetTop = g.top(p, bar.value)
+        // The room between the header and the sheet (the sheet rises as a page opens or the tiles scroll: the room shrinks with it).
+        val sheetTop = g.top(p, bar.value, st.lifted(g))
         val availH = (sheetTop - g.previewTop - 22f * g.unit).coerceAtLeast(60f * g.unit)
         val availW = g.w - margin * 2f
         // Whole: the phone fitted into the room, in its frame.
@@ -1331,6 +1401,8 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
     val look = LocalLook.current
     val style = look.text(SettingsTokens.TITLE, look.color(SettingsTokens.TITLE_COLOR))
     val rise = 6f * g.unit
+    // A title keeps clear of the back button on either side (a long one ends in an ellipsis on a narrow phone).
+    val clear = Modifier.padding(horizontal = look.dp(look.pt(SettingsTokens.MARGIN) + g.buttonSize + 8f * g.unit))
     Box(Modifier.fillMaxWidth().offset { IntOffset(0, g.headerTop.roundToInt()) }.height(look.dp(g.buttonSize)), contentAlignment = Alignment.Center) {
         BasicText("Settings", style = style, modifier = Modifier.graphicsLayer {
             val p = st.p.value
@@ -1339,15 +1411,30 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
             alpha = (1f - p * 2f).coerceIn(0f, 1f) * e
             translationY = -p * rise + (1f - e) * rise
         })
-        for (part in Part.entries) BasicText(part.title, style = style, modifier = Modifier.graphicsLayer {
+        for (part in Part.entries) BasicText(part.title, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = clear.graphicsLayer {
             val p = if (st.open == part) st.p.value else 0f
-            // Motion's own name gives way to a group's as the group's page comes over it: it slides left and is gone before
-            // the group's has come in from the right (crossing at the same strength, the two read as one jumble halfway).
-            val k = if (part == Part.MOTION) st.motionPush.value.coerceIn(0f, 1f) else 0f
+            // A part's own name gives way to a pushed page's (a Motion group's, a sub-page's) as that page comes over it: it
+            // slides left and is gone before the other has come in from the right (crossing at the same strength, the two
+            // read as one jumble halfway).
+            val k = when {
+                part == Part.MOTION -> st.motionPush.value
+                st.sub?.part == part -> st.subPush.value
+                else -> 0f
+            }.coerceIn(0f, 1f)
             alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f) * (1f - k / TITLE_OUT).coerceIn(0f, 1f)
             translationY = (1f - p) * rise
             translationX = -k * TITLE_SLIDE * g.unit
         })
+        // The last sub-page pushed keeps its title here (faded with the push), as Motion's groups do.
+        val titledSub by remember { androidx.compose.runtime.derivedStateOf { st.subTitled } }
+        titledSub?.let { s ->
+            BasicText(s.title, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = clear.graphicsLayer {
+                val p = if (st.open == s.part) st.p.value else 0f
+                val k = if (st.sub === s) st.subPush.value.coerceIn(0f, 1f) else 0f
+                alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f) * ((k - TITLE_IN) / (1f - TITLE_IN)).coerceIn(0f, 1f)
+                translationX = (1f - k) * TITLE_SLIDE * g.unit
+            })
+        }
         // The last group pushed keeps its title here (faded with the push): a group coming or going composes nothing, unless
         // it is another group (the header composed again at each push's start and pop's end: 2 missed refreshes, S24).
         val titled by remember { androidx.compose.runtime.derivedStateOf { st.motionTitled } }
@@ -1416,7 +1503,12 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
         Modifier
             .offset { IntOffset(g.inset.roundToInt(), g.openTop.roundToInt()) }
             .size(look.dp(g.sheetW), look.dp(g.sheetH))
-            .graphicsLayer { translationY = g.top(st.p.value, bar.value) - g.openTop + (1f - st.entry.enter.floatValue.coerceAtLeast(0f)) * g.enterDrop }
+            .graphicsLayer {
+                // While home slides in (or out): from below the screen (its shadow too) to where it rests now, wherever that
+                // is (the tiles' scroll and the Apply bar lift it).
+                val top = g.top(st.p.value, bar.value, st.lifted(g))
+                translationY = top + (1f - st.entry.enter.floatValue.coerceAtLeast(0f)) * (g.belowTop - top) - g.openTop
+            }
             .drawBehind {
                 val k = solid()
                 if (k <= 0.003f) return@drawBehind
@@ -1431,7 +1523,7 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
                 bottomStart = look.dp(corner - below), bottomEnd = look.dp(corner - below)))
             .onPlaced { st.sheet = it },
     ) {
-        StartContent(st, g, open)
+        StartContent(st, g, open, 18f * g.unit)
         for (part in Part.entries) GrowingTile(st, part)
         for ((i, part) in Part.entries.withIndex()) {
             if (st.built > i) PageLayer(st, g, part, close)
@@ -1445,53 +1537,47 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
     }
 }
 
-/** At rest: what you have now (chips that open their page) and the four tiles. */
+/**
+ * At rest: the tiles, two across (docs/PLAN_SETTINGS_V2.md: Look and Motion, the parts of the phone, Phone). More than the
+ * sheet shows at rest: a scroll up lifts the sheet first, as a page would, then scrolls the tiles in it ([liftScroll]); the
+ * last ones clear the Apply bar.
+ */
 @Composable
-private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit) {
+private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: Float) {
     val look = LocalLook.current
     val m = look.dp(SettingsTokens.MARGIN)
-    val gap = look.dp(SettingsTokens.TILE_GAP)
-    // Everything but the open tile steps back and fades as the page grows over it.
-    val back = Modifier.graphicsLayer {
-        val p = st.p.value
-        alpha = (1f - p * 1.8f).coerceIn(0f, 1f)
-        val s = 1f - 0.05f * p.coerceIn(0f, 1f)
-        scaleX = s; scaleY = s
-    }
-    Column(Modifier.fillMaxWidth().padding(start = m, end = m, top = look.dp(26f * g.unit))) {
-        BasicText("Your setup", style = look.text(SettingsTokens.SECTION, look.color(SettingsTokens.SECTION_COLOR)),
-            modifier = back.padding(bottom = look.dp(8f * g.unit)))
-        val draft = LocalDraft.current
-        Row(back.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(look.dp(6f * g.unit))) {
-            Chip(themeName(draft.themeId())) { open(Part.LOOK) }
-            Chip(if (draft.wallpaperColors()) "Wallpaper colours" else "Theme colours") { open(Part.LOOK) }
-            Chip(presetName(draft.motionId()) + " motion") { open(Part.MOTION) }
-        }
-        Spacer(Modifier.height(look.dp(16f * g.unit)))
-        for (row in listOf(listOf(Part.LAYOUTS, Part.LOOK), listOf(Part.MOTION, Part.PHONE))) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                for (part in row) Tile(st, part, open, Modifier.weight(1f))
-            }
-            Spacer(Modifier.height(gap))
+    val bar = st.bar
+    val bandPaint = remember { androidx.compose.ui.graphics.Paint() }
+    // (The tiles dissolve under the sheet's top once they scroll in it, not while the sheet only rises.)
+    Box(Modifier.fillMaxSize().topFade(st.start, g.unit, fadePx, bandPaint) { contentOffset(st.start, g.liftRoom(bar.value)) }) {
+        Column(Modifier.fillMaxSize()
+            .liftScroll(st.start, { g.liftRoom(bar.value) }) { bar.value * g.barRoom }
+            .padding(start = m, end = m)) {
+            Spacer(Modifier.height(look.dp(26f * g.unit)))
+            TileGrid(st, open)
+            Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset)))
         }
     }
 }
 
+/**
+ * The tiles two across, every one as tall as the tallest needs and at least the theme's tile height (a long name takes two
+ * lines, its row as tall as the others).
+ */
 @Composable
-private fun Chip(text: String, onClick: () -> Unit) {
+private fun TileGrid(st: Studio, open: (Part) -> Unit) {
     val look = LocalLook.current
-    var pressed by remember { mutableStateOf(false) }
-    val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
-    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
-    val st = LocalStudio.current
-    BasicText(text, style = look.text(SettingsTokens.CHIP_TEXT, look.color(SettingsTokens.CHIP_TEXT_COLOR)), maxLines = 1,
-        modifier = Modifier
-            .pressScale { 1f - 0.05f * press }
-            .then(if (glass) Modifier.movingGlass(SettingsTokens.CHIP_MATERIAL, look.pt(SettingsTokens.CHIP_CORNER), { press }, panelUnder(look),
-                { st?.let { (1f - it.p.value * 1.8f).coerceIn(0f, 1f) } ?: 1f }) { st?.let { it.p.value + it.entry.enter.floatValue } }
-                else Modifier.background(look.color(SettingsTokens.CHIP_FILL), RoundedCornerShape(look.dp(SettingsTokens.CHIP_CORNER))))
-            .pointerInput(onClick) { rowTap({ pressed = it }, onClick) }
-            .padding(horizontal = look.dp(12f * look.unit), vertical = look.dp(7f * look.unit)))
+    val gap = look.pt(SettingsTokens.TILE_GAP)
+    val least = look.pt(SettingsTokens.TILE_HEIGHT)
+    androidx.compose.ui.layout.Layout(content = { for (part in Part.entries) Tile(st, part, open) }) { ms, c ->
+        val w = ((c.maxWidth - gap) / 2f).toInt().coerceAtLeast(0)
+        val h = maxOf(least, ms.maxOf { it.maxIntrinsicHeight(w).toFloat() }).roundToInt()
+        val placeables = ms.map { it.measure(androidx.compose.ui.unit.Constraints.fixed(w, h)) }
+        val rows = (placeables.size + 1) / 2
+        layout(c.maxWidth, (rows * h + (rows - 1).coerceAtLeast(0) * gap).roundToInt()) {
+            placeables.forEachIndexed { i, pl -> pl.place(if (i % 2 == 0) 0 else c.maxWidth - w, ((i / 2) * (h + gap)).roundToInt()) }
+        }
+    }
 }
 
 /**
@@ -1556,13 +1642,12 @@ internal fun mix(a: Color, b: Color, t: Float) = Color(
 
 /** One part: its symbol on its colour, its name and what it holds; it sinks when pressed and grows into its page. */
 @Composable
-private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifier) {
+private fun Tile(st: Studio, part: Part, open: (Part) -> Unit) {
     val look = LocalLook.current
     val c = look.color(part.color)
     val glass = Design.num(SettingsTokens.GLASS) > 0.5f
     val titleTint = if (glass) 0f else Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
     val label = look.color(SettingsTokens.ROW_LABEL)
-    val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
     val symbol = look.pt(SettingsTokens.TILE_SYMBOL)
     var pressed by remember { mutableStateOf(false) }
     val press = st.press.getValue(part)
@@ -1570,9 +1655,8 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
     val pressOut = look.motion<Float>(MotionTokens.PRESS_OUT)
     LaunchedEffect(pressed) { press.animateTo(if (pressed) 1f else 0f, if (pressed) pressIn else pressOut) }
     Column(
-        modifier
-            .height(look.dp(SettingsTokens.TILE_HEIGHT))
-            .onGloballyPositioned { co -> st.sheet?.let { s -> if (s.isAttached && co.isAttached) st.tiles[part] = s.localBoundingBoxOf(co) } }
+        Modifier
+            .onPlaced { st.tileAt[part] = it }
             .graphicsLayer {
                 val p = st.p.value
                 if (st.open == part) {
@@ -1587,8 +1671,11 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
                 }
             }
             .pressScale { 1f - 0.04f * press.value }
+            // (Its glass drawn again whenever it moves on screen: a page opening, home sliding in, the tiles scrolling, the
+            // sheet rising for the Apply bar.)
             .then(if (glass) Modifier.movingGlass(SettingsTokens.TILE_MATERIAL, look.pt(SettingsTokens.TILE_CORNER), { press.value }, panelUnder(look),
-                { if (st.open == part) (if (st.p.value > 0f) 0f else 1f) else (1f - st.p.value * 1.8f).coerceIn(0f, 1f) }) { st.p.value + st.entry.enter.floatValue }
+                { if (st.open == part) (if (st.p.value > 0f) 0f else 1f) else (1f - st.p.value * 1.8f).coerceIn(0f, 1f) }) {
+                    st.p.value + st.entry.enter.floatValue + st.start.offset + st.bar.value }
                 else Modifier.background(tileFill(look, part), RoundedCornerShape(look.dp(SettingsTokens.TILE_CORNER))))
             .pointerInput(part) { rowTap({ pressed = it }) { open(part) } }
             .padding(look.dp(14f * look.unit)),
@@ -1600,15 +1687,24 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, modifier: Modifie
                 modifier = Modifier.size(look.dp(symbol * if (glass) 0.8f else 0.6f)))
         }
         Spacer(Modifier.weight(1f))
-        BasicText(part.title, style = look.text(SettingsTokens.TILE_TITLE, mix(label, c, titleTint)), maxLines = 1)
+        // (A long name in two lines: every tile is then as tall as it needs, TileGrid.)
+        BasicText(part.title, style = look.text(SettingsTokens.TILE_TITLE, mix(label, c, titleTint)), maxLines = 2,
+            modifier = Modifier.onPlaced { st.tileTitleAt[part] = it })
         // Read through a derived state where it follows the draft: every step of a slider in Motion changes the draft, and
         // the tile (out of sight behind the page) composed again with each.
         val draft = LocalDraft.current
         val drafted = remember(part, draft, look.version) { androidx.compose.runtime.derivedStateOf { part.detail(draft) } }
-        BasicText(if (part == Part.MOTION || part == Part.LOOK) drafted.value else part.detail(draft),
-            style = look.text(SettingsTokens.TILE_DETAIL, mix(detail, c, titleTint).copy(alpha = if (titleTint > 0f) 0.8f else detail.alpha)),
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        BasicText(if (part == Part.PHONE) part.detail(draft) else drafted.value, style = tileDetailStyle(look, part),
+            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.onPlaced { st.tileDetailAt[part] = it })
     }
+}
+
+/** The line under a tile's name: the detail colour, or with the tiles in their colours (no glass) its own, a little faded. */
+private fun tileDetailStyle(look: Look, part: Part): androidx.compose.ui.text.TextStyle {
+    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
+    val titleTint = if (glass) 0f else Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
+    val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
+    return look.text(SettingsTokens.TILE_DETAIL, mix(detail, look.color(part.color), titleTint).copy(alpha = if (titleTint > 0f) 0.8f else detail.alpha))
 }
 
 /**
@@ -1633,12 +1729,23 @@ private fun GrowingTile(st: Studio, part: Part) {
     val glyphColor = ColorFilter.tint(if (glass) label else look.color(SettingsTokens.TILE_SYMBOL_COLOR))
     val titleTint = if (glass) 0f else Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
     val measurer = rememberTextMeasurer()
-    val title = remember(part, look) { measurer.measure(part.title, look.text(SettingsTokens.TILE_TITLE, mix(look.color(SettingsTokens.ROW_LABEL), c, titleTint))) }
+    val titleStyle = look.text(SettingsTokens.TILE_TITLE, mix(look.color(SettingsTokens.ROW_LABEL), c, titleTint))
+    val detailStyle = tileDetailStyle(look, part)
+    val draft = LocalDraft.current
     Canvas(Modifier.fillMaxSize()) {
         if (st.open != part) return@Canvas
         val p = st.p.value
         if (p <= 0f) return@Canvas
         val tile = st.tiles[part] ?: return@Canvas
+        // Its name and the line under it where the tile has them, wrapped as there (the measurer keeps its last layouts:
+        // measured once per opening).
+        val titleAt = st.tileTitles[part] ?: Rect(tile.left + pad, tile.bottom - pad - 40f * look.unit, tile.right - pad, tile.bottom - pad - 18f * look.unit)
+        // (Within the tile's padding, as the tile lays them out: the line under the name may have changed while the page was
+        // open, and is cut where the tile cuts it.)
+        val inner = androidx.compose.ui.unit.Constraints(maxWidth = (tile.width - 2f * pad).roundToInt().coerceAtLeast(1))
+        val title = measurer.measure(part.title, titleStyle, maxLines = 2, constraints = inner)
+        val detailAt = st.tileDetails[part]
+        val detail = if (detailAt == null) null else measurer.measure(part.detail(draft), detailStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = inner)
         // From the size the tile sank to when pressed (it springs back out as it grows).
         val sunk = 0.04f * st.press.getValue(part).value
         val from = Rect(tile.left + tile.width * sunk / 2f, tile.top + tile.height * sunk / 2f, tile.right - tile.width * sunk / 2f, tile.bottom - tile.height * sunk / 2f)
@@ -1667,7 +1774,8 @@ private fun GrowingTile(st: Studio, part: Part) {
                     }
                 }
             }
-            drawText(title, topLeft = Offset(r.left + pad, from.bottom - from.top + r.top - pad - title.size.height - 16f * look.unit), alpha = content)
+            drawText(title, topLeft = Offset(r.left + (titleAt.left - tile.left), r.top + (titleAt.top - tile.top)), alpha = content)
+            if (detail != null && detailAt != null) drawText(detail, topLeft = Offset(r.left + (detailAt.left - tile.left), r.top + (detailAt.top - tile.top)), alpha = content)
         }
     }
 }
@@ -1708,22 +1816,19 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
                     translationX = if (open) 0f else g.w * 3f
                     alpha = if ((open && st.p.value > 0f) || warm) 1f else 0f
                 }
-                .then(if (part == Part.LAYOUTS || part == Part.MOTION) Modifier else Modifier.topFade(scroll, g.unit, fadePx, bandPaint)),
+                // (Pages with pages of their own fade their tops themselves.)
+                .then(if (part.element == null) Modifier else Modifier.topFade(scroll, g.unit, fadePx, bandPaint)),
         ) {
-            if (part == Part.LAYOUTS) LayoutsPager(st, g, fadePx, bandPaint)
-            else if (part == Part.MOTION) MotionPager(st, g, fadePx, bandPaint)
-            else Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
-              run {
-                Spacer(Modifier.height(look.dp(26f * g.unit)))
-                when (part) {
-                    Part.LAYOUTS -> Unit
-                    Part.LOOK -> LookPage()
-                    Part.MOTION -> Unit
-                    Part.PHONE -> PhonePage()
+            when (part) {
+                Part.LOOK -> SubPager(st, g, part, fadePx, bandPaint, { push, lit -> LookPage(push, lit) }) { s, _ -> LookSubPage(s) }
+                Part.MOTION -> MotionPager(st, g, fadePx, bandPaint)
+                Part.PHONE -> PhonePager(st, g, fadePx, bandPaint)
+                else -> Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
+                    Spacer(Modifier.height(look.dp(26f * g.unit)))
+                    PartPage(part)
+                    // Room below the last row for the Apply bar.
+                    Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
                 }
-                // Room below the last row for the Apply bar.
-                Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
-              }
             }
         }
     }
@@ -1732,52 +1837,88 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
 // ------------------------------------------------------------------ the pages
 
 /**
- * Look (docs/PLAN_SETTINGS.md S2): the theme as cards (home as it looked in each, once the settings have seen it), a
- * theme for one part only, the wallpaper's colours, light and dark. All of it waits for Apply.
+ * Look, for the whole phone (docs/PLAN_SETTINGS_V2.md, "Look, calmer"): the theme as cards (home as it looked in each, once
+ * the settings have seen it), the colours as one choice with the palette under it, light and dark; fonts, sizes and the
+ * palette's finer points a row away ([LookSubPage]); the settings' own theme last. A part's own theme is on its page. All of
+ * it waits for Apply.
  */
 @Composable
-private fun LookPage() {
+private fun LookPage(push: (Sub) -> Unit, lit: () -> Sub?) {
     val draft = LocalDraft.current
-    val themes = remember(LocalLook.current.version) { Design.themes() }
-    Group("Theme", "Everything follows it, unless a part has its own below.") {
+    val look = LocalLook.current
+    val themes = remember(look.version) { Design.themes() }
+    Group("Theme", "Every part follows it, unless one has a theme of its own (on that part's page).") {
         ThemeCards(themes, draft)
     }
-    Group("Only for one part") {
-        for (e in Element.entries) ElementTheme(e, themes, draft)
-    }
-    // Which colour the editor below the palette is changing: the one it is made from ([SEED]), a palette's key, or none.
+    // Whether the colour of your own is being changed (its editor open under it).
     val editing = remember { mutableStateOf<Char?>(null) }
-    Group("Colours", "Material You: any theme's surfaces, glass and accents take your wallpaper's colours, or your own. Tap a colour to set it yourself.") {
-        ToggleRow("Material You", null, draft.wallpaperColors()) { draft.chooseColors(it) }
-        ColourSourceRow(draft, editing)
-        ColourStyleRow(draft)
-        IntensityRow(draft)
-        PaletteRow(draft, editing)
+    Group("Colours", "Material You: any theme's surfaces, glass and accents take your wallpaper's colours, or a colour of your own.") {
+        ColourChoiceRow(draft, editing)
+        Reveal(draft.wallpaperColors() && draft.seedColor() != null) { SeedRow(draft, editing) }
         ColourEditor(draft, editing)
+        Reveal(draft.wallpaperColors()) {
+            Column {
+                PaletteRow(draft, null)
+                PushRow("Adjust colours", "Their style, how colourful, each palette's own colour", Sub.COLOURS, push, lit)
+            }
+        }
     }
-    Group("Fonts", "Google fonts are downloaded the first time they are used, then work offline.") {
-        FontRow("Text", "sys.font.text", draft)
-        FontRow("Titles", "sys.font.display", draft)
-    }
-    Group("Appearance") {
-        Box(Modifier.padding(LocalLook.current.dp(SettingsTokens.ROW_PADDING))) {
+    Group("Light & dark") {
+        Box(Modifier.padding(look.dp(SettingsTokens.ROW_PADDING))) {
             ChoiceChips(Appearance.Mode.entries.map { it.title }, Appearance.Mode.entries.indexOf(draft.appearanceMode())) {
                 draft.chooseAppearance(Appearance.Mode.entries[it])
             }
         }
     }
-    Group("Size", "Following the phone: everything takes its Display size, text its Font size, as Android's own apps do. Off, or a slider moved: your own sizes, whatever the phone's (100 % is an iPhone's).") {
+    Group(null) {
+        val text = fontName(draft.font("sys.font.text"))
+        val titles = fontName(draft.font("sys.font.display"))
+        PushRow("Fonts", if (text == titles) text else "$text · $titles", Sub.FONTS, push, lit)
         val ctx = LocalContext.current
-        ToggleRow("Follow the phone's display and font size", null, draft.followsPhoneSize()) { draft.chooseFollowsPhoneSize(it) }
-        val phone = draft.followsPhoneSize()
-        SizeRow("Everything", draft.size(ctx), phone, dev.launcher.app.design.Scale.SIZE_MIN, dev.launcher.app.design.Scale.SIZE_MAX) { draft.chooseSize(ctx, it) }
-        SizeRow("Text", draft.text(ctx), phone, dev.launcher.app.design.Scale.TEXT_MIN, dev.launcher.app.design.Scale.TEXT_MAX) { draft.chooseText(ctx, it) }
+        PushRow("Size", if (draft.followsPhoneSize()) "Follows the phone"
+            else "Your own · ${(draft.size(ctx) * 100).roundToInt()} %, text ${(draft.text(ctx) * 100).roundToInt()} %", Sub.SIZE, push, lit)
+    }
+    Group("These settings", "Their own theme, or the one above.") {
+        OwnThemeRow(Element.SETTINGS)
     }
 }
 
-/** The wallpaper's palette (Material You's roles in this appearance), lit while the wallpaper's colours are chosen. */
+/** Look's pages one level down: the palette's finer points, the fonts, the sizes. */
 @Composable
-private fun PaletteRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>) {
+private fun LookSubPage(s: Sub) {
+    val draft = LocalDraft.current
+    when (s) {
+        Sub.COLOURS -> {
+            // Which palette's colour the editor under the palette is changing (null: none).
+            val editing = remember { mutableStateOf<Char?>(null) }
+            Group(null, "Material You makes the palette from the wallpaper's main colour, or yours, in a style. Tap a colour to set it yourself.") {
+                ColourStyleRow(draft)
+                IntensityRow(draft)
+                PaletteRow(draft, editing)
+                ColourEditor(draft, editing)
+            }
+        }
+        Sub.FONTS -> Group(null, "Google fonts are downloaded the first time they are used, then work offline.") {
+            FontRow("Text", "sys.font.text", draft)
+            FontRow("Titles", "sys.font.display", draft)
+        }
+        Sub.SIZE -> Group(null, "Following the phone: everything takes its Display size, text its Font size, as Android's own apps do. Off, or a slider moved: your own sizes, whatever the phone's (100 % is an iPhone's).") {
+            val ctx = LocalContext.current
+            ToggleRow("Follow the phone's display and font size", null, draft.followsPhoneSize()) { draft.chooseFollowsPhoneSize(it) }
+            val phone = draft.followsPhoneSize()
+            SizeRow("Everything", draft.size(ctx), phone, dev.launcher.app.design.Scale.SIZE_MIN, dev.launcher.app.design.Scale.SIZE_MAX) { draft.chooseSize(ctx, it) }
+            SizeRow("Text", draft.text(ctx), phone, dev.launcher.app.design.Scale.TEXT_MIN, dev.launcher.app.design.Scale.TEXT_MAX) { draft.chooseText(ctx, it) }
+        }
+        Sub.DEVELOPER -> Unit
+    }
+}
+
+/**
+ * The palette's palettes (Material You's roles in this appearance), as the draft would make them. With [editing], a tap on
+ * one opens the editor on its own colour (and rings it); without, they only show.
+ */
+@Composable
+private fun PaletteRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>?) {
     val look = LocalLook.current
     val k by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "palette")
     val dark = Appearance.dark > 0.5f
@@ -1790,15 +1931,17 @@ private fun PaletteRow(draft: Draft, editing: androidx.compose.runtime.MutableSt
     }
     val accent = look.color(SettingsTokens.ACCENT)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val swatch = 34f * look.unit
-    Row(Modifier.fillMaxWidth().drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+    Row(Modifier.fillMaxWidth().drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .padding(horizontal = pad, vertical = look.dp(12f * look.unit)), horizontalArrangement = Arrangement.SpaceBetween) {
         for ((target, name, p) in roles) Column(horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.pointerInput(p) { rowTap({}) { editing.value = if (editing.value == p) null else p } }) {
+            modifier = if (editing == null) Modifier else Modifier.pointerInput(p) { rowTap({}) { editing.value = if (editing.value == p) null else p } }) {
             val c by androidx.compose.animation.animateColorAsState(target, look.motion(MotionTokens.APPEAR_FADE), label = "swatch")
             // Ringed while it is the one being changed; a dot under one the user set themselves.
-            val ring by animateFloatAsState(if (editing.value == p) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "ring")
+            val ring by animateFloatAsState(if (editing?.value == p) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "ring")
             val own by animateFloatAsState(if (draft.keyColor(p) != null) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "own")
             Canvas(Modifier.size(look.dp(swatch))) {
                 // Off: quieter and a little smaller (the colours are not in use).
@@ -1818,36 +1961,54 @@ private fun PaletteRow(draft: Draft, editing: androidx.compose.runtime.MutableSt
 /** The editor's target for the colour the palette is made from (the others are the palettes' letters). */
 private const val SEED = 'X'
 
-/** What the palette is made from: the wallpaper's main colour, or a colour of the user's own (its swatch opens the editor). */
+/**
+ * Where the colours come from, one choice: the theme's own, the wallpaper's (Material You), or a colour of the user's own
+ * (made into a palette the same way; its editor opens under it as it is chosen).
+ */
 @Composable
-private fun ColourSourceRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>) {
+private fun ColourChoiceRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>) {
     val look = LocalLook.current
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
-    val dim by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0.45f, look.motion(MotionTokens.CC_TOGGLE), label = "dim")
-    val seed = draft.seedColor()
-    val shownSeed by androidx.compose.animation.animateColorAsState(seed?.let { Color(it) } ?: Color.Transparent, look.motion(MotionTokens.APPEAR_FADE), label = "seed")
-    val showSeed by animateFloatAsState(if (seed != null) 1f else 0f, look.motion(MotionTokens.APPEAR), label = "showSeed")
-    Column(Modifier.fillMaxWidth()
-        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
-        .graphicsLayer { alpha = dim }
-        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            BasicText("Made from", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
-            // The user's colour, there while it is chosen: a tap opens the editor on it.
-            Canvas(Modifier.size(look.dp(SettingsTokens.TARGET)).graphicsLayer { alpha = showSeed; scaleX = 0.6f + 0.4f * showSeed; scaleY = scaleX }
-                .pointerInput(Unit) { rowTap({}) { if (draft.seedColor() != null) editing.value = if (editing.value == SEED) null else SEED } }) {
-                drawCircle(shownSeed, radius = 12f * look.unit)
-                drawCircle(Color.Black.copy(alpha = 0.1f), radius = 12f * look.unit, style = Stroke(1f * look.unit))
+    val chosen = if (!draft.wallpaperColors()) 0 else if (draft.seedColor() == null) 1 else 2
+    Box(Modifier.fillMaxWidth()
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .padding(pad)) {
+        ChoiceChips(listOf("The theme's", "The wallpaper's", "Your own"), chosen) { i ->
+            when (i) {
+                0 -> { draft.chooseColors(false); editing.value = null }
+                1 -> { draft.chooseColors(true); draft.chooseSeed(null); editing.value = null }
+                else -> {
+                    draft.chooseColors(true)
+                    if (draft.seedColor() == null) draft.chooseSeed(Design.wallpaperSeed() ?: 0xFF3478F6.toInt())
+                    editing.value = SEED
+                }
             }
-        }
-        Spacer(Modifier.height(look.dp(2f * look.unit)))
-        ChoiceChips(listOf("Wallpaper", "Your colour"), if (seed == null) 0 else 1) { i ->
-            if (i == 0) { draft.chooseSeed(null); if (editing.value == SEED) editing.value = null }
-            else { draft.chooseSeed(Design.wallpaperSeed() ?: 0xFF3478F6.toInt()); editing.value = SEED }
         }
     }
 }
+
+/** The user's own colour the palette is made from: its swatch; a tap opens its editor (or closes it). */
+@Composable
+private fun SeedRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>) {
+    val look = LocalLook.current
+    val seed = draft.seedColor()
+    // (It keeps its last colour while its row closes.)
+    val last = remember { intArrayOf(0xFF3478F6.toInt()) }
+    if (seed != null) last[0] = seed
+    val shown by androidx.compose.animation.animateColorAsState(Color(last[0]), look.motion(MotionTokens.APPEAR_FADE), label = "seed")
+    BaseRow("Your colour", null, { editing.value = if (editing.value == SEED) null else SEED }) {
+        Canvas(Modifier.size(look.dp(24f * look.unit))) {
+            drawCircle(shown, radius = size.minDimension / 2f)
+            drawCircle(Color.Black.copy(alpha = 0.1f), radius = size.minDimension / 2f, style = Stroke(1f * look.unit))
+        }
+    }
+}
+
+/** A font family's name as the font rows show it. */
+private fun fontName(id: String) = FONT_FAMILIES.firstOrNull { it.first == id }?.second ?: id.removePrefix("google:")
 
 /**
  * The colour editor, opening in place under the palette for the colour being changed (the one the palette is made from, or a
@@ -1976,10 +2137,12 @@ private fun ColourStyleRow(draft: Draft) {
     val look = LocalLook.current
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
     val dim by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0.45f, look.motion(MotionTokens.CC_TOGGLE), label = "dim")
     val styles = dev.launcher.app.design.MaterialYou.Style.entries
     Column(Modifier.fillMaxWidth()
-        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .graphicsLayer { alpha = dim }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         BasicText("Style", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
@@ -1997,8 +2160,10 @@ private fun SizeRow(title: String, value: Float, phone: Boolean, min: Float, max
     val look = LocalLook.current
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
     Column(Modifier.fillMaxWidth()
-        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
@@ -2015,10 +2180,12 @@ private fun IntensityRow(draft: Draft) {
     val look = LocalLook.current
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
     val dim by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0.45f, look.motion(MotionTokens.CC_TOGGLE), label = "dim")
     val k = draft.colorIntensity()
     Column(Modifier.fillMaxWidth()
-        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .graphicsLayer { alpha = dim }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -2122,7 +2289,6 @@ private fun FontRow(title: String, key: String, draft: Draft) {
     val faces = ids.map { id -> androidx.compose.runtime.key(id) { rememberFace(id) } }
     // A Google family shows once its face is here (it arrives in its own font, never in another first); the chosen at once.
     val shown = ids.indices.filter { i -> !ids[i].startsWith("google:") || faces[i] != null || ids[i] == chosen }
-    fun nameOf(id: String) = FONT_FAMILIES.firstOrNull { it.first == id }?.second ?: id.removePrefix("google:")
     Column(Modifier.fillMaxWidth()
         .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
@@ -2134,7 +2300,7 @@ private fun FontRow(title: String, key: String, draft: Draft) {
             }
         }
         Spacer(Modifier.height(look.dp(8f * look.unit)))
-        ChoiceChips(shown.map { nameOf(ids[it]) }, shown.indexOfFirst { ids[it] == chosen }, fonts = shown.map { faces[it] }) { i ->
+        ChoiceChips(shown.map { fontName(ids[it]) }, shown.indexOfFirst { ids[it] == chosen }, fonts = shown.map { faces[it] }) { i ->
             draft.chooseFont(key, ids[shown[i]])
         }
     }
@@ -2217,21 +2383,21 @@ private fun ThemeThumb(id: String) {
     }
 }
 
-/** One part's own theme: Follow (the main one) or any theme. */
+/** A part's own theme (docs/PLAN_LAYOUTS_THEMES.md, a theme per element): it follows Look's, or has any theme of its own. */
 @Composable
-private fun ElementTheme(e: Element, themes: List<Design.ThemeInfo>, draft: Draft) {
+private fun OwnThemeRow(e: Element) {
     val look = LocalLook.current
+    val draft = LocalDraft.current
+    val themes = remember(look.version) { Design.themes() }
     val counter = LocalRowCounter.current
     val first = remember { counter == null || counter.n++ == 0 }
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
     val own = draft.elementTheme(e)
-    Column(Modifier.fillMaxWidth()
+    Box(Modifier.fillMaxWidth()
         .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
-        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
-        BasicText(e.title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
-        Spacer(Modifier.height(look.dp(8f * look.unit)))
-        val names = listOf("Follow") + themes.map { it.name }
+        .padding(pad)) {
+        val names = listOf("Follows Look") + themes.map { it.name }
         val at = if (own == null) 0 else 1 + themes.indexOfFirst { it.id == own }.coerceAtLeast(0)
         ChoiceChips(names, at) { i -> draft.chooseElement(e, if (i == 0) null else themes[i - 1].id) }
     }
@@ -2409,14 +2575,15 @@ internal fun Reveal(visible: Boolean, content: @Composable () -> Unit) {
  * of its own (the content is a layer: drawing it twice draws one list twice); the whole page in one cost a sheet-sized
  * buffer every frame of a scroll.
  */
-internal fun Modifier.topFade(scroll: IosScrollState, unit: Float, fadePx: Float, paint: androidx.compose.ui.graphics.Paint): Modifier = composed {
+internal fun Modifier.topFade(scroll: IosScrollState, unit: Float, fadePx: Float, paint: androidx.compose.ui.graphics.Paint,
+                              offset: () -> Float = { scroll.offset }): Modifier = composed {
     // Its gradient made once (one made every frame of a scroll was native memory every frame).
     val top = 6f * unit
     val end = top + fadePx
     val brush = remember(top, end) { Brush.verticalGradient(listOf(Color.Transparent, Color.Black), startY = top, endY = end) }
     drawWithContent {
         clipRect(top = end) { this@drawWithContent.drawContent() }
-        if (scroll.offset > 0f) drawIntoCanvas { cv ->
+        if (offset() > 0f) drawIntoCanvas { cv ->
             cv.saveLayer(Rect(0f, top, size.width, end), paint)
             clipRect(top = top, bottom = end) { this@drawWithContent.drawContent() }
             drawRect(brush, topLeft = Offset(0f, top), size = Size(size.width, fadePx), blendMode = BlendMode.DstIn)
@@ -2425,247 +2592,27 @@ internal fun Modifier.topFade(scroll: IosScrollState, unit: Float, fadePx: Float
     }
 }
 
-/** The elements' short names, for the picker at the top of Layouts. */
-private val Element.short get() = when (this) {
-    Element.STATUS_BAR -> "Status bar"
-    Element.SHADE -> "Shade"
-    Element.RECENTS -> "Recents"
-    Element.DRAWER -> "Drawer"
-    Element.HOME -> "Home"
-    Element.SETTINGS -> "Settings"
-}
-
 /**
- * Layouts: the elements in a picker at the top (it stays while the rest scrolls), the chosen one's layouts, place and options
- * below; the picture of home above focuses on the chosen one. Another element: its page slides in from its side as the last
- * one slides away (each its own spring, interruptible), and the picture moves to it. (Matheesha: following the scroll
- * through one long page to decide the focus was odd.)
+ * A part of the phone's page (docs/PLAN_SETTINGS_V2.md, "A part's page"): the same sections every time, each short. Its
+ * layout (a single line while it has only one), where it lives (the finger on the picture shows how it is reached), its
+ * counts and switches, and its own theme. Waits for Apply like the rest.
  */
 @Composable
-private fun LayoutsPager(st: Studio, g: Geometry, fadePx: Float, bandPaint: androidx.compose.ui.graphics.Paint) {
-    val look = LocalLook.current
-    val scope = rememberCoroutineScope()
-    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.NAV_PUSH))
-    val m = look.dp(SettingsTokens.MARGIN)
-    val slide = 48f * g.unit
-    val choose: (Element) -> Unit = remember(st, scope) {
-        { e ->
-            val was = st.element
-            if (e != was) {
-                st.element = e
-                for (o in Element.entries) {
-                    val shown = st.elementShown.getValue(o)
-                    // The one coming in comes from the side it is on (from the last one); the ones going leave towards theirs.
-                    if (o == e) st.elementSide.getValue(o).floatValue = if (o.ordinal > was.ordinal) 1f else -1f
-                    else if (shown.value > 0.001f || shown.isRunning) st.elementSide.getValue(o).floatValue = if (o.ordinal > e.ordinal) 1f else -1f
-                    scope.launch { try { shown.animateTo(if (o == e) 1f else 0f, spec.value) } catch (_: kotlinx.coroutines.CancellationException) { } }
-                }
-            }
-        }
-    }
-    val pickerTop = 24f * g.unit
-    val pickerH = look.pt(SettingsTokens.SEGMENT_HEIGHT)
-    val contentTop = pickerTop + pickerH + 10f * g.unit
-    Box(Modifier.fillMaxSize()) {
-        for (e in Element.entries) ElementColumn(st, e, g, contentTop, slide, fadePx, m)
-        // The picker, over the pages' tops: a segmented control (draft C), the page's main choice. It comes and goes with the
-        // page, as its first group (it showed whole from the first frame of the opening, over the tiles).
-        val shownNow = LocalShown.current
-        Box(Modifier.zIndex(2f).padding(top = look.dp(pickerTop)).fillMaxWidth().height(look.dp(pickerH))
-            .graphicsLayer {
-                val k = ((shownNow() - 0.3f) / 0.45f).coerceIn(0f, 1f)
-                alpha = k
-                translationY = (1f - k) * 22f * look.unit
-            }
-            .padding(horizontal = m),
-            contentAlignment = Alignment.Center) {
-            ElementPicker(st, choose)
-        }
-    }
-}
-
-/** The elements' symbols, for the picker at the top of Layouts. */
-private val Element.symbol get() = when (this) {
-    Element.STATUS_BAR -> R.drawable.sym_statusbar
-    Element.SHADE -> R.drawable.sym_bell
-    Element.RECENTS -> R.drawable.sym_recents
-    Element.DRAWER -> R.drawable.sym_apps
-    Element.HOME -> R.drawable.sym_home
-    Element.SETTINGS -> R.drawable.sym_settings
-}
-
-/** The picker of Layouts (Matheesha chose B: symbols, the chosen one with its name), reading the choice in its own scope. */
-@Composable
-private fun ElementPicker(st: Studio, choose: (Element) -> Unit) {
-    SymbolSegmented(Element.entries.map { it.short }, Element.entries.map { it.symbol }, st.element.ordinal) { i -> choose(Element.entries[i]) }
-}
-
-/**
- * The picker of Layouts: option B (Matheesha's choice), at the touch rules' sizes. Every choice is its symbol; the chosen
- * one is wider, on the thumb, with its name beside its symbol. The others are each at least a 44 pt target (on the S24
- * 47 x 48 pt: the room left once the longest name fits), symbols 22 pt, the name 13 pt semibold. One spring moves it all:
- * the thumb slides and takes the new one's width, the old name fades as its segment narrows, the new one's comes as it
- * widens. A tap chooses; a drag along it carries the thumb under the finger and chooses where it is let go.
- */
-@Composable
-private fun SymbolSegmented(names: List<String>, symbols: List<Int>, chosen: Int, onChoose: (Int) -> Unit) {
-    val look = LocalLook.current
-    val n = names.size
-    val at = remember { Animatable(chosen.toFloat()) }
-    var dragging by remember { mutableStateOf(false) }
-    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.NAV_PUSH))
-    val scope = rememberCoroutineScope()
-    LaunchedEffect(chosen) { if (!dragging) at.animateTo(chosen.toFloat(), spec.value) }
-    val measurer = rememberTextMeasurer()
-    val label = look.color(SettingsTokens.ROW_LABEL)
-    val muted = look.color(SettingsTokens.ROW_DETAIL_COLOR)
-    val style = look.text(SettingsTokens.SEGMENT_TEXT, label).copy(fontWeight = androidx.compose.ui.text.font.FontWeight(600))
-    val painters = symbols.map { painterResource(it) }
-    val track = look.color(SettingsTokens.SEGMENT_TRACK)
-    val thumbFill = look.color(SettingsTokens.SEGMENT_THUMB)
-    val inset = 3f * look.unit
-    val iconSize = look.pt(SettingsTokens.SEGMENT_SYMBOL)
-    val gap = 6f * look.unit
-    val pad = 12f * look.unit
-    val target = look.pt(SettingsTokens.TARGET)
-    var width by remember { mutableIntStateOf(0) }
-    // The widths: the others share what the chosen one leaves once the longest name fits it, each at least a target; on a
-    // phone too narrow for that, the names are set smaller until they fit.
-    val layout = remember(names, look, width) {
-        var texts = names.map { measurer.measure(it, style, maxLines = 1) }
-        val w = width.toFloat()
-        var base = if (w <= 0f) target else (w - (iconSize + gap + texts.maxOf { it.size.width } + pad * 2f)) / (n - 1)
-        if (w > 0f && base < target) {
-            base = target
-            val room = w - (n - 1) * base - iconSize - gap - pad * 2f
-            val widest = texts.maxOf { it.size.width }
-            if (room > 0f && widest > room) texts = names.map { measurer.measure(it, style.copy(fontSize = style.fontSize * (room / widest)), maxLines = 1) }
-        }
-        base to texts
-    }
-    val (base, texts) = layout
-    val choose = androidx.compose.runtime.rememberUpdatedState(onChoose)
-    // How much of the chosen one's extra room each choice has at [p] (the thumb's place: an index, fractional on the way).
-    fun share(i: Int, p: Float) = (1f - kotlin.math.abs(p - i)).coerceIn(0f, 1f)
-    Canvas(
-        Modifier.fillMaxWidth().height(look.dp(SettingsTokens.SEGMENT_HEIGHT))
-            .onSizeChanged { width = it.width }
-            .pointerInput(n, base) {
-            awaitEachGesture {
-                val down = awaitFirstDown()
-                val w = size.width.toFloat()
-                val slop = viewConfiguration.touchSlop
-                var moved = false
-                // Where a finger is as a place along the choices (spread evenly over the control).
-                fun place(x: Float) = ((x - base / 2f) / (w - base) * (n - 1)).coerceIn(0f, (n - 1).toFloat())
-                while (true) {
-                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
-                    val dx = c.position.x - down.position.x
-                    if (!moved && kotlin.math.abs(dx) > slop) { moved = true; dragging = true }
-                    if (moved) { c.consume(); scope.launch { at.snapTo(place(c.position.x)) } }
-                    if (!c.pressed) break
-                }
-                // A tap: the choice whose segment it is now (the chosen one wider).
-                val to = if (moved) kotlin.math.round(at.value).toInt() else {
-                    val extra = w - n * base
-                    var x = 0f
-                    var hit = n - 1
-                    for (i in 0 until n) {
-                        val sw = base + extra * share(i, at.value)
-                        if (down.position.x < x + sw) { hit = i; break }
-                        x += sw
-                    }
-                    hit
-                }
-                dragging = false
-                scope.launch { at.animateTo(to.toFloat(), spec.value) }
-                choose.value(to)
-            }
-        },
-    ) {
-        val h = size.height
-        val w = size.width
-        val p = at.value
-        val extra = (w - n * base).coerceAtLeast(0f)
-        val r = minOf(look.pt(SettingsTokens.SEGMENT_CORNER), h / 2f)
-        drawRoundRect(track, cornerRadius = CornerRadius(r))
-        val lefts = FloatArray(n)
-        val widths = FloatArray(n)
-        var x = 0f
-        for (i in 0 until n) { lefts[i] = x; widths[i] = base + extra * share(i, p); x += widths[i] }
-        // The thumb: over the segment the place is in, moving into the next with it.
-        val i0 = p.toInt().coerceIn(0, n - 1)
-        val i1 = (i0 + 1).coerceAtMost(n - 1)
-        val f = (p - i0).coerceIn(0f, 1f)
-        val tl = lefts[i0] + (lefts[i1] - lefts[i0]) * f
-        val tw = widths[i0] + (widths[i1] - widths[i0]) * f
-        val tr = (r - inset).coerceAtLeast(0f)
-        drawRoundRect(Color.Black.copy(alpha = 0.06f), Offset(tl + inset, inset + 1.5f * look.unit), Size(tw - inset * 2f, h - inset * 2f), CornerRadius(tr))
-        drawRoundRect(thumbFill, Offset(tl + inset, inset), Size(tw - inset * 2f, h - inset * 2f), CornerRadius(tr))
-        for (i in 0 until n) {
-            val k = share(i, p)
-            val t = texts[i]
-            // The symbol and the name side by side, centred in the segment (the name's room growing with it).
-            val content = iconSize + (gap + t.size.width) * k
-            val cx = lefts[i] + widths[i] / 2f
-            val sx = cx - content / 2f
-            translate(sx, (h - iconSize) / 2f) { with(painters[i]) { draw(Size(iconSize, iconSize), colorFilter = ColorFilter.tint(mix(muted, label, k))) } }
-            if (k > 0.01f) clipRect(left = lefts[i], right = lefts[i] + widths[i]) {
-                drawText(t, topLeft = Offset(sx + iconSize + gap, (h - t.size.height) / 2f), alpha = k * k)
-            }
-        }
-    }
-}
-
-/** One element's page on Layouts: it slides in from its side and away, and takes the touches while it is the chosen one. */
-@Composable
-private fun ElementColumn(st: Studio, e: Element, g: Geometry, contentTop: Float, slide: Float, fadePx: Float, m: androidx.compose.ui.unit.Dp) {
-    val look = LocalLook.current
-    val shown = st.elementShown.getValue(e)
-    val side = st.elementSide.getValue(e)
-    val scroll = st.elementScrolls.getValue(e)
-    val bandPaint = remember { androidx.compose.ui.graphics.Paint() }
-    val chosen by remember(st, e) { androidx.compose.runtime.derivedStateOf { st.element == e } }
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(top = look.dp(contentTop))
-                    // The chosen one takes the touches (the one going is under it while both show).
-                    .zIndex(if (chosen) 1f else 0f)
-                    .graphicsLayer {
-                        val k = shown.value.coerceIn(0f, 1f)
-                        // Out of sight once gone (not laid out again when it comes).
-                        translationX = if (k <= 0.001f) g.w * 3f else side.floatValue * (1f - k) * slide
-                        // Seen only in the upper part of its way: the one going is nearly gone before the one coming shows
-                        // (both at half strength, their names over each other, read as a mess).
-                        val a = ((k - 0.35f) / 0.65f).coerceIn(0f, 1f)
-                        alpha = a * a * (3f - 2f * a)
-                    }
-                    .topFade(scroll, g.unit, fadePx, bandPaint),
-            ) {
-                Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
-                    Spacer(Modifier.height(look.dp(10f * g.unit)))
-                    ElementLayouts(e)
-                    // Room below the last row for the Apply bar.
-                    Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
-                }
-            }
-}
-
-/** One element on Layouts: its layouts, where it lives, its options. Waits for Apply like the rest. */
-@Composable
-private fun ElementLayouts(e: Element) {
+private fun PartPage(part: Part) {
+    val e = part.element ?: return
     val draft = LocalDraft.current
     val current = Layouts.find(e, draft.layout(e)) ?: Setup.layout(e)
     val layouts = Layouts.of(e)
-    Group(e.title, current.description) {
-        for (l in layouts) CheckRow(l.title, l.origin, l.id == current.id) { draft.chooseLayout(e, l.id) }
+    Group("Layout", current.description) {
+        if (layouts.size > 1) for (l in layouts) CheckRow(l.title, l.origin, l.id == current.id) { draft.chooseLayout(e, l.id) }
+        // (Its name once where the design it comes from says it: "iOS 27", not "iOS" and "iOS 27".)
+        else if (current.origin.startsWith(current.title)) BaseRow(current.origin, null, null) { }
+        else InfoRow(current.title, current.origin)
     }
-    if (current.placements.size > 1) {
-        val at = draft.placement(e)
-        Group("Where it lives") {
-            for (p in current.placements) CheckRow(p.title, p.description, p.id == at) { draft.choosePlacement(e, p.id) }
-        }
+    val at = draft.placement(e)
+    Group("Where it lives", if (gestureOf(e, at) != null) "The finger on the picture shows how it is reached." else null) {
+        if (current.placements.size > 1) for (p in current.placements) CheckRow(p.title, p.description, p.id == at) { draft.choosePlacement(e, p.id) }
+        else current.defaultPlacement.let { p -> BaseRow(p.title, p.description, null) { } }
     }
     val counts = current.options.filterIsInstance<Option.Count>()
     if (counts.isNotEmpty()) {
@@ -2682,6 +2629,9 @@ private fun ElementLayouts(e: Element) {
     val toggles = current.options.filterIsInstance<Option.Toggle>()
     if (toggles.isNotEmpty()) Group("Options") {
         for (o in toggles) ToggleRow(o.title, o.description, draft.bool(e, o.key, o.default)) { draft.chooseBool(e, o.key, it, o.default) }
+    }
+    Group("Look", "It follows the theme chosen in Look, or has one of its own.") {
+        OwnThemeRow(e)
     }
 }
 
@@ -2782,7 +2732,9 @@ private fun Stepper(minus: Boolean, plus: Boolean, onMinus: () -> Unit, onPlus: 
  * above it), counts them, and after Back with changes waiting says what a second Back does.
  */
 @Composable
-private fun ApplyBar(draft: Draft, g: Geometry, bar: Animatable<Float, *>, entry: EntryState, onApply: () -> Unit) {
+private fun ApplyBar(draft: Draft, g: Geometry, st: Studio, onApply: () -> Unit) {
+    val bar = st.bar
+    val entry = st.entry
     val look = LocalLook.current
     // (A derived state: every step of a slider changes the draft, most of them not its count.)
     val n by remember(draft) { androidx.compose.runtime.derivedStateOf { draft.count } }
@@ -2815,7 +2767,9 @@ private fun ApplyBar(draft: Draft, g: Geometry, bar: Animatable<Float, *>, entry
             .graphicsLayer {
                 val k = bar.value
                 alpha = k.coerceIn(0f, 1f)
-                translationY = (1f - k) * (g.barH + 40f * g.unit) + (1f - entry.enter.floatValue.coerceAtLeast(0f)) * g.enterDrop
+                // (With the sheet while home slides in or out: as far as the sheet goes.)
+                val sheetTop = g.top(st.p.value, k, st.lifted(g))
+                translationY = (1f - k) * (g.barH + 40f * g.unit) + (1f - entry.enter.floatValue.coerceAtLeast(0f)) * (g.belowTop - sheetTop)
             }
             .pressScale { 1f + 0.05f * nudge.value }
             .drawBehind {
@@ -2992,34 +2946,33 @@ internal fun DrawnLine(text: () -> String, style: androidx.compose.ui.text.TextS
 
 /**
  * Phone: what the launcher needs from the phone, its updates, and the way out of trouble, in one place (Matheesha: the
- * developer panel and the safe settings were apps of their own). All of it takes effect at once (nothing here waits for
- * Apply). The plain safe settings screen stays for the Restore notification (it opens even if the themes cannot load).
+ * developer panel and the safe settings were apps of their own). Calmer (docs/PLAN_SETTINGS_V2.md): Shizuku, Updates,
+ * Safety, About; the testing tools and the token editor show once the build has been tapped seven times (Android's way),
+ * until turned off on their page. All of it takes effect at once (nothing here waits for Apply). The plain safe settings
+ * screen stays for the Restore notification (it opens even if the themes cannot load).
  */
 @Composable
-private fun PhonePage() {
-    val ctx = LocalContext.current
-    val app = ctx.applicationContext as? dev.launcher.app.LauncherApp
-    val st = LocalStudio.current
+private fun PhonePager(st: Studio, g: Geometry, fadePx: Float, bandPaint: androidx.compose.ui.graphics.Paint) {
     // What it shows is read again whenever Shizuku comes or goes, the settings come back, or an action here is done.
-    var tick by remember { mutableIntStateOf(0) }
+    val tick = remember { mutableIntStateOf(0) }
     val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
     androidx.compose.runtime.DisposableEffect(Unit) {
-        val l: () -> Unit = { main.post { tick++ } }
+        val l: () -> Unit = { main.post { tick.intValue++ } }
         dev.launcher.app.ShizukuLink.addListener(l)
         onDispose { dev.launcher.app.ShizukuLink.removeListener(l) }
     }
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
     androidx.compose.runtime.DisposableEffect(lifecycle) {
-        val o = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick++ }
+        val o = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick.intValue++ }
         lifecycle.addObserver(o)
         onDispose { lifecycle.removeObserver(o) }
     }
-    // The log's newest lines, while this page is open and at rest (a few times a second at most: each is laid out again).
-    // Watched outside the page's composition: reading which page is open here recomposed the whole page whenever any page
-    // opened (14 ms in the first frame of opening Look on the S24).
+    // The log's newest lines and the updater's last word, while Phone (or its Developer page) is open and at rest (a few times
+    // a second at most: each is laid out again). Watched outside the pages' composition: reading which page is open there
+    // recomposed a whole page whenever any page opened (14 ms in the first frame of opening Look on the S24).
     val feed = remember { LogFeed() }
     LaunchedEffect(st) {
-        androidx.compose.runtime.snapshotFlow { st == null || (st.open == Part.PHONE && !st.p.isRunning) }.collectLatest { open ->
+        androidx.compose.runtime.snapshotFlow { st.open == Part.PHONE && !st.p.isRunning && !st.subPush.isRunning }.collectLatest { open ->
             if (!open) return@collectLatest
             feed.read()
             var pending = false
@@ -3028,13 +2981,14 @@ private fun PhonePage() {
             try { kotlinx.coroutines.awaitCancellation() } finally { dev.launcher.app.AppLog.removeListener(l) }
         }
     }
-    val shizuku = remember(tick) { dev.launcher.app.ShizukuLink.state() }
-    val connected = shizuku == dev.launcher.app.ShizukuLink.State.CONNECTED
-    fun settingsPage(action: String) {
-        try { ctx.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-        catch (_: android.content.ActivityNotFoundException) { ctx.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-    }
+    SubPager(st, g, Part.PHONE, fadePx, bandPaint, { push, lit -> PhonePage(tick, feed, push, lit) }) { _, pop -> DeveloperPage(tick, feed, pop) }
+}
 
+@Composable
+private fun PhonePage(tick: androidx.compose.runtime.MutableIntState, feed: LogFeed, push: (Sub) -> Unit, lit: () -> Sub?) {
+    val ctx = LocalContext.current
+    val app = ctx.applicationContext as? dev.launcher.app.LauncherApp
+    val shizuku = remember(tick.intValue) { dev.launcher.app.ShizukuLink.state() }
     Group("Shizuku", "The advanced features (the shade, gestures, app switching, updates) work through Shizuku.") {
         InfoRow("Status", when (shizuku) {
             dev.launcher.app.ShizukuLink.State.CONNECTED -> "Connected"
@@ -3042,35 +2996,95 @@ private fun PhonePage() {
             dev.launcher.app.ShizukuLink.State.NO_PERMISSION -> "Not allowed yet"
             dev.launcher.app.ShizukuLink.State.NOT_RUNNING -> "Not running"
         })
-        if (!connected) ActionRow("Connect", "Start Shizuku first (wireless debugging)") { dev.launcher.app.ShizukuLink.connect() }
+        Reveal(shizuku != dev.launcher.app.ShizukuLink.State.CONNECTED) {
+            ActionRow("Connect", "Start Shizuku first (wireless debugging)") { dev.launcher.app.ShizukuLink.connect() }
+        }
     }
     Group("Updates") {
-        InfoRow("This build", app?.buildStamp() ?: "?")
         ActionRow("Check for updates", feed.update) { app?.let { dev.launcher.app.Updater.update(it, force = false) } }
-        ActionRow("Install the newest again", "Even if it is the build you have") { app?.let { dev.launcher.app.Updater.update(it, force = true) } }
     }
     var restored by remember { mutableStateOf<String?>(null) }
     Group("Safety", "If the status bar is missing, animations are off or the launcher misbehaves. Restarting the phone also brings the status bar back.") {
-        val hidden = remember(tick) { dev.launcher.app.SystemRestore.statusBarHidden(ctx) }
-        InfoRow("Status bar", if (hidden) "Ours (stock one hidden)" else "The phone's own")
-        InfoRow("Animations", remember(tick) { dev.launcher.app.SystemRestore.currentScales(ctx) })
-        InfoRow("Restore without Shizuku", if (remember(tick) { dev.launcher.app.SystemRestore.canWriteSecureSettings(ctx) }) "Ready" else "Connect Shizuku once")
-        InfoRow("Safety notification", if (remember(tick) { dev.launcher.app.SafetyNotification.canPost(ctx) }) "Allowed" else "Blocked")
         ActionRow("Restore system", restored ?: "The status bar, gestures and animations as they were") {
             restored = "Restoring..."
-            dev.launcher.app.DevTools.restore(ctx) { restored = it; tick++ }
+            dev.launcher.app.DevTools.restore(ctx) { restored = it; tick.intValue++ }
         }
-        NavRow("Choose a different home app", null) { settingsPage(android.provider.Settings.ACTION_HOME_SETTINGS) }
-        NavRow("Animation scales", "Android's developer options") { settingsPage(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS) }
+        InfoRow("Restore without Shizuku", if (remember(tick.intValue) { dev.launcher.app.SystemRestore.canWriteSecureSettings(ctx) }) "Ready" else "Connect Shizuku once")
+        InfoRow("Safety notification", if (remember(tick.intValue) { dev.launcher.app.SafetyNotification.canPost(ctx) }) "Allowed" else "Blocked")
+        NavRow("Choose a different home app", null) { openSystemSettings(ctx, android.provider.Settings.ACTION_HOME_SETTINGS) }
     }
-    Group("Developer", "For testing the launcher. Each takes effect at once; what they find goes to the log below.") {
-        var gestures by remember(tick) { mutableStateOf(dev.launcher.app.SystemRestore.gesturesWanted(ctx)) }
-        ToggleRow("Gesture navigation", "The launcher's own gestures and app cards", gestures) { on ->
-            if (connected) { gestures = on; dev.launcher.app.DevTools.setGestures(ctx, on) { tick++ } } else dev.launcher.app.ShizukuLink.connect()
+    Group("About") {
+        BuildRow(app?.buildStamp() ?: "?")
+    }
+    // Once turned on (seven taps on the build): the testing tools and the token editor.
+    Reveal(SettingsPrefs.developer) {
+        Column {
+            Group("Developer") {
+                PushRow("Developer tools", "Tests, slow animations, the log", Sub.DEVELOPER, push, lit)
+                NavRow("Every value of the theme", "The token editor, for theme authors") {
+                    ctx.startActivity(Intent(ctx, dev.launcher.app.design.DesignActivity::class.java))
+                }
+            }
         }
-        var bar by remember(tick) { mutableStateOf(dev.launcher.app.SystemRestore.statusBarWanted(ctx)) }
+    }
+}
+
+/** How many taps on the build turn the developer tools on (Android's own number). */
+private const val DEVELOPER_TAPS = 7
+
+/**
+ * The build this is; seven taps on it turn the developer tools on (Android's way). From the third, a line under it counts
+ * down; once on, a tap says where they are.
+ */
+@Composable
+private fun BuildRow(build: String) {
+    val look = LocalLook.current
+    val ctx = LocalContext.current
+    var taps by remember { mutableIntStateOf(0) }
+    // A pause in the tapping starts the count again.
+    LaunchedEffect(taps) { if (taps > 0) { kotlinx.coroutines.delay(3000); taps = 0 } }
+    val said = when {
+        SettingsPrefs.developer && taps > 0 -> "The developer tools are on, below"
+        taps >= 3 -> (DEVELOPER_TAPS - taps).let { "$it more tap" + (if (it == 1) "" else "s") + " for the developer tools" }
+        else -> null
+    }
+    // (It keeps its last words while its line closes.)
+    val last = remember { arrayOf("") }
+    if (said != null) last[0] = said
+    BaseRow("Build", null, {
+        if (SettingsPrefs.developer) taps = 1
+        else if (taps + 1 >= DEVELOPER_TAPS) { SettingsPrefs.setDeveloper(ctx, true); taps = 1 }
+        else taps++
+    }, below = {
+        Reveal(said != null) { Rolling(last[0], look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ACCENT)), Modifier.fillMaxWidth()) }
+    }) {
+        BasicText(build, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
+    }
+}
+
+/**
+ * Phone's Developer page: the tools for testing the launcher, what it has done to the phone, and the log. A switch at its
+ * top hides it (and the token editor) again.
+ */
+@Composable
+private fun DeveloperPage(tick: androidx.compose.runtime.MutableIntState, feed: LogFeed, pop: () -> Unit) {
+    val ctx = LocalContext.current
+    val app = ctx.applicationContext as? dev.launcher.app.LauncherApp
+    val connected = remember(tick.intValue) { dev.launcher.app.ShizukuLink.state() } == dev.launcher.app.ShizukuLink.State.CONNECTED
+    Group(null, "On Phone until turned off here.") {
+        ToggleRow("Developer tools", null, SettingsPrefs.developer) { on ->
+            SettingsPrefs.setDeveloper(ctx, on)
+            if (!on) pop()
+        }
+    }
+    Group("Tests", "For testing the launcher. Each takes effect at once; what they find goes to the log below.") {
+        var gestures by remember(tick.intValue) { mutableStateOf(dev.launcher.app.SystemRestore.gesturesWanted(ctx)) }
+        ToggleRow("Gesture navigation", "The launcher's own gestures and app cards", gestures) { on ->
+            if (connected) { gestures = on; dev.launcher.app.DevTools.setGestures(ctx, on) { tick.intValue++ } } else dev.launcher.app.ShizukuLink.connect()
+        }
+        var bar by remember(tick.intValue) { mutableStateOf(dev.launcher.app.SystemRestore.statusBarWanted(ctx)) }
         ToggleRow("Our status bar", "The phone's own hidden", bar) { on ->
-            if (connected) { bar = on; dev.launcher.app.DevTools.setOwnStatusBar(ctx, on) { tick++ } } else dev.launcher.app.ShizukuLink.connect()
+            if (connected) { bar = on; dev.launcher.app.DevTools.setOwnStatusBar(ctx, on) { tick.intValue++ } } else dev.launcher.app.ShizukuLink.connect()
         }
         ToggleRow("Test animation presets", "Shown in Motion with the others", SettingsPrefs.testPresets) { on -> SettingsPrefs.setTestPresets(ctx, on) }
         SlowRow()
@@ -3089,17 +3103,24 @@ private fun PhonePage() {
         ActionRow("Test: stop the shell service", "The phone's status bar should come back at once") { dev.launcher.app.DevTools.killService() }
         ConfirmRow("Reset home layout", "Forgets your home pages; the launcher restarts", "Tap again to reset home") { dev.launcher.app.DevTools.resetHomeLayout(ctx) }
     }
+    Group("The phone now") {
+        InfoRow("Status bar", if (remember(tick.intValue) { dev.launcher.app.SystemRestore.statusBarHidden(ctx) }) "Ours (stock one hidden)" else "The phone's own")
+        InfoRow("Animations", remember(tick.intValue) { dev.launcher.app.SystemRestore.currentScales(ctx) })
+        NavRow("Animation scales", "Android's developer options") { openSystemSettings(ctx, android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS) }
+        ActionRow("Install the newest again", "Even if it is the build you have") { app?.let { dev.launcher.app.Updater.update(it, force = true) } }
+    }
     Group("Log") {
         BasicText(feed.log.ifEmpty { "Nothing yet." }, style = LocalLook.current.text(SettingsTokens.ROW_DETAIL, LocalLook.current.color(SettingsTokens.ROW_DETAIL_COLOR))
             .copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)),
             modifier = Modifier.fillMaxWidth().padding(LocalLook.current.dp(SettingsTokens.ROW_PADDING)))
         ActionRow("Copy log", null) { dev.launcher.app.DevTools.copyLog(ctx) }
     }
-    Group("Expert") {
-        NavRow("Every value of the theme", "The token editor, for theme authors") {
-            ctx.startActivity(Intent(ctx, dev.launcher.app.design.DesignActivity::class.java))
-        }
-    }
+}
+
+/** One of the phone's own settings pages (its Settings app if this phone has no such page). */
+private fun openSystemSettings(ctx: android.content.Context, action: String) {
+    try { ctx.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    catch (_: android.content.ActivityNotFoundException) { ctx.startActivity(Intent(android.provider.Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 /**
@@ -3111,11 +3132,13 @@ private fun SlowRow() {
     val look = LocalLook.current
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
     val factors = listOf(1f, 2f, 4f, 10f)
     val now = (try { Design.resolved(MotionTokens.DEBUG_SLOW.name) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Number)?.v ?: 1f
     val chosen = factors.indexOfFirst { kotlin.math.abs(it - now) < 0.01f }.coerceAtLeast(0)
     Column(Modifier.fillMaxWidth()
-        .drawBehind { drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         BasicText("Slow animations", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
         BasicText("Every animation this many times slower, to check it frame by frame",
@@ -3182,14 +3205,19 @@ internal fun Group(title: String?, note: String? = null, rows: @Composable () ->
     Spacer(Modifier.height(look.dp(24f * look.unit)))
 }
 
-/** One row: a name, an optional detail below it, something at its end; pressed, it lights up. */
+/**
+ * One row: a name, an optional detail below it ([below]: more under that), something at its end; pressed (or [held]: what it
+ * opens being built), it lights up.
+ */
 @Composable
-internal fun BaseRow(title: String, detail: String?, onClick: (() -> Unit)?, accent: Boolean = false, changing: Boolean = false, end: @Composable () -> Unit) {
+internal fun BaseRow(title: String, detail: String?, onClick: (() -> Unit)?, accent: Boolean = false, changing: Boolean = false,
+                     held: Boolean = false, below: (@Composable () -> Unit)? = null, end: @Composable () -> Unit) {
     val look = LocalLook.current
     val counter = LocalRowCounter.current
     val first = remember { counter == null || counter.n++ == 0 }
     var pressed by remember { mutableStateOf(false) }
-    val press by animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+    val down = pressed || held
+    val press by animateFloatAsState(if (down) 1f else 0f, look.motion(if (down) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
     Row(
@@ -3208,6 +3236,7 @@ internal fun BaseRow(title: String, detail: String?, onClick: (() -> Unit)?, acc
             val detailStyle = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR))
             if (changing) { if (detail != null) Rolling(detail, detailStyle, Modifier.fillMaxWidth(), lines = 6) }
             else if (detail != null) BasicText(detail, style = detailStyle)
+            below?.invoke()
         }
         Spacer(Modifier.width(look.dp(12f * look.unit)))
         end()

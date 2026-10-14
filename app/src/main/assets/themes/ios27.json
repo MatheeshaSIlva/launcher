@@ -2573,9 +2573,17 @@
    "ref": "sys.color.label.primary",
    "src": "judged:the theme's primary label"
   },
-  "comp.settings.color.layouts": {
+  "comp.settings.color.apps": {
+   "ref": "ref.color.accents.purple",
+   "src": "judged:a colour per part"
+  },
+  "comp.settings.color.home": {
    "ref": "ref.color.accents.blue",
    "src": "judged:a colour per part (Android 16's Settings, iOS Settings' icons)"
+  },
+  "comp.settings.color.library": {
+   "ref": "ref.color.accents.teal",
+   "src": "judged:a colour per part"
   },
   "comp.settings.color.look": {
    "ref": "ref.color.accents.indigo",
@@ -2587,6 +2595,14 @@
   },
   "comp.settings.color.phone": {
    "ref": "ref.color.accents.green",
+   "src": "judged:a colour per part"
+  },
+  "comp.settings.color.shade": {
+   "ref": "ref.color.accents.red",
+   "src": "judged:a colour per part (iOS Settings' Notifications icon)"
+  },
+  "comp.settings.color.statusbar": {
+   "ref": "ref.color.accents.mint",
    "src": "judged:a colour per part"
   },
   "comp.settings.field.fill": {

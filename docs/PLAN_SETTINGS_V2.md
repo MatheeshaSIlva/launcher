@@ -182,7 +182,7 @@ is moving them into the new pages and writing the moments.
 
 | Step | What |
 | --- | --- |
-| V1 | The new start page (Look, Motion, the parts, Phone; search field shown), the parts' pages from Layouts' content and the per-part looks; Look and Phone calmer; Developer behind the build number |
+| V1 | The new start page (Look, Motion, the parts, Phone), the parts' pages from Layouts' content and the per-part looks; Look and Phone calmer; Developer behind the build number. **Done 2026-10-15** (`docs/PROGRESS.md`); the search field moved to V3, where it searches |
 | V2 | Motion as moments: the 22 moments, per-moment Speed and Bounce, character sliders, Every detail (today's rows and editor), the glue out of the settings; presets as small app openings |
 | V3 | Search and "what you changed" |
 | V4 | Transition styles, one moment at a time (`docs/MOTION_STYLES.md`: Opening and closing apps first) |

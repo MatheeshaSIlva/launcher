@@ -120,6 +120,7 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SettingsPrefs.load(this)
         Design.addListener(onDesign)
         Design.addListener(onLook)
         dev.launcher.app.theme.Appearance.addListener(onLook)

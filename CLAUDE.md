@@ -56,17 +56,23 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`Setup`, `files/setup.json`; never in a theme). `HomeConfig` reads the drawer and home options from it. Over adb:
   `am broadcast -a dev.launcher.app.SETUP -p dev.launcher.app --es element ID [--es layout ID] [--es placement ID]
   [--es option KEY=VALUE]`.
-- **Settings app** (`settings/`, plan `docs/PLAN_SETTINGS.md`): Jetpack Compose (`SettingsActivity`, own task), an element of
+- **Settings app** (`settings/`, plans `docs/PLAN_SETTINGS.md`, then `docs/PLAN_SETTINGS_V2.md`): Jetpack Compose
+  (`SettingsActivity`, own task), an element of
   its own (`Element.SETTINGS`, layout "studio", tokens `comp.settings.*`), drawn with the theme's tokens through
   `SettingsTheme`/`Look` (no Material components; motion roles as Compose specs). Studio (draft D in Figma): a picture of
   home above a sheet of tiles; a tile grows into its page inside the sheet (`motion.settings.open`), one value moving
   everything; pages are built ahead and only placed while open (a page built in a transition's first frame cost the S24
   60-80 ms); solid groups (no glass per card). Changes wait in a draft for Apply (`Draft`, `ApplyBar`, `Design.batch`:
   one reveal for all of them); a look change is revealed from the tap
-  (`ThemeReveal`). The picture of home (with our status bar drawn on it) takes no touches: it zooms to the element chosen
-  in Layouts' segmented control and fades away behind the sheet (`motion.settings.focus`). iOS 27's overview: the page is
-  the blurred wallpaper, the panel on it, its buttons clear glass (`comp.settings.glass`). Phone holds Shizuku, updates,
-  safety and the developer tools with the log.
+  (`ThemeReveal`). Structure B (V1, 2026-10-15): tiles (`Part`) for Look and Motion (the whole phone), one per part of the
+  phone (Home, Apps, App Library, Notifications & Control Center, Status bar: its layout, where it lives, its options, its
+  own theme, on its page: `PartPage`) and Phone; more tiles than the sheet shows at rest, so a scroll up lifts the sheet
+  first, then scrolls the tiles (`liftScroll`, `Studio.lifted`). Look and Phone push pages one level down (`SubPager`,
+  `Sub`: Look's colours, fonts, size; Phone's Developer page). The picture of home (with our status bar drawn on it) takes
+  no touches: it zooms to the open part and fades away behind the sheet (`motion.settings.focus`); a finger shows how the
+  part is reached. iOS 27's overview: the page is the blurred wallpaper, the panel on it, its buttons clear glass
+  (`comp.settings.glass`). Phone holds Shizuku, updates, safety and About; seven taps on the build turn on the developer
+  tools (Developer: the tests and the log; the token editor), until switched off on their page (`SettingsPrefs.developer`).
   Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control. From the edit menu
   home slides into them (`settings/SettingsEntry`, `EntryState`): home pictures itself at rest with our bar on it, their
   first frame waits for it and shows it over the whole screen (the screen's own corners, no frame), and once the window
@@ -132,7 +138,7 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `HomeMetrics` and `Scale.homeText`); a change rebuilds everything). A view that keeps the unit in a field measures it
   again on every design change, not only in `onSizeChanged` (the window keeps its size when the unit changes: Control
   Center and Notification Center stayed small after Follow was turned off).
-  The token editor is `design/DesignActivity` (opened from the settings app: Phone, Expert; no drawer entry).
+  The token editor is `design/DesignActivity` (opened from the settings app: Phone, Developer, once the developer tools are on; no drawer entry).
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.
   Notification Center is on it (step 2a, tokens `comp.nc.*` in `shade/NcTokens.kt`), and Control Center with its expanded
@@ -274,8 +280,9 @@ copy it wholesale — port the working pieces cleanly. File map:
   lock/unlock because Default USB configuration had data functions; fixed by "debugging only"/"No data transfer". Hence: status bar flags are set
   through the binder API with a token owned by our service (system drops them when it dies), never with `cmd` (those persist until reboot).
 - **Everything that changes system state must auto-restore and be recoverable without Shizuku** (notification action + safe-settings screen). A reboot always clears these in-memory flags.
-  The safe-settings screen (plain views) opens from the Restore notification only; the same and the developer tools are in
-  the settings app's Phone page (`DevTools`; the separate dev panel and its home entry are gone).
+  The safe-settings screen (plain views) opens from the Restore notification only; the same is on the settings app's Phone
+  page, the developer tools on its Developer page once the build has been tapped seven times (`DevTools`; the separate dev
+  panel and its home entry are gone).
 - **The window manager takes a pull from the top edge away from us.** After 24 dp (within 500 ms) of a pull that starts in the
   top band, `DisplayPolicy.requestTransientBars` transfers the touch to SystemUI's status bar (`transferTouch`) unless the
   focused window shows its bars transiently: our shade window gets ACTION_CANCEL mid-pull. It cannot be blocked from an app

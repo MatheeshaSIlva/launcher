@@ -19,7 +19,7 @@ OUT = os.path.join(ROOT, 'app', 'src', 'main', 'assets', 'themes', 'ios27.json')
 # Motion is a layer of its own (B3, docs/PLAN_LAYOUTS_THEMES.md): every motion.* token goes to the iOS 27 animation preset.
 OUT_MOTION = os.path.join(ROOT, 'app', 'src', 'main', 'assets', 'motion', 'ios27.json')
 # Tokens renamed since an earlier build (the value written in the file moves with the name).
-RENAMES = {'comp.cc.motion.open': 'motion.cc.open', 'comp.cc.symbol-on-accent': 'comp.cc.symbol-on-accent-color'}
+RENAMES = {'comp.cc.motion.open': 'motion.cc.open', 'comp.settings.color.layouts': 'comp.settings.color.home', 'comp.cc.symbol-on-accent': 'comp.cc.symbol-on-accent-color'}
 
 
 def slug(name):
@@ -910,7 +910,11 @@ COMPONENT_SEEDS = {
     'comp.settings.tile.symbol-color': {'color': '#ffffff', 'src': "judged:a white symbol on its colour (iOS Settings' icons)"},
     'comp.settings.tile.title': {'ref': 'sys.type.headline', 'src': "judged:draft D: a tile's name"},
     'comp.settings.tile.detail': {'ref': 'sys.type.caption1', 'src': "judged:draft D: what is under it now"},
-    'comp.settings.color.layouts': {'ref': 'ref.color.accents.blue', 'src': "judged:a colour per part (Android 16's Settings, iOS Settings' icons)"},
+    'comp.settings.color.home': {'ref': 'ref.color.accents.blue', 'src': "judged:a colour per part (Android 16's Settings, iOS Settings' icons)"},
+    'comp.settings.color.apps': {'ref': 'ref.color.accents.purple', 'src': "judged:a colour per part"},
+    'comp.settings.color.library': {'ref': 'ref.color.accents.teal', 'src': "judged:a colour per part"},
+    'comp.settings.color.shade': {'ref': 'ref.color.accents.red', 'src': "judged:a colour per part (iOS Settings' Notifications icon)"},
+    'comp.settings.color.statusbar': {'ref': 'ref.color.accents.mint', 'src': "judged:a colour per part"},
     'comp.settings.color.look': {'ref': 'ref.color.accents.indigo', 'src': "judged:a colour per part"},
     'comp.settings.color.motion': {'ref': 'ref.color.accents.orange', 'src': "judged:a colour per part"},
     'comp.settings.color.phone': {'ref': 'ref.color.accents.green', 'src': "judged:a colour per part"},

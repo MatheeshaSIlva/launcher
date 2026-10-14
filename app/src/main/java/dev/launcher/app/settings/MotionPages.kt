@@ -266,7 +266,7 @@ private fun GroupRow(grp: MotionGroup, push: (MotionGroup) -> Unit, lit: () -> M
 }
 
 /** How far in a group's page may be and still count as gone (its alpha under a 255th). */
-private const val PAGE_GONE = 0.002f
+internal const val PAGE_GONE = 0.002f
 
 /**
  * The most time one frame moves Motion's loops (the cards' dots, the picture's demo and samples; s): a stalled frame (a
@@ -1112,7 +1112,7 @@ private fun MotionPage(push: (MotionGroup) -> Unit, lit: () -> MotionGroup?) {
     val all = remember(look.version) { Design.motionPresets() }
     val chosen = draft.motionId()
     // Presets made for testing show when Developer asks for them, or while one is in use; the default first, tests last.
-    val presets = all.filter { !it.test || SettingsPrefs.testPresets || it.id == chosen || it.id == Design.motionPresetId }
+    val presets = all.filter { !it.test || (SettingsPrefs.developer && SettingsPrefs.testPresets) || it.id == chosen || it.id == Design.motionPresetId }
         .sortedWith(compareBy({ it.test }, { it.id != Design.DEFAULT_MOTION }, { it.name }))
     // The cards' dots run on one clock while the page is open and at rest (read in drawing only).
     val clock = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
