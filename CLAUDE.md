@@ -539,6 +539,8 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - When the S24 is connected (USB or wireless adb, `DEVICE=<serial>`): animations are checked frame by frame with
   `tools/device.sh rec NAME [SECS]` … `recpull NAME [WAIT]` (screenrecord captures every composed frame, 120 fps; contact
   sheets and frame times land in `tools/shots/NAME/`; needs `pip install imageio-ffmpeg`). Frame logs give the numbers.
+- `dumpsys gfxinfo ... framestats` keeps only a window's last ~120 frames (one second at 120 Hz): reset just before a
+  step and read it within a second; a longer window reads only its last second (sample several, or trace).
 - `tools/frame_glitch.py REC.mp4 X Y W H [THR] [OUTDIR]` finds 1-4 frame flickers in a region of a recording (how the dock's
   one-frame glitch at the end of a grabbed close was found); `tools/appearance_tour.sh PREFIX` screenshots every surface.
 - Unlock animations: the S24's lock screen is secure (Matheesha unlocks; read the "[home] arrival" log lines afterwards).

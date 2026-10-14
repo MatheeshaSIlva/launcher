@@ -173,6 +173,7 @@ MATERIAL_YOU = {
        for _a in ('blue', 'brown', 'cyan', 'green', 'indigo', 'mint', 'orange', 'pink', 'purple', 'teal', 'yellow')},
     'ref.color.accents.red': {'color': '@error', 'src': "judged:Material You: destructive red becomes the palette's error colour"},
     'component.control.accent-symbol-color': {'color': '@on_primary', 'src': "judged:Material You: a symbol on the primary is on-primary"},
+    'comp.settings.accent-label': {'color': '@on_primary', 'src': "judged:Material You: a label on the accent (the primary) is on-primary; white read poorly on dark mode's light primary (the settings' Apply on the S24, 2026-10-14)"},
 }
 
 # Material You beyond the accents (Matheesha, 2026-10-11: "the material you theming for ios is scarce"): as Android tints its

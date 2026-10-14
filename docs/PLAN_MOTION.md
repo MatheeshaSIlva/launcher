@@ -315,7 +315,19 @@ search across the settings (with C3's); sharing presets.
 - Checked on the emulator: the cards and dots, Speed 145 % (the curve rising sooner, the card's line, the Apply bar), a
   preset chosen with another's change waiting, Apply (iOS 27's speed saved in its own file while Material became active),
   Reset all and Apply (iOS 27's file gone), Bounce 200 % (the hump twice as high), the Developer switch and slow motion,
-  and a tour on Material with Bounce 200 % (launch, close, Control Center, a banner: no errors). Not yet measured on the
-  S24.
+  and a tour on Material with Bounce 200 % (launch, close, Control Center, a banner: no errors).
+- **On the S24** (fd7c240, dark mode, wallpaper colours; frame stats of what the screen showed, Perfetto): Motion opens
+  with 0 missed refreshes (GPU 5.4 ms a frame); at rest it draws a steady 120 frames a second (959 in 8 s, no long work on
+  our threads; once a single 36 ms frame in ten one-second samples, not seen again in the trace); dragging Speed, tapping
+  a card and scrolling 0 missed. Speed reaches real animations: the page's close drew 73-78 frames at 100 %, 43-47 at
+  200 %. Material: Control Center, Notification Center and banners 0-1 missed (3 runs), App Library launches and closes 0
+  (3 + 3). At 200 % the settings' page transitions missed more (closes 1-2, two of six openings 8-10; at 100 % 0-1 in all
+  twelve): the late frames are a slide's first ~100 ms, where the settings lay out (2-4 ms) and record (5-8 ms) in every
+  frame, the Phone page too (untouched by C4a: 13 late frames over three close/open pairs, Motion 8). Compose takes a moving
+  layer for a layout change and runs every position callback (each glass button and chip) in each frame; a quicker spring
+  puts more of the motion into those frames. To be fixed with C4b, which pushes more pages inside the sheet.
+- Found on the S24 and fixed: under wallpaper colours in dark mode the Apply button's white label sat on the palette's
+  light primary; the settings' accent label is the palette's on-primary there (`comp.settings.accent-label` in the
+  theme's Material You section), checked on the phone.
 - For C4b: our `Spring` treats any damping above 1 as 1 (Compose's springs do not): the editor's "gentler than no bounce"
   needs the overdamped case in `Spring` first.

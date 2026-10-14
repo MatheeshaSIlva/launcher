@@ -4280,6 +4280,10 @@
    "color": "@on_primary_container",
    "src": "judged:Material You: iOS's Notification Center's count label as Android 14's tonal role (@on_primary_container)"
   },
+  "comp.settings.accent-label": {
+   "color": "@on_primary",
+   "src": "judged:Material You: a label on the accent (the primary) is on-primary; white read poorly on dark mode's light primary (the settings' Apply on the S24, 2026-10-14)"
+  },
   "comp.settings.button.fill": {
    "color": "@surface_container_highest/80",
    "src": "judged:Material You: iOS's settings' round button as Android 14's tonal role (@surface_container_highest/80)"

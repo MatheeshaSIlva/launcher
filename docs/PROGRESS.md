@@ -2095,4 +2095,7 @@ The settings' Motion page (plan: `docs/PLAN_MOTION.md`): preset cards playing th
 picture's demo with a banner after the app, Speed and Bounce for each preset (applied everywhere a curve is read:
 `MotionAdjust`), Reset all, and a second real preset, Material (Android 16's springs, bouncing only where iOS 27 does).
 Developer gained "Test animation presets" and "Slow animations". Checked on the emulator (details in the plan), 96 unit
-tests; the S24 was not connected, so its frame rates on the page are not measured yet.
+tests. On the S24 (fd7c240): Motion at rest a steady 120 fps, its controls 0 missed refreshes, Speed 200 % shortening the
+settings' own slide from 73-78 frames to 43-47, Material's shade and launches 0-1 missed; the settings' page slides miss
+more at 200 % in their first frames (layout and recording every frame on every page: open, for C4b). The Apply label
+under wallpaper colours in dark mode is now the palette's on-primary.
