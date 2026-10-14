@@ -272,8 +272,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         }
         // The live blur's window first: it must sit under this one.
         liveBlur.attach()
-        liveBlur.maxBlurPx = if (liveBlur.mode == LiveBlur.Mode.SAMSUNG) dev.launcher.app.design.Design.num(CcTokens.SAMSUNG_STRENGTH)
-            else ccBlurRadius()
+        liveBlur.maxBlurPx = liveBlurMax()
         // adb test hook (senders must hold DUMP: adb's shell does, other apps cannot):
         //   am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do nc_expand
         // fans Notification Center's collapsed stack out, so a script can scroll it without tapping a notification.
@@ -450,6 +449,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             state.readAll()
             state.readDetails()
             if (cc.hasAppTiles()) AppTiles.readStates()
+            // The design may have changed since (light and dark blur differently).
+            liveBlur.maxBlurPx = liveBlurMax()
             prepareBackdrop()
         } else {
             nc.prepare()
@@ -462,10 +463,20 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * Control Center's background (the kit's overlay: a background blur of 24, black 50 %): its blur as Android's blur
      * radius (px), and how much it darkens (0..1).
      */
-    private fun ccBlurRadius(): Float {
+    private fun ccBlurRadius(): Float = dev.launcher.app.design.Blur.renderRadius(ccSigmaPx())
+
+    /** Control Center's background blur as a Gaussian's sigma (px). */
+    private fun ccSigmaPx(): Float {
         val m = dev.launcher.app.design.Design.material(CcTokens.BACKGROUND)
         val unit = dev.launcher.app.design.Scale.unitPx(ctx, ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels))
-        return dev.launcher.app.design.Blur.renderRadius(dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * dev.launcher.app.theme.Appearance.dark, unit))
+        return dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * dev.launcher.app.theme.Appearance.dark, unit)
+    }
+
+    /** The live blur at full strength, in its mode's own unit (see [LiveBlur.maxBlurPx]). */
+    private fun liveBlurMax(): Float = when (liveBlur.mode) {
+        LiveBlur.Mode.SAMSUNG_VIEW -> dev.launcher.app.design.SamsungBlur.radiusFor(ccSigmaPx()).toFloat()
+        LiveBlur.Mode.SAMSUNG -> dev.launcher.app.design.Design.num(CcTokens.SAMSUNG_STRENGTH)
+        else -> ccBlurRadius()
     }
 
     private fun ccDim(): Float {

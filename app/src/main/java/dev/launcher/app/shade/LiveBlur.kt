@@ -17,9 +17,11 @@ import java.util.concurrent.TimeUnit
  * blur). The shade's own window cannot blur what is behind it without blurring itself, so the blur is a window of its own,
  * just under the shade's (added first: windows of one kind stack in the order they were added), empty and untouchable,
  * that blurs what is behind it:
- * - Samsung (One UI): its dim layer turned into a blur (`FLAG_DIM_BEHIND` + `SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR`),
- *   strength following `dimAmount` (probe 14g: driven every frame without failures). Standard cross-window blur is off on
- *   the S24 and cannot be switched on without root.
+ * - Samsung (One UI): the window's view blurs what is behind it (`View.semSetBlurInfo`, [dev.launcher.app.design.SamsungBlur],
+ *   as the banners), its radius set again at every frame (no relayout). One UI 9 (Android 17) no longer gives our window a
+ *   dim layer at all, so its dim turned into a blur (`FLAG_DIM_BEHIND` + `SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR`,
+ *   strength following `dimAmount`, probe 14g) showed nothing: kept only for a One UI without the view blur. Standard
+ *   cross-window blur is off on the S24 and cannot be switched on without root.
  * - Elsewhere, where the system allows cross-window blur (Android 12+): `FLAG_BLUR_BEHIND` with `blurBehindRadius`.
  * - Otherwise [available] is false and Control Center keeps its own blurred picture of what was behind (BackdropView).
  *
@@ -30,7 +32,7 @@ import java.util.concurrent.TimeUnit
  * laid out in the new orientation but shown in the old). Changes are coalesced: a frame sends only the latest strength.
  */
 class LiveBlur(ctx: Context, private val wm: WindowManager) {
-    enum class Mode { SAMSUNG, STANDARD, NONE }
+    enum class Mode { SAMSUNG_VIEW, SAMSUNG, STANDARD, NONE }
 
     private val thread = HandlerThread("live-blur").apply { start() }
     private val h = Handler(thread.looper)
@@ -51,6 +53,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
     }
 
     val mode: Mode = when {
+        dev.launcher.app.design.SamsungBlur.available -> Mode.SAMSUNG_VIEW
         samsungFlag() != null -> Mode.SAMSUNG
         Build.VERSION.SDK_INT >= 31 && try { wm.isCrossWindowBlurEnabled } catch (_: Throwable) { false } -> Mode.STANDARD
         else -> Mode.NONE
@@ -67,7 +70,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
     @Volatile private var pending = false
     private var shownNow = false
     private var strengthNow = -1f
-    /** Full strength: Samsung's dim amount, or the standard blur radius in px. */
+    /** Full strength: Samsung's view blur radius, its dim amount, or the standard blur radius in px. */
     @Volatile var maxBlurPx = 0f
 
     /** Adds the window (blocking briefly: it must be in place before the shade's window, to sit under it). */
@@ -94,7 +97,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         }
         done.await(800, TimeUnit.MILLISECONDS)
         // Samsung's first blur of a boot cost a 125 ms hitch (probe): taken now, with nothing on screen yet.
-        if (mode == Mode.SAMSUNG) h.postDelayed({ prewarm() }, 1500)
+        if (mode == Mode.SAMSUNG || mode == Mode.SAMSUNG_VIEW) h.postDelayed({ prewarm() }, 1500)
     }
 
     fun detach() {
@@ -126,22 +129,39 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         val k = if (show) want else 0f
         if (show == shownNow && (k == strengthNow || !show)) return@Runnable
         try {
-            if (show != shownNow) {
+            val resize = show != shownNow
+            if (resize) {
                 val size = if (show) WindowManager.LayoutParams.MATCH_PARENT else 1
                 lp.width = size; lp.height = size
                 shownNow = show
             }
-            writeStrength(k)
+            if (mode == Mode.SAMSUNG_VIEW) {
+                // The view's blur changes without a relayout; the window's size only when the panel comes or goes.
+                if (!show) viewBlur(0f)
+                if (resize) wm.updateViewLayout(view, lp)
+                if (show) viewBlur(k)
+            } else {
+                writeStrength(k)
+                wm.updateViewLayout(view, lp)
+            }
             strengthNow = k
-            wm.updateViewLayout(view, lp)
         } catch (t: Throwable) {
             failed = true
             AppLog.log("[blur] live blur update FAILED: ${t.javaClass.simpleName}: ${t.message}")
         }
     }
 
+    /** Samsung's view blur at strength [k] (its radius: it does not follow the view's alpha). */
+    private fun viewBlur(k: Float) {
+        val r = Math.round(maxBlurPx * k)
+        if (r <= 0) dev.launcher.app.design.SamsungBlur.clear(view)
+        else if (!dev.launcher.app.design.SamsungBlur.set(view, r, 0f, 0)) throw IllegalStateException("Samsung view blur refused")
+        view.invalidate()
+    }
+
     private fun writeStrength(k: Float) {
         when (mode) {
+            Mode.SAMSUNG_VIEW -> {}
             Mode.SAMSUNG -> {
                 lp.flags = if (k > 0f) lp.flags or WindowManager.LayoutParams.FLAG_DIM_BEHIND else lp.flags and WindowManager.LayoutParams.FLAG_DIM_BEHIND.inv()
                 lp.dimAmount = (maxBlurPx * k).coerceIn(0f, 1f)
@@ -160,9 +180,13 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
             lp.width = WindowManager.LayoutParams.MATCH_PARENT; lp.height = WindowManager.LayoutParams.MATCH_PARENT
             writeStrength(0.02f)
             wm.updateViewLayout(view, lp)
+            if (mode == Mode.SAMSUNG_VIEW) viewBlur(0.02f)
             h.postDelayed({
                 if (shownNow || failed) return@postDelayed
-                try { lp.width = 1; lp.height = 1; writeStrength(0f); wm.updateViewLayout(view, lp) } catch (_: Throwable) { }
+                try {
+                    if (mode == Mode.SAMSUNG_VIEW) viewBlur(0f)
+                    lp.width = 1; lp.height = 1; writeStrength(0f); wm.updateViewLayout(view, lp)
+                } catch (_: Throwable) { }
             }, 250)
         } catch (t: Throwable) {
             AppLog.log("[blur] prewarm failed: ${t.message}")

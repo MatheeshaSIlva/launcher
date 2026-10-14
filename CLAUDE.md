@@ -152,7 +152,7 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   through `cmd statusbar add-tile/click-tile`) and banners (`BannerView`), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
   Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),
-  that blurs what is behind (One UI dim-to-blur; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded
+  that blurs what is behind (One UI: Samsung's view blur on its full-screen view; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded
   modules; a notification's app opens out of its platter on a card inside the shade's window (`Shade.openFrom`). iOS 27
   consistency, item by item: `docs/IOS27_EVALUATION.md`.
 
@@ -186,14 +186,24 @@ copy it wholesale — port the working pieces cleanly. File map:
   Bitmap sent over Binder is *read back into a 10 MB software copy* by Binder itself: send the `HardwareBuffer`
   (`taskSnapshotBuffer`) and wrap it in the app. The software copies cost a 5+ ms GPU upload at first draw and native-memory
   GCs (5 ms pauses of the whole process) mid-gesture.
+- **Android 17 (One UI 9) moved task snapshots out of IActivityTaskManager** into `ITaskSnapshotManager`
+  (`IActivityTaskManager.getTaskSnapshotManager()`): `getTaskSnapshot(taskId, latestCaptureTime, resolution)` (-1: the caller
+  holds none, so one always comes back; resolution 1 high, 2 low, 3 any), `takeTaskSnapshot(taskId, updateCache,
+  lowResolution, includeDecors)` (visible tasks only). And `TaskSnapshot.getHardwareBuffer()` is deprecated: it logs
+  "getHardwareBuffer is deprecated!" and returns null; the buffer is still its `mSnapshot` field (`ShellService.bufferOf`).
+  Without them every App Switcher card, close card and warm launch showed the app's launch screen (icon on a plain colour).
+  When a reflected call stops working after an update, read the phone's own framework: `adb pull
+  /system/framework/framework.jar` (and `services.jar` for the server side), `dexdump` from the build tools.
 - **Our own frame log ("frames N ... dropped ~K") times the drawing thread, not the screen.** A frame the GPU finishes late is
   shown a refresh later and the log does not see it. What the screen showed: `tools/framestats.py` (present times).
 - **Windows created from the Shizuku process fail** ("Unknown pid=… uid=2000").
 - **Freeform / split-screen launches from the shell** become stuck overlays after ~5 s. Out of scope (experimental only).
 - **Stock recents animation API does not exist on Android 16**; we draw our own.
 - **Standard cross-window blur is off on this Samsung** (`ro.surface_flinger.supports_background_blur` empty, not changeable without root).
-  Samsung's plain `View.semSetBlurRadius` gives fog. What works: window with `FLAG_DIM_BEHIND` + `semAddExtensionFlags(SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR)`;
-  strength follows `dimAmount`; whole-screen only (never a rectangle). Reflection on `sem*` worked without changing the hidden-API policy.
+  Samsung's plain `View.semSetBlurRadius` gives fog. What worked up to One UI 8: window with `FLAG_DIM_BEHIND` + `semAddExtensionFlags(SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR)`;
+  strength follows `dimAmount`; whole-screen only (never a rectangle). One UI 9 gives our overlay window no dim layer at all
+  (the flags are set, SurfaceFlinger shows none), so Control Center's live blur is Samsung's view blur on a full-screen view
+  now (`LiveBlur`, mode SAMSUNG_VIEW: its radius set again each frame, no relayout). Reflection on `sem*` worked without changing the hidden-API policy.
   **For one view's rectangle: `View.semSetBlurInfo(SemBlurInfo.Builder(BLUR_MODE_WINDOW)...)` is real live blur** (the "fog" was
   `semSetBlurRadius` only): `design/SamsungBlur`. It blurs what is behind the window within the view's bounds, follows the view's
   translation and scale, works inside a GPU layer, takes `setBackgroundCornerRadius`; it ignores the view's alpha (fade it by
@@ -583,8 +593,7 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
   measured on the phone by frame stats only: it shows other apps' snapshots, so it is looked at on the emulator.
   The shade: `scenario_shade.sh` (Control Center open/close/edit, Notification Center, a test banner; window
   `LauncherStatusBar`). Test notifications and banners: `am broadcast -a dev.launcher.app.TEST_NOTIFY -p dev.launcher.app
-  --es title T --es text X --ei id N` (`--ez cancel true` removes it). The emulator (Android 17) hides the task snapshot calls
-  from the shell, so Control Center over an app shows its dark fallback there; over home it is real.
+  --es title T --es text X --ei id N` (`--ez cancel true` removes it).
 - When the S24 is connected (USB or wireless adb, `DEVICE=<serial>`): animations are checked frame by frame with
   `tools/device.sh rec NAME [SECS]` … `recpull NAME [WAIT]` (screenrecord captures every composed frame, 120 fps; contact
   sheets and frame times land in `tools/shots/NAME/`; needs `pip install imageio-ffmpeg`). Frame logs give the numbers.

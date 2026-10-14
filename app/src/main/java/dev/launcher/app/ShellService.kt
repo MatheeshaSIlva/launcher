@@ -172,10 +172,46 @@ class ShellService : IShellService.Stub() {
     private fun snapshotNote(why: String) {
         if (snapshotNotes++ >= 3) return
         val sigs = try {
-            systemService("activity_task", ATM_STUB).javaClass.methods.filter { it.name == "takeTaskSnapshot" || it.name == "getTaskSnapshot" }
+            val atm = systemService("activity_task", ATM_STUB)
+            (atm.javaClass.methods.toList() + (snapshotManager(atm)?.javaClass?.methods?.toList() ?: emptyList()))
+                .filter { it.name.contains("TaskSnapshot") }
                 .joinToString { m -> m.name + m.parameterTypes.joinToString(",", "(", ")") { it.simpleName } }
         } catch (_: Throwable) { "?" }
         android.util.Log.i("Launcher", "[snapshot] failed: $why; available: $sigs")
+    }
+
+    /**
+     * Android 17's snapshot service (`ITaskSnapshotManager`, from `IActivityTaskManager.getTaskSnapshotManager()`): the
+     * snapshot calls left IActivityTaskManager for it (One UI 9 found none of them there). Null before Android 17.
+     */
+    @Volatile private var snapshotManagerCache: Any? = null
+
+    private fun snapshotManager(atm: Any): Any? {
+        snapshotManagerCache?.let { return it }
+        val m = atm.javaClass.methods.firstOrNull { it.name == "getTaskSnapshotManager" && it.parameterTypes.isEmpty() } ?: return null
+        return m.invoke(atm)?.also { snapshotManagerCache = it }
+    }
+
+    /**
+     * A snapshot through Android 17's service. `getTaskSnapshot(taskId, latestCaptureTime, resolution)`: the time of the
+     * snapshot the caller already holds (-1: none, so one always comes back), resolution 1 high, 2 low (3 any);
+     * `takeTaskSnapshot(taskId, updateCache, lowResolution, includeDecors)` takes a new one now.
+     */
+    private fun managerSnapshot(tsm: Any, taskId: Int, fresh: Boolean, low: Boolean): Any? {
+        val ms = tsm.javaClass.methods
+        val i = Int::class.javaPrimitiveType
+        val j = Long::class.javaPrimitiveType
+        val z = Boolean::class.javaPrimitiveType
+        if (fresh) {
+            val take = ms.firstOrNull { it.name == "takeTaskSnapshot" && it.parameterTypes.contentEquals(arrayOf(i, z, z, z)) }
+            if (take != null) return take.invoke(tsm, taskId, false, false, false)
+        }
+        val resolution = if (low) 2 else 1
+        ms.firstOrNull { it.name == "getTaskSnapshot" && it.parameterTypes.contentEquals(arrayOf(i, j, i)) }
+            ?.let { return it.invoke(tsm, taskId, -1L, resolution) }
+        ms.firstOrNull { it.name == "getTaskSnapshotWithCacheOption" && it.parameterTypes.contentEquals(arrayOf(i, j, i, z)) }
+            ?.let { return it.invoke(tsm, taskId, -1L, resolution, false) }
+        return null
     }
 
     override fun taskSnapshotBufferLow(taskId: Int): HardwareBuffer? = try {
@@ -187,7 +223,10 @@ class ShellService : IShellService.Stub() {
     private fun snapshotBuffer(taskId: Int, fresh: Boolean, low: Boolean = false): HardwareBuffer? {
         val atm = systemService("activity_task", ATM_STUB)
         val ms = atm.javaClass.methods
-        val snap: Any? = if (fresh) {
+        val tsm = snapshotManager(atm)
+        val snap: Any? = if (tsm != null) {
+            managerSnapshot(tsm, taskId, fresh, low)
+        } else if (fresh) {
             ms.firstOrNull { it.name == "takeTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, false)
                 ?: callWithDefaults(atm, ms.firstOrNull { it.name == "takeTaskSnapshot" && it.parameterTypes.size > 2 }, taskId, false)
         } else {
@@ -195,8 +234,23 @@ class ShellService : IShellService.Stub() {
             ms.firstOrNull { it.name == "getTaskSnapshot" && it.parameterTypes.size == 2 }?.invoke(atm, taskId, low)
                 ?: callWithDefaults(atm, ms.firstOrNull { it.name == "getTaskSnapshot" && it.parameterTypes.size > 2 }, taskId, low)
         }
-        return snap?.javaClass?.getMethod("getHardwareBuffer")?.invoke(snap) as? HardwareBuffer
+        return snap?.let { bufferOf(it) }
     }
+
+    /**
+     * The snapshot's picture. Android 17 deprecated `TaskSnapshot.getHardwareBuffer()`: it logs "getHardwareBuffer is
+     * deprecated!" and returns null (the platform hands the picture over only by attaching it to a surface); the buffer is
+     * still the snapshot's own field (`mSnapshot`, what those calls attach), read here first, the getter as a fallback.
+     */
+    private fun bufferOf(snap: Any): HardwareBuffer? {
+        val f = snapshotField ?: try {
+            snap.javaClass.getDeclaredField("mSnapshot").apply { isAccessible = true }.also { snapshotField = it }
+        } catch (_: Throwable) { null }
+        (f?.get(snap) as? HardwareBuffer)?.let { return if (it.isClosed) null else it }
+        return snap.javaClass.getMethod("getHardwareBuffer").invoke(snap) as? HardwareBuffer
+    }
+
+    @Volatile private var snapshotField: java.lang.reflect.Field? = null
 
     /**
      * Calls [m] (taskId, flag, ...) with neutral values for the parameters newer Android versions added (false, 0, null):
