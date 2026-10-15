@@ -420,7 +420,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         // The card grows out of the icon over a picture of home without that icon (recorded now, before the card appears);
         // a card that does not come out of it (sliding up, fading in) over home as it is now, the icon in place.
         if (dev.launcher.app.motion.AppStyles.opening().fromIcon) HomeBridge.putWithout(e.pkg, recordWithout(e.pkg))
-        else HomeBridge.atLaunch = record()
+        else HomeBridge.putAtLaunch(e.pkg, record())
         if (!GestureNav.launchApp(e.pkg, iconOnScreen, icon, start)) start()
     }
 
@@ -447,7 +447,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         // and its blur included (a recording of home leaves both out: the card's first frame showed home without them).
         val shown = pictureAsShown() ?: recordWithout(pkg)
         HomeBridge.putWithout(pkg, shown)
-        HomeBridge.atLaunch = shown   // (the same whatever the style: the menu item stays)
+        HomeBridge.putAtLaunch(pkg, shown)   // (the same whatever the style: the menu item stays)
         if (!GestureNav.launchApp(pkg, from, icon, start)) start()
     }
 

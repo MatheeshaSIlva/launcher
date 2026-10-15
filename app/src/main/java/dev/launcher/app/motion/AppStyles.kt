@@ -72,30 +72,41 @@ object AppStyles {
     private fun hyp(a: Float, b: Float) = kotlin.math.sqrt(a * a + b * b)
 
     /**
-     * The genie's mesh: the app's picture ([cols] x [rows] cells, row by row) on its way from [from] to [to] at [p] (0..1).
-     * Rows far from the icon's height [iconY] go first and widen first when [opening] (it pours out of the icon); closing,
-     * the rows nearest the icon go in first and narrow first (it is poured back). [out] holds (cols + 1) x (rows + 1) x 2
-     * floats, x and y.
+     * The genie's mesh (macOS's minimize): the app's picture, [win] ([cols] x [rows] cells, row by row), poured into [icon]
+     * at [p] (0: the app as it is, 1: all of it in the icon; opening runs it backwards, 1 to 0). A funnel forms first, its
+     * sides curving from the app's edges at its far end to the icon's at the icon; the app's near edge (the one facing the
+     * icon) drops into the icon early, and the rest follows down the funnel, squeezed into it. [out] holds (cols + 1) x
+     * (rows + 1) x 2 floats, x and y.
      */
-    fun genie(out: FloatArray, cols: Int, rows: Int, from: Box, to: Box, p: Float, iconY: Float, opening: Boolean) {
+    fun genie(out: FloatArray, cols: Int, rows: Int, win: Box, icon: Box, p: Float) {
         val pp = p.coerceIn(0f, 1f)
-        // How far each row's place at the large end is from the icon, to the farthest.
-        val big = if (opening) to else from
-        val maxDist = max(abs(big.top - iconY), abs(big.bottom - iconY)).coerceAtLeast(1f)
+        // The icon below the app (the dock, the lower rows): its bottom edge goes first; above it, its top edge.
+        val down = icon.top + icon.bottom >= win.top + win.bottom
+        val winFar = if (down) win.top else win.bottom
+        val winNear = if (down) win.bottom else win.top
+        val iconNear = if (down) icon.top else icon.bottom
+        val iconFar = if (down) icon.bottom else icon.top
+        val bend = ease((pp / GENIE_BEND_END).coerceAtMost(1f))
+        val nearY = lerp(winNear, iconFar, ease((pp / GENIE_NEAR_END).coerceAtMost(1f)))
+        val farY = lerp(winFar, iconNear, ease(((pp - GENIE_FAR_START) / (1f - GENIE_FAR_START)).coerceAtLeast(0f)))
+        // The funnel narrows to the icon from both sides (an icon half way down the screen draws both halves in).
+        val up = (icon.top - win.top).coerceAtLeast(1f)
+        val below = (win.bottom - icon.bottom).coerceAtLeast(1f)
         var i = 0
         for (r in 0..rows) {
             val v = r / rows.toFloat()
-            val yBig = big.top + big.height() * v
-            val near = 1f - (abs(yBig - iconY) / maxDist).coerceIn(0f, 1f)
-            // Opening: far rows first (the head pours out); closing: near rows first (sucked in at the narrow end).
-            val order = if (opening) near else 1f - near
-            val lagY = GENIE_LAG * order
-            val lagW = GENIE_LAG_W * kotlin.math.sqrt(order)
-            val py = ease(((pp - lagY) / (1f - lagY)).coerceIn(0f, 1f))
-            val pw = ease(((pp - lagW) / (1f - lagW)).coerceIn(0f, 1f))
-            val y = lerp(from.top + from.height() * v, to.top + to.height() * v, py)
-            val left = lerp(from.left, to.left, pw)
-            val right = lerp(from.right, to.right, pw)
+            // From the far edge (0) to the near one (1), squeezed between where they are.
+            val y = lerp(farY, nearY, if (down) v else 1f - v)
+            // The funnel at this height: the icon's width at the icon, the app's at its edges (an S curve between).
+            val d = when {
+                y < icon.top -> (icon.top - y) / up
+                y > icon.bottom -> (y - icon.bottom) / below
+                else -> 0f
+            }
+            val s = 1f - ease(d.coerceIn(0f, 1f))
+            val f = s * bend
+            val left = lerp(win.left, icon.left, f)
+            val right = lerp(win.right, icon.right, f)
             for (c in 0..cols) {
                 val u = c / cols.toFloat()
                 out[i++] = left + (right - left) * u
@@ -104,9 +115,10 @@ object AppStyles {
         }
     }
 
-    /** How far behind the first row the last one moves (of the whole run), and widens. */
-    private const val GENIE_LAG = 0.38f
-    private const val GENIE_LAG_W = 0.55f
+    /** The genie's timing (of its run): the funnel formed by, the near edge in the icon by, the far edge leaving from. */
+    private const val GENIE_BEND_END = 0.4f
+    private const val GENIE_NEAR_END = 0.45f
+    private const val GENIE_FAR_START = 0.3f
     /** The genie's mesh: columns and rows (fine enough that its edges read as curves). */
     const val GENIE_COLS = 8
     const val GENIE_ROWS = 24

@@ -97,25 +97,34 @@ class MomentsTest {
         assertEquals(far, s.revealRadius(1f, 100f, 2000f, 120f, 1080f, 2340f), 0.5f)
     }
 
-    @Test fun theGeniesMeshGoesFromOneRectToTheOther() {
-        val from = dev.launcher.app.motion.Box(400f, 2000f, 520f, 2120f)
-        val to = dev.launcher.app.motion.Box(0f, 0f, 1080f, 2340f)
+    @Test fun theGeniePoursTheAppIntoItsIcon() {
+        val icon = dev.launcher.app.motion.Box(130f, 2100f, 230f, 2200f)
+        val app = dev.launcher.app.motion.Box(0f, 0f, 1080f, 2340f)
         val cols = dev.launcher.app.motion.AppStyles.GENIE_COLS
         val rows = dev.launcher.app.motion.AppStyles.GENIE_ROWS
         val out = FloatArray((cols + 1) * (rows + 1) * 2)
-        for ((p, r) in listOf(0f to from, 1f to to)) {
-            dev.launcher.app.motion.AppStyles.genie(out, cols, rows, from, to, p, 2060f, opening = true)
-            // Its corners where the rect's are.
-            assertEquals(r.left, out[0], 0.01f); assertEquals(r.top, out[1], 0.01f)
-            val last = out.size - 2
-            assertEquals(r.right, out[last], 0.01f); assertEquals(r.bottom, out[last + 1], 0.01f)
+        val last = out.size - 2
+        for ((p, r) in listOf(0f to app, 1f to icon)) {
+            dev.launcher.app.motion.AppStyles.genie(out, cols, rows, app, icon, p)
+            // Its corners where the rect's are: the app as it is, then all of it in the icon.
+            assertEquals("$p", r.left, out[0], 0.01f); assertEquals("$p", r.top, out[1], 0.01f)
+            assertEquals("$p", r.right, out[last], 0.01f); assertEquals("$p", r.bottom, out[last + 1], 0.01f)
         }
-        // On the way, the rows far from the icon are further along than those near it (it pours out).
-        dev.launcher.app.motion.AppStyles.genie(out, cols, rows, from, to, 0.4f, 2060f, opening = true)
+        // On the way, a funnel: the bottom (nearest the icon below) is narrow and already at the icon, the top still wide.
+        dev.launcher.app.motion.AppStyles.genie(out, cols, rows, app, icon, 0.4f)
         val topRowWidth = out[cols * 2] - out[0]
         val bottomStart = rows * (cols + 1) * 2
         val bottomRowWidth = out[bottomStart + cols * 2] - out[bottomStart]
-        assertTrue("top $topRowWidth, bottom $bottomRowWidth", topRowWidth > bottomRowWidth)
+        assertTrue("top $topRowWidth, bottom $bottomRowWidth", topRowWidth > bottomRowWidth * 3)
+        assertTrue("bottom at ${out[bottomStart + 1]}", out[bottomStart + 1] > 2100f)
+        // Its sides curve: a quarter of the way down, the left edge is nearer the app's than a straight line would be.
+        val mid = (rows / 4) * (cols + 1) * 2
+        val straight = out[0] + (out[bottomStart] - out[0]) * ((out[mid + 1] - out[1]) / (out[bottomStart + 1] - out[1]))
+        assertTrue("left ${out[mid]}, straight $straight", out[mid] < straight)
+        // An icon above the app: its top edge goes first.
+        val high = dev.launcher.app.motion.Box(130f, 200f, 230f, 300f)
+        dev.launcher.app.motion.AppStyles.genie(out, cols, rows, app, high, 0.4f)
+        assertTrue("top row at ${out[1]}", out[1] < 300f)
     }
 
     @Test fun aMomentsFeelGoesOnTopOfThePresets() {

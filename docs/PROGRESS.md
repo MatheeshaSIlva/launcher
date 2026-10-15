@@ -2345,3 +2345,48 @@ a late picture fading in, the card catching up, the banner's glass...) follow th
   reveal and a genie grabbed mid-launch, an app opened during a genie close, a reopening after a bubble close, the
   settings' style cards, samples, search and Your changes. Smoothness is not judged from the emulator (its recordings
   drop frames). Not yet on the S24. 118 unit tests.
+
+## V4 on the S24: mixing the styles, and the settings in one column (2026-10-15)
+
+Every style opened and closed on the S24 (Calculator from the dock, the phone's own speed kept), measured from what the
+screen showed (frame stats, unrecorded) and recorded for looking at (recordings dropped whenever a notification came);
+six mixed pairs (genie in, bubble out; circle in, genie out; slide in, dolly out; dolly in, slide out; fade in, container
+out; container in, fade out); a genie launch grabbed, a circle reveal grabbed, a genie close reversed, another app opened
+during a slide close; a dolly close held into the App Switcher (emulator: it shows other apps).
+
+**What looked wrong, fixed:**
+- **The genie** was a straight wedge leaning at the icon. It is macOS's now (`AppStyles.genie`): a funnel narrowing to
+  the icon from both sides (an icon mid-screen draws both halves in), the app's near edge dropping in first and the rest
+  following down it; opening runs it backwards. Its frame keeps the card's corners (they squared off at the start).
+- **A genie close reversed** (its icon tapped mid-pour) started from the mesh's bounds as if they were the card: the card
+  was twice the size for a frame. A flight reversed now starts from the plain card the style was drawn on, the style's
+  shape kept on it and giving way over the first half (`StyleDev.grab` for a flight's start too).
+- **The bubble** was a rounded rectangle (a pill); it rounds into a circle now, its long side drawn in to its short one.
+- **Slide and fade closes** showed home's picture without the app's icon (recorded for the zoom), and the icon appeared
+  at once at the end: the picture is home with its icon for a closing style that leaves it there (`closePicture`).
+- **A dolly close held into the App Switcher** left home behind the deck zoomed 1.55 times into the icon (a blur of a
+  few icons): the dolly is a fraction that gives way as the switcher opens (`PreviewView.fadeDolly`), one way.
+- **The first bubble close after an update** compiled its circle clip inside a frame (76 ms, 9 missed refreshes): the
+  styles' drawing (circle and round-rect clips, faded draws, the genie's mesh and path, the container's box) is warmed
+  off screen while home is idle (`CardStyleWarmUp`, 110 ms once): the first bubble close then peaked at 9.9 ms.
+- **Every launch's last frames**: the cards' container fading into the app went through a layer the size of the screen,
+  allocated in that frame (7.4 ms of GPU for the zoom, ~9 for a circle reveal: 1-2 missed refreshes in 5 of 7 circle
+  openings). With only one card drawing, its fade applies to its draws: circle openings 0 missed in 4 runs, zoom 0, the
+  frame 5-7 ms. A fading card in the fade style is faded draw by draw too (`flatFade`).
+- Also: a launch's picture of home taken at the tap now belongs to that app's launch only (a stale one could be used by
+  a later launch), and a turned display's close (always into the icon) takes the picture without the icon from the start.
+
+**Numbers after the fixes** (S24, missed refreshes): openings: zoom 0 (5 runs), circle reveal 0 (4), genie 0 (2), fade
+0 (2), slide 0 (2), container 0, dolly 0; closes: zoom 0, container 0, slide 0 (2), fade 0 (2), dolly 0, genie 0 (2), the
+bubble 1 in the first two runs after the install, then 0 in six. GPU per frame varies 3-10 ms between runs of the same
+style with no missed refresh (frame stats count waiting for buffers as GPU time).
+
+**The settings in one column** (Matheesha: "make it one column and design each beautifully with the motion graphics"):
+each tile as wide as the sheet, its scene across the top (76 pt, was 52) laid out for its width: Look's colours and "Aa"
+with a small screen turning dark and light as its switch goes; Motion's opening curve beside a small phone where an app
+opens and goes home in the preset's own styles (a Playful preset pours it); Home's grid across the width over its dock;
+the App Switcher's deck in the middle; the App Library's search field over its folders; Notification Center with Control
+Center and its brightness slider beside it; the status bar end to end with a notification's icon arriving after the
+time; Phone's shield beside its three rows. On the S24 at rest the scenes cost 0 missed refreshes (GPU 5.1 ms a frame),
+scrolling 0. A tile opening misses 1-2 refreshes ~200 ms in (Look: 0, 1, 1); the previous build, two across, measured
+0, 2, 2 the same way: older than this change, not looked into yet.

@@ -67,8 +67,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`ThemeReveal`). Structure B (V1, 2026-10-15): tiles (`Part`) for Look and Motion (the whole phone), one per part of the
   phone (Home, Apps, App Library, Notifications & Control Center, Status bar: its layout, where it lives, its options, its
   own theme, on its page: `PartPage`) and Phone; more tiles than the sheet shows at rest, so a scroll up lifts the sheet
-  first, then scrolls the tiles (`liftScroll`, `Studio.lifted`). The tiles are solid, as the groups (no glass), each with a
-  motion graphic in place of a symbol (`TileArt`: a small scene per part on the preset's springs as the draft would apply
+  first, then scrolls the tiles (`liftScroll`, `Studio.lifted`). The tiles are solid, as the groups (no glass), one under
+  another as wide as the sheet (Matheesha, 2026-10-15), each with a motion graphic across its top in place of a symbol
+  (`TileArt`: a scene per part laid out for the width it has, on the preset's springs and styles as the draft would apply
   them, on a clock that runs only while the tiles are in sight). Groups on the sheet take iOS's elevated cell colour (the
   sheet's own grey hid them in dark). Look and Phone push pages one level down (`SubPager`,
   `Sub`: Look's colours, fonts, size; Phone's Developer page). The picture of home (with our status bar drawn on it) takes
@@ -153,7 +154,12 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `iconFrame`, a genie mesh), so grabs, reversals and launches mid-close work for every style. A style a card still
   shows fades out over a new flight's first half (`StyleDev`); a grabbed card's style gives way to a plain card on the
   cancel's curve (the App Switcher's deck draws plain cards: it waits), and a style with a frame of its own (circle,
-  genie) is grabbed by the plain card it is drawn on (`StyleDev.grab`). Presets bundle styles (iOS 27 zoom, Material
+  genie) is grabbed by the plain card it is drawn on (`StyleDev.grab`), and a flight reversed starts from it too (the
+  reversal of a genie once started from the mesh's bounds: a card twice the size for a frame). The genie is macOS's: a
+  funnel narrowing to the icon from both sides, the app's near edge dropping in first (`AppStyles.genie`). A close that
+  leaves the icon on home (slide, fade) shows home's picture with it; the dolly zoom on home's picture is a fraction that
+  gives way as the App Switcher opens (`PreviewView.fadeDolly`). The styles' drawing is warmed off screen while home is
+  idle (`CardStyleWarmUp`). Presets bundle styles (iOS 27 zoom, Material
   container, Playful genie, Calm fade, Cinematic dolly: `tools/design/build_style_presets.py`). The settings show a style
   by playing it (`settings/AppStyleArt`: the picture of home, the presets' cards, the Style group of Opening apps and
   Going home), never by name alone. Theme seeds and motion seeds both live in the builder, which
@@ -405,8 +411,12 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **A `Picture` of a view is drawn in software**: outline clips, RenderEffects and glass that only draws on the GPU are
   lost (a widget's copy above its menu had square corners, the glass clock no numerals). Copies that must look like the
   item are render nodes (`ContextMenuView.record`). And **Android empties the app's GPU pipeline cache with every update**:
-  the first draw of a surface compiles its pipelines inside its first frame (the widget gallery: 141 ms); warm such
-  surfaces off screen while idle (`design/GpuWarmUp`).
+  the first draw of a surface compiles its pipelines inside its first frame (the widget gallery: 141 ms; the first bubble
+  close: 76 ms, 9 missed refreshes); warm such surfaces off screen while idle (`design/GpuWarmUp`, `CardStyleWarmUp`).
+- **A container that fades is drawn through a layer the size of the screen** (a ViewGroup overlaps by default): the cards'
+  container fading into the app at the end of every launch allocated one in that frame (7-9 ms of the S24's GPU; a circle
+  reveal's tipped over into a missed refresh in 5 of 7 runs). When only one card draws one picture, its fade applies to its
+  draws (`GestureNav.drawsAlone`, `forceHasOverlappingRendering`): 0 missed in 4 runs, the frame 5-7 ms.
 - **An app's existing task brought back may send no window event** (Settings sends none, from the dock or a panel): never
   wait on the accessibility event alone; ask the system for the task in front (`topTaskPackage`). And while a panel holds
   our focus window, the launched app cannot take the focus at all: a launch from the shade lets it go.

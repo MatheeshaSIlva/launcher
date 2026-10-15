@@ -1699,6 +1699,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                         if (Build.VERSION.SDK_INT >= 33) ThemeReveal.warmUp(resources.displayMetrics.density * REVEAL_CELL_DP)
                         // And the settings' curve graphs (their first opening: 99 ms of compiling inside its frame).
                         dev.launcher.app.settings.MotionWarmUp.warmUp(m?.u ?: 0f)
+                        // And the cards' transition styles (the first bubble after an update: a 76 ms frame).
+                        dev.launcher.app.CardStyleWarmUp.warmUp()
                     } else if (++warmTries < 10) postDelayed(this, 2000L)
                 }
             }.start()

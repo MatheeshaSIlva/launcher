@@ -914,7 +914,7 @@ COMPONENT_SEEDS = {
     'comp.settings.tile.tint': {'factor': 0, 'src': "judged:the groups' fill as it is (the part's colour is in its motion graphic)"},
     'comp.settings.tile.title-tint': {'factor': 0, 'src': "judged:names in the label colour, as rows"},
     'comp.settings.tile.corner': {'ref': 'comp.settings.group.corner', 'src': "judged:as the groups"},
-    'comp.settings.tile.art': {'pt': 52, 'src': "judged:Matheesha (2026-10-15): a motion graphic for each part in place of its symbol, across the tile's top"},
+    'comp.settings.tile.art': {'pt': 76, 'src': "judged:Matheesha (2026-10-15): a motion graphic for each part in place of its symbol, across the tile's top; one column, the scenes wider and taller"},
     'comp.settings.tile.height': {'pt': 116, 'src': "judged:draft D"},
     'comp.settings.tile.gap': {'pt': 10, 'src': "judged:draft D"},
     'comp.settings.tile.title': {'ref': 'sys.type.headline', 'src': "judged:draft D: a tile's name"},

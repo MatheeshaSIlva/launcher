@@ -154,8 +154,7 @@ internal object AppStyleArt {
                 val pic = s.pagePicture() ?: return
                 s.whole.set(0f, 0f, w, h)
                 s.small.set(ic.left, ic.top, ic.right, ic.bottom)
-                if (opening) AppStyles.genie(s.mesh, COLS, ROWS, s.small, s.whole, kk, ic.centerY(), true)
-                else AppStyles.genie(s.mesh, COLS, ROWS, s.whole, s.small, 1f - kk, ic.centerY(), false)
+                AppStyles.genie(s.mesh, COLS, ROWS, s.whole, s.small, 1f - kk)
                 // Going home, it turns into the icon once it is in.
                 val a = if (opening) iconA else AppStyles.step(0.82f, 1f, 1f - kk)
                 s.image.alpha = (255 * (1f - a)).toInt().coerceIn(0, 255)

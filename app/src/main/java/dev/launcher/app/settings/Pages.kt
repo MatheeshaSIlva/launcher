@@ -1769,22 +1769,14 @@ private fun ChangesEntry(st: Studio, open: (Part) -> Unit) {
 }
 
 /**
- * The tiles two across, every one as tall as the tallest needs and at least the theme's tile height (a long name takes two
- * lines, its row as tall as the others).
+ * The tiles one under another, each as wide as the sheet: its scene across its top, its name and what it holds under it
+ * (Matheesha, 2026-10-15: one column, each designed with its motion graphic).
  */
 @Composable
 private fun TileGrid(st: Studio, open: (Part) -> Unit, art: androidx.compose.runtime.State<ArtKit>) {
     val look = LocalLook.current
-    val gap = look.pt(SettingsTokens.TILE_GAP)
-    val least = look.pt(SettingsTokens.TILE_HEIGHT)
-    androidx.compose.ui.layout.Layout(content = { for (part in Part.entries) if (part.tile) Tile(st, part, open, art) }) { ms, c ->
-        val w = ((c.maxWidth - gap) / 2f).toInt().coerceAtLeast(0)
-        val h = maxOf(least, ms.maxOf { it.maxIntrinsicHeight(w).toFloat() }).roundToInt()
-        val placeables = ms.map { it.measure(androidx.compose.ui.unit.Constraints.fixed(w, h)) }
-        val rows = (placeables.size + 1) / 2
-        layout(c.maxWidth, (rows * h + (rows - 1).coerceAtLeast(0) * gap).roundToInt()) {
-            placeables.forEachIndexed { i, pl -> pl.place(if (i % 2 == 0) 0 else c.maxWidth - w, ((i / 2) * (h + gap)).roundToInt()) }
-        }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(look.dp(look.pt(SettingsTokens.TILE_GAP)))) {
+        for (part in Part.entries) if (part.tile) Tile(st, part, open, art)
     }
 }
 
@@ -1839,6 +1831,7 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.com
     LaunchedEffect(pressed) { press.animateTo(if (pressed) 1f else 0f, if (pressed) pressIn else pressOut) }
     Column(
         Modifier
+            .fillMaxWidth()
             .onPlaced { st.tileAt[part] = it }
             .graphicsLayer {
                 val p = st.p.value
@@ -1863,15 +1856,13 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.com
             .pointerInput(part) { rowTap({ pressed = it }) { st.fromRow = null; open(part) } }
             .padding(look.dp(14f * look.unit)),
     ) {
-        // Its scene, on the art's clock, in a layer of its own (only the scene is drawn again in each of its frames).
+        // Its scene across the top, on the art's clock, in a layer of its own (only the scene is drawn again in its frames).
         Canvas(Modifier.fillMaxWidth().height(look.dp(artH)).graphicsLayer()) {
             TileArt.draw(this, part, size.width, size.height, st.artClock.floatValue, art.value, c)
         }
-        Spacer(Modifier.height(look.dp(6f * look.unit)))
-        Spacer(Modifier.weight(1f))
-        // (A long name in two lines: every tile is then as tall as it needs, TileGrid.)
-        BasicText(part.title, style = look.text(SettingsTokens.TILE_TITLE, mix(label, c, titleTint)), maxLines = 2,
-            modifier = Modifier.onPlaced { st.tileTitleAt[part] = it })
+        Spacer(Modifier.height(look.dp(10f * look.unit)))
+        BasicText(part.title, style = look.text(SettingsTokens.TILE_TITLE, mix(label, c, titleTint)), maxLines = 1,
+            overflow = TextOverflow.Ellipsis, modifier = Modifier.onPlaced { st.tileTitleAt[part] = it })
         // Read through a derived state where it follows the draft: every step of a slider in Motion changes the draft, and
         // the tile (out of sight behind the page) composed again with each.
         val draft = LocalDraft.current
@@ -1918,7 +1909,7 @@ private fun GrowingTile(st: Studio, part: Part, art: androidx.compose.runtime.St
         // (Within the tile's padding, as the tile lays them out: the line under the name may have changed while the page was
         // open, and is cut where the tile cuts it.)
         val inner = androidx.compose.ui.unit.Constraints(maxWidth = (tile.width - 2f * pad).roundToInt().coerceAtLeast(1))
-        val title = measurer.measure(part.title, titleStyle, maxLines = 2, constraints = inner)
+        val title = measurer.measure(part.title, titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = inner)
         val detailAt = st.tileDetails[part]
         val detail = if (detailAt == null) null else measurer.measure(part.detail(draft), detailStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = inner)
         // From the size the tile sank to when pressed (it springs back out as it grows).

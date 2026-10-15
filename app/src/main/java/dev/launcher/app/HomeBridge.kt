@@ -74,9 +74,19 @@ object HomeBridge {
      * Home as it showed at the tap of a launch whose card does not come out of its icon (sliding up, fading in:
      * motion/AppStyles), its icon in place; taken by that launch ([takeAtLaunch]).
      */
-    @Volatile var atLaunch: HomePicture? = null
+    fun putAtLaunch(pkg: String, p: HomePicture?) {
+        atLaunch = if (p == null) null else Triple(pkg, p, android.os.SystemClock.uptimeMillis())
+    }
 
-    fun takeAtLaunch(): HomePicture? = atLaunch.also { atLaunch = null }
+    /** The picture of home [putAtLaunch] kept for [pkg]'s launch, if it is for that launch (a tap a moment ago). */
+    fun takeAtLaunch(pkg: String): HomePicture? {
+        val a = atLaunch ?: return null
+        atLaunch = null
+        return a.second.takeIf { a.first == pkg && android.os.SystemClock.uptimeMillis() - a.third < AT_LAUNCH_MS }
+    }
+
+    @Volatile private var atLaunch: Triple<String, HomePicture, Long>? = null
+    private const val AT_LAUNCH_MS = 2000L
 
     /** Stores a picture without [pkg]'s icon recorded right now (a launch records it before its card appears). */
     fun putWithout(pkg: String, p: HomePicture?) { if (p != null) without[pkg] = p }

@@ -349,7 +349,12 @@ object GestureNav {
         try { app.getSystemService(android.hardware.display.DisplayManager::class.java).registerDisplayListener(displayTurned, main) } catch (_: Throwable) { }
         // A picture of home without the card's icon arrives a moment after a gesture starts: use it as soon as it does.
         HomeBridge.onPreviewReady = { pkg ->
-            nav.post { if (cardPkg == pkg && backdrop?.picture != null && !pictureDropped) backdrop?.picture = HomeBridge.previewFor(pkg) }
+            // (Only behind a card that goes into the icon or comes out of it: sliding and fading keep the icon in the picture.)
+            nav.post {
+                val leaves = if (anim == Anim.LAUNCH) !flightStyle.fromIcon
+                    else if (anim == Anim.HOME_COMMIT) !springToIcon else !AppStyles.closing().fromIcon
+                if (cardPkg == pkg && backdrop?.picture != null && !pictureDropped && !leaves) backdrop?.picture = HomeBridge.previewFor(pkg)
+            }
         }
         HomeBridge.onHomeTouched = { nav.post { homeTouchedDuringClose(); readyForLaunch() } }
         HomeBridge.onHomeDragged = { nav.post { homeDraggedDuringClose() } }
@@ -1838,6 +1843,25 @@ object GestureNav {
         }
     }
 
+    /**
+     * Home's picture behind [pkg]'s card going home: without its icon when the card goes into it, with it when the closing
+     * style leaves it on home (sliding down, fading: the icon was missing from the dock until the real home showed, then
+     * appeared at once).
+     */
+    private fun closePicture(pkg: String?): HomePicture? =
+        if (turned || AppStyles.closing().fromIcon) HomeBridge.previewFor(pkg) else HomeBridge.preview ?: HomeBridge.previewFor(pkg)
+
+    /** Only the current card draws in the cards' container, one picture at a time: a fade of the container can apply to its draws. */
+    private fun drawsAlone(r: android.view.ViewGroup): Boolean {
+        val c = cur ?: return false
+        for (i in 0 until r.childCount) {
+            val v = r.getChildAt(i)
+            if (v === c || v is CardBadgeView || v.visibility != View.VISIBLE) continue
+            return false
+        }
+        return c.visibility == View.VISIBLE && !c.hasOverlappingRendering()
+    }
+
     /** Ends the card session: window invisible (kept), icon back, everything pending forgotten. */
     private fun hideCards() {
         if (win != Win.NONE) endSwitcherWindow()
@@ -1870,6 +1894,7 @@ object GestureNav {
             r.visibility = View.INVISIBLE
             r.alpha = 1f
             r.setBackgroundColor(0)
+            r.forceHasOverlappingRendering(true)   // (as a container is: see fadeOutCards)
         }
         backdrop?.picture = null
         HomeBridge.homeCovered = false
@@ -2176,8 +2201,8 @@ object GestureNav {
         // A launch card that already covers the screen: home behind it is shown as it is now, not as it was at the tap
         // (opened from Spotlight, the search has ended behind the app since: the close showed Spotlight, then home snapped
         // to the first page). Unseen while the card covers everything.
-        if (wasAnim == Anim.LAUNCH && s > 0.97f) HomeBridge.previewFor(cardPkg)?.let { backdrop?.picture = it }
-        if (backdrop?.picture == null) backdrop?.picture = HomeBridge.previewFor(cardPkg)
+        if (wasAnim == Anim.LAUNCH && s > 0.97f) closePicture(cardPkg)?.let { backdrop?.picture = it }
+        if (backdrop?.picture == null) backdrop?.picture = closePicture(cardPkg)
         pictureDropped = false
         travel0 = travelForScale(s)
         lastTravel = travel0
@@ -2334,7 +2359,7 @@ object GestureNav {
             // the fresh picture replaces it as soon as it arrives (onFgFresh). Waiting for it left the card ~80 ms late.
             if (fgFresh == null) recentImage(f.pkg)?.let { cur?.let { c -> setCardContent(c, f.pkg, it) } }
             cur?.let { cardKnows(it, f.pkg) }
-            if (phase == Phase.DRAG_HOME) backdrop?.picture = HomeBridge.previewFor(f.pkg)
+            if (phase == Phase.DRAG_HOME) backdrop?.picture = closePicture(f.pkg)
             maybeShow()
         }
     }
@@ -2404,7 +2429,7 @@ object GestureNav {
         // Going home in a dolly zoom: home's picture flies back out of the icon the card goes into (the middle if unknown).
         val dollyAt = f?.pkg?.let { HomeBridge.iconRect(it) }?.let { homeToScreen(it) }
         backdrop?.setDolly(AppStyles.closing() == AppStyle.DOLLY, dollyAt?.centerX() ?: (sw / 2), dollyAt?.centerY() ?: (sh / 2))
-        backdrop?.picture = HomeBridge.previewFor(f?.pkg)
+        backdrop?.picture = closePicture(f?.pkg)
         backdrop?.depth = 1f
         travel0 = 0f
         lastTravel = 0f
@@ -2513,6 +2538,10 @@ object GestureNav {
             val style = if (deferHome || iconAt == null) AppStyle.ZOOM else AppStyles.closing()
             val intoIcon = style.fromIcon
             val target = iconAt?.takeIf { intoIcon }
+            // Home's picture as this close needs it (it was chosen by the closing style; a turned display goes into the icon).
+            if (iconAt != null && intoIcon != AppStyles.closing().fromIcon && !pictureDropped) {
+                (if (intoIcon) HomeBridge.previewFor(pkg) else HomeBridge.preview)?.let { backdrop?.picture = it }
+            }
             val size = target?.width() ?: (sw * 0.3f)
             val sizeH = target?.height() ?: (sh * 0.3f)
             switchAt = 0L   // going home ends any run of quick switches
@@ -3112,24 +3141,36 @@ object GestureNav {
     private var springMix0 = 0f
     private var springToIcon = false
 
-    private fun beginCardSprings(toIcon: Boolean, style: AppStyle = AppStyle.ZOOM, opening: Boolean = false, icon: RectF? = null, fresh: Boolean = false) {
+    /**
+     * The springs about to start take the card from where it is: as it is drawn, or ([from], [fromR]: a flight reversed) the
+     * plain card the last flight's style was drawn on, where they then start.
+     */
+    private fun beginCardSprings(toIcon: Boolean, style: AppStyle = AppStyle.ZOOM, opening: Boolean = false, icon: RectF? = null,
+                                 fresh: Boolean = false, from: RectF? = null, fromR: Float = Float.NaN) {
         val c = cur ?: return
-        springW0 = c.w
-        springR0 = c.radius
+        val f0 = from ?: RectF(c.cx - c.w / 2, c.cy - c.h / 2, c.cx + c.w / 2, c.cy + c.h / 2)
+        val r0 = if (from != null && !fromR.isNaN()) fromR else c.radius
+        springW0 = f0.width()
+        springR0 = r0
         springMix0 = c.iconMix
         springToIcon = toIcon
         springRadiusEnd = deviceRadius
-        // A style the card still shows (a flight interrupted, a grab) fades out in this one's first half, as its corners do. (A
-        // new launch's card is set up by its style: nothing left over.)
-        if (fresh) styleDev0.clear() else styleDev0.of(c)
+        // A style the card still shows (a flight interrupted, a grab) stays on the plain card as it moves and fades out in this
+        // one's first half, as its corners do. (A new launch's card is set up by its style: nothing left over.)
+        if (fresh) styleDev0.clear() else styleDev0.grab(c, f0, r0, sw, sh)
         flightStyle = style
         flightOpening = opening
         if (icon != null) flightIcon.set(icon) else flightIcon.setEmpty()
-        flightFrom.set(c.cx - c.w / 2, c.cy - c.h / 2, c.cx + c.w / 2, c.cy + c.h / 2)
-        plainFrame.set(flightFrom)
-        plainR = c.radius
-        springCy0 = c.cy
+        flightFrom.set(f0)
+        plainFrame.set(f0)
+        plainR = r0
+        springCy0 = f0.centerY()
+        // A fading card is faded draw by draw: through a layer of its size it cost the GPU ~10 ms a frame on the S24.
+        if (style == AppStyle.FADE) c.flatFade = true
     }
+
+    // The start's style ([styleDev0]) on the flight's plain card, as drawn this frame.
+    private var startMesh = FloatArray(0)
 
     // ---- transition styles (motion/AppStyles): how the flight the springs drive is drawn. At ZOOM with nothing left over
     // from an earlier style, the card draws exactly as before them.
@@ -3307,14 +3348,39 @@ object GestureNav {
         val d = styleDev0
         c.iconFrame.setEmpty()
         if (flightStyle == AppStyle.ZOOM && !d.any) return
+        // What the start's style left ([StyleDev.grab]): on the plain card as it moves, fading out in the first half.
         var content = d.content * keep
         var icon = d.icon * keep
         var box = d.box * keep
         var full = d.full * keep
         var ownFull = false
         var alpha = d.alpha * keep
-        var mesh: FloatArray? = d.mesh?.takeIf { d.genie * keep > 0.001f }
         var genieK = d.genie * keep
+        var mesh: FloatArray? = null
+        val dm = d.mesh
+        if (dm != null && genieK > 0.001f) {
+            if (startMesh.size != dm.size) startMesh = FloatArray(dm.size)
+            var i = 0
+            while (i < dm.size) { startMesh[i] = cx + dm[i] * w; startMesh[i + 1] = cy + dm[i + 1] * w; i += 2 }
+            mesh = startMesh
+        }
+        if (d.framed && keep > 0f) {
+            fun mix(a: Float, b: Float) = a + (b - a) * keep
+            val fx = mix(cx, cx + d.fx * w)
+            val fy = mix(cy, cy + d.fy * w)
+            val fw = mix(w, d.fw * w)
+            val fh = mix(h, d.fh * w)
+            styleFrame.set(fx - fw / 2, fy - fh / 2, fx + fw / 2, fy + fh / 2)
+            styleRadius = mix(radius, d.fr * w)
+        }
+        if (!d.iconFrame.isEmpty && keep > 0f) {
+            // Its icon where it was on the card, on its way to filling the card.
+            val fill = min(w, h)
+            val ix = cx + d.ix * w * keep
+            val iy = cy + d.iy * w * keep
+            val size = fill + (d.iw * w - fill) * keep
+            c.iconFrame.set(ix - size / 2f, iy - size / 2f, ix + size / 2f, iy + size / 2f)
+        }
         // Toward the app (0: the icon's end, 1: the app's).
         val k = if (flightOpening) q else 1f - q
         when (flightStyle) {
@@ -3337,24 +3403,29 @@ object GestureNav {
                     c.iconFrame.set(flightIcon)
                 }
             } else {
-                // Going home: the card rounds into a bubble on its way, and takes the icon's corners as it lands.
-                var r = radius + (min(w, h) / 2f - radius) * AppStyles.step(0f, 0.5f, q)
-                r += (w * Icons.shape.clipFraction() - r) * AppStyles.step(0.85f, 1f, q)
+                // Going home: the card rounds into a bubble (a circle: its long side drawn in to its short one) on its way,
+                // and takes the icon's corners as it lands.
+                val round = AppStyles.step(0f, 0.5f, q)
+                val side = min(styleFrame.width(), styleFrame.height())
+                val bw = styleFrame.width() + (side - styleFrame.width()) * round
+                val bh = styleFrame.height() + (side - styleFrame.height()) * round
+                val bx = styleFrame.centerX()
+                val by = styleFrame.centerY()
+                styleFrame.set(bx - bw / 2, by - bh / 2, bx + bw / 2, by + bh / 2)
+                var r = styleRadius + (min(bw, bh) / 2f - styleRadius) * round
+                r += (bw * Icons.shape.clipFraction() - r) * AppStyles.step(0.85f, 1f, q)
                 styleRadius = r
             }
             AppStyle.FADE -> alpha += (if (flightOpening) q else 1f - q).coerceIn(0f, 1f) - 1f
             AppStyle.GENIE -> if (!flightIcon.isEmpty) {
-                if (flightOpening) {
-                    genieA.set(flightIcon.left, flightIcon.top, flightIcon.right, flightIcon.bottom)
-                    genieB.set(0f, 0f, sw, sh)
-                } else {
-                    genieA.set(flightFrom.left, flightFrom.top, flightFrom.right, flightFrom.bottom)
-                    genieB.set(flightIcon.left, flightIcon.top, flightIcon.right, flightIcon.bottom)
-                }
-                AppStyles.genie(genieMesh, AppStyles.GENIE_COLS, AppStyles.GENIE_ROWS, genieA, genieB, q, flightIcon.centerY(), flightOpening)
+                // The app (the whole screen opening, the card as it began going home) and its icon; opening pours it out.
+                if (flightOpening) genieA.set(0f, 0f, sw, sh)
+                else genieA.set(flightFrom.left, flightFrom.top, flightFrom.right, flightFrom.bottom)
+                genieB.set(flightIcon.left, flightIcon.top, flightIcon.right, flightIcon.bottom)
+                AppStyles.genie(genieMesh, AppStyles.GENIE_COLS, AppStyles.GENIE_ROWS, genieA, genieB, if (flightOpening) 1f - q else q)
                 mesh = genieMesh
                 genieK = 1f
-                // Its frame: the mesh's bounds, square (it bends past any corner); going home, the corners square off first.
+                // Its frame: the mesh's bounds, with the card's corners (its far corners are the bounds' own).
                 var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var rr = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
                 var i = 0
                 while (i < genieMesh.size) {
@@ -3363,7 +3434,7 @@ object GestureNav {
                     i += 2
                 }
                 styleFrame.set(l, t, rr, b)
-                styleRadius = if (flightOpening) 0f else radius * (1f - AppStyles.step(0f, 0.15f, q))
+                styleRadius = radius
                 c.iconFrame.set(flightIcon)
                 // Poured back, it turns into the icon once it is in (by the plain card's size, it faded while its last rows
                 // were still pouring).
@@ -3375,7 +3446,12 @@ object GestureNav {
         c.iconK = 1f + icon
         c.boxK = box.coerceIn(0f, 1f)
         c.contentFullK = full.coerceIn(0f, 1f)
-        if (ownFull) c.contentFrame.setEmpty() else c.contentFrame.set(d.fullFrame)
+        when {
+            ownFull -> c.contentFrame.setEmpty()
+            d.full != 0f -> c.contentFrame.set(cx + (d.gx - d.gw / 2f) * w, cy + (d.gy - d.gh / 2f) * w,
+                cx + (d.gx + d.gw / 2f) * w, cy + (d.gy + d.gh / 2f) * w)
+            else -> c.contentFrame.setEmpty()
+        }
         if (mesh != null && genieK > 0.001f) {
             c.genieMesh = mesh
             c.genieK = genieK
@@ -3513,6 +3589,8 @@ object GestureNav {
         if (reverse) softSwap()   // (a card still coming in over its icon: as it would be once over it)
         // Where the card starts and how fast it moves: from where it is if this is the same app (reversal), else the icon.
         val m = if (reverse) cardMotion() else floatArrayOf(iconRect.centerX(), iconRect.centerY(), iconRect.width(), iconRect.height(), 0f, 0f, 0f, 0f)
+        // (Taken from the flight's springs: its plain card's corners too, whatever its style drew.)
+        val mR = if (reverse && animating && anim != Anim.SWITCH_COMMIT && anim != Anim.SWITCH_CANCEL) plainR else Float.NaN
         // Another app's card still closing goes on landing (read before hideCards ends its session).
         val landing = if (!reverse) landingFor(pkg) else null
         // Home recedes from where it is: a close under way has it part way (it started sharp, and the blur snapped away).
@@ -3534,7 +3612,7 @@ object GestureNav {
         val style = if (reverse) AppStyle.ZOOM else AppStyles.opening()
         // Sliding up and fading in do not come out of the icon: it stays on home, and in home's picture (recorded at the tap).
         val fromIcon = style.fromIcon
-        val atTap = HomeBridge.takeAtLaunch()
+        val atTap = HomeBridge.takeAtLaunch(pkg)
         val picture = if (fromIcon) HomeBridge.previewFor(pkg) else atTap ?: HomeBridge.preview
         // Reopening a closing app whose picture of home was already dropped: cover home again (the app starts at once).
         if (reverse && backdrop?.picture == null) backdrop?.picture = picture
@@ -3588,7 +3666,9 @@ object GestureNav {
         if (reverse) hideIcon(pkg) else if (fromIcon) afterCardFrame(g) { if (cardPkg == pkg) hideIcon(pkg) }
         cardIconSize = iconRect.width()
         switchAt = 0L   // a launch ends any run of quick switches
-        beginCardSprings(toIcon = false, style, opening = true, icon = if (reverse) null else iconRect, fresh = !reverse)
+        beginCardSprings(toIcon = false, style, opening = true, icon = if (reverse) null else iconRect, fresh = !reverse,
+            from = if (reverse) RectF(m[0] - m[2] / 2, m[1] - m[3] / 2, m[0] + m[2] / 2, m[1] + m[3] / 2) else null,
+            fromR = mR)
         val open = Motion.profile.appOpen
         // Where the card starts: the icon (or, reversing, where it is); sliding, below the screen; fading, in place.
         val f0 = when {
@@ -3975,6 +4055,11 @@ object GestureNav {
         val r = root ?: return
         if (gen != g) return
         if (!overHome) backdrop?.alpha = 0f
+        // One card drawing one picture (the end of a launch, a card fading where it is over home): the fade applies to its
+        // draws, not through a layer the size of the screen allocated in the fade's first frame (the handover frame of every
+        // launch took 7-9 ms of the S24's GPU; a circle reveal's tipped over into a missed refresh).
+        r.forceHasOverlappingRendering(!drawsAlone(r))
+        r.invalidate()
         // Set (or cleared) every time: a view's animator keeps its update listener from one animation to the next.
         r.animate().alpha(0f).timed(curve)
             .setUpdateListener(if (overHome) android.animation.ValueAnimator.AnimatorUpdateListener { backdrop?.alpha = r.alpha } else null)
@@ -4091,12 +4176,21 @@ object GestureNav {
     private val switcherBg = dev.launcher.app.motion.MotionValue(0f, 300f, onChange = { k ->
         val depth = depthAtSwitcher + (1f - depthAtSwitcher) * k
         val ground = if (switcherGround != 0) switcherGround else ((SWITCHER_DIM * k * 255).toInt().coerceIn(0, 255)) shl 24
+        // A dolly zoom's close held into the App Switcher: home behind the deck steps back about the middle as it always
+        // does (zoomed into the icon it was 1.55 times, the deck over a blur of a few icons), the dolly giving way as it opens.
+        if (switcherDollyFrom > 0f) {
+            switcherDollyK = max(switcherDollyK, k.coerceIn(0f, 1f))
+            backdrop?.fadeDolly(switcherDollyFrom * (1f - switcherDollyK))
+        }
         backdrop?.depth = depth
         root?.setBackgroundColor(ground)
         // The switcher's own window shows the same while the deck is there (until then it stays as it is, under the card window:
         // drawing it every frame cost both threads 2-3 ms a frame of the opening; the handover brings it up to date).
-        if (win == Win.HOLDS) { back2?.depth = depth; dim2?.setBackgroundColor(ground) }
+        if (win == Win.HOLDS) { backdrop?.let { back2?.followDolly(it) }; back2?.depth = depth; dim2?.setBackgroundColor(ground) }
     })
+    // The dolly zoom on home's picture as the App Switcher opened, and how far it has given way since.
+    private var switcherDollyFrom = 0f
+    private var switcherDollyK = 0f
 
     private val holdCheck = Runnable { maybeEnterSwitcher() }
 
@@ -4169,6 +4263,8 @@ object GestureNav {
         switcherGround = if (backdrop?.picture == null) 0xFF101418.toInt() else 0
         hideIcon(null)
         depthAtSwitcher = backdrop?.depth ?: 1f
+        switcherDollyFrom = backdrop?.dollyAmount ?: 0f
+        switcherDollyK = 0f
         switcherBg.snapTo(0f)
         switcherBg.animateTo(1f, Motion.profile.switcher.enter, 0f)
         maybeAskSwitcherWindow()
@@ -5084,34 +5180,58 @@ object GestureNav {
          */
         fun setDolly(on: Boolean, x: Float, y: Float) {
             if (picture != null && shown && alpha > 0f) return
-            pivotOn(on, x, y)
+            pivotOn(if (on) 1f else 0f, x, y)
+        }
+
+        /** How much of a dolly zoom is on (1: all, 0: none). */
+        val dollyAmount get() = dolly
+
+        /**
+         * The dolly zoom giving way, as far as [k] of it is left, to the plain step back about the middle (the App Switcher
+         * opening during a dolly zoom's close: home behind the deck as it always is). Its point stays: no jump.
+         */
+        fun fadeDolly(k: Float) {
+            val a = k.coerceIn(0f, 1f)
+            if (a == dolly) return
+            pivotOn(a, dollyX, dollyY)
         }
 
         /** As [other]'s dolly zoom: the App Switcher's own window showing home as the card window did. */
         fun followDolly(other: PreviewView) {
-            if (dolly == other.dolly && (!dolly || (dollyX == other.dollyX && dollyY == other.dollyY))) return
+            if (dolly == other.dolly && (dolly == 0f || (dollyX == other.dollyX && dollyY == other.dollyY))) return
             pivotOn(other.dolly, other.dollyX, other.dollyY)
         }
 
-        private fun pivotOn(on: Boolean, x: Float, y: Float) {
-            dolly = on
+        private fun pivotOn(k: Float, x: Float, y: Float) {
+            dolly = k
             dollyX = x
             dollyY = y
-            for (l in arrayOf(wallpaperLayer, contentLayer)) if (on) { l.pivotX = x; l.pivotY = y } else l.resetPivot()
-            for (l in arrayOf(lowWallpaper, lowContent)) if (on) { l.pivotX = x * lowScale; l.pivotY = y * lowScale } else l.resetPivot()
+            if (k <= 0f) {
+                for (l in arrayOf(wallpaperLayer, contentLayer, lowWallpaper, lowContent)) l.resetPivot()
+            } else {
+                // From the middle to the icon as much of it as is on.
+                val px = width / 2f + (x - width / 2f) * k
+                val py = height / 2f + (y - height / 2f) * k
+                for (l in arrayOf(wallpaperLayer, contentLayer)) { l.pivotX = px; l.pivotY = py }
+                for (l in arrayOf(lowWallpaper, lowContent)) { l.pivotX = px * lowScale; l.pivotY = py * lowScale }
+            }
             applyDepth()
         }
 
-        private var dolly = false
+        private var dolly = 0f
         private var dollyX = 0f
         private var dollyY = 0f
 
         private fun applyDepth() {
             val v = depth
             val mp = Motion.profile
-            // Stepping back about the middle, or (dolly zoom) flying toward the icon, the wallpaper less than the icons.
-            val wz = if (dolly) 1f + v * (AppStyles.DOLLY_ZOOM - 1f) * 0.6f else 1f + v * (mp.homeWallpaperZoom - 1f)
-            val cz = if (dolly) 1f + v * (AppStyles.DOLLY_ZOOM - 1f) else 1f + v * (mp.homeContentZoom - 1f)
+            // Stepping back about the middle, or (dolly zoom, as much of it as is on) flying toward the icon, the wallpaper
+            // less than the icons.
+            val d = dolly
+            val wFull = mp.homeWallpaperZoom + (1f + (AppStyles.DOLLY_ZOOM - 1f) * 0.6f - mp.homeWallpaperZoom) * d
+            val cFull = mp.homeContentZoom + (AppStyles.DOLLY_ZOOM - mp.homeContentZoom) * d
+            val wz = 1f + v * (wFull - 1f)
+            val cz = 1f + v * (cFull - 1f)
             wallpaperLayer.scaleX = wz; wallpaperLayer.scaleY = wz
             contentLayer.scaleX = cz; contentLayer.scaleY = cz
             lowWallpaper.scaleX = wz; lowWallpaper.scaleY = wz

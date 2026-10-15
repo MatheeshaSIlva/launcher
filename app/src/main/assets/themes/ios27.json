@@ -2756,8 +2756,8 @@
    "src": "kit:Apple's Human Interface Guidelines: a control's hit target is at least 44 x 44 pt (Android: 48 dp)"
   },
   "comp.settings.tile.art": {
-   "pt": 52,
-   "src": "judged:Matheesha (2026-10-15): a motion graphic for each part in place of its symbol, across the tile's top"
+   "pt": 76,
+   "src": "judged:Matheesha (2026-10-15): a motion graphic for each part in place of its symbol, across the tile's top; one column, the scenes wider and taller"
   },
   "comp.settings.tile.corner": {
    "ref": "comp.settings.group.corner",
