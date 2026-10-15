@@ -70,6 +70,14 @@ object HomeBridge {
 
     fun hasWithout(pkg: String) = without.containsKey(pkg)
 
+    /**
+     * Home as it showed at the tap of a launch whose card does not come out of its icon (sliding up, fading in:
+     * motion/AppStyles), its icon in place; taken by that launch ([takeAtLaunch]).
+     */
+    @Volatile var atLaunch: HomePicture? = null
+
+    fun takeAtLaunch(): HomePicture? = atLaunch.also { atLaunch = null }
+
     /** Stores a picture without [pkg]'s icon recorded right now (a launch records it before its card appears). */
     fun putWithout(pkg: String, p: HomePicture?) { if (p != null) without[pkg] = p }
 

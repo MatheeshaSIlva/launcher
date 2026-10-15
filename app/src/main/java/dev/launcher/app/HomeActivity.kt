@@ -62,7 +62,13 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
      * changed how home looks, the pictures of it a close shows are taken again. Not at the pause of a launch: home stays in
      * sight under the card until the app covers it (Change Wallpaper's menu, kept open over the picker, vanished as it began).
      */
-    private fun hidden() { if (screen.onHidden()) recordAfterHidden() }
+    private fun hidden() {
+        if (screen.onHidden()) { recordAfterHidden(); return }
+        // A launch whose card did not come out of its icon (sliding up, fading in) recorded home with the icon; a close into
+        // the icon needs it without: recorded now, out of sight.
+        val pkg = lastLaunched ?: return
+        if (!HomeBridge.hasWithout(pkg)) HomeBridge.putWithout(pkg, recordWithout(pkg))
+    }
 
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -411,8 +417,10 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
                 AppLog.log("[home] launch ${e.pkg} failed: ${t.message}")
             }
         }
-        // The card grows out of the icon over a picture of home without that icon (recorded now, before the card appears).
-        HomeBridge.putWithout(e.pkg, recordWithout(e.pkg))
+        // The card grows out of the icon over a picture of home without that icon (recorded now, before the card appears);
+        // a card that does not come out of it (sliding up, fading in) over home as it is now, the icon in place.
+        if (dev.launcher.app.motion.AppStyles.opening().fromIcon) HomeBridge.putWithout(e.pkg, recordWithout(e.pkg))
+        else HomeBridge.atLaunch = record()
         if (!GestureNav.launchApp(e.pkg, iconOnScreen, icon, start)) start()
     }
 
@@ -437,7 +445,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         }
         // The edit menu stays open under the card (its item keeps it so): behind the card, home exactly as it shows, the menu
         // and its blur included (a recording of home leaves both out: the card's first frame showed home without them).
-        HomeBridge.putWithout(pkg, pictureAsShown() ?: recordWithout(pkg))
+        val shown = pictureAsShown() ?: recordWithout(pkg)
+        HomeBridge.putWithout(pkg, shown)
+        HomeBridge.atLaunch = shown   // (the same whatever the style: the menu item stays)
         if (!GestureNav.launchApp(pkg, from, icon, start)) start()
     }
 

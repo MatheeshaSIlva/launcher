@@ -1115,6 +1115,14 @@
    "ms": 240,
    "src": "judged:and coming back; as the code timed it before B3"
   },
+  "motion.style.closing": {
+   "choice": "zoom",
+   "src": "measured:iOS 27: the app shrinks back into its icon"
+  },
+  "motion.style.opening": {
+   "choice": "zoom",
+   "src": "measured:iOS 27: the app grows out of its icon as home steps back"
+  },
   "motion.switch.cancel": {
    "spring": [
     0.3,

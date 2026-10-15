@@ -1,5 +1,6 @@
 package dev.launcher.app.motion
 
+import dev.launcher.app.design.ChoiceKey
 import dev.launcher.app.design.NumberKey
 
 /** The part of the phone a moment belongs to (the settings' tiles, docs/PLAN_SETTINGS_V2.md); [EVERYWHERE]: no one part. */
@@ -24,6 +25,8 @@ class Moment(
     val roles: List<String>, val glue: List<String> = emptyList(), val character: Character? = null,
     /** The animation that shows the moment best (the settings' picture plays it): its first, unless another says more. */
     val sample: String = roles.first(),
+    /** Its choreography, where it has a choice of them ([AppStyles]: opening apps, going home). */
+    val style: ChoiceKey? = null,
 ) {
     val speed = NumberKey("motion.adjust.$id.speed")
     val bounce = NumberKey("motion.adjust.$id.bounce")
@@ -44,10 +47,11 @@ object Moments {
         ks("app.open", "home.depth-open", "home.content-zoom", "home.wallpaper-zoom", "home.depth-blur"),
         glue = ks("card.color", "card.snapshot", "card.fade-app"),
         character = Character("How far home steps back", "Not at all", "Far",
-            listOf(k("home.content-zoom") to 1f, k("home.wallpaper-zoom") to 1f, k("home.depth-blur") to 0f)))
+            listOf(k("home.content-zoom") to 1f, k("home.wallpaper-zoom") to 1f, k("home.depth-blur") to 0f)),
+        style = AppStyles.OPENING)
     val CLOSING = Moment("closing", MomentPart.APPS, "Going home", "An app shrinking back into its icon as home comes forward.",
         ks("app.close-size", "app.close-position", "home.depth-close", "app.cancel"),
-        glue = ks("card.fade-home", "card.catch-up"))
+        glue = ks("card.fade-home", "card.catch-up"), style = AppStyles.CLOSING)
     val SWITCHING = Moment("switching", MomentPart.APPS, "Switching apps", "A sideways swipe on the bar to the app before or after.",
         ks("switch.commit", "switch.cancel"))
     val SWITCHER = Moment("switcher", MomentPart.APPS, "App Switcher", "The deck of recent apps coming, scrolling, a card opening or flicked away.",

@@ -168,7 +168,8 @@ class MotionTest {
         val material = preset("material")
         assertEquals("ios27", material.extends)
         for ((k, e) in material.entries) {
-            val c = (e.value as Value.CurveV).curve
+            // (Its styles are choices, not curves.)
+            val c = (e.value as? Value.CurveV)?.curve ?: continue
             if (overshoot(c) < 1e-4f) continue
             assertTrue("$k bounces in Material and not in iOS 27", overshoot((ios.getValue(k).value as Value.CurveV).curve) > 1e-3f)
         }

@@ -1,0 +1,54 @@
+{
+ "format": 1,
+ "name": "Playful",
+ "description": "Apps pour out of their icons",
+ "author": "Launcher",
+ "version": "0.1",
+ "extends": "ios27",
+ "_about": "Genie openings and closings, with livelier springs where iOS 27 bounces. Written by tools/design/build_style_presets.py.",
+ "tokens": {
+  "motion.app.close-position": {
+   "spring": [
+    0.46,
+    0.88
+   ],
+   "src": "judged:Playful: with the size"
+  },
+  "motion.app.close-size": {
+   "spring": [
+    0.46,
+    0.88
+   ],
+   "src": "judged:Playful: the pour back, a touch slower than the zoom"
+  },
+  "motion.app.open": {
+   "spring": [
+    0.5,
+    0.86
+   ],
+   "src": "judged:Playful: a little longer and springier than iOS 27's, for the pour to read"
+  },
+  "motion.banner.in": {
+   "spring": [
+    0.5,
+    0.62
+   ],
+   "src": "judged:Playful: a livelier drop"
+  },
+  "motion.folder.open": {
+   "spring": [
+    0.42,
+    0.7
+   ],
+   "src": "judged:Playful: folders open with a bounce"
+  },
+  "motion.style.closing": {
+   "choice": "genie",
+   "src": "judged:Playful: the app is poured back into its icon"
+  },
+  "motion.style.opening": {
+   "choice": "genie",
+   "src": "judged:Playful: the app pours out of its icon (macOS's genie)"
+  }
+ }
+}

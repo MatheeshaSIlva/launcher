@@ -214,7 +214,13 @@ object MotionRoles {
             MotionRole(m.bounce.name, "${m.title}: bounce", "How far ${m.title.lowercase()} goes past its place (1: as the preset; 0: not at all)."))
     })
 
-    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE, MOMENTS)
+    /** How apps open and close ([AppStyles]): choices, chosen on Opening apps' and Going home's pages, not animations. */
+    val STYLES = MotionGroup("Styles", "How apps open and close.", listOf(
+        r("style.opening", "Opening apps: style", "How an app comes out of its icon (zoom, container transform, slide, circle, fade, dolly zoom, genie)."),
+        r("style.closing", "Going home: style", "How an app goes back into its icon."),
+    ))
+
+    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE, MOMENTS, STYLES)
 
     /**
      * What the settings' Motion lets a person retime, by group (docs/PLAN_MOTION.md): every animation but the App Switcher's

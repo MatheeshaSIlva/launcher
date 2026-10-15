@@ -192,6 +192,14 @@ The settings app's pages: **grow from the tile** (today) · **push** (iOS) · **
 4. **Home pages**: parallax first; 3D styles only after measuring glass under 3D.
 5. The rest as the presets need them.
 
+## Built (2026-10-15, V4)
+
+Opening and closing apps, all seven of the first table's buildable styles: zoom, container transform, slide, circle
+reveal (closing: a bubble), fade and scale, dolly zoom and genie (blur to sharp and liquid not yet). Presets bundle them
+(answer to question 3): iOS 27 zoom, Material container, and three new presets, Playful (genie), Calm (fade, nothing
+bounces) and Cinematic (dolly). Each moment's style can be changed on its own (the Style group of Opening apps and Going
+home). Details in `docs/PROGRESS.md`.
+
 ## Open questions (Matheesha)
 
 1. Start with opening and closing apps (recommended), or another moment?

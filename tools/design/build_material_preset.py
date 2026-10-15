@@ -201,6 +201,9 @@ def main():
                 why += ', critically damped: iOS 27 does not overshoot here'
         out[k] = {'spring': [response(stiffness), damping],
                   'src': f"judged:Material 3 Expressive's {why} spring (stiffness {stiffness:g}, damping {damping:g})"}
+    # Material 3's container transform: the icon's box becomes the window and back, contents fading through.
+    for k, why in (('motion.style.opening', 'opening'), ('motion.style.closing', 'going home')):
+        out[k] = {'choice': 'container', 'src': f"judged:Material 3's container transform for {why} (docs/MOTION_STYLES.md)"}
     preset = {'format': 1, 'name': 'Material', 'description': "Android 16's springs",
               'author': "Launcher (Material 3 Expressive's motion tokens, androidx v0_14_0)", 'version': '0.1', 'extends': 'ios27',
               '_about': "Android 16's motion on iOS 27's roles: Material 3 Expressive's springs by each role's kind and size, a "
@@ -209,7 +212,7 @@ def main():
     with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
         json.dump(preset, f, indent=1, ensure_ascii=False)
         f.write('\n')
-    bouncy = sum(1 for v in out.values() if v['spring'][1] < 1)
+    bouncy = sum(1 for v in out.values() if 'spring' in v and v['spring'][1] < 1)
     print(f'{OUT}: {len(out)} roles ({bouncy} bounce), {len(KEEP)} kept as iOS 27')
 
 

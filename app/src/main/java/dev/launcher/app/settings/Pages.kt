@@ -316,6 +316,12 @@ internal class Draft {
     fun chooseMotionValue(preset: String, key: String, v: dev.launcher.app.design.Value) {
         putMotionEdit(preset to key, v.takeIf { it != Design.presetValue(preset, key, edits = preset !in motionCleared) })
     }
+    /** How apps open or close ([k]: motion/AppStyles' OPENING or CLOSING) in [preset] as it would be applied. */
+    fun motionStyle(preset: String, k: dev.launcher.app.design.ChoiceKey): dev.launcher.app.motion.AppStyle =
+        dev.launcher.app.motion.AppStyle.of((motionRaw(preset, k.name) as? dev.launcher.app.design.Value.Choice)?.option)
+    fun chooseMotionStyle(preset: String, k: dev.launcher.app.design.ChoiceKey, s: dev.launcher.app.motion.AppStyle) =
+        chooseMotionValue(preset, k.name, dev.launcher.app.design.Value.Choice(s.id))
+
     /** Changed from how [preset] comes (by you, applied or not). */
     fun motionChanged(preset: String, key: String): Boolean = motionRaw(preset, key) != motionOwn(preset, key)
     /** Changed here and not applied yet. */
@@ -334,16 +340,18 @@ internal class Draft {
         return keys.filterTo(HashSet()) { it != MotionTokens.DEBUG_SLOW.name && motionChanged(preset, it) }
     }
 
-    /** A preset's or a moment's own speed or bounce (not one animation's). */
-    private fun isFeel(key: String) = key.startsWith("motion.adjust.")
+    /** A preset's or a moment's own speed or bounce, or a style (not one animation's). */
+    private fun isFeel(key: String) = key.startsWith("motion.adjust.") || key.startsWith("motion.style.")
 
-    /** How many of moment [m]'s values you changed in [preset]: its speed, its bounce, each of its animations. */
-    fun momentChanges(preset: String, m: dev.launcher.app.motion.Moment): Int =
-        (listOf(m.speed.name, m.bounce.name) + m.all).count { motionChanged(preset, it) }
+    /** Moment [m]'s own values: its speed, its bounce, its style if it has one, each of its animations. */
+    private fun momentKeys(m: dev.launcher.app.motion.Moment) = listOfNotNull(m.speed.name, m.bounce.name, m.style?.name) + m.all
 
-    /** Moment [m] back as [preset] has it (on Apply): its speed, its bounce and every animation of it. */
+    /** How many of moment [m]'s values you changed in [preset]. */
+    fun momentChanges(preset: String, m: dev.launcher.app.motion.Moment): Int = momentKeys(m).count { motionChanged(preset, it) }
+
+    /** Moment [m] back as [preset] has it (on Apply): its speed, its bounce, its style and every animation of it. */
     fun resetMoment(preset: String, m: dev.launcher.app.motion.Moment) {
-        for (k in listOf(m.speed.name, m.bounce.name) + m.all) {
+        for (k in momentKeys(m)) {
             if (!motionChanged(preset, k)) continue
             val own = motionOwn(preset, k) ?: continue
             chooseMotionValue(preset, k, own)
@@ -1368,6 +1376,10 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
                 if (layer) nc.saveLayerAlpha(0f, 0f, g.w, g.h, (255 * sa).roundToInt())
                 kit.set(g.w, g.h, g.w * cornerFrac, shown, demoIconAt[0] ?: HomeBridge.dockIcon().also { demoIconAt[0] = it },
                     appFill.toArgb(), appPage.toArgb(), appInk.toArgb(), appAccent.toArgb(), paints.rim, paints.image, paints.path)
+                // The ways apps open and close as the draft has them (read here, in drawing: a choice redraws, never composes).
+                val preset = draft.motionId()
+                kit.opening = draft.motionStyle(preset, dev.launcher.app.motion.AppStyles.OPENING)
+                kit.closing = draft.motionStyle(preset, dev.launcher.app.motion.AppStyles.CLOSING)
                 MotionSamples.draw(kit, nc, role, sk, sm.forward.value, sm.number.floatValue)
                 if (layer) nc.restore()
             }

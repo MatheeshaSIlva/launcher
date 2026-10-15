@@ -145,7 +145,18 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   roles with today's editor (`settings/MotionPages`: spring or curve, a graph with handles, sliders, shapes), samples on
   the picture of home (`settings/MotionSamples`, one loop for the whole settings), the graph's arithmetic in
   `motion/CurveFit` (springs fitted to curves and back); kept as the preset's user edits
-  (`files/design/motion-edits-<id>.json`). Values read in words first ("Smooth, bouncy · 0.42 s"). Theme seeds and motion seeds both live in the builder, which
+  (`files/design/motion-edits-<id>.json`). Values read in words first ("Smooth, bouncy · 0.42 s").
+  **Transition styles** (V4, `docs/MOTION_STYLES.md`): how apps open and go home is a choreography a preset names
+  (`motion.style.opening`/`.closing`, `motion/AppStyles`: zoom, container transform, slide, circle reveal (closing: a
+  bubble), fade and scale, dolly zoom, genie), drawn from the same card springs (`GestureNav.applyStyle` sets the frame
+  and `CardView`'s style parts: `contentK`/`iconK`/`boxK`, the app over `contentFrame` at `contentFullK`, the icon at
+  `iconFrame`, a genie mesh), so grabs, reversals and launches mid-close work for every style. A style a card still
+  shows fades out over a new flight's first half (`StyleDev`); a grabbed card's style gives way to a plain card on the
+  cancel's curve (the App Switcher's deck draws plain cards: it waits), and a style with a frame of its own (circle,
+  genie) is grabbed by the plain card it is drawn on (`StyleDev.grab`). Presets bundle styles (iOS 27 zoom, Material
+  container, Playful genie, Calm fade, Cinematic dolly: `tools/design/build_style_presets.py`). The settings show a style
+  by playing it (`settings/AppStyleArt`: the picture of home, the presets' cards, the Style group of Opening apps and
+  Going home), never by name alone. Theme seeds and motion seeds both live in the builder, which
   writes the two files. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). Points to pixels: one unit everywhere, `Scale.unitPx` (policy `adaptive`: 402 pt
   across a phone, never larger than the dp at the phone's default density, times the Display size's zoom; text through
@@ -584,6 +595,12 @@ copy it wholesale — port the working pieces cleanly. File map:
   its GPU fence, buffer waits included: values stuck near 16.6 ms with a bare material are waiting, not drawing (judge the
   misses, and look in a trace before blaming a shader). The first run after an update reads the app's code and fonts from
   disk (`folio_wait_bit_common` in the trace): judge a step after a warm-up run.
+- **A card's icon comes from its app, which may be known after its picture**: a fresh picture taken from the task
+  already known (the app changed since its kept picture) arrives before the recent-tasks lookup, and neither path set the
+  icon: the close crossfaded into nothing and the real icon appeared a moment later. The card takes its icon once its
+  app is known (`GestureNav.cardKnows`).
+- **Home's idle check must count every motion on it** (`HomeScreen.isIdle`): the theme reveal was not counted, and home's
+  picture recorded mid-reveal (400 ms after onResume) missed the items not yet revealed, behind the next close.
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

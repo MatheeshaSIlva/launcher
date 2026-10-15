@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
+import dev.launcher.app.motion.AppStyle
 import dev.launcher.app.motion.Moment
 import dev.launcher.app.motion.Moments
 import kotlin.math.PI
@@ -52,6 +53,11 @@ internal class SampleKit {
     val r = RectF()
     val src = android.graphics.Rect()
     val dst = RectF()
+    /** How apps open and close (motion/AppStyles): the draft's, set before each draw. */
+    var opening = AppStyle.ZOOM
+    var closing = AppStyle.ZOOM
+    /** The app's opening and closing drawn in a style on this picture ([AppStyleArt]). */
+    internal val stage = SampleStage(this)
 
     fun set(w: Float, h: Float, corner: Float, home: Bitmap?, icon: RectF?, fill: Int, page: Int, ink: Int, accent: Int, paint: Paint, image: Paint, path: Path) {
         this.w = w; this.h = h; this.corner = corner; this.home = home; this.icon = icon
@@ -253,7 +259,12 @@ internal object MotionSamples {
         val a = kit.r.apply { set(s.area.left * w, s.area.top * h, s.area.right * w, s.area.bottom * h) }
         val kk = k.coerceIn(0f, 1f)
         when (s.kind) {
-            Kind.APP -> app(kit, c, k, 1f)
+            Kind.APP -> {
+                // Opening on its own run (or on the way back from a close), going home on the other.
+                val opening = (key == m("app.open")) == forward
+                val st = kit.stage.prepare()
+                AppStyleArt.draw(st, c, k, if (opening) kit.opening else kit.closing, opening)
+            }
             Kind.APP_CANCEL -> {
                 // Pulled down a little by the finger, let go: back to the whole screen.
                 val pull = 1f - k
@@ -434,7 +445,7 @@ internal object MotionSamples {
     }
 
     /** An app's page (a title and two groups of rows, in the theme's page colours) in l, t, r, b. */
-    private fun page(kit: SampleKit, c: Canvas, l: Float, t: Float, r: Float, b: Float, corner: Float, alpha: Float, tint: Boolean = false) {
+    internal fun page(kit: SampleKit, c: Canvas, l: Float, t: Float, r: Float, b: Float, corner: Float, alpha: Float, tint: Boolean = false) {
         if (alpha <= 0.003f) return
         val w = r - l
         val h = b - t
@@ -514,10 +525,66 @@ internal object MotionSamples {
         card(kit, c, bl, bt, bl + bw, bt + bh, (k / 0.2f).coerceIn(0f, 1f))
     }
 
-    private fun withAlpha(color: Int, a: Float): Int = (((color ushr 24) * a.coerceIn(0f, 1f)).toInt() shl 24) or (color and 0xFFFFFF)
+    internal fun withAlpha(color: Int, a: Float): Int = (((color ushr 24) * a.coerceIn(0f, 1f)).toInt() shl 24) or (color and 0xFFFFFF)
 
     private fun mixColor(a: Int, b: Int, t: Float): Int {
         fun ch(s: Int) = (((a shr s) and 0xFF) + (((b shr s) and 0xFF) - ((a shr s) and 0xFF)) * t).toInt().coerceIn(0, 255)
         return (ch(24) shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
     }
+}
+
+/** The picture of home as a stage for the apps' styles ([AppStyleArt]): home's picture, the dock's icon, the sample's page. */
+internal class SampleStage(private val kit: SampleKit) : StyleStage() {
+    /** Its size, corners and icon from the kit as it was set for this draw. */
+    fun prepare(): SampleStage {
+        w = kit.w
+        h = kit.h
+        corner = kit.corner
+        val ic = kit.icon
+        val size = ic?.width() ?: (w * 0.17f)
+        if (ic != null) icon.set(ic) else icon.set(w * 0.5f - size / 2f, h * 0.9f - size, w * 0.5f + size / 2f, h * 0.9f)
+        return this
+    }
+
+    override fun home(c: Canvas, zoom: Float, px: Float, py: Float) {
+        val b = kit.home ?: return
+        c.save()
+        c.scale(zoom, zoom, px, py)
+        kit.src.set(0, 0, b.width, b.height)
+        kit.dst.set(0f, 0f, w, h)
+        kit.image.alpha = 255
+        c.drawBitmap(b, kit.src, kit.dst, kit.image)
+        c.restore()
+    }
+
+    override fun page(c: Canvas, l: Float, t: Float, r: Float, b: Float, corner: Float, alpha: Float) =
+        MotionSamples.page(kit, c, l, t, r, b, corner, alpha)
+
+    override fun icon(c: Canvas, l: Float, t: Float, r: Float, b: Float, alpha: Float) {
+        if (alpha <= 0.003f) return
+        val home = kit.home
+        val ic = kit.icon
+        if (home != null && ic != null) {
+            // The dock's icon as home shows it.
+            val sx = home.width / w
+            val sy = home.height / h
+            kit.src.set((ic.left * sx).toInt(), (ic.top * sy).toInt(), (ic.right * sx).toInt(), (ic.bottom * sy).toInt())
+            kit.dst.set(l, t, r, b)
+            kit.image.alpha = (255 * alpha.coerceIn(0f, 1f)).toInt()
+            c.drawBitmap(home, kit.src, kit.dst, kit.image)
+            kit.image.alpha = 255
+        } else {
+            kit.paint.color = MotionSamples.withAlpha(kit.accent, alpha)
+            val cr = kotlin.math.min(r - l, b - t) * 0.23f
+            c.drawRoundRect(l, t, r, b, cr, cr, kit.paint)
+        }
+    }
+
+    override fun box(c: Canvas, l: Float, t: Float, r: Float, b: Float, corner: Float, alpha: Float) {
+        if (alpha <= 0.003f) return
+        kit.paint.color = MotionSamples.withAlpha(kit.page, alpha)
+        c.drawRoundRect(l, t, r, b, corner, corner, kit.paint)
+    }
+
+    override fun pageKey(): Long = ((kit.page.toLong() * 1_000_003L + kit.fill) * 1_000_003L + kit.ink) * 31 + kit.corner.toBits()
 }

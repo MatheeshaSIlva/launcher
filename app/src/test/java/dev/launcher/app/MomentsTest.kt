@@ -54,6 +54,70 @@ class MomentsTest {
         assertEquals("a feel of no moment", Moments.ALL.size * 2, feels.size)
     }
 
+    @Test fun everyPresetGivesAStyleTheAppKnows() {
+        val dir = File("src/main/assets/motion")
+        for (f in dir.listFiles()!!.filter { it.name.endsWith(".json") }) {
+            val t = Theme.parse(f.readText())
+            for (k in listOf(dev.launcher.app.motion.AppStyles.OPENING.name, dev.launcher.app.motion.AppStyles.CLOSING.name)) {
+                val v = t.entries[k]?.value ?: continue
+                val id = (v as dev.launcher.app.design.Value.Choice).option
+                assertTrue("${f.name}: $k is '$id'", dev.launcher.app.motion.AppStyle.entries.any { it.id == id })
+            }
+        }
+    }
+
+    @Test fun appsOpenAndGoHomeInStyles() {
+        // Only the two moments of apps have a style, each its own key.
+        assertEquals(listOf(Moments.OPENING to dev.launcher.app.motion.AppStyles.OPENING, Moments.CLOSING to dev.launcher.app.motion.AppStyles.CLOSING),
+            Moments.ALL.filter { it.style != null }.map { it to it.style })
+        // Sliding and fading leave the icon on home (no icon hidden, none to land in); the others come out of it and go back.
+        for (s in dev.launcher.app.motion.AppStyle.entries) {
+            val leaves = s == dev.launcher.app.motion.AppStyle.SLIDE || s == dev.launcher.app.motion.AppStyle.FADE
+            assertEquals("$s", !leaves, s.fromIcon)
+        }
+        // An unknown id (an older preset, a typo) is the zoom.
+        assertEquals(dev.launcher.app.motion.AppStyle.ZOOM, dev.launcher.app.motion.AppStyle.of("warp"))
+        assertEquals(dev.launcher.app.motion.AppStyle.ZOOM, dev.launcher.app.motion.AppStyle.of(null))
+    }
+
+    @Test fun theContainerTransformFadesThrough() {
+        val s = dev.launcher.app.motion.AppStyles
+        // The icon only at the start, the app only at the end, never both at once.
+        assertEquals(1f, s.containerIcon(0f), 0f); assertEquals(0f, s.containerIcon(1f), 0f)
+        assertEquals(0f, s.containerContent(0f), 0f); assertEquals(1f, s.containerContent(1f), 0f)
+        var q = 0f
+        while (q <= 1f) { assertTrue("at $q", s.containerIcon(q) == 0f || s.containerContent(q) == 0f); q += 0.01f }
+    }
+
+    @Test fun theCircleRevealCoversTheWholeScreen() {
+        val s = dev.launcher.app.motion.AppStyles
+        // From half the icon to the farthest corner from it.
+        assertEquals(60f, s.revealRadius(0f, 100f, 2000f, 120f, 1080f, 2340f), 0.01f)
+        val far = kotlin.math.hypot(1080f - 100f, 2000f)
+        assertEquals(far, s.revealRadius(1f, 100f, 2000f, 120f, 1080f, 2340f), 0.5f)
+    }
+
+    @Test fun theGeniesMeshGoesFromOneRectToTheOther() {
+        val from = dev.launcher.app.motion.Box(400f, 2000f, 520f, 2120f)
+        val to = dev.launcher.app.motion.Box(0f, 0f, 1080f, 2340f)
+        val cols = dev.launcher.app.motion.AppStyles.GENIE_COLS
+        val rows = dev.launcher.app.motion.AppStyles.GENIE_ROWS
+        val out = FloatArray((cols + 1) * (rows + 1) * 2)
+        for ((p, r) in listOf(0f to from, 1f to to)) {
+            dev.launcher.app.motion.AppStyles.genie(out, cols, rows, from, to, p, 2060f, opening = true)
+            // Its corners where the rect's are.
+            assertEquals(r.left, out[0], 0.01f); assertEquals(r.top, out[1], 0.01f)
+            val last = out.size - 2
+            assertEquals(r.right, out[last], 0.01f); assertEquals(r.bottom, out[last + 1], 0.01f)
+        }
+        // On the way, the rows far from the icon are further along than those near it (it pours out).
+        dev.launcher.app.motion.AppStyles.genie(out, cols, rows, from, to, 0.4f, 2060f, opening = true)
+        val topRowWidth = out[cols * 2] - out[0]
+        val bottomStart = rows * (cols + 1) * 2
+        val bottomRowWidth = out[bottomStart + cols * 2] - out[bottomStart]
+        assertTrue("top $topRowWidth, bottom $bottomRowWidth", topRowWidth > bottomRowWidth)
+    }
+
     @Test fun aMomentsFeelGoesOnTopOfThePresets() {
         assertEquals(1f, MotionAdjust.speed(1f, 1f), 0f)
         assertEquals(2f, MotionAdjust.speed(1f, 2f), 1e-6f)

@@ -797,6 +797,14 @@
     1.0
    ],
    "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
+  },
+  "motion.style.opening": {
+   "choice": "container",
+   "src": "judged:Material 3's container transform for opening (docs/MOTION_STYLES.md)"
+  },
+  "motion.style.closing": {
+   "choice": "container",
+   "src": "judged:Material 3's container transform for going home (docs/MOTION_STYLES.md)"
   }
  }
 }

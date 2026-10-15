@@ -772,6 +772,10 @@ for _m in MOMENTS:
     SEED['motion.adjust.%s.speed' % _m] = {'factor': 1, 'src': "judged:the moment's own speed on top of the preset's (1: as the preset)"}
     SEED['motion.adjust.%s.bounce' % _m] = {'factor': 1, 'src': "judged:the moment's own bounce on top of the preset's (1: as the preset)"}
 
+# How apps open and close (docs/MOTION_STYLES.md; motion/AppStyles.kt): iOS's zoom from and into the icon.
+SEED['motion.style.opening'] = {'choice': 'zoom', 'src': "measured:iOS 27: the app grows out of its icon as home steps back"}
+SEED['motion.style.closing'] = {'choice': 'zoom', 'src': "measured:iOS 27: the app shrinks back into its icon"}
+
 
 CONTROL_ACCENTS = {
     'connectivity': 'blue', 'media': 'pink', 'brightness': 'yellow', 'volume': 'cyan', 'focus': 'indigo',

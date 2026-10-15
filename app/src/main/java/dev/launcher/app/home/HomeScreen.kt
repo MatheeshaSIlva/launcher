@@ -1183,7 +1183,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && !arrivalAnimating && !arrivalHeld && (drag == Drag.NONE || drag == Drag.IGNORED) &&
         (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true) && editMode?.active != true && menu?.isShowing != true &&
         picker?.isOpen != true && !externalTouch && clocks.none { it.animating } && widgetViews().none { it.resizing } &&
-        !dev.launcher.app.theme.Appearance.changing
+        !dev.launcher.app.theme.Appearance.changing && rebuildAnim == null
 
     // ---- arrival: home after unlock, and after a cold start (boot, update, crash)
     //

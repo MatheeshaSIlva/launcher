@@ -103,6 +103,47 @@ class CardView(context: Context) : View(context) {
 
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
 
+    // ---- how a transition style draws the card (motion/AppStyles), set by gesture nav at every frame of a flight. At their
+    // defaults the card draws as it always has.
+
+    /** The app's alpha besides [iconMix]'s (the container transform's fade-through dips it). */
+    var contentK = 1f
+        set(v) { if (field != v) { field = v; invalidate() } }
+    /** The icon's alpha besides [iconMix]'s. */
+    var iconK = 1f
+        set(v) { if (field != v) { field = v; invalidate() } }
+    /** The card's own colour under everything (the container transform's box), 0..1. */
+    var boxK = 0f
+        set(v) { if (field != v) { field = v; invalidate() } }
+    /**
+     * 1: the app drawn over [contentFrame] whatever the frame (the circle reveal's window onto it), 0: covering the frame.
+     */
+    var contentFullK = 0f
+        set(v) { if (field != v) { field = v; invalidate() } }
+    /** Where the app is drawn at [contentFullK] 1 (screen px; empty: the whole view, as it is on the screen). */
+    val contentFrame = android.graphics.RectF()
+    /**
+     * The genie: the app's picture drawn through this mesh ([AppStyles.GENIE_COLS] x [AppStyles.GENIE_ROWS] cells, screen
+     * px), blended by [genieK] into the frame's plain grid; null: off.
+     */
+    var genieMesh: FloatArray? = null
+        set(v) { field = v; invalidate() }
+    var genieK = 1f
+        set(v) { if (field != v) { field = v; invalidate() } }
+    /**
+     * Where the card's icon is drawn when it is not the card's frame (a genie's, a circle reveal's: the icon it comes out
+     * of, at its own size and place; screen px); empty: filling the card.
+     */
+    val iconFrame = android.graphics.RectF()
+    private val genieVerts = FloatArray((dev.launcher.app.motion.AppStyles.GENIE_COLS + 1) * (dev.launcher.app.motion.AppStyles.GENIE_ROWS + 1) * 2)
+    private val geniePath = android.graphics.Path()
+
+    /** Every style's drawing back to the card's own (a new card, a hidden one). */
+    fun clearStyle() {
+        contentK = 1f; iconK = 1f; boxK = 0f; contentFullK = 0f; genieMesh = null; genieK = 1f; contentFrame.setEmpty()
+        iconFrame.setEmpty()
+    }
+
     init {
         clipToOutline = true
         outlineProvider = object : ViewOutlineProvider() {
@@ -151,9 +192,18 @@ class CardView(context: Context) : View(context) {
         }
         val l = cx - w / 2
         val t = cy - h / 2
-        val contentAlpha = ((1f - iconMix) * 255).roundToInt()
+        // (A window onto the app, [contentFullK], shows it whole from the start: the icon fades on top, where it is.)
+        val contentAlpha = ((1f - iconMix * (1f - contentFullK.coerceIn(0f, 1f))) * contentK * 255).roundToInt()
         val b = snapshot
         val d = icon
+        val mesh = genieMesh
+        if (mesh != null) { drawGenie(canvas, mesh, b, d, contentAlpha); return }
+        // The container's box: the card's own colour under the fade-through.
+        if (boxK > 0f) {
+            paint.color = shownColor
+            paint.alpha = (boxK * 255).roundToInt()
+            canvas.drawRect(l, t, l + w, t + h, paint)
+        }
         if (b != null) {
             if (contentAlpha > 0) {
                 val k = fadeK()
@@ -165,10 +215,60 @@ class CardView(context: Context) : View(context) {
                 }
                 drawCover(canvas, b, (contentAlpha * k).roundToInt())
             }
-            if (d != null && iconMix > 0f) drawIcon(canvas, d, min(w, h), (iconMix * 255).roundToInt())
+            if (d != null && iconMix > 0f) {
+                val a = (iconMix * iconK * 255).roundToInt()
+                if (iconFrame.isEmpty) drawIcon(canvas, d, min(w, h), a) else drawIcon(canvas, d, iconFrame.width(), a, iconFrame.centerX(), iconFrame.centerY())
+            }
             return
         }
         drawLaunchScreen(canvas, l, t, contentAlpha, d)
+    }
+
+    /**
+     * The genie's picture: the app (its snapshot, else its launch-screen colour) through the mesh, blended by [genieK] into
+     * the frame's plain grid; its icon at [iconFrame] while it shows.
+     */
+    private fun drawGenie(canvas: Canvas, mesh: FloatArray, b: Bitmap?, d: Drawable?, contentAlpha: Int) {
+        val cols = dev.launcher.app.motion.AppStyles.GENIE_COLS
+        val rows = dev.launcher.app.motion.AppStyles.GENIE_ROWS
+        val k = genieK.coerceIn(0f, 1f)
+        val l = cx - w / 2
+        val t = cy - h / 2
+        var i = 0
+        for (r in 0..rows) for (c in 0..cols) {
+            val px = l + w * c / cols
+            val py = t + h * r / rows
+            genieVerts[i] = px + (mesh[i] - px) * k
+            genieVerts[i + 1] = py + (mesh[i + 1] - py) * k
+            i += 2
+        }
+        if (contentAlpha > 0) {
+            if (b != null) {
+                paint.alpha = contentAlpha
+                canvas.drawBitmapMesh(b, cols, rows, genieVerts, 0, null, 0, paint)
+            } else {
+                // The launch screen: its colour filling the mesh's outline, its icon at the mesh's middle.
+                geniePath.rewind()
+                val stride = (cols + 1) * 2
+                geniePath.moveTo(genieVerts[0], genieVerts[1])
+                for (r in 0..rows) geniePath.lineTo(genieVerts[r * stride], genieVerts[r * stride + 1])
+                for (r in rows downTo 0) geniePath.lineTo(genieVerts[r * stride + cols * 2], genieVerts[r * stride + cols * 2 + 1])
+                geniePath.close()
+                paint.color = shownColor
+                paint.alpha = contentAlpha
+                canvas.drawPath(geniePath, paint)
+                if (d != null) {
+                    val mid = (rows / 2) * stride + (cols / 2) * 2
+                    val rowW = genieVerts[(rows / 2) * stride + cols * 2] - genieVerts[(rows / 2) * stride]
+                    val size = max(minIconSize, rowW * 0.3f).coerceAtMost(rowW.coerceAtLeast(1f))
+                    d.setBounds((genieVerts[mid] - size / 2).roundToInt(), (genieVerts[mid + 1] - size / 2).roundToInt(),
+                        (genieVerts[mid] + size / 2).roundToInt(), (genieVerts[mid + 1] + size / 2).roundToInt())
+                    d.alpha = contentAlpha
+                    d.draw(canvas)
+                }
+            }
+        }
+        if (d != null && iconMix > 0f && !iconFrame.isEmpty) drawIcon(canvas, d, iconFrame.width(), (iconMix * iconK * 255).roundToInt(), iconFrame.centerX(), iconFrame.centerY())
     }
 
     /**
@@ -193,9 +293,22 @@ class CardView(context: Context) : View(context) {
             src.set(src.left + (f.left * bs - src.left) * k, src.top + (f.top * bs - src.top) * k,
                 src.right + (f.right * bs - src.right) * k, src.bottom + (f.bottom * bs - src.bottom) * k)
         }
-        val s = max(w / max(1f, src.width()), h / max(1f, src.height()))
+        var s = max(w / max(1f, src.width()), h / max(1f, src.height()))
+        var x = cx
+        var y = cy
+        val full = contentFullK
+        if (full > 0f && width > 0) {
+            // As the app is on the screen (a circle reveal's window onto it), on the way from covering the frame.
+            val g = contentFrame
+            val gw = if (g.isEmpty) width.toFloat() else g.width()
+            val gh = if (g.isEmpty) height.toFloat() else g.height()
+            val fs = max(gw / max(1f, src.width()), gh / max(1f, src.height()))
+            s += (fs - s) * full
+            x += ((if (g.isEmpty) width / 2f else g.centerX()) - x) * full
+            y += ((if (g.isEmpty) height / 2f else g.centerY()) - y) * full
+        }
         canvas.save()
-        canvas.translate(cx, cy)
+        canvas.translate(x, y)
         canvas.scale(s, s)
         paint.alpha = alpha
         canvas.drawBitmap(b, -src.centerX(), -src.centerY(), paint)
@@ -210,22 +323,44 @@ class CardView(context: Context) : View(context) {
         if (contentAlpha > 0) {
             paint.color = shownColor
             paint.alpha = contentAlpha
+            // (A circle reveal's window shows the whole screen's colour; the frame is the window.)
             canvas.drawRect(l, t, l + w, t + h, paint)
         }
-        if (d != null) {
+        if (d == null) return
+        val fullK = contentFullK
+        if (iconFrame.isEmpty && fullK <= 0f) {
             val full = min(w, h)
             val splash = max(minIconSize, full * 0.3f).coerceAtMost(full)
-            drawIcon(canvas, d, splash + (full - splash) * iconMix, 255)
+            // The icon it starts as (at [iconK]) and the launch screen's own (with the app, at [contentK]).
+            val a = iconMix * iconK + (1f - iconMix) * contentK
+            drawIcon(canvas, d, splash + (full - splash) * iconMix, (a * 255).roundToInt())
+            return
+        }
+        // A style's: the icon it comes out of where it is, and the launch screen's own where the app's screen is (a circle
+        // reveal's window onto it), each fading as the other comes.
+        if (iconMix > 0f) {
+            val a = (iconMix * iconK * 255).roundToInt()
+            if (iconFrame.isEmpty) drawIcon(canvas, d, min(w, h), a) else drawIcon(canvas, d, iconFrame.width(), a, iconFrame.centerX(), iconFrame.centerY())
+        }
+        val la = (1f - iconMix * (1f - fullK.coerceIn(0f, 1f))) * contentK
+        if (la > 0f) {
+            val g = contentFrame
+            val gx = if (g.isEmpty) width / 2f else g.centerX()
+            val gy = if (g.isEmpty) height / 2f else g.centerY()
+            val gs = if (g.isEmpty) min(width, height).toFloat() else min(g.width(), g.height())
+            val base = min(w, h) + (gs - min(w, h)) * fullK
+            val splash = max(minIconSize, base * 0.3f).coerceAtMost(base)
+            drawIcon(canvas, d, splash, (la * 255).roundToInt(), cx + (gx - cx) * fullK, cy + (gy - cy) * fullK)
         }
     }
 
     private val iconRect = android.graphics.RectF()
 
-    private fun drawIcon(canvas: Canvas, d: Drawable, size: Float, alpha: Int) {
-        d.setBounds((cx - size / 2).roundToInt(), (cy - size / 2).roundToInt(), (cx + size / 2).roundToInt(), (cy + size / 2).roundToInt())
+    private fun drawIcon(canvas: Canvas, d: Drawable, size: Float, alpha: Int, x: Float = cx, y: Float = cy) {
+        d.setBounds((x - size / 2).roundToInt(), (y - size / 2).roundToInt(), (x + size / 2).roundToInt(), (y + size / 2).roundToInt())
         d.alpha = alpha
         val turn = iconTurn * iconMix
-        if (turn != 0f) { canvas.save(); canvas.rotate(turn, cx, cy) }
+        if (turn != 0f) { canvas.save(); canvas.rotate(turn, x, y) }
         d.draw(canvas)
         if (turn != 0f) canvas.restore()
     }

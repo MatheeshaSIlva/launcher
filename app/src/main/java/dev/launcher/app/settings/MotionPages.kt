@@ -102,6 +102,7 @@ internal fun MomentPageContent(st: Studio, m: Moment) {
         }
         m.character?.let { c -> CharacterSlider(draft, id, c) }
     }
+    if (m.style != null) StyleGroup(m, draft)
     EveryDetail(st, m)
     val changes by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.momentChanges(id, m) } }
     // (It keeps its last count while it folds away.)
@@ -1277,39 +1278,21 @@ private fun PresetCard(p: Design.ThemeInfo, run: Pair<CurveRun, CurveRun>, draft
     val press = animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
     val corner = look.pt(SettingsTokens.TILE_CORNER) * 0.7f
     val unit = look.unit
+    val stage = remember { CardStage() }
     Column(modifier.pressScale { 1f - 0.04f * press.value }
         .pointerInput(p.id) { rowTap({ pressed = it }) { draft.chooseMotion(p.id) } }) {
         Box(Modifier.fillMaxWidth().height(look.dp(84f * unit)).drawBehind {
             val kk = k.value.coerceIn(0f, 1f)
-            drawRoundRect(fill, cornerRadius = CornerRadius(corner))
-            if (kk > 0.001f) drawRoundRect(accent.copy(alpha = accent.alpha * kk), cornerRadius = CornerRadius(corner), style = Stroke(2.5f * unit))
             // The beat: open, rest, close, rest, again.
             val o = openFor.value
             val c = closeFor.value
             val loop = o + PRESET_REST + c + PRESET_REST
             val t = clock.floatValue % loop
-            val v = if (t < o + PRESET_REST) run.first.at(t) else 1f - run.second.at(t - o - PRESET_REST)
-            // The app: out of an icon at the bottom into the card's inside, its colour turning from the icon's into a page's.
-            val inset = 9f * unit
-            val icon = 20f * unit
-            val ix0 = size.width / 2f - icon / 2f
-            val iy0 = size.height - inset - icon - 4f * unit
-            val l = ix0 + (inset - ix0) * v
-            val tp = iy0 + (inset - iy0) * v
-            val r = ix0 + icon + (size.width - inset - ix0 - icon) * v
-            val b = iy0 + icon + (size.height - inset - iy0 - icon) * v
-            val ink = mix(line, accent, kk)
-            val vv = v.coerceIn(0f, 1f)
-            val cr = icon * 0.24f + (corner - inset - icon * 0.24f).coerceAtLeast(0f) * vv
-            drawRoundRect(mix(ink, page, vv), Offset(l, tp), Size(r - l, b - tp), CornerRadius(cr))
-            // The app's first lines, there as it opens.
-            if (vv > 0.3f) {
-                val a = ((vv - 0.3f) / 0.7f)
-                val w = r - l
-                drawRoundRect(ink.copy(alpha = ink.alpha * 0.7f * a), Offset(l + w * 0.1f, tp + (b - tp) * 0.18f), Size(w * 0.42f, 3.4f * unit), CornerRadius(1.7f * unit))
-                drawRoundRect(ink.copy(alpha = ink.alpha * 0.3f * a), Offset(l + w * 0.1f, tp + (b - tp) * 0.42f), Size(w * 0.7f, 3f * unit), CornerRadius(1.5f * unit))
-                drawRoundRect(ink.copy(alpha = ink.alpha * 0.3f * a), Offset(l + w * 0.1f, tp + (b - tp) * 0.6f), Size(w * 0.55f, 3f * unit), CornerRadius(1.5f * unit))
-            }
+            val opening = t < o + PRESET_REST
+            val v = if (opening) run.first.at(t) else 1f - run.second.at(t - o - PRESET_REST)
+            // Its app, opening and going home in the preset's own ways (motion/AppStyles).
+            val style = draft.motionStyle(p.id, if (opening) dev.launcher.app.motion.AppStyles.OPENING else dev.launcher.app.motion.AppStyles.CLOSING)
+            drawStyleArt(stage, corner, unit, fill, line, accent, kk, page, style, opening, v)
         })
         Spacer(Modifier.height(look.dp(8f * unit)))
         BasicText(p.name, style = look.text(SettingsTokens.ROW_DETAIL, mix(look.color(SettingsTokens.ROW_LABEL), accent, k.value.coerceIn(0f, 1f))), maxLines = 1,
@@ -1395,3 +1378,122 @@ private fun Feel(draft: Draft) {
 private fun speedToSlider(speed: Float) = ((kotlin.math.ln(speed) / kotlin.math.ln(2f)) + 1f) / 2f
 
 private fun sliderToSpeed(t: Float) = Draft.snap(Math.pow(2.0, (t * 2f - 1f).toDouble()).toFloat()).coerceIn(MotionAdjust.SPEED_MIN, MotionAdjust.SPEED_MAX)
+
+/**
+ * A card's small app ([AppStyleArt]): its fill and the accent ring (at [ring]), a home of faint icons, and the app opening
+ * ([opening]) or going home in [style] at [v] of its run, its icon a third of the way across the card's bottom row.
+ */
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawStyleArt(
+    stage: CardStage, corner: Float, unit: Float, fill: Color, line: Color, accent: Color, ring: Float, page: Color,
+    style: dev.launcher.app.motion.AppStyle, opening: Boolean, v: Float,
+) {
+    drawRoundRect(fill, cornerRadius = CornerRadius(corner))
+    val inset = 9f * unit
+    val icon = 18f * unit
+    stage.w = size.width - inset * 2f
+    stage.h = size.height - inset * 2f
+    stage.corner = (corner - inset).coerceAtLeast(2f * unit)
+    val ix = (stage.w * 0.36f - icon / 2f)
+    val iy = stage.h - icon - 4f * unit
+    stage.icon.set(ix, iy, ix + icon, iy + icon)
+    stage.fill = fill.toArgb()
+    stage.faint = line.copy(alpha = line.alpha * 0.22f).toArgb()
+    stage.accent = mix(line, accent, ring).toArgb()
+    stage.pageColor = page.toArgb()
+    stage.ink = mix(line, accent, ring).toArgb()
+    drawIntoCanvas { cv ->
+        val nc = cv.nativeCanvas
+        nc.save()
+        stage.path.rewind()
+        stage.path.addRoundRect(0f, 0f, size.width, size.height, corner, corner, android.graphics.Path.Direction.CW)
+        nc.clipPath(stage.path)
+        nc.translate(inset, inset)
+        stage.drawIcons(nc)
+        // (Sliding and fading leave the icon on home.)
+        if (!style.fromIcon) stage.icon(nc, stage.icon.left, stage.icon.top, stage.icon.right, stage.icon.bottom, 1f)
+        AppStyleArt.draw(stage, nc, v, style, opening)
+        nc.restore()
+    }
+    if (ring > 0.001f) drawRoundRect(accent.copy(alpha = accent.alpha * ring), cornerRadius = CornerRadius(corner), style = Stroke(2.5f * unit))
+}
+
+/**
+ * How apps open, or go home (docs/MOTION_STYLES.md): a card per style, each playing it on this moment's curves with the
+ * other half as you have it (an opening style's app goes home your way), the chosen one ringed in the accent; the picture
+ * above plays the chosen one. Chosen by watching, never by name alone. Waits for Apply like the rest.
+ */
+@Composable
+private fun StyleGroup(m: Moment, draft: Draft) {
+    val look = LocalLook.current
+    val key = m.style ?: return
+    val closing = key == dev.launcher.app.motion.AppStyles.CLOSING
+    val id = draft.motionId()
+    val v = look.version
+    val runs by remember(draft, id, v) {
+        androidx.compose.runtime.derivedStateOf {
+            CurveRun.of(draft.motionCurve(id, MotionTokens.APP_OPEN)) to CurveRun.of(draft.motionCurve(id, MotionTokens.APP_CLOSE_SIZE))
+        }
+    }
+    // One clock for every card while the page is in (read in drawing only); a long frame counts as a short one.
+    val clock = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        var last = androidx.compose.runtime.withFrameNanos { it }
+        while (true) {
+            val now = androidx.compose.runtime.withFrameNanos { it }
+            clock.floatValue += ((now - last) / 1e9f).coerceAtMost(LOOP_STEP_MAX)
+            last = now
+        }
+    }
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val gap = look.dp(12f * look.unit)
+    Group("Style", if (closing) "How an app goes home, each its own way. The picture above plays the one you choose."
+        else "How an app opens, each its own way. The picture above plays the one you choose.") {
+        Column(Modifier.fillMaxWidth().padding(pad), verticalArrangement = Arrangement.spacedBy(gap)) {
+            for (row in dev.launcher.app.motion.AppStyle.entries.chunked(2)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                    for (s in row) androidx.compose.runtime.key(s.id) {
+                        StyleCard(s, key, closing, draft, runs, clock, Modifier.weight(1f))
+                    }
+                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StyleCard(s: dev.launcher.app.motion.AppStyle, key: dev.launcher.app.design.ChoiceKey, closing: Boolean, draft: Draft,
+                      runs: Pair<CurveRun, CurveRun>, clock: androidx.compose.runtime.FloatState, modifier: Modifier) {
+    val look = LocalLook.current
+    val accent = look.color(SettingsTokens.ACCENT)
+    val line = look.color(SettingsTokens.ROW_DETAIL_COLOR)
+    val fill = look.color(SettingsTokens.CHIP_FILL)
+    val page = look.color(SettingsTokens.GROUP_FILL).copy(alpha = 1f)
+    val id = draft.motionId()
+    val chosen by remember(draft, id, s, key) { androidx.compose.runtime.derivedStateOf { draft.motionStyle(id, key) == s } }
+    val k = animateFloatAsState(if (chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chosen")
+    var pressed by remember { mutableStateOf(false) }
+    val press = animateFloatAsState(if (pressed) 1f else 0f, look.motion(if (pressed) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
+    val corner = look.pt(SettingsTokens.TILE_CORNER) * 0.7f
+    val unit = look.unit
+    val stage = remember { CardStage() }
+    Column(modifier.pressScale { 1f - 0.04f * press.value }
+        .pointerInput(s.id, id) { rowTap({ pressed = it }) { draft.chooseMotionStyle(id, key, s) } }) {
+        Box(Modifier.fillMaxWidth().height(look.dp(96f * unit)).drawBehind {
+            // The beat: open, rest, home, rest, again; this card's style on its half, the other as you have it.
+            val o = runs.first.duration
+            val c = runs.second.duration
+            val loop = o + PRESET_REST + c + PRESET_REST
+            val t = clock.floatValue % loop
+            val opening = t < o + PRESET_REST
+            val v = if (opening) runs.first.at(t) else 1f - runs.second.at(t - o - PRESET_REST)
+            val style = if (opening != closing) s
+                else draft.motionStyle(id, if (opening) dev.launcher.app.motion.AppStyles.OPENING else dev.launcher.app.motion.AppStyles.CLOSING)
+            drawStyleArt(stage, corner, unit, fill, line, accent, k.value.coerceIn(0f, 1f), page, style, opening, v)
+        })
+        Spacer(Modifier.height(look.dp(8f * unit)))
+        BasicText(if (closing) s.closing else s.opening,
+            style = look.text(SettingsTokens.ROW_DETAIL, mix(look.color(SettingsTokens.ROW_LABEL), accent, k.value.coerceIn(0f, 1f))),
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}

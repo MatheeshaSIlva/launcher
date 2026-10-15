@@ -1,0 +1,54 @@
+{
+ "format": 1,
+ "name": "Calm",
+ "description": "Everything fades, nothing bounces",
+ "author": "Launcher",
+ "version": "0.1",
+ "extends": "ios27",
+ "_about": "Apps fade in and out in place; every spring critically damped and a little slower (iOS's Reduce Motion spirit). Written by tools/design/build_style_presets.py.",
+ "tokens": {
+  "motion.app.close-position": {
+   "spring": [
+    0.46,
+    1.0
+   ],
+   "src": "judged:Calm: with the size"
+  },
+  "motion.app.close-size": {
+   "spring": [
+    0.46,
+    1.0
+   ],
+   "src": "judged:Calm: unhurried, no overshoot"
+  },
+  "motion.app.open": {
+   "spring": [
+    0.5,
+    1.0
+   ],
+   "src": "judged:Calm: unhurried, no overshoot"
+  },
+  "motion.banner.in": {
+   "spring": [
+    0.5,
+    1.0
+   ],
+   "src": "judged:Calm: banners settle without a bounce"
+  },
+  "motion.folder.open": {
+   "spring": [
+    0.45,
+    1.0
+   ],
+   "src": "judged:Calm: folders open without a bounce"
+  },
+  "motion.style.closing": {
+   "choice": "fade",
+   "src": "judged:Calm: the app fades out shrinking a little"
+  },
+  "motion.style.opening": {
+   "choice": "fade",
+   "src": "judged:Calm: the app fades in growing a little (Reduce Motion)"
+  }
+ }
+}

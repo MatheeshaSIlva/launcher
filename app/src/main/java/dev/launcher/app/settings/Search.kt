@@ -100,6 +100,16 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
         // (A moment's own settings rank with the moments; they answer to its name through their place.)
         add("Speed", at, "speed fast faster slow slower quick snappy relaxed", host, page, rank = 1)
         add("Bounce", at, "bounce bouncy spring overshoot lively still", host, page, rank = 1)
+        // How apps open and close: answers to every style's name (a setting: before the moments).
+        m.style?.let { k ->
+            val closing = k == dev.launcher.app.motion.AppStyles.CLOSING
+            val names = dev.launcher.app.motion.AppStyle.entries.joinToString(" ") { (if (closing) it.closing else it.opening) + " " + it.id }
+            add("Style", at, "style styles transition transitions effect $names", host, page, rank = 0)
+            // Each style by its name, found in that group.
+            for (s in dev.launcher.app.motion.AppStyle.entries) {
+                add(if (closing) s.closing else s.opening, "$at › Style", "style transition effect ${s.id}", host, page, anchor = "Style", about = s.about, rank = 0)
+            }
+        }
         m.character?.let { c -> add(c.title, at, "${c.low} ${c.high}", host, page, rank = 1) }
         add("Every detail", at, "every detail animations springs curves", host, page, rank = 1)
         for (k in m.roles) {

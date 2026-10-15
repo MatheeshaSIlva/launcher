@@ -138,6 +138,17 @@ internal fun changesOf(d: Draft, ctx: android.content.Context, only: Part? = nul
                 d.chooseMotionNumber(id, k, own)
             }
         }
+        // Its style (how apps open, how they go home), by name.
+        m.style?.let { k ->
+            if (d.motionChanged(id, k.name)) {
+                val closing = k == dev.launcher.app.motion.AppStyles.CLOSING
+                fun name(v: Value?) = dev.launcher.app.motion.AppStyle.of((v as? Value.Choice)?.option).let { if (closing) it.closing else it.opening }
+                val own = d.motionOwn(id, k.name)
+                add("moment:${m.id}:style", "Style", at, name(own), name(d.motionRaw(id, k.name)), shownAs) {
+                    own?.let { d.chooseMotionValue(id, k.name, it) }
+                }
+            }
+        }
         for (k in m.roles) {
             if (!d.motionChanged(id, k)) continue
             val r = MotionRoles.find(k)?.second ?: continue

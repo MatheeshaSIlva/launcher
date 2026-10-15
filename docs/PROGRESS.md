@@ -2312,3 +2312,36 @@ a late picture fading in, the card catching up, the banner's glass...) follow th
   part's), a dot before each changed row; rows fold in and out as changes come and go (`RevealList`).
 - Seen on the emulator, not from this change: right after a reinstall, the picture of home was half drawn (its lower
   half grey) until home had shown again (home captured mid-start).
+
+## Settings v2, step V4: how apps open and go home (2026-10-15, emulator; S24 not checked yet)
+
+- **Seven styles** (`motion/AppStyles`, `docs/MOTION_STYLES.md`): Zoom from the icon / Shrink into the icon (iOS, as
+  before), Container transform (Material 3: the icon's box becomes the app, the icon fading out early and the app in
+  late; home stays where it is), Slide up / Slide down, Circle reveal (a circle growing from the icon uncovers the app as
+  it is on the screen, the icon fading where it is; going home, the card rounds into a bubble that lands in the icon),
+  Fade and scale, Dolly zoom (home flies toward the icon as the app grows, and back), Genie (the app pours out of its icon
+  through a mesh, the far rows first, and is poured back in, turning into the icon once it is in). All are drawn from the
+  card's springs (frame, corners, icon blend), so grabs, reversals and an app opened mid-close work for every style.
+- **Presets bundle styles**: iOS 27 zoom, Material container, and three new presets: Playful (genie), Calm (fade,
+  nothing bounces), Cinematic (dolly). Tokens `motion.style.opening`/`.closing`; `tools/design/build_style_presets.py`.
+- **Interrupting**: a grabbed card keeps its style's look and gives way to a plain card under the finger on the cancel's
+  curve; the App Switcher waits for that (its deck draws plain cards: the held circle once jumped to a big disc with the
+  app drawn larger). A circle reveal or a genie is grabbed by the plain card it is drawn on, its window or mesh kept on
+  it (first grabbed as the circle's square: "scale 2.80", the card sat still and then shrank). Tapping the icon of a
+  closing app zooms it back out; another app opening during a styled close fades the closing card where it is.
+- **The settings**: Opening apps and Going home have a Style group: a card per style, each playing it with the other half
+  as you have it (an opening style's app goes home your way); the picture of home plays the chosen one; the presets'
+  cards open and close in their own styles. Search finds every style by name ("genie", "circle", "bubble") and lands on
+  the group; Your changes lists a changed style by name ("Zoom from the icon → Genie") with Reset.
+- **Found on the way, older than the styles**:
+  - A close whose fresh picture arrived before the task lookup (the app had changed since its kept picture) had no icon:
+    the card crossfaded into nothing and the real icon popped in once home drew (seen as a gap of ~4 frames at full
+    speed). The card takes its icon as soon as its app is known (`GestureNav.cardKnows`).
+  - Home's idle check ignored the theme reveal: the picture recorded 400 ms after onResume, mid-reveal, missed the items
+    not yet revealed, and showed behind the next close until home settled. The reveal counts as busy now.
+  - Slide and fade (no icon to grow out of) record home at the tap with the icon in (`HomeBridge.atLaunch`), as the zoom
+    records it without; a close into the icon then records its picture once home is out of sight.
+- Checked on the emulator in slow motion (x4), recorded frame by frame: every style opening and going home, a circle
+  reveal and a genie grabbed mid-launch, an app opened during a genie close, a reopening after a bubble close, the
+  settings' style cards, samples, search and Your changes. Smoothness is not judged from the emulator (its recordings
+  drop frames). Not yet on the S24. 118 unit tests.
