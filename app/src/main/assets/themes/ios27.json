@@ -2755,17 +2755,13 @@
    "pt": 44,
    "src": "kit:Apple's Human Interface Guidelines: a control's hit target is at least 44 x 44 pt (Android: 48 dp)"
   },
-  "comp.settings.tile.art": {
-   "pt": 76,
-   "src": "judged:Matheesha (2026-10-15): a motion graphic for each part in place of its symbol, across the tile's top; one column, the scenes wider and taller"
-  },
   "comp.settings.tile.corner": {
    "ref": "comp.settings.group.corner",
    "src": "judged:as the groups"
   },
   "comp.settings.tile.detail": {
-   "ref": "sys.type.caption1",
-   "src": "judged:draft D: what is under it now"
+   "ref": "sys.type.subheadline",
+   "src": "judged:what it holds now, under its name"
   },
   "comp.settings.tile.fill": {
    "ref": "comp.settings.group.fill",
@@ -2776,20 +2772,38 @@
    "src": "judged:draft D"
   },
   "comp.settings.tile.height": {
-   "pt": 116,
-   "src": "judged:draft D"
+   "pt": 112,
+   "src": "judged:the name (up to two lines) and its state beside the window, every card as tall"
+  },
+  "comp.settings.tile.paper": {
+   "light": "#ffffff",
+   "dark": "#ffffff2e",
+   "src": "judged:panels in a window's scene (an app's page, a banner, a folder): white in light, a light veil in dark"
   },
   "comp.settings.tile.tint": {
    "factor": 0,
    "src": "judged:the groups' fill as it is (the part's colour is in its motion graphic)"
   },
   "comp.settings.tile.title": {
-   "ref": "sys.type.headline",
-   "src": "judged:draft D: a tile's name"
+   "ref": "sys.type.title3",
+   "src": "judged:a card's name, the first thing read down the page"
   },
   "comp.settings.tile.title-tint": {
    "factor": 0,
    "src": "judged:names in the label colour, as rows"
+  },
+  "comp.settings.tile.visual": {
+   "factor": 0.44,
+   "src": "judged:Matheesha (2026-10-15): the cards more polished and well thought out: each a name on the left and a window onto its part on the right, the same on every card (its share of the card's width)"
+  },
+  "comp.settings.tile.visual-inset": {
+   "pt": 10,
+   "src": "judged:the window inset evenly from the card's top, right and bottom; its corners concentric with the card's (the card's corner less this), as iOS 27 nests shapes"
+  },
+  "comp.settings.tile.visual-veil": {
+   "light": "#ffffffd6",
+   "dark": "#1c1c1ebd",
+   "src": "judged:the window is the part's colour under this veil: a pastel of it in light, a deep tint in dark"
   },
   "comp.settings.title": {
    "ref": "sys.type.headline",
@@ -3860,6 +3874,10 @@
   "sys.type.title2": {
    "ref": "ref.type.title2.emphasized",
    "src": "kit:text style Title2/Emphasized"
+  },
+  "sys.type.title3": {
+   "ref": "ref.type.title3.emphasized",
+   "src": "kit:text style Title3/Emphasized"
   }
  },
  "materialYou": {

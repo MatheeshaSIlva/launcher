@@ -67,10 +67,14 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`ThemeReveal`). Structure B (V1, 2026-10-15): tiles (`Part`) for Look and Motion (the whole phone), one per part of the
   phone (Home, Apps, App Library, Notifications & Control Center, Status bar: its layout, where it lives, its options, its
   own theme, on its page: `PartPage`) and Phone; more tiles than the sheet shows at rest, so a scroll up lifts the sheet
-  first, then scrolls the tiles (`liftScroll`, `Studio.lifted`). The tiles are solid, as the groups (no glass), one under
-  another as wide as the sheet (Matheesha, 2026-10-15), each with a motion graphic across its top in place of a symbol
-  (`TileArt`: a scene per part laid out for the width it has, on the preset's springs and styles as the draft would apply
-  them, on a clock that runs only while the tiles are in sight). Groups on the sheet take iOS's elevated cell colour (the
+  first, then scrolls the tiles (`liftScroll`, `Studio.lifted`). The tiles are solid cards, as the groups (no glass), one
+  under another as wide as the sheet (Matheesha, 2026-10-15: "more polished and well thought out"): the part's name and
+  what it holds on the left, on the right a window onto the part in its colour (under the theme's veil:
+  `comp.settings.tile.visual*`), inset evenly with corners concentric to the card's, a scene playing in it (`TileArt`, on
+  the preset's springs and styles as the draft would apply them, on a clock that runs only while the cards are in sight).
+  Every scene rests on a whole picture of its part, never an empty window, and plays one act a cycle (`TileArt.CYCLE`),
+  the acts running down the column a beat apart (`STEP`): a card or two moves at a time, and the cards come alive one
+  after another as the page appears. Groups on the sheet take iOS's elevated cell colour (the
   sheet's own grey hid them in dark). Look and Phone push pages one level down (`SubPager`,
   `Sub`: Look's colours, fonts, size; Phone's Developer page). The picture of home (with our status bar drawn on it) takes
   no touches: it zooms to the open part and fades away behind the sheet (`motion.settings.focus`); a finger shows how the

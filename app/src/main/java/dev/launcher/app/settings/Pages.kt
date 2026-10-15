@@ -142,8 +142,11 @@ object SettingsTokens {
     val TILE_CORNER = NumberKey("comp.settings.tile.corner")
     val TILE_HEIGHT = NumberKey("comp.settings.tile.height")
     val TILE_GAP = NumberKey("comp.settings.tile.gap")
-    /** How tall a tile's scene (its motion graphic, TileArt) is. */
-    val TILE_ART = NumberKey("comp.settings.tile.art")
+    /** A card's window onto its part (TileArt): its share of the card's width, its inset, its veil; the scenes' paper. */
+    val TILE_VISUAL = NumberKey("comp.settings.tile.visual")
+    val TILE_VISUAL_INSET = NumberKey("comp.settings.tile.visual-inset")
+    val TILE_VISUAL_VEIL = ColorKey("comp.settings.tile.visual-veil")
+    val TILE_PAPER = ColorKey("comp.settings.tile.paper")
     val TILE_TITLE = TextKey("comp.settings.tile.title")
     val TILE_DETAIL = TextKey("comp.settings.tile.detail")
     val CHIP_FILL = ColorKey("comp.settings.chip.fill")
@@ -1570,7 +1573,7 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
             .onPlaced { st.sheet = it },
     ) {
         MotionSampleLoop(st)
-        val art = rememberArtKit(look.pt(SettingsTokens.TILE_ART))
+        val art = rememberArtKit()
         StartContent(st, g, open, 18f * g.unit, art)
         for (part in Part.entries) GrowingTile(st, part, art)
         for ((i, part) in Part.entries.withIndex()) {
@@ -1769,14 +1772,22 @@ private fun ChangesEntry(st: Studio, open: (Part) -> Unit) {
 }
 
 /**
- * The tiles one under another, each as wide as the sheet: its scene across its top, its name and what it holds under it
- * (Matheesha, 2026-10-15: one column, each designed with its motion graphic).
+ * The cards one under another, each as wide as the sheet (Matheesha, 2026-10-15: one column, "more polished and well
+ * thought out"): every card the same, its name and what it holds on the left, its window onto the part on the right; every
+ * card as tall as the tallest needs and at least the theme's card height, so the column keeps one rhythm.
  */
 @Composable
 private fun TileGrid(st: Studio, open: (Part) -> Unit, art: androidx.compose.runtime.State<ArtKit>) {
     val look = LocalLook.current
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(look.dp(look.pt(SettingsTokens.TILE_GAP)))) {
-        for (part in Part.entries) if (part.tile) Tile(st, part, open, art)
+    val gap = look.pt(SettingsTokens.TILE_GAP)
+    val least = look.pt(SettingsTokens.TILE_HEIGHT)
+    androidx.compose.ui.layout.Layout(content = { for (part in Part.entries) if (part.tile) Tile(st, part, open, art) }) { ms, c ->
+        val w = c.maxWidth
+        val h = maxOf(least, ms.maxOf { it.maxIntrinsicHeight(w).toFloat() }).roundToInt()
+        val placeables = ms.map { it.measure(androidx.compose.ui.unit.Constraints.fixed(w, h)) }
+        layout(w, (placeables.size * h + (placeables.size - 1).coerceAtLeast(0) * gap).roundToInt()) {
+            placeables.forEachIndexed { i, pl -> pl.place(0, (i * (h + gap)).roundToInt()) }
+        }
     }
 }
 
@@ -1810,9 +1821,10 @@ internal fun mix(a: Color, b: Color, t: Float) = Color(
 )
 
 /**
- * One part: its scene (a motion graphic, [TileArt]) over its name and what it holds, on a solid card as the app's groups
- * are (Matheesha, 2026-10-15: the tiles as the rest of the app, not glass). Pressed, it lights as a row does and sinks; it
- * grows into its page.
+ * One part, on a solid card as the app's groups are (Matheesha, 2026-10-15: the cards as the rest of the app, not glass):
+ * its name and what it holds on the left, read down the page; on the right a window onto the part in its colour with a
+ * scene playing in it ([TileArt]), inset evenly, its corners concentric with the card's. Pressed, it lights as a row does
+ * and sinks; it grows into its page.
  */
 @Composable
 private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.compose.runtime.State<ArtKit>) {
@@ -1820,8 +1832,8 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.com
     val c = look.color(part.color)
     val titleTint = Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
     val label = look.color(SettingsTokens.ROW_LABEL)
-    val artH = look.pt(SettingsTokens.TILE_ART)
     val corner = look.pt(SettingsTokens.TILE_CORNER)
+    val share = Design.num(SettingsTokens.TILE_VISUAL).coerceIn(0.2f, 0.7f)
     val fill = tileFill(look, part)
     val pressFill = Color(Appearance.pressFill)
     var pressed by remember { mutableStateOf(false) }
@@ -1829,9 +1841,9 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.com
     val pressIn = look.motion<Float>(MotionTokens.PRESS_IN)
     val pressOut = look.motion<Float>(MotionTokens.PRESS_OUT)
     LaunchedEffect(pressed) { press.animateTo(if (pressed) 1f else 0f, if (pressed) pressIn else pressOut) }
-    Column(
+    Box(
         Modifier
-            .fillMaxWidth()
+            .fillMaxSize()
             .onPlaced { st.tileAt[part] = it }
             .graphicsLayer {
                 val p = st.p.value
@@ -1853,24 +1865,36 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.com
                 val k = press.value
                 if (k > 0.001f) drawRoundRect(pressFill.copy(alpha = pressFill.alpha * k), cornerRadius = r)
             }
-            .pointerInput(part) { rowTap({ pressed = it }) { st.fromRow = null; open(part) } }
-            .padding(look.dp(14f * look.unit)),
+            .pointerInput(part) { rowTap({ pressed = it }) { st.fromRow = null; open(part) } },
     ) {
-        // Its scene across the top, on the art's clock, in a layer of its own (only the scene is drawn again in its frames).
-        Canvas(Modifier.fillMaxWidth().height(look.dp(artH)).graphicsLayer()) {
+        // Its window and the scene in it, on the art's clock, in a layer of its own (only the scene is drawn again in its
+        // frames).
+        Canvas(Modifier.matchParentSize().graphicsLayer()) {
             TileArt.draw(this, part, size.width, size.height, st.artClock.floatValue, art.value, c)
         }
-        Spacer(Modifier.height(look.dp(10f * look.unit)))
-        BasicText(part.title, style = look.text(SettingsTokens.TILE_TITLE, mix(label, c, titleTint)), maxLines = 1,
-            overflow = TextOverflow.Ellipsis, modifier = Modifier.onPlaced { st.tileTitleAt[part] = it })
-        // Read through a derived state where it follows the draft: every step of a slider in Motion changes the draft, and
-        // the tile (out of sight behind the page) composed again with each.
-        val draft = LocalDraft.current
-        val drafted = remember(part, draft, look.version) { androidx.compose.runtime.derivedStateOf { part.detail(draft) } }
-        BasicText(if (part == Part.PHONE) part.detail(draft) else drafted.value, style = tileDetailStyle(look, part),
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.onPlaced { st.tileDetailAt[part] = it })
+        // Its name and what it holds, beside the window, in the middle of the card's height.
+        Column(Modifier
+            .align(Alignment.CenterStart)
+            .fillMaxWidth(1f - share)
+            .padding(start = look.dp(TILE_TEXT_START * look.unit), end = look.dp(TILE_TEXT_END * look.unit),
+                top = look.dp(TILE_TEXT_V * look.unit), bottom = look.dp(TILE_TEXT_V * look.unit))) {
+            BasicText(part.title, style = look.text(SettingsTokens.TILE_TITLE, mix(label, c, titleTint)), maxLines = 2,
+                overflow = TextOverflow.Ellipsis, modifier = Modifier.onPlaced { st.tileTitleAt[part] = it })
+            Spacer(Modifier.height(look.dp(3f * look.unit)))
+            // Read through a derived state where it follows the draft: every step of a slider in Motion changes the draft,
+            // and the card (out of sight behind the page) composed again with each.
+            val draft = LocalDraft.current
+            val drafted = remember(part, draft, look.version) { androidx.compose.runtime.derivedStateOf { part.detail(draft) } }
+            BasicText(if (part == Part.PHONE) part.detail(draft) else drafted.value, style = tileDetailStyle(look, part),
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.onPlaced { st.tileDetailAt[part] = it })
+        }
     }
 }
+
+// A card's text: from its left edge, short of its window, and above and below it (pt).
+private const val TILE_TEXT_START = 18f
+private const val TILE_TEXT_END = 12f
+private const val TILE_TEXT_V = 14f
 
 /** The line under a tile's name: the detail colour, or with names in their part's colour ([SettingsTokens.TILE_TITLE_TINT]) its own. */
 private fun tileDetailStyle(look: Look, part: Part): androidx.compose.ui.text.TextStyle {
@@ -1891,8 +1915,7 @@ private fun GrowingTile(st: Studio, part: Part, art: androidx.compose.runtime.St
     val c = look.color(part.color)
     val fromCorner = look.pt(SettingsTokens.TILE_CORNER)
     val toCorner = look.pt(SettingsTokens.SHEET_CORNER)
-    val pad = 14f * look.unit
-    val artH = look.pt(SettingsTokens.TILE_ART)
+    val share = Design.num(SettingsTokens.TILE_VISUAL).coerceIn(0.2f, 0.7f)
     val titleTint = Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
     val measurer = rememberTextMeasurer()
     val titleStyle = look.text(SettingsTokens.TILE_TITLE, mix(look.color(SettingsTokens.ROW_LABEL), c, titleTint))
@@ -1905,13 +1928,14 @@ private fun GrowingTile(st: Studio, part: Part, art: androidx.compose.runtime.St
         val tile = st.tiles[part] ?: return@Canvas
         // Its name and the line under it where the tile has them, wrapped as there (the measurer keeps its last layouts:
         // measured once per opening).
-        val titleAt = st.tileTitles[part] ?: Rect(tile.left + pad, tile.bottom - pad - 40f * look.unit, tile.right - pad, tile.bottom - pad - 18f * look.unit)
-        // (Within the tile's padding, as the tile lays them out: the line under the name may have changed while the page was
-        // open, and is cut where the tile cuts it.)
-        val inner = androidx.compose.ui.unit.Constraints(maxWidth = (tile.width - 2f * pad).roundToInt().coerceAtLeast(1))
-        val title = measurer.measure(part.title, titleStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = inner)
+        val start = TILE_TEXT_START * look.unit
+        val titleAt = st.tileTitles[part] ?: Rect(tile.left + start, tile.top + tile.height * 0.3f, tile.right, tile.top + tile.height * 0.55f)
+        // (In the card's text column, as the card lays them out: the line under the name may have changed while the page
+        // was open, and is cut where the card cuts it.)
+        val inner = androidx.compose.ui.unit.Constraints(maxWidth = (tile.width * (1f - share) - start - TILE_TEXT_END * look.unit).roundToInt().coerceAtLeast(1))
+        val title = measurer.measure(part.title, titleStyle, maxLines = 2, overflow = TextOverflow.Ellipsis, constraints = inner)
         val detailAt = st.tileDetails[part]
-        val detail = if (detailAt == null) null else measurer.measure(part.detail(draft), detailStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = inner)
+        val detail = if (detailAt == null) null else measurer.measure(part.detail(draft), detailStyle, maxLines = 2, overflow = TextOverflow.Ellipsis, constraints = inner)
         // From the size the tile sank to when pressed (it springs back out as it grows).
         val pressed = st.press.getValue(part).value
         val sunk = 0.04f * pressed
@@ -1929,8 +1953,9 @@ private fun GrowingTile(st: Studio, part: Part, art: androidx.compose.runtime.St
         if (pressed > 0.001f) drawRoundRect(pressFill.copy(alpha = pressFill.alpha * pressed * colour), r.topLeft, r.size, CornerRadius(corner))
         val content = (1f - p / 0.35f).coerceIn(0f, 1f)
         if (content > 0f) {
-            translate(r.left + pad, r.top + pad) {
-                TileArt.draw(this, part, tile.width - 2f * pad, artH, st.artClock.floatValue, art.value, c, content)
+            // Its window as the card had it, riding along with the card's top left.
+            translate(r.left, r.top) {
+                TileArt.draw(this, part, tile.width, tile.height, st.artClock.floatValue, art.value, c, content)
             }
             drawText(title, topLeft = Offset(r.left + (titleAt.left - tile.left), r.top + (titleAt.top - tile.top)), alpha = content)
             if (detail != null && detailAt != null) drawText(detail, topLeft = Offset(r.left + (detailAt.left - tile.left), r.top + (detailAt.top - tile.top)), alpha = content)

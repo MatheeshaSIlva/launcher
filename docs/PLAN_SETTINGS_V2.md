@@ -195,6 +195,12 @@ is moving them into the new pages and writing the moments.
    settings: yes?
 3. Testing tools behind the build number (seven taps), or keep them on Phone?
 
+4. (2026-10-15, Matheesha) Does the start page need the live picture of home, or motion graphics there and the live
+   view only where a layout is customised? Recommended: the latter (`docs/PROGRESS.md`, "The cards, polished"): the start
+   page all cards (about six in sight instead of two), the picture of home only on the pages where a change is judged on
+   your own home (Home, Apps, App Library, Notifications & Control Center, Status bar, Look), grown out of the card's
+   window as the page opens.
+
 ## Decided (Matheesha, 2026-10-15)
 
 1. Structure **B**: Look and Motion for the whole phone, then one tile per part, then Phone.

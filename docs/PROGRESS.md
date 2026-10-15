@@ -2390,3 +2390,41 @@ Center and its brightness slider beside it; the status bar end to end with a not
 time; Phone's shield beside its three rows. On the S24 at rest the scenes cost 0 missed refreshes (GPU 5.1 ms a frame),
 scrolling 0. A tile opening misses 1-2 refreshes ~200 ms in (Look: 0, 1, 1); the previous build, two across, measured
 0, 2, 2 the same way: older than this change, not looked into yet.
+
+## The cards, polished (2026-10-15, emulator; S24 not checked yet)
+
+Matheesha, after the one-column cards: "I just wanted the cards to feel more polished and well thought out. current design
+doesn't really deliver that" (a Pinterest video of a food app's menu as the example of the card look: a bold name on one
+side, a large picture on the other, every card the same; not its colours, not its transitions).
+
+- **One structure for every card**: the part's name (Title 3, emphasized) and what it holds (Subheadline) on the left,
+  centred on the card's height; on the right a window onto the part in its colour, inset evenly (10 pt) with corners
+  concentric to the card's (26 less 10), as iOS 27 nests shapes. The window is the part's colour under the theme's veil
+  (`comp.settings.tile.visual-veil`: a pastel in light, a deep tint in dark), its panels the theme's paper
+  (`comp.settings.tile.paper`). A first try ran the window off the card's right and bottom edges, as the video's pictures
+  run off theirs: at full size its left edge met the card's bottom in a hard corner and its top ran into the card's corner
+  arc (a rectangle cut by a corner looks like a mistake; the video's pictures are round plates).
+- **Every scene rests on a whole picture of its part and plays one act a cycle** (6 s), the acts running down the column
+  0.75 s apart, so a card or two moves at a time and the page comes alive card by card as it appears. Before, all eight
+  moved at once and some passed through empty moments (the App Library's folders emptied, the status bar faded out, Home's
+  icons left). The acts: Look's switch turns the little screen dark and the icons to the next colours, and back; Motion
+  opens an app in the preset's style, a moment, and closes it in its closing style; Home wiggles and two icons change
+  places (back again next time); the App Switcher's deck turns a card; the App Library's apps turn round their folders,
+  folder after folder; a banner drops onto Notification Center as two controls turn on and the brightness rises; the
+  status bar's minute rolls on and a notification's icon arrives and goes; Phone's shield sends out a pulse that its
+  ticks answer.
+- The scenes are laid out for the window they have (hundredths of its height); words in them (the time, "Aa") scale with
+  a taller card.
+- Checked on the emulator in light and dark, recorded; a card growing into its page and back carries its window and words
+  with it. Not yet measured on the S24 (it was locked). 118 unit tests.
+- Seen again, not from this change: right after a reinstall and an appearance switch, the settings' picture of home was
+  drawn only in its upper half until home had shown again.
+
+**Open question (Matheesha): the live picture of home on the start page.** Recommended: take it off the start page and
+show it only where a change is judged on your own home. On the start page it repeats what the cards now show, takes the
+top half of the screen (two cards in sight at rest instead of about six), is the heaviest thing on the page (home recorded
+into a picture each time the settings come up) and the most fragile (the half-drawn picture above). Where it earns its
+place is a part's page while you change its layout, grid, placement or look: there it would grow out of the card's
+window as the page opens (the card's scene turning into the real thing), zoomed to that part. Motion's moments would play
+on a stage like the cards' (as the opening and closing styles already do), Phone needs none. To redesign with it: the
+slide from home's edit menu into the settings (home shrinking into the picture), perhaps into the Home card's window.
