@@ -122,9 +122,8 @@ object SettingsTokens {
     val SHEET_INSET = NumberKey("comp.settings.sheet.inset")
     val SHEET_REST = NumberKey("comp.settings.sheet.rest")
     val SHEET_OPEN = NumberKey("comp.settings.sheet.open")
-    /** 1: the overview is glass over the blurred wallpaper (iOS 27's Liquid Glass); 0: coloured tiles on a solid sheet. */
+    /** 1: the page behind the sheet is the wallpaper, blurred (iOS 27's Liquid Glass); 0: the theme's background colour. */
     val GLASS = NumberKey("comp.settings.glass")
-    val TILE_MATERIAL = MaterialKey("comp.settings.tile.material")
     val SEGMENT_TRACK = ColorKey("comp.settings.segment.track")
     val SEGMENT_THUMB = ColorKey("comp.settings.segment.thumb")
     val SEGMENT_HEIGHT = NumberKey("comp.settings.segment.height")
@@ -134,16 +133,14 @@ object SettingsTokens {
     /** The least a control's touch area is, either way (Apple: 44 pt; Android: 48 dp). */
     val TARGET = NumberKey("comp.settings.target")
     val CHIP_HEIGHT = NumberKey("comp.settings.chip.height")
-    val CHIP_MATERIAL = MaterialKey("comp.settings.chip.material")
     val TILE_FILL = ColorKey("comp.settings.tile.fill")
     val TILE_TINT = NumberKey("comp.settings.tile.tint")
     val TILE_TITLE_TINT = NumberKey("comp.settings.tile.title-tint")
     val TILE_CORNER = NumberKey("comp.settings.tile.corner")
     val TILE_HEIGHT = NumberKey("comp.settings.tile.height")
     val TILE_GAP = NumberKey("comp.settings.tile.gap")
-    val TILE_SYMBOL = NumberKey("comp.settings.tile.symbol")
-    val TILE_SYMBOL_CORNER = NumberKey("comp.settings.tile.symbol-corner")
-    val TILE_SYMBOL_COLOR = ColorKey("comp.settings.tile.symbol-color")
+    /** How tall a tile's scene (its motion graphic, TileArt) is. */
+    val TILE_ART = NumberKey("comp.settings.tile.art")
     val TILE_TITLE = TextKey("comp.settings.tile.title")
     val TILE_DETAIL = TextKey("comp.settings.tile.detail")
     val CHIP_FILL = ColorKey("comp.settings.chip.fill")
@@ -188,15 +185,15 @@ object SettingsTokens {
  * ([element]: its layout, where it lives, its options and its own theme, all on its page), and Phone. Each has its name, its
  * colour and its symbol.
  */
-internal enum class Part(val title: String, val color: ColorKey, val symbol: Int, val element: Element? = null) {
-    LOOK("Look", ColorKey("comp.settings.color.look"), R.drawable.sym_palette),
-    MOTION("Motion", ColorKey("comp.settings.color.motion"), R.drawable.sym_spring),
-    HOME("Home", ColorKey("comp.settings.color.home"), R.drawable.sym_home, Element.HOME),
-    APPS("Apps", ColorKey("comp.settings.color.apps"), R.drawable.sym_recents, Element.RECENTS),
-    LIBRARY("App Library", ColorKey("comp.settings.color.library"), R.drawable.sym_apps, Element.DRAWER),
-    SHADE("Notifications & Control Center", ColorKey("comp.settings.color.shade"), R.drawable.sym_bell, Element.SHADE),
-    STATUS_BAR("Status bar", ColorKey("comp.settings.color.statusbar"), R.drawable.sym_statusbar, Element.STATUS_BAR),
-    PHONE("Phone", ColorKey("comp.settings.color.phone"), R.drawable.sym_shield),
+internal enum class Part(val title: String, val color: ColorKey, val element: Element? = null) {
+    LOOK("Look", ColorKey("comp.settings.color.look")),
+    MOTION("Motion", ColorKey("comp.settings.color.motion")),
+    HOME("Home", ColorKey("comp.settings.color.home"), Element.HOME),
+    APPS("Apps", ColorKey("comp.settings.color.apps"), Element.RECENTS),
+    LIBRARY("App Library", ColorKey("comp.settings.color.library"), Element.DRAWER),
+    SHADE("Notifications & Control Center", ColorKey("comp.settings.color.shade"), Element.SHADE),
+    STATUS_BAR("Status bar", ColorKey("comp.settings.color.statusbar"), Element.STATUS_BAR),
+    PHONE("Phone", ColorKey("comp.settings.color.phone")),
 }
 
 /** What a part holds (with the changes waiting to be applied), in a line under its name on the tile. */
@@ -541,6 +538,8 @@ internal class Studio(
     val tileDetailAt = HashMap<Part, LayoutCoordinates>()
     /** How far each tile is pressed in (the growing one starts from the size it sank to); read in drawing only. */
     val press = Part.entries.associateWith { Animatable(0f) }
+    /** The tiles' scenes' clock (s): it runs only while they are in sight (StartContent), so a scene never jumps. */
+    val artClock = androidx.compose.runtime.mutableFloatStateOf(0f)
     var sheet: LayoutCoordinates? = null
     /** How many pages are built (ahead of time, one a frame, so opening one never builds it). */
     var built by mutableIntStateOf(0)
@@ -1523,8 +1522,9 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
                 bottomStart = look.dp(corner - below), bottomEnd = look.dp(corner - below)))
             .onPlaced { st.sheet = it },
     ) {
-        StartContent(st, g, open, 18f * g.unit)
-        for (part in Part.entries) GrowingTile(st, part)
+        val art = rememberArtKit(look.pt(SettingsTokens.TILE_ART))
+        StartContent(st, g, open, 18f * g.unit, art)
+        for (part in Part.entries) GrowingTile(st, part, art)
         for ((i, part) in Part.entries.withIndex()) {
             if (st.built > i) PageLayer(st, g, part, close)
         }
@@ -1543,18 +1543,46 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
  * last ones clear the Apply bar.
  */
 @Composable
-private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: Float) {
+private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: Float, art: androidx.compose.runtime.State<ArtKit>) {
     val look = LocalLook.current
     val m = look.dp(SettingsTokens.MARGIN)
     val bar = st.bar
     val bandPaint = remember { androidx.compose.ui.graphics.Paint() }
+    // The scenes' clock runs while the tiles are in sight: not under a page at rest, not with the settings away or covered by
+    // home's picture. A long frame counts as a short one (a stall pauses the scenes, never makes them jump).
+    val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
+    val resumed = remember { mutableStateOf(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
+    androidx.compose.runtime.DisposableEffect(lifecycle) {
+        val o = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) resumed.value = true
+            else if (e == androidx.lifecycle.Lifecycle.Event.ON_PAUSE) resumed.value = false
+        }
+        lifecycle.addObserver(o)
+        onDispose { lifecycle.removeObserver(o) }
+    }
+    val inSight = remember(st) {
+        androidx.compose.runtime.derivedStateOf {
+            resumed.value && st.entry.enter.floatValue > 0f && !(st.open != null && !st.p.isRunning && st.p.value >= 1f)
+        }
+    }
+    LaunchedEffect(st) {
+        androidx.compose.runtime.snapshotFlow { inSight.value }.collectLatest { on ->
+            if (!on) return@collectLatest
+            var last = androidx.compose.runtime.withFrameNanos { it }
+            while (true) {
+                val now = androidx.compose.runtime.withFrameNanos { it }
+                st.artClock.floatValue += ((now - last) / 1e9f).coerceAtMost(LOOP_STEP_MAX)
+                last = now
+            }
+        }
+    }
     // (The tiles dissolve under the sheet's top once they scroll in it, not while the sheet only rises.)
     Box(Modifier.fillMaxSize().topFade(st.start, g.unit, fadePx, bandPaint) { contentOffset(st.start, g.liftRoom(bar.value)) }) {
         Column(Modifier.fillMaxSize()
             .liftScroll(st.start, { g.liftRoom(bar.value) }) { bar.value * g.barRoom }
             .padding(start = m, end = m)) {
             Spacer(Modifier.height(look.dp(26f * g.unit)))
-            TileGrid(st, open)
+            TileGrid(st, open, art)
             Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset)))
         }
     }
@@ -1565,11 +1593,11 @@ private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: 
  * lines, its row as tall as the others).
  */
 @Composable
-private fun TileGrid(st: Studio, open: (Part) -> Unit) {
+private fun TileGrid(st: Studio, open: (Part) -> Unit, art: androidx.compose.runtime.State<ArtKit>) {
     val look = LocalLook.current
     val gap = look.pt(SettingsTokens.TILE_GAP)
     val least = look.pt(SettingsTokens.TILE_HEIGHT)
-    androidx.compose.ui.layout.Layout(content = { for (part in Part.entries) Tile(st, part, open) }) { ms, c ->
+    androidx.compose.ui.layout.Layout(content = { for (part in Part.entries) Tile(st, part, open, art) }) { ms, c ->
         val w = ((c.maxWidth - gap) / 2f).toInt().coerceAtLeast(0)
         val h = maxOf(least, ms.maxOf { it.maxIntrinsicHeight(w).toFloat() }).roundToInt()
         val placeables = ms.map { it.measure(androidx.compose.ui.unit.Constraints.fixed(w, h)) }
@@ -1589,38 +1617,7 @@ internal fun Modifier.pressScale(scale: () -> Float): Modifier = drawWithContent
     if (s == 1f) drawContent() else scale(s) { this@drawWithContent.drawContent() }
 }
 
-/**
- * This element as glass [key] (corner [cornerPx]) where it is on screen now: its place is read again whenever it draws, and
- * it draws again whenever [moving] changes (the sheet's spring): a glass that kept the place it rested at showed the wrong
- * part of the wallpaper while the sheet moved.
- */
-private fun Modifier.movingGlass(key: MaterialKey, cornerPx: Float, press: () -> Float, under: List<dev.launcher.app.design.Fill>,
-                                 visible: () -> Float = { 1f }, moving: () -> Float?): Modifier = composed {
-    val look = LocalLook.current
-    val at = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
-    val rect = remember { android.graphics.RectF() }
-    this
-        .onPlaced { at[0] = it }
-        .drawBehind {
-            moving()
-            // Not seen (faded by its layer as a page grows over it): not drawn (it is drawn again when it comes back).
-            if (visible() <= 0.003f) return@drawBehind
-            val co = at[0]?.takeIf { it.isAttached } ?: return@drawBehind
-            val o = co.positionInWindow()
-            rect.set(0f, 0f, size.width, size.height)
-            drawIntoCanvas { look.drawGlass(it.nativeCanvas, key, rect, cornerPx, o.x, o.y, press(), under = under) }
-        }
-}
-
-/** What glass on the panel shows through: the panel's own fill over the page (the blurred wallpaper). */
-private fun panelUnder(look: Look): List<dev.launcher.app.design.Fill> {
-    val c = look.color(SettingsTokens.SHEET_FILL).toArgb()
-    val a = ((c ushr 24) and 0xFF) / 255f
-    val opaque = c or (0xFF shl 24)
-    return listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(opaque, opaque), a, a, dev.launcher.app.design.Blend.NORMAL))
-}
-
-/** A tile's fill: its colour by the theme's tint over the tile's own fill. */
+/** A tile's fill: its colour by the theme's tint over the tile's own fill (the groups' fill in the themes: one look). */
 private fun tileFill(look: Look, part: Part): Color {
     val base = look.color(SettingsTokens.TILE_FILL)
     val c = look.color(part.color)
@@ -1640,15 +1637,21 @@ internal fun mix(a: Color, b: Color, t: Float) = Color(
     blue = a.blue + (b.blue - a.blue) * t, alpha = a.alpha + (b.alpha - a.alpha) * t,
 )
 
-/** One part: its symbol on its colour, its name and what it holds; it sinks when pressed and grows into its page. */
+/**
+ * One part: its scene (a motion graphic, [TileArt]) over its name and what it holds, on a solid card as the app's groups
+ * are (Matheesha, 2026-10-15: the tiles as the rest of the app, not glass). Pressed, it lights as a row does and sinks; it
+ * grows into its page.
+ */
 @Composable
-private fun Tile(st: Studio, part: Part, open: (Part) -> Unit) {
+private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.compose.runtime.State<ArtKit>) {
     val look = LocalLook.current
     val c = look.color(part.color)
-    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
-    val titleTint = if (glass) 0f else Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
+    val titleTint = Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
     val label = look.color(SettingsTokens.ROW_LABEL)
-    val symbol = look.pt(SettingsTokens.TILE_SYMBOL)
+    val artH = look.pt(SettingsTokens.TILE_ART)
+    val corner = look.pt(SettingsTokens.TILE_CORNER)
+    val fill = tileFill(look, part)
+    val pressFill = Color(Appearance.pressFill)
     var pressed by remember { mutableStateOf(false) }
     val press = st.press.getValue(part)
     val pressIn = look.motion<Float>(MotionTokens.PRESS_IN)
@@ -1671,21 +1674,20 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit) {
                 }
             }
             .pressScale { 1f - 0.04f * press.value }
-            // (Its glass drawn again whenever it moves on screen: a page opening, home sliding in, the tiles scrolling, the
-            // sheet rising for the Apply bar.)
-            .then(if (glass) Modifier.movingGlass(SettingsTokens.TILE_MATERIAL, look.pt(SettingsTokens.TILE_CORNER), { press.value }, panelUnder(look),
-                { if (st.open == part) (if (st.p.value > 0f) 0f else 1f) else (1f - st.p.value * 1.8f).coerceIn(0f, 1f) }) {
-                    st.p.value + st.entry.enter.floatValue + st.start.offset + st.bar.value }
-                else Modifier.background(tileFill(look, part), RoundedCornerShape(look.dp(SettingsTokens.TILE_CORNER))))
+            .drawBehind {
+                val r = CornerRadius(corner)
+                drawRoundRect(fill, cornerRadius = r)
+                val k = press.value
+                if (k > 0.001f) drawRoundRect(pressFill.copy(alpha = pressFill.alpha * k), cornerRadius = r)
+            }
             .pointerInput(part) { rowTap({ pressed = it }) { open(part) } }
             .padding(look.dp(14f * look.unit)),
     ) {
-        // Glass: the symbol alone in the label's colour (no coloured square), the names in the labels' colours.
-        Box(Modifier.size(look.dp(symbol)).then(if (glass) Modifier else Modifier.background(c, RoundedCornerShape(look.dp(SettingsTokens.TILE_SYMBOL_CORNER)))),
-            contentAlignment = if (glass) Alignment.CenterStart else Alignment.Center) {
-            Image(painterResource(part.symbol), null, colorFilter = ColorFilter.tint(if (glass) label else look.color(SettingsTokens.TILE_SYMBOL_COLOR)),
-                modifier = Modifier.size(look.dp(symbol * if (glass) 0.8f else 0.6f)))
+        // Its scene, on the art's clock, in a layer of its own (only the scene is drawn again in each of its frames).
+        Canvas(Modifier.fillMaxWidth().height(look.dp(artH)).graphicsLayer()) {
+            TileArt.draw(this, part, size.width, size.height, st.artClock.floatValue, art.value, c)
         }
+        Spacer(Modifier.height(look.dp(6f * look.unit)))
         Spacer(Modifier.weight(1f))
         // (A long name in two lines: every tile is then as tall as it needs, TileGrid.)
         BasicText(part.title, style = look.text(SettingsTokens.TILE_TITLE, mix(label, c, titleTint)), maxLines = 2,
@@ -1699,35 +1701,28 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit) {
     }
 }
 
-/** The line under a tile's name: the detail colour, or with the tiles in their colours (no glass) its own, a little faded. */
+/** The line under a tile's name: the detail colour, or with names in their part's colour ([SettingsTokens.TILE_TITLE_TINT]) its own. */
 private fun tileDetailStyle(look: Look, part: Part): androidx.compose.ui.text.TextStyle {
-    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
-    val titleTint = if (glass) 0f else Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
+    val titleTint = Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
     val detail = look.color(SettingsTokens.ROW_DETAIL_COLOR)
     return look.text(SettingsTokens.TILE_DETAIL, mix(detail, look.color(part.color), titleTint).copy(alpha = if (titleTint > 0f) 0.8f else detail.alpha))
 }
 
 /**
- * The open tile growing into the sheet (and back): its shape from the tile's bounds to the sheet's, its colour fading
- * into the sheet's as it grows; its symbol and name ride along and fade as the page arrives.
+ * The open tile growing into the sheet (and back): its shape from the tile's bounds to the sheet's, its fill (lit as the
+ * press left it) fading into the sheet's as it grows; its scene, name and line ride along and fade as the page arrives.
  */
 @Composable
-private fun GrowingTile(st: Studio, part: Part) {
+private fun GrowingTile(st: Studio, part: Part, art: androidx.compose.runtime.State<ArtKit>) {
     val look = LocalLook.current
-    val glass = Design.num(SettingsTokens.GLASS) > 0.5f
     val bg = tileFill(look, part)
+    val pressFill = Color(Appearance.pressFill)
     val c = look.color(part.color)
-    val label = look.color(SettingsTokens.ROW_LABEL)
-    val glassRect = remember { android.graphics.RectF() }
-    val under = panelUnder(look)
     val fromCorner = look.pt(SettingsTokens.TILE_CORNER)
     val toCorner = look.pt(SettingsTokens.SHEET_CORNER)
     val pad = 14f * look.unit
-    val symbol = look.pt(SettingsTokens.TILE_SYMBOL)
-    val symbolCorner = look.pt(SettingsTokens.TILE_SYMBOL_CORNER)
-    val glyph = painterResource(part.symbol)
-    val glyphColor = ColorFilter.tint(if (glass) label else look.color(SettingsTokens.TILE_SYMBOL_COLOR))
-    val titleTint = if (glass) 0f else Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
+    val artH = look.pt(SettingsTokens.TILE_ART)
+    val titleTint = Design.num(SettingsTokens.TILE_TITLE_TINT).coerceIn(0f, 1f)
     val measurer = rememberTextMeasurer()
     val titleStyle = look.text(SettingsTokens.TILE_TITLE, mix(look.color(SettingsTokens.ROW_LABEL), c, titleTint))
     val detailStyle = tileDetailStyle(look, part)
@@ -1747,7 +1742,8 @@ private fun GrowingTile(st: Studio, part: Part) {
         val detailAt = st.tileDetails[part]
         val detail = if (detailAt == null) null else measurer.measure(part.detail(draft), detailStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = inner)
         // From the size the tile sank to when pressed (it springs back out as it grows).
-        val sunk = 0.04f * st.press.getValue(part).value
+        val pressed = st.press.getValue(part).value
+        val sunk = 0.04f * pressed
         val from = Rect(tile.left + tile.width * sunk / 2f, tile.top + tile.height * sunk / 2f, tile.right - tile.width * sunk / 2f, tile.bottom - tile.height * sunk / 2f)
         val k = p.coerceIn(0f, 1.05f)
         val r = Rect(
@@ -1756,23 +1752,12 @@ private fun GrowingTile(st: Studio, part: Part) {
         )
         val corner = fromCorner + (toCorner - fromCorner) * k.coerceIn(0f, 1f)
         val colour = (1f - (p - 0.25f) / 0.6f).coerceIn(0f, 1f)
-        if (glass) {
-            // The tile's glass grows with it, at its place over the wallpaper, and gives way to the sheet turning solid.
-            val at = st.sheet?.takeIf { it.isAttached }?.positionInWindow() ?: Offset.Zero
-            glassRect.set(r.left, r.top, r.right, r.bottom)
-            if (colour > 0.003f) drawIntoCanvas { look.drawGlass(it.nativeCanvas, SettingsTokens.TILE_MATERIAL, glassRect, corner, at.x, at.y, alpha = colour, under = under) }
-        } else drawRoundRect(bg.copy(alpha = bg.alpha * colour), r.topLeft, r.size, CornerRadius(corner))
+        drawRoundRect(bg.copy(alpha = bg.alpha * colour), r.topLeft, r.size, CornerRadius(corner))
+        if (pressed > 0.001f) drawRoundRect(pressFill.copy(alpha = pressFill.alpha * pressed * colour), r.topLeft, r.size, CornerRadius(corner))
         val content = (1f - p / 0.35f).coerceIn(0f, 1f)
         if (content > 0f) {
             translate(r.left + pad, r.top + pad) {
-                if (glass) {
-                    with(glyph) { draw(Size(symbol * 0.8f, symbol * 0.8f), alpha = content, colorFilter = glyphColor) }
-                } else {
-                    drawRoundRect(c.copy(alpha = c.alpha * content), Offset.Zero, Size(symbol, symbol), CornerRadius(symbolCorner))
-                    translate(symbol * 0.2f, symbol * 0.2f) {
-                        with(glyph) { draw(Size(symbol * 0.6f, symbol * 0.6f), alpha = content, colorFilter = glyphColor) }
-                    }
-                }
+                TileArt.draw(this, part, tile.width - 2f * pad, artH, st.artClock.floatValue, art.value, c, content)
             }
             drawText(title, topLeft = Offset(r.left + (titleAt.left - tile.left), r.top + (titleAt.top - tile.top)), alpha = content)
             if (detail != null && detailAt != null) drawText(detail, topLeft = Offset(r.left + (detailAt.left - tile.left), r.top + (detailAt.top - tile.top)), alpha = content)

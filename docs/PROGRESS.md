@@ -2251,3 +2251,23 @@ longer a room, and "Your setup"'s chips are gone (the Look and Motion tiles say 
   Notifications & Control Center and Status bar pages with their focus and fingers; Look with each sub-page and the
   colours' three choices; Phone, the seven taps, Developer on and off; Motion and a group page; the edit menu's Home
   Settings in and Back out from a lifted sheet. 107 unit tests.
+
+## The start page's tiles: solid, with motion graphics (2026-10-15, emulator; S24 not checked yet)
+
+Matheesha: "instead of liquid glass tiles, unify the look with the rest of the app and add motion graphics instead of
+icons". The tiles are the groups' solid cards now (`comp.settings.tile.fill` and `.corner` alias the groups'; no tint; names
+in the label colour); pressed, one lights as a row does and sinks. The page behind the sheet stays the blurred wallpaper
+(`comp.settings.glass`), the only glass left on the start page. Gone with the glass: the tiles' and chips' materials and the
+symbol tokens.
+- Each tile's top is a small scene (`settings/TileArt.kt`, 52 pt, `comp.settings.tile.art`): Look's three colours turning
+  round each other (the palette the draft would make), "Aa" in the theme's font and a light/dark switch; Motion's opening
+  as a curve with a dot running it and an app growing (its bounce shows); Home's icons arriving in a wave, wiggling and
+  leaving, the dock under them; Apps' deck turning a card at a time; the App Library's apps flying into their folders;
+  a banner dropping in over Notification Center while two controls light; the status bar's signal and Wi-Fi coming up,
+  the battery charging and the minute rolling on; Phone's shield checking itself with a pulse. Every move is the
+  preset's own spring as the draft would apply it (a preset, speed or bounce chosen in Motion shows on the tiles), a
+  scene that starts again fades out and back in, and the scenes' clock runs only while the tiles are in sight (paused
+  under an open page, with the settings away or home's picture over them; a long frame counts as a short one). Each
+  scene is drawn in a layer of its own; the growing tile draws its scene too, riding along with its name.
+- Dark: the groups were the sheet's own grey (`#1C1C1E` on `#1C1C1E`), so tiles and every page's groups had no edge.
+  They take iOS's elevated cell colour now (`#2C2C2E`, a sheet is an elevated surface); light is unchanged.

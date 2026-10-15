@@ -67,7 +67,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`ThemeReveal`). Structure B (V1, 2026-10-15): tiles (`Part`) for Look and Motion (the whole phone), one per part of the
   phone (Home, Apps, App Library, Notifications & Control Center, Status bar: its layout, where it lives, its options, its
   own theme, on its page: `PartPage`) and Phone; more tiles than the sheet shows at rest, so a scroll up lifts the sheet
-  first, then scrolls the tiles (`liftScroll`, `Studio.lifted`). Look and Phone push pages one level down (`SubPager`,
+  first, then scrolls the tiles (`liftScroll`, `Studio.lifted`). The tiles are solid, as the groups (no glass), each with a
+  motion graphic in place of a symbol (`TileArt`: a small scene per part on the preset's springs as the draft would apply
+  them, on a clock that runs only while the tiles are in sight). Groups on the sheet take iOS's elevated cell colour (the
+  sheet's own grey hid them in dark). Look and Phone push pages one level down (`SubPager`,
   `Sub`: Look's colours, fonts, size; Phone's Developer page). The picture of home (with our status bar drawn on it) takes
   no touches: it zooms to the open part and fades away behind the sheet (`motion.settings.focus`); a finger shows how the
   part is reached. iOS 27's overview: the page is the blurred wallpaper, the panel on it, its buttons clear glass

@@ -323,26 +323,13 @@
    "pt": 0,
    "src": "judged:Graphite: the sheet meets the screen's edges"
   },
-  "comp.settings.tile.fill": {
-   "light": "#ffffffbf",
-   "dark": "#2c2d32ff",
-   "src": "judged:Graphite: neutral tiles"
-  },
   "comp.settings.tile.tint": {
    "factor": 0,
-   "src": "judged:Graphite: no tint, the colour stays on the symbol"
+   "src": "judged:Graphite: no tint (the tiles are the groups' fill)"
   },
   "comp.settings.tile.title-tint": {
    "factor": 0,
    "src": "judged:Graphite: names in the label colour"
-  },
-  "comp.settings.tile.corner": {
-   "pt": 16,
-   "src": "judged:Graphite: tighter corners"
-  },
-  "comp.settings.tile.symbol-corner": {
-   "pt": 9,
-   "src": "judged:Graphite"
   },
   "comp.settings.chip.fill": {
    "light": "#dcdce2",
@@ -369,7 +356,7 @@
   },
   "comp.settings.glass": {
    "factor": 0,
-   "src": "judged:Graphite keeps its coloured tiles on a solid sheet"
+   "src": "judged:Graphite: a solid page behind the sheet"
   }
  }
 }

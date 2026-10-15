@@ -2561,10 +2561,6 @@
    "pt": 34,
    "src": "judged:a chip's capsule (its touch area the target's 44)"
   },
-  "comp.settings.chip.material": {
-   "ref": "sys.material.glass.clear",
-   "src": "judged:as the tiles"
-  },
   "comp.settings.chip.text": {
    "ref": "sys.type.footnote",
    "src": "judged:draft D"
@@ -2619,15 +2615,15 @@
   },
   "comp.settings.glass": {
    "factor": 1,
-   "src": "judged:Matheesha (2026-10-11): the overview's buttons as Liquid Glass (on the panel, over the blurred wallpaper), not coloured cards"
+   "src": "judged:the page behind the sheet: the wallpaper, blurred (Matheesha, 2026-10-11; since 2026-10-15 the tiles on it are solid, as the groups)"
   },
   "comp.settings.group.corner": {
    "ref": "component.card.corner",
    "src": "judged:the theme's card corner"
   },
   "comp.settings.group.fill": {
-   "ref": "ref.color.backgrounds-grouped.secondary",
-   "src": "measured:iOS 27 Settings: solid white groups (#1C1C1E dark), no glass"
+   "ref": "ref.color.backgrounds-grouped.secondary-elevated",
+   "src": "measured:iOS 27 Settings: solid white groups, no glass; on the sheet (an elevated surface) iOS's elevated cells: #2C2C2E in dark (the sheet's #1C1C1E hid them)"
   },
   "comp.settings.hint-color": {
    "ref": "sys.color.label.secondary",
@@ -2759,18 +2755,21 @@
    "pt": 44,
    "src": "kit:Apple's Human Interface Guidelines: a control's hit target is at least 44 x 44 pt (Android: 48 dp)"
   },
+  "comp.settings.tile.art": {
+   "pt": 52,
+   "src": "judged:Matheesha (2026-10-15): a motion graphic for each part in place of its symbol, across the tile's top"
+  },
   "comp.settings.tile.corner": {
-   "pt": 26,
-   "src": "judged:iOS 26/27 grouped corners"
+   "ref": "comp.settings.group.corner",
+   "src": "judged:as the groups"
   },
   "comp.settings.tile.detail": {
    "ref": "sys.type.caption1",
    "src": "judged:draft D: what is under it now"
   },
   "comp.settings.tile.fill": {
-   "light": "#ffffff00",
-   "dark": "#ffffff00",
-   "src": "judged:draft D (iOS 27): a tile is its colour over the sheet"
+   "ref": "comp.settings.group.fill",
+   "src": "judged:Matheesha (2026-10-15): the tiles as the rest of the app, solid as its groups (no glass)"
   },
   "comp.settings.tile.gap": {
    "pt": 10,
@@ -2780,33 +2779,17 @@
    "pt": 116,
    "src": "judged:draft D"
   },
-  "comp.settings.tile.material": {
-   "ref": "sys.material.glass.clear",
-   "src": "judged:clear glass on the light panel: white with its rims and lens (iOS 26's glass buttons over light content); the card glass made for the wallpaper read grey there"
-  },
-  "comp.settings.tile.symbol": {
-   "pt": 34,
-   "src": "judged:draft D: the symbol's square"
-  },
-  "comp.settings.tile.symbol-color": {
-   "color": "#ffffff",
-   "src": "judged:a white symbol on its colour (iOS Settings' icons)"
-  },
-  "comp.settings.tile.symbol-corner": {
-   "pt": 10,
-   "src": "judged:draft D"
-  },
   "comp.settings.tile.tint": {
-   "factor": 0.14,
-   "src": "judged:draft D: how much of its colour a tile takes (iOS 27: a light tint)"
+   "factor": 0,
+   "src": "judged:the groups' fill as it is (the part's colour is in its motion graphic)"
   },
   "comp.settings.tile.title": {
    "ref": "sys.type.headline",
    "src": "judged:draft D: a tile's name"
   },
   "comp.settings.tile.title-tint": {
-   "factor": 1.0,
-   "src": "judged:draft D: a tile's name in its colour (0: the label colour)"
+   "factor": 0,
+   "src": "judged:names in the label colour, as rows"
   },
   "comp.settings.title": {
    "ref": "sys.type.headline",
