@@ -292,12 +292,14 @@ internal class Draft {
     fun motionSpeed(preset: String) = motionNumber(preset, MotionTokens.ADJUST_SPEED)
     fun motionBounce(preset: String) = motionNumber(preset, MotionTokens.ADJUST_BOUNCE)
 
-    /** Role [k] of animation preset [preset] as it would run once applied (yours, at the draft's speed and bounce). */
+    /** Role [k] of animation preset [preset] as it would run once applied (yours, at the draft's speed and bounce, the preset's and its moment's). */
     fun motionCurve(preset: String, k: dev.launcher.app.design.CurveKey): dev.launcher.app.design.Curve {
         val raw = (cell(preset, k.name).value as? dev.launcher.app.design.Value.CurveV)?.curve
             ?: Design.previewCurve(preset, k, edits = preset !in motionCleared, adjusted = false)
             ?: return dev.launcher.app.motion.Motion.role(k)
-        return MotionAdjust.apply(raw, motionSpeed(preset), motionBounce(preset))
+        val m = dev.launcher.app.motion.Moments.of(k.name)
+        return MotionAdjust.apply(raw, MotionAdjust.speed(motionSpeed(preset), m?.let { motionNumber(preset, it.speed) } ?: 1f),
+            MotionAdjust.bounce(motionBounce(preset), m?.let { motionNumber(preset, it.bounce) } ?: 1f))
     }
 
     /** Token [key] of animation preset [preset] as you have it (not at its speed and bounce): this draft's, else yours, else its own. */
@@ -314,23 +316,45 @@ internal class Draft {
     /** Changed here and not applied yet. */
     fun motionPending(preset: String, key: String): Boolean = cell(preset, key).value != null || preset in motionCleared && key in Design.motionEdits(preset)
 
-    /** How many of [preset]'s animations you changed, as it would be applied (its speed and bounce aside). */
-    fun motionRoleChanges(preset: String): Int {
+    /** How many of [preset]'s animations you changed, as it would be applied (its speed and bounce, and its moments', aside). */
+    fun motionRoleChanges(preset: String): Int = changedKeys(preset).count { !isFeel(it) }
+
+    /** How many moments of [preset] you gave a speed or a bounce of their own (each counts once per value). */
+    private fun momentFeelChanges(preset: String): Int = changedKeys(preset).count { isFeel(it) && it !in OVERALL_MOTION }
+
+    private fun changedKeys(preset: String): Set<String> {
         val keys = HashSet<String>()
         if (preset !in motionCleared) keys += Design.motionEdits(preset).keys
         for ((pk, _) in motionEdits) if (pk.first == preset) keys += pk.second
-        return keys.count { it !in OVERALL_MOTION && motionChanged(preset, it) }
+        return keys.filterTo(HashSet()) { it != MotionTokens.DEBUG_SLOW.name && motionChanged(preset, it) }
+    }
+
+    /** A preset's or a moment's own speed or bounce (not one animation's). */
+    private fun isFeel(key: String) = key.startsWith("motion.adjust.")
+
+    /** How many of moment [m]'s values you changed in [preset]: its speed, its bounce, each of its animations. */
+    fun momentChanges(preset: String, m: dev.launcher.app.motion.Moment): Int =
+        (listOf(m.speed.name, m.bounce.name) + m.all).count { motionChanged(preset, it) }
+
+    /** Moment [m] back as [preset] has it (on Apply): its speed, its bounce and every animation of it. */
+    fun resetMoment(preset: String, m: dev.launcher.app.motion.Moment) {
+        for (k in listOf(m.speed.name, m.bounce.name) + m.all) {
+            if (!motionChanged(preset, k)) continue
+            val own = motionOwn(preset, k) ?: continue
+            chooseMotionValue(preset, k, own)
+        }
     }
     private fun speedChanged(preset: String) = kotlin.math.abs(motionSpeed(preset) - ownMotionNumber(preset, MotionTokens.ADJUST_SPEED)) > 0.001f
     private fun bounceChanged(preset: String) = kotlin.math.abs(motionBounce(preset) - ownMotionNumber(preset, MotionTokens.ADJUST_BOUNCE)) > 0.001f
-    /** Your changes to [preset] as it would be applied: its animations, and its speed and bounce as one each. */
-    fun motionChangeCount(preset: String): Int = motionRoleChanges(preset) + (if (speedChanged(preset)) 1 else 0) + (if (bounceChanged(preset)) 1 else 0)
+    /** Your changes to [preset] as it would be applied: its animations, its moments' feel, and its speed and bounce as one each. */
+    fun motionChangeCount(preset: String): Int = motionRoleChanges(preset) + momentFeelChanges(preset) +
+        (if (speedChanged(preset)) 1 else 0) + (if (bounceChanged(preset)) 1 else 0)
     /** What you changed in [preset], in a few words for its card (null: nothing). */
     fun motionSummary(preset: String): String? {
         val parts = ArrayList<String>()
         if (speedChanged(preset)) parts += "Speed ${(motionSpeed(preset) * 100).roundToInt()} %"
         if (bounceChanged(preset)) parts += motionBounce(preset).let { if (it < 0.001f) "No bounce" else "Bounce ${(it * 100).roundToInt()} %" }
-        val n = motionRoleChanges(preset)
+        val n = motionRoleChanges(preset) + momentFeelChanges(preset)
         if (n > 0) parts += "$n change" + if (n == 1) "" else "s"
         return when (parts.size) { 0 -> null; 1 -> parts[0]; else -> motionChangeCount(preset).let { "$it changes" } }
     }
@@ -557,35 +581,25 @@ internal class Studio(
      * far it is in, each one's scroll, and the way back from each part's (set by its pager). [subTitled]: the last one pushed
      * (its title stays in the header, faded out, after its page has gone).
      */
-    private val pushedSub = mutableStateOf<Sub?>(null)
-    var sub: Sub?
+    private val pushedSub = mutableStateOf<Pushed?>(null)
+    var sub: Pushed?
         get() = pushedSub.value
-        set(v) { pushedSub.value = v; if (v != null && v !== subTitled) subTitled = v }
-    var subTitled by mutableStateOf<Sub?>(null)
+        set(v) { pushedSub.value = v; if (v != null && v != subTitled) subTitled = v }
+    var subTitled by mutableStateOf<Pushed?>(null)
         private set
     val subPush = Animatable(0f)
-    val subScrolls = Sub.entries.associateWith { IosScrollState() }
+    /** Each pushed page's scroll (a moment's page made when first pushed: SubPager). */
+    val subScrolls = androidx.compose.runtime.mutableStateMapOf<Pushed, IosScrollState>().apply { for (s in Sub.entries) put(s, IosScrollState()) }
     val popSubs = HashMap<Part, () -> Unit>()
     /**
-     * Motion's group pages (docs/PLAN_MOTION.md, C4b): the group pushed over Motion (null: none), how far its page is in
-     * (0..1), the animation whose editor is open on it, each page's scroll, what the picture plays for them, at a quarter
-     * speed when asked, and Back on a group's page (set by Motion's pages). [motionTitled]: the last group pushed (its title
-     * stays in the header, faded out, after its page has gone).
+     * A moment's page (MomentPage, pushed over Motion or a part's page): the animation whose editor is open on it (Every
+     * detail), whether a slider or a handle is being dragged (what follows it changes at once, no rolling words), and what
+     * the picture plays for it, at a quarter speed when asked.
      */
-    private val pushedGroup = mutableStateOf<dev.launcher.app.motion.MotionGroup?>(null)
-    var motionGroup: dev.launcher.app.motion.MotionGroup?
-        get() = pushedGroup.value
-        set(v) { pushedGroup.value = v; if (v != null && v !== motionTitled) motionTitled = v }
-    var motionTitled by mutableStateOf<dev.launcher.app.motion.MotionGroup?>(null)
-        private set
-    val motionPush = Animatable(0f)
     var motionRole by mutableStateOf<String?>(null)
-    /** A slider or a handle of an editor is being dragged: what follows it changes at once (no rolling words). */
     var motionLive by mutableStateOf(false)
-    val motionScrolls = MOTION_GROUPS.associateWith { IosScrollState() }
     val sample = SampleState()
     var sampleSlow by mutableStateOf(false)
-    var popGroup: (() -> Unit)? = null
 }
 
 internal val LocalStudio = staticCompositionLocalOf<Studio?> { null }
@@ -781,8 +795,7 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         val moving by remember {
             androidx.compose.runtime.derivedStateOf {
                 st.p.isRunning || bar.isRunning || entry.moving || st.scrolls.values.any { it.moving } || st.start.moving ||
-                    st.subPush.isRunning || st.subScrolls.values.any { it.moving } ||
-                    st.motionPush.isRunning || st.motionScrolls.values.any { it.moving }
+                    st.subPush.isRunning || st.subScrolls.values.any { it.moving }
             }
         }
         // And the tree is there at all only for a screen reader (TalkBack): taking it away at every scroll's start and
@@ -807,10 +820,8 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                     HomePicture(st, g, bar)
                     Header(st, g) {
                         // A pushed page goes back to its part's page first (once it is on its way back, the part's page closes).
-                        val pop = st.popGroup
                         val sub = st.sub
-                        if (st.open == Part.MOTION && st.motionGroup != null && pop != null) pop()
-                        else if (sub != null && sub.part == st.open && st.subPush.targetValue >= 0.5f) st.popSubs[sub.part]?.invoke() ?: close(0f)
+                        if (sub != null && sub.part == st.open && st.subPush.targetValue >= 0.5f) st.popSubs[sub.part]?.invoke() ?: close(0f)
                         else close(0f)
                     }
                     Sheet(st, g, bar, open, close)
@@ -915,7 +926,8 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     // Motion's group pages: the part the group (or the open animation) plays in.
     val motionFocus = remember(statusFrac) {
         androidx.compose.runtime.derivedStateOf {
-            if (st.open == Part.MOTION && st.p.targetValue >= 0.5f && st.motionPush.targetValue >= 0.5f) MotionSamples.focus(st.motionGroup, st.motionRole, statusFrac) else null
+            val sub = st.sub as? MomentPage
+            if (sub != null && st.open == sub.part && st.p.targetValue >= 0.5f && st.subPush.targetValue >= 0.5f) MotionSamples.focus(sub.moment, st.motionRole, statusFrac) else null
         }
     }
     val targetState = remember(draft, statusFrac) {
@@ -941,7 +953,10 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     val hintAt = remember { androidx.compose.runtime.mutableIntStateOf(0) }
     val hintT = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     val hintA = remember { Animatable(0f) }
-    val hintOnState = remember { androidx.compose.runtime.derivedStateOf { st.open?.element != null && !st.p.isRunning } }
+    // (Not while a page is pushed over the part's: a moment's page plays the moment instead.)
+    val hintOnState = remember {
+        androidx.compose.runtime.derivedStateOf { st.open?.element != null && !st.p.isRunning && !(st.sub != null && st.subPush.targetValue >= 0.5f) }
+    }
     LaunchedEffect(gestureState) {
         androidx.compose.runtime.snapshotFlow { gestureState.value?.takeIf { hintOnState.value } }.collectLatest { gs ->
         if (gs == null) { hintA.animateTo(0f, look.motion(MotionTokens.DISAPPEAR_FADE)); return@collectLatest }
@@ -979,7 +994,9 @@ private fun HomePicture(st: Studio, g: Geometry, bar: Animatable<Float, *>) {
     val demoAlpha = remember { Animatable(1f) }
     val demoFade = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.DISAPPEAR_FADE))
     // (Not while a group's page is in: it plays its animations instead.)
-    val motionOpen by remember { androidx.compose.runtime.derivedStateOf { st.open == Part.MOTION && !st.p.isRunning && st.motionPush.targetValue < 0.5f } }
+    val motionOpen by remember {
+        androidx.compose.runtime.derivedStateOf { st.open == Part.MOTION && !st.p.isRunning && !(st.sub?.part == Part.MOTION && st.subPush.targetValue >= 0.5f) }
+    }
     // (Followed outside composition: keyed on it, the whole picture composed again at every push and pop of a group.)
     LaunchedEffect(Unit) { androidx.compose.runtime.snapshotFlow { motionOpen }.collectLatest { open ->
         // Whatever shows of it goes first (also when Motion comes back mid-fade: it starts again from the closed app).
@@ -1412,35 +1429,21 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
         })
         for (part in Part.entries) BasicText(part.title, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = clear.graphicsLayer {
             val p = if (st.open == part) st.p.value else 0f
-            // A part's own name gives way to a pushed page's (a Motion group's, a sub-page's) as that page comes over it: it
+            // A part's own name gives way to a pushed page's (a sub-page's, a moment's) as that page comes over it: it
             // slides left and is gone before the other has come in from the right (crossing at the same strength, the two
             // read as one jumble halfway).
-            val k = when {
-                part == Part.MOTION -> st.motionPush.value
-                st.sub?.part == part -> st.subPush.value
-                else -> 0f
-            }.coerceIn(0f, 1f)
+            val k = if (st.sub?.part == part) st.subPush.value.coerceIn(0f, 1f) else 0f
             alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f) * (1f - k / TITLE_OUT).coerceIn(0f, 1f)
             translationY = (1f - p) * rise
             translationX = -k * TITLE_SLIDE * g.unit
         })
-        // The last sub-page pushed keeps its title here (faded with the push), as Motion's groups do.
+        // The last page pushed keeps its title here (faded with the push): a page coming or going composes nothing, unless it
+        // is another page (the header composed again at each push's start and pop's end: 2 missed refreshes, S24).
         val titledSub by remember { androidx.compose.runtime.derivedStateOf { st.subTitled } }
         titledSub?.let { s ->
             BasicText(s.title, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = clear.graphicsLayer {
                 val p = if (st.open == s.part) st.p.value else 0f
-                val k = if (st.sub === s) st.subPush.value.coerceIn(0f, 1f) else 0f
-                alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f) * ((k - TITLE_IN) / (1f - TITLE_IN)).coerceIn(0f, 1f)
-                translationX = (1f - k) * TITLE_SLIDE * g.unit
-            })
-        }
-        // The last group pushed keeps its title here (faded with the push): a group coming or going composes nothing, unless
-        // it is another group (the header composed again at each push's start and pop's end: 2 missed refreshes, S24).
-        val titled by remember { androidx.compose.runtime.derivedStateOf { st.motionTitled } }
-        titled?.let { grp ->
-            BasicText(grp.title, style = style, maxLines = 1, modifier = Modifier.graphicsLayer {
-                val p = if (st.open == Part.MOTION) st.p.value else 0f
-                val k = if (st.motionGroup === grp) st.motionPush.value.coerceIn(0f, 1f) else 0f
+                val k = if (st.sub == s) st.subPush.value.coerceIn(0f, 1f) else 0f
                 alpha = ((p - 0.4f) / 0.6f).coerceIn(0f, 1f) * ((k - TITLE_IN) / (1f - TITLE_IN)).coerceIn(0f, 1f)
                 translationX = (1f - k) * TITLE_SLIDE * g.unit
             })
@@ -1522,6 +1525,7 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
                 bottomStart = look.dp(corner - below), bottomEnd = look.dp(corner - below)))
             .onPlaced { st.sheet = it },
     ) {
+        MotionSampleLoop(st)
         val art = rememberArtKit(look.pt(SettingsTokens.TILE_ART))
         StartContent(st, g, open, 18f * g.unit, art)
         for (part in Part.entries) GrowingTile(st, part, art)
@@ -1768,14 +1772,11 @@ private fun GrowingTile(st: Studio, part: Part, art: androidx.compose.runtime.St
 /** A page in the sheet: built ahead, placed (so drawn and touchable) only while it is the open one. */
 @Composable
 private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Unit) {
-    val look = LocalLook.current
-    val scroll = st.scrolls.getValue(part)
     // Made once (a new one each time this composed changed what every group of the page reads: the whole page composed again
     // in the first frame of any opening).
     val shown: () -> Float = remember(st, part) { { if (st.open == part) st.p.value.coerceIn(0f, 1f) else 0f } }
     val counter = remember { GroupCounter() }
     counter.n = 0
-    val m = look.dp(SettingsTokens.MARGIN)
     val fadePx = 18f * g.unit
     val bandPaint = remember { androidx.compose.ui.graphics.Paint() }
     // Only the open page is in the accessibility tree: with an accessibility service on (gesture nav is one), Compose
@@ -1801,19 +1802,14 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
                     translationX = if (open) 0f else g.w * 3f
                     alpha = if ((open && st.p.value > 0f) || warm) 1f else 0f
                 }
-                // (Pages with pages of their own fade their tops themselves.)
-                .then(if (part.element == null) Modifier else Modifier.topFade(scroll, g.unit, fadePx, bandPaint)),
         ) {
+            // Every page pushes pages of its own (SubPager, which also fades the tops of its pages): Look's and Phone's, and
+            // the moments' (Motion's all, each part its own).
             when (part) {
                 Part.LOOK -> SubPager(st, g, part, fadePx, bandPaint, { push, lit -> LookPage(push, lit) }) { s, _ -> LookSubPage(s) }
-                Part.MOTION -> MotionPager(st, g, fadePx, bandPaint)
+                Part.MOTION -> SubPager(st, g, part, fadePx, bandPaint, { push, lit -> MotionPage(push, lit) }) { s, _ -> MomentPageOf(st, s) }
                 Part.PHONE -> PhonePager(st, g, fadePx, bandPaint)
-                else -> Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
-                    Spacer(Modifier.height(look.dp(26f * g.unit)))
-                    PartPage(part)
-                    // Room below the last row for the Apply bar.
-                    Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
-                }
+                else -> SubPager(st, g, part, fadePx, bandPaint, { push, lit -> PartPage(part, push, lit) }) { s, _ -> MomentPageOf(st, s) }
             }
         }
     }
@@ -1828,7 +1824,7 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
  * it waits for Apply.
  */
 @Composable
-private fun LookPage(push: (Sub) -> Unit, lit: () -> Sub?) {
+private fun LookPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val draft = LocalDraft.current
     val look = LocalLook.current
     val themes = remember(look.version) { Design.themes() }
@@ -1868,9 +1864,15 @@ private fun LookPage(push: (Sub) -> Unit, lit: () -> Sub?) {
     }
 }
 
+/** A moment's page, for a page pushed as one. */
+@Composable
+private fun MomentPageOf(st: Studio, s: Pushed) {
+    if (s is MomentPage) MomentPageContent(st, s.moment)
+}
+
 /** Look's pages one level down: the palette's finer points, the fonts, the sizes. */
 @Composable
-private fun LookSubPage(s: Sub) {
+private fun LookSubPage(s: Pushed) {
     val draft = LocalDraft.current
     when (s) {
         Sub.COLOURS -> {
@@ -1894,7 +1896,7 @@ private fun LookSubPage(s: Sub) {
             SizeRow("Everything", draft.size(ctx), phone, dev.launcher.app.design.Scale.SIZE_MIN, dev.launcher.app.design.Scale.SIZE_MAX) { draft.chooseSize(ctx, it) }
             SizeRow("Text", draft.text(ctx), phone, dev.launcher.app.design.Scale.TEXT_MIN, dev.launcher.app.design.Scale.TEXT_MAX) { draft.chooseText(ctx, it) }
         }
-        Sub.DEVELOPER -> Unit
+        else -> Unit
     }
 }
 
@@ -2583,7 +2585,7 @@ internal fun Modifier.topFade(scroll: IosScrollState, unit: Float, fadePx: Float
  * counts and switches, and its own theme. Waits for Apply like the rest.
  */
 @Composable
-private fun PartPage(part: Part) {
+private fun PartPage(part: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val e = part.element ?: return
     val draft = LocalDraft.current
     val current = Layouts.find(e, draft.layout(e)) ?: Setup.layout(e)
@@ -2617,6 +2619,11 @@ private fun PartPage(part: Part) {
     }
     Group("Look", "It follows the theme chosen in Look, or has one of its own.") {
         OwnThemeRow(e)
+    }
+    // Its moments (docs/PLAN_SETTINGS_V2.md, V2): each a row with its feel, pushing its page.
+    val moments = remember(part) { momentsOf(part) }
+    if (moments.isNotEmpty()) Group("Motion", "Each moment's speed and bounce on top of the preset's (Motion), and every animation in it.") {
+        for (m in moments) androidx.compose.runtime.key(m.id) { MomentRow(m, part, push, lit) }
     }
 }
 
@@ -2970,7 +2977,7 @@ private fun PhonePager(st: Studio, g: Geometry, fadePx: Float, bandPaint: androi
 }
 
 @Composable
-private fun PhonePage(tick: androidx.compose.runtime.MutableIntState, feed: LogFeed, push: (Sub) -> Unit, lit: () -> Sub?) {
+private fun PhonePage(tick: androidx.compose.runtime.MutableIntState, feed: LogFeed, push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val ctx = LocalContext.current
     val app = ctx.applicationContext as? dev.launcher.app.LauncherApp
     val shizuku = remember(tick.intValue) { dev.launcher.app.ShizukuLink.state() }

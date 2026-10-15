@@ -19,6 +19,18 @@ object MotionAdjust {
     const val BOUNCE_MAX = 2f
     /** The most a spring is let overshoot (of its travel), however far Bounce is turned up. */
     private const val MAX_OVERSHOOT = 0.6
+    /** A moment's own speed and bounce (on top of the preset's, docs/PLAN_SETTINGS_V2.md) go as far as the preset's. */
+    const val MOMENT_SPEED_MIN = SPEED_MIN
+    const val MOMENT_SPEED_MAX = SPEED_MAX
+    const val MOMENT_BOUNCE_MAX = BOUNCE_MAX
+
+    /** The speed a curve of a moment plays at: the preset's [preset] times the moment's own [moment], each within its range. */
+    fun speed(preset: Float, moment: Float): Float =
+        preset.coerceIn(SPEED_MIN, SPEED_MAX) * moment.coerceIn(MOMENT_SPEED_MIN, MOMENT_SPEED_MAX)
+
+    /** The bounce a curve of a moment plays at: the preset's [preset] times the moment's own [moment]. */
+    fun bounce(preset: Float, moment: Float): Float =
+        preset.coerceIn(0f, BOUNCE_MAX) * moment.coerceIn(0f, MOMENT_BOUNCE_MAX)
 
     /** [c] at [speed] (1: as it is; 2: in half the time) and [bounce] (1: as it is; 0: no overshoot; 2: twice as far past). */
     fun apply(c: Curve, speed: Float, bounce: Float): Curve {

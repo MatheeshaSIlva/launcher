@@ -2271,3 +2271,26 @@ symbol tokens.
   scene is drawn in a layer of its own; the growing tile draws its scene too, riding along with its name.
 - Dark: the groups were the sheet's own grey (`#1C1C1E` on `#1C1C1E`), so tiles and every page's groups had no edge.
   They take iOS's elevated cell colour now (`#2C2C2E`, a sheet is an elevated surface); light is unchanged.
+
+## Settings v2, step V2: motion as moments (2026-10-15, emulator; S24 not checked yet)
+
+Motion's 11 groups of 142 rows are 22 moments now (`motion/Moments.kt`, the plan's table): Apps (Opening apps, Going
+home, Switching apps, App Switcher), Home (Pages, Folders, Unlocking, Editing, Little things, A new look), App Library
+(Opening and search, Menus and sheets), Notifications & Control Center (Control Center, Controls, Editing controls,
+Notification Center, Lock screen, Banners), Status bar (Status icons, Hiding and showing), and Scrolling and These
+settings for everywhere. Every editable role is in exactly one moment (`MomentsTest`); 13 glue roles (the launch colour,
+a late picture fading in, the card catching up, the banner's glass...) follow their moment's feel and are not listed
+(the token editor keeps them).
+- **A moment's own feel**: `motion.adjust.<moment>.speed` and `.bounce` in the preset (1 = as the preset), applied on
+  top of the preset's wherever a curve is read. Checked on the emulator: an app's opening took 1353 ms with Opening apps
+  at 50 % and 692-694 ms at the default (the card animation's own log line).
+- **Character sliders** move a moment's numbers together from where it shows none of it: How far home steps back (the
+  icons' and wallpaper's zoom, the blur), How far home zooms in (unlocking), Wiggle, Clear All's rhythm.
+- **Pages**: Motion lists the moments by part, each with its feel in words ("Quick, a touch of bounce"); each part's page
+  lists its own; a moment's page (pushed as Look's pages are, `SubPager`) has Speed and Bounce with their ends in words
+  (Relaxed ... Snappy, Still ... Lively), its character, Every detail (its roles in the order they play, folded until
+  asked for, each with today's editor) and Back to the preset's once changed. The picture zooms to where the moment
+  plays and plays it, again and again (one sample loop for the whole settings).
+- **Presets as small app openings**: each card plays an app opening out of its icon and closing, on that preset's curves
+  at its speed and bounce, all cards on one beat (a quicker preset settles sooner).
+- Fine-tune is Feel (Speed, Bounce, their ends in words); values read in words first, the number beside them.

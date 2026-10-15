@@ -129,10 +129,17 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   handed one: an int alpha past 255 flashes, an edge-anchored panel shows a gap). A preset's Speed and Bounce
   (`motion.adjust.*`, the settings' Fine-tune) apply where a curve is read (`Design.curve` through `motion/MotionAdjust`;
   Bounce scales existing overshoot only); times a motion is staged by go through `Motion.ms` (speed and slow motion).
-  Every role can be changed on its own in the settings' Motion (C4b, `docs/PLAN_MOTION.md`): groups as pages, an editor
-  per role (`settings/MotionPages`: spring or curve, a graph with handles, sliders, shapes), samples on the picture of
-  home (`settings/MotionSamples`), the graph's arithmetic in `motion/CurveFit` (springs fitted to curves and back); kept as
-  the preset's user edits (`files/design/motion-edits-<id>.json`). Theme seeds and motion seeds both live in the builder, which
+  The settings show motion as **moments** (V2, `docs/PLAN_SETTINGS_V2.md`; `motion/Moments.kt`): 22 things a person
+  notices ("Opening apps", "Folders"), each holding its roles (every editable role in exactly one; a test checks it) and
+  its glue (roles nobody sees alone, unlisted, following its feel). Each moment has its own Speed and Bounce
+  (`motion.adjust.<moment>.speed/.bounce`, 1 = as the preset), applied on top of the preset's wherever a curve is read
+  (`Design.curve`, `Design.previewCurve`, `Draft.motionCurve` through `MotionAdjust.speed/bounce`), and some a character
+  slider moving their numbers together (`Character`: home's depth, the unlock zoom, the wiggle, Clear All's rhythm). A
+  moment's page (Motion's list by part, and each part's page) has Speed, Bounce, its character and Every detail: its
+  roles with today's editor (`settings/MotionPages`: spring or curve, a graph with handles, sliders, shapes), samples on
+  the picture of home (`settings/MotionSamples`, one loop for the whole settings), the graph's arithmetic in
+  `motion/CurveFit` (springs fitted to curves and back); kept as the preset's user edits
+  (`files/design/motion-edits-<id>.json`). Values read in words first ("Smooth, bouncy · 0.42 s"). Theme seeds and motion seeds both live in the builder, which
   writes the two files. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). Points to pixels: one unit everywhere, `Scale.unitPx` (policy `adaptive`: 402 pt
   across a phone, never larger than the dp at the phone's default density, times the Display size's zoom; text through

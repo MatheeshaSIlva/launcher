@@ -303,8 +303,11 @@ object Design {
         val c = (try { r.resolve(k.name) } catch (_: Throwable) { null } as? Value.CurveV)?.curve ?: return null
         if (!adjusted) return c
         fun num(n: NumberKey) = (try { r.resolve(n.name) } catch (_: Throwable) { null } as? Value.Number)?.v ?: 1f
-        return dev.launcher.app.motion.MotionAdjust.apply(c, num(dev.launcher.app.motion.MotionTokens.ADJUST_SPEED),
-            num(dev.launcher.app.motion.MotionTokens.ADJUST_BOUNCE))
+        // The preset's speed and bounce, and the moment's on top of them.
+        val m = dev.launcher.app.motion.Moments.of(k.name)
+        return dev.launcher.app.motion.MotionAdjust.apply(c,
+            dev.launcher.app.motion.MotionAdjust.speed(num(dev.launcher.app.motion.MotionTokens.ADJUST_SPEED), m?.let { num(it.speed) } ?: 1f),
+            dev.launcher.app.motion.MotionAdjust.bounce(num(dev.launcher.app.motion.MotionTokens.ADJUST_BOUNCE), m?.let { num(it.bounce) } ?: 1f))
     }
 
     /** Token [key] as animation preset [id] gives it (with the user's edits of it, or [edits] false: the preset's own). */
@@ -729,9 +732,11 @@ object Design {
         val raw = (value(k.name) as? Value.CurveV ?: throw IllegalStateException("token $k is not a curve")).curve
         val c = if (!isMotion(k.name)) raw else {
             fun num(n: NumberKey) = (try { s.value(n.name) } catch (_: Throwable) { null } as? Value.Number)?.v ?: 1f
+            // The preset's speed and bounce, and the moment's on top of them (docs/PLAN_SETTINGS_V2.md, V2).
+            val m = dev.launcher.app.motion.Moments.of(k.name)
             dev.launcher.app.motion.MotionAdjust.apply(raw,
-                num(dev.launcher.app.motion.MotionTokens.ADJUST_SPEED).coerceIn(dev.launcher.app.motion.MotionAdjust.SPEED_MIN, dev.launcher.app.motion.MotionAdjust.SPEED_MAX),
-                num(dev.launcher.app.motion.MotionTokens.ADJUST_BOUNCE).coerceIn(0f, dev.launcher.app.motion.MotionAdjust.BOUNCE_MAX))
+                dev.launcher.app.motion.MotionAdjust.speed(num(dev.launcher.app.motion.MotionTokens.ADJUST_SPEED), m?.let { num(it.speed) } ?: 1f),
+                dev.launcher.app.motion.MotionAdjust.bounce(num(dev.launcher.app.motion.MotionTokens.ADJUST_BOUNCE), m?.let { num(it.bounce) } ?: 1f))
         }
         s.curves[k.name] = c
         return c

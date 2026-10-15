@@ -11,13 +11,10 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
-import dev.launcher.app.motion.MotionGroup
-import dev.launcher.app.motion.MotionRoles
+import dev.launcher.app.motion.Moment
+import dev.launcher.app.motion.Moments
 import kotlin.math.PI
 import kotlin.math.sin
-
-/** The groups Motion's pages show (docs/PLAN_MOTION.md: every animation a person can retime). */
-internal val MOTION_GROUPS: List<MotionGroup> = MotionRoles.EDITABLE
 
 /**
  * What the picture of home plays for Motion's group pages (docs/PLAN_MOTION.md, C4b): which animation, how far its run is
@@ -228,18 +225,22 @@ internal object MotionSamples {
     /** [key]'s sample (a plain card fading in where none is written). */
     fun spec(key: String): Spec = SPECS[key] ?: Spec(Kind.FADE, CARD)
 
-    /** The band of the phone (top, bottom; its full width) the picture focuses on for [group], or the animation [role] in it. */
-    fun focus(group: MotionGroup?, role: String?, statusFrac: Float): Rect {
+    /**
+     * The band of the phone (top, bottom; its full width) the picture focuses on for moment [m], or for the animation [role]
+     * of it (its editor open): where it plays.
+     */
+    fun focus(m: Moment, role: String?, statusFrac: Float): Rect {
         val bars = (statusFrac * 3f).coerceIn(0.08f, 0.16f)
-        if (role != null) when {
-            role.startsWith("motion.statusbar.") -> return Rect(0f, 0f, 1f, bars)
-            role.startsWith("motion.strip.") -> return Rect(0f, 0.84f, 1f, 1f)
-            role.startsWith("motion.banner.") -> return Rect(0f, 0f, 1f, 0.24f)
+        val k = role ?: m.sample
+        when {
+            k.startsWith("motion.statusbar.") && k != "motion.statusbar.lock" -> return Rect(0f, 0f, 1f, bars)
+            k.startsWith("motion.strip.") -> return Rect(0f, 0.84f, 1f, 1f)
+            k.startsWith("motion.banner.") -> return Rect(0f, 0f, 1f, 0.24f)
         }
-        return when (group?.title) {
-            MotionRoles.BANNERS.title -> Rect(0f, 0f, 1f, 0.24f)
-            MotionRoles.BARS.title -> Rect(0f, 0f, 1f, bars)
-            MotionRoles.CONTROL_CENTER.title -> Rect(0f, 0f, 1f, 0.58f)
+        return when (m) {
+            Moments.BANNERS -> Rect(0f, 0f, 1f, 0.24f)
+            Moments.STATUS_ICONS -> Rect(0f, 0f, 1f, bars)
+            Moments.CONTROL_CENTER, Moments.CONTROLS, Moments.CC_EDITING -> Rect(0f, 0f, 1f, 0.58f)
             else -> WHOLE
         }
     }

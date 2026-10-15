@@ -764,6 +764,15 @@ SEED = {
 }
 
 
+# Each moment's own speed and bounce (docs/PLAN_SETTINGS_V2.md, V2; the moments are motion/Moments.kt): 1 = as the preset.
+MOMENTS = ['opening', 'closing', 'switching', 'switcher', 'pages', 'folders', 'unlocking', 'editing', 'little', 'newlook',
+           'library', 'menus', 'cc', 'controls', 'cc-editing', 'nc', 'lock', 'banners', 'status-icons', 'bars', 'scrolling',
+           'settings']
+for _m in MOMENTS:
+    SEED['motion.adjust.%s.speed' % _m] = {'factor': 1, 'src': "judged:the moment's own speed on top of the preset's (1: as the preset)"}
+    SEED['motion.adjust.%s.bounce' % _m] = {'factor': 1, 'src': "judged:the moment's own bounce on top of the preset's (1: as the preset)"}
+
+
 CONTROL_ACCENTS = {
     'connectivity': 'blue', 'media': 'pink', 'brightness': 'yellow', 'volume': 'cyan', 'focus': 'indigo',
     'rotation-lock': 'red', 'silent': 'red', 'flashlight': 'blue', 'timer': 'orange', 'calculator': 'orange',

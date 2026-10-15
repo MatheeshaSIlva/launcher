@@ -205,7 +205,16 @@ object MotionRoles {
         r("adjust.bounce", "Bounce", "How far animations that bounce go past their place (1: the preset's own; 0: not at all)."),
     ))
 
-    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE)
+    /**
+     * Each moment's own feel (docs/PLAN_SETTINGS_V2.md, V2: [Moments]), on top of the preset's: the settings set them on a
+     * moment's page; not one animation's, so not in the groups.
+     */
+    val MOMENTS = MotionGroup("Moments", "Each moment's own speed and bounce, on top of the preset's.", Moments.ALL.flatMap { m ->
+        listOf(MotionRole(m.speed.name, "${m.title}: speed", "${m.title}'s animations this much faster (1: as the preset)."),
+            MotionRole(m.bounce.name, "${m.title}: bounce", "How far ${m.title.lowercase()} goes past its place (1: as the preset; 0: not at all)."))
+    })
+
+    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE, MOMENTS)
 
     /**
      * What the settings' Motion lets a person retime, by group (docs/PLAN_MOTION.md): every animation but the App Switcher's

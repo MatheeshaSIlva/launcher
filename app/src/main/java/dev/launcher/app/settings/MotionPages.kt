@@ -62,7 +62,9 @@ import dev.launcher.app.design.Value
 import dev.launcher.app.motion.CurveFit
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.MotionAdjust
-import dev.launcher.app.motion.MotionGroup
+import dev.launcher.app.motion.Moment
+import dev.launcher.app.motion.Moments
+import dev.launcher.app.motion.MotionRoles
 import dev.launcher.app.motion.MotionRole
 import dev.launcher.app.motion.MotionTokens
 import dev.launcher.app.motion.mover
@@ -77,195 +79,229 @@ import kotlinx.coroutines.launch
 // with its editor and its sample on the picture of home (C4b).
 
 /**
- * Motion's page and the groups' pages over it: a group tapped slides its page in from the right as Motion gives way (a third
- * of the way left, fading; `motion.sheet.push`), the picture focusing on where the group plays; Back, the round button or
- * the system's, slides it back. A group's page is built when it is tapped, in the frame before its slide starts (every
- * page built ahead held the main thread for seconds on the emulator; built while a finger rested on its row, a scroll
- * starting there stuttered). Each page keeps its scroll.
+ * A moment's page (docs/PLAN_SETTINGS_V2.md, V2), pushed over Motion or over the page of the part it belongs to; the picture
+ * above plays the moment. Its own Speed and Bounce on top of the preset's ("As the preset" in the middle), its character
+ * where it has one ("How far home steps back"), then Every detail: its animations in the order they play, each with its
+ * editor, folded away until asked for. Everything waits for Apply.
  */
 @Composable
-internal fun MotionPager(st: Studio, g: Geometry, fadePx: Float, bandPaint: androidx.compose.ui.graphics.Paint) {
+internal fun MomentPageContent(st: Studio, m: Moment) {
+    val draft = LocalDraft.current
     val look = LocalLook.current
-    val scope = rememberCoroutineScope()
-    val spec = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.NAV_PUSH))
-    val m = look.dp(SettingsTokens.MARGIN)
-    val main = st.scrolls.getValue(Part.MOTION)
-    // The group whose page is built (the last one pushed; one at a time). Never another while the built one shows: a group
-    // tapped as the last one's page slides away waits until it has gone. [pending]: tapped, its page being built (its row
-    // stays lit until the page moves).
-    var built by remember { mutableStateOf<MotionGroup?>(null) }
-    var pending by remember { mutableStateOf<MotionGroup?>(null) }
-    val gone = { st.motionPush.value <= PAGE_GONE }
-    val pushing = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
-    val push: (MotionGroup) -> Unit = remember(st, scope) {
-        { grp ->
-            if (st.motionPush.targetValue < 0.5f) {
-                st.motionRole = null
-                pushing[0]?.cancel()
-                pending = grp
-                pushing[0] = scope.launch {
-                    try {
-                        if (built !== grp && !gone()) androidx.compose.runtime.snapshotFlow { gone() }.first { it }
-                        val ready = built === grp
-                        built = grp
-                        st.motionGroup = grp
-                        // A page not built yet is built in the next frame and slides from the one after: built in its slide's
-                        // first frame, it cost that frame (and the slide's start a jump).
-                        if (!ready) { androidx.compose.runtime.withFrameNanos { }; androidx.compose.runtime.withFrameNanos { } }
-                        st.motionGroup = grp   // (the last page's slide may have ended meanwhile, letting go of its group)
-                        pending = null
-                        st.motionPush.animateTo(1f, spec.value)
-                    } catch (_: kotlinx.coroutines.CancellationException) {
-                    } finally { if (pending === grp) pending = null }
+    val id = draft.motionId()
+    val v = look.version
+    // Derived: every step of a slider changes the draft; only what it changed composes again.
+    val speed by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.motionNumber(id, m.speed) } }
+    val bounce by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.motionNumber(id, m.bounce) } }
+    Group(null, m.description + " The picture above plays it.") {
+        FeelSlider("Speed", momentSpeedWords(speed), speedToSlider(speed), "Relaxed", "Snappy") { t ->
+            draft.chooseMotionNumber(id, m.speed, sliderToSpeed(t))
+        }
+        FeelSlider("Bounce", momentBounceWords(bounce), bounce / MotionAdjust.MOMENT_BOUNCE_MAX, "Still", "Lively") { t ->
+            draft.chooseMotionNumber(id, m.bounce, Draft.snap(t * MotionAdjust.MOMENT_BOUNCE_MAX))
+        }
+        m.character?.let { c -> CharacterSlider(draft, id, c) }
+    }
+    EveryDetail(st, m)
+    val changes by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.momentChanges(id, m) } }
+    // (It keeps its last count while it folds away.)
+    val last = remember { intArrayOf(1) }
+    if (changes > 0) last[0] = changes
+    Reveal(changes > 0) {
+        Column {
+            Group(null) {
+                ActionRow("Back to ${presetName(id)}'s", "${last[0]} change" + (if (last[0] == 1) "" else "s") + " to ${m.title.lowercase()}") {
+                    draft.resetMoment(id, m)
                 }
             }
         }
     }
-    val lit: () -> MotionGroup? = remember { { pending } }
-    val pop: () -> Unit = remember(st, scope) {
-        {
-            st.motionRole = null
-            pushing[0]?.cancel()
-            scope.launch {
-                try {
-                    st.motionPush.animateTo(0f, spec.value)
-                    if (pushing[0]?.isActive != true) st.motionGroup = null
-                } catch (_: kotlinx.coroutines.CancellationException) { }   // pushed again on the way: it stays
-            }
-        }
-    }
-    SideEffect { st.popGroup = pop }
-    GroupBack(st, pop)
-    // Back at the tiles some other way with a group's page in (home brought the settings back): Motion itself next time.
-    LaunchedEffect(st) {
-        androidx.compose.runtime.snapshotFlow { st.open }.collect { open ->
-            if (open != Part.MOTION) pushing[0]?.cancel()
-            if (open != Part.MOTION && st.motionGroup != null) { st.motionPush.snapTo(0f); st.motionGroup = null; st.motionRole = null }
-        }
-    }
-    MotionSampleLoop(st)
-    Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize()
-            .graphicsLayer {
-                val k = st.motionPush.value.coerceIn(0f, 1f)
-                translationX = -g.w / 3f * k
-                alpha = 1f - k
-                // Faded draw by draw, not through a page-sized buffer (made and filled in a push's first frame, it cost the
-                // S24's render thread 13 ms there; the pages hold no glass or pictures that overlap).
-                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
-            }
-            .topFade(main, g.unit, fadePx, bandPaint)) {
-            Column(Modifier.fillMaxSize().iosScroll(main).padding(horizontal = m)) {
-                Spacer(Modifier.height(look.dp(26f * g.unit)))
-                MotionPage(push, lit)
-                // Room below the last row for the Apply bar.
-                Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
-            }
-        }
-        built?.let { grp -> androidx.compose.runtime.key(grp) { GroupPage(st, g, grp, fadePx, bandPaint) } }
-    }
 }
 
-/** The system's Back on a group's page: back to Motion. Its own composable: only it composes again as a group comes or goes. */
-@Composable
-private fun GroupBack(st: Studio, pop: () -> Unit) {
-    val on by remember(st) { androidx.compose.runtime.derivedStateOf { st.open == Part.MOTION && st.motionGroup != null } }
-    BackHandler(enabled = on) { pop() }
+/** A moment's speed in words, the number beside them. */
+private fun momentSpeedWords(s: Float): String = when {
+    abs(s - 1f) < 0.03f -> "As the preset"
+    s > 1f -> "Quicker · ${(s * 100).roundToInt()} %"
+    else -> "Slower · ${(s * 100).roundToInt()} %"
 }
 
-/** One group's page: its animations, then the numbers that shape them; it slides in over Motion and back. */
+/** A moment's bounce in words, the number beside them. */
+private fun momentBounceWords(b: Float): String = when {
+    b < 0.005f -> "None"
+    abs(b - 1f) < 0.03f -> "As the preset"
+    b > 1f -> "Livelier · ${(b * 100).roundToInt()} %"
+    else -> "Calmer · ${(b * 100).roundToInt()} %"
+}
+
+/**
+ * A value set on a slider whose ends say what they mean ([low], [high]): its name and its value in words above (rolling as it
+ * changes), the slider, the ends' words under it.
+ */
 @Composable
-private fun GroupPage(st: Studio, g: Geometry, grp: MotionGroup, fadePx: Float, bandPaint: androidx.compose.ui.graphics.Paint) {
+private fun FeelSlider(title: String, value: String, position: Float, low: String, high: String, onChange: (Float) -> Unit) {
     val look = LocalLook.current
-    val m = look.dp(SettingsTokens.MARGIN)
-    val scroll = st.motionScrolls.getValue(grp)
-    // Its groups rise in with its push, a beat apart (as a page's do with its opening).
-    val shown: () -> Float = remember(st, grp) { { if (st.motionGroup === grp) st.motionPush.value.coerceIn(0f, 1f) else 0f } }
-    val counter = remember { GroupCounter() }
-    counter.n = 0
-    CompositionLocalProvider(LocalShown provides shown, LocalGroups provides counter) {
-        // (Over Motion's page by its place, last in their box: nothing here is read in composition, so a push or a pop
-        // composes nothing.)
-        Box(Modifier.fillMaxSize()
-            .graphicsLayer {
-                val on = st.motionGroup === grp
-                val k = if (on) st.motionPush.value else 0f
-                // Out of sight unless it is the one pushed (moved, never laid out again).
-                translationX = if (!on) g.w * 3f else (1f - k.coerceIn(0f, 1f)) * g.w * 0.4f
-                alpha = (k / 0.7f).coerceIn(0f, 1f)
-                // (Faded draw by draw, as Motion's page: no page-sized buffer.)
-                compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.ModulateAlpha
-            }
-            .topFade(scroll, g.unit, fadePx, bandPaint)) {
-            Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
-                Spacer(Modifier.height(look.dp(26f * g.unit)))
-                GroupRoles(st, grp)
-                Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
-            }
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val ends = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR))
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
+            Rolling(value, look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier)
         }
-    }
-}
-
-@Composable
-private fun GroupRoles(st: Studio, grp: MotionGroup) {
-    val curves = grp.roles.filter { it.key in MotionTokens.CURVES }
-    val numbers = grp.roles.filter { it.key in MotionTokens.NUMBERS }
-    val kit = rememberRowKit()
-    Group(null, grp.description + " Tap one to change it: the picture above plays it.") {
-        for (r in curves) androidx.compose.runtime.key(r.key) { RoleRow(st, r, kit) }
-    }
-    if (numbers.isNotEmpty()) Group("Amounts", "Numbers that shape these animations: how far, how blurred, how long between.") {
-        for (r in numbers) androidx.compose.runtime.key(r.key) { RoleRow(st, r, kit) }
+        Spacer(Modifier.height(look.dp(4f * look.unit)))
+        SettingsSlider(position, onChange = onChange)
+        Row(Modifier.fillMaxWidth()) {
+            BasicText(low, style = ends, maxLines = 1)
+            Spacer(Modifier.weight(1f))
+            BasicText(high, style = ends, maxLines = 1)
+        }
     }
 }
 
 /**
- * Motion's groups as rows (on Motion itself): a group's name, what it covers, how many of its animations you changed.
- * Tapped, it stays lit while its page is built ([lit]), and goes out as the page slides in.
+ * A moment's character: its numbers moved together (each away from where the moment shows none of it, by the slider's value:
+ * 0 none, 1 the preset's own, 2 twice as much).
  */
 @Composable
-private fun GroupRow(grp: MotionGroup, push: (MotionGroup) -> Unit, lit: () -> MotionGroup?) {
-    val look = LocalLook.current
-    val draft = LocalDraft.current
-    // Counted through a derived state: every step of a slider changes the draft, and only a changed count should compose.
-    val changed by remember(draft, grp, look.version) {
-        androidx.compose.runtime.derivedStateOf { grp.roles.count { draft.motionChanged(draft.motionId(), it.key) } }
+private fun CharacterSlider(draft: Draft, id: String, c: dev.launcher.app.motion.Character) {
+    val v = LocalLook.current.version
+    val k by remember(draft, id, v, c) { androidx.compose.runtime.derivedStateOf { characterOf(draft, id, c) } }
+    FeelSlider(c.title, when {
+        k < 0.005f -> "None"
+        abs(k - 1f) < 0.03f -> "As the preset"
+        k > 1f -> "More · ${(k * 100).roundToInt()} %"
+        else -> "Less · ${(k * 100).roundToInt()} %"
+    }, k / 2f, c.low, c.high) { t -> setCharacter(draft, id, c, Draft.snap(t * 2f)) }
+}
+
+/** How far a character's numbers are from none, of how far the preset puts them (1: as it comes). */
+private fun characterOf(d: Draft, id: String, c: dev.launcher.app.motion.Character): Float {
+    for ((key, neutral) in c.keys) {
+        val own = (d.motionOwn(id, key) as? Value.Number)?.v ?: continue
+        if (abs(own - neutral) < 1e-4f) continue
+        val now = (d.motionRaw(id, key) as? Value.Number)?.v ?: own
+        return ((now - neutral) / (own - neutral)).coerceIn(0f, 2f)
     }
-    val held by remember(grp) { androidx.compose.runtime.derivedStateOf { lit() === grp } }
-    val counter = LocalRowCounter.current
-    val first = remember { counter == null || counter.n++ == 0 }
-    var pressed by remember { mutableStateOf(false) }
-    val down = pressed || held
-    val press by animateFloatAsState(if (down) 1f else 0f, look.motion(if (down) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
-    val pad = look.dp(SettingsTokens.ROW_PADDING)
-    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
-    val pressFill = Color(Appearance.pressFill)
-    val onClick = remember(grp, push) { { push(grp) } }
-    Row(Modifier.fillMaxWidth().heightIn(min = look.dp(SettingsTokens.ROW_HEIGHT))
-        .drawBehind {
-            if (press > 0.001f) drawRect(pressFill.copy(alpha = pressFill.alpha * press))
-            if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f))
+    return 1f
+}
+
+private fun setCharacter(d: Draft, id: String, c: dev.launcher.app.motion.Character, k: Float) {
+    for ((key, neutral) in c.keys) {
+        val own = d.motionOwn(id, key) as? Value.Number ?: continue
+        val spec = NUMBERS[key]
+        var x = neutral + (own.v - neutral) * k
+        if (spec != null) x = snapTo(x, spec.step).coerceIn(spec.min, spec.max)
+        d.chooseMotionValue(id, key, Value.Number(x, own.unit))
+    }
+}
+
+/**
+ * Every detail: a moment's animations in the order they play (curves, then the numbers that shape them), each with its editor
+ * in place (the picture plays the one open), folded away under one row until asked for; built when first opened.
+ */
+@Composable
+private fun EveryDetail(st: Studio, m: Moment) {
+    val look = LocalLook.current
+    var open by remember { mutableStateOf(false) }
+    var built by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val turn by animateFloatAsState(if (open) 1f else 0f, look.motion(MotionTokens.APPEAR), label = "detail")
+    val roles = remember(m) { m.roles.mapNotNull { k -> MotionRoles.find(k)?.second } }
+    val curves = remember(roles) { roles.filter { it.key in MotionTokens.CURVES } }
+    val numbers = remember(roles) { roles.filter { it.key in MotionTokens.NUMBERS } }
+    var held by remember { mutableStateOf(false) }
+    Group(null) {
+        BaseRow("Every detail", "${roles.size} animation" + (if (roles.size == 1) "" else "s") + ", in the order they play", {
+            if (open) { open = false; st.motionRole = null }
+            else if (built) open = true
+            else if (!held) {
+                // Built at the tap and opened two frames later (the row lit meanwhile): built in its opening's first frame,
+                // it cost that frame.
+                held = true
+                built = true
+                scope.launch {
+                    androidx.compose.runtime.withFrameNanos { }
+                    androidx.compose.runtime.withFrameNanos { }
+                    open = true
+                    held = false
+                }
+            }
+        }, held = held) {
+            BasicText("›", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)),
+                modifier = Modifier.graphicsLayer { rotationZ = 90f * turn })
         }
-        .pointerInput(grp) { rowTap({ pressed = it }, onClick) }
-        .padding(horizontal = pad, vertical = look.dp(10f * look.unit)),
-        verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            BasicText(grp.title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
-            BasicText(grp.description, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
-            // How many of its animations you changed: a line of its own that opens and closes, the count rolling (beside the
-            // words, it made them wrap again). It keeps its last count while it closes.
-            val last = remember { intArrayOf(1) }
-            if (changed > 0) last[0] = changed
-            Reveal(changed > 0) {
-                Rolling("${last[0]} changed", look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ACCENT)), Modifier)
+        if (built) {
+            val kit = rememberRowKit()
+            Reveal(open) {
+                Column {
+                    for (r in curves) androidx.compose.runtime.key(r.key) { RoleRow(st, r, kit) }
+                    for (r in numbers) androidx.compose.runtime.key(r.key) { RoleRow(st, r, kit) }
+                }
             }
         }
-        Spacer(Modifier.width(look.dp(12f * look.unit)))
+    }
+}
+
+/**
+ * A moment as a row (on Motion and on its part's page): its name, its feel in words as it would be applied ("Quick, a little
+ * bounce": its sample's curve at the preset's and its own speed and bounce), the accent and a count once you changed it.
+ * Tapped, it stays lit while its page is built.
+ */
+@Composable
+internal fun MomentRow(m: Moment, host: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) {
+    val look = LocalLook.current
+    val draft = LocalDraft.current
+    val v = look.version
+    val page = remember(m, host) { MomentPage(m, host) }
+    val feel by remember(draft, m, v) { androidx.compose.runtime.derivedStateOf { feelOf(draft, m) } }
+    val changes by remember(draft, m, v) { androidx.compose.runtime.derivedStateOf { draft.momentChanges(draft.motionId(), m) } }
+    val held by remember(page) { androidx.compose.runtime.derivedStateOf { lit() == page } }
+    val onClick = remember(page, push) { { push(page) } }
+    // (Its count keeps its last number while its line closes.)
+    val last = remember { intArrayOf(1) }
+    if (changes > 0) last[0] = changes
+    BaseRow(m.title, null, onClick, held = held, below = {
+        val detail = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR))
+        Rolling(feel, detail, Modifier.fillMaxWidth())
+        Reveal(changes > 0) {
+            Rolling("${last[0]} changed", look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ACCENT)), Modifier)
+        }
+    }) {
         BasicText("›", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
     }
 }
 
-/** How far in a group's page may be and still count as gone (its alpha under a 255th). */
+/** How a moment feels as it would be applied, in words: its sample's pace and how far it goes past its place. */
+internal fun feelOf(d: Draft, m: Moment): String {
+    val key = m.sample.takeIf { it in MotionTokens.CURVES } ?: m.roles.firstOrNull { it in MotionTokens.CURVES } ?: return ""
+    val c = d.motionCurve(d.motionId(), CurveKey(key))
+    val t = CurveFit.settleTime(c)
+    val past = when (c) {
+        is Curve.Spring -> MotionAdjust.overshoot(c.damping).toFloat()
+        is Curve.Ease -> ((0..40).maxOf { CurveFit.at(c, c.ms / 1000f * it / 40f) } - 1f).coerceAtLeast(0f)
+    }
+    val pace = when {
+        t < 0.3f -> "Snappy"
+        t < 0.45f -> "Quick"
+        t < 0.65f -> "Smooth"
+        t < 0.9f -> "Relaxed"
+        else -> "Slow"
+    }
+    val spring = when {
+        past < 0.005f -> "no bounce"
+        past < 0.04f -> "a touch of bounce"
+        past < 0.12f -> "a little bounce"
+        past < 0.25f -> "bouncy"
+        else -> "very bouncy"
+    }
+    return "$pace, $spring"
+}
+
+/** How far in a pushed page may be and still count as gone (its alpha under a 255th). */
 internal const val PAGE_GONE = 0.002f
 
 /**
@@ -509,14 +545,27 @@ private fun OpenReveal(visible: Boolean, warm: Boolean, content: @Composable () 
         .graphicsLayer { alpha = k.value.coerceIn(0f, 1f) }) { content() }
 }
 
-/** An animation's value in words: a spring's duration and bounce, a curve's length, a number in its unit. */
+/**
+ * An animation's value in words first (docs/PLAN_SETTINGS_V2.md: "Quick, bouncy"), the number beside them (a spring's
+ * duration, a curve's length); a number in its unit.
+ */
 private fun valueText(key: String, v: Value?): String = when (v) {
-    is Value.CurveV -> when (val c = v.curve) {
-        is Curve.Spring -> {
-            val b = CurveFit.bounceOf(c.damping)
-            "Spring · " + seconds(c.response) + if (abs(b) >= 0.005f) " · " + percent(b) else ""
+    is Value.CurveV -> {
+        val c = v.curve
+        val t = CurveFit.settleTime(c)
+        val pace = when {
+            t < 0.3f -> "Snappy"
+            t < 0.45f -> "Quick"
+            t < 0.65f -> "Smooth"
+            t < 0.9f -> "Relaxed"
+            else -> "Slow"
         }
-        is Curve.Ease -> "Curve · " + millis(c.ms)
+        val past = when (c) {
+            is Curve.Spring -> MotionAdjust.overshoot(c.damping).toFloat()
+            is Curve.Ease -> ((0..40).maxOf { CurveFit.at(c, c.ms / 1000f * it / 40f) } - 1f).coerceAtLeast(0f)
+        }
+        val bounce = when { past < 0.04f -> null; past < 0.15f -> "bouncy"; else -> "very bouncy" }
+        (if (bounce == null) pace else "$pace, $bounce") + " · " + when (c) { is Curve.Spring -> seconds(c.response); is Curve.Ease -> millis(c.ms) }
     }
     is Value.Number -> NUMBERS[key]?.text?.invoke(v.v) ?: fmt("%.2f", v.v)
     else -> ""
@@ -1027,19 +1076,22 @@ private fun frozenAt(v: FloatArray, reach: Float, t: Float): Float {
 }
 
 /**
- * What the picture plays while a group's page is in (docs/PLAN_MOTION.md, C4b): the open animation, else the group's first;
- * its own run on the draft's curve (as it would be applied: the preset's speed and bounce too), a pause, the way back on
- * its partner (or at once), a pause, again. Slow plays it at a quarter speed. The picture draws it (MotionSamples), the
- * editor's graph runs a dot with it.
+ * What the picture plays while a moment's page is in (over Motion or over a part's page): the animation whose editor is open,
+ * else the moment's own sample; its run on the draft's curve (as it would be applied: the preset's and the moment's speed
+ * and bounce), a pause, the way back on its partner (or at once), a pause, again. Slow plays it at a quarter speed. The
+ * picture draws it (MotionSamples), the editor's graph runs a dot with it. One for the whole settings.
  */
 @Composable
-private fun MotionSampleLoop(st: Studio) {
+internal fun MotionSampleLoop(st: Studio) {
     val draft = LocalDraft.current
     val playing = remember(st) {
         androidx.compose.runtime.derivedStateOf {
-            if (st.open == Part.MOTION && !st.p.isRunning && st.motionPush.targetValue >= 0.5f) st.motionRole ?: st.motionGroup?.roles?.firstOrNull()?.key else null
+            val sub = st.sub as? MomentPage
+            if (sub != null && st.open == sub.part && !st.p.isRunning && st.subPush.targetValue >= 0.5f) st.motionRole ?: sub.moment.sample else null
         }
     }
+    // An editor left open on a page that has gone: none open on the next one.
+    LaunchedEffect(st) { androidx.compose.runtime.snapshotFlow { st.sub }.collect { st.motionRole = null } }
     val look = LocalLook.current
     val fadeOut = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.DISAPPEAR_FADE))
     val fadeIn = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.APPEAR_FADE))
@@ -1055,7 +1107,7 @@ private fun MotionSampleLoop(st: Studio) {
             sm.forward.value = true
             sm.k.floatValue = spec.from
             sm.t.floatValue = -1f
-            // (The preset is read at each run: it cannot change while a group's page is in, but its speed and bounce can.)
+            // (The preset is read at each run: it cannot change while a moment's page is in, but its speeds and bounces can.)
             fun curveOf(k: String): Curve = if (k in MotionTokens.CURVES) draft.motionCurve(draft.motionId(), CurveKey(k)) else Motion.role(MotionTokens.APPEAR)
             suspend fun run(c: Curve, from: Float, to: Float, own: Boolean) {
                 val m = c.mover().apply { start(from, 0f, to) }
@@ -1100,12 +1152,12 @@ private fun MotionSampleLoop(st: Studio) {
 }
 
 /**
- * Motion (docs/PLAN_MOTION.md): the animation presets as cards, each playing its curve (the picture of home above plays the
- * chosen one: an app opening and closing, a banner dropping in), the whole preset's speed and bounce, and every animation by
- * group (each group's page pushed over this one). Waits for Apply like the rest.
+ * Motion (docs/PLAN_SETTINGS_V2.md, V2): the presets as cards, each playing a small app opening in its own way (the picture
+ * of home above plays the chosen one), the whole preset's feel (Speed, Bounce), and the moments by part, each a row with its
+ * feel in words that pushes its page. Waits for Apply like the rest.
  */
 @Composable
-private fun MotionPage(push: (MotionGroup) -> Unit, lit: () -> MotionGroup?) {
+internal fun MotionPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val draft = LocalDraft.current
     val look = LocalLook.current
     val st = LocalStudio.current
@@ -1114,12 +1166,14 @@ private fun MotionPage(push: (MotionGroup) -> Unit, lit: () -> MotionGroup?) {
     // Presets made for testing show when Developer asks for them, or while one is in use; the default first, tests last.
     val presets = all.filter { !it.test || (SettingsPrefs.developer && SettingsPrefs.testPresets) || it.id == chosen || it.id == Design.motionPresetId }
         .sortedWith(compareBy({ it.test }, { it.id != Design.DEFAULT_MOTION }, { it.name }))
-    // The cards' dots run on one clock while the page is open and at rest (read in drawing only).
+    // The cards' apps run on one clock while the page is open and at rest (read in drawing only).
     val clock = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     LaunchedEffect(st) {
-        androidx.compose.runtime.snapshotFlow { st == null || (st.open == Part.MOTION && !st.p.isRunning && st.motionPush.targetValue < 0.5f) }.collectLatest { open ->
+        androidx.compose.runtime.snapshotFlow {
+            st == null || (st.open == Part.MOTION && !st.p.isRunning && !(st.sub?.part == Part.MOTION && st.subPush.targetValue >= 0.5f))
+        }.collectLatest { open ->
             if (!open) return@collectLatest
-            // Frame by frame, a long frame counting as a short one: the dots pause through a stall, never jump.
+            // Frame by frame, a long frame counting as a short one: the apps pause through a stall, never jump.
             var last = androidx.compose.runtime.withFrameNanos { it }
             while (true) {
                 val now = androidx.compose.runtime.withFrameNanos { it }
@@ -1128,21 +1182,39 @@ private fun MotionPage(push: (MotionGroup) -> Unit, lit: () -> MotionGroup?) {
             }
         }
     }
-    Group("Presets", "How everything moves. The picture above plays the one you choose.") {
+    Group("Presets", "How everything moves, each its own way. The picture above plays the one you choose.") {
         PresetCards(presets, draft, clock)
     }
-    FineTune(draft)
-    Group("Every animation", "Each one can be changed on its own: a spring or a curve, played on the picture as you change it.") {
-        for (grp in MOTION_GROUPS) androidx.compose.runtime.key(grp.title) { GroupRow(grp, push, lit) }
+    Feel(draft)
+    for (part in MOMENT_PARTS) {
+        Group(part.second, if (part.first == dev.launcher.app.motion.MomentPart.EVERYWHERE) "Each moment's speed and bounce on top of the preset's, and every animation in it." else null) {
+            for (m in Moments.of(part.first)) androidx.compose.runtime.key(m.id) { MomentRow(m, Part.MOTION, push, lit) }
+        }
     }
 }
 
+/** The moments' parts as Motion lists them, with their headings. */
+private val MOMENT_PARTS = listOf(
+    dev.launcher.app.motion.MomentPart.APPS to "Apps", dev.launcher.app.motion.MomentPart.HOME to "Home",
+    dev.launcher.app.motion.MomentPart.LIBRARY to "App Library", dev.launcher.app.motion.MomentPart.SHADE to "Notifications & Control Center",
+    dev.launcher.app.motion.MomentPart.STATUS_BAR to "Status bar", dev.launcher.app.motion.MomentPart.EVERYWHERE to "Everywhere",
+)
+
+/** Part [p]'s moments (none for Look, Motion and Phone). */
+internal fun momentsOf(p: Part): List<Moment> = when (p) {
+    Part.HOME -> Moments.of(dev.launcher.app.motion.MomentPart.HOME)
+    Part.APPS -> Moments.of(dev.launcher.app.motion.MomentPart.APPS)
+    Part.LIBRARY -> Moments.of(dev.launcher.app.motion.MomentPart.LIBRARY)
+    Part.SHADE -> Moments.of(dev.launcher.app.motion.MomentPart.SHADE)
+    Part.STATUS_BAR -> Moments.of(dev.launcher.app.motion.MomentPart.STATUS_BAR)
+    else -> emptyList()
+}
+
 /**
- * The presets side by side, each drawing the curve a banner drops in on (a motion that bounces, so a preset's bounce shows as
- * well as its pace; iOS 27's app opening hardly overshoots), at its speed and bounce as it would be applied, with a dot
- * running along it on its own timing, again and again; the chosen one ringed in the accent. One time axis for all of
- * them, so a quicker preset rises sooner and a slower one later (it glides to fit the slowest). Two share the row; more
- * keep that width and scroll sideways, the next one peeking in.
+ * The presets side by side, each playing a small app opening out of its icon and going back into it, on that preset's own
+ * curves at its speed and bounce as it would be applied (its pace and bounce show), the chosen one ringed in the accent. One
+ * beat for all of them: every app starts opening together and closing together, so a quicker preset settles sooner. Two
+ * share the row; more keep that width and scroll sideways, the next one peeking in.
  */
 @Composable
 private fun PresetCards(presets: List<Design.ThemeInfo>, draft: Draft, clock: androidx.compose.runtime.FloatState) {
@@ -1150,17 +1222,20 @@ private fun PresetCards(presets: List<Design.ThemeInfo>, draft: Draft, clock: an
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val gap = look.dp(12f * look.unit)
     // Derived: every step of a slider changes the draft; the cards compose again only when one of their curves changed, and
-    // not at all while a group's page covers them (editing a banner's curve made them sample theirs again at every step).
+    // not at all while a moment's page covers them.
     val st = LocalStudio.current
-    val held = remember { arrayOfNulls<List<Curve>>(1) }
-    val curves by remember(presets, draft, look.version) {
+    val held = remember { arrayOfNulls<List<Pair<CurveRun, CurveRun>>>(1) }
+    val runs by remember(presets, draft, look.version) {
         androidx.compose.runtime.derivedStateOf {
-            val covered = st != null && st.motionPush.targetValue >= 0.5f
-            held[0]?.takeIf { covered } ?: presets.map { draft.motionCurve(it.id, MotionTokens.BANNER_IN) }.also { held[0] = it }
+            val covered = st != null && st.sub?.part == Part.MOTION && st.subPush.targetValue >= 0.5f
+            held[0]?.takeIf { covered } ?: presets.map {
+                CurveRun.of(draft.motionCurve(it.id, MotionTokens.APP_OPEN)) to CurveRun.of(draft.motionCurve(it.id, MotionTokens.APP_CLOSE_SIZE))
+            }.also { held[0] = it }
         }
     }
-    val runs = remember(curves) { curves.map { CurveRun.of(it) } }
-    val axis = animateFloatAsState(maxOf(0.6f, runs.maxOfOrNull { it.duration } ?: 0.6f) * 1.08f, look.motion(MotionTokens.SETTINGS_FOCUS), label = "axis")
+    // The beat: when every app has opened, and when every one has closed (it glides to fit the slowest).
+    val openFor = animateFloatAsState(maxOf(0.3f, runs.maxOfOrNull { it.first.duration } ?: 0.3f), look.motion(MotionTokens.SETTINGS_FOCUS), label = "open")
+    val closeFor = animateFloatAsState(maxOf(0.3f, runs.maxOfOrNull { it.second.duration } ?: 0.3f), look.motion(MotionTokens.SETTINGS_FOCUS), label = "close")
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
         val room = maxWidth - pad * 2
         val cardW = if (presets.size <= 2) (room - gap) / 2 else room * 0.44f
@@ -1168,22 +1243,23 @@ private fun PresetCards(presets: List<Design.ThemeInfo>, draft: Draft, clock: an
         Row(Modifier.fillMaxWidth().then(if (presets.size > 2) Modifier.horizontalScroll(scroll) else Modifier).padding(pad),
             horizontalArrangement = Arrangement.spacedBy(gap)) {
             presets.forEachIndexed { i, p ->
-                androidx.compose.runtime.key(p.id) { PresetCard(p, runs[i], draft, clock, axis, Modifier.width(cardW)) }
+                androidx.compose.runtime.key(p.id) { PresetCard(p, runs[i], draft, clock, openFor, closeFor, Modifier.width(cardW)) }
             }
         }
     }
 }
 
-/** How long a preset's dot rests at the end of its curve before it runs again (s). */
-private const val PRESET_DOT_REST = 0.7f
+/** How long every app rests open, and closed, between its moves (s). */
+private const val PRESET_REST = 0.7f
 
 @Composable
-private fun PresetCard(p: Design.ThemeInfo, run: CurveRun, draft: Draft, clock: androidx.compose.runtime.FloatState,
-                       axis: androidx.compose.runtime.State<Float>, modifier: Modifier) {
+private fun PresetCard(p: Design.ThemeInfo, run: Pair<CurveRun, CurveRun>, draft: Draft, clock: androidx.compose.runtime.FloatState,
+                       openFor: androidx.compose.runtime.State<Float>, closeFor: androidx.compose.runtime.State<Float>, modifier: Modifier) {
     val look = LocalLook.current
     val accent = look.color(SettingsTokens.ACCENT)
     val line = look.color(SettingsTokens.ROW_DETAIL_COLOR)
     val fill = look.color(SettingsTokens.CHIP_FILL)
+    val page = look.color(SettingsTokens.GROUP_FILL).copy(alpha = 1f)
     val chosen = draft.motionId() == p.id
     val k = animateFloatAsState(if (chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "chosen")
     var pressed by remember { mutableStateOf(false) }
@@ -1192,36 +1268,36 @@ private fun PresetCard(p: Design.ThemeInfo, run: CurveRun, draft: Draft, clock: 
     val unit = look.unit
     Column(modifier.pressScale { 1f - 0.04f * press.value }
         .pointerInput(p.id) { rowTap({ pressed = it }) { draft.chooseMotion(p.id) } }) {
-        Box(Modifier.fillMaxWidth().height(look.dp(84f * unit)).drawWithCache {
-            val inset = 14f * unit
-            val w = size.width - inset * 2f
-            val h = size.height - inset * 2f
-            fun yOf(v: Float) = inset + h - v.coerceIn(-0.2f, 1.25f) * h * 0.8f
-            val ax = axis.value
-            fun xOf(t: Float) = inset + (t / ax).coerceAtMost(1f) * w
-            // The curve, made again only when it or the axis changes (never in a frame of the dot's).
-            val path = androidx.compose.ui.graphics.Path()
-            for (i in run.values.indices) {
-                val x = xOf(i * run.step)
-                val y = yOf(run.values[i])
-                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            val dash = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(4f * unit, 4f * unit))
-            onDrawBehind {
-                val kk = k.value
-                drawRoundRect(fill, cornerRadius = CornerRadius(corner))
-                if (kk > 0.001f) drawRoundRect(accent.copy(alpha = accent.alpha * kk.coerceIn(0f, 1f)), cornerRadius = CornerRadius(corner), style = Stroke(2.5f * unit))
-                // Where it comes to rest.
-                drawLine(line.copy(alpha = line.alpha * 0.4f), Offset(inset, yOf(1f)), Offset(inset + w, yOf(1f)), strokeWidth = 1f * unit, pathEffect = dash)
-                val ink = mix(line, accent, kk.coerceIn(0f, 1f))
-                drawPath(path, ink, style = Stroke(2.5f * unit, cap = androidx.compose.ui.graphics.StrokeCap.Round))
-                // The dot: along the curve on its own timing, a rest at its end, again (it fades out at the end of the rest
-                // and in at the start, so it never jumps back).
-                val loop = run.duration + PRESET_DOT_REST
-                val t = clock.floatValue % loop
-                val tt = t.coerceAtMost(run.duration)
-                val a = minOf((t / 0.12f).coerceIn(0f, 1f), ((loop - t) / 0.25f).coerceIn(0f, 1f))
-                if (a > 0.003f) drawCircle(ink.copy(alpha = ink.alpha * a), 4.5f * unit, Offset(xOf(tt), yOf(run.at(tt))))
+        Box(Modifier.fillMaxWidth().height(look.dp(84f * unit)).drawBehind {
+            val kk = k.value.coerceIn(0f, 1f)
+            drawRoundRect(fill, cornerRadius = CornerRadius(corner))
+            if (kk > 0.001f) drawRoundRect(accent.copy(alpha = accent.alpha * kk), cornerRadius = CornerRadius(corner), style = Stroke(2.5f * unit))
+            // The beat: open, rest, close, rest, again.
+            val o = openFor.value
+            val c = closeFor.value
+            val loop = o + PRESET_REST + c + PRESET_REST
+            val t = clock.floatValue % loop
+            val v = if (t < o + PRESET_REST) run.first.at(t) else 1f - run.second.at(t - o - PRESET_REST)
+            // The app: out of an icon at the bottom into the card's inside, its colour turning from the icon's into a page's.
+            val inset = 9f * unit
+            val icon = 20f * unit
+            val ix0 = size.width / 2f - icon / 2f
+            val iy0 = size.height - inset - icon - 4f * unit
+            val l = ix0 + (inset - ix0) * v
+            val tp = iy0 + (inset - iy0) * v
+            val r = ix0 + icon + (size.width - inset - ix0 - icon) * v
+            val b = iy0 + icon + (size.height - inset - iy0 - icon) * v
+            val ink = mix(line, accent, kk)
+            val vv = v.coerceIn(0f, 1f)
+            val cr = icon * 0.24f + (corner - inset - icon * 0.24f).coerceAtLeast(0f) * vv
+            drawRoundRect(mix(ink, page, vv), Offset(l, tp), Size(r - l, b - tp), CornerRadius(cr))
+            // The app's first lines, there as it opens.
+            if (vv > 0.3f) {
+                val a = ((vv - 0.3f) / 0.7f)
+                val w = r - l
+                drawRoundRect(ink.copy(alpha = ink.alpha * 0.7f * a), Offset(l + w * 0.1f, tp + (b - tp) * 0.18f), Size(w * 0.42f, 3.4f * unit), CornerRadius(1.7f * unit))
+                drawRoundRect(ink.copy(alpha = ink.alpha * 0.3f * a), Offset(l + w * 0.1f, tp + (b - tp) * 0.42f), Size(w * 0.7f, 3f * unit), CornerRadius(1.5f * unit))
+                drawRoundRect(ink.copy(alpha = ink.alpha * 0.3f * a), Offset(l + w * 0.1f, tp + (b - tp) * 0.6f), Size(w * 0.55f, 3f * unit), CornerRadius(1.5f * unit))
             }
         })
         Spacer(Modifier.height(look.dp(8f * unit)))
@@ -1261,29 +1337,41 @@ private class CurveRun(val step: Float, val values: FloatArray) {
 }
 
 /**
- * The whole preset at once (docs/PLAN_MOTION.md): its speed (every curve's time) and its bounce (how far whatever bounces
- * goes past its place), and back to the preset as it comes. Shown at once on the cards and the picture above; waits for
- * Apply. The speed's slider doubles and halves evenly either side of the preset's own.
+ * The whole preset's feel (docs/PLAN_SETTINGS_V2.md): its speed (every curve's time) and its bounce (how far whatever bounces
+ * goes past its place), in words, the slider's ends saying which way is which; and back to the preset as it comes. Shown at
+ * once on the cards and the picture above; waits for Apply. The speed's slider doubles and halves evenly either side of the
+ * preset's own.
  */
 @Composable
-private fun FineTune(draft: Draft) {
+private fun Feel(draft: Draft) {
     val id = draft.motionId()
     val name = presetName(id)
     val v = LocalLook.current.version
-    // Derived: every step of a slider in a group's editor changes the draft; these compose again only when they change.
+    // Derived: every step of a slider on a moment's page changes the draft; these compose again only when they change.
     val speed by remember(draft, id, v) { androidx.compose.runtime.derivedStateOf { draft.motionSpeed(id) } }
     val bounce by remember(draft, id, v) { androidx.compose.runtime.derivedStateOf { draft.motionBounce(id) } }
-    val n by remember(draft, id, v) { androidx.compose.runtime.derivedStateOf { draft.motionRoleChanges(id) } }
-    val any by remember(draft, id, v) { androidx.compose.runtime.derivedStateOf { draft.motionChangeCount(id) > 0 } }
-    Group("Fine-tune", "For $name as a whole: every animation faster or slower, every bounce further or calmer.") {
-        SliderRow("Speed", "${(speed * 100).roundToInt()} %", speedToSlider(speed)) { t ->
+    val n by remember(draft, id, v) { androidx.compose.runtime.derivedStateOf { draft.motionChangeCount(id) } }
+    // (It keeps its last count while it folds away.)
+    val last = remember { intArrayOf(1) }
+    if (n > 0) last[0] = n
+    Group("Feel", "For $name as a whole: every moment quicker or calmer, every bounce livelier or stiller.") {
+        FeelSlider("Speed", when {
+            abs(speed - 1f) < 0.03f -> "As $name has it"
+            speed > 1f -> "Snappier · ${(speed * 100).roundToInt()} %"
+            else -> "More relaxed · ${(speed * 100).roundToInt()} %"
+        }, speedToSlider(speed), "Relaxed", "Snappy") { t ->
             draft.chooseMotionNumber(id, MotionTokens.ADJUST_SPEED, sliderToSpeed(t))
         }
-        SliderRow("Bounce", if (bounce < 0.001f) "None" else "${(bounce * 100).roundToInt()} %", bounce / MotionAdjust.BOUNCE_MAX) { t ->
+        FeelSlider("Bounce", when {
+            bounce < 0.005f -> "None"
+            abs(bounce - 1f) < 0.03f -> "As $name has it"
+            bounce > 1f -> "Livelier · ${(bounce * 100).roundToInt()} %"
+            else -> "Stiller · ${(bounce * 100).roundToInt()} %"
+        }, bounce / MotionAdjust.BOUNCE_MAX, "Still", "Lively") { t ->
             draft.chooseMotionNumber(id, MotionTokens.ADJUST_BOUNCE, Draft.snap(t * MotionAdjust.BOUNCE_MAX))
         }
-        Reveal(any) {
-            ActionRow("Reset all", "Back to $name as it comes" + if (n > 0) " ($n change" + (if (n == 1) "" else "s") + " to its animations)" else "") {
+        Reveal(n > 0) {
+            ActionRow("Reset all", "Back to $name as it comes (${last[0]} change" + (if (last[0] == 1) "" else "s") + ")") {
                 draft.resetMotion(id)
             }
         }
@@ -1294,4 +1382,3 @@ private fun FineTune(draft: Draft) {
 private fun speedToSlider(speed: Float) = ((kotlin.math.ln(speed) / kotlin.math.ln(2f)) + 1f) / 2f
 
 private fun sliderToSpeed(t: Float) = Draft.snap(Math.pow(2.0, (t * 2f - 1f).toDouble()).toFloat()).coerceIn(MotionAdjust.SPEED_MIN, MotionAdjust.SPEED_MAX)
-

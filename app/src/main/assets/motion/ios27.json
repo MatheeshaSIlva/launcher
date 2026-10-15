@@ -6,13 +6,189 @@
  "version": "0.1",
  "_about": "The iOS 27 animation preset: every motion role (motion.*) as a spring or a bezier curve. Written by tools/design/build_ios27_theme.py (its seeds); kept as edited here once written.",
  "tokens": {
+  "motion.adjust.banners.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.banners.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.bars.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.bars.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
   "motion.adjust.bounce": {
    "factor": 1,
    "src": "judged:the preset's own bounce (the settings' Fine-tune: every overshoot scaled by it)"
   },
+  "motion.adjust.cc-editing.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.cc-editing.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.cc.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.cc.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.closing.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.closing.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.controls.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.controls.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.editing.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.editing.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.folders.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.folders.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.library.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.library.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.little.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.little.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.lock.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.lock.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.menus.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.menus.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.nc.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.nc.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.newlook.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.newlook.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.opening.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.opening.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.pages.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.pages.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.scrolling.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.scrolling.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.settings.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.settings.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
   "motion.adjust.speed": {
    "factor": 1,
    "src": "judged:the preset's own speed (the settings' Fine-tune: every curve's time divided by it)"
+  },
+  "motion.adjust.status-icons.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.status-icons.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.switcher.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.switcher.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.switching.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.switching.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.unlocking.bounce": {
+   "factor": 1,
+   "src": "judged:the moment's own bounce on top of the preset's (1: as the preset)"
+  },
+  "motion.adjust.unlocking.speed": {
+   "factor": 1,
+   "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
   },
   "motion.app.cancel": {
    "spring": [

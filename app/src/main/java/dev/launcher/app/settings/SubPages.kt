@@ -24,15 +24,26 @@ import dev.launcher.app.motion.MotionTokens
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
+/** A page pushed over a part's own page ([part]); [title] is the header's while it is in. */
+internal sealed interface Pushed {
+    val part: Part
+    val title: String
+}
+
 /**
  * Pages one level below a part's own page (docs/PLAN_SETTINGS_V2.md, "Look, calmer" and "Phone, calmer"): what most people
- * never change waits there, a row away. [title] is the header's while the page is in.
+ * never change waits there, a row away.
  */
-internal enum class Sub(val part: Part, val title: String) {
+internal enum class Sub(override val part: Part, override val title: String) : Pushed {
     COLOURS(Part.LOOK, "Adjust colours"),
     FONTS(Part.LOOK, "Fonts"),
     SIZE(Part.LOOK, "Size"),
     DEVELOPER(Part.PHONE, "Developer"),
+}
+
+/** A moment's page (docs/PLAN_SETTINGS_V2.md, V2), pushed over Motion or over the page of the part it belongs to. */
+internal data class MomentPage(val moment: dev.launcher.app.motion.Moment, override val part: Part) : Pushed {
+    override val title: String get() = moment.title
 }
 
 /**
@@ -45,8 +56,8 @@ internal enum class Sub(val part: Part, val title: String) {
 @Composable
 internal fun SubPager(
     st: Studio, g: Geometry, part: Part, fadePx: Float, bandPaint: androidx.compose.ui.graphics.Paint,
-    main: @Composable (push: (Sub) -> Unit, lit: () -> Sub?) -> Unit,
-    page: @Composable (sub: Sub, pop: () -> Unit) -> Unit,
+    main: @Composable (push: (Pushed) -> Unit, lit: () -> Pushed?) -> Unit,
+    page: @Composable (sub: Pushed, pop: () -> Unit) -> Unit,
 ) {
     val look = LocalLook.current
     val scope = rememberCoroutineScope()
@@ -55,19 +66,21 @@ internal fun SubPager(
     val mainScroll = st.scrolls.getValue(part)
     // The sub-page built (the last one pushed; one at a time, never another while it shows: one tapped as the last one's page
     // slides away waits until it has gone), and the one tapped whose page is being built.
-    var built by remember { mutableStateOf<Sub?>(null) }
-    var pending by remember { mutableStateOf<Sub?>(null) }
+    var built by remember { mutableStateOf<Pushed?>(null) }
+    var pending by remember { mutableStateOf<Pushed?>(null) }
     val gone = { st.subPush.value <= PAGE_GONE }
     val pushing = remember { arrayOfNulls<kotlinx.coroutines.Job>(1) }
-    val push: (Sub) -> Unit = remember(st, scope) {
+    val push: (Pushed) -> Unit = remember(st, scope) {
         { s ->
             if (st.open == part && st.subPush.targetValue < 0.5f) {
                 pushing[0]?.cancel()
+                // Its scroll, kept while the settings are open (made here, outside composition).
+                if (s !in st.subScrolls) st.subScrolls[s] = IosScrollState()
                 pending = s
                 pushing[0] = scope.launch {
                     try {
-                        if (built !== s && !gone()) androidx.compose.runtime.snapshotFlow { gone() }.first { it }
-                        val ready = built === s
+                        if (built != s && !gone()) androidx.compose.runtime.snapshotFlow { gone() }.first { it }
+                        val ready = built == s
                         built = s
                         st.sub = s
                         if (!ready) { androidx.compose.runtime.withFrameNanos { }; androidx.compose.runtime.withFrameNanos { } }
@@ -75,12 +88,12 @@ internal fun SubPager(
                         pending = null
                         st.subPush.animateTo(1f, spec.value)
                     } catch (_: kotlinx.coroutines.CancellationException) {
-                    } finally { if (pending === s) pending = null }
+                    } finally { if (pending == s) pending = null }
                 }
             }
         }
     }
-    val lit: () -> Sub? = remember { { pending } }
+    val lit: () -> Pushed? = remember { { pending } }
     val pop: () -> Unit = remember(st, scope) {
         {
             pushing[0]?.cancel()
@@ -135,18 +148,18 @@ private fun SubBack(st: Studio, part: Part, pop: () -> Unit) {
 
 /** One sub-page: it slides in over its part's page and back; its groups rise in with the push, a beat apart. */
 @Composable
-private fun SubPage(st: Studio, g: Geometry, s: Sub, fadePx: Float, bandPaint: androidx.compose.ui.graphics.Paint, content: @Composable () -> Unit) {
+private fun SubPage(st: Studio, g: Geometry, s: Pushed, fadePx: Float, bandPaint: androidx.compose.ui.graphics.Paint, content: @Composable () -> Unit) {
     val look = LocalLook.current
     val m = look.dp(SettingsTokens.MARGIN)
     val scroll = st.subScrolls.getValue(s)
-    val shown: () -> Float = remember(st, s) { { if (st.sub === s) st.subPush.value.coerceIn(0f, 1f) else 0f } }
+    val shown: () -> Float = remember(st, s) { { if (st.sub == s) st.subPush.value.coerceIn(0f, 1f) else 0f } }
     val counter = remember { GroupCounter() }
     counter.n = 0
     CompositionLocalProvider(LocalShown provides shown, LocalGroups provides counter) {
         // (Nothing here is read in composition: a push or a pop composes nothing.)
         Box(Modifier.fillMaxSize()
             .graphicsLayer {
-                val on = st.sub === s
+                val on = st.sub == s
                 val k = if (on) st.subPush.value else 0f
                 // Out of sight unless it is the one pushed (moved, never laid out again).
                 translationX = if (!on) g.w * 3f else (1f - k.coerceIn(0f, 1f)) * g.w * 0.4f
@@ -168,9 +181,9 @@ private fun SubPage(st: Studio, g: Geometry, s: Sub, fadePx: Float, bandPaint: a
  * goes out as the page slides in.
  */
 @Composable
-internal fun PushRow(title: String, detail: String?, sub: Sub, push: (Sub) -> Unit, lit: () -> Sub?) {
+internal fun PushRow(title: String, detail: String?, sub: Pushed, push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val look = LocalLook.current
-    val held by remember(sub) { androidx.compose.runtime.derivedStateOf { lit() === sub } }
+    val held by remember(sub) { androidx.compose.runtime.derivedStateOf { lit() == sub } }
     val onClick = remember(sub, push) { { push(sub) } }
     BaseRow(title, detail, onClick, held = held) {
         BasicText("›", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
