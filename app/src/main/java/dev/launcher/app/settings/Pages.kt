@@ -27,6 +27,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -185,7 +188,7 @@ object SettingsTokens {
  * ([element]: its layout, where it lives, its options and its own theme, all on its page), and Phone. Each has its name, its
  * colour and its symbol.
  */
-internal enum class Part(val title: String, val color: ColorKey, val element: Element? = null) {
+internal enum class Part(val title: String, val color: ColorKey, val element: Element? = null, val tile: Boolean = true) {
     LOOK("Look", ColorKey("comp.settings.color.look")),
     MOTION("Motion", ColorKey("comp.settings.color.motion")),
     HOME("Home", ColorKey("comp.settings.color.home"), Element.HOME),
@@ -194,6 +197,8 @@ internal enum class Part(val title: String, val color: ColorKey, val element: El
     SHADE("Notifications & Control Center", ColorKey("comp.settings.color.shade"), Element.SHADE),
     STATUS_BAR("Status bar", ColorKey("comp.settings.color.statusbar"), Element.STATUS_BAR),
     PHONE("Phone", ColorKey("comp.settings.color.phone")),
+    /** Everything you changed (V3), opened from the start page's "Your changes": a page, no tile. */
+    CHANGES("Your changes", ColorKey("comp.settings.color.look"), tile = false),
 }
 
 /** What a part holds (with the changes waiting to be applied), in a line under its name on the tile. */
@@ -574,8 +579,13 @@ internal class Studio(
      * above it), the rest scrolls the tiles in it ([liftScroll]).
      */
     val start = IosScrollState()
-    /** How far (px) the sheet has risen for the tiles' scroll now. */
-    fun lifted(g: Geometry): Float = start.offset.coerceIn(0f, g.liftRoom(bar.value))
+    /** How far (px) the sheet has risen now: for the tiles' scroll, or all the way while the search is up ([searchLift]). */
+    fun lifted(g: Geometry): Float {
+        val room = g.liftRoom(bar.value)
+        return maxOf(start.offset.coerceIn(0f, room), searchLift.value.coerceIn(0f, 1f) * room)
+    }
+    /** The search lifting the sheet (0..1, its own spring: the tiles' scroll stays where it was under the results). */
+    val searchLift = Animatable(0f)
     /**
      * The sub-page pushed over the open part's page (Look's colours, fonts and size; Phone's developer tools; null: none), how
      * far it is in, each one's scroll, and the way back from each part's (set by its pager). [subTitled]: the last one pushed
@@ -591,6 +601,23 @@ internal class Studio(
     /** Each pushed page's scroll (a moment's page made when first pushed: SubPager). */
     val subScrolls = androidx.compose.runtime.mutableStateMapOf<Pushed, IosScrollState>().apply { for (s in Sub.entries) put(s, IosScrollState()) }
     val popSubs = HashMap<Part, () -> Unit>()
+    /** Each part's way of pushing a page over its own (set by its pager): the search goes to pages one level down. */
+    val pushers = HashMap<Part, (Pushed) -> Unit>()
+    /** The search (V3): whether it is up, its words, its results' scroll, and how far the start page has turned to it (0..1). */
+    var searching by mutableStateOf(false)
+    val query = androidx.compose.foundation.text.input.TextFieldState()
+    val searchScroll = IosScrollState()
+    val searchK = Animatable(0f)
+    /** Rows the search can find, by page and name, each page's viewport, and the row lit now (its strength). */
+    val anchors = HashMap<String, LayoutCoordinates>()
+    val viewports = HashMap<String, LayoutCoordinates>()
+    var lit by mutableStateOf<String?>(null)
+    val litK = Animatable(0f)
+    /** The open page grew from a row (a result, Your changes), not from its tile: it grows without the tile's contents. */
+    var fromRow by mutableStateOf<Part?>(null)
+    /** The moment whose Every detail is open (one at a time), and the one whose Every detail is open on screen now. */
+    var detailFor by mutableStateOf<String?>(null)
+    var detailShown by mutableStateOf<String?>(null)
     /**
      * A moment's page (MomentPage, pushed over Motion or a part's page): the animation whose editor is open on it (Every
      * detail), whether a slider or a handle is being dragged (what follows it changes at once, no rolling words), and what
@@ -688,7 +715,7 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                 // From the tiles only (a tap on a fading tile while another page closes is not one).
                 if (st.p.value < 0.02f || st.open == part) {
                     // Where it grows from: the tile where it is now (the tiles scroll), its name's place in it.
-                    if (st.open != part) {
+                    if (st.open != part && st.fromRow != part) {
                         val s = st.sheet?.takeIf { it.isAttached }
                         val t = st.tileAt[part]?.takeIf { it.isAttached }
                         if (s != null && t != null) {
@@ -726,7 +753,11 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
                 st.open = null
                 focus.clearFocus()
                 st.start.scroller.jumpTo(0f)
-                scope.launch { st.p.snapTo(0f); fontSearch.closeNow() }
+                // A search left up ends too.
+                st.searching = false
+                st.query.edit { replace(0, length, "") }
+                st.searchScroll.scroller.jumpTo(0f)
+                scope.launch { st.p.snapTo(0f); fontSearch.closeNow(); st.searchK.snapTo(0f); st.searchLift.snapTo(0f) }
             }
         }
         // Where home's picture at the tiles leaves the status bar to the page, as the sheet is now (the tiles' scroll lifts it).
@@ -795,7 +826,8 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         val moving by remember {
             androidx.compose.runtime.derivedStateOf {
                 st.p.isRunning || bar.isRunning || entry.moving || st.scrolls.values.any { it.moving } || st.start.moving ||
-                    st.subPush.isRunning || st.subScrolls.values.any { it.moving }
+                    st.subPush.isRunning || st.subScrolls.values.any { it.moving } ||
+                    st.searchK.isRunning || st.searchLift.isRunning || st.searchScroll.moving
             }
         }
         // And the tree is there at all only for a screen reader (TalkBack): taking it away at every scroll's start and
@@ -1542,9 +1574,10 @@ private fun Sheet(st: Studio, g: Geometry, bar: Animatable<Float, *>, open: (Par
 }
 
 /**
- * At rest: the tiles, two across (docs/PLAN_SETTINGS_V2.md: Look and Motion, the parts of the phone, Phone). More than the
- * sheet shows at rest: a scroll up lifts the sheet first, as a page would, then scrolls the tiles in it ([liftScroll]); the
- * last ones clear the Apply bar.
+ * At rest: a search field (V3), then the tiles, two across (docs/PLAN_SETTINGS_V2.md: Look and Motion, the parts of the
+ * phone, Phone), "Your changes" over them while anything differs from the theme or preset. More than the sheet shows at
+ * rest: a scroll up lifts the sheet first, as a page would, then scrolls the tiles in it ([liftScroll]); the last ones clear
+ * the Apply bar. The search lifts the sheet as a page would and turns the tiles into its results.
  */
 @Composable
 private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: Float, art: androidx.compose.runtime.State<ArtKit>) {
@@ -1552,8 +1585,8 @@ private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: 
     val m = look.dp(SettingsTokens.MARGIN)
     val bar = st.bar
     val bandPaint = remember { androidx.compose.ui.graphics.Paint() }
-    // The scenes' clock runs while the tiles are in sight: not under a page at rest, not with the settings away or covered by
-    // home's picture. A long frame counts as a short one (a stall pauses the scenes, never makes them jump).
+    // The scenes' clock runs while the tiles are in sight: not under a page at rest or the search's results, not with the
+    // settings away or covered by home's picture. A long frame counts as a short one (a stall pauses the scenes).
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
     val resumed = remember { mutableStateOf(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
     androidx.compose.runtime.DisposableEffect(lifecycle) {
@@ -1566,7 +1599,8 @@ private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: 
     }
     val inSight = remember(st) {
         androidx.compose.runtime.derivedStateOf {
-            resumed.value && st.entry.enter.floatValue > 0f && !(st.open != null && !st.p.isRunning && st.p.value >= 1f)
+            resumed.value && st.entry.enter.floatValue > 0f && !(st.open != null && !st.p.isRunning && st.p.value >= 1f) &&
+                !(st.searching && !st.searchK.isRunning)
         }
     }
     LaunchedEffect(st) {
@@ -1580,14 +1614,144 @@ private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: 
             }
         }
     }
-    // (The tiles dissolve under the sheet's top once they scroll in it, not while the sheet only rises.)
-    Box(Modifier.fillMaxSize().topFade(st.start, g.unit, fadePx, bandPaint) { contentOffset(st.start, g.liftRoom(bar.value)) }) {
-        Column(Modifier.fillMaxSize()
-            .liftScroll(st.start, { g.liftRoom(bar.value) }) { bar.value * g.barRoom }
-            .padding(start = m, end = m)) {
-            Spacer(Modifier.height(look.dp(26f * g.unit)))
-            TileGrid(st, open, art)
-            Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset)))
+    val scope = rememberCoroutineScope()
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val draft = LocalDraft.current
+    val turn = androidx.compose.runtime.rememberUpdatedState(look.motion<Float>(MotionTokens.MODE_CROSSFADE))
+    // The index is made as the search begins (it follows the layouts chosen and Developer's switch); searched off the main
+    // thread as the words change, the list following a frame later.
+    val index = remember { mutableStateOf<List<SearchEntry>>(emptyList()) }
+    val results = remember { mutableStateOf<List<SearchEntry>>(emptyList()) }
+    LaunchedEffect(st) {
+        androidx.compose.runtime.snapshotFlow { st.searching }.collect { on -> if (on) index.value = settingsIndex(draft, SettingsPrefs.developer) }
+    }
+    LaunchedEffect(st) {
+        androidx.compose.runtime.snapshotFlow { st.query.text.toString() to index.value }.collectLatest { (q, idx) ->
+            results.value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { searchSettings(idx, q) }
+        }
+    }
+    val begin: () -> Unit = remember(st, scope, g) {
+        {
+            if (!st.searching) {
+                st.searching = true
+                scope.launch { st.searchK.animateTo(1f, turn.value) }
+                // The sheet rises to where a page puts it (the picture shrinks above it), the results under the field.
+                scope.launch { st.searchLift.animateTo(1f, Look.spec(dev.launcher.app.motion.Motion.role(MotionTokens.SHEET))) }
+            }
+        }
+    }
+    val cancel: () -> Unit = remember(st, scope, g, focus, keyboard) {
+        {
+            focus.clearFocus()
+            keyboard?.hide()
+            st.searching = false
+            // The sheet back to where the tiles' scroll had it.
+            scope.launch { st.searchLift.animateTo(0f, Look.spec(dev.launcher.app.motion.Motion.role(MotionTokens.SHEET))) }
+            scope.launch {
+                st.searchK.animateTo(0f, turn.value)
+                // Gone: the next search starts afresh (no words, its top).
+                if (!st.searching) { st.query.edit { replace(0, length, "") }; st.searchScroll.scroller.jumpTo(0f) }
+            }
+        }
+    }
+    SearchBack(st, cancel)
+    val pick: (SearchEntry, Rect?) -> Unit = remember(st, scope, focus, keyboard, open) {
+        { e, from ->
+            focus.clearFocus()
+            keyboard?.hide()
+            scope.launch { jumpTo(st, e, from, look.unit, open) }
+        }
+    }
+    val fade = Modifier.graphicsLayer { alpha = (1f - st.p.value * 1.8f).coerceIn(0f, 1f) }
+    Column(Modifier.fillMaxSize()) {
+        Row(fade.fillMaxWidth().padding(start = m, end = m, top = look.dp(22f * g.unit)), verticalAlignment = Alignment.CenterVertically) {
+            SearchField(st.query, "Search", Modifier.weight(1f)) { focused -> if (focused) begin() }
+            // Cancel: its room opens as the search begins (and the field gives way to it).
+            Box(Modifier
+                .layout { mm, c ->
+                    val pl = mm.measure(c.copy(minWidth = 0))
+                    val k = st.searchK.value.coerceIn(0f, 1f)
+                    layout((pl.width * k).roundToInt(), pl.height) { pl.place(0, 0) }
+                }
+                .graphicsLayer { alpha = st.searchK.value.coerceIn(0f, 1f) }) {
+                TextButton("Cancel", null) { cancel() }
+            }
+        }
+        Box(Modifier.fillMaxWidth().weight(1f)) {
+            // (The tiles dissolve under the field once they scroll in the sheet, not while the sheet only rises.)
+            Box(Modifier.fillMaxSize()
+                .graphicsLayer { alpha = 1f - st.searchK.value.coerceIn(0f, 1f) }
+                .topFade(st.start, g.unit, fadePx, bandPaint) { contentOffset(st.start, g.liftRoom(bar.value)) }) {
+                Column(Modifier.fillMaxSize()
+                    .liftScroll(st.start, { g.liftRoom(bar.value) }) { bar.value * g.barRoom }
+                    .padding(start = m, end = m)) {
+                    Spacer(Modifier.height(look.dp(16f * g.unit)))
+                    ChangesEntry(st, open)
+                    TileGrid(st, open, art)
+                    Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset)))
+                }
+            }
+            // The results, over the tiles while the search is up (taking every touch there), above the keyboard.
+            val resultsShown by remember(st) { androidx.compose.runtime.derivedStateOf { st.searching || st.searchK.value > 0.001f } }
+            if (resultsShown) {
+                Box(Modifier.fillMaxSize()
+                    .graphicsLayer { alpha = st.searchK.value.coerceIn(0f, 1f) * (1f - st.p.value * 1.8f).coerceIn(0f, 1f) }
+                    .padding(start = m, end = m)
+                    .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.ime.only(androidx.compose.foundation.layout.WindowInsetsSides.Bottom))
+                    .topFade(st.searchScroll, g.unit, fadePx, bandPaint)) {
+                    SearchResults(st, { results.value }, pick)
+                }
+            }
+        }
+    }
+}
+
+/** Back puts the search away while it is up at the tiles (its own scope: only it composes again as the search comes and goes). */
+@Composable
+private fun SearchBack(st: Studio, cancel: () -> Unit) {
+    val on by remember(st) { androidx.compose.runtime.derivedStateOf { st.searching && st.open == null } }
+    BackHandler(enabled = on) { cancel() }
+}
+
+/**
+ * "Your changes" over the tiles (V3): there while anything differs from the theme or the preset, how many, leading to them
+ * all (the page grows out of the row). Counted while the tiles show (a slider dragged on a page does not count it again
+ * at every step).
+ */
+@Composable
+private fun ChangesEntry(st: Studio, open: (Part) -> Unit) {
+    val draft = LocalDraft.current
+    val look = LocalLook.current
+    val ctx = LocalContext.current
+    val held = remember { intArrayOf(-1) }
+    val n by remember(st, draft, look.version) {
+        androidx.compose.runtime.derivedStateOf {
+            if (held[0] >= 0 && st.open != null && !st.p.isRunning) held[0] else changesOf(draft, ctx).size.also { held[0] = it }
+        }
+    }
+    // (It keeps its last count while it folds away.)
+    val last = remember { intArrayOf(1) }
+    if (n > 0) last[0] = n
+    val at = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    Reveal(n > 0) {
+        // (It steps back and fades as a page grows over it, as the tiles do.)
+        Column(Modifier.onPlaced { at[0] = it }.graphicsLayer {
+            val p = st.p.value
+            alpha = (1f - p * 1.8f).coerceIn(0f, 1f)
+            val sc = 1f - 0.05f * p.coerceIn(0f, 1f)
+            scaleX = sc; scaleY = sc
+        }) {
+            Group(null) {
+                BaseRow("Your changes", "${last[0]} from the theme and the preset", {
+                    val s = st.sheet?.takeIf { it.isAttached }
+                    val me = at[0]?.takeIf { it.isAttached }
+                    if (s != null && me != null) { st.tiles[Part.CHANGES] = s.localBoundingBoxOf(me, clipBounds = false); st.fromRow = Part.CHANGES }
+                    open(Part.CHANGES)
+                }) {
+                    BasicText("›", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
+                }
+            }
         }
     }
 }
@@ -1601,7 +1765,7 @@ private fun TileGrid(st: Studio, open: (Part) -> Unit, art: androidx.compose.run
     val look = LocalLook.current
     val gap = look.pt(SettingsTokens.TILE_GAP)
     val least = look.pt(SettingsTokens.TILE_HEIGHT)
-    androidx.compose.ui.layout.Layout(content = { for (part in Part.entries) Tile(st, part, open, art) }) { ms, c ->
+    androidx.compose.ui.layout.Layout(content = { for (part in Part.entries) if (part.tile) Tile(st, part, open, art) }) { ms, c ->
         val w = ((c.maxWidth - gap) / 2f).toInt().coerceAtLeast(0)
         val h = maxOf(least, ms.maxOf { it.maxIntrinsicHeight(w).toFloat() }).roundToInt()
         val placeables = ms.map { it.measure(androidx.compose.ui.unit.Constraints.fixed(w, h)) }
@@ -1684,7 +1848,7 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.com
                 val k = press.value
                 if (k > 0.001f) drawRoundRect(pressFill.copy(alpha = pressFill.alpha * k), cornerRadius = r)
             }
-            .pointerInput(part) { rowTap({ pressed = it }) { open(part) } }
+            .pointerInput(part) { rowTap({ pressed = it }) { st.fromRow = null; open(part) } }
             .padding(look.dp(14f * look.unit)),
     ) {
         // Its scene, on the art's clock, in a layer of its own (only the scene is drawn again in each of its frames).
@@ -1754,9 +1918,11 @@ private fun GrowingTile(st: Studio, part: Part, art: androidx.compose.runtime.St
             from.left + (0f - from.left) * k, from.top + (0f - from.top) * k,
             from.right + (size.width - from.right) * k, from.bottom + (size.height - from.bottom) * k,
         )
-        val corner = fromCorner + (toCorner - fromCorner) * k.coerceIn(0f, 1f)
+        val row = st.fromRow == part
+        val corner = (if (row) 0f else fromCorner) + (toCorner - (if (row) 0f else fromCorner)) * k.coerceIn(0f, 1f)
         val colour = (1f - (p - 0.25f) / 0.6f).coerceIn(0f, 1f)
         drawRoundRect(bg.copy(alpha = bg.alpha * colour), r.topLeft, r.size, CornerRadius(corner))
+        if (row) return@Canvas
         if (pressed > 0.001f) drawRoundRect(pressFill.copy(alpha = pressFill.alpha * pressed * colour), r.topLeft, r.size, CornerRadius(corner))
         val content = (1f - p / 0.35f).coerceIn(0f, 1f)
         if (content > 0f) {
@@ -1809,6 +1975,7 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
                 Part.LOOK -> SubPager(st, g, part, fadePx, bandPaint, { push, lit -> LookPage(push, lit) }) { s, _ -> LookSubPage(s) }
                 Part.MOTION -> SubPager(st, g, part, fadePx, bandPaint, { push, lit -> MotionPage(push, lit) }) { s, _ -> MomentPageOf(st, s) }
                 Part.PHONE -> PhonePager(st, g, fadePx, bandPaint)
+                Part.CHANGES -> SubPager(st, g, part, fadePx, bandPaint, { _, _ -> ChangesList(null, byPart = true) }) { _, _ -> }
                 else -> SubPager(st, g, part, fadePx, bandPaint, { push, lit -> PartPage(part, push, lit) }) { s, _ -> MomentPageOf(st, s) }
             }
         }
@@ -1828,6 +1995,7 @@ private fun LookPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val draft = LocalDraft.current
     val look = LocalLook.current
     val themes = remember(look.version) { Design.themes() }
+    ChangesRow(Part.LOOK, push, lit)
     Group("Theme", "Every part follows it, unless one has a theme of its own (on that part's page).") {
         ThemeCards(themes, draft)
     }
@@ -1995,7 +2163,7 @@ private fun SeedRow(draft: Draft, editing: androidx.compose.runtime.MutableState
 }
 
 /** A font family's name as the font rows show it. */
-private fun fontName(id: String) = FONT_FAMILIES.firstOrNull { it.first == id }?.second ?: id.removePrefix("google:")
+internal fun fontName(id: String) = FONT_FAMILIES.firstOrNull { it.first == id }?.second ?: id.removePrefix("google:")
 
 /**
  * The colour editor, opening in place under the palette for the colour being changed (the one the palette is made from, or a
@@ -2588,6 +2756,7 @@ internal fun Modifier.topFade(scroll: IosScrollState, unit: Float, fadePx: Float
 private fun PartPage(part: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val e = part.element ?: return
     val draft = LocalDraft.current
+    ChangesRow(part, push, lit)
     val current = Layouts.find(e, draft.layout(e)) ?: Setup.layout(e)
     val layouts = Layouts.of(e)
     Group("Layout", current.description) {
@@ -2598,7 +2767,9 @@ private fun PartPage(part: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) {
     }
     val at = draft.placement(e)
     Group("Where it lives", if (gestureOf(e, at) != null) "The finger on the picture shows how it is reached." else null) {
-        if (current.placements.size > 1) for (p in current.placements) CheckRow(p.title, p.description, p.id == at) { draft.choosePlacement(e, p.id) }
+        if (current.placements.size > 1) for (p in current.placements) {
+            CheckRow(p.title, p.description, p.id == at, changed = p.id == at && p.id != current.defaultPlacement.id) { draft.choosePlacement(e, p.id) }
+        }
         else current.defaultPlacement.let { p -> BaseRow(p.title, p.description, null) { } }
     }
     val counts = current.options.filterIsInstance<Option.Count>()
@@ -2609,13 +2780,16 @@ private fun PartPage(part: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) {
                 val v = draft.int(e, o.key, o.default)
                 // Up to what fits at the size chosen (Look, Size); a count past it (the size grew since) can only come down.
                 val top = minOf(o.max, room[o.key] ?: o.max)
-                StepperRow(o.title, o.description, v, minus = v > o.min, plus = v < top) { draft.chooseInt(e, o.key, it, o.default) }
+                StepperRow(o.title, o.description, v, minus = v > o.min, plus = v < top, changed = v != o.default) { draft.chooseInt(e, o.key, it, o.default) }
             }
         }
     }
     val toggles = current.options.filterIsInstance<Option.Toggle>()
     if (toggles.isNotEmpty()) Group("Options") {
-        for (o in toggles) ToggleRow(o.title, o.description, draft.bool(e, o.key, o.default)) { draft.chooseBool(e, o.key, it, o.default) }
+        for (o in toggles) {
+            val v = draft.bool(e, o.key, o.default)
+            ToggleRow(o.title, o.description, v, changed = v != o.default) { draft.chooseBool(e, o.key, it, o.default) }
+        }
     }
     Group("Look", "It follows the theme chosen in Look, or has one of its own.") {
         OwnThemeRow(e)
@@ -2661,7 +2835,8 @@ private fun roomNote(e: Element, room: Map<String, Int>): String? = when {
 
 /** A count: its name and what it is, the number (rolling to a new one) and iOS's stepper. */
 @Composable
-private fun StepperRow(title: String, detail: String?, value: Int, minus: Boolean, plus: Boolean, onChange: (Int) -> Unit) = BaseRow(title, detail, null) {
+private fun StepperRow(title: String, detail: String?, value: Int, minus: Boolean, plus: Boolean, changed: Boolean = false, onChange: (Int) -> Unit) =
+    BaseRow(title, detail, null, changed = changed) {
     val look = LocalLook.current
     Rolling("$value", look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)), Modifier)
     Spacer(Modifier.width(look.dp(12f * look.unit)))
@@ -3187,7 +3362,8 @@ internal fun Group(title: String?, note: String? = null, rows: @Composable () ->
     val counter = remember { RowCounter() }
     counter.n = 0
     Column(rise.fillMaxWidth().background(look.color(SettingsTokens.GROUP_FILL), RoundedCornerShape(look.dp(SettingsTokens.GROUP_CORNER)))
-        .clip(RoundedCornerShape(look.dp(SettingsTokens.GROUP_CORNER)))) {
+        .clip(RoundedCornerShape(look.dp(SettingsTokens.GROUP_CORNER)))
+        .then(if (title != null) Modifier.anchor(title) else Modifier)) {
         CompositionLocalProvider(LocalRowCounter provides counter) { rows() }
     }
     if (note != null) {
@@ -3203,22 +3379,30 @@ internal fun Group(title: String?, note: String? = null, rows: @Composable () ->
  */
 @Composable
 internal fun BaseRow(title: String, detail: String?, onClick: (() -> Unit)?, accent: Boolean = false, changing: Boolean = false,
-                     held: Boolean = false, below: (@Composable () -> Unit)? = null, end: @Composable () -> Unit) {
+                     held: Boolean = false, below: (@Composable () -> Unit)? = null, changed: Boolean = false, separator: Boolean? = null,
+                     end: @Composable () -> Unit) {
     val look = LocalLook.current
     val counter = LocalRowCounter.current
-    val first = remember { counter == null || counter.n++ == 0 }
+    val counted = remember { counter == null || counter.n++ == 0 }
+    val first = separator?.let { !it } ?: counted
+    // A dot before its name while it differs from the theme's or the preset's (V3).
+    val dot by animateFloatAsState(if (changed) 1f else 0f, look.motion(if (changed) MotionTokens.APPEAR else MotionTokens.DISAPPEAR_FADE), label = "dot")
+    val dotColor = look.color(SettingsTokens.ACCENT)
     var pressed by remember { mutableStateOf(false) }
     val down = pressed || held
     val press by animateFloatAsState(if (down) 1f else 0f, look.motion(if (down) MotionTokens.PRESS_IN else MotionTokens.PRESS_OUT), label = "press")
     val pad = look.dp(SettingsTokens.ROW_PADDING)
-    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val separatorColor = look.color(SettingsTokens.ROW_SEPARATOR)
     Row(
         Modifier.fillMaxWidth().heightIn(min = look.dp(SettingsTokens.ROW_HEIGHT))
             .drawBehind {
                 if (press > 0.001f) drawRect(Color(Appearance.pressFill).copy(alpha = Color(Appearance.pressFill).alpha * press))
                 // Between rows: a hairline above each but the first (inset by the padding, as iOS's).
-                if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f))
+                if (!first) drawRect(separatorColor, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f))
+                if (dot > 0.003f) drawCircle(dotColor.copy(alpha = dotColor.alpha * dot.coerceIn(0f, 1f)), 3.5f * look.unit * dot,
+                    Offset(pad.toPx() / 2f, 21f * look.unit))
             }
+            .anchor(title)
             .then(if (onClick == null) Modifier else Modifier.pointerInput(onClick) { rowTap({ pressed = it }, onClick) })
             .padding(horizontal = pad, vertical = look.dp(10f * look.unit)),
         verticalAlignment = Alignment.CenterVertically,
@@ -3263,14 +3447,16 @@ private fun ConfirmRow(title: String, detail: String, confirm: String, onConfirm
 
 /** A choice: the chosen row carries a check (it moves to the row tapped). */
 @Composable
-private fun CheckRow(title: String, detail: String?, chosen: Boolean, onChoose: () -> Unit) = BaseRow(title, detail, { if (!chosen) onChoose() }) {
+private fun CheckRow(title: String, detail: String?, chosen: Boolean, changed: Boolean = false, onChoose: () -> Unit) =
+    BaseRow(title, detail, { if (!chosen) onChoose() }, changed = changed) {
     val look = LocalLook.current
     val k by animateFloatAsState(if (chosen) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "check")
     BasicText("✓", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_CHECK).copy(alpha = k)))
 }
 
 @Composable
-private fun ToggleRow(title: String, detail: String?, on: Boolean, onChange: (Boolean) -> Unit) = BaseRow(title, detail, { onChange(!on) }) {
+private fun ToggleRow(title: String, detail: String?, on: Boolean, changed: Boolean = false, onChange: (Boolean) -> Unit) =
+    BaseRow(title, detail, { onChange(!on) }, changed = changed) {
     Toggle(on)
 }
 

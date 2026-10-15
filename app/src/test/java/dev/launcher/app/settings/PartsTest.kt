@@ -15,9 +15,32 @@ class PartsTest {
     }
 
     @Test fun theWholePhoneFirstPhoneLast() {
-        assertEquals(listOf(Part.LOOK, Part.MOTION), Part.entries.take(2))
-        assertEquals(Part.PHONE, Part.entries.last())
+        val tiles = Part.entries.filter { it.tile }
+        assertEquals(listOf(Part.LOOK, Part.MOTION), tiles.take(2))
+        assertEquals(Part.PHONE, tiles.last())
         for (p in listOf(Part.LOOK, Part.MOTION, Part.PHONE)) assertEquals("$p", null, p.element)
+        // Your changes is a page with no tile.
+        assertEquals(listOf(Part.CHANGES), Part.entries.filter { !it.tile })
+    }
+
+    @Test fun theSearchFindsByNameAndByWhatItDoes() {
+        val index = listOf(
+            SearchEntry("Columns", "Home › Grid", "icons across a page grid", Part.HOME),
+            SearchEntry("Bounce", "Motion › Feel", "bounce spring overshoot", Part.MOTION),
+            SearchEntry("Light & dark", "Look", "dark mode night appearance", Part.LOOK),
+            SearchEntry("Dock", "Home › Grid", "dock icons bottom", Part.HOME),
+        )
+        assertEquals(listOf("Columns", "Dock"), searchSettings(index, "icons").map { it.title })
+        assertEquals(listOf("Light & dark"), searchSettings(index, "DARK").map { it.title })
+        assertEquals(listOf("Light & dark"), searchSettings(index, "light and dark").map { it.title })
+        // Every word must be found; a name that starts with the words comes first.
+        assertEquals(listOf("Dock"), searchSettings(index, "dock icons").map { it.title })
+        assertEquals(listOf("Bounce"), searchSettings(index, "bou").map { it.title })
+        assertEquals(emptyList<String>(), searchSettings(index, "  ").map { it.title })
+        assertEquals(emptyList<String>(), searchSettings(index, "wallpaperzzz").map { it.title })
+        // Settings before single animations, whatever the words.
+        val withRole = index + SearchEntry("Depth: icons", "Apps › Opening apps", "animation", Part.APPS, rank = 2)
+        assertEquals(listOf("Columns", "Dock", "Depth: icons"), searchSettings(withRole, "icons").map { it.title })
     }
 
     @Test fun subPagesHangUnderPagesThatPushThem() {

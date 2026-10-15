@@ -62,6 +62,7 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -374,7 +375,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.SheetContent(search: 
     Box(Modifier.fillMaxWidth().weight(1f).windowInsetsPadding(WindowInsets.ime.only(WindowInsetsSides.Bottom))
         .onSizeChanged { viewport.intValue = it.height }.clip(androidx.compose.ui.graphics.RectangleShape).iosScroll(scroll)) {
         Column(Modifier.fillMaxWidth().padding(horizontal = pad)) {
-            GlidingRows({ results.value }, rowH, windowOf) { g -> FontResultRow(g, paint, chosenOf, inView, onPick) }
+            GlidingRows({ results.value }, { it.name }, rowH, windowOf) { g -> FontResultRow(g, paint, chosenOf, inView, onPick) }
             Spacer(Modifier.height(look.dp(24f * look.unit + nav)))
         }
     }
@@ -404,7 +405,7 @@ private class RowPaint(val look: Look, val measurer: androidx.compose.ui.text.Te
  * out four texts each). Every argument is made once: it composes again only when its own check or face changes.
  */
 @Composable
-private fun FontResultRow(g: Glide, paint: RowPaint, chosenOf: () -> String?, inView: (Float) -> Boolean, onPick: (String) -> Unit) {
+private fun FontResultRow(g: Glide<GoogleFontCatalog.Family>, paint: RowPaint, chosenOf: () -> String?, inView: (Float) -> Boolean, onPick: (String) -> Unit) {
     val look = paint.look
     val ctx = LocalContext.current
     val isChosen by remember(g) { androidx.compose.runtime.derivedStateOf { chosenOf() == "google:${g.name}" } }
@@ -438,7 +439,7 @@ private fun FontResultRow(g: Glide, paint: RowPaint, chosenOf: () -> String?, in
             if (g.index > 0) drawRect(paint.separator, Offset(pad, 0f), Size(size.width - pad, 1f))
             val checkW = 14f * look.unit
             val right = size.width - pad
-            paint.category(g.categoryName).let { t ->
+            paint.category(categoryName(g.item.category)).let { t ->
                 drawText(t, topLeft = Offset(right - checkW - 10f * look.unit - t.size.width, (size.height - t.size.height) / 2f))
             }
             if (check.value > 0.001f) {
@@ -468,10 +469,18 @@ private fun FontResultRow(g: Glide, paint: RowPaint, chosenOf: () -> String?, in
     }
 }
 
-/** A row of the list: its family, where it is and is going, and whether it is on its way out. */
+/** A Google Fonts category's name in words. */
+private fun categoryName(category: String) = GoogleFontCatalog.CATEGORIES.firstOrNull { it.first == category }?.second ?: category
+
+/**
+ * A row of a gliding list: its item (by [key]; the newest one with that key), where it is and is going, and whether it is on
+ * its way out.
+ */
 @Stable
-private class Glide(val name: String, category: String, y: Float, a: Float) {
-    val categoryName = GoogleFontCatalog.CATEGORIES.firstOrNull { it.first == category }?.second ?: category
+internal class Glide<T>(val key: String, item: T, y: Float, a: Float) {
+    /** The family's name (the font list's key). */
+    val name: String get() = key
+    var item by mutableStateOf(item)
     val y = Animatable(y)
     val a = Animatable(a)
     var index by mutableIntStateOf(0)
@@ -489,19 +498,19 @@ private class Glide(val name: String, category: String, y: Float, a: Float) {
  * in sight and a few around) are built, and only they move: the others simply take their places. Rows of height [rowH].
  */
 @Composable
-private fun GlidingRows(itemsOf: () -> List<GoogleFontCatalog.Family>, rowH: Float, window: () -> IntRange, row: @Composable (Glide) -> Unit) {
+internal fun <T> GlidingRows(itemsOf: () -> List<T>, keyOf: (T) -> String, rowH: Float, window: () -> IntRange, row: @Composable (Glide<T>) -> Unit) {
     val look = LocalLook.current
     val scope = rememberCoroutineScope()
-    val glides = remember { mutableStateListOf<Glide>() }
+    val glides = remember { mutableStateListOf<Glide<T>>() }
     val height = remember { Animatable(0f) }
     val rise = 10f * look.unit
     LaunchedEffect(Unit) { snapshotFlow { itemsOf() }.collectLatest { items ->
         val seen = window()
         val at = HashMap<String, Int>(items.size * 2)
-        items.forEachIndexed { i, f -> at[f.name] = i }
-        val byName = HashMap<String, Glide>(glides.size * 2)
-        for (g in glides) byName[g.name] = g
-        for (g in glides.toList()) if (g.name !in at && !g.leaving) {
+        items.forEachIndexed { i, f -> at[keyOf(f)] = i }
+        val byName = HashMap<String, Glide<T>>(glides.size * 2)
+        for (g in glides) byName[g.key] = g
+        for (g in glides.toList()) if (g.key !in at && !g.leaving) {
             if (!g.built) { glides.remove(g); continue }
             g.leaving = true
             scope.launch {
@@ -511,12 +520,13 @@ private fun GlidingRows(itemsOf: () -> List<GoogleFontCatalog.Family>, rowH: Flo
         }
         items.forEachIndexed { i, f ->
             val to = i * rowH
-            val g = byName[f.name]
+            val g = byName[keyOf(f)]
             if (g == null) {
                 // In sight it rises and fades in as it is built; out of sight it is simply there when scrolled to.
                 val inSight = i in seen
-                glides.add(Glide(f.name, f.category, if (inSight) to + rise else to, if (inSight) 0f else 1f).also { it.index = i; it.appear = inSight })
+                glides.add(Glide(keyOf(f), f, if (inSight) to + rise else to, if (inSight) 0f else 1f).also { it.index = i; it.appear = inSight })
             } else {
+                g.item = f
                 g.index = i
                 if (g.leaving) { g.leaving = false; scope.launch { g.a.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE)) } }
                 when {
@@ -564,13 +574,13 @@ private fun GlidingRows(itemsOf: () -> List<GoogleFontCatalog.Family>, rowH: Flo
         }) {
         // Keyed at the loop's top: a key inside the `if` sat in a positional group, so a row whose place in the list changed
         // was not recognised and was built again (eleven rows rebuilt in one frame as a letter was typed).
-        for (g in glides.filter { it.built }) key(g.name) { GlideSlot(g, rowH, row) }
+        for (g in glides.filter { it.built }) key(g.key) { GlideSlot(g, rowH, row) }
     }
 }
 
 /** A row's place: where its glide puts it, faded by it (its own scope: the list composing again leaves it alone). */
 @Composable
-private fun GlideSlot(g: Glide, rowH: Float, row: @Composable (Glide) -> Unit) {
+private fun <T> GlideSlot(g: Glide<T>, rowH: Float, row: @Composable (Glide<T>) -> Unit) {
     val look = LocalLook.current
     Box(Modifier.fillMaxWidth().height(look.dp(rowH)).graphicsLayer {
         translationY = g.y.value
@@ -587,7 +597,7 @@ private fun GlideSlot(g: Glide, rowH: Float, row: @Composable (Glide) -> Unit) {
  * keeps its own words ([state]): typing composes only it.
  */
 @Composable
-private fun SearchField(state: TextFieldState, placeholder: String, modifier: Modifier) {
+internal fun SearchField(state: TextFieldState, placeholder: String, modifier: Modifier, onFocus: ((Boolean) -> Unit)? = null) {
     val look = LocalLook.current
     val fill = look.color(SettingsTokens.FIELD_FILL)
     val hint = look.color(SettingsTokens.FIELD_PLACEHOLDER)
@@ -609,7 +619,8 @@ private fun SearchField(state: TextFieldState, placeholder: String, modifier: Mo
                 cursorBrush = SolidColor(look.color(SettingsTokens.ACCENT)),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 onKeyboardAction = { focus.clearFocus() },
-                modifier = Modifier.fillMaxWidth())
+                modifier = Modifier.fillMaxWidth().then(if (onFocus == null) Modifier
+                    else Modifier.onFocusChanged { onFocus(it.isFocused) }))
         }
         // Clear: a filled circle with a cross, there while there are words.
         Canvas(Modifier.size(look.dp(36f * look.unit)).graphicsLayer { alpha = 1f - empty; scaleX = 0.6f + 0.4f * (1f - empty); scaleY = scaleX }

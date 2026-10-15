@@ -46,6 +46,18 @@ internal data class MomentPage(val moment: dev.launcher.app.motion.Moment, overr
     override val title: String get() = moment.title
 }
 
+/** A part's changes from the theme or preset (V3), pushed over its page from "N changes". */
+internal data class ChangesPage(override val part: Part) : Pushed {
+    override val title: String get() = "Changes"
+}
+
+/** A pushed page's name among the pages (rows found by the search register under it, Search.anchor). */
+internal val Pushed.key: String get() = part.name + "/" + when (this) {
+    is Sub -> name
+    is MomentPage -> "moment:" + moment.id
+    is ChangesPage -> "changes"
+}
+
 /**
  * A part's page and its sub-pages, as Motion's groups over Motion: a row tapped ([PushRow]) slides its page in from the right
  * as the part's own page gives way (a third of the way left, fading; `motion.nav.push`); Back, the round button or the
@@ -105,7 +117,7 @@ internal fun SubPager(
             }
         }
     }
-    SideEffect { st.popSubs[part] = pop }
+    SideEffect { st.popSubs[part] = pop; st.pushers[part] = push }
     SubBack(st, part, pop)
     // Back at the tiles some other way with a sub-page in (home brought the settings back): the part's own page next time.
     LaunchedEffect(st) {
@@ -125,15 +137,20 @@ internal fun SubPager(
                 // Faded draw by draw, not through a page-sized buffer (as Motion's page; MotionWarmUp compiles its pipelines).
                 compositingStrategy = CompositingStrategy.ModulateAlpha
             }
-            .topFade(mainScroll, g.unit, fadePx, bandPaint)) {
+            .topFade(mainScroll, g.unit, fadePx, bandPaint)
+            .viewport(st, part.name)) {
             Column(Modifier.fillMaxSize().iosScroll(mainScroll).padding(horizontal = m)) {
                 Spacer(Modifier.height(look.dp(26f * g.unit)))
-                main(push, lit)
+                CompositionLocalProvider(LocalAnchorPage provides part.name) { main(push, lit) }
                 // Room below the last row for the Apply bar.
                 Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
             }
         }
-        built?.let { s -> androidx.compose.runtime.key(s) { SubPage(st, g, s, fadePx, bandPaint) { page(s, pop) } } }
+        built?.let { s ->
+            androidx.compose.runtime.key(s) {
+                SubPage(st, g, s, fadePx, bandPaint) { if (s is ChangesPage) ChangesList(s.part, byPart = false) else page(s, pop) }
+            }
+        }
     }
 }
 
@@ -166,10 +183,11 @@ private fun SubPage(st: Studio, g: Geometry, s: Pushed, fadePx: Float, bandPaint
                 alpha = (k / 0.7f).coerceIn(0f, 1f)
                 compositingStrategy = CompositingStrategy.ModulateAlpha
             }
-            .topFade(scroll, g.unit, fadePx, bandPaint)) {
+            .topFade(scroll, g.unit, fadePx, bandPaint)
+            .viewport(st, s.key)) {
             Column(Modifier.fillMaxSize().iosScroll(scroll).padding(horizontal = m)) {
                 Spacer(Modifier.height(look.dp(26f * g.unit)))
-                content()
+                CompositionLocalProvider(LocalAnchorPage provides s.key) { content() }
                 Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset + g.barRoom)))
             }
         }

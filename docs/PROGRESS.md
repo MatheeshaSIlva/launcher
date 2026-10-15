@@ -2294,3 +2294,21 @@ a late picture fading in, the card catching up, the banner's glass...) follow th
 - **Presets as small app openings**: each card plays an app opening out of its icon and closing, on that preset's curves
   at its speed and bounce, all cards on one beat (a quicker preset settles sooner).
 - Fine-tune is Feel (Speed, Bounce, their ends in words); values read in words first, the number beside them.
+
+## Settings v2, step V3: search and what you changed (2026-10-15, emulator; S24 not checked yet)
+
+- **Search** (`settings/Search.kt`): a field over the tiles. Tapped, the sheet rises as a page would (its own spring:
+  the tiles' scroll stays where it was), Cancel opens beside the field, and the tiles cross-fade into the results above
+  the keyboard; Cancel or Back put it all back. Every setting is indexed with its place ("Home › Grid") and words it
+  answers to ("icons" finds the grid, "bounce" every Bounce, "dark" Light & dark); settings come before moments, moments
+  before single animations. A result grows its part's page out of its row (not its tile), pushes the page it is on (a
+  sub-page, a moment), opens a moment's Every detail, waits for the page to settle, scrolls the row into sight and lights
+  it (an accent wash that fades). Checked: "icons" to Home's Rows, "wiggle" to an animation inside Editing's Every detail.
+  Two bugs found on the way: the scroll stopped short while Every detail was still unfolding, and a wait on the
+  scroller (no snapshot state) never ended, so the row was never lit.
+- **What you changed** (`settings/Changes.kt`): every difference from the theme, the preset or a layout's defaults,
+  with where it is, before and after ("App Library › Grid · 2 → 3") and Reset (into the draft, waiting for Apply).
+  "Your changes" over the tiles while there are any (all of them by part), "N changes" at the top of every page (that
+  part's), a dot before each changed row; rows fold in and out as changes come and go (`RevealList`).
+- Seen on the emulator, not from this change: right after a reinstall, the picture of home was half drawn (its lower
+  half grey) until home had shown again (home captured mid-start).

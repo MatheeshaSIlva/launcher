@@ -76,6 +76,12 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   part is reached. iOS 27's overview: the page is the blurred wallpaper, the panel on it, its buttons clear glass
   (`comp.settings.glass`). Phone holds Shizuku, updates, safety and About; seven taps on the build turn on the developer
   tools (Developer: the tests and the log; the token editor), until switched off on their page (`SettingsPrefs.developer`).
+  Search (V3, `settings/Search.kt`): a field over the tiles; every setting indexed with its place and the words it
+  answers to (settings before moments before single animations); a result grows its part's page out of its row, pushes
+  the page it is on, opens a moment's Every detail, scrolls the row into sight and lights it (rows register with
+  `Modifier.anchor(name)` under their page, `LocalAnchorPage`; an animation's row as `roleAnchor(key)`). What you changed
+  (`settings/Changes.kt`): every difference from the theme, the preset or a layout's defaults with before and after and
+  Reset (into the draft); "Your changes" over the tiles, "N changes" at the top of each page, a dot on each changed row.
   Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control. From the edit menu
   home slides into them (`settings/SettingsEntry`, `EntryState`): home pictures itself at rest with our bar on it, their
   first frame waits for it and shows it over the whole screen (the screen's own corners, no frame), and once the window

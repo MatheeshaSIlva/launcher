@@ -94,10 +94,10 @@ internal fun MomentPageContent(st: Studio, m: Moment) {
     val speed by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.motionNumber(id, m.speed) } }
     val bounce by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.motionNumber(id, m.bounce) } }
     Group(null, m.description + " The picture above plays it.") {
-        FeelSlider("Speed", momentSpeedWords(speed), speedToSlider(speed), "Relaxed", "Snappy") { t ->
+        FeelSlider("Speed", momentSpeedWords(speed), speedToSlider(speed), "Relaxed", "Snappy", changed = abs(speed - 1f) > 0.001f) { t ->
             draft.chooseMotionNumber(id, m.speed, sliderToSpeed(t))
         }
-        FeelSlider("Bounce", momentBounceWords(bounce), bounce / MotionAdjust.MOMENT_BOUNCE_MAX, "Still", "Lively") { t ->
+        FeelSlider("Bounce", momentBounceWords(bounce), bounce / MotionAdjust.MOMENT_BOUNCE_MAX, "Still", "Lively", changed = abs(bounce - 1f) > 0.001f) { t ->
             draft.chooseMotionNumber(id, m.bounce, Draft.snap(t * MotionAdjust.MOMENT_BOUNCE_MAX))
         }
         m.character?.let { c -> CharacterSlider(draft, id, c) }
@@ -138,15 +138,22 @@ private fun momentBounceWords(b: Float): String = when {
  * changes), the slider, the ends' words under it.
  */
 @Composable
-private fun FeelSlider(title: String, value: String, position: Float, low: String, high: String, onChange: (Float) -> Unit) {
+private fun FeelSlider(title: String, value: String, position: Float, low: String, high: String, changed: Boolean = false, onChange: (Float) -> Unit) {
     val look = LocalLook.current
     val counter = LocalRowCounter.current
     val first = remember { counter == null || counter.n++ == 0 }
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
     val ends = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR))
+    // A dot before its name while it differs from the preset's (V3).
+    val dot by animateFloatAsState(if (changed) 1f else 0f, look.motion(if (changed) MotionTokens.APPEAR else MotionTokens.DISAPPEAR_FADE), label = "dot")
+    val accent = look.color(SettingsTokens.ACCENT)
     Column(Modifier.fillMaxWidth()
-        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .drawBehind {
+            if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f))
+            if (dot > 0.003f) drawCircle(accent.copy(alpha = accent.alpha * dot.coerceIn(0f, 1f)), 3.5f * look.unit * dot, Offset(pad.toPx() / 2f, 21f * look.unit))
+        }
+        .anchor(title)
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)), modifier = Modifier.weight(1f))
@@ -175,7 +182,7 @@ private fun CharacterSlider(draft: Draft, id: String, c: dev.launcher.app.motion
         abs(k - 1f) < 0.03f -> "As the preset"
         k > 1f -> "More · ${(k * 100).roundToInt()} %"
         else -> "Less · ${(k * 100).roundToInt()} %"
-    }, k / 2f, c.low, c.high) { t -> setCharacter(draft, id, c, Draft.snap(t * 2f)) }
+    }, k / 2f, c.low, c.high, changed = abs(k - 1f) > 0.003f) { t -> setCharacter(draft, id, c, Draft.snap(t * 2f)) }
 }
 
 /** How far a character's numbers are from none, of how far the preset puts them (1: as it comes). */
@@ -206,31 +213,31 @@ private fun setCharacter(d: Draft, id: String, c: dev.launcher.app.motion.Charac
 @Composable
 private fun EveryDetail(st: Studio, m: Moment) {
     val look = LocalLook.current
-    var open by remember { mutableStateOf(false) }
     var built by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
+    // Open while the settings say so (a tap here, or the search); built when first asked for and opened two frames later
+    // (built in its opening's first frame, it cost that frame).
+    var ready by remember { mutableStateOf(false) }
+    val wanted by remember(st, m) { androidx.compose.runtime.derivedStateOf { st.detailFor == m.id } }
+    val open = wanted && ready
+    // (The search waits for it to be open on screen before it scrolls to one of its rows.)
+    LaunchedEffect(open) { if (open) st.detailShown = m.id else if (st.detailShown == m.id) st.detailShown = null }
+    LaunchedEffect(wanted) {
+        if (wanted && !ready) {
+            built = true
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
+            ready = true
+        }
+    }
     val turn by animateFloatAsState(if (open) 1f else 0f, look.motion(MotionTokens.APPEAR), label = "detail")
     val roles = remember(m) { m.roles.mapNotNull { k -> MotionRoles.find(k)?.second } }
     val curves = remember(roles) { roles.filter { it.key in MotionTokens.CURVES } }
     val numbers = remember(roles) { roles.filter { it.key in MotionTokens.NUMBERS } }
-    var held by remember { mutableStateOf(false) }
     Group(null) {
         BaseRow("Every detail", "${roles.size} animation" + (if (roles.size == 1) "" else "s") + ", in the order they play", {
-            if (open) { open = false; st.motionRole = null }
-            else if (built) open = true
-            else if (!held) {
-                // Built at the tap and opened two frames later (the row lit meanwhile): built in its opening's first frame,
-                // it cost that frame.
-                held = true
-                built = true
-                scope.launch {
-                    androidx.compose.runtime.withFrameNanos { }
-                    androidx.compose.runtime.withFrameNanos { }
-                    open = true
-                    held = false
-                }
-            }
-        }, held = held) {
+            if (wanted) { st.detailFor = null; st.motionRole = null }
+            else st.detailFor = m.id
+        }, held = wanted && !ready) {
             BasicText("›", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_DETAIL_COLOR)),
                 modifier = Modifier.graphicsLayer { rotationZ = 90f * turn })
         }
@@ -264,7 +271,7 @@ internal fun MomentRow(m: Moment, host: Part, push: (Pushed) -> Unit, lit: () ->
     // (Its count keeps its last number while its line closes.)
     val last = remember { intArrayOf(1) }
     if (changes > 0) last[0] = changes
-    BaseRow(m.title, null, onClick, held = held, below = {
+    BaseRow(m.title, null, onClick, held = held, changed = changes > 0, below = {
         val detail = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR))
         Rolling(feel, detail, Modifier.fillMaxWidth())
         Reveal(changes > 0) {
@@ -450,6 +457,7 @@ private fun RoleRow(st: Studio, role: MotionRole, kit: RowKit) {
     val rowH = with(androidx.compose.ui.platform.LocalDensity.current) { kit.rowH.toDp() }
     Column(Modifier.fillMaxWidth()) {
         Box(Modifier.fillMaxWidth().height(rowH)
+            .anchor(roleAnchor(role.key))
             .semantics(mergeDescendants = true) {
                 contentDescription = role.title + ", " + m.now
                 onClick { toggle(); true }
@@ -549,6 +557,8 @@ private fun OpenReveal(visible: Boolean, warm: Boolean, content: @Composable () 
  * An animation's value in words first (docs/PLAN_SETTINGS_V2.md: "Quick, bouncy"), the number beside them (a spring's
  * duration, a curve's length); a number in its unit.
  */
+internal fun valueWords(key: String, v: Value?): String = valueText(key, v)
+
 private fun valueText(key: String, v: Value?): String = when (v) {
     is Value.CurveV -> {
         val c = v.curve
@@ -1182,6 +1192,7 @@ internal fun MotionPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
             }
         }
     }
+    ChangesRow(Part.MOTION, push, lit)
     Group("Presets", "How everything moves, each its own way. The picture above plays the one you choose.") {
         PresetCards(presets, draft, clock)
     }
@@ -1355,11 +1366,13 @@ private fun Feel(draft: Draft) {
     val last = remember { intArrayOf(1) }
     if (n > 0) last[0] = n
     Group("Feel", "For $name as a whole: every moment quicker or calmer, every bounce livelier or stiller.") {
+        val speedOwn = remember(draft, id, v) { (draft.motionOwn(id, MotionTokens.ADJUST_SPEED.name) as? Value.Number)?.v ?: 1f }
+        val bounceOwn = remember(draft, id, v) { (draft.motionOwn(id, MotionTokens.ADJUST_BOUNCE.name) as? Value.Number)?.v ?: 1f }
         FeelSlider("Speed", when {
             abs(speed - 1f) < 0.03f -> "As $name has it"
             speed > 1f -> "Snappier · ${(speed * 100).roundToInt()} %"
             else -> "More relaxed · ${(speed * 100).roundToInt()} %"
-        }, speedToSlider(speed), "Relaxed", "Snappy") { t ->
+        }, speedToSlider(speed), "Relaxed", "Snappy", changed = abs(speed - speedOwn) > 0.001f) { t ->
             draft.chooseMotionNumber(id, MotionTokens.ADJUST_SPEED, sliderToSpeed(t))
         }
         FeelSlider("Bounce", when {
@@ -1367,7 +1380,7 @@ private fun Feel(draft: Draft) {
             abs(bounce - 1f) < 0.03f -> "As $name has it"
             bounce > 1f -> "Livelier · ${(bounce * 100).roundToInt()} %"
             else -> "Stiller · ${(bounce * 100).roundToInt()} %"
-        }, bounce / MotionAdjust.BOUNCE_MAX, "Still", "Lively") { t ->
+        }, bounce / MotionAdjust.BOUNCE_MAX, "Still", "Lively", changed = abs(bounce - bounceOwn) > 0.001f) { t ->
             draft.chooseMotionNumber(id, MotionTokens.ADJUST_BOUNCE, Draft.snap(t * MotionAdjust.BOUNCE_MAX))
         }
         Reveal(n > 0) {

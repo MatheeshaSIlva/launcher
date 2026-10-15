@@ -211,6 +211,7 @@ internal object TileArt {
                 Part.SHADE -> shade(k, c, u, at, alpha)
                 Part.STATUS_BAR -> statusBar(k, c, w, u, at, alpha)
                 Part.PHONE -> phone(k, c, u, at, alpha)
+                Part.CHANGES -> Unit   // (no tile)
             }
         }
     }
