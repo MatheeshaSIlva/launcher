@@ -59,15 +59,14 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Settings app** (`settings/`, plans `docs/PLAN_SETTINGS.md`, then `docs/PLAN_SETTINGS_V2.md`): Jetpack Compose
   (`SettingsActivity`, own task), an element of
   its own (`Element.SETTINGS`, layout "studio", tokens `comp.settings.*`), drawn with the theme's tokens through
-  `SettingsTheme`/`Look` (no Material components; motion roles as Compose specs). Studio (draft D in Figma): a picture of
-  home above a sheet of tiles; a tile grows into its page inside the sheet (`motion.settings.open`), one value moving
-  everything; pages are built ahead and only placed while open (a page built in a transition's first frame cost the S24
+  `SettingsTheme`/`Look` (no Material components; motion roles as Compose specs). Studio (draft D in Figma; V5,
+  2026-10-16: no live picture of home, the live preview belongs to the token editor): a sheet of cards under the title; a
+  card grows into the stage at the top of its page (`motion.settings.open`), one value moving everything; pages are built ahead and only placed while open (a page built in a transition's first frame cost the S24
   60-80 ms); solid groups (no glass per card). Changes wait in a draft for Apply (`Draft`, `ApplyBar`, `Design.batch`:
   one reveal for all of them); a look change is revealed from the tap
   (`ThemeReveal`). Structure B (V1, 2026-10-15): tiles (`Part`) for Look and Motion (the whole phone), one per part of the
   phone (Home, Apps, App Library, Notifications & Control Center, Status bar: its layout, where it lives, its options, its
-  own theme, on its page: `PartPage`) and Phone; more tiles than the sheet shows at rest, so a scroll up lifts the sheet
-  first, then scrolls the tiles (`liftScroll`, `Studio.lifted`). The tiles are solid cards, as the groups (no glass), one
+  own theme, on its page: `PartPage`) and Phone. The tiles are solid cards, as the groups (no glass), one
   under another as wide as the sheet (Matheesha, 2026-10-15: "more polished and well thought out"): the part's name and
   what it holds on the left, on the right a scene of the part (`TileArt`, on the preset's springs and styles as the draft
   would apply them, on a clock that runs only while the cards are in sight) drawn on the card itself, no box of its own
@@ -78,9 +77,12 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   acts running down the column a beat apart (`STEP`): a card or two moves at a time, and the cards come alive one after
   another as the page appears. Groups on the sheet take iOS's elevated cell colour (the
   sheet's own grey hid them in dark). Look and Phone push pages one level down (`SubPager`,
-  `Sub`: Look's colours, fonts, size; Phone's Developer page). The picture of home (with our status bar drawn on it) takes
-  no touches: it zooms to the open part and fades away behind the sheet (`motion.settings.focus`); a finger shows how the
-  part is reached. iOS 27's overview: the page is the blurred wallpaper, the panel on it, its buttons clear glass
+  `Sub`: Look's colours, fonts, size; Phone's Developer page). A part's stage (`settings/Stage.kt`, over the page, no
+  touches): the phone drawn as a motion graphic (`settings/PhoneScene.kt`) in the part's colours, at the part's band of
+  the phone (`motion.settings.focus`), following the draft (home's grid, dock and names through `HomeMetrics`, gliding on
+  a change; Control Center's columns; the App Library's place; Look's palette and light or dark), playing how the part is
+  reached (a finger and what it opens, on the draft's curves) and its own act; a moment's page pushed below plays its
+  samples on it (`MotionSamples` with `SampleKit.scene`). iOS 27's overview: the page is the blurred wallpaper, the panel on it, its buttons clear glass
   (`comp.settings.glass`). Phone holds Shizuku, updates, safety and About; seven taps on the build turn on the developer
   tools (Developer: the tests and the log; the token editor), until switched off on their page (`SettingsPrefs.developer`).
   Search (V3, `settings/Search.kt`): a field over the tiles; every setting indexed with its place and the words it
@@ -90,9 +92,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`settings/Changes.kt`): every difference from the theme, the preset or a layout's defaults with before and after and
   Reset (into the draft); "Your changes" over the tiles, "N changes" at the top of each page, a dot on each changed row.
   Opened from the drawer, home's edit menu ("Home Settings") and the "Launcher Settings" control. From the edit menu
-  home slides into them (`settings/SettingsEntry`, `EntryState`): home pictures itself at rest with our bar on it, their
+  home goes into them (`settings/SettingsEntry`, `EntryState`): home pictures itself at rest with our bar on it, their
   first frame waits for it and shows it over the whole screen (the screen's own corners, no frame), and once the window
-  is on screen it shrinks into the picture above the sheet as the sheet rises; Back on the tiles plays it the other way,
+  is on screen it steps back, blurs and fades into the page as the sheet rises over it (`settings/HomeSlide.kt`); Look's
+  theme cards keep such pictures per theme (`HomePictures`); Back on the tiles plays it the other way,
   the card window holds home's picture while they go back at rest underneath (their App Switcher card) and home comes
   (`GestureNav.ownScreenToHome`). Their task is the one of ours in the App Switcher (`switchable`: by activity class).
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll

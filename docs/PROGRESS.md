@@ -2447,3 +2447,38 @@ visual change I want you to make."
   motion an act could run past the cycle and jump at the wrap. The cycle now stretches to the longest act and a rest
   (`ArtMoves.cycle`); nothing changes at the presets' own speeds.
 - Checked on the emulator in light and dark, Motion's act recorded in slow motion. Not measured on the S24.
+
+## V5 step 1: the settings without the live picture of home (2026-10-16, emulator; S24 not checked yet)
+
+Matheesha: "we will keep the live preview only where it's needed. it would be especially useful for the token editor,
+where the user can select each element to customize it. Otherwise, it would be better to use a motion graphic instead of
+a live preview where it is not crucial" (`docs/PLAN_SETTINGS_V2.md`, V5).
+
+- **The start page is the cards.** The sheet sits under the title, at rest and with a page open (tokens
+  `comp.settings.sheet.gap`; `sheet.rest` and `sheet.open` gone); the tiles' scroll no longer lifts it. Six cards in
+  sight on the emulator where two were.
+- **A part's page opens with its card grown into a stage** (`settings/Stage.kt`; `comp.settings.stage.height` 0.21 of the
+  screen, `stage.inset`): the card moves and grows to the top of the page over the groups rising in under it, its scene,
+  name and line giving way to a phone drawn as a motion graphic (`settings/PhoneScene.kt`) in the part's colours: a
+  wallpaper of the colour, its icons the colour's pastels (Look: its palette), the status bar, the Search pill and the
+  dock. It is home as the draft lays it out (`HomeMetrics` from the draft's columns, rows, dock, names and size): Rows +
+  glides the icons up and grows the new row in (recorded); Control Center's columns resize on the same curve. The stage
+  looks at the part's band of the phone (the status bar large; the shade's upper half; the App Library's page or sheet;
+  the whole phone otherwise) and plays how the part is reached: the finger's strokes and what they open, following it,
+  then settling open on the draft's own curve and closing (Notification Center with the date, the clock and two
+  notifications; Control Center; the app shrinking into the deck as older cards come in; the App Library's page from the
+  side or its sheet from below). Its own acts: home's icons wiggle and two change places, the minute rolls on and a
+  notification's icon comes and goes, Look's icons turn through its colours and its phone follows the draft's light or
+  dark, Phone's shield pulses, Motion's phone opens and closes an app in the draft's styles and drops a banner. A page
+  pushed below (a moment's) keeps the stage and plays its samples on the same phone, focused where they play
+  (`MotionSamples` on the scene: home, its icon and the app's page come from it). Back shrinks the stage into its card.
+  Search results grow it out of their row; Your changes still grows its row into the sheet (under its page).
+- **From home's edit menu** home's picture steps back (8 %), dims, blurs and fades into the page as the sheet rises over
+  it (`settings/HomeSlide.kt`); Back on the tiles plays it the other way. The slide back into home was recorded on the
+  emulator; the slide in could not be: home gave no picture of itself there ("home gave no picture of itself in 900 ms",
+  the same before this change), so the settings opened at rest. Not yet on the S24, where it worked before.
+- Look's theme cards keep their pictures of home in each theme (taken once a look, a beat after the settings come up,
+  never in a motion).
+- Checked on the emulator in light and dark, in slow motion: a card opening and closing, Home's grid change, a moment's
+  page, Motion's page, a search result. Not measured on the S24. 118 unit tests.
+

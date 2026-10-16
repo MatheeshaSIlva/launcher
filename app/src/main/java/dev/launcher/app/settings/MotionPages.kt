@@ -76,7 +76,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 // The settings' Motion (docs/PLAN_MOTION.md): the presets and their fine-tuning (C4a), and every animation by group, each
-// with its editor and its sample on the picture of home (C4b).
+// with its editor and its sample on the phone above (C4b; V5: the phone drawn on the stage).
 
 /**
  * A moment's page (docs/PLAN_SETTINGS_V2.md, V2), pushed over Motion or over the page of the part it belongs to; the picture
@@ -93,7 +93,7 @@ internal fun MomentPageContent(st: Studio, m: Moment) {
     // Derived: every step of a slider changes the draft; only what it changed composes again.
     val speed by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.motionNumber(id, m.speed) } }
     val bounce by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.motionNumber(id, m.bounce) } }
-    Group(null, m.description + " The picture above plays it.") {
+    Group(null, m.description + " The phone above plays it.") {
         FeelSlider("Speed", momentSpeedWords(speed), speedToSlider(speed), "Relaxed", "Snappy", changed = abs(speed - 1f) > 0.001f) { t ->
             draft.chooseMotionNumber(id, m.speed, sliderToSpeed(t))
         }
@@ -691,7 +691,7 @@ private fun curveInfo(c: Curve, speed: Float): String {
  * A curve's editor (docs/PLAN_MOTION.md): what it is and where its value comes from, Spring | Curve (switching fits the one
  * to the other), the graph (its handle or handles dragged), a spring's duration and bounce or a curve's length, what that
  * makes ("settles in, goes past"), shapes to start from, and Slow (the sample at a quarter speed), Reset, Done. Everything
- * waits for Apply and plays on the picture at once. The curve ([raw]) is read where it shows; what is composed changes only
+ * waits for Apply and plays on the phone above at once. The curve ([raw]) is read where it shows; what is composed changes only
  * with its kind (a switch folds one kind's slider and shapes away as the other's open).
  */
 @Composable
@@ -1194,7 +1194,7 @@ internal fun MotionPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
         }
     }
     ChangesRow(Part.MOTION, push, lit)
-    Group("Presets", "How everything moves, each its own way. The picture above plays the one you choose.") {
+    Group("Presets", "How everything moves, each its own way. The phone above plays the one you choose.") {
         PresetCards(presets, draft, clock)
     }
     Feel(draft)
@@ -1333,7 +1333,7 @@ private class CurveRun(val step: Float, val values: FloatArray) {
 /**
  * The whole preset's feel (docs/PLAN_SETTINGS_V2.md): its speed (every curve's time) and its bounce (how far whatever bounces
  * goes past its place), in words, the slider's ends saying which way is which; and back to the preset as it comes. Shown at
- * once on the cards and the picture above; waits for Apply. The speed's slider doubles and halves evenly either side of the
+ * once on the cards and the phone above; waits for Apply. The speed's slider doubles and halves evenly either side of the
  * preset's own.
  */
 @Composable
@@ -1446,8 +1446,8 @@ private fun StyleGroup(m: Moment, draft: Draft) {
     }
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val gap = look.dp(12f * look.unit)
-    Group("Style", if (closing) "How an app goes home, each its own way. The picture above plays the one you choose."
-        else "How an app opens, each its own way. The picture above plays the one you choose.") {
+    Group("Style", if (closing) "How an app goes home, each its own way. The phone above plays the one you choose."
+        else "How an app opens, each its own way. The phone above plays the one you choose.") {
         Column(Modifier.fillMaxWidth().padding(pad), verticalArrangement = Arrangement.spacedBy(gap)) {
             for (row in dev.launcher.app.motion.AppStyle.entries.chunked(2)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {

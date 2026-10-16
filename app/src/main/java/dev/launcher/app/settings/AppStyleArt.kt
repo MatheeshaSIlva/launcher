@@ -11,7 +11,7 @@ import dev.launcher.app.motion.Box
 import kotlin.math.min
 
 /**
- * What an app opening or closing in a transition style is drawn on in the settings ([AppStyleArt]): the picture of home
+ * What an app opening or closing in a transition style is drawn on in the settings ([AppStyleArt]): the stage's phone
  * (MotionSamples), a preset's card, a style's card. Its size, the app's icon on it, and how it draws home, the app's page,
  * its icon and its launch colour.
  */

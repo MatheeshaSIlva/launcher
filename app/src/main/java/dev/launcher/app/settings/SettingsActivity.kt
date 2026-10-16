@@ -23,10 +23,10 @@ import dev.launcher.app.motion.timed
  * ([SettingsTheme]). A change applies at once: when it changes the look, the app holds its old look the moment the design
  * changes and reveals the new one from where it was touched (as home does: [ThemeReveal]).
  *
- * Opened from home's edit menu ([SettingsEntry.FROM_HOME]) home slides into it: the first frame waits for home's picture,
- * shows it over the whole screen (as home itself), and once the window is on screen it shrinks into the picture of home
- * above the sheet as the sheet rises ([EntryState]). Back on the tiles then plays it the other way, and the card window
- * holds home's picture while the settings settle at rest underneath (the frame the system keeps of them: the App
+ * Opened from home's edit menu ([SettingsEntry.FROM_HOME]) home goes into it: the first frame waits for home's picture,
+ * shows it over the whole screen (as home itself), and once the window is on screen it steps back and blurs into the page
+ * as the sheet rises over it ([EntryState], [EntryHome]). Back on the tiles then plays it the other way, and the card
+ * window holds home's picture while the settings settle at rest underneath (the frame the system keeps of them: the App
  * Switcher's card) and home comes to the front ([dev.launcher.app.GestureNav.ownScreenToHome]).
  */
 class SettingsActivity : ComponentActivity() {
@@ -236,7 +236,7 @@ class SettingsActivity : ComponentActivity() {
         slideIn("opening transition finished")
     }
 
-    /** Home's picture shrinks into its place above the sheet, which rises (the window is on screen with it). */
+    /** Home's picture steps back into the page as the sheet rises over it (the window is on screen with it). */
     private fun slideIn(why: String) {
         if (!slideDue || holdFirstFrame || !firstDrawn) return
         slideDue = false
@@ -255,8 +255,8 @@ class SettingsActivity : ComponentActivity() {
         SettingsEntry.homePicture { pic ->
             if (gen != exitGen) return@homePicture
             if (pic == null || !showing) { exiting = false; if (pic == null) finish(); return@homePicture }
-            entry.freshPage = SettingsEntry.pictureWasPage
-            entry.fresh = pic
+            entry.handedPage = SettingsEntry.pictureWasPage
+            entry.picture = pic
             entryTone = dev.launcher.app.HomeBridge.homeStatusDark
             AppLog.log("[settings] sliding back into home")
             entry.request(0f) {

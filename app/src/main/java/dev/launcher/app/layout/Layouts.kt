@@ -138,7 +138,7 @@ object Layouts {
 
     val STUDIO = LayoutSpec(
         Element.SETTINGS, "studio", "Studio", "Launcher",
-        "A live picture of your phone above a sheet of tiles; the picture zooms to the part a page is about.",
+        "Cards for the parts of your phone; each grows into its page, where a drawing of the phone shows that part as you set it.",
         listOf(Placement("app", "An app", "Opened from the drawer, home's edit menu and a Control Center control.")),
     )
 

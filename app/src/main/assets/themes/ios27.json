@@ -2729,17 +2729,13 @@
    "dark": "#1c1c1ef2",
    "src": "judged:iOS 26 sheets at a partial height: a white floating panel (the elevated grey in dark); over a solid page nothing shows through"
   },
+  "comp.settings.sheet.gap": {
+   "pt": 8,
+   "src": "judged:V5 (Matheesha, 2026-10-16: no live picture of home in the settings): the sheet's top just under the title, at rest and with a page open"
+  },
   "comp.settings.sheet.inset": {
    "pt": 8,
    "src": "judged:iOS 26's floating sheets keep a margin from the screen's edges"
-  },
-  "comp.settings.sheet.open": {
-   "factor": 0.36,
-   "src": "judged:draft D: the sheet's top with a page open (the picture smaller, still in sight)"
-  },
-  "comp.settings.sheet.rest": {
-   "factor": 0.55,
-   "src": "judged:draft D: where the sheet's top rests (of the screen's height), the picture of home above it"
   },
   "comp.settings.sheet.rim": {
    "light": "#ffffffe6",
@@ -2750,6 +2746,14 @@
    "light": "#0000001a",
    "dark": "#00000066",
    "src": "judged:a soft shadow above the sheet"
+  },
+  "comp.settings.stage.height": {
+   "factor": 0.21,
+   "src": "judged:V5: a part's stage at the top of its page (of the screen's height): the phone drawn at the part, the page's groups as high as they were under the picture of home"
+  },
+  "comp.settings.stage.inset": {
+   "pt": 10,
+   "src": "judged:V5: the phone's frame in the stage, inset evenly as a card's scene (comp.settings.tile.visual-inset)"
   },
   "comp.settings.target": {
    "pt": 44,

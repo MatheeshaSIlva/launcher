@@ -18,7 +18,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * What the picture of home plays for Motion's group pages (docs/PLAN_MOTION.md, C4b): which animation, how far its run is
+ * What the stage's phone plays for Motion's group pages (docs/PLAN_MOTION.md, C4b; V5: the phone drawn, [PhoneScene]): which animation, how far its run is
  * ([k]: 0 to 1, past 1 as it overshoots; below 0 nothing), whether it is that animation's own run or the way back on its
  * partner ([forward]), seconds into its own run ([t], for the graph's dot) and a number it shows (a number's value as the
  * draft has it, NaN otherwise). Written by Motion's sample loop, read in drawing only.
@@ -58,6 +58,8 @@ internal class SampleKit {
     var closing = AppStyle.ZOOM
     /** The app's opening and closing drawn in a style on this picture ([AppStyleArt]). */
     internal val stage = SampleStage(this)
+    /** The phone drawn as a motion graphic (a part's stage, V5): home, its icons and an app's page come from it. */
+    var scene: PhoneScene? = null
 
     fun set(w: Float, h: Float, corner: Float, home: Bitmap?, icon: RectF?, fill: Int, page: Int, ink: Int, accent: Int, paint: Paint, image: Paint, path: Path) {
         this.w = w; this.h = h; this.corner = corner; this.home = home; this.icon = icon
@@ -447,6 +449,7 @@ internal object MotionSamples {
     /** An app's page (a title and two groups of rows, in the theme's page colours) in l, t, r, b. */
     internal fun page(kit: SampleKit, c: Canvas, l: Float, t: Float, r: Float, b: Float, corner: Float, alpha: Float, tint: Boolean = false) {
         if (alpha <= 0.003f) return
+        kit.scene?.let { it.drawAppPage(c, l, t, r, b, corner, alpha, seed = if (tint) 1 else 0); return }
         val w = r - l
         val h = b - t
         c.save()
@@ -489,6 +492,12 @@ internal object MotionSamples {
         // The icon it grows out of, fading into the page as it opens.
         val iconA = (1f - kk / 0.45f).coerceIn(0f, 1f) * alpha
         val home = kit.home
+        val scene = kit.scene
+        if (ic != null && home == null && scene != null && iconA > 0f) {
+            kit.paint.color = withAlpha(scene.dockIconColor(scene.dockMiddle()), iconA)
+            val cr = (r - l).coerceAtMost(b - t) * 0.23f
+            c.drawRoundRect(l, t, r, b, cr, cr, kit.paint)
+        }
         if (ic != null && home != null && iconA > 0f) {
             val sx = home.width / w; val sy = home.height / h
             kit.src.set((ic.left * sx).toInt(), (ic.top * sy).toInt(), (ic.right * sx).toInt(), (ic.bottom * sy).toInt())
@@ -501,13 +510,24 @@ internal object MotionSamples {
 
     /** Home's picture again, zoomed by [zoom] around the centre and dimmed by [dim] (a depth, an arrival). */
     private fun home(kit: SampleKit, c: Canvas, zoom: Float, dim: Float) {
-        val b = kit.home ?: return
+        val b = kit.home
+        val scene = kit.scene
+        if (b == null && scene == null) return
         c.save()
         c.scale(zoom, zoom, kit.w / 2f, kit.h / 2f)
-        kit.src.set(0, 0, b.width, b.height)
-        kit.dst.set(0f, 0f, kit.w, kit.h)
-        kit.image.alpha = 255
-        c.drawBitmap(b, kit.src, kit.dst, kit.image)
+        if (b != null) {
+            kit.src.set(0, 0, b.width, b.height)
+            kit.dst.set(0f, 0f, kit.w, kit.h)
+            kit.image.alpha = 255
+            c.drawBitmap(b, kit.src, kit.dst, kit.image)
+        } else if (scene != null) {
+            // (Past the phone's edges as it zooms out: the wallpaper reaches them.)
+            c.save()
+            c.scale(1.2f, 1.2f, kit.w / 2f, kit.h / 2f)
+            scene.drawWallpaper(c)
+            c.restore()
+            scene.drawHome(c, 1f)
+        }
         c.restore()
         if (dim > 0.003f) c.drawColor((((255 * dim).toInt().coerceIn(0, 255)) shl 24))
     }
@@ -533,7 +553,7 @@ internal object MotionSamples {
     }
 }
 
-/** The picture of home as a stage for the apps' styles ([AppStyleArt]): home's picture, the dock's icon, the sample's page. */
+/** The stage's phone as a stage for the apps' styles ([AppStyleArt]): home (drawn, [PhoneScene]), the dock's icon, the sample's page. */
 internal class SampleStage(private val kit: SampleKit) : StyleStage() {
     /** Its size, corners and icon from the kit as it was set for this draw. */
     fun prepare(): SampleStage {
@@ -547,13 +567,20 @@ internal class SampleStage(private val kit: SampleKit) : StyleStage() {
     }
 
     override fun home(c: Canvas, zoom: Float, px: Float, py: Float) {
-        val b = kit.home ?: return
+        val b = kit.home
+        val scene = kit.scene
+        if (b == null && scene == null) return
         c.save()
         c.scale(zoom, zoom, px, py)
-        kit.src.set(0, 0, b.width, b.height)
-        kit.dst.set(0f, 0f, w, h)
-        kit.image.alpha = 255
-        c.drawBitmap(b, kit.src, kit.dst, kit.image)
+        if (b != null) {
+            kit.src.set(0, 0, b.width, b.height)
+            kit.dst.set(0f, 0f, w, h)
+            kit.image.alpha = 255
+            c.drawBitmap(b, kit.src, kit.dst, kit.image)
+        } else if (scene != null) {
+            scene.drawWallpaper(c)
+            scene.drawHome(c, 1f)
+        }
         c.restore()
     }
 
@@ -564,7 +591,13 @@ internal class SampleStage(private val kit: SampleKit) : StyleStage() {
         if (alpha <= 0.003f) return
         val home = kit.home
         val ic = kit.icon
-        if (home != null && ic != null) {
+        val scene = kit.scene
+        if (home == null && scene != null) {
+            // The dock's icon as the phone draws it.
+            kit.paint.color = MotionSamples.withAlpha(scene.dockIconColor(scene.dockMiddle()), alpha)
+            val cr = kotlin.math.min(r - l, b - t) * 0.23f
+            c.drawRoundRect(l, t, r, b, cr, cr, kit.paint)
+        } else if (home != null && ic != null) {
             // The dock's icon as home shows it.
             val sx = home.width / w
             val sy = home.height / h

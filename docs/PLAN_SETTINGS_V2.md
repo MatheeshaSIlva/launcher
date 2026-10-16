@@ -186,6 +186,7 @@ is moving them into the new pages and writing the moments.
 | V2 | Motion as moments: the 22 moments, per-moment Speed and Bounce, character sliders, Every detail (today's rows and editor), the glue out of the settings; presets as small app openings. **Done 2026-10-15** (`docs/PROGRESS.md`) |
 | V3 | Search and "what you changed". **Done 2026-10-15** (`docs/PROGRESS.md`) |
 | V4 | Transition styles, one moment at a time (`docs/MOTION_STYLES.md`: Opening and closing apps first). **Opening and closing apps done 2026-10-15** (`docs/PROGRESS.md`); the next moments after Matheesha's look at these |
+| V5 | Motion graphics in place of the live picture of home (below, "V5"). Step 1, the settings: **done 2026-10-16 on the emulator** (`docs/PROGRESS.md`); step 2, the live preview in the token editor: proposed below |
 
 ## To decide (Matheesha)
 
@@ -194,12 +195,6 @@ is moving them into the new pages and writing the moments.
 2. Motion as moments with Speed and Bounce each, every animation under "Every detail", the 13 glue animations out of the
    settings: yes?
 3. Testing tools behind the build number (seven taps), or keep them on Phone?
-
-4. (2026-10-15, Matheesha) Does the start page need the live picture of home, or motion graphics there and the live
-   view only where a layout is customised? Recommended: the latter (`docs/PROGRESS.md`, "The cards, polished"): the start
-   page all cards (about six in sight instead of two), the picture of home only on the pages where a change is judged on
-   your own home (Home, Apps, App Library, Notifications & Control Center, Status bar, Look), grown out of the card's
-   window as the page opens.
 
 ## Decided (Matheesha, 2026-10-15)
 
@@ -216,4 +211,49 @@ is moving them into the new pages and writing the moments.
    the user, the better. This is more than enough for the first version of our app that we will ship. Afterwards, we can
    gather user feedback to add more layouts, animations and more."
 
+6. (2026-10-16) The live picture of home: "we will keep the live preview only where it's needed. it would be especially
+   useful for the token editor, where the user can select each element to customize it. Otherwise, it would be better to
+   use a motion graphic instead of a live preview where it is not crucial." (V5, below.)
+
 Before any of it: One UI 9's breakage and the app's speed under fast use (his priority, 2026-10-15).
+
+## V5: motion graphics in the settings, the live preview in the token editor (2026-10-16)
+
+The live picture of home above the sheet showed home as it is, not as the draft would make it (a change showed only after
+Apply), took the top half of the start page, and cost a render of home each time the settings came up. Matheesha's
+decision above moves the live preview to the one place where it is the point (the token editor: tap an element, change
+it, see it) and gives every other page a motion graphic that follows the draft.
+
+**Step 1, the settings (done, emulator):**
+
+- The start page is the cards: the sheet sits under the title at rest and with a page open (no lift, no picture), about
+  six cards in sight.
+- A part's page opens with its card grown into a **stage** at the top of the page (`settings/Stage.kt`): the card's
+  scene gives way to the phone drawn as a motion graphic (`settings/PhoneScene.kt`) in the part's colours, at the part
+  (the band of the phone it lives in: the status bar large, the shade's upper half, the whole phone for the rest). It
+  shows what the draft would make, as you change it: home laid out by the draft's columns, rows, dock and names at the
+  draft's size (`HomeMetrics`: a change glides there as home reflows), Control Center in its columns, the App Library in
+  its columns and its place, Look's palette and light or dark. It plays how the part is reached: the finger's strokes,
+  and what they open following the finger (Notification Center and Control Center pulled down, the app shrinking into the
+  App Switcher's deck, the App Library's page or sheet coming in), on the draft's own curves. Home's icons wiggle and two
+  change places, the status bar's minute rolls on, Look's icons turn through its colours, Phone's shield pulses, Motion
+  plays an app opening and closing in the draft's styles and a banner. The stage stays while the part's own pages are
+  pushed below it; a moment's page plays its samples on the same phone (`MotionSamples` on the scene), focused where they
+  play. Back shrinks it into its card.
+- From home's edit menu, home's picture steps back, blurs and fades into the page as the sheet rises over it
+  (`settings/HomeSlide.kt`, `EntryHome`); Back on the tiles plays it the other way (the picture is home's own, handed over
+  as before).
+- Look's theme cards keep their pictures of home as it looked in each theme (taken once a look, never in a motion).
+
+**Step 2, the token editor with a live preview (proposal, to agree with Matheesha):**
+
+The token editor (`design/DesignActivity`, Phone › Developer) is a list of every token. Recommended: **edit on the real
+screen**, as REQUIREMENTS' builder has it ("quick edit on the real screen"): the editor opens as a sheet over home itself;
+a tap on an element of the real home (the dock, an icon, a widget, the Search pill, the status bar; Control Center's
+modules and the notifications with their panel open) outlines it and lists its tokens (colours as swatches, sizes as
+sliders, a material as its layers), and every change applies to the real home at once (the user's edits layer, as the
+editor's today), with undo, revert and the auto-revert confirmation. Elements name their token namespace where they are
+built (the dock `comp.home.dock.*`, the bar `comp.statusbar.*`...), so a tap finds the deepest one under the finger.
+The other way, a picture of home inside the editor taken again after each change, is simpler but a picture (it lags each
+change by a render, ~20 ms, and its glass is frozen).
+

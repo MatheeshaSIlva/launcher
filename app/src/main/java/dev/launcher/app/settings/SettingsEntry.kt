@@ -16,10 +16,11 @@ import java.util.concurrent.Executors
 
 /**
  * Home handing itself over to the settings as they open from its edit menu ("Home Settings"; docs/PLAN_SETTINGS.md),
- * Matheesha: home slides into the settings' picture of it, not a separate app opening. Home pictures itself at rest with
- * our status bar across its top and offers it ([offer]); the settings' first frame shows exactly that over the whole
- * screen (their window comes up as home itself), then it shrinks into the picture of home above the sheet as the sheet
- * rises ([EntryState]). Back on the tiles plays it the other way and home comes back ([SettingsActivity]). Main thread.
+ * Matheesha: home goes into the settings, not a separate app opening. Home pictures itself at rest with our status bar
+ * across its top and offers it ([offer]); the settings' first frame shows exactly that over the whole screen (their window
+ * comes up as home itself), then it steps back and blurs into the page as the sheet rises over it ([EntryState],
+ * [EntryHome]; V5: the settings keep no picture of home of their own). Back on the tiles plays it the other way and home
+ * comes back ([SettingsActivity]). Main thread.
  */
 object SettingsEntry {
     /** The intent extra: opened from home's edit menu. */
@@ -222,19 +223,19 @@ object SettingsEntry {
 
 /**
  * The slide between home and the settings, for the settings' drawing: home's picture over the whole screen ([enter] 0),
- * shrinking into its place above the sheet as the sheet rises (1: at rest). [enter] is read in drawing and layers only.
+ * stepping back into the page as the sheet rises over it (1: at rest). [enter] is read in drawing and layers only.
  */
 @Stable
 class EntryState {
     /** 0: home, full screen; 1: the settings at rest. */
     val enter = mutableFloatStateOf(1f)
-    /** Home's picture handed over as it slides in: shown at once, until the preview has taken it in (then null). */
+    /**
+     * Home's picture while home slides in (handed over by home) or back out (taken again just before: its clock and the
+     * bar's time as they are now); null at rest.
+     */
     var picture by mutableStateOf<Bitmap?>(null)
-    /** A newer picture of home for the preview to take in with its fade (before sliding back into home). */
-    var fresh by mutableStateOf<Bitmap?>(null)
-    /** Whether [picture] and [fresh] show one of home's pages as they rest (theme cards keep only such pictures). */
+    /** Whether [picture] shows one of home's pages as they rest (theme cards keep only such pictures). */
     var handedPage = false
-    var freshPage = false
     /** Opened from home's edit menu: Back on the tiles goes back into home the same way. */
     var fromHome by mutableStateOf(false)
     /** A slide asked for ([request]), counted for the effect that plays it. */
