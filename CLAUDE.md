@@ -69,12 +69,14 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   own theme, on its page: `PartPage`) and Phone; more tiles than the sheet shows at rest, so a scroll up lifts the sheet
   first, then scrolls the tiles (`liftScroll`, `Studio.lifted`). The tiles are solid cards, as the groups (no glass), one
   under another as wide as the sheet (Matheesha, 2026-10-15: "more polished and well thought out"): the part's name and
-  what it holds on the left, on the right a window onto the part in its colour (under the theme's veil:
-  `comp.settings.tile.visual*`), inset evenly with corners concentric to the card's, a scene playing in it (`TileArt`, on
-  the preset's springs and styles as the draft would apply them, on a clock that runs only while the cards are in sight).
-  Every scene rests on a whole picture of its part, never an empty window, and plays one act a cycle (`TileArt.CYCLE`),
-  the acts running down the column a beat apart (`STEP`): a card or two moves at a time, and the cards come alive one
-  after another as the page appears. Groups on the sheet take iOS's elevated cell colour (the
+  what it holds on the left, on the right a scene of the part (`TileArt`, on the preset's springs and styles as the draft
+  would apply them, on a clock that runs only while the cards are in sight) drawn on the card itself, no box of its own
+  (Matheesha, 2026-10-16: "make it blend with the card itself"): in a frame inset from the card's edges, its colours from
+  the part's colour under the theme's veil (`comp.settings.tile.visual*`; panels the veil's pastel in light, the card being
+  white), cut only by the card's outline and kept off its words. Every scene rests on a whole picture of its part and
+  plays one act a cycle (`ArtMoves.cycle`: 6 s, longer when the preset's moves are slower than an act and a rest), the
+  acts running down the column a beat apart (`STEP`): a card or two moves at a time, and the cards come alive one after
+  another as the page appears. Groups on the sheet take iOS's elevated cell colour (the
   sheet's own grey hid them in dark). Look and Phone push pages one level down (`SubPager`,
   `Sub`: Look's colours, fonts, size; Phone's Developer page). The picture of home (with our status bar drawn on it) takes
   no touches: it zooms to the open part and fades away behind the sheet (`motion.settings.focus`); a finger shows how the

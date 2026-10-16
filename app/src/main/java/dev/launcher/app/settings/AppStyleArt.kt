@@ -46,9 +46,15 @@ internal abstract class StyleStage {
     /** What the page's look depends on (its colours): its picture is drawn again when it changes. */
     abstract fun pageKey(): Long
 
+    /**
+     * Drawn on a surface of its own (a settings card's scene): no ground behind home and no dimming (both would show as a
+     * box), and home's icons only where they are whole.
+     */
+    var bare = false
+
     /** Home dimming behind the app. */
     fun dim(c: Canvas, a: Float) {
-        if (a > 0.003f) c.drawColor(((255 * 0.25f * a).toInt().coerceIn(0, 255)) shl 24)
+        if (!bare && a > 0.003f) c.drawColor(((255 * 0.25f * a).toInt().coerceIn(0, 255)) shl 24)
     }
 
     /** The page over the whole stage as a picture (the genie bends it), drawn again when its size or look changes. */
@@ -182,8 +188,10 @@ internal class CardStage : StyleStage() {
     override fun home(c: Canvas, zoom: Float, px: Float, py: Float) {
         c.save()
         c.scale(zoom, zoom, px, py)
-        paint.color = fill
-        c.drawRect(-w, -h, w * 2f, h * 2f, paint)
+        if (!bare) {
+            paint.color = fill
+            c.drawRect(-w, -h, w * 2f, h * 2f, paint)
+        }
         drawIcons(c)
         c.restore()
     }
@@ -200,7 +208,9 @@ internal class CardStage : StyleStage() {
                 var x = icon.left - step * 3
                 while (x < w + s) {
                     val mine = kotlin.math.abs(x - icon.left) < 1f && kotlin.math.abs(y - icon.top) < 1f
-                    if (!mine && x > -s && y > -s) c.drawRoundRect(x, y, x + s, y + s, s * 0.23f, s * 0.23f, paint)
+                    // (Bare, only the whole ones: one cut at the frame's edge would show an edge where there is none.)
+                    val seen = if (bare) x >= 0f && y >= 0f && x + s <= w && y + s <= h else x > -s && y > -s
+                    if (!mine && seen) c.drawRoundRect(x, y, x + s, y + s, s * 0.23f, s * 0.23f, paint)
                     x += step
                 }
                 y += step

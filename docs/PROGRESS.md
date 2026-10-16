@@ -2428,3 +2428,22 @@ place is a part's page while you change its layout, grid, placement or look: the
 window as the page opens (the card's scene turning into the real thing), zoomed to that part. Motion's moments would play
 on a stage like the cards' (as the opening and closing styles already do), Phone needs none. To redesign with it: the
 slide from home's edit menu into the settings (home shrinking into the picture), perhaps into the Home card's window.
+
+## The cards' scenes on the card itself (2026-10-16, emulator; S24 not checked yet)
+
+Matheesha: "instead of having a separate box for the motion graphic, make it blend with the card itself. that's the only
+visual change I want you to make."
+
+- No box: each scene is drawn on the card, in the same frame (inset from the card's top, right and bottom), its edges the
+  card's own. What leaves the frame (the banner coming down, the deck's front card leaving) is cut by the card's outline,
+  never by an invisible line, and nothing reaches the card's words.
+- What the box used to hide or hold had to follow it: the scenes' panels were white (on a white card they vanished), they
+  now take the part's pastel in light (`comp.settings.tile.paper` transparent over it; dark unchanged); everything that ran
+  off the box's edges ends inside the frame (the App Library shows three whole folders, slightly smaller, where it showed
+  two and a cut third); the banner drops in from past the card's top edge; Look's little screen turning dark is gone (it
+  was a box), its act is the switch and the icons' colours; Motion's stage has no ground and no dimming of its own, its
+  faint icons only where they are whole, and its app opens to the frame (corners concentric with the card's).
+- Found on the way: the act cycle was a fixed 6 s while the acts follow the preset's speed; at a slow Speed or in slow
+  motion an act could run past the cycle and jump at the wrap. The cycle now stretches to the longest act and a rest
+  (`ArtMoves.cycle`); nothing changes at the presets' own speeds.
+- Checked on the emulator in light and dark, Motion's act recorded in slow motion. Not measured on the S24.

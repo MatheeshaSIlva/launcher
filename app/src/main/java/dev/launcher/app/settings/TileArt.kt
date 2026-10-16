@@ -38,10 +38,11 @@ import kotlin.math.sin
 
 // The settings' cards as motion graphics (Matheesha, 2026-10-15: "motion graphics instead of icons", then "more polished
 // and well thought out"): every card is the part's name on the left and, on the right, a window onto that part in its
-// colour, the same on every card, inset evenly from the card's top, right and bottom with its corners concentric to the
-// card's (the card's corner less the inset, as iOS 27 nests shapes). In the window a small scene plays on a loop, moved by the animation preset's own springs as the draft would apply them, drawn in the part's
-// colour family: the window is the colour under the theme's veil (a pastel in light, a deep tint in dark), its panels the
-// theme's paper. A scene is made of whole moves, each from rest to rest; one that starts again fades out first and back
+// colour, the same on every card. No box of its own (Matheesha, 2026-10-16: "make it blend with the card itself"): the
+// scene is drawn on the card, in a frame inset evenly from its top, right and bottom, its edges the card's own. A small
+// scene plays on a loop, moved by the animation preset's own springs as the draft would apply them, drawn in the part's
+// colour family: its colours start from the part's colour under the theme's veil (a pastel in light, a deep tint in
+// dark), its panels the theme's paper over that. A scene is made of whole moves, each from rest to rest; one that starts again fades out first and back
 // in, so no frame of a loop jumps. Drawn on the art's clock ([Studio.artClock]), which runs only while the cards are in
 // sight.
 
@@ -82,32 +83,48 @@ internal class ArtMoves(private val d: Draft) {
     /** How apps open and go home (motion/AppStyles), as the draft would apply them. */
     val opening = d.motionStyle(id, dev.launcher.app.motion.AppStyles.OPENING)
     val closing = d.motionStyle(id, dev.launcher.app.motion.AppStyles.CLOSING)
+
+    /**
+     * How often the cards play their acts (s): [TileArt.CYCLE], or longer when the preset's moves are slow enough (its
+     * Speed, slow motion) that an act and a rest would not fit in it (the act would be cut at the wrap: a jump).
+     */
+    val cycle: Float = run {
+        val acts = floatArrayOf(
+            toggle.dur * 2f + 1.5f + 0.6f,                          // Look: on, a moment, off, the icons' wave
+            open.dur + 0.8f + close.dur,                            // Motion: open, a moment, close
+            maxOf(2.0f, 0.55f + folder.dur),                        // Home: the wiggle, the two changing places
+            switch.dur,                                             // Apps: a turn of the deck
+            0.3f + folder.dur,                                      // App Library: the folders, one after another
+            bannerIn.dur + 1.2f + maxOf(bannerOut.dur, 0.35f + toggle.dur, 0.25f + level.dur), // the banner and the controls
+            maxOf(0.25f + roll.dur, 2.6f + appear.dur),             // Status bar: the minute, the icon coming and going
+            maxOf(1.0f, 0.83f + appear.dur),                        // Phone: the pulse, the ticks
+        )
+        maxOf(TileArt.CYCLE, acts.max() + TileArt.REST)
+    }
 }
 
 /**
- * How a card and its window look (the theme's, px): the card's corner, the window's corner, the window's share of the
- * card's width, its top below the card's, the veil it is the part's colour under, the scenes' paper, and the appearance.
+ * How a card and its scene look (the theme's, px): the card's corner, its scene frame's inset and share of the card's
+ * width, the veil the scene's colours start under, the scene's paper, and the appearance.
  */
 internal class CardShape(val corner: Float, val inset: Float, val share: Float,
                          val veil: Color, val paper: Color, val dark: Boolean) {
-    /** The window's corners: concentric with the card's. */
-    val windowCorner = (corner - inset).coerceAtLeast(inset * 0.5f)
+    /** A shape that fills the frame (Motion's app, open) takes these corners: concentric with the card's. */
+    val frameCorner = (corner - inset).coerceAtLeast(inset * 0.5f)
 
-    /** How far a scene draws what runs off its window's right and bottom edges (cut by the window there). */
-    val bleed get() = windowCorner + 2f
-
-    /** The window in a card [w] x [h]: from the end of the card's text to the card's right edge, inset evenly. */
-    fun window(w: Float, h: Float) = Rect(w * (1f - share), inset, w - inset, h - inset)
+    /** The scene's frame in a card [w] x [h]: from the end of the card's text to the card's right edge, inset evenly. */
+    fun frame(w: Float, h: Float) = Rect(w * (1f - share), inset, w - inset, h - inset)
 }
 
-/** A part's colours in its window: its colour, the window, two steps between, the scene's paper and lines on it. */
-internal class WindowColors {
+/** A part's colours in its scene: its colour, the colour under the veil, two steps between, the scene's paper and lines on it. */
+internal class SceneColors {
     var c = Color.Unspecified; private set
-    var window = Color.Black; private set
+    /** The part's colour under the theme's veil: where the scene's colours start from (never drawn as a ground). */
+    var base = Color.Black; private set
     /** Shapes a step into the colour (a dock, a track), and halfway (an idle control). */
     var tint = Color.Black; private set
     var mid = Color.Black; private set
-    /** Panels (an app's page, a banner, a folder) as drawn over the window, and lines on them. */
+    /** Panels (an app's page, a banner, a folder), and lines on them. */
     var paper = Color.White; private set
     var line = Color.Black; private set
     var dark = false; private set
@@ -117,15 +134,15 @@ internal class WindowColors {
     fun set(c: Color, veil: Color, paper: Color, dark: Boolean) {
         if (c == this.c && veil == this.veil && paper == paperOf && dark == this.dark) return
         this.c = c; this.veil = veil; paperOf = paper; this.dark = dark
-        window = over(veil, c)
-        tint = mix(window, c, 0.3f)
-        mid = mix(window, c, 0.58f)
-        this.paper = over(paper, window)
+        base = over(veil, c)
+        tint = mix(base, c, 0.3f)
+        mid = mix(base, c, 0.58f)
+        this.paper = over(paper, base)
         line = if (dark) mix(this.paper, Color.White, 0.42f) else mix(this.paper, c, 0.4f)
     }
 
-    /** An icon's colour: [shade] of the way from the window into the part's colour. */
-    fun icon(shade: Float) = mix(window, c, shade)
+    /** An icon's colour: [shade] of the way from the base into the part's colour. */
+    fun icon(shade: Float) = mix(base, c, shade)
 
     private fun over(top: Color, under: Color): Color {
         val a = top.alpha
@@ -143,7 +160,7 @@ internal class ArtKit(
 ) {
     /** Motion's small phone, where an app opens and goes home in the preset's own ways. */
     val stage = CardStage()
-    internal val colors = WindowColors()
+    internal val colors = SceneColors()
 
     // Shapes that depend on the size things are drawn at, made again only when it changes (never in a frame).
     private var builtFor = -1f
@@ -151,7 +168,7 @@ internal class ArtKit(
     val check = Path()
     private var clipW = -1f
     private var clipH = -1f
-    internal val windowClip = Path()
+    internal val cardClip = Path()
 
     /** The scenes' shapes at [u] px a unit. */
     fun build(u: Float) {
@@ -175,13 +192,12 @@ internal class ArtKit(
         check.lineTo(cx + 9f * u, cy - 6.5f * u)
     }
 
-    /** The window's outline for a card [w] x [h] (made again when its size changes). */
+    /** The card's outline for a card [w] x [h] (made again when its size changes): what a scene running off it is cut by. */
     fun clips(w: Float, h: Float) {
         if (w == clipW && h == clipH) return
         clipW = w; clipH = h
-        val win = shape.window(w, h)
-        windowClip.reset()
-        windowClip.addRoundRect(RoundRect(win, CornerRadius(shape.windowCorner)))
+        cardClip.reset()
+        cardClip.addRoundRect(RoundRect(0f, 0f, w, h, CornerRadius(shape.corner)))
     }
 }
 
@@ -197,7 +213,7 @@ internal fun rememberArtKit(): State<ArtKit> {
     val measurer = rememberTextMeasurer()
     return remember(look, look.version, draft) {
         val inset = look.pt(SettingsTokens.TILE_VISUAL_INSET)
-        // The scenes are laid out in hundredths of the window's height (a card of the theme's height measures their words).
+        // The scenes are laid out in hundredths of their frame's height (a card of the theme's height measures their words).
         val u = (look.pt(SettingsTokens.TILE_HEIGHT) - 2f * inset) / ART_UNITS
         val ink = look.color(SettingsTokens.ROW_LABEL)
         val bold = with(density) { TextStyle(fontSize = (21f * u).toSp(), fontWeight = FontWeight(650), color = ink) }
@@ -228,51 +244,57 @@ internal const val ART_UNITS = 100f
 
 internal object TileArt {
     /**
-     * Part [part]'s card art, for a card [w] x [h] px from the scope's origin: its window and the scene in it at [t] s of the
-     * art's clock, at [alpha].
+     * Part [part]'s card art, for a card [w] x [h] px from the scope's origin: its scene at [t] s of the art's clock, at
+     * [alpha], drawn on the card itself (no box), cut only by the card's own outline and kept off its words.
      *
-     * Every scene rests on a whole picture of its part (never an empty window) and plays one act a cycle, returning to it:
+     * Every scene rests on a whole picture of its part (never an empty frame) and plays one act a cycle, returning to it:
      * the acts run down the column a beat apart ([STEP]), so the page moves a card or two at a time, and coming in, the
      * cards come alive one after another from the top.
      */
     fun draw(s: DrawScope, part: Part, w: Float, h: Float, t: Float, k: ArtKit, c: Color, alpha: Float = 1f) {
         if (alpha <= 0.003f || part == Part.CHANGES) return
         val shape = k.shape
-        val win = shape.window(w, h)
-        val vw = win.width
-        val vh = win.height
+        val fr = shape.frame(w, h)
+        val vw = fr.width
+        val vh = fr.height
         if (vw <= 0f || vh <= 0f) return
         val u = vh / ART_UNITS
         k.build(u)
         k.clips(w, h)
         val p = k.colors.also { it.set(c, shape.veil, shape.paper, shape.dark) }
         // Its own act's time in this cycle, and how many cycles have gone (a scene that moves on, act after act, counts).
+        val cycle = k.moves.cycle
         val local = t - part.ordinal * STEP
-        val cyc = floor(local / CYCLE).toInt()
-        val tau = local - cyc * CYCLE
+        val cyc = floor(local / cycle).toInt()
+        val tau = local - cyc * cycle
         with(s) {
-            drawRoundRect(p.window.a(alpha), win.topLeft, win.size, CornerRadius(shape.windowCorner))
-            clipPath(k.windowClip) {
-                translate(win.left, win.top) {
-                    when (part) {
-                        Part.LOOK -> look(k, p, vw, u, tau, alpha)
-                        Part.MOTION -> motion(k, p, vw, vh, u, tau, alpha, shape.bleed)
-                        Part.HOME -> home(k, p, vw, u, tau, cyc, alpha, shape.bleed)
-                        Part.APPS -> apps(k, p, vw, u, tau, cyc, alpha)
-                        Part.LIBRARY -> library(k, p, vw, u, tau, cyc, alpha, shape.bleed)
-                        Part.SHADE -> shade(k, p, vw, u, tau, alpha)
-                        Part.STATUS_BAR -> statusBar(k, p, vw, u, tau, cyc, alpha, shape.bleed)
-                        Part.PHONE -> phone(k, p, vw, u, tau, alpha, shape.bleed)
-                        Part.CHANGES -> Unit
+            // (What runs off the frame, a banner coming down, a card leaving, is cut by the card's own edges; nothing reaches
+            // the words.)
+            clipRect(left = fr.left) {
+                clipPath(k.cardClip) {
+                    translate(fr.left, fr.top) {
+                        when (part) {
+                            Part.LOOK -> look(k, p, vw, u, tau, alpha)
+                            Part.MOTION -> motion(k, p, vw, vh, u, tau, alpha)
+                            Part.HOME -> home(k, p, vw, u, tau, cyc, alpha)
+                            Part.APPS -> apps(k, p, vw, u, tau, cyc, alpha)
+                            Part.LIBRARY -> library(k, p, vw, u, tau, cyc, alpha)
+                            Part.SHADE -> shade(k, p, vw, u, tau, alpha)
+                            Part.STATUS_BAR -> statusBar(k, p, vw, u, tau, cyc, alpha)
+                            Part.PHONE -> phone(k, p, vw, u, tau, alpha)
+                            Part.CHANGES -> Unit
+                        }
                     }
                 }
             }
         }
     }
 
-    /** One act each this often (s); a card's act a beat after the one above it. */
+    /** One act each this often (s; longer if the acts are: [ArtMoves.cycle]); a card's act a beat after the one above it. */
     const val CYCLE = 6f
     const val STEP = 0.75f
+    /** The least rest between one act and the next (s). */
+    const val REST = 1f
 
     private fun mod(a: Int, n: Int) = ((a % n) + n) % n
 
@@ -291,17 +313,14 @@ internal object TileArt {
 
     /**
      * Look: "Aa" in the theme's font and a switch beside it; under them home's icons in Look's colours. Its act: the switch
-     * goes on, the little screen turns dark (light in dark) and the icons to the next of the colours; a moment, and back.
+     * goes on and the icons turn to the next of the colours, one after another; a moment, and back.
      */
-    private fun DrawScope.look(k: ArtKit, p: WindowColors, w: Float, u: Float, tau: Float, a: Float) {
+    private fun DrawScope.look(k: ArtKit, p: SceneColors, w: Float, u: Float, tau: Float, a: Float) {
         val m = k.moves
         val on = there(m.toggle, tau, 0f, m.toggle.dur + 1.5f).coerceIn(-0.05f, 1.05f)
         val o = on.coerceIn(0f, 1f)
-        // The screen's other appearance over the window, as far as the switch has gone.
-        drawRect((if (p.dark) LIGHT_SCREEN else DARK_SCREEN).a(a * o), Offset(0f, 0f), Size(w * 2f, 200f * u))
-        val ink = mix(if (p.dark) INK_ON_DARK else INK_ON_LIGHT, if (p.dark) INK_ON_LIGHT else INK_ON_DARK, o)
         val ts = u / k.textUnit
-        scale(ts, Offset(14f * u, 9f * u)) { drawText(k.aa, color = ink, topLeft = Offset(14f * u, 9f * u), alpha = a) }
+        scale(ts, Offset(14f * u, 9f * u)) { drawText(k.aa, color = k.ink, topLeft = Offset(14f * u, 9f * u), alpha = a) }
         val tw = 36f * u
         val th = 21f * u
         val tx = 14f * u + k.aa.size.width * ts + 12f * u
@@ -309,14 +328,14 @@ internal object TileArt {
         drawRoundRect(mix(p.mid, p.c, o).a(a), Offset(tx, ty), Size(tw, th), CornerRadius(th / 2f))
         val kd = th - 4f * u
         drawCircle(k.knob.a(a), kd / 2f, Offset(tx + 2f * u + kd / 2f + (tw - kd - 4f * u) * on, ty + th / 2f))
-        val s = 22f * u
-        val g = 11f * u
+        val s = 20f * u
+        val g = 8f * u
         val cols = floor((w - 14f * u + g) / (s + g)).toInt().coerceIn(3, 6)
         for (r in 0 until 2) for (col in 0 until cols) {
             val i = r * cols + col
             // Each a beat after the one before, as a wave across them.
             val oi = there(m.toggle, tau, 0.05f * i, m.toggle.dur + 1.5f + 0.05f * i).coerceIn(0f, 1f)
-            icon(14f * u + col * (s + g), 54f * u + r * (s + g), s, mix(k.palette[i % 3], k.palette[(i + 1) % 3], oi).a(a))
+            icon(14f * u + col * (s + g), 52f * u + r * (s + g), s, mix(k.palette[i % 3], k.palette[(i + 1) % 3], oi).a(a))
         }
     }
 
@@ -324,7 +343,7 @@ internal object TileArt {
      * Motion: a little home where an app opens and goes home again in the preset's own ways (motion/AppStyles). It rests on
      * home; its act: the app opens, a moment, and closes.
      */
-    private fun DrawScope.motion(k: ArtKit, p: WindowColors, w: Float, h: Float, u: Float, tau: Float, a: Float, bleed: Float) {
+    private fun DrawScope.motion(k: ArtKit, p: SceneColors, w: Float, h: Float, u: Float, tau: Float, a: Float) {
         val m = k.moves
         val run = m.open.dur
         val hold = 0.8f
@@ -332,13 +351,14 @@ internal object TileArt {
         val style = if (opening) m.opening else m.closing
         val v = if (opening) m.open.at(tau) else 1f - m.close.at(tau - run - hold)
         val st = k.stage
-        // The app fills the window to its hidden edges.
-        st.w = w + bleed
-        st.h = h + bleed
-        st.corner = k.shape.windowCorner
+        // On the card itself (no ground, no dimming); the app opens to the frame, its corners concentric with the card's.
+        st.bare = true
+        st.w = w
+        st.h = h
+        st.corner = k.shape.frameCorner
         val s = 24f * u
         st.icon.set(18f * u, 58f * u, 18f * u + s, 58f * u + s)
-        st.fill = p.window.toArgb()
+        st.fill = p.base.toArgb()
         st.faint = p.tint.toArgb()
         st.accent = p.c.toArgb()
         st.pageColor = p.paper.toArgb()
@@ -359,11 +379,13 @@ internal object TileArt {
      * Home: its icons and the dock under them. Its act: they wiggle as when home is edited, and two of them change places
      * (back again in the next).
      */
-    private fun DrawScope.home(k: ArtKit, p: WindowColors, w: Float, u: Float, tau: Float, cyc: Int, a: Float, bleed: Float) {
+    private fun DrawScope.home(k: ArtKit, p: SceneColors, w: Float, u: Float, tau: Float, cyc: Int, a: Float) {
         val m = k.moves
-        val s = 22f * u
-        val g = 12f * u
-        val cols = floor((w - 14f * u + g) / (s + g)).toInt().coerceIn(3, 6)
+        val s = 20f * u
+        val g = 10f * u
+        val cols = floor((w - 16f * u + g) / (s + g)).toInt().coerceIn(3, 6)
+        val gridW = cols * s + (cols - 1) * g
+        val left = (w - gridW) / 2f
         val wiggle = 2.0f
         val env = if (tau < wiggle) minOf(1f, tau / 0.18f, (wiggle - tau) / 0.18f).coerceIn(0f, 1f) else 0f
         val swap = m.folder.at(tau - 0.55f)
@@ -371,9 +393,9 @@ internal object TileArt {
         val crossed = mod(cyc, 2) == 1
         val ia = 1                       // the second icon of the first row...
         val ib = cols + cols - 2         // ...and the one before last of the second
-        fun at(i: Int): Offset = Offset(14f * u + (i % cols) * (s + g) + s / 2f, 12f * u + (i / cols) * (s + g) + s / 2f)
-        val dockTop = 79f * u
-        drawRoundRect(p.tint.a(a), Offset(8f * u, dockTop), Size(w + bleed, 34f * u), CornerRadius(13f * u))
+        fun at(i: Int): Offset = Offset(left + (i % cols) * (s + g) + s / 2f, 10f * u + (i / cols) * (s + g) + s / 2f)
+        val dockTop = 68f * u
+        drawRoundRect(p.tint.a(a), Offset(left - 6f * u, dockTop), Size(gridW + 12f * u, 28f * u), CornerRadius(11f * u))
         fun item(c: Offset, size: Float, i: Int, lift: Float) {
             val wig = if (env > 0f) sin(tau * 2f * PI.toFloat() * 3.4f + i * 1.7f) * 3f * env else 0f
             val sz = size * (1f + 0.14f * lift)
@@ -381,14 +403,8 @@ internal object TileArt {
         }
         val lift = sin(PI.toFloat() * swap.coerceIn(0f, 1f))
         for (i in 0 until 2 * cols) if (i != ia && i != ib) item(at(i), s, i, 0f)
-        val ds = 19f * u
-        var i = 0
-        var dx = 17f * u
-        while (dx + ds < w) {
-            item(Offset(dx + ds / 2f, dockTop + 4f * u + ds / 2f), ds, 2 * cols + i, 0f)
-            dx += ds + 12f * u
-            i++
-        }
+        val ds = 18f * u
+        for (i in 0 until DOCK) item(Offset(left + gridW * (i + 0.5f) / DOCK, dockTop + 14f * u), ds, 2 * cols + i, 0f)
         // The two changing places, over the others, lifted on the way.
         val from = if (crossed) ib else ia
         val to = if (crossed) ia else ib
@@ -401,7 +417,7 @@ internal object TileArt {
     private fun lerp(a: Offset, b: Offset, t: Float) = Offset(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
 
     /** Apps: the App Switcher's deck. Its act: it turns a card, the front one leaving to the right. */
-    private fun DrawScope.apps(k: ArtKit, p: WindowColors, w: Float, u: Float, tau: Float, cyc: Int, a: Float) {
+    private fun DrawScope.apps(k: ArtKit, p: SceneColors, w: Float, u: Float, tau: Float, cyc: Int, a: Float) {
         val m = k.moves
         val q = m.switch.at(tau)
         val n = cyc
@@ -442,17 +458,21 @@ internal object TileArt {
      * App Library: its search field over its folders, each holding its apps. Its act: the apps in each folder turn round
      * one place, a folder after another, as the library sorts them.
      */
-    private fun DrawScope.library(k: ArtKit, p: WindowColors, w: Float, u: Float, tau: Float, cyc: Int, a: Float, bleed: Float) {
+    private fun DrawScope.library(k: ArtKit, p: SceneColors, w: Float, u: Float, tau: Float, cyc: Int, a: Float) {
         val m = k.moves
-        val fs = 42f * u
-        val gap = 12f * u
+        val fs = 40f * u
+        val gap = 10f * u
         val folders = floor((w - 12f * u + gap) / (fs + gap)).toInt().coerceIn(2, 4)
-        drawRoundRect(p.paper.a(a), Offset(12f * u, 12f * u), Size(w + bleed, 16f * u), CornerRadius(8f * u))
-        drawCircle(p.line.a(a), 3.4f * u, Offset(22f * u, 20f * u), style = Stroke(1.4f * u))
+        val rowW = folders * fs + (folders - 1) * gap
+        val left = (w - rowW) / 2f
+        drawRoundRect(p.paper.a(a), Offset(left, 12f * u), Size(rowW, 16f * u), CornerRadius(8f * u))
+        drawCircle(p.line.a(a), 3.4f * u, Offset(left + 10f * u, 20f * u), style = Stroke(1.4f * u))
         val top = 40f * u
         val mi = 12f * u
+        // (Its four apps in the middle of a folder, 4 apart.)
+        val pad = (fs - 2f * mi - 4f * u) / 2f
         for (f in 0 until folders) {
-            val fx = 12f * u + f * (fs + gap)
+            val fx = left + f * (fs + gap)
             drawRoundRect(p.paper.a(a), Offset(fx, top), Size(fs, fs), CornerRadius(11f * u))
             val turn = m.folder.at(tau - 0.1f * f)
             for (j in 0 until 4) {
@@ -463,8 +483,8 @@ internal object TileArt {
                 val sx = p0.x + (p1.x - p0.x) * turn
                 val sy = p0.y + (p1.y - p0.y) * turn
                 val sz = mi * (1f - 0.18f * sin(PI.toFloat() * turn.coerceIn(0f, 1f)))
-                val x = fx + 7f * u + sx * (mi + 4f * u) + (mi - sz) / 2f
-                val y = top + 7f * u + sy * (mi + 4f * u) + (mi - sz) / 2f
+                val x = fx + pad + sx * (mi + 4f * u) + (mi - sz) / 2f
+                val y = top + pad + sy * (mi + 4f * u) + (mi - sz) / 2f
                 icon(x, y, sz, p.icon(ICON_SHADES[(f * 4 + j) * 5 % ICON_SHADES.size]).a(a))
             }
         }
@@ -474,21 +494,22 @@ internal object TileArt {
      * Notifications and Control Center: Notification Center's list and Control Center's controls beside it. Its act: a
      * banner drops in, two controls turn on and the brightness rises with it; it goes, and they settle back.
      */
-    private fun DrawScope.shade(k: ArtKit, p: WindowColors, w: Float, u: Float, tau: Float, a: Float) {
+    private fun DrawScope.shade(k: ArtKit, p: SceneColors, w: Float, u: Float, tau: Float, a: Float) {
         val m = k.moves
         val outAt = m.bannerIn.dur + 1.2f
         val nw = (w * 0.6f).coerceAtLeast(70f * u)
         // Notification Center's list under where the banner comes.
         for (i in 0 until 2) {
-            val py = 56f * u + i * 27f * u
+            val py = 52f * u + i * 25f * u
             drawRoundRect(p.paper.a(a * (if (i == 0) 0.9f else 0.6f)), Offset(12f * u, py), Size(nw - 12f * u, 22f * u), CornerRadius(10f * u))
             drawCircle(p.tint.a(a), 5f * u, Offset(24f * u, py + 11f * u))
             bar(p.line.a(a * 0.8f), 34f * u, py + 9.5f * u, (nw - 12f * u) * 0.5f, 3.2f * u)
         }
-        // The banner: from above the window to its place, and back up.
+        // The banner: down from past the card's top edge to its place, and back up.
         val bh = 32f * u
         val down = there(m.bannerIn, tau, 0f, outAt)
-        val by = -bh - 4f * u + (bh + 16f * u) * down
+        val above = bh + k.shape.inset + 2f * u
+        val by = -above + (above + 12f * u) * down
         if (by > -bh) {
             drawRoundRect(p.paper.a(a), Offset(12f * u, by), Size(nw - 12f * u, bh), CornerRadius(13f * u))
             drawRoundRect(p.c.a(a), Offset(20f * u, by + 8f * u), Size(16f * u, 16f * u), CornerRadius(4.5f * u))
@@ -522,13 +543,13 @@ internal object TileArt {
      * The status bar, large, across the top of a little screen: the time, the signal, Wi-Fi and the battery; the screen's
      * page under it. Its act: the minute rolls on, and a notification's icon arrives after the time and goes.
      */
-    private fun DrawScope.statusBar(k: ArtKit, p: WindowColors, w: Float, u: Float, tau: Float, cyc: Int, a: Float, bleed: Float) {
+    private fun DrawScope.statusBar(k: ArtKit, p: SceneColors, w: Float, u: Float, tau: Float, cyc: Int, a: Float) {
         val m = k.moves
         // The screen's page under the bar.
-        bar(p.mid.a(a), 14f * u, 50f * u, w * 0.46f, 8f * u)
-        bar(p.tint.a(a), 14f * u, 66f * u, w * 0.7f, 5f * u)
-        bar(p.tint.a(a), 14f * u, 77f * u, w * 0.52f, 5f * u)
-        drawRoundRect(p.paper.a(a), Offset(10f * u, 90f * u), Size(w + bleed, 30f * u), CornerRadius(11f * u))
+        bar(p.mid.a(a), 14f * u, 46f * u, w * 0.46f, 8f * u)
+        bar(p.tint.a(a), 14f * u, 61f * u, w * 0.7f, 5f * u)
+        bar(p.tint.a(a), 14f * u, 71f * u, w * 0.52f, 5f * u)
+        drawRoundRect(p.paper.a(a), Offset(10f * u, 82f * u), Size(w - 10f * u, 18f * u), CornerRadius(9f * u))
         val ink = if (p.dark) Color.White else k.ink.copy(alpha = 1f)
         val cy = 22f * u
         val tx = 14f * u
@@ -580,12 +601,12 @@ internal object TileArt {
      * Phone: its shield, checked, beside the phone's things, each ticked. Its act: a pulse goes out from the shield and
      * the ticks answer it one after another.
      */
-    private fun DrawScope.phone(k: ArtKit, p: WindowColors, w: Float, u: Float, tau: Float, a: Float, bleed: Float) {
+    private fun DrawScope.phone(k: ArtKit, p: SceneColors, w: Float, u: Float, tau: Float, a: Float) {
         val m = k.moves
         val rx = 70f * u
         for (i in 0 until 3) {
             val ry = 12f * u + i * 27f * u
-            drawRoundRect(p.paper.a(a), Offset(rx, ry), Size(w + bleed - rx, 21f * u), CornerRadius(10.5f * u))
+            drawRoundRect(p.paper.a(a), Offset(rx, ry), Size(w - rx, 21f * u), CornerRadius(10.5f * u))
             bar(p.line.a(a), rx + 10f * u, ry + 9f * u, (w - rx) * (0.46f - i * 0.08f), 3.4f * u)
             val bump = there(m.appear, tau, 0.35f + i * 0.14f, 0.55f + i * 0.14f)
             drawCircle(p.c.a(a), 4.4f * u * (1f + 0.4f * bump), Offset(w - 16f * u, ry + 10.5f * u))
@@ -604,9 +625,6 @@ internal object TileArt {
     private val ICON_SHADES = floatArrayOf(1f, 0.72f, 0.5f, 0.86f, 0.62f, 0.92f, 0.45f, 0.78f, 0.66f, 0.84f, 0.56f)
     // A folder's four places, clockwise from the top left (columns and rows).
     private val SLOTS = arrayOf(Offset(0f, 0f), Offset(1f, 0f), Offset(1f, 1f), Offset(0f, 1f))
-    // Look's little screen in its other appearance, and its ink in each.
-    private val LIGHT_SCREEN = Color(0xFFF2F2F7)
-    private val DARK_SCREEN = Color(0xFF1C1C1E)
-    private val INK_ON_LIGHT = Color(0xFF1C1C1E)
-    private val INK_ON_DARK = Color(0xFFF2F2F7)
+    /** Home's dock: its icons. */
+    private const val DOCK = 4
 }

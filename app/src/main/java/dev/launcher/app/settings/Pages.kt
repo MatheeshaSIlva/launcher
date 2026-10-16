@@ -142,7 +142,7 @@ object SettingsTokens {
     val TILE_CORNER = NumberKey("comp.settings.tile.corner")
     val TILE_HEIGHT = NumberKey("comp.settings.tile.height")
     val TILE_GAP = NumberKey("comp.settings.tile.gap")
-    /** A card's window onto its part (TileArt): its share of the card's width, its inset, its veil; the scenes' paper. */
+    /** A card's scene (TileArt): its share of the card's width, its frame's inset, the veil its colours start under, its paper. */
     val TILE_VISUAL = NumberKey("comp.settings.tile.visual")
     val TILE_VISUAL_INSET = NumberKey("comp.settings.tile.visual-inset")
     val TILE_VISUAL_VEIL = ColorKey("comp.settings.tile.visual-veil")
@@ -1773,8 +1773,8 @@ private fun ChangesEntry(st: Studio, open: (Part) -> Unit) {
 
 /**
  * The cards one under another, each as wide as the sheet (Matheesha, 2026-10-15: one column, "more polished and well
- * thought out"): every card the same, its name and what it holds on the left, its window onto the part on the right; every
- * card as tall as the tallest needs and at least the theme's card height, so the column keeps one rhythm.
+ * thought out"): every card the same, its name and what it holds on the left, its part's scene on the right; every card
+ * as tall as the tallest needs and at least the theme's card height, so the column keeps one rhythm.
  */
 @Composable
 private fun TileGrid(st: Studio, open: (Part) -> Unit, art: androidx.compose.runtime.State<ArtKit>) {
@@ -1822,9 +1822,9 @@ internal fun mix(a: Color, b: Color, t: Float) = Color(
 
 /**
  * One part, on a solid card as the app's groups are (Matheesha, 2026-10-15: the cards as the rest of the app, not glass):
- * its name and what it holds on the left, read down the page; on the right a window onto the part in its colour with a
- * scene playing in it ([TileArt]), inset evenly, its corners concentric with the card's. Pressed, it lights as a row does
- * and sinks; it grows into its page.
+ * its name and what it holds on the left, read down the page; on the right a scene of the part in its colour ([TileArt]),
+ * drawn on the card itself (Matheesha, 2026-10-16: no box, "blend with the card itself"). Pressed, it lights as a row
+ * does and sinks; it grows into its page.
  */
 @Composable
 private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.compose.runtime.State<ArtKit>) {
@@ -1867,8 +1867,7 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.com
             }
             .pointerInput(part) { rowTap({ pressed = it }) { st.fromRow = null; open(part) } },
     ) {
-        // Its window and the scene in it, on the art's clock, in a layer of its own (only the scene is drawn again in its
-        // frames).
+        // Its scene, on the art's clock, in a layer of its own (only the scene is drawn again in its frames).
         Canvas(Modifier.matchParentSize().graphicsLayer()) {
             TileArt.draw(this, part, size.width, size.height, st.artClock.floatValue, art.value, c)
         }
@@ -1891,7 +1890,7 @@ private fun Tile(st: Studio, part: Part, open: (Part) -> Unit, art: androidx.com
     }
 }
 
-// A card's text: from its left edge, short of its window, and above and below it (pt).
+// A card's text: from its left edge, short of its scene, and above and below it (pt).
 private const val TILE_TEXT_START = 18f
 private const val TILE_TEXT_END = 12f
 private const val TILE_TEXT_V = 14f
@@ -1953,7 +1952,7 @@ private fun GrowingTile(st: Studio, part: Part, art: androidx.compose.runtime.St
         if (pressed > 0.001f) drawRoundRect(pressFill.copy(alpha = pressFill.alpha * pressed * colour), r.topLeft, r.size, CornerRadius(corner))
         val content = (1f - p / 0.35f).coerceIn(0f, 1f)
         if (content > 0f) {
-            // Its window as the card had it, riding along with the card's top left.
+            // Its scene as the card had it, riding along with the card's top left.
             translate(r.left, r.top) {
                 TileArt.draw(this, part, tile.width, tile.height, st.artClock.floatValue, art.value, c, content)
             }
