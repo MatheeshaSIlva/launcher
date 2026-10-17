@@ -1,6 +1,7 @@
 {
  "format": 1,
- "name": "Graphite (test)",
+ "name": "Graphite",
+ "test": true,
  "author": "Launcher",
  "version": "0.1",
  "extends": "ios27",

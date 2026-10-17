@@ -2482,3 +2482,33 @@ a live preview where it is not crucial" (`docs/PLAN_SETTINGS_V2.md`, V5).
 - Checked on the emulator in light and dark, in slow motion: a card opening and closing, Home's grid change, a moment's
   page, Motion's page, a search result. Not measured on the S24. 118 unit tests.
 
+## Styles during fast use, and the wallpaper in the settings (2026-10-18, emulator)
+
+Matheesha: "when I switched the app launch animation, it would work but frequently revert back to the default animation.
+I noticed that it happens when I open and close apps too fast"; "there's also issues with how the wallpaper change
+affects our settings app".
+
+- **A closing app reopened always zoomed** (`beginLaunch`: a reversal took `AppStyle.ZOOM` whatever the preset said), so
+  every launch during a close, or right as the card landed in its icon, played the default. It now plays the chosen
+  opening style from where the card is: the style's look is read at the card's place on the whole way from its icon (its
+  size), and it comes in over the first half of the flight as what the card showed goes (frames, the fade-through, the
+  circle's window; a genie's own mesh bends into the opening one: replaced at once, the funnel snapped flat for a
+  frame). Slide up and fade in have no way from a card part way to its icon: it grows back as it is. The first frame is
+  exactly the closing card's (the blend starts from it). Another app opened during a close already played its style
+  (the closing card fades where it is). Checked on the emulator at 8x slow motion: Clock closed in the genie and reopened
+  as it landed poured back out of its icon ("launch ... (reversed a closing card) (genie)"); Maps opened during Clock's
+  close in the genie.
+- **A close of an app with no icon on home always zoomed to the middle**, slide and fade too (they never go into the
+  icon). They now play as chosen; the styles that go into an icon still shrink to the middle and fade there.
+- **The wallpaper changed while the settings were away** (home's Change Wallpaper, the system's picker): coming back,
+  Android showed them on their task's snapshot (the old wallpaper), then the theme's reveal replayed the change over the
+  whole page, its band a grey smear warping the words. It is a crossfade now (`motion.wallpaper.crossfade`), from the
+  still that matches the snapshot to the new look; the reveal stays for a look applied in the settings, from the tap.
+- **Theme cards kept pictures of home with the old wallpaper** (Graphite's card showed the old one beside iOS 27's new
+  one). A picture keeps the wallpaper it was taken with (`HomePictures.Shot`, saved as `<theme>~<wallpaper>.webp`); one
+  taken with another wallpaper shows the drawn stand-in on the current wallpaper until a new picture comes, which fades in.
+- **The test theme showed to everyone** ("Graphite (test)" beside iOS 27). Themes can be marked `"test": true` as presets
+  are; Graphite is, shown only with Developer's "Test themes and presets" switch (or while in use).
+- Seen on home, not fixed yet: after a new wallpaper's reveal, the dock's glass keeps the old wallpaper's tint for about
+  a second (its frost is made again after the reveal).
+

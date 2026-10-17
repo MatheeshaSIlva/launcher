@@ -90,10 +90,19 @@ private const val BLUR_STEPS = 24
 /** How much it dims as it steps back. */
 private const val DIM = 0.18f
 
-/** Home as it showed in each theme (kept whenever the settings take a picture): a theme shows before it is applied. */
+/**
+ * Home as it showed in each theme (kept whenever the settings take a picture): a theme shows before it is applied. Each
+ * picture keeps the wallpaper it was taken with ([Shot.wallpaper], the system's wallpaper id): one taken with another
+ * wallpaper is not home as it would look now (a theme card showed the old wallpaper after a new one was set).
+ */
 internal object HomePictures {
-    val byTheme = androidx.compose.runtime.mutableStateMapOf<String, android.graphics.Bitmap>()
+    class Shot(val bitmap: android.graphics.Bitmap, val wallpaper: Int)
+
+    val byTheme = androidx.compose.runtime.mutableStateMapOf<String, Shot>()
     private var loaded = false
+
+    /** Theme [id]'s picture if it was taken with wallpaper [wallpaper] (null: none, or taken with another). */
+    fun of(id: String, wallpaper: Int?): android.graphics.Bitmap? = byTheme[id]?.takeIf { wallpaper == null || it.wallpaper == wallpaper }?.bitmap
 
     private fun dir(ctx: android.content.Context) = java.io.File(ctx.filesDir, "design/home-pictures")
 
@@ -105,35 +114,41 @@ internal object HomePictures {
         if (loaded) return
         loaded = true
         val found = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            // ("<theme>~<wallpaper>.webp"; one without a wallpaper's id is from before they were kept: never current.)
             (dir(ctx).listFiles() ?: emptyArray()).filter { it.name.endsWith(".webp") }.mapNotNull { f ->
+                val name = f.name.removeSuffix(".webp")
+                val id = name.substringBefore('~')
+                val wallpaper = name.substringAfter('~', "").toIntOrNull() ?: Int.MIN_VALUE
                 val b = try { android.graphics.BitmapFactory.decodeFile(f.path) } catch (_: Throwable) { null } ?: return@mapNotNull null
                 // On the GPU before it is shown (a software bitmap is uploaded inside its first frame).
-                f.name.removeSuffix(".webp") to (b.copy(android.graphics.Bitmap.Config.HARDWARE, false) ?: b)
+                id to Shot(b.copy(android.graphics.Bitmap.Config.HARDWARE, false) ?: b, wallpaper)
             }
         }
-        for ((id, b) in found) if (id !in byTheme) byTheme[id] = b
+        for ((id, s) in found) if (id !in byTheme) byTheme[id] = s
     }
 
     /** Home's picture [home] with the status bar's [bar] across its top, drawn together on the GPU (any thread but main). */
     fun withBar(home: android.graphics.Bitmap, bar: android.graphics.Bitmap): android.graphics.Bitmap = SettingsEntry.withBar(home, bar)
 
     /**
-     * [b] is home in theme [id] now: kept, and saved (at half size) off the main thread. Only a picture of one of home's pages
-     * as they rest ([page]): the theme's card is home as it looked in it (opened from the App Library, the card showed
-     * the App Library).
+     * [b] is home in theme [id] now, with wallpaper [wallpaper]: kept, and saved (at half size) off the main thread. Only a
+     * picture of one of home's pages as they rest ([page]): the theme's card is home as it looked in it (opened from the
+     * App Library, the card showed the App Library).
      */
-    fun keep(ctx: android.content.Context, id: String, b: android.graphics.Bitmap, page: Boolean) {
+    fun keep(ctx: android.content.Context, id: String, b: android.graphics.Bitmap, page: Boolean, wallpaper: Int) {
         if (!page) return
-        byTheme[id] = b
+        byTheme[id] = Shot(b, wallpaper)
         val app = ctx.applicationContext
         Thread {
             try {
                 val sw = b.copy(android.graphics.Bitmap.Config.ARGB_8888, false) ?: return@Thread
                 val half = android.graphics.Bitmap.createScaledBitmap(sw, sw.width / 2, sw.height / 2, true)
                 val d = dir(app).apply { mkdirs() }
-                val tmp = java.io.File(d, "$id.webp.tmp")
+                val tmp = java.io.File(d, "$id~$wallpaper.webp.tmp")
                 tmp.outputStream().use { half.compress(android.graphics.Bitmap.CompressFormat.WEBP_LOSSY, 85, it) }
-                tmp.renameTo(java.io.File(d, "$id.webp"))
+                // (The theme's older pictures go: one a theme.)
+                d.listFiles()?.filter { it.name == "$id.webp" || (it.name.startsWith("$id~") && it.name.endsWith(".webp")) }?.forEach { it.delete() }
+                tmp.renameTo(java.io.File(d, "$id~$wallpaper.webp"))
                 if (half !== sw) half.recycle()
                 sw.recycle()
             } catch (t: Throwable) { dev.launcher.app.AppLog.log("[settings] keeping home's picture failed: ${t.message}") }
@@ -152,7 +167,9 @@ internal fun KeepHomePictures(st: Studio) {
     val look = LocalLook.current
     LaunchedEffect(Unit) { HomePictures.load(ctx) }
     LaunchedEffect(st.entry) {
-        snapshotFlow { st.entry.picture }.collect { pic -> if (pic != null) HomePictures.keep(ctx, Design.themeId, pic, st.entry.handedPage) }
+        snapshotFlow { st.entry.picture }.collect { pic ->
+            if (pic != null) HomePictures.keep(ctx, Design.themeId, pic, st.entry.handedPage, dev.launcher.app.Wallpaper.current?.id ?: 0)
+        }
     }
     LaunchedEffect(look.version, look.wallpaper) {
         delay(KEEP_DELAY_MS)
@@ -174,7 +191,7 @@ internal fun KeepHomePictures(st: Studio) {
             delay(300)
         }
         val next = if (bar == null) home else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { HomePictures.withBar(home, bar) }
-        HomePictures.keep(ctx, Design.themeId, next, page)
+        HomePictures.keep(ctx, Design.themeId, next, page, look.wallpaper?.id ?: 0)
     }
 }
 

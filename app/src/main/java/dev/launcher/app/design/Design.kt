@@ -181,12 +181,12 @@ object Design {
         try {
             for (n in appCtx.assets.list(THEMES) ?: emptyArray()) if (n.endsWith(".json")) {
                 val id = n.removeSuffix(".json")
-                readFile(THEMES, id)?.let { out[id] = ThemeInfo(id, it.name, true) }
+                readFile(THEMES, id)?.let { out[id] = ThemeInfo(id, it.name, true, it.description, it.test) }
             }
         } catch (_: Throwable) { }
         File(appCtx.filesDir, THEMES).listFiles()?.filter { it.name.endsWith(".json") }?.forEach { f ->
             val id = f.name.removeSuffix(".json")
-            readFile(THEMES, id)?.let { out[id] = ThemeInfo(id, it.name, false) }
+            readFile(THEMES, id)?.let { out[id] = ThemeInfo(id, it.name, false, it.description, it.test) }
         }
         return out.values.toList()
     }

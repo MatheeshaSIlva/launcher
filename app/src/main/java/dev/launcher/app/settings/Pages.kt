@@ -228,6 +228,16 @@ internal fun Part.detail(d: Draft): String {
 }
 
 private fun themeName(id: String) = Design.themes().firstOrNull { it.id == id }?.name ?: id
+
+/**
+ * The themes the settings offer: themes made for testing (marked `"test"` in their file: Graphite) only with Developer's
+ * switch on, or while one is in use (as test presets in Motion).
+ */
+internal fun offeredThemes(draft: Draft): List<Design.ThemeInfo> {
+    val testsOn = SettingsPrefs.developer && SettingsPrefs.testPresets
+    val inUse = buildSet { add(Design.themeId); add(draft.themeId()); addAll(Element.entries.mapNotNull { draft.elementTheme(it) }) }
+    return Design.themes().filter { !it.test || testsOn || it.id in inUse }
+}
 internal fun presetName(id: String) = Design.motionPresets().firstOrNull { it.id == id }?.name ?: id
 
 /**
@@ -1347,7 +1357,7 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
 private fun LookPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val draft = LocalDraft.current
     val look = LocalLook.current
-    val themes = remember(look.version) { Design.themes() }
+    val themes = remember(look.version, SettingsPrefs.developer, SettingsPrefs.testPresets) { offeredThemes(draft) }
     ChangesRow(Part.LOOK, push, lit)
     Group("Theme", "Every part follows it, unless one has a theme of its own (on that part's page).") {
         ThemeCards(themes, draft)
@@ -1871,23 +1881,61 @@ private fun ThemeCards(themes: List<Design.ThemeInfo>, draft: Draft) {
     }
 }
 
-/** Home as it looked in theme [id]; one not seen yet: the wallpaper under that theme's sheet colour and accent. */
+/**
+ * Home as it looked in theme [id] with the wallpaper there is now; one not seen yet (or seen with another wallpaper): the
+ * wallpaper under that theme's sheet colour and accent. A new picture (taken a moment after the settings come up or the
+ * wallpaper changes) fades in over what showed.
+ */
 @Composable
 private fun ThemeThumb(id: String) {
     val look = LocalLook.current
-    val pic = HomePictures.byTheme[id]
-    if (pic != null) { Image(pic.asImageBitmap(), null, contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()); return }
+    val pic = HomePictures.of(id, look.wallpaper?.id)
     val sheet = Design.previewColor(id, SettingsTokens.SHEET_FILL)?.let { Color(it) } ?: look.color(SettingsTokens.SHEET_FILL)
     val accent = Design.previewColor(id, SettingsTokens.ACCENT)?.let { Color(it) } ?: look.color(SettingsTokens.ACCENT)
+    val shown = remember { arrayOf(pic) }
+    val before = remember { arrayOfNulls<android.graphics.Bitmap>(1) }
+    val fade = remember { Animatable(1f) }
+    LaunchedEffect(pic) {
+        if (pic === shown[0]) return@LaunchedEffect
+        before[0] = shown[0]
+        shown[0] = pic
+        fade.snapTo(0f)
+        fade.animateTo(1f, look.motion(MotionTokens.APPEAR_FADE))
+        before[0] = null
+    }
+    val paint = remember { android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG) }
+    val src = remember { android.graphics.Rect() }
+    val dst = remember { android.graphics.RectF() }
     Canvas(Modifier.fillMaxSize()) {
-        val wp = look.wallpaper
-        if (wp != null) drawIntoCanvas { c ->
-            val m = wp.matrix(look.screenW, look.screenH)
-            m.postScale(size.width / look.screenW, size.height / look.screenH)
-            c.nativeCanvas.drawBitmap(wp.bitmap, m, android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
-        } else drawRect(look.color(SettingsTokens.BACKGROUND))
-        drawRoundRect(sheet, Offset(size.width * 0.08f, size.height * 0.58f), Size(size.width * 0.84f, size.height * 0.36f), CornerRadius(size.width * 0.1f))
-        drawCircle(accent, size.width * 0.08f, Offset(size.width * 0.5f, size.height * 0.76f))
+        val f = fade.value.coerceIn(0f, 1f)
+        drawIntoCanvas { c ->
+            val nc = c.nativeCanvas
+            fun picture(b: android.graphics.Bitmap, a: Float) {
+                if (a <= 0.003f) return
+                paint.alpha = (255 * a).roundToInt().coerceIn(0, 255)
+                src.set(0, 0, b.width, b.height)
+                dst.set(0f, 0f, size.width, size.height)
+                nc.drawBitmap(b, src, dst, paint)
+            }
+            val now = shown[0]
+            val old = before[0]
+            // The drawn stand-in under whatever picture there is (hidden by an opaque picture of home).
+            if (now == null || (old == null && f < 0.999f)) {
+                val wp = look.wallpaper
+                if (wp != null) {
+                    val m = wp.matrix(look.screenW, look.screenH)
+                    m.postScale(size.width / look.screenW, size.height / look.screenH)
+                    paint.alpha = 255
+                    nc.drawBitmap(wp.bitmap, m, paint)
+                } else nc.drawColor(look.color(SettingsTokens.BACKGROUND).toArgb())
+            }
+            if (now == null || (old == null && f < 0.999f)) {
+                drawRoundRect(sheet, Offset(size.width * 0.08f, size.height * 0.58f), Size(size.width * 0.84f, size.height * 0.36f), CornerRadius(size.width * 0.1f))
+                drawCircle(accent, size.width * 0.08f, Offset(size.width * 0.5f, size.height * 0.76f))
+            }
+            if (now != null) { if (old != null) picture(old, 1f); picture(now, f) }
+            else if (old != null) picture(old, 1f - f)
+        }
     }
 }
 
@@ -1896,7 +1944,7 @@ private fun ThemeThumb(id: String) {
 private fun OwnThemeRow(e: Element) {
     val look = LocalLook.current
     val draft = LocalDraft.current
-    val themes = remember(look.version) { Design.themes() }
+    val themes = remember(look.version, SettingsPrefs.developer, SettingsPrefs.testPresets) { offeredThemes(draft) }
     val counter = LocalRowCounter.current
     val first = remember { counter == null || counter.n++ == 0 }
     val pad = look.dp(SettingsTokens.ROW_PADDING)
@@ -2605,7 +2653,7 @@ private fun DeveloperPage(tick: androidx.compose.runtime.MutableIntState, feed: 
         ToggleRow("Our status bar", "The phone's own hidden", bar) { on ->
             if (connected) { bar = on; dev.launcher.app.DevTools.setOwnStatusBar(ctx, on) { tick.intValue++ } } else dev.launcher.app.ShizukuLink.connect()
         }
-        ToggleRow("Test animation presets", "Shown in Motion with the others", SettingsPrefs.testPresets) { on -> SettingsPrefs.setTestPresets(ctx, on) }
+        ToggleRow("Test themes and presets", "Shown in Look and Motion with the others", SettingsPrefs.testPresets) { on -> SettingsPrefs.setTestPresets(ctx, on) }
         SlowRow()
         ActionRow("Frame report", "Frames since the last report") { dev.launcher.app.DevTools.frameReport(ctx) }
         ActionRow("Status bar test", "An app that puts the bars in every state (full screen, landscape...)") {

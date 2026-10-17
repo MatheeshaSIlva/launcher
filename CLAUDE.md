@@ -164,7 +164,11 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   shows fades out over a new flight's first half (`StyleDev`); a grabbed card's style gives way to a plain card on the
   cancel's curve (the App Switcher's deck draws plain cards: it waits), and a style with a frame of its own (circle,
   genie) is grabbed by the plain card it is drawn on (`StyleDev.grab`), and a flight reversed starts from it too (the
-  reversal of a genie once started from the mesh's bounds: a card twice the size for a frame). The genie is macOS's: a
+  reversal of a genie once started from the mesh's bounds: a card twice the size for a frame). A closing app reopened
+  plays the chosen opening style from where its card is (`flightBlend`: the style at the card's place on the whole way
+  from its icon, coming in over the flight's first half as what the card showed goes; a genie's mesh bends into the new
+  one; slide and fade grow the card back as it is); it once always zoomed (Matheesha: launches during a close "would
+  revert back to the default animation"). Slide and fade closes play also for an app with no icon on home. The genie is macOS's: a
   funnel narrowing to the icon from both sides, the app's near edge dropping in first (`AppStyles.genie`). A close that
   leaves the icon on home (slide, fade) shows home's picture with it; the dolly zoom on home's picture is a fraction that
   gives way as the App Switcher opens (`PreviewView.fadeDolly`). The styles' drawing is warmed off screen while home is

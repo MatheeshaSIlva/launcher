@@ -2534,8 +2534,10 @@ object GestureNav {
             for (d in longArrayOf(90, 160, 240, 330, 450)) nav.postDelayed({ if (gen == g && pipCoverPkg != null) refreshFloating() }, d)
             val iconAt = pkg?.let { HomeBridge.iconRect(it) }?.let { homeToScreen(it) }
             // How it goes (motion/AppStyles): over a turned display, into its icon as always. Sliding down and fading do not
-            // go into the icon: it is back on home at once.
-            val style = if (deferHome || iconAt == null) AppStyle.ZOOM else AppStyles.closing()
+            // go into the icon (it is back on home at once), so they play also for an app with no icon on home (opened from
+            // the App Library, Spotlight, a folder): the styles that go into it shrink to the middle and fade there.
+            val chosen = AppStyles.closing()
+            val style = if (deferHome || (iconAt == null && chosen.fromIcon)) AppStyle.ZOOM else chosen
             val intoIcon = style.fromIcon
             val target = iconAt?.takeIf { intoIcon }
             // Home's picture as this close needs it (it was chosen by the closing style; a turned display goes into the icon).
@@ -3160,6 +3162,7 @@ object GestureNav {
         if (fresh) styleDev0.clear() else styleDev0.grab(c, f0, r0, sw, sh)
         flightStyle = style
         flightOpening = opening
+        flightBlend = opening && !fresh
         if (icon != null) flightIcon.set(icon) else flightIcon.setEmpty()
         flightFrom.set(f0)
         plainFrame.set(f0)
@@ -3177,6 +3180,11 @@ object GestureNav {
 
     private var flightStyle = AppStyle.ZOOM
     private var flightOpening = false
+    /**
+     * A closing card reopened ([beginLaunch]): its style is taken up where the card is on its way from the icon, and comes in
+     * over the first half of the flight as what the card showed goes (frames, the genie's mesh, the fade-through: one blend).
+     */
+    private var flightBlend = false
     /** How far into the genie's way home its picture starts turning into the icon. */
     private const val GENIE_ICON_FROM = 0.82f
     // The icon the flight comes out of or goes into, and the card's frame as it began (screen px).
@@ -3338,13 +3346,16 @@ object GestureNav {
     }
 
     /**
-     * The flight's style at [q] (0..1 along it): the card's own drawing (on top of what the start's style left, fading out
-     * in the first half) and, for the styles whose card is not a plain frame, its frame ([styleFrame], [styleRadius]).
+     * The flight's style at [qs] (0..1 along its way) on a flight [q] along: the card's own drawing (on top of what the
+     * start's style left, fading out in the first half, while a reopened card's style comes in: [flightBlend]) and, for the
+     * styles whose card is not a plain frame, its frame ([styleFrame], [styleRadius]).
      */
-    private fun applyStyle(c: CardView, q: Float, w: Float, h: Float, cx: Float, cy: Float, radius: Float) {
+    private fun applyStyle(c: CardView, q: Float, qs: Float, w: Float, h: Float, cx: Float, cy: Float, radius: Float) {
         styleFrame.set(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
         styleRadius = radius
         val keep = 1f - AppStyles.step(0f, 0.5f, q)
+        // How much of this flight's own style shows: all of it, or (a reopened card) as what the card showed goes.
+        val inK = if (flightBlend) 1f - keep else 1f
         val d = styleDev0
         c.iconFrame.setEmpty()
         if (flightStyle == AppStyle.ZOOM && !d.any) return
@@ -3382,22 +3393,24 @@ object GestureNav {
             c.iconFrame.set(ix - size / 2f, iy - size / 2f, ix + size / 2f, iy + size / 2f)
         }
         // Toward the app (0: the icon's end, 1: the app's).
-        val k = if (flightOpening) q else 1f - q
+        val k = if (flightOpening) qs else 1f - qs
         when (flightStyle) {
             AppStyle.CONTAINER -> {
-                content += AppStyles.containerContent(k) - 1f
-                icon += AppStyles.containerIcon(k) - 1f
-                box += AppStyles.step(0.1f, 0.3f, k) * (1f - AppStyles.step(0.8f, 0.95f, k))
+                content += (AppStyles.containerContent(k) - 1f) * inK
+                icon += (AppStyles.containerIcon(k) - 1f) * inK
+                box += AppStyles.step(0.1f, 0.3f, k) * (1f - AppStyles.step(0.8f, 0.95f, k)) * inK
             }
             AppStyle.CIRCLE -> if (flightOpening && !flightIcon.isEmpty) {
                 // A window onto the app as it is on the screen, growing from its icon; at the end the plain full card.
-                if (q < 0.999f) {
+                if (qs < 0.999f) {
                     val ix = flightIcon.centerX()
                     val iy = flightIcon.centerY()
-                    val r = AppStyles.revealRadius(q, ix, iy, flightIcon.width(), sw, sh)
-                    styleFrame.set(ix - r, iy - r, ix + r, iy + r)
-                    styleRadius = r
-                    full += 1f
+                    val r = AppStyles.revealRadius(qs, ix, iy, flightIcon.width(), sw, sh)
+                    // (A reopened card's frame turns into the window as what it showed goes.)
+                    styleFrame.set(styleFrame.left + (ix - r - styleFrame.left) * inK, styleFrame.top + (iy - r - styleFrame.top) * inK,
+                        styleFrame.right + (ix + r - styleFrame.right) * inK, styleFrame.bottom + (iy + r - styleFrame.bottom) * inK)
+                    styleRadius += (r - styleRadius) * inK
+                    full += inK
                     ownFull = true
                     // The icon stays where it is, its own size, fading as the circle grows around it.
                     c.iconFrame.set(flightIcon)
@@ -3416,15 +3429,26 @@ object GestureNav {
                 r += (bw * Icons.shape.clipFraction() - r) * AppStyles.step(0.85f, 1f, q)
                 styleRadius = r
             }
-            AppStyle.FADE -> alpha += (if (flightOpening) q else 1f - q).coerceIn(0f, 1f) - 1f
+            AppStyle.FADE -> alpha += ((if (flightOpening) qs else 1f - qs).coerceIn(0f, 1f) - 1f) * inK
             AppStyle.GENIE -> if (!flightIcon.isEmpty) {
                 // The app (the whole screen opening, the card as it began going home) and its icon; opening pours it out.
                 if (flightOpening) genieA.set(0f, 0f, sw, sh)
                 else genieA.set(flightFrom.left, flightFrom.top, flightFrom.right, flightFrom.bottom)
                 genieB.set(flightIcon.left, flightIcon.top, flightIcon.right, flightIcon.bottom)
-                AppStyles.genie(genieMesh, AppStyles.GENIE_COLS, AppStyles.GENIE_ROWS, genieA, genieB, if (flightOpening) 1f - q else q)
+                AppStyles.genie(genieMesh, AppStyles.GENIE_COLS, AppStyles.GENIE_ROWS, genieA, genieB, if (flightOpening) 1f - qs else qs)
+                val left = mesh
+                if (left != null && left.size == genieMesh.size && inK < 0.999f) {
+                    // A genie going home, reopened: its own mesh bends into this one as it goes (its first frame is that
+                    // mesh as it was: replaced at once, the funnel snapped flat for a frame).
+                    var j = 0
+                    while (j < genieMesh.size) { genieMesh[j] = left[j] + (genieMesh[j] - left[j]) * inK; j++ }
+                    genieK = 1f
+                } else {
+                    // (A reopened card's plain grid bends into the mesh as what it showed goes: the card blends a mesh into
+                    // its frame's grid by this, and its outline rounds the frame's corners meanwhile.)
+                    genieK = inK
+                }
                 mesh = genieMesh
-                genieK = 1f
                 // Its frame: the mesh's bounds, with the card's corners (its far corners are the bounds' own).
                 var l = Float.MAX_VALUE; var t = Float.MAX_VALUE; var rr = -Float.MAX_VALUE; var b = -Float.MAX_VALUE
                 var i = 0
@@ -3433,7 +3457,8 @@ object GestureNav {
                     if (x < l) l = x; if (x > rr) rr = x; if (y < t) t = y; if (y > b) b = y
                     i += 2
                 }
-                styleFrame.set(l, t, rr, b)
+                styleFrame.set(styleFrame.left + (l - styleFrame.left) * inK, styleFrame.top + (t - styleFrame.top) * inK,
+                    styleFrame.right + (rr - styleFrame.right) * inK, styleFrame.bottom + (b - styleFrame.bottom) * inK)
                 styleRadius = radius
                 c.iconFrame.set(flightIcon)
                 // Poured back, it turns into the icon once it is in (by the plain card's size, it faded while its last rows
@@ -3496,14 +3521,19 @@ object GestureNav {
             c.alpha = 1f - ((q - springFadeFrom) / (0.85f - springFadeFrom)).coerceIn(0f, 1f)
             r = deviceRadius * (w / sw)
         }
-        // Its style (motion/AppStyles): sliding moves along its height (its size does not change).
-        val sq = if (flightStyle == AppStyle.SLIDE && abs(sCy.target - springCy0) > 1f)
-            ((sCy.value(t) - springCy0) / (sCy.target - springCy0)).coerceIn(0f, 1f) else q
+        // Its style (motion/AppStyles): sliding moves along its height (its size does not change); a reopened card's style is
+        // where the card is on the whole way from its icon (taken up part way, not from its start).
+        val iw = flightIcon.width()
+        val sq = when {
+            flightStyle == AppStyle.SLIDE && abs(sCy.target - springCy0) > 1f -> ((sCy.value(t) - springCy0) / (sCy.target - springCy0)).coerceIn(0f, 1f)
+            flightBlend && !flightIcon.isEmpty && sw - iw > 1f -> ((w - iw) / (sw - iw)).coerceIn(0f, 1f)
+            else -> q
+        }
         val px = sCx.value(t)
         val py = sCy.value(t)
         plainFrame.set(px - w / 2, py - h / 2, px + w / 2, py + h / 2)
         plainR = r
-        applyStyle(c, sq, w, h, px, py, r)
+        applyStyle(c, q, sq, w, h, px, py, r)
         c.setFrame(styleFrame.centerX(), styleFrame.centerY(), styleFrame.width(), styleFrame.height(), styleRadius)
         backdrop?.depth = sDepth.value(t)
         return sCx.settled(t) && sCy.settled(t) && sW.settled(t) && sH.settled(t)
@@ -3608,8 +3638,11 @@ object GestureNav {
         cardPkg = pkg
         fg = null
         homeStarted = false
-        // How it opens (motion/AppStyles): reopening a closing card always zooms back from where it is.
-        val style = if (reverse) AppStyle.ZOOM else AppStyles.opening()
+        // How it opens (motion/AppStyles). Reopening a closing card plays it too, taken up from where the card is (Matheesha:
+        // a launch during a close "would revert back to the default animation"); sliding up and fading in have no way from
+        // a card part way down to its icon: it grows back as it is.
+        val chosen = AppStyles.opening()
+        val style = if (reverse && !chosen.fromIcon) AppStyle.ZOOM else chosen
         // Sliding up and fading in do not come out of the icon: it stays on home, and in home's picture (recorded at the tap).
         val fromIcon = style.fromIcon
         val atTap = HomeBridge.takeAtLaunch(pkg)
@@ -3666,7 +3699,7 @@ object GestureNav {
         if (reverse) hideIcon(pkg) else if (fromIcon) afterCardFrame(g) { if (cardPkg == pkg) hideIcon(pkg) }
         cardIconSize = iconRect.width()
         switchAt = 0L   // a launch ends any run of quick switches
-        beginCardSprings(toIcon = false, style, opening = true, icon = if (reverse) null else iconRect, fresh = !reverse,
+        beginCardSprings(toIcon = false, style, opening = true, icon = iconRect, fresh = !reverse,
             from = if (reverse) RectF(m[0] - m[2] / 2, m[1] - m[3] / 2, m[0] + m[2] / 2, m[1] + m[3] / 2) else null,
             fromR = mR)
         val open = Motion.profile.appOpen
