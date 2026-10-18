@@ -18,8 +18,9 @@ object Watchdog {
         try {
             val reply = s.watchdogArm(SystemRestore.restorePlan(ctx))
             if ("FIRED" in reply) {
-                // The loop already restored the animation scales while we were gone.
+                // The loop already restored the animation scales (and One UI's status bar settings) while we were gone.
                 SystemRestore.clearAnimationRecords(ctx)
+                StockBarSettings.forget(ctx)
                 s.watchdogArm("")
                 AppLog.log("[watchdog] it fired since the last arm (${reply.substringAfter("FIRED").substringBefore(";").trim()}); system was restored")
             }

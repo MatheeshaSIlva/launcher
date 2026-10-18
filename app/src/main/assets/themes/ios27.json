@@ -2854,6 +2854,18 @@
    "color": "#ffcc00",
    "src": "judged:iOS's yellow in Low Power Mode"
   },
+  "comp.statusbar.capsule-color": {
+   "color": "#000000",
+   "src": "judged:the charging moment's capsule, opaque as the Dynamic Island (it covers One UI's charging animation, which no flag stops)"
+  },
+  "comp.statusbar.capsule-label-color": {
+   "color": "#ffffff",
+   "src": "judged:the percentage and the battery's outline on the capsule"
+  },
+  "comp.statusbar.sharing-color": {
+   "color": "#ff3b30",
+   "src": "judged:iOS's red capsule around the time while the screen is recorded or shared"
+  },
   "comp.switcher.clear.bottom": {
    "pt": 44,
    "src": "judged:the capsule's bottom this far above the screen's bottom edge (above the gesture bar)"

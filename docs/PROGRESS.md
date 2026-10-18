@@ -2589,3 +2589,23 @@ the wallpaper's:
     through it still blurred.
   - *Edit mode survives home being built again* (a scheduled dark mode or new colours meanwhile): it ended unseen under
     the old look's picture, and the next drag on a widget's handle pulled Spotlight down instead.
+- **The status bar, everything that can show through it** (Matheesha: the stock bar under ours while sharing his screen;
+  One UI's charging animation clashing with ours; "find everything that could interrupt our status bar"). Read from One UI 9's
+  SystemUI (its visibility rules, HomeStatusBarViewModelImpl and SamsungOngoingCastController): the clock, system icons and
+  carrier name obey our flags; three things do not:
+  - *While the screen is cast or shared* (any MediaProjection or Smart View; Link to Windows excepted) One UI shows its
+    notification icons and its call/cast chips whatever the flags say. The icons stay away with its notification style
+    "none" (System `simple_status_bar` 2), and its live-notification chips with QuickStar's "hide ongoing chip" (Secure
+    `quickstar_indicator_hide_ongoing_chip` 1, already on on the S24): `StockBarSettings` sets both while our bar is on and
+    gives the user's values back when it goes, on Restore system and through the watchdog. The cast chip is covered by our
+    bar's sharing capsule (the time in iOS's red with a sharing glyph; the shell watches screen captures, `watchProjection`,
+    and presentation displays count too).
+  - *One UI's charging animation* (a pill at the right, 22 x 76 dp) plays on plug-in whatever the flags say. Our bar plays
+    a charging moment over it: the battery grows into an opaque capsule (the capsule tokens), the battery and its bolt move
+    into it, the cellular and Wi-Fi icons give way, the percentage is revealed inside; it ends when One UI's animation logs
+    its reset (the shell's `awaitLog` on `ChargingVI`), or after `motion.statusbar.charge-hold` when none plays. Samsung only.
+  - Our flags now include DISABLE_ONGOING_CALL_CHIP (AOSP's modern chips ignore it: the emulator's call chip still shows),
+    and they are applied again on every wake and unlock.
+  Checked on the emulator in slow motion, frame by frame (both capsules through `TEST_STATUS`; three bugs found and fixed on
+  the way: the battery vanished as the moment began, the capsule's clip took the battery's rect, the moment ended early in
+  slow motion). Not yet on the S24: the settings guard, the real charging animation's cover and timing, a real share.

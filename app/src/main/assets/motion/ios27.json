@@ -1027,6 +1027,10 @@
    ],
    "src": "judged:an icon coming"
   },
+  "motion.statusbar.charge-hold": {
+   "ms": 1600,
+   "src": "judged:the charging moment held this long when no One UI charging animation plays under it (then it shrinks back into the battery)"
+  },
   "motion.statusbar.hide": {
    "bezier": [
     0.365,

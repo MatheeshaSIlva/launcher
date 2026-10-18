@@ -358,6 +358,18 @@ copy it wholesale — port the working pieces cleanly. File map:
   heads-up suppressed, SystemUI does not open a call's or an alarm's full screen either while the phone is unlocked (it expects
   the heads-up to show it): our ringing banners (Answer/Decline from the call's own intents, an alarm's actions) are the only
   way such a notification shows; they stay until it stops ringing, also over an open panel.
+- **One UI's status bar shows parts of itself that no disable flag hides** (read from its SystemUI, One UI 9:
+  HomeStatusBarViewModelImpl's visibility rules; the clock, system icons and carrier name do obey the flags). While the
+  screen is cast or shared (its CastController counts any MediaProjection and Smart View; Link to Windows excepted) its
+  notification icons and its call/cast chips show whatever the flags say: Matheesha's "the stock status bar comes back under
+  our own one" while sharing his screen. The icons stay away when System `simple_status_bar` is 2 (notification style
+  "none"); its live-notification chips (timers, navigation) when Secure `quickstar_indicator_hide_ongoing_chip` is 1;
+  `StockBarSettings` sets both while our bar is on and gives the user's values back (bar off, Restore system, the watchdog's
+  plan). The cast chip is covered by our sharing capsule (the time in red, `StockBarCover`). And One UI's charging animation
+  (`ChargingVI`, a pill 22 x ~76 dp at the right on plug-in) plays whatever the flags say (visible = playing || system info
+  allowed): our charging moment covers it, an opaque capsule growing out of the battery, ended when its log says
+  "Resetting animation state" (the shell's `awaitLog`). Never build a test that starts a screen capture behind the user's
+  consent: the sharing path is checked with a share the user starts, the capsule's look with `TEST_STATUS`.
 - **Never screenshot or record Notification Center or banners on Matheesha's phone** (they show his messages). Measure them
   with framestats only (`tools/scenario_shade.sh` never captures them; its test banner is our own text).
 - **"No animation" options (`makeCustomAnimation(0, 0)`, or any custom animation) are ignored for a cross-app start**:
@@ -757,9 +769,10 @@ Phase 2 decides whether the whole idea works.
 - Our shade replaces the stock one (and its heads-up, by our banners). Still stock: in-app links' animations; launching from a
   notification uses the app's own transition (no card from the platter yet); replying in place (the keyboard sits under our
   overlay).
-- Stock status bar chips ignore the disable flags on the Android 17 emulator (modern SystemUI): an incoming call's grey chip
-  and a call in progress's timer chip draw under our time; the mic/camera privacy chip (a system safeguard, it must stay)
-  draws over our battery. Not checked on the S24 (One UI's own chips). Our bar does not yet make room for them.
+- Stock status bar chips ignore the disable flags on the Android 17 emulator (modern SystemUI), DISABLE_ONGOING_CALL_CHIP
+  included (set since 2026-10-18; AOSP's chips no longer read it): a call in progress's timer chip draws under our time;
+  the mic/camera privacy chip (a system safeguard, it must stay) draws beside our battery. On One UI see the pitfall
+  "One UI's status bar shows parts of itself that no disable flag hides". Our bar has no call capsule yet (iOS's green).
 - Review the thedjchi Shizuku fork's code before recommending it in onboarding.
 - Accessibility requirements need writing. Theme gallery/sharing plan, app name: undecided (placeholder "Launcher").
 - Everything was probed on one S24; re-run the key probes on other devices after phase 2.

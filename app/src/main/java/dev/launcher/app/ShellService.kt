@@ -359,6 +359,64 @@ class ShellService : IShellService.Stub() {
 
     override fun watchWindows(listener: IWindowWatch, names: Array<String>): String = WindowWatch.watch(listener, names)
 
+    // ---------------------------------------------------------------- log lines, screen capture
+
+    override fun awaitLog(tag: String, regex: String, timeoutMs: Int): String {
+        // (From half a second ago: the line may come between the app's request and this process's logcat starting.)
+        val since = String.format(java.util.Locale.US, "%.3f", System.currentTimeMillis() / 1000.0 - 0.5)
+        val p = try {
+            ProcessBuilder("logcat", "-v", "epoch", "-s", "$tag:V", "-T", since).redirectErrorStream(true).start()
+        } catch (t: Throwable) { return "ERROR: ${describe(t)}" }
+        val re = try { Regex(regex) } catch (t: Throwable) { p.destroy(); return "ERROR: ${describe(t)}" }
+        val found = java.util.concurrent.atomic.AtomicReference("")
+        val reader = Thread {
+            try {
+                p.inputStream.bufferedReader().useLines { lines -> for (l in lines) if (re.containsMatchIn(l)) { found.set(l.trim()); break } }
+            } catch (_: Throwable) { }
+        }.apply { isDaemon = true; name = "await-log"; start() }
+        reader.join(timeoutMs.toLong().coerceAtLeast(1))
+        p.destroy()
+        return found.get()
+    }
+
+    @Volatile private var projectionListener: IProjectionWatch? = null
+    private var projectionCallback: Binder? = null
+
+    override fun watchProjection(listener: IProjectionWatch): String = try {
+        projectionListener = listener
+        synchronized(this) {
+            if (projectionCallback == null) {
+                // The system's watcher callback (IMediaProjectionWatcherCallback: onStart, onStop, onRecordingSessionSet) is
+                // a hidden interface: a plain binder of ours stands for it, and every call it gets is taken as "something
+                // changed" (the active capture is read again, so the calls' arguments need not be read).
+                val cb = object : Binder() {
+                    override fun onTransact(code: Int, data: android.os.Parcel, reply: android.os.Parcel?, flags: Int): Boolean {
+                        if (code == INTERFACE_TRANSACTION) { reply?.writeString(PROJECTION_WATCHER); return true }
+                        if (code in FIRST_CALL_TRANSACTION..LAST_CALL_TRANSACTION) { reportProjection(); return true }
+                        return super.onTransact(code, data, reply, flags)
+                    }
+                }
+                val iface = Class.forName("$PROJECTION_WATCHER\$Stub").getMethod("asInterface", IBinder::class.java).invoke(null, cb)
+                val mpm = systemService("media_projection", PROJECTION_MANAGER_STUB)
+                mpm.javaClass.methods.first { it.name == "addCallback" && it.parameterTypes.size == 1 }.invoke(mpm, iface)
+                projectionCallback = cb
+            }
+        }
+        reportProjection()
+        "ok"
+    } catch (t: Throwable) {
+        "ERROR: ${describe(t)}"
+    }
+
+    private fun reportProjection() {
+        val pkg = try {
+            val mpm = systemService("media_projection", PROJECTION_MANAGER_STUB)
+            val info = mpm.javaClass.methods.first { it.name == "getActiveProjectionInfo" && it.parameterTypes.isEmpty() }.invoke(mpm)
+            info?.javaClass?.getMethod("getPackageName")?.invoke(info) as? String ?: ""
+        } catch (_: Throwable) { "" }
+        try { projectionListener?.onProjection(pkg) } catch (_: Throwable) { projectionListener = null }
+    }
+
     override fun stopWindows() = WindowWatch.stop()
 
     override fun pipHint(pkg: String): String = try {
@@ -526,6 +584,8 @@ class ShellService : IShellService.Stub() {
 
     private companion object {
         const val SHELL_PKG = "com.android.shell"
+        const val PROJECTION_WATCHER = "android.media.projection.IMediaProjectionWatcherCallback"
+        const val PROJECTION_MANAGER_STUB = "android.media.projection.IMediaProjectionManager\$Stub"
         const val ATM_STUB = "android.app.IActivityTaskManager\$Stub"
         // WindowConfiguration windowing modes (hidden constants).
         const val WINDOWING_MODE_PINNED = 2

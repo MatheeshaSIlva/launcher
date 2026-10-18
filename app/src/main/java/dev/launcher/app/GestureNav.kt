@@ -346,6 +346,9 @@ object GestureNav {
     fun init(app: LauncherApp) {
         this.app = app
         NoAnimStarts.init(app)
+        registerStatusTest()
+        // (A shell already connected before this: its capture watch starts now.)
+        ShizukuLink.service?.let { stockCover.shellChanged(it) }
         dev.launcher.app.switcher.SwitcherHost.thread = nav
         try { app.getSystemService(android.hardware.display.DisplayManager::class.java).registerDisplayListener(displayTurned, main) } catch (_: Throwable) { }
         // A picture of home without the card's icon arrives a moment after a gesture starts: use it as soon as it does.
@@ -431,6 +434,10 @@ object GestureNav {
         if (s.attach(h)) {
             statusBarShown = true
             AppLog.log("[statusbar] on (${h}px), with our shade")
+            // Over One UI's own bar where no flag hides it (StockBarCover): its charging animation, its chips while shared.
+            s.bar.chargeMomentWanted = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+            s.bar.onChargeMoment = { stockCover.chargeMoment(ShizukuLink.service) }
+            stockCover.push()
             reapplyFlags()   // now the stock clock and icons can go, and the stock shade
             refreshAppearance()
             main.post { barWatch.attach() }
@@ -495,8 +502,38 @@ object GestureNav {
     @Volatile private var edgeWatching = -1
 
     // The shell service came or went (a restart ends its watch): watched again from scratch where it should be.
-    private val shellChanged: () -> Unit = { nav.post { edgeWatching = -1; applyBarVisible() } }
+    private val shellChanged: () -> Unit = {
+        nav.post { edgeWatching = -1; applyBarVisible() }
+        if (::app.isInitialized) stockCover.shellChanged(ShizukuLink.service)
+    }
     init { ShizukuLink.addListener(shellChanged) }
+
+    /** What our bar shows over the parts of One UI's bar that no flag hides (the sharing capsule, the charging moment). */
+    private val stockCover by lazy { dev.launcher.app.statusbar.StockBarCover(app, nav) { statusBar } }
+
+    private fun registerStatusTest() {
+        // For checks (adb, senders need DUMP): our bar's capsules without a charger or a screen share.
+        //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do charge [--ei ms 4000]
+        //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do share --ez on true|false
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(c: Context, i: Intent) {
+                val what = i.getStringExtra("do")
+                val ms = i.getIntExtra("ms", 4000).toLong()
+                val on = i.getBooleanExtra("on", true)
+                nav.post {
+                    val bar = statusBar ?: return@post AppLog.log("[statusbar] test: no bar")
+                    when (what) {
+                        "charge" -> bar.testChargeMoment(ms)
+                        "share" -> bar.setSharing(on)
+                        else -> AppLog.log("[statusbar] test: do charge|share")
+                    }
+                }
+            }
+        }
+        val f = IntentFilter("dev.launcher.app.TEST_STATUS")
+        if (Build.VERSION.SDK_INT >= 33) app.registerReceiver(r, f, android.Manifest.permission.DUMP, null, Context.RECEIVER_EXPORTED)
+        else app.registerReceiver(r, f, android.Manifest.permission.DUMP, null)
+    }
 
     // The display turned (an app in landscape, home back upright): the bar's hold and the top edge's side follow at once
     // (the window manager tells BarWatch's window only once it has redrawn for the turn, a second later on the emulator).
@@ -963,6 +1000,9 @@ object GestureNav {
             }
             update()
             if (intent.action == Intent.ACTION_SCREEN_OFF) shade?.onScreenOff()
+            // Waking and unlocking: our flags are applied again (the same flags: nothing changes if they are in force; if
+            // anything cleared them, the stock bar does not stay under ours).
+            else reapplyFlags()
         }
     }
 

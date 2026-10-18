@@ -8,6 +8,7 @@ import android.os.Bundle;
 import dev.launcher.app.ITouchStream;
 import dev.launcher.app.ITopEdge;
 import dev.launcher.app.IWindowWatch;
+import dev.launcher.app.IProjectionWatch;
 
 // Runs in the Shizuku user-service process (uid 2000 via wireless debugging).
 // Transaction codes are explicit so the app and an older still-running service never disagree.
@@ -142,4 +143,14 @@ interface IShellService {
     // When (uptime ms) a window of [pkg] last came on screen through our instant transition (any of its activities; the
     // system plays a transition once the window coming has drawn), 0 if never. A launch's card goes only once the app shows.
     long packageShownAt(String pkg) = 39;
+
+    // Waits for a line of [tag] in the log (from half a second ago on) that contains a match of [regex]: returns it, or ""
+    // after [timeoutMs]. Blocking. One UI's charging animation in the status bar, which no disable flag stops, is known to
+    // have ended from its own log line: our charging moment, which covers it, ends then.
+    String awaitLog(String tag, String regex, int timeoutMs) = 40;
+
+    // Tells [listener] which app's screen capture (MediaProjection) is active ("" when none), now and whenever one starts or
+    // stops. One UI shows parts of its own status bar while the screen is shared, whatever the disable flags say; our bar
+    // shows its own sharing capsule over them. "ok" or "ERROR: ...".
+    String watchProjection(in IProjectionWatch listener) = 41;
 }

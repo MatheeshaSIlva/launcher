@@ -34,6 +34,7 @@ import android.text.format.DateFormat
 import android.view.View
 import android.view.WindowInsets
 import dev.launcher.app.AppLog
+import dev.launcher.app.design.Design
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.motion.timed
 import dev.launcher.app.shade.Notifs
@@ -61,6 +62,10 @@ import java.util.concurrent.Executors
  * Panels: Control Center ([setPanel] cc) carries the right group down to its own status row (the network icons gliding
  * over to the left, the percentage appearing beside the battery), Notification Center (nc) fades the time, which its big
  * clock shows. Content turns white over Control Center and follows the wallpaper over Notification Center.
+ *
+ * Over the parts of One UI's own bar that no disable flag hides (StockBarSettings has the rest): while the screen is shared
+ * or cast the time sits in a red capsule ([setSharing]; One UI's call and cast chips show then), and on plug-in the battery
+ * grows into a charging capsule for as long as One UI's charging animation plays ([chargeMomentWanted]).
  *
  * Lives on gesture nav's UI thread (its own looper): all state changes arrive through [post]. Hides itself when the app
  * in front hides the status bar (immersive). [preview] fixes a state for the dev preview screen.
@@ -222,6 +227,67 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private var lockTarget = 0f
     private var lockAnim: android.animation.ValueAnimator? = null
 
+    // ------------------------------------------------------------------ capsules over One UI's own bar
+
+    /**
+     * The screen is shared or cast (a capture is running, or a presentation display is on): the time sits in a red capsule
+     * with a sharing glyph after it, iOS's screen-recording capsule. It also covers One UI's call and cast chips, which show
+     * then whatever our disable flags say.
+     */
+    fun setSharing(on: Boolean) {
+        if (on == sharing) return
+        sharing = on
+        AppLog.log("[statusbar] ${if (on) "the screen is shared or cast: the time in its capsule" else "no longer shared"}")
+        if (!settled) shareK.snapTo(if (on) 1f else 0f) else shareK.animateTo(if (on) 1f else 0f, if (on) APPEAR else LEAVE)
+        relayout()
+    }
+
+    private var sharing = false
+    private val shareK = MotionValue(0f, 100f, { invalidate() })
+
+    /**
+     * One UI plays a charging animation in its own bar when a charger is connected, and no disable flag stops it (it drew under
+     * ours, clashing with it: Matheesha). Set where it does: on plug-in the battery grows into an opaque capsule over it
+     * ([onChargeMoment] then waits for its end, [endChargeMoment]).
+     */
+    var chargeMomentWanted = false
+
+    /** The charging moment began: gesture nav waits for One UI's charging animation to end and then ends it. */
+    var onChargeMoment: (() -> Unit)? = null
+
+    private var chargeMoment = false
+    private val chargeK = MotionValue(0f, 100f, { invalidate() })
+    private val chargeTimeout = Runnable { endChargeMoment() }
+
+    private fun startChargeMoment() {
+        if (chargeMoment) return
+        chargeMoment = true
+        AppLog.log("[statusbar] charging moment")
+        chargeK.animateTo(1f, APPEAR)
+        removeCallbacks(chargeTimeout)
+        postDelayed(chargeTimeout, CHARGE_MAX_MS)
+        onChargeMoment?.invoke()
+    }
+
+    /** The charging moment ends: the capsule shrinks back into the battery (also on unplugging, and after at most 8 s). */
+    fun endChargeMoment() {
+        if (!chargeMoment) return
+        chargeMoment = false
+        removeCallbacks(chargeTimeout)
+        chargeK.animateTo(0f, MOVE)
+    }
+
+    /** For checks (adb): the charging moment as on plug-in, ended after [ms] (in slow motion as the springs are). */
+    fun testChargeMoment(ms: Long) {
+        val hook = onChargeMoment
+        onChargeMoment = null
+        try { startChargeMoment() } finally { onChargeMoment = hook }
+        removeCallbacks(chargeTimeout)
+        postDelayed(chargeTimeout, (ms * dev.launcher.app.motion.Motion.slow()).toLong())
+    }
+
+    private fun interactive() = try { context.getSystemService(PowerManager::class.java).isInteractive } catch (_: Throwable) { true }
+
     // ------------------------------------------------------------------ panels (set by the shade every frame)
 
     private var cc = 0f
@@ -382,7 +448,12 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
         if (level >= 0 && scale > 0) batteryLevel = level * 100 / scale
         val status = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        val was = charging
         charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+        // Plugged in where One UI plays its charging animation (not over the lock screen, nor with a panel open: it does not
+        // play there; nor while our bar is away).
+        if (!was && charging && settled && chargeMomentWanted && showing && lockTarget == 0f && cc == 0f && nc == 0f && interactive()) startChargeMoment()
+        if (was && !charging) endChargeMoment()
     }
 
     private fun readPowerSave() {
@@ -532,7 +603,8 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
         // Left: the time, the moon, notification icons while they fit before the camera, a dot for the rest.
         time.textSize = TIME_PT * u
-        timeSlot.width = clockText.width(time)
+        // (Sharing: the glyph after the time is part of its slot, so the icons after it make room.)
+        timeSlot.width = clockText.width(time) + if (sharing) (SHARE_GAP_PT + SHARE_GLYPH_PT) * u else 0f
         timeSlot.present(clockText.text.isNotEmpty())
         moonSlot.width = 12.4f * u
         moonSlot.present(dnd)
@@ -669,7 +741,13 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
         // Left group: fades as either panel opens (the time: Notification Center's clock shows it; Control Center has none).
         val leftK = (1f - cc) * (1f - nc) * (1f - lockK)
-        for (s in leftSlots) drawSlot(c, s, s.x.value, cy - cc * 6f * u, content, leftK)
+        val sk = shareK.value
+        if (sk > 0.001f && leftK > 0f) drawShareCapsule(c, cy - cc * 6f * u, sk, leftK)
+        for (s in leftSlots) {
+            // The time in the capsule is written in the capsule's label colour.
+            val col = if (s === timeSlot && sk > 0f) blend(content or (0xFF shl 24), Design.color(StatusBarTokens.CAPSULE_LABEL), sk.coerceIn(0f, 1f)) else content
+            drawSlot(c, s, s.x.value, cy - cc * 6f * u, col, leftK)
+        }
 
         // Right group: down to Control Center's status row with cc. The network icons glide over to the row's left side
         // (iOS shows carrier, signal and Wi-Fi there), the percentage appears beside the battery.
@@ -679,15 +757,22 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val rightK = 1f - cc * (1f - rowAlpha)
         // Further in than the bar's own sides (landscape: the grid's), as the panel opens.
         val inset = max(0f, ccInset - SIDE_PT * u) * smooth(cc)
+        // The charging moment: the icons under its capsule make way, the battery and the bolt move into it (it fades as
+        // Control Center opens: the row moves down there).
+        val mk = chargeK.value.coerceIn(0f, 1f) * (1f - cc)
         var leftX = SIDE_PT * u + max(0f, ccInset - SIDE_PT * u)
         for (s in listOf(cellSlot, typeSlot, wifiSlot, vpnSlot)) {
             val ccX = leftX
             if (s.wanted) leftX += s.width + 5.6f * u
-            drawSlot(c, s, s.x.value + (ccX - s.x.value) * smooth(cc), y, content, rightK)
+            drawSlot(c, s, s.x.value + (ccX - s.x.value) * smooth(cc), y, content, rightK * (1f - mk))
         }
-        // The percentage appears beside the battery (the battery's own number fades out of it).
-        drawSlot(c, boltSlot, boltSlot.x.value - inset, y, content, rightK)
-        drawSlot(c, batterySlot, batterySlot.x.value - inset, y, content, rightK)
+        if (mk > 0.001f) {
+            drawChargeCapsule(c, y, chargeK.value * (1f - cc), content, rightK)
+        } else {
+            // The percentage appears beside the battery (the battery's own number fades out of it).
+            drawSlot(c, boltSlot, boltSlot.x.value - inset, y, content, rightK)
+            drawSlot(c, batterySlot, batterySlot.x.value - inset, y, content, rightK)
+        }
         if (cc > 0f && rightK > 0f) {
             label.color = content
             label.alpha = (255 * cc.coerceIn(0f, 1f) * rightK).toInt()
@@ -732,8 +817,8 @@ class StatusBarView(ctx: Context) : View(ctx) {
         d.draw(c)
     }
 
-    /** The battery starting at [left]. */
-    private fun drawBattery(c: Canvas, left: Float, cy: Float, content: Int) {
+    /** The battery starting at [left]; [numberK]: how much of its number is knocked out of it (the percentage beside it). */
+    private fun drawBattery(c: Canvas, left: Float, cy: Float, content: Int, numberK: Float = 1f - cc) {
         val u = u
         val a = (content ushr 24) and 0xFF
         val nubW = 1.6f * u
@@ -762,12 +847,114 @@ class StatusBarView(ctx: Context) : View(ctx) {
         c.drawRoundRect(r, rad, rad, fill)
         c.restore()
         cut.textSize = 9.6f * u
-        cut.alpha = (255 * (1f - cc)).toInt().coerceIn(0, 255)
+        cut.alpha = (255 * numberK).toInt().coerceIn(0, 255)
         if (cut.alpha > 0) pctInside.drawCentered(c, r.centerX(), cy + 0.727f * cut.textSize / 2f, cut, batteryLevel.toString())
         c.restoreToCount(layer)
     }
 
     private val pctInside = RollingText { invalidate() }
+
+    /**
+     * The sharing capsule behind the time ([k]: its presence, 0..1 and past while its spring overshoots): from just before
+     * the time to past the glyph after it, growing from its middle; the glyph (two screens, one in front of the other)
+     * comes in with it.
+     */
+    private fun drawShareCapsule(c: Canvas, cy: Float, k: Float, alpha: Float) {
+        val u = u
+        val dp = resources.displayMetrics.density
+        val kk = k.coerceIn(0f, 1f)
+        time.textSize = TIME_PT * u
+        val clockW = clockText.width(time)
+        val pad = SHARE_PAD_PT * u
+        val left = timeSlot.x.value - pad
+        val right = timeSlot.x.value + clockW + (SHARE_GAP_PT + SHARE_GLYPH_PT) * u * kk + pad
+        // Taller than One UI's chips (20 dp), within a short bar (the emulator's is 24 dp).
+        val h = min(max(SHARE_H_PT * u, 21f * dp), barHeight * 0.84f)
+        val s = 0.75f + 0.25f * k.coerceAtMost(1.1f)
+        val save = c.save()
+        c.scale(s, s, (left + right) / 2f, cy)
+        fill.color = Design.color(StatusBarTokens.SHARING)
+        fill.alpha = (Color.alpha(fill.color) * kk * alpha).toInt()
+        r.set(left, cy - h / 2f, right, cy + h / 2f)
+        c.drawRoundRect(r, h / 2f, h / 2f, fill)
+        // The glyph: a screen outlined in front of another, filled, behind it to the upper right.
+        val labelColor = Design.color(StatusBarTokens.CAPSULE_LABEL)
+        val gx = timeSlot.x.value + clockW + SHARE_GAP_PT * u
+        val gw = SHARE_GLYPH_PT * u
+        val gh = gw * 0.72f
+        val a = (255 * kk * kk * alpha).toInt().coerceIn(0, 255)
+        fill.color = labelColor
+        fill.alpha = (a * 0.55f).toInt()
+        c.drawRoundRect(gx + gw * 0.28f, cy - gh * 0.62f, gx + gw, cy + gh * 0.24f, 1.6f * u, 1.6f * u, fill)
+        fill.color = Design.color(StatusBarTokens.SHARING)
+        fill.alpha = (Color.alpha(fill.color) * kk * alpha).toInt()
+        c.drawRoundRect(gx - 0.6f * u, cy - gh * 0.32f - 0.6f * u, gx + gw * 0.72f + 0.6f * u, cy + gh * 0.56f + 0.6f * u, 2f * u, 2f * u, fill)
+        stroke.color = labelColor
+        stroke.alpha = a
+        stroke.strokeWidth = 1.3f * u
+        c.drawRoundRect(gx, cy - gh * 0.32f, gx + gw * 0.72f, cy + gh * 0.56f, 1.6f * u, 1.6f * u, stroke)
+        c.restoreToCount(save)
+    }
+
+    /**
+     * The charging capsule ([k]: its presence, past 1 while its spring overshoots): it grows out of the battery's body over
+     * One UI's charging animation (22 x ~76 dp at 19 dp from the screen's right edge on the camera's line, measured on the
+     * S24; One UI lays it out in dp, so this does), the battery and its bolt moving into it as it grows and the percentage
+     * appearing beside them, on the capsule in its label colour (the battery keeps its charging green). The battery is drawn
+     * throughout (as the moment starts it is still in its place, the capsule darkening around it).
+     */
+    private val capClip = Path()
+    private val capRect = RectF()
+
+    private fun drawChargeCapsule(c: Canvas, cy: Float, k: Float, content: Int, alpha: Float) {
+        val u = u
+        val dp = resources.displayMetrics.density
+        val kk = k.coerceIn(0f, 1f)
+        val battW = 27f * u
+        // Where the battery and the bolt go: the capsule's right end, inset.
+        val capR = width - CHARGE_RIGHT_DP * dp
+        val battTarget = capR - CHARGE_PAD_DP * dp - boltSlot.width - 2.6f * u - battW
+        // The percentage beside them sets how far left the capsule reaches, never less than over One UI's animation.
+        label.textSize = 14f * u
+        val pctW = label.measureText(pctText)
+        val capL = min(capR - CHARGE_W_DP * dp, battTarget - 6f * u - pctW - CHARGE_PAD_DP * dp)
+        val capH = min(CHARGE_H_DP * dp, barHeight * 0.9f)
+        // From the battery's body.
+        val bodyL = batterySlot.x.value
+        val bodyR = bodyL + battW - 2.4f * u
+        val bodyH = 12.6f * u
+        val l = bodyL + (capL - bodyL) * k
+        val rr = bodyR + (capR - bodyR) * k
+        val h = bodyH + (capH - bodyH) * k
+        fill.color = Design.color(StatusBarTokens.CAPSULE)
+        fill.alpha = (Color.alpha(fill.color) * (kk * 4f).coerceAtMost(1f) * alpha).toInt()
+        // (A rect of its own: drawBattery below sets [r] to the battery's body.)
+        capRect.set(l, cy - h / 2f, rr, cy + h / 2f)
+        val rad = 4.2f * u + (h / 2f - 4.2f * u) * kk
+        c.drawRoundRect(capRect, rad, rad, fill)
+        // The battery and the bolt move in, keeping their places to each other, and take the capsule's label colour; the
+        // battery's number goes (the percentage is beside it). The percentage is inside the capsule as it is now (it never
+        // shows past the capsule's edge while that grows or shrinks).
+        val labelColor = Design.color(StatusBarTokens.CAPSULE_LABEL)
+        val onCapsule = blend(content or (0xFF shl 24), labelColor, kk)
+        val a = (255 * alpha).toInt().coerceIn(0, 255)
+        val dx = (battTarget - batterySlot.x.value) * kk
+        drawBattery(c, batterySlot.x.value + dx, cy, (a shl 24) or (onCapsule and 0xFFFFFF), numberK = (1f - cc) * (1f - kk))
+        drawSlot(c, boltSlot, boltSlot.x.value + dx, cy, onCapsule, alpha)
+        val t = ((kk - 0.65f) / 0.35f).coerceIn(0f, 1f)
+        if (t > 0f) {
+            val save = c.save()
+            capClip.reset()
+            capClip.addRoundRect(capRect, rad, rad, Path.Direction.CW)
+            c.clipPath(capClip)
+            label.color = labelColor
+            label.alpha = (255 * t * alpha).toInt()
+            // (Beside the battery where it is now: it is still moving in.)
+            c.drawText(pctText, batterySlot.x.value + dx - 6f * u - pctW + (1f - t) * 3f * u, cy + 0.727f * label.textSize / 2f, label)
+            label.alpha = 255
+            c.restoreToCount(save)
+        }
+    }
 
     private fun drawCell(c: Canvas, left: Float, cy: Float, content: Int) {
         val u = u
@@ -890,6 +1077,18 @@ class StatusBarView(ctx: Context) : View(ctx) {
         const val ICON_GAP_PT = 4.5f
         /** Notification icons shown at most (Matheesha: more looked cluttered); a dot stands for the rest. */
         const val MAX_ICONS = 3
+        /** The sharing capsule: its padding around the time and the glyph, the glyph's gap and size, its height (pt). */
+        const val SHARE_PAD_PT = 8f
+        const val SHARE_GAP_PT = 5f
+        const val SHARE_GLYPH_PT = 12f
+        const val SHARE_H_PT = 22f
+        /** The charging capsule over One UI's charging animation (dp, as One UI lays that out): its right inset, width, height, padding. */
+        const val CHARGE_RIGHT_DP = 14f
+        const val CHARGE_W_DP = 96f
+        const val CHARGE_H_DP = 26f
+        const val CHARGE_PAD_DP = 10f
+        /** The longest a charging moment lasts if One UI's animation never says it ended (it takes ~4 s). */
+        const val CHARGE_MAX_MS = 8000L
         val MOVE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_MOVE)
         val APPEAR get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_APPEAR)
         val LEAVE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_LEAVE)

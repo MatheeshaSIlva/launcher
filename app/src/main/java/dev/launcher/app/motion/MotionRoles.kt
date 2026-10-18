@@ -187,6 +187,7 @@ object MotionRoles {
         r("statusbar.show", "Bar showing", "The bar coming back."),
         r("statusbar.tone", "Bar's tone", "The bar's content turning dark or light."),
         r("statusbar.lock", "Time over the lock screen", "The time fading over the lock screen, and back."),
+        r("statusbar.charge-hold", "Charging moment", "How long the charging capsule shows when no One UI charging animation plays under it (ms).", behaviour = true),
         r("strip.hide", "Gesture pill hiding", "The pill fading while a panel is open."),
         r("strip.show", "Gesture pill showing", "The pill coming back."),
     ))

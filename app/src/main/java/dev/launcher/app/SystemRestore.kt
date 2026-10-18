@@ -28,6 +28,7 @@ object SystemRestore {
     private const val DISABLE_HOME = 0x00200000
     private const val DISABLE_CLOCK = 0x00800000
     private const val DISABLE_RECENT = 0x01000000
+    private const val DISABLE_ONGOING_CALL_CHIP = 0x04000000
     private const val DISABLE2_QUICK_SETTINGS = 1
     private const val DISABLE2_SYSTEM_ICONS = 1 shl 1
     private const val DISABLE2_NOTIFICATION_SHADE = 1 shl 2
@@ -153,7 +154,7 @@ object SystemRestore {
         val bar = statusBarWanted(ctx) && GestureNav.statusBarShown
         // Never block stock gestures unless our strip can actually be shown.
         val gestures = gesturesWanted(ctx) && GestureNav.ready
-        val what1 = (if (bar) DISABLE_CLOCK or DISABLE_NOTIFICATION_ICONS or DISABLE_EXPAND else 0) or (if (gestures) DISABLE_HOME or DISABLE_RECENT else 0)
+        val what1 = (if (bar) DISABLE_CLOCK or DISABLE_NOTIFICATION_ICONS or DISABLE_EXPAND or DISABLE_ONGOING_CALL_CHIP else 0) or (if (gestures) DISABLE_HOME or DISABLE_RECENT else 0)
         val what2 = if (bar) DISABLE2_SYSTEM_ICONS or DISABLE2_QUICK_SETTINGS or DISABLE2_NOTIFICATION_SHADE else 0
         val r = try { s.setDisableFlags(what1, what2, ShizukuLink.clientToken) } catch (t: Throwable) { "ERROR: ${t.javaClass.simpleName}: ${t.message}" }
         gestureFlagsActive = gestures && !r.contains("ERROR")
@@ -162,6 +163,9 @@ object SystemRestore {
         GestureNav.update()
         // Our shade has taken over: One UI's Brief pop-ups would still show beside our banners.
         if (bar && !r.contains("ERROR")) PopupStyle.check(ctx, s)
+        // And the parts of One UI's bar that no flag hides (while the screen is shared, live notification chips).
+        try { StockBarSettings.apply(ctx, s, bar && !r.contains("ERROR"))?.let { AppLog.log("[flags] $it") } }
+        catch (t: Throwable) { AppLog.log("[flags] One UI's status bar settings: ${t.javaClass.simpleName}: ${t.message}") }
         return r
     }
 
@@ -171,12 +175,16 @@ object SystemRestore {
         GestureNav.update()
     }
 
-    /** Shell commands that undo our animation-scale change (empty when unchanged). The watchdog runs these. */
+    /**
+     * Shell commands that undo what we changed in settings (empty when nothing): the animation scales, One UI's status bar
+     * settings ([StockBarSettings]). The watchdog runs these.
+     */
     fun restorePlan(ctx: Context): String {
         val p = prefs(ctx)
-        if (!p.contains(KEY_TRANSITION)) return ""
-        return "settings put global transition_animation_scale ${p.getFloat(KEY_TRANSITION, 1f)}\n" +
-            "settings put global window_animation_scale ${p.getFloat(KEY_WINDOW, 1f)}"
+        val scales = if (!p.contains(KEY_TRANSITION)) "" else
+            "settings put global transition_animation_scale ${p.getFloat(KEY_TRANSITION, 1f)}\n" +
+                "settings put global window_animation_scale ${p.getFloat(KEY_WINDOW, 1f)}"
+        return listOf(scales, StockBarSettings.restorePlan(ctx)).filter { it.isNotEmpty() }.joinToString("\n")
     }
 
     /** The watchdog already ran the plan: forget the saved animation scales. */
@@ -233,9 +241,11 @@ object SystemRestore {
         }
         if (svc != null) Watchdog.sync(ctx, svc)
         val popups = PopupStyle.restore(ctx, svc)
+        // (Given back by applyFlags above with Shizuku; without it, said so.)
+        val stockBar = StockBarSettings.restore(ctx, svc)
 
         val report = "animations: ${animations ?: "NOT restored (no Shizuku, no permission): Developer options > animation scales"}; " +
-            "status bar: $statusBar" + (popups?.let { "; $it" } ?: "")
+            "status bar: $statusBar" + (popups?.let { "; $it" } ?: "") + (stockBar?.let { "; $it" } ?: "")
         AppLog.log("[restore] $report")
         return report
     }
