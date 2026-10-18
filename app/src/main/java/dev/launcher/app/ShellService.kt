@@ -379,6 +379,37 @@ class ShellService : IShellService.Stub() {
         return found.get()
     }
 
+    /** The log watches running, by tag (a logcat process each). */
+    private val logWatches = java.util.concurrent.ConcurrentHashMap<String, java.lang.Process>()
+
+    override fun watchLog(tag: String, regex: String, listener: ILogWatch): String = try {
+        val re = Regex(regex)
+        logWatches.remove(tag)?.destroy()
+        // From now on (asked before the last line is looked for: a line between the two may come twice, never not at all).
+        val since = String.format(java.util.Locale.US, "%.3f", System.currentTimeMillis() / 1000.0)
+        val last = try {
+            val d = ProcessBuilder("logcat", "-d", "-v", "epoch", "-s", "$tag:V").redirectErrorStream(true).start()
+            val l = d.inputStream.bufferedReader().useLines { lines -> lines.lastOrNull { re.containsMatchIn(it) } }
+            d.waitFor()
+            l
+        } catch (_: Throwable) { null }
+        if (last != null) listener.onLine(last.trim())
+        val p = ProcessBuilder("logcat", "-v", "epoch", "-T", since, "-s", "$tag:V").redirectErrorStream(true).start()
+        logWatches[tag] = p
+        Thread {
+            try {
+                p.inputStream.bufferedReader().useLines { lines ->
+                    for (l in lines) if (re.containsMatchIn(l)) {
+                        try { listener.onLine(l.trim()) } catch (_: Throwable) { p.destroy(); break }
+                    }
+                }
+            } catch (_: Throwable) { }
+        }.apply { isDaemon = true; name = "log-watch"; start() }
+        // It ends with the app.
+        try { listener.asBinder().linkToDeath({ p.destroy(); logWatches.remove(tag, p) }, 0) } catch (_: Throwable) { p.destroy() }
+        "ok"
+    } catch (t: Throwable) { "ERROR: ${describe(t)}" }
+
     @Volatile private var projectionListener: IProjectionWatch? = null
     private var projectionCallback: Binder? = null
 

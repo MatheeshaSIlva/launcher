@@ -5,6 +5,7 @@ import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.view.Display
 import dev.launcher.app.AppLog
+import dev.launcher.app.ILogWatch
 import dev.launcher.app.IProjectionWatch
 import dev.launcher.app.IShellService
 import dev.launcher.app.motion.Motion
@@ -13,9 +14,10 @@ import java.util.concurrent.Executors
 
 /**
  * When our bar covers the parts of One UI's own bar that no disable flag hides (the rest: StockBarSettings):
- * - sharing: a screen capture is running (the shell watches MediaProjection) or a presentation display is on (Smart View,
- *   an external display): One UI then shows its call and cast chips whatever our flags say, and our bar puts the time in its
- *   sharing capsule over them;
+ * - sharing: a screen capture is running (the shell watches MediaProjection), a presentation display is on (Smart View,
+ *   an external display), or One UI's cast controller says it casts (its log: also Link to Windows' phone screen, which is
+ *   neither, mirrored through a private display of Samsung's service): One UI then shows its cast chip (and with a capture
+ *   its call chips and notification icons) whatever our flags say, and our bar puts the time in its sharing capsule over them;
  * - the charging moment: One UI's charging animation logs when it started and ended (read by the shell), and the moment
  *   ends with it, or soon after the plug-in when it never starts (a panel open, the lock screen).
  * Calls into the bar arrive on [bar]'s thread ([handler]).
@@ -26,6 +28,8 @@ class StockBarCover(private val ctx: Context, private val handler: Handler, priv
     private val watchers = Executors.newCachedThreadPool()
     private var capturing = ""
     private var presenting = false
+    /** One UI's cast controller says it casts (its cast chip shows); from its own log, read by the shell. */
+    private var oneUiCasting = false
 
     private val projection = object : IProjectionWatch.Stub() {
         override fun onProjection(pkg: String) {
@@ -36,6 +40,31 @@ class StockBarCover(private val ctx: Context, private val handler: Handler, priv
                 push()
             }
         }
+    }
+
+    private val castLog = object : ILogWatch.Stub() {
+        override fun onLine(line: String) {
+            val m = CASTING.find(line) ?: return
+            val now = m.groupValues[1].equals("T", ignoreCase = true)
+            handler.post {
+                if (now) {
+                    handler.removeCallbacks(castEnded)
+                    if (oneUiCasting) return@post
+                    AppLog.log("[statusbar] One UI casts: its cast chip shows")
+                    oneUiCasting = true
+                    push()
+                } else if (oneUiCasting && !handler.hasCallbacks(castEnded)) {
+                    // Its chip goes on its own animation: the capsule stays over it a moment longer.
+                    handler.postDelayed(castEnded, CAST_END_HOLD_MS)
+                }
+            }
+        }
+    }
+
+    private val castEnded = Runnable {
+        AppLog.log("[statusbar] One UI no longer casts")
+        oneUiCasting = false
+        push()
     }
 
     private val displays = object : DisplayManager.DisplayListener {
@@ -63,15 +92,28 @@ class StockBarCover(private val ctx: Context, private val handler: Handler, priv
 
     /** The shell came ([s]) or went (null): the capture watch starts again with it. */
     fun shellChanged(s: IShellService?) {
-        if (s == null) { handler.post { capturing = ""; push() }; return }
+        if (s == null) { handler.post { capturing = ""; oneUiCasting = false; push() }; return }
         io.execute {
             val r = try { s.watchProjection(projection) } catch (t: Throwable) { "ERROR: ${t.javaClass.simpleName}: ${t.message}" }
             if (r != "ok") AppLog.log("[statusbar] screen capture watch: $r")
+            if (android.os.Build.MANUFACTURER.equals("samsung", ignoreCase = true)) {
+                // How it is now, if One UI's last word on it is no longer in the log: Link to Windows' phone screen is
+                // mirrored through a private display of Samsung's service (One UI's chip shows while it is there).
+                val mirrored = try {
+                    // (The shell's answer ends with an "[exit N]" line.)
+                    (s.runShellTimeout("dumpsys display | grep -c 'owner $LTW_PACKAGE'", 3000).lines().firstNotNullOfOrNull { it.trim().toIntOrNull() } ?: 0) > 0
+                } catch (_: Throwable) { false }
+                if (mirrored) handler.post {
+                    if (!oneUiCasting) { AppLog.log("[statusbar] Link to Windows mirrors the screen: One UI's cast chip shows"); oneUiCasting = true; push() }
+                }
+                val c = try { s.watchLog(CAST_TAG, CASTING.pattern, castLog) } catch (t: Throwable) { "ERROR: ${t.javaClass.simpleName}: ${t.message}" }
+                if (c != "ok") AppLog.log("[statusbar] One UI's cast watch: $c")
+            }
         }
     }
 
     /** The bar's state now (after it was made again, or a change). On [bar]'s thread. */
-    fun push() { bar()?.setSharing(capturing.isNotEmpty() || presenting) }
+    fun push() { bar()?.setSharing(capturing.isNotEmpty() || presenting || oneUiCasting) }
 
     /** One UI's charging animation may be playing now (from a plug-in until its log says it ended, or our waits ran out). */
     @Volatile var oneUiActive = false
@@ -155,6 +197,13 @@ class StockBarCover(private val ctx: Context, private val handler: Handler, priv
     private fun epochOf(line: String): Long = line.trim().substringBefore(' ').toDoubleOrNull()?.let { (it * 1000).toLong() } ?: -1L
 
     private companion object {
+        /** One UI's cast controller: every line it logs ends with its state, "isCasting:T" or "isCasting:f". */
+        const val CAST_TAG = "SamsungOngoingCastController"
+        /** Not a timing but a deadline: One UI's cast chip is gone this long after its controller stopped casting. */
+        const val CAST_END_HOLD_MS = 400L
+        /** Samsung's Link to Windows service, which mirrors the phone's screen through a private display of its own. */
+        const val LTW_PACKAGE = "com.samsung.android.mdx"
+        val CASTING = Regex("isCasting:([TtFf])")
         const val TAG = "ChargingVI"
         const val STARTED = "animationStarted"
         const val ENDED = "Resetting animation state|cleaning up|cancelling"

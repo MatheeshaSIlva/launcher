@@ -254,6 +254,12 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private val shareK = MotionValue(0f, 100f, { invalidate() })
 
     /**
+     * The sharing capsule covers One UI's cast chip (Samsung): it is sized over it (as tall as the charging capsule, past the
+     * chip on the left); elsewhere it is iOS's, close round the time.
+     */
+    var shareCoversChip = false
+
+    /**
      * One UI plays a charging animation in its own bar when a charger is connected, and no disable flag or setting stops it
      * (it drew under ours, clashing with it: Matheesha). Set where it does: on plug-in the battery grows into an opaque
      * capsule over it ([onChargeMoment] then waits for its end, [endChargeMoment]).
@@ -769,8 +775,11 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
         // Left: the time, the moon, notification icons while they fit before the camera, a dot for the rest.
         time.textSize = TIME_PT * u
-        // (Sharing: the glyph after the time is part of its slot, so the icons after it make room.)
-        timeSlot.width = clockText.width(time) + if (sharing) (SHARE_GAP_PT + SHARE_GLYPH_PT) * u else 0f
+        // (Sharing: the glyph after the time and the capsule's end are part of its slot, so the icons after it make room,
+        // starting a little past the capsule.)
+        val sharePad = if (shareCoversChip) SHARE_CHIP_PAD_PT else SHARE_PAD_PT
+        timeSlot.width = clockText.width(time) +
+            if (sharing) (SHARE_GAP_PT + SHARE_GLYPH_PT + max(0f, sharePad + SHARE_AFTER_PT - TIME_GAP_PT)) * u else 0f
         timeSlot.present(clockText.text.isNotEmpty())
         moonSlot.width = 12.4f * u
         moonSlot.present(dnd)
@@ -1073,16 +1082,20 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val kk = k.coerceIn(0f, 1f)
         time.textSize = TIME_PT * u
         val clockW = clockText.width(time)
-        val pad = SHARE_PAD_PT * u
-        val left = timeSlot.x.value - pad
+        // Over One UI's cast chip ([shareCoversChip]): as tall as the charging capsule and reaching past the chip on the left,
+        // the time in its middle, coming in from closer to its size and solid sooner (the chip never shows through it).
+        // Elsewhere iOS's, close round the time: taller than AOSP's chips (20 dp), within a short bar (the emulator's 24 dp).
+        val chip = shareCoversChip
+        val pad = (if (chip) SHARE_CHIP_PAD_PT else SHARE_PAD_PT) * u
+        val left = if (chip) min(timeSlot.x.value - pad, SHARE_CHIP_LEFT_DP * dp) else timeSlot.x.value - pad
         val right = timeSlot.x.value + clockW + (SHARE_GAP_PT + SHARE_GLYPH_PT) * u * kk + pad
-        // Taller than One UI's chips (20 dp), within a short bar (the emulator's is 24 dp).
-        val h = min(max(SHARE_H_PT * u, 21f * dp), barHeight * 0.84f)
-        val s = 0.75f + 0.25f * k.coerceAtMost(1.1f)
+        val h = if (chip) min(CHARGE_H_DP * dp, barHeight * 0.9f) else min(max(SHARE_H_PT * u, 21f * dp), barHeight * 0.84f)
+        val from = if (chip) SHARE_CHIP_FROM else SHARE_FROM
+        val s = from + (1f - from) * k.coerceAtMost(1.1f)
         val save = c.save()
         c.scale(s, s, (left + right) / 2f, cy)
         fill.color = Design.color(StatusBarTokens.SHARING)
-        fill.alpha = (Color.alpha(fill.color) * kk * alpha).toInt()
+        fill.alpha = (Color.alpha(fill.color) * (if (chip) (kk / SHARE_CHIP_SOLID_AT).coerceAtMost(1f) else kk) * alpha).toInt()
         r.set(left, cy - h / 2f, right, cy + h / 2f)
         c.drawRoundRect(r, h / 2f, h / 2f, fill)
         // The glyph: a screen outlined in front of another, filled, behind it to the upper right.
@@ -1340,6 +1353,18 @@ class StatusBarView(ctx: Context) : View(ctx) {
         const val SHARE_GAP_PT = 5f
         const val SHARE_GLYPH_PT = 12f
         const val SHARE_H_PT = 22f
+        /** And grown in from this much of its size; the gap after it before the next icon (pt). */
+        const val SHARE_FROM = 0.75f
+        const val SHARE_AFTER_PT = 5f
+        /**
+         * Over One UI's cast chip (S24, from a Link to Windows share: x 70-158, y 34-79 px, 33 x 17 dp at 27 dp from the left
+         * edge, its middle 5 px below the camera's line): the padding round the time and the glyph (pt), the farthest left it
+         * starts (dp: its rounded end then holds the chip's), from what size it grows in, opaque from how far in.
+         */
+        const val SHARE_CHIP_PAD_PT = 13f
+        const val SHARE_CHIP_LEFT_DP = 21f
+        const val SHARE_CHIP_FROM = 0.94f
+        const val SHARE_CHIP_SOLID_AT = 0.12f
         /**
          * The charging capsule over One UI's charging animation (dp, as One UI lays that out): its right inset, width, height,
          * padding. One UI's chip on the S24 (its own log): 205 x 58 px at x 815, y 26 (78 x 22 dp, 23 dp from the right edge,

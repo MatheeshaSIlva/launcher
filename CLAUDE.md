@@ -365,7 +365,13 @@ copy it wholesale — port the working pieces cleanly. File map:
   our own one" while sharing his screen. The icons stay away when System `simple_status_bar` is 2 (notification style
   "none"); its live-notification chips (timers, navigation) when Secure `quickstar_indicator_hide_ongoing_chip` is 1;
   `StockBarSettings` sets both while our bar is on and gives the user's values back (bar off, Restore system, the watchdog's
-  plan). The cast chip is covered by our sharing capsule (the time in red, `StockBarCover`). And One UI's charging animation
+  plan). The cast chip is covered by our sharing capsule (the time in red, `StockBarCover`), on whenever One UI's cast
+  controller says it casts: its log (`SamsungOngoingCastController`, every line ending "isCasting:T" or "isCasting:f"),
+  followed by the shell's `watchLog` (a live logcat stream). Link to Windows' phone screen shows the chip too (Samsung's
+  service `com.samsung.android.mdx` sends SystemUI an `LTW_CAST_CHIP` broadcast) though it is no capture: it mirrors through
+  a private display of that service, which only `dumpsys display` shows (also how the state is known at our start when the
+  log line is gone). On Samsung the capsule is sized over the chip (S24: x 70-158, y 34-79 px; ours 28 dp tall from 21 dp,
+  solid within ~30 ms) and stays 400 ms after the chip goes (its own exit animation). And One UI's charging animation
   (`ChargingVI`, a chip 205 x 58 px at x 815, y 26 on the S24 by its own log, starting 65-100 ms after the plug-in) plays
   whatever the flags say (visible = playing || system info allowed; no setting turns it off: its style is chosen from the
   device's state, "INDICATOR_CHARGING" off the lock screen, and it is skipped only while the stock shade is open): our

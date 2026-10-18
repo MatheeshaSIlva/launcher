@@ -9,6 +9,7 @@ import dev.launcher.app.ITouchStream;
 import dev.launcher.app.ITopEdge;
 import dev.launcher.app.IWindowWatch;
 import dev.launcher.app.IProjectionWatch;
+import dev.launcher.app.ILogWatch;
 
 // Runs in the Shizuku user-service process (uid 2000 via wireless debugging).
 // Transaction codes are explicit so the app and an older still-running service never disagree.
@@ -153,4 +154,10 @@ interface IShellService {
     // stops. One UI shows parts of its own status bar while the screen is shared, whatever the disable flags say; our bar
     // shows its own sharing capsule over them. "ok" or "ERROR: ...".
     String watchProjection(in IProjectionWatch listener) = 41;
+
+    // Tells [listener] each new line of [tag] in the log that contains a match of [regex], and first the last such line still
+    // in the log (the state it says now, if it is there). One watch per tag: a new one replaces it; it ends with the app.
+    // One UI's cast chip shows, whatever the disable flags say, while its cast controller says "isCasting:T" (also for
+    // Link to Windows, which is no screen capture): our bar's sharing capsule covers it then. "ok" or "ERROR: ...".
+    String watchLog(String tag, String regex, in ILogWatch listener) = 42;
 }

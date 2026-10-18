@@ -436,6 +436,7 @@ object GestureNav {
             AppLog.log("[statusbar] on (${h}px), with our shade")
             // Over One UI's own bar where no flag hides it (StockBarCover): its charging animation, its chips while shared.
             s.bar.chargeMomentWanted = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+            s.bar.shareCoversChip = s.bar.chargeMomentWanted
             s.bar.onChargeMoment = { stockCover.chargeMoment(ShizukuLink.service) }
             s.bar.keepCoverOnUnplug = { stockCover.oneUiActive }
             stockCover.push()

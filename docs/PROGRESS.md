@@ -2666,3 +2666,18 @@ the wallpaper's:
     white inside it, both back at the plug-in again; One UI started no second animation; the capsule folded 317 ms after
     One UI's reset (the restart grace). 880 frames, no stock pixel; our window drew every frame of the plug-in again on time
     (114 shown, 0 late). The row now closes up as the bolt goes (and opens as it comes): it kept an empty bolt's place.
+- **A real screen share, on the S24** (Matheesha's screenshot from Phone Link's "Phone screen": One UI's red cast chip under
+  our time, our capsule never on). Phone Link mirrors through a private virtual display of Samsung's Link to Windows service
+  (`com.samsung.android.mdx`, "VirtualDevice_N"), no MediaProjection (null) and no presentation display: our watches saw
+  nothing. One UI shows its cast chip for it all the same: the service sends SystemUI an `LTW_CAST_CHIP` broadcast
+  (`SamsungOngoingCastBroadcastDispatcher`, visibilityLtwChip), and its cast controller (`SamsungOngoingCastController`)
+  goes casting, every line it logs ending with "isCasting:T|f". Our cover now follows that controller's own word: the
+  shell's new `watchLog(tag, regex, listener)` streams its log (the last matching line first), and at our start, when that
+  line is no longer in the log, the mirroring display is looked for in `dumpsys display`. The capsule is sized over the chip
+  on Samsung (the chip measured from the screenshot at x 70-158, y 34-79 px: ours 28 dp tall like the charging capsule,
+  from 21 dp at the left, the time in its middle, solid within ~30 ms), the icons after it start 5 pt past its end (they
+  ran into it, also by ~2 px in iOS's size), and it stays 400 ms after One UI stops casting (its chip leaves on its own
+  animation). On the phone: the capsule up 14 ms after One UI's log said it casts, covering the chip whole (Matheesha's
+  second screenshot), and after a restart with the log cleared, 150 ms after our bar came (from the display); at the stop
+  One UI dropped its chip at .432 and our capsule went at .843. The stop's frames were not seen (the recording was deleted
+  unviewed: something below the bar changed in its two minutes).
