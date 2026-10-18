@@ -627,6 +627,13 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
         val roll = if (bar) moves.roll.at(tau - 0.25f) * ak else 0f
         val notice = if (bar) (moves.appear.at(tau - 0.9f) - moves.appear.at(tau - 2.6f)) * ak else 0f
         scene.drawStatusBar(nc, 1f, if (bar) cyc + 1 else 1, roll, notice, barInk)
+        // A sample of the bar itself (the charging capsule over its battery) draws over it.
+        if (role != null && sk > -0.5f && sa > 0.003f && MotionSamples.overBar(role)) {
+            val layer = sa < 0.997f
+            if (layer) nc.saveLayerAlpha(0f, 0f, w, h, (255 * sa).roundToInt())
+            MotionSamples.drawOverBar(kit, nc, role, sk, sm.forward.value)
+            if (layer) nc.restore()
+        }
         scene.drawHomeBar(nc, 1f, barInk)
         // The finger showing how the part is reached: a soft white dot with a trail, at a size that reads on the stage.
         val fa = act.finger.value

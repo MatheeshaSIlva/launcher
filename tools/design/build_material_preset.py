@@ -152,6 +152,9 @@ ROLES = {
     'motion.statusbar.show': ('effects', 'default'),
     'motion.statusbar.tone': ('effects', 'default'),
     'motion.statusbar.lock': ('effects', 'default'),
+    'motion.statusbar.charge-open': ('spatial', 'fast'),
+    'motion.statusbar.charge-content': ('spatial', 'default'),
+    'motion.statusbar.charge-close': ('spatial', 'default'),
     'motion.strip.hide': ('effects', 'default'),
     'motion.strip.show': ('effects', 'default'),
 }
@@ -161,6 +164,7 @@ KEEP = {
     'motion.card.color', 'motion.card.snapshot', 'motion.card.catch-up', 'motion.card.fade-home', 'motion.card.fade-app',
     'motion.arrival.hold', 'motion.wallpaper.reveal', 'motion.home.rebuild', 'motion.settings.hint', 'motion.widgets.row',
     'motion.cc.backdrop-hold', 'motion.nc.launch-fade', 'motion.banner.app-fade', 'motion.appearance.change',
+    'motion.statusbar.charge-shimmer',
 }
 
 # iOS 27's spring bounces visibly at this damping or below (0.5 % past its place).

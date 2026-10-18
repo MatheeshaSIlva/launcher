@@ -2614,3 +2614,30 @@ the wallpaper's:
   run showed its right end past our capsule for five frames (our outline was still on its spring, and our bar held a frame
   for 40 ms then); the outline now leads its spring and the capsule is 28 dp tall: the chip's whole box is ours 36 ms after
   the plug-in, no stock pixel in any frame, and the moment ends 4 ms after One UI's reset. Not yet: a real screen share.
+- **The charging moment, polished** (Matheesha, 2026-10-18: "would be okay if it actually looked nice but the current
+  implementation could definitely use some extra attention. fine tune its animations"). The cover stays (One UI 9's
+  SystemUI picks the chip's style from the device's state, "INDICATOR_CHARGING" off the lock screen, and skips it only while
+  the stock shade is open: no setting turns it off); what was wrong with its look, from the S24 recording: the capsule faded
+  in translucent over the Wi-Fi icon (a muddy grey box with the icon inside), the battery kept its number while the
+  percentage appeared beside it (both at once), the signal bars stayed as ghosts beside the capsule, the percentage faded in
+  grey. Now, its own moment in the settings ("Charging": `motion.statusbar.charge-open`, `-content`, `-shimmer`, `-close`,
+  with a sample of the capsule over the stage's bar, `PhoneScene.drawChargeMoment`):
+  - the capsule (opaque from its first steps) grows out from behind the battery on its led outline, over One UI's chip within
+    ~55 ms (and never less than 85 % at 70 ms whatever the settings' speed: a slowed moment would show the chip);
+  - the battery and its bolt move to its right end; the battery's number slides out through the battery's side and grows
+    into the percentage, a hole in the battery while inside it and written on the capsule outside, the "%" following it out;
+    the row sits in the middle of the capsule (wider for "100%");
+  - the icons beside it dissolve as iOS's do when the Dynamic Island grows (shrinking, blurring, fading) and come back as it
+    goes;
+  - a light sweeps through the charge while it holds (one sweep in each 1.5 s, resting off the battery between);
+  - back in reverse: the "%" and the number slide into the battery, the battery and the bolt go back to their places, the
+    capsule folds into the body on a smoothstep and fades over its last steps (on the lead its last 5 % lingered as a dark
+    ring for ~150 ms);
+  - what is on the capsule takes its label colour as the capsule comes under it (over a light wallpaper the black bolt had
+    vanished on it for 100 ms), the bolt as the capsule's end crosses it.
+  Checked frame by frame at exact 120 Hz times through a new hook, `TEST_STATUS --es do charge-frames [--ei ms] [--es bg]`
+  (the bar's real drawing into PNGs in `files/dev-out/charge/`): an emulator recording shows ~5 frames a second, and our
+  springs pause through slow frames, so a ghost "100" in the battery and an instant capsule were the recorder, not the
+  build. Dark and light backgrounds, 9 %, 85 % and 100 %, the real-time moment, and the settings' page (search lands on it,
+  its sample plays). Found on the way: the Android 17 emulator's own SystemUI plays a charging chip under our bar too
+  (open items). Not yet on the S24: coverage with the new outline (faster than the checked one: 86 % at 60 ms against 75 %).

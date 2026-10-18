@@ -154,8 +154,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   handed one: an int alpha past 255 flashes, an edge-anchored panel shows a gap). A preset's Speed and Bounce
   (`motion.adjust.*`, the settings' Fine-tune) apply where a curve is read (`Design.curve` through `motion/MotionAdjust`;
   Bounce scales existing overshoot only); times a motion is staged by go through `Motion.ms` (speed and slow motion).
-  The settings show motion as **moments** (V2, `docs/PLAN_SETTINGS_V2.md`; `motion/Moments.kt`): 22 things a person
-  notices ("Opening apps", "Folders"), each holding its roles (every editable role in exactly one; a test checks it) and
+  The settings show motion as **moments** (V2, `docs/PLAN_SETTINGS_V2.md`; `motion/Moments.kt`): 23 things a person
+  notices (Charging, the status bar's charging moment, joined the plan's 22 on 2026-10-18) ("Opening apps", "Folders"), each holding its roles (every editable role in exactly one; a test checks it) and
   its glue (roles nobody sees alone, unlisted, following its feel). Each moment has its own Speed and Bounce
   (`motion.adjust.<moment>.speed/.bounce`, 1 = as the preset), applied on top of the preset's wherever a curve is read
   (`Design.curve`, `Design.previewCurve`, `Draft.motionCurve` through `MotionAdjust.speed/bounce`), and some a character
@@ -367,10 +367,19 @@ copy it wholesale — port the working pieces cleanly. File map:
   `StockBarSettings` sets both while our bar is on and gives the user's values back (bar off, Restore system, the watchdog's
   plan). The cast chip is covered by our sharing capsule (the time in red, `StockBarCover`). And One UI's charging animation
   (`ChargingVI`, a chip 205 x 58 px at x 815, y 26 on the S24 by its own log, starting 65-100 ms after the plug-in) plays
-  whatever the flags say (visible = playing || system info allowed): our charging moment covers it, an opaque capsule
-  growing out of the battery whose outline leads its spring (on the spring itself the chip's end showed for five frames),
-  ended when its log says "Resetting animation state" (the shell's `awaitLog`). Never build a test that starts a screen capture behind the user's
-  consent: the sharing path is checked with a share the user starts, the capsule's look with `TEST_STATUS`.
+  whatever the flags say (visible = playing || system info allowed; no setting turns it off: its style is chosen from the
+  device's state, "INDICATOR_CHARGING" off the lock screen, and it is skipped only while the stock shade is open): our
+  charging moment covers it, ended when its log says "Resetting animation state" (the shell's `awaitLog`). The moment (its
+  own moment in the settings, "Charging"): an opaque capsule grows out from behind the battery on a led outline
+  (`motion.statusbar.charge-open`, 1 - (1 - k)^4: over the chip within ~55 ms; on the spring itself the chip's end showed
+  for five frames; never less than 85 % at 70 ms whatever the settings' speed), the battery and its bolt move to its right
+  end, the battery's number slides out through its side and grows into the percentage (a hole in the battery inside it,
+  written on the capsule outside), the icons beside it dissolve (shrink, blur, fade), a light sweeps through the charge
+  while it holds, and it folds back on a smoothstep (on the lead its last 5 % lingered as a dark ring for ~150 ms), the
+  colours of what is on it following the capsule under them. Checked frame by frame at exact 120 Hz times with
+  `TEST_STATUS --es do charge-frames` (the real drawing into PNGs: an emulator recording shows ~5 frames a second, and our
+  springs pause through slow frames). Never build a test that starts a screen capture behind the user's consent: the
+  sharing path is checked with a share the user starts, the capsule's look with `TEST_STATUS`.
 - **Never screenshot or record Notification Center or banners on Matheesha's phone** (they show his messages). Measure them
   with framestats only (`tools/scenario_shade.sh` never captures them; its test banner is our own text).
 - **"No animation" options (`makeCustomAnimation(0, 0)`, or any custom animation) are ignored for a cross-app start**:
@@ -772,8 +781,11 @@ Phase 2 decides whether the whole idea works.
   overlay).
 - Stock status bar chips ignore the disable flags on the Android 17 emulator (modern SystemUI), DISABLE_ONGOING_CALL_CHIP
   included (set since 2026-10-18; AOSP's chips no longer read it): a call in progress's timer chip draws under our time;
-  the mic/camera privacy chip (a system safeguard, it must stay) draws beside our battery. On One UI see the pitfall
-  "One UI's status bar shows parts of itself that no disable flag hides". Our bar has no call capsule yet (iOS's green).
+  the mic/camera privacy chip (a system safeguard, it must stay) draws beside our battery; and a charging chip plays on
+  plug-in (seen 2026-10-18: a dark pill round the stock battery, the bar's full height, ~2 s after the plug-in for a few
+  seconds), under our bar as One UI's does: our charging moment plays on Samsung only, and its capsule (57 px tall in the
+  emulator's 63 px bar) would not cover a full-height chip. On One UI see the pitfall "One UI's status bar shows parts of
+  itself that no disable flag hides". Our bar has no call capsule yet (iOS's green).
 - Review the thedjchi Shizuku fork's code before recommending it in onboarding.
 - Accessibility requirements need writing. Theme gallery/sharing plan, app name: undecided (placeholder "Launcher").
 - Everything was probed on one S24; re-run the key probes on other devices after phase 2.

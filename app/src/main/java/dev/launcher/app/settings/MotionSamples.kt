@@ -72,7 +72,7 @@ internal object MotionSamples {
     /** How a sample moves: the kind of motion, drawn where the element is. */
     enum class Kind {
         APP, APP_CANCEL, DEPTH, SWITCH, SWITCH_BACK, CARD_FADE, GROW, SLIDE_DOWN, SLIDE_UP, SLIDE_SIDE, FADE, PRESS, MOVE, FLY,
-        LEVEL, ROLL, WIGGLE, ZOOM, REVEAL, RESIZE, LIFT, BANNER,
+        LEVEL, ROLL, WIGGLE, ZOOM, REVEAL, RESIZE, LIFT, BANNER, CHARGE,
     }
 
     /**
@@ -225,6 +225,10 @@ internal object MotionSamples {
         pair("statusbar.show", "statusbar.hide", Kind.FADE, STATUS)
         add("statusbar.tone", Spec(Kind.FADE, STATUS, 0f, 1f, m("statusbar.tone")))
         add("statusbar.lock", Spec(Kind.FADE, STATUS, 0f, 1f, m("statusbar.lock")))
+        // The charging capsule over the bar's battery (drawn by the phone's scene: PhoneScene.drawChargeMoment).
+        pair("statusbar.charge-open", "statusbar.charge-close", Kind.CHARGE, Rect(0.68f, 0.012f, 0.95f, 0.04f))
+        add("statusbar.charge-content", Spec(Kind.CHARGE, Rect(0.68f, 0.012f, 0.95f, 0.04f), 0f, 1f, m("statusbar.charge-close")))
+        add("statusbar.charge-shimmer", Spec(Kind.CHARGE, Rect(0.68f, 0.012f, 0.95f, 0.04f)))
         pair("strip.show", "strip.hide", Kind.FADE, PILL)
         // Light and dark.
         add("appearance.change", Spec(Kind.FADE, WHOLE, 0f, 1f, m("appearance.change")))
@@ -247,7 +251,7 @@ internal object MotionSamples {
         }
         return when (m) {
             Moments.BANNERS -> Rect(0f, 0f, 1f, 0.24f)
-            Moments.STATUS_ICONS -> Rect(0f, 0f, 1f, bars)
+            Moments.STATUS_ICONS, Moments.CHARGING -> Rect(0f, 0f, 1f, bars)
             Moments.CONTROL_CENTER, Moments.CONTROLS, Moments.CC_EDITING -> Rect(0f, 0f, 1f, 0.58f)
             else -> WHOLE
         }
@@ -408,6 +412,24 @@ internal object MotionSamples {
                 c.restore()
             }
             Kind.BANNER -> banner(kit, c, k)
+            // Over the bar itself, after it ([drawOverBar]); a card where no phone is drawn.
+            Kind.CHARGE -> if (kit.scene == null) card(kit, c, a.left, a.top, a.right, a.bottom, kk)
+        }
+    }
+
+    /** Whether [key]'s sample is of the bar itself, drawn over it ([drawOverBar]) rather than under it. */
+    fun overBar(key: String) = spec(key).kind == Kind.CHARGE
+
+    /**
+     * [key]'s sample over the phone's status bar at [k]: the charging moment over its battery, the capsule growing out of
+     * it and back (its own run, or the way back on the close), what it holds coming in, or the light through the charge.
+     */
+    fun drawOverBar(kit: SampleKit, c: Canvas, key: String, k: Float, forward: Boolean) {
+        val sc = kit.scene ?: return
+        when {
+            key.endsWith("charge-content") -> sc.drawChargeMoment(c, 1f, if (forward) 1f else k, k)
+            key.endsWith("charge-shimmer") -> sc.drawChargeMoment(c, 1f, 1f, 1f, k.coerceIn(0f, 1f))
+            else -> sc.drawChargeMoment(c, 1f, k, k)
         }
     }
 

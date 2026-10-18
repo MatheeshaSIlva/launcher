@@ -35,9 +35,9 @@ class Moment(
 }
 
 /**
- * The 22 moments (docs/PLAN_SETTINGS_V2.md): every animation of the launcher belongs to exactly one (a test checks it), so a
+ * The 23 moments (docs/PLAN_SETTINGS_V2.md): every animation of the launcher belongs to exactly one (a test checks it), so a
  * moment's feel is one value whatever it holds. Built from the plan's table: Apps 4, Home 6, App Library 2, Notifications &
- * Control Center 6, Status bar 2, and two everywhere.
+ * Control Center 6, Status bar 3 (Charging joined it with the charging moment, 2026-10-18), and two everywhere.
  */
 object Moments {
     private fun k(s: String) = "motion.$s"
@@ -108,6 +108,8 @@ object Moments {
         ks("statusbar.appear", "statusbar.leave", "statusbar.move", "statusbar.level", "statusbar.roll"))
     val BARS = Moment("bars", MomentPart.STATUS_BAR, "Hiding and showing", "The bar and the gesture pill fading away and back, and changing tone.",
         ks("statusbar.hide", "statusbar.show", "statusbar.tone", "strip.hide", "strip.show"))
+    val CHARGING = Moment("charging", MomentPart.STATUS_BAR, "Charging", "The battery growing into a capsule when a charger is connected, and folding back.",
+        ks("statusbar.charge-open", "statusbar.charge-content", "statusbar.charge-shimmer", "statusbar.charge-close"))
 
     val SCROLLING = Moment("scrolling", MomentPart.EVERYWHERE, "Scrolling", "How lists move under the finger and after it.",
         ks("scroll.overscroll-return", "scroll.deceleration", "scroll.rubber-band"))
@@ -115,7 +117,7 @@ object Moments {
         ks("settings.open", "settings.focus", "settings.hint", "sheet.push"))
 
     val ALL = listOf(OPENING, CLOSING, SWITCHING, SWITCHER, PAGES, FOLDERS, UNLOCKING, EDITING, LITTLE, NEW_LOOK, LIBRARY, MENUS,
-        CONTROL_CENTER, CONTROLS, CC_EDITING, NOTIFICATION_CENTER, LOCK_SCREEN, BANNERS, STATUS_ICONS, BARS, SCROLLING, SETTINGS)
+        CONTROL_CENTER, CONTROLS, CC_EDITING, NOTIFICATION_CENTER, LOCK_SCREEN, BANNERS, STATUS_ICONS, BARS, CHARGING, SCROLLING, SETTINGS)
 
     private val byRole: Map<String, Moment> = HashMap<String, Moment>().apply { for (m in ALL) for (r in m.all) put(r, m) }
 

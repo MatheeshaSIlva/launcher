@@ -438,6 +438,10 @@ SEED = {
     'motion.statusbar.leave': {'spring': [0.26, 1.0], 'src': 'judged:an icon going'},
     'motion.statusbar.level': {'spring': [0.6, 1.0], 'src': "judged:the battery's level"},
     'motion.statusbar.roll': {'spring': [0.42, 1.0], 'src': 'judged:a digit rolling to the next'},
+    'motion.statusbar.charge-open': {'spring': [0.28, 1.0], 'src': "judged:the charging capsule growing out of the battery; its outline leads this spring (1 - (1 - k)^4), over One UI's charging chip within ~55 ms (the chip shows 65-100 ms after the plug-in on the S24)"},
+    'motion.statusbar.charge-content': {'spring': [0.52, 0.8], 'src': "judged:the battery, its bolt and its number moving into the charging capsule, the number sliding out through the battery's side to be the percentage"},
+    'motion.statusbar.charge-close': {'spring': [0.42, 1.0], 'src': "judged:the charging capsule folding back into the battery; on its led outline what it holds goes first"},
+    'motion.statusbar.charge-shimmer': {'bezier': [0.45, 0, 0.25, 1], 'ms': 1500, 'src': "judged:one cycle of the light sweeping through the battery's charge while the capsule shows; it rests off the battery at both ends"},
     'motion.statusbar.charge-hold': {'ms': 1600, 'src': "judged:the charging moment held this long when no One UI charging animation plays under it (then it shrinks back into the battery)"},
     'motion.edit.press-in': {'spring': [0.12, 1.0], 'src': "judged:edit mode's buttons pressed"},
     'motion.edit.press-out': {'spring': [0.3, 1.0], 'src': 'judged:and let go'},
@@ -771,8 +775,8 @@ SEED = {
 
 # Each moment's own speed and bounce (docs/PLAN_SETTINGS_V2.md, V2; the moments are motion/Moments.kt): 1 = as the preset.
 MOMENTS = ['opening', 'closing', 'switching', 'switcher', 'pages', 'folders', 'unlocking', 'editing', 'little', 'newlook',
-           'library', 'menus', 'cc', 'controls', 'cc-editing', 'nc', 'lock', 'banners', 'status-icons', 'bars', 'scrolling',
-           'settings']
+           'library', 'menus', 'cc', 'controls', 'cc-editing', 'nc', 'lock', 'banners', 'status-icons', 'bars', 'charging',
+           'scrolling', 'settings']
 for _m in MOMENTS:
     SEED['motion.adjust.%s.speed' % _m] = {'factor': 1, 'src': "judged:the moment's own speed on top of the preset's (1: as the preset)"}
     SEED['motion.adjust.%s.bounce' % _m] = {'factor': 1, 'src': "judged:the moment's own bounce on top of the preset's (1: as the preset)"}

@@ -515,17 +515,31 @@ object GestureNav {
         // For checks (adb, senders need DUMP): our bar's capsules without a charger or a screen share.
         //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do charge [--ei ms 4000]
         //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do share --ez on true|false
+        // And the charging moment drawn frame by frame at the display's rate (open, [ms] of holding, close), as PNGs of the
+        // bar in files/dev-out/charge/ (adb pull; ends with .done): the real drawing at exact times, unlike a recording.
+        //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do charge-frames [--ei ms 600] [--ei fps 120] [--es bg '#E6E8EE']
         val r = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
                 val what = i.getStringExtra("do")
                 val ms = i.getIntExtra("ms", 4000).toLong()
                 val on = i.getBooleanExtra("on", true)
+                val fps = i.getIntExtra("fps", 120)
                 nav.post {
                     val bar = statusBar ?: return@post AppLog.log("[statusbar] test: no bar")
                     when (what) {
                         "charge" -> bar.testChargeMoment(ms)
+                        "charge-frames" -> {
+                            val dir = java.io.File(app.getExternalFilesDir(null), "dev-out/charge")
+                            dir.deleteRecursively()
+                            dir.mkdirs()
+                            val bg = try { android.graphics.Color.parseColor(i.getStringExtra("bg") ?: "#34405A") } catch (_: Throwable) { 0xFF34405A.toInt() }
+                            bar.renderChargeFrames(dir, fps, i.getIntExtra("ms", 600).toLong(), bg) { n ->
+                                java.io.File(dir, ".done").writeText("$n\n")
+                                AppLog.log("[statusbar] test: $n frames of the charging moment in ${dir.path}")
+                            }
+                        }
                         "share" -> bar.setSharing(on)
-                        else -> AppLog.log("[statusbar] test: do charge|share")
+                        else -> AppLog.log("[statusbar] test: do charge|charge-frames|share")
                     }
                 }
             }

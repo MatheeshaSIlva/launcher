@@ -8,13 +8,17 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import android.net.ConnectivityManager
 import android.net.Network
@@ -24,6 +28,7 @@ import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.telephony.ServiceState
 import android.telephony.SignalStrength
@@ -36,6 +41,7 @@ import android.view.WindowInsets
 import dev.launcher.app.AppLog
 import dev.launcher.app.design.Design
 import dev.launcher.app.motion.MotionValue
+import dev.launcher.app.motion.RoleTiming
 import dev.launcher.app.motion.timed
 import dev.launcher.app.shade.Notifs
 import dev.launcher.app.theme.Fonts
@@ -82,6 +88,8 @@ class StatusBarView(ctx: Context) : View(ctx) {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_OUT); fonts.text(this, 700); textAlign = Paint.Align.CENTER
         fontFeatureSettings = "'tnum'"
     }
+    /** The battery's number written out (the charging capsule's percentage): as [cut] draws it into the battery. */
+    private val num = Paint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 700); fontFeatureSettings = "'tnum'" }
     private val r = RectF()
     private val path = Path()
 
@@ -246,9 +254,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private val shareK = MotionValue(0f, 100f, { invalidate() })
 
     /**
-     * One UI plays a charging animation in its own bar when a charger is connected, and no disable flag stops it (it drew under
-     * ours, clashing with it: Matheesha). Set where it does: on plug-in the battery grows into an opaque capsule over it
-     * ([onChargeMoment] then waits for its end, [endChargeMoment]).
+     * One UI plays a charging animation in its own bar when a charger is connected, and no disable flag or setting stops it
+     * (it drew under ours, clashing with it: Matheesha). Set where it does: on plug-in the battery grows into an opaque
+     * capsule over it ([onChargeMoment] then waits for its end, [endChargeMoment]).
      */
     var chargeMomentWanted = false
 
@@ -256,25 +264,129 @@ class StatusBarView(ctx: Context) : View(ctx) {
     var onChargeMoment: (() -> Unit)? = null
 
     private var chargeMoment = false
-    private val chargeK = MotionValue(0f, 100f, { invalidate() })
+    /** The capsule's outline: 0 the battery's body, 1 the capsule (led on the way, [chargeGeometry]). */
+    private val chargeOutline = MotionValue(0f, 100f, { invalidate() })
+    /** What it holds: 0 the bar as it is, 1 the percentage, the battery and the bolt in the capsule, the icons beside gone. */
+    private val chargeContent = MotionValue(0f, 100f, { invalidate() })
     private val chargeTimeout = Runnable { endChargeMoment() }
+    /** When the moment last began (uptime ms): its outline is over One UI's chip in time whatever the springs ([chargeGeometry]). */
+    private var chargeStart = 0L
+    /** The charging light's clock (ms; counted from frames, at most a 30th of a second each: a stall pauses it). */
+    private var shineMs = 0f
+    private var shineFrameNs = 0L
+    private val shine = RoleTiming(dev.launcher.app.motion.MotionTokens.STATUSBAR_CHARGE_SHIMMER)
 
     private fun startChargeMoment() {
         if (chargeMoment) return
         chargeMoment = true
         AppLog.log("[statusbar] charging moment")
-        chargeK.animateTo(1f, APPEAR)
+        chargeStart = SystemClock.uptimeMillis()
+        // From rest the light starts its first cycle off the battery (one already showing carries on).
+        if (chargeOutline.value <= 0.001f && chargeContent.value <= 0.001f) { shineMs = 0f; shineFrameNs = 0L }
+        if (outlineFolding) {
+            // It was folding back: the capsule carries on from where it is, now on the opening's lead.
+            val x = chargeOutline.value.coerceIn(0f, 1f)
+            val o = leadInverse(foldOf(x))
+            val v = chargeOutline.velocity * foldSlope(x) / max(leadSlope(o), MIN_SLOPE)
+            outlineFolding = false
+            chargeOutline.snapTo(o)
+            chargeOutline.animateTo(1f, CHARGE_OPEN, v)
+        } else chargeOutline.animateTo(1f, CHARGE_OPEN)
+        chargeContent.animateTo(1f, CHARGE_CONTENT)
         removeCallbacks(chargeTimeout)
         postDelayed(chargeTimeout, CHARGE_MAX_MS)
         onChargeMoment?.invoke()
     }
 
-    /** The charging moment ends: the capsule shrinks back into the battery (also on unplugging, and after at most 8 s). */
+    /**
+     * The charging moment ends: the capsule folds back into the battery, what it holds first (also on unplugging, and after
+     * at most 8 s).
+     */
     fun endChargeMoment() {
         if (!chargeMoment) return
+        // The outline from here on its folding curve ([chargeGeometry]), from the capsule as it is (no jump, its speed kept).
+        val o = chargeOutline.value.coerceIn(0f, 1f)
+        val x = foldInverse(chargeGeometry(o, 1f))
+        val v = chargeOutline.velocity * leadSlope(o) / max(foldSlope(x), MIN_SLOPE)
         chargeMoment = false
+        outlineFolding = true
         removeCallbacks(chargeTimeout)
-        chargeK.animateTo(0f, MOVE)
+        chargeOutline.snapTo(x)
+        chargeOutline.animateTo(0f, CHARGE_CLOSE, v)
+        chargeContent.animateTo(0f, CHARGE_CLOSE)
+    }
+
+    /** The outline is folding back (on [foldOf]), not opening (on [leadOf]). */
+    private var outlineFolding = false
+
+    /**
+     * The capsule's outline (0..1) from its spring's [o]. Opening, led: 1 - (1 - o)^4, so it is over One UI's chip within
+     * ~55 ms (the chip shows 65-100 ms after the plug-in on the S24) while what it holds takes its time, and never less
+     * than [CHARGE_COVER_AT] after [CHARGE_COVER_MS] (a moment slowed down in the settings would show One UI's chip under
+     * its first frames). Folding back, a smoothstep: it holds a little while its contents gather into the battery, then
+     * contracts into the battery's body with a short tail (on the lead its last 5 % lingered as a dark ring for ~150 ms).
+     * [fold]: what of it Control Center leaves (it folds back as that opens).
+     */
+    private fun chargeGeometry(o: Float, fold: Float): Float {
+        val x = o.coerceIn(0f, 1f)
+        val s = sim
+        if (if (s != null) s[3] == 0f else outlineFolding) return foldOf(x)
+        val led = leadOf(x)
+        if (if (s != null) s[3] == 0f else !chargeMoment) return led
+        val elapsed = s?.get(2) ?: (SystemClock.uptimeMillis() - chargeStart).toFloat()
+        val t = elapsed / (CHARGE_COVER_MS * dev.launcher.app.motion.Motion.slow())
+        return max(led, CHARGE_COVER_AT * smooth(t) * fold)
+    }
+
+    private fun leadOf(o: Float) = 1f - (1f - o).let { it * it * it * it }
+    private fun leadSlope(o: Float) = 4f * (1f - o).let { it * it * it }
+    private fun leadInverse(g: Float) = 1f - Math.pow((1f - g.coerceIn(0f, 1f)).toDouble(), 0.25).toFloat()
+    private fun foldOf(x: Float) = x * x * (3f - 2f * x)
+    private fun foldSlope(x: Float) = 6f * x * (1f - x)
+    private fun foldInverse(g: Float) = (0.5 - Math.sin(Math.asin(1.0 - 2.0 * g.coerceIn(0f, 1f)) / 3.0)).toFloat()
+
+    /** While [renderChargeFrames] draws: the outline, the contents, ms since the start, opening (1) or not, the light's clock. */
+    private var sim: FloatArray? = null
+
+    /**
+     * For checks: the charging moment drawn at [fps] into PNGs in [dir] (the bar's right half, over [bg]): it opens, holds
+     * [holdMs] and closes, each frame at its exact time on the moment's curves (the real drawing; everything else on the bar
+     * as it is now). A recording on the emulator shows a few frames a second, and our springs pause through slow frames.
+     * One frame a message on the bar's thread (touches go on between them), one picture at a time; [done] gets the count.
+     */
+    fun renderChargeFrames(dir: java.io.File, fps: Int, holdMs: Long, bg: Int = 0xFF34405A.toInt(), done: (Int) -> Unit = {}) {
+        val h = barHeight
+        if (width == 0 || h == 0) { done(0); return }
+        val open = dev.launcher.app.motion.CurveTiming(CHARGE_OPEN)
+        val content = dev.launcher.app.motion.CurveTiming(CHARGE_CONTENT)
+        val close = dev.launcher.app.motion.CurveTiming(CHARGE_CLOSE)
+        val opened = max(open.durationMs, content.durationMs) + holdMs
+        val step = 1000f / fps.coerceIn(10, 240)
+        val frames = ((opened + close.durationMs + 50) / step).toInt() + 1
+        val b = android.graphics.Bitmap.createBitmap(width, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(b)
+        val half = width / 2
+        // Black content over a light background, as over a light wallpaper.
+        val darkness = if (Color.luminance(bg) > 0.5f) 1f else 0f
+        fun frame(n: Int) {
+            if (n >= frames) { b.recycle(); invalidate(); done(n); return }
+            val t = n * step
+            val st = if (t < opened) floatArrayOf(open.atMs(t), content.atMs(t), t, 1f, t)
+            else (t - opened).let { c -> floatArrayOf(1f - close.atMs(c), 1f - close.atMs(c), t, 0f, t) }
+            val wasDark = dark
+            sim = st
+            dark = darkness
+            try { b.eraseColor(bg); draw(canvas) } finally { sim = null; dark = wasDark }
+            val crop = android.graphics.Bitmap.createBitmap(b, half, 0, width - half, h)
+            try {
+                java.io.File(dir, "f%03d_%04dms_o%.3f_k%.3f.png".format(n, t.toInt(), st[0], st[1])).outputStream().use {
+                    crop.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+            } catch (_: Throwable) { }
+            crop.recycle()
+            post { frame(n + 1) }
+        }
+        post { frame(0) }
     }
 
     /** For checks (adb): the charging moment as on plug-in, ended after [ms] (in slow motion as the springs are). */
@@ -304,7 +416,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val b = android.graphics.Bitmap.createBitmap(width, h, android.graphics.Bitmap.Config.ARGB_8888)
         val was = floatArrayOf(dark, cc, nc, lockK)
         dark = if (darkContent) 1f else 0f; cc = 0f; nc = 0f; lockK = 0f
-        try { draw(Canvas(b)) } finally { dark = was[0]; cc = was[1]; nc = was[2]; lockK = was[3] }
+        // (At rest: a charging moment playing now is not in the picture.)
+        picturing = true
+        try { draw(Canvas(b)) } finally { dark = was[0]; cc = was[1]; nc = was[2]; lockK = was[3]; picturing = false }
         return b
     }
 
@@ -327,6 +441,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private var ccRow = 0f
     private var ccInset = 0f
     private var rowAlpha = 1f
+    private var picturing = false
 
     /** Control Center's status row fades while its edit mode is on (iOS hides it there). */
     fun setRowAlpha(a: Float) {
@@ -757,17 +872,26 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val rightK = 1f - cc * (1f - rowAlpha)
         // Further in than the bar's own sides (landscape: the grid's), as the panel opens.
         val inset = max(0f, ccInset - SIDE_PT * u) * smooth(cc)
-        // The charging moment: the icons under its capsule make way, the battery and the bolt move into it (it fades as
-        // Control Center opens: the row moves down there).
-        val mk = chargeK.value.coerceIn(0f, 1f) * (1f - cc)
+        // The charging moment: its capsule's outline and what it holds (both fold back as Control Center opens: the row
+        // moves down there). The icons beside the battery dissolve as it comes (shrinking, blurring and fading, as iOS's
+        // status items do when the Dynamic Island grows) and come back as it goes.
+        val sm = sim
+        val co = if (picturing) 0f else (sm?.get(0) ?: chargeOutline.value) * (1f - cc)
+        val ck = if (picturing) 0f else (sm?.get(1) ?: chargeContent.value) * (1f - cc)
+        val inMoment = co > 0.0005f || ck > 0.0005f
+        val dk = if (inMoment) smooth(ck / CHARGE_DISSOLVED_AT) else 0f
+        if (dk > 0f) dissolveBlur(DISSOLVE_BLUR_PT * u * dk)
         var leftX = SIDE_PT * u + max(0f, ccInset - SIDE_PT * u)
         for (s in listOf(cellSlot, typeSlot, wifiSlot, vpnSlot)) {
             val ccX = leftX
             if (s.wanted) leftX += s.width + 5.6f * u
-            drawSlot(c, s, s.x.value + (ccX - s.x.value) * smooth(cc), y, content, rightK * (1f - mk))
+            drawSlot(c, s, s.x.value + (ccX - s.x.value) * smooth(cc), y, content, rightK * (1f - dk), 1f - DISSOLVE_SHRINK * dk)
         }
-        if (mk > 0.001f) {
-            drawChargeCapsule(c, y, chargeK.value * (1f - cc), content, rightK)
+        if (dk > 0f) dissolveBlur(0f)
+        if (inMoment) {
+            drawChargeCapsule(c, y, co, ck, content, rightK, inset)
+            // The light through the battery's charge runs while the capsule shows (the springs draw the rest).
+            postInvalidateOnAnimation()
         } else {
             // The percentage appears beside the battery (the battery's own number fades out of it).
             drawSlot(c, boltSlot, boltSlot.x.value - inset, y, content, rightK)
@@ -789,12 +913,15 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     private fun smooth(t: Float): Float { val x = t.coerceIn(0f, 1f); return x * x * (3f - 2f * x) }
 
-    /** Draws [s] at [x] on line [cy]: scaled about its centre and faded by how present it is (times [alpha]). */
-    private fun drawSlot(c: Canvas, s: Slot, x: Float, cy: Float, color: Int, alpha: Float) {
+    /**
+     * Draws [s] at [x] on line [cy]: scaled about its centre and faded by how present it is (times [alpha], and scaled by
+     * [scaleBy] as well).
+     */
+    private fun drawSlot(c: Canvas, s: Slot, x: Float, cy: Float, color: Int, alpha: Float, scaleBy: Float = 1f) {
         val k = s.shown.value.coerceIn(0f, 1.2f)
         val a = (k.coerceIn(0f, 1f) * alpha).coerceIn(0f, 1f)
         if (a <= 0.004f) return
-        val scale = 0.55f + 0.45f * k
+        val scale = (0.55f + 0.45f * k) * scaleBy
         val col = (Math.round(a * 255) shl 24) or (color and 0xFFFFFF)
         val save = c.save()
         if (scale != 1f) c.scale(scale, scale, x + s.width / 2f, cy)
@@ -817,8 +944,14 @@ class StatusBarView(ctx: Context) : View(ctx) {
         d.draw(c)
     }
 
-    /** The battery starting at [left]; [numberK]: how much of its number is knocked out of it (the percentage beside it). */
-    private fun drawBattery(c: Canvas, left: Float, cy: Float, content: Int, numberK: Float = 1f - cc) {
+    /**
+     * The battery starting at [left]; [numberK]: how much of its number is knocked out of it (the percentage beside it).
+     * The number is in its middle unless [numCx] says where (the charging capsule takes it out through its side; past the
+     * body nothing is knocked out), at [numSize]. [shineAt]: where the charging light is across the body (its middle, as a
+     * fraction of the body's width), [shineK] how strong (0: none); it shows on the charge only.
+     */
+    private fun drawBattery(c: Canvas, left: Float, cy: Float, content: Int, numberK: Float = 1f - cc,
+                            numCx: Float = Float.NaN, numSize: Float = NUMBER_PT * u, shineAt: Float = 0f, shineK: Float = 0f) {
         val u = u
         val a = (content ushr 24) and 0xFF
         val nubW = 1.6f * u
@@ -845,12 +978,36 @@ class StatusBarView(ctx: Context) : View(ctx) {
         c.clipRect(r.left, r.top, r.left + r.width() * lvl, r.bottom)
         fill.color = levelColor
         c.drawRoundRect(r, rad, rad, fill)
+        if (shineK > 0.004f) {
+            // A soft band of light across the charge (off the body at both ends of its run).
+            val w = bodyW * SHINE_WIDTH
+            shineMatrix.setScale(w, 1f)
+            shineMatrix.postTranslate(left + bodyW * shineAt - w / 2f, 0f)
+            shineShader.setLocalMatrix(shineMatrix)
+            fill.shader = shineShader
+            fill.color = Color.WHITE
+            fill.alpha = (a * shineK.coerceAtMost(1f)).toInt()
+            c.drawRoundRect(r, rad, rad, fill)
+            fill.shader = null
+        }
         c.restore()
-        cut.textSize = 9.6f * u
+        cut.textSize = numSize
         cut.alpha = (255 * numberK).toInt().coerceIn(0, 255)
-        if (cut.alpha > 0) pctInside.drawCentered(c, r.centerX(), cy + 0.727f * cut.textSize / 2f, cut, batteryLevel.toString())
+        if (cut.alpha > 0) pctInside.drawCentered(c, if (numCx.isNaN()) r.centerX() else numCx, cy + 0.727f * cut.textSize / 2f, cut, batteryLevel.toString())
         c.restoreToCount(layer)
     }
+
+    private val shineShader = LinearGradient(0f, 0f, 1f, 0f, intArrayOf(0x00FFFFFF, 0x80FFFFFF.toInt(), 0x00FFFFFF), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+    private val shineMatrix = Matrix()
+
+    /** Blurs what the shared paints draw by [px] (0: sharp again): the icons dissolving under the charging capsule. */
+    private fun dissolveBlur(px: Float) {
+        val step = (px * 2f).toInt()
+        val f = if (step <= 0) null else blurs.getOrPut(step) { BlurMaskFilter(step / 2f, BlurMaskFilter.Blur.NORMAL) }
+        fill.maskFilter = f; stroke.maskFilter = f; label.maskFilter = f
+    }
+
+    private val blurs = HashMap<Int, BlurMaskFilter>()
 
     private val pctInside = RollingText { invalidate() }
 
@@ -897,70 +1054,112 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     /**
-     * The charging capsule ([k]: its presence, past 1 while its spring overshoots): it grows out of the battery's body over
-     * One UI's charging animation (22 x ~76 dp at 19 dp from the screen's right edge on the camera's line, measured on the
-     * S24; One UI lays it out in dp, so this does), the battery and its bolt moving into it as it grows and the percentage
-     * appearing beside them, on the capsule in its label colour (the battery keeps its charging green). The battery is drawn
-     * throughout (as the moment starts it is still in its place, the capsule darkening around it).
+     * The charging moment, drawn over One UI's charging chip (78 x 22 dp at 23 dp from the screen's right edge on the S24,
+     * by its own log; One UI lays it out in dp, so this does). [o]: the capsule's outline spring, [k]: what it holds (both
+     * already folded by Control Center), [inset]: Control Center's row inset.
+     *
+     * An opaque capsule (the Dynamic Island's black) grows out from behind the battery's body, on its led outline
+     * ([chargeGeometry]). The battery and its bolt move to its right end and take its label colour; the battery's number
+     * slides out of it through its left side, growing, and is written on the capsule there (inside the body it is still a
+     * hole in it, as the bar draws it), the "%" following it out: the percentage. A light sweeps through the charge while it
+     * shows. Back, in reverse: the number slides into the battery, the battery and the bolt go back to their places, and the
+     * capsule folds into the body, fading over its last steps.
      */
-    private val capClip = Path()
-    private val capRect = RectF()
-
-    private fun drawChargeCapsule(c: Canvas, cy: Float, k: Float, content: Int, alpha: Float) {
+    private fun drawChargeCapsule(c: Canvas, cy: Float, o: Float, k: Float, content: Int, alpha: Float, inset: Float) {
         val u = u
         val dp = resources.displayMetrics.density
         val kk = k.coerceIn(0f, 1f)
+        // At rest: the percentage, the battery and the bolt in a row, in the middle of the capsule, which is never less than
+        // over One UI's chip.
         val battW = 27f * u
-        // Where the battery and the bolt go: the capsule's right end, inset.
-        val capR = width - CHARGE_RIGHT_DP * dp
-        val battTarget = capR - CHARGE_PAD_DP * dp - boltSlot.width - 2.6f * u - battW
-        // The percentage beside them sets how far left the capsule reaches, never less than over One UI's animation.
-        label.textSize = 14f * u
-        val pctW = label.measureText(pctText)
-        val capL = min(capR - CHARGE_W_DP * dp, battTarget - 6f * u - pctW - CHARGE_PAD_DP * dp)
-        val capH = min(CHARGE_H_DP * dp, barHeight * 0.9f)
-        // From the battery's body.
-        val bodyL = batterySlot.x.value
-        val bodyR = bodyL + battW - 2.4f * u
+        val bodyW = battW - 2.4f * u
         val bodyH = 12.6f * u
-        // The capsule's outline leads its spring: One UI's pill shows ~100 ms after the plug-in at its full size, and with the
-        // outline on the spring itself its right end showed past ours for five frames (S24 recording; our bar also held a
-        // frame for 40 ms then). Led, the outline is over the pill's area within ~75 ms; it also stays a moment longer as
-        // it shrinks, then folds into the battery. Past 1 (the spring's overshoot) it follows the spring.
-        val g = if (k >= 1f) k else 1f - (1f - k).let { it * it * it * it }
-        val l = bodyL + (capL - bodyL) * g
-        val rr = bodyR + (capR - bodyR) * g
+        val boltGap = 2.6f * u
+        val gap = CHARGE_GAP_PT * u
+        val level = batteryLevel.toString()
+        num.textSize = CHARGE_TEXT_PT * u
+        val digitsW = num.measureText(level)
+        val signW = num.measureText("%")
+        val rowW = digitsW + signW + gap + battW + boltGap + boltSlot.width
+        val pad = CHARGE_PAD_DP * dp
+        val capR = width - CHARGE_RIGHT_DP * dp
+        val capW = max(CHARGE_W_DP * dp, rowW + 2f * pad)
+        val capL = capR - capW
+        val battTarget = capL + (capW - rowW) / 2f + digitsW + signW + gap
+        val capH = min(CHARGE_H_DP * dp, barHeight * 0.9f)
+
+        // The outline, from the battery's body where the bar has it.
+        val slotX = batterySlot.x.value - inset
+        val g = chargeGeometry(o, 1f - cc)
+        val l = slotX + (capL - slotX) * g
+        val rr = slotX + bodyW + (capR - slotX - bodyW) * g
         val h = bodyH + (capH - bodyH) * g
-        fill.color = Design.color(StatusBarTokens.CAPSULE)
-        // (Opaque from 60 % of its outline on: when it folds back into the battery it fades over its last part, no halo.)
-        fill.alpha = (Color.alpha(fill.color) * (g / 0.6f).coerceAtMost(1f) * alpha).toInt()
-        // (A rect of its own: drawBattery below sets [r] to the battery's body.)
         capRect.set(l, cy - h / 2f, rr, cy + h / 2f)
-        val rad = 4.2f * u + (h / 2f - 4.2f * u) * g.coerceAtMost(1f)
+        val rad = 4.2f * u + (h / 2f - 4.2f * u) * g.coerceIn(0f, 1f)
+        // Opaque at once, but over its first steps out of the body (as it comes, and its last as it folds back) it fades in:
+        // no dark ring pops up around the battery, nor stays as a halo.
+        fill.color = Design.color(StatusBarTokens.CAPSULE)
+        fill.alpha = (Color.alpha(fill.color) * (g / CHARGE_SOLID_AT).coerceIn(0f, 1f) * alpha).toInt()
         c.drawRoundRect(capRect, rad, rad, fill)
-        // The battery and the bolt move in, keeping their places to each other, and take the capsule's label colour; the
-        // battery's number goes (the percentage is beside it). The percentage is inside the capsule as it is now (it never
-        // shows past the capsule's edge while that grows or shrinks).
+
+        // The battery and the bolt, keeping their places to each other, in the capsule's label colour as soon as it is under
+        // them (on its outline, not on their own way: black content over a light wallpaper vanished on it for 100 ms).
         val labelColor = Design.color(StatusBarTokens.CAPSULE_LABEL)
-        val onCapsule = blend(content or (0xFF shl 24), labelColor, kk)
+        val onCapsule = blend(content or (0xFF shl 24), labelColor, smooth(g / CHARGE_TONE_AT))
         val a = (255 * alpha).toInt().coerceIn(0, 255)
-        val dx = (battTarget - batterySlot.x.value) * kk
-        drawBattery(c, batterySlot.x.value + dx, cy, (a shl 24) or (onCapsule and 0xFFFFFF), numberK = (1f - cc) * (1f - kk))
-        drawSlot(c, boltSlot, boltSlot.x.value + dx, cy, onCapsule, alpha)
-        val t = ((kk - 0.65f) / 0.35f).coerceIn(0f, 1f)
-        if (t > 0f) {
+        val battX = slotX + (battTarget - slotX) * k
+        // The number: from the battery's middle to the percentage's place, from the bar's size to the capsule's.
+        val size = NUMBER_PT * u + (CHARGE_TEXT_PT - NUMBER_PT) * u * k
+        val wNow = digitsW * size / (CHARGE_TEXT_PT * u)
+        val from = battX + bodyW / 2f
+        val to = battX - gap - signW - digitsW / 2f
+        val numCx = from + (to - from) * k
+        // The light: once the battery is in the capsule, a sweep each cycle (its run ends off the body on both sides).
+        val sm = sim
+        if (sm != null) shineMs = sm[4] else {
+            val nowNs = System.nanoTime()
+            if (shineFrameNs != 0L) shineMs += ((nowNs - shineFrameNs) / 1e6f).coerceIn(0f, MAX_LOOP_STEP_MS)
+            shineFrameNs = nowNs
+        }
+        val t = shine.get()
+        val cycle = t.durationMs.toFloat().coerceAtLeast(1f)
+        val shineAt = SHINE_FROM + (SHINE_TO - SHINE_FROM) * t.at((shineMs % cycle) / cycle)
+        val shineK = smooth((kk - 0.6f) / 0.4f) * SHINE_STRENGTH
+        drawBattery(c, battX, cy, (a shl 24) or (onCapsule and 0xFFFFFF), numberK = 1f - cc, numCx = numCx, numSize = size,
+            shineAt = shineAt, shineK = shineK)
+        // The bolt beside it: on the capsule as far as the capsule's end has passed it (its end crosses it as it grows and
+        // folds), and while the capsule is solid.
+        val boltX = boltSlot.x.value - inset + (battX - slotX)
+        val boltOn = smooth((rr - boltX) / boltSlot.width) * (g / CHARGE_SOLID_AT).coerceIn(0f, 1f)
+        drawSlot(c, boltSlot, boltX, cy, blend(content or (0xFF shl 24), labelColor, boltOn), alpha)
+
+        // Past the battery's side the number is written on the capsule (and never past the capsule's edge as it grows).
+        if (k > 0.001f) {
             val save = c.save()
             capClip.reset()
             capClip.addRoundRect(capRect, rad, rad, Path.Direction.CW)
             c.clipPath(capClip)
-            label.color = labelColor
-            label.alpha = (255 * t * alpha).toInt()
-            // (Beside the battery where it is now: it is still moving in.)
-            c.drawText(pctText, batterySlot.x.value + dx - 6f * u - pctW + (1f - t) * 3f * u, cy + 0.727f * label.textSize / 2f, label)
-            label.alpha = 255
+            bodyClip.reset()
+            bodyClip.addRoundRect(battX, cy - bodyH / 2f, battX + bodyW, cy + bodyH / 2f, 4.2f * u, 4.2f * u, Path.Direction.CW)
+            c.clipOutPath(bodyClip)
+            num.textSize = size
+            num.color = labelColor
+            num.alpha = (a * (1f - cc)).toInt()
+            val baseline = cy + 0.727f * size / 2f
+            pctInside.drawCentered(c, numCx, baseline, num, level)
+            // The "%" follows the number out.
+            val signA = smooth((k - 0.35f) / 0.5f)
+            if (signA > 0f) {
+                num.alpha = (a * (1f - cc) * signA).toInt()
+                c.drawText("%", numCx + wNow / 2f, baseline, num)
+            }
             c.restoreToCount(save)
         }
     }
+
+    private val capClip = Path()
+    private val bodyClip = Path()
+    private val capRect = RectF()
 
     private fun drawCell(c: Canvas, left: Float, cy: Float, content: Int) {
         val u = u
@@ -1100,6 +1299,39 @@ class StatusBarView(ctx: Context) : View(ctx) {
         const val CHARGE_PAD_DP = 10f
         /** The longest a charging moment lasts if One UI's animation never says it ended (it takes ~4 s). */
         const val CHARGE_MAX_MS = 8000L
+        /**
+         * Not a timing but a deadline: One UI's chip shows 65-100 ms after the plug-in (S24), so the outline is at least
+         * [CHARGE_COVER_AT] of the way (the chip's whole box covered) this long after the moment began, whatever the springs.
+         */
+        const val CHARGE_COVER_MS = 70f
+        const val CHARGE_COVER_AT = 0.85f
+        /** The capsule is opaque from this much of its outline on (fading in over its first steps out of the battery). */
+        const val CHARGE_SOLID_AT = 0.15f
+        /** What is on the capsule is in its label colour from this much of its outline on. */
+        const val CHARGE_TONE_AT = 0.5f
+        /** The battery's number (pt) in the bar, and as the capsule's percentage; the gap between it and the battery. */
+        const val NUMBER_PT = 9.6f
+        const val CHARGE_TEXT_PT = 14f
+        const val CHARGE_GAP_PT = 6f
+        /** The icons beside the battery are gone at this much of the capsule's contents, shrunk by this and blurred this much (pt). */
+        const val CHARGE_DISSOLVED_AT = 0.6f
+        const val DISSOLVE_SHRINK = 0.3f
+        const val DISSOLVE_BLUR_PT = 2.5f
+        /**
+         * The charging light: its width and its run across the battery's body (fractions of the body: it starts and ends off
+         * it, so a cycle rests at both ends), its strength.
+         */
+        const val SHINE_WIDTH = 0.6f
+        const val SHINE_FROM = -0.6f
+        const val SHINE_TO = 1.6f
+        const val SHINE_STRENGTH = 0.9f
+        /** A loop nobody drives counts a long frame as this much at most (ms): a stall pauses it instead of skipping. */
+        const val MAX_LOOP_STEP_MS = 1000f / 30f
+        /** The least slope a speed is carried across with, from one curve of the outline to the other (where one is flat). */
+        const val MIN_SLOPE = 0.05f
+        val CHARGE_OPEN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_CHARGE_OPEN)
+        val CHARGE_CONTENT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_CHARGE_CONTENT)
+        val CHARGE_CLOSE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_CHARGE_CLOSE)
         val MOVE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_MOVE)
         val APPEAR get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_APPEAR)
         val LEAVE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_LEAVE)

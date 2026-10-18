@@ -353,6 +353,95 @@ internal class PhoneScene {
     }
 
     /**
+     * The bar's charging moment over its battery (as [drawStatusBar] draws it, at [a]): the black capsule grown out of the
+     * battery by [grow] (0..1), what it holds come in by [inside] (the battery moved to its right end and green, the bolt
+     * after it, the percentage come out of the battery's side beside it), and the light through the charge at [shine]
+     * (0..1 of its run, NaN none). At 0 and 0 it is the bar's own battery, exactly.
+     */
+    fun drawChargeMoment(c: Canvas, a: Float, grow: Float, inside: Float, shine: Float = Float.NaN) {
+        if (a <= 0.003f || (grow <= 0.001f && inside <= 0.001f)) return
+        val cy = statusH * 0.55f
+        val bw = 24f * u
+        val bh = 11.5f * u
+        val bx0 = w - w * 0.075f - bw
+        val g = grow.coerceIn(0f, 1.1f)
+        val k = inside.coerceIn(0f, 1.05f)
+        val kk = k.coerceIn(0f, 1f)
+        // At rest: the percentage, the battery and the bolt in a row in the middle of the capsule.
+        text.typeface = face
+        text.textSize = 13f * u
+        val pct = "72%"
+        val pctW = text.measureText(pct)
+        val gap = 5f * u
+        val boltW = 6f * u
+        val rowW = pctW + gap + bw + 2.8f * u + 3f * u + boltW
+        // (In from the screen's rounded corner.)
+        val capR = w - w * 0.058f
+        val capW = maxOf(rowW + 18f * u, 92f * u)
+        val capL = capR - capW
+        val capH = minOf(statusH * 0.78f, 26f * u)
+        val bxT = capL + (capW - rowW) / 2f + pctW + gap
+        // The capsule, out of the battery's body.
+        val l = bx0 + (capL - bx0) * g
+        val rr = bx0 + bw + (capR - bx0 - bw) * g
+        val hh = bh + (capH - bh) * g
+        paint.color = withAlpha(BLACK, a * (g / 0.15f).coerceIn(0f, 1f))
+        c.drawRoundRect(l, cy - hh / 2f, rr, cy + hh / 2f, hh / 2f, hh / 2f, paint)
+        // The battery: from the bar's look (the ink at 72 %) to the capsule's (white outline, green charge).
+        val on = (g / 0.5f).coerceIn(0f, 1f)
+        val tone = mix(ink, WHITE, on)
+        val bx = bx0 + (bxT - bx0) * k
+        val by = cy - bh / 2f
+        stroke.strokeWidth = 1.2f * u
+        stroke.color = withAlpha(tone, a * 0.45f)
+        c.drawRoundRect(bx, by, bx + bw, by + bh, 3.4f * u, 3.4f * u, stroke)
+        paint.color = withAlpha(tone, a * 0.45f)
+        c.drawRoundRect(bx + bw + 1.2f * u, cy - 2f * u, bx + bw + 2.8f * u, cy + 2f * u, 0.8f * u, 0.8f * u, paint)
+        val fl = bx + 2f * u
+        val fr = bx + 2f * u + (bw - 4f * u) * 0.72f
+        paint.color = withAlpha(mix(tone, GREEN, kk), a)
+        c.drawRoundRect(fl, by + 2f * u, fr, by + bh - 2f * u, 1.8f * u, 1.8f * u, paint)
+        if (!shine.isNaN()) {
+            // A band of light running across the charge.
+            val band = (fr - fl) * 0.6f
+            val x = fl - band + (fr - fl + 2f * band) * shine
+            c.save()
+            c.clipRect(fl, by + 2f * u, fr, by + bh - 2f * u)
+            for (i in 0 until 6) {
+                val f = 1f - kotlin.math.abs(i - 2.5f) / 3f
+                paint.color = withAlpha(WHITE, a * 0.16f * f)
+                c.drawRect(x + band * i / 6f, by, x + band * (i + 1) / 6f, by + bh, paint)
+            }
+            c.restore()
+        }
+        // The bolt after it (white once the capsule is under it).
+        val boltX = bx + bw + 2.8f * u + 3f * u
+        paint.color = withAlpha(mix(ink, WHITE, on), a * kk)
+        boltPath.rewind()
+        boltPath.moveTo(boltX + boltW * 0.62f, cy - bh * 0.5f)
+        boltPath.lineTo(boltX, cy + bh * 0.08f)
+        boltPath.lineTo(boltX + boltW * 0.45f, cy + bh * 0.08f)
+        boltPath.lineTo(boltX + boltW * 0.38f, cy + bh * 0.5f)
+        boltPath.lineTo(boltX + boltW, cy - bh * 0.08f)
+        boltPath.lineTo(boltX + boltW * 0.55f, cy - bh * 0.08f)
+        boltPath.close()
+        c.drawPath(boltPath, paint)
+        // The percentage, out of the battery's side (on the capsule only).
+        if (k > 0.001f) {
+            val fm = text.fontMetrics
+            val base = cy - (fm.ascent + fm.descent) / 2f
+            val px = bx - gap - pctW + (1f - k) * (gap + pctW * 0.6f)
+            c.save()
+            c.clipRect(l, cy - hh / 2f, bx, cy + hh / 2f)
+            text.color = withAlpha(WHITE, a * kk)
+            c.drawText(pct, px, base, text)
+            c.restore()
+        }
+    }
+
+    private val boltPath = android.graphics.Path()
+
+    /**
      * Notification Center pulled down to [k] (0: up, 1: all the way; its content riding on its lower edge): home dimmed
      * under it, the date and the clock large, two notifications.
      */
@@ -575,6 +664,8 @@ internal class PhoneScene {
         const val COLOR_SLOTS = SLOTS + DOCK_SLOTS
         const val WHITE = -1
         const val BLACK = 0xFF000000.toInt()
+        /** The battery's charge while charging (the bar's comp.statusbar.battery-charging-color in iOS 27). */
+        const val GREEN = 0xFF34C759.toInt()
         /** How far into the part's colour each icon's pastel goes. */
         private val ICON_TINTS = floatArrayOf(0.08f, 0.3f, 0.5f, 0.18f, 0.4f, 0.62f, 0.12f, 0.34f, 0.24f, 0.56f, 0.44f, 0.2f)
         /** Each name's length, of its icon's size. */
