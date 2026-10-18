@@ -2640,4 +2640,21 @@ the wallpaper's:
   springs pause through slow frames, so a ghost "100" in the battery and an instant capsule were the recorder, not the
   build. Dark and light backgrounds, 9 %, 85 % and 100 %, the real-time moment, and the settings' page (search lands on it,
   its sample plays). Found on the way: the Android 17 emulator's own SystemUI plays a charging chip under our bar too
-  (open items). Not yet on the S24: coverage with the new outline (faster than the checked one: 86 % at 60 ms against 75 %).
+  (open items).
+  On the S24 (2026-10-19, build 6b902b2, a plug-in simulated with `dumpsys battery`, recorded, only the bar's strip kept
+  after a check that nothing changed below it): no stock pixel in any frame; the capsule 85 % formed 39 ms after its first
+  frame, whole at ~66 ms, One UI's chip started 55 ms after ours by its log; the bar's window drew every frame on time
+  through the opening (108 frames, GPU 1.4 ms median, 4.2 max, 0 missed); the close folds back as on the emulator. The
+  recording repeated 5 of 476 frames in the first 200 ms after the plug-in (not ours: our window's frames were on time).
+  Then One UI's chip was recorded on its own (cover off, `TEST_STATUS --es do cover`): it comes as a faint small pill at
+  the hidden stock battery's place (x ~945-1028, y 37-73), 64 ms after our bar reacted, and stretches left over its whole
+  205 px ~125 ms later. Its place moved: 823-1029 that day (815-1020 the day before; it is anchored at the stock battery's
+  cached bounds). And Matheesha's own plug-ins that night logged One UI's start only 29 ms after ours once (79 and 152 ms
+  the others): at 29 ms our right end was short of x 1028, so a faint sliver may have shown for a frame or two. Now the
+  capsule's right end leads the rest (out by 25 ms whatever the springs, carried into a fold and back without a jump);
+  unplugged mid-moment the capsule stays while One UI's animation may still play, folding when One UI's log says it ended,
+  and a plug-in again waits for One UI's next animation (a newer wait ends the moment, an older one no longer can; the
+  shell reads One UI's log from half a second back, so lines from before a plug-in are let go). Checked on the emulator
+  (frames: the right end out at 25 ms); on the S24 the plug-in on this build ended 7 ms after One UI's reset, but its
+  recording was deleted unviewed (something changed below the bar: the phone was in use). Not yet on the S24: the frames of
+  the new opening, an unplug and plug-in again during the moment.

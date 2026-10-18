@@ -277,21 +277,36 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private val shine = RoleTiming(dev.launcher.app.motion.MotionTokens.STATUSBAR_CHARGE_SHIMMER)
 
     private fun startChargeMoment() {
-        if (chargeMoment) return
+        if (chargeMoment) {
+            // Plugged in again while the capsule stayed for One UI's animation (unplugged meanwhile): One UI may play its
+            // animation again, so the capsule now waits for that one.
+            AppLog.log("[statusbar] charging moment: plugged in again, the capsule stays")
+            removeCallbacks(chargeTimeout)
+            postDelayed(chargeTimeout, CHARGE_MAX_MS)
+            onChargeMoment?.invoke()
+            return
+        }
         chargeMoment = true
         AppLog.log("[statusbar] charging moment")
-        chargeStart = SystemClock.uptimeMillis()
+        val now = SystemClock.uptimeMillis()
+        chargeStart = now
         // From rest the light starts its first cycle off the battery (one already showing carries on).
         if (chargeOutline.value <= 0.001f && chargeContent.value <= 0.001f) { shineMs = 0f; shineFrameNs = 0L }
         if (outlineFolding) {
-            // It was folding back: the capsule carries on from where it is, now on the opening's lead.
+            // It was folding back: the capsule carries on from where it is, now on the opening's lead, its right end too
+            // (its lead goes on from where that end is).
             val x = chargeOutline.value.coerceIn(0f, 1f)
+            val right = chargeRight(foldOf(x))
             val o = leadInverse(foldOf(x))
             val v = chargeOutline.velocity * foldSlope(x) / max(leadSlope(o), MIN_SLOPE)
             outlineFolding = false
+            rightStart = now - (foldInverse(right) * CHARGE_RIGHT_MS * dev.launcher.app.motion.Motion.slow()).toLong()
             chargeOutline.snapTo(o)
             chargeOutline.animateTo(1f, CHARGE_OPEN, v)
-        } else chargeOutline.animateTo(1f, CHARGE_OPEN)
+        } else {
+            rightStart = now
+            chargeOutline.animateTo(1f, CHARGE_OPEN)
+        }
         chargeContent.animateTo(1f, CHARGE_CONTENT)
         removeCallbacks(chargeTimeout)
         postDelayed(chargeTimeout, CHARGE_MAX_MS)
@@ -299,15 +314,25 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     /**
+     * Unplugged during the moment: the capsule stays while One UI's charging animation may still play (it is told to end by
+     * One UI's log, [endChargeMoment]); without one it folds back at once.
+     */
+    var keepCoverOnUnplug: (() -> Boolean)? = null
+
+    /**
      * The charging moment ends: the capsule folds back into the battery, what it holds first (also on unplugging, and after
      * at most 8 s).
      */
     fun endChargeMoment() {
         if (!chargeMoment) return
-        // The outline from here on its folding curve ([chargeGeometry]), from the capsule as it is (no jump, its speed kept).
+        // The outline from here on its folding curve ([chargeGeometry]), from the capsule as it is (no jump, its speed kept);
+        // its right end, ahead of the rest while it opened, comes back to it as it folds ([chargeRight]).
         val o = chargeOutline.value.coerceIn(0f, 1f)
-        val x = foldInverse(chargeGeometry(o, 1f))
+        val g = chargeGeometry(o, 1f)
+        val x = foldInverse(g)
         val v = chargeOutline.velocity * leadSlope(o) / max(foldSlope(x), MIN_SLOPE)
+        rightCarry = (chargeRight(g) - g).coerceAtLeast(0f)
+        foldFrom = g
         chargeMoment = false
         outlineFolding = true
         removeCallbacks(chargeTimeout)
@@ -337,6 +362,29 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val t = elapsed / (CHARGE_COVER_MS * dev.launcher.app.motion.Motion.slow())
         return max(led, CHARGE_COVER_AT * smooth(t) * fold)
     }
+
+    /**
+     * How far the capsule's right end is on its way (0..1). It leads the
+     * rest: One UI's chip comes as a small pill at the hidden stock battery's place (x 945-1028 on the S24), its first frame
+     * as early as ~30 ms after our first one (One UI's own log 29 ms after ours, 2026-10-19), and only later stretches left
+     * over its whole width; so while the moment opens that end is out by [CHARGE_RIGHT_MS], whatever the springs. As the
+     * capsule folds, what it was ahead comes back to the rest in step with it. [g]: the outline ([chargeGeometry]); [fold]:
+     * what of it Control Center leaves.
+     */
+    private fun chargeRight(g: Float, fold: Float = 1f): Float {
+        val lead = CHARGE_RIGHT_MS * dev.launcher.app.motion.Motion.slow()
+        val s = sim
+        // (The frames fold from a capsule fully open: nothing is ahead then.)
+        if (s != null) return if (s[3] == 0f) g else max(g, smooth(s[2] / lead) * fold)
+        if (outlineFolding) return if (foldFrom > 0.001f) (g + rightCarry * (g / foldFrom)).coerceAtMost(1f) else g
+        if (!chargeMoment) return g
+        return max(g, smooth((SystemClock.uptimeMillis() - rightStart) / lead) * fold)
+    }
+
+    /** When the right end's lead began (uptime ms), and what of it is carried into a fold (with the outline it began from). */
+    private var rightStart = 0L
+    private var rightCarry = 0f
+    private var foldFrom = 0f
 
     private fun leadOf(o: Float) = 1f - (1f - o).let { it * it * it * it }
     private fun leadSlope(o: Float) = 4f * (1f - o).let { it * it * it }
@@ -568,7 +616,10 @@ class StatusBarView(ctx: Context) : View(ctx) {
         // Plugged in where One UI plays its charging animation (not over the lock screen, nor with a panel open: it does not
         // play there; nor while our bar is away).
         if (!was && charging && settled && chargeMomentWanted && showing && lockTarget == 0f && cc == 0f && nc == 0f && interactive()) startChargeMoment()
-        if (was && !charging) endChargeMoment()
+        if (was && !charging && chargeMoment) {
+            if (keepCoverOnUnplug?.invoke() == true) AppLog.log("[statusbar] unplugged: the capsule stays while One UI's charging animation plays")
+            else endChargeMoment()
+        }
     }
 
     private fun readPowerSave() {
@@ -1092,7 +1143,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val slotX = batterySlot.x.value - inset
         val g = chargeGeometry(o, 1f - cc)
         val l = slotX + (capL - slotX) * g
-        val rr = slotX + bodyW + (capR - slotX - bodyW) * g
+        val rr = slotX + bodyW + (capR - slotX - bodyW) * chargeRight(g, 1f - cc)
         val h = bodyH + (capH - bodyH) * g
         capRect.set(l, cy - h / 2f, rr, cy + h / 2f)
         val rad = 4.2f * u + (h / 2f - 4.2f * u) * g.coerceIn(0f, 1f)
@@ -1305,6 +1356,11 @@ class StatusBarView(ctx: Context) : View(ctx) {
          */
         const val CHARGE_COVER_MS = 70f
         const val CHARGE_COVER_AT = 0.85f
+        /**
+         * Also a deadline: the capsule's right end is out this long after the moment began (One UI's chip comes first as a
+         * small pill at the stock battery's place, x 945-1028 on the S24, as early as ~30 ms after our first frame).
+         */
+        const val CHARGE_RIGHT_MS = 25f
         /** The capsule is opaque from this much of its outline on (fading in over its first steps out of the battery). */
         const val CHARGE_SOLID_AT = 0.15f
         /** What is on the capsule is in its label colour from this much of its outline on. */

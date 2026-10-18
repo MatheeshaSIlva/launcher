@@ -369,7 +369,14 @@ copy it wholesale — port the working pieces cleanly. File map:
   (`ChargingVI`, a chip 205 x 58 px at x 815, y 26 on the S24 by its own log, starting 65-100 ms after the plug-in) plays
   whatever the flags say (visible = playing || system info allowed; no setting turns it off: its style is chosen from the
   device's state, "INDICATOR_CHARGING" off the lock screen, and it is skipped only while the stock shade is open): our
-  charging moment covers it, ended when its log says "Resetting animation state" (the shell's `awaitLog`). The moment (its
+  charging moment covers it, ended when its log says "Resetting animation state" (the shell's `awaitLog`, read from half
+  a second back: `StockBarCover` lets lines from before the plug-in go). The chip is anchored at the hidden stock battery's
+  cached bounds (offsetX = battery right - 205: 815-1020 on 2026-10-18, 823-1029 on 2026-10-19) and comes first as a small
+  faint pill there (x ~945-1028, y 37-73), stretching left over its width ~125 ms later; One UI's log has started it 29-152
+  ms after ours (S24), so its first frame can come ~30 ms after our first: the capsule's right end leads the rest, out by
+  25 ms (`CHARGE_RIGHT_MS`). Unplugged mid-moment, the capsule stays while One UI's animation may still play
+  (`StockBarCover.oneUiActive`), and a plug-in again waits for One UI's next animation (only the newest wait ends it). See
+  One UI's chip on its own with `TEST_STATUS --es do cover --ez on false` (and `true` after). The moment (its
   own moment in the settings, "Charging"): an opaque capsule grows out from behind the battery on a led outline
   (`motion.statusbar.charge-open`, 1 - (1 - k)^4: over the chip within ~55 ms; on the spring itself the chip's end showed
   for five frames; never less than 85 % at 70 ms whatever the settings' speed), the battery and its bolt move to its right

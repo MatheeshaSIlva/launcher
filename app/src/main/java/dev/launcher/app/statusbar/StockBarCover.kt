@@ -22,6 +22,8 @@ import java.util.concurrent.Executors
  */
 class StockBarCover(private val ctx: Context, private val handler: Handler, private val bar: () -> StatusBarView?) {
     private val io = Executors.newSingleThreadExecutor()
+    /** The charging moments' waits on One UI's log, each on a thread of its own (a newer one never waits behind an older). */
+    private val watchers = Executors.newCachedThreadPool()
     private var capturing = ""
     private var presenting = false
 
@@ -71,38 +73,102 @@ class StockBarCover(private val ctx: Context, private val handler: Handler, priv
     /** The bar's state now (after it was made again, or a change). On [bar]'s thread. */
     fun push() { bar()?.setSharing(capturing.isNotEmpty() || presenting) }
 
+    /** One UI's charging animation may be playing now (from a plug-in until its log says it ended, or our waits ran out). */
+    @Volatile var oneUiActive = false
+        private set
+    /** Which plug-in's wait is the current one (a plug-in again while one waits starts another: only the newest ends it). */
+    @Volatile private var generation = 0
+
     /**
-     * The bar's charging moment began: it ends when One UI's charging animation has (its "Resetting animation state"), or
-     * `motion.statusbar.charge-hold` after the plug-in when that animation never starts within [START_WAIT_MS] (a moment
-     * that covers nothing still plays out as one: it grows, shows and shrinks back).
+     * The bar's charging moment began (or a plug-in came again while it lasted): it ends when One UI's charging animation
+     * has (its "Resetting animation state"), or `motion.statusbar.charge-hold` after the plug-in when that animation never
+     * starts within [START_WAIT_MS] (a moment that covers nothing still plays out as one: it grows, shows and shrinks back).
+     * After a plug-in again One UI may reset the animation playing and start another: then the moment waits
+     * [RESTART_GRACE_MS] after a reset for that.
+     * Lines from before the plug-in are not taken (the shell reads its log from half a second back). On the bar's thread.
      */
     fun chargeMoment(s: IShellService?) {
         val t0 = android.os.SystemClock.uptimeMillis()
+        val from = System.currentTimeMillis() - PLUG_SLACK_MS
+        val mine = ++generation
+        // (A plug-in again while One UI's animation may still play: that one may end first, and none start.)
+        val again = oneUiActive
+        oneUiActive = true
         fun end(why: String, at: Long) {
+            if (mine != generation) return
             AppLog.log("[statusbar] charging moment ends: $why")
-            handler.postAtTime({ bar()?.endChargeMoment() }, at)
+            handler.postAtTime({
+                if (mine != generation) return@postAtTime
+                oneUiActive = false
+                bar()?.endChargeMoment()
+            }, at)
         }
         if (s == null) { end("no shell (One UI's animation's usual length)", t0 + ONE_UI_ANIMATION_MS); return }
-        io.execute {
-            val started = try { s.awaitLog(TAG, "animationStarted|skipping|cancelling", START_WAIT_MS) } catch (_: Throwable) { "" }
-            if (!started.contains("animationStarted")) {
-                end(if (started.isEmpty()) "One UI's charging animation did not start" else "One UI's charging animation skipped",
-                    t0 + Motion.ms(MotionTokens.STATUSBAR_CHARGE_HOLD))
+        watchers.execute {
+            var first = next(s, "$STARTED|skipping|$ENDED", from, if (again) END_WAIT_MS else START_WAIT_MS)
+            if (first.isEmpty() || first.contains("skipping")) {
+                end(when {
+                    first.contains("skipping") -> "One UI's charging animation skipped"
+                    again -> "One UI's charging animation said nothing more"
+                    else -> "One UI's charging animation did not start"
+                }, if (again) android.os.SystemClock.uptimeMillis() else t0 + Motion.ms(MotionTokens.STATUSBAR_CHARGE_HOLD))
                 return@execute
             }
-            val done = try { s.awaitLog(TAG, "Resetting animation state|cleaning up|cancelling", END_WAIT_MS) } catch (_: Throwable) { "" }
-            end(if (done.isEmpty()) "One UI's charging animation never said it ended" else "One UI's charging animation ended",
-                android.os.SystemClock.uptimeMillis() + AFTER_END_MS)
+            // (A reset first: One UI ended one playing as ours began, and may start another.)
+            val grace = again || Regex(ENDED).containsMatchIn(first)
+            while (mine == generation) {
+                // Playing (or, after a plug-in again, the earlier one ending): its end, then a moment for a start again.
+                val ended = if (Regex(ENDED).containsMatchIn(first)) first else next(s, ENDED, epochOf(first), END_WAIT_MS)
+                if (ended.isEmpty()) { end("One UI's charging animation never said it ended", android.os.SystemClock.uptimeMillis()); return@execute }
+                // (Only after a plug-in again: One UI may reset the animation playing and start another. A plug-in on its own
+                // starts one, which ends once: the moment ends with it.)
+                val restart = if (grace) next(s, STARTED, epochOf(ended), RESTART_GRACE_MS) else ""
+                if (restart.isEmpty()) {
+                    end("One UI's charging animation ended", android.os.SystemClock.uptimeMillis() + AFTER_END_MS)
+                    return@execute
+                }
+                AppLog.log("[statusbar] One UI's charging animation started again: the capsule stays")
+                first = restart
+            }
         }
     }
 
+    /**
+     * The next ChargingVI line matching [regex] logged at or after [notBefore] (epoch ms), within [timeoutMs]; "" if none.
+     * A line from before is let go: once it is out of the shell's half second back the wait is asked again.
+     */
+    private fun next(s: IShellService, regex: String, notBefore: Long, timeoutMs: Int): String {
+        val until = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            val left = until - System.currentTimeMillis()
+            if (left <= 0) return ""
+            val line = try { s.awaitLog(TAG, regex, left.toInt()) } catch (_: Throwable) { return "" }
+            if (line.isEmpty() || line.startsWith("ERROR")) return ""
+            val at = epochOf(line)
+            if (at < 0 || at >= notBefore) return line
+            val wait = (at + LOOKBACK_MS - System.currentTimeMillis()).coerceAtMost(until - System.currentTimeMillis())
+            if (wait > 0) try { Thread.sleep(wait) } catch (_: InterruptedException) { return "" }
+        }
+    }
+
+    /** When a line was logged (epoch ms; the shell's log is read with `-v epoch`), or -1. */
+    private fun epochOf(line: String): Long = line.trim().substringBefore(' ').toDoubleOrNull()?.let { (it * 1000).toLong() } ?: -1L
+
     private companion object {
         const val TAG = "ChargingVI"
+        const val STARTED = "animationStarted"
+        const val ENDED = "Resetting animation state|cleaning up|cancelling"
         const val START_WAIT_MS = 1500
         const val END_WAIT_MS = 7000
         /** How long One UI's charging animation plays (S24, One UI 9: 3.9-4.0 s from the plug-in to its reset). */
         const val ONE_UI_ANIMATION_MS = 4200L
         /** After One UI's animation reset itself: its last frame is gone. */
         const val AFTER_END_MS = 60L
+        /** How long after a reset One UI is given to start again (a plug-in again restarts its animation at once). */
+        const val RESTART_GRACE_MS = 300
+        /** Lines this much before our plug-in still count (our broadcast and One UI's come about together). */
+        const val PLUG_SLACK_MS = 100L
+        /** The shell reads its log from this far back (ShellService.awaitLog), and a little more. */
+        const val LOOKBACK_MS = 520L
     }
 }

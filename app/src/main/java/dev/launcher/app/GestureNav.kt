@@ -437,6 +437,7 @@ object GestureNav {
             // Over One UI's own bar where no flag hides it (StockBarCover): its charging animation, its chips while shared.
             s.bar.chargeMomentWanted = Build.MANUFACTURER.equals("samsung", ignoreCase = true)
             s.bar.onChargeMoment = { stockCover.chargeMoment(ShizukuLink.service) }
+            s.bar.keepCoverOnUnplug = { stockCover.oneUiActive }
             stockCover.push()
             reapplyFlags()   // now the stock clock and icons can go, and the stock shade
             refreshAppearance()
@@ -518,6 +519,8 @@ object GestureNav {
         // And the charging moment drawn frame by frame at the display's rate (open, [ms] of holding, close), as PNGs of the
         // bar in files/dev-out/charge/ (adb pull; ends with .done): the real drawing at exact times, unlike a recording.
         //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do charge-frames [--ei ms 600] [--ei fps 120] [--es bg '#E6E8EE']
+        // And One UI's charging chip on its own, to see how it comes (our cover off until on again or the bar is made again):
+        //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do cover --ez on false|true
         val r = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
                 val what = i.getStringExtra("do")
@@ -539,7 +542,12 @@ object GestureNav {
                             }
                         }
                         "share" -> bar.setSharing(on)
-                        else -> AppLog.log("[statusbar] test: do charge|charge-frames|share")
+                        // One UI's charging chip seen on its own (our cover off) or covered again: --ez on false|true.
+                        "cover" -> {
+                            bar.chargeMomentWanted = on && Build.MANUFACTURER.equals("samsung", ignoreCase = true)
+                            AppLog.log("[statusbar] test: charging cover ${if (bar.chargeMomentWanted) "on" else "off"}")
+                        }
+                        else -> AppLog.log("[statusbar] test: do charge|charge-frames|share|cover")
                     }
                 }
             }
