@@ -2882,7 +2882,7 @@ private fun DeveloperPage(tick: androidx.compose.runtime.MutableIntState, feed: 
     val ctx = LocalContext.current
     val app = ctx.applicationContext as? dev.launcher.app.LauncherApp
     val connected = remember(tick.intValue) { dev.launcher.app.ShizukuLink.state() } == dev.launcher.app.ShizukuLink.State.CONNECTED
-    Group(null, "On Phone until turned off here.") {
+    Group(null, "On System until turned off here.") {
         ToggleRow("Developer tools", null, SettingsPrefs.developer) { on ->
             SettingsPrefs.setDeveloper(ctx, on)
             if (!on) pop()
