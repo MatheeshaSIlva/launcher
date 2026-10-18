@@ -64,9 +64,17 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   card grows into the stage at the top of its page (`motion.settings.open`), one value moving everything; pages are built ahead and only placed while open (a page built in a transition's first frame cost the S24
   60-80 ms); solid groups (no glass per card). Changes wait in a draft for Apply (`Draft`, `ApplyBar`, `Design.batch`:
   one reveal for all of them); a look change is revealed from the tap
-  (`ThemeReveal`). Structure B (V1, 2026-10-15): tiles (`Part`) for Look and Motion (the whole phone), one per part of the
-  phone (Home, Apps, App Library, Notifications & Control Center, Status bar: its layout, where it lives, its options, its
-  own theme, on its page: `PartPage`) and Phone. The tiles are solid cards, as the groups (no glass), one
+  (`ThemeReveal`). Structure B (V1, 2026-10-15; regrouped 2026-10-19, `docs/SETTINGS_NAVIGATION.md`): tiles (`Part`, in
+  the start page's order) one per part of the phone (Home, App Library, Apps, Notifications & Control Center, Status bar:
+  its layout, where it lives, its options, its own theme, on its page: `PartPage`), Look and Motion (the whole phone) and
+  System (the launcher's own; "Phone" until 2026-10-19), under headings (`TILE_GROUPS`: Your phone, Style, System alone),
+  the quick choices over them (`QuickGroup`: light and dark, the colours' source, the animation preset, the same draft as
+  Look's and Motion's). Three layers on every page: what most people change in sight, the rest in folds (`settings/Fold.kt`:
+  a row that names what it holds, its rows unfolding in place on the appear role over `comp.settings.fold.fill`, built
+  at the tap and opened two frames later, left as it was in the next session too: `SettingsPrefs.openFolds`): More
+  (Look's fonts, size and the settings' theme; each part's moments, one Motion row on its page; Motion's moments by part)
+  and Advanced (Look's palette style, intensity and key colours; a moment's animations, its Every detail). Pages never go
+  more than two deep; editors open in place. The tiles are solid cards, as the groups (no glass), one
   under another as wide as the sheet (Matheesha, 2026-10-15: "more polished and well thought out"): the part's name and
   what it holds on the left, on the right a scene of the part (`TileArt`, on the preset's springs and styles as the draft
   would apply them, on a clock that runs only while the cards are in sight) drawn on the card itself, no box of its own
@@ -80,19 +88,20 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   cards no edge). Under the wallpaper's colours each part keeps its own hue, harmonised toward the palette's accent
   (`partColor`, `MaterialYou.harmonize`: the palette's one primary had made every card the same). A part with one layout
   or one place says so in a caption under its stage (`PageLead`, which search lands on), not in rows that choose nothing;
-  a part's own theme is offered only while there is another theme. Look and Phone push pages one level down (`SubPager`,
-  `Sub`: Look's colours, fonts, size; Phone's Developer page). A part's stage (`settings/Stage.kt`, over the page, no
+  a part's own theme is offered only while there is another theme. Look and System push pages one level down (`SubPager`,
+  `Sub`: Look's fonts and size, from its More; System's Developer page). A part's stage (`settings/Stage.kt`, over the page, no
   touches): the phone drawn as a motion graphic (`settings/PhoneScene.kt`) in the part's colours, at the part's band of
   the phone (`motion.settings.focus`), following the draft (home's grid, dock and names through `HomeMetrics`, gliding on
   a change; Control Center's columns; the App Library's place; Look on your wallpaper in the palette's light tones, light
   or dark; Look's Fonts page turns it into a type specimen), playing how the part is
   reached (a finger and what it opens, on the draft's curves) and its own act; a moment's page pushed below plays its
   samples on it (`MotionSamples` with `SampleKit.scene`). iOS 27's overview: the page is the blurred wallpaper, the panel on it, its buttons clear glass
-  (`comp.settings.glass`). Phone holds Shizuku, updates, safety and About; seven taps on the build turn on the developer
+  (`comp.settings.glass`). System holds Shizuku, updates, safety and About; seven taps on the build turn on the developer
   tools (Developer: the tests and the log; the token editor), until switched off on their page (`SettingsPrefs.developer`).
   Search (V3, `settings/Search.kt`): a field over the tiles; every setting indexed with its place and the words it
   answers to (settings before moments before single animations); a result grows its part's page out of its row, pushes
-  the page it is on, opens a moment's Every detail, scrolls the row into sight and lights it (rows register with
+  the page it is on, opens the fold the row waits in (`SearchEntry.fold`) or a moment's Every detail, scrolls the row into
+  sight (no further than the page goes) and lights it (rows register with
   `Modifier.anchor(name)` under their page, `LocalAnchorPage`; an animation's row as `roleAnchor(key)`). What you changed
   (`settings/Changes.kt`): every difference from the theme, the preset or a layout's defaults with before and after and
   Reset (into the draft); "Your changes" over the tiles, "N changes" at the foot of each page, a dot on each changed row.
@@ -160,7 +169,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`motion.adjust.<moment>.speed/.bounce`, 1 = as the preset), applied on top of the preset's wherever a curve is read
   (`Design.curve`, `Design.previewCurve`, `Draft.motionCurve` through `MotionAdjust.speed/bounce`), and some a character
   slider moving their numbers together (`Character`: home's depth, the unlock zoom, the wiggle, Clear All's rhythm). A
-  moment's page (Motion's list by part, and each part's page) has Speed, Bounce, its character and Every detail: its
+  moment's page (Motion's list by part, and each part's page) has Speed, Bounce, its character and Every detail (its
+  Advanced fold): its
   roles with today's editor (`settings/MotionPages`: spring or curve, a graph with handles, sliders, shapes), samples on
   the picture of home (`settings/MotionSamples`, one loop for the whole settings), the graph's arithmetic in
   `motion/CurveFit` (springs fitted to curves and back); kept as the preset's user edits
@@ -195,7 +205,7 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `HomeMetrics` and `Scale.homeText`); a change rebuilds everything). A view that keeps the unit in a field measures it
   again on every design change, not only in `onSizeChanged` (the window keeps its size when the unit changes: Control
   Center and Notification Center stayed small after Follow was turned off).
-  The token editor is `design/DesignActivity` (opened from the settings app: Phone, Developer, once the developer tools are on; no drawer entry).
+  The token editor is `design/DesignActivity` (opened from the settings app: System, Developer, once the developer tools are on; no drawer entry).
   Surfaces are drawn by **one renderer**, `design/MaterialPainter` (a material token layer by layer as the kit defines it:
   frost, lens, fills with blend modes, inner shadows, rims), over a backdrop blurred per frost by `design/FrostCache`.
   Notification Center is on it (step 2a, tokens `comp.nc.*` in `shade/NcTokens.kt`), and Control Center with its expanded
@@ -337,7 +347,7 @@ copy it wholesale — port the working pieces cleanly. File map:
   lock/unlock because Default USB configuration had data functions; fixed by "debugging only"/"No data transfer". Hence: status bar flags are set
   through the binder API with a token owned by our service (system drops them when it dies), never with `cmd` (those persist until reboot).
 - **Everything that changes system state must auto-restore and be recoverable without Shizuku** (notification action + safe-settings screen). A reboot always clears these in-memory flags.
-  The safe-settings screen (plain views) opens from the Restore notification only; the same is on the settings app's Phone
+  The safe-settings screen (plain views) opens from the Restore notification only; the same is on the settings app's System
   page, the developer tools on its Developer page once the build has been tapped seven times (`DevTools`; the separate dev
   panel and its home entry are gone).
 - **The window manager takes a pull from the top edge away from us.** After 24 dp (within 500 ms) of a pull that starts in the
@@ -596,7 +606,7 @@ copy it wholesale — port the working pieces cleanly. File map:
   rate and adds missed refreshes: judge alignment from recordings, timing from unrecorded frame stats.
 - **Android refuses an app's own entry into picture-in-picture while another app's mini player is up** (auto-enter and
   entry from a pause; `checkEnterPictureInPictureState`): test with one mini player at a time. The test app
-  (`PipTestActivity`, Phone, Developer, "Mini player test"; `am start -n dev.launcher.app/.PipTestActivity [--es orient
+  (`PipTestActivity`, System, Developer, "Mini player test"; `am start -n dev.launcher.app/.PipTestActivity [--es orient
   landscape] [--ez pip true]`) shows a fixed bright picture; "pip" enters at once (allowed while resumed: it replaces
   another app's). Without seamless resizing Android shows the app's icon over a plain colour while a PiP resizes.
 - **A small view moved by its bounds makes Android record its parent again** (`View.setFrame` marks the parent

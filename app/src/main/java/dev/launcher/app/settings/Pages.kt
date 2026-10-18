@@ -161,6 +161,8 @@ object SettingsTokens {
     val BUTTON_SYMBOL = ColorKey("comp.settings.button.symbol-color")
     val BUTTON_SIZE = NumberKey("comp.settings.button.size")
     val GROUP_FILL = ColorKey("comp.settings.group.fill")
+    /** Under a fold's rows ([Fold]): where the fold's own rows end shows. */
+    val FOLD_FILL = ColorKey("comp.settings.fold.fill")
     val GROUP_CORNER = NumberKey("comp.settings.group.corner")
     val SECTION = TextKey("comp.settings.section")
     val SECTION_COLOR = ColorKey("comp.settings.section-color")
@@ -190,19 +192,20 @@ object SettingsTokens {
 }
 
 /**
- * The settings' tiles (docs/PLAN_SETTINGS_V2.md, structure B): Look and Motion for the whole phone, one per part of the phone
- * ([element]: its layout, where it lives, its options and its own theme, all on its page), and Phone. Each has its name, its
- * colour and its symbol.
+ * The settings' tiles (docs/PLAN_SETTINGS_V2.md, structure B; docs/SETTINGS_NAVIGATION.md): one per part of the phone
+ * ([element]: its layout, where it lives, its options and its own theme, all on its page), Look and Motion for the whole
+ * phone, and System (the launcher's own: Shizuku, updates, safety, about; "Phone" until 2026-10-19). Each has its name, its
+ * colour and its symbol. In the start page's order ([TILE_GROUPS]): the scenes' acts run down the column in it ([TileArt]).
  */
 internal enum class Part(val title: String, val color: ColorKey, val element: Element? = null, val tile: Boolean = true) {
-    LOOK("Look", ColorKey("comp.settings.color.look")),
-    MOTION("Motion", ColorKey("comp.settings.color.motion")),
     HOME("Home", ColorKey("comp.settings.color.home"), Element.HOME),
-    APPS("Apps", ColorKey("comp.settings.color.apps"), Element.RECENTS),
     LIBRARY("App Library", ColorKey("comp.settings.color.library"), Element.DRAWER),
+    APPS("Apps", ColorKey("comp.settings.color.apps"), Element.RECENTS),
     SHADE("Notifications & Control Center", ColorKey("comp.settings.color.shade"), Element.SHADE),
     STATUS_BAR("Status bar", ColorKey("comp.settings.color.statusbar"), Element.STATUS_BAR),
-    PHONE("Phone", ColorKey("comp.settings.color.phone")),
+    LOOK("Look", ColorKey("comp.settings.color.look")),
+    MOTION("Motion", ColorKey("comp.settings.color.motion")),
+    PHONE("System", ColorKey("comp.settings.color.phone")),
     /** Everything you changed (V3), opened from the start page's "Your changes": a page, no tile. */
     CHANGES("Your changes", ColorKey("comp.settings.color.look"), tile = false),
 }
@@ -599,6 +602,8 @@ internal class Studio(
     /** The moment whose Every detail is open (one at a time), and the one whose Every detail is open on screen now. */
     var detailFor by mutableStateOf<String?>(null)
     var detailShown by mutableStateOf<String?>(null)
+    /** The folds open on screen now ([Fold]): the search waits for the one a row it found is in. */
+    var foldsShown by mutableStateOf(emptySet<String>())
     /**
      * A moment's page (MomentPage, pushed over Motion or a part's page): the animation whose editor is open on it (Every
      * detail), whether a slider or a handle is being dragged (what follows it changes at once, no rolling words), and what
@@ -1010,10 +1015,10 @@ private fun Sheet(st: Studio, g: Geometry, open: (Part) -> Unit, close: (Float) 
 }
 
 /**
- * At rest: a search field (V3), then the tiles, two across (docs/PLAN_SETTINGS_V2.md: Look and Motion, the parts of the
- * phone, Phone), "Your changes" over them while anything differs from the theme or preset. More than the sheet shows at
- * rest: a scroll up lifts the sheet first, as a page would, then scrolls the tiles in it ([liftScroll]); the last ones clear
- * the Apply bar. The search lifts the sheet as a page would and turns the tiles into its results.
+ * At rest: a search field (V3), the quick choices ([QuickGroup]), then the tiles in their groups ([TILE_GROUPS]: the parts of
+ * the phone, its style, System), "Your changes" over them while anything differs from the theme or preset. More than the
+ * sheet shows at rest: a scroll up lifts the sheet first, as a page would, then scrolls the tiles in it ([liftScroll]); the
+ * last ones clear the Apply bar. The search lifts the sheet as a page would and turns the tiles into its results.
  */
 @Composable
 private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: Float, art: androidx.compose.runtime.State<ArtKit>) {
@@ -1119,6 +1124,7 @@ private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: 
                     .liftScroll(st.start, { 0f }) { bar.value * g.barRoom }
                     .padding(start = m, end = m)) {
                     Spacer(Modifier.height(look.dp(16f * g.unit)))
+                    QuickGroup(st)
                     ChangesEntry(st, open)
                     TileGrid(st, open, art)
                     Spacer(Modifier.height(look.dp(24f * g.unit + g.navPx + g.inset)))
@@ -1189,22 +1195,100 @@ private fun ChangesEntry(st: Studio, open: (Part) -> Unit) {
 }
 
 /**
+ * The start page's quick choices (docs/SETTINGS_NAVIGATION.md: what most people change first, set where they start): light
+ * and dark, where the colours come from, the animation preset. The same choices as Look's and Motion's (one draft: changed
+ * here, they show changed there), waiting for Apply as every change does. It steps back and fades as a page grows over it,
+ * as the tiles do.
+ */
+@Composable
+private fun QuickGroup(st: Studio) {
+    val draft = LocalDraft.current
+    val look = LocalLook.current
+    // Whether the colour of your own is being changed (its editor open under it, as on Look).
+    val editing = remember { mutableStateOf<Char?>(null) }
+    val all = remember(look.version) { Design.motionPresets() }
+    val chosen = draft.motionId()
+    val presets = remember(all, chosen, SettingsPrefs.developer, SettingsPrefs.testPresets) { offeredPresets(all, chosen) }
+    val names = remember(presets) { presets.map { it.name } }
+    Column(Modifier.graphicsLayer {
+        val p = st.p.value
+        alpha = (1f - p * 1.8f).coerceIn(0f, 1f)
+        val sc = 1f - 0.05f * p.coerceIn(0f, 1f)
+        scaleX = sc; scaleY = sc
+    }) {
+        Group(null) {
+            ChipsRow("Light & dark") {
+                ChoiceChips(APPEARANCES, Appearance.Mode.entries.indexOf(draft.appearanceMode())) { draft.chooseAppearance(Appearance.Mode.entries[it]) }
+            }
+            ColourChoiceRow(draft, editing, "Colours")
+            Reveal(draft.wallpaperColors() && draft.seedColor() != null) { SeedRow(draft, editing) }
+            ColourEditor(draft, editing)
+            ChipsRow("Animations") {
+                ChoiceChips(names, presets.indexOfFirst { it.id == chosen }) { draft.chooseMotion(presets[it].id) }
+            }
+        }
+    }
+}
+
+/**
+ * The tiles in the start page's groups (docs/SETTINGS_NAVIGATION.md), in [Part]'s order: the parts of the phone, its style
+ * (Look and Motion), then System on its own.
+ */
+internal val TILE_GROUPS: List<Pair<String?, List<Part>>> = listOf(
+    "Your phone" to listOf(Part.HOME, Part.LIBRARY, Part.APPS, Part.SHADE, Part.STATUS_BAR),
+    "Style" to listOf(Part.LOOK, Part.MOTION),
+    null to listOf(Part.PHONE),
+)
+
+/**
  * The cards one under another, each as wide as the sheet (Matheesha, 2026-10-15: one column, "more polished and well
- * thought out"): every card the same, its name and what it holds on the left, its part's scene on the right; every card
- * as tall as the tallest needs and at least the theme's card height, so the column keeps one rhythm.
+ * thought out"), in their groups under their headings ([TILE_GROUPS]): every card the same, its name and what it holds on the
+ * left, its part's scene on the right; every card as tall as the tallest needs and at least the theme's card height, so the
+ * column keeps one rhythm. The headings step back and fade with the cards as a page grows over them.
  */
 @Composable
 private fun TileGrid(st: Studio, open: (Part) -> Unit, art: androidx.compose.runtime.State<ArtKit>) {
     val look = LocalLook.current
     val gap = look.pt(SettingsTokens.TILE_GAP)
     val least = look.pt(SettingsTokens.TILE_HEIGHT)
-    androidx.compose.ui.layout.Layout(content = { for (part in Part.entries) if (part.tile) Tile(st, part, open, art) }) { ms, c ->
-        val w = c.maxWidth
-        val h = maxOf(least, ms.maxOf { it.maxIntrinsicHeight(w).toFloat() }).roundToInt()
-        val placeables = ms.map { it.measure(androidx.compose.ui.unit.Constraints.fixed(w, h)) }
-        layout(w, (placeables.size * h + (placeables.size - 1).coerceAtLeast(0) * gap).roundToInt()) {
-            placeables.forEachIndexed { i, pl -> pl.place(0, (i * (h + gap)).roundToInt()) }
+    // Between the groups, as between a page's groups.
+    val between = 24f * look.unit
+    val heading = look.text(SettingsTokens.SECTION, look.color(SettingsTokens.SECTION_COLOR))
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    // Which of the children are headings (each group's first, when it has one).
+    val headed = remember { TILE_GROUPS.flatMap { (title, parts) -> listOfNotNull(title?.let { true }) + parts.map { false } } }
+    androidx.compose.ui.layout.Layout(content = {
+        for ((title, parts) in TILE_GROUPS) {
+            if (title != null) BasicText(title, style = heading, modifier = Modifier
+                .graphicsLayer {
+                    val p = st.p.value
+                    alpha = (1f - p * 1.8f).coerceIn(0f, 1f)
+                    val s = 1f - 0.05f * p.coerceIn(0f, 1f)
+                    scaleX = s; scaleY = s
+                }
+                .padding(start = pad, bottom = look.dp(6f * look.unit)))
+            for (part in parts) Tile(st, part, open, art)
         }
+    }) { ms, c ->
+        val w = c.maxWidth
+        val h = maxOf(least, ms.filterIndexed { i, _ -> !headed[i] }.maxOf { it.maxIntrinsicHeight(w).toFloat() }).roundToInt()
+        val placeables = ms.mapIndexed { i, m ->
+            if (headed[i]) m.measure(c.copy(minWidth = 0, minHeight = 0)) else m.measure(androidx.compose.ui.unit.Constraints.fixed(w, h))
+        }
+        val ys = IntArray(placeables.size)
+        var y = 0f
+        var i = 0
+        for ((n, group) in TILE_GROUPS.withIndex()) {
+            if (n > 0) y += between
+            if (group.first != null) { ys[i] = y.roundToInt(); y += placeables[i].height; i++ }
+            for (k in group.second.indices) {
+                if (k > 0) y += gap
+                ys[i] = y.roundToInt()
+                y += h
+                i++
+            }
+        }
+        layout(w, y.roundToInt()) { placeables.forEachIndexed { j, pl -> pl.place(0, ys[j]) } }
     }
 }
 
@@ -1389,18 +1473,27 @@ private fun PageLayer(st: Studio, g: Geometry, part: Part, close: (Float) -> Uni
 // ------------------------------------------------------------------ the pages
 
 /**
- * Look, for the whole phone (docs/PLAN_SETTINGS_V2.md, "Look, calmer"): the theme as cards (home as it looked in each, once
- * the settings have seen it), the colours as one choice with the palette under it, light and dark; fonts, sizes and the
- * palette's finer points a row away ([LookSubPage]); the settings' own theme last. A part's own theme is on its page. All of
- * it waits for Apply.
+ * Look, for the whole phone (docs/SETTINGS_NAVIGATION.md): what most people change in sight (the theme as cards, home as it
+ * looked in each once the settings have seen it; light and dark; the colours as one choice), the rest folded under two rows
+ * that say what they hold: More (fonts and size a page away, the settings' own theme) and Advanced (the palette's style, how
+ * colourful it is, each palette's own colour; quieter while the theme's own colours are chosen). A part's own theme is on
+ * its page. All of it waits for Apply.
  */
 @Composable
 private fun LookPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val draft = LocalDraft.current
     val look = LocalLook.current
+    val ctx = LocalContext.current
     val themes = remember(look.version, SettingsPrefs.developer, SettingsPrefs.testPresets) { offeredThemes(draft) }
     Group("Theme", "Every part follows it, unless one has a theme of its own (on that part's page).") {
         ThemeCards(themes, draft)
+    }
+    Group("Light & dark") {
+        Box(Modifier.padding(look.dp(SettingsTokens.ROW_PADDING))) {
+            ChoiceChips(APPEARANCES, Appearance.Mode.entries.indexOf(draft.appearanceMode())) {
+                draft.chooseAppearance(Appearance.Mode.entries[it])
+            }
+        }
     }
     // Whether the colour of your own is being changed (its editor open under it).
     val editing = remember { mutableStateOf<Char?>(null) }
@@ -1408,36 +1501,48 @@ private fun LookPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
         ColourChoiceRow(draft, editing)
         Reveal(draft.wallpaperColors() && draft.seedColor() != null) { SeedRow(draft, editing) }
         ColourEditor(draft, editing)
-        Reveal(draft.wallpaperColors()) {
-            Column {
-                PaletteRow(draft, null)
-                PushRow("Adjust colours", "Their style, how colourful, each palette's own colour", Sub.COLOURS, push, lit)
-            }
-        }
     }
-    Group("Light & dark") {
-        Box(Modifier.padding(look.dp(SettingsTokens.ROW_PADDING))) {
-            ChoiceChips(Appearance.Mode.entries.map { it.title }, Appearance.Mode.entries.indexOf(draft.appearanceMode())) {
-                draft.chooseAppearance(Appearance.Mode.entries[it])
-            }
-        }
+    // (Derived: a slider in Size changes the draft at every step; the dots change far more rarely.)
+    val moreChanged by remember(draft, look.version) {
+        androidx.compose.runtime.derivedStateOf { changesOf(draft, ctx, Part.LOOK).any { it.id in MORE_CHANGES || it.id.startsWith("font:") } }
     }
+    val advancedChanged by remember(draft, look.version) {
+        androidx.compose.runtime.derivedStateOf { changesOf(draft, ctx, Part.LOOK).any { it.id in ADVANCED_CHANGES || it.id.startsWith("key:") } }
+    }
+    val settingsTheme = themes.size > 1 || draft.elementTheme(Element.SETTINGS) != null
+    // Which palette's colour the editor under the palette is changing (null: none).
+    val keyEditing = remember { mutableStateOf<Char?>(null) }
     Group(null) {
-        val text = fontName(draft.font("sys.font.text"))
-        val titles = fontName(draft.font("sys.font.display"))
-        // ("Inter · Serif" did not say which was which.)
-        PushRow("Fonts", if (text == titles) text else "$text, titles in $titles", Sub.FONTS, push, lit)
-        val ctx = LocalContext.current
-        PushRow("Size", if (draft.followsPhoneSize()) "Follows the phone"
-            else "Your own · ${(draft.size(ctx) * 100).roundToInt()} %, text ${(draft.text(ctx) * 100).roundToInt()} %", Sub.SIZE, push, lit)
-    }
-    if (themes.size > 1 || draft.elementTheme(Element.SETTINGS) != null) {
-        Group("Settings app", "The settings app's own theme, or the one Look has.") {
-            OwnThemeRow(Element.SETTINGS)
+        Fold(foldId(Part.LOOK, "more"), "More", if (settingsTheme) "Fonts, size, the settings app's theme" else "Fonts, size", moreChanged) {
+            val text = fontName(draft.font("sys.font.text"))
+            val titles = fontName(draft.font("sys.font.display"))
+            // ("Inter · Serif" did not say which was which.)
+            PushRow("Fonts", if (text == titles) text else "$text, titles in $titles", Sub.FONTS, push, lit)
+            PushRow("Size", if (draft.followsPhoneSize()) "Follows the phone"
+                else "Your own · ${(draft.size(ctx) * 100).roundToInt()} %, text ${(draft.text(ctx) * 100).roundToInt()} %", Sub.SIZE, push, lit)
+            if (settingsTheme) OwnThemeRow(Element.SETTINGS, SETTINGS_THEME)
+        }
+        // (Its rows are quieter while the theme's own colours are chosen, and the palette's line says what they are for: a
+        // line here saying so took three.)
+        Fold(foldId(Part.LOOK, "advanced"), "Advanced", "The palette's style, intensity and colours", advancedChanged) {
+            ColourStyleRow(draft)
+            IntensityRow(draft)
+            PaletteRow(draft, keyEditing)
+            ColourEditor(draft, keyEditing)
         }
     }
     ChangesRow(Part.LOOK, push, lit)
 }
+
+/** Light and dark as the chips name them. */
+private val APPEARANCES = Appearance.Mode.entries.map { it.title }
+
+/** The name of the settings app's own theme as Look's More and the search call it. */
+internal const val SETTINGS_THEME = "The settings app's theme"
+
+/** The changes ([changesOf]'s ids) in Look's More, and in its Advanced, besides the fonts' and the key colours'. */
+private val MORE_CHANGES = setOf("size", "theme:settings")
+private val ADVANCED_CHANGES = setOf("style", "intensity")
 
 /** A moment's page, for a page pushed as one. */
 @Composable
@@ -1445,21 +1550,11 @@ private fun MomentPageOf(st: Studio, s: Pushed) {
     if (s is MomentPage) MomentPageContent(st, s.moment)
 }
 
-/** Look's pages one level down: the palette's finer points, the fonts, the sizes. */
+/** Look's pages one level down: the fonts, the sizes. */
 @Composable
 private fun LookSubPage(s: Pushed) {
     val draft = LocalDraft.current
     when (s) {
-        Sub.COLOURS -> {
-            // Which palette's colour the editor under the palette is changing (null: none).
-            val editing = remember { mutableStateOf<Char?>(null) }
-            Group(null, "Material You makes the palette from the wallpaper's main colour, or yours, in a style. Tap a colour to set it yourself.") {
-                ColourStyleRow(draft)
-                IntensityRow(draft)
-                PaletteRow(draft, editing)
-                ColourEditor(draft, editing)
-            }
-        }
         Sub.FONTS -> Group(null, "Google fonts are downloaded the first time they are used, then work offline.") {
             FontRow("Text", "sys.font.text", draft)
             FontRow("Titles", "sys.font.display", draft)
@@ -1477,7 +1572,7 @@ private fun LookSubPage(s: Pushed) {
 
 /**
  * The palette's palettes (Material You's roles in this appearance), as the draft would make them. With [editing], a tap on
- * one opens the editor on its own colour (and rings it); without, they only show.
+ * one opens the editor on its own colour (and rings it), as the line under them says; without, they only show.
  */
 @Composable
 private fun PaletteRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>?) {
@@ -1497,26 +1592,34 @@ private fun PaletteRow(draft: Draft, editing: androidx.compose.runtime.MutableSt
     val first = remember { counter == null || counter.n++ == 0 }
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val swatch = 34f * look.unit
-    Row(Modifier.fillMaxWidth().drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
-        .padding(horizontal = pad, vertical = look.dp(12f * look.unit)), horizontalArrangement = Arrangement.SpaceBetween) {
-        for ((target, name, p) in roles) Column(horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = if (editing == null) Modifier else Modifier.pointerInput(p) { rowTap({}) { editing.value = if (editing.value == p) null else p } }) {
-            val c by androidx.compose.animation.animateColorAsState(target, look.motion(MotionTokens.APPEAR_FADE), label = "swatch")
-            // Ringed while it is the one being changed; a dot under one the user set themselves.
-            val ring by animateFloatAsState(if (editing?.value == p) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "ring")
-            val own by animateFloatAsState(if (draft.keyColor(p) != null) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "own")
-            Canvas(Modifier.size(look.dp(swatch))) {
-                // Off: quieter and a little smaller (the colours are not in use).
-                val s = 0.82f + 0.18f * k - 0.1f * ring
-                drawCircle(c.copy(alpha = 0.3f + 0.7f * k), radius = this.size.minDimension / 2f * s)
-                // (Its rim in the separators' colour: a black one vanished in dark, and the surface's swatch with it.)
-                drawCircle(separator, radius = this.size.minDimension / 2f * s, style = Stroke(1f * look.unit))
-                if (ring > 0.001f) drawCircle(accent.copy(alpha = accent.alpha * ring), radius = this.size.minDimension / 2f - 1.2f * look.unit, style = Stroke(2.4f * look.unit))
-                if (own > 0.001f) drawCircle(accent.copy(alpha = accent.alpha * own), radius = 2.5f * look.unit,
-                    center = Offset(this.size.width / 2f, this.size.height + 0f))
+    Column(Modifier.fillMaxWidth().drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .anchor("Palette")
+        .padding(horizontal = pad, vertical = look.dp(12f * look.unit))) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            for ((target, name, p) in roles) Column(horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = if (editing == null) Modifier else Modifier.pointerInput(p) { rowTap({}) { editing.value = if (editing.value == p) null else p } }) {
+                val c by androidx.compose.animation.animateColorAsState(target, look.motion(MotionTokens.APPEAR_FADE), label = "swatch")
+                // Ringed while it is the one being changed; a dot under one the user set themselves.
+                val ring by animateFloatAsState(if (editing?.value == p) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "ring")
+                val own by animateFloatAsState(if (draft.keyColor(p) != null) 1f else 0f, look.motion(MotionTokens.CC_TOGGLE), label = "own")
+                Canvas(Modifier.size(look.dp(swatch))) {
+                    // Off: quieter and a little smaller (the colours are not in use).
+                    val s = 0.82f + 0.18f * k - 0.1f * ring
+                    drawCircle(c.copy(alpha = 0.3f + 0.7f * k), radius = this.size.minDimension / 2f * s)
+                    // (Its rim in the separators' colour: a black one vanished in dark, and the surface's swatch with it.)
+                    drawCircle(separator, radius = this.size.minDimension / 2f * s, style = Stroke(1f * look.unit))
+                    if (ring > 0.001f) drawCircle(accent.copy(alpha = accent.alpha * ring), radius = this.size.minDimension / 2f - 1.2f * look.unit, style = Stroke(2.4f * look.unit))
+                    if (own > 0.001f) drawCircle(accent.copy(alpha = accent.alpha * own), radius = 2.5f * look.unit,
+                        center = Offset(this.size.width / 2f, this.size.height + 0f))
+                }
+                Spacer(Modifier.height(look.dp(5f * look.unit)))
+                BasicText(name, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)), maxLines = 1)
             }
-            Spacer(Modifier.height(look.dp(5f * look.unit)))
-            BasicText(name, style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)), maxLines = 1)
+        }
+        if (editing != null) {
+            Spacer(Modifier.height(look.dp(10f * look.unit)))
+            BasicText("Made from the wallpaper's main colour, or yours, in the style above. Tap a colour to set it yourself.",
+                style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)))
         }
     }
 }
@@ -1526,20 +1629,14 @@ private const val SEED = 'X'
 
 /**
  * Where the colours come from, one choice: the theme's own, the wallpaper's (Material You), or a colour of the user's own
- * (made into a palette the same way; its editor opens under it as it is chosen).
+ * (made into a palette the same way; its editor opens under it as it is chosen). [title]: its name over the chips where no
+ * heading names it (the start page).
  */
 @Composable
-private fun ColourChoiceRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>) {
-    val look = LocalLook.current
-    val counter = LocalRowCounter.current
-    val first = remember { counter == null || counter.n++ == 0 }
-    val pad = look.dp(SettingsTokens.ROW_PADDING)
-    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+private fun ColourChoiceRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>, title: String? = null) {
     val chosen = if (!draft.wallpaperColors()) 0 else if (draft.seedColor() == null) 1 else 2
-    Box(Modifier.fillMaxWidth()
-        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
-        .padding(pad)) {
-        ChoiceChips(listOf("The theme's", "The wallpaper's", "Your own"), chosen) { i ->
+    ChipsRow(title) {
+        ChoiceChips(COLOUR_SOURCES, chosen) { i ->
             when (i) {
                 0 -> { draft.chooseColors(false); editing.value = null }
                 1 -> { draft.chooseColors(true); draft.chooseSeed(null); editing.value = null }
@@ -1550,6 +1647,33 @@ private fun ColourChoiceRow(draft: Draft, editing: androidx.compose.runtime.Muta
                 }
             }
         }
+    }
+}
+
+/** Where the colours come from, as the chips name it. */
+private val COLOUR_SOURCES = listOf("The theme's", "The wallpaper's", "Your own")
+
+/**
+ * A row of chips in a group: the hairline above it (but the first's), and [title] over the chips where no heading names
+ * them (the start page's quick choices), which the search lights it by.
+ */
+@Composable
+private fun ChipsRow(title: String?, chips: @Composable () -> Unit) {
+    val look = LocalLook.current
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .then(if (title == null) Modifier.padding(pad)
+            // (The chips' own touch height leaves room under them: a row's padding there too made the three a tall block.)
+            else Modifier.anchor(title).padding(start = pad, end = pad, top = look.dp(10f * look.unit), bottom = look.dp(4f * look.unit)))) {
+        if (title != null) {
+            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
+            Spacer(Modifier.height(look.dp(4f * look.unit)))
+        }
+        chips()
     }
 }
 
@@ -1706,6 +1830,7 @@ private fun ColourStyleRow(draft: Draft) {
     val styles = dev.launcher.app.design.MaterialYou.Style.entries
     Column(Modifier.fillMaxWidth()
         .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .anchor("Style")
         .graphicsLayer { alpha = dim }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         BasicText("Style", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
@@ -1749,6 +1874,7 @@ private fun IntensityRow(draft: Draft) {
     val k = draft.colorIntensity()
     Column(Modifier.fillMaxWidth()
         .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .anchor("Intensity")
         .graphicsLayer { alpha = dim }
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -2000,9 +2126,12 @@ private fun ThemeThumb(id: String) {
     }
 }
 
-/** A part's own theme (docs/PLAN_LAYOUTS_THEMES.md, a theme per element): it follows Look's, or has any theme of its own. */
+/**
+ * A part's own theme (docs/PLAN_LAYOUTS_THEMES.md, a theme per element): it follows Look's, or has any theme of its own.
+ * [title]: its name above the chips (where no group heading names it: Look's More).
+ */
 @Composable
-private fun OwnThemeRow(e: Element) {
+private fun OwnThemeRow(e: Element, title: String? = null) {
     val look = LocalLook.current
     val draft = LocalDraft.current
     val themes = remember(look.version, SettingsPrefs.developer, SettingsPrefs.testPresets) { offeredThemes(draft) }
@@ -2011,10 +2140,15 @@ private fun OwnThemeRow(e: Element) {
     val pad = look.dp(SettingsTokens.ROW_PADDING)
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
     val own = draft.elementTheme(e)
-    Box(Modifier.fillMaxWidth()
+    Column(Modifier.fillMaxWidth()
         .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .then(if (title != null) Modifier.anchor(title) else Modifier)
         .padding(pad)) {
-        val names = listOf("Follows Look") + themes.map { it.name }
+        if (title != null) {
+            BasicText(title, style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
+            Spacer(Modifier.height(look.dp(8f * look.unit)))
+        }
+        val names = remember(themes) { listOf("Follows Look") + themes.map { it.name } }
         val at = if (own == null) 0 else 1 + themes.indexOfFirst { it.id == own }.coerceAtLeast(0)
         ChoiceChips(names, at) { i -> draft.chooseElement(e, if (i == 0) null else themes[i - 1].id) }
     }
@@ -2285,10 +2419,11 @@ private fun PartPage(part: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) {
     if (ownTheme) Group("Look", "It follows the theme chosen in Look, or has one of its own.") {
         OwnThemeRow(e)
     }
-    // Its moments (docs/PLAN_SETTINGS_V2.md, V2): each a row with its feel, pushing its page.
+    // Its moments (docs/PLAN_SETTINGS_V2.md, V2), folded under one row that names them (docs/SETTINGS_NAVIGATION.md): each a
+    // row with its feel, pushing its page.
     val moments = remember(part) { momentsOf(part) }
-    if (moments.isNotEmpty()) Group("Motion", "Each moment's speed and bounce on top of the preset's (Motion), and every animation in it.") {
-        for (m in moments) androidx.compose.runtime.key(m.id) { MomentRow(m, part, push, lit) }
+    if (moments.isNotEmpty()) Group(null, "Each moment's speed and bounce on top of the preset's (Motion), and every animation in it.") {
+        MomentsFold(foldId(part, "motion"), "Motion", moments, part, push, lit)
     }
     ChangesRow(part, push, lit)
 }

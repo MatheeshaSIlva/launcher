@@ -5,7 +5,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The settings' structure B (docs/PLAN_SETTINGS_V2.md): what the tiles hold, and the tiles' scroll. */
+/** The settings' structure B (docs/PLAN_SETTINGS_V2.md, docs/SETTINGS_NAVIGATION.md): what the tiles hold, and the tiles' scroll. */
 class PartsTest {
     @Test fun everyPartOfThePhoneHasOneTile() {
         // The settings themselves are no part of the phone: their look and motion are under Look and Motion.
@@ -14,13 +14,25 @@ class PartsTest {
         }
     }
 
-    @Test fun theWholePhoneFirstPhoneLast() {
+    @Test fun thePartsFirstThenTheirStyleThenSystem() {
         val tiles = Part.entries.filter { it.tile }
-        assertEquals(listOf(Part.LOOK, Part.MOTION), tiles.take(2))
-        assertEquals(Part.PHONE, tiles.last())
+        // The parts of the phone, then Look and Motion, System last.
+        assertTrue(tiles.dropLast(3).all { it.element != null })
+        assertEquals(listOf(Part.LOOK, Part.MOTION, Part.PHONE), tiles.takeLast(3))
         for (p in listOf(Part.LOOK, Part.MOTION, Part.PHONE)) assertEquals("$p", null, p.element)
+        assertEquals("System", Part.PHONE.title)
         // Your changes is a page with no tile.
         assertEquals(listOf(Part.CHANGES), Part.entries.filter { !it.tile })
+    }
+
+    @Test fun theStartPagesGroupsHoldEveryTileInTheirOrder() {
+        // Every tile once, in Part's order: the scenes' acts run down the column by it (TileArt).
+        assertEquals(Part.entries.filter { it.tile }, TILE_GROUPS.flatMap { it.second })
+    }
+
+    @Test fun aFoldIsNamedByItsPageAndWhatItHolds() {
+        assertEquals("LOOK/advanced", foldId(Part.LOOK, "advanced"))
+        assertEquals("HOME/motion", foldId(Part.HOME, "motion"))
     }
 
     @Test fun theSearchFindsByNameAndByWhatItDoes() {

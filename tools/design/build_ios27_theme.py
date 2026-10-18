@@ -215,6 +215,7 @@ for _k, (_l, _d, _what) in {
     'comp.settings.button.fill': ('@surface_container_highest/80', '@surface_container_highest/80', "settings' round button"),
     'comp.settings.chip.fill': ('@surface_container_highest', '@surface_container_highest', "settings' chip"),
     'comp.settings.field.fill': ('@surface_container_highest', '@surface_container_highest', "settings' search field"),
+    'comp.settings.fold.fill': ('@on_surface_variant/4', '@on_surface_variant/9', "settings' fold (half the quaternary fill)"),
 }.items():
     MATERIAL_YOU[_k] = ({'color': _l} if _l == _d else {'light': _l, 'dark': _d}) | {'src': _MY_SRC.format(what=_what, roles=_l if _l == _d else _l + ' | ' + _d)}
 
@@ -948,6 +949,7 @@ COMPONENT_SEEDS = {
     'comp.settings.button.rim': {'light': '#ffffffe6', 'dark': '#ffffff1f', 'src': "judged:its bright rim"},
     'comp.settings.button.symbol-color': {'ref': 'sys.color.label.primary', 'src': "measured:iOS 27 Settings: a black chevron (white in dark)"},
     'comp.settings.button.size': {'pt': 44, 'src': "measured:iOS 27 Settings: the round back button, 44 pt at 16, 62"},
+    'comp.settings.fold.fill': {'light': '#7474800a', 'dark': '#76768017', 'src': "judged:half of iOS's quaternary fill (for large areas holding complex content, as expanded table cells; #74748014 | #7676802e) under a fold's rows (docs/SETTINGS_NAVIGATION.md): the whole one came out as the sheet's grey, and a fold's last rows looked outside their group"},
     'comp.settings.group.fill': {'ref': 'ref.color.backgrounds-grouped.secondary-elevated', 'src': "measured:iOS 27 Settings: solid white groups, no glass; on the sheet (an elevated surface) iOS's elevated cells: #2C2C2E in dark (the sheet's #1C1C1E hid them)"},
     'comp.settings.group.corner': {'ref': 'component.card.corner', 'src': "judged:the theme's card corner"},
     'comp.settings.section': {'ref': 'component.section.title', 'src': "judged:the theme's section heading (sentence case, iOS 27)"},

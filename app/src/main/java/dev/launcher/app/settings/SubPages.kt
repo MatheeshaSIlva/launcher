@@ -32,10 +32,9 @@ internal sealed interface Pushed {
 
 /**
  * Pages one level below a part's own page (docs/PLAN_SETTINGS_V2.md, "Look, calmer" and "Phone, calmer"): what most people
- * never change waits there, a row away.
+ * never change waits there, a row away (Look's from its More, docs/SETTINGS_NAVIGATION.md).
  */
 internal enum class Sub(override val part: Part, override val title: String) : Pushed {
-    COLOURS(Part.LOOK, "Adjust colours"),
     FONTS(Part.LOOK, "Fonts"),
     SIZE(Part.LOOK, "Size"),
     DEVELOPER(Part.PHONE, "Developer"),

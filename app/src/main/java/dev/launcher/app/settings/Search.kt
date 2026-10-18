@@ -37,13 +37,13 @@ import kotlinx.coroutines.flow.first
 
 /**
  * One setting as the search finds it: its name, where it is in words, more words it answers to ([words]; [about]: what it
- * does, counting less), and where it lives (a part's page, a page pushed over it, the row's name there, and a moment whose
- * Every detail it is in). [rank]: settings first (0), then moments (1), then single animations (2).
+ * does, counting less), and where it lives (a part's page, a page pushed over it, the row's name there, a moment whose
+ * Every detail it is in, a fold it waits in: [foldId]). [rank]: settings first (0), then moments (1), then single animations (2).
  */
 internal class SearchEntry(
     val title: String, val place: String, val words: String, val part: Part,
     val pushed: Pushed? = null, val anchor: String = title, val fallback: String? = null, val detail: Moment? = null,
-    val about: String = "", val rank: Int = 0,
+    val about: String = "", val rank: Int = 0, val fold: String? = null,
 ) {
     /** Unique among the entries (the results' keys). */
     val id: String = part.name + "/" + (pushed?.key ?: "") + "/" + anchor + "/" + title
@@ -67,28 +67,34 @@ internal fun settingsIndex(draft: Draft, developer: Boolean): List<SearchEntry> 
 
 private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry> = buildList {
     fun add(title: String, place: String, words: String, part: Part, pushed: Pushed? = null, anchor: String = title,
-            fallback: String? = null, detail: Moment? = null, about: String = "", rank: Int = 0) =
-        add(SearchEntry(title, place, words, part, pushed, anchor, fallback, detail, about, rank))
+            fallback: String? = null, detail: Moment? = null, about: String = "", rank: Int = 0, fold: String? = null) =
+        add(SearchEntry(title, place, words, part, pushed, anchor, fallback, detail, about, rank, fold))
 
-    // Look.
+    // Look: the theme, light and dark and the colours in sight, the rest in its More and its Advanced.
+    val more = foldId(Part.LOOK, "more")
+    val advanced = foldId(Part.LOOK, "advanced")
     add("Theme", "Look", "theme themes look style skin design ios graphite appearance", Part.LOOK)
     add("Colours", "Look", "colors colours color colour material you wallpaper palette accent tint dynamic theme's own", Part.LOOK)
     add("Your colour", "Look › Colours", "your own custom color colour seed accent pick", Part.LOOK, fallback = "Colours")
-    add("Adjust colours", "Look › Colours", "adjust colors colours style intensity palette primary secondary tertiary vibrant expressive tonal",
-        Part.LOOK, fallback = "Colours")
     add("Light & dark", "Look", "light dark mode night appearance automatic black white", Part.LOOK)
-    add("Fonts", "Look", "fonts font typeface typography text titles inter google", Part.LOOK)
-    add("Size", "Look", "size zoom scale display bigger smaller large small text size", Part.LOOK)
-    if (offersOwnTheme(draft, dev.launcher.app.layout.Element.SETTINGS)) add("Settings app", "Look", "settings app own theme this these", Part.LOOK)
-    add("Style", "Look › Adjust colours", "style tonal vibrant expressive neutral monochrome material you colors colours", Part.LOOK, Sub.COLOURS)
-    add("Intensity", "Look › Adjust colours", "intensity colourful colorful saturation chroma vivid grey gray", Part.LOOK, Sub.COLOURS)
+    add("More", "Look", "more fonts size settings app theme", Part.LOOK)
+    add("Fonts", "Look › More", "fonts font typeface typography text titles inter google", Part.LOOK, fold = more)
+    add("Size", "Look › More", "size zoom scale display bigger smaller large small text size", Part.LOOK, fold = more)
+    if (offersOwnTheme(draft, dev.launcher.app.layout.Element.SETTINGS)) {
+        add(SETTINGS_THEME, "Look › More", "settings app own theme this these", Part.LOOK, fold = more)
+    }
+    add("Advanced", "Look", "advanced adjust colors colours style intensity palette primary secondary tertiary key", Part.LOOK)
+    add("Style", "Look › Advanced", "style tonal vibrant expressive neutral monochrome material you colors colours", Part.LOOK, fold = advanced)
+    add("Intensity", "Look › Advanced", "intensity colourful colorful saturation chroma vivid grey gray", Part.LOOK, fold = advanced)
+    add("The palette's colours", "Look › Advanced", "palette primary secondary tertiary surface neutral key colors colours own",
+        Part.LOOK, anchor = "Palette", fold = advanced)
     add("Text", "Look › Fonts", "text font body typeface", Part.LOOK, Sub.FONTS)
     add("Titles", "Look › Fonts", "titles headings display font typeface", Part.LOOK, Sub.FONTS)
     add("Follow the phone's display and font size", "Look › Size", "follow phone display size font size adaptive", Part.LOOK, Sub.SIZE)
     add("Everything", "Look › Size", "size zoom scale everything bigger smaller", Part.LOOK, Sub.SIZE)
     add("Text size", "Look › Size", "text font size bigger smaller", Part.LOOK, Sub.SIZE, anchor = "Text")
 
-    // Motion.
+    // Motion: each part's moments folded on its page (the moments everywhere on Motion's).
     add("Presets", "Motion", "presets preset animation animations motion ios material style feel", Part.MOTION)
     add("Speed", "Motion › Feel", "speed fast faster slow slower quick snappy relaxed animation animations duration feel", Part.MOTION)
     add("Bounce", "Motion › Feel", "bounce bouncy spring springy overshoot lively still feel", Part.MOTION)
@@ -96,7 +102,9 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
         val host = hostOf(m)
         val page = MomentPage(m, host)
         val at = host.title + " › " + m.title
-        add(m.title, host.title + " › Motion", "motion animation animations moment", host, about = m.description, rank = 1)
+        val everywhere = m.part == MomentPart.EVERYWHERE
+        add(m.title, host.title + (if (everywhere) " › Everywhere" else " › Motion"), "motion animation animations moment", host,
+            about = m.description, rank = 1, fold = if (everywhere) foldId(Part.MOTION, m.part.name) else foldId(host, "motion"))
         // (A moment's own settings rank with the moments; they answer to its name through their place.)
         add("Speed", at, "speed fast faster slow slower quick snappy relaxed", host, page, rank = 1)
         add("Bounce", at, "bounce bouncy spring overshoot lively still", host, page, rank = 1)
@@ -111,11 +119,11 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
             }
         }
         m.character?.let { c -> add(c.title, at, "${c.low} ${c.high}", host, page, rank = 1) }
-        add("Every detail", at, "every detail animations springs curves", host, page, rank = 1)
+        add("Advanced", at, "advanced every detail each animation animations springs curves", host, page, rank = 1)
         for (k in m.roles) {
             val r = MotionRoles.find(k)?.second ?: continue
             // (An animation's row is found by its key: a moment's slider may share its name, Wiggle.)
-            add(r.title, "$at › Every detail", "animation spring curve", host, page, anchor = roleAnchor(k), detail = m, about = r.description, rank = 2)
+            add(r.title, "$at › Advanced", "animation spring curve", host, page, anchor = roleAnchor(k), detail = m, about = r.description, rank = 2)
         }
     }
 
@@ -133,15 +141,15 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
         if (offersOwnTheme(draft, e)) add("A theme of its own", p.title + " › Look", "theme own look follows", p, anchor = "Look")
     }
 
-    // Phone.
-    add("Shizuku", "Phone", "shizuku adb wireless debugging connect permission status", Part.PHONE)
-    add("Check for updates", "Phone › Updates", "updates update upgrade new version download install", Part.PHONE)
-    add("Restore system", "Phone › Safety", "restore safety status bar missing animations broken fix", Part.PHONE)
-    add("Choose a different home app", "Phone › Safety", "default home launcher app change", Part.PHONE)
-    add("Build", "Phone › About", "about version build number developer", Part.PHONE)
+    // System (Phone until 2026-10-19: it still answers to the word).
+    add("Shizuku", "System", "shizuku adb wireless debugging connect permission status system phone", Part.PHONE)
+    add("Check for updates", "System › Updates", "updates update upgrade new version download install system phone", Part.PHONE)
+    add("Restore system", "System › Safety", "restore safety status bar missing animations broken fix phone", Part.PHONE)
+    add("Choose a different home app", "System › Safety", "default home launcher app change system phone", Part.PHONE)
+    add("Build", "System › About", "about version build number developer system phone", Part.PHONE)
     if (developer) {
-        add("Developer tools", "Phone › Developer", "developer tools tests log debug", Part.PHONE)
-        add("Every value of the theme", "Phone › Developer", "token editor tokens expert values theme", Part.PHONE)
+        add("Developer tools", "System › Developer", "developer tools tests log debug", Part.PHONE)
+        add("Every value of the theme", "System › Developer", "token editor tokens expert values theme", Part.PHONE)
         val dev = Sub.DEVELOPER
         for ((t, w) in listOf(
             "Gesture navigation" to "gestures navigation strip cards", "Our status bar" to "status bar stock hide",
@@ -153,7 +161,7 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
             "Test: stop the shell service" to "stop shell service", "Reset home layout" to "reset home layout pages",
             "Animation scales" to "animation scales developer options", "Install the newest again" to "install update again",
             "Copy log" to "copy log clipboard",
-        )) add(t, "Phone › Developer", w, Part.PHONE, dev)
+        )) add(t, "System › Developer", w, Part.PHONE, dev)
     }
 }
 
@@ -252,7 +260,8 @@ internal fun Modifier.viewport(st: Studio, page: String): Modifier = onPlaced { 
 
 /**
  * Takes the settings to [e]: its part's page opens (growing from [from], the result's row, unless it is open), the page it
- * is on is pushed, its moment's Every detail opens, the page scrolls the row into sight and the row lights up and fades.
+ * is on is pushed, the fold it waits in or its moment's Every detail opens, the page scrolls the row into sight and the row
+ * lights up and fades.
  */
 internal suspend fun jumpTo(st: Studio, e: SearchEntry, from: Rect?, unit: Float, open: (Part) -> Unit) {
     val part = e.part
@@ -281,6 +290,11 @@ internal suspend fun jumpTo(st: Studio, e: SearchEntry, from: Rect?, unit: Float
         // Built at its opening and open two frames later: its rows unfold from then on.
         kotlinx.coroutines.withTimeoutOrNull(1500) { androidx.compose.runtime.snapshotFlow { st.detailShown == m.id }.first { it } }
     }
+    e.fold?.let { f ->
+        // (Left open from now on, as a fold opened by hand.)
+        SettingsPrefs.setFold(f, true)
+        kotlinx.coroutines.withTimeoutOrNull(1500) { androidx.compose.runtime.snapshotFlow { f in st.foldsShown }.first { it } }
+    }
     // What opened has finished unfolding (Every detail grows in): until then the page's scroll ends short of its rows, and
     // a scroll there stopped short.
     var stable = 0
@@ -292,13 +306,16 @@ internal suspend fun jumpTo(st: Studio, e: SearchEntry, from: Rect?, unit: Float
         lastMax = max
         if (stable >= 3) break
     }
-    val key = listOfNotNull(e.anchor, e.fallback).map { "$page|$it" }.firstOrNull { st.anchors[it]?.isAttached == true } ?: return
+    val key = listOfNotNull(e.anchor, e.fallback).map { "$page|$it" }.firstOrNull { st.anchors[it]?.isAttached == true }
+    dev.launcher.app.AppLog.log("[settings] search: ${e.title} (${e.place})" + if (key == null) ", its row not found" else "")
+    if (key == null) return
     val row = st.anchors[key] ?: return
     val vp = st.viewports[page]?.takeIf { it.isAttached }
     if (vp != null && scroll != null) {
         val margin = LIT_MARGIN_PT * unit
         val dy = row.positionInWindow().y - vp.positionInWindow().y
-        val target = scroll.offset + dy - margin
+        // (As far as the page goes: a row near its end, the page already there, waited out a scroll to nowhere before it lit.)
+        val target = (scroll.offset + dy - margin).coerceIn(scroll.scroller.minPos, scroll.scroller.maxPos)
         if (kotlin.math.abs(target - scroll.offset) > 4f && (dy < margin || dy + row.size.height > vp.size.height - margin)) {
             scroll.scroller.animateTo(target, dev.launcher.app.motion.Motion.role(MotionTokens.INDEX_SCROLL), 0f)
             // (The scroller is no snapshot state: watched frame by frame, a flow of it never saw it come to rest.)

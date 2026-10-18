@@ -2681,3 +2681,14 @@ the wallpaper's:
   second screenshot), and after a restart with the log cleared, 150 ms after our bar came (from the display); at the stop
   One UI dropped its chip at .432 and our capsule went at .843. The stop's frames were not seen (the recording was deleted
   unviewed: something below the bar changed in its two minutes).
+
+## Settings navigation: three layers, folds, the quick choices (2026-10-19, emulator; S24 not checked yet)
+
+Matheesha on the research (`docs/SETTINGS_NAVIGATION.md`): "looks good". Built as proposed: every page shows what most
+people change, the rest waits in folds that name what they hold (More, Advanced; `settings/Fold.kt`, left as they were in
+the next session); the start page has the quick choices (light and dark, the colours' source, the animation preset) and
+the tiles under Your phone, Style and System (Phone renamed); Look keeps the theme, light and dark and the colours in
+sight, Motion its presets and feel with the moments folded by part, a part's page its moments under one Motion row, a
+moment's Every detail is its Advanced. Rows in sight: start page 13, Look 7 (was 10), Motion 11 (was 28), Home 10 (was
+15). The search opens the fold a row waits in; it also no longer waits out a scroll to nowhere before lighting a row near
+a page's end. Details and what was checked: `docs/SETTINGS_NAVIGATION.md`, "Decided and built".

@@ -5,6 +5,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
@@ -81,8 +82,8 @@ import kotlinx.coroutines.launch
 /**
  * A moment's page (docs/PLAN_SETTINGS_V2.md, V2), pushed over Motion or over the page of the part it belongs to; the picture
  * above plays the moment. Its own Speed and Bounce on top of the preset's ("As the preset" in the middle), its character
- * where it has one ("How far home steps back"), then Every detail: its animations in the order they play, each with its
- * editor, folded away until asked for. Everything waits for Apply.
+ * where it has one ("How far home steps back"), then Every detail (its Advanced): its animations in the order they play,
+ * each with its editor, folded away until asked for. Everything waits for Apply.
  */
 @Composable
 internal fun MomentPageContent(st: Studio, m: Moment) {
@@ -209,8 +210,9 @@ private fun setCharacter(d: Draft, id: String, c: dev.launcher.app.motion.Charac
 }
 
 /**
- * Every detail: a moment's animations in the order they play (curves, then the numbers that shape them), each with its editor
- * in place (the picture plays the one open), folded away under one row until asked for; built when first opened.
+ * Every detail, the moment's Advanced (docs/SETTINGS_NAVIGATION.md): a moment's animations in the order they play (curves,
+ * then the numbers that shape them), each with its editor in place (the picture plays the one open), folded away under one
+ * row until asked for; built when first opened.
  */
 @Composable
 private fun EveryDetail(st: Studio, m: Moment) {
@@ -236,7 +238,7 @@ private fun EveryDetail(st: Studio, m: Moment) {
     val curves = remember(roles) { roles.filter { it.key in MotionTokens.CURVES } }
     val numbers = remember(roles) { roles.filter { it.key in MotionTokens.NUMBERS } }
     Group(null) {
-        BaseRow("Every detail", "${roles.size} animation" + (if (roles.size == 1) "" else "s") + ", in the order they play", {
+        BaseRow("Advanced", "${if (roles.size == 1) "Its animation" else "Its ${roles.size} animations, in the order they play"}, each with its curve", {
             if (wanted) { st.detailFor = null; st.motionRole = null }
             else st.detailFor = m.id
         }, held = wanted && !ready) {
@@ -245,8 +247,10 @@ private fun EveryDetail(st: Studio, m: Moment) {
         }
         if (built) {
             val kit = rememberRowKit()
+            // (On the folds' fill, as every fold's rows: Fold.)
+            val fill = look.color(SettingsTokens.FOLD_FILL)
             Reveal(open) {
-                Column {
+                Column(Modifier.background(fill)) {
                     for (r in curves) androidx.compose.runtime.key(r.key) { RoleRow(st, r, kit) }
                     for (r in numbers) androidx.compose.runtime.key(r.key) { RoleRow(st, r, kit) }
                 }
@@ -1170,9 +1174,10 @@ internal fun MotionSampleLoop(st: Studio) {
 }
 
 /**
- * Motion (docs/PLAN_SETTINGS_V2.md, V2): the presets as cards, each playing a small app opening in its own way (the picture
- * of home above plays the chosen one), the whole preset's feel (Speed, Bounce), and the moments by part, each a row with its
- * feel in words that pushes its page. Waits for Apply like the rest.
+ * Motion (docs/PLAN_SETTINGS_V2.md, V2; docs/SETTINGS_NAVIGATION.md): the presets as cards, each playing a small app opening
+ * in its own way (the picture of home above plays the chosen one), the whole preset's feel (Speed, Bounce), and the moments
+ * by part, each part folded under a row naming its moments, each moment a row with its feel in words that pushes its page.
+ * Waits for Apply like the rest.
  */
 @Composable
 internal fun MotionPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
@@ -1181,9 +1186,7 @@ internal fun MotionPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val st = LocalStudio.current
     val all = remember(look.version) { Design.motionPresets() }
     val chosen = draft.motionId()
-    // Presets made for testing show when Developer asks for them, or while one is in use; the default first, tests last.
-    val presets = all.filter { !it.test || (SettingsPrefs.developer && SettingsPrefs.testPresets) || it.id == chosen || it.id == Design.motionPresetId }
-        .sortedWith(compareBy({ it.test }, { it.id != Design.DEFAULT_MOTION }, { it.name }))
+    val presets = offeredPresets(all, chosen)
     // The cards' apps run on one clock while the page is open and at rest (read in drawing only).
     val clock = remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
     LaunchedEffect(st) {
@@ -1204,15 +1207,41 @@ internal fun MotionPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
         PresetCards(presets, draft, clock)
     }
     Feel(draft)
-    for (part in MOMENT_PARTS) {
-        Group(part.second, if (part.first == dev.launcher.app.motion.MomentPart.EVERYWHERE) "Each moment's speed and bounce on top of the preset's, and every animation in it." else null) {
-            for (m in Moments.of(part.first)) androidx.compose.runtime.key(m.id) { MomentRow(m, Part.MOTION, push, lit) }
+    Group("By part", "Each moment's speed and bounce on top of the preset's, and every animation in it.") {
+        for ((part, title) in MOMENT_PARTS) androidx.compose.runtime.key(part) {
+            MomentsFold(foldId(Part.MOTION, part.name), title, Moments.of(part), Part.MOTION, push, lit)
         }
     }
     ChangesRow(Part.MOTION, push, lit)
 }
 
-/** The moments' parts as Motion lists them, with their headings. */
+/**
+ * [moments] folded under one row, [title], that names them (Motion's parts, a part's Motion); a dot on it while one of them
+ * differs from the preset. Each moment a row that pushes its page over [host].
+ */
+@Composable
+internal fun MomentsFold(id: String, title: String, moments: List<Moment>, host: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) {
+    val draft = LocalDraft.current
+    val v = LocalLook.current.version
+    val names = remember(moments) { moments.joinToString(", ") { it.title } }
+    // (Derived: every step of a slider on a moment's page changes the draft; the dot changes far more rarely.)
+    val changed by remember(draft, moments, v) {
+        androidx.compose.runtime.derivedStateOf { moments.any { draft.momentChanges(draft.motionId(), it) > 0 } }
+    }
+    Fold(id, title, names, changed) {
+        for (m in moments) androidx.compose.runtime.key(m.id) { MomentRow(m, host, push, lit) }
+    }
+}
+
+/**
+ * The presets the settings offer of [all] ([chosen]: the draft's): those made for testing when Developer asks for them, or
+ * while one is in use; the default first, tests last.
+ */
+internal fun offeredPresets(all: List<Design.ThemeInfo>, chosen: String): List<Design.ThemeInfo> =
+    all.filter { !it.test || (SettingsPrefs.developer && SettingsPrefs.testPresets) || it.id == chosen || it.id == Design.motionPresetId }
+        .sortedWith(compareBy({ it.test }, { it.id != Design.DEFAULT_MOTION }, { it.name }))
+
+/** The moments' parts as Motion lists them, with their names. */
 private val MOMENT_PARTS = listOf(
     dev.launcher.app.motion.MomentPart.APPS to "Apps", dev.launcher.app.motion.MomentPart.HOME to "Home",
     dev.launcher.app.motion.MomentPart.LIBRARY to "App Library", dev.launcher.app.motion.MomentPart.SHADE to "Notifications & Control Center",

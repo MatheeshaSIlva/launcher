@@ -39,7 +39,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 // What you changed (docs/PLAN_SETTINGS_V2.md, V3): everything that differs from the theme or the animation preset, with
-// where it is, before and after, and Reset each. "N changes" at the top of a page leads to its own; the start page leads to
+// where it is, before and after, and Reset each. "N changes" at the foot of a page leads to its own; the start page leads to
 // them all. A Reset goes into the draft as any change does (it waits for Apply).
 
 /** One change: what and where, as the theme or preset has it and as you have it, and how to take it back. */
@@ -58,7 +58,7 @@ internal fun changesOf(d: Draft, ctx: android.content.Context, only: Part? = nul
         for ((k, name) in listOf("sys.font.text" to "Text font", "sys.font.display" to "Titles font")) {
             val own = (theme(k) as? Value.Choice)?.option ?: "inter"
             val now = d.font(k)
-            if (now != own) add("font:$k", name, "Look › Fonts", fontName(own), fontName(now), Part.LOOK) { d.chooseFont(k, own) }
+            if (now != own) add("font:$k", name, "Look › More › Fonts", fontName(own), fontName(now), Part.LOOK) { d.chooseFont(k, own) }
         }
         val ownWallpaper = (theme(Design.COLOR_SOURCE.name) as? Value.Choice)?.option == "wallpaper"
         if (d.wallpaperColors() != ownWallpaper) add("colours", "Colours", "Look", if (ownWallpaper) "The wallpaper's" else "The theme's",
@@ -66,23 +66,23 @@ internal fun changesOf(d: Draft, ctx: android.content.Context, only: Part? = nul
         val seed = d.seedColor()
         if (seed != null) add("seed", "Your colour", "Look › Colours", "The wallpaper's", Design.hexOf(seed).uppercase(), Part.LOOK) { d.chooseSeed(null) }
         val ownStyle = (theme(Design.COLOR_STYLE.name) as? Value.Choice)?.option ?: "system"
-        if (d.colorStyle().id != ownStyle) add("style", "Style", "Look › Adjust colours",
+        if (d.colorStyle().id != ownStyle) add("style", "Style", "Look › Advanced",
             dev.launcher.app.design.MaterialYou.Style.of(ownStyle).title, d.colorStyle().title, Part.LOOK) {
             d.chooseColorStyle(dev.launcher.app.design.MaterialYou.Style.of(ownStyle))
         }
         val ownIntensity = (theme(Design.COLOR_INTENSITY.name) as? Value.Number)?.v ?: 1f
-        if (abs(d.colorIntensity() - ownIntensity) > 0.005f) add("intensity", "Intensity", "Look › Adjust colours",
+        if (abs(d.colorIntensity() - ownIntensity) > 0.005f) add("intensity", "Intensity", "Look › Advanced",
             "${(ownIntensity * 100).roundToInt()} %", "${(d.colorIntensity() * 100).roundToInt()} %", Part.LOOK) { d.chooseColorIntensity(ownIntensity) }
         for ((p, name) in dev.launcher.app.design.MaterialYou.KEY_PALETTES) {
             val c = d.keyColor(p) ?: continue
-            add("key:$p", "$name colour", "Look › Adjust colours", "The style's", Design.hexOf(c).uppercase(), Part.LOOK) { d.chooseKey(p, null) }
+            add("key:$p", "$name colour", "Look › Advanced", "The style's", Design.hexOf(c).uppercase(), Part.LOOK) { d.chooseKey(p, null) }
         }
-        if (!d.followsPhoneSize()) add("size", "Size", "Look", "Follows the phone",
+        if (!d.followsPhoneSize()) add("size", "Size", "Look › More", "Follows the phone",
             "${(d.size(ctx) * 100).roundToInt()} %, text ${(d.text(ctx) * 100).roundToInt()} %", Part.LOOK) { d.chooseFollowsPhoneSize(true) }
         if (d.appearanceMode() != Appearance.Mode.AUTO) add("appearance", "Light & dark", "Look", Appearance.Mode.AUTO.title,
             d.appearanceMode().title, Part.LOOK) { d.chooseAppearance(Appearance.Mode.AUTO) }
         d.elementTheme(dev.launcher.app.layout.Element.SETTINGS)?.let { id ->
-            add("theme:settings", "Settings app's theme", "Look", "Follows Look", themeTitle(id), Part.LOOK) {
+            add("theme:settings", "Settings app's theme", "Look › More", "Follows Look", themeTitle(id), Part.LOOK) {
                 d.chooseElement(dev.launcher.app.layout.Element.SETTINGS, null)
             }
         }
@@ -153,7 +153,7 @@ internal fun changesOf(d: Draft, ctx: android.content.Context, only: Part? = nul
             if (!d.motionChanged(id, k)) continue
             val r = MotionRoles.find(k)?.second ?: continue
             val own = d.motionOwn(id, k) ?: continue
-            add("role:$k", r.title, "$at › Every detail", valueWords(k, own), valueWords(k, d.motionRaw(id, k)), shownAs) {
+            add("role:$k", r.title, "$at › Advanced", valueWords(k, own), valueWords(k, d.motionRaw(id, k)), shownAs) {
                 d.chooseMotionValue(id, k, own)
             }
         }

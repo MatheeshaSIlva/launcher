@@ -210,6 +210,42 @@ Rows in sight at most (every row that shows only sometimes counted):
 7. **The research with people**: run the card sort, survey and tree test first (about a week with friends), or build the
    proposal and test it on the phone?
 
+## Decided and built (2026-10-19)
+
+Matheesha on the proposal: "looks good". Taken as yes to every recommendation: the three layers and the two-level rule;
+no global "Show advanced" switch; moments in one list under Motion folded by part, each part's page folding its own
+under one Motion row; the Quick strip with light and dark, the colours' source and the animation preset; Phone renamed
+System. The two left open were decided by the defaults: build first and test on the phone (no card sort or tree test
+before it), and the Customize sheet on home waits for the home element round (D5).
+
+Built (the code at the commit after b179750):
+
+- **Folds** (`settings/Fold.kt`): a row naming what it holds; its rows unfold in place on the appear role (the chevron
+  turning with them), on iOS's quaternary fill at half strength (`comp.settings.fold.fill`; the whole one matched the
+  sheet's grey under the group, and a fold's last rows looked outside it), built at the tap and opened two frames later
+  (the row lit meanwhile), left open or folded in the next session (`SettingsPrefs.openFolds`), a dot on the fold while
+  something in it is changed. The search opens the fold a row waits in (`SearchEntry.fold`) before it scrolls to it.
+- **Start page**: the search, the quick choices (`QuickGroup`: one card, three rows of chips under their names; the same
+  draft as Look and Motion, waiting for Apply), Your changes, then the tiles under "Your phone" (Home, App Library, Apps,
+  Notifications & Control Center, Status bar), "Style" (Look, Motion) and System on its own. `Part`'s order is the
+  column's (the tiles' scenes play down it).
+- **Look**: Theme, Light & dark, Colours (and your colour) in sight; More (Fonts, Size, the settings app's theme) and
+  Advanced (the palette's style, intensity and colours, with the line "tap a colour to set it"; quieter while the theme's
+  own colours are chosen). The Adjust colours page is gone (its rows are Advanced's).
+- **Motion**: Presets, Feel, then "By part": six folds naming their moments.
+- **A part's page**: its moments folded under one Motion row.
+- **A moment's page**: Every detail is labelled Advanced ("Its 5 animations, in the order they play, each with its curve").
+- **System** (was Phone): the same rows; search places say System.
+- Found on the way: the search scrolled toward a row near a page's end even when the page could not move, and waited out
+  that scroll before lighting it (up to ~0.7 s); the target is now clamped to how far the page goes.
+
+Rows in sight now (every row that shows only sometimes counted): start page 13, Look 7, Motion 11, Home 10.
+
+Checked on the emulator (light and dark, the theme's colours and the wallpaper's): every page above, folds opening and
+closing (in 4x slow motion: rows growing in and fading up, the chevron turning), the quick choices applied from the start
+page and back, the search into a folded row (Folders on Home) and into Look's More (Fonts). 129 unit tests. Not yet on
+the S24: frame timing of a fold's opening (its rows are built in the frame two after the tap, as Every detail's).
+
 ## Sources
 
 - NN/g, [Progressive Disclosure](https://www.nngroup.com/articles/progressive-disclosure/) and

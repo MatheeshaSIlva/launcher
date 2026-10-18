@@ -2614,6 +2614,11 @@
    "ref": "sys.color.label.secondary",
    "src": "judged:iOS's search field: the magnifier and the placeholder in the secondary label"
   },
+  "comp.settings.fold.fill": {
+   "light": "#7474800a",
+   "dark": "#76768017",
+   "src": "judged:half of iOS's quaternary fill (for large areas holding complex content, as expanded table cells; #74748014 | #7676802e) under a fold's rows (docs/SETTINGS_NAVIGATION.md): the whole one came out as the sheet's grey, and a fold's last rows looked outside their group"
+  },
   "comp.settings.glass": {
    "factor": 1,
    "src": "judged:the page behind the sheet: the wallpaper, blurred (Matheesha, 2026-10-11; since 2026-10-15 the tiles on it are solid, as the groups)"
@@ -4329,6 +4334,11 @@
   "comp.settings.field.fill": {
    "color": "@surface_container_highest",
    "src": "judged:Material You: iOS's settings' search field as Android 14's tonal role (@surface_container_highest)"
+  },
+  "comp.settings.fold.fill": {
+   "light": "@on_surface_variant/4",
+   "dark": "@on_surface_variant/9",
+   "src": "judged:Material You: iOS's settings' fold (half the quaternary fill) as Android 14's tonal role (@on_surface_variant/4 | @on_surface_variant/9)"
   },
   "comp.settings.sheet.fill": {
    "light": "@surface_container_low/85",
