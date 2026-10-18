@@ -2608,4 +2608,9 @@ the wallpaper's:
     and they are applied again on every wake and unlock.
   Checked on the emulator in slow motion, frame by frame (both capsules through `TEST_STATUS`; three bugs found and fixed on
   the way: the battery vanished as the moment began, the capsule's clip took the battery's rect, the moment ended early in
-  slow motion). Not yet on the S24: the settings guard, the real charging animation's cover and timing, a real share.
+  slow motion). On the S24 (2026-10-18, a plug-in simulated with `dumpsys battery`, recorded, only the bar's strip kept after
+  a check that nothing changed below it): the settings guard holds (`simple_status_bar` 1 -> 2, the watchdog's plan holds
+  both values); One UI's chip, by its own log, is 205 x 58 px at x 815, y 26 and starts 65-100 ms after the plug-in. The first
+  run showed its right end past our capsule for five frames (our outline was still on its spring, and our bar held a frame
+  for 40 ms then); the outline now leads its spring and the capsule is 28 dp tall: the chip's whole box is ours 36 ms after
+  the plug-in, no stock pixel in any frame, and the moment ends 4 ms after One UI's reset. Not yet: a real screen share.

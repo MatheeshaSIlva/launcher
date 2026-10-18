@@ -923,14 +923,20 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val bodyL = batterySlot.x.value
         val bodyR = bodyL + battW - 2.4f * u
         val bodyH = 12.6f * u
-        val l = bodyL + (capL - bodyL) * k
-        val rr = bodyR + (capR - bodyR) * k
-        val h = bodyH + (capH - bodyH) * k
+        // The capsule's outline leads its spring: One UI's pill shows ~100 ms after the plug-in at its full size, and with the
+        // outline on the spring itself its right end showed past ours for five frames (S24 recording; our bar also held a
+        // frame for 40 ms then). Led, the outline is over the pill's area within ~75 ms; it also stays a moment longer as
+        // it shrinks, then folds into the battery. Past 1 (the spring's overshoot) it follows the spring.
+        val g = if (k >= 1f) k else 1f - (1f - k).let { it * it * it * it }
+        val l = bodyL + (capL - bodyL) * g
+        val rr = bodyR + (capR - bodyR) * g
+        val h = bodyH + (capH - bodyH) * g
         fill.color = Design.color(StatusBarTokens.CAPSULE)
-        fill.alpha = (Color.alpha(fill.color) * (kk * 4f).coerceAtMost(1f) * alpha).toInt()
+        // (Opaque from 60 % of its outline on: when it folds back into the battery it fades over its last part, no halo.)
+        fill.alpha = (Color.alpha(fill.color) * (g / 0.6f).coerceAtMost(1f) * alpha).toInt()
         // (A rect of its own: drawBattery below sets [r] to the battery's body.)
         capRect.set(l, cy - h / 2f, rr, cy + h / 2f)
-        val rad = 4.2f * u + (h / 2f - 4.2f * u) * kk
+        val rad = 4.2f * u + (h / 2f - 4.2f * u) * g.coerceAtMost(1f)
         c.drawRoundRect(capRect, rad, rad, fill)
         // The battery and the bolt move in, keeping their places to each other, and take the capsule's label colour; the
         // battery's number goes (the percentage is beside it). The percentage is inside the capsule as it is now (it never
@@ -1082,10 +1088,15 @@ class StatusBarView(ctx: Context) : View(ctx) {
         const val SHARE_GAP_PT = 5f
         const val SHARE_GLYPH_PT = 12f
         const val SHARE_H_PT = 22f
-        /** The charging capsule over One UI's charging animation (dp, as One UI lays that out): its right inset, width, height, padding. */
+        /**
+         * The charging capsule over One UI's charging animation (dp, as One UI lays that out): its right inset, width, height,
+         * padding. One UI's chip on the S24 (its own log): 205 x 58 px at x 815, y 26 (78 x 22 dp, 23 dp from the right edge,
+         * its middle 4 px below the camera's line, where our capsule is centred): ours reaches 10 dp past it to the left,
+         * 9 dp to the right, 4 px below.
+         */
         const val CHARGE_RIGHT_DP = 14f
         const val CHARGE_W_DP = 96f
-        const val CHARGE_H_DP = 26f
+        const val CHARGE_H_DP = 28f
         const val CHARGE_PAD_DP = 10f
         /** The longest a charging moment lasts if One UI's animation never says it ended (it takes ~4 s). */
         const val CHARGE_MAX_MS = 8000L

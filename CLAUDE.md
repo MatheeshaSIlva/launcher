@@ -366,9 +366,10 @@ copy it wholesale — port the working pieces cleanly. File map:
   "none"); its live-notification chips (timers, navigation) when Secure `quickstar_indicator_hide_ongoing_chip` is 1;
   `StockBarSettings` sets both while our bar is on and gives the user's values back (bar off, Restore system, the watchdog's
   plan). The cast chip is covered by our sharing capsule (the time in red, `StockBarCover`). And One UI's charging animation
-  (`ChargingVI`, a pill 22 x ~76 dp at the right on plug-in) plays whatever the flags say (visible = playing || system info
-  allowed): our charging moment covers it, an opaque capsule growing out of the battery, ended when its log says
-  "Resetting animation state" (the shell's `awaitLog`). Never build a test that starts a screen capture behind the user's
+  (`ChargingVI`, a chip 205 x 58 px at x 815, y 26 on the S24 by its own log, starting 65-100 ms after the plug-in) plays
+  whatever the flags say (visible = playing || system info allowed): our charging moment covers it, an opaque capsule
+  growing out of the battery whose outline leads its spring (on the spring itself the chip's end showed for five frames),
+  ended when its log says "Resetting animation state" (the shell's `awaitLog`). Never build a test that starts a screen capture behind the user's
   consent: the sharing path is checked with a share the user starts, the capsule's look with `TEST_STATUS`.
 - **Never screenshot or record Notification Center or banners on Matheesha's phone** (they show his messages). Measure them
   with framestats only (`tools/scenario_shade.sh` never captures them; its test banner is our own text).
