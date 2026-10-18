@@ -1131,7 +1131,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
         num.textSize = CHARGE_TEXT_PT * u
         val digitsW = num.measureText(level)
         val signW = num.measureText("%")
-        val rowW = digitsW + signW + gap + battW + boltGap + boltSlot.width
+        // (The bolt as present as it is: unplugged while the capsule stays, the row closes up as it goes, and opens as it
+        // comes back.)
+        val rowW = digitsW + signW + gap + battW + (boltGap + boltSlot.width) * boltSlot.shown.value.coerceIn(0f, 1f)
         val pad = CHARGE_PAD_DP * dp
         val capR = width - CHARGE_RIGHT_DP * dp
         val capW = max(CHARGE_W_DP * dp, rowW + 2f * pad)

@@ -2656,5 +2656,13 @@ the wallpaper's:
   and a plug-in again waits for One UI's next animation (a newer wait ends the moment, an older one no longer can; the
   shell reads One UI's log from half a second back, so lines from before a plug-in are let go). Checked on the emulator
   (frames: the right end out at 25 ms); on the S24 the plug-in on this build ended 7 ms after One UI's reset, but its
-  recording was deleted unviewed (something changed below the bar: the phone was in use). Not yet on the S24: the frames of
-  the new opening, an unplug and plug-in again during the moment.
+  recording was deleted unviewed (something changed below the bar: the phone was in use). Then, the phone left to us (a
+  plug-in is user activity to Android: the "touched" gate trips for 20 s after each simulated plug-in or reset):
+  - a plug-in at 87 %: the right end is over the stock battery's place from the second frame (~5 ms after the first), no
+    stock pixel, One UI's chip 52 ms after ours, the capsule ending 2 ms after One UI's reset;
+  - unplugged 0.66 s in and plugged again 2 s later: One UI's animation did not stop at the unplug (it played on, "Animation
+    completed" at +4.0 s, and reset only at +6.4 s, after the plug-in again): the capsule stayed throughout (the old fold at
+    the unplug would have left One UI's chip uncovered for almost 6 s), its bolt shrinking away and the charge fading to
+    white inside it, both back at the plug-in again; One UI started no second animation; the capsule folded 317 ms after
+    One UI's reset (the restart grace). 880 frames, no stock pixel; our window drew every frame of the plug-in again on time
+    (114 shown, 0 late). The row now closes up as the bolt goes (and opens as it comes): it kept an empty bolt's place.
