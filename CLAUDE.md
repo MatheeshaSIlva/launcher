@@ -640,6 +640,11 @@ copy it wholesale — port the working pieces cleanly. File map:
   app is known (`GestureNav.cardKnows`).
 - **Home's idle check must count every motion on it** (`HomeScreen.isIdle`): the theme reveal was not counted, and home's
   picture recorded mid-reveal (400 ms after onResume) missed the items not yet revealed, behind the next close.
+- **A still picture fading out over something that moves shows everything on it twice**: the widget menu's lifted copy,
+  a widget's old look and an app's update arriving mid-resize all faded out as pictures over a widget still growing or
+  shrinking (the clock's date and a widget's buttons twice). Fade between live copies (recorded again at every frame:
+  `ContextMenuView.LiveCopy`; an old layout kept as a live view laid out with the card: `LauncherWidgetHostView` ghost), or
+  wait for rest. And a home rebuild must carry its modes over (edit mode once ended unseen under the old look's picture).
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.

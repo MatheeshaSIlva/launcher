@@ -645,7 +645,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         // Edit mode: its bar ("Edit", "Done") at the top of the scene; above the scene the long-press menu, the widget gallery
         // and the lifted copy of a dragged item.
         val em = editMode ?: EditMode(this, editHost).also { editMode = it }
-        if (em.active) em.exit()
+        // Editing goes on in the new build (a scheduled dark mode or new colours arriving meanwhile): it ended, unseen under
+        // the old look's picture, and the next drag on a widget's handle pulled Spotlight down instead.
+        val editing = em.active
+        if (editing) em.exit(now = true)
         val bar = em.Bar(context).also { editBar = it; it.visibility = View.GONE }
         fg.addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (metrics.gridTop - topInset - metrics.pt(6f)).roundToInt().coerceAtLeast(1)).apply { topMargin = topInset })
         overlay.removeAllViews()
@@ -666,6 +669,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         overlay.addView(em.ghostView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         applyGlassWallpaper()
         bindLayout()
+        if (editing) em.enter(haptic = false, now = true)
     }
 
     /**
@@ -1814,6 +1818,21 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         // Nothing is changed while the menu is open: a drag that takes the item over drops these callbacks.
         mv.onHandBack = { showItem() }
         mv.onClosed = { showItem() }
+        // A widget given a new size or style here: the copy fading into it shows it as it is at each frame (a new view for a
+        // new style: the still copy then, the old style fading out over the new).
+        if (widget != null) {
+            val size = android.graphics.PointF()
+            mv.liveLifted = ContextMenuView.LiveCopy({ area, pivot ->
+                if (!widget.isAttachedToWindow || widget.width == 0) false else {
+                    val at = frameInHome(widget)
+                    widget.drawnSize(size)
+                    area.set(at.left, at.top, at.left + size.x, at.top + size.y)
+                    widget.shownCenter(pivot)
+                    pivot.offset(at.left, at.top)
+                    true
+                }
+            }) { c -> widget.drawCard(c) }
+        }
         pendingDragView = v
     }
 
@@ -2042,8 +2061,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         }
         override fun editingChanged(active: Boolean, now: Boolean) {
             if (active) widgets?.prewarmApps()   // "Add Widget" is a tap away
-            (editBar as? EditMode.Bar)?.let { if (active) it.show() else it.hide(now) }
-            if (!active && now) indicator?.endEditNow() else indicator?.editing = active
+            (editBar as? EditMode.Bar)?.let { if (active) it.show(now) else it.hide(now) }
+            if (now) indicator?.setEditingNow(active) else indicator?.editing = active
             if (!active) {
                 // Pages emptied while editing are gone from the layout: match the views to it.
                 if (pages.size != (layout?.pages?.size ?: pages.size)) bindLayout()
@@ -2071,9 +2090,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         override fun widgetDescription(info: android.appwidget.AppWidgetProviderInfo): String? = widgets?.description(info)
         override fun widgetPreviewImage(info: android.appwidget.AppWidgetProviderInfo): android.graphics.drawable.Drawable? = widgets?.previewImage(info)
         override fun widgetPreviewView(info: android.appwidget.AppWidgetProviderInfo, parent: android.view.ViewGroup): View? = widgets?.previewView(info, parent)
-        override fun addClockWidget() {
+        override fun addClockWidget(size: WidgetSize) {
             val metrics = m ?: return
-            editMode?.addWidget(HomeItem.Widget("clock", metrics.cfg.columns.coerceAtMost(4), 2))
+            editMode?.addWidget(HomeItem.Widget("clock", size.spanX.coerceAtMost(metrics.cfg.columns), size.spanY.coerceAtMost(metrics.cfg.rows)))
         }
         override fun addAppWidget(info: android.appwidget.AppWidgetProviderInfo, size: WidgetSize) {
             val w = widgets ?: return

@@ -15,6 +15,7 @@ import dev.launcher.app.components.MenuSpec
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.theme.Appearance
+import kotlin.math.roundToInt
 
 /**
  * iOS's long-press menu for a home icon, widget or button: home blurs and dims behind (the blur is applied by home through
@@ -51,6 +52,18 @@ class ContextMenuView(
 
     /** The item is shown again early, under the lifted copy fading into it ([handBack]); [onClosed] still runs at the end. */
     var onHandBack: (() -> Unit)? = null
+
+    /**
+     * The item as it shows now: [frame] fills in the area it draws in and the point it is lifted about (in this view; false
+     * once it is gone), [draw] draws it from that area's top-left. The copy that hands back to an item changing in place
+     * ([handBack]) is recorded from it at every frame (set after [show]): a still copy of the old size, fading out over the
+     * widget growing or shrinking under it, showed everything on it twice.
+     */
+    class LiveCopy(val frame: (area: RectF, pivot: android.graphics.PointF) -> Boolean, val draw: (Canvas) -> Unit)
+    var liveLifted: LiveCopy? = null
+    private val liveNode = RenderNode("lifted-live")
+    private val liveArea = RectF()
+    private val livePivot = android.graphics.PointF()
 
     /**
      * The lifted copy moves and fades with this view (set after [show]): the Edit button's copy leaves with the edit bar
@@ -101,6 +114,7 @@ class ContextMenuView(
         onClosed = null
         afterClose = null
         liftedFollows = null
+        liveLifted = null
         lifted = picture
         liftedPressed = pressed
         liftedFades = false
@@ -188,14 +202,30 @@ class ContextMenuView(
         // The pressed item, lifted (slightly bigger), above the blur; with what it follows, where that is now and as faded.
         val follows = liftedFollows
         val followA = follows?.alpha?.coerceIn(0f, 1f) ?: 1f
-        lifted?.takeIf { followA > 0.003f }?.let { p ->
-            val s = if (liftedFades) 0.6f + 0.46f * kk else 1f + 0.06f * kv
+        // Handing back to an item that changes in place: the item as it is now, where it is now.
+        val live = if (liftedHandsBack) liveLifted else null
+        val isLive = live != null && live.frame(liveArea, livePivot)
+        val fr = if (isLive) liveArea else anchor
+        val px = if (isLive) livePivot.x else anchor.centerX()
+        val py = if (isLive) livePivot.y else anchor.centerY()
+        val copy = if (live != null && isLive) {
+            liveNode.setPosition(0, 0, maxOf(1, liveArea.width().roundToInt()), maxOf(1, liveArea.height().roundToInt()))
+            val rc = liveNode.beginRecording()
+            try { live.draw(rc) } finally { liveNode.endRecording() }
+            liveNode
+        } else lifted
+        copy?.takeIf { followA > 0.003f }?.let { p ->
+            // (Handing back, it settles to its size sooner than it fades: lifted over the item, a fading copy a few per cent
+            // larger showed every edge twice.)
+            val s = if (liftedFades) 0.6f + 0.46f * kk else if (liftedHandsBack) 1f + 0.06f * kv * kv else 1f + 0.06f * kv
             c.save()
-            c.translate(anchor.centerX(), anchor.centerY() + (follows?.let { it.translationY - followFromY } ?: 0f))
+            c.translate(px, py + (follows?.let { it.translationY - followFromY } ?: 0f))
             c.scale(s, s)
-            c.translate(-anchor.width() / 2f, -anchor.height() / 2f)
-            if (liftedFades || liftedHandsBack) {
-                val l = c.saveLayerAlpha(0f, 0f, anchor.width(), anchor.height(), (255 * kk * followA).toInt())
+            c.translate(fr.left - px, fr.top - py)
+            // (A live copy is the item itself as it shows: it stays whole until the menu has closed, the blur behind it gone,
+            // where faded with the menu the item showed through it still blurred. A still one fades into the item.)
+            if (liftedFades || (liftedHandsBack && !isLive)) {
+                val l = c.saveLayerAlpha(0f, 0f, fr.width(), fr.height(), (255 * kk * followA).toInt())
                 c.drawRenderNode(p)
                 c.restoreToCount(l)
             } else {

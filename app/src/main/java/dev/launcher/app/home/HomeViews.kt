@@ -178,8 +178,10 @@ object ResizeHandle {
  * The iOS lock-screen clock as a home widget, its "Glass" style: the date line, and the time in huge numerals of liquid
  * glass that refract the wallpaper behind them (the dock's material shaped like the digits: clear, a lens at the stroke
  * edges, a crisp highlight where the edge faces the light, a soft shadow). No card, no label, as on the lock screen. 12 or
- * 24 hours as the system is set; no AM/PM. The minute change crossfades the numerals (two glass layers take turns) instead
- * of swapping them; a change of size crossfades the whole look ([WidgetFrameView]).
+ * 24 hours as the system is set; no AM/PM. A square card (Small, Large) sets the hours over the minutes, as Apple Watch's
+ * X-Large face does ([ClockNumerals.stacks]); the clock sits in the middle of its card. The minute change crossfades the
+ * numerals (two glass layers take turns) instead of swapping them; a change of size grows or shrinks both layers with the
+ * card while the new numerals crossfade in over the old.
  */
 class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, style: String? = null) : WidgetFrameView(ctx, m, spanX, spanY) {
     /** "Solid": plain white numerals instead of glass (the lock screen's other style). */
@@ -187,6 +189,36 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     private var solidBaseline = 0f
     private val dateSize = m.pt(19f)
     private val digitsTop = m.pt(25f)
+    private val is24 get() = android.text.format.DateFormat.is24HourFormat(context)
+
+    /**
+     * The box the numerals are laid out in for a card [w] x [h] (px): the card below the date, no taller than the digits need,
+     * so a tall card (Large) shows the clock in its middle instead of at its top over an empty card.
+     */
+    private fun digitsBox(w: Float, h: Float): Float = ClockNumerals.tightBox(android.text.TextPaint(digitPaint), w, room(h), is24, stackedAt(w, h))
+
+    /** Above the date and below the numerals at the least: a clock that fills its card (stacked) had the date against its top edge. */
+    private val contentInset = m.pt(8f)
+
+    /** The height the numerals may take in a card [h] tall: less the date's line and the insets. */
+    private fun room(h: Float): Float = (h - 2 * contentInset - digitsTop).coerceAtLeast(1f)
+
+    /** The hours over the minutes in a card [w] x [h] (px): a square one. */
+    private fun stackedAt(w: Float, h: Float): Boolean = ClockNumerals.stacks(w, room(h))
+
+    /** The digits' text size the clock is set at in a card [w] x [h], set one way ([stacked]) or the other. */
+    private fun sizeIn(w: Float, h: Float, stacked: Boolean): Float {
+        val p = android.text.TextPaint(digitPaint)
+        ClockNumerals.layout(p, w, ClockNumerals.tightBox(android.text.TextPaint(digitPaint), w, room(h), is24, stacked), is24, stacked)
+        return p.textSize
+    }
+
+    /** How far down the card the clock (date and numerals) starts: the room the box leaves, halved. */
+    private fun contentTop(w: Float, h: Float): Float = contentInset + ((room(h) - digitsBox(w, h)) / 2f).coerceAtLeast(0f)
+
+    /** Where the clock starts as the card is shown now (between the old and new size while it resizes). */
+    private var shownTop = 0f
+    private var topFrom = 0f
     private val datePaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xF2FFFFFF.toInt()
         textSize = dateSize
@@ -214,6 +246,12 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         var mask: android.graphics.Bitmap? = null
         var height: android.graphics.Bitmap? = null
         var time = ""
+        /** The digits' text size the shape was built at (px). */
+        var size = 0f
+        /** Set on two lines (the hours over the minutes). */
+        var stacked = false
+        /** The digits' box the shape was built in (its layer's height less the shadow's room), px. */
+        val box get() = glass.height - shadowRoom
     }
     private val layerA = Numerals()
     private val layerB = Numerals()
@@ -234,16 +272,19 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     private val shadowRoom = ClockNumerals.shadowRoom(ctx)
 
     init {
+        shownTop = contentTop(cardW, cardH)
         for (n in listOf(layerA, layerB)) {
-            addView(n.glass, LayoutParams(cardW.roundToInt(), (cardH - digitsTop + shadowRoom).roundToInt()).apply {
-                leftMargin = left.roundToInt()
-                topMargin = digitsTop.roundToInt()
+            addView(n.glass, LayoutParams(cardW.roundToInt(), (digitsBox(cardW, cardH) + shadowRoom).roundToInt()).apply {
+                leftMargin = cardLeft.roundToInt()
+                topMargin = (shownTop + digitsTop).roundToInt()
             })
             n.glass.alpha = 0f
             if (solid) n.glass.visibility = View.GONE
         }
-        layerA.glass.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
-            if (r - l != or - ol || b - t != ob - ot) post { shownTime = ""; refresh() }
+        // The numerals in front are built again for a new size once their layer has it (a change of size resizes the layer
+        // the new ones go in; the other keeps the old size until they have crossfaded in).
+        for (n in listOf(layerA, layerB)) n.glass.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob ->
+            if ((r - l != or - ol || b - t != ob - ot) && n === front) post { if (n === front) { shownTime = ""; refresh() } }
         }
     }
 
@@ -267,19 +308,98 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
     override fun onSpanChanged() {
         tickAnim?.cancel()
         tickAnim = null
-        for (n in listOf(layerA, layerB)) {
-            n.glass.layoutParams = (n.glass.layoutParams as LayoutParams).apply {
-                width = cardW.roundToInt(); height = (cardH - digitsTop + shadowRoom).roundToInt(); leftMargin = left.roundToInt()
-            }
-            // The old shape would be drawn at the new size: hidden until the new one is built, then it fades in (the old
-            // look crossfades out over it meanwhile).
-            n.glass.alpha = 0f
+        // The numerals showing stay as they are (their shape is built for their size) and keep to the middle of the card as
+        // it moves, until the new ones, built for the new size in the other layer, crossfade in over them. (Both layers were
+        // hidden at once: the clock showed no time until the new shape was built, a picture of the old look cannot hold
+        // the glass.)
+        // (Another change of size before the new numerals came: the ones still showing from before stay the old ones.)
+        val old = front.takeIf { it.glass.alpha > 0f && it.glass.width > 0 } ?: leaving?.takeIf { it.glass.alpha > 0f }
+        val next = if (old === layerA) layerB else if (old === layerB) layerA else front
+        if (old != null && old !== leaving) { leaving = old; leavingW = old.glass.width.toFloat() }
+        val box = digitsBox(cardW, cardH)
+        val newTop = contentTop(cardW, cardH)
+        val stacked = stackedAt(cardW, cardH)
+        topFrom = shownTop
+        // The numerals' middle in the card as it shows now (mid-resize: as far as it has come) and where it goes: both layers
+        // keep to it as the card moves.
+        val centerNow = shownTop + digitsTop + digitsBox(shownW, shownH) / 2f
+        val centerNew = newTop + digitsTop + box / 2f
+        // The old numerals take the size they would have in the new card set as they are (one line or stacked), so they
+        // always fit the card: within a kind it is one clock growing or shrinking, across kinds the new set grows out of the
+        // old one as it crossfades in.
+        leaving?.let { l ->
+            leavingScale0 = l.glass.scaleX
+            leavingScale1 = if (l.size > 0f) sizeIn(cardW, cardH, l.stacked) / l.size else 1f
+            l.glass.pivotX = leavingW / 2f
+            l.glass.pivotY = l.box / 2f
+            leavingY0 = l.glass.translationY
+            leavingY1 = centerNew - ((l.glass.layoutParams as LayoutParams).topMargin + l.box / 2f)
         }
+        for (n in listOf(layerA, layerB)) {
+            if (n === old) continue
+            n.glass.layoutParams = (n.glass.layoutParams as LayoutParams).apply {
+                width = cardW.roundToInt(); height = (box + shadowRoom).roundToInt(); leftMargin = cardLeft.roundToInt()
+                topMargin = (newTop + digitsTop).roundToInt()
+            }
+            n.glass.alpha = 0f
+            n.glass.translationX = 0f
+            n.glass.translationY = 0f
+            n.glass.scaleX = 1f
+            n.glass.scaleY = 1f
+        }
+        // The new numerals start as they would be set in the card as it shows now, and grow or shrink with it to their place.
+        val finalSize = sizeIn(cardW, cardH, stacked)
+        enterScale0 = if (finalSize > 0f) sizeIn(shownW, shownH, stacked) / finalSize else 1f
+        enterY0 = centerNow - centerNew
+        next.glass.pivotX = cardW / 2f
+        next.glass.pivotY = box / 2f
+        front = next
         shownTime = ""
+        applyResizeFrame()
+        // (Built once the new layer is laid out at its size: its layout listener.)
+    }
+
+    /** The numerals that showed before a change of size, until the new ones have crossfaded in over them. */
+    private var leaving: Numerals? = null
+    private var leavingW = 0f
+    private var leavingScale0 = 1f
+    private var leavingScale1 = 1f
+    private var leavingY0 = 0f
+    private var leavingY1 = 0f
+    /** The new numerals' scale and offset (from their place) at the start of a resize; both go to none with it. */
+    private var enterScale0 = 1f
+    private var enterY0 = 0f
+
+    override fun onShownChanged() = applyResizeFrame()
+
+    private fun applyResizeFrame() {
+        val k = resizeFraction
+        // The date glides to the clock's new place with the card.
+        shownTop = topFrom + (contentTop(cardW, cardH) - topFrom) * k
+        // The old numerals keep to the middle of the card as it grows or shrinks, and take the size they would have in it.
+        leaving?.let {
+            it.glass.translationX = (shownW - leavingW) / 2f
+            val s = leavingScale0 + (leavingScale1 - leavingScale0) * k
+            it.glass.scaleX = s
+            it.glass.scaleY = s
+            it.glass.translationY = leavingY0 + (leavingY1 - leavingY0) * k
+        }
+        // The new ones, laid out at the new size, follow the card there from the size they would have in it as it shows.
+        val n = front
+        if (n !== leaving) {
+            n.glass.translationX = (shownW - cardW) / 2f
+            val s = enterScale0 + (1f - enterScale0) * k
+            n.glass.scaleX = s
+            n.glass.scaleY = s
+            n.glass.translationY = enterY0 * (1f - k)
+        }
     }
 
     /** No card to clip the old look with: the whole widget crossfades. */
     override fun oldCornerRadius(): Float = 0f
+
+    /** The glass numerals crossfade themselves (two layers); only the solid style's plain numerals crossfade as a picture. */
+    override val recordsOldLook: Boolean get() = solid
 
     /** No card of its own: edit mode outlines where it is, so its badge and handle have something to sit on. */
     override val frameless: Boolean get() = true
@@ -289,12 +409,12 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         val is24 = android.text.format.DateFormat.is24HourFormat(context)
         val now = java.util.Date()
         val locale = java.util.Locale.getDefault()
-        val time = java.text.SimpleDateFormat(if (is24) "H:mm" else "h:mm", locale).format(now)
+        val time = ClockNumerals.format(now, is24, stackedAt(cardW, cardH), locale)
         // As on the iOS lock screen: weekday, then day ("Sat 3").
         val date = java.text.SimpleDateFormat("EEE d", locale).format(now)
         if (date != dateText) { dateText = date; invalidate() }
         if (time == shownTime) return
-        if (solid) { shownTime = time; layoutDigits(); invalidate(); return }
+        if (solid) { shownTime = time; shownLines = time.split('\n'); layoutDigits(); invalidate(); return }
         if (front.glass.width <= 0) return
         // A minute change crossfades into the other layer once its shape is built; a first showing (or a new size) fades
         // the numerals in, never popping them.
@@ -305,6 +425,8 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
             val other = if (front === layerA) layerB else layerA
             buildMask(target, time) {
                 tickAnim?.cancel()
+                val from = leaving
+                if (from != null && from !== target && from.glass.alpha > 0f) { crossfadeFrom(from, target); return@buildMask }
                 other.glass.alpha = 0f
                 fadeIn(target)
             }
@@ -330,6 +452,34 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         }
     }
 
+    /** The numerals of [to] (built for a new size) come in over [from] (the old size's), which goes, on the clock's crossfade. */
+    private fun crossfadeFrom(from: Numerals, to: Numerals) {
+        val a0 = from.glass.alpha
+        tickAnim = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+            timed(dev.launcher.app.motion.Motion.profile.clockTick)
+            addUpdateListener { a -> val k = a.animatedValue as Float; to.glass.alpha = k; from.glass.alpha = a0 * (1f - k) }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    to.glass.alpha = 1f
+                    from.glass.alpha = 0f
+                    if (leaving === from) leaving = null
+                    // At rest: the old layer takes the card's size again (it is the one built next, at the next minute).
+                    from.glass.translationX = 0f
+                    from.glass.scaleX = 1f
+                    from.glass.scaleY = 1f
+                    from.glass.translationY = 0f
+                    from.glass.layoutParams = (from.glass.layoutParams as LayoutParams).apply {
+                        width = cardW.roundToInt(); height = (digitsBox(cardW, cardH) + shadowRoom).roundToInt(); leftMargin = cardLeft.roundToInt()
+                        topMargin = (contentTop(cardW, cardH) + digitsTop).roundToInt()
+                    }
+                    tickAnim = null
+                    onSettled?.invoke()
+                }
+            })
+            start()
+        }
+    }
+
     /** The numerals of [n] fade in (a first showing, a new size). */
     private fun fadeIn(n: Numerals) {
         val from = n.glass.alpha
@@ -346,8 +496,10 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
 
     /** The digits' size for the box (the font's own proportions, slightly narrowed as iOS's clock is), and their baseline. */
     private fun layoutDigits(): Float {
-        val baseline = ClockNumerals.layout(digitPaint, cardW, cardH - digitsTop, android.text.format.DateFormat.is24HourFormat(context))
+        val stacked = stackedAt(cardW, cardH)
+        val baseline = ClockNumerals.layout(digitPaint, cardW, digitsBox(cardW, cardH), is24, stacked)
         solidBaseline = baseline
+        solidStep = ClockNumerals.lineStep(digitPaint)
         return baseline
     }
 
@@ -364,6 +516,8 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         val h = n.glass.height
         if (w <= 0 || h <= 0) return
         val baseline = layoutDigits()
+        val size = digitPaint.textSize
+        val stacked = stackedAt(cardW, cardH)
         val gen = ++buildGen
         buildsPending++
         ClockNumerals.buildAsync(digitPaint, w, h, baseline, time, m.u) { gm ->
@@ -375,6 +529,8 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
             n.glass.mask = gm
             n.glass.invalidate()
             n.time = time
+            n.size = size
+            n.stacked = stacked
             then()
         }
     }
@@ -399,6 +555,8 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         try { context.unregisterReceiver(tick) } catch (_: Throwable) { }
     }
 
+    private var shownLines = emptyList<String>()
+    private var solidStep = 0f
     private val solidPaint = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xF2FFFFFF.toInt()
         textAlign = Paint.Align.CENTER
@@ -412,7 +570,8 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
         datePaint.alpha = ((col ushr 24) * 0xF2 / 255f).toInt()
         dateShadow.color = (((0x66 * (1f - t)).toInt()) shl 24)
         dateShadow.apply(datePaint)
-        canvas.drawText(dateText, left + shownW / 2f, dateSize * 0.86f, datePaint)
+        // (Not in the old look's picture: the date stays live and moves with the card's middle, never doubled.)
+        if (!recordingLook) canvas.drawText(dateText, cardLeft + shownW / 2f, shownTop + dateSize * 0.86f, datePaint)
         if (solid && shownTime.isNotEmpty()) {
             solidPaint.typeface = digitPaint.typeface
             solidPaint.textSize = digitPaint.textSize
@@ -422,7 +581,8 @@ class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, styl
             solidPaint.alpha = ((col ushr 24) * 0xF2 / 255f * contentK).toInt()
             solidShadow.color = (((0x33 * (1f - t)).toInt()) shl 24)
             solidShadow.apply(solidPaint)
-            canvas.drawText(shownTime, left + cardW / 2f, digitsTop + solidBaseline, solidPaint)
+            val y0 = contentTop(cardW, cardH) + digitsTop + solidBaseline
+            for ((i, line) in shownLines.withIndex()) canvas.drawText(line, cardLeft + cardW / 2f, y0 + i * solidStep, solidPaint)
         }
     }
 
@@ -439,20 +599,76 @@ object ClockNumerals {
      * as iOS's clock is; the widest time fits the width, the digits' height fits the box) and returns the baseline that
      * puts the numerals at the bottom of the box.
      */
-    fun layout(paint: android.text.TextPaint, w: Float, h: Float, is24: Boolean): Float {
+    fun layout(paint: android.text.TextPaint, w: Float, h: Float, is24: Boolean, stacked: Boolean = false): Float {
         paint.textScaleX = 1f
         paint.textSize = 100f
-        val bounds = android.graphics.Rect()
-        paint.getTextBounds("0123456789", 0, 10, bounds)
-        val digitH = bounds.height() / 100f
-        val widest = if (is24) "20:08" else "10:08"
-        val widthPer100 = paint.measureText(widest) / 100f
+        val digitH = digitHeight(paint) / 100f
+        val widthPer100 = widest(paint, is24, stacked) / 100f
         paint.textScaleX = 0.95f
-        paint.textSize = minOf(h * 0.94f / digitH, w * 0.96f / (widthPer100 * 0.95f))
-        return digitH * paint.textSize + h * 0.03f
+        paint.textSize = minOf(h * 0.94f / (digitH * lines(stacked)), w * WIDTH / (widthPer100 * 0.95f))
+        return digitH * paint.textSize + h * TOP
     }
 
-    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    /** The widest time's share of the clock's width. */
+    private const val WIDTH = 0.96f
+
+    /** Between the two lines of a stacked clock, of the digits' height. */
+    private const val GAP = 0.1f
+
+    /** The digits' height in lines: one, or two and the gap between them. */
+    private fun lines(stacked: Boolean) = if (stacked) 2f + GAP else 1f
+
+    /**
+     * A box at least this tall for its width sets the time on two lines, the hours over the minutes (Apple Watch's X-Large
+     * face): one line in a square card left most of it empty, and Large showed the very numerals of Medium.
+     */
+    private const val STACK_ASPECT = 0.6f
+
+    /** Whether a [w] x [h] box (px) sets the time stacked. */
+    fun stacks(w: Float, h: Float): Boolean = h >= w * STACK_ASPECT
+
+    /**
+     * The time [now] as the clock sets it: "9:41" (12 or 24 hours as the system is set, no AM/PM), or [stacked], the hours
+     * over the minutes ("9\n41").
+     */
+    fun format(now: java.util.Date, is24: Boolean, stacked: Boolean, locale: java.util.Locale = java.util.Locale.getDefault()): String =
+        java.text.SimpleDateFormat(if (stacked) (if (is24) "H\nmm" else "h\nmm") else (if (is24) "H:mm" else "h:mm"), locale).format(now)
+
+    /** From one line's baseline to the next's in a stacked clock, for [paint] as [layout] set it. */
+    fun lineStep(paint: android.text.TextPaint): Float = digitHeight(paint) * (1f + GAP)
+
+    /** The digits' height (the font's figures, top to baseline) at [paint]'s size, px. */
+    private fun digitHeight(paint: android.text.TextPaint): Float {
+        val bounds = android.graphics.Rect()
+        paint.getTextBounds("0123456789", 0, 10, bounds)
+        return bounds.height().toFloat()
+    }
+
+    /**
+     * The widest time [paint] can set, px: hours 1-12 (or 0-23) and minutes in the font's own figures, which need not all be
+     * as wide; stacked, the wider of the two lines.
+     */
+    private fun widest(paint: android.text.TextPaint, is24: Boolean, stacked: Boolean): Float {
+        val d = FloatArray(10) { paint.measureText(it.toString()) }
+        fun widest(r: IntRange) = r.maxOf { d[it] }
+        val hours = if (is24) maxOf(widest(0..9), d[1] + widest(0..9), d[2] + widest(0..3)) else maxOf(widest(1..9), d[1] + widest(0..2))
+        val minutes = widest(0..5) + widest(0..9)
+        return if (stacked) maxOf(hours, minutes) else hours + paint.measureText(":") + minutes
+    }
+
+    /**
+     * The height of the box [layout] needs for [w] x [h] (px): [h], or less when the width sets the digits' size (a tall card),
+     * just what the digits take with their margins. [paint] is changed.
+     */
+    fun tightBox(paint: android.text.TextPaint, w: Float, h: Float, is24: Boolean, stacked: Boolean = false): Float {
+        layout(paint, w, h, is24, stacked)
+        return minOf(h, digitHeight(paint) * lines(stacked) / 0.94f)
+    }
+
+    /** How far down the box [layout] is given the digits' top is (of its height). */
+    const val TOP = 0.03f
+
+    private val worker by lazy { java.util.concurrent.Executors.newSingleThreadExecutor() }
 
     /** How far below the numerals their shadow reaches, px. */
     @Suppress("UNUSED_PARAMETER")
@@ -460,7 +676,7 @@ object ClockNumerals {
 
     /** The last shape built (debug: written out by HomeActivity's test hook). */
     @Volatile var lastBuilt: dev.launcher.app.GlassMask? = null
-    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val main by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
     /**
      * [build] on a worker thread (the distance transform takes some tens of ms); [done] runs on the main thread, always (with
@@ -484,7 +700,10 @@ object ClockNumerals {
      */
     fun build(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, unitPx: Float): dev.launcher.app.GlassMask {
         val mask = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8)
-        android.graphics.Canvas(mask).drawText(time, w / 2f, baseline, paint)
+        // (Stacked: a line each, [lineStep] apart.)
+        val step = lineStep(paint)
+        val canvas = android.graphics.Canvas(mask)
+        for ((i, line) in time.split('\n').withIndex()) canvas.drawText(line, w / 2f, baseline + i * step, paint)
         val cov = readAlpha(mask)
         val n = w * h
         val inside = BooleanArray(n) { cov[it] >= 128 }
@@ -494,8 +713,12 @@ object ClockNumerals {
         val signed = FloatArray(n) { i -> if (inside[i]) dIn[i] - 0.5f + (cov[i] - 128) / 255f else -(dOut[i] - 0.5f) + (cov[i] - 127) / 255f }
         // The lens is the dock's own: its 20 pt bevel and 30 pt bend (the strokes are narrower than the bevel, so the whole
         // stroke is lens, as a thick glass digit is).
-        val ins = ArrayList<Float>()
-        for (i in 0 until n) if (signed[i] > 0f) ins += signed[i]
+        // (A float array: boxed in a list, the inside of a Large clock's digits was some 300 000 objects to collect.)
+        var count = 0
+        for (i in 0 until n) if (signed[i] > 0f) count++
+        val ins = FloatArray(count)
+        count = 0
+        for (i in 0 until n) if (signed[i] > 0f) ins[count++] = signed[i]
         ins.sort()
         val half = if (ins.isEmpty()) 10f else ins[(ins.size * 0.95f).toInt().coerceAtMost(ins.size - 1)]
         val bevel = 20f * unitPx
@@ -737,10 +960,13 @@ class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx)
         }
 
     /** Edit mode ended while home is out of sight: the Search pill back at once. */
-    fun endEditNow() {
-        editing = false
+    fun endEditNow() = setEditingNow(false)
+
+    /** The page dots ([v]) or the Search pill at once, nothing animating. */
+    fun setEditingNow(v: Boolean) {
+        editing = v
         fade?.cancel()
-        search = 1f
+        search = if (v) 0f else 1f
         content.invalidate()
     }
 

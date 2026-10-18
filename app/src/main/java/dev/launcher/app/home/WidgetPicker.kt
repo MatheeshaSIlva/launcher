@@ -59,7 +59,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         fun widgetPreviewImage(info: AppWidgetProviderInfo): Drawable?
         /** Main thread. */
         fun widgetPreviewView(info: AppWidgetProviderInfo, parent: android.view.ViewGroup): View?
-        fun addClockWidget()
+        fun addClockWidget(size: WidgetSize)
         fun addAppWidget(info: AppWidgetProviderInfo, size: WidgetSize)
         /** How far the sheet is up (0..1): home blurs and dims behind it by as much. */
         fun pickerProgress(k: Float)
@@ -235,12 +235,13 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         pressed = null
         pressK.snapTo(0f)
         clockGlasses.clear()
+        oldClockGlasses.clear()
         clockBuilding.clear()
-        // The featured clock shows today and the time now (a made-up date next to the real one on home looked wrong).
-        val now = java.util.Date()
-        val locale = java.util.Locale.getDefault()
-        previewDate = java.text.SimpleDateFormat("EEE d", locale).format(now)
-        previewTime = java.text.SimpleDateFormat(if (android.text.format.DateFormat.is24HourFormat(context)) "H:mm" else "h:mm", locale).format(now)
+        // The featured clock shows today and the time now (a made-up date next to the real one on home looked wrong), and
+        // goes on with the minutes while the gallery is open (it stayed at the minute it opened, behind the status bar's).
+        setPreviewNow()
+        removeCallbacks(previewMinute)
+        postDelayed(previewMinute, msToNextMinute())
         updateListBounds()
         visibility = VISIBLE
         edit.visibility = VISIBLE
@@ -307,7 +308,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         removeCallbacks(inflateNext)
         rowIcons.clear()
         clockGlasses.clear()
+        oldClockGlasses.clear()
         clockBuilding.clear()
+        removeCallbacks(previewMinute)
         sheetGlass.wallpaper = null
         // The preview layouts added as children go; the field stays.
         for (i in childCount - 1 downTo 0) { val c = getChildAt(i); if (c !== edit) removeViewAt(i) }
@@ -408,12 +411,16 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         hideKeyboard()
         app = a
         pager.snapTo(0f)
-        entries = if (a == null) listOf(Entry(null, WidgetSize.MEDIUM, "Clock", "The time in liquid glass numerals, as on the lock screen."))
+        // Our clock in each size that fits (Small and Large set the hours over the minutes), opened at the Medium one the
+        // featured card shows, as iOS opens a featured widget at its size.
+        entries = if (a == null) listOf(WidgetSize.SMALL, WidgetSize.MEDIUM, WidgetSize.LARGE).filter { it.fits(m.cfg) }
+            .map { Entry(null, it, "Clock", "The time in liquid glass numerals, as on the lock screen.") }
         else a.widgets.flatMap { info ->
             val t = host.widgetLabel(info)
             val d = host.widgetDescription(info)
             host.widgetSizes(info).map { Entry(info, it, t, d) }
         }
+        if (a == null) entries.indexOfFirst { it.size == WidgetSize.MEDIUM }.takeIf { it > 0 }?.let { pager.snapTo(it.toFloat()) }
         push.animateTo(1f, Motion.profile.navPush)
         val infos = entries.mapNotNull { it.info }.distinct().filter { !previews.containsKey(it) }
         val gen = generation
@@ -452,7 +459,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private fun addCurrent() {
         val e = entries.getOrNull(pager.target.roundToInt()) ?: return
         val info = e.info
-        if (info == null) host.addClockWidget() else host.addAppWidget(info, e.size)
+        if (info == null) host.addClockWidget(e.size) else host.addAppWidget(info, e.size)
         close()
     }
 
@@ -808,10 +815,11 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         val fading = clockGlasses.values.any { now - it.second < previewT.get().durationMs }
         var k = ((l * 31L + t) * 31 + rgt) * 31 + btm
         k = k * 31 + Math.round(down * 64f)
-        k = k * 31 + previewDate.hashCode() * 17L + previewTime.hashCode()
+        k = k * 31 + previewDate.hashCode() * 17L + previewNow.time / 60_000L
         k = k * 31 + System.identityHashCode(host.wallpaper())
         k = k * 31 + Math.round(Appearance.wallpaperDim * 255f) * 7L + Appearance.separator
         k = k * 31 + clockGlasses.values.sumOf { System.identityHashCode(it.first).toLong() }
+        k = k * 31 + oldClockGlasses.values.sumOf { System.identityHashCode(it).toLong() }
         if (fading) k = k * 31 + now
         if (k != featuredKey || !featuredNode.hasDisplayList()) {
             featuredNode.setPosition(l, t, rgt, btm)
@@ -853,7 +861,31 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private val clockGlasses = HashMap<Pair<Int, Int>, Pair<GlassDrawable, Long>>()
     private val clockBuilding = HashSet<Pair<Int, Int>>()
     private var previewDate = ""
-    private var previewTime = "9:41"
+    /** The time the gallery's clocks show (set one line or stacked as each size sets it): this minute's. */
+    private var previewNow = java.util.Date()
+
+    private fun setPreviewNow() {
+        val now = java.util.Date()
+        previewNow = now
+        previewDate = java.text.SimpleDateFormat("EEE d", java.util.Locale.getDefault()).format(now)
+    }
+
+    private fun msToNextMinute(): Long = 60_000L - System.currentTimeMillis() % 60_000L + 50L
+
+    /** A new minute: each clock's numerals are built again and crossfade in over the last ones (as home's clock does). */
+    private val previewMinute = object : Runnable {
+        override fun run() {
+            if (visibility != VISIBLE) return
+            setPreviewNow()
+            for ((key, g) in clockGlasses) oldClockGlasses[key] = g.first
+            clockGlasses.clear()
+            invalidate()
+            postDelayed(this, msToNextMinute())
+        }
+    }
+
+    /** The last minute's numerals per clock (size), shown until the new ones have faded in over them. */
+    private val oldClockGlasses = HashMap<Pair<Int, Int>, GlassDrawable>()
 
     /**
      * The clock widget as it looks on home (date line and glass numerals in the widget's own proportions), scaled by [s] into
@@ -906,8 +938,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
 
     /** [window]: the wallpaper window it is on (its shadow stays inside it). */
     private fun drawClockPreview(c: Canvas, box: RectF, s: Float, boxScreenY: Float, window: RectF) {
-        // Exactly the widget's geometry and look (ClockWidgetView): the date at 19 pt with its shadow, the numerals' box
-        // from 25 pt to the bottom, on the wallpaper, in the tone home's clock would take there.
+        // Exactly the widget's geometry and look (ClockWidgetView): the date at 19 pt with its shadow, the numerals 25 pt
+        // below its top, one line or (a square card) the hours over the minutes, the two in the middle of the card, on the
+        // wallpaper, in the tone home's clock would take there.
         val tone = previewTone(host.wallpaper(), box, boxScreenY)
         val dateSize = m.pt(19f) * s
         clockDate.textSize = dateSize
@@ -915,23 +948,35 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         clockDate.color = col
         clockDate.alpha = ((col ushr 24) * 0xF2 / 255f).toInt()
         clockDate.setShadowLayer(m.pt(5f) * s, 0f, m.pt(1f) * s, ((0x66 * (1f - tone)).toInt()) shl 24)
-        c.drawText(previewDate, box.centerX(), box.top + dateSize * 0.86f, clockDate)
-        val numTop = box.top + m.pt(25f) * s
+        val digitsTop = m.pt(25f) * s
+        val inset = m.pt(8f) * s
         val w = box.width().roundToInt()
-        val boxH = (box.bottom - numTop).roundToInt()
-        if (w <= 0 || boxH <= 0) return
-        val baseline = ClockNumerals.layout(clockPaint, w.toFloat(), boxH.toFloat(), android.text.format.DateFormat.is24HourFormat(context))
+        val full = box.height() - 2 * inset - digitsTop
+        if (w <= 0 || full <= 0f) return
+        val is24 = android.text.format.DateFormat.is24HourFormat(context)
+        val stacked = ClockNumerals.stacks(w.toFloat(), full)
+        val tight = ClockNumerals.tightBox(android.text.TextPaint(clockPaint), w.toFloat(), full, is24, stacked)
+        val top = box.top + inset + ((full - tight) / 2f).coerceAtLeast(0f)
+        c.drawText(previewDate, box.centerX(), top + dateSize * 0.86f, clockDate)
+        val numTop = top + digitsTop
+        val boxH = tight.roundToInt()
+        if (boxH <= 0) return
+        val previewTime = ClockNumerals.format(previewNow, is24, stacked)
+        val baseline = ClockNumerals.layout(clockPaint, w.toFloat(), boxH.toFloat(), is24, stacked)
         // As on home: the glass reaches below the numerals for their shadow (kept inside the window here).
         val h = boxH + (ClockNumerals.shadowRoom(context) * s).roundToInt()
         val wp = host.wallpaper()
         val key = w to h
         val g = clockGlasses[key]
+        val old = oldClockGlasses[key]
         if (wp != null && android.os.Build.VERSION.SDK_INT >= 33 && g == null && key !in clockBuilding) {
             clockBuilding += key
             val gen = generation
+            val minute = previewNow
             ClockNumerals.buildAsync(clockPaint, w, h, baseline, previewTime, m.u * s) { mask ->
                 clockBuilding -= key
-                if (gen != generation || mask == null) return@buildAsync
+                // (A minute that went by meanwhile: the next draw builds the new one.)
+                if (gen != generation || mask == null || minute !== previewNow) { invalidate(); return@buildAsync }
                 val glass = try {
                     GlassDrawable(wp, m.w, m.h, 0f, m.u, resources.displayMetrics.density * HomeScreen.REVEAL_CELL_DP, GlassStyle.IOS_CLOCK,
                         GlassDrawable.Source.FROSTED, mask)   // on the wallpaper window: exactly the home clock's glass
@@ -940,24 +985,29 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
                 invalidate()
             }
         }
-        if (g != null && c.isHardwareAccelerated) {
-            val k = previewT.get().atMs((SystemClock.uptimeMillis() - g.second).toFloat()).coerceIn(0f, 1f)
-            val gl = g.first
-            gl.alpha = (255 * k).toInt()
-            gl.tone = tone
-            gl.originX = box.left
-            gl.originY = boxScreenY + numTop
-            gl.setBounds(box.left.roundToInt(), numTop.roundToInt(), box.left.roundToInt() + w, numTop.roundToInt() + h)
+        if ((g != null || old != null) && c.isHardwareAccelerated) {
+            val k = g?.let { previewT.get().atMs((SystemClock.uptimeMillis() - it.second).toFloat()).coerceIn(0f, 1f) } ?: 0f
             c.save()
             windowClip.reset()
             windowClip.addRoundRect(window, m.widgetRadius * s, m.widgetRadius * s, Path.Direction.CW)
             c.clipPath(windowClip)
-            gl.draw(c)
+            fun place(gl: GlassDrawable, a: Float) {
+                gl.alpha = (255 * a).toInt()
+                gl.tone = tone
+                gl.originX = box.left
+                gl.originY = boxScreenY + numTop
+                gl.setBounds(box.left.roundToInt(), numTop.roundToInt(), box.left.roundToInt() + w, numTop.roundToInt() + h)
+                gl.draw(c)
+            }
+            if (old != null && k < 1f) place(old, 1f - k)
+            if (g != null) place(g.first, k)
             c.restore()
-            if (k < 1f) postInvalidateOnAnimation()
+            if (g != null && k < 1f) postInvalidateOnAnimation()
+            if (k >= 1f && old != null) oldClockGlasses.remove(key)
         } else if (wp == null || android.os.Build.VERSION.SDK_INT < 33) {
             clockPaint.alpha = 0xE6
-            c.drawText(previewTime, box.centerX(), numTop + baseline, clockPaint)
+            val step = ClockNumerals.lineStep(clockPaint)
+            for ((i, line) in previewTime.split('\n').withIndex()) c.drawText(line, box.centerX(), numTop + baseline + i * step, clockPaint)
         }
     }
 
@@ -1034,12 +1084,13 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
         // Our clock is shown on a window onto the wallpaper (as it will look on home); Android widgets on glass cards.
         if (info == null) drawWallpaperWindow(c, box, rad, sheetY(), 0f) else glassShape(c, box, rad, sheetY(), 0f, cardFill, 0x1F, HomeTokens.WIDGETS_CARD)
         if (info == null) {
-            // Our clock: the widget inside its card with the featured card's margins, scaled as the card is.
+            // Our clock: the widget at this size inside its card with the featured card's margins, scaled as the card is (it
+            // was always the Medium clock shrunk to the card, and Small and Large set the time otherwise: ClockNumerals.stacks).
             val padH = featuredPadH * s
             val padV = featuredPadV * s
-            val fs = min((box.width() - 2 * padH) / m.widgetWidth(e.size.spanX), (box.height() - 2 * padV) / m.widgetHeight(e.size.spanY)) * (m.widgetWidth(e.size.spanX) / m.widgetWidth(4))
-            val bw = m.widgetWidth(4) * fs
-            val bh = m.widgetHeight(2) * fs
+            val fs = min((box.width() - 2 * padH) / m.widgetWidth(e.size.spanX), (box.height() - 2 * padV) / m.widgetHeight(e.size.spanY))
+            val bw = m.widgetWidth(e.size.spanX) * fs
+            val bh = m.widgetHeight(e.size.spanY) * fs
             clockR.set(box.centerX() - bw / 2f, box.centerY() - bh / 2f, box.centerX() + bw / 2f, box.centerY() + bh / 2f)
             drawClockPreview(c, clockR, fs, sheetY(), box)
             return

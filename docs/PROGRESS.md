@@ -2563,3 +2563,29 @@ the wallpaper's:
   of a launch grabbed mid-flight. It is re-aimed with the depth now (`PreviewView.aimDolly`). Checked on the emulator in
   slow motion: Clock closed, Maps opened as it landed: home zooms toward Maps.
 
+- **Widgets** ("they work but they suck"; checked on the emulator in 4x slow motion, frame by frame):
+  - *Placement.* A widget now moves widgets in its way, as iOS does (`Grid.putAt`): one of its size it came from beside
+    swaps into its old place, others go to the first place they fit from where they were on, the icons under them move on,
+    and what fits nowhere on the page goes to the next (an icon still never moves a widget). Before, a widget added at the
+    top went to the bottom or another page, and one dragged or grown onto another was refused. A drag and a held resize
+    handle are worked out from the layout as it was when they began (`EditMode.Snapshot`): what one place or size moved
+    out of the way comes back when the finger goes on (items drifted further with every step and never returned).
+  - *The clock's sizes.* Small and Large set the hours over the minutes (Apple Watch's X-Large face,
+    `ClockNumerals.stacks`): one line in a square card left most of it empty and Large showed Medium's numerals over an
+    empty card. The clock sits in the middle of its card with an 8 pt inset (the date was against the top edge), the date
+    glides with it. The gallery offers the clock in all three sizes (each preview set as on home) and its clocks follow
+    the minute (they kept the minute the gallery opened at).
+  - *Resizing.* The glass clock's old numerals stay and grow or shrink with the card toward the size they would have in
+    it while the new ones, built for the new size, crossfade in over them, both keeping to the card's middle (both were
+    hidden until the new shape was built: no time for a moment). An Android widget is laid out at the card's size as shown,
+    frame by frame: its content reflows with the card's edge and always fills it with its own corners (the picture of
+    the old look crossfading over the content laid out at the new size was what made the corners change while the handle
+    was held). A layout switch mid-way (Android 12's sized layouts) keeps the old layout live over the new one as it fades;
+    what the app sends meanwhile waits until the card is at rest (a picture of it stayed put as the card moved on, every
+    button twice).
+  - *From the menu.* A size or style chosen in a widget's menu: the copy lifted above the blur is recorded from the widget
+    at every frame as the menu closes (`ContextMenuView.LiveCopy`), whole until the blur behind it has gone: the still copy
+    of the old size faded out over the widget resizing under it (the date and buttons twice), and the widget showed
+    through it still blurred.
+  - *Edit mode survives home being built again* (a scheduled dark mode or new colours meanwhile): it ended unseen under
+    the old look's picture, and the next drag on a widget's handle pulled Spotlight down instead.

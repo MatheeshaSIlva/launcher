@@ -106,6 +106,64 @@ class GridTest {
         assertEquals(listOf(16, 17, 18, 19, 20), listOf(a, b, c, d, e).map(::cellOf))
     }
 
+    @Test fun aGrowingWidgetMovesTheWidgetInItsWay() {
+        // The clock 4x2 on rows 0-1, a calendar 4x2 on rows 2-3, icons on row 4; the clock grows to 4x4 (rows 0-3): the
+        // calendar goes to the first place it fits from where it was (rows 4-5), the icons there move on (off the page).
+        val clock = HomeItem.Widget("clock", 4, 2).apply { col = 0; row = 0 }
+        val cal = HomeItem.Widget(HomeItem.Widget.APP, 4, 2, 7, "cal").apply { col = 0; row = 2 }
+        val a = app("a", 16); val b = app("b", 17)
+        val page = mutableListOf<HomeItem>(clock, cal, a, b)
+        page.remove(clock)
+        val big = clock.with(spanX = 4, spanY = 4)
+        val off = Grid.putAt(page, big, 0, 0, cols, rows)!!
+        assertEquals(16, cellOf(cal))
+        assertEquals(listOf(a, b), off)
+        assertTrue(page.none { it === a || it === b })
+    }
+
+    @Test fun aWidgetAddedAtTheTopMovesTheOneThere() {
+        // As iOS adds a widget: at the top of the page, the widget there moving down out of its way.
+        val clock = HomeItem.Widget("clock", 4, 2).apply { col = 0; row = 0 }
+        val page = mutableListOf<HomeItem>(clock, app("a", 8))
+        val w = HomeItem.Widget(HomeItem.Widget.APP, 2, 2, 9, "new")
+        val off = Grid.putAt(page, w, 0, 0, cols, rows)!!
+        assertEquals(emptyList<HomeItem>(), off)
+        assertEquals(0, cellOf(w))
+        assertEquals(8, cellOf(clock))
+        assertTrue(page.first { (it as? HomeItem.App)?.key == "a" }.let { cellOf(it) >= 16 })
+    }
+
+    @Test fun aWidgetDraggedOntoOneOfItsSizeSwaps() {
+        val top = HomeItem.Widget("clock", 4, 2).apply { col = 0; row = 0 }
+        val low = HomeItem.Widget(HomeItem.Widget.APP, 4, 2, 7, "cal").apply { col = 0; row = 3 }
+        val page = mutableListOf<HomeItem>(top, low)
+        page.remove(top)
+        Grid.putAt(page, top, 0, 3, cols, rows, origin = 0)
+        assertEquals(12, cellOf(top))
+        assertEquals(0, cellOf(low))
+    }
+
+    @Test fun anIconStillCannotMoveAWidget() {
+        val w = HomeItem.Widget("clock", 2, 2).apply { col = 0; row = 0 }
+        val page = mutableListOf<HomeItem>(w)
+        assertNull(Grid.putAt(page, app("x"), 1, 1, cols, rows))
+        assertEquals(0, cellOf(w))
+    }
+
+    @Test fun aWidgetThatFitsNowhereGoesOffThePage() {
+        // Three 4x2 widgets fill the page; a fourth placed at the top moves them down and the last one off.
+        val w1 = HomeItem.Widget(HomeItem.Widget.APP, 4, 2, 1, "w1").apply { col = 0; row = 0 }
+        val w2 = HomeItem.Widget(HomeItem.Widget.APP, 4, 2, 2, "w2").apply { col = 0; row = 2 }
+        val w3 = HomeItem.Widget(HomeItem.Widget.APP, 4, 2, 3, "w3").apply { col = 0; row = 4 }
+        val page = mutableListOf<HomeItem>(w1, w2, w3)
+        val w4 = HomeItem.Widget(HomeItem.Widget.APP, 4, 2, 4, "w4")
+        val off = Grid.putAt(page, w4, 0, 0, cols, rows)!!
+        assertEquals(0, cellOf(w4))
+        assertEquals(8, cellOf(w1))
+        assertEquals(16, cellOf(w2))
+        assertEquals(listOf<HomeItem>(w3), off)
+    }
+
     @Test fun firstFreeSkipsTakenCells() {
         val page = mutableListOf<HomeItem>(app("a", 0), app("b", 1))
         assertEquals(listOf(2, 0), Grid.firstFree(page, 1, 1, cols, rows)!!.toList())

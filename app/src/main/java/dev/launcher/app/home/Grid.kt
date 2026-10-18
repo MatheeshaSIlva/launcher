@@ -7,7 +7,11 @@ package dev.launcher.app.home
  * Moving an item onto icons: within an unbroken run of icons between the item's old cell and the new one, the icons step
  * over by one towards the old cell (the classic reorder); otherwise the icons in the way move on in reading order, one
  * cell each, until an empty cell takes the last one. Icons pushed past the page's last cell are handed back (they continue
- * on the next page). Widgets never move out of the way: a target that would cover one is refused.
+ * on the next page). An icon never moves a widget (a target that would cover one is refused); a widget moves widgets in
+ * its way as iOS does: one of its size it came from beside swaps into its old place, others go to the first place they fit
+ * from where they were on, the icons under them moving on too, and what fits nowhere on the page is handed back with the
+ * icons. (Widgets that never moved made a widget impossible to place: added at the top, it went to the bottom or another
+ * page; dragged or grown onto another, it was refused: Matheesha, "can't even properly place a widget".)
  */
 object Grid {
     fun span(item: HomeItem, cols: Int, rows: Int): IntArray =
@@ -93,11 +97,13 @@ object Grid {
         cols * rows - place(items, cols, rows).sumOf { it.spanX * it.spanY }
 
     /**
-     * True if [item] could be put at ([col], [row]) on [items]: inside the page and not over a widget other than itself.
+     * True if [item] could be put at ([col], [row]) on [items]: inside the page and, for an icon, not over a widget (a widget
+     * moves widgets in its way).
      */
     fun canPut(items: List<HomeItem>, item: HomeItem, col: Int, row: Int, cols: Int, rows: Int): Boolean {
         val (sx, sy) = span(item, cols, rows).let { it[0] to it[1] }
         if (col < 0 || row < 0 || col + sx > cols || row + sy > rows) return false
+        if (item is HomeItem.Widget) return true
         for (p in place(items, cols, rows)) {
             if (p.item === item || p.item !is HomeItem.Widget) continue
             if (overlap(col, row, sx, sy, p.col, p.row, p.spanX, p.spanY)) return false
@@ -107,32 +113,73 @@ object Grid {
 
     /**
      * Puts [item] at ([col], [row]) on [items] (adding it if it is not there). [origin]: the cell index (row * cols + col)
-     * it came from on this same page, if it did, so the icons between can step back into it. Returns the icons pushed off
-     * the page (removed from [items]), or null if the target covers a widget (nothing changed).
+     * it came from on this same page, if it did, so the icons between can step back into it (and a widget of the same size
+     * in the way can swap into it). Returns the items pushed off the page (removed from [items]: icons, and widgets moved
+     * out of a widget's way that fit nowhere else on it), or null if an icon's target covers a widget (nothing changed).
      */
     fun putAt(items: MutableList<HomeItem>, item: HomeItem, col: Int, row: Int, cols: Int, rows: Int, origin: Int? = null): List<HomeItem>? {
         if (!canPut(items, item, col, row, cols, rows)) return null
         val (sx, sy) = span(item, cols, rows).let { it[0] to it[1] }
         if (items.none { it === item }) items += item
         val others = items.filter { it !== item }
-        place(others, cols, rows)
+        val placedOthers = place(others, cols, rows)
         val n = cols * rows
         // Cells: widgets (other than the item) and the item's own block are fixed; icons are what can move.
         val fixed = BooleanArray(n)
         val icon = arrayOfNulls<HomeItem>(n)
-        for (p in place(others, cols, rows)) {
-            if (p.item is HomeItem.Widget) { for (r in p.row until p.row + p.spanY) for (c in p.col until p.col + p.spanX) fixed[r * cols + c] = true }
-            else icon[p.row * cols + p.col] = p.item
-        }
         val block = ArrayList<Int>()
         for (r in row until row + sy) for (c in col until col + sx) block += r * cols + c
+        val blockSet = block.toHashSet()
+        // Widgets in a widget's way move (an icon's target never covers one: canPut); the others stay where they are
+        // unless a moving widget needs their place.
+        fun cellsOf(p: Placed) = (p.row until p.row + p.spanY).flatMap { r -> (p.col until p.col + p.spanX).map { c -> r * cols + c } }
+        val staying = arrayOfNulls<Placed>(n)
+        val queue = ArrayList<Placed>()
+        for (p in placedOthers) {
+            if (p.item is HomeItem.Widget) {
+                val cells = cellsOf(p)
+                if (cells.any { it in blockSet }) queue += p else for (cell in cells) staying[cell] = p
+            } else icon[p.row * cols + p.col] = p.item
+        }
         val displaced = block.mapNotNull { icon[it] }.toMutableList()
         for (b in block) { icon[b] = null; fixed[b] = true }
         item.col = col; item.row = row
         val target = row * cols + col
+        val off = ArrayList<HomeItem>()
+
+        // The widgets in the way, in reading order: one of the item's size it came from beside swaps into its old place;
+        // the others are pushed on, each to the first place from where it was that the item and the widgets already moved
+        // leave free (a widget staying there is pushed on in turn, the icons there move on with the rest); what is pushed
+        // past the page's end goes off it. (Always onward, so it ends.)
+        val swapIn = queue.singleOrNull()?.takeIf { origin != null && it.spanX == sx && it.spanY == sy }
+        while (queue.isNotEmpty()) {
+            val p = queue.minByOrNull { it.row * cols + it.col }!!
+            queue.remove(p)
+            val w = p.item
+            fun fits(at: Int): Boolean {
+                val c0 = at % cols
+                val r0 = at / cols
+                if (c0 + p.spanX > cols || r0 + p.spanY > rows) return false
+                for (r in r0 until r0 + p.spanY) for (c in c0 until c0 + p.spanX) if (fixed[r * cols + c]) return false
+                return true
+            }
+            val from = p.row * cols + p.col
+            val at = if (swapIn === p && origin != null && fits(origin)) origin else (from until n).firstOrNull { fits(it) }
+            if (at == null) { off += w; continue }
+            w.col = at % cols; w.row = at / cols
+            for (r in w.row until w.row + p.spanY) for (c in w.col until w.col + p.spanX) {
+                val cell = r * cols + c
+                staying[cell]?.let { q -> for (qc in cellsOf(q)) staying[qc] = null; queue += q }
+                icon[cell]?.let { displaced += it }
+                icon[cell] = null
+                fixed[cell] = true
+            }
+        }
+        // The widgets that stay are fixed where they are.
+        for (cell in 0 until n) if (staying[cell] != null) fixed[cell] = true
 
         // A 1x1 move within an unbroken run of icons towards its old cell: the run steps over by one (classic reorder).
-        if (sx == 1 && sy == 1 && origin != null && origin != target && displaced.size == 1 && icon[origin] == null) {
+        if (sx == 1 && sy == 1 && origin != null && origin != target && displaced.size == 1 && icon[origin] == null && !fixed[origin]) {
             val step = if (origin > target) 1 else -1
             val cells = generateSequence(target) { it + step }.takeWhile { it != origin }.filter { !fixed[it] || it == target }.toList()
             val run = cells.drop(1)
@@ -147,7 +194,6 @@ object Grid {
 
         // Otherwise the icons in the way move on in reading order, keeping their order: each goes to the next cell after the
         // one before it, pushing what is there along, until an empty cell takes the last.
-        val off = ArrayList<HomeItem>()
         var cursor = -1
         for (d in displaced.sortedBy { it.row * cols + it.col }) {
             var carry: HomeItem = d
