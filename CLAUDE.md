@@ -197,7 +197,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   container, Playful genie, Calm fade, Cinematic dolly: `tools/design/build_style_presets.py`). The settings show a style
   by playing it (`settings/AppStyleArt`: the picture of home, the presets' cards, the Style group of Opening apps and
   Going home), never by name alone. Theme seeds and motion seeds both live in the builder, which
-  writes the two files. Test theme: `graphite`. New and migrated drawing code reads tokens, never literals; every token says where its
+  writes the two files. Test theme: `graphite`. `pixel` (`tools/design/build_pixel_theme.py`, from AOSP's numbers and
+  captures of the Android 17 emulator's shade): Material 3 Expressive in the phone's palette by role, so far for the shade
+  (step 1 of `docs/SHADE_PIXEL_EVALUATION.md`, the engine test before the shade becomes blocks and layout files). New and migrated drawing code reads tokens, never literals; every token says where its
   value came from (kit, measured, judged). Points to pixels: one unit everywhere, `Scale.unitPx` (policy `adaptive`: 402 pt
   across a phone, never larger than the dp at the phone's default density, times the Display size's zoom; text through
   `Design.text` follows the Font size up to 130 %, not the status bar nor home's labels; policy `custom`: the same base
@@ -650,6 +652,13 @@ copy it wholesale — port the working pieces cleanly. File map:
   restarts, and a view kept in a field (the cover that hands the settings back to home) stayed in the removed window, never
   drew, and the hand-back waited for it forever (the settings stuck on home's picture: "home freezes"). Make such views in
   the window they show in (`parent === host`), drop them with it, and never let a wait for a frame be the only way out.
+- **A base theme's Material You section can hide a derived theme's component values.** iOS 27's `materialYou` sets some
+  `comp.*` tokens itself (Control Center's glass, wells, veil, buttons and gallery; Notification Center's count; the
+  banners' plain colour): with the wallpaper's colours on, the resolver finds those before the alias to `component.*`
+  that a theme built on iOS 27 restyles, so Pixel's tiles stayed iOS glass. A derived theme points such tokens back at the
+  components (`pixel.json` does); the clean fix is iOS 27's builder writing its Material You at the component level. And
+  Control Center's backdrop only darkens: its material's fills become one dimming amount when the picture behind is baked
+  (`Shade.ccDim`), so a light veil is dropped.
 - **A surface has a fill budget** (`MaterialPainter.MAX_FILLS`, now 12): under, own and over fills share it, and Material
   You adds two tint layers to every glass. Past it, layers were left out silently (a lit Control Center well lost its
   accent and looked off). The painter logs the first overflow.

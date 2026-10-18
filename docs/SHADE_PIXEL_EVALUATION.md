@@ -198,6 +198,40 @@ a builder (later) lets people write their own.
    numbers, until the file reproduces Pixel's shade.
 5. **Later**: the layout builder in the settings, so the same file format is open to everyone.
 
+## Step 1 done: the theme alone (2026-10-19)
+
+Matheesha: "yes, go with the blocks approach, start step 1". Built without a line of code: `assets/themes/pixel.json`
+(150 tokens, written by `tools/design/build_pixel_theme.py` with each value's source: AOSP's numbers, the captures, or a
+judgement where Pixel has nothing like an iOS part), on iOS 27's, its colours the phone's palette by role.
+
+**What the theme reached** (emulator, light and dark): tiles that are off as light (dark, in dark) pills over the blur,
+lit tiles and the sliders' level in the palette's primary, every symbol in onSurfaceVariant, a large tile's symbol in a
+circle of surfaceContainerHighest; notification cards opaque in surfaceContainerHigh with 28 dp corners, 16 dp from the
+sides, a 40 dp icon, text from 72 dp, 16/14/12 sp type; groups as one card (no shelves); banners as opaque cards (no live
+blur); Material's round buttons; Google Sans Flex everywhere (downloaded at first use); the wallpaper's colours.
+
+**What the engine could not do, found on the way** (besides the gaps listed above):
+- **Control Center's backdrop only darkens.** Its material's fills are reduced to one dimming amount when the picture
+  behind is baked (`Shade.ccDim`): a light veil, Pixel's in light mode, is dropped, so the blurred screen shows at full
+  colour behind the tiles (dark mode is right: its veil darkens). Needs code: the backdrop drawn with its fills' colours.
+- **Notification Center's veil lies only under the list.** The cover sheet keeps the wallpaper and the lock-screen clock;
+  Pixel's veil over the whole panel is structure (step 4) and code.
+- **iOS 27's Material You section sets some `comp.*` tokens itself** (Control Center's glass, its wells, its veil, its
+  buttons and gallery, Notification Center's count, the banners' plain colour). With the wallpaper's colours on (Pixel
+  turns them on) those hid the `component.*` values a theme built on iOS 27 gives; Control Center's tiles stayed iOS glass
+  until Pixel pointed those tokens back at the components. Better: iOS 27's builder writes its Material You at the
+  component level, so a theme built on it needs no pointing back.
+
+**Confirmed on screen**: lit tiles keep the pill (no corner when on), cells are square, the modules are iOS's (2x2
+connectivity and media, vertical sliders), and none of Pixel's structure is there (header, quick row, pages, footers).
+
+**To see it on the phone**: Settings › Notifications & Control Center › Look › Pixel, then Apply (only the shade takes
+it). Or Look › Pixel for the whole phone: so far only the shade is Pixel's; the rest takes its font and the wallpaper's
+colours.
+
+**Step 2 grows by two**: the four look additions (the corner when on, the symbol box's corner, the cell's height, a symbol
+set), plus Control Center's backdrop drawn with its veil's colours, and iOS 27's Material You moved to the component level.
+
 ## References
 
 - Captures (emulator, Android 17 SystemUI, 1080 x 2400, 420 dpi): `tools/shots/shade_qqs.png` (first pull),

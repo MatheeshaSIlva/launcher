@@ -1,0 +1,815 @@
+{
+ "format": 1,
+ "name": "Pixel",
+ "description": "Android's Material 3 Expressive, so far for the shade (notifications, controls, banners)",
+ "author": "Launcher",
+ "version": "0.1",
+ "extends": "ios27",
+ "_about": "Pixel's look as a theme on iOS 27's (docs/SHADE_PIXEL_EVALUATION.md, step 1): written by tools/design/build_pixel_theme.py from AOSP's numbers and captures of the Android 17 emulator's shade. Only what differs from iOS 27 is written here; its colours are the phone's palette by role, as a Pixel's.",
+ "tokens": {
+  "sys.font.text": {
+   "choice": "google:Google Sans Flex",
+   "src": "judged:Pixel draws its system UI in Google Sans Flex (Material 3 Expressive)"
+  },
+  "sys.font.display": {
+   "choice": "google:Google Sans Flex",
+   "src": "judged:Pixel draws its system UI in Google Sans Flex (Material 3 Expressive)"
+  },
+  "sys.color.source": {
+   "choice": "wallpaper",
+   "src": "judged:a Pixel always takes the wallpaper's colours (Material You)"
+  },
+  "comp.cc.module.material": {
+   "ref": "component.control.material",
+   "src": "judged:back to the component (iOS 27's Material You sets its own tinted glass here)"
+  },
+  "comp.cc.well.material": {
+   "ref": "component.control.well-material",
+   "src": "judged:back to the component (iOS 27's Material You sets its own tinted glass here)"
+  },
+  "comp.cc.background.material": {
+   "ref": "component.panel.material",
+   "src": "judged:back to the component (iOS 27's Material You sets its own tinted veil here)"
+  },
+  "component.panel.material": {
+   "material": {
+    "frost": 30,
+    "fills": [
+     [
+      "@surface_container_lowest",
+      [
+       0.55,
+       0.72
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "measured:the shade's veil over a blur, about 55 % light in light and 72 % dark in dark (docs/PIXEL_PROFILE.md, the captures)"
+  },
+  "component.control.material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container_lowest|@surface_container_highest",
+      [
+       0.45,
+       0.55
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "measured:Android 17 emulator shade, 2026-10-19 (tools/shots/shade_qs.png, shade_qqs.png) against its palette: a tile that is off is a light layer of about 45 % over the veil (light); dark judged alike"
+  },
+  "component.control.on-material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@primary",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, background primary (the capture: exactly the palette's primary)"
+  },
+  "component.control.corner": {
+   "pt": 36,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: InactiveCornerRadius 50 dp on a 72 dp tile, a pill (half its height); on, 24 dp (ActiveTileCornerRadius): no token for the corner when on yet"
+  },
+  "component.control.symbol": {
+   "pt": 26,
+   "src": "measured:Android 17 emulator shade, 2026-10-19 (tools/shots/shade_qs.png, shade_qqs.png) against its palette: a small tile's symbol about 25 dp across (CommonTileDefaults.IconSize 32 dp with its padding)"
+  },
+  "component.control.symbol-color": {
+   "color": "@on_surface_variant",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: inactiveTileColors, icon onSurfaceVariant"
+  },
+  "component.control.on-symbol-color": {
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary"
+  },
+  "component.control.accent-symbol-color": {
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary"
+  },
+  "component.control.label-color": {
+   "color": "@on_surface_variant",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: inactiveTileColors, label onSurfaceVariant (on, onPrimary: no token for a name when on yet)"
+  },
+  "component.control.detail-color": {
+   "color": "@on_surface_variant",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: secondaryLabel onSurfaceVariant"
+  },
+  "component.control.detail-blend": {
+   "choice": "NORMAL",
+   "src": "judged:Material draws words plainly (no vibrancy)"
+  },
+  "component.control.chevron-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:as the state's words"
+  },
+  "component.control.title": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: LargeTileLabels, labelLarge (14/20, 500, 0.1)"
+  },
+  "component.control.title-large": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 16,
+    "line": 24,
+    "tracking": 0.15
+   },
+   "src": "judged:titleMedium (16/24, 500) for the larger names"
+  },
+  "component.control.detail": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.25
+   },
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: secondary label, bodyMedium (14/20, 400, 0.25)"
+  },
+  "component.control.well-material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container_highest",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: inactiveDualTargetTileColors, iconBackground surfaceContainerHighest"
+  },
+  "comp.cc.grid.cell": {
+   "pt": 72,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: TileHeight 72 dp"
+  },
+  "comp.cc.grid.gap": {
+   "pt": 8,
+   "src": "kit:AOSP SystemUI dimens.xml qs_tile_margin_horizontal / _vertical 8 dp"
+  },
+  "comp.cc.well.size": {
+   "pt": 56,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: ToggleTargetSize 56 dp"
+  },
+  "comp.cc.well.symbol": {
+   "pt": 24,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: LargeTileIconSize 28 dp with its padding, about 24 dp drawn"
+  },
+  "comp.cc.wide.padding": {
+   "pt": 8,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: TilePadding 8 dp"
+  },
+  "comp.cc.wide.gap": {
+   "pt": 6,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: TileArrangementPadding 6 dp"
+  },
+  "component.slider.corner": {
+   "pt": 36,
+   "src": "kit:AOSP compose/core PlatformSlider.kt: the track rounded by half its size (a pill) on a 72 dp module"
+  },
+  "component.slider.expanded-corner": {
+   "pt": 40,
+   "src": "judged:the opened slider as a pill too"
+  },
+  "comp.cc.button.material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container_highest",
+      [
+       0.85,
+       0.85
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:as Quick Settings' round footer buttons (qs_footer_action_button_size 48 dp), surfaceContainerHighest"
+  },
+  "comp.cc.button.symbol-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:as the footer buttons' symbols"
+  },
+  "comp.cc.button.size": {
+   "pt": 34,
+   "src": "judged:larger than iOS 27's (Pixel's are 48 dp; kept within the status row)"
+  },
+  "comp.cc.button.symbol": {
+   "pt": 18,
+   "src": "judged:as iOS 27's"
+  },
+  "comp.cc.media.text-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:Material's secondary words"
+  },
+  "comp.cc.media.text-blend": {
+   "choice": "NORMAL",
+   "src": "judged:Material draws words plainly"
+  },
+  "comp.cc.media.title": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "judged:labelLarge, as the tiles' names"
+  },
+  "comp.cc.media.placeholder-color": {
+   "color": "@surface_container_highest",
+   "src": "judged:an empty cover in surfaceContainerHighest"
+  },
+  "comp.cc.media.track-color": {
+   "color": "@outline_variant",
+   "src": "judged:a track in outlineVariant"
+  },
+  "comp.cc.media.progress-color": {
+   "color": "@primary",
+   "src": "judged:progress in primary"
+  },
+  "comp.cc.media.level-color": {
+   "color": "@primary",
+   "src": "judged:the level in primary"
+  },
+  "comp.cc.media.secondary-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:Material's secondary words"
+  },
+  "comp.cc.add.fill-color": {
+   "color": "@primary",
+   "src": "judged:the add badge in primary"
+  },
+  "comp.cc.edit.badge-color": {
+   "color": "@surface_container_highest",
+   "src": "judged:the remove badge on surfaceContainerHighest"
+  },
+  "comp.cc.edit.badge-minus-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:its minus in onSurfaceVariant"
+  },
+  "comp.cc.edit.handle-color": {
+   "color": "@primary",
+   "src": "judged:the resize handle in primary (Pixel's editor marks the selected tile in primary)"
+  },
+  "comp.cc.gallery.sheet": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:the gallery as a Material sheet (surfaceContainer)"
+  },
+  "comp.cc.gallery.entry": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container_highest",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:entries as tiles that are off"
+  },
+  "comp.cc.gallery.dim": {
+   "color": "#00000052",
+   "src": "judged:Material's scrim (32 % black)"
+  },
+  "comp.cc.gallery.corner": {
+   "pt": 28,
+   "src": "judged:a Material sheet's top corners (28 dp)"
+  },
+  "comp.cc.gallery.grabber-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:Material's drag handle"
+  },
+  "comp.cc.gallery.heading-color": {
+   "color": "@on_surface",
+   "src": "judged:Material's words"
+  },
+  "comp.cc.gallery.section-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:Material's secondary words"
+  },
+  "comp.cc.gallery.name-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:Material's secondary words"
+  },
+  "comp.cc.menu.label": {
+   "color": "@on_surface",
+   "src": "judged:Material's menu words"
+  },
+  "comp.cc.menu.press": {
+   "color": "@on_surface/12",
+   "src": "judged:Material's pressed state (12 %)"
+  },
+  "component.notification.material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container_high",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "measured:Android 17 emulator shade, 2026-10-19 (tools/shots/shade_qs.png, shade_qqs.png) against its palette: cards opaque in surfaceContainerHigh (#e7e6ef against the palette's #e7e7f1)"
+  },
+  "component.notification.floating-material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container_high",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:a heads-up notification is the same opaque card"
+  },
+  "component.notification.corner": {
+   "pt": 28,
+   "src": "kit:AOSP SystemUI dimens.xml notification_corner_radius 28 dp (between joined cards 4 dp: no token for that yet)"
+  },
+  "component.notification.padding": {
+   "pt": 16,
+   "src": "kit:AOSP core dimens.xml notification_2025_margin 16 dp"
+  },
+  "component.notification.icon": {
+   "pt": 40,
+   "src": "kit:AOSP core dimens.xml notification_2025_icon_circle_size 40 dp"
+  },
+  "component.notification.title": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 16,
+    "line": 24,
+    "tracking": 0.15
+   },
+   "src": "kit:AOSP core dimens.xml notification_big_title_text_size 16 sp (the 2025 template as captured), titleMedium"
+  },
+  "component.notification.body": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.25
+   },
+   "src": "kit:AOSP core dimens.xml notification_text_size 14 sp, bodyMedium"
+  },
+  "component.notification.time": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 12,
+    "line": 16,
+    "tracking": 0.4
+   },
+   "src": "kit:AOSP core dimens.xml notification_subtext_size 12 sp, bodySmall"
+  },
+  "component.notification.label-color": {
+   "color": "@on_surface",
+   "src": "judged:Material's words on a card (onSurface)"
+  },
+  "component.notification.time-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:Material's secondary words"
+  },
+  "component.notification.time-blend": {
+   "choice": "NORMAL",
+   "src": "judged:Material draws words plainly"
+  },
+  "component.notification.gap": {
+   "pt": 2,
+   "src": "measured:Android 17 emulator shade, 2026-10-19 (tools/shots/shade_qs.png, shade_qqs.png) against its palette: a section's cards joined about 2 dp apart"
+  },
+  "comp.nc.list.margin": {
+   "pt": 16,
+   "src": "kit:AOSP SystemUI dimens.xml notification_side_paddings 16 dp"
+  },
+  "comp.nc.platter.text-x": {
+   "pt": 72,
+   "src": "kit:AOSP core dimens.xml notification_2025_content_margin_start 72 dp"
+  },
+  "comp.nc.platter.text-top": {
+   "pt": 16,
+   "src": "kit:AOSP core dimens.xml notification_2025_margin 16 dp"
+  },
+  "comp.nc.platter.min-height": {
+   "pt": 72,
+   "src": "kit:AOSP core dimens.xml notification_2025_min_height 72 dp"
+  },
+  "comp.nc.stack.front-text-top": {
+   "pt": 16,
+   "src": "judged:as a single card"
+  },
+  "comp.nc.stack.front-min-height": {
+   "pt": 72,
+   "src": "judged:as a single card"
+  },
+  "comp.nc.stack.shelf-show": {
+   "pt": 0,
+   "src": "judged:a Pixel's collapsed group is one card with a count, no shelves below it"
+  },
+  "comp.nc.count.fill": {
+   "color": "@primary",
+   "src": "judged:the group's count on a primary chip"
+  },
+  "comp.nc.count.label": {
+   "color": "@on_primary",
+   "src": "judged:the count in onPrimary"
+  },
+  "comp.nc.count.type": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 12,
+    "line": 16,
+    "tracking": 0.5
+   },
+   "src": "judged:labelMedium"
+  },
+  "comp.nc.overlay.material": {
+   "material": {
+    "frost": 30,
+    "fills": [
+     [
+      "@surface_container_lowest",
+      [
+       0.55,
+       0.72
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "measured:the shade's veil over a blur, as Quick Settings' (docs/PIXEL_PROFILE.md, the captures)"
+  },
+  "comp.nc.header-color": {
+   "color": "@on_surface",
+   "src": "judged:Material's words on the veil"
+  },
+  "comp.nc.text-shadow-color": {
+   "color": "#00000000",
+   "src": "judged:Material puts no shadow under words"
+  },
+  "comp.nc.media.placeholder-color": {
+   "color": "@surface_container_highest",
+   "src": "judged:an empty cover in surfaceContainerHighest"
+  },
+  "comp.nc.media.track-color": {
+   "color": "@outline_variant",
+   "src": "judged:a track in outlineVariant"
+  },
+  "comp.nc.look.card-color": {
+   "color": "@surface_container_high",
+   "src": "judged:the held card as the cards"
+  },
+  "comp.nc.look.card-corner": {
+   "pt": 28,
+   "src": "kit:AOSP SystemUI dimens.xml notification_corner_radius 28 dp"
+  },
+  "comp.nc.look.dim": {
+   "color": "#00000052",
+   "src": "judged:Material's scrim (32 % black)"
+  },
+  "comp.nc.look.label": {
+   "color": "@on_surface",
+   "src": "judged:Material's words"
+  },
+  "comp.nc.menu.material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:a Material menu (surfaceContainer)"
+  },
+  "comp.nc.menu.label": {
+   "color": "@on_surface",
+   "src": "judged:Material's menu words"
+  },
+  "comp.nc.menu.press": {
+   "color": "@on_surface/12",
+   "src": "judged:Material's pressed state (12 %)"
+  },
+  "comp.nc.menu.corner": {
+   "pt": 16,
+   "src": "judged:Material 3 Expressive's menu corner"
+  },
+  "comp.nc.menu.type": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "judged:labelLarge, a menu's items"
+  },
+  "component.round-button.material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container_high",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material's round button (surfaceContainerHigh)"
+  },
+  "component.round-button.symbol-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:Material's symbol colour"
+  },
+  "component.round-button.symbol-blend": {
+   "choice": "NORMAL",
+   "src": "judged:Material draws symbols plainly"
+  },
+  "component.round-button.on-color": {
+   "color": "@primary",
+   "src": "judged:lit in primary"
+  },
+  "component.round-button.size": {
+   "pt": 48,
+   "src": "judged:Material's 48 dp round button"
+  },
+  "component.round-button.symbol": {
+   "pt": 24,
+   "src": "judged:Material's 24 dp symbol"
+  },
+  "comp.banner.system-blur": {
+   "factor": 0,
+   "src": "judged:a Pixel's heads-up notification is an opaque card (no blur behind it)"
+  },
+  "comp.banner.flat-color": {
+   "color": "@surface_container_high",
+   "src": "judged:the card's colour"
+  },
+  "comp.banner.label": {
+   "color": "@on_surface",
+   "src": "judged:Material's words on a card"
+  },
+  "comp.banner.secondary": {
+   "color": "@on_surface_variant",
+   "src": "judged:Material's secondary words"
+  },
+  "component.button.fill": {
+   "color": "@secondary_container",
+   "src": "judged:Material's filled tonal button (secondaryContainer)"
+  },
+  "component.button.height": {
+   "pt": 40,
+   "src": "judged:Material 3 Expressive's small button (40 dp)"
+  },
+  "component.button.text": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "judged:labelLarge"
+  },
+  "comp.cc.accent.accessibility": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.airplane": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.alarm": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.app-tile": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.bluetooth": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.brightness": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.calculator": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.camera": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.cellular": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.connectivity": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.dark-mode": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.data-saver": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.extra-dim": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.flashlight": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.focus": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.grayscale": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.home": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.hotspot": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.invert": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.launcher-settings": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.live-captions": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.location": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.low-power": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.magnifier": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.media": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.mirroring": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.nfc": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.notes": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.quick-share": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.recognize-music": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.rotation-lock": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.scan-code": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.selfie": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.settings": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.silent": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.stopwatch": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.text-size": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.timer": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.translate": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.video": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.voice-memo": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.volume": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.vpn": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.wallet": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  },
+  "comp.cc.accent.wifi": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+  }
+ }
+}
