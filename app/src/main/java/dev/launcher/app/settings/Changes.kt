@@ -82,7 +82,7 @@ internal fun changesOf(d: Draft, ctx: android.content.Context, only: Part? = nul
         if (d.appearanceMode() != Appearance.Mode.AUTO) add("appearance", "Light & dark", "Look", Appearance.Mode.AUTO.title,
             d.appearanceMode().title, Part.LOOK) { d.chooseAppearance(Appearance.Mode.AUTO) }
         d.elementTheme(dev.launcher.app.layout.Element.SETTINGS)?.let { id ->
-            add("theme:settings", "These settings' theme", "Look", "Follows Look", themeTitle(id), Part.LOOK) {
+            add("theme:settings", "Settings app's theme", "Look", "Follows Look", themeTitle(id), Part.LOOK) {
                 d.chooseElement(dev.launcher.app.layout.Element.SETTINGS, null)
             }
         }
@@ -231,7 +231,10 @@ private class Kept<T>(val key: String, item: T, val k: Animatable<Float, Animati
 /** One change: what it is, where, before and after, and Reset (into the draft: it waits for Apply like the rest). */
 @Composable
 internal fun ChangeRow(c: Change) {
-    BaseRow(c.title, c.place + " · " + c.before + " → " + c.after, null) {
+    // Shown under its part's name (in the list by part, or on the part's page): its place without it ("Notifications &
+    // Control Center › Grid · 4 → 5" wrapped its value onto a line of its own). Before and after stay on one line.
+    val place = c.place.removePrefix(c.part.title).let { r -> if (r == c.place) r else r.removePrefix(" › ") }
+    BaseRow(c.title, (if (place.isEmpty()) "" else "$place · ") + c.before + "\u00A0→\u00A0" + c.after, null) {
         TextButton("Reset", null) { c.reset() }
     }
 }
@@ -269,7 +272,12 @@ internal fun ChangesList(only: Part?, byPart: Boolean) {
     Reveal(all.size > 1) {
         Column {
             Group(null) {
-                ActionRow("Reset all", "Everything listed here back as it comes (waits for Apply)") { for (c in all) c.reset() }
+                ActionRow("Reset all", when (only) {
+                    null -> "Back to the theme and the preset as they come (waits for Apply)"
+                    Part.LOOK -> "Back to the theme as it comes (waits for Apply)"
+                    Part.MOTION -> "Back to the preset as it comes (waits for Apply)"
+                    else -> "Back to how it comes (waits for Apply)"
+                }) { for (c in all) c.reset() }
             }
         }
     }
@@ -289,14 +297,16 @@ internal fun ChangesRow(part: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) 
     val last = remember { intArrayOf(1) }
     if (n > 0) last[0] = n
     val page = remember(part) { ChangesPage(part) }
+    // (At the page's foot: shown at its top it pushed what the finger was on out from under it as the first change came.)
+    val from = when (part) {
+        Part.LOOK -> "the ${dev.launcher.app.design.Design.themes().firstOrNull { it.id == dev.launcher.app.design.Design.themeId }?.name ?: "theme"} theme"
+        Part.MOTION -> "the ${presetName(draft.motionId())} preset"
+        else -> "how it comes"
+    }
     Reveal(n > 0) {
         Column {
             Group(null) {
-                PushRow("${last[0]} change" + (if (last[0] == 1) "" else "s"), when (part) {
-                    Part.LOOK -> "From how the theme has it: see each, reset any"
-                    Part.MOTION -> "From how the preset has it: see each, reset any"
-                    else -> "From how it comes: see each, reset any"
-                }, page, push, lit)
+                PushRow("${last[0]} change" + (if (last[0] == 1) "" else "s") + " from $from", "See each, and reset any", page, push, lit)
             }
         }
     }

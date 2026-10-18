@@ -2512,3 +2512,37 @@ affects our settings app".
 - Seen on home, not fixed yet: after a new wallpaper's reveal, the dock's glass keeps the old wallpaper's tint for about
   a second (its frost is made again after the reveal).
 
+## A day of use: the settings reviewed (2026-10-18, emulator)
+
+Matheesha: "do a full day to day usability testing - try to use our app, tweaking each possible type of setting. Note
+down the issues and how we can improve the user experience". The review, its method and every finding:
+`docs/USABILITY_REVIEW.md`. Fixed in this round, checked on the emulator in light and dark, with the theme's colours and
+the wallpaper's:
+
+- **Groups that never became whole**: the groups' rise-in stagger was capped at the sixth, past what the page's motion
+  reaches (the sixth stayed at 89 %, the seventh on at 75 %), and a group that composed again alone took a new stagger
+  number (any group could turn translucent after an interaction). The number is taken once; from the fifth on they rise
+  together.
+- **White on white**: with the theme's colours in light the sheet was white at 80 % under white cards (255 against 252):
+  it is iOS's grouped grey now (#F2F2F7), as in iOS's own Settings.
+- **One hue for every part** under the wallpaper's colours: a part keeps its hue, turned half way toward the palette's
+  accent, at most 15° (`MaterialYou.harmonize`, unit-tested).
+- **What fits**: Control Center at 5 columns where 4 fit showed 4 while its card and the stage said 5; all say 4 now, the
+  row says what happens and the note why.
+- **The page's structure**: the changes row at each page's foot (at the top it pushed the page down under the finger as
+  the first change came); "N changes to apply" on the Apply bar; a caption under the stage in place of Layout and Where it
+  lives rows with one choice (search lands on it, lit as a card); a part's own theme only when there is another theme;
+  one theme shown with its description; a moment's row says its style and its page puts Style first.
+- **Stages that show the setting**: Look's phone on your wallpaper (dimmed in dark) in the palette's light tones; the
+  Fonts page a type specimen (each font named in its own face, the layout fixed so a font chosen only changes the
+  letters); Look's card "Aa" in the titles' font.
+- **Details**: chip rows scroll out to the card's edge; swatch rims visible in dark; change rows without the part's name
+  under its heading and with "4 → 5" kept on one line; "Inter, titles in Serif"; cards say "iOS 27 theme / preset /
+  style"; `tools/build.sh` shows Gradle's reason when it fails.
+- Found by the review's own reset test before any commit: a part's colour with the theme's colours called itself (a
+  replace inside its own body) and the settings crashed at the first frame after Reset all. Fixed; see the new checking
+  rule in CLAUDE.md.
+- Open (in the review): the dock's glass tint lagging a new wallpaper; App Library names cut at 3 columns; Android's
+  palette lagging a wallpaper set outside its picker (emulator; check the S24); the look-change reveal over the settings
+  page; Phone's stage not showing Shizuku's state; accessibility labels for the drawn stages.
+

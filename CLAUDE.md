@@ -76,11 +76,16 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   plays one act a cycle (`ArtMoves.cycle`: 6 s, longer when the preset's moves are slower than an act and a rest), the
   acts running down the column a beat apart (`STEP`): a card or two moves at a time, and the cards come alive one after
   another as the page appears. Groups on the sheet take iOS's elevated cell colour (the
-  sheet's own grey hid them in dark). Look and Phone push pages one level down (`SubPager`,
+  sheet's own grey hid them in dark); the sheet is iOS's grouped grey in light (#F2F2F7: a white sheet left the white
+  cards no edge). Under the wallpaper's colours each part keeps its own hue, harmonised toward the palette's accent
+  (`partColor`, `MaterialYou.harmonize`: the palette's one primary had made every card the same). A part with one layout
+  or one place says so in a caption under its stage (`PageLead`, which search lands on), not in rows that choose nothing;
+  a part's own theme is offered only while there is another theme. Look and Phone push pages one level down (`SubPager`,
   `Sub`: Look's colours, fonts, size; Phone's Developer page). A part's stage (`settings/Stage.kt`, over the page, no
   touches): the phone drawn as a motion graphic (`settings/PhoneScene.kt`) in the part's colours, at the part's band of
   the phone (`motion.settings.focus`), following the draft (home's grid, dock and names through `HomeMetrics`, gliding on
-  a change; Control Center's columns; the App Library's place; Look's palette and light or dark), playing how the part is
+  a change; Control Center's columns; the App Library's place; Look on your wallpaper in the palette's light tones, light
+  or dark; Look's Fonts page turns it into a type specimen), playing how the part is
   reached (a finger and what it opens, on the draft's curves) and its own act; a moment's page pushed below plays its
   samples on it (`MotionSamples` with `SampleKit.scene`). iOS 27's overview: the page is the blurred wallpaper, the panel on it, its buttons clear glass
   (`comp.settings.glass`). Phone holds Shizuku, updates, safety and About; seven taps on the build turn on the developer
@@ -663,6 +668,8 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
   App Switcher). And there home takes ~1 s to come to the front, so every tap lands after the card: slow motion first
   (`design/motion-edits-ios27.json` with `"motion.debug.slow": {"factor": 4}` through the inbox; `--es files remove` undoes).
 - What only the S24 can show (Samsung blur, One UI quirks, real frame pacing) is reported to Matheesha as unverified.
+- Settings changes are checked with the theme's colours and the wallpaper's, in light and dark: a path only the theme's
+  colours took (a part's colour calling itself) crashed the settings at the first frame after a reset to them.
 - Smoothness on the S24 is measured from what the screen showed: `tools/scenario_spotlight_close.sh`, `scenario_library.sh`,
   `scenario_switch.sh` run launches/closes/switches N times and print per-animation missed refreshes and GPU/CPU per frame
   (`tools/framestats.py` on `dumpsys gfxinfo framestats`; frames whose present time is before their own vsync are not real

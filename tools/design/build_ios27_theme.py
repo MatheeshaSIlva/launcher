@@ -895,7 +895,7 @@ COMPONENT_SEEDS = {
     'comp.settings.title-color': {'ref': 'sys.color.label.primary', 'src': "judged:the theme's primary label"},
     'comp.settings.hint-color': {'ref': 'sys.color.label.secondary', 'src': "judged:the theme's secondary label"},
     'comp.settings.margin': {'ref': 'component.page.margin', 'src': "judged:the page margin of every page"},
-    'comp.settings.sheet.fill': {'light': '#ffffffcc', 'dark': '#1c1c1ef2', 'src': "judged:iOS 26 sheets at a partial height: a white floating panel (the elevated grey in dark); over a solid page nothing shows through"},
+    'comp.settings.sheet.fill': {'light': '#f2f2f7f2', 'dark': '#1c1c1ef2', 'src': "judged:iOS's grouped grey (backgrounds-grouped.primary, #F2F2F7) under white groups, as in its Settings (the elevated grey in dark); a white sheet (#ffffffcc) left the white cards with no edge on it (2026-10-18)"},
     'comp.settings.sheet.rim': {'light': '#ffffffe6', 'dark': '#ffffff1f', 'src': "judged:the bright rim of iOS 26's glass sheets"},
     'comp.settings.sheet.shadow': {'light': '#0000001a', 'dark': '#00000066', 'src': "judged:a soft shadow above the sheet"},
     'comp.settings.sheet.corner': {'pt': 38, 'src': "judged:iOS 26's floating sheets (rounder than cards, as the screen's corners)"},

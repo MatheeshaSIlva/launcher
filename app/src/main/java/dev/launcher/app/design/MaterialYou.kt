@@ -168,6 +168,17 @@ object MaterialYou {
 
     private fun norm(h: Double) = ((h % 360.0) + 360.0) % 360.0
 
+    /**
+     * [design] with its hue turned toward [source]'s by half the way between them, at most [maxTurn] degrees, its lightness
+     * and chroma kept (Material's harmonising: a colour that means something keeps meaning it under any palette).
+     */
+    fun harmonize(design: Int, source: Int, maxTurn: Double = 15.0): Int {
+        val (l, c, h) = toLch(design)
+        val diff = ((toLch(source).third - h + 540.0) % 360.0) - 180.0
+        val turn = minOf(abs(diff) * 0.5, maxTurn) * kotlin.math.sign(diff)
+        return lch(l, c, norm(h + turn))
+    }
+
     // ------------------------------------------------------------------ CIELAB (D65) <-> sRGB
 
     /** L*, C*, h (degrees) of [argb]. */

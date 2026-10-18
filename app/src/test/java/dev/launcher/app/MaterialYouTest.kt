@@ -48,6 +48,22 @@ class MaterialYouTest {
         assertEquals(plain.neutral.chroma, keyed.neutral.chroma, 0.001)
     }
 
+    @Test fun harmonizingTurnsTheHueHalfWayAtMost15Degrees() {
+        fun hue(c: Int) = MaterialYou.toLch(c).third
+        fun turn(from: Double, to: Double) = ((to - from + 540.0) % 360.0) - 180.0
+        val blue = 0xFF3366CC.toInt()
+        val purple = MaterialYou.lch(50.0, 40.0, hue(blue) + 20.0)
+        // Far apart (orange and blue): 15 degrees toward the palette's hue, lightness and chroma as they were.
+        val o = MaterialYou.harmonize(orange, blue)
+        assertEquals(15.0, abs(turn(hue(orange), hue(o))), 1.0)
+        assertTrue(abs(turn(hue(o), hue(blue))) < abs(turn(hue(orange), hue(blue))))
+        assertEquals(MaterialYou.toLch(orange).first, MaterialYou.toLch(o).first, 1.0)
+        // Close (20 degrees apart): half the way.
+        assertEquals(10.0, abs(turn(hue(purple), hue(MaterialYou.harmonize(purple, blue)))), 1.0)
+        // The same hue: unchanged.
+        assertEquals(blue, MaterialYou.harmonize(blue, blue))
+    }
+
     @Test fun namesKnowTheirPalette() {
         assertEquals('P', MaterialYou.paletteOf("system_accent1_500"))
         assertEquals('V', MaterialYou.paletteOf("system_neutral2_100"))

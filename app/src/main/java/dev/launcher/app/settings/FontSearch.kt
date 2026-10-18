@@ -338,7 +338,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.SheetContent(search: 
     SearchField(field, "Search Google Fonts", Modifier.padding(horizontal = pad))
     Spacer(Modifier.height(look.dp(10f * look.unit)))
     val categories = remember { listOf("All") + GoogleFontCatalog.CATEGORIES.map { it.second } }
-    ChoiceChips(categories, category, Modifier.padding(horizontal = pad)) { category = it }
+    ChoiceChips(categories, category, edge = pad) { category = it }
     Spacer(Modifier.height(look.dp(18f * look.unit)))
     Rolling(heading, look.text(SettingsTokens.SECTION, look.color(SettingsTokens.SECTION_COLOR)),
         Modifier.padding(start = pad + pad, bottom = look.dp(6f * look.unit)))

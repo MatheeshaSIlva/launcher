@@ -93,6 +93,8 @@ internal fun MomentPageContent(st: Studio, m: Moment) {
     // Derived: every step of a slider changes the draft; only what it changed composes again.
     val speed by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.motionNumber(id, m.speed) } }
     val bounce by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.motionNumber(id, m.bounce) } }
+    // Pick, then adjust, then every detail (docs/PLAN_SETTINGS_V2.md, principle 1): the style first.
+    if (m.style != null) StyleGroup(m, draft)
     Group(null, m.description + " The phone above plays it.") {
         FeelSlider("Speed", momentSpeedWords(speed), speedToSlider(speed), "Relaxed", "Snappy", changed = abs(speed - 1f) > 0.001f) { t ->
             draft.chooseMotionNumber(id, m.speed, sliderToSpeed(t))
@@ -102,7 +104,6 @@ internal fun MomentPageContent(st: Studio, m: Moment) {
         }
         m.character?.let { c -> CharacterSlider(draft, id, c) }
     }
-    if (m.style != null) StyleGroup(m, draft)
     EveryDetail(st, m)
     val changes by remember(draft, id, v, m) { androidx.compose.runtime.derivedStateOf { draft.momentChanges(id, m) } }
     // (It keeps its last count while it folds away.)
@@ -111,7 +112,7 @@ internal fun MomentPageContent(st: Studio, m: Moment) {
     Reveal(changes > 0) {
         Column {
             Group(null) {
-                ActionRow("Back to ${presetName(id)}'s", "${last[0]} change" + (if (last[0] == 1) "" else "s") + " to ${m.title.lowercase()}") {
+                ActionRow("Reset to ${presetName(id)}", "${last[0]} change" + (if (last[0] == 1) "" else "s") + " to ${m.title.lowercase()}") {
                     draft.resetMoment(id, m)
                 }
             }
@@ -306,7 +307,13 @@ internal fun feelOf(d: Draft, m: Moment): String {
         past < 0.25f -> "bouncy"
         else -> "very bouncy"
     }
-    return "$pace, $spring"
+    // A moment with styles says which first (it was the one thing the row did not say: "Opening apps · Smooth, no bounce"
+    // with the genie chosen).
+    val style = m.style?.let { k ->
+        val s = d.motionStyle(d.motionId(), k)
+        if (k == dev.launcher.app.motion.AppStyles.CLOSING) s.closing else s.opening
+    } ?: return "$pace, $spring"
+    return "$style · ${pace.lowercase()}, $spring"
 }
 
 /** How far in a pushed page may be and still count as gone (its alpha under a 255th). */
@@ -1193,7 +1200,6 @@ internal fun MotionPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
             }
         }
     }
-    ChangesRow(Part.MOTION, push, lit)
     Group("Presets", "How everything moves, each its own way. The phone above plays the one you choose.") {
         PresetCards(presets, draft, clock)
     }
@@ -1203,6 +1209,7 @@ internal fun MotionPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
             for (m in Moments.of(part.first)) androidx.compose.runtime.key(m.id) { MomentRow(m, Part.MOTION, push, lit) }
         }
     }
+    ChangesRow(Part.MOTION, push, lit)
 }
 
 /** The moments' parts as Motion lists them, with their headings. */

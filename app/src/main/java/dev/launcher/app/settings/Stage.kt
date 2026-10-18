@@ -338,7 +338,8 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
     // Control Center's columns as the draft has them: a change resizes its controls on the reflow's curve.
     val ccColumns = remember { Animatable(-1f) }
     LaunchedEffect(draft) {
-        snapshotFlow { draft.int(Element.SHADE, dev.launcher.app.shade.CcGrid.COLUMNS, 4).toFloat() }.collectLatest { n ->
+        // (As many as Control Center shows: only what fits at the draft's size.)
+        snapshotFlow { draft.ccColumnsShown(ctx).toFloat() }.collectLatest { n ->
             if (ccColumns.value < 0f) ccColumns.snapTo(n)
             else ccColumns.animateTo(n, Look.spec(draft.motionCurve(draft.motionId(), MotionTokens.REFLOW)))
         }
@@ -370,6 +371,112 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
     val iconRect = remember { android.graphics.RectF() }
     val cardPath = remember { Path() }
     val paletteInts = remember { PaletteInts() }
+    val wallMatrix = remember { WallMatrix() }
+    // Look's icons: the palette the draft would make, at its light tones (readable on any wallpaper: its mid tones were
+    // dark slate on a slate phone under the wallpaper's colours), else the theme's own three.
+    val lookIcons = remember(look, look.version, draft) {
+        derivedStateOf {
+            if (!draft.wallpaperColors()) art.value.palette else {
+                val dark = Appearance.dark > 0.5f
+                val choice = draft.youChoice()
+                listOf("primary_fixed", "tertiary_fixed", "secondary_fixed").map { role ->
+                    Color(dev.launcher.app.design.Theme.resolveSpec("@$role", dark) { Design.previewPalette(it, choice) })
+                }
+            }
+        }
+    }
+    // Look's Fonts page: the stage turns to type (a specimen in the fonts the draft would apply) and back.
+    val fontsIn = remember(st) { derivedStateOf { st.open == Part.LOOK && st.sub == Sub.FONTS && st.subPush.targetValue >= 0.5f } }
+    val specimen = remember { Animatable(0f) }
+    LaunchedEffect(st) {
+        snapshotFlow { fontsIn.value }.collectLatest { specimen.animateTo(if (it) 1f else 0f, look.motion(MotionTokens.MODE_CROSSFADE)) }
+    }
+    // The fonts the draft would apply, as layers: a font chosen fades in over what shows while every layer before it fades
+    // out from where it is (chosen again mid-fade, nothing jumps). Followed from the draft, not read in composition.
+    val typeLayers = remember { ArrayList<TypeLayer>() }
+    LaunchedEffect(draft, look.version) {
+        snapshotFlow { draft.font("sys.font.text") to draft.font("sys.font.display") }.collect { (textId, displayId) ->
+            val faces = TypeSet(faceFor(textId, 400), faceFor(displayId, 700), textId, displayId)
+            val layer = TypeLayer(faces, Animatable(if (typeLayers.isEmpty()) 1f else 0f))
+            val leaving = typeLayers.toList()
+            typeLayers.add(layer)
+            val spec = look.motion<Float>(MotionTokens.APPEAR_FADE)
+            launch { layer.alpha.animateTo(1f, spec) }
+            for (l in leaving) launch { l.alpha.animateTo(0f, spec); typeLayers.remove(l) }
+        }
+    }
+    val typeInk = look.color(SettingsTokens.ROW_LABEL).toArgb()
+    val typeSub = look.color(SettingsTokens.ROW_DETAIL_COLOR).toArgb()
+    val typePaint = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG) }
+    val typeMetrics = remember { android.graphics.Paint.FontMetrics() }
+    val glyphBounds = remember { android.graphics.Rect() }
+
+    /**
+     * The fonts Look's Fonts page would apply, as type in the stage's frame [v] at [a]: "Aa" in the titles' face, and each
+     * font named in its own face over what it is for. A long name is set smaller until it fits (never cut).
+     */
+    fun typeSpecimen(nc: android.graphics.Canvas, v: Rect, a: Float) {
+        if (a <= 0.003f) return
+        val u = look.unit
+        val p = typePaint
+        val fm = typeMetrics
+        // One layout for every font (a font chosen changes the letters, never where they are): "Aa" centred in the frame's
+        // left part, the names from a fixed line.
+        val left = v.left + 18f * u
+        val x = v.left + v.width * 0.46f
+        val aaRoom = x - 22f * u - left
+        fun pass(faces: TypeSet, k: Float) {
+            if (k <= 0.003f) return
+            // "Aa" in ink, as on Look's card, its letters (not its line) centred in their room; a wide face set smaller.
+            p.typeface = faces.title
+            p.textSize = v.height * 0.5f
+            p.getTextBounds("Aa", 0, 2, glyphBounds)
+            if (glyphBounds.width() > aaRoom && aaRoom > 0f) {
+                p.textSize *= aaRoom / glyphBounds.width()
+                p.getTextBounds("Aa", 0, 2, glyphBounds)
+            }
+            p.color = PhoneScene.withAlpha(typeInk, a * k)
+            nc.drawText("Aa", left + (aaRoom - glyphBounds.width()) / 2f - glyphBounds.left, v.center.y - glyphBounds.exactCenterY(), p)
+            val room = v.right - 18f * u - x
+            if (room <= 0f) return
+            val nameSize = 24f * u
+            val labelSize = 13f * u
+            // The two entries as one block, centred: a name's line, a label's line under it, a gap, the other.
+            fun nameLine(name: String, face: android.graphics.Typeface): Float {
+                p.typeface = face
+                p.textSize = nameSize
+                val w = p.measureText(name)
+                if (w > room) p.textSize = nameSize * room / w
+                p.getFontMetrics(fm)
+                return fm.descent - fm.ascent
+            }
+            fun labelLine(): Float {
+                p.typeface = faces.text
+                p.textSize = labelSize
+                p.getFontMetrics(fm)
+                return fm.descent - fm.ascent
+            }
+            val display = fontName(faces.displayId)
+            val text = fontName(faces.textId)
+            val gap = 14f * u
+            val block = nameLine(display, faces.title) + labelLine() + gap + nameLine(text, faces.text) + labelLine()
+            var top = v.center.y - block / 2f
+            fun entry(name: String, face: android.graphics.Typeface, label: String) {
+                nameLine(name, face)
+                p.color = PhoneScene.withAlpha(typeInk, a * k)
+                nc.drawText(name, x, top - fm.ascent, p)
+                top += fm.descent - fm.ascent
+                labelLine()
+                p.color = PhoneScene.withAlpha(typeSub, a * k)
+                nc.drawText(label, x, top - fm.ascent, p)
+                top += fm.descent - fm.ascent
+            }
+            entry(display, faces.title, "Titles")
+            top += gap
+            entry(text, faces.text, "Text")
+        }
+        for (l in typeLayers) pass(l.faces, l.alpha.value.coerceIn(0f, 1f))
+    }
 
     /** The App Switcher: the app in front shrinks from the whole screen into its card ([k] 0..1), the older ones come in on its left. */
     fun deck(nc: android.graphics.Canvas, k: Float) {
@@ -432,7 +539,14 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
         val o = act.opens
         val panel = if (o != null) act.panel.value else 0f
         val dark = Appearance.dark > 0.5f
-        scene.drawWallpaper(nc)
+        val wp = if (part == Part.LOOK) look.wallpaper else null
+        if (wp != null) {
+            // Look's phone is on your wallpaper (its colours are what Look is about), as home shows it: dimmed in dark, as
+            // the draft's light or dark would have it.
+            paints.kitImage.alpha = 255
+            nc.drawBitmap(wp.bitmap, wallMatrix.of(wp, w.toInt(), h.toInt()), paints.kitImage)
+            scene.wash(nc, PhoneScene.BLACK, lookDark.value.coerceIn(0f, 1f) * Design.num(dev.launcher.app.theme.PaletteTokens.WALLPAPER_DIM))
+        } else scene.drawWallpaper(nc)
         var barInk = scene.ink
         if (part == Part.APPS) {
             // An app in front; the finger shrinks it into its card and the deck comes as it rests.
@@ -455,7 +569,7 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
                 }
                 Part.LOOK -> {
                     // Its act: the icons turn to the next of Look's colours, one after another, and back.
-                    val pal = art.value.palette
+                    val pal = lookIcons.value
                     for (i in wave.indices) {
                         val oi = ((moves.toggle.at(tau - 0.05f * (i % 24)) - moves.toggle.at(tau - 1.5f - 0.05f * (i % 24))) * ak).coerceIn(0f, 1f)
                         wave[i] = mix(pal[i % pal.size], pal[(i + 1) % pal.size], oi).toArgb()
@@ -628,7 +742,7 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
         val from = Rect(tile.left + tile.width * sunk / 2f, tile.top + tile.height * sunk / 2f, tile.right - tile.width * sunk / 2f, tile.bottom - tile.height * sunk / 2f)
         val k = p.coerceIn(0f, 1.05f)
         val kk = k.coerceIn(0f, 1f)
-        val c = look.color(part.color)
+        val c = partColor(look, part)
         val fill = if (row) groupFill else tileFill(look, part)
         val r = lerp(from, g.stage, k)
         val corner = (if (row) 0f else tileCorner) + (tileCorner - (if (row) 0f else tileCorner)) * kk
@@ -651,7 +765,7 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
                 }
                 val detailAt = st.tileDetails[part]
                 if (detailAt != null) {
-                    val d = measurer.measure(part.detail(draft), tileDetailStyle(look, part), maxLines = 2, overflow = TextOverflow.Ellipsis, constraints = inner)
+                    val d = measurer.measure(part.detail(draft, ctx), tileDetailStyle(look, part), maxLines = 2, overflow = TextOverflow.Ellipsis, constraints = inner)
                     drawText(d, topLeft = Offset(r.left + (detailAt.left - tile.left), r.top + (detailAt.top - tile.top)), alpha = content)
                 }
             }
@@ -663,9 +777,12 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
                 val v = lerp(v0, innerOf(g.stage, stageInset), k)
                 scene.reflow = reflow.value
                 val dark = if (part == Part.LOOK) lookDark.value else Appearance.dark
-                scene.colors(c.toArgb(), dark, if (part == Part.LOOK) paletteInts.of(art.value.palette) else null)
+                scene.colors(c.toArgb(), dark, if (part == Part.LOOK) paletteInts.of(lookIcons.value) else null)
                 scene.face = faces.first
-                drawIntoCanvas { cv -> phone(cv.nativeCanvas, r, v, phoneA, part) }
+                // Look's Fonts page shows type, not a phone: the two cross over as the page comes and goes.
+                val sp = if (part == Part.LOOK) specimen.value.coerceIn(0f, 1f) else 0f
+                if (sp < 0.997f) drawIntoCanvas { cv -> phone(cv.nativeCanvas, r, v, phoneA * (1f - sp), part) }
+                if (sp > 0.003f) drawIntoCanvas { cv -> typeSpecimen(cv.nativeCanvas, innerOf(g.stage, stageInset), phoneA * sp) }
             }
         }
     }
@@ -691,6 +808,29 @@ internal fun RowGrowth(st: Studio) {
         drawRoundRect(fill.copy(alpha = fill.alpha * colour), r.topLeft, r.size, CornerRadius(sheetCorner * k.coerceIn(0f, 1f)))
     }
 }
+
+/** Font [id]'s face at [weight] (a Google family's regular face once it is here, else the theme's text face). */
+internal fun faceFor(id: String, weight: Int): android.graphics.Typeface =
+    if (!id.startsWith("google:")) dev.launcher.app.theme.Fonts.of(id, weight, 15f)
+    else dev.launcher.app.theme.FontPreviews.ready(id.removePrefix("google:")) ?: dev.launcher.app.theme.Fonts.text(weight)
+
+/** The wallpaper's place on the phone, made again only when the wallpaper or the phone's size is another. */
+private class WallMatrix {
+    private var id = -1
+    private var w = 0
+    private var h = 0
+    private var m = android.graphics.Matrix()
+    fun of(wp: dev.launcher.app.Wallpaper, w: Int, h: Int): android.graphics.Matrix {
+        if (wp.id != id || w != this.w || h != this.h) { id = wp.id; this.w = w; this.h = h; m = wp.matrix(w, h) }
+        return m
+    }
+}
+
+/** The faces of the fonts the draft would apply: the text's, the titles' ([textId], [displayId] their families). */
+private class TypeSet(val text: android.graphics.Typeface, val title: android.graphics.Typeface, val textId: String, val displayId: String)
+
+/** One layer of the type specimen: its faces at its [alpha]. */
+private class TypeLayer(val faces: TypeSet, val alpha: Animatable<Float, androidx.compose.animation.core.AnimationVector1D>)
 
 /** Look's palette as colour ints, made again only when the palette is another (never in each frame). */
 private class PaletteInts {

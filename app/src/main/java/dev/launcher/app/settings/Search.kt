@@ -79,7 +79,7 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
     add("Light & dark", "Look", "light dark mode night appearance automatic black white", Part.LOOK)
     add("Fonts", "Look", "fonts font typeface typography text titles inter google", Part.LOOK)
     add("Size", "Look", "size zoom scale display bigger smaller large small text size", Part.LOOK)
-    add("These settings", "Look", "settings app own theme this", Part.LOOK)
+    if (offersOwnTheme(draft, dev.launcher.app.layout.Element.SETTINGS)) add("Settings app", "Look", "settings app own theme this these", Part.LOOK)
     add("Style", "Look › Adjust colours", "style tonal vibrant expressive neutral monochrome material you colors colours", Part.LOOK, Sub.COLOURS)
     add("Intensity", "Look › Adjust colours", "intensity colourful colorful saturation chroma vivid grey gray", Part.LOOK, Sub.COLOURS)
     add("Text", "Look › Fonts", "text font body typeface", Part.LOOK, Sub.FONTS)
@@ -130,7 +130,7 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
             val section = if (o is Option.Count) "Grid" else "Options"
             add(o.title, p.title + " › " + section, synonyms(e, o.key), p, fallback = section, about = o.description)
         }
-        add("A theme of its own", p.title + " › Look", "theme own look follows", p, anchor = "Look")
+        if (offersOwnTheme(draft, e)) add("A theme of its own", p.title + " › Look", "theme own look follows", p, anchor = "Look")
     }
 
     // Phone.
@@ -221,7 +221,7 @@ internal val LocalAnchorPage = staticCompositionLocalOf<String?> { null }
  * A row the search can find: where it is (for scrolling to it) under its page and [title], and its light while the search
  * shows it (a soft accent wash in and out). The light is read in drawing; only the lit row reads its strength.
  */
-internal fun Modifier.anchor(title: String): Modifier = composed {
+internal fun Modifier.anchor(title: String, corner: Float = 0f, outset: Float = 0f): Modifier = composed {
     val st = LocalStudio.current
     val page = LocalAnchorPage.current
     if (st == null || page == null) return@composed this
@@ -232,7 +232,14 @@ internal fun Modifier.anchor(title: String): Modifier = composed {
         .drawBehind {
             if (st.lit == key) {
                 val k = st.litK.value.coerceIn(0f, 1f)
-                if (k > 0.003f) drawRect(accent.copy(alpha = accent.alpha * LIT_ALPHA * k))
+                // (A row is lit edge to edge, its group's corners cut it; words on the page itself as a card would be:
+                // [corner], reaching [outset] past them above and below.)
+                if (k > 0.003f) {
+                    val c = accent.copy(alpha = accent.alpha * LIT_ALPHA * k)
+                    if (corner <= 0f && outset <= 0f) drawRect(c)
+                    else drawRoundRect(c, androidx.compose.ui.geometry.Offset(0f, -outset),
+                        androidx.compose.ui.geometry.Size(size.width, size.height + 2f * outset), androidx.compose.ui.geometry.CornerRadius(corner))
+                }
             }
         }
 }

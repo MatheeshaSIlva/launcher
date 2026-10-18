@@ -558,6 +558,7 @@ object Design {
         scaledText.clear()
         followYouSettings()
         previews.clear()
+        ownColors = null
         motionPreviews.clear()
         motionOwn.clear()
         savedEdits.clear()
@@ -705,6 +706,18 @@ object Design {
 
     /** A colour value's light and dark ARGB, its palette references looked up (the token editor shows them). */
     fun pair(v: Value.Color): Pair<Int, Int> = resolver.pair(v)
+
+    /**
+     * [k]'s colour as the active theme has it itself, the wallpaper's colours (Material You) left out, at the current
+     * appearance: what a colour that must stay its own hue starts from (the settings' parts, harmonised with the palette).
+     */
+    fun ownColor(k: ColorKey): Int {
+        val r = ownColors ?: Resolver(layersOf(chain, user, false)) { name -> paletteColor(name) }.also { ownColors = it }
+        val v = try { r.resolve(k.name) as? Value.Color } catch (_: Throwable) { null } ?: return color(k)
+        return r.pair(v).let { (l, d) -> Appearance.mix(l, d) }
+    }
+
+    @Volatile private var ownColors: Resolver? = null
 
     /**
      * A material's colour (a literal or a token) at the current appearance. A token is read as any other, by its own

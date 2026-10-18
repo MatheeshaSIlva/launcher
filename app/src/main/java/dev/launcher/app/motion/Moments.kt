@@ -111,7 +111,7 @@ object Moments {
 
     val SCROLLING = Moment("scrolling", MomentPart.EVERYWHERE, "Scrolling", "How lists move under the finger and after it.",
         ks("scroll.overscroll-return", "scroll.deceleration", "scroll.rubber-band"))
-    val SETTINGS = Moment("settings", MomentPart.EVERYWHERE, "These settings", "A tile opening into its page, the picture focusing, the finger's hint, a page pushed.",
+    val SETTINGS = Moment("settings", MomentPart.EVERYWHERE, "Settings app", "A tile opening into its page, the picture focusing, the finger's hint, a page pushed.",
         ks("settings.open", "settings.focus", "settings.hint", "sheet.push"))
 
     val ALL = listOf(OPENING, CLOSING, SWITCHING, SWITCHER, PAGES, FOLDERS, UNLOCKING, EDITING, LITTLE, NEW_LOOK, LIBRARY, MENUS,

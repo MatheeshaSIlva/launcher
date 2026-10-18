@@ -1,6 +1,7 @@
 {
  "format": 1,
  "name": "Graphite",
+ "description": "Solid graphite in place of glass, a green accent (a test theme)",
  "test": true,
  "author": "Launcher",
  "version": "0.1",

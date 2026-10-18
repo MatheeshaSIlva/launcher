@@ -219,10 +219,16 @@ internal fun rememberArtKit(): State<ArtKit> {
         val bold = with(density) { TextStyle(fontSize = (21f * u).toSp(), fontWeight = FontWeight(650), color = ink) }
         val time = measurer.measure("9:4", look.text(SettingsTokens.ROW_TITLE, ink).merge(bold))
         val digits = (0..9).map { measurer.measure("$it", look.text(SettingsTokens.ROW_TITLE, ink).merge(bold)) }
-        val aa = measurer.measure("Aa", look.text(SettingsTokens.TITLE, ink).merge(with(density) { TextStyle(fontSize = (34f * u).toSp(), color = ink) }))
+        // Look's "Aa" is in the titles' font the draft would apply (a font chosen shows on the card before Apply): measured
+        // in the derived state (read in drawing; a font chosen composes nothing), once per font.
+        val aaFor = arrayOfNulls<Pair<String, androidx.compose.ui.text.TextLayoutResult>>(1)
+        fun aaOf(id: String) = aaFor[0]?.takeIf { it.first == id }?.second
+            ?: measurer.measure("Aa", look.text(SettingsTokens.TITLE, ink).merge(with(density) {
+                TextStyle(fontSize = (34f * u).toSp(), color = ink, fontFamily = familyOf(faceFor(id, 600)))
+            })).also { aaFor[0] = id to it }
         val knob = look.color(SettingsTokens.TOGGLE_KNOB)
         val accent = look.color(SettingsTokens.ACCENT)
-        val theirs = listOf(look.color(Part.LOOK.color), accent, look.color(Part.SHADE.color))
+        val theirs = listOf(partColor(look, Part.LOOK), accent, partColor(look, Part.SHADE))
         val dark = dev.launcher.app.theme.Appearance.dark > 0.5f
         val shape = CardShape(look.pt(SettingsTokens.TILE_CORNER), inset, Design.num(SettingsTokens.TILE_VISUAL).coerceIn(0.2f, 0.7f),
             look.color(SettingsTokens.TILE_VISUAL_VEIL), look.color(SettingsTokens.TILE_PAPER), dark)
@@ -234,7 +240,7 @@ internal fun rememberArtKit(): State<ArtKit> {
                     Color(dev.launcher.app.design.Theme.resolveSpec("@$role", dark) { Design.previewPalette(it, choice) })
                 }
             } else theirs
-            ArtKit(ink, knob, palette, time, digits, aa, ArtMoves(draft), shape, u)
+            ArtKit(ink, knob, palette, time, digits, aaOf(draft.font("sys.font.display")), ArtMoves(draft), shape, u)
         }
     }
 }
