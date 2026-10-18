@@ -2546,3 +2546,20 @@ the wallpaper's:
   palette lagging a wallpaper set outside its picker (emulator; check the S24); the look-change reveal over the settings
   page; Phone's stage not showing Shizuku's state; accessibility labels for the drawn stages.
 
+## Round 2 of Matheesha's findings (2026-10-18, emulator; S24 log read)
+
+- **Wallpaper change, one-frame flicker.** The S24's log showed it: the wallpaper set in the system's picker loaded as
+  home was brought forward under a closing card, so its reveal ran under the card and the card's picture of the old
+  wallpaper handed over to a home mid-reveal. Home now holds the reveal until the card is gone
+  (`HomeBridge.whenUncovered`). Reproduced on the emulator at 4x slow motion with a test hook that sets the wallpaper from
+  a file while an app is open (`TEST_WALLPAPER`): before, the reveal started 0.2 s before the card landed; after, 40 ms
+  after it, and `tools/frame_glitch.py` finds no flicker over the whole screen.
+- **The home gesture over the settings closes them** instead of shrinking them into a card: they follow the finger up
+  and close into home as Back does, or spring back (`OwnScreenSwipe`, `EntryState.upward`). Checked on the emulator: a
+  long swipe closes them into home (home's picture comes forward, sharpening, as the sheet leaves), a short one springs
+  them back, Back on the tiles still slides down into home. No App Switcher from them (a hold does nothing).
+- **Cinematic's dolly zoom kept its first direction** when apps were opened rapidly: an app opened while another's card
+  still landed left home's zoom aimed at the first icon (`setDolly` is ignored while a picture shows), and so did the close
+  of a launch grabbed mid-flight. It is re-aimed with the depth now (`PreviewView.aimDolly`). Checked on the emulator in
+  slow motion: Clock closed, Maps opened as it landed: home zooms toward Maps.
+

@@ -35,6 +35,8 @@ import java.util.concurrent.Executors
 class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private lateinit var screen: HomeScreen
     private var wallpaper: Wallpaper? = null
+    /** A new wallpaper loaded while a card still covered home: applied (revealed) once home itself shows. */
+    private var pendingWallpaper: Wallpaper? = null
     private var wallpaperLoading = false
     private var wallpaperDirty = false
     // Fires on any wallpaper change, also while home is in the background (the change usually happens in Settings).
@@ -334,7 +336,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         // Retried on every return until it works (the permission arrives when Shizuku connects, possibly after the first try),
         // and reloaded whenever the system wallpaper changed while we were away.
         val id = Wallpaper.currentId(this)
-        if (wallpaper == null || wallpaperDirty || (id != -1 && id != wallpaper?.id)) loadWallpaper()
+        val pending = pendingWallpaper
+        if (pending != null && !wallpaperDirty && (id == -1 || id == pending.id)) applyWallpaper(pending)
+        else if (wallpaper == null || wallpaperDirty || (id != -1 && id != wallpaper?.id)) loadWallpaper()
         screen.postDelayed({ recordPreview() }, 400)
     }
 
@@ -711,6 +715,21 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private fun applyWallpaper(w: Wallpaper?) {
         val old = wallpaper
         if (w != null && old != null && w.id == old.id && w.id != -1) return   // same wallpaper, nothing to do
+        if (w != null && old != null && resumed && HomeBridge.homeCovered) {
+            // Resumed under a card still closing into home (gesture nav brings home forward as the swipe starts, and a
+            // wallpaper changed while away loads then): the reveal waits until home itself shows. Started under the card,
+            // it played unseen, and the card's picture of home (the old wallpaper) handed over to a home caught mid-reveal,
+            // the whole screen changing in one frame (Matheesha: "a full screen flicker for a single frame").
+            pendingWallpaper = w
+            HomeBridge.whenUncovered {
+                if (pendingWallpaper !== w) return@whenUncovered
+                if (!resumed) return@whenUncovered   // (kept for the next resume, where home is seen)
+                pendingWallpaper = null
+                applyWallpaper(w)
+            }
+            return
+        }
+        pendingWallpaper = null
         if (w != null && old != null && resumed && Build.VERSION.SDK_INT >= 33 && screen.width > 0) {
             // Changed while we can be seen: reveal the new one behind a glowing, sparkling front. The glass refracts the
             // same change on the same frames, so the dock never lags behind the wallpaper.

@@ -102,7 +102,11 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   is on screen it steps back, blurs and fades into the page as the sheet rises over it (`settings/HomeSlide.kt`); Look's
   theme cards keep such pictures per theme (`HomePictures`); Back on the tiles plays it the other way,
   the card window holds home's picture while they go back at rest underneath (their App Switcher card) and home comes
-  (`GestureNav.ownScreenToHome`). Their task is the one of ours in the App Switcher (`switchable`: by activity class).
+  (`GestureNav.ownScreenToHome`). The home gesture over them is a panel's, not an app's (Matheesha: "should just close
+  it"): gesture nav hands the swipe up to them (`OwnScreenSwipe`, phase `OWN_PULL`), the sheet, header and Apply bar
+  follow the finger up and away (`EntryState.upward`, `shift`) with home's picture coming forward under them, and a release
+  closes them into home as Back does (the same hand-over) or springs them back (the Home gesture's thresholds); no App
+  Switcher from them. Their task is the one of ours in the App Switcher (`switchable`: by activity class).
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").
@@ -176,7 +180,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   revert back to the default animation"). Slide and fade closes play also for an app with no icon on home. The genie is macOS's: a
   funnel narrowing to the icon from both sides, the app's near edge dropping in first (`AppStyles.genie`). A close that
   leaves the icon on home (slide, fade) shows home's picture with it; the dolly zoom on home's picture is a fraction that
-  gives way as the App Switcher opens (`PreviewView.fadeDolly`). The styles' drawing is warmed off screen while home is
+  gives way as the App Switcher opens (`PreviewView.fadeDolly`), and is re-aimed with the depth when a flight goes to
+  another icon than the one home was zooming toward (`PreviewView.aimDolly`: an app opened while another's card still
+  lands, the close of a launch grabbed; it once kept the first app's icon: Matheesha, Cinematic, apps opened rapidly). The styles' drawing is warmed off screen while home is
   idle (`CardStyleWarmUp`). Presets bundle styles (iOS 27 zoom, Material
   container, Playful genie, Calm fade, Cinematic dolly: `tools/design/build_style_presets.py`). The settings show a style
   by playing it (`settings/AppStyleArt`: the picture of home, the presets' cards, the Style group of Opening apps and
@@ -606,6 +612,11 @@ copy it wholesale — port the working pieces cleanly. File map:
   home shows under the growing card until the app covers it (the edit menu vanished as Change Wallpaper's card began).
   The card window's launch backdrop is a recording of home, which leaves the menu and its blur out: a launch from an open
   menu draws home as it shows (`HomeActivity.pictureAsShown`, a GPU render).
+- **A wallpaper changed while away reaches home while a card still covers it** (gesture nav brings home forward as a
+  close starts, and home loads the new wallpaper on that resume): its reveal played unseen under the card, and the
+  card's picture (the old wallpaper) handed over to a home caught mid-reveal, the whole screen changing in one frame
+  (Matheesha: "a full screen flicker for a single frame"). Home holds a change that would show until it is uncovered
+  (`HomeBridge.whenUncovered`). Test wallpapers: `TEST_WALLPAPER --es file <path under files/>` (`Wallpaper.testHook`).
 - **What is recorded must be recorded again when what it shows arrives later**: a notification's picture (loaded off the
   main thread after the platter's first draw) and an app's shaped icon (rendered by home, the system's until then) were
   kept in Notification Center's recorded content as they first drew (the app's icon in place of a sender's photo for the

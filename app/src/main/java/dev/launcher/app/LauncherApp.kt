@@ -31,6 +31,7 @@ class LauncherApp : Application() {
         dev.launcher.app.apps.Apps.init(this)
         GestureNav.init(this)
         Badges.testHook(this)
+        Wallpaper.testHook(this)
         ShizukuLink.init(this)
         SafetyNotification.show(this)
     }

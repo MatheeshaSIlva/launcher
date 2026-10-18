@@ -106,7 +106,8 @@ object GestureNav {
 
     private class Task(val id: Int, val pkg: String, val cls: String? = null)
     // HOME_PULL: a swipe up on the home screen (no card); a hold opens the App Switcher, a release is the Home button.
-    private enum class Phase { IDLE, DRAG_HOME, DRAG_SWITCH, ANIM, HOLD, SWITCHER, HOME_PULL }
+    // OWN_PULL: a swipe up over one of our own panels (the settings): it follows the finger and closes into home (OwnScreenSwipe).
+    private enum class Phase { IDLE, DRAG_HOME, DRAG_SWITCH, ANIM, HOLD, SWITCHER, HOME_PULL, OWN_PULL }
     private enum class Anim { NONE, HOME_COMMIT, HOME_CANCEL, LAUNCH, SWITCH_COMMIT, SWITCH_CANCEL }
 
     // ------------------------------------------------------------------ windows (nav thread)
@@ -2105,7 +2106,7 @@ object GestureNav {
                 val dy = downY - e.rawY
                 if (pendingFresh && !homeVisible) forward.hold(e)
                 if (pendingFresh && !homeVisible) {
-                    if (dy > dp(10) && dy > abs(dx)) { pendingFresh = false; beginHome() }
+                    if (dy > dp(10) && dy > abs(dx)) { pendingFresh = false; if (!beginOwnPull(e.rawY)) beginHome() }
                     else if (abs(dx) > dp(14) && abs(dx) > abs(dy) * 1.2f) { pendingFresh = false; beginSwitch() }
                 } else if (pendingFresh && homeVisible && dy > dp(10) && dy > abs(dx)) {
                     // On home, a swipe up: a hold opens the App Switcher; lifting does what the Home button does (leaves edit
@@ -2124,6 +2125,7 @@ object GestureNav {
                     Phase.DRAG_HOME -> { dragHome(e.rawX, e.rawY); stats.touchEvent(e.eventTime); watchForHold() }
                     Phase.DRAG_SWITCH -> { dragSwitch(e.rawX); stats.touchEvent(e.eventTime) }
                     Phase.HOME_PULL -> { lastDragX = e.rawX; lastDragY = e.rawY; pullHome(); watchForHold() }
+                    Phase.OWN_PULL -> moveOwnPull(e.rawY)
                     else -> {}
                 }
             }
@@ -2138,6 +2140,7 @@ object GestureNav {
                 if (pendingFresh && !homeVisible && up) tapToApp(e)
                 when {
                     phase == Phase.HOME_PULL -> releaseHomePull(up)
+                    phase == Phase.OWN_PULL -> releaseOwnPull(up, vy)
                     phase == Phase.DRAG_HOME -> releaseHome(up, vx, vy)
                     phase == Phase.DRAG_SWITCH -> releaseSwitch(up, vx)
                     grabbedFull -> { grabbedFull = false; releaseHome(false, 0f, 0f) }   // a tap on a full-size card: let it finish
@@ -2168,6 +2171,8 @@ object GestureNav {
         // the plain card the flight is built on, the style kept on it.
         val flight = wasAnim == Anim.LAUNCH || wasAnim == Anim.HOME_COMMIT || wasAnim == Anim.HOME_CANCEL
         cur?.let { if (flight) grabDev.grab(it, plainFrame, plainR, sw, sh) else grabDev.of(it) } ?: grabDev.clear()
+        // Home's dolly zoom stays aimed where the flight had turned it (the close that follows aims it again).
+        backdrop?.endAim()
         if (flightStyle != AppStyle.FADE) grabDev.alpha = 0f
         flightStyle = AppStyle.ZOOM
         springFade = false
@@ -2403,6 +2408,47 @@ object GestureNav {
 
     // ================================================================== HOME
 
+    // ---- the home gesture over one of our own panels (the settings): it follows the finger and closes into home
+
+    private var ownPanel: OwnScreenSwipe.Panel? = null
+    private var ownPullFrom = 0f
+    @Volatile private var ownTravel = 0f
+    @Volatile private var ownPosted = false
+
+    /** A swipe up starting at [y] over one of our own panels that takes it: the panel follows the finger, no card. */
+    private fun beginOwnPull(y: Float): Boolean {
+        val p = OwnScreenSwipe.panel ?: return false
+        if (lastFrontPkg != app.packageName) return false
+        ownPanel = p
+        ownPullFrom = y
+        ownTravel = 0f
+        ownPosted = false
+        phase = Phase.OWN_PULL
+        main.post { p.begin() }
+        AppLog.log("[nav] home gesture over our own panel: it follows the finger")
+        return true
+    }
+
+    /** The finger at [y]: the panel is told how far up it has gone (the newest only, once a frame of the main thread). */
+    private fun moveOwnPull(y: Float) {
+        val p = ownPanel ?: return
+        ownTravel = max(0f, ownPullFrom - y)
+        if (ownPosted) return
+        ownPosted = true
+        main.post { ownPosted = false; p.move(ownTravel) }
+    }
+
+    /** The finger lifted: as the Home gesture decides over an app (far enough, or fast enough), the panel closes into home or goes back. */
+    private fun releaseOwnPull(up: Boolean, vy: Float) {
+        val p = ownPanel
+        ownPanel = null
+        phase = Phase.IDLE
+        val upSpeed = -vy
+        val travel = ownTravel
+        val commit = up && ((upSpeed > 350f && travel > dp(30)) || (travel > sh * 0.2f && upSpeed > -250f))
+        if (p != null) main.post { p.move(travel); p.end(commit, upSpeed) }
+    }
+
     private fun beginHome() {
         if (!prepareCardWindow()) return
         gen++
@@ -2539,6 +2585,9 @@ object GestureNav {
             val chosen = AppStyles.closing()
             val style = if (deferHome || (iconAt == null && chosen.fromIcon)) AppStyle.ZOOM else chosen
             val intoIcon = style.fromIcon
+            // Home flies back out of the icon this card goes into (the middle if unknown), from wherever it was aimed (a
+            // close of a card grabbed from its launch, or one dragged since a flight that went elsewhere): with the depth.
+            backdrop?.aimDolly(chosen == AppStyle.DOLLY, iconAt?.centerX() ?: (sw / 2), iconAt?.centerY() ?: (sh / 2), 0f)
             val target = iconAt?.takeIf { intoIcon }
             // Home's picture as this close needs it (it was chosen by the closing style; a turned display goes into the icon).
             if (iconAt != null && intoIcon != AppStyles.closing().fromIcon && !pictureDropped) {
@@ -3686,6 +3735,8 @@ object GestureNav {
             c.alpha = if (first != null || style == AppStyle.FADE) 0f else 1f
             backdrop?.picture = first ?: picture
             backdrop?.depth = depth0
+            // Under a card still landing home's picture flies on as it is, turning toward this app's icon as the app opens.
+            if (landing != null) backdrop?.aimDolly(style == AppStyle.DOLLY, iconRect.centerX(), iconRect.centerY(), 1f)
             // (Where this app's icon is on home, at rest: the landing card's patch leaves it alone.)
             landing?.start?.invoke(HomeBridge.iconRect(pkg) ?: RectF(iconRect).also { r ->
                 val z = contentZoom(depth0)
@@ -5204,16 +5255,64 @@ object GestureNav {
             set(v) {
                 if (field == v) return
                 field = v
-                applyDepth()
+                if (aiming) aimStep() else applyDepth()
             }
 
         /**
          * The dolly zoom (motion/AppStyles): with it on, depth flies home toward [x], [y] (the icon an app comes out of or
-         * goes into) instead of stepping it back about the middle. Set only while home's picture shows nothing.
+         * goes into) instead of stepping it back about the middle. Set only while home's picture shows nothing (see
+         * [aimDolly] for a picture already showing).
          */
         fun setDolly(on: Boolean, x: Float, y: Float) {
             if (picture != null && shown && alpha > 0f) return
+            aiming = false
             pivotOn(if (on) 1f else 0f, x, y)
+        }
+
+        /**
+         * The dolly zoom aimed at [x], [y] (on: flying toward that icon; off: the plain step back about the middle) while home's
+         * picture already shows: an app opened while another's card still lands, a close of the app a grab took from its
+         * launch. It goes there as the depth goes from where it is to [toDepth] (the flight's), from where it is aimed now:
+         * home turns toward the new icon with the flight, no jump. (Kept aimed at the last icon, home flew toward the first
+         * app's icon whatever was opened after it: Matheesha, Cinematic, apps opened rapidly.)
+         */
+        fun aimDolly(on: Boolean, x: Float, y: Float, toDepth: Float) {
+            val a1 = if (on) 1f else 0f
+            if (!(picture != null && shown && alpha > 0f)) { aiming = false; pivotOn(a1, x, y); return }
+            if (a1 == dolly && (a1 == 0f || (x == dollyX && y == dollyY))) { aiming = false; return }
+            aimFromA = dolly; aimFromX = dollyX; aimFromY = dollyY
+            // (From none: the point is the new one all the way; only the amount comes in.)
+            if (dolly <= 0f) { aimFromX = x; aimFromY = y }
+            aimToA = a1; aimToX = x; aimToY = y
+            aimDepth0 = depth
+            aimDepth1 = toDepth
+            aiming = true
+            aimStep()
+        }
+
+        /** An aim under way stops where it is (the finger takes the card: home is not to turn back with the drag). */
+        fun endAim() { aiming = false }
+
+        private var aiming = false
+        private var aimFromA = 0f
+        private var aimFromX = 0f
+        private var aimFromY = 0f
+        private var aimToA = 0f
+        private var aimToX = 0f
+        private var aimToY = 0f
+        private var aimDepth0 = 0f
+        private var aimDepth1 = 0f
+
+        /** Where an aim is for the depth now (all the way once the depth is at the flight's end). */
+        private fun aimStep() {
+            val span = aimDepth1 - aimDepth0
+            val k = if (abs(span) < 0.01f) 1f else ((depth - aimDepth0) / span).coerceIn(0f, 1f)
+            if (k >= 1f) aiming = false
+            val a = aimFromA + (aimToA - aimFromA) * k
+            // (Going to none: the point stays where it was while the amount goes.)
+            val x = if (aimToA <= 0f) aimFromX else aimFromX + (aimToX - aimFromX) * k
+            val y = if (aimToA <= 0f) aimFromY else aimFromY + (aimToY - aimFromY) * k
+            pivotOn(a, x, y)
         }
 
         /** How much of a dolly zoom is on (1: all, 0: none). */
@@ -5224,6 +5323,7 @@ object GestureNav {
          * opening during a dolly zoom's close: home behind the deck as it always is). Its point stays: no jump.
          */
         fun fadeDolly(k: Float) {
+            aiming = false
             val a = k.coerceIn(0f, 1f)
             if (a == dolly) return
             pivotOn(a, dollyX, dollyY)
@@ -5231,6 +5331,7 @@ object GestureNav {
 
         /** As [other]'s dolly zoom: the App Switcher's own window showing home as the card window did. */
         fun followDolly(other: PreviewView) {
+            aiming = false
             if (dolly == other.dolly && (dolly == 0f || (dollyX == other.dollyX && dollyY == other.dollyY))) return
             pivotOn(other.dolly, other.dollyX, other.dollyY)
         }

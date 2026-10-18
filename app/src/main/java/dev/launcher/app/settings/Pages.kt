@@ -881,7 +881,11 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
     val rise = 6f * g.unit
     // A title keeps clear of the back button on either side (a long one ends in an ellipsis on a narrow phone).
     val clear = Modifier.padding(horizontal = look.dp(look.pt(SettingsTokens.MARGIN) + g.buttonSize + 8f * g.unit))
-    Box(Modifier.fillMaxWidth().offset { IntOffset(0, g.headerTop.roundToInt()) }.height(look.dp(g.buttonSize)), contentAlignment = Alignment.Center) {
+    // (Up and away with the sheet as the home gesture closes them; the slide from home moves only the sheet.)
+    val lift = Modifier.graphicsLayer { translationY = if (st.entry.upward) st.entry.shift(0f) else 0f }
+    // How far the sheet goes up to be gone: its bottom past the top of the screen, its shadow too.
+    androidx.compose.runtime.SideEffect { st.entry.liftPx = g.sheetTop + g.sheetH + 40f * g.unit }
+    Box(Modifier.fillMaxWidth().offset { IntOffset(0, g.headerTop.roundToInt()) }.then(lift).height(look.dp(g.buttonSize)), contentAlignment = Alignment.Center) {
         BasicText("Settings", style = style, modifier = Modifier.graphicsLayer {
             val p = st.p.value
             // In as home's picture has made room for it (the slide's second half).
@@ -913,6 +917,7 @@ private fun Header(st: Studio, g: Geometry, onBack: () -> Unit) {
     }
     RoundButton(R.drawable.sym_back, "Back", { st.open != null }, onBack, Modifier
         .offset { IntOffset(look.pt(SettingsTokens.MARGIN).roundToInt(), g.headerTop.roundToInt()) }
+        .then(lift)
         .graphicsLayer {
             val p = st.p.value.coerceIn(0f, 1f)
             alpha = p
@@ -968,8 +973,9 @@ private fun Sheet(st: Studio, g: Geometry, open: (Part) -> Unit, close: (Float) 
             .offset { IntOffset(g.inset.roundToInt(), g.sheetTop.roundToInt()) }
             .size(look.dp(g.sheetW), look.dp(g.sheetH))
             .graphicsLayer {
-                // While home slides in (or out): from below the screen (its shadow too) to its place under the title.
-                translationY = (1f - st.entry.enter.floatValue.coerceAtLeast(0f)) * (g.belowTop - g.sheetTop)
+                // While home slides in (or out): from below the screen (its shadow too) to its place under the title; up and
+                // away with the finger as the home gesture closes them (EntryState.upward).
+                translationY = st.entry.shift(g.belowTop - g.sheetTop)
             }
             .drawBehind {
                 val k = solid()
@@ -2439,7 +2445,7 @@ private fun ApplyBar(draft: Draft, g: Geometry, st: Studio, onApply: () -> Unit)
                 val k = bar.value
                 alpha = k.coerceIn(0f, 1f)
                 // (With the sheet while home slides in or out: as far as the sheet goes.)
-                translationY = (1f - k) * (g.barH + 40f * g.unit) + (1f - entry.enter.floatValue.coerceAtLeast(0f)) * (g.belowTop - g.sheetTop)
+                translationY = (1f - k) * (g.barH + 40f * g.unit) + entry.shift(g.belowTop - g.sheetTop)
             }
             .pressScale { 1f + 0.05f * nudge.value }
             .drawBehind {

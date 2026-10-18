@@ -173,9 +173,28 @@ object HomeBridge {
 
     /**
      * True while gesture nav's picture of home covers the real home (cards on screen): home then skips its depth blur,
-     * which nobody would see (its zoom still runs, so it matches whenever it is uncovered).
+     * which nobody would see (its zoom still runs, so it matches whenever it is uncovered), and holds back a change that
+     * would show (a new wallpaper's reveal: [whenUncovered]).
      */
     @Volatile var homeCovered = false
+        set(v) {
+            val was = field
+            field = v
+            if (was && !v) {
+                val l = synchronized(uncovered) { uncovered.toList().also { uncovered.clear() } }
+                if (l.isNotEmpty()) main.post { for (f in l) f() }
+            }
+        }
+    private val uncovered = ArrayList<() -> Unit>()
+
+    /**
+     * Runs [f] on the main thread once the real home is no longer covered by gesture nav's picture of it (at once if it is
+     * not). Any thread.
+     */
+    fun whenUncovered(f: () -> Unit) {
+        val now = synchronized(uncovered) { if (homeCovered) { uncovered += f; false } else true }
+        if (now) main.post(f)
+    }
 
     /** When gesture nav last brought home forward from an app (a close, the App Switcher's home; uptime ms; 0 never). */
     @Volatile var homeStartedAt = 0L

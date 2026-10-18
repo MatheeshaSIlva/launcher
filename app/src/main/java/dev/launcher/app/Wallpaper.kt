@@ -81,6 +81,33 @@ class Wallpaper private constructor(
         fun addListener(h: android.os.Handler, l: () -> Unit) = synchronized(listeners) { listeners += h to l }
         fun removeListener(l: () -> Unit) = synchronized(listeners) { listeners.removeAll { it.second === l } }
 
+        /**
+         * Sets the system wallpaper from a file, for checking what a wallpaper change does where it happens (an app in
+         * front, a close landing, the settings away). adb only (senders must hold DUMP):
+         *   adb push wp.png /sdcard/Android/data/dev.launcher.app/files/dev-in/wp.png
+         *   adb shell am broadcast -a dev.launcher.app.TEST_WALLPAPER -p dev.launcher.app --es file dev-in/wp.png
+         */
+        fun testHook(ctx: Context) {
+            val r = object : android.content.BroadcastReceiver() {
+                override fun onReceive(c: Context, i: android.content.Intent) {
+                    val name = i.getStringExtra("file") ?: return
+                    val f = c.getExternalFilesDir(null)?.let { java.io.File(it, name) }?.takeIf { it.exists() }
+                        ?: return AppLog.log("[wallpaper] test wallpaper: no file $name")
+                    Thread {
+                        try {
+                            f.inputStream().use { WallpaperManager.getInstance(c).setStream(it, null, true, WallpaperManager.FLAG_SYSTEM) }
+                            AppLog.log("[wallpaper] test wallpaper set from $name")
+                        } catch (t: Throwable) {
+                            AppLog.log("[wallpaper] test wallpaper failed: ${t.javaClass.simpleName}: ${t.message}")
+                        }
+                    }.start()
+                }
+            }
+            val filter = android.content.IntentFilter("dev.launcher.app.TEST_WALLPAPER")
+            if (android.os.Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(r, filter, android.Manifest.permission.DUMP, null, Context.RECEIVER_EXPORTED)
+            else ctx.registerReceiver(r, filter, android.Manifest.permission.DUMP, null)
+        }
+
         /** The system wallpaper's id: changes whenever the user sets a new wallpaper (-1 if unknown). */
         fun currentId(ctx: Context): Int = try {
             WallpaperManager.getInstance(ctx).getWallpaperId(WallpaperManager.FLAG_SYSTEM)
