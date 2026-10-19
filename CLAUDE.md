@@ -800,7 +800,9 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **A cached picture is keyed by what the view showed when it was recorded, not by the state the app has already
   taken**: a new wallpaper is taken (and home rebuilt and recorded for its colours) before its reveal starts, and the old
   wallpaper recorded under the new one's key was kept: every close showed the old wallpaper behind the card
-  (`HomeActivity.recordNow` keys on `wallpaperView.wallpaper`).
+  (`HomeActivity.recordNow` keys on `wallpaperView.wallpaper`). And the key holds everything that shapes the result:
+  Notification Center's glass numerals were keyed by time, wallpaper and fonts but not the panel's size, and after a
+  landscape app the portrait panel drew the landscape numerals, a sliver of the time at its edge.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
 - **Our own code is compiled at install only through `app/src/main/baseline-prof.txt`** (`HSPLdev/launcher/app/**;->**(**)**`
   and the class rule): the install profile held only the libraries' rules before (2026-10-19), and everything of ours ran
