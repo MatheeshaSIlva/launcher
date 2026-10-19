@@ -623,6 +623,18 @@ object Design {
 
         fun color(name: String): Int? = cache.getOrPut(name) { make(name) ?: NO_COLOR }.takeIf { it != NO_COLOR }
 
+        /** Palette [p] ('P', 'S', 'T', 'N', 'V', 'E') at tone [t] (CIELAB L*), as this palette makes its colours. */
+        fun tone(p: Char, t: Double): Int? {
+            val phone = phones && p !in choice.keys
+            val sc = if (phone) phoneRoles else scheme ?: return null
+            val pal = when (p) {
+                'P' -> sc.primary; 'S' -> sc.secondary; 'T' -> sc.tertiary
+                'N' -> sc.neutral; 'V' -> sc.neutralVariant; else -> sc.error
+            }
+            val c = pal.tone(t)
+            return if (phone) MaterialYou.scaleChroma(c, choice.intensity) else c
+        }
+
         /** The colours worked out so far, by name (what a change is judged by: the colours in use). */
         fun seen(): Map<String, Int> = HashMap(cache)
 
@@ -659,6 +671,9 @@ object Design {
         val p = synchronized(previewPalettes) { previewPalettes[choice]?.takeIf { it.phone == phone } ?: Palette(choice, phone).also { previewPalettes[choice] = it } }
         return p.color(name)
     }
+
+    /** Palette [p] ('P' primary, 'S' secondary, 'T' tertiary, 'N', 'V' neutrals) at tone [tone] (CIELAB L*), as the palette in use has it. */
+    fun paletteTone(p: Char, tone: Double): Int? = state.palette.tone(p, tone)
 
     /** The wallpaper's main colour (what "wallpaper" makes the palette from), else the phone's own primary. */
     fun wallpaperSeed(): Int? = phone.wallpaper.firstOrNull() ?: systemColor("system_accent1_500")

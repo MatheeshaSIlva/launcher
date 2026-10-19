@@ -197,17 +197,20 @@ object SettingsTokens {
  * phone, and System (the launcher's own: Shizuku, updates, safety, about; "Phone" until 2026-10-19). Each has its name, its
  * colour and its symbol. In the start page's order ([TILE_GROUPS]): the scenes' acts run down the column in it ([TileArt]).
  */
-internal enum class Part(val title: String, val color: ColorKey, val element: Element? = null, val tile: Boolean = true) {
-    HOME("Home", ColorKey("comp.settings.color.home"), Element.HOME),
-    LIBRARY("App Library", ColorKey("comp.settings.color.library"), Element.DRAWER),
-    APPS("Apps", ColorKey("comp.settings.color.apps"), Element.RECENTS),
-    SHADE("Notifications & Control Center", ColorKey("comp.settings.color.shade"), Element.SHADE),
-    STATUS_BAR("Status bar", ColorKey("comp.settings.color.statusbar"), Element.STATUS_BAR),
-    LOOK("Look", ColorKey("comp.settings.color.look")),
-    MOTION("Motion", ColorKey("comp.settings.color.motion")),
+internal enum class Part(val title: String, val color: ColorKey, val element: Element? = null, val tile: Boolean = true,
+                         /** Its palette under Material You ('P' primary, 'T' tertiary, 'S' secondary; null: its own colour). */
+                         val palette: Char? = null) {
+    HOME("Home", ColorKey("comp.settings.color.home"), Element.HOME, palette = 'P'),
+    LIBRARY("App Library", ColorKey("comp.settings.color.library"), Element.DRAWER, palette = 'T'),
+    APPS("Apps", ColorKey("comp.settings.color.apps"), Element.RECENTS, palette = 'S'),
+    SHADE("Notifications & Control Center", ColorKey("comp.settings.color.shade"), Element.SHADE, palette = 'P'),
+    STATUS_BAR("Status bar", ColorKey("comp.settings.color.statusbar"), Element.STATUS_BAR, palette = 'T'),
+    LOOK("Look", ColorKey("comp.settings.color.look"), palette = 'P'),
+    MOTION("Motion", ColorKey("comp.settings.color.motion"), palette = 'T'),
+    // (Its green says the launcher is working: kept, only turned toward the palette.)
     PHONE("System", ColorKey("comp.settings.color.phone")),
     /** Everything you changed (V3), opened from the start page's "Your changes": a page, no tile. */
-    CHANGES("Your changes", ColorKey("comp.settings.color.look"), tile = false),
+    CHANGES("Your changes", ColorKey("comp.settings.color.look"), tile = false, palette = 'P'),
 }
 
 /** What a part holds (with the changes waiting to be applied), in a line under its name on the tile. */
@@ -1330,16 +1333,22 @@ internal fun Modifier.pressScale(scale: () -> Float): Modifier = drawWithContent
 }
 
 /**
- * Part [part]'s colour: the theme's; with the wallpaper's colours (Material You), the theme's own hue turned toward the
- * palette's accent by half the way, at most 15° (Material's harmonising), its lightness and chroma kept. Under the palette
- * every part's accent had become its one primary: every card and every stage the same hue, the page's colours no help.
+ * Part [part]'s colour: the theme's; with Material You's colours, the palette's: the part's own palette (primary, tertiary
+ * or secondary in turn down the column, as Android's own Settings colours its entries) at the lightness of the theme's own
+ * colour for it, so the cards stay apart and keep the theme's contrast. (Each part kept its own hue once, turned only 15°
+ * toward the palette: blue, teal, pink and red cards under a green palette; Matheesha: "the settings colours don't match the
+ * launcher colours". Before that every card had been the palette's one primary.) System keeps its own green, turned toward
+ * the palette (Material's harmonising): it says the launcher is working.
  */
 internal fun partColor(look: Look, part: Part): Color {
     if (!Design.wallpaperColors) return look.color(part.color)
     val key = look.version to part
     return partColors.getOrPut(key) {
         if (partColors.keys.any { it.first != look.version }) partColors.keys.removeAll { it.first != look.version }
-        Color(dev.launcher.app.design.MaterialYou.harmonize(Design.ownColor(part.color), look.color(SettingsTokens.ACCENT).toArgb()))
+        val own = Design.ownColor(part.color)
+        val c = part.palette?.let { p -> Design.paletteTone(p, dev.launcher.app.design.MaterialYou.toLch(own).first) }
+            ?: dev.launcher.app.design.MaterialYou.harmonize(own, look.color(SettingsTokens.ACCENT).toArgb())
+        Color((own and 0xFF000000.toInt()) or (c and 0xFFFFFF))
     }
 }
 
