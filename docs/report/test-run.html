@@ -1,0 +1,283 @@
+<title>Launcher Test Run</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one reading column; a measurement table where each missed refresh is a dot on a frame timeline. */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --ink: #141a21;
+  --muted: #5a6573;
+  --rule: #dde2e8;
+  --late: #e0453f;
+  --late-soft: #fbe3e2;
+  --ontime: #2f8f57;
+  --ontime-soft: #dff1e6;
+  --budget: #c98a12;
+  --accent: #1f5f9e;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1318; --surface: #171d24; --ink: #e8edf2; --muted: #9aa6b4; --rule: #2a323c;
+    --late: #ff6b63; --late-soft: #3a1f1f; --ontime: #5cc487; --ontime-soft: #183126; --budget: #e7ad3c; --accent: #79b0ea;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1318; --surface: #171d24; --ink: #e8edf2; --muted: #9aa6b4; --rule: #2a323c;
+  --late: #ff6b63; --late-soft: #3a1f1f; --ontime: #5cc487; --ontime-soft: #183126; --budget: #e7ad3c; --accent: #79b0ea;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 700; letter-spacing: -0.01em; line-height: 1.08; }
+h2 { font-size: 24px; font-weight: 600; }
+h3 { font-size: 17px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-family: var(--font-data); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+header { display: flex; flex-direction: column; gap: 12px; }
+header p { color: var(--muted); font-size: 16px; }
+
+.figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.figure { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.figure .label { font-size: 13px; color: var(--muted); }
+.figure .value { font-family: var(--font-display); font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.figure .value .from { color: var(--muted); font-weight: 500; font-size: 20px; }
+.figure .value .arrow { color: var(--muted); font-weight: 500; font-size: 20px; padding: 0 4px; }
+.figure .note { font-size: 13px; color: var(--muted); }
+
+.section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; }
+.tabs { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.tabs button { font: inherit; font-size: 13px; border: 0; background: transparent; color: var(--muted); padding: 7px 12px; cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.tabs button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--muted); align-items: center; }
+.legend .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--late); margin-right: 6px; vertical-align: 0; }
+.legend .zero { display: inline-block; width: 18px; height: 2px; background: var(--ontime); margin-right: 6px; vertical-align: 3px; border-radius: 2px; }
+
+.table-box { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+th { font-family: var(--font-data); font-weight: 500; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+tr.group td { font-family: var(--font-display); font-weight: 600; font-size: 14px; background: color-mix(in srgb, var(--bg) 60%, var(--surface)); color: var(--ink); }
+td.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.num.ok { color: var(--ontime); }
+td.num.slow { color: var(--budget); }
+td.num.bad { color: var(--late); }
+.dots { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; min-height: 12px; }
+.dots i { display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--late); }
+.dots .none { width: 18px; height: 2px; border-radius: 2px; background: var(--ontime); }
+.dots .na { font-family: var(--font-data); color: var(--muted); font-size: 12px; }
+tr:last-child td { border-bottom: 0; }
+
+.findings { display: grid; gap: 28px; }
+.group-title { display: flex; align-items: baseline; gap: 10px; }
+.group-title .count { font-family: var(--font-data); font-size: 13px; color: var(--muted); }
+ul.items { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+ul.items li { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--rule); }
+ul.items li:last-child { border-bottom: 0; }
+.code { font-family: var(--font-data); font-size: 12px; font-weight: 500; color: var(--accent); padding-top: 2px; }
+.item-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.item-body .what { font-weight: 600; }
+.item-body .why { color: var(--muted); font-size: 14px; }
+.item-body .result { font-size: 14px; }
+.item-body .result b { font-weight: 600; color: var(--ontime); }
+.item-body .result.open b { color: var(--budget); }
+
+ol.steps { margin: 0; padding-left: 22px; display: grid; gap: 10px; max-width: 72ch; }
+ol.steps li::marker { font-family: var(--font-data); color: var(--muted); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px; }
+.plain { margin: 0; padding-left: 18px; display: grid; gap: 8px; color: var(--ink); }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--rule); padding-top: 16px; }
+footer code, p code { font-family: var(--font-data); font-size: 0.92em; }
+@media (prefers-reduced-motion: no-preference) { .tabs button { transition: background 0.15s, color 0.15s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Galaxy S24 · One UI 9 · 120 Hz · 19 October 2026</div>
+    <h1>Launcher test run</h1>
+    <p id="lede">Every animation of the launcher measured on the S24 before and after, from what the screen showed, and every element exercised on the emulator, screen by screen. A missed refresh is a frame the display had to show twice: at 120 Hz each frame has 8.3 ms.</p>
+  </header>
+
+  <section class="figures" id="figures" aria-label="Headline numbers"></section>
+
+  <section>
+    <div class="section-head">
+      <h2>Every animation, before and after</h2>
+      <div class="tabs" role="group" aria-label="Which run">
+        <button type="button" id="tab-cold" aria-pressed="true">Right after an update</button>
+        <button type="button" id="tab-warm" aria-pressed="false">Warm</button>
+      </div>
+    </div>
+    <p style="margin-top:8px;color:var(--muted)" id="table-note"></p>
+    <div class="legend" style="margin:14px 0 10px">
+      <span><span class="dot"></span>one missed refresh</span>
+      <span><span class="zero"></span>none missed</span>
+      <span>Slowest frame: <span style="color:var(--ontime)">within 8.3 ms</span> · <span style="color:var(--budget)">within 16.7 ms</span> · <span style="color:var(--late)">longer</span></span>
+    </div>
+    <div class="table-box">
+      <table>
+        <thead><tr><th>Animation</th><th>Missed before</th><th>Missed after</th><th>Slowest frame before</th><th>Slowest frame after</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="findings" id="findings" aria-label="Findings"></section>
+
+  <section class="two">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <h2>Check on your phone</h2>
+      <p style="color:var(--muted)">After UPDATE (the first log line should read the build below):</p>
+      <ol class="steps" id="checks"></ol>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <h2>Not covered</h2>
+      <ul class="plain" id="gaps"></ul>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const DATA = {"sections": [{"title": "Home", "steps": [{"id": "page_to_library", "name": "Page to App Library", "cold": {"before": null, "after": {"missed": 1, "cpu": 7.3, "shown": 87}}, "warm": {"before": {"missed": 2, "cpu": 19.6, "shown": 167}, "after": {"missed": 1, "cpu": 6.2, "shown": 88}}}, {"id": "library_scroll", "name": "App Library scroll", "cold": {"before": null, "after": {"missed": 0, "cpu": 4.7, "shown": 114}}, "warm": {"before": {"missed": 0, "cpu": 5.3, "shown": 227}, "after": {"missed": 0, "cpu": 5.1, "shown": 114}}}, {"id": "library_to_page_swipe", "name": "Library back to page (swipe)", "cold": {"before": null, "after": {"missed": 0, "cpu": 17.5, "shown": 87}}, "warm": {"before": {"missed": 1, "cpu": 5.0, "shown": 88}, "after": {"missed": 1, "cpu": 6.7, "shown": 171}}}, {"id": "library_to_page_bar", "name": "Library back to page (bar)", "cold": {"before": null, "after": {"missed": 0, "cpu": 10.7, "shown": 82}}, "warm": {"before": {"missed": 0, "cpu": 22.5, "shown": 81}, "after": {"missed": 0, "cpu": 17.6, "shown": 82}}}, {"id": "folder_open", "name": "Library folder opens", "cold": {"before": null, "after": {"missed": 2, "cpu": 11.3, "shown": 79}}, "warm": {"before": {"missed": 0, "cpu": 13.0, "shown": 192}, "after": {"missed": 0, "cpu": 16.1, "shown": 79}}}, {"id": "folder_close_bar", "name": "Library folder closes", "cold": {"before": null, "after": {"missed": 0, "cpu": 13.3, "shown": 72}}, "warm": {"before": {"missed": 0, "cpu": 17.4, "shown": 154}, "after": {"missed": 0, "cpu": 18.0, "shown": 73}}}, {"id": "library_search_open", "name": "Library search opens", "cold": {"before": null, "after": {"missed": 1, "cpu": 33.6, "shown": 64}}, "warm": {"before": {"missed": 0, "cpu": 18.9, "shown": 53}, "after": {"missed": 2, "cpu": 16.2, "shown": 55}}}, {"id": "library_search_close", "name": "Library search closes", "cold": {"before": null, "after": {"missed": 0, "cpu": 16.1, "shown": 83}}, "warm": {"before": {"missed": 0, "cpu": 16.9, "shown": 83}, "after": {"missed": 0, "cpu": 19.6, "shown": 82}}}, {"id": "spotlight_open", "name": "Spotlight opens", "cold": {"before": null, "after": {"missed": 1, "cpu": 8.2, "shown": 95}}, "warm": {"before": {"missed": 1, "cpu": 5.5, "shown": 96}, "after": {"missed": 0, "cpu": 8.0, "shown": 95}}}, {"id": "spotlight_close", "name": "Spotlight closes", "cold": {"before": null, "after": {"missed": 0, "cpu": 11.1, "shown": 76}}, "warm": {"before": {"missed": 0, "cpu": 5.7, "shown": 75}, "after": {"missed": 0, "cpu": 11.8, "shown": 76}}}, {"id": "home_pull", "name": "Swipe up on home", "cold": {"before": null, "after": {"missed": 0, "cpu": 7.2, "shown": 55}}, "warm": {"before": {"missed": 0, "cpu": 13.9, "shown": 115}, "after": {"missed": 0, "cpu": 7.5, "shown": 55}}}, {"id": "edit_enter", "name": "Edit mode in", "cold": {"before": null, "after": {"missed": 0, "cpu": 3.6, "shown": 114}}, "warm": {"before": {"missed": 0, "cpu": 2.6, "shown": 133}, "after": {"missed": 1, "cpu": 4.4, "shown": 114}}}, {"id": "edit_exit", "name": "Edit mode out", "cold": {"before": null, "after": {"missed": 0, "cpu": 4.8, "shown": 86}}, "warm": {"before": {"missed": 0, "cpu": 7.3, "shown": 164}, "after": {"missed": 0, "cpu": 8.7, "shown": 82}}}]}, {"title": "Apps", "steps": [{"id": "calc_launch", "name": "App opens (library)", "cold": {"before": {"missed": 2, "cpu": 11.2, "shown": 171}, "after": {"missed": 0, "cpu": 6.3, "shown": 91}}, "warm": {"before": {"missed": 2, "cpu": 10.8, "shown": 159}, "after": {"missed": 0, "cpu": 8.4, "shown": 91}}}, {"id": "calc_close", "name": "App closes", "cold": {"before": {"missed": 0, "cpu": 12.1, "shown": 164}, "after": {"missed": 0, "cpu": 9.1, "shown": 170}}, "warm": {"before": {"missed": 1, "cpu": 9.9, "shown": 190}, "after": {"missed": 0, "cpu": 6.2, "shown": 167}}}, {"id": "clock_launch_folder", "name": "App opens (folder)", "cold": {"before": {"missed": 0, "cpu": 14.4, "shown": 165}, "after": {"missed": 0, "cpu": 5.2, "shown": 91}}, "warm": {"before": {"missed": 0, "cpu": 5.9, "shown": 205}, "after": {"missed": 0, "cpu": 7.9, "shown": 91}}}, {"id": "clock_close_folder", "name": "App closes (folder)", "cold": {"before": {"missed": 1, "cpu": 6.8, "shown": 170}, "after": {"missed": 1, "cpu": 8.4, "shown": 173}}, "warm": {"before": {"missed": 0, "cpu": 3.9, "shown": 250}, "after": {"missed": 0, "cpu": 4.5, "shown": 173}}}, {"id": "switch_sideways", "name": "Quick switch", "cold": {"before": {"missed": 0, "cpu": 4.0, "shown": 69}, "after": {"missed": 0, "cpu": 5.5, "shown": 69}}, "warm": {"before": {"missed": 0, "cpu": 3.7, "shown": 179}, "after": {"missed": 0, "cpu": 3.2, "shown": 68}}}, {"id": "switch_back", "name": "Quick switch back", "cold": {"before": {"missed": 2, "cpu": 6.8, "shown": 70}, "after": {"missed": 1, "cpu": 5.4, "shown": 69}}, "warm": {"before": {"missed": 0, "cpu": 12.3, "shown": 141}, "after": {"missed": 1, "cpu": 7.3, "shown": 126}}}, {"id": "close_cancel", "name": "Close cancelled", "cold": {"before": {"missed": 2, "cpu": 3.7, "shown": 9}, "after": {"missed": 1, "cpu": 7.4, "shown": 53}}, "warm": {"before": {"missed": 0, "cpu": 7.1, "shown": 123}, "after": {"missed": 0, "cpu": 4.8, "shown": 9}}}, {"id": "calc_close_2", "name": "App closes (again)", "cold": {"before": {"missed": 1, "cpu": 10.6, "shown": 171}, "after": {"missed": 0, "cpu": 7.6, "shown": 174}}, "warm": {"before": {"missed": 0, "cpu": 14.9, "shown": 181}, "after": {"missed": 0, "cpu": 7.6, "shown": 171}}}, {"id": "launch_grabbed", "name": "Opening app grabbed", "cold": {"before": {"missed": 0, "cpu": 12.7, "shown": 181}, "after": {"missed": 0, "cpu": 14.7, "shown": 186}}, "warm": {"before": {"missed": 0, "cpu": 21.6, "shown": 244}, "after": {"missed": 0, "cpu": 11.9, "shown": 184}}}]}, {"title": "App Switcher", "steps": [{"id": "switcher_open", "name": "App Switcher opens", "cold": {"before": {"missed": 0, "cpu": 194.9, "shown": 124}, "after": {"missed": 2, "cpu": 21.2, "shown": 48}}, "warm": {"before": {"missed": 1, "cpu": 3.8, "shown": 107}, "after": {"missed": 1, "cpu": 5.1, "shown": 50}}}, {"id": "switcher_scroll", "name": "App Switcher scroll", "cold": {"before": {"missed": 0, "cpu": 7.0, "shown": 189}, "after": {"missed": 0, "cpu": 7.2, "shown": 110}}, "warm": {"before": {"missed": 0, "cpu": 6.1, "shown": 111}, "after": {"missed": 0, "cpu": 6.9, "shown": 111}}}, {"id": "switcher_home", "name": "App Switcher to home", "cold": {"before": {"missed": 0, "cpu": 10.2, "shown": 136}, "after": {"missed": 0, "cpu": 5.2, "shown": 68}}, "warm": {"before": {"missed": 1, "cpu": 7.1, "shown": 68}, "after": {"missed": 0, "cpu": 8.1, "shown": 68}}}]}, {"title": "Shade", "steps": [{"id": "cc_open", "name": "Control Center opens", "cold": {"before": {"missed": 0, "cpu": 47.5, "shown": 114}, "after": {"missed": 0, "cpu": 5.7, "shown": 114}}, "warm": {"before": {"missed": 0, "cpu": 16.4, "shown": 114}, "after": {"missed": 0, "cpu": 20.8, "shown": 114}}}, {"id": "cc_close", "name": "Control Center closes", "cold": {"before": {"missed": 0, "cpu": 6.5, "shown": 114}, "after": {"missed": 0, "cpu": 7.5, "shown": 80}}, "warm": {"before": {"missed": 1, "cpu": 9.2, "shown": 156}, "after": {"missed": 0, "cpu": 9.9, "shown": 80}}}, {"id": "nc_open", "name": "Notification Center opens", "cold": {"before": {"missed": 10, "cpu": 84.8, "shown": 114}, "after": {"missed": 1, "cpu": 11.8, "shown": 112}}, "warm": {"before": {"missed": 0, "cpu": 2.8, "shown": 114}, "after": {"missed": 0, "cpu": 11.7, "shown": 101}}}, {"id": "nc_close", "name": "Notification Center closes", "cold": {"before": {"missed": 0, "cpu": 4.9, "shown": 106}, "after": {"missed": 0, "cpu": 5.5, "shown": 75}}, "warm": {"before": {"missed": 0, "cpu": 5.2, "shown": 114}, "after": {"missed": 0, "cpu": 4.9, "shown": 75}}}]}, {"title": "Settings", "steps": [{"id": "settings_launch", "name": "Settings open", "cold": {"before": {"missed": 0, "cpu": 13.6, "shown": 319}, "after": {"missed": 2, "cpu": 10.0, "shown": 263}}, "warm": {"before": {"missed": 0, "cpu": 6.3, "shown": 243}, "after": {"missed": 0, "cpu": 8.4, "shown": 204}}}, {"id": "settings_close_gesture", "name": "Settings close (gesture)", "cold": {"before": {"missed": 1, "cpu": 18.2, "shown": 190}, "after": {"missed": 0, "cpu": 5.6, "shown": 86}}, "warm": {"before": {"missed": 1, "cpu": 22.0, "shown": 121}, "after": {"missed": 0, "cpu": 9.4, "shown": 91}}}, {"id": "edit_menu_open", "name": "Home's edit menu opens", "cold": {"before": {"missed": 4, "cpu": 38.1, "shown": 166}, "after": {"missed": 3, "cpu": 25.7, "shown": 114}}, "warm": {"before": {"missed": 1, "cpu": 17.3, "shown": 195}, "after": {"missed": 1, "cpu": 13.0, "shown": 114}}}, {"id": "settings_from_home", "name": "Home Settings slides in", "cold": {"before": {"missed": 2, "cpu": 28.7, "shown": 278}, "after": {"missed": 0, "cpu": 24.6, "shown": 165}}, "warm": {"before": {"missed": 2, "cpu": 26.7, "shown": 183}, "after": {"missed": 1, "cpu": 22.5, "shown": 163}}}, {"id": "settings_back_to_home", "name": "Settings slide back home", "cold": {"before": {"missed": 2, "cpu": 23.0, "shown": 194}, "after": {"missed": 1, "cpu": 11.1, "shown": 111}}, "warm": {"before": {"missed": 1, "cpu": 17.5, "shown": 111}, "after": {"missed": 1, "cpu": 11.8, "shown": 112}}}]}]};
+const META = {"fixed": "36", "fixedNote": "3 you reported, 27 found by measuring, 6 in behaviour", "p29": "<b>47-50 ms to 5.7 ms</b> at worst in the first pull after an update. Its controls are recorded ahead while the shade is idle.", "footer": "Build: the newest one on UPDATE (commit <code>336b82d</code> or later). Numbers: <code>tools/scenario_sweep.sh</code> on the S24 (frame stats, what the screen showed), once right after installing the build and once warm, at the start of the run and at its end; single runs, so a single missed refresh either way is within the spread. Every finding with its numbers: <code>docs/TEST_RUN.md</code>."};
+
+const FINDINGS = [
+  { title: 'Fixed: what you reported', items: [
+    { code: 'R1', what: 'A flicker after closing the settings', why: 'Home came back with Android\'s grey starting window, which faded over home after our picture of it had gone.', result: '<b>Fixed.</b> Home starts with no starting window; our picture stays until home is really on screen.' },
+    { code: 'R2', what: 'Changing the theme, then swiping to the App Library froze the launcher', why: 'The settings rebuilt themselves in the background (~160 ms of the main thread), and the library\'s first slide recorded every tile and uploaded every icon in one frame (59 ms).', result: '<b>Fixed.</b> The settings wait until the launcher has been left alone 5 s; the library is drawn ahead whenever it changes. First slide: worst frame 5-8 ms.' },
+    { code: 'R3', what: 'Animations skipping now and then', why: 'After every update our own code ran interpreted until Android had seen it run: each animation\'s first time was slower.', result: '<b>Fixed.</b> All our code is compiled at install. The settings\' first frame: 225 to 154 ms; no compiling of our code in traces since.' },
+  ]},
+  { title: 'Fixed: found during the run', items: [
+    { code: 'P22', what: 'App Switcher, first opening after a start', why: 'Each card read its app\'s name and icon from the app itself, on the gesture\'s thread.', result: '<b>231 ms frame to 7 ms.</b> Names and icons read ahead in the background; late ones fade in.' },
+    { code: 'P14', what: 'Notification Center, first pull after a start', why: 'An app\'s name was read while drawing (65 ms for one system app).', result: '<b>82 ms frame gone;</b> 10 missed refreshes to 0 in the first pull after an update.' },
+    { code: 'P19', what: 'The whole screen composited on the GPU at every frame', why: 'Two idle 1 x 1 windows of ours were too small for the display hardware, so SurfaceFlinger drew every frame with the GPU, the same GPU our animations use.', result: '<b>Fixed.</b> Every layer composited by the display hardware again.' },
+    { code: 'P13', what: 'A burst of garbage every minute', why: 'The glass clock\'s new numerals made ~25 MB of temporary arrays per clock each minute; the clean-up pauses landed in whatever moved then.', result: '<b>84 MB to 4.8 MB</b> of garbage in the same 70 s.' },
+    { code: 'P8', what: 'The App Library\'s slide filled the GPU memory', why: 'The search field\'s glass made a new GPU image of another size at every frame; icons were pushed out and uploaded again.', result: '<b>1768 to 174</b> image allocations over three slides; icon uploads 1189 to 216.' },
+    { code: 'P25', what: 'The settings\' home gesture: its first frames late', why: 'Home\'s picture was rendered at the touch and the main thread waited for the GPU (~15 ms).', result: '<b>2-4 late frames to 0-1</b> per close. The picture is drawn into buffers made ahead and waited for off the main thread.' },
+    { code: 'P20', what: 'Spotlight\'s first pull', why: 'The keyboard asked for the cursor\'s position at every frame, and the field re-laid out home as the keyboard rose.', result: '<b>54 + 23 ms frames to one of 40 ms.</b>' },
+    { code: 'P6', what: 'Settings: the tiles\' scenes stuttered as the app opened', why: 'Pages are built ahead one per frame (20-45 ms each) while the scenes already played.', result: '<b>Fixed.</b> The scenes start once everything is built.' },
+    { code: 'P23', what: 'The App Switcher\'s touch window held every window\'s frames', why: 'It drew nothing but allocated screen-sized buffers on the render thread all our windows share (7.8 ms).', result: '<b>Fixed.</b> It draws in software on its own thread.' },
+    { code: 'P26', what: 'The Shizuku side kept every app picture it sent', why: 'Each task snapshot (~10 MB of graphics memory) stayed open until a garbage collection.', result: '<b>Fixed.</b> Closed as soon as it is sent.' },
+    { code: 'P28', what: 'The App Library\'s first slide after a while re-uploaded its icons', why: 'Android lets textures go after ~10 s unused; ~40 icons went up inside the slide\'s first frame.', result: '<b>Fixed.</b> Put back on the GPU when a finger lands beside the library (0.2 ms when still there).' },
+    { code: 'P12', what: 'Spotlight\'s first pull: 25 and 45 ms frames', why: 'Android\'s autofill laid out every text on home when the field first took the focus.', result: '<b>Fixed.</b> No autofill on home and in the settings.' },
+    { code: 'P29', what: 'Control Center\'s first pull after an update: its first frame ~50 ms late', why: 'Every control\'s layer was recorded in that first frame.', result: '<b>47-50 ms to 5.7 ms</b> at worst in the first pull after an update. Its controls are recorded ahead while the shade is idle.' },
+    { code: 'P3-P30', what: 'Twelve more of the same kind', why: 'Warm-ups for first uses after an update, glass uniforms set only when changed, shadows rendered once, Control Center\'s first blur and its backdrop made off the render thread, Notification Center recording ahead, icons put back on the GPU, a stuck notification listener after a crash.', result: '<b>Fixed;</b> each with its numbers in docs/TEST_RUN.md.' },
+  ]},
+  { title: 'Fixed: behaviour', items: [
+    { code: 'B1', what: 'A widget made bigger could push an item off home', why: 'The item went to a new page that was never shown (Calendar made wide sent the small clock away).', result: '<b>Fixed.</b> Every page an item lands on is shown.' },
+    { code: 'B2', what: 'Icons pushed to the next page went in reverse order', why: 'A widget added at the top of a full page sent its icons on backwards.', result: '<b>Fixed,</b> with a test.' },
+    { code: 'B4', what: 'After a new wallpaper, closes showed the old one', why: 'The card closed over the old wallpaper, then home jumped to the new one. The App Switcher\'s background too.', result: '<b>Fixed.</b> Home\'s picture keys on the wallpaper it shows.' },
+    { code: 'B5', what: 'Notification Center\'s clock off to one side after a landscape app', why: 'Numerals made for the turned panel were kept back in portrait.', result: '<b>Fixed.</b> Made again for each size, cross-fading in.' },
+    { code: 'B3', what: 'Dark chosen from home\'s menu: the lifted Edit label stayed dark', why: 'The lifted copy kept the tone of the change\'s last frame.', result: '<b>Fixed.</b>' },
+    { code: 'B6', what: 'A notification of ours opened with the wrong picture', why: 'The card took the latest picture of our package, which could be any of our screens.', result: '<b>Fixed.</b> Our own notifications open with the icon on its colour.' },
+  ]},
+  { title: 'Looked into, left as they are', items: [
+    { code: 'P27', what: 'Home\'s edit menu: its first frame one refresh late about every second opening', why: 'GPU-bound: edit mode alone costs ~12 ms of GPU a frame (the jiggling glass clock, dock and widgets). Tried: warming the menu during the long press, its glass without blur, without its shader, reading home\'s blurred copy. None moved it beyond run-to-run spread.', result: 'open', open: true },
+    { code: 'P5', what: 'Home\'s frames while the settings open over it', why: 'Counted as late, but home is wholly at rest under the settings then: nothing on screen moves.', result: 'Nothing to see.', open: true },
+  ]},
+  { title: 'For you to decide', items: [
+    { code: 'D1', what: 'The minus badge in edit mode removes an icon at once', why: 'iOS asks first (Remove from Home Screen, Delete App, Cancel). Here it only leaves home (it stays in the App Library) and can be dragged back.', result: 'Your call.', open: true },
+  ]},
+];
+
+const CHECKS = [
+  'Right after the update, swipe up and hold: the App Switcher opens without a hitch.',
+  'Settings, Look: pick another theme and apply it, go home, then swipe to the App Library. No freeze.',
+  'Close the settings with the home gesture, and with Back on the tiles. No flicker, no jump.',
+  'Set a new wallpaper, then open and close an app: the card lands on the new wallpaper.',
+  'Watch a landscape video for a minute or two, go home, pull down Notification Center: the clock is whole and centred.',
+  'Edit mode on a full page: make a widget bigger. What it pushes shows on the next page, in order.',
+];
+
+const GAPS = [
+  'Restore system and a killed launcher on your phone (they change system state there; both checked on the emulator).',
+  'Pulls over the lock screen on the S24 (your lock screen is secure).',
+  'Every theme x colour source x font combination (the main ones only).',
+  'Notification Center and banners on your phone were measured by frame stats only, never captured.',
+];
+
+function cls(ms) { if (ms == null) return ''; return ms <= 8.4 ? 'ok' : ms <= 16.7 ? 'slow' : 'bad'; }
+function dots(v) {
+  if (v == null) return '<span class="na">not run</span>';
+  if (v.missed === 0) return '<span class="none" title="none missed"></span>';
+  return Array.from({ length: Math.min(v.missed, 24) }, () => '<i></i>').join('') + (v.missed > 24 ? '<span class="na">+' + (v.missed - 24) + '</span>' : '');
+}
+function ms(v) { return v == null ? '<span class="na">-</span>' : v.cpu.toFixed(1) + ' ms'; }
+
+function render(kind) {
+  const rows = [];
+  for (const sec of DATA.sections) {
+    rows.push('<tr class="group"><td colspan="5">' + sec.title + '</td></tr>');
+    for (const s of sec.steps) {
+      const r = s[kind];
+      rows.push('<tr><td>' + s.name + '</td><td><div class="dots" aria-label="' + (r.before ? r.before.missed + ' missed' : 'not run') + '">' + dots(r.before) +
+        '</div></td><td><div class="dots" aria-label="' + (r.after ? r.after.missed + ' missed' : 'not run') + '">' + dots(r.after) + '</div></td>' +
+        '<td class="num ' + cls(r.before && r.before.cpu) + '">' + ms(r.before) + '</td><td class="num ' + cls(r.after && r.after.cpu) + '">' + ms(r.after) + '</td></tr>');
+    }
+  }
+  document.getElementById('rows').innerHTML = rows.join('');
+  document.getElementById('table-note').textContent = kind === 'cold'
+    ? 'Measured right after installing the build, as after an UPDATE: nothing warmed yet. The first sweep before the run did not cover home\'s own motion.'
+    : 'Measured again once everything had run once.';
+  for (const k of ['cold', 'warm']) document.getElementById('tab-' + k).setAttribute('aria-pressed', String(k === kind));
+  try { localStorage.setItem('tab', kind); } catch (e) {}
+}
+
+function totals(kind, which) {
+  let missed = 0, shown = 0, worst = 0, worstName = '';
+  for (const sec of DATA.sections) for (const s of sec.steps) {
+    const b = s[kind].before, a = s[kind].after;
+    if (!b || !a) continue;   // only animations measured both times
+    const v = which === 'before' ? b : a;
+    missed += v.missed; shown += v.shown;
+    if (v.cpu > worst) { worst = v.cpu; worstName = s.name; }
+  }
+  return { missed, shown, worst, worstName };
+}
+
+function figures() {
+  const cb = totals('cold', 'before'), ca = totals('cold', 'after');
+  const wb = totals('warm', 'before'), wa = totals('warm', 'after');
+  const f = [
+    { label: 'Missed refreshes right after an update', from: cb.missed, to: ca.missed, note: 'over ' + ca.shown.toLocaleString() + ' frames shown, same animations' },
+    { label: 'Missed refreshes, warm', from: wb.missed, to: wa.missed, note: 'over ' + wa.shown.toLocaleString() + ' frames shown, same animations' },
+    { label: 'Slowest frame right after an update', from: cb.worst.toFixed(0) + ' ms', to: ca.worst.toFixed(0) + ' ms', note: 'was: ' + cb.worstName + '; now: ' + ca.worstName },
+    { label: 'Problems fixed', from: null, to: META.fixed || '', note: META.fixedNote || '' },
+  ];
+  document.getElementById('figures').innerHTML = f.map(x => '<div class="figure"><span class="label">' + x.label + '</span><span class="value">' +
+    (x.from != null ? '<span class="from">' + x.from + '</span><span class="arrow">&rarr;</span>' : '') + x.to + '</span><span class="note">' + x.note + '</span></div>').join('');
+}
+
+function findings() {
+  document.getElementById('findings').innerHTML = FINDINGS.map(g => '<div style="display:flex;flex-direction:column;gap:12px"><div class="group-title"><h2>' + g.title +
+    '</h2><span class="count">' + g.items.length + '</span></div><ul class="items">' + g.items.map(i => '<li><span class="code">' + i.code +
+    '</span><div class="item-body"><span class="what">' + i.what + '</span><span class="why">' + i.why + '</span><span class="result' + (i.open ? ' open' : '') + '">' +
+    (i.result === 'open' ? '<b>Open.</b>' : i.result) + '</span></div></li>').join('') + '</ul></div>').join('');
+}
+
+document.getElementById('checks').innerHTML = CHECKS.map(c => '<li>' + c + '</li>').join('');
+document.getElementById('gaps').innerHTML = GAPS.map(c => '<li>' + c + '</li>').join('');
+document.getElementById('foot').innerHTML = (META.footer || '');
+figures();
+findings();
+let start = 'cold';
+try { start = localStorage.getItem('tab') || 'cold'; } catch (e) {}
+render(start === 'warm' ? 'warm' : 'cold');
+document.getElementById('tab-cold').addEventListener('click', () => render('cold'));
+document.getElementById('tab-warm').addEventListener('click', () => render('warm'));
+</script>

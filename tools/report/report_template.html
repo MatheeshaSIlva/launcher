@@ -176,7 +176,7 @@ const FINDINGS = [
     { code: 'P28', what: 'The App Library\'s first slide after a while re-uploaded its icons', why: 'Android lets textures go after ~10 s unused; ~40 icons went up inside the slide\'s first frame.', result: '<b>Fixed.</b> Put back on the GPU when a finger lands beside the library (0.2 ms when still there).' },
     { code: 'P12', what: 'Spotlight\'s first pull: 25 and 45 ms frames', why: 'Android\'s autofill laid out every text on home when the field first took the focus.', result: '<b>Fixed.</b> No autofill on home and in the settings.' },
     { code: 'P29', what: 'Control Center\'s first pull after an update: its first frame ~50 ms late', why: 'Every control\'s layer was recorded in that first frame.', result: '/*P29*/' },
-    { code: 'P3-P24', what: 'Eleven more of the same kind', why: 'Warm-ups for first uses after an update, glass uniforms set only when changed, shadows rendered once, Control Center\'s first blur, Notification Center recording ahead, icons put back on the GPU, a stuck notification listener after a crash.', result: '<b>Fixed;</b> each with its numbers in docs/TEST_RUN.md.' },
+    { code: 'P3-P30', what: 'Twelve more of the same kind', why: 'Warm-ups for first uses after an update, glass uniforms set only when changed, shadows rendered once, Control Center\'s first blur and its backdrop made off the render thread, Notification Center recording ahead, icons put back on the GPU, a stuck notification listener after a crash.', result: '<b>Fixed;</b> each with its numbers in docs/TEST_RUN.md.' },
   ]},
   { title: 'Fixed: behaviour', items: [
     { code: 'B1', what: 'A widget made bigger could push an item off home', why: 'The item went to a new page that was never shown (Calendar made wide sent the small clock away).', result: '<b>Fixed.</b> Every page an item lands on is shown.' },
@@ -197,10 +197,10 @@ const FINDINGS = [
 
 const CHECKS = [
   'Right after the update, swipe up and hold: the App Switcher opens without a hitch.',
-  'Settings, Look: pick another theme, go home, swipe to the App Library at once. No freeze.',
+  'Settings, Look: pick another theme and apply it, go home, then swipe to the App Library. No freeze.',
   'Close the settings with the home gesture, and with Back on the tiles. No flicker, no jump.',
   'Set a new wallpaper, then open and close an app: the card lands on the new wallpaper.',
-  'Watch a landscape video, go home, pull down Notification Center: the clock is whole and centred.',
+  'Watch a landscape video for a minute or two, go home, pull down Notification Center: the clock is whole and centred.',
   'Edit mode on a full page: make a widget bigger. What it pushes shows on the next page, in order.',
 ];
 

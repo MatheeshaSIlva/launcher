@@ -99,6 +99,18 @@ what was seen and the fix's commit), or **not run** (why).
 
 ## Results
 
+Final sweep on the S24 (commit 336b82d's code, `tools/scenario_sweep.sh`, CSV `tools/shots/sweep/final.csv`), against the
+sweep at the start of the run (`before.csv`), single runs each:
+
+| | Missed refreshes | Slowest frame |
+| --- | --- | --- |
+| Right after installing the build (21 animations measured both times) | 27 -> 12 (0.84 % -> 0.50 % of frames) | 195 ms (App Switcher opens) -> 26 ms (home's edit menu, P27) |
+| Warm (34 animations) | 15 -> 10 (0.30 % -> 0.28 %) | 27 ms -> 22 ms (Home Settings slides in) |
+
+What is left are single missed refreshes scattered across runs (no animation misses in both final runs except the edit
+menu, P27, and the App Switcher's opening, 2 cold and 1 warm). Report page: `docs/report/test-run.html`
+(`tools/report/make_report.py`).
+
 Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix), screenshots looked at; timing on the S24
 (frame stats, Perfetto) as in the table above.
 
