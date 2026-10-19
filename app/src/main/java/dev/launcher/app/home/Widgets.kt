@@ -249,6 +249,10 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
     /** The widget's layout as its app last sent it (inflated again when the phone's palette changes: [refreshColours]). */
     private var lastViews: android.widget.RemoteViews? = null
 
+    /** The phone's palette (and light or dark) the content was inflated in: [phoneGen] as it was then. */
+    var inflatedIn = phoneGen
+        private set
+
     /**
      * The phone's palette changed: the widget's layout is inflated anew in it (its colours are fixed at inflation), the old
      * one fading out over the new while it shows. Home used to be made anew at every change of the palette, which did
@@ -257,6 +261,7 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
      * the phone's palette, which Other apps makes the launcher's.
      */
     fun refreshColours() {
+        inflatedIn = phoneGen
         val last = lastViews ?: return
         if (resizingContent) return   // (the resize's end applies what came meanwhile)
         val old = if (childCount > 0) getChildAt(0) else null
@@ -342,6 +347,7 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
     }
 
     private fun apply(remoteViews: android.widget.RemoteViews?) {
+        inflatedIn = phoneGen
         val now = android.os.SystemClock.uptimeMillis()
         val fade = now < crossfadeUntil && width > 0 && height > 0 && isAttachedToWindow
         val before = if (childCount > 0) getChildAt(0) else null
@@ -442,6 +448,11 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
         canvas.drawPicture(p)
         canvas.restoreToCount(l)
         postInvalidateOnAnimation()
+    }
+
+    companion object {
+        /** Counts the changes of the phone's palette (and of light and dark) widgets are inflated in. Main thread. */
+        var phoneGen = 0
     }
 }
 

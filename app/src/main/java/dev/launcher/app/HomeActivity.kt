@@ -338,6 +338,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         super.onResume()
         resumed = true
         resumedAt = android.os.SystemClock.uptimeMillis()
+        // Home back in front counts as a touch: a finger usually follows (work that waits for an untouched launcher waits).
+        HomeBridge.lastTouchAt = resumedAt
         GestureNav.onHomeShown()
         reportFirstFrame()
         arriveIfDue()

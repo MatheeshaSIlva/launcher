@@ -29,9 +29,12 @@ class LauncherApp : Application() {
                 config = android.content.res.Configuration(newConfig)
                 // The scale (Display size, Font size), the palette (it comes with the assets: an overlay, Material You's or
                 // One UI's, read again only then: not at every turn of the phone), the appearance.
-                dev.launcher.app.design.Design.onScale(newConfig.densityDpi, newConfig.fontScale)
-                if (diff and ASSETS_PATHS != 0) dev.launcher.app.design.Design.onConfiguration()
-                dev.launcher.app.theme.Appearance.onConfiguration(newConfig)
+                android.os.Trace.beginSection("launcher: configuration changed")
+                try {
+                    dev.launcher.app.design.Design.onScale(newConfig.densityDpi, newConfig.fontScale)
+                    if (diff and ASSETS_PATHS != 0) dev.launcher.app.design.Design.onConfiguration()
+                    dev.launcher.app.theme.Appearance.onConfiguration(newConfig)
+                } finally { android.os.Trace.endSection() }
             }
             @Deprecated("Deprecated in Java") override fun onLowMemory() {}
         })

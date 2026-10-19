@@ -505,6 +505,7 @@ class SettingsActivity : ComponentActivity() {
         // Sliding back into home: nothing here takes a touch any more (a tile tapped would open its page under home).
         if (exiting) return true
         if (ev.actionMasked == MotionEvent.ACTION_UP) { touchX = ev.x; touchY = ev.y; touchAt = android.os.SystemClock.uptimeMillis() }
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN || ev.actionMasked == MotionEvent.ACTION_UP) dev.launcher.app.HomeBridge.lastTouchAt = android.os.SystemClock.uptimeMillis()
         return super.dispatchTouchEvent(ev)
     }
 

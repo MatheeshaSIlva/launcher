@@ -289,9 +289,42 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     /** The phone's own colours may have changed: apps' widgets, drawn in them, follow ([LauncherWidgetHostView.refreshColours]). */
     private val onPhonePalette: () -> Unit = { widgetsFollowPhone() }
 
-    /** Apps' widgets inflated again in the phone's palette, light or dark as it is now (each fading from its old look). */
+    /**
+     * Apps' widgets inflated again in the phone's palette, light or dark as it is now (each fading from its old look), once
+     * the system is done with the change ([dev.launcher.app.SystemCalm]). Such a change reaches every app at once and keeps
+     * the system busy a while (~1.4 s on the emulator); a widget's views going and coming register and unregister receivers
+     * with it (a clock's TextClock), and each such call waited for it on the main thread, inside the change's own callback
+     * (116 ms on the emulator, several in a row: home froze a moment after Other apps gave Android a palette). Then one widget
+     * a frame ([nextWidget]), while home is still and untouched.
+     */
     fun widgetsFollowPhone() {
-        for (w in widgetViews()) (w as? AppWidgetFrame)?.hostView?.refreshColours()
+        val gen = ++LauncherWidgetHostView.phoneGen
+        dev.launcher.app.SystemCalm.after(context, WIDGETS_SETTLE_MS) {
+            if (gen != LauncherWidgetHostView.phoneGen) return@after
+            widgetsSince = android.os.SystemClock.uptimeMillis()
+            nextWidget()
+        }
+    }
+
+    /** When the widgets began to follow the phone's palette (uptime ms). */
+    private var widgetsSince = 0L
+    private val widgetStep = Runnable { nextWidget() }
+
+    /**
+     * The next widget not yet inflated in the phone's palette, inflated again (~5-20 ms of the main thread each, its app's
+     * resources loaded): not while home moves or a finger is on it, nor over the settings (on this thread too), unless it has
+     * waited [WIDGETS_MAX_WAIT_MS]; out of sight at once. The one after it a frame later.
+     */
+    private fun nextWidget() {
+        removeCallbacks(widgetStep)
+        val gen = LauncherWidgetHostView.phoneGen
+        val stale = widgetViews().firstNotNullOfOrNull { w -> (w as? AppWidgetFrame)?.hostView?.takeIf { it.inflatedIn != gen } } ?: return
+        val now = android.os.SystemClock.uptimeMillis()
+        val busy = dev.launcher.app.design.SystemPalette.settingsInFront ||
+            (dev.launcher.app.GestureNav.homeVisible && (!isIdle || dev.launcher.app.HomeBridge.touching || now - dev.launcher.app.HomeBridge.lastTouchAt < WIDGETS_UNTOUCHED_MS))
+        if (busy && now - widgetsSince < WIDGETS_MAX_WAIT_MS) { postDelayed(widgetStep, WIDGETS_RETRY_MS); return }
+        stale.refreshColours()
+        postOnAnimation { post(widgetStep) }
     }
 
     /** A change of the design under way is shown by its caller ([changeShownBy]), not by home's own reveal. */
@@ -2402,5 +2435,13 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         /** How long after home comes back its icons are put back on the GPU (and how often it asks again while not idle; ms). */
         const val ICON_WARM_MS = 600L
         const val ICONS_PER_FRAME = 12
+        /** After a change of the phone's palette, how soon the system is asked whether it is done with it (ms). */
+        const val WIDGETS_SETTLE_MS = 400L
+        /** Apps' widgets follow the phone's palette on a home left untouched this long (ms)... */
+        const val WIDGETS_UNTOUCHED_MS = 800L
+        /** ...asked again this often (ms)... */
+        const val WIDGETS_RETRY_MS = 300L
+        /** ...and after this long anyway (ms). */
+        const val WIDGETS_MAX_WAIT_MS = 10_000L
     }
 }

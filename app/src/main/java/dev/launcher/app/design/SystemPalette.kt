@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit
  * app again, ours too (each window's thread, then a frame of each), and given a moment after Apply it landed in the middle
  * of the colours' reveal (S24: the settings and the card window laid out again mid-reveal; before the activities kept
  * through palette changes, both were made anew there). So it waits while the settings are in front and while a change of
- * the look is being shown.
+ * the look is being shown, then for home at rest and untouched, or the screen off ([quietIn]).
  */
 object SystemPalette {
     private const val SETTING = "theme_customization_overlay_packages"
@@ -106,13 +106,41 @@ object SystemPalette {
 
     private fun schedule(c: Context, delayMs: Long) {
         pending?.cancel(false)
-        pending = io.schedule({ whenStill(c) }, delayMs, TimeUnit.MILLISECONDS)
+        val g = ++scheduled
+        pending = io.schedule({ whenStill(c, g) }, delayMs, TimeUnit.MILLISECONDS)
     }
 
-    private fun whenStill(c: Context) {
+    /** Counts [schedule]'s calls: a check answered on the main thread for an earlier one does nothing. */
+    @Volatile private var scheduled = 0
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    private fun whenStill(c: Context, g: Int) {
         val left = Still.msLeft()
         if (settingsInFront || left > 0) { schedule(c, maxOf(left, STILL_MS)); return }
-        syncNow(c)
+        // (Home's state is the main thread's.)
+        main.post {
+            if (g != scheduled) return@post
+            val wait = quietIn(c)
+            if (wait == 0L) io.execute { if (g == scheduled) syncNow(c) } else schedule(c, wait)
+        }
+    }
+
+    /**
+     * 0 once nothing of the launcher moves or is touched, else how long to wait before asking again (ms). Android's palette
+     * lays every window of every app out again and keeps the system busy a while (~1.4 s on the emulator): a frame of
+     * anything moving then comes late (given as soon as the settings were left, it landed while Matheesha swiped home's
+     * pages: "it freezes for a second"). So it waits for the screen to be off, or for home in front and still, untouched
+     * for [UNTOUCHED_MS]; never while an app is in front (it would be told mid-use, and an app that does not take palette
+     * changes itself is made anew).
+     */
+    private fun quietIn(c: Context): Long {
+        if (!dev.launcher.app.GestureNav.idle) return QUIET_RETRY_MS
+        val interactive = (c.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager)?.isInteractive ?: true
+        if (!interactive) return 0L
+        if (!dev.launcher.app.GestureNav.homeVisible) return AWAY_RETRY_MS
+        if (dev.launcher.app.HomeBridge.touching || dev.launcher.app.HomeBridge.home?.isIdle() == false) return QUIET_RETRY_MS
+        val untouched = android.os.SystemClock.uptimeMillis() - dev.launcher.app.HomeBridge.lastTouchAt
+        return if (untouched >= UNTOUCHED_MS) 0L else maxOf(UNTOUCHED_MS - untouched, QUIET_RETRY_MS / 2)
     }
 
     /** Restore system: the switch off and the phone's own palette back. Blocking. Returns a line for the report, or null. */
@@ -270,4 +298,13 @@ object SystemPalette {
 
     /** How long the launcher must have been still before Android's palette is given (ms). */
     private const val STILL_MS = 600L
+    /**
+     * Home must have been left untouched this long before Android's palette is given ([quietIn]; ms), as long as the
+     * settings wait to bring their look up to date while away (SettingsActivity.UNTOUCHED_MS)...
+     */
+    private const val UNTOUCHED_MS = 5000L
+    /** ...asked again this often while it is not (ms)... */
+    private const val QUIET_RETRY_MS = 500L
+    /** ...and this often while an app is in front (ms). */
+    private const val AWAY_RETRY_MS = 2000L
 }

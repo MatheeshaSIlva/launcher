@@ -159,7 +159,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   Restore system give the phone's own value back (unless changed since); Auto on a phone whose palette is already the
   wallpaper's gives nothing. Written with the launcher's self-granted WRITE_SECURE_SETTINGS, else the shell; only when it
   differs (a write makes every app reload its colours), and only once the launcher is still (not while the settings are in
-  front nor during a reveal: a change of Android's palette lays every window out again); log lines "[palette] ...".
+  front nor during a reveal: a change of Android's palette lays every window out again), then on a home at rest and left
+  untouched 5 s (its return to the front counts as a touch) or with the screen off, never while an app is in front (it
+  would be told mid-use); log lines "[palette] ...".
   **Icon sets** (`design/IconSets`, `assets/icons/<id>.json` or `files/icons/<id>.json` through the inbox): symbols as
   vector paths that the shade draws in place of its own (`res/drawable/sym_*`, Material Symbols Rounded: the set
   `launcher`) where a theme names a set (`sys.symbols`, read through each element's own token: `comp.cc.symbols`,
@@ -838,6 +840,14 @@ copy it wholesale — port the working pieces cleanly. File map:
   glass clock build, a GC at every minute). Hot loops take arrays or plain parameters.
 - **A GPU bitmap's `copy(ARGB_8888)` reads the whole image back on the render thread** (14-32 ms for home's picture, every
   window of ours waiting): `ViewPicture.softCopy` draws it scaled on the GPU into a CPU-readable buffer instead.
+- **A change for every app (Android's palette, light and dark) keeps the system busy a while after it reaches us**
+  (emulator: 0.4-1.4 s): every window of ours is laid out again (each a relayout call into the busy window manager, up to
+  194 ms; the frame after it 1.5 s once), and every binder call of ours waits: apps' widgets inflated again inside the
+  change's own callback dropped their views, and a clock's TextClock unregistering its receiver waited 116 ms, one after
+  another on the main thread (home froze a moment after Other apps gave Android a palette: "it freezes for a second").
+  Widgets follow such a change once `SystemCalm` finds the system answering at once (a receiver of ours registered and
+  dropped from a worker thread, timed), one a frame, on a home at rest; Other apps gives Android a palette only when
+  nothing would show the hitch (above). Nothing of ours makes a binder call on the main thread right after such a change.
 - **After a crash while Android binds the notification listener, the system keeps the binding as made** ("is already
   bound") and never retries: our shade empty until a reboot. `LauncherApp.watchNotificationListener` switches the component
   off and on when it has not connected 8 s after a start (a rebind request alone is ignored for an enabled listener).

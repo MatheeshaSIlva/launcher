@@ -161,3 +161,23 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
   flags at once (they belong to our process) and the launcher, the home app, comes back and sets everything up again in
   ~4 s. Restore system (the settings' System page): Android's own status bar, gestures and animation scales back, our
   accessibility service off, the result written under the button; switched back on from the Developer page.
+
+## After the run: Matheesha's four reports (2026-10-19)
+
+1. **"Changing colour profile from home settings still cause the launcher to freeze for a moment ... it freezes for a
+   second and then back to normal."** Traced on the emulator (Other apps on): leaving the settings after a change of the
+   colours, Android's palette was given 0.6 s later, on home, and the change reached every app at once. Inside its callback
+   on our main thread (503 ms): apps' widgets inflated again, a clock widget's TextClock unregistering and registering its
+   receiver with the activity manager, which was busy handing the change to every app (two calls of 197 and 110 ms);
+   then the next frame (up to 1.5 s): every window of ours laid out again, each relayout a call into the busy window manager
+   (194 ms for the bar's one-pixel window). **Fixed** what is ours: widgets follow once the system answers at once again
+   (`SystemCalm`: 0.4-1.2 s after the change on the emulator), one a frame on a home at rest (the callback: 120 ms, of it
+   Android's own); Android's palette is given only on a home left untouched 5 s (its return counts as a touch) or with the
+   screen off, never while an app is in front, so the system's own hitch lands where nothing moves. Unverified on the S24
+   (in a call during this round).
+2. The landscape notification shade: proposal first.
+3. Ask before removing an icon from home; several icons moved at once, as on iOS: to do.
+4. **Control Center's edit mode reshuffled for good** ("doesn't revert to its original position if I don't release the
+   control where the other controls made space"): every stop of a drag was worked out from the page as the last stop left
+   it. **Fixed** (e2e4ba8): worked out from the page as it was when the drag began, so the controls moved out of the way
+   go back as the drag moves on, and a drag or resize the system cancels puts the page back.

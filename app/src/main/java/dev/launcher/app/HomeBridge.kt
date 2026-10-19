@@ -266,7 +266,10 @@ object HomeBridge {
      */
     @Volatile var touching = false
 
-    /** When the launcher was last touched (a finger down or up on home, the bar or a panel; uptime ms; any thread). */
+    /**
+     * When the launcher was last touched (a finger down or up on home, the bar, a panel or the settings; home coming back to
+     * the front counts too; uptime ms; any thread).
+     */
     @Volatile var lastTouchAt = 0L
 
     /**
