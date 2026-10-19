@@ -176,7 +176,10 @@ class InstantTransitions(private val atm: Any) {
             ?: rtClass.getConstructor(ifaceClass).newInstance(iface)
     }
 
-    private fun options(): Bundle = activityOptions().toBundle()
+    private fun options(noStartingWindow: Boolean = false): Bundle = activityOptions().toBundle().also {
+        // (The key the system reads into ActivityOptions.mDisableStartingWindow: what setDisableStartingWindow sets.)
+        if (noStartingWindow) it.putBoolean(KEY_DISABLE_STARTING_WINDOW, true)
+    }
 
     private fun activityOptions(): ActivityOptions {
         val rtClass = Class.forName("android.window.RemoteTransition")
@@ -195,7 +198,11 @@ class InstantTransitions(private val atm: Any) {
             .sortedByDescending { it.name == "startActivityAsUser" }
             .firstOrNull { m -> m.parameterTypes.any { it == Intent::class.java } && m.parameterTypes.any { it == Bundle::class.java } }
             ?: return "ERROR: no startActivity method"
-        val bundle = options()
+        // Home (ours, under a picture of itself): no starting window. Brought back to the front, the system put a snapshot
+        // starting window over it, and home keeps no snapshots (they showed it as it was before the screen went off): a
+        // flat grey surface, faded out over home ~150 ms after home drew, after the picture of home over it had gone (the
+        // flicker after the settings closed into home, S24 recording).
+        val bundle = options(noStartingWindow = intent.component?.let { it.packageName == "dev.launcher.app" && it.className == "dev.launcher.app.HomeActivity" } == true)
         var strings = 0
         var ints = 0
         val args = m.parameterTypes.map { p ->
@@ -253,6 +260,7 @@ class InstantTransitions(private val atm: Any) {
 
     private companion object {
         const val DESCRIPTOR = "android.window.IRemoteTransition"
+        const val KEY_DISABLE_STARTING_WINDOW = "android.activity.disableStarting"
         const val COMMIT_TIMEOUT_MS = 1000L
     }
 }

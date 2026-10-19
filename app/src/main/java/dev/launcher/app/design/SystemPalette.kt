@@ -56,8 +56,6 @@ object SystemPalette {
     @Volatile var settingsInFront = false
         set(v) { val was = field; field = v; if (was && !v) sync() }
 
-    /** Until when (uptime ms) a change of the look is being shown: home's and the settings' reveals, the wallpaper's. */
-    @Volatile private var busyUntil = 0L
 
     /** Whether the switch is on (kept across restarts). */
     @Volatile var on = false
@@ -72,13 +70,9 @@ object SystemPalette {
         app = c
         on = prefs(c).getBoolean(ON, false)
         io.execute { oneUi = readSystem(c, "wallpapertheme_color") != null }
-        Design.addListener {
-            // Every change of the design may be shown by a reveal: the longest one there is, and a moment.
-            val reveal = maxOf(dev.launcher.app.motion.CurveTiming(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.HOME_REBUILD)).durationMs,
-                dev.launcher.app.motion.CurveTiming(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.WALLPAPER_REVEAL)).durationMs)
-            busyUntil = maxOf(busyUntil, android.os.SystemClock.uptimeMillis() + reveal + STILL_MS)
-            sync()
-        }
+        // (Still follows every change of the design first: by the time this runs it knows how long the reveal is.)
+        Still.init()
+        Design.addListener { sync() }
         // Once the design system is up (it starts right after this): what it shows decides what Android is given.
         android.os.Handler(android.os.Looper.getMainLooper()).post { sync() }
     }
@@ -116,7 +110,7 @@ object SystemPalette {
     }
 
     private fun whenStill(c: Context) {
-        val left = busyUntil - android.os.SystemClock.uptimeMillis()
+        val left = Still.msLeft()
         if (settingsInFront || left > 0) { schedule(c, maxOf(left, STILL_MS)); return }
         syncNow(c)
     }

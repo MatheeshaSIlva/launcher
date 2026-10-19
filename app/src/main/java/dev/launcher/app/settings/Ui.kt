@@ -141,7 +141,7 @@ val LocalLook = staticCompositionLocalOf<Look> { error("no Look: wrap the conten
 
 /** Gives [content] the theme as a [Look], made again whenever the design or the appearance changes. */
 @Composable
-fun SettingsTheme(beforeWallpaper: (first: Boolean) -> Unit = {}, content: @Composable () -> Unit) {
+fun SettingsTheme(beforeWallpaper: (first: Boolean) -> Unit = {}, gate: LookGate? = null, content: @Composable () -> Unit) {
     var version by remember { mutableIntStateOf(0) }
     val ctx = LocalContext.current
     // Home's wallpaper (followed as it changes); read here if home has not (this app opened before home ever showed).
@@ -150,7 +150,8 @@ fun SettingsTheme(beforeWallpaper: (first: Boolean) -> Unit = {}, content: @Comp
     var wallpaper by remember { mutableStateOf(Wallpaper.current) }
     DisposableEffect(Unit) {
         val l: () -> Unit = {
-            Wallpaper.current?.let { if (it !== wallpaper) { beforeWallpaper(wallpaper == null); wallpaper = it } }
+            val apply = { Wallpaper.current?.let { if (it !== wallpaper) { beforeWallpaper(wallpaper == null); wallpaper = it } }; Unit }
+            if (gate == null) apply() else gate.offer("wallpaper", apply)
         }
         Wallpaper.addListener(android.os.Handler(android.os.Looper.getMainLooper()), l)
         onDispose { Wallpaper.removeListener(l) }
@@ -167,7 +168,7 @@ fun SettingsTheme(beforeWallpaper: (first: Boolean) -> Unit = {}, content: @Comp
         }
     }
     DisposableEffect(Unit) {
-        val l: () -> Unit = { version++ }
+        val l: () -> Unit = { if (gate == null) version++ else gate.offer("look") { version++ } }
         Design.addListener(l)
         Appearance.addListener(l)
         // The user's setup too (a layout, a placement, an option chosen here).
@@ -185,6 +186,30 @@ fun SettingsTheme(beforeWallpaper: (first: Boolean) -> Unit = {}, content: @Comp
     }
     val look = remember(version, d.density, d.fontScale, wallpaper) { Look(Scale.unitPx(ctx, minOf(w, h)), d.density, d.fontScale, w, h, version, wallpaper) }
     CompositionLocalProvider(LocalLook provides look) { content() }
+}
+
+/**
+ * When a change of the look (the design, the appearance, the setup, a new wallpaper) reaches the settings' content: at once
+ * while they show; held while they are away ([holding]), and made when the activity lets it go ([release]): once the
+ * launcher is still, or as they come back. Made at once while away, they composed and laid out their whole tree again
+ * (~100 ms of the main thread on the S24) exactly as home began its own reveal (Matheesha: "changing themes ... momentarily
+ * freezes the launcher").
+ */
+class LookGate {
+    var holding = false
+    private val waiting = LinkedHashMap<String, () -> Unit>()
+
+    /** Runs [apply] now, or keeps it (the newest per [kind]) until [release]. Main thread. */
+    fun offer(kind: String, apply: () -> Unit) { if (holding) waiting[kind] = apply else apply() }
+
+    val pending: Boolean get() = waiting.isNotEmpty()
+
+    /** Runs what waited (and lets the next changes through while not [holding]). Main thread. */
+    fun release() {
+        val runs = waiting.values.toList()
+        waiting.clear()
+        for (r in runs) r()
+    }
 }
 
 /** This element as glass [key] with corner [radiusPt] (points), drawn where it is on screen; [press] lightens it. */

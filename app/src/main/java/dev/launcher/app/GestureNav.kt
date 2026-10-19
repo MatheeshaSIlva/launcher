@@ -127,6 +127,9 @@ object GestureNav {
     // ------------------------------------------------------------------ state (nav thread)
     private var phase = Phase.IDLE
     private var anim = Anim.NONE
+
+    /** No gesture and no card moving (read from any thread: a hint for work that would cost a frame, not a lock). */
+    val idle: Boolean get() = phase == Phase.IDLE && anim == Anim.NONE
     /** Bumped on every hand-over; callbacks from an earlier phase compare it and do nothing. */
     private var gen = 0
     private var cardPkg: String? = null          // the app the current card shows
@@ -904,12 +907,30 @@ object GestureNav {
         AppLog.log("[nav] our screen is at rest under home's picture (${asked - coverAt} ms): home comes")
         homeAsked = true
         frontIo.execute { startHomeQuietly() }
+        val component = android.content.ComponentName(app, HomeActivity::class.java).flattenToString()
+        // The picture goes once home is on screen: drawn, and its transition committed (the shell saw it). Drawn alone was
+        // not enough: the system's starting window still covered home then (a flat grey frame, then home faded in).
         fun check() {
             if (g != coverGen) return
+            val waited = SystemClock.uptimeMillis() - asked
             val drawn = homeVisible && HomeBridge.homeDrawnAt >= asked
-            if (drawn || SystemClock.uptimeMillis() - asked > COVER_HOME_WAIT_MS) {
-                nav.postDelayed({ if (g == coverGen) uncover(if (drawn) "home drew ${HomeBridge.homeDrawnAt - asked} ms after it was asked for" else "home did not draw in time") }, COVER_SHOWN_MS)
-            } else nav.postDelayed({ check() }, 8)
+            if (!drawn) {
+                if (waited > COVER_HOME_WAIT_MS) nav.postDelayed({ if (g == coverGen) uncover("home did not draw in time") }, COVER_SHOWN_MS)
+                else nav.postDelayed({ check() }, 8)
+                return
+            }
+            frontIo.execute {
+                val at = try { ShizukuLink.service?.transitionShownAt(component) } catch (_: Throwable) { null }
+                nav.post {
+                    if (g != coverGen) return@post
+                    val shown = at != null && at >= asked
+                    if (shown || SystemClock.uptimeMillis() - asked > COVER_HOME_WAIT_MS) nav.postDelayed({
+                        if (g == coverGen) uncover("home drew ${HomeBridge.homeDrawnAt - asked} ms after it was asked for, " +
+                            if (shown) "on screen after ${at!! - asked} ms" else "not seen on screen in time")
+                    }, COVER_SHOWN_MS)
+                    else nav.postDelayed({ check() }, 8)
+                }
+            }
         }
         check()
     }

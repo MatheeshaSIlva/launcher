@@ -1,0 +1,70 @@
+# Full test run (started 2026-10-19)
+
+Matheesha: "Time to do a full testing run on my device. flag any and all issues you can find. leave no stone unturned ...
+test every case which each element is affected and test it's behaviour". Every case below is run on the S24 (timings:
+frame stats, Perfetto; looks: recordings of home and our own screens only, never Notification Center, banners or other
+apps) and, where only behaviour matters, on the emulator first. Each line ends with its result: **ok**, **issue** (with
+what was seen and the fix's commit), or **not run** (why).
+
+## Reported before the run
+
+| # | What | Found | Fix |
+| --- | --- | --- | --- |
+| R1 | A flicker after closing the settings into home | S24 recording: ~120 ms after the slide back, home vanished into a flat dark grey for ~90 ms, then faded in over ~150 ms. The shell's start of home got a snapshot starting window (home keeps no snapshots: a grey surface), which the system faded out over home after home's picture had already gone (it went when home *drew*, not when home was on screen). | Home started with no starting window (`android.activity.disableStarting`, InstantTransitions); the picture goes once home's transition is committed (GestureNav.coverHome). S24: no starting window, no jump. |
+| R2 | Changing themes, then scrolling home to the App Library, freezes the launcher for a moment | Perfetto: the settings, out of sight, made a still of themselves and composed and laid out their whole tree again at the theme change (~100 ms of the main thread, as home's reveal began); the first swipe to the App Library after the rebuild recorded every tile and uploaded every icon in one frame (59 ms). | The settings hold a change of the look while away (LookGate) and make it once the launcher is still (design/Still) or as they come back; home draws the App Library once off screen after each build, once idle. S24: the App Library warmed 2 s after each change (31-37 ms, off the main thread), its first swipe no longer a long frame; the settings' work moved off the reveal but is still 160 ms when made (see P2). |
+| R3 | Animations skipping sometimes (rare) | Found one cause for all of them (P1): after every update our own code ran interpreted until the JIT had seen it, so the first time each animation ran after an update was slower (Perfetto: "JIT compiling dev.launcher.app..." inside long frames). | P1. |
+
+## Found during the run
+
+| # | What | Found | Fix |
+| --- | --- | --- | --- |
+| P1 | Our own code was never compiled at install | The install profile (`.dm`) held only the libraries' rules: 0 of our methods (`mergeDebugArtProfile/baseline-prof.txt`). Home, gesture nav, the shade and the settings ran interpreted after each update until the JIT warmed each path: every first open, close, theme change after an UPDATE was slower. | `app/src/main/baseline-prof.txt`: every class and method of ours (wildcards, profgen expands them). S24: 62k of our entries in the phone's profile, `speed-profile [reason=install-dm]`; the settings' first frame after a start 225 → 154 ms; no JIT of our code in traces. Install 18 s. |
+| P2 | The settings away still compose their whole tree for a change of the look | 100 ms recompose + 58-85 ms layout once the launcher is still (every page is kept built). A touch landing then waits for it. | To fix. |
+| P3 | A long press on home re-lays out the card window | nav-ui `relayoutWindow ... params=true` of LauncherCards at the touch (11 ms): the status bar's frame missed. | To fix. |
+| P4 | Entering edit mode: a 32 ms frame | Home's frame at the Edit tap (main 18.8 ms, render 24.8 ms). | To fix. |
+| P5 | Home's menu stalls while the settings open over it | The settings' first frame (154 ms on the main thread) holds home's frames: the menu's close stops for it. | To fix. |
+| P6 | The tiles' scenes stutter while the pages are built ahead | Pages built one a frame after the slide in: 20-45 ms frames while the tile scenes play. | To fix. |
+
+## Plan
+
+### Home
+- H1 Cold start and unlock arrivals; screen off and on over home.
+- H2 Pages and their ends (rubber band); the page indicator.
+- H3 App Library: in and out, scroll, a category folder (open, launch, close), search (keyboard, results, launch, cancel).
+- H4 Spotlight: pull, type, results, launch, dismiss.
+- H5 Launch and close from the dock, a page, the library, a folder, Spotlight, in every transition style; a launch reversed
+  during its close, a launch grabbed, a cancelled close.
+- H6 Menus: an icon's, a widget's, home's (edit mode); drag, drop, remove, add a widget, resize, widget styles; Done.
+- H7 Widgets: the clock's minute, an app's widget, dark mode, a palette change.
+- H8 Badges coming and going.
+- H9 A new wallpaper (from the picker; while home shows), the colours following it.
+- H10 Another theme with home in front (reveal), the App Library after it.
+- H11 Light and dark: the phone's switch, home's menu.
+
+### Gesture nav
+- G1 Home from apps: a flick, a slow drag, a drag back (cancel).
+- G2 App Switcher: hold, scroll, tap a card, flick one away, Clear All, empty space (home).
+- G3 Quick switch both ways, quickly repeated.
+- G4 Back gesture from the side over our screens and apps.
+- G5 A mini player (PiP): a close into it, the switcher with it up.
+
+### Shade
+- S1 Status bar: time, icons, battery, charging moment, a full-screen app hiding it.
+- S2 Control Center: pull, every toggle, sliders, media, edit mode and gallery, closing (tap, swipe).
+- S3 Notification Center (frame stats only on the S24): pull, fan out, scroll, dismiss, open an app, clear.
+- S4 Banners (frame stats only on the S24): in, out, swipe away, tap.
+- S5 Over the lock screen.
+
+### Settings
+- T1 Opening from home's menu, the drawer, the App Switcher; closing with Back on the tiles, the home gesture, the App Switcher.
+- T2 Every part's page; Look's and System's pages below; folds; search; Your changes and Reset.
+- T3 Apply: theme, the four colour sources, style, intensity, your colour, key colours, Other apps, symbols, fonts (a Google
+  font downloaded), size, motion preset, a moment's speed and bounce, Every detail, every part's layout and options.
+- T4 The font sheet: open, search, categories, more results, pick, close (drag, the button, Back).
+
+### System
+- Y1 Restore system; the watchdog; Shizuku gone and back.
+
+## Results
+
+(filled in as the run goes)

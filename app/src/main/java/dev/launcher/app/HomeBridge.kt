@@ -40,6 +40,8 @@ object HomeBridge {
         fun pictureNow(): android.graphics.Bitmap?
         /** Home shows one of its pages as they rest (not the App Library, Spotlight, the widget gallery, edit mode or a menu). Main thread. */
         fun showsPage(): Boolean
+        /** Nothing on home moves and no finger is on it (main thread). */
+        fun isIdle(): Boolean
     }
 
     @Volatile var home: Home? = null

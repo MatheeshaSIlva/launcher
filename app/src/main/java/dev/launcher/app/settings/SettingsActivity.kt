@@ -65,12 +65,46 @@ class SettingsActivity : ComponentActivity() {
     private var entryAt = 0L
     private var exiting = false
 
-    /** Registered before the content's own listener, so the old look is held before it draws in the new one. */
+    /**
+     * Registered before the content's own listener, so the old look is held before it draws in the new one. Away (stopped),
+     * nothing is done at once ([lookGate] holds the content's own update too): the still and the new look wait for the
+     * launcher to be still ([whenQuiet]), or for them to come back.
+     */
     private val onDesign: () -> Unit = {
         if (Design.structure != builtStructure && ::root.isInitialized && root.isAttachedToWindow) {
             builtStructure = Design.structure
-            hold()
+            if (started) hold() else { awayChange = true; whenQuiet() }
         }
+    }
+
+    /** What reaches the content while away waits here ([LookGate]). */
+    private val lookGate = LookGate()
+    /** Between onStart and onStop: their window can show (paused counts as started: a dialog, the App Switcher over them). */
+    private var started = false
+    /** A change of the look came while away: held until [applyAwayChange]. */
+    private var awayChange = false
+
+    /**
+     * Away, a change of the look is made once nothing moves: no reveal of a change under way ([dev.launcher.app.design.Still]),
+     * gesture nav and home at rest. Checked again a little later otherwise; coming back first does it then ([onStart]).
+     */
+    private fun whenQuiet() {
+        root.removeCallbacks(quietCheck)
+        root.postDelayed(quietCheck, maxOf(dev.launcher.app.design.Still.msLeft(), QUIET_CHECK_MS))
+    }
+
+    private val quietCheck = Runnable {
+        if (started || (!awayChange && !lookGate.pending)) return@Runnable
+        val quiet = dev.launcher.app.design.Still.msLeft() == 0L && dev.launcher.app.GestureNav.idle && dev.launcher.app.HomeBridge.home?.isIdle() != false
+        if (quiet) applyAwayChange() else whenQuiet()
+    }
+
+    /** The still of how they looked (crossfaded from as they show again), then their content in the new look. */
+    private fun applyAwayChange() {
+        if (!awayChange && !lookGate.pending) return
+        AppLog.log("[settings] the new look made " + if (started) "as they come back" else "while away, the launcher still")
+        if (awayChange) { awayChange = false; hold() }
+        lookGate.release()
     }
 
     /** The bars' symbols dark over a light page, light over a dark one: as told to gesture nav's bar, and in the window's flags. */
@@ -139,7 +173,7 @@ class SettingsActivity : ComponentActivity() {
             setContent {
                 SettingsApp(onClose = { finish() }, beforeWallpaper = { first ->
                     crossfade(if (first) MotionTokens.WALLPAPER_APPEAR else MotionTokens.WALLPAPER_CROSSFADE)
-                }, entry = entry, toHome = { exitToHome() })
+                }, entry = entry, toHome = { exitToHome() }, gate = lookGate)
             }
         },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -174,6 +208,9 @@ class SettingsActivity : ComponentActivity() {
      * closes unseen); the first frame waits until home's picture is there. The status bar keeps home's tone meanwhile.
      */
     private fun beginEntry() {
+        // A still kept to crossfade from when they show again (a change of the look while away): the slide from home's
+        // picture shows them instead. Left, it lay over everything and the old page showed at once in place of home's picture.
+        dropHeld()
         entry.fromHome = true
         entry.jump(0f)   // (a slide still playing stops: one left half-way, say, back into home)
         entry.picture = null
@@ -391,6 +428,14 @@ class SettingsActivity : ComponentActivity() {
         dev.launcher.app.OwnScreenSwipe.panel = if (showing && !exiting) swipe else null
     }
 
+    override fun onStart() {
+        super.onStart()
+        started = true
+        // Back before the launcher was still: what waited is made now, before their first frame.
+        applyAwayChange()
+        lookGate.holding = false
+    }
+
     override fun onResume() {
         super.onResume()
         showing = true
@@ -410,6 +455,8 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        started = false
+        lookGate.holding = true
         // Out of sight: whatever comes next shows them in their own tone (the window's flags; gesture nav reads them then),
         // at rest (home came without their frame at rest under its picture: they show at rest when they come back).
         if (exiting) { entry.jump(1f); entry.picture = null }
@@ -500,6 +547,16 @@ class SettingsActivity : ComponentActivity() {
         v.animate().alpha(0f).timed(Motion.role(role)).withEndAction { done(v, old) }.start()
     }
 
+    /** No still held and no crossfade waiting. */
+    private fun dropHeld() {
+        deferred = null
+        coverAnim?.cancel()
+        cover?.let { it.animate().cancel(); root.removeView(it) }
+        cover = null
+        held?.recycle()
+        held = null
+    }
+
     private fun done(v: View, old: Bitmap) {
         root.removeView(v)
         if (cover === v) cover = null
@@ -514,6 +571,8 @@ class SettingsActivity : ComponentActivity() {
         const val EXIT_STUCK_MS = 3000L
         /** The saved state: opened from home (Back slides back into it). */
         const val KEY_FROM_HOME = "fromHome"
+        /** How often, away, whether the launcher is still is asked again (ms). */
+        const val QUIET_CHECK_MS = 700L
         /** How far up the home gesture's finger goes for the whole slide back into home, of the window's height. */
         const val SWIPE_SPAN = 0.45f
         /** Without word that the window is on screen, home slides in this long after its first frame was drawn (ms). */

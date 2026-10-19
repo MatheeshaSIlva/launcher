@@ -711,8 +711,8 @@ internal val LocalGroups = staticCompositionLocalOf { GroupCounter() }
  */
 @Composable
 fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit = {}, entry: EntryState = remember { EntryState() },
-                toHome: () -> Unit = onClose) {
-    SettingsTheme(beforeWallpaper) {
+                toHome: () -> Unit = onClose, gate: LookGate? = null) {
+    SettingsTheme(beforeWallpaper, gate) {
         val look = LocalLook.current
         val st = remember(entry) { Studio(entry) }
         val scope = rememberCoroutineScope()

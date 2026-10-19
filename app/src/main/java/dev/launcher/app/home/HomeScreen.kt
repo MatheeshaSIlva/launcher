@@ -775,6 +775,11 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         warmTries = 0
         removeCallbacks(warmPicker)
         postDelayed(warmPicker, WARM_UP_DELAY_MS)
+        // The App Library as built, once home is idle again (a new look's reveal over): after a new look its first showing
+        // recorded every tile and uploaded every icon inside one frame (59 ms on the S24; the swipe to it froze: Matheesha).
+        libraryTries = 0
+        removeCallbacks(warmLibraryWhenIdle)
+        postDelayed(warmLibraryWhenIdle, LIBRARY_WARM_MS)
         (em.ghostView.parent as? android.view.ViewGroup)?.removeView(em.ghostView)
         overlay.addView(em.ghostView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         applyGlassWallpaper()
@@ -1822,6 +1827,34 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     /**
+     * The App Library and the backdrop under it drawn once off screen (while closed they are laid out, not drawn): their
+     * display lists recorded and what they draw (icons, glass) on the GPU before the first swipe to them.
+     */
+    private var libraryTries = 0
+
+    private val warmLibraryWhenIdle = object : Runnable {
+        override fun run() {
+            // (Waiting as long as it takes, more slowly after a while: home may stay behind the settings for minutes.)
+            if (!isIdle || !hasWindowFocus() || HomeBridge.homeCovered || !dev.launcher.app.GestureNav.idle) {
+                postDelayed(this, if (++libraryTries < 20) LIBRARY_WARM_MS else 4 * LIBRARY_WARM_MS)
+                return
+            }
+            warmLibrary()
+        }
+    }
+
+    private fun warmLibrary() {
+        val dv = drawer?.view ?: return
+        if (dv.width == 0 || dv.height == 0 || drawerProgress() > 0f) return
+        val node = android.graphics.RenderNode("library-warm-up").apply {
+            setPosition(0, 0, dv.width, dv.height)
+            val c = beginRecording()
+            try { backdrop.draw(c); dv.draw(c) } finally { endRecording() }
+        }
+        dev.launcher.app.design.GpuWarmUp.render(node, dv.width, dv.height, "the App Library")
+    }
+
+    /**
      * A picture of [v] as it looks (an icon without its label), and its frame in home's coordinates; for an icon also as it
      * looks pressed ([pressedCopy]: the lifted icon turns from that into the clear one as the menu opens, never at once).
      */
@@ -2252,5 +2285,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         const val REVEAL_CELL_DP = 7f
         /** How long after home is built the widget gallery is drawn off screen once, if home is idle then (ms). */
         const val WARM_UP_DELAY_MS = 6000L
+        /** How soon after a build, and how often again, home is asked whether it is idle to warm the App Library (ms). */
+        const val LIBRARY_WARM_MS = 500L
     }
 }
