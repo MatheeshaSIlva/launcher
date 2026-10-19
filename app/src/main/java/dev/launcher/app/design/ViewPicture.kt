@@ -76,6 +76,8 @@ object ViewPicture {
     }
 
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    /** A picture of [drawLater] taking longer than this is logged (ms). */
+    private const val SLOW_MS = 40L
     /** Waits for the GPU to finish the pictures of [drawLater] and makes the buffers kept ahead ([prepare]). */
     private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "view-picture") }
     private const val USAGE = HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT
@@ -119,11 +121,12 @@ object ViewPicture {
      * soon as this returns. [draw] blocked until the GPU was done (the settings' first frame of the home gesture waited 15
      * ms for home's picture, S24). Android 14+; before, as [draw].
      */
-    fun drawLater(w: Int, h: Int, what: String, opaque: Boolean = true, block: (android.graphics.Canvas) -> Unit, then: (Bitmap?) -> Unit) {
-        if (w == 0 || h == 0) { main.post { then(null) }; return }
-        if (android.os.Build.VERSION.SDK_INT < 34) { val b = draw(w, h, what, opaque, block); main.post { then(b) }; return }
+    fun drawLater(w: Int, h: Int, what: String, opaque: Boolean = true, block: (android.graphics.Canvas) -> Unit,
+                  handler: android.os.Handler = main, then: (Bitmap?) -> Unit) {
+        if (w == 0 || h == 0) { handler.post { then(null) }; return }
+        if (android.os.Build.VERSION.SDK_INT < 34) { val b = draw(w, h, what, opaque, block); handler.post { then(b) }; return }
         val buffer = spare(w, h) ?: try { HardwareBuffer.create(w, h, HardwareBuffer.RGBA_8888, 1, USAGE) } catch (_: Throwable) { null }
-        if (buffer == null) { val b = draw(w, h, what, opaque, block); main.post { then(b) }; return }
+        if (buffer == null) { val b = draw(w, h, what, opaque, block); handler.post { then(b) }; return }
         var renderer: android.graphics.HardwareBufferRenderer? = null
         try {
             val root = RenderNode("view-picture")
@@ -151,14 +154,15 @@ object ViewPicture {
                     try { r.close() } catch (_: Throwable) { }
                     buffer.close()   // (the bitmap keeps its own reference)
                 }
-                AppLog.log("[design] picture of $what in ${android.os.SystemClock.uptimeMillis() - t0} ms (drawn from ${issued} ms)")
-                main.post { then(b) }
+                val took = android.os.SystemClock.uptimeMillis() - t0
+                if (took > SLOW_MS) AppLog.log("[design] picture of $what in $took ms (drawn from $issued ms)")
+                handler.post { then(b) }
             }
         } catch (t: Throwable) {
             AppLog.log("[design] no picture of $what as it shows (${t.javaClass.simpleName}: ${t.message})")
             try { renderer?.close() } catch (_: Throwable) { }
             buffer.close()
-            main.post { then(null) }
+            handler.post { then(null) }
         }
     }
 

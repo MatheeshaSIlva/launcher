@@ -166,7 +166,9 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
 /**
  * Renders a picture blurred (and veiled) into a small hardware bitmap on the GPU, off the UI threads: what Control Center's
  * glass controls sample (the same blur as its background when fully open). Each result is a new bitmap; [done] runs on
- * [handler].
+ * [handler]. Into a buffer made on this worker, the GPU waited for there ([dev.launcher.app.design.ViewPicture.drawLater]):
+ * through an ImageReader the buffer was made on the render thread every window of ours draws with (6.7 ms at each pull's
+ * start on the S24), and the picture was wrapped before the GPU had drawn it.
  */
 object BlurBaker {
     private val io = Executors.newSingleThreadExecutor()
@@ -177,6 +179,22 @@ object BlurBaker {
             val t0 = SystemClock.uptimeMillis()
             val bw = max(1, ceil(w * scale).toInt())
             val bh = max(1, ceil(h * scale).toInt())
+            val m = Matrix().apply { setScale(w.toFloat() / bw, h.toFloat() / bh) }
+            if (Build.VERSION.SDK_INT >= 34) {
+                val content = RenderNode("shade-bake-content")
+                content.setPosition(0, 0, bw, bh)
+                val rc = content.beginRecording()
+                // Covering the image exactly (a rounded size at one scale left the last column and row half transparent).
+                try { rc.scale(bw / w.toFloat(), bh / h.toFloat()); source.draw(rc, w.toFloat(), h.toFloat()) } finally { content.endRecording() }
+                content.setRenderEffect(RenderEffect.createBlurEffect(radiusPx * scale, radiusPx * scale, Shader.TileMode.CLAMP))
+                dev.launcher.app.design.ViewPicture.drawLater(bw, bh, "the shade's backdrop", block = { c ->
+                    c.drawRenderNode(content); c.drawColor(veil)
+                }, handler = handler) { b ->
+                    if (bakeLogs < 3) { bakeLogs++; AppLog.log("[shade] backdrop baked ${bw}x$bh in ${SystemClock.uptimeMillis() - t0} ms") }
+                    done(b, m)
+                }
+                return@execute
+            }
             var reader: ImageReader? = null
             var renderer: HardwareRenderer? = null
             val bmp = try {
@@ -210,7 +228,6 @@ object BlurBaker {
                 try { reader?.close() } catch (_: Throwable) { }
             }
             if (bakeLogs < 3) { bakeLogs++; AppLog.log("[shade] backdrop baked ${bw}x$bh in ${SystemClock.uptimeMillis() - t0} ms") }
-            val m = Matrix().apply { setScale(w.toFloat() / bw, h.toFloat() / bh) }
             handler.post { done(bmp, m) }
         }
     }
