@@ -10,3 +10,7 @@ tools/shots/
 ios-reference/out/
 ios-reference/*.xcodeproj/
 dd/
+
+# Python bytecode (tools/)
+__pycache__/
+*.pyc
