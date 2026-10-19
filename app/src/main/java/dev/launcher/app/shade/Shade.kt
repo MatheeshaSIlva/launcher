@@ -1104,7 +1104,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         launchFading = false
         launchFrom.set(from)
         launchCard.animate().cancel()
-        launchCard.snapshot = nav.snapshotFor(pkg)
+        // (Not for our own package: it has several screens, and its latest picture may be any of them: our safety
+        // notification's card showed the mini player test's screen. The launch screen's look instead.)
+        launchCard.snapshot = if (pkg == ctx.packageName) null else nav.snapshotFor(pkg)
         val icon = dev.launcher.app.apps.Icons.drawableFor(pkg) ?: try { ctx.packageManager.getApplicationIcon(pkg) } catch (_: Throwable) { null }
         launchCard.icon = icon?.constantState?.newDrawable()?.mutate() ?: icon
         launchCard.minIconSize = 60f * u()
