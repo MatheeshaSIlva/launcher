@@ -226,6 +226,8 @@ object Design {
     fun setTheme(id: String): Boolean {
         val before = activeId
         if (!load(id)) return false
+        // (The theme left keeps the edits made while it was the active one: its preview is made from them again.)
+        prepared.clear()
         activeId = id
         try { File(appCtx.filesDir, ACTIVE).apply { parentFile?.mkdirs() }.writeText(id) } catch (_: Throwable) { }
         changedOutside("theme '$themeName'" + if (before != id) " (was $before)" else " (reloaded)")
@@ -236,6 +238,7 @@ object Design {
     fun reload() {
         themeList = null
         presetList = null
+        prepared.clear()
         IconSets.clear()
         presetChains.clear()
         val theme = load(activeId)
@@ -288,7 +291,7 @@ object Design {
      */
     fun previewColor(id: String, k: ColorKey): Int? {
         val r = previews.getOrPut(id) {
-            val l = (if (id == activeId) Loaded(id, chain, user) else elementThemes[id] ?: prepare(id)) ?: return null
+            val l = (if (id == activeId) Loaded(id, chain, user) else elementThemes[id] ?: prepared.getOrPut(id) { prepare(id) ?: return null }) ?: return null
             Resolver(layersOf(l.chain, l.edits, ThemeLayers.fromWallpaper(l.chain, l.edits))) { name -> state.palette.color(name) }
         }
         val v = try { r.resolve(k.name) as? Value.Color } catch (_: Throwable) { null } ?: return null
@@ -296,6 +299,13 @@ object Design {
     }
 
     private val previews = HashMap<String, Resolver>()
+
+    /**
+     * Themes read and checked for the settings' previews, kept until their files are read again ([reload]): the previews
+     * are made again after every change (the palette, an edit), and each made its theme again from its files, checking
+     * every token, in the settings' first frame after Apply.
+     */
+    private val prepared = HashMap<String, Loaded>()
 
     /**
      * Curve [k] as animation preset [id] gives it, whether or not it is in use (the settings play a preset before it is
@@ -568,6 +578,7 @@ object Design {
         scaledText.clear()
         previews.clear()
         ownColors = null
+        ownParts.clear()
         motionPreviews.clear()
         motionOwn.clear()
         savedEdits.clear()
@@ -867,12 +878,16 @@ object Design {
      * appearance: what a colour that must stay its own hue starts from (the settings' parts, harmonised with the palette).
      */
     fun ownColor(k: ColorKey): Int {
-        val r = ownColors ?: Resolver(layersOf(chain, user, false)) { name -> state.palette.color(name) }.also { ownColors = it }
+        // In the theme its part follows, where it has one of its own (as every other read of it: [value]).
+        val own = TokenParts.of(k.name)?.let { elementIds[it] }?.let { elementThemes[it] }
+        val r = if (own == null) ownColors ?: Resolver(layersOf(chain, user, false)) { name -> state.palette.color(name) }.also { ownColors = it }
+            else ownParts.getOrPut(own.id) { Resolver(layersOf(own.chain, own.edits, false)) { name -> state.palette.color(name) } }
         val v = try { r.resolve(k.name) as? Value.Color } catch (_: Throwable) { null } ?: return color(k)
         return r.pair(v).let { (l, d) -> Appearance.mix(l, d) }
     }
 
     @Volatile private var ownColors: Resolver? = null
+    private val ownParts = java.util.concurrent.ConcurrentHashMap<String, Resolver>()
 
     /**
      * A material's colour (a literal or a token) at the current appearance. A token is read as any other, by its own
