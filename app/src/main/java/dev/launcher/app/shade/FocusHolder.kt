@@ -53,7 +53,9 @@ class FocusHolder(private val ctx: Context, private val wm: WindowManager, priva
                 return true
             }
         }
-        val lp = WindowManager.LayoutParams(1, 1, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        // A few pixels, transparent: the display's composer could not take a 1 x 1 layer, and SurfaceFlinger composed the
+        // whole screen on the GPU at every frame while a panel was open.
+        val lp = WindowManager.LayoutParams(SIZE_PX, SIZE_PX, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
             // Focusable but never the keyboard's target (ALT_FOCUSABLE_IM, as the shade's window when it takes the focus).
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_ALT_FOCUSABLE_IM or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
@@ -61,9 +63,8 @@ class FocusHolder(private val ctx: Context, private val wm: WindowManager, priva
             PixelFormat.TRANSPARENT).apply {
             gravity = Gravity.TOP or Gravity.START
             title = "LauncherFocus"
-            // Never composed (it only takes the keys): at alpha 1 the display's composer could not take its 1 x 1 layer, and
-            // SurfaceFlinger composed the whole screen on the GPU at every frame while a panel was open.
-            alpha = 0f
+            // Never at window alpha 0: SurfaceFlinger counts such a layer as not visible for input, so it could not take the
+            // focus, and Back waited for a focused window until Android called the launcher not responding (S24).
         }
         try {
             wm.addView(v, lp)
@@ -80,6 +81,8 @@ class FocusHolder(private val ctx: Context, private val wm: WindowManager, priva
     }
 
     private companion object {
+        /** The window's side (px): transparent and untouchable, in the screen's top-left corner. */
+        const val SIZE_PX = 64
         val KEYS = setOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
     }
 }
