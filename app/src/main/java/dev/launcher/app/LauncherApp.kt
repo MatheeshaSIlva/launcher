@@ -43,6 +43,34 @@ class LauncherApp : Application() {
         Wallpaper.testHook(this)
         ShizukuLink.init(this)
         SafetyNotification.show(this)
+        // (The app's own process only: never in another of its processes.)
+        if (android.os.Build.VERSION.SDK_INT < 28 || android.app.Application.getProcessName() == packageName) watchNotificationListener(1)
+    }
+
+    /**
+     * The notification listener (our shade's notifications, home's badges) connected after a start, or bound again. When the
+     * app crashes while Android binds it (an install that raced the app's own start: Android's handleBindApplication), the
+     * system keeps the binding as made and never retries ("is already bound"), and our shade stayed empty until a reboot (seen
+     * on the emulator). Our component is switched off and on then (the system unbinds and binds it afresh); a rebind request
+     * alone is ignored for a listener the system counts as enabled.
+     */
+    private fun watchNotificationListener(attempt: Int) {
+        android.os.Handler(mainLooper).postDelayed({
+            if (dev.launcher.app.shade.Notifs.connected) return@postDelayed
+            val cn = android.content.ComponentName(this, BadgeListener::class.java)
+            val granted = try {
+                if (android.os.Build.VERSION.SDK_INT >= 27) getSystemService(android.app.NotificationManager::class.java).isNotificationListenerAccessGranted(cn)
+                else true
+            } catch (_: Throwable) { false }
+            if (!granted) return@postDelayed
+            AppLog.log("[badges] the notification listener has not connected ${LISTENER_WAIT_MS * attempt / 1000} s after the start: bound again")
+            try {
+                val pm = packageManager
+                pm.setComponentEnabledSetting(cn, android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED, android.content.pm.PackageManager.DONT_KILL_APP)
+                pm.setComponentEnabledSetting(cn, android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, android.content.pm.PackageManager.DONT_KILL_APP)
+            } catch (t: Throwable) { AppLog.log("[badges] binding the listener again failed: ${t.message}") }
+            if (attempt < LISTENER_ATTEMPTS) watchNotificationListener(attempt + 1)
+        }, LISTENER_WAIT_MS * attempt)
     }
 
     /**
@@ -62,5 +90,8 @@ class LauncherApp : Application() {
     private companion object {
         /** ActivityInfo.CONFIG_ASSETS_PATHS (a runtime overlay changed: the phone's palette). */
         const val ASSETS_PATHS = 0x80000000.toInt()
+        /** How long after a start (times the attempt) the notification listener should have connected (ms). */
+        const val LISTENER_WAIT_MS = 8000L
+        const val LISTENER_ATTEMPTS = 3
     }
 }
