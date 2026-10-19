@@ -50,7 +50,7 @@ class SwitcherInput(private val onEvent: (MotionEvent) -> Unit, private val onOu
             val c = ctx ?: return@post
             val m = wm ?: return@post
             try {
-                val v = View(c).apply {
+                val v = View(SoftwareDrawn(c)).apply {
                     setOnTouchListener { _, e ->
                         if (e.actionMasked == MotionEvent.ACTION_OUTSIDE) onOutside() else onEvent(MotionEvent.obtain(e))
                         true
@@ -110,5 +110,18 @@ class SwitcherInput(private val onEvent: (MotionEvent) -> Unit, private val onOu
     fun quit() {
         hide()
         handler.post { thread.quitSafely() }
+    }
+
+    /**
+     * The window draws nothing, in software, on this thread: drawn by the hardware renderer (the app's, as every window
+     * added without a parent is), its first frame waited on the render thread every window of ours shares for its
+     * screen-sized buffers (7.8 ms on the S24, at each opening's lift: the deck's frames wait behind it). A window takes
+     * the hardware renderer from its view's app info ([android.view.WindowManagerGlobal.addView]).
+     */
+    private class SoftwareDrawn(base: Context) : android.content.ContextWrapper(base) {
+        private val info = android.content.pm.ApplicationInfo(base.applicationInfo).apply {
+            flags = flags and android.content.pm.ApplicationInfo.FLAG_HARDWARE_ACCELERATED.inv()
+        }
+        override fun getApplicationInfo(): android.content.pm.ApplicationInfo = info
     }
 }

@@ -28,6 +28,12 @@ interface DrawerHost {
      * host can skip drawing its own underneath (a full-screen pass less per frame).
      */
     fun setBackgroundCovered(covered: Boolean) {}
+
+    /**
+     * What the drawer shows changed while it may be closed (its apps read, an icon rendered): the host draws it once more off
+     * screen when idle, so the first showing finds it ready (see HomeScreen.warmLibrary).
+     */
+    fun onDrawerContentChanged() {}
 }
 
 /**

@@ -264,6 +264,9 @@ object HomeBridge {
      */
     @Volatile var touching = false
 
+    /** When the launcher was last touched (a finger down or up on home, the bar or a panel; uptime ms; any thread). */
+    @Volatile var lastTouchAt = 0L
+
     /**
      * Set by gesture nav: a touch on home moved past the touch slop (pages, the App Library, Spotlight: icons move, a closing
      * card gets out of the way). Called on the main thread, once per touch.

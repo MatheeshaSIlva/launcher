@@ -646,6 +646,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var vt: VelocityTracker? = null
 
     private fun onTouch(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN || e.actionMasked == MotionEvent.ACTION_UP) dev.launcher.app.HomeBridge.lastTouchAt = android.os.SystemClock.uptimeMillis()
         if (e.actionMasked == MotionEvent.ACTION_DOWN) {
             vt?.recycle(); vt = VelocityTracker.obtain()
             downX = e.rawX; downY = e.rawY

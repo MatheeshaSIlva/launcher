@@ -75,7 +75,14 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
     }
 
     /** One recent app. [snapshot] may arrive later (or never: then its launch screen, colour and icon, stands in). */
-    class Card(val taskId: Int, val pkg: String, val label: String, val icon: Drawable?, val splash: Int) {
+    class Card(val taskId: Int, val pkg: String, label: String, icon: Drawable?, val splash: Int) {
+        /** The app's name and icon: either may come after the card (read in the background), and then fades in. */
+        var label = label
+            internal set
+        var icon = icon
+            internal set
+        internal var labelIn: MotionValue? = null   // a name that came late, fading in (null: shown)
+        internal var iconIn: MotionValue? = null    // an icon that came late, fading in (null: shown)
         var snapshot: Bitmap? = null
             set(v) { if (field !== v) { field = v; shader = null } }
         /** How good [snapshot] is: 0 none (or out of date), 1 the system's reduced copy, 2 full size. */
@@ -403,7 +410,7 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         c.icon?.let { d ->
             val size = min(r.width(), r.height()) * 0.3f
             d.setBounds((r.centerX() - size / 2).roundToInt(), (r.centerY() - size / 2).roundToInt(), (r.centerX() + size / 2).roundToInt(), (r.centerY() + size / 2).roundToInt())
-            d.alpha = (a * 255).roundToInt()
+            d.alpha = (a * (c.iconIn?.value ?: 1f) * 255).roundToInt()
             d.draw(canvas)
         }
     }
@@ -442,10 +449,10 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         val cy = r.top - dp(12f) * k - iconPx / 2
         c.icon?.let { d ->
             d.setBounds(left.roundToInt(), (cy - iconPx / 2).roundToInt(), (left + iconPx).roundToInt(), (cy + iconPx / 2).roundToInt())
-            d.alpha = (a * 255).roundToInt()
+            d.alpha = (a * (c.iconIn?.value ?: 1f) * 255).roundToInt()
             d.draw(canvas)
         }
-        val nameA = a * (1f - abs(t) * 1.6f).coerceIn(0f, 1f)
+        val nameA = a * (1f - abs(t) * 1.6f).coerceIn(0f, 1f) * (c.labelIn?.value ?: 1f)
         if (nameA > 0.004f && c.label.isNotEmpty()) {
             labelPaint.alpha = (nameA * 255).roundToInt()
             labelShadow.apply(labelPaint)
@@ -484,6 +491,23 @@ class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {
         out.set(left - dp(12f), cy - iconPx / 2 - dp(12f), right, cy + iconPx / 2 + dp(12f))
         return true
     }
+
+    /**
+     * [pkg]'s name or icon was read after its cards were made (in the background: read on gesture nav's thread, eight apps'
+     * resources held the deck's first frame 231 ms on the S24): it fades in on the cards that had none.
+     */
+    fun updateLook(pkg: String, label: String?, icon: Drawable?) {
+        var changed = false
+        for (c in cards) {
+            if (c.pkg != pkg) continue
+            if (!label.isNullOrEmpty() && c.label.isEmpty()) { c.label = label; c.labelIn = fadeIn { c.labelIn = null }; changed = true }
+            if (icon != null && c.icon == null) { c.icon = icon; c.iconIn = fadeIn { c.iconIn = null }; changed = true }
+        }
+        if (changed) invalidate()
+    }
+
+    private fun fadeIn(done: () -> Unit) =
+        MotionValue(0f, 1000f, onChange = { invalidate() }, onRest = done).also { it.animateTo(1f, Motion.profile.appearFade, 0f) }
 
     // ------------------------------------------------------------------ entering and leaving
 

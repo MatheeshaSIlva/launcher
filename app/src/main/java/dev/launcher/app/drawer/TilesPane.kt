@@ -49,7 +49,8 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
     val isIdle get() = !scroller.isSettling && !scroller.isDragging
 
     fun dataChanged() {
-        labels.clear()
+        // (The labels stay: each is kept by its own text, and the same names come back at every rebuild, after every closing
+        // too; cleared here, every name was measured again inside the next slide's first frame.)
         updateBounds()
         invalidate()
     }

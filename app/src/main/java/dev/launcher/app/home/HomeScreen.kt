@@ -1042,12 +1042,12 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun dispatchTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { movedX = e.x; movedY = e.y; moved = false; HomeBridge.touching = true }
+            MotionEvent.ACTION_DOWN -> { movedX = e.x; movedY = e.y; moved = false; HomeBridge.touching = true; HomeBridge.lastTouchAt = android.os.SystemClock.uptimeMillis() }
             MotionEvent.ACTION_MOVE -> if (!moved && (abs(e.x - movedX) > slop || abs(e.y - movedY) > slop)) {
                 moved = true
                 HomeBridge.onHomeDragged?.invoke()
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> HomeBridge.touching = false
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { HomeBridge.touching = false; HomeBridge.lastTouchAt = android.os.SystemClock.uptimeMillis() }
         }
         return super.dispatchTouchEvent(e)
     }
@@ -1720,6 +1720,18 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun onIconsMoved() = publishIcons()
 
+    /**
+     * The App Library's content changed: drawn ahead once more when home is idle. The first warm-up after a start ran before
+     * its apps and icons had arrived (0.9 s after the start), and the first swipe to it recorded and measured everything
+     * inside its first frame (11 ms of the main thread, S24).
+     */
+    override fun onDrawerContentChanged() {
+        if (drawerProgress() > 0f) return
+        libraryTries = 0
+        removeCallbacks(warmLibraryWhenIdle)
+        postDelayed(warmLibraryWhenIdle, LIBRARY_WARM_MS)
+    }
+
     private var backgroundCovered = false
 
     override fun setBackgroundCovered(covered: Boolean) {
@@ -1918,6 +1930,19 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             try { backdrop.draw(c); dv.draw(c); (dv as? dev.launcher.app.drawer.AppLibraryView)?.drawListForWarmUp(c) } finally { endRecording() }
         }
         dev.launcher.app.design.GpuWarmUp.render(node, dv.width, dv.height, "the App Library")
+        // And recorded once in the window too, where it lies out of sight (beside the page): drawn into the warm-up's own
+        // canvas, its views still recorded their window's display lists inside the first swipe to it (9 ms, S24). One frame
+        // shown off the screen (nothing of it is on screen to draw), then hidden again; the lists stay.
+        if (dv.visibility != View.VISIBLE && kotlin.math.abs(dv.translationX) >= width.toFloat()) {
+            dv.visibility = View.VISIBLE
+            // (The next frame draws it; hidden at the one after: an animation callback runs before its own frame's drawing.
+            // Unless a swipe to it began meanwhile: then it shows by its own progress.)
+            postOnAnimation {
+                postOnAnimation {
+                    if (drawerProgress() == 0f && kotlin.math.abs(dv.translationX) >= width.toFloat()) dv.visibility = View.INVISIBLE
+                }
+            }
+        }
     }
 
     /**

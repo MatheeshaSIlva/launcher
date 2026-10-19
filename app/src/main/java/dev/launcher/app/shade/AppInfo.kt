@@ -8,7 +8,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 /**
- * Other apps' names and icons for the shade (a notification's app), read off the UI threads. Reading another app's name
+ * Other apps' names and icons for the shade (a notification's app) and the App Switcher, read off the UI threads. Reading another app's name
  * or icon loads that app's resources (`LoadApkAssets`: 65 ms for Google's Permission Controller on the S24), and the shade
  * read them while drawing, on gesture nav's thread: Notification Center's first pull after a start had one 82 ms frame.
  * [Notifs] has a new app's read here before it publishes its notifications ([ensure]); the painters only look them up.
@@ -39,6 +39,12 @@ object AppInfo {
         // (The name last: [ensure] asks by it whether an app was read.)
         labels[pkg] = try { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() } catch (_: Throwable) { pkg }
     }
+
+    /** [pkg]'s name if it was read before, else null (never reads it). */
+    fun labelIfRead(pkg: String): String? = labels[pkg]
+
+    /** A new drawable of [pkg]'s icon if it was read before, else null (never reads it). */
+    fun iconIfRead(ctx: Context, pkg: String): Drawable? = if (icons.containsKey(pkg)) icon(ctx, pkg) else null
 
     /** [pkg]'s name (read here, blocking, only for an app that came some other way than a notification). */
     fun label(ctx: Context, pkg: String): String = labels[pkg] ?: run { read(ctx, pkg); labels[pkg] ?: pkg }

@@ -41,7 +41,8 @@ internal class IconSpot(val pkg: String, val rect: RectF, val source: String)
  */
 class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), AppDrawer {
     val m get() = host.metrics
-    internal val iconPainter = IconPainter(m.iconSize) { invalidateAll() }
+    internal val iconPainter = IconPainter(m.iconSize) { invalidateAll(); host.onDrawerContentChanged() }
+    private var shownContent = 0   // the names and apps last shown (see rebuild)
 
     internal val tilesPane = TilesPane(ctx, this)
     internal val listPane = SearchList(ctx, m, iconPainter, { e, r -> launch(e, r, "list") }, { e, r -> isHidden(e, r) }, { haptic() }, { settled() }).apply {
@@ -159,6 +160,9 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         tiles = out
         tilesPane.dataChanged()
         listPane.setApps(all)
+        // New names or apps (not only the order of the same ones, as after each closing): drawn ahead again.
+        val shown = out.map { it.title }.hashCode() * 31 + out.flatMap { t -> t.apps.map { it.key } }.toSortedSet().hashCode()
+        if (shown != shownContent) { shownContent = shown; host.onDrawerContentChanged() }
     }
 
     /**

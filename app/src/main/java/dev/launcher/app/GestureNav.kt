@@ -2138,6 +2138,7 @@ object GestureNav {
     private fun closing() = (anim == Anim.HOME_COMMIT && root?.visibility == View.VISIBLE) || deferredRelease != null
 
     private fun onTouch(e: MotionEvent): Boolean {
+        if (e.actionMasked == MotionEvent.ACTION_DOWN || e.actionMasked == MotionEvent.ACTION_UP) HomeBridge.lastTouchAt = SystemClock.uptimeMillis()
         if (phase == Phase.SWITCHER) return onTouchInSwitcher(e)
         if (e.actionMasked == MotionEvent.ACTION_DOWN) ignoringTouch = closing()
         if (ignoringTouch) {
@@ -2345,6 +2346,7 @@ object GestureNav {
             val tasks = try { parseTasks(s.recentTasks(8)) } catch (_: Throwable) { emptyList() }
             if (id != gestureId) return@execute
             tasks.take(2).forEach { iconFor(it.pkg) }
+            lookAhead(tasks)
             nav.post {
                 if (id != gestureId) return@post
                 fg = if (fresh) (lastFrontPkg?.let { p -> tasks.firstOrNull { it.pkg == p } } ?: tasks.getOrNull(0))
@@ -2408,6 +2410,7 @@ object GestureNav {
             val t0 = SystemClock.uptimeMillis()
             val all = try { parseTasks(s.recentTasks(SWITCHER_MAX_CARDS)) } catch (_: Throwable) { emptyList() }
             val ms = SystemClock.uptimeMillis() - t0
+            lookAhead(all)
             nav.post {
                 if (all.isEmpty()) return@post
                 recentAll = all
@@ -4552,7 +4555,7 @@ object GestureNav {
      * left the front (else the deck asks for the system's, showing ours meanwhile).
      */
     private fun newCard(t: Task) =
-        dev.launcher.app.switcher.DeckView.Card(t.id, t.pkg, labelFor(t.pkg), iconFor(t.pkg), SplashColors.cached(t.pkg) ?: DEFAULT_SPLASH).apply {
+        dev.launcher.app.switcher.DeckView.Card(t.id, t.pkg, labelFor(t.pkg), cardIconFor(t.pkg), SplashColors.cached(t.pkg) ?: DEFAULT_SPLASH).apply {
             snapshot = images[t.pkg]
             have = if (snapshot != null && (systemPictureAt[t.pkg] ?: 0L) > (leftFrontAt[t.pkg] ?: Long.MAX_VALUE)) 2 else 0
         }
@@ -4579,9 +4582,39 @@ object GestureNav {
         }
     }
 
+    /**
+     * A card's name and icon in the App Switcher, from what is known: never read from the app here (the first read of an
+     * app's name or icon loads its resources, and the deck's first frame after a start waited 231 ms on the S24 for eight
+     * of them). [lookAhead] reads what is missing as soon as the recent apps are known; what comes after the deck opened
+     * fades in ([deckLook]).
+     */
     private fun labelFor(pkg: String): String =
-        dev.launcher.app.apps.Apps.all.firstOrNull { it.pkg == pkg }?.label
-            ?: try { app.packageManager.getApplicationLabel(app.packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Throwable) { "" }
+        dev.launcher.app.apps.Apps.forPkg(pkg)?.label ?: dev.launcher.app.shade.AppInfo.labelIfRead(pkg) ?: ""
+
+    private fun cardIconFor(pkg: String): Drawable? =
+        Icons.drawableFor(pkg) ?: icons[pkg] ?: dev.launcher.app.shade.AppInfo.iconIfRead(app, pkg)
+
+    /**
+     * The recent apps' icons and names, read in the background before a card needs them (a hold may follow any gesture):
+     * home's shaped icon for an app home has not drawn at its size (one in the App Library only), the system's icon and
+     * name for an app home does not list.
+     */
+    private fun lookAhead(tasks: List<Task>) {
+        val pkgs = tasks.switchable().map { it.pkg }.distinct().filter { Icons.bitmapFor(it) == null }
+        if (pkgs.isEmpty()) return
+        val listed = pkgs.mapNotNull { dev.launcher.app.apps.Apps.forPkg(it) }
+        if (listed.isNotEmpty()) main.post {
+            for (e in listed) Icons.load(e, Icons.homeSize) { nav.post { deckLook(e.pkg) } }
+        }
+        val other = pkgs.filter { dev.launcher.app.apps.Apps.forPkg(it) == null && dev.launcher.app.shade.AppInfo.labelIfRead(it) == null }
+        if (other.isNotEmpty()) dev.launcher.app.shade.AppInfo.ensure(app, other) { nav.post { other.forEach { deckLook(it) } } }
+    }
+
+    /** [pkg]'s name or icon was read: it fades in on its cards in the open App Switcher. */
+    private fun deckLook(pkg: String) {
+        if (phase != Phase.SWITCHER) return
+        deck?.updateLook(pkg, labelFor(pkg), cardIconFor(pkg))
+    }
 
     /** The bar while the switcher is open: the opening swipe still going on, or a new swipe up (home). */
     private fun onTouchInSwitcher(e: MotionEvent): Boolean {

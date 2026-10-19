@@ -95,8 +95,14 @@ class SettingsActivity : ComponentActivity() {
 
     private val quietCheck = Runnable {
         if (started || (!awayChange && !lookGate.pending)) return@Runnable
-        val quiet = dev.launcher.app.design.Still.msLeft() == 0L && dev.launcher.app.GestureNav.idle && dev.launcher.app.HomeBridge.home?.isIdle() != false
-        if (quiet) applyAwayChange() else whenQuiet()
+        val still = dev.launcher.app.design.Still.msLeft() == 0L && dev.launcher.app.GestureNav.idle && dev.launcher.app.HomeBridge.home?.isIdle() != false
+        // Where it cannot be seen: home out of sight (an app in front), or the screen off; else once the launcher (home, the
+        // bar, the panels) has been left untouched a while: the work holds the main thread ~160 ms on the S24, and a finger
+        // landing then waited for it.
+        val unseen = !dev.launcher.app.GestureNav.homeVisible ||
+            !(getSystemService(android.os.PowerManager::class.java)?.isInteractive ?: true)
+        val untouched = android.os.SystemClock.uptimeMillis() - dev.launcher.app.HomeBridge.lastTouchAt > UNTOUCHED_MS && !dev.launcher.app.HomeBridge.touching
+        if (still && (unseen || untouched)) applyAwayChange() else whenQuiet()
     }
 
     /** The still of how they looked (crossfaded from as they show again), then their content in the new look. */
@@ -576,6 +582,8 @@ class SettingsActivity : ComponentActivity() {
         const val KEY_FROM_HOME = "fromHome"
         /** How often, away, whether the launcher is still is asked again (ms). */
         const val QUIET_CHECK_MS = 700L
+        /** Away, a change of the look is made on a home left untouched this long (ms), if not out of sight first. */
+        const val UNTOUCHED_MS = 5000L
         /** How far up the home gesture's finger goes for the whole slide back into home, of the window's height. */
         const val SWIPE_SPAN = 0.45f
         /** Without word that the window is on screen, home slides in this long after its first frame was drawn (ms). */
