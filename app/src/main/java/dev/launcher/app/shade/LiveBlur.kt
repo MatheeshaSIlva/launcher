@@ -50,6 +50,10 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
         if (Build.VERSION.SDK_INT >= 30) setFitInsetsTypes(0)
         dimAmount = 0f
+        // Idle: one transparent pixel at window alpha 0. At alpha 1 the display's composer could not take the 1 x 1 layer
+        // and SurfaceFlinger composed it on the GPU ("CLIENT") at every frame the screen changed, on the GPU our frames
+        // draw with. At 0 it is not composed at all, and the window is still shown (a rotation still waits for it to draw).
+        alpha = 0f
     }
 
     val mode: Mode = when {
@@ -84,7 +88,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
                 shownNow = false
                 strengthNow = -1f
                 view.visibility = View.VISIBLE
-                lp.width = 1; lp.height = 1
+                lp.width = 1; lp.height = 1; lp.alpha = 0f
                 if (mode == Mode.SAMSUNG) setupSamsung()
                 wm.addView(view, lp)
                 added = true
@@ -133,6 +137,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
             if (resize) {
                 val size = if (show) WindowManager.LayoutParams.MATCH_PARENT else 1
                 lp.width = size; lp.height = size
+                lp.alpha = if (show) 1f else 0f
                 lp.x = 0; lp.y = 0   // (the prewarm's corner)
                 shownNow = show
             }
@@ -184,7 +189,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         if (!added || failed) return
         if (mode == Mode.SAMSUNG_VIEW) { prewarmCorner(); return }
         try {
-            lp.width = WindowManager.LayoutParams.MATCH_PARENT; lp.height = WindowManager.LayoutParams.MATCH_PARENT
+            lp.width = WindowManager.LayoutParams.MATCH_PARENT; lp.height = WindowManager.LayoutParams.MATCH_PARENT; lp.alpha = 1f
             writeStrength(0.02f)
             wm.updateViewLayout(view, lp)
             if (mode == Mode.SAMSUNG_VIEW) viewBlur(0.02f)
@@ -192,7 +197,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
                 if (shownNow || failed) return@postDelayed
                 try {
                     if (mode == Mode.SAMSUNG_VIEW) viewBlur(0f)
-                    lp.width = 1; lp.height = 1; writeStrength(0f); wm.updateViewLayout(view, lp)
+                    lp.width = 1; lp.height = 1; lp.alpha = 0f; writeStrength(0f); wm.updateViewLayout(view, lp)
                 } catch (_: Throwable) { }
             }, 250)
         } catch (t: Throwable) {
@@ -214,7 +219,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
             val s = (corner * 0.25f).toInt()
             if (s < 4) return
             val screenH = if (Build.VERSION.SDK_INT >= 30) wm.currentWindowMetrics.bounds.height() else view.resources.displayMetrics.heightPixels
-            lp.width = s; lp.height = s; lp.x = 0; lp.y = screenH - s
+            lp.width = s; lp.height = s; lp.x = 0; lp.y = screenH - s; lp.alpha = 1f
             wm.updateViewLayout(view, lp)
             if (!dev.launcher.app.design.SamsungBlur.set(view, maxOf(8, (maxBlurPx / 2f).toInt()), 0f, 0)) return
             view.invalidate()
@@ -222,7 +227,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
                 if (shownNow || failed) return@postDelayed
                 try {
                     dev.launcher.app.design.SamsungBlur.clear(view)
-                    lp.width = 1; lp.height = 1; lp.x = 0; lp.y = 0
+                    lp.width = 1; lp.height = 1; lp.x = 0; lp.y = 0; lp.alpha = 0f
                     wm.updateViewLayout(view, lp)
                 } catch (_: Throwable) { }
             }, PREWARM_MS)

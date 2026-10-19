@@ -58,7 +58,7 @@ fun Fill.scaled(k: Float): Fill = if (k == 1f) this else copy(opacity = opacity 
  */
 @TargetApi(33)
 class MaterialPainter private constructor(private val unitPx: Float) {
-    private val shader = RuntimeShader(AGSL)
+    private val shader = Shaders.make("material", AGSL)
 
     /**
      * The values last given to [shader], by uniform name: a uniform is set again only when its value changes. Each set is a
@@ -104,7 +104,7 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         if (v != null && v.size == values.size) System.arraycopy(values, 0, v, 0, values.size) else given[name] = values.copyOf()
     }
     /** What a live surface's node holds, read within a rectangle only (see [drawLive]: a surface past the screen's edge). */
-    private val edgeClamp by lazy { RuntimeShader(EDGE_CLAMP) }
+    private val edgeClamp by lazy { Shaders.make("edge-clamp", EDGE_CLAMP) }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val fillColors = FloatArray(4 * MAX_FILLS)
     private val fillModes = FloatArray(MAX_FILLS)

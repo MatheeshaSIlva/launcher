@@ -154,7 +154,7 @@ class GlassDrawable(
     enum class Source { WALLPAPER, BACKDROP, FROSTED }
 
     private val masked = mask != null
-    private val shader = RuntimeShader(when {
+    private val shader = dev.launcher.app.design.Shaders.make("glass", when {
         masked -> AGSL_MASK
         source == Source.BACKDROP -> AGSL_RECT_BACKDROP
         else -> AGSL_RECT

@@ -176,7 +176,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private var imeInset = 0
 
     // The search field: a real text field laid over the drawn capsule (it moves with the sheet).
-    private val edit = EditText(ctx)
+    private val edit: EditText = dev.launcher.app.components.SearchEditText(ctx)
 
     val isOpen get() = visibility == VISIBLE && shown.target > 0f
 

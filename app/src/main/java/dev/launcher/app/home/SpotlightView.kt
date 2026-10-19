@@ -135,10 +135,19 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
 
     private fun fieldTop() = m.h - max(imeInset.toFloat(), bottomInset) - m.pt(12f) - m.searchHeight
 
+    /** Where the field is laid out: its place without the keyboard (the keyboard moves it by translation). */
+    private var restTop = Int.MIN_VALUE
+
     private fun layoutField() {
-        val lp = field.layoutParams as LayoutParams
-        lp.topMargin = fieldTop().roundToInt()
-        field.layoutParams = lp
+        // Laid out where it rests without the keyboard; the keyboard's rise moves it by translation ([applyProgress]): set as
+        // its layout at every frame of the keyboard's animation, it laid home out again at each one.
+        val top = (m.h - bottomInset - m.pt(12f) - m.searchHeight).roundToInt()
+        if (top != restTop) {
+            restTop = top
+            val lp = field.layoutParams as LayoutParams
+            lp.topMargin = top
+            field.layoutParams = lp
+        }
         // Results run on under the frosted field (down to the keyboard) and can be scrolled up from beneath it.
         results.bottomSpace = max(imeInset.toFloat(), 0f)
         results.bottomPadding = m.h - max(imeInset.toFloat(), 0f) - fieldTop() + m.pt(16f)
@@ -291,7 +300,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
     private fun applyProgress() {
         val p = progress.coerceIn(0f, 1f)
         // Field rises from below, content comes down from above, both fading in with the pull.
-        field.translationY = (1f - p) * m.pt(60f)
+        field.translationY = (1f - p) * m.pt(60f) + (fieldTop() - restTop)
         // Faded through its own drawing, never the view's alpha (live glass inside a view with alpha is cut at its edge).
         field.fade = p
         field.frost.invalidate()   // it shows what is behind it, which changes as it moves
@@ -438,7 +447,7 @@ class SpotlightView(ctx: Context, private val m: HomeMetrics, private val host: 
      * background), darkened a little, with a slight light rim; a magnifier, the text, and a clear button while there is text.
      */
     private inner class Field(ctx: Context) : FrameLayout(ctx) {
-        val edit = EditText(ctx)
+        val edit: EditText = dev.launcher.app.components.SearchEditText(ctx)
         val frost = Frost(ctx)
         private val clearButton = ClearButton(ctx)
 

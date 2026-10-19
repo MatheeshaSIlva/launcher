@@ -61,6 +61,9 @@ class FocusHolder(private val ctx: Context, private val wm: WindowManager, priva
             PixelFormat.TRANSPARENT).apply {
             gravity = Gravity.TOP or Gravity.START
             title = "LauncherFocus"
+            // Never composed (it only takes the keys): at alpha 1 the display's composer could not take its 1 x 1 layer, and
+            // SurfaceFlinger composed the whole screen on the GPU at every frame while a panel was open.
+            alpha = 0f
         }
         try {
             wm.addView(v, lp)

@@ -1091,10 +1091,15 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             }
             if (busy != null) { if (prerecorded > 0) AppLog.log("[nc] recorded $prerecorded notifications ahead, then stopped ($busy)"); prerecorded = 0; return }
             if (prerecorded == 0) prerecordFrom = android.os.SystemClock.uptimeMillis()
-            var n = 0
+            // As many a frame as fit in [PRERECORD_FRAME_MS] (at least one): the first ones after a start cost far more than
+            // the ~1.5 ms each they cost later (three in a frame: 28 ms, S24).
+            val t0 = System.nanoTime()
             for (b in blocks.values) {
                 if (b.kind != Kind.PLATTER && b.kind != Kind.MEDIA) continue
-                if (recordContent(b)) { prerecorded++; if (++n >= PRERECORD_PER_FRAME) { postOnAnimation(this); return } }
+                if (recordContent(b)) {
+                    prerecorded++
+                    if (System.nanoTime() - t0 >= PRERECORD_FRAME_MS * 1_000_000L) { postOnAnimation(this); return }
+                }
             }
             if (prerecorded > 0) AppLog.log("[nc] recorded $prerecorded notifications ahead in ${android.os.SystemClock.uptimeMillis() - prerecordFrom} ms")
             prerecorded = 0
@@ -1895,8 +1900,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         /** A notification left out under another: how far past its glass its rims reach (pt), and how much sooner a
          *  continuous corner bends in than a circle's (judged: Figma's smoothing reaches 1.528 r along the edge). */
         const val COVER_MARGIN_PT = 2f
-        /** The stack's notifications recorded ahead: how many a frame, from how long after Notification Center came to rest (ms). */
-        const val PRERECORD_PER_FRAME = 3
+        /** The stack's notifications recorded ahead: for how long a frame (ms), from how long after Notification Center came to rest (ms). */
+        const val PRERECORD_FRAME_MS = 4L
         const val PRERECORD_DELAY_MS = 150L
         const val COVER_SMOOTH_CORNER = 1.6f
         /** Points along a quarter circle where a corner's arc is checked (0 to 90 degrees). */

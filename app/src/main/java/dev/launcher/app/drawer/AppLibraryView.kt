@@ -450,7 +450,7 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
     private val lens = Path()
     private var cancelSpace = 0f
     private var editable = false
-    val edit = EditText(ctx)
+    val edit: EditText = dev.launcher.app.components.SearchEditText(ctx)
 
     init {
         setWillNotDraw(false)

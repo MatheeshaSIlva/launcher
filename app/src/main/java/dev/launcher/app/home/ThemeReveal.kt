@@ -20,7 +20,7 @@ import kotlin.math.max
  */
 @TargetApi(33)
 class ThemeReveal(old: Bitmap, private val w: Float, private val h: Float, val originX: Float, val originY: Float, val cellPx: Float) {
-    private val shader = RuntimeShader(AGSL)
+    private val shader = dev.launcher.app.design.Shaders.make("theme-reveal", AGSL)
     private val paint = Paint()
     /** How far the front travels to leave no corner of the screen behind. */
     val maxDist = max(max(hypot(originX, originY), hypot(w - originX, originY)), max(hypot(originX, h - originY), hypot(w - originX, h - originY)))

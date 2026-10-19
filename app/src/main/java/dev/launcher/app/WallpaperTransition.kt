@@ -16,7 +16,7 @@ import android.graphics.Shader
  */
 @TargetApi(33)
 class WallpaperTransition(from: Wallpaper, to: Wallpaper, width: Int, height: Int, private val cellPx: Float) {
-    private val shader = RuntimeShader(AGSL)
+    private val shader = dev.launcher.app.design.Shaders.make("wallpaper-transition", AGSL)
     private val paint = Paint()
     private val w = width.toFloat()
     private val h = height.toFloat()

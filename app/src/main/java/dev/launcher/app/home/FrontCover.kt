@@ -18,7 +18,7 @@ import dev.launcher.app.Reveal
  */
 @TargetApi(33)
 class FrontCover(old: Bitmap, private val w: Float, private val h: Float, cellPx: Float) {
-    private val shader = RuntimeShader(AGSL)
+    private val shader = dev.launcher.app.design.Shaders.make("front-cover", AGSL)
     private val paint = Paint()
 
     init {
