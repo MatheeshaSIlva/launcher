@@ -32,6 +32,12 @@ import dev.launcher.app.motion.timed
  * springs. Over the dock an app joins the dock (up to its slots). Resting at the left or right edge turns the page (past
  * the last page a new one appears). On release the copy springs into the item's cell. The layout is saved at once.
  * An app dragged out of the App Library or Spotlight arrives the same way, as a new item.
+ *
+ * Several apps at once (iOS's multi-select): while one finger carries an app, a tap with another finger on an app adds it
+ * to the stack (its copy springs in behind the carried one, its place stays empty, a count shows on the stack); the
+ * stack goes from page to page as one app does, and on release the apps go into the cells after the carried one in the
+ * order they joined, pushing icons on as a dropped icon does (past the page's end, into its free cells, then on to the
+ * next page).
  */
 internal class EditMode(private val home: HomeScreen, private val host: Host) {
     interface Host {
@@ -196,10 +202,16 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     private var candidateBadge = false
     private var moved = false
     private var resizing: HomeItem.Widget? = null   // the widget whose resize handle the finger holds
+    /** The finger carrying a drag (pointer id; -1: the touch's first), and another finger that may tap an app into the stack. */
+    private var dragPointer = -1
+    private var tapPointer = -1
+    private var tapX = 0f
+    private var tapY = 0f
 
     /** Down on home while editing: true if it landed on an item (edit mode takes the touch). */
     fun onDown(x: Float, y: Float): Boolean {
         downX = x; downY = y; moved = false
+        dragPointer = -1; tapPointer = -1
         candidate = itemViewAt(x, y)
         candidateBadge = candidate?.let { onBadge(it, x, y) } ?: false
         resizing = candidate?.takeIf { !candidateBadge && onHandle(it, x, y) }?.let { v ->
@@ -335,27 +347,55 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     fun onTouch(e: MotionEvent) {
         when (e.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
-                if (drag != null) { dragTo(e.x, e.y); return }
-                if (resizing != null) { if (hypot(e.x - downX, e.y - downY) > slop) { moved = true; resizeTowards(e.x, e.y) }; return }
-                if (!moved && hypot(e.x - downX, e.y - downY) > slop) {
+                // A second finger that slid is no tap.
+                if (tapPointer >= 0) e.findPointerIndex(tapPointer).takeIf { it >= 0 }?.let { j ->
+                    if (hypot(e.getX(j) - tapX, e.getY(j) - tapY) > slop) tapPointer = -1
+                }
+                val i = pointerIndex(e)
+                val x = e.getX(i)
+                val y = e.getY(i)
+                if (drag != null) { dragTo(x, y); return }
+                if (resizing != null) { if (hypot(x - downX, y - downY) > slop) { moved = true; resizeTowards(x, y) }; return }
+                if (!moved && hypot(x - downX, y - downY) > slop) {
                     moved = true
                     candidate?.let { if (!candidateBadge) beginDrag(it, downX, downY) }
                 }
             }
+            // Another finger while an app is carried: a tap of it on an app adds that app to the stack.
+            MotionEvent.ACTION_POINTER_DOWN -> if (drag != null && tapPointer < 0) {
+                val j = e.actionIndex
+                tapPointer = e.getPointerId(j); tapX = e.getX(j); tapY = e.getY(j)
+            }
+            MotionEvent.ACTION_POINTER_UP -> {
+                val j = e.actionIndex
+                val id = e.getPointerId(j)
+                if (id == tapPointer) {
+                    tapPointer = -1
+                    if (hypot(e.getX(j) - tapX, e.getY(j) - tapY) <= slop) joinAt(e.getX(j), e.getY(j))
+                } else if (id == dragPointer && drag != null) drop()   // the carrying finger lifted first: dropped where it is
+            }
             MotionEvent.ACTION_UP -> {
+                tapPointer = -1
                 if (drag != null) { drop(); return }
                 if (resizing != null) { resizing = null; resizeBase = null; return }
                 val c = candidate
                 // The minus asks first, as on iOS ([HomeScreen.askToRemove]: it leaves through [removeFromHome]).
                 if (!moved && c != null && candidateBadge && onBadge(c, e.x, e.y)) home.askToRemove(c)
             }
-            MotionEvent.ACTION_CANCEL -> { resizing = null; resizeBase = null; if (drag != null) drop() }
+            MotionEvent.ACTION_CANCEL -> { tapPointer = -1; resizing = null; resizeBase = null; if (drag != null) drop() }
         }
+    }
+
+    /** The index of the finger that carries the drag (the touch's first finger, from its first event on). */
+    private fun pointerIndex(e: MotionEvent): Int {
+        if (dragPointer < 0) dragPointer = e.getPointerId(0)
+        return e.findPointerIndex(dragPointer).takeIf { it >= 0 } ?: 0
     }
 
     /** Start dragging [v] right away (a long press that kept moving; [fromMenu]: its menu's copy was already lifted). */
     fun beginDragFrom(v: View, x: Float, y: Float, fromMenu: Boolean = false) {
         downX = x; downY = y; moved = true
+        dragPointer = -1; tapPointer = -1
         candidate = v
         beginDrag(v, x, y, if (fromMenu) 0.75f else 0f)
     }
@@ -470,12 +510,16 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
 
     // ------------------------------------------------------------------ dragging
 
-    private class Drag(val item: HomeItem, var inDock: Boolean, var page: Int, val grabX: Float, val grabY: Float) {
+    private class Drag(val item: HomeItem, var inDock: Boolean, var page: Int, val grabX: Float, val grabY: Float, val external: Boolean = false) {
         /** The layout when the drag began, and where the item was in it (page, cell; dock: page -1). */
         var base: Snapshot? = null
         var basePage = -1
         var baseCell = -1
         var baseInDock = false
+        /** Apps tapped into the stack while this one is carried (iOS's multi-select), in the order they joined. */
+        val extras = ArrayList<HomeItem.App>()
+        /** Where [moveTo] last put the carried item: put there again when an app joins (the layout it works from changes). */
+        var applied: Target? = null
     }
 
     private var drag: Drag? = null
@@ -549,7 +593,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         // The copy's top-left such that its icon sits on [from].
         val sx = from.centerX() - iconRect.centerX()
         val sy = from.centerY() - iconRect.centerY()
-        drag = Drag(HomeItem.App(key), false, -1, x - sx, y - sy).also { d -> d.base = snapshot() }
+        drag = Drag(HomeItem.App(key), false, -1, x - sx, y - sy, external = true).also { d -> d.base = snapshot() }
         fingerX = x; fingerY = y
         ghost.lift(pic, sx, sy, floatArrayOf(iconRect.centerX(), iconRect.centerY()), 0f, scale0)
         home.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -583,7 +627,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
     private fun targetAt(x: Float, y: Float, d: Drag): Target? {
         val l = host.layout ?: return null
         val dock = host.dockView
-        if (dock != null && d.item is HomeItem.App && y > m.dockTop - m.pt(12f)) {
+        // (A stack of apps goes onto a page: the dock takes one app at a time.)
+        if (dock != null && d.item is HomeItem.App && d.extras.isEmpty() && y > m.dockTop - m.pt(12f)) {
             val inDockAlready = d.inDock
             if (!inDockAlready && l.dock.size >= m.cfg.dockSlots) return null   // the dock is full
             val n = if (inDockAlready) l.dock.size else l.dock.size + 1
@@ -664,10 +709,91 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             d.page = pi
             if (off.isNotEmpty()) pushed = pushOff(pi + 1, off)
         }
+        d.applied = t
         // (Every page: one the drag passed over earlier gets back what it moved there.)
         refreshPages(if (d.base != null) null else setOf(fromPage, pi, pi + 1) + pushed)
         refreshDock()
         hideDragged()
+    }
+
+    /**
+     * A second finger tapped ([x], [y]) while an app is carried: the app there joins the stack (iOS's multi-select). It
+     * leaves the layout the drag works from (its place stays empty: iOS 18 moves nothing into it; the dock closes up), its
+     * copy springs into the stack behind the carried one, and the carried one goes where it was going. Only apps: a widget
+     * is carried alone, and one dragged in from the App Library takes nothing with it, as on iOS.
+     */
+    private fun joinAt(x: Float, y: Float) {
+        val d = drag ?: return
+        val carried = d.item as? HomeItem.App ?: return
+        if (d.external) return
+        val base = d.base ?: return
+        val l = host.layout ?: return
+        val v = itemViewAt(x, y) as? IconView ?: return
+        val key = v.entry?.key ?: return
+        if (key == carried.key || d.extras.any { it.key == key } || v === draggedView(d)) return
+        val inBaseDock = key in base.dock
+        val saved = if (inBaseDock) null else base.pages.flatten().firstOrNull { (it.item as? HomeItem.App)?.key == key } ?: return
+        val o = screenOrigin(v)
+        val pivot = pivotOf(v)
+        val pic = recordLift(v)
+        // The layout the drag works from, without it.
+        restore(base)
+        d.page = d.basePage; d.inDock = d.baseInDock
+        if (d.baseCell >= 0) { carried.col = d.baseCell % m.cfg.columns; carried.row = d.baseCell / m.cfg.columns }
+        val joined: HomeItem.App = if (inBaseDock) { l.dock.remove(key); HomeItem.App(key) } else {
+            val item = saved!!.item as HomeItem.App
+            for (p in l.pages) p.removeAll { it === item }
+            item
+        }
+        d.base = snapshot()
+        v.setTag(dev.launcher.app.R.id.drag_held, true)
+        v.animate().cancel()
+        v.alpha = 0f
+        d.extras += joined
+        ghost.join(pic, o[0] + pivot[0], o[1] + pivot[1], pivot)
+        val t = d.applied
+        if (t != null && !t.dock) moveTo(t) else { d.applied = null; refreshPages(); refreshDock(); hideDragged() }
+        home.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+    }
+
+    /**
+     * The apps carried with the dropped one go into the cells after it, in the order they joined, each pushing icons on as a
+     * dropped icon does (none over a widget; past the page's end, into its free cells, then on to the next pages); with the
+     * carried one in the dock, into the first free cells from the page on screen on.
+     */
+    private fun placeExtras(d: Drag) {
+        if (d.extras.isEmpty()) return
+        val l = host.layout ?: return
+        val cols = m.cfg.columns
+        val rows = m.cfg.rows
+        if (d.inDock || d.page !in l.pages.indices) {
+            pushOff(host.currentPage().coerceIn(0, l.pages.size - 1), d.extras)
+        } else {
+            val pi = d.page
+            var cell = d.item.row * cols + d.item.col + 1
+            val off = ArrayList<HomeItem>()
+            for (e in d.extras) {
+                var put = false
+                while (cell < cols * rows) {
+                    val pushed = Grid.putAt(l.pages[pi], e, cell % cols, cell / cols, cols, rows)
+                    cell++
+                    if (pushed != null) { off += pushed; put = true; break }
+                }
+                // Past the page's end: a free cell of this page before a new one.
+                if (!put) Grid.firstFree(l.pages[pi], 1, 1, cols, rows)?.let { f -> e.col = f[0]; e.row = f[1]; l.pages[pi] += e; put = true }
+                if (!put) off += e
+            }
+            if (off.isNotEmpty()) pushOff(pi + 1, off)
+        }
+        refreshPages()
+    }
+
+    /** Where [item] (an app placed by [placeExtras]) shows now, if it has a view. */
+    private fun viewOf(item: HomeItem.App): View? {
+        val l = host.layout ?: return null
+        val pi = l.pages.indexOfFirst { p -> p.any { it === item } }
+        if (pi >= 0) return host.pageViews.getOrNull(pi)?.viewFor(item)
+        return host.dockView?.icons()?.firstOrNull { it.entry?.key == item.key }
     }
 
     private fun refreshPages(only: Set<Int>? = null) {
@@ -739,12 +865,35 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
                 }
             }
         }
+        // Carried to another page and let go where it cannot go (over a widget there): the first free place of the page on
+        // screen (the stack after it), not back where it was, unseen on the page it came from.
+        host.layout?.let { l ->
+            val pi = host.currentPage()
+            if (!d.inDock && d.page >= 0 && d.page != pi && pi in l.pages.indices) {
+                val sp = Grid.span(d.item, m.cfg.columns, m.cfg.rows)
+                Grid.firstFree(l.pages[pi], sp[0], sp[1], m.cfg.columns, m.cfg.rows)?.let { f -> moveTo(Target(false, f[1] * m.cfg.columns + f[0])) }
+            }
+        }
+        placeExtras(d)
         val target = draggedView(d)
+        // The apps carried with it, each hidden where it went until its copy is there.
+        val extraViews = d.extras.map { e -> viewOf(e)?.also { v -> v.setTag(dev.launcher.app.R.id.drag_held, true); v.animate().cancel(); v.alpha = 0f } }
+        val copies = ghost.stack()
         drag = null
         // Views the drag held on its way (where it was for a moment) are no longer held; the one it lands on shows when the
         // copy is there.
         for (v in host.pageViews.flatMap { it.itemViews() } + (host.dockView?.icons() ?: emptyList())) {
-            if (v !== target && v.getTag(dev.launcher.app.R.id.drag_held) == true) v.setTag(dev.launcher.app.R.id.drag_held, null)
+            if (v !== target && v !in extraViews && v.getTag(dev.launcher.app.R.id.drag_held) == true) v.setTag(dev.launcher.app.R.id.drag_held, null)
+        }
+        for ((i, copy) in copies.withIndex()) {
+            val ev = extraViews.getOrNull(i)
+            val shown = { if (ev != null) { ev.setTag(dev.launcher.app.R.id.drag_held, null); ev.alpha = 1f; (ev as? IconView)?.growEditBadge() } }
+            if (ev == null) { ghost.land(copy, null, shown); continue }
+            ev.post {
+                val o = screenOrigin(ev)
+                val pv = pivotOf(ev)
+                ghost.land(copy, floatArrayOf(o[0] - ev.translationX + pv[0], o[1] - ev.translationY + pv[1]), shown)
+            }
         }
         if (target == null) { ghost.clear(); return }
         target.post {
@@ -783,14 +932,103 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         private val shadow = Paint(Paint.FILTER_BITMAP_FLAG).apply { color = 0x40000000 }
         // Rendered once (it follows the finger and grows: blurred again at every frame otherwise).
         private val softShadow = dev.launcher.app.theme.SoftShadow(m.pt(14f))
+        /** The apps tapped into the stack behind the carried one, in the order they joined. */
+        private val extras = ArrayList<Extra>()
+        /** The stack's count (0 hidden, 1 shown: it pops in with the first app that joins). */
+        private val badgeK = MotionValue(0f, 100f, { invalidate() })
+        private val at = FloatArray(2)
+        private val badgeIcon = RectF()
 
         init { setWillNotDraw(false); isClickable = false }
+
+        /** An app's copy in the stack: it springs in from its place ([fromX], [fromY]: its pivot on screen), and out at the drop. */
+        inner class Extra(val pic: Picture, val pivotX: Float, val pivotY: Float, val fromX: Float, val fromY: Float) {
+            /** 0 where it was, 1 in the stack. */
+            val inK = MotionValue(0f, 1000f, { invalidate() })
+            /** The drop: 0 where it was in the stack then, 1 at its place (or faded out where it was: no place). */
+            val landK = MotionValue(0f, 1000f, { invalidate() }, { landed(this) })
+            var landing = false
+            var landFromX = 0f
+            var landFromY = 0f
+            var landFromS = 1f
+            var toX = 0f
+            var toY = 0f
+            var fades = false
+            var onLanded: (() -> Unit)? = null
+        }
+
+        /** [p] (an app's lifted copy, its pivot at [pivot] in it) joins the stack from its pivot on screen ([px], [py]). */
+        fun join(p: Picture, px: Float, py: Float, pivot: FloatArray) {
+            val e = Extra(p, pivot[0], pivot[1], px, py)
+            extras += e
+            e.inK.animateTo(1f, Motion.profile.dragSettle)
+            if (badgeK.target < 1f) badgeK.animateTo(1f, Motion.profile.dragLift)
+            visibility = VISIBLE
+            invalidate()
+        }
+
+        /** The stack's copies, in the order the apps joined. */
+        fun stack(): List<Extra> = extras.filter { !it.landing }
+
+        /** [e] springs from where it is now to [pivot] (its pivot there on screen; null: it fades where it is), then [then]. */
+        fun land(e: Extra, pivot: FloatArray?, then: () -> Unit) {
+            if (e !in extras || e.landing) return
+            val i = extras.indexOf(e)
+            stackPlace(e, i, liftK.value, at)
+            e.landFromX = at[0]; e.landFromY = at[1]; e.landFromS = stackScale(e, i, liftK.value)
+            e.toX = pivot?.get(0) ?: at[0]; e.toY = pivot?.get(1) ?: at[1]
+            e.fades = pivot == null
+            e.onLanded = then
+            e.landing = true
+            e.landK.snapTo(0f)
+            e.landK.animateTo(1f, Motion.profile.dragSettle)
+            badgeK.animateTo(0f, Motion.profile.dragSettle)
+        }
+
+        private fun landed(e: Extra) {
+            if (e.landK.value < 1f) return
+            e.onLanded?.invoke()
+            e.onLanded = null
+            extras.remove(e)
+            if (pic == null && extras.isEmpty()) visibility = GONE
+            invalidate()
+        }
+
+        /** Every copy of the stack at its place at once (a new drag begins, or the drop had nowhere to land the carried one). */
+        private fun landAllNow() {
+            val all = extras.toList()
+            extras.clear()
+            for (e in all) { e.inK.stop(); e.landK.stop(); e.onLanded?.invoke(); e.onLanded = null }
+            badgeK.snapTo(0f)
+        }
+
+        /** Where the [i]th app of the stack is drawn now (its pivot on screen): springing in, in the stack, or landing. */
+        private fun stackPlace(e: Extra, i: Int, lift: Float, out: FloatArray) {
+            if (e.landing) {
+                val k = e.landK.value
+                out[0] = e.landFromX + (e.toX - e.landFromX) * k
+                out[1] = e.landFromY + (e.toY - e.landFromY) * k
+                return
+            }
+            // A step down and to the right per app behind the carried one (three steps at most).
+            val step = m.pt(3.5f) * minOf(i + 1, 3)
+            val k = e.inK.value
+            out[0] = e.fromX + (x + pivotX0 + step - e.fromX) * k
+            out[1] = e.fromY + (y + pivotY0 + step - e.fromY) * k
+        }
+
+        private fun stackScale(e: Extra, i: Int, lift: Float): Float {
+            if (e.landing) return e.landFromS + ((if (e.fades) e.landFromS else 1f) - e.landFromS) * e.landK.value
+            val inStack = (1f + 0.08f * lift.coerceIn(0f, 1f)) * (1f - 0.04f * minOf(i + 1, 3))
+            return 1f + (inStack - 1f) * e.inK.value
+        }
 
         fun lift(p: Picture, sx: Float, sy: Float, pivot: FloatArray, from: Float, startScale: Float) {
             // A copy still settling from the last drop lands at once (its view must show again).
             onSettled?.invoke()
             onSettled = null
             settleK.stop()
+            landAllNow()
             pic = p; x = sx; y = sy
             pivotX0 = pivot[0]; pivotY0 = pivot[1]
             size0 = startScale
@@ -824,11 +1062,32 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             clear()
         }
 
-        fun clear() { pic = null; liftK.stop(); visibility = GONE }
+        fun clear() {
+            pic = null
+            liftK.stop()
+            // (The stack's copies, still landing, finish on their own.)
+            if (extras.isEmpty()) visibility = GONE
+        }
 
         override fun onDraw(c: Canvas) {
-            val p = pic ?: return
             val lift = liftK.value
+            // The stack behind the carried app, the deepest first.
+            for (i in extras.indices.reversed()) {
+                val e = extras[i]
+                stackPlace(e, i, lift, at)
+                val sc = stackScale(e, i, lift)
+                val a = if (e.landing && e.fades) 1f - e.landK.value else 1f
+                if (a <= 0.003f) continue
+                c.save()
+                c.translate(at[0], at[1])
+                c.scale(sc, sc)
+                c.translate(-e.pivotX, -e.pivotY)
+                val l = if (a < 1f) c.saveLayerAlpha(0f, 0f, e.pic.width.toFloat(), e.pic.height.toFloat(), (255 * a).toInt()) else -1
+                c.drawPicture(e.pic)
+                if (l >= 0) c.restoreToCount(l)
+                c.restore()
+            }
+            val p = pic ?: return
             val grow = size0 + (1f - size0) * lift.coerceIn(0f, 1f)
             val scale = grow * (1f + 0.08f * lift)
             c.save()
@@ -841,6 +1100,14 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
                 softShadow.drawRoundRect(c, pivotX0 - s / 2f, pivotY0 - s / 2f + m.pt(8f), pivotX0 + s / 2f, pivotY0 + s / 2f + m.pt(8f), s * 0.25f, shadow)
             }
             c.drawPicture(p)
+            // How many apps the stack holds, at the carried one's top right (iOS's count, blue).
+            val bk = badgeK.value
+            if (bk > 0.003f && extras.isNotEmpty()) {
+                val s = m.iconSize / 2f
+                badgeIcon.set(pivotX0 - s, pivotY0 - s, pivotX0 + s, pivotY0 + s)
+                dev.launcher.app.components.CountBadge.draw(c, badgeIcon, 1 + extras.count { !it.landing }, m.u,
+                    (255 * bk.coerceIn(0f, 1f)).toInt(), bk, dev.launcher.app.components.BadgeSpec.DRAG)
+            }
             c.restore()
         }
     }

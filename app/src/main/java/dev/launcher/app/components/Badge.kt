@@ -32,6 +32,8 @@ class BadgeSpec(prefix: String) {
     companion object {
         val APP = BadgeSpec("comp.badge")
         val STACK = BadgeSpec("comp.nc.count")
+        /** The count on apps carried together while editing home (iOS's multi-select drag). */
+        val DRAG = BadgeSpec("comp.badge.drag")
     }
 }
 
@@ -42,7 +44,7 @@ object BadgeTokens {
     val REMOVE_RADIUS = NumberKey("comp.badge.remove.radius")
     val REMOVE_STROKE = NumberKey("comp.badge.remove.stroke")
 
-    val ALL = listOf(REMOVE_DISC, REMOVE_MINUS, REMOVE_RADIUS, REMOVE_STROKE).map { it.name } + BadgeSpec.APP.all + BadgeSpec.STACK.all
+    val ALL = listOf(REMOVE_DISC, REMOVE_MINUS, REMOVE_RADIUS, REMOVE_STROKE).map { it.name } + BadgeSpec.APP.all + BadgeSpec.STACK.all + BadgeSpec.DRAG.all
 }
 
 /** iOS's count badge: a capsule with the count at an icon's top right ([BadgeSpec]: an app's, a stack's). */

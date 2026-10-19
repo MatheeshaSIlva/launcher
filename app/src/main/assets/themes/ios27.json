@@ -1395,6 +1395,38 @@
    },
    "src": "kit:text style Title3/Regular"
   },
+  "comp.badge.drag.fill": {
+   "ref": "ref.color.accents.blue",
+   "src": "judged:iOS's count on apps carried together (the system's blue, not a notification's red)"
+  },
+  "comp.badge.drag.height": {
+   "ref": "comp.badge.height",
+   "src": "judged:as the app badge"
+  },
+  "comp.badge.drag.label": {
+   "ref": "comp.badge.label",
+   "src": "judged:as the app badge"
+  },
+  "comp.badge.drag.max": {
+   "ref": "comp.badge.max",
+   "src": "judged:as the app badge"
+  },
+  "comp.badge.drag.offset-x": {
+   "ref": "comp.badge.offset-x",
+   "src": "judged:as the app badge"
+  },
+  "comp.badge.drag.offset-y": {
+   "ref": "comp.badge.offset-y",
+   "src": "judged:as the app badge"
+  },
+  "comp.badge.drag.pad-x": {
+   "ref": "comp.badge.pad-x",
+   "src": "judged:as the app badge"
+  },
+  "comp.badge.drag.type": {
+   "ref": "comp.badge.type",
+   "src": "judged:as the app badge"
+  },
   "comp.badge.fill": {
    "ref": "component.badge.fill",
    "src": "judged:the shared component style (component.badge.fill)"

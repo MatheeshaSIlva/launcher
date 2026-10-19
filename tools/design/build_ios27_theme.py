@@ -538,6 +538,15 @@ SEED = {
     'comp.badge.offset-x': {'pt': 5, 'src': "judged:its right edge 5 pt past the icon's, as on iOS"},
     'comp.badge.offset-y': {'pt': -5, 'src': "judged:its top 5 pt above the icon's, as on iOS"},
     'comp.badge.max': {'factor': 999, 'src': 'judged:larger counts show as 999+'},
+    # The count on a stack of apps carried together while editing home (iOS's multi-select drag): the badge's shape, blue.
+    'comp.badge.drag.fill': {'ref': 'ref.color.accents.blue', 'src': "judged:iOS's count on apps carried together (the system's blue, not a notification's red)"},
+    'comp.badge.drag.label': {'ref': 'comp.badge.label', 'src': 'judged:as the app badge'},
+    'comp.badge.drag.type': {'ref': 'comp.badge.type', 'src': 'judged:as the app badge'},
+    'comp.badge.drag.height': {'ref': 'comp.badge.height', 'src': 'judged:as the app badge'},
+    'comp.badge.drag.pad-x': {'ref': 'comp.badge.pad-x', 'src': 'judged:as the app badge'},
+    'comp.badge.drag.offset-x': {'ref': 'comp.badge.offset-x', 'src': 'judged:as the app badge'},
+    'comp.badge.drag.offset-y': {'ref': 'comp.badge.offset-y', 'src': 'judged:as the app badge'},
+    'comp.badge.drag.max': {'ref': 'comp.badge.max', 'src': 'judged:as the app badge'},
     # A stack's count in Notification Center (iOS 16+: white, the number dark grey; measured on the iOS 27 Simulator).
     'comp.nc.count.fill': {'color': '#ffffff', 'src': 'measured:the iOS 27 Simulator'},
     'comp.nc.count.label': {'color': '#3a3a3c', 'src': 'measured:the iOS 27 Simulator'},

@@ -74,6 +74,14 @@ Built in round 2 (`home/EditMode.kt`, `home/ContextMenuView.kt`), differences fr
   once); an icon can be opened while its folder still grows; the A-Z index animates (bubble, magnified letters, list on
   a spring). Home arrives animated after unlock and on a cold start. Floating windows (PiP, pop-ups) stay visible
   through holes in the card window.
+- 2026-10-20 (Matheesha's reports): removing asks first, as iOS (an alert from Apple's kit: "Remove “Maps”?" with Delete
+  App, Remove from Home Screen, Cancel; a widget's with Remove and Cancel; the menu's item is iOS's "Remove App").
+  Several apps at once, as iOS: while one finger carries an app, a tap with another finger on an app adds it to the stack
+  (its copy springs in behind, its place stays empty, a blue count on the stack; dock icons too, not widgets); the stack
+  turns pages at the edge as one app does, and on release the apps go into the cells after the carried one in the order
+  they joined, pushing icons on (past the page's end into its free cells, then the next page). The dock takes one app at
+  a time. Let go over a page where it cannot go (over a widget), an app or a stack takes that page's first free place,
+  not its old one.
 
 ## 3. App Switcher (hold during a home swipe) — built (round 8)
 

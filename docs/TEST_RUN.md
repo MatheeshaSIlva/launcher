@@ -181,7 +181,10 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
    App (where Android can uninstall it: its own confirmation follows), Remove from Home Screen and Cancel; a widget's minus
    and Remove Widget ask "Remove “Calendar”?" with Cancel and Remove side by side. The glass materialises as it grows in
    (`motion.alert.open`) and clears as it goes; home dims behind it; Back answers Cancel. Checked on the emulator in light
-   and dark, from the menu and from edit mode, an app removed and put back. Several icons moved at once: next.
+   and dark, from the menu and from edit mode, an app removed and put back. **Several apps moved at once: done**, as on
+   iOS: a second finger's tap on apps while one is carried stacks them (a blue count), the stack turns pages and drops
+   into the cells after the carried one (docs/HOME_FEATURES.md). Checked on the emulator with two-finger console events:
+   two apps tapped in from the page and one from the dock, carried to another page, dropped, the layout put back after.
 4. **Control Center's edit mode reshuffled for good** ("doesn't revert to its original position if I don't release the
    control where the other controls made space"): every stop of a drag was worked out from the page as the last stop left
    it. **Fixed** (e2e4ba8): worked out from the page as it was when the drag began, so the controls moved out of the way
