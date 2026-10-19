@@ -26,6 +26,11 @@ class Wallpaper private constructor(
     val meanLuminance: Float = 0.5f,
     /** Luminance (0..1) of every pixel of [heavy] (row by row): how light the wallpaper is under a part of the screen. */
     private val lumGrid: FloatArray = FloatArray(0),
+    /**
+     * Its main colours (Android's reading of the picture: main, second, third). One UI gives apps no reading of its
+     * wallpaper's colours (`getWallpaperColors` is null there), so the palette is made from this one.
+     */
+    val colors: List<Int> = emptyList(),
 ) {
     /** Mean luminance of the (blurred) wallpaper under [r] (screen px, a [w] x [h] screen); 0.5 if unknown. */
     fun luminanceUnder(r: android.graphics.RectF, w: Int, h: Int): Float {
@@ -135,7 +140,13 @@ class Wallpaper private constructor(
             boxBlur(heavy, 3, 3)   // at 1/16 size: ≈ 60 px at full size, like iOS's background material
             val top = topLuminance(heavy)
             val mean = meanLuminance(heavy)
-            AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}")
+            val colors = try {
+                if (android.os.Build.VERSION.SDK_INT >= 27) android.app.WallpaperColors.fromBitmap(bmp)
+                    .let { listOfNotNull(it.primaryColor, it.secondaryColor, it.tertiaryColor).map { c -> c.toArgb() } }
+                else emptyList()
+            } catch (_: Throwable) { emptyList() }
+            AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}, colours " +
+                colors.joinToString(" ") { "#" + String.format("%06x", it and 0xFFFFFF) }.ifEmpty { "unknown" })
             // Kept on the GPU (hardware bitmaps): with ordinary bitmaps Android re-uploaded all three whenever home had been in
             // the background a while (it trims GPU memory then), which stalled the first frame of a home gesture's card (it
             // draws the picture of home) by 20-45 ms on the S24. Nothing reads their pixels after this point.
@@ -143,7 +154,7 @@ class Wallpaper private constructor(
                 val p = heavy.getPixel(i % heavy.width, i / heavy.width)
                 ((0.2126 * ((p shr 16) and 0xFF) + 0.7152 * ((p shr 8) and 0xFF) + 0.0722 * (p and 0xFF)) / 255.0).toFloat()
             }
-            Wallpaper(gpu(bmp), gpu(small), scale, id, gpu(heavy), heavyScale, top, mean, grid)
+            Wallpaper(gpu(bmp), gpu(small), scale, id, gpu(heavy), heavyScale, top, mean, grid, colors)
         } catch (t: Throwable) {
             AppLog.log("[wallpaper] not readable (${t.javaClass.simpleName}: ${t.message}); using the system wallpaper window, no glass")
             null

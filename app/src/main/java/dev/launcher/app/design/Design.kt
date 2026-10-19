@@ -632,13 +632,20 @@ object Design {
         return systemColor("system_accent1_500")
     }
 
-    /** The wallpaper's colours as the system reads them (main, second, third; the home screen's wallpaper), or none. */
-    private fun wallpaperColours(): List<Int> = try {
-        if (android.os.Build.VERSION.SDK_INT >= 27)
-            android.app.WallpaperManager.getInstance(appCtx).getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM)
-                ?.let { listOfNotNull(it.primaryColor, it.secondaryColor, it.tertiaryColor).map { c -> c.toArgb() } } ?: emptyList()
-        else emptyList()
-    } catch (_: Throwable) { emptyList() }
+    /**
+     * The wallpaper's colours (main, second, third; the home screen's wallpaper): the system's reading, else ours of the
+     * picture home draws (One UI 9 answers apps with none: the S24's log said "the wallpaper's (unknown)", and Auto made the
+     * palette from the phone's old one), or none before the wallpaper is loaded.
+     */
+    private fun wallpaperColours(): List<Int> {
+        val system = try {
+            if (android.os.Build.VERSION.SDK_INT >= 27)
+                android.app.WallpaperManager.getInstance(appCtx).getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM)
+                    ?.let { listOfNotNull(it.primaryColor, it.secondaryColor, it.tertiaryColor).map { c -> c.toArgb() } }
+            else null
+        } catch (_: Throwable) { null }
+        return system?.takeIf { it.isNotEmpty() } ?: dev.launcher.app.Wallpaper.current?.colors.orEmpty()
+    }
 
     @Volatile private var phoneFollows: Boolean? = null
 
