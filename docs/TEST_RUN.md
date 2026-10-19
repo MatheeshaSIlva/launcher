@@ -112,7 +112,7 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
   Reversed and grabbed launches, cancelled closes: S24 sweep only.
 - H6 **issue, fixed**: B1 (a pushed widget on no page), B2 (pushed icons reversed); menus, resize, drag and drop, the widget
   gallery, Done ok; D1 noted (the minus badge removes at once).
-- H7 **ok**: widgets follow a palette change with a crossfade (~4 s after a wallpaper's reveal: Android's palette is pushed
+- H7 **ok**: the glass clock's minute crossfades (recorded across 9:49 to 9:50); widgets follow a palette change with a crossfade (~4 s after a wallpaper's reveal: Android's palette is pushed
   once the launcher is still).
 - H8 **ok**: badges (3, 12, cleared); our own notifications never badge (by design).
 - H9 **issue, fixed**: B4 (closes showed the old wallpaper after a new one); the reveal and colours ok.
@@ -136,7 +136,7 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
 - S5: the bar over the lock screen ok; pulls over the lock screen not run (emulator lock screen only).
 
 ### Settings
-- T1 **ok**: from home's menu (Home Settings) and Back, the home gesture (S24: 0-1 late frames per close, was 2-4: P25).
+- T1 **ok**: from home's menu (Home Settings) and Back, from their App Switcher card, the home gesture (S24: 0-1 late frames per close, was 2-4: P25).
 - T2 **ok**: Home, App Library, Apps pages; search (a result opens its page, Back returns to the results).
 - T3 **ok**: a change in the draft (the stage follows, the row marked), Discard, Apply (Dark: the reveal from the tap), back
   to Automatic. Not run here: every theme, colour source and font.
