@@ -346,7 +346,8 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
                 if (drag != null) { drop(); return }
                 if (resizing != null) { resizing = null; resizeBase = null; return }
                 val c = candidate
-                if (!moved && c != null && candidateBadge && onBadge(c, e.x, e.y)) remove(c)
+                // The minus asks first, as on iOS ([HomeScreen.askToRemove]: it leaves through [removeFromHome]).
+                if (!moved && c != null && candidateBadge && onBadge(c, e.x, e.y)) home.askToRemove(c)
             }
             MotionEvent.ACTION_CANCEL -> { resizing = null; resizeBase = null; if (drag != null) drop() }
         }

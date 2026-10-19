@@ -328,6 +328,8 @@ SEED = {
     'motion.menu.open': {'spring': [0.35, 0.8], 'src': 'judged:the item lifts, home blurs and the menu grows on one spring (UIContextMenuInteraction)'},
     'motion.menu.close': {'spring': [0.3, 1.0], 'src': 'judged:closing is quicker and does not bounce'},
     'motion.menu.blur': {'pt': 18, 'src': "judged:home's blur behind a menu"},
+    'motion.alert.open': {'spring': [0.38, 1.0], 'src': "judged:an alert zooming in as home dims behind it (UIAlertController: from a little larger, no bounce)"},
+    'motion.alert.close': {'spring': [0.24, 1.0], 'src': "judged:an answered alert fading away, quicker"},
     'motion.edit.reflow': {'spring': [0.36, 1.0], 'src': 'judged:icons making room for a dragged one'},
     'motion.edit.drag-lift': {'spring': [0.26, 0.8], 'src': 'judged:the dragged one lifting'},
     'motion.edit.drag-settle': {'spring': [0.34, 0.86], 'src': 'judged:and dropping into its place'},
@@ -583,6 +585,27 @@ SEED = {
     'comp.home.menu.press': {'light': '#00000014', 'dark': '#ffffff1f', 'src': "judged:a pressed row's highlight (was the app's press fill)"},
     'comp.home.menu.symbol': {'pt': 18, 'src': "judged:a symbol from a drawable, the size of the drawn ones (18 pt)"},
     'comp.home.menu.grow-from': {'factor': 0.8, 'src': 'judged:the panel grows out of what it belongs to from 80 % of its size'},
+    # The alert asking before something leaves home: the kit's Alerts (page 507:24668; stacked 61:67601, side by side
+    # 65:57149, its buttons 5446:6653, the dim behind it "Overlay - Alerts" 5446:7633).
+    'comp.home.alert.material': {'ref': 'sys.material.glass.regular', 'src': "kit:5584:31857 (Liquid Glass - Regular - Medium; the menus took the frosted glass, but over a dark wallpaper it left the question on mid grey)"},
+    'comp.home.alert.fallback': {'ref': 'component.menu.fallback', 'src': "judged:as home's menus where the glass cannot be drawn"},
+    'comp.home.alert.width': {'pt': 300, 'src': 'kit:61:67601'},
+    'comp.home.alert.corner': {'pt': 34, 'src': 'kit:5584:31857 (the glass; corner smoothing 0.6)'},
+    'comp.home.alert.padding': {'pt': 14, 'src': 'kit:61:67601'},
+    'comp.home.alert.text-inset': {'pt': 8, 'src': 'kit:61:67654 (the title and message 8 pt in from the padding)'},
+    'comp.home.alert.text-gap': {'pt': 10, 'src': 'kit:61:67654 (between the title and the message)'},
+    'comp.home.alert.text-below': {'pt': 24, 'src': 'kit:61:67654 (under the message, above the buttons)'},
+    'comp.home.alert.title': {'ref': 'ref.type.headline.regular', 'src': 'kit:61:67599 (17 Semibold, left-aligned)'},
+    'comp.home.alert.message': {'ref': 'ref.type.body.regular', 'src': 'kit:61:67600 (17 Regular, left-aligned)'},
+    'comp.home.alert.label': {'ref': 'ref.color.labels.primary', 'src': 'kit:61:67599 (black; white in dark)'},
+    'comp.home.alert.button': {'ref': 'ref.color.fills.secondary', 'src': "kit:5446:6654 (#787880 16 %, linear burn; linear dodge in dark): drawn as iOS's secondary fill"},
+    'comp.home.alert.button-height': {'pt': 48, 'src': 'kit:5446:6744 (a capsule)'},
+    'comp.home.alert.button-gap': {'pt': 8, 'src': 'kit:537:39280 (stacked; side by side the same)'},
+    'comp.home.alert.button-type': {'ref': 'ref.type.headline.regular', 'src': 'kit:5446:6661 (17 Semibold, every role)'},
+    'comp.home.alert.destructive': {'ref': 'ref.color.accents.red', 'src': 'kit:5446:6665 (#ff383c)'},
+    'comp.home.alert.press': {'ref': 'component.menu.press', 'src': "judged:a pressed button lights as a pressed menu row"},
+    'comp.home.alert.scrim': {'light': '#29293a3b', 'dark': '#0000005c', 'src': "kit:5446:7633 (Overlay - Alerts: #29293a 23 %; dark judged: black 36 %)"},
+    'comp.home.alert.grow-from': {'factor': 1.15, 'src': "judged:iOS's alerts zoom in from a little larger as they fade in"},
     # The App Switcher's menu of an app and its Clear All button: not in iOS (Android's convenience), so judged: the menu
     # is home's menu, the button a capsule of the same glass.
     **{'comp.switcher.menu.' + _k: {'ref': 'comp.home.menu.' + _k, 'src': "judged:the App Switcher's app menu looks as home's menus"}
@@ -885,6 +908,10 @@ COMPONENTS = {
     **{'component.menu.' + _k: 'comp.home.menu.' + _k for _k in (
         'material', 'corner', 'width', 'row', 'pad-top', 'pad-bottom', 'symbol-x', 'label-x', 'type', 'label', 'destructive',
         'press', 'fallback', 'symbol', 'grow-from')},
+    # Alert (home's, asking before something leaves home).
+    **{'component.alert.' + _k: 'comp.home.alert.' + _k for _k in (
+        'material', 'fallback', 'width', 'corner', 'padding', 'text-inset', 'text-gap', 'text-below', 'title', 'message', 'label',
+        'button', 'button-height', 'button-gap', 'button-type', 'destructive', 'press', 'scrim', 'grow-from')},
     # Badge (the count on icons) and the remove badge (edit mode).
     **{'component.badge.' + _k: 'comp.badge.' + _k for _k in ('fill', 'height', 'label', 'max', 'offset-x', 'offset-y', 'pad-x', 'type')},
     **{'component.remove-badge.' + _k: 'comp.badge.remove.' + _k for _k in ('disc', 'minus', 'radius', 'stroke')},

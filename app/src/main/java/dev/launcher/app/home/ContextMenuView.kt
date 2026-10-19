@@ -314,7 +314,7 @@ class ContextMenuView(
                     dismiss()
                     return true
                 }
-                if (chosen != null && chosen.destructive) liftedFades = true
+                if (chosen != null && chosen.destructive && !chosen.asks) liftedFades = true
                 dismiss()
                 chosen?.afterClose?.let { afterClose = it }   // (before the action: a menu it shows drops it)
                 chosen?.action?.invoke()

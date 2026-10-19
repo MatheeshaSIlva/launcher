@@ -99,6 +99,8 @@ object MotionRoles {
         r("menu.open", "Menu opening", "The pressed item lifting, home blurring and the menu growing."),
         r("menu.close", "Menu closing", "The menu going and home coming back."),
         r("menu.blur", "Menu: blur behind", "How blurred home is behind a menu."),
+        r("alert.open", "Alert opening", "An alert asking before something is removed, zooming in as home dims behind it."),
+        r("alert.close", "Alert closing", "The alert going once it is answered, and home coming back."),
         r("sheet", "Sheet", "A sheet coming up and going (the widget gallery)."),
         r("sheet.push", "Page in a sheet", "A page pushed inside a sheet."),
         r("settings.open", "Settings: a tile opening", "A tile of the settings growing into its page, and the page back into it."),

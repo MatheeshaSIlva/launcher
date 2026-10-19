@@ -145,6 +145,13 @@ Kit values:
   XL follow the grid. Lock Screen widgets: circular 72 (58 circle), rectangular 162 x 72, inline 327 x 26.
 - **App Library groups ("Launch Pad")**: 68 square, radius 12, four 23 pt icons (radius 5.25) 4.5 apart.
 - **Sheets**: grabber component; dimming overlay black 20 %.
+- **Alerts** (page 507:24668; stacked 61:67601, side by side 65:57149): 300 wide, the Regular glass (5584:31857: white
+  70 % lighten, grey 10 % darken; dark #1a1a1a luminosity layers), radius **34** (smoothing 0.6), padding 14; the title
+  and message 8 further in, **left-aligned** (17 Semibold over 17 Regular, both 22 pt lines, 10 apart, 24 above the
+  buttons); buttons capsules 48 tall, 8 apart (side by side 132 wide each), labels 17 Semibold in every role: Default a
+  blue capsule (#0088ff linear burn under white 60 %) with a white label, None and Cancel #787880 16 % (linear burn;
+  dodge in dark) with the label colour, Destructive the same capsule with a red label (#ff383c). Centred on the screen;
+  behind it "Overlay - Alerts" #29293a 23 %. Built as home's `AlertView` (`comp.home.alert.*`, `component.alert.*`).
 
 ## Carried over (2026-10-07)
 

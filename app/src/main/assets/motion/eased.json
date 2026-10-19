@@ -8,6 +8,26 @@
  "extends": "ios27",
  "_about": "A test animation preset built on iOS 27: every spring role as a bezier curve (Material's emphasized decelerate, or a gentle back-out where iOS 27 overshoots). Written by tools/design/build_test_presets.py.",
  "tokens": {
+  "motion.alert.close": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 300,
+   "src": "judged:test preset: iOS 27's spring (0.24 s, damping 1.0) as a bezier (emphasized decelerate, 300 ms)"
+  },
+  "motion.alert.open": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 480,
+   "src": "judged:test preset: iOS 27's spring (0.38 s, damping 1.0) as a bezier (emphasized decelerate, 480 ms)"
+  },
   "motion.app.cancel": {
    "bezier": [
     0.05,

@@ -198,6 +198,20 @@
    "factor": 1,
    "src": "judged:the moment's own speed on top of the preset's (1: as the preset)"
   },
+  "motion.alert.close": {
+   "spring": [
+    0.24,
+    1.0
+   ],
+   "src": "judged:an answered alert fading away, quicker"
+  },
+  "motion.alert.open": {
+   "spring": [
+    0.38,
+    1.0
+   ],
+   "src": "judged:an alert zooming in as home dims behind it (UIAlertController: from a little larger, no bounce)"
+  },
   "motion.app.cancel": {
    "spring": [
     0.38,

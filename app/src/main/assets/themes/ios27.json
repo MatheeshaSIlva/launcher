@@ -2120,6 +2120,82 @@
    "pt": 14,
    "src": "kit:2547:2623"
   },
+  "comp.home.alert.button": {
+   "ref": "component.alert.button",
+   "src": "judged:the shared component style (component.alert.button)"
+  },
+  "comp.home.alert.button-gap": {
+   "ref": "component.alert.button-gap",
+   "src": "judged:the shared component style (component.alert.button-gap)"
+  },
+  "comp.home.alert.button-height": {
+   "ref": "component.alert.button-height",
+   "src": "judged:the shared component style (component.alert.button-height)"
+  },
+  "comp.home.alert.button-type": {
+   "ref": "component.alert.button-type",
+   "src": "judged:the shared component style (component.alert.button-type)"
+  },
+  "comp.home.alert.corner": {
+   "ref": "component.alert.corner",
+   "src": "judged:the shared component style (component.alert.corner)"
+  },
+  "comp.home.alert.destructive": {
+   "ref": "component.alert.destructive",
+   "src": "judged:the shared component style (component.alert.destructive)"
+  },
+  "comp.home.alert.fallback": {
+   "ref": "component.alert.fallback",
+   "src": "judged:the shared component style (component.alert.fallback)"
+  },
+  "comp.home.alert.grow-from": {
+   "ref": "component.alert.grow-from",
+   "src": "judged:the shared component style (component.alert.grow-from)"
+  },
+  "comp.home.alert.label": {
+   "ref": "component.alert.label",
+   "src": "judged:the shared component style (component.alert.label)"
+  },
+  "comp.home.alert.material": {
+   "ref": "component.alert.material",
+   "src": "judged:the shared component style (component.alert.material)"
+  },
+  "comp.home.alert.message": {
+   "ref": "component.alert.message",
+   "src": "judged:the shared component style (component.alert.message)"
+  },
+  "comp.home.alert.padding": {
+   "ref": "component.alert.padding",
+   "src": "judged:the shared component style (component.alert.padding)"
+  },
+  "comp.home.alert.press": {
+   "ref": "component.alert.press",
+   "src": "judged:the shared component style (component.alert.press)"
+  },
+  "comp.home.alert.scrim": {
+   "ref": "component.alert.scrim",
+   "src": "judged:the shared component style (component.alert.scrim)"
+  },
+  "comp.home.alert.text-below": {
+   "ref": "component.alert.text-below",
+   "src": "judged:the shared component style (component.alert.text-below)"
+  },
+  "comp.home.alert.text-gap": {
+   "ref": "component.alert.text-gap",
+   "src": "judged:the shared component style (component.alert.text-gap)"
+  },
+  "comp.home.alert.text-inset": {
+   "ref": "component.alert.text-inset",
+   "src": "judged:the shared component style (component.alert.text-inset)"
+  },
+  "comp.home.alert.title": {
+   "ref": "component.alert.title",
+   "src": "judged:the shared component style (component.alert.title)"
+  },
+  "comp.home.alert.width": {
+   "ref": "component.alert.width",
+   "src": "judged:the shared component style (component.alert.width)"
+  },
   "comp.home.button.material": {
    "ref": "sys.material.glass.dock",
    "src": "judged:edit mode's Edit and Done on home's glass, as the Search pill"
@@ -3014,6 +3090,83 @@
   "comp.widgets.sheet.material": {
    "ref": "component.sheet.material",
    "src": "judged:the shared component style (component.sheet.material)"
+  },
+  "component.alert.button": {
+   "ref": "ref.color.fills.secondary",
+   "src": "kit:5446:6654 (#787880 16 %, linear burn; linear dodge in dark): drawn as iOS's secondary fill"
+  },
+  "component.alert.button-gap": {
+   "pt": 8,
+   "src": "kit:537:39280 (stacked; side by side the same)"
+  },
+  "component.alert.button-height": {
+   "pt": 48,
+   "src": "kit:5446:6744 (a capsule)"
+  },
+  "component.alert.button-type": {
+   "ref": "ref.type.headline.regular",
+   "src": "kit:5446:6661 (17 Semibold, every role)"
+  },
+  "component.alert.corner": {
+   "pt": 34,
+   "src": "kit:5584:31857 (the glass; corner smoothing 0.6)"
+  },
+  "component.alert.destructive": {
+   "ref": "ref.color.accents.red",
+   "src": "kit:5446:6665 (#ff383c)"
+  },
+  "component.alert.fallback": {
+   "ref": "component.menu.fallback",
+   "src": "judged:as home's menus where the glass cannot be drawn"
+  },
+  "component.alert.grow-from": {
+   "factor": 1.15,
+   "src": "judged:iOS's alerts zoom in from a little larger as they fade in"
+  },
+  "component.alert.label": {
+   "ref": "ref.color.labels.primary",
+   "src": "kit:61:67599 (black; white in dark)"
+  },
+  "component.alert.material": {
+   "ref": "sys.material.glass.regular",
+   "src": "kit:5584:31857 (Liquid Glass - Regular - Medium; the menus took the frosted glass, but over a dark wallpaper it left the question on mid grey)"
+  },
+  "component.alert.message": {
+   "ref": "ref.type.body.regular",
+   "src": "kit:61:67600 (17 Regular, left-aligned)"
+  },
+  "component.alert.padding": {
+   "pt": 14,
+   "src": "kit:61:67601"
+  },
+  "component.alert.press": {
+   "ref": "component.menu.press",
+   "src": "judged:a pressed button lights as a pressed menu row"
+  },
+  "component.alert.scrim": {
+   "light": "#29293a3b",
+   "dark": "#0000005c",
+   "src": "kit:5446:7633 (Overlay - Alerts: #29293a 23 %; dark judged: black 36 %)"
+  },
+  "component.alert.text-below": {
+   "pt": 24,
+   "src": "kit:61:67654 (under the message, above the buttons)"
+  },
+  "component.alert.text-gap": {
+   "pt": 10,
+   "src": "kit:61:67654 (between the title and the message)"
+  },
+  "component.alert.text-inset": {
+   "pt": 8,
+   "src": "kit:61:67654 (the title and message 8 pt in from the padding)"
+  },
+  "component.alert.title": {
+   "ref": "ref.type.headline.regular",
+   "src": "kit:61:67599 (17 Semibold, left-aligned)"
+  },
+  "component.alert.width": {
+   "pt": 300,
+   "src": "kit:61:67601"
   },
   "component.badge.fill": {
    "color": "#ff3b30",

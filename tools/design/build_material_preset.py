@@ -82,6 +82,8 @@ ROLES = {
     # Menus, sheets and search
     'motion.menu.open': ('spatial', 'default'),
     'motion.menu.close': ('spatial', 'default'),
+    'motion.alert.open': ('spatial', 'default'),
+    'motion.alert.close': ('effects', 'default'),
     'motion.sheet': ('spatial', 'slow'),
     'motion.sheet.push': ('spatial', 'default'),
     'motion.settings.open': ('spatial', 'default'),

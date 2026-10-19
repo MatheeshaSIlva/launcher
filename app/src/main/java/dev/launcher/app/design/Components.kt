@@ -92,6 +92,28 @@ object Components {
         p("menu", "grow-from", "Opening size", "How large the menu starts as it opens (a fraction of its size)."),
     ))
 
+    val ALERT = ComponentSpec("alert", "Alert", "Asks before something is removed: a title, a message and buttons.", listOf(
+        p("alert", "material", "Surface", "What the alert is made of."),
+        p("alert", "fallback", "Plain surface", "The alert's surface where glass cannot be drawn."),
+        p("alert", "width", "Width", "The alert's width."),
+        p("alert", "corner", "Corner radius", "How round the alert's corners are."),
+        p("alert", "padding", "Padding", "Space between the alert's edge and its content."),
+        p("alert", "text-inset", "Text inset", "How far the title and message sit in from the padding."),
+        p("alert", "text-gap", "Space under the title", "Between the title and the message."),
+        p("alert", "text-below", "Space above the buttons", "Between the message and the first button."),
+        p("alert", "title", "Title text", "The question the alert asks."),
+        p("alert", "message", "Message text", "What answering it does."),
+        p("alert", "label", "Text colour", "The title, the message and the buttons' labels."),
+        p("alert", "button", "Button fill", "The capsule behind each button."),
+        p("alert", "button-height", "Button height", "The height of a button."),
+        p("alert", "button-gap", "Space between buttons", "The gap between two buttons."),
+        p("alert", "button-type", "Button text", "A button's label."),
+        p("alert", "destructive", "Destructive colour", "Buttons that remove or delete."),
+        p("alert", "press", "Pressed colour", "A button while it is pressed."),
+        p("alert", "scrim", "Dim behind", "How the screen dims behind the alert."),
+        p("alert", "grow-from", "Opening size", "How large the alert starts as it appears (a fraction of its size)."),
+    ))
+
     val BADGE = ComponentSpec("badge", "Badge", "The count on an app's icon.", listOf(
         p("badge", "fill", "Fill", "The badge's colour."),
         p("badge", "height", "Height", "The badge's height."),
@@ -175,7 +197,7 @@ object Components {
         p("panel", "samsung-strength", "Samsung blur strength", "The strength of One UI's own blur behind the panel."),
     ))
 
-    val ALL = listOf(NOTIFICATION, CONTROL, SLIDER, ROUND_BUTTON, BUTTON, MENU, BADGE, REMOVE_BADGE, FIELD, WALLPAPER_LABEL, CARD,
+    val ALL = listOf(NOTIFICATION, CONTROL, SLIDER, ROUND_BUTTON, BUTTON, MENU, ALERT, BADGE, REMOVE_BADGE, FIELD, WALLPAPER_LABEL, CARD,
         LIST_ROW, TOGGLE, SECTION, PAGE, DOCK, SHEET, PANEL)
 
     fun find(key: String): Pair<ComponentSpec, ComponentProp>? {

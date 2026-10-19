@@ -87,6 +87,11 @@ class MenuPainter(private val spec: MenuSpec, private val u: Float) {
                 * out of sight (Change Wallpaper: Matheesha, the picker need not wait for the menu's close).
                 */
                val keepsOpen: Boolean = false,
+               /**
+                * A [destructive] item that asks first (an alert: Remove App): the lifted item settles back into its place as
+                * the menu closes, instead of shrinking away with it (it leaves home only if the answer says so).
+                */
+               val asks: Boolean = false,
                val action: () -> Unit = {})
 
     private fun pt(v: Float) = v * u

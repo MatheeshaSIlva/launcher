@@ -82,8 +82,8 @@ object Moments {
 
     val LIBRARY = Moment("library", MomentPart.LIBRARY, "Opening and search", "The App Library sliding in, its search and the A to Z index.",
         ks("drawer", "mode-crossfade", "field.clear-in", "field.clear-out", "index.scroll", "index.bubble-in", "index.follow", "index.bubble-out"))
-    val MENUS = Moment("menus", MomentPart.LIBRARY, "Menus and sheets", "Long-press menus, and sheets such as the widget gallery.",
-        ks("menu.open", "menu.close", "sheet", "widgets.row", "widgets.preview", "menu.blur", "widgets.row-stagger"))
+    val MENUS = Moment("menus", MomentPart.LIBRARY, "Menus and sheets", "Long-press menus, alerts, and sheets such as the widget gallery.",
+        ks("menu.open", "menu.close", "alert.open", "alert.close", "sheet", "widgets.row", "widgets.preview", "menu.blur", "widgets.row-stagger"))
 
     val CONTROL_CENTER = Moment("cc", MomentPart.SHADE, "Control Center", "Control Center coming down and going.",
         ks("cc.open", "cc.settle", "cc.close", "cc.close-style", "cc.stretch-back"),

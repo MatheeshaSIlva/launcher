@@ -815,6 +815,13 @@ copy it wholesale — port the working pieces cleanly. File map:
   10 ms). Live glass partly off the screen kept a node cut to the screen (the library's field sliding in: 1768 image
   allocations in three swipe pairs); `MaterialPainter.drawLive` keeps the node whole and clamps what it reads instead.
   `dumpsys gfxinfo` "Scratch TextureRenderTarget" shows it (99.8 of 121 MB then).
+- **Glass faded by its opacity shows what is behind it sharp through itself** (the shader multiplies its whole result):
+  behind a menu home is blurred, which hid it; an alert over home showed home crisp through the panel until it was whole.
+  Glass that appears over unblurred content materialises instead (`Material.materialized(k)`: its frost grows on the
+  log scale, its lens, fills, rims and shadows come in; at 0 it is exactly what is behind it), drawn at opacity 1.
+- **Home takes a touch for edit mode before its overlays see it** (`HomeScreen.onInterceptTouchEvent`: an item under
+  the finger belongs to edit mode): an overlay that handles every touch itself (Spotlight, the menu, an alert) is
+  named there, or a tap on its button over an icon went to edit mode (the alert over edit mode did nothing).
 - **A shape drawn with a blur mask filter or a shadow layer is blurred again on the CPU at every frame it moves by a
   fraction of a pixel** (Skia keys the mask by the fractional offset) and uploaded as a new texture: shadows that move use
   `theme/SoftShadow` (rendered once per size, drawn scaled). Text shadows are fine (glyph cache).

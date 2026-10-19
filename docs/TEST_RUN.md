@@ -176,7 +176,12 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
    screen off, never while an app is in front, so the system's own hitch lands where nothing moves. Unverified on the S24
    (in a call during this round).
 2. The landscape notification shade: proposal first.
-3. Ask before removing an icon from home; several icons moved at once, as on iOS: to do.
+3. **Ask before removing an icon from home: done.** iOS 27's alert, from Apple's kit (docs/IOS27_KIT.md, Alerts): edit
+   mode's minus and the menu's Remove App (iOS's name; Delete App moved into the alert) ask "Remove “Maps”?" with Delete
+   App (where Android can uninstall it: its own confirmation follows), Remove from Home Screen and Cancel; a widget's minus
+   and Remove Widget ask "Remove “Calendar”?" with Cancel and Remove side by side. The glass materialises as it grows in
+   (`motion.alert.open`) and clears as it goes; home dims behind it; Back answers Cancel. Checked on the emulator in light
+   and dark, from the menu and from edit mode, an app removed and put back. Several icons moved at once: next.
 4. **Control Center's edit mode reshuffled for good** ("doesn't revert to its original position if I don't release the
    control where the other controls made space"): every stop of a drag was worked out from the page as the last stop left
    it. **Fixed** (e2e4ba8): worked out from the page as it was when the drag began, so the controls moved out of the way

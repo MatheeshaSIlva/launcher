@@ -108,7 +108,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private fun liveGlassShows(): Boolean =
         drawerProgress() > 0f || spotlight?.visibility == View.VISIBLE || menu?.visibility == View.VISIBLE ||
-            picker?.visibility == View.VISIBLE
+            picker?.visibility == View.VISIBLE || alert?.visibility == View.VISIBLE
     private var editTouch = false
     private var enteredByPress = false     // this touch's long press started edit mode: its lift does not leave it again
     private var pendingDragView: View? = null
@@ -830,6 +830,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         postDelayed(warmLibraryWhenIdle, LIBRARY_WARM_MS)
         (em.ghostView.parent as? android.view.ViewGroup)?.removeView(em.ghostView)
         overlay.addView(em.ghostView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        val av = AlertView(context, metrics) { c -> scene.draw(c) }.also { alert = it }
+        overlay.addView(av, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         applyGlassWallpaper()
         bindLayout()
         if (editing) em.enter(haptic = false, now = true)
@@ -1126,8 +1128,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                 removeCallbacks(emptyLongPress)
                 // The widget gallery handles its own touches.
                 if (picker?.isOpen == true) { drag = Drag.IGNORED; return false }
-                // While Spotlight or the long-press menu is open, it handles every touch itself.
-                if (spotlight?.isOpen == true || menu?.isShowing == true) { drag = Drag.IGNORED; return false }
+                // While Spotlight, the long-press menu or an alert is open, it handles every touch itself (an alert over edit
+                // mode: its buttons lie over items, which edit mode took the touch for).
+                if (spotlight?.isOpen == true || menu?.isShowing == true || alert?.isShowing == true) { drag = Drag.IGNORED; return false }
                 // Editing: a touch on an item belongs to edit mode (drag it, or its remove badge).
                 val em = editMode
                 if (em != null && em.active && em.onDown(e.x, e.y)) { editTouch = true; return true }
@@ -1354,7 +1357,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     // ================================================================== state for the launcher and gesture nav
 
     val isIdle: Boolean get() = !pagerAnimating && !sheetAnimating && !depthAnimating && !arrivalAnimating && !arrivalHeld && (drag == Drag.NONE || drag == Drag.IGNORED) &&
-        (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true) && editMode?.active != true && menu?.isShowing != true &&
+        (drawer?.isIdle ?: true) && (spotlight?.isIdle ?: true) && editMode?.active != true && menu?.isShowing != true && alert?.isShowing != true &&
         picker?.isOpen != true && !externalTouch && clocks.none { it.animating } && widgetViews().none { it.resizing } &&
         !dev.launcher.app.theme.Appearance.changing && rebuildAnim == null
 
@@ -1690,6 +1693,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     /** Back pressed: leaves search or a folder, then closes the drawer. */
     fun onBack() {
+        if (alert?.isShowing == true) { alert?.cancel(); return }
         if (menu?.isShowing == true) { menu?.dismiss(); return }
         if (picker?.onBack() == true) return
         if (editMode?.active == true) { editMode?.exit(); return }
@@ -1812,7 +1816,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     fun onHidden(): Boolean {
         // Whether home looks different now: the pictures of it a close shows behind its card are then recorded again (taken
         // with a menu or edit mode on, the close ended on a home that no longer showed them: Matheesha, Change Wallpaper).
-        var changed = menu?.visibility == View.VISIBLE || picker?.isOpen == true
+        var changed = menu?.visibility == View.VISIBLE || picker?.isOpen == true || alert?.visibility == View.VISIBLE
+        alert?.dismissNow()
         menu?.dismissNow(runClosed = true)
         picker?.closeNow()
         if (editMode?.dragging == true) editMode?.externalUp()
@@ -1970,7 +1975,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val items = listOf(
             dev.launcher.app.components.MenuPainter.Item("Edit Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.GRID),
             dev.launcher.app.components.MenuPainter.Item("App Info", glyph = dev.launcher.app.components.MenuPainter.Glyph.INFO),
-            dev.launcher.app.components.MenuPainter.Item("Remove from Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true))
+            dev.launcher.app.components.MenuPainter.Item("Remove App", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true))
         val node = mv.warmUpNode(items) ?: return
         dev.launcher.app.design.GpuWarmUp.render(node, width, height, "home's menus")
     }
@@ -2052,18 +2057,62 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         return items
     }
 
-    /** "Delete App" (iOS): Android's own uninstall confirmation; system apps cannot be deleted, so they do not get it. */
-    private fun deleteItem(e: AppEntry): dev.launcher.app.components.MenuPainter.Item? {
+    /** Whether [e] can be deleted (iOS's "Delete App"): not a system app (Android cannot uninstall those), not this launcher. */
+    private fun canDelete(e: AppEntry): Boolean {
         val system = try {
             (context.packageManager.getApplicationInfo(e.pkg, 0).flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
         } catch (_: Throwable) { true }
-        if (system || e.pkg == context.packageName) return null
-        return dev.launcher.app.components.MenuPainter.Item("Delete App", glyph = dev.launcher.app.components.MenuPainter.Glyph.TRASH, destructive = true) {
-            try {
-                context.startActivity(android.content.Intent(android.content.Intent.ACTION_DELETE, android.net.Uri.parse("package:${e.pkg}"))
-                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-            } catch (t: Throwable) { AppLog.log("[home] cannot delete ${e.pkg}: ${t.message}") }
+        return !system && e.pkg != context.packageName
+    }
+
+    /** "Delete App": Android's own uninstall confirmation (deleted, the app leaves home with the layout's next reconcile). */
+    private fun delete(e: AppEntry) {
+        try {
+            context.startActivity(android.content.Intent(android.content.Intent.ACTION_DELETE, android.net.Uri.parse("package:${e.pkg}"))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (t: Throwable) { AppLog.log("[home] cannot delete ${e.pkg}: ${t.message}") }
+    }
+
+    /** The App Library's "Delete App" (straight to Android's own confirmation); none for an app that cannot be deleted. */
+    private fun deleteItem(e: AppEntry): dev.launcher.app.components.MenuPainter.Item? =
+        if (!canDelete(e)) null
+        else dev.launcher.app.components.MenuPainter.Item("Delete App", glyph = dev.launcher.app.components.MenuPainter.Glyph.TRASH, destructive = true) { delete(e) }
+
+    private var alert: AlertView? = null
+
+    /**
+     * Asks before [v] leaves home, as iOS does (edit mode's minus, the menu's Remove App and Remove Widget): an app's icon
+     * "Remove “Maps”?" with Delete App (where it can be deleted), Remove from Home Screen (it stays in the App
+     * Library) and Cancel; a widget "Remove “Calendar”?" with Remove and Cancel. What it cannot ask about leaves at once.
+     */
+    fun askToRemove(v: View) {
+        val a = alert
+        val remove = { editMode?.removeFromHome(v); Unit }
+        if (a == null) { remove(); return }
+        val e = (v as? IconView)?.entry
+        if (e != null) {
+            val buttons = ArrayList<AlertView.Button>()
+            if (canDelete(e)) buttons += AlertView.Button("Delete App", AlertView.Role.DESTRUCTIVE, afterClose = true) { delete(e) }
+            buttons += AlertView.Button("Remove from Home Screen") { remove() }
+            buttons += AlertView.Button("Cancel", AlertView.Role.CANCEL)
+            a.show("Remove \u201c${e.label}\u201d?", "Removing from Home Screen will keep the app in your App Library.", buttons)
+            return
         }
+        val widget = pages.firstNotNullOfOrNull { it.itemOf(v) } as? HomeItem.Widget
+        if (widget != null) {
+            a.show("Remove \u201c${widgetName(widget)}\u201d?", "Removing this widget will not delete any data.", listOf(
+                AlertView.Button("Remove", AlertView.Role.DESTRUCTIVE) { remove() },
+                AlertView.Button("Cancel", AlertView.Role.CANCEL)))
+            return
+        }
+        remove()
+    }
+
+    /** What a widget is called where it is asked about: its app's name, or the clock's. */
+    private fun widgetName(w: HomeItem.Widget): String = when (w.kind) {
+        HomeItem.Widget.APP -> w.provider?.let { android.content.ComponentName.unflattenFromString(it)?.packageName }?.let { Apps.forPkg(it)?.label } ?: "Widget"
+        "clock" -> "Clock"
+        else -> "Widget"
     }
 
     private fun appInfoItem(e: AppEntry, frame: RectF) = dev.launcher.app.components.MenuPainter.Item("App Info", glyph = dev.launcher.app.components.MenuPainter.Glyph.INFO) {
@@ -2078,8 +2127,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val (pic, frame) = liftedCopy(v)
         val items = ArrayList(shortcutItems(e, frame))
         items += dev.launcher.app.components.MenuPainter.Item("Edit Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.GRID) { editMode?.enter() }
-        items += dev.launcher.app.components.MenuPainter.Item("Remove from Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
-        deleteItem(e)?.let { items += it }
+        items += dev.launcher.app.components.MenuPainter.Item("Remove App", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true, asks = true) {
+            askToRemove(v)
+        }
         items += appInfoItem(e, frame)
         showMenu(v, pic, frame, items)
     }
@@ -2159,7 +2209,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             setWidgetLabelsShown(!cfg.showWidgetLabels)
         }
         items += dev.launcher.app.components.MenuPainter.Item("Edit Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.GRID) { editMode?.enter() }
-        items += dev.launcher.app.components.MenuPainter.Item("Remove Widget", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true) { editMode?.removeFromHome(v) }
+        items += dev.launcher.app.components.MenuPainter.Item("Remove Widget", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true, asks = true) {
+            askToRemove(v)
+        }
         sizeRow?.let { items += it }
         showMenu(v, pic, frame, items)
     }

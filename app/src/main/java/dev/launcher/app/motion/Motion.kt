@@ -44,6 +44,8 @@ class MotionProfile internal constructor() {
     val menuOpen: Curve get() = curve(MotionTokens.MENU_OPEN)
     val menuClose: Curve get() = curve(MotionTokens.MENU_CLOSE)
     val menuBlur: Float get() = Design.num(MotionTokens.MENU_BLUR)
+    val alertOpen: Curve get() = curve(MotionTokens.ALERT_OPEN)
+    val alertClose: Curve get() = curve(MotionTokens.ALERT_CLOSE)
     val reflow: Curve get() = curve(MotionTokens.REFLOW)
     val dragLift: Curve get() = curve(MotionTokens.DRAG_LIFT)
     val dragSettle: Curve get() = curve(MotionTokens.DRAG_SETTLE)

@@ -53,13 +53,36 @@ object HomeTokens {
     val LABEL_SHADOW = dev.launcher.app.design.ColorKey("comp.home.label.shadow")
     val LABEL_DARK_FROM = dev.launcher.app.design.NumberKey("comp.home.label.dark-from")
     val LABEL_DARK_FULL = dev.launcher.app.design.NumberKey("comp.home.label.dark-full")
+    // The alert asking before something leaves home (the kit's Alerts: [AlertView]).
+    val ALERT = MaterialKey("comp.home.alert.material")
+    val ALERT_FALLBACK = dev.launcher.app.design.ColorKey("comp.home.alert.fallback")
+    val ALERT_WIDTH = dev.launcher.app.design.NumberKey("comp.home.alert.width")
+    val ALERT_CORNER = dev.launcher.app.design.NumberKey("comp.home.alert.corner")
+    val ALERT_PADDING = dev.launcher.app.design.NumberKey("comp.home.alert.padding")
+    val ALERT_TEXT_INSET = dev.launcher.app.design.NumberKey("comp.home.alert.text-inset")
+    val ALERT_TEXT_GAP = dev.launcher.app.design.NumberKey("comp.home.alert.text-gap")
+    val ALERT_TEXT_BELOW = dev.launcher.app.design.NumberKey("comp.home.alert.text-below")
+    val ALERT_TITLE = dev.launcher.app.design.TextKey("comp.home.alert.title")
+    val ALERT_MESSAGE = dev.launcher.app.design.TextKey("comp.home.alert.message")
+    val ALERT_LABEL = dev.launcher.app.design.ColorKey("comp.home.alert.label")
+    val ALERT_BUTTON = dev.launcher.app.design.ColorKey("comp.home.alert.button")
+    val ALERT_BUTTON_HEIGHT = dev.launcher.app.design.NumberKey("comp.home.alert.button-height")
+    val ALERT_BUTTON_GAP = dev.launcher.app.design.NumberKey("comp.home.alert.button-gap")
+    val ALERT_BUTTON_TYPE = dev.launcher.app.design.TextKey("comp.home.alert.button-type")
+    val ALERT_DESTRUCTIVE = dev.launcher.app.design.ColorKey("comp.home.alert.destructive")
+    val ALERT_PRESS = dev.launcher.app.design.ColorKey("comp.home.alert.press")
+    val ALERT_SCRIM = dev.launcher.app.design.ColorKey("comp.home.alert.scrim")
+    val ALERT_GROW_FROM = dev.launcher.app.design.NumberKey("comp.home.alert.grow-from")
+
     /** The glass clock's tint, light or dark by the wallpaper under it ([LabelTone.clockTint]). */
     val CLOCK_TINT_LIGHT = dev.launcher.app.design.ColorKey("comp.home.clock.tint-light")
     val CLOCK_TINT_DARK = dev.launcher.app.design.ColorKey("comp.home.clock.tint-dark")
 
     val ALL = listOf(DOCK, SEARCH, WIDGET, BUTTON, FIELD, LIBRARY_TILE, SPOTLIGHT_CARD, WIDGETS_SHEET, WIDGETS_BUTTON, WIDGETS_CARD, MENU, MENU_CORNER, MENU_WIDTH, MENU_ROW, MENU_PAD_TOP, MENU_PAD_BOTTOM, MENU_SYMBOL_X,
         MENU_LABEL_X, MENU_TYPE, MENU_LABEL, MENU_DESTRUCTIVE, MENU_PRESS, LABEL_LIGHT, LABEL_DARK, LABEL_SHADOW, LABEL_DARK_FROM, LABEL_DARK_FULL,
-        CLOCK_TINT_LIGHT, CLOCK_TINT_DARK, WIDGETS_FALLBACK, WIDGETS_GRABBER, FIELD_CLEAR, FIELD_CLEAR_SYMBOL).map { it.name }
+        CLOCK_TINT_LIGHT, CLOCK_TINT_DARK, WIDGETS_FALLBACK, WIDGETS_GRABBER, FIELD_CLEAR, FIELD_CLEAR_SYMBOL, ALERT, ALERT_FALLBACK, ALERT_WIDTH,
+        ALERT_CORNER, ALERT_PADDING, ALERT_TEXT_INSET, ALERT_TEXT_GAP, ALERT_TEXT_BELOW, ALERT_TITLE, ALERT_MESSAGE, ALERT_LABEL, ALERT_BUTTON,
+        ALERT_BUTTON_HEIGHT, ALERT_BUTTON_GAP, ALERT_BUTTON_TYPE, ALERT_DESTRUCTIVE, ALERT_PRESS, ALERT_SCRIM, ALERT_GROW_FROM).map { it.name }
 }
 
 /**

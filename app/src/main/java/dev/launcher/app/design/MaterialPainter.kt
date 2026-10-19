@@ -26,6 +26,27 @@ fun Material.frostNowPt(): Float = frostPt + (frostDarkPt - frostPt) * Appearanc
 fun Fill.scaled(k: Float): Fill = if (k == 1f) this else copy(opacity = opacity * k, opacityDark = opacityDark * k)
 
 /**
+ * [this] material [k] of the way into being (iOS 26's glass materialising rather than fading): its frost grows on the
+ * scale a blur is seen by ((1 + frost)^k - 1: a blur looks about as strong as the log of its radius, see LiveBlur), its lens
+ * bends, its fills, rims and shadows come in. At 0 it shows exactly what is behind it. Faded by opacity instead, a glass
+ * showed what is behind it sharp through itself until it was whole (an alert over home, for a moment).
+ */
+fun Material.materialized(k: Float): Material {
+    if (k >= 1f) return this
+    val kk = k.coerceIn(0f, 1f)
+    fun grow(f: Float) = if (f <= 0f) 0f else Math.pow(1.0 + f, kk.toDouble()).toFloat() - 1f
+    fun shadow(s: Shadow) = when (val c = s.color) {
+        is ColorValue.Literal -> s.copy(color = ColorValue.Literal(alphaTimes(c.light, kk), alphaTimes(c.dark, kk)))
+        else -> s
+    }
+    return copy(frostPt = grow(frostPt), frostDarkPt = grow(frostDarkPt), lens = lens?.copy(refraction = lens.refraction * kk, dispersion = lens.dispersion * kk,
+        light = lens.light * kk), fills = fills.map { it.scaled(kk) }, innerShadows = innerShadows.map { shadow(it) },
+        shadows = shadows.map { shadow(it) }, strokes = strokes.map { it.copy(opacity = it.opacity * kk, opacityDark = it.opacityDark * kk) })
+}
+
+private fun alphaTimes(c: Int, k: Float): Int = (c and 0x00FFFFFF) or (((c ushr 24) * k).toInt().coerceIn(0, 255) shl 24)
+
+/**
  * The one renderer for every material (step 2 of docs/DESIGN_SYSTEM_PLAN.md): a [Material] token drawn as Apple's kit
  * defines it, layer by layer, in one shader pass per surface.
  *
