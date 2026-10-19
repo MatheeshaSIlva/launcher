@@ -287,7 +287,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     /** The phone's own colours may have changed: apps' widgets, drawn in them, follow ([LauncherWidgetHostView.refreshColours]). */
-    private val onPhonePalette: () -> Unit = {
+    private val onPhonePalette: () -> Unit = { widgetsFollowPhone() }
+
+    /** Apps' widgets inflated again in the phone's palette, light or dark as it is now (each fading from its old look). */
+    fun widgetsFollowPhone() {
         for (w in widgetViews()) (w as? AppWidgetFrame)?.hostView?.refreshColours()
     }
 

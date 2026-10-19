@@ -82,6 +82,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        lastNight = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
         // No system snapshot of home: one shown as a placeholder when home came back (the unlock) showed home as it was
         // before the screen went off, for a frame. Our own pictures of home (gesture nav) do not use it.
         if (Build.VERSION.SDK_INT >= 33) setRecentsScreenshotEnabled(false)
@@ -162,7 +163,13 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
         super.onConfigurationChanged(newConfig)
         dev.launcher.app.theme.Appearance.onConfiguration(newConfig)
+        // Apps' widgets inflate their layouts in the phone's light or dark: inflated again in the new one (not being made
+        // anew, home kept every widget in the look it was made in).
+        val night = newConfig.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+        if (night != lastNight) { lastNight = night; screen.widgetsFollowPhone() }
     }
+
+    private var lastNight = -1
 
     // The status bar's content over home follows what is under it (see HomeScreen.updateStatusDark).
     private val onAppearance: () -> Unit = { updateStatusDark() }
