@@ -158,7 +158,12 @@ fun SettingsTheme(beforeWallpaper: (first: Boolean) -> Unit = {}, content: @Comp
     androidx.compose.runtime.LaunchedEffect(Unit) {
         if (wallpaper == null) {
             val w = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Wallpaper.load(ctx.applicationContext) }
-            if (wallpaper == null && w != null) { beforeWallpaper(true); wallpaper = w }
+            if (wallpaper == null && w != null) {
+                beforeWallpaper(true)
+                wallpaper = w
+                // The palette from its colours too, where the system gives none (home has not read them yet).
+                if (Wallpaper.current == null) Design.onWallpaper(w)
+            }
         }
     }
     DisposableEffect(Unit) {

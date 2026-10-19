@@ -732,13 +732,26 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         pendingWallpaper = null
         if (w != null && old != null && resumed && Build.VERSION.SDK_INT >= 33 && screen.width > 0) {
             // Changed while we can be seen: reveal the new one behind a glowing, sparkling front. The glass refracts the
-            // same change on the same frames, so the dock never lags behind the wallpaper.
+            // same change on the same frames, so the dock never lags behind the wallpaper. Colours that follow the
+            // wallpaper change with it: home is built again in them now, under the reveal, and its old look gives way along
+            // the same front (one reveal for both).
+            if (screen.revealingLook) {
+                // A new look being revealed (another theme, the phone's palette): the wallpaper's reveal follows it.
+                pendingWallpaper = w
+                screen.afterLook { if (pendingWallpaper === w && resumed) { pendingWallpaper = null; applyWallpaper(w) } }
+                return
+            }
             wallpaper = w
+            var oldLook: android.graphics.Bitmap? = null
+            screen.changeShownBy { dev.launcher.app.design.Design.onWallpaper(w) { oldLook = screen.contentPicture() } }
             val glass = screen.glassViews()
             for (g in glass) g.beginTransition(old, w)
-            screen.wallpaperView.transitionTo(old, w, onFrame = { p, t -> for (g in glass) g.setReveal(p, t) }) {
+            val front = oldLook?.let { screen.coverAlongFront(it) }
+            screen.wallpaperView.transitionTo(old, w, onFrame = { p, t -> for (g in glass) g.setReveal(p, t); front?.invoke(p, t) }) {
                 for (g in glass) g.endTransition(w)
+                screen.endFrontCover()
                 finishWallpaper(w)
+                screen.wallpaperRevealed()
             }
             return
         }
@@ -749,8 +762,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private fun finishWallpaper(w: Wallpaper?) {
         if (wallpaper !== w) return
         Wallpaper.current = w
-        // A new wallpaper may bring new Material You colours (themes in the wallpaper's colours follow them).
-        dev.launcher.app.design.Design.onConfiguration()
+        // A new wallpaper may bring new colours (the palette may follow it; told at its reveal's start when there is one).
+        w?.let { dev.launcher.app.design.Design.onWallpaper(it) }
         // The materials' strength follows how light the wallpaper is (see Appearance's veils).
         w?.let { dev.launcher.app.theme.Appearance.wallpaperLuma = it.meanLuminance }
         if (w == null) {

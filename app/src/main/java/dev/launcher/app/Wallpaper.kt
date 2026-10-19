@@ -91,10 +91,18 @@ class Wallpaper private constructor(
          * front, a close landing, the settings away). adb only (senders must hold DUMP):
          *   adb push wp.png /sdcard/Android/data/dev.launcher.app/files/dev-in/wp.png
          *   adb shell am broadcast -a dev.launcher.app.TEST_WALLPAPER -p dev.launcher.app --es file dev-in/wp.png
+         * `--ez clear true` gives the phone its default wallpaper back.
          */
         fun testHook(ctx: Context) {
             val r = object : android.content.BroadcastReceiver() {
                 override fun onReceive(c: Context, i: android.content.Intent) {
+                    if (i.getBooleanExtra("clear", false)) {
+                        Thread {
+                            try { WallpaperManager.getInstance(c).clear(WallpaperManager.FLAG_SYSTEM); AppLog.log("[wallpaper] test wallpaper: the default one back") }
+                            catch (t: Throwable) { AppLog.log("[wallpaper] test wallpaper: clear failed: ${t.javaClass.simpleName}: ${t.message}") }
+                        }.start()
+                        return
+                    }
                     val name = i.getStringExtra("file") ?: return
                     val f = c.getExternalFilesDir(null)?.let { java.io.File(it, name) }?.takeIf { it.exists() }
                         ?: return AppLog.log("[wallpaper] test wallpaper: no file $name")

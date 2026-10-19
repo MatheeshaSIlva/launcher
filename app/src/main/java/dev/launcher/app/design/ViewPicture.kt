@@ -19,18 +19,23 @@ import dev.launcher.app.AppLog
 object ViewPicture {
     fun render(v: View): Bitmap? = draw(v.width, v.height, v.javaClass.simpleName) { c -> c.drawColor(Color.BLACK); v.draw(c) }
 
+    /** [v] as it shows now on a clear ground (where it draws nothing stays transparent): a layer to lay over others. */
+    fun renderClear(v: View): Bitmap? = draw(v.width, v.height, v.javaClass.simpleName, opaque = false) { c -> v.draw(c) }
+
     /**
      * What [block] draws on a [w] x [h] canvas, rendered on the GPU into a GPU bitmap ([what] names it in the log). Any
      * thread for bitmaps alone (home's picture with the status bar's on it: drawn through the CPU it was read back from the
      * GPU, drawn and uploaded again, 200-570 ms on the emulator); a view's display lists only on its own thread ([render]).
      */
-    fun draw(w: Int, h: Int, what: String, block: (android.graphics.Canvas) -> Unit): Bitmap? {
+    fun draw(w: Int, h: Int, what: String, opaque: Boolean = true, block: (android.graphics.Canvas) -> Unit): Bitmap? {
         if (w == 0 || h == 0) return null
         var reader: ImageReader? = null
         var renderer: HardwareRenderer? = null
         return try {
             reader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 1, HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT)
             renderer = HardwareRenderer()
+            // (Not opaque: the buffer is cleared first, else what was not drawn is whatever the buffer held.)
+            renderer.isOpaque = opaque
             renderer.setSurface(reader.surface)
             val root = RenderNode("view-picture")
             root.setPosition(0, 0, w, h)

@@ -85,25 +85,34 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
     // ---- a wallpaper change (HomeActivity drives it on the wallpaper's reveal's frames)
 
     private var revealFrom: Wallpaper? = null
+    /** The wallpaper a change under way goes to (null: none): a glass made during it ([rebuild]) joins it where it is. */
+    private var revealTo: Wallpaper? = null
     private var revealProgress = 1f
     private var revealTime = 0f
 
     /** A wallpaper change starts: [from] is what the glass showed, [to] what it will show. */
     fun beginTransition(from: Wallpaper, to: Wallpaper) {
+        revealFrom = from
+        revealTo = to
+        revealProgress = 0f
+        revealTime = 0f
         glass?.beginTransition(from, to)
-        if (usesMaterial) { revealFrom = from; wallpaper = to; revealProgress = 0f; revealTime = 0f; invalidate() }
+        if (usesMaterial) { wallpaper = to; invalidate() }
     }
 
     /** The reveal's progress and time, every frame (the same as the wallpaper's). */
     fun setReveal(progress: Float, time: Float) {
+        revealProgress = progress
+        revealTime = time
         glass?.setReveal(progress, time)
-        if (usesMaterial) { revealProgress = progress; revealTime = time; invalidate() }
+        if (usesMaterial) invalidate()
     }
 
     /** The change is over: only the new wallpaper from now on. */
     fun endTransition(to: Wallpaper) {
         glass?.endTransition(to)
         revealFrom = null
+        revealTo = null
         revealProgress = 1f
         adoptWallpaper(to)
         invalidate()
@@ -130,6 +139,11 @@ class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx:
         // The reveal drives the glass through invalidateSelf(): that reaches this view only with the callback set (without it
         // the dock and indicator showed the new wallpaper only after the reveal had ended).
         glass?.callback = this
+        // Made during a wallpaper's reveal (the clock's numerals get their shape once laid out, home built again under the
+        // reveal): it joins it where it is (made from the old wallpaper alone, the clock kept it until its next minute).
+        val from = revealFrom
+        val to = revealTo
+        if (from != null && to != null) glass?.let { it.beginTransition(from, to); it.setReveal(revealProgress, revealTime) }
         glass?.tone = tone
         if (lightAngle != 225f) glass?.setLightAngle(lightAngle)
         invalidate()

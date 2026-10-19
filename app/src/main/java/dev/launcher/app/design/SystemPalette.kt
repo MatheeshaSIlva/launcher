@@ -23,6 +23,12 @@ import java.util.concurrent.TimeUnit
  * system, unless something else has changed it since (Wallpaper and style): then it is left as it is. Written with the
  * launcher's own WRITE_SECURE_SETTINGS (granted through Shizuku once), else through the shell. Not in the watchdog's plan: a
  * coloured palette breaks nothing when the launcher is gone. Blocking work runs on its own thread.
+ *
+ * Android's palette is given only while the launcher is still: a change of it makes Android lay out every window of every
+ * app again, ours too (each window's thread, then a frame of each), and given a moment after Apply it landed in the middle
+ * of the colours' reveal (S24: the settings and the card window laid out again mid-reveal; before the activities kept
+ * through palette changes, both were made anew there). So it waits while the settings are in front and while a change of
+ * the look is being shown.
  */
 object SystemPalette {
     private const val SETTING = "theme_customization_overlay_packages"
@@ -46,6 +52,13 @@ object SystemPalette {
     @Volatile private var pending: ScheduledFuture<*>? = null
     private var app: Context? = null
 
+    /** The settings are in front (where the colours are chosen): Android's palette waits until they are left. */
+    @Volatile var settingsInFront = false
+        set(v) { val was = field; field = v; if (was && !v) sync() }
+
+    /** Until when (uptime ms) a change of the look is being shown: home's and the settings' reveals, the wallpaper's. */
+    @Volatile private var busyUntil = 0L
+
     /** Whether the switch is on (kept across restarts). */
     @Volatile var on = false
         private set
@@ -59,27 +72,53 @@ object SystemPalette {
         app = c
         on = prefs(c).getBoolean(ON, false)
         io.execute { oneUi = readSystem(c, "wallpapertheme_color") != null }
-        Design.addListener { sync() }
-        sync()
+        Design.addListener {
+            // Every change of the design may be shown by a reveal: the longest one there is, and a moment.
+            val reveal = maxOf(dev.launcher.app.motion.CurveTiming(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.HOME_REBUILD)).durationMs,
+                dev.launcher.app.motion.CurveTiming(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.WALLPAPER_REVEAL)).durationMs)
+            busyUntil = maxOf(busyUntil, android.os.SystemClock.uptimeMillis() + reveal + STILL_MS)
+            sync()
+        }
+        // Once the design system is up (it starts right after this): what it shows decides what Android is given.
+        android.os.Handler(android.os.Looper.getMainLooper()).post { sync() }
     }
 
     /** It can write Android's palette: the launcher's own permission, else Shizuku. */
     fun canWrite(ctx: Context): Boolean = dev.launcher.app.SystemRestore.canWriteSecureSettings(ctx) || ShizukuLink.service != null
 
-    /** The switch (the settings' Apply): on, other apps take the colours now; off, the phone's own palette comes back. */
+    /** The switch (the settings' Apply): on, other apps take the colours; off, the phone's own palette comes back. Either once the launcher is still. */
     fun setEnabled(ctx: Context, enabled: Boolean) {
         val c = ctx.applicationContext
+        if (enabled == on) return
         on = enabled
         prefs(c).edit().putBoolean(ON, enabled).apply()
-        if (enabled) sync() else io.execute { restore(c) }
+        sync()
     }
 
-    /** What the colours ask of the phone's palette, worked out off the main thread a moment after a change. */
+    /** What the colours ask of the phone's palette, worked out off the main thread once the launcher is still. */
     fun sync() {
         val c = app ?: return
-        if (!on) return
+        val p = prefs(c)
+        if (!on && !p.contains(PUSHED)) return
+        if (p.contains(PUSHED) && Design.readsAndroidPalette()) {
+            // The launcher shows the phone's own palette now, and Android's may still be the one we gave it: given back at
+            // once (waiting, the launcher showed ours as "the phone's" until the settings were left).
+            pending?.cancel(false)
+            pending = io.schedule({ syncNow(c) }, 0, TimeUnit.MILLISECONDS)
+            return
+        }
+        schedule(c, STILL_MS)
+    }
+
+    private fun schedule(c: Context, delayMs: Long) {
         pending?.cancel(false)
-        pending = io.schedule({ syncNow(c) }, 400, TimeUnit.MILLISECONDS)
+        pending = io.schedule({ whenStill(c) }, delayMs, TimeUnit.MILLISECONDS)
+    }
+
+    private fun whenStill(c: Context) {
+        val left = busyUntil - android.os.SystemClock.uptimeMillis()
+        if (settingsInFront || left > 0) { schedule(c, maxOf(left, STILL_MS)); return }
+        syncNow(c)
     }
 
     /** Restore system: the switch off and the phone's own palette back. Blocking. Returns a line for the report, or null. */
@@ -90,7 +129,7 @@ object SystemPalette {
     }
 
     private fun syncNow(ctx: Context) {
-        if (!on) return
+        if (!on) { restore(ctx); return }
         val target = try { target(ctx) } catch (t: Throwable) { AppLog.log("[palette] ${t.javaClass.simpleName}: ${t.message}"); return }
         if (target == null) restore(ctx) else push(ctx, target)
     }
@@ -101,6 +140,8 @@ object SystemPalette {
         if (choice(Design.COLOR_SOURCE) != "wallpaper") return null
         val style = MaterialYou.Style.of(choice(Design.COLOR_STYLE))
         val own = Design.hexColor(choice(Design.COLOR_SEED))
+        // Auto on a phone whose own palette is the wallpaper's: the launcher shows that one, other apps have it already.
+        if (style == MaterialYou.Style.AUTO && own == null && Design.phonePaletteIsWallpapers()) return null
         if (style == MaterialYou.Style.SYSTEM && own == null) {
             // The system's colours: One UI's palette for Google's apps too; a phone whose palette is its own needs nothing.
             val ss = parseList(readSystem(ctx, "wallpapertheme_color")) ?: return null
@@ -136,7 +177,7 @@ object SystemPalette {
         val pushed = p.getString(PUSHED, null)
         val original = p.getString(ORIGINAL, null)
         if (pushed == null) { if (original != null) p.edit().remove(ORIGINAL).commit(); return null }
-        val ours = parse(pushed)?.let { o -> key(o.optString(PALETTE)).toLongOrNull(16)?.let { Target(it.toInt(), o.optString(STYLE)) } }
+        val ours = targetOf(pushed)
         val line = if (ours != null && matches(parse(read(ctx)), ours)) {
             val back = if (original == null || original == UNSET) write(ctx, null) else write(ctx, original)
             if (back) "the phone's own palette given back" else "the phone's own palette NOT given back (no Shizuku): Wallpaper and style"
@@ -145,6 +186,25 @@ object SystemPalette {
         AppLog.log("[palette] $line")
         return line
     }
+
+    /** Android's palette setting as the phone has it of its own ([value], null: none), and whether ours is in force ([ours]). */
+    class Own(val value: String?, val ours: Boolean)
+
+    /**
+     * Android's palette setting [raw] as the phone had it of its own: while it is the one we gave it, the one it had before.
+     * What the phone's own palette follows is judged from that (Design: Auto).
+     */
+    fun phonesOwn(raw: String?): Own {
+        val p = app?.let { prefs(it) } ?: return Own(raw, false)
+        val ours = targetOf(p.getString(PUSHED, null)) ?: return Own(raw, false)
+        // (SystemUI writes it again in its own form: Android 17's capitals, without the alpha, a seed list added.)
+        if (!matches(parse(raw), ours)) return Own(raw, false)
+        return Own(p.getString(ORIGINAL, null)?.takeIf { it != UNSET }, true)
+    }
+
+    /** What a value we wrote asked for (its seed and style), or null. */
+    private fun targetOf(pushed: String?): Target? =
+        parse(pushed)?.let { o -> key(o.optString(PALETTE)).toLongOrNull(16)?.let { Target((0xFF000000L or it).toInt(), o.optString(STYLE)) } }
 
     private fun read(ctx: Context): String? = try {
         Settings.Secure.getString(ctx.contentResolver, SETTING)
@@ -213,4 +273,7 @@ object SystemPalette {
     fun key(s: String): String = s.trim().removePrefix("#").lowercase().takeLast(6)
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    /** How long the launcher must have been still before Android's palette is given (ms). */
+    private const val STILL_MS = 600L
 }

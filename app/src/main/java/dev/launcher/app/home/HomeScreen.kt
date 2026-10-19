@@ -165,6 +165,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         dev.launcher.app.design.Design.addListener(onDesign)
+        dev.launcher.app.design.Design.addPhoneListener(onPhonePalette)
         dev.launcher.app.layout.Setup.addListener(onSetup)
         viewTreeObserver.addOnGlobalLayoutListener(toneAfterLayout)
         dev.launcher.app.Badges.addListener(onBadges)
@@ -174,6 +175,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun onDetachedFromWindow() {
         dev.launcher.app.design.Design.removeListener(onDesign)
+        dev.launcher.app.design.Design.removePhoneListener(onPhonePalette)
         dev.launcher.app.layout.Setup.removeListener(onSetup)
         viewTreeObserver.removeOnGlobalLayoutListener(toneAfterLayout)
         dev.launcher.app.Badges.removeListener(onBadges)
@@ -245,14 +247,111 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
      */
     private val onDesign: () -> Unit = {
         if (m != null && dev.launcher.app.design.Design.structure != builtStructure) {
-            if (shownNow() && rebuildFrozen == null) {
+            if (shownElsewhere) rebuildUnder("the colours changed with the wallpaper")
+            // A new wallpaper's reveal under way (the phone's palette following it a moment later): the new look's own
+            // reveal follows it, not at once (two fronts crossed each other; a still of home would have stopped it).
+            else if (wallpaperView.transitioning && shownNow()) lookAfterWallpaper = true
+            else if (shownNow() && rebuildFrozen == null) {
                 val t0 = android.os.SystemClock.uptimeMillis()
                 renderNow()?.let { freeze(it) }
                 frozenAt = android.os.SystemClock.uptimeMillis()
                 AppLog.log("[home] the old look held (${frozenAt - t0} ms)")
             }
-            requestRebuild("the theme changed")
+            if (!shownElsewhere && !lookAfterWallpaper) requestRebuild("the theme changed")
         }
+    }
+
+    /** A change of the look arrived during a new wallpaper's reveal: shown once that is over ([wallpaperRevealed]). */
+    private var lookAfterWallpaper = false
+
+    /** A new wallpaper's reveal is over: a change of the look that waited for it is shown now. */
+    fun wallpaperRevealed() {
+        if (!lookAfterWallpaper) return
+        lookAfterWallpaper = false
+        onDesign()
+    }
+
+    /** A new look is being revealed (or held for it): a new wallpaper's reveal waits for it ([afterLook]). */
+    val revealingLook: Boolean get() = rebuildFrozen != null || rebuildPosted || rebuildCover != null
+
+    private val afterLookRuns = ArrayList<Runnable>()
+
+    /** Runs [r] once no new look is being revealed (at once if none is). */
+    fun afterLook(r: Runnable) { if (!revealingLook) r.run() else afterLookRuns += r }
+
+    private fun lookRevealed() {
+        if (revealingLook) return
+        val runs = afterLookRuns.toList()
+        afterLookRuns.clear()
+        for (r in runs) r.run()
+    }
+
+    /** The phone's own colours may have changed: apps' widgets, drawn in them, follow ([LauncherWidgetHostView.refreshColours]). */
+    private val onPhonePalette: () -> Unit = {
+        for (w in widgetViews()) (w as? AppWidgetFrame)?.hostView?.refreshColours()
+    }
+
+    /** A change of the design under way is shown by its caller ([changeShownBy]), not by home's own reveal. */
+    private var shownElsewhere = false
+
+    /**
+     * [block] changes the design, and its caller shows the change itself, over the whole screen (a new wallpaper whose
+     * colours the palette follows: the wallpaper's reveal shows both, [coverAlongFront]): home is built again at once,
+     * under it, with no reveal of its own.
+     */
+    fun changeShownBy(block: () -> Unit) {
+        shownElsewhere = true
+        try { block() } finally { shownElsewhere = false }
+    }
+
+    /** Built again at once, nothing of its own shown (see [changeShownBy]). */
+    private fun rebuildUnder(why: String) {
+        if (width == 0 || height == 0) return
+        coldHoldWanted = false
+        removeCallbacks(coldRetry)
+        if (arrivalAnimating || arrivalHeld) { arrivalHeld = false; finishArrival() }
+        rebuildFrozen?.let { b -> rebuildFrozen = null; rebuildCover?.let { removeView(it) }; rebuildCover = null; b.recycle() }
+        AppLog.log("[home] $why: building home again (under that change's own reveal)")
+        buildBehind()
+    }
+
+    /** Home's content as it shows now (the wallpaper left out, transparent there), or null. Main thread. */
+    fun contentPicture(): android.graphics.Bitmap? = dev.launcher.app.design.ViewPicture.renderClear(fg)
+
+    private var frontCover: View? = null
+
+    /**
+     * [old] (home's content as it looked: [contentPicture]) laid over the new look, right above the content, giving way along
+     * the wallpaper reveal's front ([FrontCover]). Returns what moves it on each of the reveal's frames (its progress and
+     * time), or null where it cannot be drawn (the new look then shows at once). [endFrontCover] takes it away.
+     */
+    fun coverAlongFront(old: android.graphics.Bitmap): ((Float, Float) -> Unit)? {
+        if (Build.VERSION.SDK_INT < 33) { old.recycle(); return null }
+        val cover = try {
+            FrontCover(old, width.toFloat(), height.toFloat(), resources.displayMetrics.density * REVEAL_CELL_DP)
+        } catch (t: Throwable) {
+            AppLog.log("[home] the old look cannot give way along the front (${t.javaClass.simpleName}: ${t.message})")
+            old.recycle()
+            return null
+        }
+        var progress = 0f
+        var time = 0f
+        val v = object : View(context) {
+            override fun onDraw(c: android.graphics.Canvas) { if (!old.isRecycled) cover.draw(c, progress, time) }
+        }
+        v.tag = old
+        endFrontCover()
+        frontCover = v
+        // In the scene, right above the content (under menus and sheets; blurred with the rest behind one).
+        scene.addView(v, scene.indexOfChild(fg) + 1, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        return { p, t -> progress = p; time = t; v.invalidate() }
+    }
+
+    fun endFrontCover() {
+        val v = frontCover ?: return
+        frontCover = null
+        (v.parent as? android.view.ViewGroup)?.removeView(v)
+        (v.tag as? android.graphics.Bitmap)?.recycle()
     }
 
     private fun shownNow() = windowVisibility == View.VISIBLE && dev.launcher.app.GestureNav.homeVisible
@@ -325,7 +424,13 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private fun requestRebuild(why: String) {
         if (rebuildPosted) return
         rebuildPosted = true
-        val run = Runnable { rebuildPosted = false; rebuild(why) }
+        val run = Runnable {
+            rebuildPosted = false
+            // Built for this design already (under the wallpaper's reveal, meanwhile): nothing left to reveal.
+            if (dev.launcher.app.design.Design.structure != builtStructure || rebuildFrozen != null) rebuild(why)
+            // (Built behind, or nothing to do: whatever waited for the new look goes on.)
+            lookRevealed()
+        }
         val h = handler
         if (h == null) post(run) else h.postAtFrontOfQueue(run)
     }
@@ -435,6 +540,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                     if (rebuildAnim === animation) rebuildAnim = null
                     old.recycle()
                     listener.onHomeSettled()
+                    lookRevealed()
                 }
             })
             start()
@@ -485,6 +591,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             if (rebuildCover === v) rebuildCover = null
             old.recycle()
             listener.onHomeSettled()
+            lookRevealed()
         }.start()
     }
 

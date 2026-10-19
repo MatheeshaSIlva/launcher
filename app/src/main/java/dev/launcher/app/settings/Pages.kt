@@ -214,7 +214,9 @@ internal enum class Part(val title: String, val color: ColorKey, val element: El
 internal fun Part.detail(d: Draft, ctx: android.content.Context? = null): String {
     val e = element ?: return when (this) {
         // ("iOS 27" named the theme, the preset and the status bar's layout on three cards: each says which it is.)
-        Part.LOOK -> themeName(d.themeId()) + " theme" + if (d.wallpaperColors()) " · wallpaper colours" else ""
+        Part.LOOK -> themeName(d.themeId()) + " theme" + when (d.colourSource()) {
+            1 -> " · the system's colours"; 2 -> " · wallpaper colours"; 3 -> " · your colour"; else -> ""
+        }
         Part.MOTION -> presetName(d.motionId()) + " preset" + (d.motionChangeCount(d.motionId()).takeIf { it > 0 }?.let { " · $it change" + if (it == 1) "" else "s" } ?: "")
         else -> if (dev.launcher.app.ShizukuLink.service != null) "Shizuku connected" else "Shizuku not running"
     }
@@ -537,7 +539,7 @@ internal class Draft {
             for ((p, v) in colorKeys) Design.set(Design.COLOR_KEYS.getValue(p).name, dev.launcher.app.design.Value.Choice(v))
         }
         appearance?.let { Appearance.setMode(ctx, it) }
-        // (After the colours: other apps take the ones just applied.)
+        // (After the colours: other apps take the ones just applied, once the launcher is still.)
         otherApps?.let { dev.launcher.app.design.SystemPalette.setEnabled(ctx, it) }
         for (e in setup.keys.map { it.first }.distinct()) {
             val opts = setup.filterKeys { it.first == e && it.second.startsWith("opt:") }.mapKeys { it.key.second.removePrefix("opt:") }

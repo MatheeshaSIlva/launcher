@@ -270,7 +270,9 @@ class GlassDrawable(
 
     /** The change is over: only the new wallpaper from now on. */
     fun endTransition(to: Wallpaper) {
+        // Both sides the new one (a glass that never saw the change's start had the old wallpaper on its new side).
         setImages("Old", to)
+        setImages("New", to)
         setReveal(1f, 0f)
     }
 

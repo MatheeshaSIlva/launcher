@@ -42,10 +42,36 @@ class MaterialYouTest {
         val blue = 0xFF3478F6.toInt()
         val plain = MaterialYou.scheme(orange, MaterialYou.Style.TONAL, 1f)
         val keyed = MaterialYou.scheme(orange, MaterialYou.Style.TONAL, 1f, mapOf('T' to blue))
-        assertEquals(MaterialYou.toLch(blue).third, keyed.tertiary.hue, 0.5)
-        assertEquals(MaterialYou.toLch(blue).second, keyed.tertiary.chroma, 0.5)
-        assertEquals(plain.primary.hue, keyed.primary.hue, 0.001)
-        assertEquals(plain.neutral.chroma, keyed.neutral.chroma, 0.001)
+        fun tonal(t: MaterialYou.Tones) = t as MaterialYou.TonalPalette
+        assertEquals(MaterialYou.toLch(blue).third, tonal(keyed.tertiary).hue, 0.5)
+        assertEquals(MaterialYou.toLch(blue).second, tonal(keyed.tertiary).chroma, 0.5)
+        assertEquals(tonal(plain.primary).hue, tonal(keyed.primary).hue, 0.001)
+        assertEquals(tonal(plain.neutral).chroma, tonal(keyed.neutral).chroma, 0.001)
+    }
+
+    @Test fun aPhonesShadesAreItsPaletteAndTheTonesBetweenFollowThem() {
+        // A phone's palette as its 13 shades (here a tonal palette's own: what Android and One UI give).
+        val made = MaterialYou.scheme(orange, MaterialYou.Style.TONAL, 1f)
+        val phone = MaterialYou.fromShades { name ->
+            Regex("""system_(accent1|accent2|accent3|neutral1|neutral2)_(\d+)""").matchEntire(name)?.let { m ->
+                val pal = when (m.groupValues[1]) { "accent1" -> made.primary; "accent2" -> made.secondary; "accent3" -> made.tertiary
+                    "neutral1" -> made.neutral; else -> made.neutralVariant }
+                pal.tone(MaterialYou.toneOfShade(m.groupValues[2].toInt()))
+            }
+        }
+        // A shade is itself.
+        assertEquals(made.primary.tone(40.0), phone.primary.tone(40.0))
+        // A tone between two shades (a surface container's 94, 92, 87; a dark one's 6, 12, 17) is near the palette's own.
+        for (t in listOf(94.0, 92.0, 87.0, 6.0, 12.0, 17.0)) {
+            val want = MaterialYou.toLch(made.neutral.tone(t))
+            val got = MaterialYou.toLch(phone.neutral.tone(t))
+            assertEquals("tone $t lightness", want.first, got.first, 0.8)
+            assertEquals("tone $t chroma", want.second, got.second, 1.0)
+        }
+        // Roles come from them: primary at 40 in light.
+        assertEquals(made.primary.tone(40.0), MaterialYou.color(phone, "system_primary_light"))
+        assertTrue(MaterialYou.isRole("system_surface_container_high_dark"))
+        assertTrue(!MaterialYou.isRole("system_accent1_500"))
     }
 
     @Test fun harmonizingTurnsTheHueHalfWayAtMost15Degrees() {

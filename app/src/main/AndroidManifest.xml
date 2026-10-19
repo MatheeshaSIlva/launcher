@@ -63,7 +63,7 @@
         <activity
             android:name=".HomeActivity"
             android:clearTaskOnLaunch="true"
-            android:configChanges="uiMode|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:configChanges="@integer/config_home"
             android:excludeFromRecents="true"
             android:exported="true"
             android:launchMode="singleTask"
@@ -99,7 +99,7 @@
              Settings on an iPhone: turned, its picture of home was squeezed into a wide phone and Back slid that into home. -->
         <activity
             android:name=".settings.SettingsActivity"
-            android:configChanges="uiMode"
+            android:configChanges="@integer/config_settings"
             android:exported="true"
             android:label="Launcher settings"
             android:launchMode="singleTask"
@@ -138,7 +138,7 @@
              exported; opaque, in the rotation it found. -->
         <activity
             android:name=".TurnCover"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|keyboardHidden"
+            android:configChanges="@integer/config_cover"
             android:excludeFromRecents="true"
             android:exported="true"
             android:noHistory="true"
@@ -152,7 +152,7 @@
              the deck's frames, which share that thread (a repeated frame at the handover, S24 trace). -->
         <activity
             android:name=".switcher.SwitcherActivity"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|density|keyboardHidden|keyboard|navigation"
+            android:configChanges="@integer/config_switcher"
             android:excludeFromRecents="true"
             android:exported="true"
             android:hardwareAccelerated="false"

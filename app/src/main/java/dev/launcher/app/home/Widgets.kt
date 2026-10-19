@@ -245,6 +245,29 @@ class HomeWidgets(private val activity: Activity) {
  */
 class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
     var onLongPress: (() -> Unit)? = null
+
+    /** The widget's layout as its app last sent it (inflated again when the phone's palette changes: [refreshColours]). */
+    private var lastViews: android.widget.RemoteViews? = null
+
+    /**
+     * The phone's palette changed: the widget's layout is inflated anew in it (its colours are fixed at inflation), the old
+     * one fading out over the new while it shows. Home used to be made anew at every change of the palette, which did
+     * this; and Android gives a launcher's own palette to widgets (AppWidgetHostView.setColorResources) only as an overlay
+     * a launcher that is not part of the system may not make (Android 17: "no resources were overlaid"), so widgets are in
+     * the phone's palette, which Other apps makes the launcher's.
+     */
+    fun refreshColours() {
+        val last = lastViews ?: return
+        if (resizingContent) return   // (the resize's end applies what came meanwhile)
+        val old = if (childCount > 0) getChildAt(0) else null
+        val shown = old != null && width > 0 && height > 0 && isAttachedToWindow && isShown
+        // A blank layout first: the same layout sent again is only applied to the views already there (their colours kept).
+        super.updateAppWidget(android.widget.RemoteViews(context.packageName, dev.launcher.app.R.layout.widget_blank))
+        super.updateAppWidget(last)
+        val now = if (childCount > 0) getChildAt(0) else null
+        if (shown && old != null && now !== old && old.parent == null) keepAsGhost(old)
+        invalidate()
+    }
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop
     private var downX = 0f
     private var downY = 0f
@@ -285,6 +308,7 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
         removeCallbacks(check)
     }
 
+
     /**
      * Until when (uptime ms) a new layout from the widget's app crossfades in: set when the widget changes size. Apps
      * answer a resize with a layout for the new size half a second to seconds later (a paused app gets it late), which replaced the content in one frame
@@ -304,6 +328,7 @@ class LauncherWidgetHostView(ctx: Context) : AppWidgetHostView(ctx) {
     private var hasPending = false
 
     override fun updateAppWidget(remoteViews: android.widget.RemoteViews?) {
+        lastViews = remoteViews
         if (resizingContent && isAttachedToWindow) { pending = remoteViews; hasPending = true; return }
         apply(remoteViews)
     }

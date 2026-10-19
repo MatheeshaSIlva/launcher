@@ -67,7 +67,7 @@ object Design {
      * material's colour references are resolved here too (an element's own theme: drawing code reads a material's colours
      * through the main theme).
      */
-    private class State(val resolver: Resolver, val bound: Boolean = false) {
+    private class State(val resolver: Resolver, val palette: Palette, val bound: Boolean = false) {
         val cache = java.util.concurrent.ConcurrentHashMap<String, Value>()
         /** Curves as code reads them: a motion role's at the preset's speed and bounce ([curve]). */
         val curves = java.util.concurrent.ConcurrentHashMap<String, Curve>()
@@ -76,7 +76,7 @@ object Design {
             if (bound && v is Value.Mat) Value.Mat(v.material.bindRefs { k -> resolver.resolve(k) as? Value.Color ?: throw IllegalStateException("token '$k' is not a colour") }) else v
         }
     }
-    @Volatile private var state = State(Resolver(emptyList()))
+    @Volatile private var state = State(Resolver(emptyList()), Palette(MaterialYou.Choice(MaterialYou.Style.AUTO, 1f), Phone()))
     private val resolver get() = state.resolver
     private val listeners = LinkedHashSet<() -> Unit>()
     private val main = Handler(Looper.getMainLooper())
@@ -114,6 +114,10 @@ object Design {
     fun init(ctx: Context) {
         if (chain.isNotEmpty()) return
         appCtx = ctx.applicationContext
+        // What the phone says of its colours, before the theme's palette is made from it (the wallpaper's colours as last
+        // read: home reads the picture again only once it has loaded it).
+        loadWallpaperColours()
+        phone = readPhone(wallpaper = true)
         activeId = try { File(appCtx.filesDir, ACTIVE).takeIf { it.exists() }?.readText()?.trim()?.ifEmpty { null } } catch (_: Throwable) { null } ?: DEFAULT_THEME
         if (!load(activeId)) {
             // The remembered theme is gone (a removed file, an older build's): the default from now on, remembered too.
@@ -129,7 +133,6 @@ object Design {
             loadMotion(DEFAULT_MOTION)
             try { File(appCtx.filesDir, ACTIVE_MOTION).apply { parentFile?.mkdirs() }.writeText(DEFAULT_MOTION) } catch (_: Throwable) { }
         }
-        paletteAt = paletteStamp()
         AppLog.log("[design] theme '$themeName' (${chain.joinToString(" < ") { it.name }}), motion '$motionName' (${motionChain.joinToString(" < ") { it.name }}): " +
             "${resolver.keys().size} tokens, ${user.size + motionUser.size} edited")
         // Over adb, for fast iteration: the theme files and the edits are read again (a theme pushed to files/themes/ shows at
@@ -286,7 +289,7 @@ object Design {
     fun previewColor(id: String, k: ColorKey): Int? {
         val r = previews.getOrPut(id) {
             val l = (if (id == activeId) Loaded(id, chain, user) else elementThemes[id] ?: prepare(id)) ?: return null
-            Resolver(layersOf(l.chain, l.edits, ThemeLayers.fromWallpaper(l.chain, l.edits))) { name -> paletteColor(name) }
+            Resolver(layersOf(l.chain, l.edits, ThemeLayers.fromWallpaper(l.chain, l.edits))) { name -> state.palette.color(name) }
         }
         val v = try { r.resolve(k.name) as? Value.Color } catch (_: Throwable) { null } ?: return null
         return r.pair(v).let { (l, d) -> Appearance.mix(l, d) }
@@ -552,12 +555,17 @@ object Design {
 
     private fun layersOf(c: List<Theme>, edits: Map<String, Entry>, materialYou: Boolean) = ThemeLayers.of(c, edits, materialYou)
 
-    /** The theme's layers and the animation preset's (their keys never meet: motion.* is only the preset's). */
-    private fun rebuild() {
+    /**
+     * The theme's layers and the animation preset's (their keys never meet: motion.* is only the preset's), and the palette
+     * they choose ([fresh]: one made already, used if it is that one): published together, so a frame never reads the new
+     * tokens in the old palette, nor a colour worked out for one lands in another.
+     */
+    private fun rebuild(fresh: Palette? = null) {
         val layers = layersOf(chain, user, ThemeLayers.fromWallpaper(chain, user)) + motionChain.map { it.entries } + listOf(LinkedHashMap(motionUser))
-        state = State(Resolver(layers) { name -> paletteColor(name) })
+        val choice = choiceOf(Resolver(layers))
+        val pal = listOfNotNull(fresh, state.palette).firstOrNull { it.choice == choice && it.phone == phone } ?: Palette(choice, phone)
+        state = State(Resolver(layers) { name -> pal.color(name) }, pal)
         scaledText.clear()
-        followYouSettings()
         previews.clear()
         ownColors = null
         motionPreviews.clear()
@@ -567,7 +575,7 @@ object Design {
         parts = elementIds.mapNotNull { (e, id) ->
             val l = elementThemes[id] ?: return@mapNotNull null
             e to byTheme.getOrPut(id) {
-                State(Resolver(layersOf(l.chain, l.edits, ThemeLayers.fromWallpaper(l.chain, l.edits))) { name -> paletteColor(name) }, bound = true)
+                State(Resolver(layersOf(l.chain, l.edits, ThemeLayers.fromWallpaper(l.chain, l.edits))) { name -> pal.color(name) }, pal, bound = true)
             }
         }.toMap()
     }
@@ -578,137 +586,177 @@ object Design {
     /** Turns the wallpaper's colours on ("wallpaper") or off ("theme") for the active theme (kept with its edits). */
     fun setColorSource(source: String) {
         if (source != "wallpaper" && source != "theme") { AppLog.log("[design] colours from '$source'? (wallpaper or theme)"); return }
-        // Where the phone's palette comes from is asked again (it may have changed without a new palette: a preset chosen).
-        phoneFollows = null
-        palette.clear()
         set(COLOR_SOURCE.name, Value.Choice(source))
         AppLog.log("[design] colours from the " + if (source == "wallpaper") "wallpaper (Material You)" else "theme")
     }
 
-    // ------------------------------------------------------------------ the system's palette (Material You)
+    // ------------------------------------------------------------------ the palette (Material You)
 
     private val colorIds = java.util.concurrent.ConcurrentHashMap<String, Int>()
-    private val palette = java.util.concurrent.ConcurrentHashMap<String, Int>()
     private const val NO_COLOR = 0x00FFFFFE   // cached "no such colour" (never a real palette colour: transparent)
-    private var paletteAt = 0L
+    private val SAMSUNG = android.os.Build.MANUFACTURER.equals("samsung", ignoreCase = true)
 
     /**
-     * The palette colour [name] (an `android.R.color` field's name, `system_primary_dark`) in the chosen Material You style
-     * and intensity ([MaterialYou]), cached until the palette, the style or the intensity changes.
+     * What the phone says of its colours, read on the main thread when something may have changed it (the palette's
+     * overlay, a new wallpaper, Other apps), never while drawing: the wallpaper's colours (main, second, third: the system's
+     * reading, else ours of the picture home draws: One UI gives apps none), whether the phone's own palette is the
+     * wallpaper's ([phonePaletteIsWallpapers]), and whether the phone is a Galaxy (One UI keeps its palette apart from
+     * Android's roles).
      */
-    private fun paletteColor(name: String): Int? = palette.getOrPut(name) { youColor(name, myChoice) ?: NO_COLOR }.takeIf { it != NO_COLOR }
+    private data class Phone(val wallpaper: List<Int> = emptyList(), val follows: Boolean = true, val samsung: Boolean = false)
+
+    @Volatile private var phone = Phone()
+
+    /**
+     * A palette: made from [choice] (the style, the intensity, the user's colours) and [phone] alone, each colour worked out
+     * once and kept. Replaced as a whole when either changes, with the state that reads it.
+     */
+    private class Palette(val choice: MaterialYou.Choice, val phone: Phone) {
+        private val cache = java.util.concurrent.ConcurrentHashMap<String, Int>()
+        /** The phone's own palette as it is ("the phone's", Auto while it is the wallpaper's), unless the user's colour makes it. */
+        val phones = choice.seed == null && (choice.style == MaterialYou.Style.SYSTEM || (choice.style == MaterialYou.Style.AUTO && phone.follows))
+        /** The colour it is made from: the user's, else the wallpaper's main one, else the phone's own primary. */
+        val seed: Int? by lazy { choice.seed ?: phone.wallpaper.firstOrNull() ?: systemColor("system_accent1_500") }
+        private val scheme: MaterialYou.Scheme? by lazy { seed?.let { MaterialYou.scheme(it, choice.style, choice.intensity, choice.keys) } }
+        /** On a Galaxy, the phone's roles as its own shades have them (Android's own follow Android's setting, not One UI). */
+        private val phoneRoles by lazy { MaterialYou.fromShades { n -> systemColor(n) } }
+
+        fun color(name: String): Int? = cache.getOrPut(name) { make(name) ?: NO_COLOR }.takeIf { it != NO_COLOR }
+
+        /** The colours worked out so far, by name (what a change is judged by: the colours in use). */
+        fun seen(): Map<String, Int> = HashMap(cache)
+
+        private fun make(name: String): Int? {
+            // A key colour of the user's makes its palette even under the phone's.
+            val own = MaterialYou.paletteOf(name)?.let { it in choice.keys } == true
+            if (phones && !own) return phoneColor(name)?.let { MaterialYou.scaleChroma(it, choice.intensity) }
+            val sc = scheme ?: return systemColor(name)
+            return MaterialYou.color(sc, name) ?: systemColor(name)
+        }
+
+        private fun phoneColor(name: String): Int? =
+            if (phone.samsung && MaterialYou.isRole(name)) MaterialYou.color(phoneRoles, name) ?: systemColor(name) else systemColor(name)
+    }
+
+    /** The palette's makings as [r] resolves them (choices and a number: no colour needed). */
+    private fun choiceOf(r: Resolver): MaterialYou.Choice {
+        fun choice(key: ChoiceKey) = (try { r.resolve(key.name) } catch (_: Throwable) { null } as? Value.Choice)?.option
+        val st = MaterialYou.Style.of(choice(COLOR_STYLE))
+        val k = (try { r.resolve(COLOR_INTENSITY.name) } catch (_: Throwable) { null } as? Value.Number)?.v ?: 1f
+        val keys = COLOR_KEYS.mapNotNull { (p, key) -> hexColor(choice(key))?.let { p to it } }.toMap()
+        return MaterialYou.Choice(st, k, hexColor(choice(COLOR_SEED)), keys)
+    }
+
+    /** Palettes the settings show before Apply, by choice (a slider makes one per step: the last few are kept). */
+    private val previewPalettes = object : LinkedHashMap<MaterialYou.Choice, Palette>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<MaterialYou.Choice, Palette>?) = size > 8
+    }
 
     /** Palette colour [name] as [choice] would make it (the settings show a choice before it is applied). */
-    fun previewPalette(name: String, choice: MaterialYou.Choice): Int? = youColor(name, choice)
-
-    /** The wallpaper's main colour (what "wallpaper" makes the palette from), if there is one. */
-    fun wallpaperSeed(): Int? = seedColor()
-
-    /** What the palette is made of now: the user's colour or the wallpaper's main colour, and the style ([SystemPalette]). */
-    fun paletteChoice(): Pair<Int?, MaterialYou.Style> = (myChoice.seed ?: seedColor()) to myChoice.style
-
-    @Volatile private var myChoice = MaterialYou.Choice(MaterialYou.Style.AUTO, 1f)
-    @Volatile private var seed: Int? = null
-    private val schemes = java.util.concurrent.ConcurrentHashMap<String, MaterialYou.Scheme>()
-
-    private fun youColor(name: String, c: MaterialYou.Choice): Int? {
-        val own = MaterialYou.paletteOf(name)?.let { it in c.keys } == true
-        // The phone's own palette (in Auto only while it is the wallpaper's), unless the user's colour or a key colour of
-        // theirs makes this one.
-        val phones = c.style == MaterialYou.Style.SYSTEM || (c.style == MaterialYou.Style.AUTO && phonePaletteIsWallpapers())
-        if (phones && c.seed == null && !own) return systemColor(name)?.let { MaterialYou.scaleChroma(it, c.intensity) }
-        // Otherwise made here: "the phone's" and Auto in the tonal style (the phone's palette comes from its wallpaper only).
-        val style = if (c.style == MaterialYou.Style.SYSTEM || c.style == MaterialYou.Style.AUTO) MaterialYou.Style.TONAL else c.style
-        val s = c.seed ?: seedColor() ?: return systemColor(name)
-        val scheme = schemes.getOrPut("${c.id}/$s") { MaterialYou.scheme(s, style, c.intensity, c.keys) }
-        return MaterialYou.color(scheme, name) ?: systemColor(name)
+    fun previewPalette(name: String, choice: MaterialYou.Choice): Int? {
+        val s = state.palette
+        if (s.choice == choice && s.phone == phone) return s.color(name)
+        val p = synchronized(previewPalettes) { previewPalettes[choice]?.takeIf { it.phone == phone } ?: Palette(choice, phone).also { previewPalettes[choice] = it } }
+        return p.color(name)
     }
 
-    /**
-     * The wallpaper's main colour (the system's reading of it), else the system palette's primary. Only a reading of the
-     * wallpaper is kept: one asked for before the wallpaper's colours could be read (at boot) once kept the phone's palette
-     * as "the wallpaper's" until the next change of the palette.
-     */
-    private fun seedColor(): Int? {
-        seed?.let { return it }
-        wallpaperColours().firstOrNull()?.let { seed = it; return it }
-        return systemColor("system_accent1_500")
-    }
+    /** The wallpaper's main colour (what "wallpaper" makes the palette from), else the phone's own primary. */
+    fun wallpaperSeed(): Int? = phone.wallpaper.firstOrNull() ?: systemColor("system_accent1_500")
 
     /**
-     * The wallpaper's colours (main, second, third; the home screen's wallpaper): the system's reading, else ours of the
-     * picture home draws (One UI 9 answers apps with none: the S24's log said "the wallpaper's (unknown)", and Auto made the
-     * palette from the phone's old one), or none before the wallpaper is loaded.
+     * Whether the phone's own palette (Wallpaper & style) is made from the wallpaper: Android's record of where it came
+     * from where the phone keeps one (`theme_customization_overlay_packages`: a wallpaper, or a preset colour; the one the
+     * phone had before Other apps gave it ours), else whether its primary is one of the wallpaper's hues
+     * ([MaterialYou.followsWallpaper]). One UI's Color palette switched off or set to a basic colour leaves it blue whatever
+     * the wallpaper is (Matheesha, 2026-10-19: a green wallpaper, blue colours).
      */
-    private fun wallpaperColours(): List<Int> {
+    fun phonePaletteIsWallpapers(): Boolean = phone.follows
+
+    private val phoneListeners = LinkedHashSet<() -> Unit>()
+
+    /**
+     * [l] runs whenever the phone's own colours may have changed (the palette's overlay), whether or not the launcher's
+     * palette did: what shows them as they are (apps' widgets on home) follows. Main thread.
+     */
+    fun addPhoneListener(l: () -> Unit) { phoneListeners += l }
+    fun removePhoneListener(l: () -> Unit) { phoneListeners -= l }
+
+    /** The palette in use is Android's own as it is (the phone's, not One UI's): what Android is given shows in the launcher. */
+    fun readsAndroidPalette(): Boolean = chain.isNotEmpty() && state.palette.phones && !phone.samsung
+
+    /**
+     * What the phone says now ([Phone]). Main thread: a binder call and a setting. The wallpaper's colours are read again
+     * only with [wallpaper] (at the start, and when home shows a new wallpaper: a palette made from them changes with its
+     * reveal, never before home shows it).
+     */
+    private fun readPhone(wallpaper: Boolean): Phone {
+        if (!wallpaper) return Phone(phone.wallpaper, followsOf(phone.wallpaper), SAMSUNG)
         val system = try {
             if (android.os.Build.VERSION.SDK_INT >= 27)
                 android.app.WallpaperManager.getInstance(appCtx).getWallpaperColors(android.app.WallpaperManager.FLAG_SYSTEM)
                     ?.let { listOfNotNull(it.primaryColor, it.secondaryColor, it.tertiaryColor).map { c -> c.toArgb() } }
             else null
         } catch (_: Throwable) { null }
-        return system?.takeIf { it.isNotEmpty() } ?: dev.launcher.app.Wallpaper.current?.colors.orEmpty()
+        val wall = system?.takeIf { it.isNotEmpty() } ?: wallpaperRead
+        return Phone(wall, followsOf(wall), SAMSUNG)
     }
 
-    @Volatile private var phoneFollows: Boolean? = null
+    private var lastFollows: Boolean? = null
 
-    /**
-     * Whether the phone's own palette (Wallpaper & style) is made from the wallpaper: Android's record of where it came
-     * from where the phone keeps one (`theme_customization_overlay_packages`: a wallpaper, or a preset colour), else
-     * whether its primary is one of the wallpaper's hues ([MaterialYou.followsWallpaper]). One UI's Color palette switched
-     * off or set to a basic colour leaves it blue whatever the wallpaper is (Matheesha, 2026-10-19: a green wallpaper,
-     * blue colours). Worked out once per palette and wallpaper.
-     */
-    fun phonePaletteIsWallpapers(): Boolean {
-        phoneFollows?.let { return it }
+    private fun followsOf(wall: List<Int>): Boolean {
         val key = systemColor("system_accent1_500") ?: return true
-        val wall = wallpaperColours()
+        val raw = try { android.provider.Settings.Secure.getString(appCtx.contentResolver, "theme_customization_overlay_packages") } catch (_: Throwable) { null }
+        val own = SystemPalette.phonesOwn(raw)
         val source = try {
-            android.provider.Settings.Secure.getString(appCtx.contentResolver, "theme_customization_overlay_packages")
-                ?.let { org.json.JSONObject(it).optString("android.theme.customization.color_source").ifEmpty { null } }
+            own.value?.let { org.json.JSONObject(it).optString("android.theme.customization.color_source").ifEmpty { null } }
         } catch (_: Throwable) { null }
-        val follows = when (source) {
-            "home_wallpaper", "lock_wallpaper" -> true
-            "preset" -> false
+        val follows = when {
+            source == "home_wallpaper" || source == "lock_wallpaper" -> true
+            source == "preset" -> false
+            // Ours in force over a phone that had no record: Android's own palette is the wallpaper's then (and its colours
+            // now are ours: no telling from them).
+            own.ours -> true
             else -> MaterialYou.followsWallpaper(key, wall)
         }
-        fun hex(c: Int) = "#" + String.format("%06x", c and 0xFFFFFF)
-        AppLog.log("[design] the phone's palette (primary ${hex(key)}, source ${source ?: "not recorded"}) " +
-            (if (follows) "follows" else "is not") + " the wallpaper's (${wall.joinToString(" ") { hex(it) }.ifEmpty { "unknown" }})" +
-            if (follows) "" else ": Auto makes the palette from the wallpaper")
-        phoneFollows = follows
+        if (follows != lastFollows) {
+            lastFollows = follows
+            AppLog.log("[design] the phone's palette (primary ${hexOf(key)}, source ${source ?: "not recorded"}) " +
+                (if (follows) "follows" else "is not") + " the wallpaper's (${wall.joinToString(" ") { hexOf(it) }.ifEmpty { "unknown" }})")
+        }
         return follows
     }
 
-    /** The style and intensity in the design now (after a rebuild): the palette made again if they changed. */
-    private fun followYouSettings() {
-        fun choice(key: ChoiceKey) = (try { value(key.name) } catch (_: Throwable) { null } as? Value.Choice)?.option
-        val st = MaterialYou.Style.of(choice(COLOR_STYLE))
-        val k = (try { value(COLOR_INTENSITY.name) } catch (_: Throwable) { null } as? Value.Number)?.v ?: 1f
-        val keys = COLOR_KEYS.mapNotNull { (p, key) -> hexColor(choice(key))?.let { p to it } }.toMap()
-        val c = MaterialYou.Choice(st, k, hexColor(choice(COLOR_SEED)), keys)
-        if (c != myChoice) { myChoice = c; palette.clear() }
+    /**
+     * The phone read again; the palette made anew from it, and the change shown (home and the settings reveal it, as any
+     * change of the look) only if a colour in use is not what it was: the phone's own palette changing under the launcher's
+     * (Other apps), or a new reading that comes to the same colours, shows nothing. [before] runs just before the change is
+     * announced. True if it was.
+     */
+    private fun refreshPalette(what: String, wallpaper: Boolean, before: () -> Unit = {}): Boolean {
+        val p = readPhone(wallpaper)
+        val old = state.palette
+        val next = Palette(old.choice, p)
+        val changed = old.seen().any { (n, c) -> (next.color(n) ?: NO_COLOR) != c }
+        val moved = p != phone
+        if (moved) { phone = p; synchronized(previewPalettes) { previewPalettes.clear() } }
+        if (!changed) {
+            // Nothing seen changes; what is worked out from now on comes from what the phone says now.
+            if (moved) rebuild(next)
+            return false
+        }
+        before()
+        rebuild(next)
+        changedOutside(what, structural = true)
+        return true
     }
 
     private fun systemColor(name: String): Int? {
-        if (android.os.Build.VERSION.SDK_INT < 31) return null
+        if (android.os.Build.VERSION.SDK_INT < 31 || !::appCtx.isInitialized) return null
         val id = colorIds.getOrPut(name) { try { android.R.color::class.java.getField(name).getInt(null) } catch (_: Throwable) { 0 } }
         if (id == 0) return null
         return try { appCtx.resources.getColor(id, null) } catch (_: Throwable) { null }
     }
 
-    /** A fingerprint of the palette's key colours (equal: nothing to look up again). */
-    private fun paletteStamp(): Long {
-        var h = 17L
-        for (n in listOf("system_accent1_500", "system_accent2_500", "system_accent3_500", "system_neutral1_500", "system_neutral2_500"))
-            h = h * 31 + (systemColor(n) ?: 0)
-        return h
-    }
-
-    /**
-     * The configuration changed (the app's ComponentCallbacks): the palette may have changed with the wallpaper. Palette
-     * colours are looked up again and every surface draws again, on the same frame (a light/dark change crossfades on its own).
-     */
     private var scaleAt = ""
 
     /**
@@ -725,19 +773,50 @@ object Design {
         changedOutside("the display size or the font size changed ($stamp)", structural = true)
     }
 
+    /**
+     * The app's assets changed (the palette's overlay: Material You's, One UI's, ours given to Android): the phone's
+     * colours and the wallpaper's (as the system reads them) are read again, and a palette that comes out other than it was
+     * is shown as a change of the look.
+     */
     fun onConfiguration() {
         if (chain.isEmpty()) return
-        // The phone's palette and the wallpaper's own colours (the phone's palette may stay as it is when the wallpaper
-        // changes: One UI's Color palette off).
-        val stamp = paletteStamp() * 31 + wallpaperColours().hashCode()
-        if (stamp == paletteAt) return
-        paletteAt = stamp
-        seed = null
-        phoneFollows = null
-        schemes.clear()
-        palette.clear()
-        rebuild()
-        changedOutside("the wallpaper's colours changed", structural = false)
+        refreshPalette("the phone's colours changed", wallpaper = false)
+        for (l in phoneListeners.toList()) l()
+    }
+
+    // The wallpaper's colours as we read them (where the system gives none), with the wallpaper's id: kept across starts, so
+    // the first frame after a start is in the palette the wallpaper gives (home reads the picture once it has loaded it).
+    @Volatile private var wallpaperRead: List<Int> = emptyList()
+    private var wallpaperReadId = -1
+    private const val WALLPAPER_COLOURS = "design/wallpaper-colours.txt"
+
+    /**
+     * Home shows wallpaper [w] from now on, or is about to (its reveal waits for this): its colours stand for the
+     * wallpaper's where the system gives none, and are kept for the next start. If a colour in use changes with them,
+     * [before] runs first (home takes its picture of the old look there) and the change is announced: true then.
+     */
+    fun onWallpaper(w: dev.launcher.app.Wallpaper, before: () -> Unit = {}): Boolean {
+        if (chain.isEmpty()) return false
+        if (w.colors.isNotEmpty() && (w.colors != wallpaperRead || w.id != wallpaperReadId)) {
+            wallpaperRead = w.colors
+            wallpaperReadId = w.id
+            val text = "${w.id}\n" + w.colors.joinToString(" ") { hexOf(it) }
+            Thread { try { File(appCtx.filesDir, WALLPAPER_COLOURS).apply { parentFile?.mkdirs() }.writeText(text) } catch (_: Throwable) { } }.start()
+        }
+        return refreshPalette("the wallpaper's colours", wallpaper = true, before)
+    }
+
+    private fun loadWallpaperColours() {
+        try {
+            val f = File(appCtx.filesDir, WALLPAPER_COLOURS)
+            if (!f.exists()) return
+            val lines = f.readLines()
+            val id = lines.getOrNull(0)?.trim()?.toIntOrNull() ?: return
+            // Another wallpaper since: not its colours.
+            if (id != dev.launcher.app.Wallpaper.currentId(appCtx)) return
+            wallpaperRead = lines.getOrNull(1)?.split(' ')?.mapNotNull { hexColor(it.trim()) }.orEmpty()
+            wallpaperReadId = id
+        } catch (_: Throwable) { }
     }
 
     private fun logPalette() {
@@ -773,7 +852,7 @@ object Design {
      * appearance: what a colour that must stay its own hue starts from (the settings' parts, harmonised with the palette).
      */
     fun ownColor(k: ColorKey): Int {
-        val r = ownColors ?: Resolver(layersOf(chain, user, false)) { name -> paletteColor(name) }.also { ownColors = it }
+        val r = ownColors ?: Resolver(layersOf(chain, user, false)) { name -> state.palette.color(name) }.also { ownColors = it }
         val v = try { r.resolve(k.name) as? Value.Color } catch (_: Throwable) { null } ?: return color(k)
         return r.pair(v).let { (l, d) -> Appearance.mix(l, d) }
     }

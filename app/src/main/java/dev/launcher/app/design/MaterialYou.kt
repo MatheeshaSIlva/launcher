@@ -30,16 +30,66 @@ object MaterialYou {
         companion object { fun of(id: String?) = entries.firstOrNull { it.id == id } ?: AUTO }
     }
 
-    /** One hue and chroma; [tone] is CIELAB L* (0 black .. 100 white). */
-    class TonalPalette(val hue: Double, val chroma: Double) {
-        private val cache = HashMap<Int, Int>()
-        fun tone(t: Double): Int = cache.getOrPut((t * 10).toInt()) { lch(t, chroma, hue) }
+    /** A palette's colours by tone ([tone]: CIELAB L*, 0 black .. 100 white). Read from any thread. */
+    interface Tones { fun tone(t: Double): Int }
+
+    /** One hue and chroma. */
+    class TonalPalette(val hue: Double, val chroma: Double) : Tones {
+        private val cache = java.util.concurrent.ConcurrentHashMap<Int, Int>()
+        override fun tone(t: Double): Int = cache.getOrPut((t * 10).toInt()) { lch(t, chroma, hue) }
+    }
+
+    /**
+     * A palette as a phone has it: Android's shades ([shade]: 0, 10, 50, 100 .. 900, 1000 to its colour, null where it has
+     * none). A shade's own tone is its colour; a tone between two shades takes their hue and chroma part of the way
+     * (CIELAB), as the tonal palette they come from has it, near enough.
+     */
+    class ShadePalette(private val shade: (Int) -> Int?) : Tones {
+        private val cache = java.util.concurrent.ConcurrentHashMap<Int, Int>()
+        override fun tone(t: Double): Int = cache.getOrPut((t * 10).toInt()) { at(t) }
+
+        private fun at(t: Double): Int {
+            val known = SHADES.mapNotNull { n -> shade(n)?.let { toneOfShade(n) to it } }
+            if (known.isEmpty()) return grey(t)
+            known.firstOrNull { abs(it.first - t) < 0.05 }?.let { return it.second }
+            // The nearest shade above the tone and below it (tones fall as shades rise).
+            val above = known.filter { it.first > t }.minByOrNull { it.first }
+            val below = known.filter { it.first < t }.maxByOrNull { it.first }
+            if (above == null || below == null) return (above ?: below)!!.second.let { val (_, c, h) = toLch(it); lch(t, c, h) }
+            val f = (above.first - t) / (above.first - below.first)
+            var (_, c1, h1) = toLch(above.second)
+            var (_, c2, h2) = toLch(below.second)
+            // White and black (tones 100 and 0) have no hue nor chroma of their own (the palette keeps its chroma toward
+            // them as far as the colours go): the other end's. A grey end has no hue either.
+            if (above.first >= 99.95) c1 = c2
+            if (below.first <= 0.05) c2 = c1
+            val ha = if (c1 < 1.0 || above.first >= 99.95) h2 else h1
+            val hb = if (c2 < 1.0 || below.first <= 0.05) h1 else h2
+            val turn = ((hb - ha + 540.0) % 360.0) - 180.0
+            return lch(t, c1 + (c2 - c1) * f, norm(ha + turn * f))
+        }
     }
 
     class Scheme(
-        val primary: TonalPalette, val secondary: TonalPalette, val tertiary: TonalPalette,
-        val neutral: TonalPalette, val neutralVariant: TonalPalette, val error: TonalPalette,
+        val primary: Tones, val secondary: Tones, val tertiary: Tones,
+        val neutral: Tones, val neutralVariant: Tones, val error: Tones,
     )
+
+    /** Android's shade numbers, light to dark. */
+    val SHADES = listOf(0, 10, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000)
+
+    /**
+     * The phone's own palette as a scheme ([system]: a colour's name to the phone's colour): its five palettes from its
+     * shades, the error palette Material's. One UI keeps its palette apart from Android's roles (which follow Android's own
+     * setting), so a role is worked out from the shades here, as the palette it is part of has it.
+     */
+    fun fromShades(system: (String) -> Int?): Scheme {
+        fun pal(name: String) = ShadePalette { n -> system("system_${name}_$n") }
+        return Scheme(pal("accent1"), pal("accent2"), pal("accent3"), pal("neutral1"), pal("neutral2"), TonalPalette(25.0, 84.0))
+    }
+
+    /** Whether [name] is one of Android's roles (`system_primary_light`), not a palette's shade. */
+    fun isRole(name: String): Boolean = ROLE.matchEntire(name)?.let { ROLES.containsKey(it.groupValues[1]) } == true
 
     /**
      * Everything that makes the palette: the [style], how colourful ([intensity]), the colour it is made from ([seed]; null:
@@ -59,7 +109,7 @@ object MaterialYou {
         val base = styled(seed, style, intensity)
         if (keys.isEmpty()) return base
         val k = intensity.coerceIn(0f, 2f).toDouble()
-        fun own(c: Char, p: TonalPalette) = keys[c]?.let { val (_, ch, h) = toLch(it); TonalPalette(norm(h), ch * k) } ?: p
+        fun own(c: Char, p: Tones) = keys[c]?.let { val (_, ch, h) = toLch(it); TonalPalette(norm(h), ch * k) } ?: p
         return Scheme(own('P', base.primary), own('S', base.secondary), own('T', base.tertiary), own('N', base.neutral),
             own('V', base.neutralVariant), base.error)
     }

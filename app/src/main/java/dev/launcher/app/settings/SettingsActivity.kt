@@ -395,6 +395,8 @@ class SettingsActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         showing = true
+        // Android's palette (Other apps) waits until they are left: a change of it lays every window out again.
+        dev.launcher.app.design.SystemPalette.settingsInFront = true
         offerSwipe()
         // The new look is drawn under the held one on the next frame; the crossfade starts on the one after.
         deferred?.let { go -> deferred = null; root.postOnAnimation { root.postOnAnimation { go() } } }
@@ -402,6 +404,7 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onPause() {
         showing = false
+        dev.launcher.app.design.SystemPalette.settingsInFront = false
         offerSwipe()
         super.onPause()
     }

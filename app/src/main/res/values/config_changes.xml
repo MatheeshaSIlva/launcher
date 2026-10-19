@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The configuration changes our activities handle themselves, as numbers: they include "assetsPaths" (0x80000000,
+  ActivityInfo.CONFIG_ASSETS_PATHS), which the platform we compile against (35) cannot name yet. Android changes an app's
+  assets whenever a runtime overlay changes, and the phone's colour palette is one (Material You's `systemui-dynamic`, One
+  UI's `SemWT_G_MonetPalette`): without it Android made every activity of ours anew at each change of the palette, home
+  and the settings in the middle of the colours' reveal, home again (a cold start's arrival) when the settings closed into
+  it, and twice under a new wallpaper, whose reveal then never played (S24, 2026-10-19). Our colours come from the design
+  system, which follows the palette on its own (Design.onConfiguration).
+
+  uiMode 0x0200, orientation 0x0080, screenSize 0x0400, screenLayout 0x0100, smallestScreenSize 0x0800, density 0x1000,
+  keyboardHidden 0x0020, keyboard 0x0010, navigation 0x0040.
+-->
+<resources>
+    <!-- assetsPaths | uiMode | orientation | screenSize | screenLayout | smallestScreenSize -->
+    <integer name="config_home">0x80000F80</integer>
+    <!-- assetsPaths | uiMode -->
+    <integer name="config_settings">0x80000200</integer>
+    <!-- assetsPaths | orientation | screenSize | screenLayout | smallestScreenSize | uiMode | density | keyboardHidden -->
+    <integer name="config_cover">0x80001FA0</integer>
+    <!-- assetsPaths | orientation | screenSize | screenLayout | smallestScreenSize | uiMode | density | keyboardHidden | keyboard | navigation -->
+    <integer name="config_switcher">0x80001FF0</integer>
+</resources>
