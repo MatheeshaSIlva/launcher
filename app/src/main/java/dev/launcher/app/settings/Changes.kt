@@ -61,8 +61,16 @@ internal fun changesOf(d: Draft, ctx: android.content.Context, only: Part? = nul
             if (now != own) add("font:$k", name, "Look › More › Fonts", fontName(own), fontName(now), Part.LOOK) { d.chooseFont(k, own) }
         }
         val ownWallpaper = (theme(Design.COLOR_SOURCE.name) as? Value.Choice)?.option == "wallpaper"
-        if (d.wallpaperColors() != ownWallpaper) add("colours", "Colours", "Look", if (ownWallpaper) "The wallpaper's" else "The theme's",
-            if (d.wallpaperColors()) "The wallpaper's" else "The theme's", Part.LOOK) { d.chooseColors(ownWallpaper) }
+        val ownStyle = (theme(Design.COLOR_STYLE.name) as? Value.Choice)?.option ?: "auto"
+        // Where the colours come from: the theme's, the system's, the wallpaper's (a colour of one's own is its own entry).
+        val ownKind = if (!ownWallpaper) 0 else if (ownStyle == dev.launcher.app.design.MaterialYou.Style.SYSTEM.id) 1 else 2
+        val kind = d.colourSource().let { if (it == 3) 2 else it }
+        if (kind != ownKind) add("colours", "Colours", "Look", COLOUR_SOURCES[ownKind], COLOUR_SOURCES[kind], Part.LOOK) {
+            d.chooseColors(ownWallpaper)
+            if (ownKind == 1) { d.chooseSeed(null); d.chooseColorStyle(dev.launcher.app.design.MaterialYou.Style.SYSTEM) }
+            else if (d.colorStyle() == dev.launcher.app.design.MaterialYou.Style.SYSTEM) d.chooseColorStyle(dev.launcher.app.design.MaterialYou.Style.of(ownStyle))
+        }
+        if (d.otherApps()) add("otherapps", "Other apps", "Look › Colours", "Off", "On", Part.LOOK) { d.chooseOtherApps(false) }
         val seed = d.seedColor()
         if (seed != null) add("seed", "Your colour", "Look › Colours", "The wallpaper's", Design.hexOf(seed).uppercase(), Part.LOOK) { d.chooseSeed(null) }
         val ownSymbols = (theme(SYMBOLS) as? Value.Choice)?.option ?: dev.launcher.app.design.IconSets.OWN
@@ -70,8 +78,8 @@ internal fun changesOf(d: Draft, ctx: android.content.Context, only: Part? = nul
             val names = dev.launcher.app.design.IconSets.list(ctx).toMap()
             add("symbols", "Symbols", "Look › More", names[ownSymbols] ?: ownSymbols, names[d.symbols()] ?: d.symbols(), Part.LOOK) { d.chooseSymbols(ownSymbols) }
         }
-        val ownStyle = (theme(Design.COLOR_STYLE.name) as? Value.Choice)?.option ?: "auto"
-        if (d.colorStyle().id != ownStyle) add("style", "Style", "Look › Advanced",
+        // (A palette's style, when the launcher makes one: the system's colours are the Colours entry above.)
+        if (d.colorStyle().id != ownStyle && d.colorStyle() != dev.launcher.app.design.MaterialYou.Style.SYSTEM && ownStyle != dev.launcher.app.design.MaterialYou.Style.SYSTEM.id) add("style", "Style", "Look › Advanced",
             dev.launcher.app.design.MaterialYou.Style.of(ownStyle).title, d.colorStyle().title, Part.LOOK) {
             d.chooseColorStyle(dev.launcher.app.design.MaterialYou.Style.of(ownStyle))
         }

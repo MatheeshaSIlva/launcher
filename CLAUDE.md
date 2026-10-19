@@ -139,7 +139,16 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `theme_customization_overlay_packages`, its `color_source`, where the phone keeps one; else whether the phone's primary
   is one of the wallpaper's hues, `MaterialYou.followsWallpaper`), otherwise a tonal palette made from the wallpaper (One
   UI's Color palette off or set to a basic colour leaves the phone's palette blue under any wallpaper: Matheesha's green
-  wallpaper came out blue). Its decision is in the log ("[design] the phone's palette ...").
+  wallpaper came out blue). Its decision is in the log ("[design] the phone's palette ..."). The settings name four
+  sources (`Draft.colourSource`): the theme's, the system's (the phone's palette as it is: style `system` with no colour of
+  one's own), the wallpaper's (made by the launcher), your own. **Other apps** (Look › Colours, `design/SystemPalette`, off
+  by default, its own preference, never a theme's): Android's palette setting given the chosen colours (Matheesha: "system
+  colours option push oneui's palette, wallpaper colours option will push the launchers"): the system's push One UI's
+  palette as Samsung's picker would (its shade 300 of the first palette, TONAL_SPOT or MONOCHROMATIC), so Google's apps
+  match Samsung's; the wallpaper's and your own push the launcher's seed and style; the theme's colours, the switch off and
+  Restore system give the phone's own value back (unless changed since). Written with the launcher's self-granted
+  WRITE_SECURE_SETTINGS, else the shell; only when it differs (a write makes every app reload its colours); log lines
+  "[palette] ...".
   **Icon sets** (`design/IconSets`, `assets/icons/<id>.json` or `files/icons/<id>.json` through the inbox): symbols as
   vector paths that the shade draws in place of its own (`res/drawable/sym_*`, Material Symbols Rounded: the set
   `launcher`) where a theme names a set (`sys.symbols`, read through each element's own token: `comp.cc.symbols`,

@@ -272,6 +272,8 @@ internal class Draft {
     var colorStyle by mutableStateOf<String?>(null)
     /** The icon set chosen (`sys.symbols`), not applied yet. */
     var symbols by mutableStateOf<String?>(null)
+    /** Other apps in these colours too ([dev.launcher.app.design.SystemPalette]), not applied yet. */
+    var otherApps by mutableStateOf<Boolean?>(null)
     var colorIntensity by mutableStateOf<Float?>(null)
     /** What the palette is made from ("wallpaper" or "#rrggbb") and key colours set by hand per palette ("auto" or "#rrggbb"). */
     var colorSeed by mutableStateOf<String?>(null)
@@ -303,7 +305,7 @@ internal class Draft {
     /** When Back was pressed with changes waiting (a second Back soon after discards them and leaves); 0: not. */
     var backAt by androidx.compose.runtime.mutableLongStateOf(0L)
 
-    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, symbols, colorIntensity, colorSeed, scalePolicy, sizeFactor, textFactor).size +
+    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, symbols, otherApps, colorIntensity, colorSeed, scalePolicy, sizeFactor, textFactor).size +
         elements.size + setup.size +
         fonts.size + colorKeys.size + motionEdits.size + motionCleared.size
 
@@ -489,6 +491,19 @@ internal class Draft {
     /** The icon set ([dev.launcher.app.design.IconSets]; the draft's, else the one in use). */
     fun symbols(): String = symbols ?: appliedChoice(SYMBOLS, dev.launcher.app.design.IconSets.OWN)
     fun chooseSymbols(id: String) { symbols = id.takeIf { it != appliedChoice(SYMBOLS, dev.launcher.app.design.IconSets.OWN) } }
+    /** Other apps in these colours too (the draft's, else as it is). */
+    fun otherApps(): Boolean = otherApps ?: dev.launcher.app.design.SystemPalette.on
+    fun chooseOtherApps(v: Boolean) { otherApps = v.takeIf { it != dev.launcher.app.design.SystemPalette.on } }
+    /**
+     * Where the colours come from, as the chips name it: the theme's own (0), the system's (1: the phone's palette as it is,
+     * One UI's on a Galaxy; the style "the phone's" without a colour of one's own), the wallpaper's (2), the user's own (3).
+     */
+    fun colourSource(): Int = when {
+        !wallpaperColors() -> 0
+        seedColor() != null -> 3
+        colorStyle() == dev.launcher.app.design.MaterialYou.Style.SYSTEM -> 1
+        else -> 2
+    }
     fun chooseFont(key: String, family: String) { if (family == appliedFont(key)) fonts.remove(key) else fonts[key] = family }
     private fun appliedFont(key: String) = (try { Design.resolved(key) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Choice)?.option ?: "inter"
 
@@ -522,6 +537,8 @@ internal class Draft {
             for ((p, v) in colorKeys) Design.set(Design.COLOR_KEYS.getValue(p).name, dev.launcher.app.design.Value.Choice(v))
         }
         appearance?.let { Appearance.setMode(ctx, it) }
+        // (After the colours: other apps take the ones just applied.)
+        otherApps?.let { dev.launcher.app.design.SystemPalette.setEnabled(ctx, it) }
         for (e in setup.keys.map { it.first }.distinct()) {
             val opts = setup.filterKeys { it.first == e && it.second.startsWith("opt:") }.mapKeys { it.key.second.removePrefix("opt:") }
             Setup.set(e, layout = setup[e to "layout"] as? String, placement = setup[e to "placement"] as? String, options = opts)
@@ -531,7 +548,7 @@ internal class Draft {
 
     fun discard() {
         theme = null; colors = null; motion = null; appearance = null
-        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; symbols = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); scalePolicy = null; sizeFactor = null; textFactor = null; backAt = 0L
+        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; symbols = null; otherApps = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); scalePolicy = null; sizeFactor = null; textFactor = null; backAt = 0L
         motionEdits.clear(); motionCleared.clear()
         for (c in motionCells.values) c.value = null
     }
@@ -1511,10 +1528,11 @@ private fun LookPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
     }
     // Whether the colour of your own is being changed (its editor open under it).
     val editing = remember { mutableStateOf<Char?>(null) }
-    Group("Colours", "Material You: any theme's surfaces, glass and accents take your wallpaper's colours, or a colour of your own.") {
+    Group("Colours", "Material You: any theme's surfaces, glass and accents take the system's colours, your wallpaper's, or a colour of your own.") {
         ColourChoiceRow(draft, editing)
         Reveal(draft.wallpaperColors() && draft.seedColor() != null) { SeedRow(draft, editing) }
         ColourEditor(draft, editing)
+        OtherAppsRow(draft)
     }
     // (Derived: a slider in Size changes the draft at every step; the dots change far more rarely.)
     val moreChanged by remember(draft, look.version) {
@@ -1669,20 +1687,26 @@ private fun PaletteRow(draft: Draft, editing: androidx.compose.runtime.MutableSt
 private const val SEED = 'X'
 
 /**
- * Where the colours come from, one choice: the theme's own, the wallpaper's (Material You), or a colour of the user's own
- * (made into a palette the same way; its editor opens under it as it is chosen). [title]: its name over the chips where no
- * heading names it (the start page).
+ * Where the colours come from, one choice: the theme's own, the system's (the phone's palette as it is: One UI's Color
+ * palette on a Galaxy, Wallpaper & style's on a Pixel), the wallpaper's (made by the launcher, Material You), or a colour of
+ * the user's own (made into a palette the same way; its editor opens under it as it is chosen). [title]: its name over the
+ * chips where no heading names it (the start page).
  */
 @Composable
 private fun ColourChoiceRow(draft: Draft, editing: androidx.compose.runtime.MutableState<Char?>, title: String? = null) {
-    val chosen = if (!draft.wallpaperColors()) 0 else if (draft.seedColor() == null) 1 else 2
     ChipsRow(title) {
-        ChoiceChips(COLOUR_SOURCES, chosen) { i ->
+        ChoiceChips(COLOUR_SOURCES, draft.colourSource()) { i ->
             when (i) {
                 0 -> { draft.chooseColors(false); editing.value = null }
-                1 -> { draft.chooseColors(true); draft.chooseSeed(null); editing.value = null }
+                1 -> { draft.chooseColors(true); draft.chooseSeed(null); draft.chooseColorStyle(dev.launcher.app.design.MaterialYou.Style.SYSTEM); editing.value = null }
+                2 -> {
+                    draft.chooseColors(true); draft.chooseSeed(null)
+                    if (draft.colorStyle() == dev.launcher.app.design.MaterialYou.Style.SYSTEM) draft.chooseColorStyle(dev.launcher.app.design.MaterialYou.Style.AUTO)
+                    editing.value = null
+                }
                 else -> {
                     draft.chooseColors(true)
+                    if (draft.colorStyle() == dev.launcher.app.design.MaterialYou.Style.SYSTEM) draft.chooseColorStyle(dev.launcher.app.design.MaterialYou.Style.AUTO)
                     if (draft.seedColor() == null) draft.chooseSeed(Design.wallpaperSeed() ?: 0xFF3478F6.toInt())
                     editing.value = SEED
                 }
@@ -1691,8 +1715,36 @@ private fun ColourChoiceRow(draft: Draft, editing: androidx.compose.runtime.Muta
     }
 }
 
-/** Where the colours come from, as the chips name it. */
-private val COLOUR_SOURCES = listOf("The theme's", "The wallpaper's", "Your own")
+/** Where the colours come from, as the chips name it ([Draft.colourSource]'s order). */
+internal val COLOUR_SOURCES = listOf("The theme's", "The system's", "The wallpaper's", "Your own")
+
+/**
+ * Other apps in these colours too ([dev.launcher.app.design.SystemPalette]): the system's colours give Google's apps One
+ * UI's palette, the wallpaper's or one's own give them the launcher's (Matheesha's rule); quieter with the theme's colours,
+ * or without Shizuku's permission yet.
+ */
+@Composable
+private fun OtherAppsRow(draft: Draft) {
+    val look = LocalLook.current
+    val ctx = LocalContext.current
+    val sp = dev.launcher.app.design.SystemPalette
+    val can = remember { sp.canWrite(ctx) }
+    val source = draft.colourSource()
+    val oneUi = sp.oneUi
+    val detail = when {
+        !can -> "Needs Shizuku once"
+        source == 0 -> "With the system's, the wallpaper's or your own colours"
+        source == 1 && oneUi -> "Google's apps take One UI's palette too"
+        source == 1 -> "They follow the system's colours already"
+        oneUi -> "Google's apps take these colours; Samsung's keep One UI's palette"
+        else -> "Every app with Material You colours takes them"
+    }
+    val live = can && source != 0
+    val dim by animateFloatAsState(if (live) 1f else 0.45f, look.motion(MotionTokens.CC_TOGGLE), label = "dim")
+    Box(Modifier.fillMaxWidth().anchor("Other apps").graphicsLayer { alpha = dim }) {
+        ToggleRow("Other apps", detail, draft.otherApps() && live, changed = draft.otherApps != null) { v -> if (live) draft.chooseOtherApps(v) }
+    }
+}
 
 /**
  * A row of chips in a group: the hairline above it (but the first's), and [title] over the chips where no heading names
@@ -1867,8 +1919,11 @@ private fun ColourStyleRow(draft: Draft) {
     val separator = look.color(SettingsTokens.ROW_SEPARATOR)
     val counter = LocalRowCounter.current
     val first = remember { counter == null || counter.n++ == 0 }
-    val dim by animateFloatAsState(if (draft.wallpaperColors()) 1f else 0.45f, look.motion(MotionTokens.CC_TOGGLE), label = "dim")
-    val styles = dev.launcher.app.design.MaterialYou.Style.entries
+    // (Quieter with the theme's colours and with the system's: a style is how the launcher makes a palette.)
+    val made = draft.colourSource() >= 2
+    val dim by animateFloatAsState(if (made) 1f else 0.45f, look.motion(MotionTokens.CC_TOGGLE), label = "dim")
+    // ("The phone's" is the system's colours now, one of the sources.)
+    val styles = remember { dev.launcher.app.design.MaterialYou.Style.entries.filter { it != dev.launcher.app.design.MaterialYou.Style.SYSTEM } }
     Column(Modifier.fillMaxWidth()
         .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
         .anchor("Style")
@@ -1876,10 +1931,12 @@ private fun ColourStyleRow(draft: Draft) {
         .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
         BasicText("Style", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
         Spacer(Modifier.height(look.dp(8f * look.unit)))
-        ChoiceChips(styles.map { it.title }, styles.indexOf(draft.colorStyle())) { i -> draft.chooseColorStyle(styles[i]) }
-        // What Auto does on this phone (its own palette, or one made from the wallpaper when the phone's is not it).
+        val titles = remember { styles.map { it.title } }
+        ChoiceChips(titles, styles.indexOf(draft.colorStyle())) { i -> draft.chooseColorStyle(styles[i]) }
+        // What Auto does on this phone with the wallpaper's colours (its own palette, or one made from the wallpaper when
+        // the phone's is not it).
         val follows = remember { Design.phonePaletteIsWallpapers() }
-        Reveal(draft.colorStyle() == dev.launcher.app.design.MaterialYou.Style.AUTO) {
+        Reveal(draft.colourSource() == 2 && draft.colorStyle() == dev.launcher.app.design.MaterialYou.Style.AUTO) {
             BasicText(if (follows) "Auto: your phone's palette, made from your wallpaper"
                 else "Auto: made from your wallpaper (your phone's palette is not your wallpaper's)",
                 style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)),

@@ -604,6 +604,9 @@ object Design {
     /** The wallpaper's main colour (what "wallpaper" makes the palette from), if there is one. */
     fun wallpaperSeed(): Int? = seedColor()
 
+    /** What the palette is made of now: the user's colour or the wallpaper's main colour, and the style ([SystemPalette]). */
+    fun paletteChoice(): Pair<Int?, MaterialYou.Style> = (myChoice.seed ?: seedColor()) to myChoice.style
+
     @Volatile private var myChoice = MaterialYou.Choice(MaterialYou.Style.AUTO, 1f)
     @Volatile private var seed: Int? = null
     private val schemes = java.util.concurrent.ConcurrentHashMap<String, MaterialYou.Scheme>()

@@ -33,6 +33,8 @@ class LauncherApp : Application() {
         Badges.testHook(this)
         Wallpaper.testHook(this)
         ShizukuLink.init(this)
+        // Other apps in the launcher's colours (Look › Colours › Other apps): follows every design change.
+        dev.launcher.app.design.SystemPalette.init(this)
         SafetyNotification.show(this)
     }
 

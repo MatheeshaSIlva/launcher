@@ -243,9 +243,11 @@ object SystemRestore {
         val popups = PopupStyle.restore(ctx, svc)
         // (Given back by applyFlags above with Shizuku; without it, said so.)
         val stockBar = StockBarSettings.restore(ctx, svc)
+        // Other apps back in the phone's own colours (the switch goes off).
+        val palette = dev.launcher.app.design.SystemPalette.turnOff(ctx)
 
         val report = "animations: ${animations ?: "NOT restored (no Shizuku, no permission): Developer options > animation scales"}; " +
-            "status bar: $statusBar" + (popups?.let { "; $it" } ?: "") + (stockBar?.let { "; $it" } ?: "")
+            "status bar: $statusBar" + (popups?.let { "; $it" } ?: "") + (stockBar?.let { "; $it" } ?: "") + (palette?.let { "; $it" } ?: "")
         AppLog.log("[restore] $report")
         return report
     }
