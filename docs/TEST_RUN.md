@@ -95,4 +95,46 @@ what was seen and the fix's commit), or **not run** (why).
 
 ## Results
 
-(filled in as the run goes)
+Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix), screenshots looked at; timing on the S24
+(frame stats, Perfetto) as in the table above.
+
+### Home
+- H1 **ok**: unlock arrival (home zooms in from larger and settles); screen off and on. O1 noted (AOSP's own unlock slide).
+- H2 **ok**: rubber band at the first page and past the App Library; pages; the bar's tone over the light library.
+- H3 **ok**: library scroll (tiles fade under the field), a category folder (open, launch, the close lands back in the open
+  folder, close), search (keyboard, results, launch, the close lands on the app's tile icon).
+- H4 **ok**: Spotlight (suggestions, field over the keyboard, top hit; Enter launches once; the close dismisses it).
+- H5 **ok**: launch from the dock and close in all seven styles (zoom, container, genie, fade, dolly, slide, circle; 4x slow).
+  Reversed and grabbed launches, cancelled closes: S24 sweep only.
+- H6 **issue, fixed**: B1 (a pushed widget on no page), B2 (pushed icons reversed); menus, resize, drag and drop, the widget
+  gallery, Done ok; D1 noted (the minus badge removes at once).
+- H7 **ok**: widgets follow a palette change with a crossfade (~4 s after a wallpaper's reveal: Android's palette is pushed
+  once the launcher is still).
+- H8 **ok**: badges (3, 12, cleared); our own notifications never badge (by design).
+- H9 **issue, fixed**: B4 (closes showed the old wallpaper after a new one); the reveal and colours ok.
+- H10 **ok**: another theme with home in front, the App Library right after.
+- H11 **issue, fixed**: B3 (the lifted Edit button's label after Dark).
+
+### Gesture nav
+- G1, G3 **ok** (S24 sweep: flick, cancel, quick switch both ways).
+- G2 **ok**: hold from home, a card opens its app, a flicked card closes its task, Clear All (emulator only) closes all and
+  goes home; the backdrop now shows the current wallpaper (B4).
+- G4 **ok**: Back from the settings (S24 and emulator).
+- G5 **ok**: a mini player up: the deck moves into the switcher's own window under it; the mini player's own close works.
+
+### Shade
+- S1 **ok**: the bar over light and dark wallpapers, charging, the lock screen's form (carrier in place of the time).
+- S2 **ok**: Control Center, the Focus module expanding, Focus Settings opening Android's page.
+- S3 **ok**: Notification Center collapsed, fanned out (grouped by app), closing.
+- S4 **ok**: a banner over home, swiped away; none under Do Not Disturb (as it should).
+- S5: the bar over the lock screen ok; pulls over the lock screen not run (emulator lock screen only).
+
+### Settings
+- T1 **ok**: from home's menu (Home Settings) and Back, the home gesture (S24: 0-1 late frames per close, was 2-4: P25).
+- T2 **ok**: Home, App Library, Apps pages; search (a result opens its page, Back returns to the results).
+- T3 **ok**: a change in the draft (the stage follows, the row marked), Discard, Apply (Dark: the reveal from the tap), back
+  to Automatic. Not run here: every theme, colour source and font.
+- T4 not run.
+
+### System
+- Y1 not run (destructive on the S24; the watchdog was proven in phase 1).
