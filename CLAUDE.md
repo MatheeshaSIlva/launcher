@@ -777,6 +777,43 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
+- **Our own code is compiled at install only through `app/src/main/baseline-prof.txt`** (`HSPLdev/launcher/app/**;->**(**)**`
+  and the class rule): the install profile held only the libraries' rules before (2026-10-19), and everything of ours ran
+  interpreted after each update until the JIT had seen it (every first open and close after an UPDATE slower). Check with
+  `cmd package dump-profiles dev.launcher.app --dump-classes-and-methods` (our methods listed) and `pm art dump`.
+- **A layer that changes size every frame is a new GPU image every frame**, and scattered sizes fill the renderer's GPU
+  cache until icons and other textures leave it (then they are uploaded again inside a later first frame: prepareTree
+  10 ms). Live glass partly off the screen kept a node cut to the screen (the library's field sliding in: 1768 image
+  allocations in three swipe pairs); `MaterialPainter.drawLive` keeps the node whole and clamps what it reads instead.
+  `dumpsys gfxinfo` "Scratch TextureRenderTarget" shows it (99.8 of 121 MB then).
+- **A shape drawn with a blur mask filter or a shadow layer is blurred again on the CPU at every frame it moves by a
+  fraction of a pixel** (Skia keys the mask by the fractional offset) and uploaded as a new texture: shadows that move use
+  `theme/SoftShadow` (rendered once per size, drawn scaled). Text shadows are fine (glyph cache).
+- **`RuntimeShader.setFloatUniform` is a JNI call that finds the uniform by name**: a glass surface setting ~30 at every
+  draw was a fifth of the main thread with many surfaces (the library's tiles); `MaterialPainter.uniform` sets only what
+  changed. Constructing a `RuntimeShader` compiles its source (1-2.5 ms on the S24; traced as "RuntimeShader NAME").
+- **A 1 x 1 window on the screen is composed on the GPU by SurfaceFlinger ("CLIENT")** at every frame the screen changes
+  (the display's composer refuses it; 8 px too, 64 px is taken). **Window alpha 0 is no way out**: such a layer is not
+  visible for input (a focus window at 0 could not take the keys: Back over a panel ended in "not responding", S24) and no
+  longer counts as drawn for a rotation (Android's async rotation timeout, 2 s with every overlay of ours hidden). Idle
+  tiny windows are parked just off the screen (`LiveBlur`, `FocusHolder`). Check `dumpsys SurfaceFlinger` "HWC layers".
+- **Focus in a text field starts autofill, which builds the window's whole view structure** on the main thread (every text
+  laid out: 17-25 ms in Spotlight's first opening): home and the settings set `IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS`.
+  **A focused field that moves sends the keyboard its cursor position at every frame** (Samsung's keyboard asks for it:
+  17 % of the main thread over Spotlight's opening): our search fields are `components/SearchEditText`. And a field that
+  follows the keyboard moves by translation, never by layout params (a layout of home at every frame of the keyboard).
+- **SurfaceFlinger's first blur of a boot costs its composite ~13 ms** (Control Center's first opening): the live blur is
+  prewarmed with a real blur in a small square inside the display's rounded bottom-left corner (hidden by it) for 300 ms
+  after its window is added (`LiveBlur.prewarmCorner`; a strength that rounds to radius 0 is no blur at all).
+- **Another app's name or icon (`getApplicationLabel`, `getApplicationIcon`) loads that app's resources** (`LoadApkAssets`:
+  65 ms for the Permission Controller): never on a drawing thread. `shade/AppInfo` reads them before Notifs publishes.
+- **A Kotlin lambda taking an `Int` boxes it at every call** (`(Int) -> Boolean` called per pixel: ~40 MB of Integers per
+  glass clock build, a GC at every minute). Hot loops take arrays or plain parameters.
+- **A GPU bitmap's `copy(ARGB_8888)` reads the whole image back on the render thread** (14-32 ms for home's picture, every
+  window of ours waiting): `ViewPicture.softCopy` draws it scaled on the GPU into a CPU-readable buffer instead.
+- **After a crash while Android binds the notification listener, the system keeps the binding as made** ("is already
+  bound") and never retries: our shade empty until a reboot. `LauncherApp.watchNotificationListener` switches the component
+  off and on when it has not connected 8 s after a start (a rebind request alone is ignored for an enabled listener).
 
 ## Build, release, update pipeline (to recreate in this repo)
 
