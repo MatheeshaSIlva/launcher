@@ -50,7 +50,7 @@ what was seen and the fix's commit), or **not run** (why).
 | B6 | A notification of ours opened with the wrong picture on its card | Emulator: the card that grows out of a tapped notification takes the latest picture of the notification's app; for our own package (several screens: home, the settings, the safety screen, the mini player test) that was the mini player test's screen, full size, under a notification that opened another screen. | For our own package the card shows the launch screen's look (the icon on its colour). Emulator: as expected. Other apps' notifications are unchanged (one app, one picture). |
 | O1 | Note: unlocking on the emulator, the lock screen's wallpaper shows in a band along the top for ~2 frames | AOSP's SystemUI slides the window behind the lock screen up from ~5 % below as it fades it in (its own unlock animation for a launcher it does not drive). Not ours to change; the S24's keyguard is Samsung's (to look at with Matheesha). | Observation. |
 | D1 | Note: the minus badge in edit mode removes an icon from home at once | iOS asks first (Delete App, Remove from Home Screen, Cancel). Here it only leaves home (still in the App Library) and is undone by dragging it back; no change made without Matheesha's call. | Design question. |
-| P4 | Entering edit mode: a 32 ms frame | Home's frame at the Edit tap (main 18.8 ms, render 24.8 ms). | To fix. |
+| P4 | Entering edit mode: a 32 ms frame | Home's frame at the Edit tap (main 18.8 ms, render 24.8 ms). | Not seen since the warm-ups and P1: edit mode's entry had no missed refresh in the four sweeps after them (slowest frame 2-6 ms). |
 | P5 | Home's frames late while the settings open over it | The settings' first frame (154 ms on the main thread) holds home's frames. But "Home Settings" ends editing and waits until home is wholly at rest (`whenAtRest`, up to 700 ms) before the settings start: nothing on home moves then, so the late frames show nothing (frame stats count them all the same). | No change needed. |
 | P6 | The tiles' scenes stutter while the pages are built ahead | Pages built one a frame after the slide in: 20-45 ms frames while the tile scenes play. | The scenes hold still until everything built ahead is (`Studio.ready`: the pages, then the font search's sheet), then come alive. S24, a fresh start: built 524 ms after they came up; the long frames before it show nothing moving, the second after it has no late frame. |
 | P28 | The App Library's first frame after a while re-uploaded its icons | The renderer lets textures go that no frame used for ~10 s while frames run (a settings session, then home): the next swipe to the library uploaded ~40 icons inside its first frame (7.8 ms of the render thread). | When a finger lands on the page beside the library, the icons its tiles show are put back on the GPU (`TilesPane.prepareIcons`): done in the touch slop (6.8 ms when they had gone, 0.2 ms when not). S24: the first frame 10.5 ms of the render thread (was 14.4), no missed refresh. |
@@ -123,11 +123,12 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
 - G1, G3 **ok** (S24 sweep: flick, cancel, quick switch both ways).
 - G2 **ok**: hold from home, a card opens its app, a flicked card closes its task, Clear All (emulator only) closes all and
   goes home; the backdrop now shows the current wallpaper (B4).
-- G4 **ok**: Back from the settings (S24 and emulator).
+- G4 **ok**: Back from the settings (S24 and emulator); the back gesture from either edge (a page to the tiles, the tiles
+  to home).
 - G5 **ok**: a mini player up: the deck moves into the switcher's own window under it; the mini player's own close works.
 
 ### Shade
-- S1 **ok**: the bar over light and dark wallpapers, charging, the lock screen's form (carrier in place of the time).
+- S1 **ok**: the bar over light and dark wallpapers, charging, the lock screen's form (carrier in place of the time); an app hiding the bar: ours hidden, and shown for a moment by a swipe from the top (a real touch: the emulator console).
 - S2 **ok**: Control Center, the Focus module expanding, Focus Settings opening Android's page.
 - S3 **issue, fixed**: B5 (the clock after a landscape app), B6 (our own notification's card); Notification Center
   collapsed, fanned out (grouped by app), a group expanded (Show Less), an app opened from a notification, in landscape.
