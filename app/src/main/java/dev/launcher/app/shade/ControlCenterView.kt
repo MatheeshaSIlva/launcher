@@ -1062,6 +1062,13 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var sliding: Anim? = null
     private var sliderFrom = 0f
     private var dragged: Anim? = null
+    /**
+     * The page as it was when a drag or a resize began (each control's column, row, width and height, in the order of
+     * [CcLayout.items]): every place the control rests over is worked out from it, so what an earlier place moved out of
+     * the way comes back. Worked out from the page as it then was, the controls shuffled further at every stop and stayed
+     * so (Matheesha: "everything just shuffles around").
+     */
+    private var editBase: List<IntArray>? = null
     private var dragDX = 0f
     private var dragDY = 0f
     private var vt: android.view.VelocityTracker? = null
@@ -1075,6 +1082,14 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         touched?.let { it.press.animateTo(0f, PRESS_OUT); it.subPress.animateTo(0f, PRESS_OUT) }
         touched = null
         sliding = null
+        // A drag or resize the system took away: the page as it was before it (nothing of it saved).
+        val base = editBase
+        val l = layout
+        if (base != null && l != null && (dragged != null || mode == Mode.RESIZE) && changedFrom(l, base)) {
+            restore(l, base)
+            for (o in anims.values) syncTarget(o, true)
+        }
+        editBase = null
         dragged?.let { d -> d.lift.animateTo(0f, DROP); syncTarget(d, true) }
         dragged = null
         mode = Mode.NONE
@@ -1179,7 +1194,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val off = radius * (1f - 0.7071f)
             if (hypot(x - (place.left + off), y - (place.top + off)) < 20f * u) { touched = a; mode = Mode.REMOVE; return }
             if (a.item.control.sizes.size > 1 && hypot(x - (place.left + place.w - off), y - (place.top + place.h - off)) < 24f * u) {
-                touched = a; mode = Mode.RESIZE; return
+                touched = a; mode = Mode.RESIZE; editBase = baseOf(layout); return
             }
         }
         val a = hit(x, y)
@@ -1223,6 +1238,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 val a = touched ?: return
                 mode = Mode.DRAG
                 dragged = a
+                editBase = baseOf(layout)
                 placementOf(a, gridTop(), 1f, place)
                 dragDX = downX - (gridLeft + a.x.value)
                 dragDY = downY - (gridTop() + a.y.value)
@@ -1259,9 +1275,10 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 removeCallbacks(applyMove)
                 applyMove.run()
                 dragged?.let { d -> d.lift.animateTo(0f, DROP); dragged = null; syncTarget(d, true) }
+                editBase = null
                 save()
             }
-            Mode.RESIZE -> save()
+            Mode.RESIZE -> { editBase = null; save() }
             Mode.EDIT_EMPTY -> exitEdit()
             else -> {}
         }
@@ -1495,19 +1512,35 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         invalidate()
     }
 
-    /** The dragged control has rested over a place: the layout moves there (the others make room on springs). */
+    /**
+     * The dragged control has rested over a place: the page as it was when the drag began, with the control there (the
+     * others make room on springs; those an earlier place had moved go back).
+     */
     private val applyMove = Runnable {
         val a = dragged ?: return@Runnable
         val l = layout ?: return@Runnable
         if (pendingCell < 0) return@Runnable
         val col = pendingCell % cols
         val row = pendingCell / cols
-        if (a.item.col == col && a.item.row == row) return@Runnable
-        if (l.moveTo(a.item, col, row)) {
+        val shown = baseOf(l)
+        editBase?.let { restore(l, it) }
+        if (!l.moveTo(a.item, col, row)) editBase?.let { restore(l, it) }
+        if (changedFrom(l, shown)) {
             for (o in anims.values) if (o !== a) syncTarget(o, true)
             performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         }
     }
+
+    private fun baseOf(l: CcLayout?): List<IntArray> = l?.items?.map { intArrayOf(it.col, it.row, it.w, it.h) } ?: emptyList()
+
+    /** Every control back where [base] had it (the same items, in the same order). */
+    private fun restore(l: CcLayout, base: List<IntArray>) {
+        if (base.size != l.items.size) return
+        for ((i, it) in l.items.withIndex()) { val b = base[i]; it.col = b[0]; it.row = b[1]; it.w = b[2]; it.h = b[3] }
+    }
+
+    private fun changedFrom(l: CcLayout, before: List<IntArray>): Boolean =
+        before.size != l.items.size || l.items.withIndex().any { (i, it) -> val b = before[i]; it.col != b[0] || it.row != b[1] || it.w != b[2] || it.h != b[3] }
 
     private fun resizeTo(a: Anim, x: Float, y: Float) {
         val l = layout ?: return
@@ -1516,7 +1549,12 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val wantH = ((y - place.top + gap / 2f) / pitchY).roundToInt().coerceIn(1, 4)
         val best = a.item.control.sizes.minByOrNull { abs(it.w - wantW) * 2 + abs(it.h - wantH) * 2 } ?: return
         if (best.w == a.item.w && best.h == a.item.h) return
-        if (l.resize(a.item, best.w, best.h)) {
+        // From the page as it was when the resize began, as a drag (a size that pushed controls away and was left gives
+        // them back).
+        val shown = baseOf(l)
+        editBase?.let { restore(l, it) }
+        if (!l.resize(a.item, best.w, best.h)) editBase?.let { restore(l, it) }
+        if (changedFrom(l, shown)) {
             for (o in anims.values) syncTarget(o, true)
             performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         }
