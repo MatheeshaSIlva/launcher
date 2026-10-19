@@ -183,7 +183,15 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
    tiles and the notifications in a centred column below (~70 % of the width), Quick Settings across the whole width on
    the second pull, no split on a phone; **One UI 9** (read from the S24's SystemUI resources, no screenshot:
    `force_config_use_split_notification_shade` true in landscape, `shade_panel_width` 474 dp at w720dp, a one-line header)
-   splits it: Quick Settings and notifications side by side. Waiting for Matheesha's choice before building.
+   splits it: Quick Settings and notifications side by side. **Matheesha's call: each shade layout handles its own
+   landscape, replicating its original.** **iOS layout: done** (tokens `comp.nc.land.*` from run 21): the date and time at
+   the top left (left-aligned, numerals 60.5 pt), the notifications in a column of the portrait width 135 pt from the right
+   edge, a short list centred in its height, a long one from its top (fading as it scrolls past it, cut by the screen's
+   bottom edge), no collapsed stack, no flashlight or camera; swipes, Clear, groups and the long look stay in the column,
+   and Android's back gesture keeps the right edge there. Checked on the emulator against the iOS capture at the same
+   point scale (`docs/report/landscape_nc_ours.png`): positions within 1-2 pt; portrait unchanged. The Pixel and One UI
+   shade layouts do not exist yet (Pixel is a theme on the iOS layout): their landscape specs are in
+   `docs/PLAN_LAYOUTS_THEMES.md` (D2) for when they are built. Unverified on the S24.
 3. **Ask before removing an icon from home: done.** iOS 27's alert, from Apple's kit (docs/IOS27_KIT.md, Alerts): edit
    mode's minus and the menu's Remove App (iOS's name; Delete App moved into the alert) ask "Remove “Maps”?" with Delete
    App (where Android can uninstall it: its own confirmation follows), Remove from Home Screen and Cancel; a widget's minus

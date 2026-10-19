@@ -80,9 +80,26 @@ object NcTokens {
     val LOOK_DIM = ColorKey("comp.nc.look.dim")
     val LOOK_BLUR = NumberKey("comp.nc.look.blur")
 
+    // Landscape (iOS 27, measured in the Simulator: docs/IOS27_KIT.md "Notification Center in landscape"): the date and the
+    // time small at the top left, the notifications in a column of the portrait width towards the right, no collapsed
+    // stack, no flashlight or camera.
+    /** Where the date and the numerals start, from the left edge. */
+    val LAND_CLOCK_X = NumberKey("comp.nc.land.clock-x")
+    /** The numerals' top and their height (the digits'). */
+    val LAND_CLOCK_TOP = NumberKey("comp.nc.land.clock-top")
+    val LAND_CLOCK_HEIGHT = NumberKey("comp.nc.land.clock-height")
+    val LAND_DATE_SIZE = NumberKey("comp.nc.land.date-size")
+    /** From the date's baseline down to the numerals' top. */
+    val LAND_DATE_GAP = NumberKey("comp.nc.land.date-gap")
+    /** The list's area: its top, its column's distance from the right edge, its bottom's from the bottom edge. */
+    val LAND_LIST_TOP = NumberKey("comp.nc.land.list-top")
+    val LAND_LIST_RIGHT = NumberKey("comp.nc.land.list-right")
+    val LAND_LIST_BOTTOM = NumberKey("comp.nc.land.list-bottom")
+
     val ALL = listOf(PLATTER, CORNER, SYMBOLS, PADDING, ICON, TEXT_X, TEXT_TOP, MIN_HEIGHT, TITLE, BODY, TIME, LABEL, TIME_COLOR, TIME_BLEND,
         MARGIN, GAP, OVERLAY, FADE_TOP, FADE_BOTTOM, FADE_LENGTH, SHELF_HEIGHT, SHELF_SHOW, SHELF_INSET1, SHELF_INSET2, STACK_TEXT_TOP, STACK_MIN_HEIGHT,
         PEEK_SHOW, PEEK_HEIGHT, PEEK_INSET, MORE_INSET, PEEK_CORNER, PEEK_ICON, BUTTON, BUTTON_SIZE, BUTTON_INSET_X,
         BUTTON_BOTTOM, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR, BUTTON_SYMBOL_BLEND, BUTTON_ON, BUTTON_ON_SYMBOL, MEDIA_PLACEHOLDER, MEDIA_TRACK, HEADER_COLOR, TEXT_SHADOW, LOOK_CARD, LOOK_CORNER, LOOK_INSET, LOOK_LABEL,
-        MENU_GAP, LOOK_DIM, LOOK_BLUR).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
+        MENU_GAP, LOOK_DIM, LOOK_BLUR, LAND_CLOCK_X, LAND_CLOCK_TOP, LAND_CLOCK_HEIGHT, LAND_DATE_SIZE, LAND_DATE_GAP, LAND_LIST_TOP,
+        LAND_LIST_RIGHT, LAND_LIST_BOTTOM).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
 }

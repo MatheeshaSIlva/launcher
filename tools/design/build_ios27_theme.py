@@ -820,6 +820,15 @@ SEED = {
     'comp.nc.fade.top': {'pt': 50, 'src': 'judged:where a scrolled notification has faded out (to be replaced by the kit\'s scroll edge)'},
     'comp.nc.fade.bottom': {'pt': 108, 'src': 'judged:gone by the top of the flashlight and camera buttons (bottom 50 + 58 pt): nothing shows under them'},
     'comp.nc.fade.length': {'pt': 70, 'src': 'judged:over how far it fades'},
+    # Landscape (an iPhone 18 Pro turned, 874 x 402 pt; docs/IOS27_KIT.md "Notification Center in landscape").
+    'comp.nc.land.clock-x': {'pt': 75, 'src': "measured:iOS 27 Simulator run 21, landscape (the date's label at x 75, the numerals' ink from 74)"},
+    'comp.nc.land.clock-top': {'pt': 88, 'src': "measured:iOS 27 Simulator run 21, landscape (the numerals' ink from y 88)"},
+    'comp.nc.land.clock-height': {'pt': 60.5, 'src': "measured:iOS 27 Simulator run 21, landscape (the numerals' ink 88 to 148.5; portrait's ~100)"},
+    'comp.nc.land.date-size': {'pt': 21, 'src': "measured:iOS 27 Simulator run 21, landscape (the date's ink 86 x 15.5 pt: Inter 600 at 21 pt sets it so)"},
+    'comp.nc.land.date-gap': {'pt': 6.5, 'src': "measured:iOS 27 Simulator run 21, landscape (the date's baseline at y 81.5, the numerals' top at 88)"},
+    'comp.nc.land.list-top': {'pt': 59.7, 'src': "measured:iOS 27 Simulator run 21, landscape (the first platter of a long list at y 59.7)"},
+    'comp.nc.land.list-right': {'pt': 135, 'src': "measured:iOS 27 Simulator run 21, landscape (platters at x 365, 374 wide, in 874)"},
+    'comp.nc.land.list-bottom': {'pt': 10, 'src': "measured:iOS 27 Simulator run 21, landscape (one notification centred between y 59.7 and ~392)"},
 }
 
 

@@ -612,6 +612,17 @@ object ClockNumerals {
     /** The widest time's share of the clock's width. */
     private const val WIDTH = 0.96f
 
+    /**
+     * The narrowest box [layout] sets digits [h] tall in (px; [h] the box's height): the widest time at that size with its
+     * margins. In a box this wide or wider the height sets the digits' size. [paint] is changed.
+     */
+    fun widthFor(paint: android.text.TextPaint, h: Float, is24: Boolean, stacked: Boolean = false): Float {
+        paint.textScaleX = 1f
+        paint.textSize = 100f
+        val size = h * 0.94f / (digitHeight(paint) / 100f * lines(stacked))
+        return size * widest(paint, is24, stacked) / 100f * 0.95f / WIDTH
+    }
+
     /** Between the two lines of a stacked clock, of the digits' height. */
     private const val GAP = 0.1f
 
@@ -710,12 +721,12 @@ object ClockNumerals {
      * previous ones). Any thread; some tens of ms.
      */
     @Synchronized
-    fun build(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, unitPx: Float): dev.launcher.app.GlassMask {
+    fun build(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, unitPx: Float, x: Float = w / 2f): dev.launcher.app.GlassMask {
         val mask = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8)
-        // (Stacked: a line each, [lineStep] apart.)
+        // (Stacked: a line each, [lineStep] apart.) At [x] as [paint] aligns it (centred, or from the left: [x] its start).
         val step = lineStep(paint)
         val canvas = android.graphics.Canvas(mask)
-        for ((i, line) in time.split('\n').withIndex()) canvas.drawText(line, w / 2f, baseline + i * step, paint)
+        for ((i, line) in time.split('\n').withIndex()) canvas.drawText(line, x, baseline + i * step, paint)
         // The coverage, read straight from the mask's rows ([cov]).
         val rowBytes = mask.rowBytes
         val nb = rowBytes * h

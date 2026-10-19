@@ -299,6 +299,23 @@ Each phase ends with a check on the S24 and Matheesha's OK.
 references (captures of iOS, Pixel, One UI; AOSP code for Pixel), the list of layouts and options agreed with Matheesha,
 build, check every layout under every theme on the emulator, then on the S24.
 
+**Landscape is each layout's own** (Matheesha, 2026-10-20: "each qs/notification layouts will handle their own landscape
+orientations. for the ios, pixel and oneui layouts, replicate the original implementations"). For the shade (D2), measured
+on 2026-10-20 (`docs/report/landscape_shade_others.png`, `docs/TEST_RUN.md` "After the run" 2):
+- **iOS** (built, `comp.nc.land.*`, docs/IOS27_KIT.md "Notification Center in landscape"): Notification Center keeps no
+  lock-screen layout: the date and time small at the top left, left-aligned (numerals 60.5 pt of 402); the notifications
+  in one column of the portrait width (374 pt, 135 pt from the right edge), from y 59.7, a short list centred in its
+  height, a long one from its top and cut by the bottom edge; no collapsed stack; no flashlight or camera. Control Center
+  in landscape: still to measure and build.
+- **Pixel** (stock Android 17, the emulator's SystemUI): no split on a phone. The first pull: a one-line header (time and
+  date at the left, status icons at the right), one row of Quick Settings tiles, the notifications in a centred column
+  (~70 % of the width) under it with the shelf at the bottom. The second pull: Quick Settings across the whole width
+  (brightness slider, tiles in 4 columns, a page indicator, the footer with the build number and power), no notifications.
+- **One UI** (One UI 9, read from the S24's SystemUI resources, no screenshot: `force_config_use_split_notification_shade`
+  true in landscape, `shade_panel_width` 474 dp at w720dp): the split shade, Quick Settings and notifications side by
+  side, each pane ~474 dp; a one-line header; Quick Settings in 4 columns. To capture on the S24 (Quick Settings only, never
+  the notifications) when the layout is built.
+
 **E. Themes**: iOS glass, Pixel (Material), One UI, the Claude look, then other modern design languages; each with
 Material You colours; each checked on every element's layouts.
 

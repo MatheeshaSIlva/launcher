@@ -68,6 +68,11 @@ import kotlin.math.roundToInt
  * away and the gap closes, stacks fan out into their notifications (and back) on springs, a swipe left follows the finger
  * and reveals Options and Clear (a long swipe clears), a press dims a platter, the clock's numerals cross-fade at the
  * minute, the "Clear" confirmation grows out of its "×". A long list scrolls up over the clock and fades under the bar.
+ *
+ * In landscape it is laid out as iOS 27 lays it out on an iPhone turned (measured in the Simulator: docs/IOS27_KIT.md,
+ * tokens `comp.nc.land.*`): the date and the time small at the top left, left-aligned; the notifications in one column of
+ * the portrait width towards the right, a short list centred in its height, a long one from its top; no collapsed stack
+ * (the list as it is) and no flashlight or camera.
  */
 @SuppressLint("ViewConstructor")
 class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
@@ -111,6 +116,15 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var margin = 0f
     private var platterW = 0f
     private var gap = 0f
+    /** The notifications' column: its platters' left and right edges (the sides' margins in portrait). */
+    private var listL = 0f
+    private var listR = 0f
+
+    /** Landscape: iOS 27's own layout for it (see the class comment). */
+    private val land get() = width > height
+    /** The column's width with its margins (the portrait width, turned or not) and its middle. */
+    private val colW get() = platterW + 2 * margin
+    private val colCx get() = (listL + listR) / 2f
 
     /** The renderer of every surface here (one per thread: its uniforms are taken when a draw is recorded). */
     private var mp: MaterialPainter? = null
@@ -131,7 +145,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         if (mp == null || nu != u) { mp = MaterialPainter.create(nu); flat = MaterialPainter.create(nu) }
         u = nu
         painter.u = u
-        datePaint.textSize = 22f * u
         dateShadow.radius = 6f * u; dateShadow.dy = 1f * u
         headShadow.radius = 6f * u; headShadow.dy = 1f * u
         clockMasks = null
@@ -150,7 +163,18 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun syncTokens() {
         margin = Design.pt(NcTokens.MARGIN, u)
         gap = Design.pt(NcTokens.GAP, u)
-        platterW = width - 2 * margin
+        if (land) {
+            // A column as wide as the portrait list, its right edge the token's distance from the screen's.
+            platterW = min(width, height) - 2 * margin
+            listR = width - Design.pt(NcTokens.LAND_LIST_RIGHT, u)
+            listL = listR - platterW
+        } else {
+            platterW = width - 2 * margin
+            listL = margin
+            listR = width - margin
+        }
+        datePaint.textSize = if (land) Design.pt(NcTokens.LAND_DATE_SIZE, u) else 22f * u
+        datePaint.textAlign = if (land) Paint.Align.LEFT else Paint.Align.CENTER
         Design.text(NcTokens.TITLE).applyTo(titlePaint, u)
         Design.text(NcTokens.BODY).applyTo(bodyPaint, u)
         Design.text(NcTokens.TIME).applyTo(timePaint, u)
@@ -188,7 +212,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             if (was <= 0.002f && v > 0.002f) invalidate()
             // Open and collapsed (the sheet only moves its layer: nothing is drawn as it comes to rest): the stack's
             // notifications are recorded ahead once it has settled (see [prerecord]).
-            if (v >= 1f && !prerecordAsked && collapsed) { prerecordAsked = true; postOnAnimationDelayed(prerecord, PRERECORD_DELAY_MS) }
+            if (v >= 1f && !prerecordAsked && collapsed && !land) { prerecordAsked = true; postOnAnimationDelayed(prerecord, PRERECORD_DELAY_MS) }
         }
 
     init {
@@ -304,7 +328,36 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         color = 0xF2FFFFFF.toInt(); fonts.display(this, 700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
     }
 
-    private fun clockBox(out: RectF): RectF = out.apply { set(36f * u, 110f * u, width - 36f * u, 206f * u) }
+    /**
+     * The numerals' box. Portrait: across the sheet under the status bar (the numerals centred in it). Landscape: at the top
+     * left, as wide as the widest time at the token's height with room for the glass at its sides (so the height sets the
+     * digits' size), the numerals left-aligned in it under the date ([numeralsX]).
+     */
+    private fun clockBox(out: RectF): RectF = out.apply {
+        if (land) {
+            val h = Design.pt(NcTokens.LAND_CLOCK_HEIGHT, u) / 0.94f
+            val top = Design.pt(NcTokens.LAND_CLOCK_TOP, u) - h * dev.launcher.app.home.ClockNumerals.TOP
+            val left = Design.pt(NcTokens.LAND_CLOCK_X, u) - CLOCK_SIDE_PT * u
+            boxPaint.set(digitPaint)
+            set(left, top, left + dev.launcher.app.home.ClockNumerals.widthFor(boxPaint, h, true) + 2 * CLOCK_SIDE_PT * u, top + h)
+        } else set(36f * u, 110f * u, width - 36f * u, 206f * u)
+    }
+
+    /** For measuring the landscape box (the digits' paint as it is, sized by [clockBox]). */
+    private val boxPaint = TextPaint()
+    private val inkBounds = android.graphics.Rect()
+
+    /**
+     * Where the numerals [t] are drawn from in a box [w] wide (px from its left), with [p] set as [ClockNumerals.layout]
+     * left it; [p]'s alignment is set to match. Portrait: centred. Landscape: their ink starts at the box's side room, under
+     * the date (iOS 27 sets both from one left edge).
+     */
+    private fun numeralsX(p: TextPaint, t: String, w: Float): Float {
+        if (!land) { p.textAlign = Paint.Align.CENTER; return w / 2f }
+        p.textAlign = Paint.Align.LEFT
+        p.getTextBounds(t, 0, t.length, inkBounds)
+        return CLOCK_SIDE_PT * u - inkBounds.left
+    }
 
     private var building = false
     /** Asked to build while a build ran: built again once it is done. */
@@ -349,10 +402,11 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         buildAgain = false
         val fontsAt = dev.launcher.app.design.Design.structure
         val paint = TextPaint(digitPaint)
+        val x = numeralsX(paint, t, box.width())
         val vw = width
         val vh = height
         clockIo.execute {
-            val gm = try { dev.launcher.app.home.ClockNumerals.build(paint, w, h, baseline, t, u) } catch (e: Throwable) {
+            val gm = try { dev.launcher.app.home.ClockNumerals.build(paint, w, h, baseline, t, u, x) } catch (e: Throwable) {
                 clockLog("numerals failed: ${e.javaClass.simpleName}: ${e.message}"); null
             }
             post {
@@ -529,7 +583,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             y += b.height + gap
         }
         val all = groups.flatMap { it.second }.sortedByDescending { it.postTime }
-        if (collapsed && all.size >= 2) {
+        if (stacks(all.size)) {
             // iOS 27 (Stack, its default display): the newest notification in front, the next one peeking out under it on
             // one line, then how many more ("+10 from Messages"); a tap fans them out into the list. The others wait hidden
             // where the front one is, so they fan out from there.
@@ -616,35 +670,46 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         // iOS dims the wallpaper under a list of notifications (Apple's kit: its lock-screen overlay, black 25 % and 5 %
         // linear burn), so white text on clear glass reads; an empty Notification Center shows the wallpaper as it is.
         // The collapsed stack leaves the wallpaper as it is (iOS); the list dims it.
-        val dimTo = if (!(collapsed && all.size >= 2) && blocks.values.any { it.visible && !it.removing && (it.kind == Kind.PLATTER || it.kind == Kind.MEDIA) }) 1f else 0f
+        val dimTo = if (!stacks(all.size) && blocks.values.any { it.visible && !it.removing && (it.kind == Kind.PLATTER || it.kind == Kind.MEDIA) }) 1f else 0f
         if (!animate) listDim.snapTo(dimTo) else if (listDim.target != dimTo) listDim.animateTo(dimTo, APPEAR)
         updateScrollBounds()
         invalidate()
     }
 
+    /** Whether [n] notifications show as the collapsed stack (portrait, until a tap fans it out; landscape shows the list). */
+    private fun stacks(n: Int) = collapsed && !land && n >= 2
+
     /** Where notifications are swiped (this view's coordinates, the sheet at rest): the shade keeps Android's back gesture off its right edge. */
     fun swipeBand(out: RectF) { listArea(out) }
 
-    /** Where the list may sit: below the clock, above the buttons. */
-    private fun listArea(out: RectF): RectF =
-        out.apply { set(margin, 232f * u, width - margin, buttonY() - buttonR() - LIST_ABOVE_BUTTONS_PT * u) }
+    /** Where the list may sit: below the clock, above the buttons (landscape: the column, from near the top to near the bottom). */
+    private fun listArea(out: RectF): RectF = out.apply {
+        if (land) set(listL, Design.pt(NcTokens.LAND_LIST_TOP, u), listR, height - Design.pt(NcTokens.LAND_LIST_BOTTOM, u))
+        else set(margin, 232f * u, width - margin, buttonY() - buttonR() - LIST_ABOVE_BUTTONS_PT * u)
+    }
+
+    /** How tall the list is (landscape centres it: without the gap after its last notification). */
+    private fun listH(): Float = if (land) max(0f, contentH - gap) else contentH
 
     private val area = RectF()
 
     private fun updateScrollBounds() {
         listArea(area)
-        val over = max(0f, contentH - area.height())
+        val over = max(0f, listH() - area.height())
         scroller.setBounds(0f, over + if (over > 0f) 120f * u else 0f, area.height())
     }
 
     /**
      * Where the list starts on the sheet: at the bottom of its area while it fits (iOS gathers them at the bottom), else
-     * under the clock. It glides there on a spring: the collapsed stack fanning out into a long list (or a notification
-     * arriving or going) moves the whole list, never in one frame.
+     * under the clock; in landscape, centred in its area while it fits, else at its top. It glides there on a spring: the
+     * collapsed stack fanning out into a long list (or a notification arriving or going) moves the whole list, never in
+     * one frame.
      */
     private fun naturalTop(): Float {
         listArea(area)
-        return if (contentH <= area.height()) area.bottom - contentH else area.top
+        val h = listH()
+        if (land) return if (h <= area.height()) area.top + (area.height() - h) / 2f else area.top
+        return if (h <= area.height()) area.bottom - h else area.top
     }
 
     private val origin = MotionValue(0f, 1f, inv)
@@ -704,7 +769,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
         // The clock stays where it is: a long list scrolls up over it (iOS's lock screen) while it fades, so the date and the
         // numerals never show through the notifications passing over them.
-        val clockK = (1f - scroller.position / (CLOCK_FADE_PT * u)).coerceIn(0f, 1f)
+        val clockK = if (land) 1f else (1f - scroller.position / (CLOCK_FADE_PT * u)).coerceIn(0f, 1f)
         if (clockK > 0.003f) {
             val tone = clockTone()
             val ck = ((dateText.hashCode().toLong() shl 32) xor (System.identityHashCode(clockGlass).toLong() shl 12)) xor
@@ -722,7 +787,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
         c.save()
         drawList(c, sy)
-        drawButtons(c)
+        if (!land) drawButtons(c)
         c.restore()
         if (c !== canvas) {
             sheetNode.endRecording()
@@ -864,7 +929,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         datePaint.color = alpha(col, k * (0xF2 / 255f))
         dateShadow.color = alpha(Design.color(NcTokens.TEXT_SHADOW), 1f - tone)
         dateShadow.apply(datePaint)
-        c.drawText(dateText, width / 2f, clockRect.top - 13f * u, datePaint)
+        if (land) c.drawText(dateText, Design.pt(NcTokens.LAND_CLOCK_X, u),
+            clockRect.top + clockRect.height() * dev.launcher.app.home.ClockNumerals.TOP - Design.pt(NcTokens.LAND_DATE_GAP, u), datePaint)
+        else c.drawText(dateText, width / 2f, clockRect.top - 13f * u, datePaint)
         val g = clockGlass
         if (g != null) {
             val f = clockFade.value.coerceIn(0f, 1f)
@@ -879,7 +946,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         if (a <= 0.003f) return
         val baseline = dev.launcher.app.home.ClockNumerals.layout(solidDigits, clockRect.width(), clockRect.height(), android.text.format.DateFormat.is24HourFormat(context))
         solidDigits.color = alpha(col, a * (0xF2 / 255f))
-        c.drawText(clockText, clockRect.centerX(), clockRect.top + baseline, solidDigits)
+        c.drawText(clockText, clockRect.left + numeralsX(solidDigits, clockText, clockRect.width()), clockRect.top + baseline, solidDigits)
     }
 
     private fun drawClockGlass(c: Canvas, g: GlassDrawable, a: Float) {
@@ -965,9 +1032,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val sw = if (b.kind == Kind.PLATTER) b.swipe.value else 0f
         val ps = if (b.kind == Kind.PLATTER) 1f - 0.02f * b.press.value else 1f
         val h = b.shownH()
-        val w2 = width / 2f
+        val w2 = colCx
         val cy = y + h / 2f
-        val x0 = margin + sw
+        val x0 = listL + sw
         val cx = x0 + platterW / 2f
         out.r.set(w2 + (cx + (x0 - cx) * ps - w2) * s, cy + (y - cy) * ps * s,
             w2 + (cx + (x0 + platterW - cx) * ps - w2) * s, cy + (y + h - cy) * ps * s)
@@ -1022,11 +1089,13 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     /**
      * How visible a block at [y] ([h] tall) is at the list's ends: it fades out as its middle goes under the status bar, and
-     * under the flashlight and camera buttons at the bottom.
+     * under the flashlight and camera buttons at the bottom. Landscape (the list from near the top, no buttons): as its top
+     * goes above the list's area; at the bottom the screen's edge cuts it (iOS).
      */
     private fun topFade(y: Float, h: Float): Float {
-        val mid = y + h / 2f
         val len = Design.pt(NcTokens.FADE_LENGTH, u)
+        if (land) return ((y - Design.pt(NcTokens.LAND_LIST_TOP, u) + len) / len).coerceIn(0f, 1f)
+        val mid = y + h / 2f
         val top = ((mid - Design.pt(NcTokens.FADE_TOP, u)) / len).coerceIn(0f, 1f)
         val bottom = ((height - Design.pt(NcTokens.FADE_BOTTOM, u) - mid) / len).coerceIn(0f, 1f)
         return min(top, bottom)
@@ -1060,7 +1129,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         fun mixIn(v: Long) { k = k * 31 + v }
         mixIn(Math.round(b.height).toLong()); mixIn(b.count.toLong()); mixIn(Math.round(b.stack.value * 255f).toLong())
         mixIn(Math.round(Appearance.dark * 255f).toLong()); mixIn(Design.version.toLong())
-        mixIn(b.item?.let { it.key.hashCode().toLong() * 7 + it.postTime } ?: 0L); mixIn(width.toLong())
+        mixIn(b.item?.let { it.key.hashCode().toLong() * 7 + it.postTime } ?: 0L); mixIn(width.toLong()); mixIn(Math.round(listL).toLong())
         // Its picture (a sender's photo) loads after the first draw, and its app's icon may be the system's until home has
         // rendered its own: recorded again when either changes.
         mixIn(if (b.item?.let { painter.pictureLoaded(it) } == true) 1L else 0L)
@@ -1103,7 +1172,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val prerecord: Runnable = object : Runnable {
         override fun run() {
             val busy = when {
-                !collapsed -> "fanned out"
+                !collapsed || land -> "fanned out"
                 progress < 1f -> "not open"
                 mode != Mode.NONE || menu != null -> "touched"
                 blocks.values.any { it.y.isAnimating || it.appear.isAnimating } -> "moving"
@@ -1131,15 +1200,15 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val s = 0.92f + 0.08f * present
         val sw = if (b.kind == Kind.PLATTER) b.swipe.value else 0f
         val ps = if (b.kind == Kind.PLATTER) 1f - 0.02f * b.press.value else 1f
-        val w2 = width / 2f
+        val w2 = colCx
         val cy = y + b.shownH() / 2f
-        val cx = margin + sw + platterW / 2f
+        val cx = listL + sw + platterW / 2f
         c.save()
         if (s != 1f) c.scale(s, s, w2, cy)
         if (b.kind == Kind.PLATTER) drawPlatterUnder(c, b, y, alpha, s)
         if (ps != 1f) c.scale(ps, ps, cx, cy)
         // Where the platter's top-left corner really is on the sheet, and its scale there (what its glass samples).
-        val x0 = margin + sw
+        val x0 = listL + sw
         val gx = w2 + (cx + (x0 - cx) * ps - w2) * s
         val gy = cy + (y - cy) * ps * s
         drawGlass(c, Design.material(NcTokens.PLATTER), x0, y, platterW, b.shownH(), Design.pt(NcTokens.CORNER, u), alpha, ps * s, gx, gy,
@@ -1158,7 +1227,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
      */
     private fun drawPeek(c: Canvas, b: Block, y: Float, a: Float) {
         val inset = Design.pt(if (b.kind == Kind.PEEK) NcTokens.PEEK_INSET else NcTokens.MORE_INSET, u)
-        val x = margin + inset
+        val x = listL + inset
         val w = platterW - 2 * inset
         val h = b.height
         drawGlass(c, Design.material(NcTokens.PLATTER), x, y, w, h, Design.pt(NcTokens.PEEK_CORNER, u), a)
@@ -1209,12 +1278,12 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
      */
     private fun drawPlatterUnder(c: Canvas, b: Block, y: Float, alpha: Float, s: Float) {
         val sw = b.swipe.value
-        val x = margin + sw
+        val x = listL + sw
         val h = b.shownH()
         val w = platterW
         val st = b.stack.value.coerceIn(0f, 1f)
         if (st > 0.002f) {
-            val w2 = width / 2f
+            val w2 = colCx
             val cy = y + h / 2f
             val mat = Design.material(NcTokens.PLATTER)
             val show = Design.pt(NcTokens.SHELF_SHOW, u)
@@ -1233,7 +1302,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun drawPlatterContent(c: Canvas, b: Block, y0: Float, a: Float) {
         val item = b.item ?: return
         val st = b.stack.value.coerceIn(0f, 1f)
-        painter.draw(c, item, margin, y0, platterW, b.shownH(), min(a, 1f), primary(), secondary(), more = b.count - 1, moreAlpha = st,
+        painter.draw(c, item, listL, y0, platterW, b.shownH(), min(a, 1f), primary(), secondary(), more = b.count - 1, moreAlpha = st,
             platter = true, stacked = if (b.stackH != b.fullH) st else 0f, fadeTime = true)
     }
 
@@ -1251,11 +1320,11 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             if (alpha <= 0.003f) return
         }
         val bw = 78f * u
-        val right = width - margin
+        val right = listR
         val clearable = groupItems(b).any { it.clearable }
         val names = if (clearable) listOf("Options", if (b.count > 1 && b.stack.value > 0.5f) "Clear All" else "Clear") else listOf("Options")
         // Buttons grow out from the right edge as the platter moves aside; a long swipe stretches Clear over the whole width.
-        val long = (reveal - names.size * (bw + gap)) / (width * 0.3f)
+        val long = (reveal - names.size * (bw + gap)) / (colW * 0.3f)
         var x1 = right - shift
         for ((i, name) in names.reversed().withIndex()) {
             val avail = (reveal - gap) / names.size
@@ -1278,7 +1347,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val m = host.media
         val y = y0
         val alpha = min(a, 1f)
-        val x = margin
+        val x = listL
         val w = platterW
         val h = b.height
         val art = m.art
@@ -1338,9 +1407,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         headShadow.color = Design.color(NcTokens.TEXT_SHADOW)
         headShadow.apply(headPaint)
         val name = painter.appLabel(b.group)
-        c.drawText(TextUtils.ellipsize(name, headPaint, width * 0.45f, TextUtils.TruncateAt.END).toString(), margin + 6f * u, y + 28f * u, headPaint)
+        c.drawText(TextUtils.ellipsize(name, headPaint, colW * 0.45f, TextUtils.TruncateAt.END).toString(), listL + 6f * u, y + 28f * u, headPaint)
         val conf = confirmGroup.getOrPut(b.group) { MotionValue(0f, 100f, inv) }.value
-        val xRight = drawClearButton(c, conf, width - margin - 4f * u, y + 20f * u, a, sheetY)
+        val xRight = drawClearButton(c, conf, listR - 4f * u, y + 20f * u, a, sheetY)
         // "Show Less".
         buttonPaint.textSize = 14f * u
         val label = "Show Less"
@@ -1507,13 +1576,15 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun longLook(m: Menu, sheetY: Float) {
         val item = m.block.item
         val inset = Design.pt(NcTokens.LOOK_INSET, u)
-        val cw = width - 2 * inset
+        // Across the column (the whole width in portrait), as near the screen's edges as landscape's short height needs.
+        val left = colCx - colW / 2f + inset
+        val cw = colW - 2 * inset
         val ch = if (item != null) expandedPainter.height(item, cw) else m.block.height
         val mGap = Design.pt(NcTokens.MENU_GAP, u)
         val total = ch + mGap + m.height
         var top = listTop() + m.block.y.value + sheetY
-        top = min(top, height - 40f * u - total).coerceAtLeast(60f * u)
-        cardR.set(inset, top, inset + cw, top + ch)
+        top = min(top, height - (if (land) LOOK_EDGE_LAND_PT else 40f) * u - total).coerceAtLeast((if (land) LOOK_EDGE_LAND_PT else 60f) * u)
+        cardR.set(left, top, left + cw, top + ch)
         // Centred under the card, never wider than it.
         if (cardR != menuAnchor) {
             menuAnchor.set(cardR)
@@ -1545,7 +1616,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         // The platter grows into the card: its rectangle and corners move on the spring, the glass gives way to the card's
         // solid face, and the text reflows to all its lines.
         val by = listTop() + b.y.value + sheetY
-        platR.set(margin, by, margin + platterW, by + b.shownH())
+        platR.set(listL, by, listL + platterW, by + b.shownH())
         fun lerp(a: Float, z: Float) = a + (z - a) * k
         rect.set(lerp(platR.left, cardR.left), lerp(platR.top, cardR.top), lerp(platR.right, cardR.right), lerp(platR.bottom, cardR.bottom))
         val radius = lerp(Design.pt(NcTokens.CORNER, u), Design.pt(NcTokens.LOOK_CORNER, u))
@@ -1634,7 +1705,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val by = top + b.y.value
             if (topFade(by, b.height) < 0.5f) continue
             val extra = if (b.kind == Kind.PLATTER && b.count > 1 && b.stack.value > 0.5f) min(b.count - 1, 2) * Design.pt(NcTokens.SHELF_SHOW, u) else 0f
-            if (y >= by && y <= by + b.height + extra && x >= margin && x <= width - margin) return b
+            if (y >= by && y <= by + b.height + extra && x >= listL && x <= listR) return b
         }
         return null
     }
@@ -1683,9 +1754,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             invalidate()
             return
         }
-        // Flashlight and camera: touch and hold.
+        // Flashlight and camera: touch and hold (portrait only).
         val by = buttonY() + sy
-        for (i in 0..1) {
+        if (!land) for (i in 0..1) {
             if (hypot(x - buttonX(i), y - by) < buttonR() + 5f * u) {
                 mode = Mode.HOLD
                 touchTarget = if (i == 0) "torch" else "camera"
@@ -1699,7 +1770,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         // A revealed swipe: a tap on its buttons acts, anywhere else puts it back.
         revealed?.let { r ->
             val ry = listTop() + r.y.value + sy
-            if (y >= ry && y <= ry + r.height && x > width - margin + r.swipe.value) { touched = r; mode = Mode.BUTTON; touchTarget = "swipe"; return }
+            if (y >= ry && y <= ry + r.height && x > listR + r.swipe.value) { touched = r; mode = Mode.BUTTON; touchTarget = "swipe"; return }
             r.swipe.animateTo(0f, SWIPE_BACK); revealed = null
             mode = Mode.NONE
             return
@@ -1712,15 +1783,15 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             Kind.HEADER -> {
                 mode = Mode.BUTTON
                 touchTarget = when {
-                    x > width - margin - 40f * u - 60f * u * confirmGroup[b.group].let { it?.value ?: 0f } -> "clearGroup"
-                    x > width - margin - 160f * u -> "showLess"
+                    x > listR - 40f * u - 60f * u * confirmGroup[b.group].let { it?.value ?: 0f } -> "clearGroup"
+                    x > listR - 160f * u -> "showLess"
                     else -> ""
                 }
                 if (touchTarget.isEmpty()) mode = Mode.PRESS
             }
             Kind.MEDIA -> {
                 mode = Mode.MEDIA
-                val cx = margin + platterW / 2f
+                val cx = listL + platterW / 2f
                 val bcy = by0 + b.height - 30f * u
                 touchTarget = when {
                     abs(y - bcy) < 26f * u && abs(x - (cx - 70f * u)) < 30f * u -> "prev"
@@ -1767,7 +1838,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 val b = touched ?: return
                 val raw = swipeFrom + (x - downX)
                 // Right of rest it resists (nothing is there), left it follows.
-                b.swipe.snapTo(if (raw > 0f) dev.launcher.app.motion.Motion.rubberBand(raw, width * 0.5f) else raw)
+                b.swipe.snapTo(if (raw > 0f) dev.launcher.app.motion.Motion.rubberBand(raw, colW * 0.5f) else raw)
             }
             Mode.SCROLL -> scroller.dragBy(lastY - y)
             Mode.CLOSE -> host.closeDrag(1, dy, 0f)
@@ -1819,7 +1890,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     private fun tapPlatter(b: Block) {
-        if (collapsed && (b.kind == Kind.PEEK || b.kind == Kind.MORE || blocks["peek"]?.let { it.visible && !it.removing } == true)) {
+        if (collapsed && !land && (b.kind == Kind.PEEK || b.kind == Kind.MORE || blocks["peek"]?.let { it.visible && !it.removing } == true)) {
             // The collapsed stack fans out into the list.
             collapsed = false
             performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -1835,7 +1906,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
         val sy = sheetY()
         val top = listTop() + b.y.value + sy
-        val from = RectF(margin + b.swipe.value, top, margin + b.swipe.value + platterW, top + b.height)
+        val from = RectF(listL + b.swipe.value, top, listL + b.swipe.value + platterW, top + b.height)
         if (!host.open(item, from)) {
             // Nothing to open: the app's notification settings, as iOS opens the app.
             openSettings(item.pkg)
@@ -1855,7 +1926,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                 val r = b ?: return
                 val bw = 78f * u
                 val clearable = groupItems(r).any { it.clearable }
-                val clearX = width - margin - bw
+                val clearX = listR - bw
                 if (clearable && downX >= clearX) clearBlock(r)
                 else { r.item?.pkg?.let { openSettings(it) } }
             }
@@ -1866,9 +1937,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val clearable = groupItems(b).any { it.clearable }
         val buttons = (if (clearable) 2 else 1) * (78f * u + gap) + gap
         val s = b.swipe.value
-        if (swipeLogs++ < 20) AppLog.log("[nc] swipe let go at ${s.roundToInt()} px, ${vx.roundToInt()} px/s (clearable $clearable, clear past ${(-width * 0.62f).roundToInt()} or ${(-buttons).roundToInt()} at < -2200 px/s)")
+        if (swipeLogs++ < 20) AppLog.log("[nc] swipe let go at ${s.roundToInt()} px, ${vx.roundToInt()} px/s (clearable $clearable, clear past ${(-colW * 0.62f).roundToInt()} or ${(-buttons).roundToInt()} at < -2200 px/s)")
         when {
-            clearable && (s < -width * 0.62f || (s < -buttons && vx < -2200f)) -> clearBlock(b, vx)
+            clearable && (s < -colW * 0.62f || (s < -buttons && vx < -2200f)) -> clearBlock(b, vx)
             s < -min(buttons * 0.3f, 60f * u) || vx < -500f -> { b.swipe.animateTo(-buttons, SWIPE_BACK, vx); revealed = b }
             else -> { b.swipe.animateTo(0f, SWIPE_BACK, vx); if (revealed === b) revealed = null }
         }
@@ -1931,6 +2002,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val CONTENT_AFTER = 0.35f
         /** The gap between the list at rest and the top of the flashlight and camera buttons (pt). */
         const val LIST_ABOVE_BUTTONS_PT = 10f
+        /** Landscape: the room left at the sides of the numerals' box for the glass's rims and shadow (pt). */
+        const val CLOCK_SIDE_PT = 16f
+        /** Landscape: how near the screen's top and bottom the long look may come (pt; portrait keeps clear of the bar). */
+        const val LOOK_EDGE_LAND_PT = 12f
         const val HOLD_MS = 380L
         val clockIo = Executors.newSingleThreadExecutor()
         val REFLOW get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_REFLOW)

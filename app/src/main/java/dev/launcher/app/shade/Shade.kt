@@ -1401,7 +1401,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         exclusion.clear()
         if (panel == Panel.NC && regionOpen) {
             nc.swipeBand(swipeBand)
-            if (!swipeBand.isEmpty) exclusion += android.graphics.Rect(w - edge, swipeBand.top.toInt(), w, swipeBand.bottom.toInt())
+            // Only where the list reaches the edge (in landscape its column ends well inside: the edge keeps Back).
+            if (!swipeBand.isEmpty && swipeBand.right > w - edge) exclusion += android.graphics.Rect(w - edge, swipeBand.top.toInt(), w, swipeBand.bottom.toInt())
         }
         if (barHeight > 0) {
             exclusion += android.graphics.Rect(0, 0, edge, barHeight)

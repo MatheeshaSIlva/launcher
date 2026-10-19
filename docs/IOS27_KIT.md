@@ -164,7 +164,11 @@ An iPhone 18 Pro turned left (874 x 402 pt), Notification Center pulled over an 
   its bottom as in portrait; a list longer than the area starts at its top and scrolls.
 - **No collapsed stack**: twelve notifications from twelve threads show as the list (portrait opens them collapsed).
 - **No flashlight or camera buttons.** Captures: `ios-reference/out/run21/test62_ncLandscape`, side by side with ours in
-  `docs/report/landscape_nc_compare.png`.
+  `docs/report/landscape_nc_compare.png` (before) and `docs/report/landscape_nc_ours.png` (built, 2026-10-20).
+- Built as tokens `comp.nc.land.*`: the date's ink is 86 x 15.5 pt ("Sat Jan 1"), which Inter 600 sets at 21 pt; its
+  baseline 6.5 pt above the numerals' top (88); the numerals' ink 88 to 148.5. Two iOS quirks not copied: with twelve
+  notifications the numerals stood 35 pt further right (centred in the date label's 216 pt box) than with one (left-
+  aligned under the date); and the Simulator's status bar stayed in portrait (along the left edge).
 
 ## Carried over (2026-10-07)
 
