@@ -61,9 +61,13 @@ object NoAnimStarts {
             AppLog.log("[nav] $what without system animation failed ($r); using the old way for this one")
             return false
         }
+        // Home's task brought back without a starting window (InstantTransitions.start): said in the log the first times.
+        if (r.contains("home's task") && homeLogs++ < 3) AppLog.log("[nav] home brought back from its task, no starting window: $r")
         verifySoon(s)
         return true
     }
+
+    private var homeLogs = 0
 
     private var checks = 0
 

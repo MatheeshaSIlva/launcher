@@ -857,6 +857,13 @@ copy it wholesale — port the working pieces cleanly. File map:
   Widgets follow such a change once `SystemCalm` finds the system answering at once (a receiver of ours registered and
   dropped from a worker thread, timed), one a frame, on a home at rest; Other apps gives Android a palette only when
   nothing would show the hitch (above). Nothing of ours makes a binder call on the main thread right after such a change.
+- **Android reads "no starting window" (`ActivityOptions`' `android.activity.disableStarting`) only for a new activity and
+  where a task is moved to the front** (`findTaskToMoveToFront`): a start that finds the activity's task already there
+  brings it forward with a snapshot starting window whatever the options say (`ActivityStarter.recycleTask`). Home in an
+  ordinary task (the S24's since an update: `type=standard`) got one at every return, a flat grey frame over home after
+  its picture had gone (the flash after closing the settings, twice). Home's task comes back through
+  `startActivityFromRecents` with the option (`InstantTransitions.start`); check with the S24's system log
+  (`SnapshotStartingWindow for taskId=`) or, on the emulator, `cmd protolog logcat enable WM_DEBUG_STARTING_WINDOW`.
 - **After a crash while Android binds the notification listener, the system keeps the binding as made** ("is already
   bound") and never retries: our shade empty until a reboot. `LauncherApp.watchNotificationListener` switches the component
   off and on when it has not connected 8 s after a start (a rebind request alone is ignored for an enabled listener).

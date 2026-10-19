@@ -194,15 +194,27 @@ class InstantTransitions(private val atm: Any) {
 
     fun start(intent: Intent, userId: Int): String {
         requests.incrementAndGet()
+        // Home (ours, under a picture of itself): no starting window. Brought back to the front, the system put a snapshot
+        // starting window over it, and home keeps no snapshots (they showed it as it was before the screen went off): a
+        // flat grey surface, faded out over home ~150 ms after home drew, after the picture of home over it had gone (the
+        // flicker after the settings closed into home, S24 recording). Android reads "no starting window" only for a new
+        // activity and where a task is moved to the front (`findTaskToMoveToFront`); a start that finds the task already
+        // there brings it forward with a starting window whatever the options say (`ActivityStarter.recycleTask`: seen on
+        // the S24 on 2026-10-20, "SnapshotStartingWindow for taskId=..." over home at every close of the settings). So
+        // home's task, while it has one, comes back as the App Switcher brings a task back (startActivityFromRecents, which
+        // moves it to the front with these options and our transition).
+        val home = intent.component?.let { it.packageName == "dev.launcher.app" && it.className == "dev.launcher.app.HomeActivity" } == true
+        if (home) {
+            val task = try { taskOf(intent.component!!) } catch (_: Throwable) { null }
+            if (task != null) try {
+                return "result ${fromRecents(task, options(noStartingWindow = true))} (home's task $task)"
+            } catch (_: Throwable) { }   // gone in between: started as an activity below
+        }
         val m = atm.javaClass.methods.filter { it.name == "startActivityAsUser" || it.name == "startActivity" }
             .sortedByDescending { it.name == "startActivityAsUser" }
             .firstOrNull { m -> m.parameterTypes.any { it == Intent::class.java } && m.parameterTypes.any { it == Bundle::class.java } }
             ?: return "ERROR: no startActivity method"
-        // Home (ours, under a picture of itself): no starting window. Brought back to the front, the system put a snapshot
-        // starting window over it, and home keeps no snapshots (they showed it as it was before the screen went off): a
-        // flat grey surface, faded out over home ~150 ms after home drew, after the picture of home over it had gone (the
-        // flicker after the settings closed into home, S24 recording).
-        val bundle = options(noStartingWindow = intent.component?.let { it.packageName == "dev.launcher.app" && it.className == "dev.launcher.app.HomeActivity" } == true)
+        val bundle = options(noStartingWindow = home)
         var strings = 0
         var ints = 0
         val args = m.parameterTypes.map { p ->
@@ -250,8 +262,31 @@ class InstantTransitions(private val atm: Any) {
 
     fun switchToTask(taskId: Int): String {
         requests.incrementAndGet()
-        val m = atm.javaClass.methods.first { it.name == "startActivityFromRecents" }
-        return "result ${m.invoke(atm, taskId, options())}"
+        return "result ${fromRecents(taskId, options())}"
+    }
+
+    private fun fromRecents(taskId: Int, options: Bundle): Any? =
+        atm.javaClass.methods.first { it.name == "startActivityFromRecents" }.invoke(atm, taskId, options)
+
+    /** The running task [component] is the top (or base) activity of, top first; null if none. */
+    private fun taskOf(component: android.content.ComponentName): Int? {
+        val ms = atm.javaClass.methods.filter { it.name == "getTasks" }
+        val m = ms.firstOrNull { it.parameterTypes.size == 4 } ?: ms.firstOrNull { it.parameterTypes.size == 3 } ?: ms.firstOrNull { it.parameterTypes.size == 1 }
+        // (maxNum, filterOnlyVisibleRecents, keepIntentExtra, displayId) on recent Android; shorter forms on older ones.
+        val list = when (m?.parameterTypes?.size) {
+            4 -> m.invoke(atm, 40, false, false, 0)
+            3 -> m.invoke(atm, 40, false, false)
+            1 -> m.invoke(atm, 40)
+            else -> null
+        } as? List<*> ?: return null
+        for (t in list) {
+            t ?: continue
+            fun cn(f: String) = try { t.javaClass.getField(f).get(t) as? android.content.ComponentName } catch (_: Throwable) { null }
+            if (cn("topActivity") == component || cn("baseActivity") == component) {
+                return try { t.javaClass.getField("taskId").getInt(t) } catch (_: Throwable) { null }
+            }
+        }
+        return null
     }
 
     fun stats(): String = "requests=${requests.get()} invoked=${invoked.get()} consumed=${consumed.get()} errors=${errors.get()}" +
