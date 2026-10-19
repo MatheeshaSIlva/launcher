@@ -683,6 +683,21 @@ copy it wholesale — port the working pieces cleanly. File map:
   its first reading (at boot it could fail and fall back to the phone's palette) until the phone's palette changed, which
   One UI with its Color palette off never does. The stamp now counts the wallpaper's own colours, and a failed reading is
   not kept.
+- **One UI 9 answers apps' `getWallpaperColors` with nothing**: the palette is made from Android's reading of the picture
+  home draws (`Wallpaper.colors`, `WallpaperColors.fromBitmap` at load; the load line in the log shows it).
+- **The phone's palettes, as found on the S24 (One UI 9.0, Android 17; read-only adb, services.jar searched with dexdump)**:
+  Android's Material You palette is the Secure setting `theme_customization_overlay_packages` (JSON: `system_palette` seed
+  hex, `color_source` "preset" or a wallpaper, `theme_style`, `_applied_timestamp`); AOSP's SystemUI rebuilds every app's
+  palette from it within a second (emulator), but skips the one change that follows its own write. One UI keeps its own
+  palette as two fabricated overlays, `android:SemWT_MonetPalette` (Samsung's apps) and `android:SemWT_G_MonetPalette`
+  (Material You), built by system_server's `SemWallpaperThemeManager` from two 65-colour lists (5 palettes x 13 shades,
+  Settings.System `wallpapertheme_color` and `wallpapertheme_color_for_g`, with `_isgray`, `_state`, `_style`); Wallpaper
+  and style applies a palette through Samsung's `IOverlayManager.applyWallpaperColor(List, List, boolean)` (or
+  `...WithStyle(..., String)`), which only checks that the caller is signed with the system key (`checkSignatures(1000,
+  uid)`): the shell's package is (`b378e95c` on the S24), so the Shizuku service can apply one; it also rewrites the AOSP
+  setting (seed, "preset", TONAL_SPOT or MONOCHROMATIC). The palette generator is in Wallpaper and style, not the system: the
+  caller sends both lists. A palette once picked is a preset that later wallpapers do not replace (the S24's stayed beige
+  under a green wallpaper).
 - **A surface has a fill budget** (`MaterialPainter.MAX_FILLS`, now 12): under, own and over fills share it, and Material
   You adds two tint layers to every glass. Past it, layers were left out silently (a lit Control Center well lost its
   accent and looked off). The painter logs the first overflow.
