@@ -175,7 +175,15 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
    Android's own); Android's palette is given only on a home left untouched 5 s (its return counts as a touch) or with the
    screen off, never while an app is in front, so the system's own hitch lands where nothing moves. Unverified on the S24
    (in a call during this round).
-2. The landscape notification shade: proposal first.
+2. **The landscape notification shade** ("very unintuitive"): ours is the portrait layout stretched (the lock screen's clock
+   over half the height, one notification across the whole width, flashlight and camera where the list would go: one
+   notification shows). How others do it (`docs/report/landscape_shade_others.png`): **iOS 27** (Simulator, run 21,
+   docs/IOS27_KIT.md) puts the date and time small at the top left and the notifications in a column of the portrait
+   width beside them, no stack, no buttons; **stock Android 17** (the emulator's SystemUI) a one-line header, one row of
+   tiles and the notifications in a centred column below (~70 % of the width), Quick Settings across the whole width on
+   the second pull, no split on a phone; **One UI 9** (read from the S24's SystemUI resources, no screenshot:
+   `force_config_use_split_notification_shade` true in landscape, `shade_panel_width` 474 dp at w720dp, a one-line header)
+   splits it: Quick Settings and notifications side by side. Waiting for Matheesha's choice before building.
 3. **Ask before removing an icon from home: done.** iOS 27's alert, from Apple's kit (docs/IOS27_KIT.md, Alerts): edit
    mode's minus and the menu's Remove App (iOS's name; Delete App moved into the alert) ask "Remove “Maps”?" with Delete
    App (where Android can uninstall it: its own confirmation follows), Remove from Home Screen and Cancel; a widget's minus
