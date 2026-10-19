@@ -769,15 +769,17 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val glyphOn = if (ctl.style == Control.Style.COLOR) Design.color(CcTokens.SYMBOL_ON_ACCENT) else ctl.accent
         val glyphColor = mix(white, if (ctl.kind == Control.Kind.TOGGLE) glyphOn else white, on)
         val icon = iconOf(ctl, on)
+        // (A set's symbol with an off look turns on with its control: Pixel's tiles.)
+        val lit = if (ctl.kind == Control.Kind.TOGGLE) on else 1f
         if (a.item.w == 1) {
-            glyphs.draw(c, icon, w / 2f, h / 2f, sf.pt(CcTokens.SYMBOL), alpha(glyphColor, alpha))
+            glyphs.draw(c, icon, w / 2f, h / 2f, sf.pt(CcTokens.SYMBOL), alpha(glyphColor, alpha), lit)
             return
         }
         val d = sf.pt(CcTokens.WELL_SIZE)
         val x = sf.pt(CcTokens.WIDE_PADDING)
         val wellOn = if (ctl.kind == Control.Kind.TOGGLE) on else 0f
         well(c, x, (h - d) / 2f, d, wellOn, if (ctl.style == Control.Style.COLOR) CcTokens.accent(ctl) else null, alpha)
-        glyphs.draw(c, icon, x + d / 2f, h / 2f, sf.pt(CcTokens.WELL_SYMBOL), alpha(glyphColor, alpha))
+        glyphs.draw(c, icon, x + d / 2f, h / 2f, sf.pt(CcTokens.WELL_SYMBOL), alpha(glyphColor, alpha), lit)
         val tx = x + d + sf.pt(CcTokens.WIDE_GAP)
         val maxW = w - tx - x
         val state = when (ctl.kind) { Control.Kind.TOGGLE -> if (on > 0.5f) "On" else "Off"; else -> null }
@@ -844,13 +846,13 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val sf = host.surfaces
         val white = Design.color(CcTokens.SYMBOL_COLOR)
         if (a.item.w == 1) {
-            glyphs.draw(c, R.drawable.sym_moon, w / 2f, h / 2f, sf.pt(CcTokens.SYMBOL), alpha(white, alpha))
+            glyphs.draw(c, R.drawable.sym_moon, w / 2f, h / 2f, sf.pt(CcTokens.SYMBOL), alpha(white, alpha), on)
             return
         }
         val d = sf.pt(CcTokens.WELL_SIZE)
         val x = sf.pt(CcTokens.WIDE_PADDING)
         well(c, x, (h - d) / 2f, d, on, CcTokens.accent(ctl), alpha)
-        glyphs.draw(c, R.drawable.sym_moon, x + d / 2f, h / 2f, sf.pt(CcTokens.WELL_SYMBOL), alpha(mix(white, Design.color(CcTokens.SYMBOL_ON_ACCENT), on), alpha))
+        glyphs.draw(c, R.drawable.sym_moon, x + d / 2f, h / 2f, sf.pt(CcTokens.WELL_SYMBOL), alpha(mix(white, Design.color(CcTokens.SYMBOL_ON_ACCENT), on), alpha), on)
         val tx = x + d + sf.pt(CcTokens.WIDE_GAP)
         if (on > 0.5f) drawLabel(c, "Do Not Disturb", "On", tx, h / 2f, w - tx - x, alpha)
         else {
@@ -912,7 +914,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val cy = at[1] * h
             well(c, cx - d / 2f, cy - d / 2f, d, on, CcTokens.accent(ctl), alpha)
             glyphs.draw(c, ctl.icon, cx, cy, sf.pt(if (bigOne) CcTokens.CONN_SYMBOL_BIG else CcTokens.CONN_SYMBOL_SMALL) * k * (1f - 0.06f * pressed),
-                alpha(mix(white, onAccent, on), alpha))
+                alpha(mix(white, onAccent, on), alpha), on)
         }
     }
 

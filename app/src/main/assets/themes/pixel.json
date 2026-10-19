@@ -15,6 +15,10 @@
    "choice": "google:Google Sans Flex",
    "src": "judged:Pixel draws its system UI in Google Sans Flex (Material 3 Expressive)"
   },
+  "sys.symbols": {
+   "choice": "pixel",
+   "src": "kit:AOSP SystemUI's Quick Settings icons, each as its tile names it (qs/tiles/*.java)"
+  },
   "sys.color.source": {
    "choice": "wallpaper",
    "src": "judged:a Pixel always takes the wallpaper's colours (Material You)"

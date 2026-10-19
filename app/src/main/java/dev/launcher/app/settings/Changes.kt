@@ -65,7 +65,12 @@ internal fun changesOf(d: Draft, ctx: android.content.Context, only: Part? = nul
             if (d.wallpaperColors()) "The wallpaper's" else "The theme's", Part.LOOK) { d.chooseColors(ownWallpaper) }
         val seed = d.seedColor()
         if (seed != null) add("seed", "Your colour", "Look › Colours", "The wallpaper's", Design.hexOf(seed).uppercase(), Part.LOOK) { d.chooseSeed(null) }
-        val ownStyle = (theme(Design.COLOR_STYLE.name) as? Value.Choice)?.option ?: "system"
+        val ownSymbols = (theme(SYMBOLS) as? Value.Choice)?.option ?: dev.launcher.app.design.IconSets.OWN
+        if (d.symbols() != ownSymbols) {
+            val names = dev.launcher.app.design.IconSets.list(ctx).toMap()
+            add("symbols", "Symbols", "Look › More", names[ownSymbols] ?: ownSymbols, names[d.symbols()] ?: d.symbols(), Part.LOOK) { d.chooseSymbols(ownSymbols) }
+        }
+        val ownStyle = (theme(Design.COLOR_STYLE.name) as? Value.Choice)?.option ?: "auto"
         if (d.colorStyle().id != ownStyle) add("style", "Style", "Look › Advanced",
             dev.launcher.app.design.MaterialYou.Style.of(ownStyle).title, d.colorStyle().title, Part.LOOK) {
             d.chooseColorStyle(dev.launcher.app.design.MaterialYou.Style.of(ownStyle))

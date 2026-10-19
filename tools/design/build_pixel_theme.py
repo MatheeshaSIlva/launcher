@@ -46,6 +46,8 @@ T = {
     # The fonts: Google Sans Flex, Pixel's own (on Google Fonts since 2025), for every text the theme names.
     'sys.font.text': {'choice': FONT, 'src': 'judged:Pixel draws its system UI in Google Sans Flex (Material 3 Expressive)'},
     'sys.font.display': {'choice': FONT, 'src': 'judged:Pixel draws its system UI in Google Sans Flex (Material 3 Expressive)'},
+    # Android's own Quick Settings symbols (assets/icons/pixel.json, tools/icons/build_icon_set.py).
+    'sys.symbols': {'choice': 'pixel', 'src': "kit:AOSP SystemUI's Quick Settings icons, each as its tile names it (qs/tiles/*.java)"},
     # A Pixel always draws in the wallpaper's colours.
     'sys.color.source': {'choice': 'wallpaper', 'src': "judged:a Pixel always takes the wallpaper's colours (Material You)"},
 

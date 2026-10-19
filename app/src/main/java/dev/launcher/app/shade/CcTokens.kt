@@ -20,6 +20,8 @@ object CcTokens {
     val ON = MaterialKey("comp.cc.module.on-material")
     val WELL = MaterialKey("comp.cc.well.material")
     val CORNER = NumberKey("comp.cc.module.corner")
+    /** The icon set its symbols are drawn from (`launcher`: the app's own; a set in assets/icons: [dev.launcher.app.design.IconSets]). */
+    val SYMBOLS = ChoiceKey("comp.cc.symbols")
     /** A control one row tall (one cell, or a wide one): its corner off and on (iOS 27: round both ways, half its height). */
     val ROW_CORNER = NumberKey("comp.cc.module.row-corner")
     val ROW_ON_CORNER = NumberKey("comp.cc.module.row-on-corner")
@@ -122,7 +124,7 @@ object CcTokens {
     // How it comes in: over how much of a pull (pt), and the spring it finishes on once the finger lets go.
     val OPEN_TRAVEL = NumberKey("comp.cc.motion.open-travel")
 
-    val ALL = listOf(OPEN_TRAVEL, BACKGROUND, SAMSUNG_STRENGTH, MODULE, ON, WELL, CORNER, ROW_CORNER, ROW_ON_CORNER, WELL_CORNER, WELL_ON_CORNER,
+    val ALL = listOf(OPEN_TRAVEL, BACKGROUND, SAMSUNG_STRENGTH, MODULE, ON, WELL, CORNER, SYMBOLS, ROW_CORNER, ROW_ON_CORNER, WELL_CORNER, WELL_ON_CORNER,
         SLIDER_CORNER, SYMBOL, SYMBOL_COLOR, WIDE_PADDING,
         WIDE_GAP, WELL_SIZE, WELL_SYMBOL, TITLE, TITLE_LARGE, DETAIL, LABEL_COLOR, DETAIL_COLOR, DETAIL_BLEND, CELL, CELL_HEIGHT, GRID_SIDE, GAP,
         GRID_TOP, GRID_TOP_EDIT, ROW_Y, GRID_TOP_LANDSCAPE, GRID_SIDE_LANDSCAPE, ROW_Y_LANDSCAPE, BUTTON, BUTTON_SIZE, BUTTON_INSET_X, BUTTON_TOP, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR,

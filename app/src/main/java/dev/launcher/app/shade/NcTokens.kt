@@ -14,6 +14,8 @@ object NcTokens {
     // A notification's platter (shared with the banners: they are the same component).
     val PLATTER = MaterialKey("comp.nc.platter.material")
     val CORNER = NumberKey("comp.nc.platter.corner")
+    /** The icon set its symbols are drawn from (`launcher`: the app's own; [dev.launcher.app.design.IconSets]). */
+    val SYMBOLS = ChoiceKey("comp.nc.symbols")
     val PADDING = NumberKey("comp.nc.platter.padding")
     val ICON = NumberKey("comp.nc.platter.icon")
     val TEXT_X = NumberKey("comp.nc.platter.text-x")
@@ -78,7 +80,7 @@ object NcTokens {
     val LOOK_DIM = ColorKey("comp.nc.look.dim")
     val LOOK_BLUR = NumberKey("comp.nc.look.blur")
 
-    val ALL = listOf(PLATTER, CORNER, PADDING, ICON, TEXT_X, TEXT_TOP, MIN_HEIGHT, TITLE, BODY, TIME, LABEL, TIME_COLOR, TIME_BLEND,
+    val ALL = listOf(PLATTER, CORNER, SYMBOLS, PADDING, ICON, TEXT_X, TEXT_TOP, MIN_HEIGHT, TITLE, BODY, TIME, LABEL, TIME_COLOR, TIME_BLEND,
         MARGIN, GAP, OVERLAY, FADE_TOP, FADE_BOTTOM, FADE_LENGTH, SHELF_HEIGHT, SHELF_SHOW, SHELF_INSET1, SHELF_INSET2, STACK_TEXT_TOP, STACK_MIN_HEIGHT,
         PEEK_SHOW, PEEK_HEIGHT, PEEK_INSET, MORE_INSET, PEEK_CORNER, PEEK_ICON, BUTTON, BUTTON_SIZE, BUTTON_INSET_X,
         BUTTON_BOTTOM, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR, BUTTON_SYMBOL_BLEND, BUTTON_ON, BUTTON_ON_SYMBOL, MEDIA_PLACEHOLDER, MEDIA_TRACK, HEADER_COLOR, TEXT_SHADOW, LOOK_CARD, LOOK_CORNER, LOOK_INSET, LOOK_LABEL,

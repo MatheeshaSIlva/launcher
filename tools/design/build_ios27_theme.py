@@ -285,7 +285,7 @@ SEED = {
     'sys.font.text': {'choice': 'inter', 'src': "judged:Inter in place of SF Pro Text (SF is licensed for Apple platforms only); its optical size 14 plays SF's Text cut"},
     'sys.font.display': {'choice': 'inter', 'src': "judged:Inter in place of SF Pro Display; its optical size 32 plays SF's Display cut"},
     'sys.color.source': {'choice': 'theme', 'src': "judged:the theme's own colours until the user picks the wallpaper's (Material You)"},
-    'sys.color.style': {'choice': 'system', 'src': "judged:Material You's style: the phone's own palette (Wallpaper & style) until the user picks one (tonal, vibrant, expressive, neutral, monochrome)"},
+    'sys.color.style': {'choice': 'auto', 'src': "judged:Material You's style: Auto, the phone's own palette (Wallpaper & style) while it is the wallpaper's, else one made from the wallpaper (Matheesha, 2026-10-19: One UI's palette stayed blue under a green wallpaper), until the user picks one (the phone's, tonal, vibrant, expressive, neutral, monochrome)"},
     'sys.color.intensity': {'factor': 1, 'src': "judged:how colourful the wallpaper's palette is (0 grey, 1 the style's own, 2 twice): the user's"},
     'sys.color.seed': {'choice': 'wallpaper', 'src': "judged:what Material You's palette is made from: the wallpaper's main colour, or a colour the user picks (#rrggbb)"},
     'sys.color.key.primary': {'choice': 'auto', 'src': "judged:the primary palette's key colour: from the style (auto), or the user's (#rrggbb)"},
@@ -700,6 +700,12 @@ SEED = {
     'comp.cc.grid.side-landscape': {'pt': 100, 'src': 'judged:iOS 27 Simulator in landscape: 8 columns centred, 103.3 pt each side at 874 pt (the 62 pt landscape safe area and the 38 pt portrait margin; the columns that fit within it)'},
     'comp.cc.status.row-y-landscape': {'pt': 32.3, 'src': 'measured:iOS 27 Simulator in landscape: Carrier 23.3-41.3 pt, the battery 25.7-39.4 (no + and power there)'},
     'comp.cc.module.corner': {'pt': 30, 'src': 'kit:2547:2662 (2x2)'},
+    # Symbols: the app's own (Material Symbols Rounded, res/drawable/sym_*) until a theme names an icon set (assets/icons,
+    # tools/icons/build_icon_set.py); each element reads its own token, so an element's own theme may name another set.
+    'sys.symbols': {'choice': 'launcher', 'src': "judged:the app's own symbols (Material Symbols Rounded, as SF Symbols' stand-in)"},
+    'comp.cc.symbols': {'ref': 'sys.symbols', 'src': "judged:the theme's icon set"},
+    'comp.nc.symbols': {'ref': 'sys.symbols', 'src': "judged:the theme's icon set"},
+    'comp.banner.symbols': {'ref': 'sys.symbols', 'src': "judged:the theme's icon set"},
     # A control one row tall and the box behind a module's symbol: round off and on (a corner past half the size is capped
     # there); a theme may square them off (Pixel: a capsule off, 24 dp on; its symbol box 16 dp on).
     'comp.cc.module.row-corner': {'pt': 999, 'src': 'judged:round: one cell a circle, a wide control a capsule (half its height)'},

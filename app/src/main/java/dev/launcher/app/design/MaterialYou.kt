@@ -12,7 +12,9 @@ import kotlin.math.sin
  * Material You's palettes made here (docs/PLAN_SETTINGS.md, C3): from the wallpaper's main colour, in one of Android's
  * styles (Tonal spot, Vibrant, Expressive, Neutral, Monochrome: the choices of the phone's Wallpaper & style), at an
  * intensity (how colourful the whole palette is: 0 grey, 1 the style's own, up to 2). "The phone's" style uses the system's
- * palette as it is (only its colourfulness scaled by the intensity).
+ * palette as it is (only its colourfulness scaled by the intensity); "Auto" does so only while the phone's palette is the
+ * wallpaper's ([followsWallpaper]), and makes a tonal one from the wallpaper otherwise (One UI's Color palette switched
+ * off or set to a basic colour leaves the phone's palette blue whatever the wallpaper is).
  *
  * The palettes are tones of one hue and chroma each, as Material's tonal palettes, made in CIELAB's lightness (a tone
  * is L*, as in Material's HCT) with the chroma brought into sRGB where a tone cannot hold it; the styles' hues and
@@ -23,9 +25,9 @@ import kotlin.math.sin
  */
 object MaterialYou {
     enum class Style(val id: String, val title: String) {
-        SYSTEM("system", "The phone's"), TONAL("tonal", "Tonal"), VIBRANT("vibrant", "Vibrant"),
+        AUTO("auto", "Auto"), SYSTEM("system", "The phone's"), TONAL("tonal", "Tonal"), VIBRANT("vibrant", "Vibrant"),
         EXPRESSIVE("expressive", "Expressive"), NEUTRAL("neutral", "Neutral"), MONOCHROME("monochrome", "Monochrome");
-        companion object { fun of(id: String?) = entries.firstOrNull { it.id == id } ?: SYSTEM }
+        companion object { fun of(id: String?) = entries.firstOrNull { it.id == id } ?: AUTO }
     }
 
     /** One hue and chroma; [tone] is CIELAB L* (0 black .. 100 white). */
@@ -76,7 +78,7 @@ object MaterialYou {
         val k = intensity.coerceIn(0f, 2f).toDouble()
         fun p(hue: Double, chroma: Double) = TonalPalette(norm(hue), chroma * k)
         return when (style) {
-            Style.SYSTEM, Style.TONAL -> Scheme(p(h, 36.0), p(h, 16.0), p(h + 60, 24.0), p(h, 6.0), p(h, 8.0), p(25.0, 84.0))
+            Style.AUTO, Style.SYSTEM, Style.TONAL -> Scheme(p(h, 36.0), p(h, 16.0), p(h + 60, 24.0), p(h, 6.0), p(h, 8.0), p(25.0, 84.0))
             Style.VIBRANT -> Scheme(p(h, maxOf(c0, 60.0)), p(h + rotation(h, VIBRANT_SECONDARY), 24.0), p(h + rotation(h, VIBRANT_TERTIARY), 32.0),
                 p(h, 10.0), p(h, 12.0), p(25.0, 84.0))
             Style.EXPRESSIVE -> Scheme(p(h + 240, 40.0), p(h + rotation(h, EXPRESSIVE_SECONDARY), 24.0), p(h + rotation(h, EXPRESSIVE_TERTIARY), 32.0),
@@ -105,6 +107,19 @@ object MaterialYou {
             return pal.tone(if (dark) r.dark else r.light)
         }
         return null
+    }
+
+    /**
+     * Whether the phone's palette, its primary key colour [phoneKey], comes from a wallpaper whose colours are [wallpaper]
+     * (the system's reading: main, second, third): one of them within [maxTurn] degrees of its hue. A grey wallpaper or a
+     * grey palette (Monochrome) counts as following (Android's own palette for a grey wallpaper is its fallback blue).
+     */
+    fun followsWallpaper(phoneKey: Int, wallpaper: List<Int>, maxTurn: Double = 45.0): Boolean {
+        val colourful = wallpaper.map { toLch(it) }.filter { it.second >= 15.0 }
+        if (colourful.isEmpty()) return true
+        val (_, kc, kh) = toLch(phoneKey)
+        if (kc < 8.0) return true
+        return colourful.any { abs(((it.third - kh + 540.0) % 360.0) - 180.0) <= maxTurn }
     }
 
     /** [argb] with its chroma times [k] (its lightness and hue kept): "The phone's" palette at an intensity. */

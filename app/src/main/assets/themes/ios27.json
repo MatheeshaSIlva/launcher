@@ -1516,6 +1516,10 @@
    "ref": "sys.color.label.secondary",
    "src": "measured:iOS 27 Simulator run 4 (the time in grey)"
   },
+  "comp.banner.symbols": {
+   "ref": "sys.symbols",
+   "src": "judged:the theme's icon set"
+  },
   "comp.banner.system-blur": {
    "factor": 1,
    "src": "judged:Matheesha (2026-10-12): banners must be live blur, as Control Center: One UI's own live blur under each banner, with the dock material's colour treatment (fitted on the S24 against our glass over the same wallpaper), the glass's rims and light over it. (Off once because banners all but vanished during app opens and closes: that was the card window stacked over the shade's, since fixed.) Where the phone has no such blur: our glass over the blurred picture of what is behind"
@@ -2084,6 +2088,10 @@
    "ref": "component.control.on-symbol-color",
    "src": "judged:the shared component style (component.control.on-symbol-color)"
   },
+  "comp.cc.symbols": {
+   "ref": "sys.symbols",
+   "src": "judged:the theme's icon set"
+  },
   "comp.cc.well.corner": {
    "ref": "component.control.well-corner",
    "src": "judged:the shared component style (component.control.well-corner)"
@@ -2538,6 +2546,10 @@
   "comp.nc.stack.shelf-show": {
    "pt": 8,
    "src": "kit:533:5978"
+  },
+  "comp.nc.symbols": {
+   "ref": "sys.symbols",
+   "src": "judged:the theme's icon set"
   },
   "comp.nc.text-shadow-color": {
    "color": "#00000059",
@@ -3601,8 +3613,8 @@
    "src": "judged:the theme's own colours until the user picks the wallpaper's (Material You)"
   },
   "sys.color.style": {
-   "choice": "system",
-   "src": "judged:Material You's style: the phone's own palette (Wallpaper & style) until the user picks one (tonal, vibrant, expressive, neutral, monochrome)"
+   "choice": "auto",
+   "src": "judged:Material You's style: Auto, the phone's own palette (Wallpaper & style) while it is the wallpaper's, else one made from the wallpaper (Matheesha, 2026-10-19: One UI's palette stayed blue under a green wallpaper), until the user picks one (the phone's, tonal, vibrant, expressive, neutral, monochrome)"
   },
   "sys.font.display": {
    "choice": "inter",
@@ -3900,6 +3912,10 @@
   "sys.spacing.margin": {
    "ref": "ref.dimen.margin",
    "src": "kit:VariableID:10442:65"
+  },
+  "sys.symbols": {
+   "choice": "launcher",
+   "src": "judged:the app's own symbols (Material Symbols Rounded, as SF Symbols' stand-in)"
   },
   "sys.type.body": {
    "ref": "ref.type.body.regular",

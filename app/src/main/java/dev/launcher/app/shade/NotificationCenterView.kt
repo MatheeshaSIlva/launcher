@@ -86,7 +86,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         fun camera()
     }
 
-    private val glyphs = Glyphs(ctx)
+    private val glyphs = Glyphs(ctx, NcTokens.SYMBOLS)
     private val mainHandler = Handler(Looper.getMainLooper())
     /** This view's thread (the shade's), or main before it is attached. */
     private fun hnd(): Handler = handler ?: mainHandler

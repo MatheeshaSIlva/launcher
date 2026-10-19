@@ -80,4 +80,26 @@ class MaterialYouTest {
         assertEquals(50.0, MaterialYou.toLch(MaterialYou.color(s, "system_accent2_500")!!).first, 1.0)
         assertEquals(null, MaterialYou.color(s, "system_something_else"))
     }
+
+    // One UI's Color palette off (or a basic colour) leaves the phone's palette blue under any wallpaper: Auto must notice.
+    @Test fun phonePaletteFollowsTheWallpaperOnlyWhenItsHueIsThere() {
+        val green = 0xFF3E8E41.toInt()
+        val moss = 0xFF6B7F3A.toInt()
+        val blue = 0xFF3478F6.toInt()
+        val greenKey = 0xFF4C8A50.toInt()
+        assertEquals(false, MaterialYou.followsWallpaper(blue, listOf(green, moss)))
+        assertEquals(true, MaterialYou.followsWallpaper(greenKey, listOf(green, moss)))
+        // A palette made from the wallpaper's second colour follows it too.
+        assertEquals(true, MaterialYou.followsWallpaper(orange, listOf(green, orange)))
+        // A grey wallpaper (Android's palette is then its fallback blue), or a grey palette: nothing to compare.
+        assertEquals(true, MaterialYou.followsWallpaper(blue, listOf(0xFF808080.toInt(), 0xFF202020.toInt())))
+        assertEquals(true, MaterialYou.followsWallpaper(0xFF777777.toInt(), listOf(green)))
+        assertEquals(true, MaterialYou.followsWallpaper(blue, emptyList()))
+    }
+
+    @Test fun autoIsTheDefaultStyle() {
+        assertEquals(MaterialYou.Style.AUTO, MaterialYou.Style.of(null))
+        assertEquals(MaterialYou.Style.AUTO, MaterialYou.Style.of("auto"))
+        assertEquals(MaterialYou.Style.SYSTEM, MaterialYou.Style.of("system"))
+    }
 }

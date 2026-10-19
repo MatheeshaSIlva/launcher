@@ -148,6 +148,7 @@ have; code, and a parameter set a layout file would fill).
 | --- | --- | --- |
 | The panel follows the finger and settles on a spring | Roles for Control Center's and Notification Center's opening | **Theme** of motion (the preset) |
 | The quick row grows into the grid as one | None | **New motion** with the two-stage block |
+| Haptics: MSDL tokens by interaction (a switch on, off, a long press), one feel per action (added 2026-10-19: Matheesha on the S24, "the animations and haptics are not the same") | Fixed Android constants in code (CLOCK_TICK, LONG_PRESS), the same in every theme and preset | **New layer**: haptics as roles a motion preset sets (Pixel's from MSDL's compositions) |
 | Corners and colours animate with a tile's state | Colours do (the toggle role) | **New role** with the new corner token (**done in step 2** without one: the corner follows the toggle's animation) |
 | The clock grows into the expanded header | None | **New motion** with the header block |
 
@@ -270,6 +271,32 @@ chosen so that nothing changes there, and Pixel's value from AOSP:
 **The symbol set is waiting**: its code is small (a token naming the set, each control's symbol looked up in it); the
 symbols are the question. AOSP SystemUI's own Quick Settings icons are exactly what a Pixel shows; Material Symbols Rounded
 are the family they come from; both are Apache-2.0, and either means downloading about 30 to 40 small vector files.
+
+**On the S24** (Matheesha, with screenshots in light and dark): the veil, the status bar's colours, the shapes and the
+symbol boxes came through; "the animations and haptics are not the same" as AOSP's (motion is step 4's with the blocks;
+haptics were in no layer: added above as a gap). "We will provide different icon sets, it is also required for the status
+bar themes as well": the symbol set below is built as icon sets any element can read.
+
+### The symbol set, as icon sets (2026-10-19)
+
+- **Icon sets** are data, as themes are (`assets/icons/<id>.json`, `files/icons/` through the inbox): each symbol vector
+  paths with its source, drawn in place of the app's own wherever a theme names the set (`sys.symbols`, read through each
+  element's own token: `comp.cc.symbols`, `comp.nc.symbols`, `comp.banner.symbols`). A name a set leaves out is drawn
+  with the app's own; `NAME.off` is a control's look while off, crossfaded as it turns on.
+- **The app's own symbols turned out to be Material Symbols Rounded already**, so the set that makes Pixel's look is
+  AOSP's own: `pixel`, 35 symbols (11 with their off look) from SystemUI's Quick Settings icons, as each tile names them
+  (`qs/tiles/*.java`): Wi-Fi's wedge, Bluetooth, airplane, DND's minus, Battery Saver, data saver, hotspot, location (a
+  crossed pin when off), flashlight (an outline when off), auto-rotate, dark theme, colour inversion and correction,
+  extra dim, cast, NFC, notes, QR, font size, wallet, alarm, live caption, hearing devices, the settings gear, brightness,
+  media volume (Pixel's music note), the ringer, the media buttons. Calculator, timer, camera and the others Android has no
+  tile for keep the app's own. Animated icons are taken at their last frame (what SystemUI shows at rest).
+- **Built by `tools/icons/build_icon_set.py`** from Android vector drawables (plain or animated: groups' transforms,
+  motion paths, several animation targets per group, trims, clip paths) and SVGs; reviewed on the preview page
+  (`PreviewActivity --es icons pixel`: each symbol beside the app's own and its off look).
+- **The Pixel theme names the set**; the settings choose one for the whole phone (Look › More › Symbols: Launcher or
+  Pixel), so theme and symbols combine freely (iOS 27's glass with Pixel's symbols was checked on the emulator).
+- **What Pixel animates, we crossfade**: its icons morph between off and on (animated vectors); ours fade one into the other
+  on the toggle's curve. The morphs are motion's (step 4).
 
 ## References
 

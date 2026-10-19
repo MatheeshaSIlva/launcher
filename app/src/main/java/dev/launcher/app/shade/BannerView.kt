@@ -91,7 +91,7 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
     private val painter = NotifPainter(ctx, 3) { for (s in all) s.card.invalidate() }
     /** The renderer of the banners' glass (they draw on the shade's thread, one at a time). */
     private var mp: MaterialPainter? = null
-    private val glyphs = Glyphs(ctx)
+    private val glyphs = Glyphs(ctx, SYMBOLS)
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
     private var u = 1f
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -712,6 +712,8 @@ class BannerView(ctx: Context, private val host: Host) : android.widget.FrameLay
         const val SHOW_MS = 7000L
         // The banner's tokens (`comp.banner.*`; values and sources in assets/themes/ios27.json).
         val MATERIAL = MaterialKey("comp.banner.material")
+        /** The icon set its symbols are drawn from ([dev.launcher.app.design.IconSets]). */
+        val SYMBOLS = dev.launcher.app.design.ChoiceKey("comp.banner.symbols")
         val SYSTEM_BLUR = NumberKey("comp.banner.system-blur")
         /** What is behind a banner changed (an app's picture came, an app opened or closed under it): its glass fades from the one to the other (`motion.banner.app-fade`). */
         private val appFade = dev.launcher.app.motion.RoleTiming(dev.launcher.app.motion.MotionTokens.BANNER_APP_FADE)

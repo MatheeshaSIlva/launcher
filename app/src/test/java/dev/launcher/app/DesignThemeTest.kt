@@ -45,7 +45,7 @@ class DesignThemeTest {
             val v = r.resolve(k)
             val want = when {
                 k.endsWith("material") -> Value.Mat::class
-                k.endsWith("-blend") -> Value.Choice::class
+                k.endsWith("-blend") || k.endsWith(".symbols") -> Value.Choice::class
                 k.endsWith("color") || k.endsWith(".label") || k.endsWith("-color") || k.endsWith(".dim") ||
                     k.endsWith(".destructive") || k.endsWith(".press") || k.endsWith(".fallback") -> Value.Color::class
                 k.endsWith(".title") || k.endsWith(".body") || k.endsWith(".time") || k.endsWith(".type") -> Value.Text::class
@@ -58,7 +58,7 @@ class DesignThemeTest {
             val v = r.resolve(k)
             val want = when {
                 k.endsWith("material") || k.endsWith(".sheet") || k.endsWith(".entry") -> Value.Mat::class
-                k.endsWith("-blend") -> Value.Choice::class
+                k.endsWith("-blend") || k.endsWith(".symbols") -> Value.Choice::class
                 k.endsWith("color") || k.endsWith(".dim") || k.endsWith(".label") || k.endsWith(".destructive") || k.endsWith(".press") ||
                     k.endsWith(".fallback") -> Value.Color::class
                 k.endsWith(".title") || k.endsWith(".title-large") || k.endsWith(".detail") || k.endsWith(".type") -> Value.Text::class

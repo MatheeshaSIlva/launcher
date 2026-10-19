@@ -270,6 +270,8 @@ internal class Draft {
     val fonts = androidx.compose.runtime.mutableStateMapOf<String, String>()
     /** Material You's style and intensity (see [dev.launcher.app.design.MaterialYou]). */
     var colorStyle by mutableStateOf<String?>(null)
+    /** The icon set chosen (`sys.symbols`), not applied yet. */
+    var symbols by mutableStateOf<String?>(null)
     var colorIntensity by mutableStateOf<Float?>(null)
     /** What the palette is made from ("wallpaper" or "#rrggbb") and key colours set by hand per palette ("auto" or "#rrggbb"). */
     var colorSeed by mutableStateOf<String?>(null)
@@ -301,7 +303,7 @@ internal class Draft {
     /** When Back was pressed with changes waiting (a second Back soon after discards them and leaves); 0: not. */
     var backAt by androidx.compose.runtime.mutableLongStateOf(0L)
 
-    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, colorIntensity, colorSeed, scalePolicy, sizeFactor, textFactor).size +
+    val count: Int get() = listOfNotNull(theme, colors, motion, appearance, colorStyle, symbols, colorIntensity, colorSeed, scalePolicy, sizeFactor, textFactor).size +
         elements.size + setup.size +
         fonts.size + colorKeys.size + motionEdits.size + motionCleared.size
 
@@ -480,10 +482,13 @@ internal class Draft {
         dev.launcher.app.design.MaterialYou.KEY_PALETTES.mapNotNull { (p, _) -> keyColor(p)?.let { p to it } }.toMap())
     private fun appliedChoice(key: String, default: String) =
         (try { Design.resolved(key) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Choice)?.option ?: default
-    private fun appliedStyle() = (try { Design.resolved(Design.COLOR_STYLE.name) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Choice)?.option ?: "system"
+    private fun appliedStyle() = (try { Design.resolved(Design.COLOR_STYLE.name) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Choice)?.option ?: "auto"
     private fun appliedIntensity() = (try { Design.resolved(Design.COLOR_INTENSITY.name) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Number)?.v ?: 1f
     /** The family font token [key] has (the draft's, else the one in use). */
     fun font(key: String): String = fonts[key] ?: appliedFont(key)
+    /** The icon set ([dev.launcher.app.design.IconSets]; the draft's, else the one in use). */
+    fun symbols(): String = symbols ?: appliedChoice(SYMBOLS, dev.launcher.app.design.IconSets.OWN)
+    fun chooseSymbols(id: String) { symbols = id.takeIf { it != appliedChoice(SYMBOLS, dev.launcher.app.design.IconSets.OWN) } }
     fun chooseFont(key: String, family: String) { if (family == appliedFont(key)) fonts.remove(key) else fonts[key] = family }
     private fun appliedFont(key: String) = (try { Design.resolved(key) } catch (_: Throwable) { null } as? dev.launcher.app.design.Value.Choice)?.option ?: "inter"
 
@@ -498,8 +503,17 @@ internal class Draft {
             for (id in motionCleared.keys) Design.clearMotionEdits(id)
             for ((pk, v) in motionEdits) Design.setMotionEdit(pk.first, pk.second, v)
             motion?.let { Design.setMotion(it) }
-            for ((k, family) in fonts) Design.set(k, dev.launcher.app.design.Value.Choice(family))
+            // The theme's own font is no edit either (kept, an Inter chosen under iOS 27 hid Pixel's Google Sans Flex).
+            for ((k, family) in fonts) {
+                if (family == (Design.themeEntry(k)?.value as? dev.launcher.app.design.Value.Choice)?.option) Design.reset(k)
+                else Design.set(k, dev.launcher.app.design.Value.Choice(family))
+            }
             colorStyle?.let { Design.set(Design.COLOR_STYLE.name, dev.launcher.app.design.Value.Choice(it)) }
+            // The theme's own set is no edit (kept as one, it would hide the set of a theme chosen later: Pixel's).
+            symbols?.let {
+                if (it == (Design.themeEntry(SYMBOLS)?.value as? dev.launcher.app.design.Value.Choice)?.option) Design.reset(SYMBOLS)
+                else Design.set(SYMBOLS, dev.launcher.app.design.Value.Choice(it))
+            }
             colorIntensity?.let { Design.set(Design.COLOR_INTENSITY.name, dev.launcher.app.design.Value.Number(it, dev.launcher.app.design.NumUnit.FACTOR)) }
             colorSeed?.let { Design.set(Design.COLOR_SEED.name, dev.launcher.app.design.Value.Choice(it)) }
             scalePolicy?.let { Design.set(dev.launcher.app.design.Scale.POLICY.name, dev.launcher.app.design.Value.Choice(it)) }
@@ -517,7 +531,7 @@ internal class Draft {
 
     fun discard() {
         theme = null; colors = null; motion = null; appearance = null
-        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); scalePolicy = null; sizeFactor = null; textFactor = null; backAt = 0L
+        elements.clear(); setup.clear(); fonts.clear(); colorStyle = null; symbols = null; colorIntensity = null; colorSeed = null; colorKeys.clear(); scalePolicy = null; sizeFactor = null; textFactor = null; backAt = 0L
         motionEdits.clear(); motionCleared.clear()
         for (c in motionCells.values) c.value = null
     }
@@ -1513,13 +1527,14 @@ private fun LookPage(push: (Pushed) -> Unit, lit: () -> Pushed?) {
     // Which palette's colour the editor under the palette is changing (null: none).
     val keyEditing = remember { mutableStateOf<Char?>(null) }
     Group(null) {
-        Fold(foldId(Part.LOOK, "more"), "More", if (settingsTheme) "Fonts, size, the settings app's theme" else "Fonts, size", moreChanged) {
+        Fold(foldId(Part.LOOK, "more"), "More", if (settingsTheme) "Fonts, size, symbols, the settings app's theme" else "Fonts, size, symbols", moreChanged) {
             val text = fontName(draft.font("sys.font.text"))
             val titles = fontName(draft.font("sys.font.display"))
             // ("Inter · Serif" did not say which was which.)
             PushRow("Fonts", if (text == titles) text else "$text, titles in $titles", Sub.FONTS, push, lit)
             PushRow("Size", if (draft.followsPhoneSize()) "Follows the phone"
                 else "Your own · ${(draft.size(ctx) * 100).roundToInt()} %, text ${(draft.text(ctx) * 100).roundToInt()} %", Sub.SIZE, push, lit)
+            SymbolsRow(draft)
             if (settingsTheme) OwnThemeRow(Element.SETTINGS, SETTINGS_THEME)
         }
         // (Its rows are quieter while the theme's own colours are chosen, and the palette's line says what they are for: a
@@ -1541,8 +1556,34 @@ private val APPEARANCES = Appearance.Mode.entries.map { it.title }
 internal const val SETTINGS_THEME = "The settings app's theme"
 
 /** The changes ([changesOf]'s ids) in Look's More, and in its Advanced, besides the fonts' and the key colours'. */
-private val MORE_CHANGES = setOf("size", "theme:settings")
+private val MORE_CHANGES = setOf("size", "symbols", "theme:settings")
 private val ADVANCED_CHANGES = setOf("style", "intensity")
+
+/** The icon set token the settings choose (each element reads it through its own: `comp.cc.symbols` ...). */
+internal const val SYMBOLS = "sys.symbols"
+
+/**
+ * Symbols: the icon sets there are ([dev.launcher.app.design.IconSets]: the launcher's own, Pixel's...), one chosen for
+ * every part (a part's own theme may name another).
+ */
+@Composable
+private fun SymbolsRow(draft: Draft) {
+    val look = LocalLook.current
+    val ctx = LocalContext.current
+    val pad = look.dp(SettingsTokens.ROW_PADDING)
+    val separator = look.color(SettingsTokens.ROW_SEPARATOR)
+    val counter = LocalRowCounter.current
+    val first = remember { counter == null || counter.n++ == 0 }
+    val sets = remember { dev.launcher.app.design.IconSets.list(ctx) }
+    Column(Modifier.fillMaxWidth()
+        .drawBehind { if (!first) drawRect(separator, Offset(pad.toPx(), 0f), Size(size.width - pad.toPx(), 1f)) }
+        .anchor("Symbols")
+        .padding(horizontal = pad, vertical = look.dp(10f * look.unit))) {
+        BasicText("Symbols", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
+        Spacer(Modifier.height(look.dp(8f * look.unit)))
+        ChoiceChips(sets.map { it.second }, sets.indexOfFirst { it.first == draft.symbols() }) { i -> draft.chooseSymbols(sets[i].first) }
+    }
+}
 
 /** A moment's page, for a page pushed as one. */
 @Composable
@@ -1836,6 +1877,14 @@ private fun ColourStyleRow(draft: Draft) {
         BasicText("Style", style = look.text(SettingsTokens.ROW_TITLE, look.color(SettingsTokens.ROW_LABEL)))
         Spacer(Modifier.height(look.dp(8f * look.unit)))
         ChoiceChips(styles.map { it.title }, styles.indexOf(draft.colorStyle())) { i -> draft.chooseColorStyle(styles[i]) }
+        // What Auto does on this phone (its own palette, or one made from the wallpaper when the phone's is not it).
+        val follows = remember { Design.phonePaletteIsWallpapers() }
+        Reveal(draft.colorStyle() == dev.launcher.app.design.MaterialYou.Style.AUTO) {
+            BasicText(if (follows) "Auto: your phone's palette, made from your wallpaper"
+                else "Auto: made from your wallpaper (your phone's palette is not your wallpaper's)",
+                style = look.text(SettingsTokens.ROW_DETAIL, look.color(SettingsTokens.ROW_DETAIL_COLOR)),
+                modifier = Modifier.padding(top = look.dp(8f * look.unit)))
+        }
     }
 }
 

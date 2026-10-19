@@ -80,6 +80,7 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
     add("More", "Look", "more fonts size settings app theme", Part.LOOK)
     add("Fonts", "Look › More", "fonts font typeface typography text titles inter google", Part.LOOK, fold = more)
     add("Size", "Look › More", "size zoom scale display bigger smaller large small text size", Part.LOOK, fold = more)
+    add("Symbols", "Look › More", "symbols icons icon set glyphs pixel android material quick settings", Part.LOOK, fold = more)
     if (offersOwnTheme(draft, dev.launcher.app.layout.Element.SETTINGS)) {
         add(SETTINGS_THEME, "Look › More", "settings app own theme this these", Part.LOOK, fold = more)
     }

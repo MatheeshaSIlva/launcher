@@ -17,6 +17,12 @@ import dev.launcher.app.statusbar.StatusBarView
 class PreviewActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // --es icons ID: an icon set's symbols beside the app's own (each: the app's, the set's, the set's off look).
+        intent.getStringExtra("icons")?.let { id ->
+            window.decorView.setBackgroundColor(Color.BLACK)
+            setContentView(android.widget.ScrollView(this).apply { addView(IconSetPreview(this@PreviewActivity, id)) })
+            return
+        }
         val h = (resources.displayMetrics.density * 40).toInt()
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -57,5 +63,37 @@ class PreviewActivity : Activity() {
         fillIcons()
         window.decorView.setBackgroundColor(Color.BLACK)
         setContentView(col)
+    }
+}
+
+/** The symbols of icon set [id] in rows: the name, the app's own symbol, the set's, and the set's look when off. */
+private class IconSetPreview(ctx: android.content.Context, id: String) : View(ctx) {
+    private val set = dev.launcher.app.design.IconSets.get(ctx, id)
+    private val names = set?.names?.filter { !it.endsWith(".off") }.orEmpty()
+    private val d = resources.displayMetrics.density
+    private val rowH = 56 * d
+    private val label = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; textSize = 13 * d }
+    private val dim = android.graphics.Paint(label).apply { color = 0xFF8E8E93.toInt() }
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) =
+        setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), ((names.size + 2) * rowH).toInt())
+
+    override fun onDraw(c: android.graphics.Canvas) {
+        c.drawText(if (set == null) "no icon set" else "${set.name}: ${names.size} symbols (own · set · off)", 16 * d, rowH * 0.6f, label)
+        val size = 28 * d
+        for ((i, n) in names.withIndex()) {
+            val y = rowH * (i + 1.5f)
+            c.drawText(n, 16 * d, y + 5 * d, dim)
+            val res = resources.getIdentifier("sym_$n", "drawable", context.packageName)
+            if (res != 0) context.getDrawable(res)?.mutate()?.let { dr ->
+                val s = size.toInt()
+                dr.setBounds(0, 0, s, s)
+                dr.setTint(Color.WHITE)
+                c.save(); c.translate(150 * d - s / 2f, y - s / 2f); dr.draw(c); c.restore()
+            }
+            set?.glyph(n)?.draw(c, 210 * d, y, size, Color.WHITE, paint)
+            set?.glyph("$n.off")?.draw(c, 270 * d, y, size, 0xFFB0B0B0.toInt(), paint)
+        }
     }
 }

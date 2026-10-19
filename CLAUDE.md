@@ -134,7 +134,21 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   wash; written by the builder). A theme's own tokens win over the Material You of the theme it extends. The palette is
   the phone's (Wallpaper & style) or made by `design/MaterialYou` from the wallpaper's main colour in a style (tonal,
   vibrant, expressive, neutral, monochrome); `sys.color.style`, `sys.color.intensity` (chroma 0..2); made from the
-  wallpaper or the user's colour (`sys.color.seed`), any palette's key colour set by hand (`sys.color.key.*`).
+  wallpaper or the user's colour (`sys.color.seed`), any palette's key colour set by hand (`sys.color.key.*`). The default
+  style is Auto: the phone's palette only while it is the wallpaper's (`Design.phonePaletteIsWallpapers`: Android's record
+  `theme_customization_overlay_packages`, its `color_source`, where the phone keeps one; else whether the phone's primary
+  is one of the wallpaper's hues, `MaterialYou.followsWallpaper`), otherwise a tonal palette made from the wallpaper (One
+  UI's Color palette off or set to a basic colour leaves the phone's palette blue under any wallpaper: Matheesha's green
+  wallpaper came out blue). Its decision is in the log ("[design] the phone's palette ...").
+  **Icon sets** (`design/IconSets`, `assets/icons/<id>.json` or `files/icons/<id>.json` through the inbox): symbols as
+  vector paths that the shade draws in place of its own (`res/drawable/sym_*`, Material Symbols Rounded: the set
+  `launcher`) where a theme names a set (`sys.symbols`, read through each element's own token: `comp.cc.symbols`,
+  `comp.nc.symbols`, `comp.banner.symbols`; the status bar's next); a name the set leaves out falls back to the app's own,
+  `NAME.off` is a control's look while off (crossfaded as it turns on: `Glyphs.draw(..., on)`), `scale` a small symbol in
+  a larger slot. Written by `tools/icons/build_icon_set.py CACHE` from Android vector drawables (an animated one at its
+  first or last frame) and SVGs, each symbol with its source: `pixel` is AOSP SystemUI's Quick Settings icons as each
+  tile names them (the Pixel theme names it). The settings choose one for the whole phone (Look › More › Symbols); a
+  set's every symbol beside the app's own: `am start -n dev.launcher.app/.PreviewActivity --es icons ID`.
   **A theme per element** (`design/TokenParts`): an element's code reads only its own namespace (`comp.statusbar.*`,
   `comp.nc/cc/banner.*`, `comp.switcher.*`, `comp.library/spotlight.*`, `comp.home/widgets/badge.*`, `comp.settings.*`;
   a test checks it), aliases into `sys.*`/`component.*`; an element given its own theme resolves its namespace there
@@ -658,6 +672,17 @@ copy it wholesale — port the working pieces cleanly. File map:
   iOS glass. A `comp.*` token that is no alias (the banners' plain colour, the count) is fine: a derived theme sets it
   directly and wins. Control Center's veil is drawn as one plain colour from its material's fills (`Shade.ccVeil`): a
   blend other than normal counts only as darkening there.
+- **AOSP's animated icons are Lottie exports**: one group can be the target of several entries (one moving it, one turning
+  it), groups move along motion paths (`translateXY` with `propertyXName`/`propertyYName` and a `pathData`), and a symbol
+  shows its last frame (SystemUI jumps an icon set without animation to its end). Reading only the last target per name and
+  skipping motion paths left Battery Saver's plus below the battery. Check a set on the preview page before shipping it.
+- **A settings choice equal to the theme's own is no edit**: kept as one, it hides what a theme chosen later says (an Inter
+  picked under iOS 27 would have kept Pixel's titles in Inter, the launcher's own symbols Pixel's set away). The draft
+  resets such tokens instead (`Draft.apply`: symbols, fonts).
+- **The wallpaper's colour must be read again when the wallpaper changes, not only when the palette does**: Design kept
+  its first reading (at boot it could fail and fall back to the phone's palette) until the phone's palette changed, which
+  One UI with its Color palette off never does. The stamp now counts the wallpaper's own colours, and a failed reading is
+  not kept.
 - **A surface has a fill budget** (`MaterialPainter.MAX_FILLS`, now 12): under, own and over fills share it, and Material
   You adds two tint layers to every glass. Past it, layers were left out silently (a lit Control Center well lost its
   accent and looked off). The painter logs the first overflow.
@@ -824,4 +849,6 @@ Phase 2 decides whether the whole idea works.
   itself that no disable flag hides". Our bar has no call capsule yet (iOS's green).
 - Review the thedjchi Shizuku fork's code before recommending it in onboarding.
 - Accessibility requirements need writing. Theme gallery/sharing plan, app name: undecided (placeholder "Launcher").
+- A licences page before release: Inter (OFL), AOSP's Quick Settings icons (Apache-2.0: `assets/icons/pixel.json`, each
+  symbol with its source), Material Symbols (Apache-2.0: the app's own `sym_*`).
 - Everything was probed on one S24; re-run the key probes on other devices after phase 2.
