@@ -193,8 +193,13 @@ object Grid {
         }
 
         // Otherwise the icons in the way move on in reading order, keeping their order: each goes to the next cell after the
-        // one before it, pushing what is there along, until an empty cell takes the last.
+        // one before it, pushing what is there along, until an empty cell takes the last. What falls off the page's end goes
+        // on in the order the icons were read before the move (a push's far end falls off first: a widget added at the top
+        // of a full page sent its icons on to the next page backwards).
+        val readAt = java.util.IdentityHashMap<HomeItem, Int>()
+        for (p in placedOthers) if (p.item !is HomeItem.Widget) readAt[p.item] = p.row * cols + p.col
         var cursor = -1
+        val iconsOff = ArrayList<HomeItem>()
         for (d in displaced.sortedBy { it.row * cols + it.col }) {
             var carry: HomeItem = d
             var pos = maxOf(cursor, d.row * cols + d.col)
@@ -202,7 +207,7 @@ object Grid {
             while (true) {
                 pos++
                 while (pos < n && fixed[pos]) pos++
-                if (pos >= n) { off += carry; if (first) cursor = n; break }
+                if (pos >= n) { iconsOff += carry; if (first) cursor = n; break }
                 val there = icon[pos]
                 icon[pos] = carry
                 carry.col = pos % cols; carry.row = pos / cols
@@ -211,6 +216,7 @@ object Grid {
                 carry = there
             }
         }
+        off += iconsOff.sortedBy { readAt[it] ?: Int.MAX_VALUE }
         for (o in off) { items.removeAll { it === o }; o.col = -1; o.row = -1 }
         return off
     }

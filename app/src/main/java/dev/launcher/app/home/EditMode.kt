@@ -292,6 +292,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         widget.spanX = size.spanX
         widget.spanY = size.spanY
         val off = Grid.putAt(page, widget, col, row, cols, rows)
+        var pushed = emptySet<Int>()
         if (off == null) {
             val fit = Grid.firstFree(page, size.spanX, size.spanY, cols, rows)
             if (fit == null) {
@@ -302,9 +303,9 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             }
             widget.col = fit[0]; widget.row = fit[1]
             page += widget
-        } else if (off.isNotEmpty()) pushOff(pi + 1, off)
+        } else if (off.isNotEmpty()) pushed = pushOff(pi + 1, off)
         syncSpan(widget)
-        refreshPages(if (base != null) null else setOf(pi, pi + 1) + before)
+        refreshPages(if (base != null) null else setOf(pi, pi + 1) + before + pushed)
         host.layoutChanged()
         home.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         return widget
@@ -448,18 +449,22 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
      * Items pushed off a page (icons, and widgets moved out of a widget's way) go to the first free place they fit from
      * page [start] on (a new page at the end if needed).
      */
-    private fun pushOff(start: Int, items: List<HomeItem>) {
-        val l = host.layout ?: return
+    private fun pushOff(start: Int, items: List<HomeItem>): Set<Int> {
+        val l = host.layout ?: return emptySet()
+        val landed = HashSet<Int>()
         for (item in items) {
             val (sx, sy) = Grid.span(item, m.cfg.columns, m.cfg.rows).let { it[0] to it[1] }
             var p = start
             while (true) {
                 if (p >= l.pages.size) host.appendPage()
                 val fit = Grid.firstFree(l.pages[p], sx, sy, m.cfg.columns, m.cfg.rows)
-                if (fit != null) { item.col = fit[0]; item.row = fit[1]; l.pages[p] += item; break }
+                if (fit != null) { item.col = fit[0]; item.row = fit[1]; l.pages[p] += item; landed += p; break }
                 p++
             }
         }
+        // The pages they went to (any page on, a new one too: the callers refresh these views, else an item pushed past the
+        // next page, onto a new one, was in the layout and on no page: Calendar made wide pushed the small clock off home).
+        return landed
     }
 
     // ------------------------------------------------------------------ dragging
@@ -643,6 +648,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         if (!t.dock && !Grid.canPut(l.pages[pi].filter { it !== d.item }, d.item, t.index % cols, t.index / cols, cols, rows)) return
         // The cell it leaves on this page (icons between can step back into it).
         val origin = if (!t.dock && !d.inDock && d.page == pi && d.item.col >= 0) d.item.row * cols + d.item.col else null
+        var pushed = emptySet<Int>()
         // Out of where it is now (an item from outside home is nowhere yet).
         if (d.inDock) l.dock.remove((d.item as HomeItem.App).key) else if (d.page in l.pages.indices) l.pages[d.page].removeAll { it === d.item }
         if (t.dock) {
@@ -655,10 +661,10 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val off = Grid.putAt(l.pages[pi], d.item, t.index % cols, t.index / cols, cols, rows, origin) ?: emptyList()
             d.inDock = false
             d.page = pi
-            if (off.isNotEmpty()) pushOff(pi + 1, off)
+            if (off.isNotEmpty()) pushed = pushOff(pi + 1, off)
         }
         // (Every page: one the drag passed over earlier gets back what it moved there.)
-        refreshPages(if (d.base != null) null else setOf(fromPage, pi, pi + 1))
+        refreshPages(if (d.base != null) null else setOf(fromPage, pi, pi + 1) + pushed)
         refreshDock()
         hideDragged()
     }

@@ -75,6 +75,13 @@ class GridTest {
         assertTrue(page.none { it === off[0] })
     }
 
+    @Test fun iconsPushedOffKeepTheirReadingOrder() {
+        // A full page of icons; a 4x2 widget added at the top: the last eight go on to the next page as they were read.
+        val page = (0 until 24).map { app("i$it", it) }.toMutableList<HomeItem>()
+        val off = Grid.putAt(page, HomeItem.Widget("clock", 4, 2), 0, 0, cols, rows)!!
+        assertEquals((16 until 24).map { "i$it" }, off.map { (it as HomeItem.App).key })
+    }
+
     @Test fun widgetsBlockAndAreNotPushed() {
         val w = HomeItem.Widget("clock", 4, 2).apply { col = 0; row = 0 }
         val page = mutableListOf<HomeItem>(w, app("a", 8))
