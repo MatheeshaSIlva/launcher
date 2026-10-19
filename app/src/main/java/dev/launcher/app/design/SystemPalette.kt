@@ -112,7 +112,7 @@ object SystemPalette {
 
     /** Counts [schedule]'s calls: a check answered on the main thread for an earlier one does nothing. */
     @Volatile private var scheduled = 0
-    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private val main by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
 
     private fun whenStill(c: Context, g: Int) {
         val left = Still.msLeft()
