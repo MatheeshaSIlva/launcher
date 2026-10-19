@@ -35,6 +35,10 @@ object Components {
         p("control", "material", "Surface", "What a control is made of when it is off."),
         p("control", "on-material", "Surface when on", "What a control that has no colour of its own is made of when on."),
         p("control", "corner", "Corner radius", "How round a control's corners are."),
+        p("control", "row-corner", "Corner, one row tall", "How round a control one row tall is (a large value: round)."),
+        p("control", "row-on-corner", "Corner when on, one row tall", "How round it is while it is on (it changes shape as it turns on)."),
+        p("control", "well-corner", "Symbol box corner", "How round the box behind a symbol is (a large value: a circle)."),
+        p("control", "well-on-corner", "Symbol box corner when on", "How round that box is while the control is on."),
         p("control", "symbol", "Symbol size", "The size of a control's symbol."),
         p("control", "symbol-color", "Symbol colour", "A symbol on the control's surface."),
         p("control", "on-symbol-color", "Symbol colour when on", "A symbol on the light surface of a control that is on."),
@@ -46,7 +50,7 @@ object Components {
         p("control", "title-large", "Large name text", "A large control's name."),
         p("control", "detail", "State text", "A control's state."),
         p("control", "chevron-color", "Arrow colour", "The small arrow that opens a control's choices."),
-        p("control", "well-material", "Symbol circle surface", "The circle behind a symbol when it is off."),
+        p("control", "well-material", "Symbol box surface", "The box behind a symbol when it is off."),
     ))
 
     val SLIDER = ComponentSpec("slider", "Slider", "Brightness, volume and other levels.", listOf(

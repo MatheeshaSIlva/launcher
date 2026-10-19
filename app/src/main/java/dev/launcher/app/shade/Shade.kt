@@ -280,6 +280,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override fun onReceive(c: Context, i: Intent) {
                 if (i.getStringExtra("do") == "nc_expand") handler.post { if (panel == Panel.NC) nc.expandList() }
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
+                // --es do open [--es panel cc|nc], --es do close: a panel opened as a released pull opens it, and closed (a
+                // script's pictures of a panel at rest, never caught mid-pull).
+                if (i.getStringExtra("do") == "open") handler.post { begin(if (i.getStringExtra("panel") == "nc") Panel.NC else Panel.CC); openFully(0f) }
+                if (i.getStringExtra("do") == "close") handler.post { close(0f) }
                 // Opens one of OUR test notifications (by its title) as a tap on its platter would: a script never taps the
                 // list on the phone (it holds the owner's own notifications).
                 if (i.getStringExtra("do") == "nc_open") handler.post {
@@ -397,20 +401,22 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             // was all but gone while the controls still showed at a third (it cleared in one frame as they faded).
             val bk = kotlin.math.sqrt(ccP.coerceIn(0f, 1f))
             if (live) liveBlur.set(bk, true)
-            backdrop.set(ccBlurRadius() * bk, ccDim() * bk, (ccP / 0.12f).coerceIn(0f, 1f))
+            val veil = ccVeil()
+            backdrop.set(ccBlurRadius() * bk, veil.rgb, veil.alpha * bk, (ccP / 0.12f).coerceIn(0f, 1f))
             bar.setRowAlpha(1f - editK)
         }
         if (ncP != null) nc.progress = ncP
         if (ccP == null && ncP == null) {
             cc.progress = 0f
             nc.progress = 0f
-            backdrop.set(0f, 0f, 0f)
+            backdrop.set(0f, 0, 0f, 0f)
         }
         val l = 1f - launchBarK()
         bar.setPanel(
             (ccP ?: 0f).coerceIn(0f, 1f) * l, (ncP ?: 0f).coerceIn(0f, 1f) * l,
             if (ncP != null) nc.wantsDarkContent() else 0f,
             if (ccP != null) cc.statusRowY else 0f, if (ccP != null) cc.statusRowInset else 0f,
+            if (ccP != null) ccVeil().darkContent else 0f,
         )
     }
 
@@ -479,15 +485,50 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         else -> ccBlurRadius()
     }
 
-    private fun ccDim(): Float {
-        var keep = 1f
+    /**
+     * Control Center's veil (its background material over the blurred picture of what is behind) as one plain colour: its
+     * plain fills laid over each other as they are, a fill of another blend by how much it darkens (a plain veil cannot tint
+     * as a colour blend does). [darkContent]: how far the status bar's content turns black over it (a light veil: Pixel's in
+     * light mode). iOS 27's black 50 % is exactly the dim it always was.
+     */
+    private class Veil(val rgb: Int, val alpha: Float, val darkContent: Float)
+
+    /** The veil worked out once per design and appearance (it is asked for twice in every frame of a pull). */
+    private var veilKept: Veil? = null
+    private var veilVersion = -1
+    private var veilDark = -1f
+
+    private fun ccVeil(): Veil {
+        val version = dev.launcher.app.design.Design.version
+        val dark = dev.launcher.app.theme.Appearance.dark
+        veilKept?.let { if (version == veilVersion && dark == veilDark) return it }
+        return workOutVeil().also { veilKept = it; veilVersion = version; veilDark = dark }
+    }
+
+    private fun workOutVeil(): Veil {
+        var a = 0f
+        var r = 0f
+        var g = 0f
+        var b = 0f
         for (f in dev.launcher.app.design.Design.material(CcTokens.BACKGROUND).fills) {
             val op = f.opacity + (f.opacityDark - f.opacity) * dev.launcher.app.theme.Appearance.dark
             val col = dev.launcher.app.design.Design.color(f.color)
-            val l = (0.2126f * ((col shr 16) and 0xFF) + 0.7152f * ((col shr 8) and 0xFF) + 0.0722f * (col and 0xFF)) / 255f
-            keep *= 1f - op * ((col ushr 24) / 255f) * (1f - l)
+            val cr = ((col shr 16) and 0xFF) / 255f
+            val cg = ((col shr 8) and 0xFF) / 255f
+            val cb = (col and 0xFF) / 255f
+            val plain = f.blend == dev.launcher.app.design.Blend.NORMAL
+            val fa = op * ((col ushr 24) / 255f) * if (plain) 1f else 1f - (0.2126f * cr + 0.7152f * cg + 0.0722f * cb)
+            // (Premultiplied, each fill over what is under it.)
+            r = (if (plain) cr else 0f) * fa + r * (1f - fa)
+            g = (if (plain) cg else 0f) * fa + g * (1f - fa)
+            b = (if (plain) cb else 0f) * fa + b * (1f - fa)
+            a = fa + a * (1f - fa)
         }
-        return 1f - keep
+        if (a <= 0f) return Veil(0, 0f, 0f)
+        val rgb = (Math.round(r / a * 255f) shl 16) or (Math.round(g / a * 255f) shl 8) or Math.round(b / a * 255f)
+        // How light it leaves what is behind (taken as a middle grey under it), as Notification Center judges its wallpaper.
+        val light = 0.2126f * r + 0.7152f * g + 0.0722f * b + (1f - a) * 0.5f
+        return Veil(rgb, a, ((light - 0.55f) / 0.15f).coerceIn(0f, 1f))
     }
 
     private fun prepareBackdrop() {
@@ -496,7 +537,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             if (panel != Panel.CC) return@backdrop
             backdrop.source = src
             if (src == null) { surfaces.setBackdrop(null, null); cc.invalidate(); return@backdrop }
-            BlurBaker.bake(src, root.width, root.height, 0.25f, ccBlurRadius(), ((ccDim() * 255).toInt() shl 24), handler) { bmp, m ->
+            val veil = ccVeil()
+            BlurBaker.bake(src, root.width, root.height, 0.25f, ccBlurRadius(), (Math.round(veil.alpha * 255f) shl 24) or veil.rgb, handler) { bmp, m ->
                 if (panel != Panel.CC || backdrop.source !== src) return@bake
                 surfaces.setBackdrop(bmp, m)
                 cc.invalidate()
@@ -559,7 +601,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val p = leavingPanel ?: return
         leavingPanel = null
         leaving.stop()
-        if (p == Panel.CC) { cc.progress = 0f; backdrop.set(0f, 0f, 0f) } else nc.progress = 0f
+        if (p == Panel.CC) { cc.progress = 0f; backdrop.set(0f, 0, 0f, 0f) } else nc.progress = 0f
         cleanUp(p)
         applyProgress()
     }

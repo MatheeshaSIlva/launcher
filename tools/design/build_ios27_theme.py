@@ -254,6 +254,9 @@ def control_center_material_you(tokens):
                                                'src': _CC_MY_SRC.format(what="primary container (a lit round button, iOS's white)")}
     # Its glass (modules, wells, the round buttons, the dimmed background, the gallery): the palette's colour layer and the
     # dark wash in both appearances, as its glass is one in both (the light wash paled the wells under their white symbols).
+    # Written where the value is: on the component where Control Center's token is its alias (the controls, their wells,
+    # the veil), so a theme built on this one that restyles the component shows it (pinned on comp.cc.*, the tint hid
+    # Pixel's tiles behind iOS glass whenever the wallpaper's colours were on).
     def material_of(k):
         seen = set()
         while k in tokens and k not in seen:
@@ -264,7 +267,7 @@ def control_center_material_you(tokens):
             k = v.get('ref')
         raise KeyError(k)
     dark_wash = [['@system_accent1_500', [0.25, 0.25], 'COLOR'], ['@system_accent2_800', [0.3, 0.3], 'NORMAL']]
-    for k in ('comp.cc.module.material', 'comp.cc.well.material', 'comp.cc.button.material', 'comp.cc.background.material'):
+    for k in ('component.control.material', 'component.control.well-material', 'comp.cc.button.material', 'component.panel.material'):
         m = json.loads(json.dumps(material_of(k)))
         m['fills'] = list(m.get('fills', [])) + json.loads(json.dumps(dark_wash))
         out[k] = {'material': m, 'src': "judged:Material You in Control Center: its glass takes the palette's colour layer and the dark wash in both appearances (its glass is one in both, as iOS's)"}
@@ -685,6 +688,8 @@ SEED = {
     'comp.cc.button.symbol': {'pt': 18, 'src': "measured:the kit's render at 3x (plus 12, power 15.7 pt); our symbols fill 5/6 of their box"},
     'comp.cc.button.symbol-color': {'color': '#f5f5f5', 'src': 'kit:10491:21415'},
     'comp.cc.grid.cell': {'pt': 70, 'src': 'kit:2524:24582'},
+    'comp.cc.grid.cell-height': {'ref': 'comp.cc.grid.cell', 'src': "kit:2524:24582 (iOS 27's cells are square)"},
+    'comp.cc.grid.side': {'pt': 0, 'src': "judged:iOS 27's cells keep their own width, the grid centred"},
     'comp.cc.motion.open-travel': {'pt': 240, 'src': "judged:Matheesha: iOS 27's (fully in after ~110 pt, measured: docs/IOS27_MOTION.md) is too fast to see"},
     'motion.cc.open': {'spring': [0.45, 1.0], 'src': "judged:Matheesha wants the opening seen; it was 0.3 / 1 (iOS: in within ~75 ms of a quick pull)"},
     'comp.cc.grid.gap': {'pt': 15.333, 'src': 'measured:iOS 27 Simulator, accessibility frames (85.33 pt pitch; the kit has 15 / 17)'},
@@ -695,6 +700,12 @@ SEED = {
     'comp.cc.grid.side-landscape': {'pt': 100, 'src': 'judged:iOS 27 Simulator in landscape: 8 columns centred, 103.3 pt each side at 874 pt (the 62 pt landscape safe area and the 38 pt portrait margin; the columns that fit within it)'},
     'comp.cc.status.row-y-landscape': {'pt': 32.3, 'src': 'measured:iOS 27 Simulator in landscape: Carrier 23.3-41.3 pt, the battery 25.7-39.4 (no + and power there)'},
     'comp.cc.module.corner': {'pt': 30, 'src': 'kit:2547:2662 (2x2)'},
+    # A control one row tall and the box behind a module's symbol: round off and on (a corner past half the size is capped
+    # there); a theme may square them off (Pixel: a capsule off, 24 dp on; its symbol box 16 dp on).
+    'comp.cc.module.row-corner': {'pt': 999, 'src': 'judged:round: one cell a circle, a wide control a capsule (half its height)'},
+    'comp.cc.module.row-on-corner': {'pt': 999, 'src': 'judged:round when on too (iOS 27 keeps its shape)'},
+    'comp.cc.well.corner': {'pt': 999, 'src': 'kit:2543:2535 (a circle)'},
+    'comp.cc.well.on-corner': {'pt': 999, 'src': 'judged:a circle when on too'},
     'comp.cc.slider.corner': {'pt': 34, 'src': 'kit:2570:20682'},
     # Control Center's colours that were in code (judged before; kept as they were).
     'comp.cc.symbol-on-color': {'color': '#1c1c1e', 'src': 'judged:a symbol on a lit (white) control'},
@@ -834,6 +845,10 @@ COMPONENTS = {
     'component.control.material': 'comp.cc.module.material',
     'component.control.on-material': 'comp.cc.module.on-material',
     'component.control.corner': 'comp.cc.module.corner',
+    'component.control.row-corner': 'comp.cc.module.row-corner',
+    'component.control.row-on-corner': 'comp.cc.module.row-on-corner',
+    'component.control.well-corner': 'comp.cc.well.corner',
+    'component.control.well-on-corner': 'comp.cc.well.on-corner',
     'component.control.symbol': 'comp.cc.symbol',
     'component.control.symbol-color': 'comp.cc.symbol-color',
     'component.control.on-symbol-color': 'comp.cc.symbol-on-color',

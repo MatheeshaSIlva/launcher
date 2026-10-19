@@ -652,13 +652,12 @@ copy it wholesale — port the working pieces cleanly. File map:
   restarts, and a view kept in a field (the cover that hands the settings back to home) stayed in the removed window, never
   drew, and the hand-back waited for it forever (the settings stuck on home's picture: "home freezes"). Make such views in
   the window they show in (`parent === host`), drop them with it, and never let a wait for a frame be the only way out.
-- **A base theme's Material You section can hide a derived theme's component values.** iOS 27's `materialYou` sets some
-  `comp.*` tokens itself (Control Center's glass, wells, veil, buttons and gallery; Notification Center's count; the
-  banners' plain colour): with the wallpaper's colours on, the resolver finds those before the alias to `component.*`
-  that a theme built on iOS 27 restyles, so Pixel's tiles stayed iOS glass. A derived theme points such tokens back at the
-  components (`pixel.json` does); the clean fix is iOS 27's builder writing its Material You at the component level. And
-  Control Center's backdrop only darkens: its material's fills become one dimming amount when the picture behind is baked
-  (`Shade.ccDim`), so a light veil is dropped.
+- **A theme's Material You values go on the token another theme restyles**: a component's value on the `component.*`
+  token, never on a `comp.*` alias of it. iOS 27's once tinted Control Center's glass, wells and veil on `comp.cc.*`: with
+  the wallpaper's colours on, the resolver found those before the alias, and Pixel's tiles (set on the components) stayed
+  iOS glass. A `comp.*` token that is no alias (the banners' plain colour, the count) is fine: a derived theme sets it
+  directly and wins. Control Center's veil is drawn as one plain colour from its material's fills (`Shade.ccVeil`): a
+  blend other than normal counts only as darkening there.
 - **A surface has a fill budget** (`MaterialPainter.MAX_FILLS`, now 12): under, own and over fills share it, and Material
   You adds two tint layers to every glass. Past it, layers were left out silently (a lit Control Center well lost its
   accent and looked off). The painter logs the first overflow.
@@ -724,10 +723,15 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - `tools/device.sh shot|tap|long|drag|swipe|log|gfx` drives the device; screenshots land in `tools/shots/` (git-ignored).
 - Emulator `Medium_Phone` (Android 17): start with `emulator -avd Medium_Phone -no-window -gpu host`. Shizuku is installed:
   start it with `adb shell <shizuku apk dir>/lib/x86_64/libshizuku.so` only if `ps -A | grep shizuku_server` shows none
-  (two servers: our service attaches to the wrong one and never connects); a long-running emulator runs out of memory
+  (two servers: our service attaches to the wrong one and never connects; two were also seen right after a boot: kill the
+  older, `kill <pid>`, then restart the app); a long-running emulator runs out of memory
   and swaps (blurs take seconds, ANRs): restart it after some hours; enable our accessibility service with
   `settings put secure enabled_accessibility_services dev.launcher.app/dev.launcher.app.NavAccessibilityService`.
 - `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
+- A panel at rest for a screenshot: `am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do open [--es
+  panel cc|nc]` (opened as a released pull opens it), `--es do close` (emulator; on the S24 never Notification Center).
+- A theme pushed through the inbox (`files/themes/<id>.json`) wins over the app's own until removed (`--es files remove
+  --es path themes/<id>.json`): a stale copy from an earlier test hid a new build's theme changes.
 - Do not run `uiautomator dump` while gesture nav is on (it unbinds accessibility services).
 - Scripted swipes on a busy emulator arrive as a few coarse events: a release's speed uses only the last 100 ms of
   samples, so a 120-300 ms `input swipe` can read as still and not turn a page (home's pages, the deck); swipe past

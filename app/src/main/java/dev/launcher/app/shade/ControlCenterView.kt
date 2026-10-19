@@ -91,9 +91,12 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     // ------------------------------------------------------------------ geometry (px)
 
     private var u = 1f
-    private var cell = 0f
+    /** A cell's width and height, and the step from one to the next across and down (a cell and the gap). */
+    private var cellW = 0f
+    private var cellH = 0f
     private var gap = 0f
-    private var pitch = 0f
+    private var pitchX = 0f
+    private var pitchY = 0f
     private var gridLeft = 0f
     private var gridTopRest = 0f
     private var gridTopEdit = 0f
@@ -161,23 +164,28 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** The grid's geometry and the type from the tokens. */
     private fun syncTokens() {
         val sf = host.surfaces
-        cell = sf.pt(CcTokens.CELL)
         gap = sf.pt(CcTokens.GAP)
-        pitch = cell + gap
         cols = Setup.int(Element.SHADE, CcGrid.COLUMNS, 4).coerceAtMost(CcGrid.room(min(width, height), u)).coerceAtLeast(4)
         layout?.setColumns(cols)
+        // Cells of their own width, or (a side given) as wide as the screen allows (Pixel's tiles), upright; as tall as the
+        // theme says (iOS 27: square).
+        val side = sf.pt(CcTokens.GRID_SIDE)
+        cellW = if (side > 0f && !landscape) (width - 2 * side - (cols - 1) * gap) / cols else sf.pt(CcTokens.CELL)
+        cellH = sf.pt(CcTokens.CELL_HEIGHT)
+        pitchX = cellW + gap
+        pitchY = cellH + gap
         // Landscape (iOS 27): the page flowed across as many columns as fit within the sides, centred, under one status
         // line; the page itself keeps its portrait places.
-        shownCols = if (landscape) max(cols, ((width - 2 * sf.pt(CcTokens.GRID_SIDE_LANDSCAPE) + gap) / pitch).toInt()) else cols
+        shownCols = if (landscape) max(cols, ((width - 2 * sf.pt(CcTokens.GRID_SIDE_LANDSCAPE) + gap) / pitchX).toInt()) else cols
         flowed = if (landscape) layout?.flowed(shownCols) else null
-        val gridW = shownCols * cell + (shownCols - 1) * gap
+        val gridW = shownCols * cellW + (shownCols - 1) * gap
         gridLeft = (width - gridW) / 2f
         gridTopRest = sf.pt(if (landscape) CcTokens.GRID_TOP_LANDSCAPE else CcTokens.GRID_TOP)
         gridTopEdit = sf.pt(CcTokens.GRID_TOP_EDIT)
         rowY = sf.pt(if (landscape) CcTokens.ROW_Y_LANDSCAPE else CcTokens.ROW_Y)
         btnR = sf.pt(CcTokens.BUTTON_SIZE) / 2f
         btnY = sf.pt(CcTokens.BUTTON_TOP) + btnR
-        rows = max(4, ((height - gridTopRest - 96f * u + gap) / pitch).toInt())
+        rows = max(4, ((height - gridTopRest - 96f * u + gap) / pitchY).toInt())
         layout?.let { it.rows = max(rows, it.usedRows()) }
         sf.text(title, CcTokens.TITLE)
         sf.text(small, CcTokens.DETAIL)
@@ -208,11 +216,18 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun save() { layout?.let { prefs.edit().putString(KEY, it.toJson()).apply() } }
 
-    /** One cell, or one row: round; a slider (one column): the kit's 34 pt; larger modules: 30 pt. */
-    private fun radiusFor(w: Float, h: Float): Float = when {
-        min(w, h) > cell * 1.01f -> host.surfaces.pt(CcTokens.CORNER)
-        w <= cell * 1.01f && h > cell * 1.01f -> min(host.surfaces.pt(CcTokens.SLIDER_CORNER), w / 2f)
-        else -> min(w, h) / 2f
+    /**
+     * A control's corner: larger modules the theme's (iOS 27: 30 pt), a slider (one column) the slider's (34 pt, at most
+     * round); one row tall (one cell, or a wide one) the row's, off or as far on as [on] (iOS 27: round both ways; Pixel: a
+     * capsule off, 24 dp on), at most half its height.
+     */
+    private fun radiusFor(w: Float, h: Float, on: Float = 0f): Float = when {
+        w > cellW * 1.01f && h > cellH * 1.01f -> host.surfaces.pt(CcTokens.CORNER)
+        w <= cellW * 1.01f && h > cellH * 1.01f -> min(host.surfaces.pt(CcTokens.SLIDER_CORNER), w / 2f)
+        else -> {
+            val off = min(host.surfaces.pt(CcTokens.ROW_CORNER), min(w, h) / 2f)
+            if (on <= 0f) off else off + (min(host.surfaces.pt(CcTokens.ROW_ON_CORNER), min(w, h) / 2f) - off) * on.coerceIn(0f, 1f)
+        }
     }
 
     // ------------------------------------------------------------------ animation state per control
@@ -268,10 +283,10 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun syncTarget(a: Anim, animate: Boolean) {
         val it = a.item
         val at = shownAt(it)
-        val tx = at[0] * pitch
-        val ty = at[1] * pitch
-        val tw = it.w * cell + (it.w - 1) * gap
-        val th = it.h * cell + (it.h - 1) * gap
+        val tx = at[0] * pitchX
+        val ty = at[1] * pitchY
+        val tw = it.w * cellW + (it.w - 1) * gap
+        val th = it.h * cellH + (it.h - 1) * gap
         if (!animate) { a.x.snapTo(tx); a.y.snapTo(ty); a.w.snapTo(tw); a.h.snapTo(th); return }
         if (a !== dragged) { springTo(a.x, tx, REFLOW); springTo(a.y, ty, REFLOW) }
         springTo(a.w, tw, RESIZE); springTo(a.h, th, RESIZE)
@@ -505,7 +520,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val s = 0.85f + 0.15f * edit
         c.save()
         c.translate(0f, top - gridTopEdit)
-        c.scale(s, s, width / 2f, gridTopEdit + l.rows * pitch / 2f)
+        c.scale(s, s, width / 2f, gridTopEdit + l.rows * pitchY / 2f)
         slotsNode.setAlpha(alpha)
         c.drawRenderNode(slotsNode)
         c.restore()
@@ -538,12 +553,12 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         try {
             for (r in 0 until l.rows) for (col in 0 until l.cols) {
                 if (l.at(col, r) != null) continue
-                val x = gridLeft + col * pitch
-                val y = gridTopEdit + r * pitch
-                if (y + cell > height - 100f * u) continue
+                val x = gridLeft + col * pitchX
+                val y = gridTopEdit + r * pitchY
+                if (y + cellH > height - 100f * u) continue
                 c.save()
                 c.translate(x, y)
-                sf.module(c, cell, cell, cell / 2f, x, y, alpha = SLOT_ALPHA)
+                sf.module(c, cellW, cellH, radiusFor(cellW, cellH), x, y, alpha = SLOT_ALPHA)
                 c.restore()
             }
         } finally {
@@ -633,11 +648,12 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val cy = p.top + p.h / 2f
         val dl = cx - p.w * p.scale / 2f
         val dt = cy - p.h * p.scale / 2f
-        val radius = radiusFor(p.w, p.h)
+        // (Its corner follows it on and off: Pixel's capsule turns into a rounded square as a tile lights.)
+        val radius = radiusFor(p.w, p.h, a.active.value)
         // Where it rests (the glass samples the backdrop there).
         val at = shownAt(a.item)
-        val restX = gridLeft + at[0] * pitch
-        val restY = (if (editK.target > 0.5f) gridTopEdit else gridTopRest) + at[1] * pitch - max(0f, a.stretch.value)
+        val restX = gridLeft + at[0] * pitchX
+        val restY = (if (editK.target > 0.5f) gridTopEdit else gridTopRest) + at[1] * pitchY - max(0f, a.stretch.value)
         // What it shows changed: drawn again now. Only where it rests changed (edit mode moved the grid, the backdrop's
         // picture arrived): a few controls a frame (all at once cost an 11 ms GPU frame on the S24); the others keep their
         // look a frame or two longer, which does not show under the blur.
@@ -727,7 +743,13 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     /** A round symbol well at ([x], [y]) of the control being recorded, [d] across; [on]: its accent ([accent]) or white. */
     private fun well(c: Canvas, x: Float, y: Float, d: Float, on: Float, accent: dev.launcher.app.design.ColorKey?, alpha: Float, press: Float = 0f) =
-        host.surfaces.well(c, x, y, d, d, d / 2f, recX + x, recY + y, 1f, alpha, on, accent, press)
+        host.surfaces.well(c, x, y, d, d, wellRadius(d, on), recX + x, recY + y, 1f, alpha, on, accent, press)
+
+    /** The corner of a symbol's box [d] across, off or as far on as [on] (iOS 27: a circle both ways; Pixel: 16 dp on). */
+    private fun wellRadius(d: Float, on: Float): Float {
+        val off = min(host.surfaces.pt(CcTokens.WELL_CORNER), d / 2f)
+        return if (on <= 0f) off else off + (min(host.surfaces.pt(CcTokens.WELL_ON_CORNER), d / 2f) - off) * on.coerceIn(0f, 1f)
+    }
 
     /** The baseline of [p]'s text in a line box [lineH] tall from [top] (half leading, as Figma places text). */
     private fun baseline(p: Paint, top: Float, lineH: Float): Float {
@@ -878,7 +900,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** Its circles: the kit's wells, each its control's colour when on. */
     private fun drawConnectivity(c: Canvas, a: Anim, w: Float, h: Float, alpha: Float) {
         val sf = host.surfaces
-        val k = min(w, h) / (2 * cell + gap)   // the module's size against the kit's 155 pt
+        val k = min(w, h) / (2 * min(cellW, cellH) + gap)   // the module's size against the kit's 155 pt
         val white = Design.color(CcTokens.SYMBOL_COLOR)
         val onAccent = Design.color(CcTokens.SYMBOL_ON_ACCENT)
         for ((ctl, at, rf) in connectivitySubs) {
@@ -1122,7 +1144,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val top = gridTop()
         for (a in anims.values.reversed()) {
             if (a.removing || !placementOf(a, top, 1f, place)) continue
-            val radius = radiusFor(place.w, place.h)
+            val radius = radiusFor(place.w, place.h, a.active.value)
             val off = radius * (1f - 0.7071f)
             if (hypot(x - (place.left + off), y - (place.top + off)) < 20f * u) { touched = a; mode = Mode.REMOVE; return }
             if (a.item.control.sizes.size > 1 && hypot(x - (place.left + place.w - off), y - (place.top + place.h - off)) < 24f * u) {
@@ -1325,7 +1347,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         placementOf(a, gridTop(), editK.value, place)
         menuAnchor.set(place.left, place.top, place.left + place.w, place.top + place.h)
         // Within the grid's columns: lined up with the control's outer edge when it is at a side, as iOS's menus hang.
-        menuBounds.set(gridLeft, 40f * u, gridLeft + shownCols * cell + (shownCols - 1) * gap, height - 24f * u)
+        menuBounds.set(gridLeft, 40f * u, gridLeft + shownCols * cellW + (shownCols - 1) * gap, height - 24f * u)
         p.layout(items, menuAnchor, menuBounds, Design.num(CcTokens.MENU_GAP), fromLeft = true)
         menuOf = a
         menuPressed = -1
@@ -1393,7 +1415,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         a.press.snapTo(0f); a.subPress.snapTo(0f)
         placementOf(a, gridTop(), editK.value, place)
         val r = RectF(place.left, place.top, place.left + place.w, place.top + place.h)
-        return expanded.open(a.item.control, r, radiusFor(place.w, place.h), width.toFloat(), height.toFloat(), u)
+        return expanded.open(a.item.control, r, radiusFor(place.w, place.h, a.active.value), width.toFloat(), height.toFloat(), u)
     }
 
     private fun slide(a: Anim, y: Float, final: Boolean) {
@@ -1431,8 +1453,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val top = gridTop()
         a.x.snapTo(x - dragDX - gridLeft)
         a.y.snapTo(y - dragDY - top)
-        val col = ((a.x.value + cell / 2f) / pitch).toInt().coerceIn(0, cols - a.item.w)
-        val row = ((a.y.value + cell / 2f) / pitch).toInt().coerceIn(0, (layout?.rows ?: rows) - a.item.h)
+        val col = ((a.x.value + cellW / 2f) / pitchX).toInt().coerceIn(0, cols - a.item.w)
+        val row = ((a.y.value + cellH / 2f) / pitchY).toInt().coerceIn(0, (layout?.rows ?: rows) - a.item.h)
         val target = row * cols + col
         if (target != pendingCell) {
             pendingCell = target
@@ -1459,8 +1481,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun resizeTo(a: Anim, x: Float, y: Float) {
         val l = layout ?: return
         placementOf(a, gridTop(), 1f, place)
-        val wantW = ((x - place.left + gap / 2f) / pitch).roundToInt().coerceIn(1, minOf(4, cols))
-        val wantH = ((y - place.top + gap / 2f) / pitch).roundToInt().coerceIn(1, 4)
+        val wantW = ((x - place.left + gap / 2f) / pitchX).roundToInt().coerceIn(1, minOf(4, cols))
+        val wantH = ((y - place.top + gap / 2f) / pitchY).roundToInt().coerceIn(1, 4)
         val best = a.item.control.sizes.minByOrNull { abs(it.w - wantW) * 2 + abs(it.h - wantH) * 2 } ?: return
         if (best.w == a.item.w && best.h == a.item.h) return
         if (l.resize(a.item, best.w, best.h)) {

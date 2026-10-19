@@ -79,14 +79,14 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
     private val lowLayer = Layer(ctx) { lowScale }
     private val lowBlur = FrameLayout(ctx)
     private val low = FrameLayout(ctx).apply { setLayerType(LAYER_TYPE_HARDWARE, null); pivotX = 0f; pivotY = 0f; alpha = 0f }
-    private val dimView = View(ctx).apply { setBackgroundColor(0xFF000000.toInt()); alpha = 0f }
+    private val veilView = View(ctx).apply { setBackgroundColor(0xFF000000.toInt()); alpha = 0f }
 
     init {
         addView(sharp, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         lowBlur.addView(lowLayer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         low.addView(lowBlur, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(low, LayoutParams(1, 1))
-        addView(dimView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(veilView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         sharp.alpha = 0f
     }
 
@@ -115,7 +115,8 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
         }
 
     private var blurPx = 0f
-    private var dim = 0f
+    private var veilRgb = 0
+    private var veilAlpha = 0f
     private var shown = 0f
 
     /** The system blurs what is behind live ([LiveBlur]): only the veil is drawn here, not the picture. */
@@ -130,10 +131,14 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
     var freeze = 0f
         set(v) { if (field != v) { field = v; apply() } }
 
-    /** Blur radius (px, at full size), dim (0..1 black) and visibility (0..1) for this frame. */
-    fun set(blurPx: Float, dim: Float, shown: Float) {
-        if (blurPx == this.blurPx && dim == this.dim && shown == this.shown) return
-        this.blurPx = blurPx; this.dim = dim; this.shown = shown
+    /**
+     * Blur radius (px, at full size), the veil over the picture ([veilRgb], how much of it shows now: [veilAlpha], 0..1; a
+     * dark veil dims what is behind, a light one lightens it) and visibility (0..1) for this frame.
+     */
+    fun set(blurPx: Float, veilRgb: Int, veilAlpha: Float, shown: Float) {
+        if (blurPx == this.blurPx && veilRgb == this.veilRgb && veilAlpha == this.veilAlpha && shown == this.shown) return
+        if (veilRgb != this.veilRgb) veilView.setBackgroundColor(veilRgb or 0xFF000000.toInt())
+        this.blurPx = blurPx; this.veilRgb = veilRgb; this.veilAlpha = veilAlpha; this.shown = shown
         apply()
     }
 
@@ -148,9 +153,9 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
         }
         low.alpha = if (has) mix * shown * pic else 0f
         sharp.alpha = if (has && mix < 1f) shown * pic else 0f
-        // Without a picture of what is behind (none could be taken), a deep dark veil instead of the blur: the sharp app
-        // through a light dim was busy behind the controls.
-        dimView.alpha = (if (source == null && !live) dim * 2.1f else dim).coerceIn(0f, 0.78f) * (if (shown > 0f) 1f else 0f)
+        // Without a picture of what is behind (none could be taken), a deeper veil instead of the blur: the sharp app through
+        // a light veil was busy behind the controls.
+        veilView.alpha = (if (source == null && !live) veilAlpha * 2.1f else veilAlpha).coerceIn(0f, 0.78f) * (if (shown > 0f) 1f else 0f)
     }
 
     private companion object {

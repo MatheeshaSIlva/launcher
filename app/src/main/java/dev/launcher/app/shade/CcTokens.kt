@@ -20,6 +20,12 @@ object CcTokens {
     val ON = MaterialKey("comp.cc.module.on-material")
     val WELL = MaterialKey("comp.cc.well.material")
     val CORNER = NumberKey("comp.cc.module.corner")
+    /** A control one row tall (one cell, or a wide one): its corner off and on (iOS 27: round both ways, half its height). */
+    val ROW_CORNER = NumberKey("comp.cc.module.row-corner")
+    val ROW_ON_CORNER = NumberKey("comp.cc.module.row-on-corner")
+    /** The box behind a symbol in a module: its corner off and on (iOS 27: a circle both ways). */
+    val WELL_CORNER = NumberKey("comp.cc.well.corner")
+    val WELL_ON_CORNER = NumberKey("comp.cc.well.on-corner")
     val SLIDER_CORNER = NumberKey("comp.cc.slider.corner")
     /** A symbol on a lit (white) control. */
     val SYMBOL_ON = ColorKey("comp.cc.symbol-on-color")
@@ -62,6 +68,10 @@ object CcTokens {
 
     // The grid and the status row.
     val CELL = NumberKey("comp.cc.grid.cell")
+    /** A cell's height (iOS 27: as wide as tall). */
+    val CELL_HEIGHT = NumberKey("comp.cc.grid.cell-height")
+    /** Cells as wide as the screen allows this far from each side (0: the cells' own width, centred), upright. */
+    val GRID_SIDE = NumberKey("comp.cc.grid.side")
     val GAP = NumberKey("comp.cc.grid.gap")
     val GRID_TOP = NumberKey("comp.cc.grid.top")
     val GRID_TOP_EDIT = NumberKey("comp.cc.grid.top-edit")
@@ -112,8 +122,9 @@ object CcTokens {
     // How it comes in: over how much of a pull (pt), and the spring it finishes on once the finger lets go.
     val OPEN_TRAVEL = NumberKey("comp.cc.motion.open-travel")
 
-    val ALL = listOf(OPEN_TRAVEL, BACKGROUND, SAMSUNG_STRENGTH, MODULE, ON, WELL, CORNER, SLIDER_CORNER, SYMBOL, SYMBOL_COLOR, WIDE_PADDING,
-        WIDE_GAP, WELL_SIZE, WELL_SYMBOL, TITLE, TITLE_LARGE, DETAIL, LABEL_COLOR, DETAIL_COLOR, DETAIL_BLEND, CELL, GAP,
+    val ALL = listOf(OPEN_TRAVEL, BACKGROUND, SAMSUNG_STRENGTH, MODULE, ON, WELL, CORNER, ROW_CORNER, ROW_ON_CORNER, WELL_CORNER, WELL_ON_CORNER,
+        SLIDER_CORNER, SYMBOL, SYMBOL_COLOR, WIDE_PADDING,
+        WIDE_GAP, WELL_SIZE, WELL_SYMBOL, TITLE, TITLE_LARGE, DETAIL, LABEL_COLOR, DETAIL_COLOR, DETAIL_BLEND, CELL, CELL_HEIGHT, GRID_SIDE, GAP,
         GRID_TOP, GRID_TOP_EDIT, ROW_Y, GRID_TOP_LANDSCAPE, GRID_SIDE_LANDSCAPE, ROW_Y_LANDSCAPE, BUTTON, BUTTON_SIZE, BUTTON_INSET_X, BUTTON_TOP, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR,
         CONN_BIG, CONN_SMALL, CONN_SYMBOL_BIG, CONN_SYMBOL_SMALL, ART, ART_CORNER, ART_X, ART_Y, OUTPUT, MEDIA_TITLE,
         MEDIA_TEXT_COLOR, MEDIA_TEXT_BLEND, TRANSPORT, PLAY, GALLERY_SHEET, GALLERY_ENTRY, GALLERY_DIM, GALLERY_CORNER,

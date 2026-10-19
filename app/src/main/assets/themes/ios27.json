@@ -1846,9 +1846,17 @@
    "pt": 70,
    "src": "kit:2524:24582"
   },
+  "comp.cc.grid.cell-height": {
+   "ref": "comp.cc.grid.cell",
+   "src": "kit:2524:24582 (iOS 27's cells are square)"
+  },
   "comp.cc.grid.gap": {
    "pt": 15.333,
    "src": "measured:iOS 27 Simulator, accessibility frames (85.33 pt pitch; the kit has 15 / 17)"
+  },
+  "comp.cc.grid.side": {
+   "pt": 0,
+   "src": "judged:iOS 27's cells keep their own width, the grid centred"
   },
   "comp.cc.grid.side-landscape": {
    "pt": 100,
@@ -2024,6 +2032,14 @@
    "ref": "component.control.on-material",
    "src": "judged:the shared component style (component.control.on-material)"
   },
+  "comp.cc.module.row-corner": {
+   "ref": "component.control.row-corner",
+   "src": "judged:the shared component style (component.control.row-corner)"
+  },
+  "comp.cc.module.row-on-corner": {
+   "ref": "component.control.row-on-corner",
+   "src": "judged:the shared component style (component.control.row-on-corner)"
+  },
   "comp.cc.module.title": {
    "ref": "component.control.title",
    "src": "judged:the shared component style (component.control.title)"
@@ -2068,9 +2084,17 @@
    "ref": "component.control.on-symbol-color",
    "src": "judged:the shared component style (component.control.on-symbol-color)"
   },
+  "comp.cc.well.corner": {
+   "ref": "component.control.well-corner",
+   "src": "judged:the shared component style (component.control.well-corner)"
+  },
   "comp.cc.well.material": {
    "ref": "component.control.well-material",
    "src": "judged:the shared component style (component.control.well-material)"
+  },
+  "comp.cc.well.on-corner": {
+   "ref": "component.control.well-on-corner",
+   "src": "judged:the shared component style (component.control.well-on-corner)"
   },
   "comp.cc.well.size": {
    "pt": 40,
@@ -3089,6 +3113,14 @@
    "color": "#1c1c1e",
    "src": "judged:a symbol on a lit (white) control"
   },
+  "component.control.row-corner": {
+   "pt": 999,
+   "src": "judged:round: one cell a circle, a wide control a capsule (half its height)"
+  },
+  "component.control.row-on-corner": {
+   "pt": 999,
+   "src": "judged:round when on too (iOS 27 keeps its shape)"
+  },
   "component.control.symbol": {
    "pt": 35,
    "src": "measured:the kit's render at 3x (the camera, SF Pro Bold 19: 29.3 pt wide); our symbols fill 5/6 of their box"
@@ -3117,9 +3149,17 @@
    },
    "src": "kit:2547:2646"
   },
+  "component.control.well-corner": {
+   "pt": 999,
+   "src": "kit:2543:2535 (a circle)"
+  },
   "component.control.well-material": {
    "ref": "ref.material.control-center.well",
    "src": "kit:2570:20607"
+  },
+  "component.control.well-on-corner": {
+   "pt": 999,
+   "src": "judged:a circle when on too"
   },
   "component.dock.material": {
    "ref": "sys.material.glass.dock",
@@ -4044,37 +4084,6 @@
    "color": "@system_accent1_500",
    "src": "judged:Material You in Control Center: tone 50 of the palette's primary in both appearances (iOS's lit blue is about tone 55)"
   },
-  "comp.cc.background.material": {
-   "material": {
-    "frost": 24,
-    "fills": [
-     [
-      "#000000",
-      0.5,
-      "NORMAL"
-     ],
-     [
-      "@system_accent1_500",
-      [
-       0.25,
-       0.25
-      ],
-      "COLOR"
-     ],
-     [
-      "@system_accent2_800",
-      [
-       0.3,
-       0.3
-      ],
-      "NORMAL"
-     ]
-    ],
-    "innerShadows": [],
-    "shadows": []
-   },
-   "src": "judged:Material You in Control Center: its glass takes the palette's colour layer and the dark wash in both appearances (its glass is one in both, as iOS's)"
-  },
   "comp.cc.button.material": {
    "material": {
     "frost": 0,
@@ -4168,7 +4177,49 @@
    },
    "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
   },
-  "comp.cc.module.material": {
+  "comp.nc.count.fill": {
+   "color": "@primary_container",
+   "src": "judged:Material You: iOS's Notification Center's count (white) as Android 14's tonal role (@primary_container)"
+  },
+  "comp.nc.count.label": {
+   "color": "@on_primary_container",
+   "src": "judged:Material You: iOS's Notification Center's count label as Android 14's tonal role (@on_primary_container)"
+  },
+  "comp.settings.accent-label": {
+   "color": "@on_primary",
+   "src": "judged:Material You: a label on the accent (the primary) is on-primary; white read poorly on dark mode's light primary (the settings' Apply on the S24, 2026-10-14)"
+  },
+  "comp.settings.button.fill": {
+   "color": "@surface_container_highest/80",
+   "src": "judged:Material You: iOS's settings' round button as Android 14's tonal role (@surface_container_highest/80)"
+  },
+  "comp.settings.chip.fill": {
+   "color": "@surface_container_highest",
+   "src": "judged:Material You: iOS's settings' chip as Android 14's tonal role (@surface_container_highest)"
+  },
+  "comp.settings.field.fill": {
+   "color": "@surface_container_highest",
+   "src": "judged:Material You: iOS's settings' search field as Android 14's tonal role (@surface_container_highest)"
+  },
+  "comp.settings.fold.fill": {
+   "light": "@on_surface_variant/4",
+   "dark": "@on_surface_variant/9",
+   "src": "judged:Material You: iOS's settings' fold (half the quaternary fill) as Android 14's tonal role (@on_surface_variant/4 | @on_surface_variant/9)"
+  },
+  "comp.settings.sheet.fill": {
+   "light": "@surface_container_low/85",
+   "dark": "@surface_container/95",
+   "src": "judged:Material You: iOS's settings' sheet as Android 14's tonal role (@surface_container_low/85 | @surface_container/95)"
+  },
+  "component.badge.fill": {
+   "color": "@error",
+   "src": "judged:Material You: iOS's badge (red) as Android 14's tonal role (@error)"
+  },
+  "component.control.accent-symbol-color": {
+   "color": "@system_on_primary_light",
+   "src": "judged:Material You in Control Center: the palette's light-mode on-primary (a symbol on the accent), in both appearances (iOS's look does not change with them)"
+  },
+  "component.control.material": {
    "material": {
     "frost": 6,
     "lens": {
@@ -4270,7 +4321,11 @@
    },
    "src": "judged:Material You in Control Center: its glass takes the palette's colour layer and the dark wash in both appearances (its glass is one in both, as iOS's)"
   },
-  "comp.cc.well.material": {
+  "component.control.on-symbol-color": {
+   "color": "@system_on_primary_container_light",
+   "src": "judged:Material You in Control Center: the palette's light-mode on-primary-container (a symbol on a lit control), in both appearances (iOS's look does not change with them)"
+  },
+  "component.control.well-material": {
    "material": {
     "frost": 0,
     "fills": [
@@ -4311,56 +4366,41 @@
    },
    "src": "judged:Material You in Control Center: its glass takes the palette's colour layer and the dark wash in both appearances (its glass is one in both, as iOS's)"
   },
-  "comp.nc.count.fill": {
-   "color": "@primary_container",
-   "src": "judged:Material You: iOS's Notification Center's count (white) as Android 14's tonal role (@primary_container)"
-  },
-  "comp.nc.count.label": {
-   "color": "@on_primary_container",
-   "src": "judged:Material You: iOS's Notification Center's count label as Android 14's tonal role (@on_primary_container)"
-  },
-  "comp.settings.accent-label": {
-   "color": "@on_primary",
-   "src": "judged:Material You: a label on the accent (the primary) is on-primary; white read poorly on dark mode's light primary (the settings' Apply on the S24, 2026-10-14)"
-  },
-  "comp.settings.button.fill": {
-   "color": "@surface_container_highest/80",
-   "src": "judged:Material You: iOS's settings' round button as Android 14's tonal role (@surface_container_highest/80)"
-  },
-  "comp.settings.chip.fill": {
-   "color": "@surface_container_highest",
-   "src": "judged:Material You: iOS's settings' chip as Android 14's tonal role (@surface_container_highest)"
-  },
-  "comp.settings.field.fill": {
-   "color": "@surface_container_highest",
-   "src": "judged:Material You: iOS's settings' search field as Android 14's tonal role (@surface_container_highest)"
-  },
-  "comp.settings.fold.fill": {
-   "light": "@on_surface_variant/4",
-   "dark": "@on_surface_variant/9",
-   "src": "judged:Material You: iOS's settings' fold (half the quaternary fill) as Android 14's tonal role (@on_surface_variant/4 | @on_surface_variant/9)"
-  },
-  "comp.settings.sheet.fill": {
-   "light": "@surface_container_low/85",
-   "dark": "@surface_container/95",
-   "src": "judged:Material You: iOS's settings' sheet as Android 14's tonal role (@surface_container_low/85 | @surface_container/95)"
-  },
-  "component.badge.fill": {
-   "color": "@error",
-   "src": "judged:Material You: iOS's badge (red) as Android 14's tonal role (@error)"
-  },
-  "component.control.accent-symbol-color": {
-   "color": "@system_on_primary_light",
-   "src": "judged:Material You in Control Center: the palette's light-mode on-primary (a symbol on the accent), in both appearances (iOS's look does not change with them)"
-  },
-  "component.control.on-symbol-color": {
-   "color": "@system_on_primary_container_light",
-   "src": "judged:Material You in Control Center: the palette's light-mode on-primary-container (a symbol on a lit control), in both appearances (iOS's look does not change with them)"
-  },
   "component.menu.fallback": {
    "light": "@surface_container/95",
    "dark": "@surface_container_high/85",
    "src": "judged:Material You: iOS's menu's plain fallback as Android 14's tonal role (@surface_container/95 | @surface_container_high/85)"
+  },
+  "component.panel.material": {
+   "material": {
+    "frost": 24,
+    "fills": [
+     [
+      "#000000",
+      0.5,
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.25,
+       0.25
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent2_800",
+      [
+       0.3,
+       0.3
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You in Control Center: its glass takes the palette's colour layer and the dark wash in both appearances (its glass is one in both, as iOS's)"
   },
   "component.round-button.on-color": {
    "color": "@system_primary_container_light",

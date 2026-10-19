@@ -19,18 +19,6 @@
    "choice": "wallpaper",
    "src": "judged:a Pixel always takes the wallpaper's colours (Material You)"
   },
-  "comp.cc.module.material": {
-   "ref": "component.control.material",
-   "src": "judged:back to the component (iOS 27's Material You sets its own tinted glass here)"
-  },
-  "comp.cc.well.material": {
-   "ref": "component.control.well-material",
-   "src": "judged:back to the component (iOS 27's Material You sets its own tinted glass here)"
-  },
-  "comp.cc.background.material": {
-   "ref": "component.panel.material",
-   "src": "judged:back to the component (iOS 27's Material You sets its own tinted veil here)"
-  },
   "component.panel.material": {
    "material": {
     "frost": 30,
@@ -82,9 +70,25 @@
    },
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, background primary (the capture: exactly the palette's primary)"
   },
+  "component.control.row-corner": {
+   "pt": 50,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: InactiveCornerRadius 50 dp, a capsule on a 72 dp tile"
+  },
+  "component.control.row-on-corner": {
+   "pt": 24,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: ActiveTileCornerRadius 24 dp"
+  },
+  "component.control.well-corner": {
+   "pt": 50,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: the symbol box takes InactiveCornerRadius 50 dp when off, a circle on 56 dp"
+  },
+  "component.control.well-on-corner": {
+   "pt": 16,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: ActiveIconCornerRadius 16 dp"
+  },
   "component.control.corner": {
-   "pt": 36,
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: InactiveCornerRadius 50 dp on a 72 dp tile, a pill (half its height); on, 24 dp (ActiveTileCornerRadius): no token for the corner when on yet"
+   "pt": 28,
+   "src": "kit:AOSP SystemUI dimens.xml qs_corner_radius 28 dp (a Pixel has no control larger than a tile: Quick Settings' own corner for iOS's modules)"
   },
   "component.control.symbol": {
    "pt": 26,
@@ -165,7 +169,15 @@
   },
   "comp.cc.grid.cell": {
    "pt": 72,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: TileHeight 72 dp (a cell's width where the screen is not filled: landscape)"
+  },
+  "comp.cc.grid.cell-height": {
+   "pt": 72,
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt: TileHeight 72 dp"
+  },
+  "comp.cc.grid.side": {
+   "pt": 16,
+   "src": "kit:AOSP SystemUI dimens.xml qs_horizontal_margin 16 dp (notification_side_paddings): tiles fill the width between"
   },
   "comp.cc.grid.gap": {
    "pt": 8,
@@ -632,84 +644,84 @@
    "src": "judged:labelLarge"
   },
   "comp.cc.accent.accessibility": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.airplane": {
    "color": "@primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.alarm": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.app-tile": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.bluetooth": {
    "color": "@primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.brightness": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.calculator": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.camera": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.cellular": {
    "color": "@primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.connectivity": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.dark-mode": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.data-saver": {
    "color": "@primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.extra-dim": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.flashlight": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.focus": {
    "color": "@primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.grayscale": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.home": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.hotspot": {
    "color": "@primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.invert": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.launcher-settings": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.live-captions": {
    "color": "@primary",
@@ -720,92 +732,92 @@
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.low-power": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.magnifier": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.media": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.mirroring": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.nfc": {
    "color": "@primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.notes": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.quick-share": {
    "color": "@primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.recognize-music": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.rotation-lock": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.scan-code": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.selfie": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.settings": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.silent": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.stopwatch": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.text-size": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.timer": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.translate": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.video": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.voice-memo": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.volume": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.vpn": {
    "color": "@primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
   },
   "comp.cc.accent.wallet": {
-   "color": "@primary",
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: every active tile in primary (no colour per control)"
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"
   },
   "comp.cc.accent.wifi": {
    "color": "@primary",

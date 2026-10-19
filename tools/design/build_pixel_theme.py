@@ -13,10 +13,12 @@ measured against the emulator's palette), and judgements where Pixel has no coun
 """
 import json
 import os
+import re
 
 ROOT = os.path.join(os.path.dirname(__file__), '..', '..')
 OUT = os.path.join(ROOT, 'app', 'src', 'main', 'assets', 'themes', 'pixel.json')
 IOS = os.path.join(ROOT, 'app', 'src', 'main', 'assets', 'themes', 'ios27.json')
+CONTROLS = os.path.join(ROOT, 'app', 'src', 'main', 'java', 'dev', 'launcher', 'app', 'shade', 'Controls.kt')
 
 FONT = 'google:Google Sans Flex'
 AOSP_TILE = 'kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt'
@@ -47,12 +49,6 @@ T = {
     # A Pixel always draws in the wallpaper's colours.
     'sys.color.source': {'choice': 'wallpaper', 'src': "judged:a Pixel always takes the wallpaper's colours (Material You)"},
 
-    # ---- Tokens iOS 27's Material You section sets itself (its tinted glass): with the wallpaper's colours they would hide
-    # what this theme gives the components, so they point back at the components here.
-    'comp.cc.module.material': {'ref': 'component.control.material', 'src': "judged:back to the component (iOS 27's Material You sets its own tinted glass here)"},
-    'comp.cc.well.material': {'ref': 'component.control.well-material', 'src': "judged:back to the component (iOS 27's Material You sets its own tinted glass here)"},
-    'comp.cc.background.material': {'ref': 'component.panel.material', 'src': "judged:back to the component (iOS 27's Material You sets its own tinted veil here)"},
-
     # ---- What covers the screen behind the controls (Quick Settings' veil over a blur).
     'component.panel.material': material([['@surface_container_lowest', [0.55, 0.72], 'NORMAL']], frost=30,
         src="measured:the shade's veil over a blur, about 55 % light in light and 72 % dark in dark (docs/PIXEL_PROFILE.md, the captures)"),
@@ -62,8 +58,12 @@ T = {
         src=CAPTURE + ': a tile that is off is a light layer of about 45 % over the veil (light); dark judged alike'),
     'component.control.on-material': material([['@primary', 1.0, 'NORMAL']],
         src=AOSP_TILE_STATE + ': activeTileColors, background primary (the capture: exactly the palette\'s primary)'),
-    'component.control.corner': pt(36, AOSP_TILE + ': InactiveCornerRadius 50 dp on a 72 dp tile, a pill (half its height); '
-                                       'on, 24 dp (ActiveTileCornerRadius): no token for the corner when on yet'),
+    # A tile's shape: a capsule when off, a rounded square when on, changing as it turns on (its symbol's box alike).
+    'component.control.row-corner': pt(50, AOSP_TILE + ': InactiveCornerRadius 50 dp, a capsule on a 72 dp tile'),
+    'component.control.row-on-corner': pt(24, AOSP_TILE_STATE + ': ActiveTileCornerRadius 24 dp'),
+    'component.control.well-corner': pt(50, AOSP_TILE + ': the symbol box takes InactiveCornerRadius 50 dp when off, a circle on 56 dp'),
+    'component.control.well-on-corner': pt(16, AOSP_TILE_STATE + ': ActiveIconCornerRadius 16 dp'),
+    'component.control.corner': pt(28, "kit:AOSP SystemUI dimens.xml qs_corner_radius 28 dp (a Pixel has no control larger than a tile: Quick Settings' own corner for iOS's modules)"),
     'component.control.symbol': pt(26, CAPTURE + ': a small tile\'s symbol about 25 dp across (CommonTileDefaults.IconSize 32 dp with its padding)'),
     'component.control.symbol-color': color('@on_surface_variant', AOSP_TILE_STATE + ': inactiveTileColors, icon onSurfaceVariant'),
     'component.control.on-symbol-color': color('@on_primary', AOSP_TILE_STATE + ': activeTileColors, icon onPrimary'),
@@ -78,8 +78,10 @@ T = {
     'component.control.well-material': material([['@surface_container_highest', 1.0, 'NORMAL']],
         src=AOSP_TILE_STATE + ': inactiveDualTargetTileColors, iconBackground surfaceContainerHighest'),
 
-    # The grid: 72 dp rows with 8 dp between them (cells are square here: no token for a cell's height apart from its width yet).
-    'comp.cc.grid.cell': pt(72, AOSP_TILE + ': TileHeight 72 dp'),
+    # The grid: four tiles as wide as the screen allows 16 dp in from each side, 72 dp tall, 8 dp between them.
+    'comp.cc.grid.cell': pt(72, AOSP_TILE + ": TileHeight 72 dp (a cell's width where the screen is not filled: landscape)"),
+    'comp.cc.grid.cell-height': pt(72, AOSP_TILE + ': TileHeight 72 dp'),
+    'comp.cc.grid.side': pt(16, 'kit:AOSP SystemUI dimens.xml qs_horizontal_margin 16 dp (notification_side_paddings): tiles fill the width between'),
     'comp.cc.grid.gap': pt(8, 'kit:AOSP SystemUI dimens.xml qs_tile_margin_horizontal / _vertical 8 dp'),
     # A large tile: its symbol in a 56 dp box 8 dp in, its words 6 dp after it.
     'comp.cc.well.size': pt(56, AOSP_TILE + ': ToggleTargetSize 56 dp'),
@@ -189,12 +191,27 @@ T = {
 }
 
 
+def colour_controls():
+    """The controls that fill with their accent when on (Style.COLOR in Controls.kt), as accent token names."""
+    out = set()
+    for line in open(CONTROLS, encoding='utf-8'):
+        m = re.match(r'\s*([A-Z_]+)\(".*Style\.COLOR\)', line)
+        if m:
+            out.add('comp.cc.accent.' + m.group(1).lower().replace('_', '-'))
+    return out
+
+
 def main():
     ios = json.load(open(IOS, encoding='utf-8'))['tokens']
-    # Every control lights in primary.
+    # A control's accent is its fill when on for the colour controls (primary on a Pixel), and its symbol's colour when on
+    # for the others (lit in the on surface, primary here: so onPrimary, or the symbol vanished into it on the phone).
+    filled = colour_controls()
     for k in sorted(ios):
         if k.startswith('comp.cc.accent.'):
-            T[k] = color('@primary', AOSP_TILE_STATE + ': every active tile in primary (no colour per control)')
+            if k in filled:
+                T[k] = color('@primary', AOSP_TILE_STATE + ': every active tile in primary (no colour per control)')
+            else:
+                T[k] = color('@on_primary', AOSP_TILE_STATE + ": activeTileColors, icon onPrimary (this accent is the lit symbol's colour)")
     missing = [k for k in T if k not in ios]
     if missing:
         raise SystemExit('not tokens of iOS 27 (the theme would be refused): ' + ', '.join(missing))

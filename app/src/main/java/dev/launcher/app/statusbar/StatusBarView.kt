@@ -459,6 +459,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private var cc = 0f
     private var nc = 0f
     private var ncDark = 0f
+    private var ccDark = 0f
 
     /**
      * The bar as it shows over home, at rest ([darkContent]: black content), as a picture the bar's height: the settings'
@@ -477,14 +478,15 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     /**
-     * How far Control Center ([ccK]) and Notification Center ([ncK]) are open (0..1, they follow the finger), and whether
-     * Notification Center's wallpaper wants black content ([ncDarkContent]). [ccRowY]: the centre of Control Center's
-     * status row (px, in this view); [ccRowInset]: how far in from each side the row runs (0: the bar's own sides; in
-     * landscape the grid's, as iOS 27 lines its one status line up with the controls).
+     * How far Control Center ([ccK]) and Notification Center ([ncK]) are open (0..1, they follow the finger), whether
+     * Notification Center's wallpaper wants black content ([ncDarkContent]), and Control Center's veil ([ccDarkContent]: a
+     * light one, as Pixel's in light mode; iOS's dark veil keeps it white). [ccRowY]: the centre of Control Center's status
+     * row (px, in this view); [ccRowInset]: how far in from each side the row runs (0: the bar's own sides; in landscape the
+     * grid's, as iOS 27 lines its one status line up with the controls).
      */
-    fun setPanel(ccK: Float, ncK: Float, ncDarkContent: Float, ccRowY: Float, ccRowInset: Float = 0f) {
-        if (ccK == cc && ncK == nc && ncDarkContent == ncDark && ccRowY == ccRow && ccRowInset == ccInset) return
-        cc = ccK; nc = ncK; ncDark = ncDarkContent; ccRow = ccRowY; ccInset = ccRowInset
+    fun setPanel(ccK: Float, ncK: Float, ncDarkContent: Float, ccRowY: Float, ccRowInset: Float = 0f, ccDarkContent: Float = 0f) {
+        if (ccK == cc && ncK == nc && ncDarkContent == ncDark && ccRowY == ccRow && ccRowInset == ccInset && ccDarkContent == ccDark) return
+        cc = ccK; nc = ncK; ncDark = ncDarkContent; ccRow = ccRowY; ccInset = ccRowInset; ccDark = ccDarkContent
         // (Laid out again within this frame: the panels call this from their animation, before it is drawn.)
         val t = ccK > 0f || ncK > 0f
         if (t != tall) { tall = t; requestLayout() }
@@ -909,8 +911,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
         if (width == 0) return
         val u = u
         val cy = centreLine()
-        // White over Control Center, the wallpaper's choice over Notification Center, else the app's or home's.
-        val base = dark * (1f - cc) * (1f - nc) + ncDark * nc * (1f - cc)
+        // Control Center's veil's choice over it (white over iOS's), the wallpaper's over Notification Center, else the app's
+        // or home's.
+        val base = dark * (1f - cc) * (1f - nc) + ncDark * nc * (1f - cc) + ccDark * cc
         val k = (255 * (1f - base)).toInt()
         val content = Color.rgb(k, k, k)
 

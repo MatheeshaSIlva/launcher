@@ -96,7 +96,7 @@ have; code, and a parameter set a layout file would fill).
 | Pixel | Our shade today | What it takes |
 | --- | --- | --- |
 | 4 columns | Control Center's columns, 4-6 | **Option exists** |
-| 72 dp rows, 8 dp gaps, cells wider than tall | Square cells (one `comp.cc.grid.cell`), gap token | **New token**: the cell's height apart from its width |
+| 72 dp rows, 8 dp gaps, cells wider than tall | Square cells (one `comp.cc.grid.cell`), gap token | **New token**: the cell's height apart from its width (**done in step 2**: `comp.cc.grid.cell-height`, and `comp.cc.grid.side` for cells that fill the width) |
 | Two sizes only: one column (symbol), two columns (symbol box and words) | Sizes per control, in code (connectivity 2x2, media 2x2 and 4x2, sliders 1x2 and 1x3...) | **New option**: the sizes a layout allows (others shown at the nearest allowed) |
 | Tiles flow in order, no empty cells | Free placement with empty cells (iOS 18); a flowing pass exists for landscape (`CcLayout.flowed`) | **New option**: arrangement "free" or "in order" |
 | Pages of 4 rows with dots, swiped sideways | One page | **New block**: pages and their dots |
@@ -106,8 +106,8 @@ have; code, and a parameter set a layout file would fill).
 
 | Pixel | Our shade today | What it takes |
 | --- | --- | --- |
-| Off: a pill; on: 24 dp corners; animated | One corner for every state | **New token** (the corner when on) and a motion role |
-| Large tile: a 56 dp symbol box (16 dp corners when on), name and state beside it | The wide control: a circle behind the symbol (always a circle), name and state beside it | **New token**: the symbol box's corner (off and on); sizes and fonts are **Theme** |
+| Off: a pill; on: 24 dp corners; animated | One corner for every state | **New token** (the corner when on) and a motion role (**done in step 2**, on the toggle's own animation: no new role) |
+| Large tile: a 56 dp symbol box (16 dp corners when on), name and state beside it | The wide control: a circle behind the symbol (always a circle), name and state beside it | **New token**: the symbol box's corner (off and on; **done in step 2**); sizes and fonts are **Theme** |
 | Small tile: the symbol alone, 32 dp | A one-cell control with its symbol | **Theme** |
 | On: primary for every tile; off: surfaceVariant | A material for off and on, a colour per control | **Theme** (every accent set to `@primary`) |
 | Unavailable: faded, in surface | App tiles know it (AppTiles); no look for it | **New token** (the unavailable look) |
@@ -148,7 +148,7 @@ have; code, and a parameter set a layout file would fill).
 | --- | --- | --- |
 | The panel follows the finger and settles on a spring | Roles for Control Center's and Notification Center's opening | **Theme** of motion (the preset) |
 | The quick row grows into the grid as one | None | **New motion** with the two-stage block |
-| Corners and colours animate with a tile's state | Colours do (the toggle role) | **New role** with the new corner token |
+| Corners and colours animate with a tile's state | Colours do (the toggle role) | **New role** with the new corner token (**done in step 2** without one: the corner follows the toggle's animation) |
 | The clock grows into the expanded header | None | **New motion** with the header block |
 
 ## How easy or hard: the verdict
@@ -191,7 +191,8 @@ a builder (later) lets people write their own.
 
 1. **The look first, no code**: a Pixel theme for the shade as it is, to see the theme engine at work and what it leaves
    (iOS's structure in Pixel's look). A day.
-2. **The four look additions**: corner when on, symbol box corner, cell height, symbol set (with Material Symbols).
+2. **The four look additions**: corner when on, symbol box corner, cell height, symbol set (with Material Symbols). Done
+   but the symbol set (below).
 3. **The shade as blocks**: the iOS shade rebuilt from blocks and described by a layout file, with nothing changing on
    screen (checked frame by frame against today's).
 4. **Pixel as a layout file**: the missing blocks and options added one by one, each compared with the captures and AOSP's
@@ -214,13 +215,14 @@ blur); Material's round buttons; Google Sans Flex everywhere (downloaded at firs
 - **Control Center's backdrop only darkens.** Its material's fills are reduced to one dimming amount when the picture
   behind is baked (`Shade.ccDim`): a light veil, Pixel's in light mode, is dropped, so the blurred screen shows at full
   colour behind the tiles (dark mode is right: its veil darkens). Needs code: the backdrop drawn with its fills' colours.
+  (Done in step 2.)
 - **Notification Center's veil lies only under the list.** The cover sheet keeps the wallpaper and the lock-screen clock;
   Pixel's veil over the whole panel is structure (step 4) and code.
 - **iOS 27's Material You section sets some `comp.*` tokens itself** (Control Center's glass, its wells, its veil, its
   buttons and gallery, Notification Center's count, the banners' plain colour). With the wallpaper's colours on (Pixel
   turns them on) those hid the `component.*` values a theme built on iOS 27 gives; Control Center's tiles stayed iOS glass
   until Pixel pointed those tokens back at the components. Better: iOS 27's builder writes its Material You at the
-  component level, so a theme built on it needs no pointing back.
+  component level, so a theme built on it needs no pointing back. (Done in step 2.)
 
 **Confirmed on screen**: lit tiles keep the pill (no corner when on), cells are square, the modules are iOS's (2x2
 connectivity and media, vertical sliders), and none of Pixel's structure is there (header, quick row, pages, footers).
@@ -231,6 +233,43 @@ colours.
 
 **Step 2 grows by two**: the four look additions (the corner when on, the symbol box's corner, the cell's height, a symbol
 set), plus Control Center's backdrop drawn with its veil's colours, and iOS 27's Material You moved to the component level.
+
+## Step 2: the look additions (2026-10-19)
+
+Matheesha, with the S24's screenshots of step 1: "continue with the next step". Each addition is a token with iOS 27's value
+chosen so that nothing changes there, and Pixel's value from AOSP:
+
+- **A tile's corner, off and on** (`component.control.row-corner`, `row-on-corner`, read as `comp.cc.module.row-corner`,
+  `row-on-corner`; iOS 27: round both ways). It follows the tile as it lights, on the toggle's own animation (no new motion
+  role): Pixel's capsule (`InactiveCornerRadius` 50 dp, at most half the height) turns into a 24 dp rounded square
+  (`ActiveTileCornerRadius`). Modules larger than a tile keep `component.control.corner` (Pixel: `qs_corner_radius` 28 dp).
+- **The symbol box's corner, off and on** (`component.control.well-corner`, `well-on-corner`; iOS 27: a circle): Pixel's 56
+  dp box is a circle off and 16 dp on (`ActiveIconCornerRadius`).
+- **The cell's height apart from its width** (`comp.cc.grid.cell-height`; iOS 27: the cell's width) and **cells that fill
+  the width** a margin in from each side (`comp.cc.grid.side`; iOS 27: 0, cells of their own width, centred): Pixel's four
+  tiles across between 16 dp margins (`qs_horizontal_margin`), 72 dp tall. Landscape keeps the cell's own width.
+- **Control Center's backdrop drawn with its veil's colours** (`Shade.ccVeil`, was `ccDim`): the background material's
+  plain fills composited as they are, a fill of another blend by how much it darkens (a plain veil cannot tint as a colour
+  blend does, and the live blur is another window's), into one colour over the blurred picture or the live blur; the status
+  bar's content turns black over a light veil. iOS 27's black 50 % is exactly the dim it was.
+- **iOS 27's Material You at the component level**: its tinted glass for the controls, their wells and the veil is written
+  on `component.control.material`, `component.control.well-material` and `component.panel.material` (it was on `comp.cc.*`,
+  which hid Pixel's components whenever the wallpaper's colours were on); Pixel's three pointers back are gone.
+
+**Checked on the emulator**:
+- iOS 27 against the committed build, Control Center opened by a real pull over the same home: with the theme's colours the
+  same picture (background to the unit, the controls alike); with the wallpaper's colours the background is a touch lighter
+  (0.39 of the wallpaper's brightness against 0.33) and tinted: the veil now shows the wash iOS 27's Material You gives it
+  (the palette's dark secondary tone at 30 %), which the old dim turned into plain black. The controls are unchanged.
+- Pixel on the shade alone, wallpaper's colours, light and dark: tiles across the width, 72 dp tall, capsules off and
+  rounded squares on, the symbol box a circle off and a rounded square on, the shape changing with the colour as a tile turns
+  on (8x slow motion); the light veil with black time and icons in light mode, white over the dark veil; edit mode's empty
+  slots, badges and handles on the new grid.
+- 129 unit tests. Not yet on the S24: the light veil over One UI's live blur (drawn over Samsung's view blur as the dim was).
+
+**The symbol set is waiting**: its code is small (a token naming the set, each control's symbol looked up in it); the
+symbols are the question. AOSP SystemUI's own Quick Settings icons are exactly what a Pixel shows; Material Symbols Rounded
+are the family they come from; both are Apache-2.0, and either means downloading about 30 to 40 small vector files.
 
 ## References
 
