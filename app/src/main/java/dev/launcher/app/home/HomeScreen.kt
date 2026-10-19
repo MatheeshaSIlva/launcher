@@ -1820,6 +1820,10 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                         dev.launcher.app.settings.MotionWarmUp.warmUp(m?.u ?: 0f)
                         // And the cards' transition styles (the first bubble after an update: a 76 ms frame).
                         dev.launcher.app.CardStyleWarmUp.warmUp()
+                        // And home's menus (the first edit menu after an update: 46 ms of compiling in its first frame), and
+                        // blurs at every radius a menu's or a close's ramps through.
+                        warmMenu()
+                        dev.launcher.app.design.GpuWarmUp.blurLadder((m?.u ?: 3f) * 80f)
                     } else if (++warmTries < 10) postDelayed(this, 2000L)
                 }
             }.start()
@@ -1843,13 +1847,58 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         }
     }
 
+    /**
+     * The apps' icons back on the GPU before they are next seen (home came back to the front): the renderer lets textures go
+     * that its frames have not used for a while, and after an app had been open the first swipe to the App Library uploaded
+     * ~80 icons inside its first frame (prepareTree 6-10 ms on the S24). [android.graphics.Bitmap.prepareToDraw] uploads the
+     * ones that left, between frames; the others cost nothing. Once home is idle.
+     */
+    fun warmIconTextures() {
+        iconWarmTries = 0
+        removeCallbacks(iconTextures)
+        postDelayed(iconTextures, ICON_WARM_MS)
+    }
+
+    private var iconWarmTries = 0
+
+    private val iconTextures: Runnable = object : Runnable {
+        override fun run() {
+            val metrics = m ?: return
+            if (!isIdle || !hasWindowFocus() || HomeBridge.homeCovered || !dev.launcher.app.GestureNav.idle) {
+                if (++iconWarmTries < 20) postDelayed(this, ICON_WARM_MS)
+                return
+            }
+            for (e in Apps.all) Icons.cached(e, metrics.iconSize)?.prepareToDraw()
+        }
+    }
+
+    init {
+        // Off-screen renders wait while home is touched or a gesture runs (they hold the render thread for a moment).
+        dev.launcher.app.design.GpuWarmUp.quiet = { !HomeBridge.touching && dev.launcher.app.GestureNav.idle }
+    }
+
+    /** A menu made only to be drawn once off screen, open ([ContextMenuView.warmUpNode]). */
+    private fun warmMenu() {
+        val metrics = m ?: return
+        if (width == 0 || height == 0) return
+        val mv = ContextMenuView(context, metrics, {}, { c -> scene.draw(c) })
+        mv.measure(MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(height, MeasureSpec.EXACTLY))
+        mv.layout(0, 0, width, height)
+        val items = listOf(
+            dev.launcher.app.components.MenuPainter.Item("Edit Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.GRID),
+            dev.launcher.app.components.MenuPainter.Item("App Info", glyph = dev.launcher.app.components.MenuPainter.Glyph.INFO),
+            dev.launcher.app.components.MenuPainter.Item("Remove from Home Screen", glyph = dev.launcher.app.components.MenuPainter.Glyph.MINUS, destructive = true))
+        val node = mv.warmUpNode(items) ?: return
+        dev.launcher.app.design.GpuWarmUp.render(node, width, height, "home's menus")
+    }
+
     private fun warmLibrary() {
         val dv = drawer?.view ?: return
         if (dv.width == 0 || dv.height == 0 || drawerProgress() > 0f) return
         val node = android.graphics.RenderNode("library-warm-up").apply {
             setPosition(0, 0, dv.width, dv.height)
             val c = beginRecording()
-            try { backdrop.draw(c); dv.draw(c) } finally { endRecording() }
+            try { backdrop.draw(c); dv.draw(c); (dv as? dev.launcher.app.drawer.AppLibraryView)?.drawListForWarmUp(c) } finally { endRecording() }
         }
         dev.launcher.app.design.GpuWarmUp.render(node, dv.width, dv.height, "the App Library")
     }
@@ -2287,5 +2336,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         const val WARM_UP_DELAY_MS = 6000L
         /** How soon after a build, and how often again, home is asked whether it is idle to warm the App Library (ms). */
         const val LIBRARY_WARM_MS = 500L
+        /** How long after home comes back its icons are put back on the GPU (and how often it asks again while not idle; ms). */
+        const val ICON_WARM_MS = 600L
     }
 }

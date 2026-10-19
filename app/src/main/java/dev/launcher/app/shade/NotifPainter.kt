@@ -224,10 +224,8 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
 
     // ------------------------------------------------------------------ names, icons, pictures
 
-    private val labels = HashMap<String, String>()
-    fun appLabel(pkg: String): String = labels.getOrPut(pkg) {
-        try { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() } catch (_: Throwable) { pkg }
-    }
+    /** [pkg]'s name, read off this thread when its notification came ([AppInfo]: reading it here loaded the app's resources). */
+    fun appLabel(pkg: String): String = AppInfo.label(ctx, pkg)
 
     // An app's icon as home shows it (made again when home renders a new one: a new shape), else the system's until home has
     // rendered it once (just after a start). Kept once for good, the system's icon stayed for the whole session, and a new
@@ -244,7 +242,7 @@ class NotifPainter(private val ctx: Context, private val maxLines: Int, private 
             icons[pkg]?.let { (kept, d) -> if (kept === b) return d }
             return android.graphics.drawable.BitmapDrawable(ctx.resources, b).also { icons[pkg] = b to it }
         }
-        return systemIcons.getOrPut(pkg) { try { ctx.packageManager.getApplicationIcon(pkg) } catch (_: Throwable) { null } }
+        return systemIcons.getOrPut(pkg) { AppInfo.icon(ctx, pkg) }
     }
 
     /** Which icon [pkg] has now (changes when home renders a new one): what was recorded with another is out of date. */

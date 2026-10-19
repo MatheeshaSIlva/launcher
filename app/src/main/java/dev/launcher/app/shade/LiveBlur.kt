@@ -133,6 +133,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
             if (resize) {
                 val size = if (show) WindowManager.LayoutParams.MATCH_PARENT else 1
                 lp.width = size; lp.height = size
+                lp.x = 0; lp.y = 0   // (the prewarm's corner)
                 shownNow = show
             }
             if (mode == Mode.SAMSUNG_VIEW) {
@@ -181,6 +182,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
 
     private fun prewarm() {
         if (!added || failed) return
+        if (mode == Mode.SAMSUNG_VIEW) { prewarmCorner(); return }
         try {
             lp.width = WindowManager.LayoutParams.MATCH_PARENT; lp.height = WindowManager.LayoutParams.MATCH_PARENT
             writeStrength(0.02f)
@@ -196,6 +198,43 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         } catch (t: Throwable) {
             AppLog.log("[blur] prewarm failed: ${t.message}")
         }
+    }
+
+    /**
+     * Samsung's view blur once, for real, where nobody sees it: a small square in the display's bottom-left corner, inside
+     * what its rounded corner hides. SurfaceFlinger's first blur of a boot cost its composite 13 ms at Control Center's first
+     * opening (Perfetto: "BlurRegion #0, radius=4"); the old prewarm's strength rounded to radius 0, which is no blur at all.
+     */
+    private fun prewarmCorner() {
+        try {
+            val display = if (Build.VERSION.SDK_INT >= 30) view.display else null
+            val corner = if (Build.VERSION.SDK_INT >= 31) display?.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_LEFT)?.radius ?: 0 else 0
+            // Inside the corner's curve: a square's inner corner (s, s) from the screen's corner lies outside the visible
+            // arc while s < r (1 - 1/sqrt 2) = 0.29 r.
+            val s = (corner * 0.25f).toInt()
+            if (s < 4) return
+            val screenH = if (Build.VERSION.SDK_INT >= 30) wm.currentWindowMetrics.bounds.height() else view.resources.displayMetrics.heightPixels
+            lp.width = s; lp.height = s; lp.x = 0; lp.y = screenH - s
+            wm.updateViewLayout(view, lp)
+            if (!dev.launcher.app.design.SamsungBlur.set(view, maxOf(8, (maxBlurPx / 2f).toInt()), 0f, 0)) return
+            view.invalidate()
+            h.postDelayed({
+                if (shownNow || failed) return@postDelayed
+                try {
+                    dev.launcher.app.design.SamsungBlur.clear(view)
+                    lp.width = 1; lp.height = 1; lp.x = 0; lp.y = 0
+                    wm.updateViewLayout(view, lp)
+                } catch (_: Throwable) { }
+            }, PREWARM_MS)
+            AppLog.log("[blur] prewarmed in a ${s}px corner")
+        } catch (t: Throwable) {
+            AppLog.log("[blur] prewarm failed: ${t.message}")
+        }
+    }
+
+    private companion object {
+        /** How long the prewarm's blur stays (a few frames: SurfaceFlinger composes it at least once; ms). */
+        const val PREWARM_MS = 300L
     }
 
     private fun setupSamsung() {

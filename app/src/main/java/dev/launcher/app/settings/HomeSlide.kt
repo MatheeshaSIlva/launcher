@@ -140,17 +140,19 @@ internal object HomePictures {
         byTheme[id] = Shot(b, wallpaper)
         val app = ctx.applicationContext
         Thread {
+            // (Below the UI threads: it was started from the main thread, whose priority it would keep.)
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
             try {
-                val sw = b.copy(android.graphics.Bitmap.Config.ARGB_8888, false) ?: return@Thread
-                val half = android.graphics.Bitmap.createScaledBitmap(sw, sw.width / 2, sw.height / 2, true)
+                // Halved on the GPU and read out here (copied whole to software, the GPU bitmap was read back on the render
+                // thread every window of ours draws with: 14-32 ms, as the settings slid in).
+                val half = dev.launcher.app.design.ViewPicture.softCopy(b, 0.5f) ?: return@Thread
                 val d = dir(app).apply { mkdirs() }
                 val tmp = java.io.File(d, "$id~$wallpaper.webp.tmp")
                 tmp.outputStream().use { half.compress(android.graphics.Bitmap.CompressFormat.WEBP_LOSSY, 85, it) }
                 // (The theme's older pictures go: one a theme.)
                 d.listFiles()?.filter { it.name == "$id.webp" || (it.name.startsWith("$id~") && it.name.endsWith(".webp")) }?.forEach { it.delete() }
                 tmp.renameTo(java.io.File(d, "$id~$wallpaper.webp"))
-                if (half !== sw) half.recycle()
-                sw.recycle()
+                half.recycle()
             } catch (t: Throwable) { dev.launcher.app.AppLog.log("[settings] keeping home's picture failed: ${t.message}") }
         }.start()
     }

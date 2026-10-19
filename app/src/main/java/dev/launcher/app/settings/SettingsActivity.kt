@@ -178,6 +178,9 @@ class SettingsActivity : ComponentActivity() {
         },
             FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
         setContentView(root)
+        // No autofill (their search field finds settings): a field taking the focus had the window's whole structure built
+        // for the autofill service on the main thread (home: 17-25 ms).
+        if (Build.VERSION.SDK_INT >= 26) window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         // Made again (a configuration change, the process restored): the intent is still the one that first opened them,
         // not a new opening from home (it held their first frame for a picture of home that never came).
         if (savedInstanceState == null && intent?.getBooleanExtra(SettingsEntry.FROM_HOME, false) == true) beginEntry()

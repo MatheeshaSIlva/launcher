@@ -161,6 +161,13 @@ class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), App
         listPane.setApps(all)
     }
 
+    /**
+     * For the warm-up off screen ([dev.launcher.app.home.HomeScreen]): the list, out of sight in tile mode, drawn as it would
+     * show, so its rows' names are laid out and their glyphs on the GPU before the search's first opening (its first frame
+     * drew them all: 18 ms of the main thread on the S24).
+     */
+    internal fun drawListForWarmUp(c: Canvas) { listPane.draw(c) }
+
     internal fun invalidateAll() {
         tilesPane.invalidate()
         listPane.invalidate()

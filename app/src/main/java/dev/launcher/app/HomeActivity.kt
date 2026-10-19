@@ -116,6 +116,10 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         screen.postDelayed({ widgets?.prewarmApps() }, 4000)
         screen.setConfig(HomeConfig.load(this))
         setContentView(screen)
+        // No autofill on home (its fields search apps): when a field of it first took the focus, Android built the whole
+        // window's structure for the autofill service on the main thread (17-25 ms, every text laid out) in Spotlight's
+        // opening.
+        if (Build.VERSION.SDK_INT >= 26) window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
         window.decorView.viewTreeObserver.addOnWindowVisibilityChangeListener(windowShown)
         screen.viewTreeObserver.addOnDrawListener(drawWatch)
         HomeBridge.home = this
@@ -347,6 +351,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (pending != null && !wallpaperDirty && (id == -1 || id == pending.id)) applyWallpaper(pending)
         else if (wallpaper == null || wallpaperDirty || (id != -1 && id != wallpaper?.id)) loadWallpaper()
         screen.postDelayed({ recordPreview() }, 400)
+        screen.warmIconTextures()
     }
 
     override fun onPause() {

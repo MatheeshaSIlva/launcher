@@ -117,12 +117,21 @@ object Notifs {
             list += read(sbn, importance, noPeek, lockVis) ?: continue
         }
         list.sortBy { order[it.key] ?: Int.MAX_VALUE }
-        connected = true
-        watchMedia(s, list)
-        publish(list)
+        // A new app's name and icon are read first, off the main thread (the shade draws them; read while drawing, they
+        // loaded the app's resources inside a frame). Only the newest reading is published.
+        val gen = ++rebuilds
+        AppInfo.ensure(s, list.map { it.pkg }) {
+            if (gen != rebuilds) return@ensure
+            connected = true
+            watchMedia(s, list)
+            publish(list)
+        }
     }
 
-    internal fun clear() { connected = false; watchMedia(null, emptyList()); publish(emptyList()) }
+    /** Counts [rebuild]s: a reading that waited for app names is not published over a newer one. */
+    private var rebuilds = 0
+
+    internal fun clear() { rebuilds++; connected = false; watchMedia(null, emptyList()); publish(emptyList()) }
 
     private fun publish(list: List<Item>) {
         items = list

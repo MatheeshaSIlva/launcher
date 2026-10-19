@@ -47,6 +47,17 @@ find_tap() {   # $1 = template, $2 = step, $3 = window that must hold the focus;
   need "$3" "$2 (before the tap)"
   tap $xy
 }
+open_utilities() {   # $1 = step: opens the library's Utilities folder (the library dragged up ~500 px; anchored on the
+  # Games tile, which keeps its icons; Utilities reorders by use, so its small icons are tapped by place, right beside it)
+  need HomeActivity "$1 (before the shot)"
+  "$ADB" "${D[@]}" exec-out screencap -p > tools/shots/gate.png
+  local out; out=$(python tools/find_icon.py tools/shots/gate.png tools/shots/tpl_s_games.png 2>/dev/null) || stop "$1 (Games tile not found)"
+  local xy; xy=$(echo "$out" | tail -1)
+  local gx=${xy% *}; local gy=${xy#* }
+  # Utilities' small icons: left of the Games tile's first icon by 286 px, 217 px lower (S24, tile pitch).
+  need HomeActivity "$1 (before the tap)"
+  tap $((gx - 286)) $((gy + 217))
+}
 hold() {   # a short swipe up from the bar that rests: the App Switcher (checked in the log)
   local before; before=$(tools/device.sh log 400 | grep -c "\[switcher\] open")
   "$ADB" "${D[@]}" shell "input motionevent DOWN 540 2330; for y in 2310 2280 2240 2200 2160 2140 2130; do input motionevent MOVE 540 \$y; done; sleep 0.6; input motionevent UP 540 2130"
@@ -68,7 +79,7 @@ if want home; then
   need HomeActivity "library back"; reset; "$ADB" "${D[@]}" shell input swipe 150 1200 900 1200 250; sleep 1.2; measure library_to_page_swipe
   to_library; need HomeActivity "library bar"; reset; bar_up; sleep 1.5; measure library_to_page_bar
   to_library; slow_up; sleep 0.8
-  reset; find_tap tpl_s_util.png folder_open HomeActivity; sleep 1.2; measure folder_open
+  reset; open_utilities folder_open; sleep 1.2; measure folder_open
   need HomeActivity "folder close"; reset; bar_up; sleep 1.2; measure folder_close_bar
   need HomeActivity "library search"; reset; tap 540 216; sleep 1.2; keyboard || stop "library search keyboard"; measure library_search_open
   need HomeActivity "library search close"; reset; bar_up; sleep 1.5; measure library_search_close
@@ -90,7 +101,7 @@ if want launch; then
   home_p1; to_library; slow_up; sleep 0.8
   reset; find_tap tpl_s_calc.png calc_launch HomeActivity; sleep 2.2; need $CALC "Calculator"; measure calc_launch
   reset; bar_up; sleep 2; need HomeActivity "after calc close"; measure calc_close
-  find_tap tpl_s_util.png folder HomeActivity; sleep 1.2
+  open_utilities folder; sleep 1.2
   reset; find_tap tpl_f_clock.png clock_launch HomeActivity; sleep 2.2; need $CLOCK "Clock from folder"; measure clock_launch_folder
   reset; bar_up; sleep 2; need HomeActivity "after clock close"; measure clock_close_folder
   need HomeActivity "folder still open"; bar_up; sleep 1.2
@@ -133,7 +144,7 @@ fi
 if want settings; then
   echo "== settings"
   home_p1; to_library; slow_up; sleep 0.8
-  find_tap tpl_s_util.png folder HomeActivity; sleep 1.2
+  open_utilities folder; sleep 1.2
   reset; find_tap tpl_f_set.png settings_launch HomeActivity; sleep 2.2; need SettingsActivity "settings from folder"; measure settings_launch
   reset; bar_up; sleep 2; need HomeActivity "after settings close"; measure settings_close_gesture
   need HomeActivity "folder still open"; bar_up; sleep 1.2

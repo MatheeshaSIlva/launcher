@@ -692,92 +692,133 @@ object ClockNumerals {
         }
     }
 
+    // [build]'s working memory, kept from build to build: a clock's numerals are made at every minute, and each build made
+    // ~25 MB of arrays to collect (a Large clock: some ten arrays of its every pixel). At each minute's turn the garbage
+    // collector ran, and its pauses landed in whatever moved then (heap profile of home's swipes on the emulator: 80 of the
+    // 84 MB allocated were these). [build] is synchronized: one build at a time uses them (home's worker, Notification
+    // Center's own).
+    private var sBytes = ByteArray(0)
+    private var sA = FloatArray(0)
+    private var sB = FloatArray(0)
+    private var sLine = FloatArray(0)
+    private var sPx = IntArray(0)
+
     /**
      * [time] drawn with [paint] as a glass shape of [w] x [h]: its coverage (anti-aliased) and its field at full size (an exact
      * Euclidean distance transform, no smoothing needed at full size): the signed distance to the edge, and a dome-shaped
      * height across every stroke that the shader lights in 3D. Fresh bitmaps every time (the glass may still be drawing the
      * previous ones). Any thread; some tens of ms.
      */
+    @Synchronized
     fun build(paint: android.text.TextPaint, w: Int, h: Int, baseline: Float, time: String, unitPx: Float): dev.launcher.app.GlassMask {
         val mask = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ALPHA_8)
         // (Stacked: a line each, [lineStep] apart.)
         val step = lineStep(paint)
         val canvas = android.graphics.Canvas(mask)
         for ((i, line) in time.split('\n').withIndex()) canvas.drawText(line, w / 2f, baseline + i * step, paint)
-        val cov = readAlpha(mask)
+        // The coverage, read straight from the mask's rows ([cov]).
+        val rowBytes = mask.rowBytes
+        val nb = rowBytes * h
+        if (sBytes.size < nb) sBytes = ByteArray(nb)
+        mask.copyPixelsToBuffer(java.nio.ByteBuffer.wrap(sBytes, 0, nb))
         val n = w * h
-        val inside = BooleanArray(n) { cov[it] >= 128 }
-        val dIn = Edt.distances(w, h) { !inside[it] }
-        val dOut = Edt.distances(w, h) { inside[it] }
+        if (sA.size < n) sA = FloatArray(n)
+        if (sB.size < n) sB = FloatArray(n)
+        if (sLine.size < maxOf(w, h)) sLine = FloatArray(maxOf(w, h))
+        if (sPx.size < w) sPx = IntArray(w)
+        val bytes = sBytes
+        fun cov(i: Int): Int = bytes[(i / w) * rowBytes + i % w].toInt() and 0xFF
+        val dIn = sA
+        val dOut = sB
+        Edt.distancesInto(dIn, w, h, bytes, rowBytes, toInside = false)
+        Edt.distancesInto(dOut, w, h, bytes, rowBytes, toInside = true)
         // Sub-pixel edge from the anti-aliased coverage (half a pixel either way), so the field is smooth along curves.
-        val signed = FloatArray(n) { i -> if (inside[i]) dIn[i] - 0.5f + (cov[i] - 128) / 255f else -(dOut[i] - 0.5f) + (cov[i] - 127) / 255f }
+        // (Into dIn's array: each pixel reads only its own distances.)
+        val signed = sA
+        for (i in 0 until n) {
+            val c = cov(i)
+            signed[i] = if (c >= 128) dIn[i] - 0.5f + (c - 128) / 255f else -(dOut[i] - 0.5f) + (c - 127) / 255f
+        }
         // The lens is the dock's own: its 20 pt bevel and 30 pt bend (the strokes are narrower than the bevel, so the whole
-        // stroke is lens, as a thick glass digit is).
-        // (A float array: boxed in a list, the inside of a Large clock's digits was some 300 000 objects to collect.)
+        // stroke is lens, as a thick glass digit is). Its half width: the 95th percentile of the distances inside (the
+        // value a sort would put there, found by selection in dOut's array, no longer needed).
+        val ins = sB
         var count = 0
-        for (i in 0 until n) if (signed[i] > 0f) count++
-        val ins = FloatArray(count)
-        count = 0
         for (i in 0 until n) if (signed[i] > 0f) ins[count++] = signed[i]
-        ins.sort()
-        val half = if (ins.isEmpty()) 10f else ins[(ins.size * 0.95f).toInt().coerceAtMost(ins.size - 1)]
+        val half = if (count == 0) 10f else select(ins, count, (count * 0.95f).toInt().coerceAtMost(count - 1))
         val bevel = 20f * unitPx
         // The field reaches as far outside as the shadow does (it is a blur of the shape moved down).
         val range = maxOf(half, paint.textSize * 0.07f, dev.launcher.app.ClockShadow.reach) + 8f
         // The outward normal (the distance's gradient), from the distance smoothed so the pixel steps of the transform do not
         // show, and kept unnormalised: across the middle of a stroke, where the nearest edge switches sides, it fades to zero
         // instead of flipping, so the two halves of the lens meet without a crease.
-        val sm = signed.copyOf()
-        boxBlur(sm, w, h, maxOf(2, (half * 0.25f).roundToInt()), 2)
-        val px = IntArray(n) { i ->
-            val x = i % w
-            val y = i / w
-            val gx = (sm[if (x < w - 1) i + 1 else i] - sm[if (x > 0) i - 1 else i]) * 0.5f
-            val gy = (sm[if (y < h - 1) i + w else i] - sm[if (y > 0) i - w else i]) * 0.5f
-            // The distance rises inwards: the outward normal points against its gradient (length 1 near the edges).
-            val len = kotlin.math.sqrt(gx * gx + gy * gy)
-            val k = if (len > 1f) 1f / len else 1f
-            val nx = -gx * k
-            val ny = -gy * k
-            val sd = ((0.5f + signed[i] / (2f * range)).coerceIn(0f, 1f) * 255f).roundToInt()
-            val ex = ((nx * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
-            val ey = ((ny * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
-            (0xFF shl 24) or (sd shl 16) or (ex shl 8) or ey
+        val sm = sB
+        System.arraycopy(signed, 0, sm, 0, n)
+        boxBlur(sm, w, h, maxOf(2, (half * 0.25f).roundToInt()), 2, sLine)
+        val field = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val row = sPx
+        for (y in 0 until h) {
+            for (x in 0 until w) {
+                val i = y * w + x
+                val gx = (sm[if (x < w - 1) i + 1 else i] - sm[if (x > 0) i - 1 else i]) * 0.5f
+                val gy = (sm[if (y < h - 1) i + w else i] - sm[if (y > 0) i - w else i]) * 0.5f
+                // The distance rises inwards: the outward normal points against its gradient (length 1 near the edges).
+                val len = kotlin.math.sqrt(gx * gx + gy * gy)
+                val k = if (len > 1f) 1f / len else 1f
+                val nx = -gx * k
+                val ny = -gy * k
+                val sd = ((0.5f + signed[i] / (2f * range)).coerceIn(0f, 1f) * 255f).roundToInt()
+                val ex = ((nx * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
+                val ey = ((ny * 0.5f + 0.5f) * 255f).roundToInt().coerceIn(0, 255)
+                row[x] = (0xFF shl 24) or (sd shl 16) or (ex shl 8) or ey
+            }
+            field.setPixels(row, 0, w, 0, y, w, 1)
         }
-        val field = android.graphics.Bitmap.createBitmap(px, w, h, android.graphics.Bitmap.Config.ARGB_8888)
         return dev.launcher.app.GlassMask(mask, field, 1f, range, bevel, 0.14f).also { lastBuilt = it }
     }
 
-    /** [passes] box blurs of radius [r] over a [w] x [h] float image, in place. */
-    private fun boxBlur(v: FloatArray, w: Int, h: Int, r: Int, passes: Int) {
-        val tmp = FloatArray(v.size)
+    /** The [k]-th smallest of the first [count] values of [v] (reordering them): what `v.sorted()[k]` gives. */
+    internal fun select(v: FloatArray, count: Int, k: Int): Float {
+        var lo = 0
+        var hi = count - 1
+        while (lo < hi) {
+            val pivot = v[(lo + hi) ushr 1]
+            var i = lo
+            var j = hi
+            while (i <= j) {
+                while (v[i] < pivot) i++
+                while (v[j] > pivot) j--
+                if (i <= j) { val t = v[i]; v[i] = v[j]; v[j] = t; i++; j-- }
+            }
+            if (k <= j) hi = j else if (k >= i) lo = i else return v[k]
+        }
+        return v[k]
+    }
+
+    /** [passes] box blurs of radius [r] over a [w] x [h] float image, in place ([line]: room for a row or a column). */
+    private fun boxBlur(v: FloatArray, w: Int, h: Int, r: Int, passes: Int, line: FloatArray) {
         val n = 2 * r + 1
         repeat(passes) {
             for (y in 0 until h) {
                 val row = y * w
+                System.arraycopy(v, row, line, 0, w)
                 var sum = 0f
-                for (x in -r..r) sum += v[row + x.coerceIn(0, w - 1)]
+                for (x in -r..r) sum += line[x.coerceIn(0, w - 1)]
                 for (x in 0 until w) {
-                    tmp[row + x] = sum / n
-                    sum += v[row + (x + r + 1).coerceAtMost(w - 1)] - v[row + (x - r).coerceAtLeast(0)]
+                    v[row + x] = sum / n
+                    sum += line[(x + r + 1).coerceAtMost(w - 1)] - line[(x - r).coerceAtLeast(0)]
                 }
             }
             for (x in 0 until w) {
+                for (y in 0 until h) line[y] = v[y * w + x]
                 var sum = 0f
-                for (y in -r..r) sum += tmp[y.coerceIn(0, h - 1) * w + x]
+                for (y in -r..r) sum += line[y.coerceIn(0, h - 1)]
                 for (y in 0 until h) {
                     v[y * w + x] = sum / n
-                    sum += tmp[(y + r + 1).coerceAtMost(h - 1) * w + x] - tmp[(y - r).coerceAtLeast(0) * w + x]
+                    sum += line[(y + r + 1).coerceAtMost(h - 1)] - line[(y - r).coerceAtLeast(0)]
                 }
             }
         }
-    }
-
-    private fun readAlpha(b: android.graphics.Bitmap): IntArray {
-        val buf = java.nio.ByteBuffer.allocate(b.rowBytes * b.height)
-        b.copyPixelsToBuffer(buf)
-        val a = buf.array()
-        return IntArray(b.width * b.height) { i -> a[(i / b.width) * b.rowBytes + i % b.width].toInt() and 0xFF }
     }
 
 }
@@ -786,11 +827,33 @@ object ClockNumerals {
 object Edt {
     private const val FAR = 1e9f
 
-    /** For every pixel of a [w] x [h] grid, the distance to the nearest pixel where [target] is true (0 on one). */
+    // One dimension's working memory, kept (its caller, ClockNumerals.build, runs one at a time).
+    private var f = FloatArray(0)
+    private var d = FloatArray(0)
+    private var v = IntArray(0)
+    private var z = FloatArray(0)
+
+    /** For every pixel of a [w] x [h] grid, the distance to the nearest pixel where [target] is true (0 on one). Tests. */
     fun distances(w: Int, h: Int, target: (Int) -> Boolean): FloatArray {
-        val g = FloatArray(w * h) { if (target(it)) 0f else FAR }
+        val cov = ByteArray(w * h) { if (target(it)) 255.toByte() else 0 }
+        return FloatArray(w * h).also { distancesInto(it, w, h, cov, w, toInside = true) }
+    }
+
+    /**
+     * For every pixel of a [w] x [h] grid, into [g] (at least [w] x [h] long): the distance to the nearest pixel of a coverage
+     * mask [cov] (rows [rowBytes] apart) that is inside it (coverage 128 or more) for [toInside], outside it otherwise (0 on
+     * one). (Read straight from the mask: a test given as a lambda boxed every pixel's index, ~40 MB of garbage a clock.)
+     */
+    @Synchronized
+    fun distancesInto(g: FloatArray, w: Int, h: Int, cov: ByteArray, rowBytes: Int, toInside: Boolean) {
+        for (y in 0 until h) {
+            val row = y * rowBytes
+            val out = y * w
+            for (x in 0 until w) g[out + x] = if (((cov[row + x].toInt() and 0xFF) >= 128) == toInside) 0f else FAR
+        }
         val m = maxOf(w, h)
-        val f = FloatArray(m); val d = FloatArray(m); val v = IntArray(m); val z = FloatArray(m + 1)
+        if (f.size < m) { f = FloatArray(m); d = FloatArray(m); v = IntArray(m); z = FloatArray(m + 1) }
+        val f = f; val d = d; val v = v; val z = z
         for (x in 0 until w) {
             for (y in 0 until h) f[y] = g[y * w + x]
             pass(f, h, d, v, z)
@@ -801,7 +864,6 @@ object Edt {
             pass(f, w, d, v, z)
             for (x in 0 until w) g[y * w + x] = kotlin.math.sqrt(d[x])
         }
-        return g
     }
 
     /** One dimension: squared distances [d] from the sampled function [f] of [n] values (lower envelope of parabolas). */

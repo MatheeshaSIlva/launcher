@@ -129,6 +129,26 @@ class ContextMenuView(
 
     fun dismiss() { if (k.target > 0f) k.animateTo(0f, Motion.profile.menuClose) }
 
+    /**
+     * This menu once, open with [menu], over what it floats on, recorded for [dev.launcher.app.design.GpuWarmUp]: the
+     * pipelines of its glass, shadow, rows and symbols compiled before a menu first opens (after an update the edit menu's
+     * first frame compiled them: 46 ms of the render thread on the S24). Only on a menu made for this, never shown; it
+     * must be laid out.
+     */
+    fun warmUpNode(menu: List<MenuPainter.Item>): RenderNode? {
+        if (width == 0 || height == 0) return null
+        anchor.set(m.w / 2f - m.pt(30f), m.h / 3f, m.w / 2f + m.pt(30f), m.h / 3f + m.pt(60f))
+        bounds.set(m.libMargin, 0f, m.w - m.libMargin, m.h - m.bottomSafe)
+        painter.layout(menu, anchor, bounds, 8f, fromLeft = true)
+        k.snapTo(1f)
+        val node = RenderNode("menu-warm-up")
+        node.setPosition(0, 0, width, height)
+        val c = node.beginRecording()
+        try { draw(c) } finally { node.endRecording() }
+        k.snapTo(0f)
+        return node
+    }
+
     /** The lifted item's look changed while the menu shows (the Edit button in a new appearance). */
     fun replaceLifted(p: RenderNode?) { if (lifted != null && p != null) { lifted = p; invalidate() } }
 
