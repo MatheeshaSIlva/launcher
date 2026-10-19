@@ -4,7 +4,8 @@
 # leaves: nothing warmed) and again (warm). Every tap waits for a checked state (the focused window, the keyboard, an icon
 # found on a fresh screenshot). Nothing is recorded or captured but home and our own screens (templates); the shade and
 # the App Switcher are measured by frame stats only.
-#   DEVICE=<serial> tools/scenario_sweep.sh [SECTION...]     sections: home launch switcher shade settings (default: all)
+#   DEVICE=<serial> [SWEEP_CSV=file SWEEP_RUN=name] tools/scenario_sweep.sh [SECTION...]
+#   sections: home launch switcher shade settings (default: all); SWEEP_CSV appends run,step,window,shown,missed,gpu_p90,gpu_max,cpu_max
 # Templates (cut on this phone, tools/shots/): tpl_s_calc.png (Calculator in the library's Utilities cluster, the library
 # dragged up ~500 px), tpl_s_util.png (that cluster's small icons: opens the folder), tpl_f_clock.png and tpl_f_set.png
 # (Clock and Launcher settings inside the open folder).
@@ -29,7 +30,11 @@ n = re.search(r'shown: (\d+) frames.*?missed refreshes ~(\d+)', t)
 g = re.search(r'GPU ms: median ([\d.]+)\s+p90 ([\d.]+)\s+max ([\d.]+)', t)
 c = re.search(r'CPU ms: median ([\d.]+)\s+p90 ([\d.]+)\s+max ([\d.]+)', t)
 if n and int(n.group(1)) > 3:
-    print(f'  {\"$1\":24s} {\"$w\":17s} shown {n.group(1):>4s}  missed {n.group(2):>2s}  GPU p90 {g.group(2):>5s} max {g.group(3):>6s}  CPU max {c.group(3):>6s}')"
+    print(f'  {\"$1\":24s} {\"$w\":17s} shown {n.group(1):>4s}  missed {n.group(2):>2s}  GPU p90 {g.group(2):>5s} max {g.group(3):>6s}  CPU max {c.group(3):>6s}')
+    import os
+    csv = os.environ.get('SWEEP_CSV')
+    if csv:
+        with open(csv, 'a') as f: f.write(f'{os.environ.get(\"SWEEP_RUN\", \"\")},$1,$w,{n.group(1)},{n.group(2)},{g.group(2)},{g.group(3)},{c.group(3)}\n')"
   done
 }
 tap() { "$ADB" "${D[@]}" shell input tap "$1" "$2"; }

@@ -1863,12 +1863,29 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     private val iconTextures: Runnable = object : Runnable {
         override fun run() {
-            val metrics = m ?: return
+            if (m == null) return
             if (!isIdle || !hasWindowFocus() || HomeBridge.homeCovered || !dev.launcher.app.GestureNav.idle) {
                 if (++iconWarmTries < 20) postDelayed(this, ICON_WARM_MS)
                 return
             }
-            for (e in Apps.all) Icons.cached(e, metrics.iconSize)?.prepareToDraw()
+            iconWarmNext = 0
+            postOnAnimation(iconTexturesStep)
+        }
+    }
+
+    private var iconWarmNext = 0
+
+    // A dozen a frame (each is a task of the render thread, an upload if it left the GPU: all at once, a gesture starting
+    // then waited behind them); stops if home is touched or moves.
+    private val iconTexturesStep: Runnable = object : Runnable {
+        override fun run() {
+            val metrics = m ?: return
+            if (HomeBridge.touching || !isIdle) return
+            val all = Apps.all
+            val end = minOf(all.size, iconWarmNext + ICONS_PER_FRAME)
+            for (i in iconWarmNext until end) Icons.cached(all[i], metrics.iconSize)?.prepareToDraw()
+            iconWarmNext = end
+            if (end < all.size) postOnAnimation(this)
         }
     }
 
@@ -2338,5 +2355,6 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         const val LIBRARY_WARM_MS = 500L
         /** How long after home comes back its icons are put back on the GPU (and how often it asks again while not idle; ms). */
         const val ICON_WARM_MS = 600L
+        const val ICONS_PER_FRAME = 12
     }
 }
