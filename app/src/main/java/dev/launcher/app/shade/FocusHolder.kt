@@ -62,6 +62,7 @@ class FocusHolder(private val ctx: Context, private val wm: WindowManager, priva
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSPARENT).apply {
             gravity = Gravity.TOP or Gravity.START
+            x = -SIZE_PX - 4; y = -SIZE_PX - 4
             title = "LauncherFocus"
             // Never at window alpha 0: SurfaceFlinger counts such a layer as not visible for input, so it could not take the
             // focus, and Back waited for a focused window until Android called the launcher not responding (S24).
@@ -82,7 +83,7 @@ class FocusHolder(private val ctx: Context, private val wm: WindowManager, priva
 
     private companion object {
         /** The window's side (px): transparent and untouchable, in the screen's top-left corner. */
-        const val SIZE_PX = 64
+        const val SIZE_PX = 1
         val KEYS = setOf(KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
     }
 }
