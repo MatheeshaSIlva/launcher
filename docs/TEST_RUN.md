@@ -103,6 +103,8 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
 ### Home
 - H1 **ok**: unlock arrival (home zooms in from larger and settles); screen off and on. O1 noted (AOSP's own unlock slide).
 - H2 **ok**: rubber band at the first page and past the App Library; pages; the bar's tone over the light library.
+- H3b **ok**: the App Library as a swipe-up sheet (Setup placement): opens and closes with the finger, Spotlight still on a
+  pull down; back to a page after the last.
 - H3 **ok**: library scroll (tiles fade under the field), a category folder (open, launch, the close lands back in the open
   folder, close), search (keyboard, results, launch, the close lands on the app's tile icon).
 - H4 **ok**: Spotlight (suggestions, field over the keyboard, top hit; Enter launches once; the close dismisses it).
