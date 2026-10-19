@@ -130,6 +130,12 @@ internal object HomePictures {
     /** Home's picture [home] with the status bar's [bar] across its top, drawn together on the GPU (any thread but main). */
     fun withBar(home: android.graphics.Bitmap, bar: android.graphics.Bitmap): android.graphics.Bitmap = SettingsEntry.withBar(home, bar)
 
+    /** When each theme's picture was last kept (uptime ms). */
+    private val keptAt = HashMap<String, Long>()
+
+    /** A picture of home in theme [id] was kept within [ms] (home handed one over as the settings opened). */
+    fun keptWithin(id: String, ms: Long): Boolean = keptAt[id]?.let { android.os.SystemClock.uptimeMillis() - it < ms } == true
+
     /**
      * [b] is home in theme [id] now, with wallpaper [wallpaper]: kept, and saved (at half size) off the main thread. Only a
      * picture of one of home's pages as they rest ([page]): the theme's card is home as it looked in it (opened from the
@@ -138,6 +144,7 @@ internal object HomePictures {
     fun keep(ctx: android.content.Context, id: String, b: android.graphics.Bitmap, page: Boolean, wallpaper: Int) {
         if (!page) return
         byTheme[id] = Shot(b, wallpaper)
+        keptAt[id] = android.os.SystemClock.uptimeMillis()
         val app = ctx.applicationContext
         Thread {
             // (Below the UI threads: it was started from the main thread, whose priority it would keep.)
@@ -175,7 +182,16 @@ internal fun KeepHomePictures(st: Studio) {
     }
     LaunchedEffect(look.version, look.wallpaper) {
         delay(KEEP_DELAY_MS)
-        snapshotFlow { st.entry.moving || st.entry.enter.floatValue < 1f || st.p.isRunning }.first { !it }
+        // Not while anything moves: taking the picture renders home on the main and render threads (20-30 ms): a new look's
+        // reveal (1.8 s; it was taken 0.9 s into it), a slide, a page, a scroll. And none when home just handed one over.
+        while (true) {
+            snapshotFlow { st.entry.moving || st.entry.enter.floatValue < 1f || st.p.isRunning || st.subPush.isRunning ||
+                st.start.moving || st.scrolls.values.any { it.moving } || st.searchK.isRunning }.first { !it }
+            val left = dev.launcher.app.design.Still.msLeft()
+            if (left == 0L) break
+            delay(left)
+        }
+        if (HomePictures.keptWithin(Design.themeId, KEEP_DELAY_MS * 3)) return@LaunchedEffect
         // Home may not be up yet (the app just started with the settings in front): asked again for a few seconds.
         var home: android.graphics.Bitmap? = null
         for (i in 0 until 8) {
