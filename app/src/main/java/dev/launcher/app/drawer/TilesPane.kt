@@ -193,7 +193,29 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
 
     // ------------------------------------------------------------------ drawing
 
+    /**
+     * What [onDraw] draws, recorded once per frame: the search field's glass shows the tiles under it from this node
+     * ([drawRecorded]) instead of drawing every tile again into its own recording (a quarter of the main thread at every
+     * frame of the library's slide, when the tiles redraw for their glass: simpleperf on the S24).
+     */
+    private val recorded = android.graphics.RenderNode("library-tiles")
+
+    /** Draws the tiles as last recorded (the pane's own coordinates); false if there is no recording to draw. */
+    fun drawRecorded(c: Canvas): Boolean {
+        if (!c.isHardwareAccelerated || !recorded.hasDisplayList()) return false
+        c.drawRenderNode(recorded)
+        return true
+    }
+
     override fun onDraw(c: Canvas) {
+        if (!c.isHardwareAccelerated) { drawContent(c); return }
+        recorded.setPosition(0, 0, width, height)
+        val rc = recorded.beginRecording(width, height)
+        try { drawContent(rc) } finally { recorded.endRecording() }
+        c.drawRenderNode(recorded)
+    }
+
+    private fun drawContent(c: Canvas) {
         if (lib.tiles.isEmpty()) return
         // Scroll edge: above the search field the content fades out (a layer over that band only). Only the tiles reaching
         // into that band are drawn into it.

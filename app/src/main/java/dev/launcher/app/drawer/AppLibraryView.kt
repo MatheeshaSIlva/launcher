@@ -406,10 +406,34 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
         color = 0xD9FFFFFF.toInt(); style = Paint.Style.STROKE; strokeWidth = m.pt(1.8f); strokeCap = Paint.Cap.ROUND
     }
 
+    // The magnifier's soft shadow, rendered once into an alpha bitmap and drawn in its colour: a stroke with a shadow
+    // layer is blurred on the CPU, and uploaded as a new texture, at every frame it moves by a fraction of a pixel (the
+    // whole slide to the App Library). The stroke itself stays a vector drawing (sharp).
+    private val glyphShadow = Paint(Paint.FILTER_BITMAP_FLAG)
+    private var glyphShadowImage: android.graphics.Bitmap? = null
+    private var glyphShadowPad = 0f
+
+    private fun glyphShadowFor(lr: Float): android.graphics.Bitmap? {
+        glyphShadowImage?.let { return it }
+        val blur = m.pt(2.5f)
+        val pad = kotlin.math.ceil(lr * 1.45f + glyph.strokeWidth + blur * 1.8f + 2f)
+        val size = (2 * pad).toInt()
+        val b = try { android.graphics.Bitmap.createBitmap(size, size, android.graphics.Bitmap.Config.ALPHA_8) } catch (_: Throwable) { return null }
+        // (Coverage only: a shadow layer is drawn at its own colour's alpha, not the stroke's.)
+        val p = Paint(glyph).apply { color = android.graphics.Color.WHITE; maskFilter = android.graphics.BlurMaskFilter(blur, android.graphics.BlurMaskFilter.Blur.NORMAL) }
+        val c = Canvas(b)
+        c.drawCircle(pad, pad, lr, p)
+        c.drawLine(pad + lr * 0.72f, pad + lr * 0.72f, pad + lr * 1.45f, pad + lr * 1.45f, p)
+        b.prepareToDraw()
+        glyphShadowImage = b
+        glyphShadowPad = pad
+        return b
+    }
+
     fun onAppearance() {
         val a = dev.launcher.app.theme.Appearance
         glyph.color = a.secondaryLabel
-        glyph.setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), lib.shadowFor(0x66000000))
+        glyphShadow.color = lib.shadowFor(0x66000000)
         edit.setTextColor(a.label)
         edit.setHintTextColor(a.tertiaryLabel)
         edit.setShadowLayer(m.pt(2.5f), 0f, m.pt(0.6f), lib.shadowFor(0x66000000))
@@ -509,6 +533,7 @@ internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameL
         val cx = m.pt(20f)
         val cy = height / 2f - m.pt(1f)
         val lr = m.pt(6.5f)
+        glyphShadowFor(lr)?.let { canvas.drawBitmap(it, cx - glyphShadowPad, cy - glyphShadowPad + m.pt(0.6f), glyphShadow) }
         lens.reset()
         lens.addCircle(cx, cy, lr, Path.Direction.CW)
         canvas.drawPath(lens, glyph)

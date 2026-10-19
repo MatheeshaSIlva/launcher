@@ -127,10 +127,9 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private val lensGlyph = Paint(glyph).apply { color = 0x99FFFFFF.toInt(); strokeWidth = m.pt(1.7f) }
     private val dot = Paint(Paint.ANTI_ALIAS_FLAG)
     private val cardFill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x1FFFFFFF }
-    private val cardShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x4D000000
-        maskFilter = android.graphics.BlurMaskFilter(m.pt(18f), android.graphics.BlurMaskFilter.Blur.NORMAL)
-    }
+    private val cardShadow = Paint(Paint.FILTER_BITMAP_FLAG).apply { color = 0x4D000000 }
+    // Rendered once per card size (the cards rise with the sheet: blurred again at every frame otherwise).
+    private val cardSoft = dev.launcher.app.theme.SoftShadow(m.pt(18f))
     private val iconClip = Path()
     // Text in the appearance's colours (dark on the light sheet, white on the dark one).
     // The clock preview's date line, as the widget's (its size is set per draw: the preview is the widget, scaled).
@@ -1079,7 +1078,7 @@ class WidgetPicker(ctx: Context, private val m: HomeMetrics, private val host: H
     private fun drawEntryCard(c: Canvas, e: Entry, box: RectF, s: Float) {
         val rad = m.widgetRadius * s
         // A soft shadow lifts the card off the sheet; the card itself is glass.
-        c.drawRoundRect(box.left + m.pt(6f), box.top + m.pt(14f), box.right - m.pt(6f), box.bottom + m.pt(10f), rad, rad, cardShadow)
+        cardSoft.drawRoundRect(c, box.left + m.pt(6f), box.top + m.pt(14f), box.right - m.pt(6f), box.bottom + m.pt(10f), rad, cardShadow)
         val info = e.info
         // Our clock is shown on a window onto the wallpaper (as it will look on home); Android widgets on glass cards.
         if (info == null) drawWallpaperWindow(c, box, rad, sheetY(), 0f) else glassShape(c, box, rad, sheetY(), 0f, cardFill, 0x1F, HomeTokens.WIDGETS_CARD)

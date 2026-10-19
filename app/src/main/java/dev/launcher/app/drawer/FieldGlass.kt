@@ -44,7 +44,9 @@ internal class FieldGlass(private val m: HomeMetrics) {
         val save = c.save()
         c.translate(at[0], at[1])
         if (v.alpha < 0.999f) c.saveLayerAlpha(0f, 0f, v.width.toFloat(), v.height.toFloat(), (255 * v.alpha).toInt())
-        v.draw(c)
+        // The library's tiles as they recorded themselves this frame (drawn again in full, they cost every frame of the
+        // library's slide a second pass over every tile).
+        if (!(v is TilesPane && v.drawRecorded(c))) v.draw(c)
         c.restoreToCount(save)
     }
 

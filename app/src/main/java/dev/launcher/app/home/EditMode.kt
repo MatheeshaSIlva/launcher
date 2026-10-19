@@ -773,10 +773,9 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         private var toX = 0f
         private var toY = 0f
         private var onSettled: (() -> Unit)? = null
-        private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = 0x40000000
-            maskFilter = android.graphics.BlurMaskFilter(m.pt(14f), android.graphics.BlurMaskFilter.Blur.NORMAL)
-        }
+        private val shadow = Paint(Paint.FILTER_BITMAP_FLAG).apply { color = 0x40000000 }
+        // Rendered once (it follows the finger and grows: blurred again at every frame otherwise).
+        private val softShadow = dev.launcher.app.theme.SoftShadow(m.pt(14f))
 
         init { setWillNotDraw(false); isClickable = false }
 
@@ -832,7 +831,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             if (lift > 0f) {
                 shadow.alpha = (0x40 * lift.coerceIn(0f, 1f)).toInt()
                 val s = m.iconSize * 0.9f
-                c.drawRoundRect(pivotX0 - s / 2f, pivotY0 - s / 2f + m.pt(8f), pivotX0 + s / 2f, pivotY0 + s / 2f + m.pt(8f), s * 0.25f, s * 0.25f, shadow)
+                softShadow.drawRoundRect(c, pivotX0 - s / 2f, pivotY0 - s / 2f + m.pt(8f), pivotX0 + s / 2f, pivotY0 + s / 2f + m.pt(8f), s * 0.25f, shadow)
             }
             c.drawPicture(p)
             c.restore()

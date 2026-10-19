@@ -879,12 +879,12 @@ class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {
 
 /** Soft shadow under the dock, drawn by us (elevation shadows are not part of the recorded picture of home). */
 class DockShadow(ctx: Context) : View(ctx) {
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x47000000 }
+    private val paint = Paint(Paint.FILTER_BITMAP_FLAG).apply { color = 0x47000000 }
     private val rect = RectF()
     private var radius = 0f
     private val d = ctx.resources.displayMetrics.density
-
-    init { paint.maskFilter = android.graphics.BlurMaskFilter(18 * d, android.graphics.BlurMaskFilter.Blur.NORMAL) }
+    // Rendered once (it slides with the dock to the App Library: blurred again at every frame otherwise).
+    private val shadow = dev.launcher.app.theme.SoftShadow(18 * d)
 
     fun place(left: Float, top: Float, right: Float, bottom: Float, r: Float) {
         rect.set(left + 4 * d, top + 10 * d, right - 4 * d, bottom + 8 * d)
@@ -893,7 +893,7 @@ class DockShadow(ctx: Context) : View(ctx) {
     }
 
     override fun onDraw(canvas: Canvas) {
-        if (!rect.isEmpty) canvas.drawRoundRect(rect, radius, radius, paint)
+        if (!rect.isEmpty) shadow.drawRoundRect(canvas, rect.left, rect.top, rect.right, rect.bottom, radius, paint)
     }
 }
 

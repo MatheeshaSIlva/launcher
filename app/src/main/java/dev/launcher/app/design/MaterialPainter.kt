@@ -59,6 +59,52 @@ fun Fill.scaled(k: Float): Fill = if (k == 1f) this else copy(opacity = opacity 
 @TargetApi(33)
 class MaterialPainter private constructor(private val unitPx: Float) {
     private val shader = RuntimeShader(AGSL)
+
+    /**
+     * The values last given to [shader], by uniform name: a uniform is set again only when its value changes. Each set is a
+     * JNI call that finds the uniform by its name, and a surface set all ~30 at every draw: most of its main-thread cost
+     * where many are drawn each frame (the App Library's tiles while it slides: a fifth of the main thread, simpleperf on
+     * the S24), though between two tiles only their place differs. The shader keeps a value until it is set again, and a
+     * draw already recorded keeps the values it was recorded with.
+     */
+    private val given = HashMap<String, FloatArray>()
+
+    private fun uniform(name: String, a: Float) {
+        val v = given[name]
+        if (v != null && v.size == 1 && v[0] == a) return
+        shader.setFloatUniform(name, a)
+        if (v != null && v.size == 1) v[0] = a else given[name] = floatArrayOf(a)
+    }
+
+    private fun uniform(name: String, a: Float, b: Float) {
+        val v = given[name]
+        if (v != null && v.size == 2 && v[0] == a && v[1] == b) return
+        shader.setFloatUniform(name, a, b)
+        if (v != null && v.size == 2) { v[0] = a; v[1] = b } else given[name] = floatArrayOf(a, b)
+    }
+
+    private fun uniform(name: String, a: Float, b: Float, c: Float) {
+        val v = given[name]
+        if (v != null && v.size == 3 && v[0] == a && v[1] == b && v[2] == c) return
+        shader.setFloatUniform(name, a, b, c)
+        if (v != null && v.size == 3) { v[0] = a; v[1] = b; v[2] = c } else given[name] = floatArrayOf(a, b, c)
+    }
+
+    private fun uniform(name: String, a: Float, b: Float, c: Float, d: Float) {
+        val v = given[name]
+        if (v != null && v.size == 4 && v[0] == a && v[1] == b && v[2] == c && v[3] == d) return
+        shader.setFloatUniform(name, a, b, c, d)
+        if (v != null && v.size == 4) { v[0] = a; v[1] = b; v[2] = c; v[3] = d } else given[name] = floatArrayOf(a, b, c, d)
+    }
+
+    private fun uniform(name: String, values: FloatArray) {
+        val v = given[name]
+        if (v != null && v.contentEquals(values)) return
+        shader.setFloatUniform(name, values)
+        if (v != null && v.size == values.size) System.arraycopy(values, 0, v, 0, values.size) else given[name] = values.copyOf()
+    }
+    /** What a live surface's node holds, read within a rectangle only (see [drawLive]: a surface past the screen's edge). */
+    private val edgeClamp by lazy { RuntimeShader(EDGE_CLAMP) }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val fillColors = FloatArray(4 * MAX_FILLS)
     private val fillModes = FloatArray(MAX_FILLS)
@@ -91,8 +137,8 @@ class MaterialPainter private constructor(private val unitPx: Float) {
 
     /** Home's depth zoom as glass on the wallpaper sees it (see [dev.launcher.app.GlassDepth]); 1 at rest. */
     fun setDepth(k: Float, cx: Float, cy: Float) {
-        shader.setFloatUniform("depthK", k)
-        shader.setFloatUniform("depthC", cx, cy)
+        uniform("depthK", k)
+        uniform("depthC", cx, cy)
     }
 
     /**
@@ -109,12 +155,12 @@ class MaterialPainter private constructor(private val unitPx: Float) {
                 filterMode = BitmapShader.FILTER_MODE_LINEAR
             })
         }
-        shader.setFloatUniform("revealProgress", if (from == null) 1f else progress)
-        shader.setFloatUniform("revealTime", time)
+        uniform("revealProgress", if (from == null) 1f else progress)
+        uniform("revealTime", time)
         val o = dev.launcher.app.Reveal.origin(screenW, screenH)
-        shader.setFloatUniform("revealOrigin", o[0], o[1])
-        shader.setFloatUniform("revealMaxDist", dev.launcher.app.Reveal.maxDist(screenW, screenH))
-        shader.setFloatUniform("revealCell", cellPx)
+        uniform("revealOrigin", o[0], o[1])
+        uniform("revealMaxDist", dev.launcher.app.Reveal.maxDist(screenW, screenH))
+        uniform("revealCell", cellPx)
     }
 
     /**
@@ -130,10 +176,10 @@ class MaterialPainter private constructor(private val unitPx: Float) {
                 filterMode = BitmapShader.FILTER_MODE_LINEAR
             })
         }
-        shader.setFloatUniform("plain", if (b == null) 1f else 0f)
+        uniform("plain", if (b == null) 1f else 0f)
         if (plain != plainNow) {
             plainNow = plain
-            shader.setFloatUniform("plainColor", ((plain shr 16) and 0xFF) / 255f, ((plain shr 8) and 0xFF) / 255f, (plain and 0xFF) / 255f)
+            uniform("plainColor", ((plain shr 16) and 0xFF) / 255f, ((plain shr 8) and 0xFF) / 255f, (plain and 0xFF) / 255f)
         }
     }
     /**
@@ -144,10 +190,10 @@ class MaterialPainter private constructor(private val unitPx: Float) {
     fun drawOverSystemBlur(c: Canvas, m: Material, w: Float, h: Float, radius: Float, alpha: Float = 1f, press: Float = 0f) {
         if (alpha <= 0.003f || w <= 1f || h <= 1f) return
         val base = overGray(m, 0.5f)
-        shader.setFloatUniform("live", 1f)
-        shader.setFloatUniform("liveBase", base[0], base[1], base[2])
+        uniform("live", 1f)
+        uniform("liveBase", base[0], base[1], base[2])
         draw(c, m, w, h, radius, 0f, 0f, 1f, alpha = alpha, press = press)
-        shader.setFloatUniform("live", 0f)
+        uniform("live", 0f)
     }
 
     /**
@@ -238,8 +284,8 @@ class MaterialPainter private constructor(private val unitPx: Float) {
              lightTurn: Float = 0f, radii: FloatArray? = null) {
         if (alpha <= 0.003f || w <= 1f || h <= 1f) return
         val reach = setUniforms(m, w, h, radius, screenX, screenY, screenScale, alpha, under, press, over, overK, lightTurn, radii)
-        shader.setFloatUniform("local0", 0f, 0f)
-        shader.setFloatUniform("clampSize", 0f, 0f)
+        uniform("local0", 0f, 0f)
+        uniform("clampSize", 0f, 0f)
         c.drawRect(-reach, -reach, w + reach, h + reach, paint)
     }
 
@@ -308,8 +354,20 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         // node around itself: screen-sized, its shader ran over every pixel of the screen each frame.
         if (keep && lastKeepW >= 0f && (kotlin.math.abs(shape.width() - lastKeepW) > 0.5f || kotlin.math.abs(shape.height() - lastKeepH) > 0.5f)) keepWhole = true
         if (keep) { lastKeepW = shape.width(); lastKeepH = shape.height() }
+        // Live content past the screen's edge: the node keeps its whole size (the surface's), and what it holds is read
+        // inside the screen only, clamped at its edge before the blur, as the edge of a node cut to the screen did. Cut to
+        // what is on screen, a surface sliding across the edge (the App Library's field as the library slides in) had a node
+        // of another size at every frame: a new GPU image each time (allocated, and the old one released, inside the
+        // frame), and images of scattered sizes filled the renderer's GPU cache until the library's icons left it.
+        var clampL = 0f; var clampT = 0f; var clampR = 0f; var clampB = 0f
+        var clamped = false
         if (keep && keepWhole) { l = limit!!.left; t = limit.top; r = limit.right; b = limit.bottom }
-        else if (limit != null) { l = maxOf(l, limit.left); t = maxOf(t, limit.top); r = minOf(r, limit.right); b = minOf(b, limit.bottom) }
+        else if (keep && limit != null) { l = maxOf(l, limit.left); t = maxOf(t, limit.top); r = minOf(r, limit.right); b = minOf(b, limit.bottom) }
+        else if (limit != null) {
+            clampL = maxOf(l, limit.left); clampT = maxOf(t, limit.top); clampR = minOf(r, limit.right); clampB = minOf(b, limit.bottom)
+            if (clampR - clampL < 1f || clampB - clampT < 1f) return false
+            clamped = clampL > l || clampT > t || clampR < r || clampB < b
+        }
         val left = kotlin.math.floor(l).toInt()
         val top = kotlin.math.floor(t).toInt()
         val w = kotlin.math.ceil(r - left).toInt()
@@ -360,6 +418,8 @@ class MaterialPainter private constructor(private val unitPx: Float) {
             val rc = node.beginRecording()
             try {
                 rc.translate(-left.toFloat(), -top.toFloat())
+                // (What is past the screen's edge is never read: not drawn.)
+                if (clamped) rc.clipRect(clampL, clampT, clampR, clampB)
                 if (toScreen != null && toScreen.invert(inverse)) rc.concat(inverse)
                 drawBehind(rc)
             } finally {
@@ -371,21 +431,32 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         // The shader's coordinates are the node's: the surface starts at (ox, oy) in them and samples the node's content
         // where it is (no depth zoom, no reveal; kept inside what was recorded).
         setUniforms(m, shape.width(), shape.height(), radius, ox, oy, 1f, alpha, under, press, emptyList(), 0f, 0f, radii)
-        shader.setFloatUniform("local0", ox, oy)
-        shader.setFloatUniform("clampSize", w.toFloat(), h.toFloat())
-        shader.setFloatUniform("plain", 0f)
-        shader.setFloatUniform("depthK", 1f)
-        shader.setFloatUniform("revealProgress", 1f)
+        uniform("local0", ox, oy)
+        uniform("clampSize", w.toFloat(), h.toFloat())
+        uniform("plain", 0f)
+        uniform("depthK", 1f)
+        uniform("revealProgress", 1f)
         // A shader effect takes the shader's uniforms as they are when it is made: made anew for this frame.
         val fx = RenderEffect.createRuntimeShaderEffect(shader, "backdrop")
-        node.setRenderEffect(if (keep || br < 0.5f) fx else RenderEffect.createChainEffect(fx, RenderEffect.createBlurEffect(br, br, Shader.TileMode.CLAMP)))
+        var inner: RenderEffect? = null
+        if (clamped) {
+            // Half a pixel inside what was drawn (a sample at its very edge blends in what is past it).
+            edgeClamp.setFloatUniform("lo", clampL - left + 0.5f, clampT - top + 0.5f)
+            edgeClamp.setFloatUniform("hi", clampR - left - 0.5f, clampB - top - 0.5f)
+            inner = RenderEffect.createRuntimeShaderEffect(edgeClamp, "content")
+        }
+        if (!keep && br >= 0.5f) {
+            val blur = RenderEffect.createBlurEffect(br, br, Shader.TileMode.CLAMP)
+            inner = if (inner == null) blur else RenderEffect.createChainEffect(blur, inner)
+        }
+        node.setRenderEffect(if (inner == null) fx else RenderEffect.createChainEffect(fx, inner))
         canvas.drawRenderNode(node)
         if (keep) {
             lastM = m; lastShape.set(shape); lastRadius = radius; lastAlpha = alpha; lastPress = press; lastUnder = under
             lastLimit.set(limit!!); lastUnit = u; lastDark = Appearance.dark; lastRadii = radii?.copyOf()
         } else lastM = null
         // Back to what paint draws expect (the backdrop image, depth and reveal are set again by their own calls).
-        shader.setFloatUniform("plain", if (backdrop == null) 1f else 0f)
+        uniform("plain", if (backdrop == null) 1f else 0f)
         return true
     }
 
@@ -486,42 +557,42 @@ class MaterialPainter private constructor(private val unitPx: Float) {
             sn++
         }
         for (i in sn until MAX_STROKES) strokeColors[i * 4 + 3] = 0f
-        shader.setFloatUniform("dropReach", reach)
-        shader.setFloatUniform("fillColor", fillColors)
-        shader.setFloatUniform("fillMode", fillModes)
-        shader.setFloatUniform("fillType", fillTypes)
-        shader.setFloatUniform("fillGeom", fillGeom)
-        shader.setFloatUniform("fillStops", fillStops)
-        shader.setFloatUniform("stopColor", stopColors)
-        shader.setFloatUniform("stopPos", stopPos)
-        shader.setFloatUniform("strokeColor", strokeColors)
-        shader.setFloatUniform("strokeGeom", strokeGeom)
-        shader.setFloatUniform("strokeMode", strokeModes)
-        shader.setFloatUniform("innerColor", innerColors)
-        shader.setFloatUniform("innerGeom", innerGeom)
-        shader.setFloatUniform("innerMode", innerModes)
-        shader.setFloatUniform("dropColor", dropColors)
-        shader.setFloatUniform("dropGeom", dropGeom)
-        shader.setFloatUniform("dropMode", dropModes)
+        uniform("dropReach", reach)
+        uniform("fillColor", fillColors)
+        uniform("fillMode", fillModes)
+        uniform("fillType", fillTypes)
+        uniform("fillGeom", fillGeom)
+        uniform("fillStops", fillStops)
+        uniform("stopColor", stopColors)
+        uniform("stopPos", stopPos)
+        uniform("strokeColor", strokeColors)
+        uniform("strokeGeom", strokeGeom)
+        uniform("strokeMode", strokeModes)
+        uniform("innerColor", innerColors)
+        uniform("innerGeom", innerGeom)
+        uniform("innerMode", innerModes)
+        uniform("dropColor", dropColors)
+        uniform("dropGeom", dropGeom)
+        uniform("dropMode", dropModes)
         val lens = m.lens
         val depth = (lens?.depthPt ?: 0f) * u
-        shader.setFloatUniform("size", w, h)
-        shader.setFloatUniform("origin", screenX, screenY)
-        shader.setFloatUniform("placeScale", screenScale)
+        uniform("size", w, h)
+        uniform("origin", screenX, screenY)
+        uniform("placeScale", screenScale)
         // Each corner's radius (top left, top right, bottom right, bottom left), at most half the shorter side.
         val cap = minOf(w, h) / 2f
-        if (radii != null && radii.size >= 4) shader.setFloatUniform("radii", radii[0].coerceIn(0f, cap), radii[1].coerceIn(0f, cap), radii[2].coerceIn(0f, cap), radii[3].coerceIn(0f, cap))
-        else radius.coerceIn(0f, cap).let { shader.setFloatUniform("radii", it, it, it, it) }
-        shader.setFloatUniform("smoothing", smoothing())
-        shader.setFloatUniform("depth", depth)
-        shader.setFloatUniform("bend", (lens?.refraction ?: 0f) * depth)
-        shader.setFloatUniform("dispersion", lens?.dispersion ?: 0f)
-        shader.setFloatUniform("light", lens?.light ?: 0f)
+        if (radii != null && radii.size >= 4) uniform("radii", radii[0].coerceIn(0f, cap), radii[1].coerceIn(0f, cap), radii[2].coerceIn(0f, cap), radii[3].coerceIn(0f, cap))
+        else radius.coerceIn(0f, cap).let { uniform("radii", it, it, it, it) }
+        uniform("smoothing", smoothing())
+        uniform("depth", depth)
+        uniform("bend", (lens?.refraction ?: 0f) * depth)
+        uniform("dispersion", lens?.dispersion ?: 0f)
+        uniform("light", lens?.light ?: 0f)
         val a = Math.toRadians((225.0 + (lens?.lightAngle ?: 0f) + lightTurn))
-        shader.setFloatUniform("lightDir", Math.cos(a).toFloat(), Math.sin(a).toFloat())
-        shader.setFloatUniform("rimWidth", RIM_PT * u)
-        shader.setFloatUniform("alpha", alpha.coerceIn(0f, 1f))
-        shader.setFloatUniform("press", press.coerceIn(0f, 1f))
+        uniform("lightDir", Math.cos(a).toFloat(), Math.sin(a).toFloat())
+        uniform("rimWidth", RIM_PT * u)
+        uniform("alpha", alpha.coerceIn(0f, 1f))
+        uniform("press", press.coerceIn(0f, 1f))
         return reach
     }
 
@@ -621,6 +692,14 @@ class MaterialPainter private constructor(private val unitPx: Float) {
         /** The reveal's front ([dev.launcher.app.Reveal.FRONT]) with its uniforms named apart from this shader's own. */
         private val FRONT = dev.launcher.app.Reveal.FRONT.replace("origin", "revealOrigin").replace("maxDist", "revealMaxDist")
             .replace("cell", "revealCell").replace("progress", "revealProgress").replace("time", "revealTime")
+
+        /** A node's content read inside [lo]..[hi] only: its edge repeated past them (a surface past the screen's edge). */
+        private const val EDGE_CLAMP = """
+uniform shader content;
+uniform float2 lo;
+uniform float2 hi;
+half4 main(float2 p) { return content.eval(clamp(p, lo, hi)); }
+"""
 
         private val AGSL = """
 uniform shader backdrop;

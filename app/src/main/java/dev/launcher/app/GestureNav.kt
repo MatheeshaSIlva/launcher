@@ -1173,7 +1173,7 @@ object GestureNav {
         val wm = wm ?: return
         if (root != null) return
         readDisplay()
-        // The window itself stays shown for good (window alpha 1 from its first use; see readyForLaunch): showing or hiding
+        // The window itself stays shown for good (window alpha 1 from its creation): showing or hiding
         // it made the window manager re-lay it out and Android rebuild its buffers, measured at 50-80 ms on the nav thread on
         // the S24 at the start of every gesture (the card's first frames came late). Cards show and hide inside it ([root]).
         val host = CardHost(ctx)
@@ -1207,7 +1207,9 @@ object GestureNav {
         val lp = overlayParams(sw.toInt(), sh.toInt(), touchable = CAN_CATCH_TOUCHES).apply {
             gravity = Gravity.TOP or Gravity.START
             title = "LauncherCards"
-            alpha = 0f
+            // Shown from the start (transparent while no card shows): made at 0 and shown at the first touch on home, that
+            // touch's frames waited for the window manager to lay it out again (11 ms of the nav thread on the S24).
+            alpha = 1f
             // Touches outside its touchable region (empty unless a close is under way) go to the windows below.
             if (CAN_CATCH_TOUCHES) flags = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
         }
@@ -1222,7 +1224,7 @@ object GestureNav {
         }
         try {
             wm.addView(host, lp)
-            cardWindow = host; windowShown = false
+            cardWindow = host; windowShown = true
             root = r; backdrop = b; prv = p; nxt = n; cur = c; land = l; deck = d
             host.holeRadius = pipCornerRadius()
             setUpSwitcherWindow(ctx)

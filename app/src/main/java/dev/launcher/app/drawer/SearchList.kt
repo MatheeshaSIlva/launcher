@@ -139,10 +139,9 @@ internal class SearchList(
     private val indexK = MotionValue(0f, 1000f, { invalidate() })
     private val bubbleK: MotionValue = MotionValue(0f, 1000f, { invalidate() }, { if (!scrubbing) settled() })
     private val bubbleY = MotionValue(0f, 1f, { invalidate() })
-    private val bubbleShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0x40000000
-        maskFilter = android.graphics.BlurMaskFilter(m.pt(10f), android.graphics.BlurMaskFilter.Blur.NORMAL)
-    }
+    private val bubbleShadow = Paint(Paint.FILTER_BITMAP_FLAG).apply { color = 0x40000000 }
+    // Rendered once (the bubble glides with the finger: blurred again at every frame otherwise).
+    private val bubbleSoft = dev.launcher.app.theme.SoftShadow(m.pt(10f))
     private val indexCapsule = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x24FFFFFF }
     private val indexCapsuleRim = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0x30FFFFFF; style = Paint.Style.STROKE; strokeWidth = max(1f, m.pt(0.7f)) }
 
@@ -521,7 +520,7 @@ internal class SearchList(
             c.save()
             c.scale(0.55f + 0.45f * b, 0.55f + 0.45f * b, bx, fingerY)
             bubbleShadow.alpha = (0x40 * a).toInt()
-            c.drawCircle(bx, fingerY + m.pt(4f), rad, bubbleShadow)
+            bubbleSoft.drawCircle(c, bx, fingerY + m.pt(4f), rad, bubbleShadow)
             val dg = drawGlass
             if (dg != null) {
                 // The dock's glass as a disc, bending the backdrop behind it.
