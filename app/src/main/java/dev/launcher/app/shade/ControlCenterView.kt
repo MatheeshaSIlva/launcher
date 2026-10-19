@@ -526,6 +526,35 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         c.restore()
     }
 
+    /**
+     * The controls' layers recorded ahead while Control Center is closed, at most [n] per call (the shade calls it a frame
+     * at a time while nothing moves): its first opening after a start recorded every one of them in its first frame
+     * (31.6 ms of the shade's thread on the S24, the pull's first frame late). Recorded where they rest, as [drawItem]
+     * records them; a backdrop that differs at the opening has them recorded again a few a frame, as there. True while
+     * some are still to do.
+     */
+    fun warmUp(n: Int): Boolean {
+        if (width == 0 || layout == null || progress > 0f) return false
+        var done = 0
+        for (a in anims.values) {
+            if (a.removing) continue
+            val w = a.w.value
+            val h = a.h.value
+            if (w <= 0f || h <= 0f) continue
+            val key = contentKey(a, w, h)
+            if (key == a.key && a.node.hasDisplayList()) continue
+            if (done == n) return true
+            val at = shownAt(a.item)
+            val restX = gridLeft + at[0] * pitchX
+            val restY = gridTopRest + at[1] * pitchY
+            record(a, w, h, radiusFor(w, h, a.active.value), restX, restY)
+            a.key = key
+            a.placeKey = (Math.round(restX).toLong() shl 40) xor (Math.round(restY).toLong() shl 16) xor host.surfaces.generation.toLong()
+            done++
+        }
+        return false
+    }
+
     /** Control Center rests open: edit mode's layer of empty cells is drawn now, not on edit mode's first frame. */
     fun prerecord() {
         val l = layout ?: return

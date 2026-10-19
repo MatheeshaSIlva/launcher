@@ -308,6 +308,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             state.start()
             media.start()
             showRinging("shade shown")
+            dev.launcher.app.design.Design.addListener(ccWarmOnDesign)
+            warmCcSoon(CC_WARM_START_MS)
             true
         } catch (t: Throwable) {
             AppLog.log("[shade] addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
@@ -330,6 +332,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     fun detach() {
+        dev.launcher.app.design.Design.removeListener(ccWarmOnDesign)
+        handler.removeCallbacks(ccWarm)
         if (!attached) return
         closeNow()
         banner.clear()
@@ -562,7 +566,41 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         updateTouchable()
         nav.shadeChanged(false)
         if (was != null) AppLog.log("[shade] closed")
+        warmCcSoon(CC_WARM_AFTER_CLOSE_MS)
     }
+
+    /**
+     * Control Center's controls recorded ahead while nothing moves (no panel, no gesture, no finger on our windows for a
+     * moment), a few a frame: its first opening after a start (or a new look) recorded all of them in its first frame
+     * (31.6 ms, S24). Started a while after the window is added, after each closing, and after a change of the look.
+     */
+    private val ccWarm = object : Runnable {
+        override fun run() {
+            val touched = android.os.SystemClock.uptimeMillis() - dev.launcher.app.HomeBridge.lastTouchAt < CC_WARM_UNTOUCHED_MS
+            if (panel != null || leavingPanel != null || !dev.launcher.app.GestureNav.idle || touched) {
+                if (panel == null) handler.postDelayed(this, CC_WARM_RETRY_MS)   // (an opening records what is left)
+                return
+            }
+            val t0 = android.os.SystemClock.uptimeMillis()
+            val more = cc.warmUp(CC_WARM_PER_FRAME)
+            ccWarmMs += android.os.SystemClock.uptimeMillis() - t0
+            ccWarmSteps++
+            if (more) root.postOnAnimation(this)
+            else if (ccWarmSteps > 1 || ccWarmMs > 0) {
+                AppLog.log("[shade] Control Center recorded ahead: $ccWarmSteps frames, $ccWarmMs ms in all")
+                ccWarmMs = 0; ccWarmSteps = 0
+            } else ccWarmSteps = 0
+        }
+    }
+    private var ccWarmMs = 0L
+    private var ccWarmSteps = 0
+
+    private fun warmCcSoon(ms: Long) {
+        handler.removeCallbacks(ccWarm)
+        handler.postDelayed(ccWarm, ms)
+    }
+
+    private val ccWarmOnDesign: () -> Unit = { handler.post { warmCcSoon(CC_WARM_START_MS) } }
 
     /** What [p] leaves behind once it is out of sight. */
     private fun cleanUp(p: Panel) {
@@ -1418,6 +1456,13 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     private companion object {
+        /** Control Center's controls are recorded ahead ([ccWarm]) this long after the window is added or the look changed. */
+        const val CC_WARM_START_MS = 3000L
+        const val CC_WARM_AFTER_CLOSE_MS = 1200L
+        const val CC_WARM_RETRY_MS = 700L
+        const val CC_WARM_UNTOUCHED_MS = 400L
+        /** Controls recorded per frame by the warm-up (~1.5 ms each on the S24). */
+        const val CC_WARM_PER_FRAME = 3
         /** A notification's app that is not in front this long after its card started: the card goes anyway. */
         const val LAUNCH_TIMEOUT_MS = 2500L
         /** How often a launch whose app has not said it is in front asks for the task in front (ms). */
