@@ -19,6 +19,13 @@ import dev.launcher.app.AppLog
 object ViewPicture {
     fun render(v: View): Bitmap? = draw(v.width, v.height, v.javaClass.simpleName) { c -> c.drawColor(Color.BLACK); v.draw(c) }
 
+    /**
+     * [v] as it shows now, as [render], without waiting for the GPU ([drawLater]): [then] gets it on the main thread. The
+     * view's thread.
+     */
+    fun renderLater(v: View, then: (Bitmap?) -> Unit) =
+        drawLater(v.width, v.height, v.javaClass.simpleName, block = { c -> c.drawColor(Color.BLACK); v.draw(c) }, then = then)
+
     /** [v] as it shows now on a clear ground (where it draws nothing stays transparent): a layer to lay over others. */
     fun renderClear(v: View): Bitmap? = draw(v.width, v.height, v.javaClass.simpleName, opaque = false) { c -> v.draw(c) }
 
@@ -65,6 +72,93 @@ object ViewPicture {
         } finally {
             try { renderer?.destroy() } catch (_: Throwable) { }
             try { reader?.close() } catch (_: Throwable) { }
+        }
+    }
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    /** Waits for the GPU to finish the pictures of [drawLater] and makes the buffers kept ahead ([prepare]). */
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "view-picture") }
+    private const val USAGE = HardwareBuffer.USAGE_GPU_SAMPLED_IMAGE or HardwareBuffer.USAGE_GPU_COLOR_OUTPUT
+    private val spares = java.util.ArrayDeque<HardwareBuffer>()   // guarded by itself
+    private var spareW = 0
+    private var spareH = 0
+    private var sparesWanted = 0
+
+    /**
+     * Keeps [count] buffers of [w] x [h] px made ahead for [drawLater] (on a worker; [count] 0 lets them go): a picture then
+     * costs the render thread its drawing alone. Made when it is drawn, a screen-sized buffer held the render thread every
+     * window of ours draws with for 4 ms (S24).
+     */
+    fun prepare(w: Int, h: Int, count: Int) {
+        if (android.os.Build.VERSION.SDK_INT < 34) return
+        worker.execute {
+            synchronized(spares) {
+                if (w != spareW || h != spareH) { spares.forEach { it.close() }; spares.clear(); spareW = w; spareH = h }
+                sparesWanted = count
+                while (spares.size > count) spares.removeLast().close()
+            }
+            refill()
+        }
+    }
+
+    private fun refill() {
+        while (true) {
+            val (w, h) = synchronized(spares) { if (spares.size >= sparesWanted || spareW == 0) return; spareW to spareH }
+            val b = try { HardwareBuffer.create(w, h, HardwareBuffer.RGBA_8888, 1, USAGE) } catch (_: Throwable) { return }
+            synchronized(spares) { if (w == spareW && h == spareH && spares.size < sparesWanted) spares.addLast(b) else b.close() }
+        }
+    }
+
+    private fun spare(w: Int, h: Int): HardwareBuffer? =
+        synchronized(spares) { if (w == spareW && h == spareH) spares.pollFirst() else null }?.also { worker.execute { refill() } }
+
+    /**
+     * What [block] draws on a [w] x [h] canvas, rendered on the GPU into a buffer kept ahead ([prepare]) or made now, without
+     * waiting: [then] gets the picture (a GPU bitmap, or null) on the main thread once the GPU has drawn it. The calling
+     * thread waits only for the render thread to take the drawing over (its sync), so a view's display lists may change as
+     * soon as this returns. [draw] blocked until the GPU was done (the settings' first frame of the home gesture waited 15
+     * ms for home's picture, S24). Android 14+; before, as [draw].
+     */
+    fun drawLater(w: Int, h: Int, what: String, opaque: Boolean = true, block: (android.graphics.Canvas) -> Unit, then: (Bitmap?) -> Unit) {
+        if (w == 0 || h == 0) { main.post { then(null) }; return }
+        if (android.os.Build.VERSION.SDK_INT < 34) { val b = draw(w, h, what, opaque, block); main.post { then(b) }; return }
+        val buffer = spare(w, h) ?: try { HardwareBuffer.create(w, h, HardwareBuffer.RGBA_8888, 1, USAGE) } catch (_: Throwable) { null }
+        if (buffer == null) { val b = draw(w, h, what, opaque, block); main.post { then(b) }; return }
+        var renderer: android.graphics.HardwareBufferRenderer? = null
+        try {
+            val root = RenderNode("view-picture")
+            root.setPosition(0, 0, w, h)
+            val c = root.beginRecording()
+            try {
+                if (!opaque) c.drawColor(Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
+                block(c)
+            } finally { root.endRecording() }
+            val r = android.graphics.HardwareBufferRenderer(buffer).also { renderer = it }
+            r.setContentRoot(root)
+            val srgb = ColorSpace.get(ColorSpace.Named.SRGB)
+            val t0 = android.os.SystemClock.uptimeMillis()
+            r.obtainRenderRequest().setColorSpace(srgb).draw(worker) { result ->
+                var b: Bitmap? = null
+                val issued = android.os.SystemClock.uptimeMillis() - t0
+                try {
+                    // (Its fence says when the GPU is done: wrapped before, a picture could be read half drawn. See [draw].)
+                    result.fence.use { if (it.isValid) it.awaitForever() }
+                    if (result.status == android.graphics.HardwareBufferRenderer.RenderResult.SUCCESS) b = Bitmap.wrapHardwareBuffer(buffer, srgb)
+                    else AppLog.log("[design] no picture of $what as it shows (status ${result.status})")
+                } catch (t: Throwable) {
+                    AppLog.log("[design] no picture of $what as it shows (${t.javaClass.simpleName}: ${t.message})")
+                } finally {
+                    try { r.close() } catch (_: Throwable) { }
+                    buffer.close()   // (the bitmap keeps its own reference)
+                }
+                AppLog.log("[design] picture of $what in ${android.os.SystemClock.uptimeMillis() - t0} ms (drawn from ${issued} ms)")
+                main.post { then(b) }
+            }
+        } catch (t: Throwable) {
+            AppLog.log("[design] no picture of $what as it shows (${t.javaClass.simpleName}: ${t.message})")
+            try { renderer?.close() } catch (_: Throwable) { }
+            buffer.close()
+            main.post { then(null) }
         }
     }
 

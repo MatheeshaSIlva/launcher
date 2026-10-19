@@ -38,6 +38,8 @@ object HomeBridge {
         fun afterNextDraw(then: () -> Unit, timeoutMs: Long = 150, label: String? = null)
         /** Home as it shows, exactly (a GPU bitmap), or null. Main thread. */
         fun pictureNow(): android.graphics.Bitmap?
+        /** As [pictureNow], without waiting for the GPU: false if home declines now, else [then] gets it (main thread). Main thread. */
+        fun pictureLater(then: (android.graphics.Bitmap?) -> Unit): Boolean
         /** Home shows one of its pages as they rest (not the App Library, Spotlight, the widget gallery, edit mode or a menu). Main thread. */
         fun showsPage(): Boolean
         /** Nothing on home moves and no finger is on it (main thread). */

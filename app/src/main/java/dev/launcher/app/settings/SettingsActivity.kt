@@ -355,11 +355,15 @@ class SettingsActivity : ComponentActivity() {
             onHome = entry.enter.floatValue < entry.toneAt
             val g = gen
             // Home as it is now (its clock, the bar's time), coming forward under the panel as it goes.
+            pictureFade?.cancel()
+            entry.pictureIn.floatValue = 1f
             SettingsEntry.homePicture { p ->
                 if (g != gen || p == null) return@homePicture
                 pic = p
                 entry.handedPage = SettingsEntry.pictureWasPage
                 entry.picture = p
+                // Come after the slide had begun to show home (a slow phone): it fades in.
+                if (entryPictureShows(entry.enter.floatValue)) fadeInPicture()
             }
             AppLog.log("[settings] the home gesture has them: they follow the finger")
         }
@@ -392,6 +396,16 @@ class SettingsActivity : ComponentActivity() {
                     if (p == null || !showing) { exiting = false; entry.jump(1f); entry.picture = null; return@request }
                     handOverToHome(p, g)
                 }
+            }
+        }
+
+        private var pictureFade: android.animation.ValueAnimator? = null
+
+        private fun fadeInPicture() {
+            entry.pictureIn.floatValue = 0f
+            pictureFade = android.animation.ValueAnimator.ofFloat(0f, 1f).timed(Motion.profile.appearFade).apply {
+                addUpdateListener { entry.pictureIn.floatValue = it.animatedValue as Float }
+                start()
             }
         }
 
@@ -440,6 +454,9 @@ class SettingsActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         started = true
+        // Home's pictures for the slide back into home (Back, the home gesture) drawn into buffers made ahead: home pictures
+        // itself, upright, at the screen's size.
+        windowManager.maximumWindowMetrics.bounds.let { b -> ViewPicture.prepare(minOf(b.width(), b.height()), maxOf(b.width(), b.height()), 2) }
         // Back before the launcher was still: what waited is made now, before their first frame.
         applyAwayChange()
         lookGate.holding = false
@@ -465,6 +482,7 @@ class SettingsActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         started = false
+        ViewPicture.prepare(0, 0, 0)
         lookGate.holding = true
         // Out of sight: whatever comes next shows them in their own tone (the window's flags; gesture nav reads them then),
         // at rest (home came without their frame at rest under its picture: they show at rest when they come back).
@@ -595,6 +613,6 @@ class SettingsActivity : ComponentActivity() {
         /** New flags reach the window manager with the window's next frame: readings within this are not taken (ms). */
         const val FLAGS_SETTLE_MS = 250L
         /** The home gesture's close waits this long at most for home's picture (asked for at the swipe's start; ms). */
-        const val SWIPE_PICTURE_WAIT_MS = 400L
+        const val SWIPE_PICTURE_WAIT_MS = 800L
     }
 }

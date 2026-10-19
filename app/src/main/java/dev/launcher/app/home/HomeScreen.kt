@@ -375,38 +375,50 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     }
 
     /** Home as it shows now (or would, behind another screen), exactly (the settings app's "Your setup"). Main thread. */
-    fun pictureNow(): android.graphics.Bitmap? {
+    fun pictureNow(): android.graphics.Bitmap? = if (declinesPicture()) null else pictured { renderNow() }
+
+    /**
+     * As [pictureNow], without waiting for the GPU ([dev.launcher.app.design.ViewPicture.renderLater]): false if home
+     * declines now (where [pictureNow] gives null), else [then] gets the picture on the main thread. Main thread.
+     */
+    fun pictureLater(then: (android.graphics.Bitmap?) -> Unit): Boolean {
+        if (declinesPicture()) return false
+        pictured { dev.launcher.app.design.ViewPicture.renderLater(this, then) }
+        return true
+    }
+
+    private fun declinesPicture(): Boolean {
         // Not shown yet in this process (its cold arrival still waits for the first time it is seen), or no wallpaper read
         // yet: home has never drawn at rest, and its picture was black (the settings kept it as home's look).
-        if (coldHoldWanted || m == null || pages.isEmpty() || width == 0 || wallpaperView.wallpaper == null) return null
+        if (coldHoldWanted || m == null || pages.isEmpty() || width == 0 || wallpaperView.wallpaper == null) return true
         // A clock built again behind (a new theme while the settings were open) has not set its time yet: it would show none.
         for (c in clocks) c.refresh(animate = false)
         // Its numerals' shape still being built off the main thread, or fading in (home built again for a new font): not
         // yet (the settings pictured a clock with a date and no time; they ask again).
-        if (clocks.any { it.animating }) return null
+        return clocks.any { it.animating }
+    }
+
+    /** Runs [take] (a picture of home, taken in it) with home as it rests, then puts back what moves. */
+    private fun <T> pictured(take: () -> T): T {
         // The wallpaper fading in (read just now): pictured as it will rest (the settings kept a black home with tinted glass).
         val wallA = wallpaperView.alpha
         if (wallA < 1f) wallpaperView.alpha = 1f
-        try { return pictureAtRest() } finally { if (wallA < 1f) wallpaperView.alpha = wallA }
+        try { return atRest(take) } finally { if (wallA < 1f) wallpaperView.alpha = wallA }
     }
 
-    private fun pictureAtRest(): android.graphics.Bitmap? {
+    private fun <T> atRest(take: () -> T): T {
         // After a cold start home holds its arrival's first frame (its icons out) until it shows: pictured at rest instead
         // (the settings showed the wallpaper alone), then held again.
         if (arrivalHeld && !arrivalAnimating) {
             applyArrival(60.0)
-            val b = renderNow()
-            applyArrival(0.0)
-            return b
+            try { return take() } finally { applyArrival(0.0) }
         }
         // Mid-arrival (the settings opened over home as it came up): at rest too, then back where the arrival is.
         if (arrivalAnimating) {
             applyArrival(60.0)
-            val b = renderNow()
-            applyArrival(arrivalT)
-            return b
+            try { return take() } finally { applyArrival(arrivalT) }
         }
-        return renderNow()
+        return take()
     }
 
     /**

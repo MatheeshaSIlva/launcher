@@ -40,7 +40,7 @@ internal fun EntryHome(st: Studio, g: Geometry) {
         .graphicsLayer {
             val e = entry.enter.floatValue.coerceIn(0f, 1f)
             val shows = entry.picture != null && e < 0.999f
-            alpha = if (!shows) 0f else 1f - smoothstep(FADE_FROM, FADE_TO, e)
+            alpha = if (!shows) 0f else (1f - smoothstep(FADE_FROM, FADE_TO, e)) * entry.pictureIn.floatValue
             val s = 1f - RECEDE * e
             scaleX = s
             scaleY = s
@@ -82,6 +82,9 @@ private const val RECEDE = 0.08f
 /** Its fade into the page, over this part of the slide (0..1). */
 private const val FADE_FROM = 0.3f
 private const val FADE_TO = 0.85f
+/** Whether home's picture shows at all at [enter] (it has faded into the page above this). */
+internal fun entryPictureShows(enter: Float) = enter < FADE_TO
+
 /** Where the status bar changes from home's tone to the page's (home's picture half gone). */
 internal const val ENTRY_TONE_AT = (FADE_FROM + FADE_TO) / 2f
 /** Its blur at the slide's end (pt), in steps. */

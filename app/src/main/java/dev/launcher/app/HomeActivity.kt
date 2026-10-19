@@ -566,6 +566,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun pictureNow(): android.graphics.Bitmap? = screen.pictureNow()
 
+    override fun pictureLater(then: (android.graphics.Bitmap?) -> Unit): Boolean = screen.pictureLater(then)
+
     override fun showsPage(): Boolean = screen.showsPage()
 
     override fun isIdle(): Boolean = screen.isIdle

@@ -159,8 +159,23 @@ class ShellService : IShellService.Stub() {
         "ERROR: ${(t.cause ?: t).javaClass.simpleName}: ${(t.cause ?: t).message}"
     }
 
+    /**
+     * The snapshot's buffer a call on this binder thread returned: closed once it is in the reply. Left to the garbage
+     * collector, each kept a screen's picture (~10 MB of graphics memory) alive in this process ("A resource failed to
+     * call HardwareBuffer.close", several at each collection on the emulator).
+     */
+    private val sent = ThreadLocal<HardwareBuffer?>()
+
+    override fun onTransact(code: Int, data: android.os.Parcel, reply: android.os.Parcel?, flags: Int): Boolean {
+        try {
+            return super.onTransact(code, data, reply, flags)
+        } finally {
+            sent.get()?.let { sent.set(null); try { it.close() } catch (_: Throwable) { } }
+        }
+    }
+
     override fun taskSnapshotBuffer(taskId: Int, fresh: Boolean): HardwareBuffer? = try {
-        snapshotBuffer(taskId, fresh).also { if (it == null) snapshotNote("null result for task $taskId (fresh $fresh)") }
+        snapshotBuffer(taskId, fresh).also { sent.set(it); if (it == null) snapshotNote("null result for task $taskId (fresh $fresh)") }
     } catch (t: Throwable) {
         snapshotNote("${(t.cause ?: t).javaClass.simpleName}: ${(t.cause ?: t).message}")
         null
@@ -215,7 +230,7 @@ class ShellService : IShellService.Stub() {
     }
 
     override fun taskSnapshotBufferLow(taskId: Int): HardwareBuffer? = try {
-        snapshotBuffer(taskId, fresh = false, low = true)
+        snapshotBuffer(taskId, fresh = false, low = true).also { sent.set(it) }
     } catch (t: Throwable) {
         null
     }

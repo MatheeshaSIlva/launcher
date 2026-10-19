@@ -159,8 +159,33 @@ object SettingsEntry {
      * of itself, asked again for a moment). Main thread: home renders itself (~10-20 ms), the bar is drawn on its own thread,
      * the two are put together on the GPU off the main thread.
      */
-    fun homePicture(then: (Bitmap?) -> Unit) = homePictureSoon(pictureOfHome()) { h ->
+    fun homePicture(then: (Bitmap?) -> Unit) = homePictureLater { h ->
         if (h == null) then(null) else withBarOn(h, then)
+    }
+
+    /**
+     * Home's picture, the GPU's drawing of it waited for off this thread ([HomeBridge.Home.pictureLater]: taken at the touch
+     * of the home gesture, the settings' first frame of it waited 15 ms for it on the S24); asked again every frame while
+     * home declines, for [maxMs] at most; null if never. Main thread.
+     */
+    private fun homePictureLater(maxMs: Long = PICTURE_RETRY_MS, then: (Bitmap?) -> Unit) {
+        fun ask(): Boolean {
+            val h = HomeBridge.home ?: return false
+            val page = h.showsPage()
+            return h.pictureLater { b -> pictureWasPage = page; then(b) }
+        }
+        if (ask()) return
+        val deadline = SystemClock.uptimeMillis() + maxMs
+        val choreographer = android.view.Choreographer.getInstance()
+        choreographer.postFrameCallback(object : android.view.Choreographer.FrameCallback {
+            override fun doFrame(frameTimeNanos: Long) {
+                when {
+                    ask() -> {}
+                    SystemClock.uptimeMillis() > deadline -> { AppLog.log("[settings] home gave no picture of itself in $maxMs ms"); then(null) }
+                    else -> choreographer.postFrameCallback(this)
+                }
+            }
+        })
     }
 
     private fun withBarOn(home: Bitmap, then: (Bitmap?) -> Unit) {
@@ -173,10 +198,7 @@ object SettingsEntry {
             done = true
             main.removeCallbacks(timeout)
             if (bar == null) { then(home); return@ask }
-            baker.execute {
-                val b = withBar(home, bar)
-                main.post { then(b) }
-            }
+            baker.execute { withBarLater(home, bar, then) }
         }
     }
 
@@ -189,6 +211,17 @@ object SettingsEntry {
             c.scale(k, k)
             c.drawBitmap(bar, 0f, 0f, paint)
         } ?: home
+    }
+
+    /** As [withBar], without waiting for the GPU ([dev.launcher.app.design.ViewPicture.drawLater]): [then] on the main thread. */
+    private fun withBarLater(home: Bitmap, bar: Bitmap, then: (Bitmap?) -> Unit) {
+        val paint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+        dev.launcher.app.design.ViewPicture.drawLater(home.width, home.height, "home with the bar", block = { c ->
+            c.drawBitmap(home, 0f, 0f, null)
+            val k = home.width.toFloat() / bar.width
+            c.scale(k, k)
+            c.drawBitmap(bar, 0f, 0f, paint)
+        }) { b -> then(b ?: home) }
     }
 
     private val watcher = Executors.newSingleThreadExecutor { r -> Thread(r, "settings-shown") }
@@ -234,6 +267,11 @@ class EntryState {
      * bar's time as they are now); null at rest.
      */
     var picture by mutableStateOf<Bitmap?>(null)
+    /**
+     * How far [picture] has come in (0..1): taken without waiting for the GPU, it can arrive after the slide has begun to
+     * show home (on a slow phone), and then fades in instead of appearing at once.
+     */
+    val pictureIn = mutableFloatStateOf(1f)
     /** Whether [picture] shows one of home's pages as they rest (theme cards keep only such pictures). */
     var handedPage = false
     /** Opened from home's edit menu: Back on the tiles goes back into home the same way. */
