@@ -153,6 +153,19 @@ Kit values:
   dodge in dark) with the label colour, Destructive the same capsule with a red label (#ff383c). Centred on the screen;
   behind it "Overlay - Alerts" #29293a 23 %. Built as home's `AlertView` (`comp.home.alert.*`, `component.alert.*`).
 
+## Notification Center in landscape (Simulator, run 21: `test62_ncLandscape`, 2026-10-20)
+
+An iPhone 18 Pro turned left (874 x 402 pt), Notification Center pulled over an app:
+- **The date and the time at the top left**, small: the date's label at (75, 56), 216 x 36 (17 pt); the time below it, its
+  numerals ~65 pt tall (portrait's are ~100), left-aligned with the date.
+- **The notifications in one column of the portrait width**: platters at x **365**, **374** wide (the column ends 135 pt
+  from the right edge), 8 apart as in portrait; the list's area from y **59.7** to ~392.
+- **One notification is centred in that area** (Maya at y 186.3, 78.7 tall: its centre at the area's), not gathered at
+  its bottom as in portrait; a list longer than the area starts at its top and scrolls.
+- **No collapsed stack**: twelve notifications from twelve threads show as the list (portrait opens them collapsed).
+- **No flashlight or camera buttons.** Captures: `ios-reference/out/run21/test62_ncLandscape`, side by side with ours in
+  `docs/report/landscape_nc_compare.png`.
+
 ## Carried over (2026-10-07)
 
 Control Center geometry and motion, notification platters, banners, folder springs, widget radius 28, glass lens /

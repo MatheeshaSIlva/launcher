@@ -88,9 +88,21 @@ final class Scenarios: XCTestCase {
         mark("tree \(name)")
     }
 
+    /// The notification permission prompt's Allow, wherever iOS shows it (SpringBoard's alert, or a button of the host's
+    /// own window), by its label's start ("Allow", "Allow Notifications"): passes 9 and 20 never found SpringBoard's alert
+    /// button and lost every notification. Logs what alerts there are when none is found.
     private func allowNotifications(_ timeout: Double = 4) {
-        let allow = sb.alerts.buttons["Allow"]
-        if allow.waitForExistence(timeout: timeout) { mark("allow notifications"); allow.tap() }
+        let allowed = NSPredicate(format: "label BEGINSWITH 'Allow'")
+        let t0 = Date()
+        while Date().timeIntervalSince(t0) < timeout {
+            for (name, app) in [("springboard", sb), ("host", host)] {
+                let b = app.buttons.matching(allowed).firstMatch
+                if b.exists { mark("allow notifications (\(name): '\(b.label)')"); b.tap(); return }
+            }
+            usleep(300_000)
+        }
+        let alerts = sb.alerts.allElementsBoundByIndex.map { $0.label } + host.alerts.allElementsBoundByIndex.map { $0.label }
+        mark("no Allow button after \(Int(timeout)) s; alerts: \(alerts)")
     }
 
     /// Grants the host app notifications before anything posts (pass 8 lost every notification: the prompt came after
@@ -1040,6 +1052,48 @@ final class Scenarios: XCTestCase {
         wait(2)
         shot("land-nc-open")
         tree("land-nc-open")
+        hostDrag("land-nc-close", (0.5, 0.99), (0.5, 0.45))
+        wait(2)
+        portrait()
+        home()
+    }
+
+    /// Notification Center in landscape with notifications (Matheesha, 2026-10-20: "The landscape notification shade could
+    /// use some attention. its current state is very unintuitive"): where the clock, the list, its stacks and the buttons
+    /// go; one notification, then many (collapsed, fanned out, scrolled).
+    func test62_ncLandscape() {
+        post("one", in: 15)
+        letBannersPass()
+        landscapeHost()
+        hostDrag("land-nc1-open", (0.1, 0.005), (0.1, 0.62))
+        wait(2.5)
+        shot("land-nc1")
+        tree("land-nc1")
+        hostDrag("land-nc1-close", (0.5, 0.99), (0.5, 0.45))
+        wait(2)
+        portrait()
+        post("many", in: 20)
+        letBannersPass()
+        landscapeHost()
+        hostDrag("land-nc-open", (0.1, 0.005), (0.1, 0.62))
+        wait(2.5)
+        shot("land-nc-collapsed")
+        tree("land-nc-collapsed")
+        // The collapsed stack: a tap on it fans it out (tapped through the element itself: its frame is in portrait points).
+        if let p = platters.filter({ $0.isHittable }).last ?? platters.last {
+            mark("land collapsed front at \(p.frame)")
+            p.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            wait(2.5)
+            shot("land-nc-expanded")
+            tree("land-nc-expanded")
+        } else { mark("land: no platter") }
+        // Scrolled up step by step, the finger resting before it lifts.
+        for i in 1...3 {
+            hostDrag("land-nc-scroll-\(i)", (0.5, 0.8), (0.5, 0.45), velocity: 250, hold: 0.8)
+            wait(1.2)
+            shot("land-nc-scrolled-\(i)")
+        }
+        tree("land-nc-scrolled-3")
         hostDrag("land-nc-close", (0.5, 0.99), (0.5, 0.45))
         wait(2)
         portrait()

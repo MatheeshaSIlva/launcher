@@ -1,2 +1,1 @@
-normal: test00_setupControls test60_ccLandscape test61_homeFromLandscape
-slow 5: test61_homeFromLandscape test60_ccLandscape
+normal: test01b_grantNotifications test62_ncLandscape
