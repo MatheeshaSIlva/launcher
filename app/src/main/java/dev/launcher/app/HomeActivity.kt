@@ -661,8 +661,14 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     }
 
     /** Records home at rest (nothing moving, no icon hidden) as the picture gesture nav draws behind cards. */
-    private fun recordPreview() {
-        if (screen.width == 0 || !screen.isIdle || screen.wallpaperView.transitioning || screen.hiddenPkg != null) return
+    private fun recordPreview(retry: Boolean = false) {
+        if (screen.width == 0) return
+        if (!screen.isIdle || screen.wallpaperView.transitioning || screen.hiddenPkg != null) {
+            // Moving: a settle records it; asked to retry (after a new wallpaper, which no settle follows), a little later.
+            if (retry && ++previewTries <= PREVIEW_RETRIES) { screen.removeCallbacks(recordPreviewRetry); screen.postDelayed(recordPreviewRetry, RECORD_AFTER_SETTLE_MS) }
+            return
+        }
+        previewTries = 0
         // A finger resting on home is often a swipe about to start (home counts as idle until it moves): later.
         if (HomeBridge.touching) { recordPreviewSoon(); return }
         // The clock stops updating while home is in the background: make it show the time now before recording.
@@ -670,6 +676,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         HomeBridge.setPreview(record() ?: return)
         recorded()
     }
+
+    private var previewTries = 0
+    private val recordPreviewRetry = Runnable { recordPreview(retry = true) }
 
     // The wallpaper's picture changes only with the wallpaper (or the screen size). Recorded anew at every record(), it was a
     // new picture each time, and gesture nav re-rendered its layers (sharp and blurred) at every launch for nothing.
@@ -689,8 +698,11 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     }
 
     private fun recordNow(): HomePicture {
+        // Keyed by the wallpaper the view shows, not the one home has taken: a new one is taken before its reveal starts
+        // (home is built again for its colours first, and recorded then), and the old one recorded under the new key was
+        // kept: every close after a new wallpaper showed the old one behind the card, then home jumped to the new one.
         // Also keyed by the appearance (dark mode dims the wallpaper); not kept while either changes.
-        val key = listOf(wallpaper, screen.width, screen.height, dev.launcher.app.theme.Appearance.dark)
+        val key = listOf(screen.wallpaperView.wallpaper, screen.width, screen.height, dev.launcher.app.theme.Appearance.dark)
         val stable = !screen.wallpaperView.transitioning && !dev.launcher.app.theme.Appearance.changing
         val wp = when {
             wallpaper == null -> null
@@ -793,7 +805,10 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         screen.setWallpaper(w)
         updateStatusDark()
         if (coldArrivalPending) { screen.removeCallbacks(coldArrival); coldArrival.run() }
-        screen.postDelayed({ recordPreview() }, 100)
+        // Gesture nav's picture of home in the new wallpaper (what follows a reveal often still moves: retried until still).
+        previewTries = 0
+        screen.removeCallbacks(recordPreviewRetry)
+        screen.postDelayed(recordPreviewRetry, 100)
     }
 
 
@@ -812,5 +827,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         const val COLD_VIA_NAV_MS = 3000L
         /** Home is recorded once it has rested this long after settling (and no finger is on it; ms). */
         const val RECORD_AFTER_SETTLE_MS = 350L
+        /** A picture asked for after a new wallpaper is tried again this many times while home still moves. */
+        const val PREVIEW_RETRIES = 12
     }
 }

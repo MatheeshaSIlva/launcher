@@ -797,6 +797,10 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **The renderer lets GPU images go that no frame used for ~10 s while frames run**, and a node's layer goes when the node
   leaves the drawn tree: a surface shown now and then (home's edit menu: its glass layer and blur images, ~6 ms) allocates
   them in its first frame each time.
+- **A cached picture is keyed by what the view showed when it was recorded, not by the state the app has already
+  taken**: a new wallpaper is taken (and home rebuilt and recorded for its colours) before its reveal starts, and the old
+  wallpaper recorded under the new one's key was kept: every close showed the old wallpaper behind the card
+  (`HomeActivity.recordNow` keys on `wallpaperView.wallpaper`).
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
 - **Our own code is compiled at install only through `app/src/main/baseline-prof.txt`** (`HSPLdev/launcher/app/**;->**(**)**`
   and the class rule): the install profile held only the libraries' rules before (2026-10-19), and everything of ours ran
