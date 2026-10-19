@@ -772,6 +772,9 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
         val editing = em.active
         if (editing) em.exit(now = true)
         val bar = em.Bar(context).also { editBar = it; it.visibility = View.GONE }
+        // The Edit button lifted above its menu is a picture: taken again while its label's tone springs to a new look (it
+        // kept the tone of the change's last frame: a dark label on the dark capsule after Dark was chosen in the menu).
+        bar.onLabelTone = { if (menu?.isShowing == true && editMode?.active == true) menu?.replaceLifted(bar.editButtonNode()) }
         fg.addView(bar, LayoutParams(LayoutParams.MATCH_PARENT, (metrics.gridTop - topInset - metrics.pt(6f)).roundToInt().coerceAtLeast(1)).apply { topMargin = topInset })
         overlay.removeAllViews()
         menuK = 0f; pickerK = 0f; applySceneBlur()

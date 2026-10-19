@@ -868,7 +868,9 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
          * it. The labels are drawn by this bar, which a change of the glass under them did not redraw (they kept a dark
          * colour over a darker wallpaper): the bar redraws on every appearance change and new wallpaper.
          */
-        private val labelTone = GlassLabelTone { invalidate() }
+        private val labelTone = GlassLabelTone { invalidate(); onLabelTone?.invoke() }
+        /** The capsules' label tone moved (it springs after a change of the look, past the change's own frames). */
+        var onLabelTone: (() -> Unit)? = null
         private val onAppearance: () -> Unit = { invalidate() }
 
         override fun onAttachedToWindow() { super.onAttachedToWindow(); dev.launcher.app.theme.Appearance.addListener(onAppearance) }
