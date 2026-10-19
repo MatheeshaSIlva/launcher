@@ -112,10 +112,12 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   theme cards keep such pictures per theme (`HomePictures`); Back on the tiles plays it the other way,
   the card window holds home's picture while they go back at rest underneath (their App Switcher card) and home comes
   (`GestureNav.ownScreenToHome`). The home gesture over them is a panel's, not an app's (Matheesha: "should just close
-  it"): gesture nav hands the swipe up to them (`OwnScreenSwipe`, phase `OWN_PULL`), the sheet, header and Apply bar
-  follow the finger up and away (`EntryState.upward`, `shift`) with home's picture coming forward under them, and a release
-  closes them into home as Back does (the same hand-over) or springs them back (the Home gesture's thresholds); no App
-  Switcher from them. Their task is the one of ours in the App Switcher (`switchable`: by activity class).
+  it"): gesture nav hands the swipe up to them (`OwnScreenSwipe`, phase `OWN_PULL`) and the finger plays the slide Back
+  plays, the way they opened the other way round (the sheet sinks, home's picture comes forward; 45 % of the window's height
+  for the whole slide, from wherever a slide was), and a release closes them into home as Back does (the same hand-over) or
+  springs them back (the Home gesture's thresholds); no App Switcher from them. (It once carried the sheet up and away with
+  the finger; Matheesha, 2026-10-19: "should close it just like swiping back gesture does".) Their task is the one of ours
+  in the App Switcher (`switchable`: by activity class).
 - **Home (iOS profile, swappable)**: `apps/` (app list, categories, shaped icons), `motion/` (every animation by role, iOS scroll
   physics), `drawer/` (drawer style × placement; App Library), `home/` (config, iOS-proportioned metrics, layout model, home screen).
   Design notes in `docs/PROGRESS.md` ("Home experience, iOS profile").
@@ -139,16 +141,25 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `theme_customization_overlay_packages`, its `color_source`, where the phone keeps one; else whether the phone's primary
   is one of the wallpaper's hues, `MaterialYou.followsWallpaper`), otherwise a tonal palette made from the wallpaper (One
   UI's Color palette off or set to a basic colour leaves the phone's palette blue under any wallpaper: Matheesha's green
-  wallpaper came out blue). Its decision is in the log ("[design] the phone's palette ..."). The settings name four
+  wallpaper came out blue). Its decision is in the log ("[design] the phone's palette ..."). The palette in use is one
+  immutable object per state (`Design.Palette`: the choice and what the phone says, `Phone`, read on the main thread when
+  the assets or the wallpaper change, never while drawing); a change of the phone's palette is shown (as a change of the
+  look) only if a colour in use changed. The wallpaper's colours change only when home shows a new wallpaper (kept across
+  starts in `files/design/wallpaper-colours.txt`): a palette that follows it changes along the wallpaper's reveal (home
+  built again under it, its old look giving way on the same front: `home/FrontCover`). On a Galaxy "the system's" roles come
+  from One UI's own shades (`MaterialYou.ShadePalette`; Android's roles follow Android's setting, which Other apps changes).
+  Under Material You the settings' parts take the palette's primary, tertiary and secondary in turn (`partColor`, at the
+  theme colour's lightness), as Android's Settings does. The settings name four
   sources (`Draft.colourSource`): the theme's, the system's (the phone's palette as it is: style `system` with no colour of
   one's own), the wallpaper's (made by the launcher), your own. **Other apps** (Look › Colours, `design/SystemPalette`, off
   by default, its own preference, never a theme's): Android's palette setting given the chosen colours (Matheesha: "system
   colours option push oneui's palette, wallpaper colours option will push the launchers"): the system's push One UI's
   palette as Samsung's picker would (its shade 300 of the first palette, TONAL_SPOT or MONOCHROMATIC), so Google's apps
   match Samsung's; the wallpaper's and your own push the launcher's seed and style; the theme's colours, the switch off and
-  Restore system give the phone's own value back (unless changed since). Written with the launcher's self-granted
-  WRITE_SECURE_SETTINGS, else the shell; only when it differs (a write makes every app reload its colours); log lines
-  "[palette] ...".
+  Restore system give the phone's own value back (unless changed since); Auto on a phone whose palette is already the
+  wallpaper's gives nothing. Written with the launcher's self-granted WRITE_SECURE_SETTINGS, else the shell; only when it
+  differs (a write makes every app reload its colours), and only once the launcher is still (not while the settings are in
+  front nor during a reveal: a change of Android's palette lays every window out again); log lines "[palette] ...".
   **Icon sets** (`design/IconSets`, `assets/icons/<id>.json` or `files/icons/<id>.json` through the inbox): symbols as
   vector paths that the shade draws in place of its own (`res/drawable/sym_*`, Material Symbols Rounded: the set
   `launcher`) where a theme names a set (`sys.symbols`, read through each element's own token: `comp.cc.symbols`,
@@ -694,6 +705,17 @@ copy it wholesale — port the working pieces cleanly. File map:
   not kept.
 - **One UI 9 answers apps' `getWallpaperColors` with nothing**: the palette is made from Android's reading of the picture
   home draws (`Wallpaper.colors`, `WallpaperColors.fromBitmap` at load; the load line in the log shows it).
+- **A change of the phone's palette is a change of every app's assets (a runtime overlay), and Android makes every
+  activity anew for it** unless the activity handles `assetsPaths` (ActivityInfo.CONFIG_ASSETS_PATHS): home and the
+  settings were made anew mid-reveal (the stutter), home again when the settings closed (a cold start's arrival: the
+  flicker), twice under a new wallpaper (its reveal never played). compileSdk 35 cannot name the flag: `configChanges`
+  points at an integer resource (`res/values/config_changes.xml`; the startup log says how the phone read it, "[app] home
+  stays through palette changes"). Kept, home must do what being made anew did: apps' widgets are inflated again when the
+  phone's palette or its light/dark changes (`LauncherWidgetHostView.refreshColours`, a blank layout first, else the same
+  layout is only re-applied); a launcher that is not a system app cannot give widgets its own palette on Android 17
+  (`AppWidgetHostView.setColorResources` builds a framework overlay: "no resources were overlaid"). And SystemUI writes
+  `theme_customization_overlay_packages` again in its own form (Android 17: capitals, no alpha, a seed list): compare by
+  seed and style, never as a string.
 - **The phone's palettes, as found on the S24 (One UI 9.0, Android 17; read-only adb, services.jar searched with dexdump)**:
   Android's Material You palette is the Secure setting `theme_customization_overlay_packages` (JSON: `system_palette` seed
   hex, `color_source` "preset" or a wallpaper, `theme_style`, `_applied_timestamp`); AOSP's SystemUI rebuilds every app's
