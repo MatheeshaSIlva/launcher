@@ -88,9 +88,21 @@ final class Scenarios: XCTestCase {
         mark("tree \(name)")
     }
 
+    /// The notification permission prompt's Allow, wherever iOS shows it (SpringBoard's alert, or a button of the host's
+    /// own window), by its label's start ("Allow", "Allow Notifications"): passes 9 and 20 never found SpringBoard's alert
+    /// button and lost every notification. Logs what alerts there are when none is found.
     private func allowNotifications(_ timeout: Double = 4) {
-        let allow = sb.alerts.buttons["Allow"]
-        if allow.waitForExistence(timeout: timeout) { mark("allow notifications"); allow.tap() }
+        let allowed = NSPredicate(format: "label BEGINSWITH 'Allow'")
+        let t0 = Date()
+        while Date().timeIntervalSince(t0) < timeout {
+            for (name, app) in [("springboard", sb), ("host", host)] {
+                let b = app.buttons.matching(allowed).firstMatch
+                if b.exists { mark("allow notifications (\(name): '\(b.label)')"); b.tap(); return }
+            }
+            usleep(300_000)
+        }
+        let alerts = sb.alerts.allElementsBoundByIndex.map { $0.label } + host.alerts.allElementsBoundByIndex.map { $0.label }
+        mark("no Allow button after \(Int(timeout)) s; alerts: \(alerts)")
     }
 
     /// Grants the host app notifications before anything posts (pass 8 lost every notification: the prompt came after
