@@ -261,8 +261,6 @@ class SettingsActivity : ComponentActivity() {
             entry.handedPage = SettingsEntry.pictureWasPage
             entry.picture = pic
             entryTone = dev.launcher.app.HomeBridge.homeStatusDark
-            // Down into home as Back goes, unless the panel is still up from a home gesture let go (on up from there: no jump).
-            if (entry.enter.floatValue >= 0.999f) entry.upward = false
             AppLog.log("[settings] sliding back into home")
             entry.request(0f) {
                 // Left meanwhile (a swipe home, another app over them): nothing covers whatever is in front now; at rest
@@ -283,24 +281,27 @@ class SettingsActivity : ComponentActivity() {
     private var exitGen = 0
 
     /**
-     * The home gesture over them (gesture nav hands it over: [dev.launcher.app.OwnScreenSwipe]): the panel follows the finger
-     * up, home's picture coming forward under it as it does in the slide back, and closes into home on release as Back on
-     * the tiles does (or goes back to rest).
+     * The home gesture over them (gesture nav hands it over: [dev.launcher.app.OwnScreenSwipe]): the finger plays the slide
+     * back into home, the one Back on the tiles plays (the way they opened, the other way round: the sheet sinks, home's
+     * picture comes forward), and on release they close into home as Back does, or go back to rest. (It once carried the
+     * panel up and away with the finger; Matheesha: "should close it just like swiping back gesture does".)
      */
     private val swipe = object : dev.launcher.app.OwnScreenSwipe.Panel {
         private var gen = -1
         private var pic: Bitmap? = null
         private var onHome = false
+        /** Where the slide was when the finger took it (one still playing, into them or out, goes on from there). */
+        private var from = 1f
+
+        /** How far up the finger goes for the whole slide (px): the Home gesture closes at a fifth of the screen. */
+        private fun span() = root.height * SWIPE_SPAN
 
         override fun begin() {
             if (exiting || !showing) { gen = -1; return }
-            // Home still sliding into them (the panel coming up from below): it goes back down into home as Back does (taken
-            // up by the finger from there, the panel would jump from below the screen to above it).
-            if (entry.enter.floatValue < 0.999f && !entry.upward) { gen = -1; exitToHome(); return }
             gen = ++exitGen
             pic = null
-            entry.jump(entry.enter.floatValue)   // (a slide still playing stops where it is: the finger has it now)
-            entry.upward = true
+            from = entry.enter.floatValue
+            entry.jump(from)   // (a slide still playing stops where it is: the finger has it now)
             // Moving as in a slide: the window's bar flags wait for the end (a change of them is a relayout: a frame of the
             // swipe), and the accessibility tree is left meanwhile (SettingsApp).
             entry.moving = true
@@ -318,8 +319,8 @@ class SettingsActivity : ComponentActivity() {
         }
 
         override fun move(travelPx: Float) {
-            if (gen != exitGen || entry.liftPx <= 0f) return
-            val e = (1f - travelPx / entry.liftPx).coerceIn(0f, 1f)
+            if (gen != exitGen || span() <= 0f) return
+            val e = (from - travelPx / span()).coerceIn(0f, 1f)
             entry.enter.floatValue = e
             // The bar takes home's tone once home's picture is under it, as in the slide (EntryState.onTone).
             val h = e < entry.toneAt
@@ -329,12 +330,12 @@ class SettingsActivity : ComponentActivity() {
         override fun end(commit: Boolean, speedPx: Float) {
             if (gen != exitGen) return
             val g = gen
-            // On from where it is at the finger's speed (enter falls as the panel rises).
-            entry.velocity = if (entry.liftPx > 0f) -speedPx / entry.liftPx else 0f
+            // On from where it is at the finger's speed (enter falls as the finger rises).
+            entry.velocity = if (span() > 0f) -speedPx / span() else 0f
             entry.moving = false   // (the slide that follows moves it again)
             if (!commit) {
                 AppLog.log("[settings] the home gesture let them go: back to rest")
-                entry.request(1f) { if (g == exitGen) entry.upward = false }
+                entry.request(1f, null)
                 return
             }
             exiting = true
@@ -342,7 +343,7 @@ class SettingsActivity : ComponentActivity() {
             whenPicture(g) { p ->
                 entry.request(0f) {
                     if (g != exitGen) return@request
-                    if (p == null || !showing) { exiting = false; entry.upward = false; entry.jump(1f); entry.picture = null; return@request }
+                    if (p == null || !showing) { exiting = false; entry.jump(1f); entry.picture = null; return@request }
                     handOverToHome(p, g)
                 }
             }
@@ -371,7 +372,6 @@ class SettingsActivity : ComponentActivity() {
     private fun handOverToHome(pic: Bitmap, gen: Int) {
         dev.launcher.app.GestureNav.ownScreenToHome(pic) { drawn ->
             // Under home's copy: at rest again, for the frame the system keeps (and the next time they show).
-            entry.upward = false
             entry.jump(1f)
             entry.picture = null
             root.viewTreeObserver.registerFrameCommitCallback { drawn() }
@@ -382,7 +382,6 @@ class SettingsActivity : ComponentActivity() {
             if (gen != exitGen || !exiting || !showing) return@postDelayed
             AppLog.log("[settings] home did not come after sliding back into it: they slide in again")
             exiting = false
-            entry.upward = false
             entry.request(1f, null)
         }, EXIT_STUCK_MS)
     }
@@ -414,7 +413,6 @@ class SettingsActivity : ComponentActivity() {
         // Out of sight: whatever comes next shows them in their own tone (the window's flags; gesture nav reads them then),
         // at rest (home came without their frame at rest under its picture: they show at rest when they come back).
         if (exiting) { entry.jump(1f); entry.picture = null }
-        entry.upward = false
         entry.moving = false
         exiting = false
         exitGen++
@@ -516,6 +514,8 @@ class SettingsActivity : ComponentActivity() {
         const val EXIT_STUCK_MS = 3000L
         /** The saved state: opened from home (Back slides back into it). */
         const val KEY_FROM_HOME = "fromHome"
+        /** How far up the home gesture's finger goes for the whole slide back into home, of the window's height. */
+        const val SWIPE_SPAN = 0.45f
         /** Without word that the window is on screen, home slides in this long after its first frame was drawn (ms). */
         const val SLIDE_FALLBACK_MS = 400L
         /** How long the shell is asked whether the window is on screen (ms, from the moment the settings were asked for). */

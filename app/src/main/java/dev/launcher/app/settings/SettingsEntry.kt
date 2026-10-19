@@ -281,17 +281,6 @@ class EntryState {
     var instant = false
         private set
 
-    /**
-     * The panel goes up and away as it leaves (the home gesture: it follows the finger up), not down (Back on the tiles).
-     * Read in drawing.
-     */
-    var upward by mutableStateOf(false)
-    /** How far up the panel goes to be gone (px; set by the settings' layout): the finger moves it this far at most. */
-    var liftPx = 0f
-
-    /** The panel's shift for where [enter] is (px): down below the screen as it leaves, or up past the top ([upward]). */
-    fun shift(down: Float): Float {
-        val gone = 1f - enter.floatValue.coerceAtLeast(0f)
-        return if (upward) -gone * liftPx else gone * down
-    }
+    /** The panel's shift for where [enter] is (px): [down] (below the screen) as it is gone. */
+    fun shift(down: Float): Float = (1f - enter.floatValue.coerceAtLeast(0f)) * down
 }
