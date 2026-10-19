@@ -144,4 +144,7 @@ Behaviour pass on the emulator (Android 17, a fresh image, the build of each fix
 - T4 **ok**: the font sheet (More Fonts: categories, the Serif filter with each family in its own face, closed with its button).
 
 ### System
-- Y1 not run (destructive on the S24; the watchdog was proven in phase 1).
+- Y1 **ok** (emulator; not on the S24, where it changes system state): the app killed: Android drops our status-bar
+  flags at once (they belong to our process) and the launcher, the home app, comes back and sets everything up again in
+  ~4 s. Restore system (the settings' System page): Android's own status bar, gestures and animation scales back, our
+  accessibility service off, the result written under the button; switched back on from the Developer page.
