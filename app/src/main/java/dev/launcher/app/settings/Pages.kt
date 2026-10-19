@@ -602,6 +602,11 @@ internal class Studio(
     var sheet: LayoutCoordinates? = null
     /** How many pages are built (ahead of time, one a frame, so opening one never builds it). */
     var built by mutableIntStateOf(0)
+    /**
+     * Everything built ahead (the pages, then the font search's sheet): the tiles' scenes start once it is. Each build is a
+     * long frame (20-45 ms on the S24), and a scene playing then stalled at each one.
+     */
+    var ready by mutableStateOf(false)
     /** Each page's scroll (kept while the settings are open: a page comes back where it was). */
     val scrolls = Part.entries.associateWith { IosScrollState() }
     /** The tiles' scroll. */
@@ -817,6 +822,7 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
         // (built in a page's opening it would cost that opening a frame).
         var sheetBuilt by remember { mutableStateOf(false) }
         LaunchedEffect(Unit) {
+            val t0 = android.os.SystemClock.uptimeMillis()
             kotlinx.coroutines.delay(350)
             // Not while home slides in: a page built in one of its frames would cost it that frame.
             androidx.compose.runtime.snapshotFlow { entry.moving || entry.enter.floatValue < 1f }.first { !it }
@@ -827,6 +833,11 @@ fun SettingsApp(onClose: () -> Unit, beforeWallpaper: (first: Boolean) -> Unit =
             androidx.compose.runtime.snapshotFlow { st.p.isRunning }.first { !it }
             androidx.compose.runtime.withFrameNanos { }
             sheetBuilt = true
+            // (Composed in the next frame: the scenes start after it.)
+            androidx.compose.runtime.withFrameNanos { }
+            androidx.compose.runtime.withFrameNanos { }
+            st.ready = true
+            dev.launcher.app.AppLog.log("[settings] built ahead ${android.os.SystemClock.uptimeMillis() - t0} ms after they came up: the tiles' scenes start")
         }
         // While a page moves (its spring, or a finger), the settings leave the accessibility tree: with an accessibility
         // service on (gesture nav is one), Compose re-reads the whole tree every 100 ms while layers move (7-25 ms frames
@@ -1058,7 +1069,8 @@ private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: 
     val bar = st.bar
     val bandPaint = remember { androidx.compose.ui.graphics.Paint() }
     // The scenes' clock runs while the tiles are in sight: not under a page at rest or the search's results, not with the
-    // settings away or covered by home's picture. A long frame counts as a short one (a stall pauses the scenes).
+    // settings away or covered by home's picture, and not before what is built ahead is ([Studio.ready]). A long frame
+    // counts as a short one (a stall pauses the scenes).
     val lifecycle = androidx.compose.ui.platform.LocalLifecycleOwner.current.lifecycle
     val resumed = remember { mutableStateOf(lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
     androidx.compose.runtime.DisposableEffect(lifecycle) {
@@ -1071,7 +1083,7 @@ private fun StartContent(st: Studio, g: Geometry, open: (Part) -> Unit, fadePx: 
     }
     val inSight = remember(st) {
         androidx.compose.runtime.derivedStateOf {
-            resumed.value && st.entry.enter.floatValue > 0f && !(st.open != null && !st.p.isRunning && st.p.value >= 1f) &&
+            resumed.value && st.ready && st.entry.enter.floatValue > 0f && !(st.open != null && !st.p.isRunning && st.p.value >= 1f) &&
                 !(st.searching && !st.searchK.isRunning)
         }
     }

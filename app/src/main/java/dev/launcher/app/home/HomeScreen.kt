@@ -1054,7 +1054,13 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
 
     override fun dispatchTouchEvent(e: MotionEvent): Boolean {
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN -> { movedX = e.x; movedY = e.y; moved = false; HomeBridge.touching = true; HomeBridge.lastTouchAt = android.os.SystemClock.uptimeMillis() }
+            MotionEvent.ACTION_DOWN -> {
+                movedX = e.x; movedY = e.y; moved = false; HomeBridge.touching = true; HomeBridge.lastTouchAt = android.os.SystemClock.uptimeMillis()
+                // A finger on the page beside the App Library may slide it in: its icons back on the GPU now, before the
+                // slide's first frame (the touch slop gives them a frame or two).
+                val li = libIndex
+                if (li != null && drawerProgress() == 0f && abs(li - pos) <= 1f) (drawer?.view as? dev.launcher.app.drawer.AppLibraryView)?.tilesPane?.prepareIcons()
+            }
             MotionEvent.ACTION_MOVE -> if (!moved && (abs(e.x - movedX) > slop || abs(e.y - movedY) > slop)) {
                 moved = true
                 HomeBridge.onHomeDragged?.invoke()

@@ -114,6 +114,21 @@ internal class TilesPane(ctx: Context, private val lib: AppLibraryView) : View(c
         return first..last
     }
 
+    /**
+     * The icons the tiles in sight show, put back on the GPU if the renderer let them go (it does with what no frame used
+     * for ~10 s while frames run): uploaded inside a slide's first frame, ~40 of them took 7.8 ms of it (S24). Nearly free
+     * for icons still there. Any time before a slide.
+     */
+    fun prepareIcons() {
+        if (lib.tiles.isEmpty() || height == 0) return
+        val size = m.iconSize
+        for (i in visibleTiles()) {
+            val tile = lib.tiles[i]
+            val shown = largeCount(i) + if (tile.expandable) min(4, tile.apps.size - 3) else 0
+            for (s in 0 until minOf(shown, tile.apps.size)) dev.launcher.app.apps.Icons.cached(tile.apps[s], size)?.prepareToDraw()
+        }
+    }
+
     fun visibleIcons(out: MutableList<IconSpot>) {
         val top = m.searchTop + m.searchHeight
         for (i in visibleTiles()) for (s in 0 until largeCount(i)) {

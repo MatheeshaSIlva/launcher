@@ -776,6 +776,27 @@ copy it wholesale — port the working pieces cleanly. File map:
   wait for rest. And a home rebuild must carry its modes over (edit mode once ended unseen under the old look's picture).
 - **Kotlin's incremental build can miss a changed interface** (an implementer in another file not recompiled: the build
   "succeeds"). After changing an interface or abstract class, run `./gradlew compileDebugKotlin --rerun-tasks` once.
+- **Another app's name or icon read through the PackageManager loads that app's resources** (`LoadApkAssets`: 60 ms for a
+  plugin, 65 ms for the Permission Controller on the S24): never on a thread that draws. The App Switcher's first opening
+  after a start read eight on gesture nav's thread (a 231 ms frame); names and icons come from caches filled in the
+  background as soon as the recent apps or notifications are known (`GestureNav.lookAhead`, `shade/AppInfo`), and what
+  comes late fades in.
+- **A window added without a parent draws with the hardware renderer** (WindowManagerGlobal takes the app's
+  `hardwareAccelerated`), so a window that draws nothing still allocates its screen-sized buffers on the render thread all
+  our windows share (the App Switcher's touch window: 7.8 ms at each opening). Such a window draws in software on its own
+  thread: made with a context whose `ApplicationInfo` has no `FLAG_HARDWARE_ACCELERATED` (`SwitcherInput.SoftwareDrawn`).
+- **A picture rendered with `HardwareRenderer` + `ImageReader` and `setWaitForPresent` blocks its caller** for the buffer's
+  allocation (on the shared render thread, 4 ms for a screen) and then for the GPU (6.6 ms): the settings' home gesture
+  waited 15 ms at its touch. Where the picture can come a frame later, `ViewPicture.drawLater` (a `HardwareBufferRenderer`
+  into a buffer made ahead with `prepare`, the fence waited for on a worker; the caller waits only for the sync).
+- **HardwareBuffers a binder call returns stay open in the sender** until its garbage collector runs: the shell service kept
+  every task snapshot it sent (~10 MB of graphics memory each). Close them once written into the reply (`ShellService.onTransact`).
+- **A warm-up must run after what it warms has arrived**: the App Library's ran 0.9 s after a start, before its apps and
+  icons, and the first swipe to it still recorded and measured everything (16-20 ms). It runs again when the library's
+  content changes (`DrawerHost.onDrawerContentChanged`).
+- **The renderer lets GPU images go that no frame used for ~10 s while frames run**, and a node's layer goes when the node
+  leaves the drawn tree: a surface shown now and then (home's edit menu: its glass layer and blur images, ~6 ms) allocates
+  them in its first frame each time.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
 - **Our own code is compiled at install only through `app/src/main/baseline-prof.txt`** (`HSPLdev/launcher/app/**;->**(**)**`
   and the class rule): the install profile held only the libraries' rules before (2026-10-19), and everything of ours ran
