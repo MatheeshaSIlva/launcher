@@ -373,7 +373,34 @@ On the S24 (9d54bb3, Matheesha): "everything works the same".
   press into edit mode and a tap out), one without the buttons and the row (the bar's time and icons in place in white,
   the controls under it, edit mode in place; turned the same), and the shipped layout back once the copy was removed.
 
-Next, stage 4: panels and gestures (one panel or two, pulled from where, one stage or two: Pixel's quick row first).
+**Stage 4, panels and gestures: done (2026-10-20)**, in two steps:
+- 4a: the shade's panels are objects (`Shade.Panel`): each says how it comes in with the finger and goes (its opening,
+  its curves, how far the finger travels for it, its progress under a finger and when caught on its way out), what it
+  shows on the way (Control Center's controls pulled below their place, risen into it, folded back closing), how it
+  takes a drag, a touch and Back, and what it leaves behind; the shade drives one spring for the panel pulled and one for
+  a panel on its way out under it, and knows neither by name. Nothing changes on screen but two details: Control Center
+  going out under a pull of Notification Center now lifts its controls as it fades, as its own close does (the pull's
+  start stopped the lift that letting it go had just begun), and edit mode's empty cells are recorded ahead when Control
+  Center rests (they were also when Notification Center did). Checked on the emulator: both panels pulled open, a short
+  pull let go, a swipe up from the bottom, Back, Control Center pulled past its place and risen, dragged closed, closed
+  by a tap on empty space and under a pull of the other, each caught on its way out; a toggle, the brightness held and
+  Back, "+" into edit mode and Back out of it, the gallery, a notification opening its app out of the fanned stack; both
+  panels turned; both over the lock screen. (A Control Center over the emulator's lock screen that closed by itself was
+  the old build's too: an injected swipe lifting a third of the way down, the known `input swipe` quirk.)
+- 4b: which panels there are and where each is pulled from are the file's: Notification Center always, Control Center
+  or not; each place of the layout says which panel each part of the top edge opens (`pulls`: the whole edge for one
+  panel, each side of the camera for two, either way round; docs/LAYOUT_FILES.md). Control Center folds back into the
+  corner it is pulled from (`CcPanel.cornerX`); the settings' stage plays the place's strokes (its finger down from each
+  part of the edge, opening that part's panel); a layout without Control Center records nothing ahead for it. Checked on
+  the emulator: the shipped file as before; a copy of your own with the sides swapped (the left opened Control Center,
+  the right Notification Center; Control Center's close, slowed six times, folding into the top left, the far controls
+  first); one with two places (the settings offer both under "Where it lives"; the mirrored one chosen: the pulls and the
+  stage followed, its finger from the left opening Control Center first, then from the right Notification Center); one
+  with Notification Center alone, from the top (from the right and the middle; nothing recorded ahead for Control
+  Center; the settings' stage one stroke from the middle; the Grid group gone with its option).
+
+One stage or two (Pixel's first pull: the quick row and the notifications; the second: the full Quick Settings) comes with
+Pixel's combined panel, the first panel to have two. Next: step 4, Pixel's shade as a second layout file.
 
 ## References
 

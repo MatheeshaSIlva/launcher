@@ -111,6 +111,8 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
     /** Which blocks it has besides the controls (the layout file's: [dev.launcher.app.layout.ShadeStructure]). */
     private var hasButtons = true
     private var hasRow = true
+    /** Pulled from the left of the camera (the layout's place): it folds back into the top left corner. */
+    private var fromLeft = false
 
     /** Takes up the layout's structure; true if the blocks it has changed (it is laid out again then). */
     private fun readStructure(): Boolean {
@@ -118,6 +120,9 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
         val changed = s.ccHasButtons != hasButtons || s.ccHasStatusRow != hasRow
         hasButtons = s.ccHasButtons
         hasRow = s.ccHasStatusRow
+        val place = dev.launcher.app.layout.Setup.placement(dev.launcher.app.layout.Element.SHADE).id
+        fromLeft = s.pullsOf(place).firstOrNull { it.kind == dev.launcher.app.layout.ShadeStructure.Kind.CONTROL_CENTER }?.from ==
+            dev.launcher.app.layout.ShadeStructure.Pull.LEFT_OF_CAMERA
         return changed
     }
 
@@ -239,10 +244,12 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
         if (closeK.target != t) closeK.animateTo(t, CLOSE_STYLE)
     }
 
-    /** How far a control centred at [cx], [cy] has left (0..1): the farther from the top-right corner, the sooner. */
+    override val cornerX: Float get() = if (fromLeft) 0f else width.toFloat()
+
+    /** How far a control centred at [cx], [cy] has left (0..1): the farther from the corner it folds into, the sooner. */
     override fun leaving(cx: Float, cy: Float): Float {
         val gone = 1f - progress.coerceIn(0f, 1f)
-        val far = (kotlin.math.hypot(width - cx, cy) / kotlin.math.hypot(width.toFloat(), height * 0.8f)).coerceIn(0f, 1f)
+        val far = (kotlin.math.hypot(cornerX - cx, cy) / kotlin.math.hypot(width.toFloat(), height * 0.8f)).coerceIn(0f, 1f)
         val local = ((gone - (1f - far) * CcClose.STAGGER) / (1f - CcClose.STAGGER)).coerceIn(0f, 1f)
         return local * local * (3f - 2f * local)
     }

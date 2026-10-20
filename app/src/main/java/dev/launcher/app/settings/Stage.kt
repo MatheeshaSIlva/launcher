@@ -81,9 +81,19 @@ private val WHOLE = Rect(0f, 0f, 1f, 1f)
  */
 internal class Gesture(val strokes: List<Pair<Offset, Offset>>, val hold: Boolean = false)
 
-internal fun gestureOf(e: Element?, placement: String): Gesture? = when (e) {
-    // Notifications from the top's left, controls from its right.
-    Element.SHADE -> Gesture(listOf(Offset(0.25f, 0.005f) to Offset(0.25f, 0.2f), Offset(0.78f, 0.005f) to Offset(0.78f, 0.2f)))
+/** [layout]: the element's layout (the shade's pulls are its file's: where each panel is pulled from in each place). */
+internal fun gestureOf(e: Element?, placement: String, layout: String?): Gesture? = when (e) {
+    // Down from each part of the top edge the place opens a panel from (iOS: notifications left, controls right).
+    Element.SHADE -> dev.launcher.app.layout.Layouts.shadeOf(layout)?.pullsOf(placement)?.let { areas ->
+        Gesture(areas.map { a ->
+            val x = when (a.from) {
+                dev.launcher.app.layout.ShadeStructure.Pull.LEFT_OF_CAMERA -> 0.25f
+                dev.launcher.app.layout.ShadeStructure.Pull.RIGHT_OF_CAMERA -> 0.78f
+                dev.launcher.app.layout.ShadeStructure.Pull.TOP -> 0.5f
+            }
+            Offset(x, 0.005f) to Offset(x, 0.2f)
+        })
+    }
     // Up from the bottom edge, then a rest.
     Element.RECENTS -> Gesture(listOf(Offset(0.5f, 0.995f) to Offset(0.5f, 0.8f)), hold = true)
     Element.DRAWER -> when (placement) {
@@ -107,8 +117,13 @@ private enum class Opens(val follow: Float, val open: CurveKey, val close: Curve
     LIBRARY_UP(0.4f, MotionTokens.DRAWER, MotionTokens.DRAWER),
 }
 
-private fun opensOf(part: Part, placement: String, stroke: Int): Opens? = when (part) {
-    Part.SHADE -> if (stroke == 0) Opens.NC else Opens.CC
+private fun opensOf(part: Part, placement: String, layout: String?, stroke: Int): Opens? = when (part) {
+    // The panel the stroke's part of the edge opens.
+    Part.SHADE -> when (dev.launcher.app.layout.Layouts.shadeOf(layout)?.pullsOf(placement)?.getOrNull(stroke)?.kind) {
+        dev.launcher.app.layout.ShadeStructure.Kind.CONTROL_CENTER -> Opens.CC
+        null -> null
+        else -> Opens.NC
+    }
     Part.APPS -> Opens.DECK
     Part.LIBRARY -> when (placement) {
         "page-before-first" -> Opens.LIBRARY_RIGHT
@@ -117,6 +132,9 @@ private fun opensOf(part: Part, placement: String, stroke: Int): Opens? = when (
     }
     else -> null
 }
+
+/** How the part open is reached: its place and layout, and the finger's strokes (a new one starts the act again). */
+private data class Reach(val part: Part, val placement: String, val layout: String?, val gesture: Gesture)
 
 /** The finger on the stage and what its stroke opens (written by the stage's loop, read in drawing). */
 @Stable
@@ -241,7 +259,8 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
             val e = part?.element
             if (!actsOn.value || e == null) null else {
                 val placement = draft.placement(e)
-                gestureOf(e, placement)?.let { Triple(part, placement, it) }
+                val layout = draft.layout(e)
+                gestureOf(e, placement, layout)?.let { Reach(part, placement, layout, it) }
             }
         }
     }
@@ -256,14 +275,14 @@ internal fun Stage(st: Studio, g: Geometry, art: State<ArtKit>) {
                 if (o != null && act.panel.value > 0.001f) act.panel.animateTo(0f, Look.spec(draft.motionCurve(draft.motionId(), o.close)))
             }
             if (on == null) return@collectLatest
-            val (part, placement, gs) = on
+            val (part, placement, layout, gs) = on
             act.gesture = gs
             act.opens = null
             delay(650)
             val travel = dev.launcher.app.motion.Motion.role(MotionTokens.SETTINGS_HINT)
             while (true) {
                 for (i in gs.strokes.indices) {
-                    val o = opensOf(part, placement, i)
+                    val o = opensOf(part, placement, layout, i)
                     act.opens = o
                     act.at.intValue = i
                     act.t.floatValue = 0f

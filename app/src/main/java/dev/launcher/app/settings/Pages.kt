@@ -2505,12 +2505,12 @@ private fun PartPage(part: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) {
         // (Where it lives says how it is reached: "Swipe up from the bottom edge and rest your finger"; a line about the
         // finger on the stage after it said it twice.)
         if (single && current.defaultPlacement.id != "home") append(" ").append(current.defaultPlacement.description)
-        else if (single && gestureOf(e, at) != null) append(" The finger above shows how it is reached.")
+        else if (single && gestureOf(e, at, current.id) != null) append(" The finger above shows how it is reached.")
     }, listOfNotNull("Layout".takeIf { layouts.size == 1 }, "Where it lives".takeIf { single }))
     if (layouts.size > 1) Group("Layout", current.description) {
         for (l in layouts) CheckRow(l.title, l.origin, l.id == current.id) { draft.chooseLayout(e, l.id) }
     }
-    if (!single) Group("Where it lives", if (gestureOf(e, at) != null) "The finger above shows how it is reached." else null) {
+    if (!single) Group("Where it lives", if (gestureOf(e, at, current.id) != null) "The finger above shows how it is reached." else null) {
         for (p in current.placements) {
             CheckRow(p.title, p.description, p.id == at, changed = p.id == at && p.id != current.defaultPlacement.id) { draft.choosePlacement(e, p.id) }
         }

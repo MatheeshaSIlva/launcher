@@ -47,7 +47,7 @@ class TopButtonsBlock(private val panel: CcPanel, private val onPlus: () -> Unit
         val col = Design.color(CcTokens.BUTTON_SYMBOL_COLOR)
         val cs = panel.closingK.coerceIn(0f, 1f)
         val k0 = panel.presence()
-        val w = panel.panelWidth
+        val corner = panel.cornerX
         for (i in 0..1) {
             var x = x(i)
             var y = y
@@ -57,7 +57,7 @@ class TopButtonsBlock(private val panel: CcPanel, private val onPlus: () -> Unit
             if (cs > 0.001f) {
                 // As the controls: back into the corner (see CcPanel.closingK).
                 val e = panel.leaving(x, y)
-                x += (w - x) * CcClose.PULL * e * cs
+                x += (corner - x) * CcClose.PULL * e * cs
                 y += -y * CcClose.PULL * e * cs
                 s *= 1f - CcClose.SHRINK * e * cs
                 k += ((1f - e) - k) * cs

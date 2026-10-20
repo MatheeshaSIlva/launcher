@@ -19,6 +19,8 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import dev.launcher.app.AppLog
 import dev.launcher.app.Unlock
+import dev.launcher.app.layout.Element
+import dev.launcher.app.layout.Setup
 import dev.launcher.app.layout.ShadeStructure
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.design.Curve
@@ -432,7 +434,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
                 // --es do open [--es panel cc|nc], --es do close: a panel opened as a released pull opens it, and closed (a
                 // script's pictures of a panel at rest, never caught mid-pull).
-                if (i.getStringExtra("do") == "open") handler.post { begin(if (i.getStringExtra("panel") == "nc") ncPanel else ccPanel); openFully(0f) }
+                if (i.getStringExtra("do") == "open") handler.post {
+                    val p = if (i.getStringExtra("panel") == "nc") ncPanel else ccPanel
+                    if (!ShadeStructure.current().has(p.kind)) { AppLog.log("[shade] test: the layout has no ${p.name}"); return@post }
+                    begin(p); openFully(0f)
+                }
                 if (i.getStringExtra("do") == "close") handler.post { close(0f) }
                 // --es do cc_expand_frames --es control CONNECTIVITY [--ei fps 60] [--ei hold 200]: a module of Control Center
                 // (open first) grown into its large form and back at exact times, Control Center drawn into PNGs in
@@ -728,6 +734,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private val ccWarm = object : Runnable {
         override fun run() {
+            // (A layout without Control Center: nothing to record.)
+            if (!ShadeStructure.current().has(ShadeStructure.Kind.CONTROL_CENTER)) return
             val touched = android.os.SystemClock.uptimeMillis() - dev.launcher.app.HomeBridge.lastTouchAt < CC_WARM_UNTOUCHED_MS
             if (panel != null || leavingPanel != null || !dev.launcher.app.GestureNav.idle || touched) {
                 if (panel == null) handler.postDelayed(this, CC_WARM_RETRY_MS)   // (an opening records what is left)
@@ -843,9 +851,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                     pulling = false
                     pullFrom = -1f
                     takenOver = false
-                    // Which panel each side of the camera opens: the shade's layout's (iOS: notifications left, controls right).
+                    // Which panel the top edge opens there: the layout's in the place chosen (iOS: notifications left of the
+                    // camera, controls right of it; one panel: the whole edge).
                     val side = if (e.rawX >= rightOfCamera()) ShadeStructure.Pull.RIGHT_OF_CAMERA else ShadeStructure.Pull.LEFT_OF_CAMERA
-                    pullPanel = panelOf(ShadeStructure.current().pulledFrom(side))
+                    pullPanel = panelOf(ShadeStructure.current().pulledFrom(Setup.placement(Element.SHADE).id, side))
                     startStream()
                 }
                 Touch.BOTTOM -> panelDrag(0, 0f, 0f)

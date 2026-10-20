@@ -10,7 +10,11 @@
   {
    "id": "split-top",
    "title": "Pull from the top: notifications on the left, controls on the right",
-   "description": "Pull down from the top edge left of the camera for notifications, right of it for the controls."
+   "description": "Pull down from the top edge left of the camera for notifications, right of it for the controls.",
+   "pulls": [
+    {"from": "left-of-camera", "panel": "notification-center"},
+    {"from": "right-of-camera", "panel": "control-center"}
+   ]
   }
  ],
  "options": [
@@ -28,7 +32,6 @@
   "panels": [
    {
     "panel": "notification-center",
-    "pull": "left-of-camera",
     "blocks": [
      {"block": "lock-clock"},
      {"block": "notifications", "opens": "stacked"},
@@ -38,7 +41,6 @@
    },
    {
     "panel": "control-center",
-    "pull": "right-of-camera",
     "blocks": [
      {"block": "top-buttons"},
      {"block": "status-row"},

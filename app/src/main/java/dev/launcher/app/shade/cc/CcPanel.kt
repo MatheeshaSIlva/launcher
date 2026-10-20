@@ -25,6 +25,8 @@ interface CcPanel {
     fun presence(): Float
     /** Closing (0 not .. 1 closing, on a spring): everything folds back into the corner Control Center is pulled from. */
     val closingK: Float
+    /** That corner's x (px): the top right, or the top left where the layout's place pulls Control Center from the left. */
+    val cornerX: Float
     /** How far something centred at [cx], [cy] has left as the panel closes (0..1): the farther from the corner, the sooner. */
     fun leaving(cx: Float, cy: Float): Float
     val host: ControlCenterView.Host

@@ -29,18 +29,20 @@ class LayoutFile(val spec: LayoutSpec, val shade: ShadeStructure?) {
             val origin = o.str("origin")
             val description = o.str("description")
             o.optStr("src")   // where it came from: for people, read by nothing
-            val placements = o.objs("placements").map { p ->
-                Placement(p.str("id"), p.str("title"), p.str("description")).also { p.end() }
-            }
+            val placementObjs = o.objs("placements")
+            val placements = placementObjs.map { p -> Placement(p.str("id"), p.str("title"), p.str("description")) }
             if (placements.isEmpty()) o.fail("placements: none (the first is the default)")
             if (placements.map { it.id }.toSet().size != placements.size) o.fail("placements: an id repeats")
             val options = if (o.has("options")) o.objs("options").map { option(it) } else emptyList()
             if (options.map { it.key }.toSet().size != options.size) o.fail("options: a key repeats")
             val spec = LayoutSpec(element, id, title, origin, description, placements, options)
             val shade = when (element) {
-                Element.SHADE -> ShadeStructure.parse(o.obj("structure"), options)
+                // (Each place says where each panel is pulled from: its `pulls`, read with the structure.)
+                Element.SHADE -> ShadeStructure.parse(o.obj("structure"), options, placements.map { it.id }.zip(placementObjs))
                 else -> if (o.has("structure")) o.fail("structure: ${element.id} has no structure as data yet") else null
             }
+            // (Ended after the structure, which reads what is its in them.)
+            placementObjs.forEach { it.end() }
             o.end()
             return LayoutFile(spec, shade)
         }

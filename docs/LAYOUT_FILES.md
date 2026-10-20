@@ -27,7 +27,7 @@ of docs/SHADE_PIXEL_EVALUATION.md); the other elements' layouts are still writte
 | `id` | Lower case letters, digits and dashes; what the setup stores (`files/setup.json`). |
 | `title`, `origin`, `description` | The layout's name, the design it comes from, what it is in plain words (the settings show them). |
 | `src` | Where it came from (measurements, captures, AOSP): for people, read by nothing. |
-| `placements` | The places it can live, each `{"id", "title", "description"}`; the first is its default. |
+| `placements` | The places it can live, each `{"id", "title", "description"}`; the first is its default. A shade's place also says where each panel is pulled from (`pulls`, below). |
 | `options` | What the user can set, each `{"key", "kind", "title", "description", "default", ...}`: `count` (with `min`, `max`), `toggle`, `choice` (with `choices`: `[{"id", "title"}]`). The settings turn them into controls. |
 | `structure` | The element's structure, for elements whose structure is data (the shade, below). |
 
@@ -36,14 +36,28 @@ with the reason. Nothing passes as a default by accident.
 
 ## The shade
 
-`structure.panels`: the panels the shade has. Each is `{"panel", "pull", "blocks", "landscape"}`:
+`structure.panels`: the panels the shade has, one or two: Notification Center always (the notifications need a panel:
+banners open it, the lock screen shows it), Control Center or not; each kind once. Each is `{"panel", "blocks",
+"landscape"}`:
 
 | Key | Values | Read by |
 | --- | --- | --- |
 | `panel` | `notification-center` (iOS's sheet pulled down over the screen), `control-center` (the controls over the blurred screen) | |
-| `pull` | `left-of-camera`, `right-of-camera`: the part of the top edge a pull opens it from (the camera's place, or the middle where there is none) | `Shade.onTouch` |
 | `blocks` | What the panel is made of, in order (below) | |
 | `landscape` | Notification Center: `clock-beside-list` (iOS 27: the date and time small at the top left, the notifications in a column of the portrait width beside them; measurements in tokens `comp.nc.land.*`) or `as-portrait` (as upright, across the turned screen). Control Center: `flow` (the grid flowed across as many columns as fit) | `NotificationCenterView.land`, `ControlCenterView.syncTokens` |
+
+Where each panel is pulled from is the place's (the user chooses among the layout's places, as for every element):
+`placements[].pulls`, which panel each part of the top edge opens, each `{"from", "panel"}`. `from`: `top` (anywhere along
+it), `left-of-camera` or `right-of-camera` (the camera's place, or the middle where there is none); `panel`: one of the
+structure's. One panel is pulled from the top; two, one from each side of the camera, either way round. Read by
+`Shade.onTouch` (in the place chosen: `Setup.placement`), Control Center's fold (it folds back into the corner it is pulled
+from: `CcPanel.cornerX`) and the settings' stage (its finger from each part of the edge in the file's order, opening its
+panel: `settings/Stage.gestureOf`). iOS's one place:
+
+```json
+{"id": "split-top", "title": "...", "description": "...",
+ "pulls": [{"from": "left-of-camera", "panel": "notification-center"}, {"from": "right-of-camera", "panel": "control-center"}]}
+```
 
 Blocks, each `{"block": ID, ...its parameters}`:
 
@@ -60,7 +74,7 @@ Blocks, each `{"block": ID, ...its parameters}`:
 but only what today's panels can already do in more than one way is the file's to choose: how Notification Center opens
 (`opens`), how it lies in landscape (`landscape`), and where Control Center's column count comes from (`columns`). The rest
 is checked to be what the panels do and refused otherwise, with the reason "(so far)": one Notification Center pulled
-from the left of the camera and one Control Center from the right; Notification Center made of `lock-clock`,
+from the left of the camera and one Control Center from the right (until stage 4); Notification Center made of `lock-clock`,
 `notifications`, `corner-buttons`, Control Center of `top-buttons`, `status-row`, `control-grid`, in that order (a
 block may be left out where the stages below say so, never moved); the editor in place; Control Center's landscape
 `flow`. Later stages lift these one by one:
@@ -73,7 +87,11 @@ block may be left out where the stages below say so, never moved); the editor in
   (`shade/cc/TopButtonsBlock`, `StatusRowBlock`, `ControlGridBlock`) given what they need by the panel (`shade/cc/CcPanel`),
   which places them; which of them Control Center has is the file's: the controls always, the status row or not, "+"
   and power or not (only with the row).
-- Stage 4, panels and gestures: one panel or two, pulled from where, one stage or two (Pixel: the quick row first).
+- Stage 4, panels and gestures (done 2026-10-20): the shade knows its panels only as panels (`Shade.Panel`: each says
+  how it comes in with the finger and goes, what it shows on the way and what it leaves behind); which there are is the
+  file's (Notification Center, and Control Center or not), and where each is pulled from is each place's (`pulls`: the
+  whole edge for one panel, each side of the camera for two, either way round). One stage or two (Pixel's first pull
+  showing the quick row, the second the full Quick Settings) comes with Pixel's panel, the first to have two.
 - Then step 4: Pixel's shade as a second file (`pixel.json`), One UI's after it (their landscape in
   docs/PLAN_LAYOUTS_THEMES.md, D).
 
