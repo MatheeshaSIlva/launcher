@@ -35,6 +35,9 @@ object NcTokens {
     val FADE_TOP = NumberKey("comp.nc.fade.top")
     val FADE_BOTTOM = NumberKey("comp.nc.fade.bottom")
     val FADE_LENGTH = NumberKey("comp.nc.fade.length")
+    /** The list's top with no clock above it, and its bottom with no buttons below it (a layout without them). */
+    val LIST_TOP = NumberKey("comp.nc.list.top")
+    val LIST_BOTTOM = NumberKey("comp.nc.list.bottom")
 
     // A group's stack: the shelves under its front platter.
     val SHELF_HEIGHT = NumberKey("comp.nc.stack.shelf-height")
@@ -97,7 +100,7 @@ object NcTokens {
     val LAND_LIST_BOTTOM = NumberKey("comp.nc.land.list-bottom")
 
     val ALL = listOf(PLATTER, CORNER, SYMBOLS, PADDING, ICON, TEXT_X, TEXT_TOP, MIN_HEIGHT, TITLE, BODY, TIME, LABEL, TIME_COLOR, TIME_BLEND,
-        MARGIN, GAP, OVERLAY, FADE_TOP, FADE_BOTTOM, FADE_LENGTH, SHELF_HEIGHT, SHELF_SHOW, SHELF_INSET1, SHELF_INSET2, STACK_TEXT_TOP, STACK_MIN_HEIGHT,
+        MARGIN, GAP, OVERLAY, FADE_TOP, FADE_BOTTOM, FADE_LENGTH, LIST_TOP, LIST_BOTTOM, SHELF_HEIGHT, SHELF_SHOW, SHELF_INSET1, SHELF_INSET2, STACK_TEXT_TOP, STACK_MIN_HEIGHT,
         PEEK_SHOW, PEEK_HEIGHT, PEEK_INSET, MORE_INSET, PEEK_CORNER, PEEK_ICON, BUTTON, BUTTON_SIZE, BUTTON_INSET_X,
         BUTTON_BOTTOM, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR, BUTTON_SYMBOL_BLEND, BUTTON_ON, BUTTON_ON_SYMBOL, MEDIA_PLACEHOLDER, MEDIA_TRACK, HEADER_COLOR, TEXT_SHADOW, LOOK_CARD, LOOK_CORNER, LOOK_INSET, LOOK_LABEL,
         MENU_GAP, LOOK_DIM, LOOK_BLUR, LAND_CLOCK_X, LAND_CLOCK_TOP, LAND_CLOCK_HEIGHT, LAND_DATE_SIZE, LAND_DATE_GAP, LAND_LIST_TOP,

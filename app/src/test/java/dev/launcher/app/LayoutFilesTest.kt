@@ -85,7 +85,12 @@ class LayoutFilesTest {
         refused(ok.replace("\"opens\": \"stacked\"", "\"open\": \"stacked\""), "a misspelt parameter")
         refused(ok.replace("\"opens\": \"stacked\"", "\"opens\": \"sideways\""), "an unknown value")
         refused(ok.replace("{\"block\": \"lock-clock\"},", "{\"block\": \"weather\"},"), "an unknown block")
-        refused(ok.replace("{\"block\": \"lock-clock\"},", ""), "a block left out (not yet the file's to choose)")
+        refused(ok.replace("{\"block\": \"lock-clock\"},", ""), "the clock left out, landscape still beside it")
+        refused(ok.replace("{\"block\": \"notifications\", \"opens\": \"stacked\"},", ""), "Notification Center without its notifications")
+        refused(ok.replace("{\"block\": \"lock-clock\"},\n     {\"block\": \"notifications\", \"opens\": \"stacked\"},",
+            "{\"block\": \"notifications\", \"opens\": \"stacked\"},\n     {\"block\": \"lock-clock\"},"), "blocks out of their order")
+        refused(ok.replace("{\"block\": \"corner-buttons\"}", "{\"block\": \"corner-buttons\"}, {\"block\": \"corner-buttons\"}"), "a block twice")
+        refused(ok.replace("{\"block\": \"status-row\"},", ""), "Control Center without its status row (not yet the file's to choose)")
         refused(ok.replace("\"pull\": \"left-of-camera\"", "\"pull\": \"right-of-camera\""), "both panels pulled from one side")
         refused(ok.replace("{\"option\": \"cc-columns\"}", "{\"option\": \"rows\"}"), "a count bound to no option")
         refused(ok.replace("{\"option\": \"cc-columns\"}", "4.5"), "a count that is not whole")
@@ -94,6 +99,18 @@ class LayoutFilesTest {
         refused(ok.replace("\"default\": 4", "\"default\": 9"), "a default out of its range")
         refused(ok.replace("\"kind\": \"count\"", "\"kind\": \"slider\""), "an option of no kind")
         refused(ok.replace("\"element\": \"shade\"", "\"element\": \"drawer\""), "a structure for an element that has none as data")
+    }
+
+    /** Notification Center's clock and buttons are the file's to leave out; the list takes their room. */
+    @Test fun notificationCenterWithoutItsClockOrButtons() {
+        val bare = LayoutFile.parse(iosShade
+            .replace("{\"block\": \"lock-clock\"},", "")
+            .replace(",\n     {\"block\": \"corner-buttons\"}", "")
+            .replace("\"landscape\": \"clock-beside-list\"", "\"landscape\": \"as-portrait\"")).shade!!
+        assertTrue(!bare.ncHasClock && !bare.ncHasButtons)
+        assertEquals(listOf("notifications"), bare.notificationCenter.blocks.map { it.id })
+        val ios = LayoutFile.parse(iosShade).shade!!
+        assertTrue(ios.ncHasClock && ios.ncHasButtons)
     }
 
     @Test fun yourOwnFileWinsIfItIsValid() {

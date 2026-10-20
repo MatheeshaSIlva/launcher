@@ -131,14 +131,25 @@ class NotificationListBlock(
     /** The area the list rests in (its top and bottom on the sheet). */
     private var areaTop = 0f
     private var areaBottom = 0f
+    /**
+     * Scrolled up, it passes over the clock above it and fades only under the status bar (iOS 27 upright); else it fades
+     * as it leaves its area's top. And it fades out over the buttons below it, else the screen's edge cuts it.
+     */
+    private var overClock = true
+    private var overButtons = true
     /** It opens with the notifications gathered in one stack (iOS 27), else as the list (the layout file's `opens`). */
     var opensStacked = true
 
-    /** Where it lies: [turned] or not, in the area from [top] to [bottom]; its sizes follow. */
-    fun place(turned: Boolean, top: Float, bottom: Float) {
+    /**
+     * Where it lies: [turned] or not, in the area from [top] to [bottom]; [overClock], [overButtons]: a clock above it that
+     * it scrolls over, buttons below it that it fades out over. Its sizes follow.
+     */
+    fun place(turned: Boolean, top: Float, bottom: Float, overClock: Boolean, overButtons: Boolean) {
         this.turned = turned
         areaTop = top
         areaBottom = bottom
+        this.overClock = overClock
+        this.overButtons = overButtons
         syncTokens()
     }
 
@@ -636,10 +647,9 @@ class NotificationListBlock(
      */
     private fun topFade(y: Float, h: Float): Float {
         val len = Design.pt(NcTokens.FADE_LENGTH, u)
-        if (turned) return ((y - areaTop + len) / len).coerceIn(0f, 1f)
         val mid = y + h / 2f
-        val top = ((mid - Design.pt(NcTokens.FADE_TOP, u)) / len).coerceIn(0f, 1f)
-        val bottom = ((height - Design.pt(NcTokens.FADE_BOTTOM, u) - mid) / len).coerceIn(0f, 1f)
+        val top = if (overClock) ((mid - Design.pt(NcTokens.FADE_TOP, u)) / len).coerceIn(0f, 1f) else ((y - areaTop + len) / len).coerceIn(0f, 1f)
+        val bottom = if (overButtons) ((height - Design.pt(NcTokens.FADE_BOTTOM, u) - mid) / len).coerceIn(0f, 1f) else 1f
         return min(top, bottom)
     }
 

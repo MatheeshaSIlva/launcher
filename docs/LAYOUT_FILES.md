@@ -49,9 +49,9 @@ Blocks, each `{"block": ID, ...its parameters}`:
 
 | Block | Parameters | What it is |
 | --- | --- | --- |
-| `lock-clock` | | The date and the glass clock (iOS's lock screen). |
-| `notifications` | `opens`: `stacked` (iOS 27: gathered in one stack at the bottom, the newest in front, the next peeking out, "+N" under it; a tap fans them out) or `list` (every app's group in its place). Read by `NotificationCenterView.prepare`. | The notifications, grouped by app. |
-| `corner-buttons` | | The flashlight and the camera in the bottom corners (touch and hold). |
+| `lock-clock` | | The date and the glass clock (iOS's lock screen). Optional: without it the list starts under the status bar (`comp.nc.list.top`) and fades as it leaves its area's top. Required by `landscape: clock-beside-list`. |
+| `notifications` | `opens`: `stacked` (iOS 27: gathered in one stack at the bottom, the newest in front, the next peeking out, "+N" under it; a tap fans them out) or `list` (every app's group in its place). | The notifications, grouped by app (`shade/nc/NotificationListBlock`). Required. |
+| `corner-buttons` | | The flashlight and the camera in the bottom corners (touch and hold; upright only). Optional: without them the list goes down to `comp.nc.list.bottom` and the screen's edge cuts it. |
 | `status-row` | | The status bar's row along the top, its icons gliding in from the bar. |
 | `control-grid` | `columns`: a whole number, or `{"option": KEY}` naming one of the file's `count` options (the user's value). `editor`: `in-place`. Read by `ControlCenterView.syncTokens` (at most what fits, at least 4). | The controls on a grid, edited in place. |
 
@@ -63,8 +63,10 @@ from the left of the camera and one Control Center from the right; Notification 
 `notifications`, `corner-buttons`, Control Center of `status-row`, `control-grid`, in that order; the editor in place;
 Control Center's landscape `flow`. Later stages lift these one by one:
 
-- Stage 2, Notification Center as blocks: the clock, the list and the corner buttons drawn by blocks the panel arranges
-  as the file says (which, in what order, where; the landscape arrangement as the blocks' places).
+- Stage 2, Notification Center as blocks (done 2026-10-20): the clock, the list and the corner buttons are blocks
+  (`shade/nc/LockClockBlock`, `NotificationListBlock`, `CornerButtonsBlock`) given what they need by the panel
+  (`shade/nc/NcPanel`), which places them; which of them Notification Center has is the file's: the notifications always,
+  the clock and the buttons or not (in their order: clock, notifications, buttons), the list taking the room either leaves.
 - Stage 3, Control Center as blocks: the status row, the grid, its modules and sliders, the editor.
 - Stage 4, panels and gestures: one panel or two, pulled from where, one stage or two (Pixel: the quick row first).
 - Then step 4: Pixel's shade as a second file (`pixel.json`), One UI's after it (their landscape in

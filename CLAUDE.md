@@ -261,7 +261,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Glass/blur**: three layers — own snapshot blur (baseline, all phones) → standard cross-window blur where the system enables it
   → Samsung dim-behind blur upgrade.
 - **Shade (iOS 27 profile)**: `statusbar/` (the bar: springs for every slot, notification icons) and `shade/`: one full-screen
-  overlay window (`Shade`) holding the bar, Notification Center (`NotificationCenterView`; in landscape iOS 27's own
+  overlay window (`Shade`) holding the bar, Notification Center (`NotificationCenterView`: the sheet, the wallpaper and the
+  arrangement of its blocks, `shade/nc/`: `LockClockBlock`, `NotificationListBlock`, `CornerButtonsBlock`; in landscape iOS 27's own
   layout, `comp.nc.land.*`: every layout handles its own landscape as its original does, Pixel's and One UI's specs in
   `docs/PLAN_LAYOUTS_THEMES.md` D), Control Center
   (`ControlCenterView`, `CcLayout`, `CcGallery`, `Controls`; apps' Quick Settings tiles as controls: `AppTiles`, run by SystemUI

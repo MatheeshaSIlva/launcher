@@ -2470,6 +2470,10 @@
    "pt": 59.7,
    "src": "measured:iOS 27 Simulator run 21, landscape (the first platter of a long list at y 59.7)"
   },
+  "comp.nc.list.bottom": {
+   "pt": 50,
+   "src": "judged:a layout with no flashlight or camera: the list down to where their bottom edge is, clear of the home indicator"
+  },
   "comp.nc.list.gap": {
    "ref": "component.notification.gap",
    "src": "judged:the shared component style (component.notification.gap)"
@@ -2477,6 +2481,10 @@
   "comp.nc.list.margin": {
    "pt": 14,
    "src": "kit:135:73247"
+  },
+  "comp.nc.list.top": {
+   "pt": 59.7,
+   "src": "judged:a layout with no clock: the list from under the status bar, as iOS 27's turned list (measured: 59.7)"
   },
   "comp.nc.look.blur": {
    "pt": 25,

@@ -122,14 +122,18 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     private val land get() = width > height && besideInLandscape
     /** In landscape the clock beside the list (iOS 27), else as upright (the layout file's `landscape`). */
     private var besideInLandscape = true
+    /** The date and the clock, the flashlight and the camera: there, or not (the layout file's blocks). */
+    private var hasClock = true
+    private var hasButtons = true
 
     /** Takes up the layout's structure ([ShadeStructure]); true if how the panel lies changed (it is laid out again then). */
     private fun readStructure(): Boolean {
         val s = dev.launcher.app.layout.ShadeStructure.current()
         list.opensStacked = s.opens == dev.launcher.app.layout.ShadeStructure.Opens.STACKED
-        val beside = s.ncClockBesideList
-        val changed = beside != besideInLandscape
-        besideInLandscape = beside
+        val changed = s.ncClockBesideList != besideInLandscape || s.ncHasClock != hasClock || s.ncHasButtons != hasButtons
+        besideInLandscape = s.ncClockBesideList
+        hasClock = s.ncHasClock
+        hasButtons = s.ncHasButtons
         return changed
     }
 
@@ -164,12 +168,17 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     /**
      * Where each block lies (iOS 27): upright, the clock across the top, the list between it and the buttons (gathered at
      * its bottom), the buttons in the bottom corners; turned, the clock at the top left and the list in a column beside it,
-     * no buttons. Taken up again when a token changes.
+     * no buttons. A block the layout leaves out leaves its room to the list (`comp.nc.list.top`, `.bottom`). Taken up
+     * again when a token changes.
      */
     private fun syncTokens() {
         clock.place(atTopLeft = land)
-        if (land) list.place(turned = true, Design.pt(NcTokens.LAND_LIST_TOP, u), height - Design.pt(NcTokens.LAND_LIST_BOTTOM, u))
-        else list.place(turned = false, 232f * u, buttons.top() - LIST_ABOVE_BUTTONS_PT * u)
+        if (land) list.place(turned = true, Design.pt(NcTokens.LAND_LIST_TOP, u), height - Design.pt(NcTokens.LAND_LIST_BOTTOM, u),
+            overClock = false, overButtons = false)
+        else list.place(turned = false,
+            if (hasClock) 232f * u else Design.pt(NcTokens.LIST_TOP, u),
+            if (hasButtons) buttons.top() - LIST_ABOVE_BUTTONS_PT * u else height - Design.pt(NcTokens.LIST_BOTTOM, u),
+            overClock = hasClock, overButtons = hasButtons)
     }
 
     /** A token changed (the token editor): everything is laid out and drawn again; sizes move there on their springs. */
@@ -219,7 +228,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         wallpaper = Wallpaper.current
         warmFrost()
         list.prepare()
-        clock.refresh()
+        if (hasClock) clock.refresh()
         startTicking()
         // The wallpaper and the clock are drawn from layers kept between frames: made anew for this opening (a reopen once
         // showed the last session's dimmed wallpaper and faded clock over the new, collapsed list).
@@ -273,7 +282,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
 
     private val tick = object : Runnable {
         override fun run() {
-            clock.refresh()
+            if (hasClock) clock.refresh()
             invalidate()   // "now" becomes "1m ago"
             hnd().postDelayed(this, 15_000)
         }
@@ -348,10 +357,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         }
         // The clock stays where it is: a long list scrolls up over it (iOS's lock screen) while it fades, so the date and the
         // numerals never show through the notifications passing over them.
-        clock.draw(c, if (land) 1f else (1f - list.scrolled / (CLOCK_FADE_PT * u)).coerceIn(0f, 1f))
+        if (hasClock) clock.draw(c, if (land) 1f else (1f - list.scrolled / (CLOCK_FADE_PT * u)).coerceIn(0f, 1f))
         c.save()
         list.draw(c, sy)
-        if (!land) buttons.draw(c)
+        if (!land && hasButtons) buttons.draw(c)
         c.restore()
         if (c !== canvas) {
             sheetNode.endRecording()
@@ -374,7 +383,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
             frosts.clear()
             warmFrost()
             // The numerals on screen stay until the new wallpaper's are made (they cross-fade then).
-            clock.refresh()
+            if (hasClock) clock.refresh()
         }
     }
 
@@ -507,7 +516,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
             buttons.cancel()
             downX = e.x; downY = e.y
             // Flashlight and camera: touch and hold (upright only); a long look open takes every touch.
-            onButtons = !list.lookOpen && !land && buttons.down(e.x, e.y - sheetY())
+            onButtons = hasButtons && !list.lookOpen && !land && buttons.down(e.x, e.y - sheetY())
         }
         if (!onButtons) return list.touch(e)
         when (e.actionMasked) {

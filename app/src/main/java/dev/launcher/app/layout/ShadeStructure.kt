@@ -4,12 +4,13 @@ package dev.launcher.app.layout
  * The shade's structure as its layout file gives it (docs/LAYOUT_FILES.md, "The shade"): its panels, where on the top
  * edge each is pulled from, the blocks each is made of and how each block is set.
  *
- * Step 3 of docs/SHADE_PIXEL_EVALUATION.md, stage 1: the file speaks the whole vocabulary, and the shade reads what today's
- * panels can already do in more than one way: how Notification Center opens (stacked, or as the list), how it lies in
+ * Step 3 of docs/SHADE_PIXEL_EVALUATION.md. Stage 1: the file speaks the whole vocabulary, and the shade reads what its
+ * panels could already do in more than one way: how Notification Center opens (stacked, or as the list), how it lies in
  * landscape (the clock beside the list, or as it stands upright), and where Control Center's column count comes from (an
- * option of the layout's, or a number). The rest is checked to be what the panels do today and refused otherwise (each
- * panel's blocks and their order, where each is pulled from, Control Center's editor and its landscape), until the next
- * stages make the panels out of blocks and those become the file's to choose.
+ * option of the layout's, or a number). Stage 2: Notification Center is made of blocks, and which it has is the file's
+ * (the notifications always; the clock and the corner buttons or not, the list taking the room either leaves). The rest
+ * is checked to be what the panels do today and refused otherwise (Control Center's blocks, where each panel is pulled
+ * from, Control Center's editor and its landscape), until the next stages make those the file's to choose.
  */
 class ShadeStructure(val panels: List<Panel>) {
 
@@ -68,6 +69,9 @@ class ShadeStructure(val panels: List<Panel>) {
     val opens: Opens get() = notificationCenter.block<Block.Notifications>()!!.opens
     /** Notification Center in landscape: the clock beside the list (else as upright). */
     val ncClockBesideList: Boolean get() = notificationCenter.landscape == NcLandscape.CLOCK_BESIDE_LIST.id
+    /** Notification Center shows the date and the clock, and the flashlight and the camera. */
+    val ncHasClock: Boolean get() = notificationCenter.block<Block.LockClock>() != null
+    val ncHasButtons: Boolean get() = notificationCenter.block<Block.CornerButtons>() != null
     val controlGrid: Block.ControlGrid get() = controlCenter.block<Block.ControlGrid>()!!
 
     /** The panel a pull from [side] of the top edge opens. */
@@ -79,9 +83,14 @@ class ShadeStructure(val panels: List<Panel>) {
             Layouts.shadeOf(Setup.of(Element.SHADE).layout) ?: Layouts.shadeOf(Layouts.default(Element.SHADE).id)
                 ?: error("no shade layout loaded (Layouts.init)")
 
-        /** What each panel is made of today, in order (stage 1: the only arrangement the panels draw). */
-        private val TODAY = mapOf(
+        /** The blocks each panel can be made of, in the order they lie (top to bottom). */
+        private val BLOCKS = mapOf(
             Kind.NOTIFICATION_CENTER to listOf("lock-clock", "notifications", "corner-buttons"),
+            Kind.CONTROL_CENTER to listOf("status-row", "control-grid"),
+        )
+        /** The blocks a panel cannot be without (Control Center: all of them, so far). */
+        private val REQUIRED = mapOf(
+            Kind.NOTIFICATION_CENTER to listOf("notifications"),
             Kind.CONTROL_CENTER to listOf("status-row", "control-grid"),
         )
         /** Where each panel is pulled from today (stage 1). */
@@ -108,10 +117,14 @@ class ShadeStructure(val panels: List<Panel>) {
             val pull = Pull.entries.firstOrNull { it.id == pullId } ?: p.fail("pull: '$pullId' (${Pull.entries.joinToString { it.id }})")
             if (pull != PULLED[kind]) p.fail("pull: ${kind.id} is pulled from ${PULLED[kind]!!.id} (so far)")
             val blocks = p.objs("blocks").map { b -> block(b, kind, options) }
-            val want = TODAY.getValue(kind)
-            if (blocks.map { it.id } != want) p.fail("blocks: ${kind.id} is made of ${want.joinToString()}, in that order (so far)")
+            val ids = blocks.map { it.id }
+            val order = BLOCKS.getValue(kind)
+            if (ids.toSet().size != ids.size) p.fail("blocks: one repeats")
+            if (ids != order.filter { it in ids }) p.fail("blocks: in the order ${order.joinToString()}")
+            REQUIRED.getValue(kind).firstOrNull { it !in ids }?.let { p.fail("blocks: ${kind.id} needs $it${if (kind == Kind.CONTROL_CENTER) " (so far)" else ""}") }
             val landscape = p.str("landscape")
             if (landscape !in LANDSCAPE.getValue(kind)) p.fail("landscape: '$landscape' (${LANDSCAPE.getValue(kind).joinToString()})")
+            if (landscape == NcLandscape.CLOCK_BESIDE_LIST.id && "lock-clock" !in ids) p.fail("landscape: clock-beside-list needs the lock-clock block")
             p.end()
             return Panel(kind, pull, blocks, landscape)
         }
@@ -130,9 +143,9 @@ class ShadeStructure(val panels: List<Panel>) {
                     if (editor != "in-place") b.fail("editor: '$editor' (in-place, so far)")
                     Block.ControlGrid(count(b, "columns", options), editor)
                 }
-                else -> b.fail("block: '$id' (${TODAY.values.flatten().joinToString()})")
+                else -> b.fail("block: '$id' (${BLOCKS.values.flatten().joinToString()})")
             }
-            if (out.id !in TODAY.getValue(kind)) b.fail("block: ${out.id} is not part of ${kind.id} (so far)")
+            if (out.id !in BLOCKS.getValue(kind)) b.fail("block: ${out.id} is not part of ${kind.id} (so far)")
             b.end()
             return out
         }

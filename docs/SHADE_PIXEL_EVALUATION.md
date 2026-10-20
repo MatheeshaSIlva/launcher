@@ -321,8 +321,27 @@ smaller Display size made room) and went when removed; the settings' page shows 
 tests of the file and its reader (`LayoutFilesTest`: what ships loads, the iOS file is what the code declared and today's
 shade, 17 kinds of mistake refused, your own copy winning only when valid).
 
-Next, stage 2: Notification Center as blocks (the clock, the list and the corner buttons drawn by blocks the panel
-arranges as the file says).
+**Stage 2, Notification Center as blocks: done (2026-10-20)**, in three steps, each checked on the emulator against the
+one before and pushed on its own:
+- 2a (4e3a0d3): the clock and the corner buttons are blocks (`shade/nc/LockClockBlock`, `CornerButtonsBlock`), given the
+  panel's view, size, point, progress, wallpaper and glass renderer through `shade/nc/NcPanel`. The same pictures upright
+  and turned (the buttons' band and the list's identical to the pixel), a tap on the camera does nothing and a hold opens
+  it, the clock turns to the next minute with the panel open.
+- 2b (fdc0918): the list is a block (`shade/nc/NotificationListBlock`: grouping, the collapsed stack, swipes and Clear,
+  headers, the player, the long look, scrolling, its touches, the overlay it lays over the wallpaper), moved as it was;
+  the panel keeps the sheet, the wallpaper and its blurs, the glass renderer and the arrangement, and gives a touch to the
+  buttons if it starts on one, else to the list (`NotificationCenterView` went from 2025 lines to 527). Checked: the
+  pictures, the stack fanned out by a tap, a swipe revealing Options and Clear and put back, a long look opened and
+  closed, Clear All on a stack, a drag on the empty sheet closing the panel; turned: a long list fanned out, scrolled and
+  swiped in its column.
+- 2c: which blocks Notification Center has is the file's: the notifications always, the clock and the buttons or not, in
+  their order; the list takes the room either leaves (`comp.nc.list.top`: under the bar; `comp.nc.list.bottom`: where the
+  buttons' bottom edge is) and fades only where it has a neighbour to fade over (over the clock under the bar, over the
+  buttons), else at its area's top and at the screen's edge. `clock-beside-list` needs the clock. Checked: the shipped
+  file as before; copies of your own without the clock and the buttons (the stack resting at the bottom of the taller
+  area) and without the buttons (lower, under the clock).
+
+Next, stage 3: Control Center as blocks (the status row, the grid, its modules and sliders, the editor).
 
 ## References
 

@@ -820,6 +820,8 @@ SEED = {
     'comp.nc.fade.top': {'pt': 50, 'src': 'judged:where a scrolled notification has faded out (to be replaced by the kit\'s scroll edge)'},
     'comp.nc.fade.bottom': {'pt': 108, 'src': 'judged:gone by the top of the flashlight and camera buttons (bottom 50 + 58 pt): nothing shows under them'},
     'comp.nc.fade.length': {'pt': 70, 'src': 'judged:over how far it fades'},
+    'comp.nc.list.top': {'pt': 59.7, 'src': "judged:a layout with no clock: the list from under the status bar, as iOS 27's turned list (measured: 59.7)"},
+    'comp.nc.list.bottom': {'pt': 50, 'src': "judged:a layout with no flashlight or camera: the list down to where their bottom edge is, clear of the home indicator"},
     # Landscape (an iPhone 18 Pro turned, 874 x 402 pt; docs/IOS27_KIT.md "Notification Center in landscape").
     'comp.nc.land.clock-x': {'pt': 75, 'src': "measured:iOS 27 Simulator run 21, landscape (the date's label at x 75, the numerals' ink from 74)"},
     'comp.nc.land.clock-top': {'pt': 88, 'src': "measured:iOS 27 Simulator run 21, landscape (the numerals' ink from y 88)"},
