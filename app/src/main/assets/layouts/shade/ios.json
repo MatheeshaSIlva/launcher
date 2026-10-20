@@ -1,0 +1,50 @@
+{
+ "format": 1,
+ "element": "shade",
+ "id": "ios",
+ "title": "iOS",
+ "origin": "iOS 27",
+ "description": "Notification Center and Control Center as two panels.",
+ "src": "iOS 27, measured in the Simulator and Apple's UI kit: docs/IOS27_KIT.md, docs/IOS27_EVALUATION.md",
+ "placements": [
+  {
+   "id": "split-top",
+   "title": "Pull from the top: notifications on the left, controls on the right",
+   "description": "Pull down from the top edge left of the camera for notifications, right of it for the controls."
+  }
+ ],
+ "options": [
+  {
+   "key": "cc-columns",
+   "kind": "count",
+   "title": "Control columns",
+   "description": "Controls across Control Center.",
+   "default": 4,
+   "min": 4,
+   "max": 6
+  }
+ ],
+ "structure": {
+  "panels": [
+   {
+    "panel": "notification-center",
+    "pull": "left-of-camera",
+    "blocks": [
+     {"block": "lock-clock"},
+     {"block": "notifications", "opens": "stacked"},
+     {"block": "corner-buttons"}
+    ],
+    "landscape": "clock-beside-list"
+   },
+   {
+    "panel": "control-center",
+    "pull": "right-of-camera",
+    "blocks": [
+     {"block": "status-row"},
+     {"block": "control-grid", "columns": {"option": "cc-columns"}, "editor": "in-place"}
+    ],
+    "landscape": "flow"
+   }
+  ]
+ }
+}

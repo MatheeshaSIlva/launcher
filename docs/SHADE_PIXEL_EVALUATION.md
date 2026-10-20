@@ -298,6 +298,32 @@ bar themes as well": the symbol set below is built as icon sets any element can 
 - **What Pixel animates, we crossfade**: its icons morph between off and on (animated vectors); ours fade one into the other
   on the toggle's curve. The morphs are motion's (step 4).
 
+## Step 3: the shade as blocks (started 2026-10-20)
+
+Matheesha: "continue" (to the proposal: four stages, each changing nothing on screen, checked against the build before it).
+
+**Stage 1, the layout file and its loader: done (2026-10-20).** The shade's layout is a file now:
+`assets/layouts/shade/ios.json` (format and every key: docs/LAYOUT_FILES.md), read strictly by `layout/LayoutFile` (a typo
+or an unknown value refuses the file with its reason) into `layout/ShadeStructure`, at app start before the setup
+(`Layouts.init`; log "[layouts] files: shade/ios"). What the code declared before (`Layouts.IOS_SHADE`: id, name, place,
+the columns option) moved into the file, unchanged. The file names the panels, where each is pulled from and the blocks
+each is made of; the shade reads what its panels already did in more than one way: how Notification Center opens
+(`opens`: stacked or list), how it lies in landscape (`clock-beside-list` or `as-portrait`), where Control Center's column
+count comes from (an option or a number), and which panel each side of the camera opens. The rest is checked to be today's
+and refused otherwise ("so far"). A copy of your own through the inbox wins (`files/layouts/shade/ios.json`; one that
+does not load is refused, the shipped one used), reloaded at once.
+
+Checked on the emulator: the shipped file against the build before it, Notification Center and Control Center at rest,
+upright and turned, the same pictures but for what the time changes (the clock, "2m ago", home's clock widget under
+Control Center's glass); a copy of your own (opens as the list, upright in landscape, 5 columns fixed) took effect at the
+next opening (Notification Center as the list; turned, the old stretched layout; Control Center 5 columns wide once a
+smaller Display size made room) and went when removed; the settings' page shows "Control columns" from the file. Unit
+tests of the file and its reader (`LayoutFilesTest`: what ships loads, the iOS file is what the code declared and today's
+shade, 17 kinds of mistake refused, your own copy winning only when valid).
+
+Next, stage 2: Notification Center as blocks (the clock, the list and the corner buttons drawn by blocks the panel
+arranges as the file says).
+
 ## References
 
 - Captures (emulator, Android 17 SystemUI, 1080 x 2400, 420 dpi): `tools/shots/shade_qqs.png` (first pull),

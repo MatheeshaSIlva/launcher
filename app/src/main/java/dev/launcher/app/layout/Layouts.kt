@@ -81,23 +81,14 @@ class LayoutSpec(
 
 /**
  * Every layout there is, per element (the first of an element is its default). For now today's iOS 27 elements, one
- * each; the element rounds of the plan (D1-D6) add the others.
+ * each; the element rounds of the plan (D1-D6) add the others. Some are written here; the shade's are layout files
+ * ([LayoutFile], `assets/layouts/<element>/<id>.json`), read by [init] at app start, before the setup.
  */
 object Layouts {
     val IOS_STATUS_BAR = LayoutSpec(
         Element.STATUS_BAR, "ios", "iOS", "iOS 27",
         "The time on the left of the camera; signal, Wi-Fi and the battery on the right.",
         listOf(Placement("top", "Along the top", "Across the top of the screen, everywhere.")),
-    )
-
-    val IOS_SHADE = LayoutSpec(
-        Element.SHADE, "ios", "iOS", "iOS 27",
-        "Notification Center and Control Center as two panels.",
-        listOf(Placement("split-top", "Pull from the top: notifications on the left, controls on the right",
-            "Pull down from the top edge left of the camera for notifications, right of it for the controls.")),
-        options = listOf(
-            Option.Count("cc-columns", "Control columns", "Controls across Control Center.", 4, 4, 6),
-        ),
     )
 
     val IOS_DECK = LayoutSpec(
@@ -142,9 +133,79 @@ object Layouts {
         listOf(Placement("app", "An app", "Opened from the drawer, home's edit menu and a Control Center control.")),
     )
 
-    val ALL: List<LayoutSpec> = listOf(IOS_STATUS_BAR, IOS_SHADE, IOS_DECK, APP_LIBRARY, IOS_HOME, STUDIO)
+    /** The layouts written here. */
+    private val WRITTEN = listOf(IOS_STATUS_BAR, IOS_DECK, APP_LIBRARY, IOS_HOME, STUDIO)
+
+    /** The layout files that ship, in the order they are offered (an element's first is its default). */
+    private val SHIPPED = listOf(Element.SHADE to "ios")
+
+    /** The layout files read (see [load]). */
+    @Volatile private var files: List<LayoutFile> = emptyList()
+    private var source: Source? = null
+
+    /** Every layout: per element (in [Element]'s order), those written here, then its files. */
+    val ALL: List<LayoutSpec>
+        get() {
+            val f = files
+            return Element.entries.flatMap { e -> WRITTEN.filter { it.element == e } + f.filter { it.spec.element == e }.map { it.spec } }
+        }
 
     fun of(e: Element): List<LayoutSpec> = ALL.filter { it.element == e }
     fun find(e: Element, id: String?): LayoutSpec? = ALL.firstOrNull { it.element == e && it.id == id }
-    fun default(e: Element): LayoutSpec = of(e).first()
+    fun default(e: Element): LayoutSpec = of(e).firstOrNull() ?: error("no layout for ${e.id} (its files not loaded: Layouts.init)")
+
+    /** The shade's structure of layout [id] (null: no such shade layout). */
+    fun shadeOf(id: String?): ShadeStructure? = files.firstOrNull { it.spec.element == Element.SHADE && it.spec.id == id }?.shade
+
+    /** Where layout files are read from: the app's own (shipped), and the user's (which win, file by file). */
+    interface Source {
+        /** The shipped file at [path] (e.g. "layouts/shade/ios.json"), or null. */
+        fun shipped(path: String): String?
+        /** The user's file at [path] (the app's files folder: pushed through the inbox), or null. */
+        fun own(path: String): String?
+    }
+
+    /** Reads the layout files from the app's assets and files, at app start: before [Setup] (which checks choices against them). */
+    fun init(ctx: android.content.Context) {
+        val c = ctx.applicationContext
+        load(object : Source {
+            override fun shipped(path: String): String? =
+                try { c.assets.open(path).bufferedReader().use { it.readText() } } catch (_: java.io.FileNotFoundException) { null }
+            override fun own(path: String): String? = java.io.File(c.filesDir, path).takeIf { it.isFile }?.readText()
+        })
+    }
+
+    /** Reads the layout files again (the inbox changed them): a panel takes the new structure the next time it opens. */
+    fun reload() { source?.let { load(it) } }
+
+    /**
+     * Reads every shipped layout file through [src], each replaced by the user's file of the same path if that one is
+     * valid (one that is not is logged and left aside). A shipped file that does not load is a broken build: it throws
+     * (the unit tests load every one).
+     */
+    fun load(src: Source) {
+        source = src
+        val out = ArrayList<LayoutFile>()
+        for ((e, id) in SHIPPED) {
+            val path = "layouts/${e.id}/$id.json"
+            val shipped = src.shipped(path) ?: error("$path: not shipped")
+            val file = try { LayoutFile.parse(shipped) } catch (t: LayoutFileError) { throw IllegalStateException("$path: ${t.message}", t) }
+            check(file.spec.element == e && file.spec.id == id) { "$path: describes ${file.spec.element.id}/${file.spec.id}" }
+            val own = try { src.own(path) } catch (t: Throwable) { log("[layouts] $path of your own not read: ${t.message}"); null }
+            out += if (own == null) file else try {
+                LayoutFile.parse(own).also {
+                    check(it.spec.element == e && it.spec.id == id) { "it describes ${it.spec.element.id}/${it.spec.id}" }
+                    log("[layouts] $path: your own")
+                }
+            } catch (t: Throwable) {
+                log("[layouts] $path of your own refused (${t.message}): the shipped one is used")
+                file
+            }
+        }
+        files = out
+        log("[layouts] files: ${out.joinToString { "${it.spec.element.id}/${it.spec.id}" }}")
+    }
+
+    // (AppLog writes through android.util.Log: not in the unit tests, which load files without Android.)
+    private fun log(s: String) = try { dev.launcher.app.AppLog.log(s) } catch (_: Throwable) { }
 }

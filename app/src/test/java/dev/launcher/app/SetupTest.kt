@@ -11,6 +11,8 @@ import org.junit.Test
 
 /** The layout registry and the user's setup (docs/PLAN_LAYOUTS_THEMES.md, phase B1). */
 class SetupTest {
+    init { TestLayouts.load() }
+
     @Test fun everyElementHasAValidDefaultLayout() {
         for (e in Element.entries) {
             val l = Layouts.default(e)

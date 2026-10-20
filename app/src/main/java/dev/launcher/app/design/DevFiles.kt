@@ -8,9 +8,10 @@ import java.io.File
  * The app's own files in and out over adb, for a build that is not debuggable (no run-as): through the app's external
  * folder, which adb can read and write (`/sdcard/Android/data/dev.launcher.app/files/`). Asked by DESIGN_RELOAD (its
  * senders must hold DUMP: adb's shell does, other apps cannot):
- *   --es files import              files/dev-in/<path> copied over files/<path> (then taken out of dev-in), design reloaded
- *   --es files export              the design files, themes, presets and layout choices copied to files/dev-out/ (adb pull)
- *   --es files remove --es path P  files/P deleted, design reloaded
+ *   --es files import              files/dev-in/<path> copied over files/<path> (then taken out of dev-in), design and
+ *                                  layout files reloaded
+ *   --es files export              the design files, themes, presets, layout files and choices copied to files/dev-out/
+ *   --es files remove --es path P  files/P deleted, design and layout files reloaded
  * Each writes what it did to the log; export ends with dev-out/.done (its file count), so a script knows it is complete.
  */
 object DevFiles {
@@ -18,7 +19,7 @@ object DevFiles {
     private const val OUT = "dev-out"
 
     /** What export copies (each a file or a folder under the app's files). */
-    private val EXPORTED = listOf("design", "themes", "motion", "icons", "setup.json", "home_layout.json")
+    private val EXPORTED = listOf("design", "themes", "motion", "icons", "layouts", "setup.json", "home_layout.json")
 
     fun run(ctx: Context, what: String, path: String?, reload: () -> Unit) {
         val ext = ctx.getExternalFilesDir(null) ?: run { AppLog.log("[dev] no external folder for files"); return }
@@ -38,6 +39,7 @@ object DevFiles {
                         n++
                     }
                     AppLog.log("[dev] imported $n file(s) from $IN")
+                    dev.launcher.app.layout.Layouts.reload()
                     reload()
                 }
                 "export" -> {
@@ -60,6 +62,7 @@ object DevFiles {
                     val f = File(root, path ?: "")
                     if (path.isNullOrBlank() || !inside(f)) { AppLog.log("[dev] remove: no path inside the app's files"); return }
                     AppLog.log("[dev] removed $path: ${f.delete()}")
+                    dev.launcher.app.layout.Layouts.reload()
                     reload()
                 }
                 else -> AppLog.log("[dev] files: import, export or remove, not '$what'")

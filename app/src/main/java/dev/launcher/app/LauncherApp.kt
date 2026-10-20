@@ -16,7 +16,9 @@ class LauncherApp : Application() {
         // The theme before the appearance: the appearance's palette is the theme's.
         dev.launcher.app.design.Design.init(this)
         resources.configuration.let { dev.launcher.app.design.Design.onScale(it.densityDpi, it.fontScale) }
-        // The user's arrangement (which layout each element uses, where it lives): before home or gesture nav read it.
+        // The layouts there are (some are files), then the user's arrangement (which layout each element uses, where it
+        // lives), checked against them: before home or gesture nav read it.
+        dev.launcher.app.layout.Layouts.init(this)
         dev.launcher.app.layout.Setup.init(this)
         dev.launcher.app.theme.Appearance.init(this)
         // Dark mode switched anywhere (also while an app is in front): home crossfades at once, so it is already in the new

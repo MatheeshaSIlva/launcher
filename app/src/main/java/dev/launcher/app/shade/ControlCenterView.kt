@@ -18,7 +18,6 @@ import dev.launcher.app.components.MenuPainter
 import dev.launcher.app.components.MenuSpec
 import dev.launcher.app.design.Design
 import dev.launcher.app.design.Scale
-import dev.launcher.app.layout.Element
 import dev.launcher.app.layout.Setup
 import dev.launcher.app.design.toBlendMode
 import dev.launcher.app.motion.Motion
@@ -165,7 +164,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private fun syncTokens() {
         val sf = host.surfaces
         gap = sf.pt(CcTokens.GAP)
-        cols = Setup.int(Element.SHADE, CcGrid.COLUMNS, 4).coerceAtMost(CcGrid.room(min(width, height), u)).coerceAtLeast(4)
+        // As many as the shade's layout says (its file: a number, or the user's value of one of its options), as fit.
+        cols = dev.launcher.app.layout.ShadeStructure.current().controlGrid.columns.value.coerceAtMost(CcGrid.room(min(width, height), u)).coerceAtLeast(4)
         layout?.setColumns(cols)
         // Cells of their own width, or (a side given) as wide as the screen allows (Pixel's tiles), upright; as tall as the
         // theme says (iOS 27: square).

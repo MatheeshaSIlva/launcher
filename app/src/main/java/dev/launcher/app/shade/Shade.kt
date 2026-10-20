@@ -19,6 +19,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import dev.launcher.app.AppLog
 import dev.launcher.app.Unlock
+import dev.launcher.app.layout.ShadeStructure
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
@@ -703,7 +704,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                     pulling = false
                     pullFrom = -1f
                     takenOver = false
-                    pullPanel = if (e.rawX >= ccZoneLeft()) Panel.CC else Panel.NC
+                    // Which panel each side of the camera opens: the shade's layout's (iOS: notifications left, controls right).
+                    val side = if (e.rawX >= rightOfCamera()) ShadeStructure.Pull.RIGHT_OF_CAMERA else ShadeStructure.Pull.LEFT_OF_CAMERA
+                    pullPanel = if (ShadeStructure.current().pulledFrom(side) == ShadeStructure.Kind.CONTROL_CENTER) Panel.CC else Panel.NC
                     startStream()
                 }
                 Touch.BOTTOM -> panelDrag(0, 0f, 0f)
@@ -736,8 +739,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         return true
     }
 
-    /** Where Control Center's zone starts on the bar: right of the camera (iOS: right of the Dynamic Island). */
-    private fun ccZoneLeft(): Float {
+    /** Where the top edge's part right of the camera starts (iOS: Control Center's, right of the Dynamic Island). */
+    private fun rightOfCamera(): Float {
         val w = root.width.toFloat()
         val cut = if (Build.VERSION.SDK_INT >= 29) try { root.display?.cutout?.boundingRectTop } catch (_: Throwable) { null } else null
         val camRight = if (cut != null && !cut.isEmpty) cut.right.toFloat() else w / 2f

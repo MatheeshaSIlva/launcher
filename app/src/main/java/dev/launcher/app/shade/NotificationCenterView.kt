@@ -59,7 +59,8 @@ import kotlin.math.roundToInt
  * kit unless the theme says otherwise): platters 14 pt from the sides, 8 pt apart, corners 24, a 38.33 pt app icon 14 pt
  * in, text from 62.33 pt, 15 pt type on 17-18 pt lines; a stack's cards peek out 8 pt below each other, 10 and 20 pt
  * narrower on each side. At most four lines of text. It opens with them collapsed into one stack at the bottom (iOS 27's
- * default): the newest in front, the next peeking out on one line, then "+N from App"; a tap fans them out into the list.
+ * default; the shade's layout file says so: `opens`): the newest in front, the next peeking out on one line, then "+N from
+ * App"; a tap fans them out into the list.
  * Every surface is drawn by the one material renderer ([MaterialPainter]): platters, shelves, buttons and the long look's
  * menu are the kit's clear glass over the wallpaper blurred to its frost, with the kit's lock-screen overlay under them
  * (it dims the wallpaper under a list); white text in light and dark.
@@ -70,7 +71,7 @@ import kotlin.math.roundToInt
  * minute, the "Clear" confirmation grows out of its "×". A long list scrolls up over the clock and fades under the bar.
  *
  * In landscape it is laid out as iOS 27 lays it out on an iPhone turned (measured in the Simulator: docs/IOS27_KIT.md,
- * tokens `comp.nc.land.*`): the date and the time small at the top left, left-aligned; the notifications in one column of
+ * tokens `comp.nc.land.*`; the layout file's `landscape: clock-beside-list`, else as upright): the date and the time small at the top left, left-aligned; the notifications in one column of
  * the portrait width towards the right, a short list centred in its height, a long one from its top; no collapsed stack
  * (the list as it is) and no flashlight or camera.
  */
@@ -120,8 +121,24 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var listL = 0f
     private var listR = 0f
 
-    /** Landscape: iOS 27's own layout for it (see the class comment). */
-    private val land get() = width > height
+    /** Landscape laid out as iOS 27 lays it (see the class comment), where the shade's layout says so. */
+    private val land get() = width > height && besideInLandscape
+
+    // What the shade's layout file says of this panel ([ShadeStructure]): taken up as it opens and at a new size.
+    /** It opens with the notifications gathered in one stack (iOS 27), else as the list. */
+    private var opensStacked = true
+    /** In landscape the clock beside the list (iOS 27), else as upright. */
+    private var besideInLandscape = true
+
+    /** Takes up the layout's structure; true if how the panel lies changed (it is laid out again then). */
+    private fun readStructure(): Boolean {
+        val s = dev.launcher.app.layout.ShadeStructure.current()
+        opensStacked = s.opens == dev.launcher.app.layout.ShadeStructure.Opens.STACKED
+        val beside = s.ncClockBesideList
+        val changed = beside != besideInLandscape
+        besideInLandscape = beside
+        return changed
+    }
     /** The column's width with its margins (the portrait width, turned or not) and its middle. */
     private val colW get() = platterW + 2 * margin
     private val colCx get() = (listL + listR) / 2f
@@ -141,6 +158,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
      * settings' Size, the phone's Display size) with the size unchanged (Matheesha: turning Follow off left the panels small).
      */
     private fun fit(w: Int, h: Int) {
+        readStructure()
         val nu = Scale.unitPx(context, min(w, h))
         if (mp == null || nu != u) { mp = MaterialPainter.create(nu); flat = MaterialPainter.create(nu) }
         u = nu
@@ -228,7 +246,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         prerecordAsked = false
         prerecorded = 0
         removeCallbacks(prerecord)
-        collapsed = true
+        if (readStructure() && width > 0) fit(width, height)
+        collapsed = opensStacked
         wallpaper = Wallpaper.current
         warmFrost()
         expanded.clear()
@@ -266,7 +285,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         // running stopped: closed with the list fanned out and moving, it kept drawing itself (unseen) with that state, and
         // the next opening showed the dimmed wallpaper and the faded clock until something redrew it.
         scroller.jumpTo(0f)
-        collapsed = true
+        collapsed = opensStacked
         expanded.clear()
         readNotifs(animate = false)
         // Out of sight, its two screen-sized GPU layers go (the sheet's, drawn anew at every opening anyway, and the

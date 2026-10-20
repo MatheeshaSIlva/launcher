@@ -53,7 +53,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
 - **Layouts** (`layout/`, plan `docs/PLAN_LAYOUTS_THEMES.md`; counts as options with the room the size leaves: home's
   columns, rows and dock icons, Control Center's columns, the App Library's tile columns): the five elements (status bar, shade, recents, drawer,
   home), the layouts registered for each (`Layouts`: id, placements, options with limits) and the user's choice of each
-  (`Setup`, `files/setup.json`; never in a theme). `HomeConfig` reads the drawer and home options from it. Over adb:
+  (`Setup`, `files/setup.json`; never in a theme). The shade's layouts are files (`assets/layouts/shade/<id>.json`,
+  `docs/LAYOUT_FILES.md`: what the layout is, its places and options, and its structure: panels, pulls, blocks), read
+  strictly at start before the setup (`Layouts.init`, `layout/LayoutFile`, `layout/ShadeStructure`); a copy of your own
+  through the inbox wins. `HomeConfig` reads the drawer and home options from it. Over adb:
   `am broadcast -a dev.launcher.app.SETUP -p dev.launcher.app --es element ID [--es layout ID] [--es placement ID]
   [--es option KEY=VALUE]`.
 - **Settings app** (`settings/`, plans `docs/PLAN_SETTINGS.md`, then `docs/PLAN_SETTINGS_V2.md`): Jetpack Compose
