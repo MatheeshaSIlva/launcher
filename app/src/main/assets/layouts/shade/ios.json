@@ -40,6 +40,7 @@
     "panel": "control-center",
     "pull": "right-of-camera",
     "blocks": [
+     {"block": "top-buttons"},
      {"block": "status-row"},
      {"block": "control-grid", "columns": {"option": "cc-columns"}, "editor": "in-place"}
     ],

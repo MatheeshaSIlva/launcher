@@ -727,6 +727,7 @@ SEED = {
     'comp.cc.grid.gap': {'pt': 15.333, 'src': 'measured:iOS 27 Simulator, accessibility frames (85.33 pt pitch; the kit has 15 / 17)'},
     'comp.cc.grid.top': {'pt': 132.3, 'src': 'measured:iOS 27 Simulator, accessibility frames (the kit: 132)'},
     'comp.cc.grid.top-edit': {'pt': 86, 'src': 'measured:iOS 27 Simulator, edit mode'},
+    'comp.cc.grid.top-bare': {'pt': 59.7, 'src': "judged:a layout with no status row: the controls from under the status bar, which stays (as Notification Center's list without its clock: comp.nc.list.top)"},
     'comp.cc.status.row-y': {'pt': 104.2, 'src': 'measured:iOS 27 Simulator, accessibility frames (the kit: 91.7)'},
     'comp.cc.grid.top-landscape': {'pt': 45.7, 'src': 'measured:iOS 27 Simulator in landscape (874 x 402 pt), accessibility frames: the first row of controls at 45.7, under one status line'},
     'comp.cc.grid.side-landscape': {'pt': 100, 'src': 'judged:iOS 27 Simulator in landscape: 8 columns centred, 103.3 pt each side at 874 pt (the 62 pt landscape safe area and the 38 pt portrait margin; the columns that fit within it)'},

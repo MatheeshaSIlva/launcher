@@ -265,7 +265,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   arrangement of its blocks, `shade/nc/`: `LockClockBlock`, `NotificationListBlock`, `CornerButtonsBlock`; in landscape iOS 27's own
   layout, `comp.nc.land.*`: every layout handles its own landscape as its original does, Pixel's and One UI's specs in
   `docs/PLAN_LAYOUTS_THEMES.md` D), Control Center
-  (`ControlCenterView`, `CcLayout`, `CcGallery`, `Controls`; apps' Quick Settings tiles as controls: `AppTiles`, run by SystemUI
+  (`ControlCenterView`: how present and pulled it is, its closing fold and the arrangement of its blocks, `shade/cc/`:
+  `TopButtonsBlock`, `StatusRowBlock`, `ControlGridBlock`; without a status row the bar stays as it is over it; `CcLayout`,
+  `CcGallery`, `Controls`; apps' Quick Settings tiles as controls: `AppTiles`, run by SystemUI
   through `cmd statusbar add-tile/click-tile`) and banners (`BannerView`), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
   Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),

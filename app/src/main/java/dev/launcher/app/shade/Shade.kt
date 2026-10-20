@@ -422,6 +422,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             if (ncP != null) nc.wantsDarkContent() else 0f,
             if (ccP != null) cc.statusRowY else 0f, if (ccP != null) cc.statusRowInset else 0f,
             if (ccP != null) ccVeil().darkContent else 0f,
+            ccHasRow = ccP == null || cc.hasStatusRow,
         )
     }
 
@@ -457,6 +458,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // system cancelled the pull (seen on the emulator). The pull itself stays ours whatever the region.
         nav.shadeChanged(true)
         if (p == Panel.CC) {
+            cc.prepare()
             state.readAll()
             state.readDetails()
             if (cc.hasAppTiles()) AppTiles.readStates()

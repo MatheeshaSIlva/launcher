@@ -343,7 +343,7 @@ one before and pushed on its own:
 
 On the S24 (9d54bb3, Matheesha): "everything works the same".
 
-**Stage 3, Control Center as blocks (started 2026-10-20)**, in three steps, as stage 2:
+**Stage 3, Control Center as blocks: done (2026-10-20)**, in three steps, as stage 2:
 - 3a: "+" and power (`shade/cc/TopButtonsBlock`: their drawing, the press, the power button held until the phone
   vibrates) and the status row (`shade/cc/StatusRowBlock`: its centre, pulled with the controls, and how far in it runs
   turned) are blocks, given the panel's view, size, point, presence, pull and its closing choreography through
@@ -361,7 +361,19 @@ On the S24 (9d54bb3, Matheesha): "everything works the same".
   edit mode, a control dragged to another cell and back, Focus resized to one cell and back, Quick Share removed and
   added again from the gallery, a tap on empty space out of edit mode and a long press into it, a drag up closing the
   panel; turned: a toggle, a long press (no edit mode there), the camera's menu, a drag closing it.
-- 3c: which blocks Control Center has is the file's.
+- 3c: which blocks Control Center has is the file's: the controls always (`control-grid`), the status row or not, "+"
+  and power (`top-buttons`, new in the vocabulary) or not, in their order; the buttons only with the row (they sit in the
+  status bar's band, which only the row clears). Without "+" edit mode is a long press on empty space; without the row
+  the status bar stays as it is over Control Center (its colour following the veil, the bar showing over an app that
+  hides it; `StatusBarView.setPanel(ccHasRow)`) and the controls start under it (`comp.cc.grid.top-bare`, 59.7 pt; edit
+  mode leaves them there; turned, under the bar's line as before). A panel takes a new structure at its next opening
+  (`ControlCenterView.prepare`). Checked on the emulator: the shipped file as before (Control Center identical to 3b but
+  for home's clock widget under the glass, Notification Center to 3a but for its clock); a copy of your own without the
+  buttons (the row and the controls as before; a tap where "+" was is a tap on empty space, closing the panel; a long
+  press into edit mode and a tap out), one without the buttons and the row (the bar's time and icons in place in white,
+  the controls under it, edit mode in place; turned the same), and the shipped layout back once the copy was removed.
+
+Next, stage 4: panels and gestures (one panel or two, pulled from where, one stage or two: Pixel's quick row first).
 
 ## References
 

@@ -151,8 +151,11 @@ class ControlGridBlock(
         rebuildAnims(animate = false)
     }
 
-    /** The grid's geometry and the type from the tokens. */
-    fun syncTokens() {
+    /**
+     * The grid's geometry and the type from the tokens; its top at rest ([top], px) and in edit mode ([topEdit]) are the
+     * panel's to say (under the status row, or under the bar where there is none).
+     */
+    fun syncTokens(top: Float, topEdit: Float) {
         val sf = host.surfaces
         gap = sf.pt(CcTokens.GAP)
         // As many as the shade's layout says (its file: a number, or the user's value of one of its options), as fit.
@@ -171,8 +174,8 @@ class ControlGridBlock(
         flowed = if (landscape) layout?.flowed(shownCols) else null
         val gridW = shownCols * cellW + (shownCols - 1) * gap
         gridLeft = (width - gridW) / 2f
-        gridTopRest = sf.pt(if (landscape) CcTokens.GRID_TOP_LANDSCAPE else CcTokens.GRID_TOP)
-        gridTopEdit = sf.pt(CcTokens.GRID_TOP_EDIT)
+        gridTopRest = top
+        gridTopEdit = topEdit
         rows = max(4, ((height - gridTopRest - 96f * u + gap) / pitchY).toInt())
         layout?.let { it.rows = max(rows, it.usedRows()) }
         sf.text(title, CcTokens.TITLE)

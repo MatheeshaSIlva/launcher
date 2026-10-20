@@ -67,7 +67,8 @@ import java.util.concurrent.Executors
  *
  * Panels: Control Center ([setPanel] cc) carries the right group down to its own status row (the network icons gliding
  * over to the left, the percentage appearing beside the battery), Notification Center (nc) fades the time, which its big
- * clock shows. Content turns white over Control Center and follows the wallpaper over Notification Center.
+ * clock shows. Content turns white over Control Center and follows the wallpaper over Notification Center. A Control
+ * Center without a status row (its layout file's) leaves the bar as it is over it, but for its colour.
  *
  * Over the parts of One UI's own bar that no disable flag hides (StockBarSettings has the rest): while the screen is shared
  * or cast the time sits in a red capsule ([setSharing]; One UI's call and cast chips show then), and on plug-in the battery
@@ -164,7 +165,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
     val transient get() = hiddenByApp && transientUntil > android.os.SystemClock.uptimeMillis()
 
     /** A panel is open (or opening): the bar shows with it whatever the app in front asks for. */
-    private val panelOpen get() = cc > 0.001f || nc > 0.001f
+    private val panelOpen get() = ccOpen > 0.001f || nc > 0.001f
 
     /**
      * Held back whatever the app asks: home shown turned under an app's landscape (a close; upright-only home is shown at the
@@ -456,7 +457,10 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     // ------------------------------------------------------------------ panels (set by the shade every frame)
 
+    /** How far the bar has gone into Control Center's status row (as far as the panel is open; 0 if it has no row). */
     private var cc = 0f
+    /** How far Control Center is open (the bar's colour over it, and the bar showing whatever the app asks). */
+    private var ccOpen = 0f
     private var nc = 0f
     private var ncDark = 0f
     private var ccDark = 0f
@@ -469,11 +473,11 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val h = barHeight
         if (width == 0 || h == 0) return null
         val b = android.graphics.Bitmap.createBitmap(width, h, android.graphics.Bitmap.Config.ARGB_8888)
-        val was = floatArrayOf(dark, cc, nc, lockK)
-        dark = if (darkContent) 1f else 0f; cc = 0f; nc = 0f; lockK = 0f
+        val was = floatArrayOf(dark, cc, nc, lockK, ccOpen)
+        dark = if (darkContent) 1f else 0f; cc = 0f; nc = 0f; lockK = 0f; ccOpen = 0f
         // (At rest: a charging moment playing now is not in the picture.)
         picturing = true
-        try { draw(Canvas(b)) } finally { dark = was[0]; cc = was[1]; nc = was[2]; lockK = was[3]; picturing = false }
+        try { draw(Canvas(b)) } finally { dark = was[0]; cc = was[1]; nc = was[2]; lockK = was[3]; ccOpen = was[4]; picturing = false }
         return b
     }
 
@@ -482,11 +486,14 @@ class StatusBarView(ctx: Context) : View(ctx) {
      * Notification Center's wallpaper wants black content ([ncDarkContent]), and Control Center's veil ([ccDarkContent]: a
      * light one, as Pixel's in light mode; iOS's dark veil keeps it white). [ccRowY]: the centre of Control Center's status
      * row (px, in this view); [ccRowInset]: how far in from each side the row runs (0: the bar's own sides; in landscape the
-     * grid's, as iOS 27 lines its one status line up with the controls).
+     * grid's, as iOS 27 lines its one status line up with the controls). [ccHasRow]: false for a Control Center without a
+     * status row (its layout file's): the bar stays as it is over it, only its colour following the veil.
      */
-    fun setPanel(ccK: Float, ncK: Float, ncDarkContent: Float, ccRowY: Float, ccRowInset: Float = 0f, ccDarkContent: Float = 0f) {
-        if (ccK == cc && ncK == nc && ncDarkContent == ncDark && ccRowY == ccRow && ccRowInset == ccInset && ccDarkContent == ccDark) return
-        cc = ccK; nc = ncK; ncDark = ncDarkContent; ccRow = ccRowY; ccInset = ccRowInset; ccDark = ccDarkContent
+    fun setPanel(ccK: Float, ncK: Float, ncDarkContent: Float, ccRowY: Float, ccRowInset: Float = 0f, ccDarkContent: Float = 0f,
+                 ccHasRow: Boolean = true) {
+        val toRow = if (ccHasRow) ccK else 0f
+        if (ccK == ccOpen && toRow == cc && ncK == nc && ncDarkContent == ncDark && ccRowY == ccRow && ccRowInset == ccInset && ccDarkContent == ccDark) return
+        ccOpen = ccK; cc = toRow; nc = ncK; ncDark = ncDarkContent; ccRow = ccRowY; ccInset = ccRowInset; ccDark = ccDarkContent
         // (Laid out again within this frame: the panels call this from their animation, before it is drawn.)
         val t = ccK > 0f || ncK > 0f
         if (t != tall) { tall = t; requestLayout() }
@@ -623,7 +630,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
         charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
         // Plugged in where One UI plays its charging animation (not over the lock screen, nor with a panel open: it does not
         // play there; nor while our bar is away).
-        if (!was && charging && settled && chargeMomentWanted && showing && lockTarget == 0f && cc == 0f && nc == 0f && interactive()) startChargeMoment()
+        if (!was && charging && settled && chargeMomentWanted && showing && lockTarget == 0f && ccOpen == 0f && nc == 0f && interactive()) startChargeMoment()
         if (was && !charging && chargeMoment) {
             if (keepCoverOnUnplug?.invoke() == true) AppLog.log("[statusbar] unplugged: the capsule stays while One UI's charging animation plays")
             else endChargeMoment()
@@ -913,7 +920,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val cy = centreLine()
         // Control Center's veil's choice over it (white over iOS's), the wallpaper's over Notification Center, else the app's
         // or home's.
-        val base = dark * (1f - cc) * (1f - nc) + ncDark * nc * (1f - cc) + ccDark * cc
+        val base = dark * (1f - ccOpen) * (1f - nc) + ncDark * nc * (1f - ccOpen) + ccDark * ccOpen
         val k = (255 * (1f - base)).toInt()
         val content = Color.rgb(k, k, k)
 

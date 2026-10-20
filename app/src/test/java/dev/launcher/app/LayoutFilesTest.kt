@@ -56,6 +56,7 @@ class LayoutFilesTest {
         assertNull(st.controlGrid.columns.fixed)
         assertEquals("in-place", st.controlGrid.editor)
         assertEquals("flow", st.controlCenter.landscape)
+        assertTrue(st.ncHasClock && st.ncHasButtons && st.ccHasButtons && st.ccHasStatusRow)
     }
 
     @Test fun theChoicesTheShadeHasNowAreRead() {
@@ -90,7 +91,12 @@ class LayoutFilesTest {
         refused(ok.replace("{\"block\": \"lock-clock\"},\n     {\"block\": \"notifications\", \"opens\": \"stacked\"},",
             "{\"block\": \"notifications\", \"opens\": \"stacked\"},\n     {\"block\": \"lock-clock\"},"), "blocks out of their order")
         refused(ok.replace("{\"block\": \"corner-buttons\"}", "{\"block\": \"corner-buttons\"}, {\"block\": \"corner-buttons\"}"), "a block twice")
-        refused(ok.replace("{\"block\": \"status-row\"},", ""), "Control Center without its status row (not yet the file's to choose)")
+        refused(ok.replace("{\"block\": \"status-row\"},", ""), "the status row left out, + and power still in the bar's band")
+        refused(ok.replace("{\"block\": \"status-row\"},\n     {\"block\": \"control-grid\", \"columns\": {\"option\": \"cc-columns\"}, \"editor\": \"in-place\"}",
+            "{\"block\": \"status-row\"}"), "Control Center without its controls")
+        refused(ok.replace("{\"block\": \"top-buttons\"},\n     {\"block\": \"status-row\"},", "{\"block\": \"status-row\"},\n     {\"block\": \"top-buttons\"},"),
+            "Control Center's blocks out of their order")
+        refused(ok.replace("{\"block\": \"corner-buttons\"}", "{\"block\": \"top-buttons\"}"), "a block of Control Center's in Notification Center")
         refused(ok.replace("\"pull\": \"left-of-camera\"", "\"pull\": \"right-of-camera\""), "both panels pulled from one side")
         refused(ok.replace("{\"option\": \"cc-columns\"}", "{\"option\": \"rows\"}"), "a count bound to no option")
         refused(ok.replace("{\"option\": \"cc-columns\"}", "4.5"), "a count that is not whole")
@@ -111,6 +117,15 @@ class LayoutFilesTest {
         assertEquals(listOf("notifications"), bare.notificationCenter.blocks.map { it.id })
         val ios = LayoutFile.parse(iosShade).shade!!
         assertTrue(ios.ncHasClock && ios.ncHasButtons)
+    }
+
+    /** Control Center's "+" and power and its status row are the file's to leave out (the buttons only with the row). */
+    @Test fun controlCenterWithoutItsButtonsOrStatusRow() {
+        val noButtons = LayoutFile.parse(iosShade.replace("{\"block\": \"top-buttons\"},", "")).shade!!
+        assertTrue(!noButtons.ccHasButtons && noButtons.ccHasStatusRow)
+        val bare = LayoutFile.parse(iosShade.replace("{\"block\": \"top-buttons\"},", "").replace("{\"block\": \"status-row\"},", "")).shade!!
+        assertTrue(!bare.ccHasButtons && !bare.ccHasStatusRow)
+        assertEquals(listOf("control-grid"), bare.controlCenter.blocks.map { it.id })
     }
 
     @Test fun yourOwnFileWinsIfItIsValid() {

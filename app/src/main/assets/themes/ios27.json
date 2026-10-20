@@ -1902,6 +1902,10 @@
    "pt": 132.3,
    "src": "measured:iOS 27 Simulator, accessibility frames (the kit: 132)"
   },
+  "comp.cc.grid.top-bare": {
+   "pt": 59.7,
+   "src": "judged:a layout with no status row: the controls from under the status bar, which stays (as Notification Center's list without its clock: comp.nc.list.top)"
+  },
   "comp.cc.grid.top-edit": {
    "pt": 86,
    "src": "measured:iOS 27 Simulator, edit mode"

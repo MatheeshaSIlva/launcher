@@ -98,7 +98,7 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
     /** Wider than tall (a display turned for an app in landscape). */
     override val landscape get() = width > height
 
-    /** "+" and power (`top-buttons`). */
+    /** "+" and power (`top-buttons`): with the status row only (they sit where the bar's icons left). */
     private val buttons = TopButtonsBlock(this) { grid.enterEdit() }
     /** The row the status bar's icons come down into (`status-row`). */
     private val statusRow = StatusRowBlock(this)
@@ -108,17 +108,45 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
     private val inv: (Float) -> Unit = { invalidate() }
 
+    /** Which blocks it has besides the controls (the layout file's: [dev.launcher.app.layout.ShadeStructure]). */
+    private var hasButtons = true
+    private var hasRow = true
+
+    /** Takes up the layout's structure; true if the blocks it has changed (it is laid out again then). */
+    private fun readStructure(): Boolean {
+        val s = dev.launcher.app.layout.ShadeStructure.current()
+        val changed = s.ccHasButtons != hasButtons || s.ccHasStatusRow != hasRow
+        hasButtons = s.ccHasButtons
+        hasRow = s.ccHasStatusRow
+        return changed
+    }
+
+    /** Control Center has a status row: the status bar's icons come down into it (without one the bar stays as it is). */
+    val hasStatusRow: Boolean get() = hasRow
+
+    /** About to open: the blocks the layout now says (a file of your own may have changed them since). */
+    fun prepare() {
+        if (readStructure() && width > 0) { syncTokens(); grid.relayout(animate = false) }
+    }
+
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         u = Scale.unitPx(context, min(w, h))
         host.surfaces.unit(u)
+        readStructure()
         syncTokens()
         grid.sized()
     }
 
-    /** Each block's sizes and places from the tokens. */
+    /**
+     * Each block's sizes and places from the tokens. The controls lie under the status row (iOS 27: 132.3 pt; in edit mode,
+     * as the row goes, 86), or with no row under the status bar, which stays (`comp.cc.grid.top-bare`; edit mode leaves
+     * them there); turned, under one status line either way.
+     */
     private fun syncTokens() {
-        grid.syncTokens()
+        val sf = host.surfaces
+        val top = sf.pt(when { landscape -> CcTokens.GRID_TOP_LANDSCAPE; hasRow -> CcTokens.GRID_TOP; else -> CcTokens.GRID_TOP_BARE })
+        grid.syncTokens(top, if (hasRow) sf.pt(CcTokens.GRID_TOP_EDIT) else top)
         statusRow.syncTokens()
         buttons.syncTokens()
     }
@@ -228,7 +256,7 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
         if (progress <= 0.002f || width == 0) return
         // Not in landscape (iOS 27: one status line there, no "+" nor power); they give way to edit mode, an expanded
         // module and a control's menu.
-        if (!landscape) buttons.draw(c, grid.quiet())
+        if (hasButtons && !landscape) buttons.draw(c, grid.quiet())
         grid.draw(c)
     }
 
@@ -246,7 +274,7 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
             downX = e.x; downY = e.y
             // "+" on a tap, power held until the phone vibrates: upright, with the grid as it rests (a control's menu or an
             // expanded module takes every touch; edit mode has neither button).
-            onButtons = !landscape && !grid.holdsTouches && !grid.editing && buttons.down(e.x, e.y)
+            onButtons = hasButtons && !landscape && !grid.holdsTouches && !grid.editing && buttons.down(e.x, e.y)
             if (onButtons) grid.cancelTouch()
         }
         if (!onButtons) return grid.touch(e)

@@ -8,9 +8,10 @@ package dev.launcher.app.layout
  * panels could already do in more than one way: how Notification Center opens (stacked, or as the list), how it lies in
  * landscape (the clock beside the list, or as it stands upright), and where Control Center's column count comes from (an
  * option of the layout's, or a number). Stage 2: Notification Center is made of blocks, and which it has is the file's
- * (the notifications always; the clock and the corner buttons or not, the list taking the room either leaves). The rest
- * is checked to be what the panels do today and refused otherwise (Control Center's blocks, where each panel is pulled
- * from, Control Center's editor and its landscape), until the next stages make those the file's to choose.
+ * (the notifications always; the clock and the corner buttons or not, the list taking the room either leaves). Stage 3:
+ * so is Control Center (the controls always; "+" and power, and the status row, or not). The rest is checked to be what
+ * the panels do today and refused otherwise (where each panel is pulled from, Control Center's editor and its
+ * landscape), until the next stage makes those the file's to choose.
  */
 class ShadeStructure(val panels: List<Panel>) {
 
@@ -51,6 +52,8 @@ class ShadeStructure(val panels: List<Panel>) {
         class Notifications(val opens: Opens) : Block("notifications")
         /** The flashlight and the camera in the bottom corners (touch and hold). */
         object CornerButtons : Block("corner-buttons")
+        /** "+" (edit mode) and the power button at the top corners, where the status bar was (upright only). */
+        object TopButtons : Block("top-buttons")
         /** The status bar's row along the top, its icons gliding in from the bar. */
         object StatusRow : Block("status-row")
         /** The controls on a grid of [columns] (more in landscape: [Panel.landscape] "flow"), edited in place. */
@@ -73,6 +76,9 @@ class ShadeStructure(val panels: List<Panel>) {
     val ncHasClock: Boolean get() = notificationCenter.block<Block.LockClock>() != null
     val ncHasButtons: Boolean get() = notificationCenter.block<Block.CornerButtons>() != null
     val controlGrid: Block.ControlGrid get() = controlCenter.block<Block.ControlGrid>()!!
+    /** Control Center shows "+" and power, and the status row (without it the status bar stays as it is over the panel). */
+    val ccHasButtons: Boolean get() = controlCenter.block<Block.TopButtons>() != null
+    val ccHasStatusRow: Boolean get() = controlCenter.block<Block.StatusRow>() != null
 
     /** The panel a pull from [side] of the top edge opens. */
     fun pulledFrom(side: Pull): Kind = panels.first { it.pull == side }.kind
@@ -86,12 +92,12 @@ class ShadeStructure(val panels: List<Panel>) {
         /** The blocks each panel can be made of, in the order they lie (top to bottom). */
         private val BLOCKS = mapOf(
             Kind.NOTIFICATION_CENTER to listOf("lock-clock", "notifications", "corner-buttons"),
-            Kind.CONTROL_CENTER to listOf("status-row", "control-grid"),
+            Kind.CONTROL_CENTER to listOf("top-buttons", "status-row", "control-grid"),
         )
-        /** The blocks a panel cannot be without (Control Center: all of them, so far). */
+        /** The blocks a panel cannot be without. */
         private val REQUIRED = mapOf(
             Kind.NOTIFICATION_CENTER to listOf("notifications"),
-            Kind.CONTROL_CENTER to listOf("status-row", "control-grid"),
+            Kind.CONTROL_CENTER to listOf("control-grid"),
         )
         /** Where each panel is pulled from today (stage 1). */
         private val PULLED = mapOf(Kind.NOTIFICATION_CENTER to Pull.LEFT_OF_CAMERA, Kind.CONTROL_CENTER to Pull.RIGHT_OF_CAMERA)
@@ -121,7 +127,10 @@ class ShadeStructure(val panels: List<Panel>) {
             val order = BLOCKS.getValue(kind)
             if (ids.toSet().size != ids.size) p.fail("blocks: one repeats")
             if (ids != order.filter { it in ids }) p.fail("blocks: in the order ${order.joinToString()}")
-            REQUIRED.getValue(kind).firstOrNull { it !in ids }?.let { p.fail("blocks: ${kind.id} needs $it${if (kind == Kind.CONTROL_CENTER) " (so far)" else ""}") }
+            REQUIRED.getValue(kind).firstOrNull { it !in ids }?.let { p.fail("blocks: ${kind.id} needs $it") }
+            // "+" and power sit in the status bar's band, which only the status row clears (the bar's icons come down into
+            // it); without it the bar stays there.
+            if ("top-buttons" in ids && "status-row" !in ids) p.fail("blocks: top-buttons needs the status-row block")
             val landscape = p.str("landscape")
             if (landscape !in LANDSCAPE.getValue(kind)) p.fail("landscape: '$landscape' (${LANDSCAPE.getValue(kind).joinToString()})")
             if (landscape == NcLandscape.CLOCK_BESIDE_LIST.id && "lock-clock" !in ids) p.fail("landscape: clock-beside-list needs the lock-clock block")
@@ -137,6 +146,7 @@ class ShadeStructure(val panels: List<Panel>) {
                     Block.Notifications(Opens.entries.firstOrNull { it.id == opens } ?: b.fail("opens: '$opens' (${Opens.entries.joinToString { it.id }})"))
                 }
                 "corner-buttons" -> Block.CornerButtons
+                "top-buttons" -> Block.TopButtons
                 "status-row" -> Block.StatusRow
                 "control-grid" -> {
                     val editor = b.str("editor")

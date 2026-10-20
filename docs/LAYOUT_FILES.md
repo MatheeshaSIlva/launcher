@@ -52,22 +52,27 @@ Blocks, each `{"block": ID, ...its parameters}`:
 | `lock-clock` | | The date and the glass clock (iOS's lock screen). Optional: without it the list starts under the status bar (`comp.nc.list.top`) and fades as it leaves its area's top. Required by `landscape: clock-beside-list`. |
 | `notifications` | `opens`: `stacked` (iOS 27: gathered in one stack at the bottom, the newest in front, the next peeking out, "+N" under it; a tap fans them out) or `list` (every app's group in its place). | The notifications, grouped by app (`shade/nc/NotificationListBlock`). Required. |
 | `corner-buttons` | | The flashlight and the camera in the bottom corners (touch and hold; upright only). Optional: without them the list goes down to `comp.nc.list.bottom` and the screen's edge cuts it. |
-| `status-row` | | The status bar's row along the top, its icons gliding in from the bar. |
-| `control-grid` | `columns`: a whole number, or `{"option": KEY}` naming one of the file's `count` options (the user's value). `editor`: `in-place`. Read by `ControlCenterView.syncTokens` (at most what fits, at least 4). | The controls on a grid, edited in place. |
+| `top-buttons` | | "+" (edit mode) and the power button (held) at Control Center's top corners, where the status bar was (upright only; `shade/cc/TopButtonsBlock`). Optional: without them edit mode is a long press on empty space. Needs `status-row` (only the row clears the bar's band). |
+| `status-row` | | The status bar's row along the top, its icons gliding in from the bar (`shade/cc/StatusRowBlock`). Optional: without it the status bar stays as it is over Control Center (its colour following the veil) and the controls start under it (`comp.cc.grid.top-bare`; edit mode leaves them there). |
+| `control-grid` | `columns`: a whole number, or `{"option": KEY}` naming one of the file's `count` options (the user's value). `editor`: `in-place`. Read by `ControlGridBlock.syncTokens` (at most what fits, at least 4). | The controls on a grid, edited in place (`shade/cc/ControlGridBlock`). Required. |
 
 **Stage 1 (2026-10-20): the vocabulary, and the choices the panels already have.** The file speaks for the whole shade,
 but only what today's panels can already do in more than one way is the file's to choose: how Notification Center opens
 (`opens`), how it lies in landscape (`landscape`), and where Control Center's column count comes from (`columns`). The rest
 is checked to be what the panels do and refused otherwise, with the reason "(so far)": one Notification Center pulled
 from the left of the camera and one Control Center from the right; Notification Center made of `lock-clock`,
-`notifications`, `corner-buttons`, Control Center of `status-row`, `control-grid`, in that order; the editor in place;
-Control Center's landscape `flow`. Later stages lift these one by one:
+`notifications`, `corner-buttons`, Control Center of `top-buttons`, `status-row`, `control-grid`, in that order (a
+block may be left out where the stages below say so, never moved); the editor in place; Control Center's landscape
+`flow`. Later stages lift these one by one:
 
 - Stage 2, Notification Center as blocks (done 2026-10-20): the clock, the list and the corner buttons are blocks
   (`shade/nc/LockClockBlock`, `NotificationListBlock`, `CornerButtonsBlock`) given what they need by the panel
   (`shade/nc/NcPanel`), which places them; which of them Notification Center has is the file's: the notifications always,
   the clock and the buttons or not (in their order: clock, notifications, buttons), the list taking the room either leaves.
-- Stage 3, Control Center as blocks: the status row, the grid, its modules and sliders, the editor.
+- Stage 3, Control Center as blocks (done 2026-10-20): "+" and power, the status row and the grid are blocks
+  (`shade/cc/TopButtonsBlock`, `StatusRowBlock`, `ControlGridBlock`) given what they need by the panel (`shade/cc/CcPanel`),
+  which places them; which of them Control Center has is the file's: the controls always, the status row or not, "+"
+  and power or not (only with the row).
 - Stage 4, panels and gestures: one panel or two, pulled from where, one stage or two (Pixel: the quick row first).
 - Then step 4: Pixel's shade as a second file (`pixel.json`), One UI's after it (their landscape in
   docs/PLAN_LAYOUTS_THEMES.md, D).
