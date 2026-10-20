@@ -78,7 +78,47 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         fun quietStarts(on: Boolean)
     }
 
-    enum class Panel { NC, CC }
+    /**
+     * One of the shade's panels (the layout file's `structure.panels`, docs/LAYOUT_FILES.md): how it comes in with the
+     * finger and goes, what it shows on the way and what it leaves behind. The shade drives it (one spring, [progress], for
+     * the panel pulled; [leaving] for one on its way out under another) and asks it for the rest. Step 3 of
+     * docs/SHADE_PIXEL_EVALUATION.md, stage 4: the shade no longer knows its panels by name.
+     */
+    private abstract inner class Panel(val kind: ShadeStructure.Kind, val name: String) {
+        /** The pull began (or something opens it): what it shows is brought up to date. */
+        abstract fun opening()
+        /** Out of sight: what it leaves behind. */
+        abstract fun cleanUp()
+        /** Let go at once on its way out under another: nothing of it shows from this frame. */
+        abstract fun gone()
+        abstract val openCurve: Curve
+        abstract val closeCurve: Curve
+        /** How far the finger travels for the whole way (px): for its speed, and for a pull that caught it. */
+        abstract fun travel(): Float
+        /** Its progress for a finger at [y] that has pulled [dy] since it took the panel from closed. */
+        abstract fun fingerProgress(y: Float, dy: Float): Float
+        /** Caught on its way out at [from], moved on by the finger's [dy]. */
+        abstract fun caughtProgress(from: Float, dy: Float): Float
+        /** A vertical drag it hands over (or one from the bottom edge), after the shade's: [phase] 0 begin, 1 move, 2 end. */
+        abstract fun drag(phase: Int, dy: Float, vy: Float)
+        /** A touch on it while it is up. */
+        abstract fun touch(e: MotionEvent): Boolean
+        /** Back: true if it took it (a menu closed, edit mode left); else the shade closes. */
+        abstract fun back(): Boolean
+        /** Its own motion beside the shade's spring: a pull took it ([caught]: on its way out), the finger moved it [dy]... */
+        open fun pullBegins(caught: Boolean) {}
+        open fun followed(dy: Float) {}
+        /** ... and let go at [vy] px/s to open. */
+        open fun released(vy: Float) {}
+        open fun opensFully() {}
+        open fun closes() {}
+        /** It goes out on its own under the panel pulled now. */
+        open fun goesUnder() {}
+        /** Open and still. */
+        open fun rests() {}
+        /** Where its notifications are swiped ([out]: empty where there are none): Android's back gesture stays off that edge. */
+        open fun swipeBand(out: android.graphics.RectF) { out.setEmpty() }
+    }
 
     private val root = Root(ctx)
     val bar = StatusBarView(ctx)
@@ -183,7 +223,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (panel != null) close()
                 Unlock.then(ctx, "open a notification of ${item.pkg}") { Notifs.open(ctx, item) }
             }
-            override fun openNotificationCenter() { begin(Panel.NC); progress.snapTo(0.12f); openFully(0f) }
+            override fun openNotificationCenter() { begin(ncPanel); progress.snapTo(0.12f); openFully(0f) }
             override fun send(pi: PendingIntent, closePanel: Boolean): Boolean =
                 Notifs.send(ctx, pi).also { if (it && closePanel && panel != null) close() }
             override fun dismissed(item: Notifs.Item) { quiet += item.key }
@@ -237,6 +277,107 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         })
     }
 
+    /** iOS 27's Notification Center: a sheet that slides down with the finger, its bottom edge under it. */
+    private val ncPanel: Panel = object : Panel(ShadeStructure.Kind.NOTIFICATION_CENTER, "Notification Center") {
+        override fun opening() { nc.prepare(); media.refresh() }
+        override fun cleanUp() { nc.onClosed() }
+        override fun gone() { nc.progress = 0f }
+        override val openCurve get() = NC_OPEN
+        override val closeCurve get() = NC_CLOSE
+        override fun travel() = root.height.toFloat()
+        override fun fingerProgress(y: Float, dy: Float): Float =
+            (y / root.height).coerceAtLeast(0f).let { if (it > 1f) 1f + Motion.rubberBand(it - 1f, 0.5f) else it }
+        override fun caughtProgress(from: Float, dy: Float): Float {
+            val raw = from + dy / travel()
+            return if (raw > 1f) 1f + Motion.rubberBand((raw - 1f) * travel(), root.height.toFloat()) / travel() else raw.coerceAtLeast(0f)
+        }
+        override fun drag(phase: Int, dy: Float, vy: Float) {
+            when (phase) {
+                1 -> {
+                    val raw = dragFrom + dy / travel()
+                    progress.snapTo(if (raw > 1f) 1f + Motion.rubberBand((raw - 1f) * travel(), root.height.toFloat()) / travel() else raw.coerceAtLeast(0f))
+                }
+                2 -> dragEnds(vy / travel(), vy)
+            }
+        }
+        override fun touch(e: MotionEvent) = nc.dispatchTouchEvent(e)
+        override fun back() = nc.onBack()
+        override fun swipeBand(out: android.graphics.RectF) = nc.swipeBand(out)
+    }
+
+    /**
+     * iOS 27's Control Center: the controls over the blurred screen, there after a short pull ([ccTravel]); past it the
+     * finger pulls them below their place ([ccOffset]), and they rise into it as it lets go; closing, they lift and fold back
+     * into the corner.
+     */
+    private val ccPanel: Panel = object : Panel(ShadeStructure.Kind.CONTROL_CENTER, "Control Center") {
+        override fun opening() {
+            cc.prepare()
+            state.readAll()
+            state.readDetails()
+            if (cc.hasAppTiles()) AppTiles.readStates()
+            // The design may have changed since (light and dark blur differently).
+            liveBlur.maxBlurPx = liveBlurMax()
+            prepareBackdrop()
+        }
+        override fun cleanUp() {
+            ccOffset.snapTo(0f)
+            cc.onClosed()
+            liveBlur.set(0f, false)
+            gallery.dismissNow()
+            backdrop.source = null
+            surfaces.setBackdrop(null, null)
+            backdropHold?.cancel()
+            backdropHold = null
+            backdrop.freeze = 0f
+        }
+        override fun gone() { cc.progress = 0f; backdrop.set(0f, 0, 0f, 0f) }
+        override val openCurve get() = ccOpen()
+        override val closeCurve get() = CC_CLOSE
+        override fun travel() = ccTravel()
+        override fun fingerProgress(y: Float, dy: Float) = (dy / ccTravel()).coerceIn(0f, 1f)
+        override fun caughtProgress(from: Float, dy: Float) = (from + dy / travel()).coerceIn(0f, 1f)
+        override fun drag(phase: Int, dy: Float, vy: Float) {
+            when (phase) {
+                0 -> { offsetFrom = ccOffset.value; ccOffset.stop() }
+                // Down: the controls are pulled below their place as when opening; up: the panel fades with the finger
+                // and the controls lift with it a little.
+                1 -> {
+                    cc.closing(dy < 0f)
+                    if (dy > 0f) { progress.snapTo(dragFrom); ccOffset.snapTo(offsetFrom + ccPull(dy)); lastPullDy = dy }
+                    else { progress.snapTo((dragFrom + dy / ccCloseTravel()).coerceIn(0f, 1f)); ccOffset.snapTo(offsetFrom + dy * 0.15f) }
+                }
+                2 -> dragEnds(vy / ccCloseTravel(), vy)
+            }
+        }
+        override fun touch(e: MotionEvent) = cc.dispatchTouchEvent(e)
+        override fun back(): Boolean = when {
+            gallery.isOpen -> { gallery.close(); true }
+            cc.onBack() -> true
+            cc.editing -> { cc.exitEdit(); true }
+            else -> false
+        }
+        override fun pullBegins(caught: Boolean) {
+            pullOffsetFrom = if (caught) ccOffset.value else 0f
+            ccOffset.stop()
+            if (caught) cc.closing(false)
+        }
+        override fun followed(dy: Float) { lastPullDy = dy; ccOffset.snapTo(pullOffsetFrom + ccPull(dy)) }
+        // The controls rise from where the finger held them, carrying its speed into the spring.
+        override fun released(vy: Float) { ccOffset.animateTo(0f, CC_SETTLE, ccPullVelocity(lastPullDy, vy)) }
+        override fun opensFully() { cc.closing(false); ccOffset.animateTo(0f, CC_SETTLE) }
+        // iOS 27: the controls lift a few points as they fade; ours also fold back into the corner (ControlCenterView.closing).
+        override fun closes() { cc.closing(true); ccOffset.animateTo(-8f * u(), CC_CLOSE) }
+        override fun goesUnder() { if (!(ccOffset.isAnimating && ccOffset.target < 0f)) closes() }
+        override fun rests() { cc.prerecord() }
+    }
+
+    /** Every panel the shade can show (the layout file says which a pull from each side opens). */
+    private val panels: List<Panel> get() = listOf(ncPanel, ccPanel)
+
+    /** The panel of [kind]. */
+    private fun panelOf(kind: ShadeStructure.Kind): Panel = if (kind == ShadeStructure.Kind.CONTROL_CENTER) ccPanel else ncPanel
+
     /**
      * The phone's power menu, through the accessibility service (Android's global action; One UI logs its answer as
      * "GlobalActions: showDialog ..."). What Android said is in our log: the S24 showed no menu once (2026-10-20).
@@ -287,11 +428,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // fans Notification Center's collapsed stack out, so a script can scroll it without tapping a notification.
         if (testHook == null) testHook = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
-                if (i.getStringExtra("do") == "nc_expand") handler.post { if (panel == Panel.NC) nc.expandList() }
+                if (i.getStringExtra("do") == "nc_expand") handler.post { if (panel === ncPanel) nc.expandList() }
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
                 // --es do open [--es panel cc|nc], --es do close: a panel opened as a released pull opens it, and closed (a
                 // script's pictures of a panel at rest, never caught mid-pull).
-                if (i.getStringExtra("do") == "open") handler.post { begin(if (i.getStringExtra("panel") == "nc") Panel.NC else Panel.CC); openFully(0f) }
+                if (i.getStringExtra("do") == "open") handler.post { begin(if (i.getStringExtra("panel") == "nc") ncPanel else ccPanel); openFully(0f) }
                 if (i.getStringExtra("do") == "close") handler.post { close(0f) }
                 // --es do cc_expand_frames --es control CONNECTIVITY [--ei fps 60] [--ei hold 200]: a module of Control Center
                 // (open first) grown into its large form and back at exact times, Control Center drawn into PNGs in
@@ -299,7 +440,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (i.getStringExtra("do") == "cc_expand_frames") handler.post {
                     val ctl = Control.entries.firstOrNull { it.name == i.getStringExtra("control") }
                     val dir = java.io.File(ctx.getExternalFilesDir(null), "dev-out/expand").apply { deleteRecursively(); mkdirs() }
-                    if (panel != Panel.CC || ctl == null) AppLog.log("[shade] test expand: ${if (ctl == null) "no control ${i.getStringExtra("control")}" else "Control Center is not open"}")
+                    if (panel !== ccPanel || ctl == null) AppLog.log("[shade] test expand: ${if (ctl == null) "no control ${i.getStringExtra("control")}" else "Control Center is not open"}")
                     else cc.renderExpandFrames(ctl, i.getIntExtra("fps", 60), i.getIntExtra("hold", 200).toLong(), dir) { n ->
                         java.io.File(dir, ".done").writeText("$n\n")
                         AppLog.log("[shade] test: $n frames of ${ctl.name} expanding in ${dir.path}")
@@ -310,7 +451,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (i.getStringExtra("do") == "nc_open") handler.post {
                     val title = i.getStringExtra("title")
                     val item = Notifs.items.firstOrNull { it.pkg == ctx.packageName && it.title?.toString() == title }
-                    if (panel == Panel.NC && item != null) {
+                    if (panel === ncPanel && item != null) {
                         val u = u()
                         openFrom(item, android.graphics.RectF(14f * u, root.height * 0.6f, root.width - 14f * u, root.height * 0.6f + 66f * u))
                     } else AppLog.log("[shade] test open: ${if (item == null) "no test notification \"$title\"" else "Notification Center is not open"}")
@@ -367,8 +508,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     // ------------------------------------------------------------------ the panel and its spring
 
-    var panel: Panel? = null
-        private set
+    private var panel: Panel? = null
     val isOpen get() = panel != null
 
     private var editK = 0f
@@ -381,7 +521,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * travel ([ccPull]) while it holds them, then back on [CC_SETTLE], which overshoots a little upwards (measured: 8-9 pt
      * on a ~70 pt return); a little above their place (negative) as they fade out closing.
      */
-    private val ccOffset = MotionValue(0f, 1f, { cc.pullOffset = it; if (panel == Panel.CC || leavingPanel == Panel.CC) applyProgress() })
+    private val ccOffset = MotionValue(0f, 1f, { cc.pullOffset = it; if (panel === ccPanel || leavingPanel === ccPanel) applyProgress() })
 
     /**
      * A panel on its way out while the other one is pulled in (Matheesha: pulled from the right as Notification Center was
@@ -414,8 +554,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var lastPullDy = 0f
 
     private fun applyProgress() {
-        val ccP = shownProgress(Panel.CC)
-        val ncP = shownProgress(Panel.NC)
+        val ccP = shownProgress(ccPanel)
+        val ncP = shownProgress(ncPanel)
         if (ccP != null) {
             cc.progress = ccP
             // Live where the system can blur behind a window (the app or home keeps moving under it), else our blurred
@@ -460,7 +600,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             // window never does, see updateExclusion), once the panel has been still for a moment.
             handler.removeCallbacks(focusWhenIdle)
             handler.postDelayed(focusWhenIdle, 300)
-            cc.prerecord()
+            panel?.rests()
         }
     }
 
@@ -477,19 +617,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // The touchable region widens once the finger lifts (openFully): changed while the window holds the touch, the
         // system cancelled the pull (seen on the emulator). The pull itself stays ours whatever the region.
         nav.shadeChanged(true)
-        if (p == Panel.CC) {
-            cc.prepare()
-            state.readAll()
-            state.readDetails()
-            if (cc.hasAppTiles()) AppTiles.readStates()
-            // The design may have changed since (light and dark blur differently).
-            liveBlur.maxBlurPx = liveBlurMax()
-            prepareBackdrop()
-        } else {
-            nc.prepare()
-            media.refresh()
-        }
-        AppLog.log("[shade] ${if (p == Panel.CC) "Control Center" else "Notification Center"} opening")
+        p.opening()
+        AppLog.log("[shade] ${p.name} opening")
     }
 
     /**
@@ -561,12 +690,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun prepareBackdrop() {
         val t0 = SystemClock.uptimeMillis()
         nav.backdrop { src ->
-            if (panel != Panel.CC) return@backdrop
+            if (panel !== ccPanel) return@backdrop
             backdrop.source = src
             if (src == null) { surfaces.setBackdrop(null, null); cc.invalidate(); return@backdrop }
             val veil = ccVeil()
             BlurBaker.bake(src, root.width, root.height, 0.25f, ccBlurRadius(), (Math.round(veil.alpha * 255f) shl 24) or veil.rgb, handler) { bmp, m ->
-                if (panel != Panel.CC || backdrop.source !== src) return@bake
+                if (panel !== ccPanel || backdrop.source !== src) return@bake
                 surfaces.setBackdrop(bmp, m)
                 cc.invalidate()
                 gallery.invalidate()
@@ -582,7 +711,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         panel = null
         progress.snapTo(0f)
         applyProgress()
-        for (p in Panel.entries) if (p != leavingPanel) cleanUp(p)
+        for (p in panels) if (p !== leavingPanel) p.cleanUp()
         handler.removeCallbacks(focusWhenIdle)
         focusHolder.release()
         regionOpen = false
@@ -625,20 +754,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private val ccWarmOnDesign: () -> Unit = { handler.post { warmCcSoon(CC_WARM_START_MS) } }
 
-    /** What [p] leaves behind once it is out of sight. */
-    private fun cleanUp(p: Panel) {
-        if (p == Panel.NC) { nc.onClosed(); return }
-        ccOffset.snapTo(0f)
-        cc.onClosed()
-        liveBlur.set(0f, false)
-        gallery.dismissNow()
-        backdrop.source = null
-        surfaces.setBackdrop(null, null)
-        backdropHold?.cancel()
-        backdropHold = null
-        backdrop.freeze = 0f
-    }
-
     /**
      * [old] makes way for the other panel: it goes on closing by itself, from where it is and as fast as it was going
      * ([leaving]), while the new pull drives [progress].
@@ -648,13 +763,13 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         endLeaving()
         leavingPanel = old
         leaving.snapTo(progress.value)
-        leaving.animateTo(0f, if (old == Panel.NC) NC_CLOSE else CC_CLOSE, progress.velocity.coerceAtMost(0f))
-        if (old == Panel.CC && !(ccOffset.isAnimating && ccOffset.target < 0f)) { cc.closing(true); ccOffset.animateTo(-8f * u(), CC_CLOSE) }
+        leaving.animateTo(0f, old.closeCurve, progress.velocity.coerceAtMost(0f))
+        old.goesUnder()
         panel = null
         progress.snapTo(0f)
         handler.removeCallbacks(focusWhenIdle)
         focusHolder.release()
-        AppLog.log("[shade] ${if (old == Panel.CC) "Control Center" else "Notification Center"} closes under the other panel")
+        AppLog.log("[shade] ${old.name} closes under the other panel")
     }
 
     /** The panel that was let go is out of sight (or must go now). */
@@ -662,31 +777,31 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val p = leavingPanel ?: return
         leavingPanel = null
         leaving.stop()
-        if (p == Panel.CC) { cc.progress = 0f; backdrop.set(0f, 0, 0f, 0f) } else nc.progress = 0f
-        cleanUp(p)
+        p.gone()
+        p.cleanUp()
         applyProgress()
     }
 
     /** Closes the open panel (animated). */
     fun close(velocity: Float = progress.velocity) {
-        if (panel == null) return
+        val p = panel ?: return
         // The focus (for Back) goes as the panel starts closing: held, the window manager hands a pull from the top to the
         // stock status bar, and a pull of the other panel during the close came only through the touchscreen's raw events.
         // (Over the lock screen it stays to the end: it hides One UI's fingerprint icon.)
         handler.removeCallbacks(focusWhenIdle)
         if (!locked) focusHolder.release()
-        progress.animateTo(0f, if (panel == Panel.NC) NC_CLOSE else CC_CLOSE, velocity.coerceAtMost(0f))
-        // iOS 27: the controls lift a few points as they fade; ours also fold back into the corner (ControlCenterView.closing).
-        if (panel == Panel.CC) { cc.closing(true); ccOffset.animateTo(-8f * u(), CC_CLOSE) }
+        progress.animateTo(0f, p.closeCurve, velocity.coerceAtMost(0f))
+        p.closes()
     }
 
     /** Gone at once (the screen went off). */
     fun closeNow() { endLeaving(); if (panel != null) finishClose() }
 
     private fun openFully(velocity: Float) {
+        val p = panel ?: return
         if (locked) focusHolder.take()
-        progress.animateTo(1f, if (panel == Panel.NC) NC_OPEN else ccOpen(), velocity)
-        if (panel == Panel.CC) { cc.closing(false); ccOffset.animateTo(0f, CC_SETTLE) }
+        progress.animateTo(1f, p.openCurve, velocity)
+        p.opensFully()
         regionOpen = true
         updateTouchable()
     }
@@ -701,7 +816,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var downX = 0f
     private var downY = 0f
     private var pulling = false
-    private var pullPanel = Panel.NC
+    private var pullPanel: Panel = ncPanel
+    /** The panel a touch on the open shade went to (the rest of that gesture goes to it too). */
+    private var touchPanel: Panel? = null
     private var dragFrom = 0f
     private var offsetFrom = 0f
     private var vt: VelocityTracker? = null
@@ -728,10 +845,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                     takenOver = false
                     // Which panel each side of the camera opens: the shade's layout's (iOS: notifications left, controls right).
                     val side = if (e.rawX >= rightOfCamera()) ShadeStructure.Pull.RIGHT_OF_CAMERA else ShadeStructure.Pull.LEFT_OF_CAMERA
-                    pullPanel = if (ShadeStructure.current().pulledFrom(side) == ShadeStructure.Kind.CONTROL_CENTER) Panel.CC else Panel.NC
+                    pullPanel = panelOf(ShadeStructure.current().pulledFrom(side))
                     startStream()
                 }
                 Touch.BOTTOM -> panelDrag(0, 0f, 0f)
+                Touch.PANEL -> touchPanel = panel
                 else -> {}
             }
         }
@@ -741,7 +859,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         when (touch) {
             Touch.GALLERY -> gallery.dispatchTouchEvent(e)
             Touch.BANNER -> banner.dispatchTouchEvent(e)
-            Touch.PANEL -> (if (panel == Panel.CC) cc else nc).dispatchTouchEvent(e)
+            Touch.PANEL -> touchPanel?.touch(e)
             Touch.PULL -> pull(e)
             Touch.BOTTOM -> when (e.actionMasked) {
                 MotionEvent.ACTION_MOVE -> panelDrag(1, e.rawY - downY, 0f)
@@ -818,11 +936,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 leavingPanel -> leaving.value
                 else -> -1f
             }
-            pullOffsetFrom = if (pullFrom >= 0f && pullPanel == Panel.CC) ccOffset.value else 0f
-            begin(pullPanel)
+            val p = pullPanel
+            val caught = pullFrom >= 0f
+            p.pullBegins(caught)
+            begin(p)
             progress.stop()
-            ccOffset.stop()
-            if (pullFrom >= 0f && panel == Panel.CC) cc.closing(false)
             downY = y
         }
         follow(y, y - downY)
@@ -831,20 +949,14 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     /** The open panel follows the finger at [y], [dy] past where it took the panel. */
     private fun follow(y: Float, dy: Float) {
         if (locked && !focusHolder.held && SystemClock.uptimeMillis() - touchDownAt > HANDOVER_MS) focusHolder.take()
-        progress.snapTo(if (pullFrom >= 0f) caughtProgress(dy) else fingerProgress(y, dy))
-        if (panel == Panel.CC) { lastPullDy = dy; ccOffset.snapTo(pullOffsetFrom + ccPull(dy)) }
+        val p = panel ?: return
+        progress.snapTo(if (pullFrom >= 0f) p.caughtProgress(pullFrom, dy) else p.fingerProgress(y, dy))
+        p.followed(dy)
     }
 
     /** Where the pulled panel was when the pull caught it on its way out (-1: the pull brought it from closed). */
     private var pullFrom = -1f
     private var pullOffsetFrom = 0f
-
-    /** A panel caught on its way out, [dy] after: moved on by the finger's travel from where it was. */
-    private fun caughtProgress(dy: Float): Float {
-        val raw = pullFrom + dy / travel()
-        return if (panel == Panel.CC) raw.coerceIn(0f, 1f)
-        else if (raw > 1f) 1f + Motion.rubberBand((raw - 1f) * travel(), root.height.toFloat()) / travel() else raw.coerceAtLeast(0f)
-    }
 
     /** The panel is closing by itself (no finger holds it). */
     private fun closingByItself() = panel != null && progress.isAnimating && progress.target <= 0f
@@ -939,55 +1051,34 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         return if (dt <= 0f) 0f else (rawV[last] - rawV[first]) / dt
     }
 
-    /** The panel's progress for a finger at [y] that has pulled [dy] since it took the panel. */
-    private fun fingerProgress(y: Float, dy: Float): Float = when (panel) {
-        // Notification Center: its bottom edge is under the finger.
-        Panel.NC -> (y / root.height).coerceAtLeast(0f).let { if (it > 1f) 1f + Motion.rubberBand(it - 1f, 0.5f) else it }
-        // Control Center: fully there after a short pull; past it, the finger pulls the controls down (ccOffset).
-        else -> (dy / ccTravel()).coerceIn(0f, 1f)
-    }
-
-    private fun travel() = if (panel == Panel.NC) root.height.toFloat() else ccTravel()
-
     private fun release(vy: Float) {
-        val v = vy / travel()
-        val p = progress.value
+        val p = panel ?: return
+        val v = vy / p.travel()
         val open = when {
             vy > FLING -> true
             vy < -FLING -> false
-            else -> p > 0.4f
+            else -> progress.value > 0.4f
         }
         if (open) {
             openFully(v)
-            // The controls rise from where the finger held them, carrying its speed into the spring.
-            if (panel == Panel.CC) ccOffset.animateTo(0f, CC_SETTLE, ccPullVelocity(lastPullDy, vy))
+            p.released(vy)
         } else close(v)
     }
 
     /** A vertical drag that a panel (or the bottom edge) hands over: it moves the panel with the finger. */
     private fun panelDrag(phase: Int, dy: Float, vy: Float) {
-        when (phase) {
-            0 -> { dragFrom = progress.value; offsetFrom = ccOffset.value; progress.stop(); ccOffset.stop(); handler.removeCallbacks(focusWhenIdle) }
-            1 -> if (panel == Panel.CC) {
-                // Down: the controls are pulled below their place as when opening; up: the panel fades with the finger
-                // and the controls lift with it a little.
-                cc.closing(dy < 0f)
-                if (dy > 0f) { progress.snapTo(dragFrom); ccOffset.snapTo(offsetFrom + ccPull(dy)); lastPullDy = dy }
-                else { progress.snapTo((dragFrom + dy / ccCloseTravel()).coerceIn(0f, 1f)); ccOffset.snapTo(offsetFrom + dy * 0.15f) }
-            } else {
-                val raw = dragFrom + dy / travel()
-                progress.snapTo(if (raw > 1f) 1f + Motion.rubberBand((raw - 1f) * travel(), root.height.toFloat()) / travel() else raw.coerceAtLeast(0f))
-            }
-            2 -> {
-                val v = vy / (if (panel == Panel.CC) ccCloseTravel() else travel())
-                val p = progress.value
-                when {
-                    vy < -FLING -> close(v)
-                    vy > FLING -> openFully(v)
-                    p < 0.75f -> close(v)
-                    else -> openFully(v)
-                }
-            }
+        val p = panel ?: return
+        if (phase == 0) { dragFrom = progress.value; progress.stop(); handler.removeCallbacks(focusWhenIdle) }
+        p.drag(phase, dy, vy)
+    }
+
+    /** A drag let go at [vy] px/s ([v]: in the panel's own units): a fling either way decides, else three quarters open stays. */
+    private fun dragEnds(v: Float, vy: Float) {
+        when {
+            vy < -FLING -> close(v)
+            vy > FLING -> openFully(v)
+            progress.value < 0.75f -> close(v)
+            else -> openFully(v)
         }
     }
 
@@ -1108,7 +1199,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             return true
         }
         val pi = item.contentIntent ?: return false
-        if (from == null || !pi.isActivity || panel != Panel.NC) return Notifs.open(ctx, item).also { if (it) close() }
+        if (from == null || !pi.isActivity || panel !== ncPanel) return Notifs.open(ctx, item).also { if (it) close() }
         val pkg = pi.creatorPackage ?: item.pkg
         cardFrom(pkg, from)
         launchIo.execute {
@@ -1199,7 +1290,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * how long to wait before starting the app (0: nothing to hold, the background is our picture already).
      */
     private fun holdBackdrop(): Long {
-        if (panel != Panel.CC || !liveBlur.available || backdrop.source == null) return 0L
+        if (panel !== ccPanel || !liveBlur.available || backdrop.source == null) return 0L
         backdropHold?.cancel()
         val hold = android.animation.ValueAnimator.ofFloat(backdrop.freeze, 1f).apply {
             timed(Motion.role(dev.launcher.app.motion.MotionTokens.CC_BACKDROP_HOLD))
@@ -1364,7 +1455,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         handler.removeCallbacks(tileWatch)
         tileWatch = object : Runnable {
             override fun run() {
-                if (panel != Panel.CC) return
+                if (panel !== ccPanel) return
                 val front = nav.frontPackage()
                 if (nav.frontSince() > t0 && front != null && front != ctx.packageName) {
                     AppLog.log("[tiles] $front came to the front after a tap on $id: closing")
@@ -1382,7 +1473,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     /** Control Center's edit mode from the lock screen: unlock first, then it opens again in edit mode. */
     private fun unlockToEdit() {
         close()
-        Unlock.then(ctx, "edit Control Center") { handler.postDelayed({ begin(Panel.CC); progress.snapTo(0.12f); openFully(0f); cc.enterEdit() }, 350) }
+        Unlock.then(ctx, "edit Control Center") { handler.postDelayed({ begin(ccPanel); progress.snapTo(0.12f); openFully(0f); cc.enterEdit() }, 350) }
     }
 
     private fun openGallery() {
@@ -1424,8 +1515,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (w == 0) return
         val edge = (40f * u()).toInt()
         exclusion.clear()
-        if (panel == Panel.NC && regionOpen) {
-            nc.swipeBand(swipeBand)
+        if (regionOpen) {
+            panel?.swipeBand(swipeBand) ?: swipeBand.setEmpty()
             // Only where the list reaches the edge (in landscape its column ends well inside: the edge keeps Back).
             if (!swipeBand.isEmpty && swipeBand.right > w - edge) exclusion += android.graphics.Rect(w - edge, swipeBand.top.toInt(), w, swipeBand.bottom.toInt())
         }
@@ -1445,15 +1536,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {
             if (event.keyCode == KeyEvent.KEYCODE_BACK && panel != null) {
-                if (event.action == KeyEvent.ACTION_UP) {
-                    when {
-                        gallery.isOpen -> gallery.close()
-                        cc.onBack() -> {}
-                        cc.editing -> cc.exitEdit()
-                        nc.onBack() -> {}
-                        else -> close()
-                    }
-                }
+                if (event.action == KeyEvent.ACTION_UP && panel?.back() != true) close()
                 return true
             }
             // While a panel holds the focus, the volume keys come here (not to an activity that would turn them into a
