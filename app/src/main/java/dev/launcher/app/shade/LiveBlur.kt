@@ -22,7 +22,8 @@ import java.util.concurrent.TimeUnit
  *   dim layer at all, so its dim turned into a blur (`FLAG_DIM_BEHIND` + `SEM_EXTENSION_FLAG_CHANGE_DIM_EFFECT_TO_BLUR`,
  *   strength following `dimAmount`, probe 14g) showed nothing: kept only for a One UI without the view blur. Standard
  *   cross-window blur is off on the S24 and cannot be switched on without root.
- * - Elsewhere, where the system allows cross-window blur (Android 12+): `FLAG_BLUR_BEHIND` with `blurBehindRadius`.
+ * - Elsewhere, where the system allows cross-window blur (Android 12+): `FLAG_BLUR_BEHIND` with `blurBehindRadius`, and a
+ *   dim too faint to see, without which SurfaceFlinger kept the blur hidden while a finger held the panel ([writeStrength]).
  * - Otherwise [available] is false and Control Center keeps its own blurred picture of what was behind (BackdropView).
  *
  * The window lives on a thread of its own: each change of its parameters is a relayout (10-50 ms of the window's thread),
@@ -179,7 +180,16 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
                 lp.dimAmount = (maxBlurPx * k).coerceIn(0f, 1f)
             }
             Mode.STANDARD -> if (Build.VERSION.SDK_INT >= 31) {
-                lp.flags = if (k > 0f) lp.flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND else lp.flags and WindowManager.LayoutParams.FLAG_BLUR_BEHIND.inv()
+                // With the blur, a dim too faint to see ([STANDARD_DIM]). Android's blur is the window manager's dim layer
+                // (black), shown at alpha 0 and given its radius in later frames. SurfaceFlinger works out which layers are
+                // visible again only when the layers change in a way it counts for that (one shown, hidden, added or removed,
+                // an alpha leaving or reaching 0), and a radius is not one: the dim layer, found invisible when shown (alpha 0,
+                // no blur yet), stayed invisible with its radius at 54, and home was sharp under Control Center while a finger
+                // held it, until anything else on the screen changed (Android 17 emulator). Its alpha leaving 0 is such a
+                // change, and with alpha above 0 the layer counts as visible whatever its radius.
+                val f = WindowManager.LayoutParams.FLAG_BLUR_BEHIND or WindowManager.LayoutParams.FLAG_DIM_BEHIND
+                lp.flags = if (k > 0f) lp.flags or f else lp.flags and f.inv()
+                lp.dimAmount = if (k > 0f) STANDARD_DIM else 0f
                 lp.blurBehindRadius = Math.round(maxBlurPx * k)
             }
             Mode.NONE -> {}
@@ -244,6 +254,12 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         /** Where the idle pixel lies: just past the screen's top-left corner. */
         const val IDLE_X = -4
         const val IDLE_Y = -4
+        /**
+         * The standard blur's dim (black's alpha): above 0 for SurfaceFlinger (see [writeStrength]), under half a step of
+         * 8-bit colour even on white (255 / 1024 = 0.25), so the picture is the blur's alone. 2^-10 is exact in the half
+         * precision SurfaceFlinger keeps alpha in.
+         */
+        const val STANDARD_DIM = 1f / 1024f
     }
 
     private fun setupSamsung() {

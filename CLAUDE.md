@@ -369,6 +369,19 @@ copy it wholesale — port the working pieces cleanly. File map:
   with the panel, stayed a heavy blur after the controls had gone and then cleared at once (Matheesha's video). `LiveBlur`
   sets the radius on that scale, (1 + max)^k - 1. And One UI 9 has no `View.semSetBlurEnabled`: a null `SemBlurInfo`
   clears a view's blur (`SamsungBlur.clear`).
+- **SurfaceFlinger does not re-check a layer's visibility when only its blur radius changes** (Android 17 emulator; the
+  standard blur, `LiveBlur` mode STANDARD: Pixels and other non-Samsung phones). Android's blur behind a window is the
+  window manager's dim layer ("Dim Layer for - Display 0"): `DimmerAnimationHelper` shows it at alpha 0 and sets its
+  radius in later frames. SurfaceFlinger works out which layers are visible again only when a layer is shown, hidden,
+  added, removed or moved, or an alpha leaves or reaches 0: judged invisible when shown (alpha 0, no blur yet), the layer
+  stayed invisible at radius 54 and home was sharp under Control Center for as long as a finger held it, until anything
+  else changed the layers (the release; a volume key's panel during the hold blurred it at once). `dumpsys SurfaceFlinger`
+  gave it away: "invisible reason= color{...} alpha=0 backgroundBlurRadius=54", a reason that lists only what makes a layer
+  visible. `LiveBlur` sets `FLAG_DIM_BEHIND` with `dimAmount` 1/1024 together with the blur: the alpha leaving 0 makes
+  SurfaceFlinger check again, and above 0 the layer counts as visible whatever its radius (1/1024 of black is under half an
+  8-bit step). The window manager already counted the window as dimming for its blur flag (`isDimming`: the navigation
+  bar's colour), so nothing else changes. Check: during `input swipe 900 5 900 1900 7000` the layer reads "visible ...
+  alpha=0.000976562".
 - **The picture of home behind cards is blurrier than home's own blur at the same radius** (it blurs a quarter-size copy
   and scales it up: about twice the look). Handing over from one to the other mid-flight pulsed the whole screen sharp
   for a frame (opening an app during a close). Never swap them mid-motion: keep the picture until something replaces
@@ -942,7 +955,12 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
   `actual_frame_timeline_slice` (jank types "App Deadline Missed", "Dropped Frame"). `DESIGN_RELOAD --es files export`
   also copies `home_layout.json` (the dock and pages, for checking a layout without run-as).
 - `dumpsys gfxinfo ... framestats` keeps only a window's last ~120 frames (one second at 120 Hz): reset just before a
-  step and read it within a second; a longer window reads only its last second (sample several, or trace).
+  step and read it within a second; a longer window reads only its last second (sample several, or trace). The emulator
+  gives no present times there (`framestats.py` prints no "shown" line): what it presented, and late, is in Perfetto's
+  frame timeline (`android.surfaceflinger.frametimeline`, table `actual_frame_timeline_slice`).
+- Another session may be driving the same emulator (each one's installs replace the other's build, both print "BUILD
+  local"): before trusting a result, check that the installed APK is the one under test (`md5sum` of `pm path
+  dev.launcher.app` against the local APK), and agree on the emulator with any other running session first.
 - `tools/frame_glitch.py REC.mp4 X Y W H [THR] [OUTDIR]` finds 1-4 frame flickers in a region of a recording (how the dock's
   one-frame glitch at the end of a grabbed close was found); `tools/appearance_tour.sh PREFIX` screenshots every surface.
 - Unlock animations: the S24's lock screen is secure (Matheesha unlocks; read the "[home] arrival" log lines afterwards).
