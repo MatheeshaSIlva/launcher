@@ -350,7 +350,17 @@ On the S24 (9d54bb3, Matheesha): "everything works the same".
   `shade/cc/CcPanel` (the choreography's numbers: `CcClose`). Checked on the emulator against 2c: Control Center upright
   and turned the same pictures but for home's clock widget under the glass; "+" enters edit mode, a press dragged off it
   does nothing, a tap on power does nothing and a hold opens the power dialog.
-- 3b: the grid (its controls, modules, sliders, edit mode, the menu of a held control, the expanded modules).
+- 3b: the grid is a block (`shade/cc/ControlGridBlock`: the page and its columns, every control in its own layer, the
+  modules and sliders, Connectivity's circles and the player, apps' tiles, edit mode with its empty cells, drags, resizes
+  and "Add a Control", a held control's menu, the expanded modules, and their touches), moved as it was; the panel keeps
+  how present and how far pulled it is, the closing fold, the blocks' layout, "+" and power drawn over the grid as far as
+  it rests (`quiet`), and gives a touch to the buttons if it starts on one, else to the grid (`ControlCenterView` went
+  from 1550 lines to 278). Checked on the emulator against 3a: the same pictures upright and turned (but for the
+  emulator's signal bars and home's clock widget under the glass); a toggle on and off, the brightness slider up, down
+  and past its end, the camera held (its menu) and a tap outside, the player held (the large player) and Back, "+" into
+  edit mode, a control dragged to another cell and back, Focus resized to one cell and back, Quick Share removed and
+  added again from the gallery, a tap on empty space out of edit mode and a long press into it, a drag up closing the
+  panel; turned: a toggle, a long press (no edit mode there), the camera's menu, a drag closing it.
 - 3c: which blocks Control Center has is the file's.
 
 ## References
