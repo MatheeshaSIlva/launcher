@@ -402,6 +402,21 @@ On the S24 (9d54bb3, Matheesha): "everything works the same".
 One stage or two (Pixel's first pull: the quick row and the notifications; the second: the full Quick Settings) comes with
 Pixel's combined panel, the first panel to have two. Next: step 4, Pixel's shade as a second layout file.
 
+## Step 4: Pixel's shade as a layout file (started 2026-10-21)
+
+Matheesha (2026-10-21), on whether iOS should offer Control Center on the left: "it should be configurable for each
+layout. just like samsung does, the user can choose to combine both notifications and qs or keep them separate if the
+layout supports it"; and on a written plan for Pixel's shade: "no need to write up a plan".
+
+**Stage 1, places choose their panels (2026-10-21).** A layout's places may use different panels: one place pulls one
+panel from the whole top edge (together), another two from each side of the camera (separately), as One UI's Quick
+panel setting; every place has a panel for the notifications, every panel is used by some place (docs/LAYOUT_FILES.md).
+iOS offers its two arrangements: Notifications on the left (iOS's own, the default) and Control Center on the left.
+Checked on the emulator: the settings show both under "Where it lives" (the stage playing each place's strokes); the
+mirrored one chosen and applied there ("[setup] shade: ios (split-top-mirrored)"): the left pull opened Control Center,
+the right Notification Center (its fold into the left corner was checked in stage 4b). The layout tests now read the
+file with Windows' line endings turned into plain ones (they failed on a fresh checkout, where Git writes CRLF).
+
 ## References
 
 - Captures (emulator, Android 17 SystemUI, 1080 x 2400, 420 dpi): `tools/shots/shade_qqs.png` (first pull),

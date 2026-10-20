@@ -36,9 +36,8 @@ with the reason. Nothing passes as a default by accident.
 
 ## The shade
 
-`structure.panels`: the panels the shade has, one or two: Notification Center always (the notifications need a panel:
-banners open it, the lock screen shows it), Control Center or not; each kind once. Each is `{"panel", "blocks",
-"landscape"}`:
+`structure.panels`: every panel the layout's places use (each kind once; every panel used by some place). Each is
+`{"panel", "blocks", "landscape"}`:
 
 | Key | Values | Read by |
 | --- | --- | --- |
@@ -46,17 +45,22 @@ banners open it, the lock screen shows it), Control Center or not; each kind onc
 | `blocks` | What the panel is made of, in order (below) | |
 | `landscape` | Notification Center: `clock-beside-list` (iOS 27: the date and time small at the top left, the notifications in a column of the portrait width beside them; measurements in tokens `comp.nc.land.*`) or `as-portrait` (as upright, across the turned screen). Control Center: `flow` (the grid flowed across as many columns as fit) | `NotificationCenterView.land`, `ControlCenterView.syncTokens` |
 
-Where each panel is pulled from is the place's (the user chooses among the layout's places, as for every element):
-`placements[].pulls`, which panel each part of the top edge opens, each `{"from", "panel"}`. `from`: `top` (anywhere along
-it), `left-of-camera` or `right-of-camera` (the camera's place, or the middle where there is none); `panel`: one of the
-structure's. One panel is pulled from the top; two, one from each side of the camera, either way round. Read by
-`Shade.onTouch` (in the place chosen: `Setup.placement`), Control Center's fold (it folds back into the corner it is pulled
-from: `CcPanel.cornerX`) and the settings' stage (its finger from each part of the edge in the file's order, opening its
-panel: `settings/Stage.gestureOf`). iOS's one place:
+Which panels open, and where each is pulled from, is the place's: the user chooses among the layout's places, as for
+every element, and a layout may offer its panels together (one panel from anywhere along the top) and separately (two,
+one each side of the camera), as One UI's Quick panel setting does, or its sides either way round. `placements[].pulls`:
+which panel each part of the top edge opens, each `{"from", "panel"}`. `from`: `top` (anywhere along it),
+`left-of-camera` or `right-of-camera` (the camera's place, or the middle where there is none); `panel`: one of the
+structure's. One panel is pulled from the top; two, one from each side of the camera. Every place has a panel for the
+notifications (banners open it, the lock screen shows it). Read by `Shade.onTouch` (in the place chosen:
+`Setup.placement`), Control Center's fold (it folds back into the corner it is pulled from: `CcPanel.cornerX`) and the
+settings' stage (its finger from each part of the edge in the file's order, opening its panel: `settings/Stage.gestureOf`).
+iOS's two places (iOS's own first, the default):
 
 ```json
-{"id": "split-top", "title": "...", "description": "...",
- "pulls": [{"from": "left-of-camera", "panel": "notification-center"}, {"from": "right-of-camera", "panel": "control-center"}]}
+{"id": "split-top", "title": "Notifications on the left", "description": "...",
+ "pulls": [{"from": "left-of-camera", "panel": "notification-center"}, {"from": "right-of-camera", "panel": "control-center"}]},
+{"id": "split-top-mirrored", "title": "Control Center on the left", "description": "...",
+ "pulls": [{"from": "left-of-camera", "panel": "control-center"}, {"from": "right-of-camera", "panel": "notification-center"}]}
 ```
 
 Blocks, each `{"block": ID, ...its parameters}`:

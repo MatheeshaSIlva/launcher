@@ -9,11 +9,20 @@
  "placements": [
   {
    "id": "split-top",
-   "title": "Pull from the top: notifications on the left, controls on the right",
-   "description": "Pull down from the top edge left of the camera for notifications, right of it for the controls.",
+   "title": "Notifications on the left",
+   "description": "Pull down left of the camera for notifications, right of it for Control Center.",
    "pulls": [
     {"from": "left-of-camera", "panel": "notification-center"},
     {"from": "right-of-camera", "panel": "control-center"}
+   ]
+  },
+  {
+   "id": "split-top-mirrored",
+   "title": "Control Center on the left",
+   "description": "Pull down left of the camera for Control Center, right of it for notifications.",
+   "pulls": [
+    {"from": "left-of-camera", "panel": "control-center"},
+    {"from": "right-of-camera", "panel": "notification-center"}
    ]
   }
  ],

@@ -6,6 +6,8 @@ import dev.launcher.app.layout.LayoutFileError
 import dev.launcher.app.layout.Layouts
 import dev.launcher.app.layout.Option
 import dev.launcher.app.layout.ShadeStructure
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -16,7 +18,8 @@ import java.io.File
 /** Layout files (docs/LAYOUT_FILES.md): what ships loads, the iOS shade is today's shade, and the reader is strict. */
 class LayoutFilesTest {
     private val dir = File("src/main/assets/layouts")
-    private val iosShade get() = File(dir, "shade/ios.json").readText()
+    // (A Windows checkout has CRLF line endings: the edits below look for "\n".)
+    private val iosShade get() = File(dir, "shade/ios.json").readText().replace("\r\n", "\n")
 
     @Test fun everyShippedLayoutFileLoads() {
         val files = dir.walkTopDown().filter { it.isFile && it.name.endsWith(".json") }.toList()
@@ -35,11 +38,10 @@ class LayoutFilesTest {
         val s = LayoutFile.parse(iosShade).spec
         assertEquals(Element.SHADE, s.element)
         assertEquals(listOf("ios", "iOS", "iOS 27", "Notification Center and Control Center as two panels."), listOf(s.id, s.title, s.origin, s.description))
-        assertEquals(1, s.placements.size)
-        val p = s.placements.single()
-        assertEquals("split-top", p.id)
-        assertEquals("Pull from the top: notifications on the left, controls on the right", p.title)
-        assertEquals("Pull down from the top edge left of the camera for notifications, right of it for the controls.", p.description)
+        // Notifications on the left (iOS's, the first: the default) or Control Center there.
+        assertEquals(listOf("split-top", "split-top-mirrored"), s.placements.map { it.id })
+        assertEquals(listOf("Notifications on the left", "Control Center on the left"), s.placements.map { it.title })
+        assertEquals("Pull down left of the camera for notifications, right of it for Control Center.", s.placements[0].description)
         val o = s.options.single() as Option.Count
         assertEquals(listOf<Any>("cc-columns", "Control columns", "Controls across Control Center.", 4, 4, 6),
             listOf<Any>(o.key, o.title, o.description, o.default, o.min, o.max))
@@ -50,6 +52,8 @@ class LayoutFilesTest {
         val st = LayoutFile.parse(iosShade).shade!!
         assertEquals(ShadeStructure.Kind.NOTIFICATION_CENTER, st.pulledFrom("split-top", ShadeStructure.Pull.LEFT_OF_CAMERA))
         assertEquals(ShadeStructure.Kind.CONTROL_CENTER, st.pulledFrom("split-top", ShadeStructure.Pull.RIGHT_OF_CAMERA))
+        assertEquals(ShadeStructure.Kind.CONTROL_CENTER, st.pulledFrom("split-top-mirrored", ShadeStructure.Pull.LEFT_OF_CAMERA))
+        assertEquals(ShadeStructure.Kind.NOTIFICATION_CENTER, st.pulledFrom("split-top-mirrored", ShadeStructure.Pull.RIGHT_OF_CAMERA))
         assertEquals(listOf(ShadeStructure.Kind.NOTIFICATION_CENTER, ShadeStructure.Kind.CONTROL_CENTER), st.panels.map { it.kind })
         assertEquals(ShadeStructure.Opens.STACKED, st.opens)
         assertTrue(st.ncClockBesideList)
@@ -141,33 +145,25 @@ class LayoutFilesTest {
 
     /** Where each panel is pulled from is the place's: the sides either way round, and as many places as the file names. */
     @Test fun eachPlaceSaysWhereEachPanelIsPulledFrom() {
-        val swapped = LayoutFile.parse(iosShade
-            .replace("{\"from\": \"left-of-camera\", \"panel\": \"notification-center\"}", "{\"from\": \"left-of-camera\", \"panel\": \"control-center\"}")
-            .replace("{\"from\": \"right-of-camera\", \"panel\": \"control-center\"}", "{\"from\": \"right-of-camera\", \"panel\": \"notification-center\"}")).shade!!
-        assertEquals(ShadeStructure.Kind.CONTROL_CENTER, swapped.pulledFrom("split-top", ShadeStructure.Pull.LEFT_OF_CAMERA))
-        assertEquals(ShadeStructure.Kind.NOTIFICATION_CENTER, swapped.pulledFrom("split-top", ShadeStructure.Pull.RIGHT_OF_CAMERA))
-        // A second place, the other way round: each place its own; a place the layout does not have is its first.
-        val two = LayoutFile.parse(iosShade.replace("\n  }\n ],\n \"options\"", """
-  },
-  {
-   "id": "split-top-swapped",
-   "title": "Controls on the left, notifications on the right",
-   "description": "Pull down from the top edge left of the camera for the controls, right of it for notifications.",
-   "pulls": [
-    {"from": "right-of-camera", "panel": "notification-center"},
-    {"from": "left-of-camera", "panel": "control-center"}
-   ]
-  }
- ],
- "options""""))
-        assertEquals(listOf("split-top", "split-top-swapped"), two.spec.placements.map { it.id })
-        val st = two.shade!!
-        assertEquals(ShadeStructure.Kind.NOTIFICATION_CENTER, st.pulledFrom("split-top", ShadeStructure.Pull.LEFT_OF_CAMERA))
-        assertEquals(ShadeStructure.Kind.CONTROL_CENTER, st.pulledFrom("split-top-swapped", ShadeStructure.Pull.LEFT_OF_CAMERA))
-        assertEquals(ShadeStructure.Kind.NOTIFICATION_CENTER, st.pulledFrom("split-top-swapped", ShadeStructure.Pull.RIGHT_OF_CAMERA))
+        val st = LayoutFile.parse(iosShade).shade!!
+        // A place the layout does not have is its first.
         assertEquals(ShadeStructure.Kind.NOTIFICATION_CENTER, st.pulledFrom("nowhere", ShadeStructure.Pull.LEFT_OF_CAMERA))
         // (The settings' stage plays the strokes in the file's order.)
-        assertEquals(listOf(ShadeStructure.Pull.RIGHT_OF_CAMERA, ShadeStructure.Pull.LEFT_OF_CAMERA), st.pullsOf("split-top-swapped").map { it.from })
+        assertEquals(listOf(ShadeStructure.Pull.LEFT_OF_CAMERA, ShadeStructure.Pull.RIGHT_OF_CAMERA), st.pullsOf("split-top-mirrored").map { it.from })
+        val reordered = LayoutFile.parse(variant { places(it)[1].put("pulls", pulls("right-of-camera" to "notification-center", "left-of-camera" to "control-center")) }).shade!!
+        assertEquals(listOf(ShadeStructure.Pull.RIGHT_OF_CAMERA, ShadeStructure.Pull.LEFT_OF_CAMERA), reordered.pullsOf("split-top-mirrored").map { it.from })
+        assertEquals(ShadeStructure.Kind.CONTROL_CENTER, reordered.pulledFrom("split-top-mirrored", ShadeStructure.Pull.LEFT_OF_CAMERA))
+    }
+
+    /** A layout's places may use different panels (together, or separately: the user's choice, as One UI's Quick panel). */
+    @Test fun placesMayUseDifferentPanels() {
+        val st = LayoutFile.parse(variant { places(it)[1].put("pulls", pulls("top" to "notification-center")) }).shade!!
+        assertTrue(st.uses("split-top", ShadeStructure.Kind.CONTROL_CENTER))
+        assertTrue(!st.uses("split-top-mirrored", ShadeStructure.Kind.CONTROL_CENTER))
+        for (side in listOf(ShadeStructure.Pull.LEFT_OF_CAMERA, ShadeStructure.Pull.RIGHT_OF_CAMERA))
+            assertEquals(ShadeStructure.Kind.NOTIFICATION_CENTER, st.pulledFrom("split-top-mirrored", side))
+        // Every panel is opened in some place.
+        refused(variant { for (p in places(it)) p.put("pulls", pulls("top" to "notification-center")) }, "a panel no place opens")
     }
 
     /** One panel, pulled from anywhere along the top edge: the layout has no Control Center. */
@@ -178,16 +174,12 @@ class LayoutFilesTest {
             assertEquals(ShadeStructure.Kind.NOTIFICATION_CENTER, one.pulledFrom("top", side))
         assertNull(one.controlCenter)
         assertNull(one.controlGrid)
-        assertTrue(!one.has(ShadeStructure.Kind.CONTROL_CENTER) && !one.ccHasButtons && !one.ccHasStatusRow)
+        assertTrue(!one.uses("top", ShadeStructure.Kind.CONTROL_CENTER) && !one.ccHasButtons && !one.ccHasStatusRow)
         refused(onePanel().replace("\"from\": \"top\"", "\"from\": \"left-of-camera\""), "one panel from a side only")
-        refused(onePanel().replace("{\"from\": \"top\", \"panel\": \"notification-center\"}",
-            "{\"from\": \"top\", \"panel\": \"notification-center\"}, {\"from\": \"top\", \"panel\": \"notification-center\"}"), "the edge twice")
-        // The notifications need a panel; a panel once.
-        refused(onePanel().replace("\"panel\": \"notification-center\",\n    \"blocks\": [\n     {\"block\": \"lock-clock\"},\n     {\"block\": \"notifications\", \"opens\": \"stacked\"},\n     {\"block\": \"corner-buttons\"}\n    ],\n    \"landscape\": \"clock-beside-list\"",
-            "\"panel\": \"control-center\",\n    \"blocks\": [\n     {\"block\": \"control-grid\", \"columns\": 4, \"editor\": \"in-place\"}\n    ],\n    \"landscape\": \"flow\"")
-            .replace("\"panel\": \"notification-center\"}", "\"panel\": \"control-center\"}"), "Control Center alone: no place for the notifications")
-        refused(iosShade.replace("\"panel\": \"control-center\",\n    \"blocks\": [\n     {\"block\": \"top-buttons\"},\n     {\"block\": \"status-row\"},\n     {\"block\": \"control-grid\", \"columns\": {\"option\": \"cc-columns\"}, \"editor\": \"in-place\"}\n    ],\n    \"landscape\": \"flow\"",
-            "\"panel\": \"notification-center\",\n    \"blocks\": [\n     {\"block\": \"notifications\", \"opens\": \"list\"}\n    ],\n    \"landscape\": \"as-portrait\""), "Notification Center twice")
+        refused(onePanel { places(it)[0].put("pulls", pulls("top" to "notification-center", "top" to "notification-center")) }, "the edge twice")
+        // The notifications need a panel in every place; a panel once.
+        refused(variant { places(it)[1].put("pulls", pulls("top" to "control-center")) }, "a place with Control Center alone: no panel for the notifications")
+        refused(variant { panels(it).put(JSONObject(panels(it).getJSONObject(0).toString())) }, "Notification Center twice")
     }
 
     /** Only the shade's places say where its panels are pulled from. */
@@ -198,13 +190,24 @@ class LayoutFilesTest {
         refused(drawer.replace("\"Up from anywhere.\"}", "\"Up from anywhere.\", \"pulls\": []}"), "pulls on a drawer's place")
     }
 
-    /** The iOS file with only Notification Center, pulled from anywhere on the top edge. */
-    private fun onePanel(): String = iosShade
-        .replace("\"id\": \"split-top\"", "\"id\": \"top\"")
-        .replace("{\"from\": \"left-of-camera\", \"panel\": \"notification-center\"},\n    {\"from\": \"right-of-camera\", \"panel\": \"control-center\"}",
-            "{\"from\": \"top\", \"panel\": \"notification-center\"}")
-        .replace(",\n   {\n    \"panel\": \"control-center\",\n    \"blocks\": [\n     {\"block\": \"top-buttons\"},\n     {\"block\": \"status-row\"},\n     {\"block\": \"control-grid\", \"columns\": {\"option\": \"cc-columns\"}, \"editor\": \"in-place\"}\n    ],\n    \"landscape\": \"flow\"\n   }", "")
-        .also { check(it != iosShade && "control-center" !in it) { "the one-panel file did not come out" } }
+    /** The iOS file changed by [edit] (on its JSON). */
+    private fun variant(edit: (JSONObject) -> Unit): String = JSONObject(iosShade).also(edit).toString(1)
+
+    private fun places(o: JSONObject): List<JSONObject> = o.getJSONArray("placements").let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
+    private fun panels(o: JSONObject): JSONArray = o.getJSONObject("structure").getJSONArray("panels")
+
+    /** A place's pulls: each part of the edge and the panel it opens. */
+    private fun pulls(vararg p: Pair<String, String>): JSONArray =
+        JSONArray().also { a -> for ((from, panel) in p) a.put(JSONObject().put("from", from).put("panel", panel)) }
+
+    /** The iOS file with only Notification Center, pulled from anywhere on the top edge (one place: "top"), then [edit]. */
+    private fun onePanel(edit: (JSONObject) -> Unit = {}): String = variant { o ->
+        o.put("placements", JSONArray().put(JSONObject().put("id", "top").put("title", "From the top").put("description", "Anywhere along the top.")
+            .put("pulls", pulls("top" to "notification-center"))))
+        val ps = panels(o)
+        for (i in ps.length() - 1 downTo 0) if (ps.getJSONObject(i).getString("panel") == "control-center") ps.remove(i)
+        edit(o)
+    }
 
     @Test fun yourOwnFileWinsIfItIsValid() {
         val path = "layouts/shade/ios.json"

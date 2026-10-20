@@ -20,7 +20,10 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
         /** iOS's Notification Center: a sheet pulled down over the screen. */
         NOTIFICATION_CENTER("notification-center"),
         /** iOS's Control Center: the controls over the blurred screen. */
-        CONTROL_CENTER("control-center"),
+        CONTROL_CENTER("control-center");
+
+        /** It shows the notifications (every place of a layout has a panel that does: banners open it, the lock screen shows it). */
+        val holdsNotifications: Boolean get() = this == NOTIFICATION_CENTER
     }
 
     /** A part of the top edge a pull opens a panel from: all of it, or a side of the camera (of the middle where there is none). */
@@ -69,11 +72,10 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
         val value: Int get() = fixed ?: option!!.let { Setup.int(Element.SHADE, it.key, it.default) }
     }
 
-    /** The notifications' panel (every shade has it). */
+    /** The notifications' panel (every iOS shade has it). */
     val notificationCenter: Panel get() = panels.first { it.kind == Kind.NOTIFICATION_CENTER }
     /** Control Center, if the layout has it. */
     val controlCenter: Panel? get() = panels.firstOrNull { it.kind == Kind.CONTROL_CENTER }
-    fun has(kind: Kind): Boolean = panels.any { it.kind == kind }
 
     /** How Notification Center opens. */
     val opens: Opens get() = notificationCenter.block<Block.Notifications>()!!.opens
@@ -93,6 +95,9 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
 
     /** The panel a pull from [side] of the camera opens in [placement] (the one panel wherever a place pulls it from the top). */
     fun pulledFrom(placement: String?, side: Pull): Kind = pullsOf(placement).let { a -> (a.firstOrNull { it.from == side } ?: a.first()).kind }
+
+    /** [placement] opens the panel of [kind] (a layout's places may use different panels: together, or separately). */
+    fun uses(placement: String?, kind: Kind): Boolean = pullsOf(placement).any { it.kind == kind }
 
     companion object {
         /** The shade's structure in use: the chosen layout's (the default's, should it have none). */
@@ -117,21 +122,25 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
 
         /**
          * The structure [o], with each of the layout's [placements] (its id and its object, whose `pulls` are read here: the
-         * file ends it after) saying where each panel is pulled from.
+         * file ends it after) saying which of its panels it uses and where each is pulled from: the panels are every panel
+         * the layout's places use (together, separately: the user chooses among them, as One UI's Quick panel setting).
          */
         internal fun parse(o: Strict, options: List<Option>, placements: List<Pair<String, Strict>>): ShadeStructure {
             val panels = o.objs("panels").map { p -> panel(p, options) }
             o.end()
-            if (panels.size !in 1..2) o.fail("structure.panels: ${panels.size} (one panel or two)")
+            if (panels.isEmpty()) o.fail("structure.panels: none")
             for (k in Kind.entries) if (panels.count { it.kind == k } > 1) o.fail("structure.panels: ${k.id} more than once")
-            // The notifications need a panel: banners open it, the lock screen shows it.
-            if (panels.none { it.kind == Kind.NOTIFICATION_CENTER }) o.fail("structure.panels: no ${Kind.NOTIFICATION_CENTER.id} (the notifications need a panel)")
             val pulls = LinkedHashMap<String, List<PullArea>>()
             for ((id, p) in placements) pulls[id] = pulls(p, panels)
+            panels.firstOrNull { pn -> pulls.values.none { a -> a.any { it.kind == pn.kind } } }
+                ?.let { o.fail("structure.panels: no place pulls ${it.kind.id}") }
             return ShadeStructure(panels, pulls)
         }
 
-        /** A place's `pulls`: the whole top edge opening the one panel, or each side of the camera one of the two. */
+        /**
+         * A place's `pulls`: the whole top edge opening one panel, or each side of the camera one of two; one of them shows
+         * the notifications.
+         */
         private fun pulls(p: Strict, panels: List<Panel>): List<PullArea> {
             val areas = p.objs("pulls").map { a ->
                 val fromId = a.str("from")
@@ -142,10 +151,12 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
                 a.end()
                 PullArea(from, kind)
             }
-            val want = if (panels.size == 1) listOf(Pull.TOP) else listOf(Pull.LEFT_OF_CAMERA, Pull.RIGHT_OF_CAMERA)
-            if (areas.size != want.size || areas.map { it.from }.toSet() != want.toSet())
-                p.fail("pulls: ${if (panels.size == 1) "one panel is pulled from the top (from: top)" else "two panels: one from left-of-camera, the other from right-of-camera"}")
+            val want = if (areas.size == 1) setOf(Pull.TOP) else setOf(Pull.LEFT_OF_CAMERA, Pull.RIGHT_OF_CAMERA)
+            if (areas.size !in 1..2 || areas.map { it.from }.toSet() != want)
+                p.fail("pulls: one panel from the top (from: top), or two: one from left-of-camera, the other from right-of-camera")
             if (areas.map { it.kind }.toSet().size != areas.size) p.fail("pulls: a panel twice (each panel from its own part of the edge)")
+            // The notifications need a panel: banners open it, the lock screen shows it.
+            if (areas.none { it.kind.holdsNotifications }) p.fail("pulls: no panel for the notifications")
             return areas
         }
 

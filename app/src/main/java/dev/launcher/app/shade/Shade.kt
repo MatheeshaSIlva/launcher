@@ -380,6 +380,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     /** The panel of [kind]. */
     private fun panelOf(kind: ShadeStructure.Kind): Panel = if (kind == ShadeStructure.Kind.CONTROL_CENTER) ccPanel else ncPanel
 
+    /** The layout's place in use opens a panel of [kind]. */
+    private fun uses(kind: ShadeStructure.Kind): Boolean = ShadeStructure.current().uses(Setup.placement(Element.SHADE).id, kind)
+
     /**
      * The phone's power menu, through the accessibility service (Android's global action; One UI logs its answer as
      * "GlobalActions: showDialog ..."). What Android said is in our log: the S24 showed no menu once (2026-10-20).
@@ -436,7 +439,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 // script's pictures of a panel at rest, never caught mid-pull).
                 if (i.getStringExtra("do") == "open") handler.post {
                     val p = if (i.getStringExtra("panel") == "nc") ncPanel else ccPanel
-                    if (!ShadeStructure.current().has(p.kind)) { AppLog.log("[shade] test: the layout has no ${p.name}"); return@post }
+                    if (!uses(p.kind)) { AppLog.log("[shade] test: the layout's place has no ${p.name}"); return@post }
                     begin(p); openFully(0f)
                 }
                 if (i.getStringExtra("do") == "close") handler.post { close(0f) }
@@ -734,8 +737,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private val ccWarm = object : Runnable {
         override fun run() {
-            // (A layout without Control Center: nothing to record.)
-            if (!ShadeStructure.current().has(ShadeStructure.Kind.CONTROL_CENTER)) return
+            // (A place without Control Center: nothing to record.)
+            if (!uses(ShadeStructure.Kind.CONTROL_CENTER)) return
             val touched = android.os.SystemClock.uptimeMillis() - dev.launcher.app.HomeBridge.lastTouchAt < CC_WARM_UNTOUCHED_MS
             if (panel != null || leavingPanel != null || !dev.launcher.app.GestureNav.idle || touched) {
                 if (panel == null) handler.postDelayed(this, CC_WARM_RETRY_MS)   // (an opening records what is left)
