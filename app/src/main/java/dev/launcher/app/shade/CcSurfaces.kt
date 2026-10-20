@@ -53,10 +53,12 @@ class CcSurfaces {
     /**
      * A surface of [m], [w] x [h] at the canvas's origin with corner [radius], faded by [alpha]. ([sx], [sy]): where that
      * origin is on screen, [scale]: how much it is scaled there (what its glass samples). [under] lie between what is
-     * behind and the surface; [over] on its fills at [overK]; [press] lightens it.
+     * behind and the surface; [over] on its fills at [overK]; [press] lightens it. [radii]: a corner each (top left, top
+     * right, bottom right, bottom left) in place of [radius].
      */
     fun draw(c: Canvas, m: Material, w: Float, h: Float, radius: Float, sx: Float, sy: Float, scale: Float = 1f, alpha: Float = 1f,
-             press: Float = 0f, under: List<Fill> = emptyList(), over: List<Fill> = emptyList(), overK: Float = 0f) {
+             press: Float = 0f, under: List<Fill> = emptyList(), over: List<Fill> = emptyList(), overK: Float = 0f,
+             radii: FloatArray? = null) {
         if (alpha <= 0.003f) return
         val p = painter
         if (p == null) {
@@ -66,7 +68,7 @@ class CcSurfaces {
             return
         }
         p.setBackdrop(backdrop)
-        p.draw(c, m, w, h, radius, sx, sy, scale, alpha, under, press, over, overK)
+        p.draw(c, m, w, h, radius, sx, sy, scale, alpha, under, press, over, overK, radii = radii)
     }
 
     /** A module: Control Center's clear glass, with [on] of its "on" fill (the kit's white; [accent]: that colour instead). */

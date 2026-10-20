@@ -52,8 +52,8 @@ T = {
     'sys.color.source': {'choice': 'wallpaper', 'src': "judged:a Pixel always takes the wallpaper's colours (Material You)"},
 
     # ---- What covers the screen behind the controls (Quick Settings' veil over a blur).
-    'component.panel.material': material([['@surface_container_lowest', [0.55, 0.72], 'NORMAL']], frost=30,
-        src="measured:the shade's veil over a blur, about 55 % light in light and 72 % dark in dark (docs/PIXEL_PROFILE.md, the captures)"),
+    'component.panel.material': material([['@surface_container_lowest', [0.55, 0.72], 'NORMAL']], frost=48,
+        src="measured:the shade's veil over a blur, about 55 % light in light and 72 % dark in dark (docs/PIXEL_PROFILE.md, the captures); heavy enough that home's icons are soft blobs (frost 30 left the shape of home's large clock)"),
 
     # ---- Quick Settings tiles (our controls).
     'component.control.material': material([['@surface_container_lowest|@surface_container_highest', [0.45, 0.55], 'NORMAL']],
@@ -190,6 +190,34 @@ T = {
     'component.button.fill': color('@secondary_container', 'judged:Material\'s filled tonal button (secondaryContainer)'),
     'component.button.height': pt(40, 'judged:Material 3 Expressive\'s small button (40 dp)'),
     'component.button.text': text(14, 20, 500, 0.1, 'judged:labelLarge'),
+
+    # ---- Android's shade (comp.qs.*: its sizes are in iOS 27's already; here its words and colours as a Pixel's).
+    'comp.qs.header.clock': text(36, 44, 400, 0, 'kit:AOSP SystemUI shade header: displaySmall (36/44)'),
+    'comp.qs.header.date': text(14, 20, 500, 0.1, 'kit:AOSP SystemUI shade header: titleSmall (14/20, 500)'),
+    'comp.qs.header.carrier': text(14, 20, 500, 0.1, 'kit:AOSP SystemUI shade header: titleSmall (14/20, 500)'),
+    'comp.qs.header.color': color('@on_surface', 'kit:AOSP SystemUI shade header: onSurface'),
+    'comp.qs.brightness.track': material([['@secondary_container', 1.0, 'NORMAL']], src='kit:AOSP compose PlatformSlider: the inactive track in secondaryContainer'),
+    'comp.qs.brightness.level': material([['@primary', 1.0, 'NORMAL']], src='kit:AOSP compose PlatformSlider: the active track in primary'),
+    'comp.qs.brightness.symbol-color': color('@on_primary', 'kit:AOSP compose PlatformSlider: the symbol on the active track in onPrimary'),
+    'comp.qs.build.text': text(12, 16, 400, 0.4, 'kit:AOSP SystemUI: the build number in bodySmall'),
+    'comp.qs.build.color': color('@on_surface_variant', 'kit:AOSP SystemUI: the build number in onSurfaceVariant'),
+    'comp.qs.dots.color': color('@on_surface_variant/38', 'judged:the other pages\' dots faint'),
+    'comp.qs.dots.active-color': color('@on_surface_variant', 'judged:the current page\'s pill'),
+    'comp.qs.cards.shelf': material([['@surface_container_lowest|@surface_container_highest', [0.3, 0.06], 'NORMAL']],
+        src=CAPTURE + ': the notifications lie on a lighter layer (light: (171, 209, 236) over (141, 189, 218); dark: a faint lift)'),
+    'comp.qs.card.action-outline': color('@outline', 'kit:AOSP notification: actions as outlined buttons in outline'),
+    'comp.qs.card.icon-fill': color('@primary', CAPTURE + ': an app\'s small symbol in a circle of primary'),
+    'comp.qs.card.icon-color': color('@on_primary', CAPTURE + ': the symbol in onPrimary'),
+    'comp.qs.card.app': text(14, 20, 400, 0.25, 'kit:AOSP notification 2025 template: the header line in bodyMedium'),
+    'comp.qs.card.title-color': color('@on_surface', 'kit:AOSP notification: the title in onSurface'),
+    'comp.qs.card.text-color': color('@on_surface_variant', 'kit:AOSP notification: the text in onSurfaceVariant'),
+    'comp.qs.card.chip-fill': color('@surface_container_highest', CAPTURE + ': a group\'s count chip in surfaceContainerHighest'),
+    'comp.qs.card.chip': text(12, 16, 500, 0.5, 'kit:AOSP notification: the count in labelMedium'),
+    'comp.qs.section.text': text(14, 20, 500, 0.1, 'kit:AOSP notification section header: titleSmall'),
+    'comp.qs.section.color': color('@on_surface_variant', 'kit:AOSP notification section header: onSurfaceVariant'),
+    'comp.qs.clear.fill': color('@surface_container_high', CAPTURE + ': Clear all on a card\'s colour'),
+    'comp.qs.clear.text': text(14, 20, 500, 0.1, 'kit:AOSP notification footer: labelLarge'),
+    'comp.qs.clear.text-color': color('@on_surface', 'kit:AOSP notification footer: onSurface'),
 }
 
 

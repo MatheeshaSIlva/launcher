@@ -25,7 +25,7 @@
   },
   "component.panel.material": {
    "material": {
-    "frost": 30,
+    "frost": 48,
     "fills": [
      [
       "@surface_container_lowest",
@@ -39,7 +39,7 @@
     "innerShadows": [],
     "shadows": []
    },
-   "src": "measured:the shade's veil over a blur, about 55 % light in light and 72 % dark in dark (docs/PIXEL_PROFILE.md, the captures)"
+   "src": "measured:the shade's veil over a blur, about 55 % light in light and 72 % dark in dark (docs/PIXEL_PROFILE.md, the captures); heavy enough that home's icons are soft blobs (frost 30 left the shape of home's large clock)"
   },
   "component.control.material": {
    "material": {
@@ -646,6 +646,190 @@
     "tracking": 0.1
    },
    "src": "judged:labelLarge"
+  },
+  "comp.qs.header.clock": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 36,
+    "line": 44,
+    "tracking": 0
+   },
+   "src": "kit:AOSP SystemUI shade header: displaySmall (36/44)"
+  },
+  "comp.qs.header.date": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP SystemUI shade header: titleSmall (14/20, 500)"
+  },
+  "comp.qs.header.carrier": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP SystemUI shade header: titleSmall (14/20, 500)"
+  },
+  "comp.qs.header.color": {
+   "color": "@on_surface",
+   "src": "kit:AOSP SystemUI shade header: onSurface"
+  },
+  "comp.qs.brightness.track": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@secondary_container",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "kit:AOSP compose PlatformSlider: the inactive track in secondaryContainer"
+  },
+  "comp.qs.brightness.level": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@primary",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "kit:AOSP compose PlatformSlider: the active track in primary"
+  },
+  "comp.qs.brightness.symbol-color": {
+   "color": "@on_primary",
+   "src": "kit:AOSP compose PlatformSlider: the symbol on the active track in onPrimary"
+  },
+  "comp.qs.build.text": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 12,
+    "line": 16,
+    "tracking": 0.4
+   },
+   "src": "kit:AOSP SystemUI: the build number in bodySmall"
+  },
+  "comp.qs.build.color": {
+   "color": "@on_surface_variant",
+   "src": "kit:AOSP SystemUI: the build number in onSurfaceVariant"
+  },
+  "comp.qs.dots.color": {
+   "color": "@on_surface_variant/38",
+   "src": "judged:the other pages' dots faint"
+  },
+  "comp.qs.dots.active-color": {
+   "color": "@on_surface_variant",
+   "src": "judged:the current page's pill"
+  },
+  "comp.qs.cards.shelf": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface_container_lowest|@surface_container_highest",
+      [
+       0.3,
+       0.06
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "measured:Android 17 emulator shade, 2026-10-19 (tools/shots/shade_qs.png, shade_qqs.png) against its palette: the notifications lie on a lighter layer (light: (171, 209, 236) over (141, 189, 218); dark: a faint lift)"
+  },
+  "comp.qs.card.action-outline": {
+   "color": "@outline",
+   "src": "kit:AOSP notification: actions as outlined buttons in outline"
+  },
+  "comp.qs.card.icon-fill": {
+   "color": "@primary",
+   "src": "measured:Android 17 emulator shade, 2026-10-19 (tools/shots/shade_qs.png, shade_qqs.png) against its palette: an app's small symbol in a circle of primary"
+  },
+  "comp.qs.card.icon-color": {
+   "color": "@on_primary",
+   "src": "measured:Android 17 emulator shade, 2026-10-19 (tools/shots/shade_qs.png, shade_qqs.png) against its palette: the symbol in onPrimary"
+  },
+  "comp.qs.card.app": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.25
+   },
+   "src": "kit:AOSP notification 2025 template: the header line in bodyMedium"
+  },
+  "comp.qs.card.title-color": {
+   "color": "@on_surface",
+   "src": "kit:AOSP notification: the title in onSurface"
+  },
+  "comp.qs.card.text-color": {
+   "color": "@on_surface_variant",
+   "src": "kit:AOSP notification: the text in onSurfaceVariant"
+  },
+  "comp.qs.card.chip-fill": {
+   "color": "@surface_container_highest",
+   "src": "measured:Android 17 emulator shade, 2026-10-19 (tools/shots/shade_qs.png, shade_qqs.png) against its palette: a group's count chip in surfaceContainerHighest"
+  },
+  "comp.qs.card.chip": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 12,
+    "line": 16,
+    "tracking": 0.5
+   },
+   "src": "kit:AOSP notification: the count in labelMedium"
+  },
+  "comp.qs.section.text": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP notification section header: titleSmall"
+  },
+  "comp.qs.section.color": {
+   "color": "@on_surface_variant",
+   "src": "kit:AOSP notification section header: onSurfaceVariant"
+  },
+  "comp.qs.clear.fill": {
+   "color": "@surface_container_high",
+   "src": "measured:Android 17 emulator shade, 2026-10-19 (tools/shots/shade_qs.png, shade_qqs.png) against its palette: Clear all on a card's colour"
+  },
+  "comp.qs.clear.text": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP notification footer: labelLarge"
+  },
+  "comp.qs.clear.text-color": {
+   "color": "@on_surface",
+   "src": "kit:AOSP notification footer: onSurface"
   },
   "comp.cc.accent.accessibility": {
    "color": "@on_primary",

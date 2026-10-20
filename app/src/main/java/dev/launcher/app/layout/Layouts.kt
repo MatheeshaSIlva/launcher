@@ -71,6 +71,8 @@ class LayoutSpec(
     val description: String,
     val placements: List<Placement>,
     val options: List<Option> = emptyList(),
+    /** Still being built: offered in the settings only while the developer tools are on. */
+    val preview: Boolean = false,
 ) {
     init { require(placements.isNotEmpty()) { "layout $id has no placement" } }
 
@@ -137,7 +139,7 @@ object Layouts {
     private val WRITTEN = listOf(IOS_STATUS_BAR, IOS_DECK, APP_LIBRARY, IOS_HOME, STUDIO)
 
     /** The layout files that ship, in the order they are offered (an element's first is its default). */
-    private val SHIPPED = listOf(Element.SHADE to "ios")
+    private val SHIPPED = listOf(Element.SHADE to "ios", Element.SHADE to "pixel")
 
     /** The layout files read (see [load]). */
     @Volatile private var files: List<LayoutFile> = emptyList()

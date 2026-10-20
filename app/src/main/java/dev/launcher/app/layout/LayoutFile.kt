@@ -29,13 +29,14 @@ class LayoutFile(val spec: LayoutSpec, val shade: ShadeStructure?) {
             val origin = o.str("origin")
             val description = o.str("description")
             o.optStr("src")   // where it came from: for people, read by nothing
+            val preview = o.optBool("preview") ?: false
             val placementObjs = o.objs("placements")
             val placements = placementObjs.map { p -> Placement(p.str("id"), p.str("title"), p.str("description")) }
             if (placements.isEmpty()) o.fail("placements: none (the first is the default)")
             if (placements.map { it.id }.toSet().size != placements.size) o.fail("placements: an id repeats")
             val options = if (o.has("options")) o.objs("options").map { option(it) } else emptyList()
             if (options.map { it.key }.toSet().size != options.size) o.fail("options: a key repeats")
-            val spec = LayoutSpec(element, id, title, origin, description, placements, options)
+            val spec = LayoutSpec(element, id, title, origin, description, placements, options, preview)
             val shade = when (element) {
                 // (Each place says where each panel is pulled from: its `pulls`, read with the structure.)
                 Element.SHADE -> ShadeStructure.parse(o.obj("structure"), options, placements.map { it.id }.zip(placementObjs))
@@ -111,6 +112,12 @@ internal class Strict(private val o: JSONObject, private val at: String) {
     }
 
     fun int(k: String): Int = optInt(k) ?: fail("${where(k)}: missing")
+
+    fun optBool(k: String): Boolean? {
+        read += k
+        if (!o.has(k)) return null
+        return o.opt(k) as? Boolean ?: fail("${where(k)}: not true or false")
+    }
 
     fun bool(k: String): Boolean {
         read += k

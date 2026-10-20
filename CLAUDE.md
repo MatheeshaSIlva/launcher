@@ -268,7 +268,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   (`ControlCenterView`: how present and pulled it is, its closing fold and the arrangement of its blocks, `shade/cc/`:
   `TopButtonsBlock`, `StatusRowBlock`, `ControlGridBlock`; without a status row the bar stays as it is over it; `CcLayout`,
   `CcGallery`, `Controls`; apps' Quick Settings tiles as controls: `AppTiles`, run by SystemUI
-  through `cmd statusbar add-tile/click-tile`) and banners (`BannerView`), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
+  through `cmd statusbar add-tile/click-tile`), banners (`BannerView`) and Android's shade for a layout that has one
+  (`ShadePanelView`: Quick Settings over the notifications in two stages, the first pull's quick row and cards growing
+  into Quick Settings; its blocks in `shade/qs/`: `QsHeaderBlock`, `BrightnessBlock`, `TileGridBlock`, `QsFooterBlock`,
+  `CardsBlock`; tokens `comp.qs.*`; Pixel's layout, a preview), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
   Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),
   that blurs what is behind (One UI: Samsung's view blur on its full-screen view; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded
@@ -713,7 +716,7 @@ copy it wholesale — port the working pieces cleanly. File map:
   token, never on a `comp.*` alias of it. iOS 27's once tinted Control Center's glass, wells and veil on `comp.cc.*`: with
   the wallpaper's colours on, the resolver found those before the alias, and Pixel's tiles (set on the components) stayed
   iOS glass. A `comp.*` token that is no alias (the banners' plain colour, the count) is fine: a derived theme sets it
-  directly and wins. Control Center's veil is drawn as one plain colour from its material's fills (`Shade.ccVeil`): a
+  directly and wins. Control Center's veil is drawn as one plain colour from its material's fills (`Shade.veilOf`, each panel's background its own): a
   blend other than normal counts only as darkening there.
 - **AOSP's animated icons are Lottie exports**: one group can be the target of several entries (one moving it, one turning
   it), groups move along motion paths (`translateXY` with `propertyXName`/`propertyYName` and a `pathData`), and a symbol

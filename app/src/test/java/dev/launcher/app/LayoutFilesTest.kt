@@ -129,7 +129,7 @@ class LayoutFilesTest {
             .replace(",\n     {\"block\": \"corner-buttons\"}", "")
             .replace("\"landscape\": \"clock-beside-list\"", "\"landscape\": \"as-portrait\"")).shade!!
         assertTrue(!bare.ncHasClock && !bare.ncHasButtons)
-        assertEquals(listOf("notifications"), bare.notificationCenter.blocks.map { it.id })
+        assertEquals(listOf("notifications"), bare.notificationCenter!!.blocks.map { it.id })
         val ios = LayoutFile.parse(iosShade).shade!!
         assertTrue(ios.ncHasClock && ios.ncHasButtons)
     }

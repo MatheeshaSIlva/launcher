@@ -417,6 +417,33 @@ mirrored one chosen and applied there ("[setup] shade: ios (split-top-mirrored)"
 the right Notification Center (its fold into the left corner was checked in stage 4b). The layout tests now read the
 file with Windows' line endings turned into plain ones (they failed on a fresh checkout, where Git writes CRLF).
 
+**Stage 2, Android's shade, together: a first version (2026-10-21).** Pixel's layout file (`assets/layouts/shade/pixel.json`,
+a preview: offered in the settings only with the developer tools on) with one place so far, Together: one panel pulled
+from anywhere along the top, of the new kind `shade` (`shade/ShadePanelView`, blocks in `shade/qs/`, tokens `comp.qs.*`:
+in iOS 27 aliases of the shared components with AOSP's sizes, in the Pixel theme Pixel's words and colours). The first
+stage: the status bar's row with the date beside the time, the quick row (the first page's first two rows) and the
+notifications as cards on a lighter shelf in three sections, joined columns, a group as one card with its count, outlined
+actions on an ongoing card, the history, Clear all and settings under them. Pulling on (or a drag down on the panel)
+expands Quick Settings: the bar's time hands over to one clock that grows into the large one (the date moving under it,
+the carrier coming in beside it), the quick row's tiles move to their places in the grid as the rest of it comes in, the
+brightness slider comes in at its place once the tiles have passed it, the build number and page dots under the grid,
+settings and power at the foot, the cards going down out of sight. A drag up collapses, and from the first stage
+closes; Back collapses first. Over the lock screen the cards show what its settings allow, the date taking the time's
+place. Checked on the emulator against its own shade's captures (tools/shots/pxref): both stages in light and dark;
+a pull, a drag down and up, Back from each stage, a pull past the first stage into Quick Settings, a swipe up closing it;
+a tile's box toggling Do Not Disturb (and its corners and colours following), the second page swiped to, the brightness
+dragged (the screen following) and set from elsewhere (the slider following); a group opened by its chip, a card swiped
+away (the rest moving up), Clear all (the cards flicked away one after another, the one that cannot be cleared moving up
+with its heading); the lock screen with the content hidden; slowed six times, the open, the expand and the collapse frame
+by frame (no part crossing another: the slider once passed over the tiles and then the date, fixed). Turned, the panel
+lies as upright with as many rows a page as fit (Pixel's own landscape, a row of tiles over a centred column, is still
+to come).
+
+Still to come for Pixel: the second place (Separately: Android 16's dual shade, notifications from the left and Quick
+Settings from the right), its landscape, the media player, the status icons moving to the expanded header's date row,
+editing (a page of its own), the motion's own roles (the expand uses Control Center's open and close for now) and
+haptics, then the measured comparison of every part.
+
 ## References
 
 - Captures (emulator, Android 17 SystemUI, 1080 x 2400, 420 dpi): `tools/shots/shade_qqs.png` (first pull),

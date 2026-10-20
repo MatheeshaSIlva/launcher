@@ -506,6 +506,33 @@ class StatusBarView(ctx: Context) : View(ctx) {
     private var rowAlpha = 1f
     private var picturing = false
 
+    /**
+     * Android's shade over the bar ([on]): its first stage's header is the bar's row with the date beside the time (drawn by
+     * the shade), so the moon and the notification icons make way, shrinking away on their springs; [timeAlpha]: the time
+     * gives way to the shade's large clock as Quick Settings expand.
+     */
+    fun setShadeHeader(on: Boolean, timeAlpha: Float) {
+        val a = timeAlpha.coerceIn(0f, 1f)
+        if (on == header && a == timeFade) return
+        val relay = on != header
+        header = on
+        timeFade = a
+        if (relay) relayout()
+        invalidate()
+    }
+
+    private var header = false
+    private var timeFade = 1f
+
+    /** Where the time ends (px): Android's shade writes the date after it. */
+    val timeRight: Float get() = timeSlot.x.value + clockText.width(time)
+    /** Where the time starts, its baseline and its size (px): Android's shade grows its large clock out of it. */
+    val timeLeft: Float get() = timeSlot.x.value
+    val timeBaseline: Float get() = centreLine() + 0.727f * TIME_PT * u / 2f
+    val timeSize: Float get() = TIME_PT * u
+    /** How much of the time shows (over the lock screen its clock stands for it: the bar's gives way). */
+    val timeShown: Float get() = 1f - lockK
+
     /** Control Center's status row fades while its edit mode is on (iOS hides it there). */
     fun setRowAlpha(a: Float) {
         if (a == rowAlpha) return
@@ -791,7 +818,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
             if (sharing) (SHARE_GAP_PT + SHARE_GLYPH_PT + max(0f, sharePad + SHARE_AFTER_PT - TIME_GAP_PT)) * u else 0f
         timeSlot.present(clockText.text.isNotEmpty())
         moonSlot.width = 12.4f * u
-        moonSlot.present(dnd)
+        moonSlot.present(dnd && !header)
         val limit = cameraLeft() - 8f * u
         var cursor = SIDE_PT * u + timeSlot.width + TIME_GAP_PT * u + (if (dnd) moonSlot.width + ICON_GAP_PT * u else 0f)
         val want = LinkedHashMap<String, Drawable?>()
@@ -812,9 +839,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
         for ((id, s) in notifSlots) if (id !in ordered) ordered[id] = s
         notifSlots.clear()
         notifSlots.putAll(ordered)
-        for ((id, s) in notifSlots) { s.slot.width = iconW; s.slot.present(id in fitting) }
+        for ((id, s) in notifSlots) { s.slot.width = iconW; s.slot.present(id in fitting && !header) }
         moreSlot.width = 3.4f * u
-        moreSlot.present(overflow)
+        moreSlot.present(overflow && !header)
         var x = SIDE_PT * u
         for (s in leftSlots) {
             s.place(x)
@@ -1000,7 +1027,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     private fun drawTime(c: Canvas, x: Float, cy: Float, k: Float, col: Int) {
-        time.color = col
+        time.color = if (timeFade >= 1f) col else (Math.round((col ushr 24) * timeFade) shl 24) or (col and 0xFFFFFF)
         time.textSize = TIME_PT * u
         clockText.draw(c, x, cy + 0.727f * time.textSize / 2f, time, 1f)
     }

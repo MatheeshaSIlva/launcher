@@ -53,6 +53,19 @@ class DesignThemeTest {
             }
             assertTrue("$k is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
         }
+        // Android's shade's: each one there, of its key's kind.
+        for (k in dev.launcher.app.shade.qs.QsTokens.KEYS) {
+            val v = r.resolve(k.name)
+            val want = when (k) {
+                is dev.launcher.app.design.MaterialKey -> Value.Mat::class
+                is dev.launcher.app.design.ColorKey -> Value.Color::class
+                is dev.launcher.app.design.TextKey -> Value.Text::class
+                is dev.launcher.app.design.NumberKey -> Value.Number::class
+                is dev.launcher.app.design.ChoiceKey -> Value.Choice::class
+                else -> error("${k.name}: a kind this check does not know")
+            }
+            assertTrue("${k.name} is ${v::class.simpleName}, the code reads it as ${want.simpleName}", want.isInstance(v))
+        }
         // Control Center's: the same check, and a colour for every control.
         for (k in dev.launcher.app.shade.CcTokens.ALL) {
             val v = r.resolve(k)

@@ -2495,7 +2495,8 @@ private fun PartPage(part: Part, push: (Pushed) -> Unit, lit: () -> Pushed?) {
     val e = part.element ?: return
     val draft = LocalDraft.current
     val current = Layouts.find(e, draft.layout(e)) ?: Setup.layout(e)
-    val layouts = Layouts.of(e)
+    // (A layout still being built shows only with the developer tools on, or while it is the one in use.)
+    val layouts = Layouts.of(e).filter { !it.preview || SettingsPrefs.developer || it.id == current.id }
     val at = draft.placement(e)
     // What it is and where it lives, in words under the stage; rows that choose only where there is a choice (a lone
     // layout and a lone place were rows that looked tappable and did nothing: "Where it lives: Home").

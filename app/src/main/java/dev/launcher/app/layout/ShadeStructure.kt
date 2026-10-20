@@ -20,10 +20,15 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
         /** iOS's Notification Center: a sheet pulled down over the screen. */
         NOTIFICATION_CENTER("notification-center"),
         /** iOS's Control Center: the controls over the blurred screen. */
-        CONTROL_CENTER("control-center");
+        CONTROL_CENTER("control-center"),
+        /**
+         * Android's shade: Quick Settings over the notifications in one panel, in two stages: the first pull shows the quick
+         * row (the grid's first rows) over the notifications, pulling on (or a second pull) the whole of Quick Settings.
+         */
+        SHADE("shade");
 
         /** It shows the notifications (every place of a layout has a panel that does: banners open it, the lock screen shows it). */
-        val holdsNotifications: Boolean get() = this == NOTIFICATION_CENTER
+        val holdsNotifications: Boolean get() = this == NOTIFICATION_CENTER || this == SHADE
     }
 
     /** A part of the top edge a pull opens a panel from: all of it, or a side of the camera (of the middle where there is none). */
@@ -65,6 +70,23 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
         object StatusRow : Block("status-row")
         /** The controls on a grid of [columns] (more in landscape: [Panel.landscape] "flow"), edited in place. */
         class ControlGrid(val columns: Count, val editor: String) : Block("control-grid")
+
+        // Android's shade (SHADE).
+        /** The date beside the status bar's time at the first stage; the large clock, the date and the carrier at the second. */
+        object QsHeader : Block("qs-header")
+        /** The brightness slider across the panel, over the tiles (the second stage). */
+        object Brightness : Block("brightness")
+        /**
+         * Quick Settings' tiles in order on [columns] columns, one or two columns wide, [rows] rows a page (pages side by
+         * side, with dots); the first stage shows the first page's first [quickRows] rows (the quick row).
+         */
+        class Tiles(val columns: Count, val quickRows: Int, val rows: Int) : Block("tiles")
+        /** Under the tiles: the build number, the page dots and the edit button; at the foot, the user, settings and power. */
+        object QsFooter : Block("qs-footer")
+        /** The notifications as cards: an app's group and a section joined as one column of cards, the silent ones apart. */
+        object NotificationCards : Block("notification-cards")
+        /** Under the notifications: the history, Clear all and the notification settings. */
+        object NotificationFooter : Block("notification-footer")
     }
 
     /** A count: a number the file fixes, or the value of one of the layout's count options (the user's, through [Setup]). */
@@ -72,18 +94,20 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
         val value: Int get() = fixed ?: option!!.let { Setup.int(Element.SHADE, it.key, it.default) }
     }
 
-    /** The notifications' panel (every iOS shade has it). */
-    val notificationCenter: Panel get() = panels.first { it.kind == Kind.NOTIFICATION_CENTER }
+    /** iOS's Notification Center, if the layout has it (Android's shade holds its notifications itself). */
+    val notificationCenter: Panel? get() = panels.firstOrNull { it.kind == Kind.NOTIFICATION_CENTER }
     /** Control Center, if the layout has it. */
     val controlCenter: Panel? get() = panels.firstOrNull { it.kind == Kind.CONTROL_CENTER }
 
     /** How Notification Center opens. */
-    val opens: Opens get() = notificationCenter.block<Block.Notifications>()!!.opens
+    val opens: Opens get() = notificationCenter?.block<Block.Notifications>()?.opens ?: Opens.STACKED
     /** Notification Center in landscape: the clock beside the list (else as upright). */
-    val ncClockBesideList: Boolean get() = notificationCenter.landscape == NcLandscape.CLOCK_BESIDE_LIST.id
+    val ncClockBesideList: Boolean get() = notificationCenter?.landscape == NcLandscape.CLOCK_BESIDE_LIST.id
     /** Notification Center shows the date and the clock, and the flashlight and the camera. */
-    val ncHasClock: Boolean get() = notificationCenter.block<Block.LockClock>() != null
-    val ncHasButtons: Boolean get() = notificationCenter.block<Block.CornerButtons>() != null
+    val ncHasClock: Boolean get() = notificationCenter?.block<Block.LockClock>() != null
+    val ncHasButtons: Boolean get() = notificationCenter?.block<Block.CornerButtons>() != null
+    /** Android's shade, if the layout has it. */
+    val shade: Panel? get() = panels.firstOrNull { it.kind == Kind.SHADE }
     /** Control Center's controls (null: the layout has no Control Center). */
     val controlGrid: Block.ControlGrid? get() = controlCenter?.block<Block.ControlGrid>()
     /** Control Center shows "+" and power, and the status row (without it the status bar stays as it is over the panel). */
@@ -109,15 +133,18 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
         private val BLOCKS = mapOf(
             Kind.NOTIFICATION_CENTER to listOf("lock-clock", "notifications", "corner-buttons"),
             Kind.CONTROL_CENTER to listOf("top-buttons", "status-row", "control-grid"),
+            Kind.SHADE to listOf("qs-header", "brightness", "tiles", "qs-footer", "notification-cards", "notification-footer"),
         )
         /** The blocks a panel cannot be without. */
         private val REQUIRED = mapOf(
             Kind.NOTIFICATION_CENTER to listOf("notifications"),
             Kind.CONTROL_CENTER to listOf("control-grid"),
+            Kind.SHADE to listOf("tiles", "notification-cards"),
         )
         private val LANDSCAPE = mapOf(
             Kind.NOTIFICATION_CENTER to NcLandscape.entries.map { it.id },
             Kind.CONTROL_CENTER to listOf("flow"),
+            Kind.SHADE to listOf("as-portrait"),
         )
 
         /**
@@ -194,6 +221,18 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
                     if (editor != "in-place") b.fail("editor: '$editor' (in-place, so far)")
                     Block.ControlGrid(count(b, "columns", options), editor)
                 }
+                "qs-header" -> Block.QsHeader
+                "brightness" -> Block.Brightness
+                "tiles" -> {
+                    val rows = b.int("rows")
+                    val quick = b.int("quick-rows")
+                    if (rows !in 1..8) b.fail("rows: $rows (1 to 8)")
+                    if (quick !in 1..rows) b.fail("quick-rows: $quick (1 to the rows a page, $rows)")
+                    Block.Tiles(count(b, "columns", options), quick, rows)
+                }
+                "qs-footer" -> Block.QsFooter
+                "notification-cards" -> Block.NotificationCards
+                "notification-footer" -> Block.NotificationFooter
                 else -> b.fail("block: '$id' (${BLOCKS.values.flatten().joinToString()})")
             }
             if (out.id !in BLOCKS.getValue(kind)) b.fail("block: ${out.id} is not part of ${kind.id} (so far)")

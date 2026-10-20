@@ -80,6 +80,9 @@ SYMBOLS = {
     "share": "share",
     "accessibility_new": "accessibility",
     "hearing": "hearing",
+    # Android's shade: the notification history and settings beside Clear all.
+    "history": "history",
+    "notification_settings": "notification_settings",
 }
 
 URL = "https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/{0}/materialsymbolsrounded/{0}_fill1_24px.svg"

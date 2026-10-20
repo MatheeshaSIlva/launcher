@@ -15,6 +15,7 @@ object TokenParts {
         "comp.nc." to Element.SHADE,
         "comp.cc." to Element.SHADE,
         "comp.banner." to Element.SHADE,
+        "comp.qs." to Element.SHADE,
         "comp.switcher." to Element.RECENTS,
         "comp.library." to Element.DRAWER,
         "comp.spotlight." to Element.DRAWER,

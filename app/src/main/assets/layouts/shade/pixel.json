@@ -1,0 +1,47 @@
+{
+ "format": 1,
+ "element": "shade",
+ "id": "pixel",
+ "title": "Pixel",
+ "origin": "Android 17",
+ "preview": true,
+ "description": "Quick Settings over your notifications in one panel: the first pull shows a row of tiles over the notifications, pulling on the whole of Quick Settings.",
+ "src": "Android 17's own shade on the emulator (tools/shots/pxref) and AOSP's SystemUI (qs/panels/ui/compose, shade/ui/composable, dimens.xml): docs/SHADE_PIXEL_EVALUATION.md",
+ "placements": [
+  {
+   "id": "together",
+   "title": "Together",
+   "description": "Pull down anywhere along the top for your notifications and Quick Settings.",
+   "pulls": [
+    {"from": "top", "panel": "shade"}
+   ]
+  }
+ ],
+ "options": [
+  {
+   "key": "qs-columns",
+   "kind": "count",
+   "title": "Tile columns",
+   "description": "Tiles across Quick Settings.",
+   "default": 4,
+   "min": 4,
+   "max": 6
+  }
+ ],
+ "structure": {
+  "panels": [
+   {
+    "panel": "shade",
+    "blocks": [
+     {"block": "qs-header"},
+     {"block": "brightness"},
+     {"block": "tiles", "columns": {"option": "qs-columns"}, "quick-rows": 2, "rows": 4},
+     {"block": "qs-footer"},
+     {"block": "notification-cards"},
+     {"block": "notification-footer"}
+    ],
+    "landscape": "as-portrait"
+   }
+  ]
+ }
+}

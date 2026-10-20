@@ -2707,6 +2707,365 @@
    "color": "#00000059",
    "src": "judged:the soft shadow under the date and group names"
   },
+  "comp.qs.background": {
+   "ref": "component.panel.material",
+   "src": "judged:the screen behind blurred and veiled, as behind Control Center"
+  },
+  "comp.qs.brightness.height": {
+   "pt": 52,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the slider 137 px tall"
+  },
+  "comp.qs.brightness.level": {
+   "ref": "component.control.on-material",
+   "src": "judged:a control that is on"
+  },
+  "comp.qs.brightness.symbol-color": {
+   "ref": "component.control.on-symbol-color",
+   "src": "judged:a symbol on a control that is on"
+  },
+  "comp.qs.brightness.top": {
+   "pt": 150,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the slider from y 394 px"
+  },
+  "comp.qs.brightness.track": {
+   "ref": "component.control.material",
+   "src": "judged:a control that is off"
+  },
+  "comp.qs.build.color": {
+   "ref": "component.control.detail-color",
+   "src": "judged:the controls' secondary words"
+  },
+  "comp.qs.build.text": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 12,
+    "line": 16,
+    "tracking": 0.4
+   },
+   "src": "kit:AOSP SystemUI: the build number in bodySmall (12/16)"
+  },
+  "comp.qs.card.action-outline": {
+   "color": "#ffffff4d",
+   "src": "judged:a faint outline in the label's white (iOS has no outlined actions)"
+  },
+  "comp.qs.card.app": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.25
+   },
+   "src": "kit:AOSP SystemUI notification 2025 template: the app's name and time in bodyMedium (14/20)"
+  },
+  "comp.qs.card.body": {
+   "ref": "component.notification.body",
+   "src": "judged:the shared notification's text"
+  },
+  "comp.qs.card.chip": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 12,
+    "line": 16,
+    "tracking": 0.5
+   },
+   "src": "kit:AOSP SystemUI: a group's count in labelMedium (12/16, 500)"
+  },
+  "comp.qs.card.chip-fill": {
+   "ref": "component.button.fill",
+   "src": "judged:the shared button's fill"
+  },
+  "comp.qs.card.corner": {
+   "ref": "component.notification.corner",
+   "src": "judged:the shared notification's corner"
+  },
+  "comp.qs.card.gap": {
+   "pt": 18,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): groups and sections 47 px apart"
+  },
+  "comp.qs.card.icon": {
+   "ref": "component.notification.icon",
+   "src": "judged:the shared notification's icon"
+  },
+  "comp.qs.card.icon-color": {
+   "color": "#ffffff",
+   "src": "judged:a white symbol on it"
+  },
+  "comp.qs.card.icon-fill": {
+   "ref": "ref.color.accents.blue",
+   "src": "judged:iOS's blue behind an app's small symbol (Android: its colour)"
+  },
+  "comp.qs.card.joined-corner": {
+   "pt": 4,
+   "src": "kit:AOSP SystemUI dimens.xml notification_corner_radius_small 4 dp"
+  },
+  "comp.qs.card.joined-gap": {
+   "pt": 2,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): joined cards 6 px apart"
+  },
+  "comp.qs.card.material": {
+   "ref": "component.notification.material",
+   "src": "judged:the shared notification"
+  },
+  "comp.qs.card.padding": {
+   "ref": "component.notification.padding",
+   "src": "judged:the shared notification's padding"
+  },
+  "comp.qs.card.text-color": {
+   "ref": "component.notification.label-color",
+   "src": "judged:the shared notification's words"
+  },
+  "comp.qs.card.title": {
+   "ref": "component.notification.title",
+   "src": "judged:the shared notification's title"
+  },
+  "comp.qs.card.title-color": {
+   "ref": "component.notification.label-color",
+   "src": "judged:the shared notification's words"
+  },
+  "comp.qs.cards.shelf": {
+   "material": {
+    "frost": 0,
+    "fills": [],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:iOS lays its notifications on nothing (an empty material)"
+  },
+  "comp.qs.cards.shelf-corner": {
+   "pt": 28,
+   "src": "kit:AOSP SystemUI: the notification shelf's top corners 28 dp (measured: about 30 dp on the emulator)"
+  },
+  "comp.qs.cards.shelf-inset": {
+   "pt": 16,
+   "src": "measured:Android 17 emulator's own shade: the shelf's top 41 px above the first card"
+  },
+  "comp.qs.cards.top": {
+   "pt": 32,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the first card 86 px under the quick row"
+  },
+  "comp.qs.clear.fill": {
+   "ref": "component.button.fill",
+   "src": "judged:the shared button"
+  },
+  "comp.qs.clear.height": {
+   "ref": "component.button.height",
+   "src": "judged:the shared button"
+  },
+  "comp.qs.clear.text": {
+   "ref": "component.button.text",
+   "src": "judged:the shared button's words"
+  },
+  "comp.qs.clear.text-color": {
+   "ref": "component.notification.label-color",
+   "src": "judged:the shared notification's words"
+  },
+  "comp.qs.dots.active-color": {
+   "ref": "component.control.label-color",
+   "src": "judged:the controls' words"
+  },
+  "comp.qs.dots.color": {
+   "ref": "component.control.detail-color",
+   "src": "judged:the controls' secondary words"
+  },
+  "comp.qs.dots.size": {
+   "pt": 6,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): page dots about 6 dp, the current one a pill twice as long"
+  },
+  "comp.qs.footer.bottom": {
+   "pt": 52,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the footer's buttons centred 136 px above the bottom edge"
+  },
+  "comp.qs.footer.button": {
+   "ref": "component.round-button.size",
+   "src": "judged:the shared round button"
+  },
+  "comp.qs.footer.material": {
+   "ref": "component.round-button.material",
+   "src": "judged:the shared round button"
+  },
+  "comp.qs.footer.power-material": {
+   "ref": "component.control.on-material",
+   "src": "judged:power lit, as a control that is on"
+  },
+  "comp.qs.footer.power-symbol-color": {
+   "ref": "component.control.on-symbol-color",
+   "src": "judged:a symbol on a control that is on"
+  },
+  "comp.qs.footer.symbol": {
+   "ref": "component.round-button.symbol",
+   "src": "judged:the shared round button's symbol"
+  },
+  "comp.qs.footer.symbol-color": {
+   "ref": "component.round-button.symbol-color",
+   "src": "judged:the shared round button's symbol"
+  },
+  "comp.qs.header.carrier": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP SystemUI shade header: the carrier in titleSmall (14/20, 500)"
+  },
+  "comp.qs.header.clock": {
+   "text": {
+    "family": "display",
+    "weight": 400,
+    "size": 36,
+    "line": 44,
+    "tracking": 0
+   },
+   "src": "kit:AOSP SystemUI shade header: the large clock in displaySmall (36/44)"
+  },
+  "comp.qs.header.clock-top": {
+   "pt": 32,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the expanded clock's line from y 84 px"
+  },
+  "comp.qs.header.color": {
+   "ref": "component.control.label-color",
+   "src": "judged:the controls' words"
+  },
+  "comp.qs.header.date": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP SystemUI shade header: the date in titleSmall (14/20, 500)"
+  },
+  "comp.qs.header.date-gap": {
+   "pt": 8,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the date 8 dp after the status bar's time at the first pull"
+  },
+  "comp.qs.header.date-top": {
+   "pt": 100,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the date's line from y 262 px"
+  },
+  "comp.qs.section.color": {
+   "ref": "component.notification.label-color",
+   "src": "judged:the shared notification's words"
+  },
+  "comp.qs.section.height": {
+   "pt": 48,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the Silent heading's row about 48 dp"
+  },
+  "comp.qs.section.text": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP SystemUI: a section's heading in titleSmall (14/20, 500)"
+  },
+  "comp.qs.side": {
+   "pt": 16,
+   "src": "kit:AOSP SystemUI dimens.xml qs_horizontal_margin, notification_side_paddings 16 dp"
+  },
+  "comp.qs.symbols": {
+   "ref": "sys.symbols",
+   "src": "judged:the theme's icon set"
+  },
+  "comp.qs.tile.box": {
+   "pt": 56,
+   "src": "kit:AOSP SystemUI CommonTile.kt ToggleTargetSize 56 dp"
+  },
+  "comp.qs.tile.box-corner": {
+   "ref": "component.control.well-corner",
+   "src": "judged:the shared control's symbol well"
+  },
+  "comp.qs.tile.box-material": {
+   "ref": "component.control.well-material",
+   "src": "judged:the shared control's symbol well"
+  },
+  "comp.qs.tile.box-on-corner": {
+   "ref": "component.control.well-on-corner",
+   "src": "judged:the shared control's symbol well when on"
+  },
+  "comp.qs.tile.corner": {
+   "ref": "component.control.row-corner",
+   "src": "judged:the shared control's corner"
+  },
+  "comp.qs.tile.detail": {
+   "ref": "component.control.detail",
+   "src": "judged:the shared control's state"
+  },
+  "comp.qs.tile.detail-color": {
+   "ref": "component.control.detail-color",
+   "src": "judged:the shared control's state"
+  },
+  "comp.qs.tile.gap": {
+   "pt": 8,
+   "src": "kit:AOSP SystemUI dimens.xml qs_tile_margin_horizontal / _vertical 8 dp"
+  },
+  "comp.qs.tile.height": {
+   "pt": 72,
+   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt TileHeight 72 dp"
+  },
+  "comp.qs.tile.inset": {
+   "pt": 8,
+   "src": "kit:AOSP SystemUI CommonTile.kt TilePadding 8 dp"
+  },
+  "comp.qs.tile.label": {
+   "ref": "component.control.title",
+   "src": "judged:the shared control's name"
+  },
+  "comp.qs.tile.label-color": {
+   "ref": "component.control.label-color",
+   "src": "judged:the shared control's name"
+  },
+  "comp.qs.tile.material": {
+   "ref": "component.control.material",
+   "src": "judged:the shared control"
+  },
+  "comp.qs.tile.on-corner": {
+   "ref": "component.control.row-on-corner",
+   "src": "judged:the shared control's corner when on"
+  },
+  "comp.qs.tile.on-label-color": {
+   "ref": "component.control.on-symbol-color",
+   "src": "judged:words on a control that is on, as its symbol"
+  },
+  "comp.qs.tile.on-material": {
+   "ref": "component.control.on-material",
+   "src": "judged:the shared control, on"
+  },
+  "comp.qs.tile.on-symbol-color": {
+   "ref": "component.control.on-symbol-color",
+   "src": "judged:the shared control's symbol when on"
+  },
+  "comp.qs.tile.symbol": {
+   "pt": 24,
+   "src": "kit:AOSP SystemUI CommonTile.kt: a symbol about 24 dp drawn (IconSize 32 dp, LargeTileIconSize 28 dp with their padding)"
+  },
+  "comp.qs.tile.symbol-color": {
+   "ref": "component.control.symbol-color",
+   "src": "judged:the shared control's symbol"
+  },
+  "comp.qs.tile.text-gap": {
+   "pt": 6,
+   "src": "kit:AOSP SystemUI CommonTile.kt TileArrangementPadding 6 dp"
+  },
+  "comp.qs.tile.unavailable-alpha": {
+   "factor": 0.38,
+   "src": "kit:Material 3: content of a disabled control at 38 %"
+  },
+  "comp.qs.tiles.quick-top": {
+   "pt": 0,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the quick row right under the status bar (y 63 px, the bar's height)"
+  },
+  "comp.qs.tiles.top": {
+   "pt": 232,
+   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the expanded grid from y 610 px"
+  },
   "comp.settings.accent": {
    "ref": "sys.color.accent",
    "src": "judged:the theme's accent (Apply, a chosen chip)"
@@ -4429,6 +4788,32 @@
   "comp.nc.count.label": {
    "color": "@on_primary_container",
    "src": "judged:Material You: iOS's Notification Center's count label as Android 14's tonal role (@on_primary_container)"
+  },
+  "comp.qs.cards.shelf": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@system_accent1_500",
+      [
+       0.25,
+       0.25
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent2_100|@system_accent2_800",
+      [
+       0.24,
+       0.3
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
   },
   "comp.settings.accent-label": {
    "color": "@on_primary",

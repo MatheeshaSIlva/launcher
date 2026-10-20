@@ -23,6 +23,7 @@ of docs/SHADE_PIXEL_EVALUATION.md); the other elements' layouts are still writte
 | Key | Meaning |
 | --- | --- |
 | `format` | 1. A file of another format is refused (it may mean something this build cannot do). |
+| `preview` | Optional, `true`: a layout still being built, offered in the settings only while the developer tools are on (or while it is the one in use). |
 | `element` | `status-bar`, `shade`, `recents`, `drawer`, `home` or `settings`. |
 | `id` | Lower case letters, digits and dashes; what the setup stores (`files/setup.json`). |
 | `title`, `origin`, `description` | The layout's name, the design it comes from, what it is in plain words (the settings show them). |
@@ -41,7 +42,7 @@ with the reason. Nothing passes as a default by accident.
 
 | Key | Values | Read by |
 | --- | --- | --- |
-| `panel` | `notification-center` (iOS's sheet pulled down over the screen), `control-center` (the controls over the blurred screen) | |
+| `panel` | `notification-center` (iOS's sheet pulled down over the screen), `control-center` (the controls over the blurred screen), `shade` (Android's: Quick Settings over the notifications in one panel, in two stages: the first pull shows the quick row over the notifications as cards, pulling on or a drag down the whole of Quick Settings; `shade/ShadePanelView`) | |
 | `blocks` | What the panel is made of, in order (below) | |
 | `landscape` | Notification Center: `clock-beside-list` (iOS 27: the date and time small at the top left, the notifications in a column of the portrait width beside them; measurements in tokens `comp.nc.land.*`) or `as-portrait` (as upright, across the turned screen). Control Center: `flow` (the grid flowed across as many columns as fit) | `NotificationCenterView.land`, `ControlCenterView.syncTokens` |
 
@@ -73,6 +74,12 @@ Blocks, each `{"block": ID, ...its parameters}`:
 | `top-buttons` | | "+" (edit mode) and the power button (held) at Control Center's top corners, where the status bar was (upright only; `shade/cc/TopButtonsBlock`). Optional: without them edit mode is a long press on empty space. Needs `status-row` (only the row clears the bar's band). |
 | `status-row` | | The status bar's row along the top, its icons gliding in from the bar (`shade/cc/StatusRowBlock`). Optional: without it the status bar stays as it is over Control Center (its colour following the veil) and the controls start under it (`comp.cc.grid.top-bare`; edit mode leaves them there). |
 | `control-grid` | `columns`: a whole number, or `{"option": KEY}` naming one of the file's `count` options (the user's value). `editor`: `in-place`. Read by `ControlGridBlock.syncTokens` (at most what fits, at least 4). | The controls on a grid, edited in place (`shade/cc/ControlGridBlock`). Required. |
+| `qs-header` | | Android's shade: the date beside the status bar's time at the first stage; as Quick Settings expand the bar's time hands over to one clock that grows into the large clock, the date moving under it, the carrier beside it (`shade/qs/QsHeaderBlock`). |
+| `brightness` | | Android's shade: the brightness slider across the panel at the second stage, coming in once the tiles have moved past its place (`shade/qs/BrightnessBlock`). |
+| `tiles` | `columns` (a number or a count option), `rows` (a page, 1 to 8: as many as fit above the footer on a turned screen), `quick-rows` (the first page's first rows shown at the first stage) | Android's shade: Quick Settings' tiles in order, one column (a symbol) or two (a box with the symbol, its name and state; a toggle's box toggles, the rest opens its page), the quick row moving into the grid as it expands; pages swiped sideways (`shade/qs/TileGridBlock`, the set and order `QsTiles`). Required. |
+| `qs-footer` | | Android's shade: the build number and the page dots under the tiles, settings and power at the foot (`shade/qs/QsFooterBlock`). |
+| `notification-cards` | | Android's shade: the notifications as cards in three sections (ongoing, alerting, silent with its heading and clear button), each a column of cards joined with small corners on a lighter shelf; an app's group one card with its count, opened by its chip; a card swiped either way goes; over the lock screen what its settings allow (`shade/qs/CardsBlock`). Required. |
+| `notification-footer` | | Android's shade: under the cards, the history, Clear all and the notification settings. |
 
 **Stage 1 (2026-10-20): the vocabulary, and the choices the panels already have.** The file speaks for the whole shade,
 but only what today's panels can already do in more than one way is the file's to choose: how Notification Center opens
@@ -96,8 +103,8 @@ block may be left out where the stages below say so, never moved); the editor in
   file's (Notification Center, and Control Center or not), and where each is pulled from is each place's (`pulls`: the
   whole edge for one panel, each side of the camera for two, either way round). One stage or two (Pixel's first pull
   showing the quick row, the second the full Quick Settings) comes with Pixel's panel, the first to have two.
-- Then step 4: Pixel's shade as a second file (`pixel.json`), One UI's after it (their landscape in
-  docs/PLAN_LAYOUTS_THEMES.md, D).
+- Then step 4: Pixel's shade as a second file (`pixel.json`, a preview while it is built: its first version 2026-10-21,
+  docs/SHADE_PIXEL_EVALUATION.md step 4), One UI's after it (their landscape in docs/PLAN_LAYOUTS_THEMES.md, D).
 
 The iOS file (`assets/layouts/shade/ios.json`) is exactly what the code declared before (`Layouts.IOS_SHADE`: the same id,
 name, place and option) and the shade as it is: checked by `LayoutFilesTest`.

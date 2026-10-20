@@ -22,6 +22,8 @@ import dev.launcher.app.Unlock
 import dev.launcher.app.layout.Element
 import dev.launcher.app.layout.Setup
 import dev.launcher.app.layout.ShadeStructure
+import dev.launcher.app.shade.qs.QsPanel
+import dev.launcher.app.shade.qs.QsTokens
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.design.Curve
 import dev.launcher.app.motion.MotionValue
@@ -141,6 +143,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val cc: ControlCenterView
     private val gallery: CcGallery
     private val nc: NotificationCenterView
+    /** Android's shade (a layout's `shade` panel): Quick Settings over the notifications in one panel. */
+    private val shadeView: ShadePanelView
     private val banner: BannerView
     private var bannerArea: android.graphics.RectF? = null
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
@@ -170,7 +174,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val onAppearance: () -> Unit = {
         if (!appearancePending.getAndSet(true)) handler.post {
             appearancePending.set(false)
-            cc.invalidate(); nc.invalidate(); gallery.invalidate(); bar.invalidate(); banner.restyle()
+            cc.invalidate(); nc.invalidate(); shadeView.invalidate(); gallery.invalidate(); bar.invalidate(); banner.restyle()
         }
     }
 
@@ -211,6 +215,24 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override val torchOn get() = state.torch
             override fun camera() = openCamera()
         })
+        shadeView = ShadePanelView(ctx, object : QsPanel.Host {
+            override val state get() = this@Shade.state
+            override fun timeRight() = bar.timeRight
+            override fun timeLeft() = bar.timeLeft
+            override fun timeBaseline() = bar.timeBaseline
+            override fun timeSize() = bar.timeSize
+            override fun timeShown() = bar.timeShown
+            override fun closeDrag(phase: Int, dy: Float, vy: Float) = panelDrag(phase, dy, vy)
+            override fun close() = this@Shade.close()
+            override fun launch(i: Intent?) = launchIntent(i)
+            override fun open(item: Notifs.Item, from: android.graphics.RectF?): Boolean = openFrom(item, from)
+            override fun send(pi: PendingIntent?): Boolean = pi != null && sendIntent(pi, closePanel = true)
+            override fun powerMenu() { close(); nav.powerMenu() }
+            override fun expandChanged() = applyProgress()
+            override val locked get() = this@Shade.locked
+            override fun thread() = handler
+            override fun notifications() = shownNotifs()
+        }, surfaces)
         banner = BannerView(ctx, object : BannerView.Host {
             override val barHeight get() = this@Shade.barHeight
             // Home resumed: the window events alone left it out after Home came back with a plain FrameLayout event (the
@@ -225,7 +247,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (panel != null) close()
                 Unlock.then(ctx, "open a notification of ${item.pkg}") { Notifs.open(ctx, item) }
             }
-            override fun openNotificationCenter() { begin(ncPanel); progress.snapTo(0.12f); openFully(0f) }
+            override fun openNotificationCenter() { val p = notificationsPanel(); begin(p); progress.snapTo(0.12f); openFully(0f) }
             override fun send(pi: PendingIntent, closePanel: Boolean): Boolean =
                 Notifs.send(ctx, pi).also { if (it && closePanel && panel != null) close() }
             override fun dismissed(item: Notifs.Item) { quiet += item.key }
@@ -247,6 +269,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         root.addView(backdrop, FrameLayout.LayoutParams(mp, mp))
         root.addView(nc, FrameLayout.LayoutParams(mp, mp))
         root.addView(cc, FrameLayout.LayoutParams(mp, mp))
+        root.addView(shadeView, FrameLayout.LayoutParams(mp, mp))
         root.addView(gallery, FrameLayout.LayoutParams(mp, mp))
         root.addView(launchCard, FrameLayout.LayoutParams(mp, mp))
         root.addView(bar, FrameLayout.LayoutParams(mp, mp))
@@ -256,7 +279,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (Notifs.connected) seen = Notifs.items.associate { it.key to it.postTime }
         cc.alpha = 1f
         bar.onHiddenChanged = { updateTouchable() }
-        state.addListener { cc.syncActive(); cc.syncSubs(); nc.invalidate() }
+        state.addListener { cc.syncActive(); cc.syncSubs(); nc.invalidate(); shadeView.stateChanged() }
         // Light and dark cross-fade (Appearance, on the main thread): the panels draw every frame of it, as home does (they
         // did not listen, and caught up late in one step).
         android.os.Handler(android.os.Looper.getMainLooper()).post { dev.launcher.app.theme.Appearance.addListener(onAppearance) }
@@ -319,7 +342,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             state.readDetails()
             if (cc.hasAppTiles()) AppTiles.readStates()
             // The design may have changed since (light and dark blur differently).
-            liveBlur.maxBlurPx = liveBlurMax()
+            liveBlur.maxBlurPx = liveBlurMax(CcTokens.BACKGROUND)
             prepareBackdrop()
         }
         override fun cleanUp() {
@@ -374,11 +397,74 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         override fun rests() { cc.prerecord() }
     }
 
+    /**
+     * Android's shade: Quick Settings over the notifications in one panel ([ShadePanelView]). The first stage follows the
+     * pull as Control Center's presence does; pulling on past it expands Quick Settings (the view's own spring), as a drag
+     * down on the panel does. Over the blurred screen, as Control Center.
+     */
+    private val shadePanel: Panel = object : Panel(ShadeStructure.Kind.SHADE, "the shade") {
+        override fun opening() {
+            state.readAll()
+            state.readDetails()
+            shadeView.barHeight = barHeight
+            shadeView.prepare()
+            liveBlur.maxBlurPx = liveBlurMax(QsTokens.BACKGROUND)
+            prepareBackdrop()
+        }
+        override fun cleanUp() {
+            shadeView.onClosed()
+            liveBlur.set(0f, false)
+            backdrop.source = null
+            surfaces.setBackdrop(null, null)
+            backdrop.freeze = 0f
+            bar.setShadeHeader(false, 1f)
+        }
+        override fun gone() { shadeView.progress = 0f; backdrop.set(0f, 0, 0f, 0f) }
+        override val openCurve get() = NC_OPEN
+        override val closeCurve get() = NC_CLOSE
+        override fun travel() = shadeView.firstTravel()
+        override fun fingerProgress(y: Float, dy: Float) = (dy / travel()).coerceIn(0f, 1f)
+        override fun caughtProgress(from: Float, dy: Float) = (from + dy / travel()).coerceIn(0f, 1f)
+        override fun drag(phase: Int, dy: Float, vy: Float) {
+            when (phase) {
+                1 -> progress.snapTo((dragFrom + dy / travel()).coerceIn(0f, 1f))
+                2 -> dragEnds(vy / travel(), vy)
+            }
+        }
+        override fun touch(e: MotionEvent) = shadeView.dispatchTouchEvent(e)
+        override fun back() = shadeView.back()
+        override fun followed(dy: Float) = shadeView.pulled(dy)
+        override fun released(vy: Float) = shadeView.released(vy)
+        override fun swipeBand(out: android.graphics.RectF) = shadeView.swipeBand(out)
+    }
+
     /** Every panel the shade can show (the layout file says which a pull from each side opens). */
-    private val panels: List<Panel> get() = listOf(ncPanel, ccPanel)
+    private val panels: List<Panel> get() = listOf(ncPanel, ccPanel, shadePanel)
 
     /** The panel of [kind]. */
-    private fun panelOf(kind: ShadeStructure.Kind): Panel = if (kind == ShadeStructure.Kind.CONTROL_CENTER) ccPanel else ncPanel
+    private fun panelOf(kind: ShadeStructure.Kind): Panel = when (kind) {
+        ShadeStructure.Kind.CONTROL_CENTER -> ccPanel
+        ShadeStructure.Kind.SHADE -> shadePanel
+        else -> ncPanel
+    }
+
+    /** The panel that shows the notifications in the place chosen (banners open it). */
+    private fun notificationsPanel(): Panel =
+        panelOf(ShadeStructure.current().pullsOf(Setup.placement(Element.SHADE).id).firstOrNull { it.kind.holdsNotifications }?.kind
+            ?: ShadeStructure.Kind.NOTIFICATION_CENTER)
+
+    /** The notifications a panel of Android's shows now: over the lock screen what its settings allow, as Notification Center. */
+    private fun shownNotifs(): List<Notifs.Item> {
+        if (!locked) return Notifs.items
+        val p = lockPrivacy
+        if (p == null || !p.show) return emptyList()
+        return Notifs.items.filter { it.lockVisibility != android.app.Notification.VISIBILITY_SECRET }.map {
+            if (it.lockVisibility == android.app.Notification.VISIBILITY_PRIVATE && !p.allowPrivate) it.redacted(AppInfo.label(ctx, it.pkg)) else it
+        }
+    }
+
+    /** The lock screen's notification settings as last read ([readLockPrivacy]). */
+    private var lockPrivacy: NotificationCenterView.LockPrivacy? = null
 
     /** The layout's place in use opens a panel of [kind]. */
     private fun uses(kind: ShadeStructure.Kind): Boolean = ShadeStructure.current().uses(Setup.placement(Element.SHADE).id, kind)
@@ -427,18 +513,21 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         }
         // The live blur's window first: it must sit under this one.
         liveBlur.attach()
-        liveBlur.maxBlurPx = liveBlurMax()
+        liveBlur.maxBlurPx = liveBlurMax(CcTokens.BACKGROUND)
         // adb test hook (senders must hold DUMP: adb's shell does, other apps cannot):
         //   am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do nc_expand
         // fans Notification Center's collapsed stack out, so a script can scroll it without tapping a notification.
         if (testHook == null) testHook = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
                 if (i.getStringExtra("do") == "nc_expand") handler.post { if (panel === ncPanel) nc.expandList() }
+                // --es do qs_expand | qs_collapse: Android's shade's Quick Settings expanded or collapsed, as a fling would.
+                if (i.getStringExtra("do") == "qs_expand") handler.post { if (panel === shadePanel) shadeView.expandTo(true) }
+                if (i.getStringExtra("do") == "qs_collapse") handler.post { if (panel === shadePanel) shadeView.expandTo(false) }
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
                 // --es do open [--es panel cc|nc], --es do close: a panel opened as a released pull opens it, and closed (a
                 // script's pictures of a panel at rest, never caught mid-pull).
                 if (i.getStringExtra("do") == "open") handler.post {
-                    val p = if (i.getStringExtra("panel") == "nc") ncPanel else ccPanel
+                    val p = when (i.getStringExtra("panel")) { "nc" -> ncPanel; "shade" -> shadePanel; else -> ccPanel }
                     if (!uses(p.kind)) { AppLog.log("[shade] test: the layout's place has no ${p.name}"); return@post }
                     begin(p); openFully(0f)
                 }
@@ -480,6 +569,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             media.start()
             showRinging("shade shown")
             dev.launcher.app.design.Design.addListener(ccWarmOnDesign)
+            dev.launcher.app.design.Design.addListener(shadeOnDesign)
             warmCcSoon(CC_WARM_START_MS)
             true
         } catch (t: Throwable) {
@@ -504,6 +594,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     fun detach() {
         dev.launcher.app.design.Design.removeListener(ccWarmOnDesign)
+        dev.launcher.app.design.Design.removeListener(shadeOnDesign)
         handler.removeCallbacks(ccWarm)
         if (!attached) return
         closeNow()
@@ -565,34 +656,45 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun applyProgress() {
         val ccP = shownProgress(ccPanel)
         val ncP = shownProgress(ncPanel)
-        if (ccP != null) {
-            cc.progress = ccP
+        val shP = shownProgress(shadePanel)
+        if (ccP != null) cc.progress = ccP
+        if (shP != null) shadeView.progress = shP
+        // Control Center and Android's shade lie over the blurred screen, each with its own background.
+        val bgP = ccP ?: shP
+        val bgKey = if (ccP != null) CcTokens.BACKGROUND else QsTokens.BACKGROUND
+        if (bgP != null) {
             // Live where the system can blur behind a window (the app or home keeps moving under it), else our blurred
             // picture of what was behind.
             val live = liveBlur.available
             backdrop.live = live
             // The background on the controls' own curve (they show at the square root of the progress): linear, the blur
             // was all but gone while the controls still showed at a third (it cleared in one frame as they faded).
-            val bk = kotlin.math.sqrt(ccP.coerceIn(0f, 1f))
+            val bk = kotlin.math.sqrt(bgP.coerceIn(0f, 1f))
             if (live) liveBlur.set(bk, true)
-            val veil = ccVeil()
-            backdrop.set(ccBlurRadius() * bk, veil.rgb, veil.alpha * bk, (ccP / 0.12f).coerceIn(0f, 1f))
-            bar.setRowAlpha(1f - editK)
+            val veil = veilOf(bgKey)
+            backdrop.set(blurRadius(bgKey) * bk, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
+            if (ccP != null) bar.setRowAlpha(1f - editK)
         }
         if (ncP != null) nc.progress = ncP
-        if (ccP == null && ncP == null) {
+        if (ccP == null && ncP == null && shP == null) {
             cc.progress = 0f
             nc.progress = 0f
+            shadeView.progress = 0f
             backdrop.set(0f, 0, 0f, 0f)
         }
         val l = 1f - launchBarK()
+        // Over Android's shade the bar stays as it is (no status row), its content following the veil; its time gives way to
+        // the shade's large clock as Quick Settings expand, and the date comes beside it.
         bar.setPanel(
-            (ccP ?: 0f).coerceIn(0f, 1f) * l, (ncP ?: 0f).coerceIn(0f, 1f) * l,
+            (bgP ?: 0f).coerceIn(0f, 1f) * l, (ncP ?: 0f).coerceIn(0f, 1f) * l,
             if (ncP != null) nc.wantsDarkContent() else 0f,
             if (ccP != null) cc.statusRowY else 0f, if (ccP != null) cc.statusRowInset else 0f,
-            if (ccP != null) ccVeil().darkContent else 0f,
-            ccHasRow = ccP == null || cc.hasStatusRow,
+            if (bgP != null) veilOf(bgKey).darkContent else 0f,
+            ccHasRow = ccP != null && cc.hasStatusRow || bgP == null,
         )
+        // (The bar's time hands over to the shade's clock at its own place as Quick Settings start to expand: the clock then
+        // grows out of it into the large one.)
+        bar.setShadeHeader(shP != null && shP > 0f, 1f - dev.launcher.app.shade.qs.smooth(0f, 0.15f, shadeView.expandK))
     }
 
     /** [p]'s progress while it shows (the panel pulled or open, or one on its way out under it), else null. */
@@ -631,23 +733,23 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     /**
-     * Control Center's background (the kit's overlay: a background blur of 24, black 50 %): its blur as Android's blur
-     * radius (px), and how much it darkens (0..1).
+     * A panel's background ([key]: Control Center's, the kit's overlay: a background blur of 24, black 50 %; Android's
+     * shade's): its blur as Android's blur radius (px).
      */
-    private fun ccBlurRadius(): Float = dev.launcher.app.design.Blur.renderRadius(ccSigmaPx())
+    private fun blurRadius(key: dev.launcher.app.design.MaterialKey): Float = dev.launcher.app.design.Blur.renderRadius(sigmaPx(key))
 
-    /** Control Center's background blur as a Gaussian's sigma (px). */
-    private fun ccSigmaPx(): Float {
-        val m = dev.launcher.app.design.Design.material(CcTokens.BACKGROUND)
+    /** A panel's background blur as a Gaussian's sigma (px). */
+    private fun sigmaPx(key: dev.launcher.app.design.MaterialKey): Float {
+        val m = dev.launcher.app.design.Design.material(key)
         val unit = dev.launcher.app.design.Scale.unitPx(ctx, ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels))
         return dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * dev.launcher.app.theme.Appearance.dark, unit)
     }
 
-    /** The live blur at full strength, in its mode's own unit (see [LiveBlur.maxBlurPx]). */
-    private fun liveBlurMax(): Float = when (liveBlur.mode) {
-        LiveBlur.Mode.SAMSUNG_VIEW -> dev.launcher.app.design.SamsungBlur.radiusFor(ccSigmaPx()).toFloat()
+    /** The live blur at full strength for the background [key], in its mode's own unit (see [LiveBlur.maxBlurPx]). */
+    private fun liveBlurMax(key: dev.launcher.app.design.MaterialKey): Float = when (liveBlur.mode) {
+        LiveBlur.Mode.SAMSUNG_VIEW -> dev.launcher.app.design.SamsungBlur.radiusFor(sigmaPx(key)).toFloat()
         LiveBlur.Mode.SAMSUNG -> dev.launcher.app.design.Design.num(CcTokens.SAMSUNG_STRENGTH)
-        else -> ccBlurRadius()
+        else -> blurRadius(key)
     }
 
     /**
@@ -658,24 +760,24 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private class Veil(val rgb: Int, val alpha: Float, val darkContent: Float)
 
-    /** The veil worked out once per design and appearance (it is asked for twice in every frame of a pull). */
-    private var veilKept: Veil? = null
+    /** Each background's veil worked out once per design and appearance (it is asked for twice in every frame of a pull). */
+    private val veilsKept = HashMap<String, Veil>()
     private var veilVersion = -1
     private var veilDark = -1f
 
-    private fun ccVeil(): Veil {
+    private fun veilOf(key: dev.launcher.app.design.MaterialKey): Veil {
         val version = dev.launcher.app.design.Design.version
         val dark = dev.launcher.app.theme.Appearance.dark
-        veilKept?.let { if (version == veilVersion && dark == veilDark) return it }
-        return workOutVeil().also { veilKept = it; veilVersion = version; veilDark = dark }
+        if (version != veilVersion || dark != veilDark) { veilsKept.clear(); veilVersion = version; veilDark = dark }
+        return veilsKept.getOrPut(key.name) { workOutVeil(key) }
     }
 
-    private fun workOutVeil(): Veil {
+    private fun workOutVeil(key: dev.launcher.app.design.MaterialKey): Veil {
         var a = 0f
         var r = 0f
         var g = 0f
         var b = 0f
-        for (f in dev.launcher.app.design.Design.material(CcTokens.BACKGROUND).fills) {
+        for (f in dev.launcher.app.design.Design.material(key).fills) {
             val op = f.opacity + (f.opacityDark - f.opacity) * dev.launcher.app.theme.Appearance.dark
             val col = dev.launcher.app.design.Design.color(f.color)
             val cr = ((col shr 16) and 0xFF) / 255f
@@ -696,19 +798,29 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         return Veil(rgb, a, ((light - 0.55f) / 0.15f).coerceIn(0f, 1f))
     }
 
+    /** The background of the panel opening (Control Center's, Android's shade's), or null for one without (Notification Center). */
+    private fun backgroundOf(p: Panel?): dev.launcher.app.design.MaterialKey? = when (p) {
+        ccPanel -> CcTokens.BACKGROUND
+        shadePanel -> QsTokens.BACKGROUND
+        else -> null
+    }
+
     private fun prepareBackdrop() {
         val t0 = SystemClock.uptimeMillis()
+        val opening = panel
+        val key = backgroundOf(opening) ?: return
         nav.backdrop { src ->
-            if (panel !== ccPanel) return@backdrop
+            if (panel !== opening) return@backdrop
             backdrop.source = src
-            if (src == null) { surfaces.setBackdrop(null, null); cc.invalidate(); return@backdrop }
-            val veil = ccVeil()
-            BlurBaker.bake(src, root.width, root.height, 0.25f, ccBlurRadius(), (Math.round(veil.alpha * 255f) shl 24) or veil.rgb, handler) { bmp, m ->
-                if (panel !== ccPanel || backdrop.source !== src) return@bake
+            if (src == null) { surfaces.setBackdrop(null, null); cc.invalidate(); shadeView.invalidate(); return@backdrop }
+            val veil = veilOf(key)
+            BlurBaker.bake(src, root.width, root.height, 0.25f, blurRadius(key), (Math.round(veil.alpha * 255f) shl 24) or veil.rgb, handler) { bmp, m ->
+                if (panel !== opening || backdrop.source !== src) return@bake
                 surfaces.setBackdrop(bmp, m)
                 cc.invalidate()
                 gallery.invalidate()
-                if (backdropLogs < 4) { backdropLogs++; AppLog.log("[shade] Control Center glass ready ${SystemClock.uptimeMillis() - t0} ms after the touch (${src.javaClass.simpleName})") }
+                shadeView.invalidate()
+                if (backdropLogs < 4) { backdropLogs++; AppLog.log("[shade] ${opening?.name} glass ready ${SystemClock.uptimeMillis() - t0} ms after the touch (${src.javaClass.simpleName})") }
             }
         }
     }
@@ -764,6 +876,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     private val ccWarmOnDesign: () -> Unit = { handler.post { warmCcSoon(CC_WARM_START_MS) } }
+    /** Android's shade takes up a new design (its sizes, its fonts). */
+    private val shadeOnDesign: () -> Unit = { handler.post { shadeView.designChanged() } }
 
     /**
      * [old] makes way for the other panel: it goes on closing by itself, from where it is and as fast as it was going
@@ -1104,6 +1218,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         seen = items.associate { it.key to it.postTime }
         // A shown banner whose notification went (or stopped ringing) goes; the others take up their changes.
         banner.sync(items)
+        shadeView.notifsChanged()
         quiet.retainAll { k -> items.any { it.key == k && it.urgent } }
         // The first list (the listener connected): what was already there does not alert again, but a call still ringing
         // shows (the app restarted while it rang).
@@ -1407,6 +1522,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             AppLog.log("[shade] ${if (l) "over the lock screen" else "unlocked"}")
             bar.setLocked(l)
             nc.setLocked(l)
+            shadeView.notifsChanged()
             if (l) { cc.exitEdit(animate = false); gallery.dismissNow(); banner.clear(keepRinging = true); readLockPrivacy() }
         }
     }
@@ -1425,7 +1541,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             val v = out.lines().map { it.trim() }.filter { it == "0" || it == "1" || it == "null" }
             val p = NotificationCenterView.LockPrivacy(show = v.getOrNull(0) == "1", allowPrivate = v.getOrNull(1) == "1")
             AppLog.log("[shade] lock screen: notifications ${if (p.show) "shown" else "hidden"}${if (p.show) ", content ${if (p.allowPrivate) "shown" else "hidden"}" else ""}")
-            handler.post { if (locked) nc.setLocked(true, p) }
+            handler.post { lockPrivacy = p; if (locked) { nc.setLocked(true, p); shadeView.notifsChanged() } }
         }
     }
 
