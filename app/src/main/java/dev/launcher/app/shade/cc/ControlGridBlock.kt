@@ -1196,12 +1196,14 @@ class ControlGridBlock(
             Mode.EMPTY -> { mode = Mode.NONE; enterEdit() }
             Mode.PRESS -> {
                 val a = touched ?: return
-                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 a.press.animateTo(0f, PRESS_OUT); a.subPress.animateTo(0f, PRESS_OUT)
                 val st = host.state
                 // A module grows into its large form (iOS 18+), a control with choices shows them (the camera's: iOS's
                 // "touch and hold to take a selfie, record a video, or take a photo"); anything else opens its settings.
+                // One tick for the hold: an expanded module gives its own as it opens (CcExpanded.open, also on Focus's
+                // tap), so it is given here only when nothing expands (both once played two: Matheesha, 2026-10-20).
                 if (expandFrom(a)) { mode = Mode.NONE; return }
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 if (a.sub == null && openMenu(a)) { mode = Mode.MENU; menuFromHold = true; return }
                 val ctl = (a.sub as? Control) ?: a.item.control
                 when (ctl.kind) {
