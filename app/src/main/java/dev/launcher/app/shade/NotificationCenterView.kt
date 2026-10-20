@@ -76,7 +76,7 @@ import kotlin.math.roundToInt
  * (the list as it is) and no flashlight or camera.
  */
 @SuppressLint("ViewConstructor")
-class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
+class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), dev.launcher.app.shade.nc.NcPanel {
     interface Host {
         val media: Media
         fun closeDrag(phase: Int, dy: Float, vy: Float)
@@ -96,24 +96,38 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private val mainHandler = Handler(Looper.getMainLooper())
     /** This view's thread (the shade's), or main before it is attached. */
     private fun hnd(): Handler = handler ?: mainHandler
+
+    // ---- the blocks it is made of (the layout file's: docs/LAYOUT_FILES.md), and what it gives them ([NcPanel])
+
+    override val view: View get() = this
+    override val panelWidth: Int get() = width
+    override val panelHeight: Int get() = height
+    override fun thread(): Handler = hnd()
+    override fun drawGlass(c: Canvas, m: Material, x: Float, y: Float, w: Float, h: Float, radius: Float, alpha: Float, scale: Float,
+                           screenX: Float, screenY: Float, over: List<Fill>, overK: Float) =
+        drawGlass(c, m, x, y, w, h, radius, alpha, scale, screenX, screenY, 0f, under, over, overK, 0f)
+
+    /** The date and the glass clock (`lock-clock`). */
+    private val clock = dev.launcher.app.shade.nc.LockClockBlock(this)
+    /** The flashlight and the camera (`corner-buttons`). */
+    private val buttons = dev.launcher.app.shade.nc.CornerButtonsBlock(this, { host.torchOn }, { host.torch() }, { host.camera() })
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
 
     // The theme's fonts, kept when it changes (B4b: Fonts.Followers).
-    private val fonts = Fonts.Followers(this) { tokensChanged(); refreshClock() }
+    private val fonts = Fonts.Followers(this) { tokensChanged() }
     private val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600) }
     private val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 400) }
     private val timePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 400); textAlign = Paint.Align.RIGHT }
-    private val datePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600); textAlign = Paint.Align.CENTER }
     private val headPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.display(this, 700) }
     private val buttonPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { fonts.text(this, 600); textAlign = Paint.Align.CENTER }
-    private val dateShadow = FadingShadow(0f, 0f, 0f, 0x59000000)
     private val headShadow = FadingShadow(0f, 0f, 0f, 0x59000000)
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val rect = RectF()
     private val inv: (Float) -> Unit = { invalidate() }
 
-    private var u = 1f
+    override var u = 1f
+        private set
     private var margin = 0f
     private var platterW = 0f
     private var gap = 0f
@@ -163,18 +177,13 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         if (mp == null || nu != u) { mp = MaterialPainter.create(nu); flat = MaterialPainter.create(nu) }
         u = nu
         painter.u = u
-        dateShadow.radius = 6f * u; dateShadow.dy = 1f * u
         headShadow.radius = 6f * u; headShadow.dy = 1f * u
-        clockMasks = null
         frosts.clear()
         syncTokens()
         warmFrost()
         translationY = sheetY()
         relayout(animate = false)
-        // Numerals made for another size (the panel turned with a landscape app): let go, made again for this one now (drawn
-        // as plain numerals meanwhile). Kept, they were drawn off to one side until the minute turned.
-        if (clockGlass != null && (clockMadeW != w || clockMadeH != h)) { clockGlass = null; clockGlassOld = null }
-        refreshClock()
+        clock.resized(w, h)
     }
 
     /** The tokens this view keeps in fields (sizes and type), taken up again when one changes. */
@@ -191,8 +200,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             listL = margin
             listR = width - margin
         }
-        datePaint.textSize = if (land) Design.pt(NcTokens.LAND_DATE_SIZE, u) else 22f * u
-        datePaint.textAlign = if (land) Paint.Align.LEFT else Paint.Align.CENTER
+        clock.place(atTopLeft = land)
         Design.text(NcTokens.TITLE).applyTo(titlePaint, u)
         Design.text(NcTokens.BODY).applyTo(bodyPaint, u)
         Design.text(NcTokens.TIME).applyTo(timePaint, u)
@@ -220,7 +228,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
      * pull costs one texture per frame instead of the wallpaper, the glass clock and every glass platter (S24: its GPU time
      * per frame was 7-9 ms, close to the 8.3 ms a frame has at 120 Hz).
      */
-    var progress = 0f
+    override var progress = 0f
         set(v) {
             if (field == v) return
             val was = field
@@ -253,12 +261,12 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         expanded.clear()
         scroller.jumpTo(0f)
         readNotifs(animate = false)
-        refreshClock()
+        clock.refresh()
         startTicking()
         // The wallpaper and the clock are drawn from layers kept between frames: made anew for this opening (a reopen once
         // showed the last session's dimmed wallpaper and faded clock over the new, collapsed list).
         bgKey = Long.MIN_VALUE
-        clockKey = Long.MIN_VALUE
+        clock.forget()
         invalidate()
     }
 
@@ -333,149 +341,17 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     // ------------------------------------------------------------------ the wallpaper and the clock
 
-    private var wallpaper: Wallpaper? = null
-    private var clockGlass: GlassDrawable? = null
-    private var clockGlassOld: GlassDrawable? = null
-    private val clockFade = MotionValue(1f, 100f, inv)
-    private var clockMasks: Pair<String, GlassMask>? = null
-    private var clockText = ""
-    private var dateText = ""
-    private val digitPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFFFFFFFF.toInt(); fonts.display(this, 700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
-    }
-    private val solidDigits = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xF2FFFFFF.toInt(); fonts.display(this, 700); textAlign = Paint.Align.CENTER; letterSpacing = -0.02f
-    }
-
-    /**
-     * The numerals' box. Portrait: across the sheet under the status bar (the numerals centred in it). Landscape: at the top
-     * left, as wide as the widest time at the token's height with room for the glass at its sides (so the height sets the
-     * digits' size), the numerals left-aligned in it under the date ([numeralsX]).
-     */
-    private fun clockBox(out: RectF): RectF = out.apply {
-        if (land) {
-            val h = Design.pt(NcTokens.LAND_CLOCK_HEIGHT, u) / 0.94f
-            val top = Design.pt(NcTokens.LAND_CLOCK_TOP, u) - h * dev.launcher.app.home.ClockNumerals.TOP
-            val left = Design.pt(NcTokens.LAND_CLOCK_X, u) - CLOCK_SIDE_PT * u
-            boxPaint.set(digitPaint)
-            set(left, top, left + dev.launcher.app.home.ClockNumerals.widthFor(boxPaint, h, true) + 2 * CLOCK_SIDE_PT * u, top + h)
-        } else set(36f * u, 110f * u, width - 36f * u, 206f * u)
-    }
-
-    /** For measuring the landscape box (the digits' paint as it is, sized by [clockBox]). */
-    private val boxPaint = TextPaint()
-    private val inkBounds = android.graphics.Rect()
-
-    /**
-     * Where the numerals [t] are drawn from in a box [w] wide (px from its left), with [p] set as [ClockNumerals.layout]
-     * left it; [p]'s alignment is set to match. Portrait: centred. Landscape: their ink starts at the box's side room, under
-     * the date (iOS 27 sets both from one left edge).
-     */
-    private fun numeralsX(p: TextPaint, t: String, w: Float): Float {
-        if (!land) { p.textAlign = Paint.Align.CENTER; return w / 2f }
-        p.textAlign = Paint.Align.LEFT
-        p.getTextBounds(t, 0, t.length, inkBounds)
-        return CLOCK_SIDE_PT * u - inkBounds.left
-    }
-
-    private var building = false
-    /** Asked to build while a build ran: built again once it is done. */
-    private var buildAgain = false
-    /** What the glass numerals on screen were made for (a new minute or a new wallpaper makes them again). */
-    private var clockMadeFor: Wallpaper? = null
-    private var clockMadeText = ""
-    /** And with which fonts (the design's structure): another font makes them again. */
-    private var clockMadeFonts = -1
-    /** And for which size of the panel. */
-    private var clockMadeW = 0
-    private var clockMadeH = 0
-    /** The glass numerals are fading in over the plain ones (no glass ones before them). */
-    private var clockFromPlain = false
-    private var clockLogs = 0
-
-    private fun clockLog(msg: String) { if (clockLogs++ < 12) AppLog.log("[shade] clock: $msg") }
-
-    /**
-     * The glass numerals for this minute and this wallpaper, made off the UI threads (the numerals' distance field). The
-     * ones on screen stay until the new ones are there, then cross-fade into them; a build that went out of date while it
-     * ran (the wallpaper changed, the minute turned) is followed by another. Until the first build is done, the numerals
-     * are drawn as plain text.
-     */
-    private fun refreshClock() {
-        val now = java.util.Date()
-        val locale = java.util.Locale.getDefault()
-        val is24 = android.text.format.DateFormat.is24HourFormat(context)
-        dateText = java.text.SimpleDateFormat("EEE d MMM", locale).format(now)
-        val t = java.text.SimpleDateFormat(if (is24) "H:mm" else "h:mm", locale).format(now)
-        clockText = t
-        val wp = wallpaper ?: return
-        if (clockGlass != null && clockMadeText == t && clockMadeFor === wp && clockMadeFonts == dev.launcher.app.design.Design.structure &&
-            clockMadeW == width && clockMadeH == height) return
-        if (width == 0) return
-        if (building) { buildAgain = true; return }
-        val box = clockBox(RectF())
-        val w = box.width().roundToInt()
-        val h = box.height().roundToInt() + dev.launcher.app.ClockShadow.reach.roundToInt()
-        val baseline = dev.launcher.app.home.ClockNumerals.layout(digitPaint, box.width(), box.height(), is24)
-        building = true
-        buildAgain = false
-        val fontsAt = dev.launcher.app.design.Design.structure
-        val paint = TextPaint(digitPaint)
-        val x = numeralsX(paint, t, box.width())
-        val vw = width
-        val vh = height
-        clockIo.execute {
-            val gm = try { dev.launcher.app.home.ClockNumerals.build(paint, w, h, baseline, t, u, x) } catch (e: Throwable) {
-                clockLog("numerals failed: ${e.javaClass.simpleName}: ${e.message}"); null
-            }
-            post {
-                building = false
-                val g = if (gm == null) null else try {
-                    GlassDrawable(wp, vw, vh, 0f, u, 0f, GlassStyle.IOS_CLOCK, GlassDrawable.Source.FROSTED, gm).apply { followsHomeDepth = false }
-                } catch (e: Throwable) { clockLog("glass failed: ${e.javaClass.simpleName}: ${e.message}"); null }
-                if (g != null && (width != vw || height != vh)) clockLog("the panel's size changed while the numerals were made: made again")
-                else if (g != null) {
-                    // The new numerals cross-fade from the old ones (a minute, a wallpaper): never a frame without a clock.
-                    val old = clockGlass
-                    clockGlass = g
-                    clockMadeFor = wp
-                    clockMadeText = t
-                    clockMadeFonts = fontsAt
-                    clockMadeW = vw
-                    clockMadeH = vh
-                    // From plain numerals too, if they show (the panel open as it turned).
-                    clockFromPlain = old == null && progress > 0f
-                    if (progress > 0f && (old != null || clockFromPlain)) { clockGlassOld = old; clockFade.snapTo(0f); clockFade.animateTo(1f, CLOCK_TICK) }
-                    else { clockGlassOld = null; clockFade.snapTo(1f) }
-                    invalidate()
-                }
-                if (wallpaper !== wp) clockLog("wallpaper changed while the numerals were made: made again")
-                if (buildAgain || clockText != t || wallpaper !== wp || width != vw || height != vh) refreshClock()
-            }
-        }
-    }
-
+    override var wallpaper: Wallpaper? = null
+        private set
     private val tick = object : Runnable {
         override fun run() {
-            refreshClock()
+            clock.refresh()
             invalidate()   // "now" becomes "1m ago"
             hnd().postDelayed(this, 15_000)
         }
     }
     private fun startTicking() { hnd().removeCallbacks(tick); hnd().postDelayed(tick, 15_000) }
     private fun stopTicking() { hnd().removeCallbacks(tick) }
-
-    /**
-     * The numerals are kept current while Notification Center is closed too (each minute while the screen is on, and as
-     * it comes on): made only as it opened, the sheet slid in with the time it was last open at and changed in front of
-     * the user (seen: 4:35 at 5:13, then a cross-fade).
-     */
-    private val minute = object : android.content.BroadcastReceiver() {
-        override fun onReceive(c: Context?, i: Intent?) {
-            if (i?.action == Intent.ACTION_SCREEN_ON || power.isInteractive) refreshClock()
-        }
-    }
-    private val power by lazy { context.getSystemService(android.os.PowerManager::class.java) }
 
     // ------------------------------------------------------------------ the list: blocks on springs
 
@@ -530,24 +406,16 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         Notifs.addListener(hnd(), notifsChanged)
         Design.addListener(tokensChanged)
         Wallpaper.addListener(hnd(), wallpaperChanged)
-        try {
-            context.registerReceiver(minute, android.content.IntentFilter().apply {
-                addAction(Intent.ACTION_TIME_TICK)
-                addAction(Intent.ACTION_TIME_CHANGED)
-                addAction(Intent.ACTION_TIMEZONE_CHANGED)
-                addAction(Intent.ACTION_SCREEN_ON)
-            }, null, hnd())
-        } catch (t: Throwable) { clockLog("no minute ticks: ${t.javaClass.simpleName}") }
         readNotifs(animate = false)
         adoptWallpaper()
-        refreshClock()   // the time at least (plain numerals) before the wallpaper is there
+        clock.attached()   // the minute's ticks, and the time at least (plain numerals) before the wallpaper is there
     }
 
     override fun onDetachedFromWindow() {
         Notifs.removeListener(notifsChanged)
         Design.removeListener(tokensChanged)
         Wallpaper.removeListener(wallpaperChanged)
-        try { context.unregisterReceiver(minute) } catch (_: Throwable) { }
+        clock.detached()
         stopTicking()
         super.onDetachedFromWindow()
     }
@@ -704,7 +572,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** Where the list may sit: below the clock, above the buttons (landscape: the column, from near the top to near the bottom). */
     private fun listArea(out: RectF): RectF = out.apply {
         if (land) set(listL, Design.pt(NcTokens.LAND_LIST_TOP, u), listR, height - Design.pt(NcTokens.LAND_LIST_BOTTOM, u))
-        else set(margin, 232f * u, width - margin, buttonY() - buttonR() - LIST_ABOVE_BUTTONS_PT * u)
+        else set(margin, 232f * u, width - margin, buttons.top() - LIST_ABOVE_BUTTONS_PT * u)
     }
 
     /** How tall the list is (landscape centres it: without the gap after its last notification). */
@@ -753,8 +621,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
      */
     private val bgNode = android.graphics.RenderNode("nc-bg").apply { setUseCompositingLayer(true, null) }
     private var bgKey = Long.MIN_VALUE
-    private val clockNode = android.graphics.RenderNode("nc-clock").apply { setUseCompositingLayer(true, null) }
-    private var clockKey = Long.MIN_VALUE
 
     /** The sheet behind a long look, blurred by how far it is open (see [drawMenu]). */
     private val sheetNode = android.graphics.RenderNode("nc-sheet")
@@ -788,25 +654,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
         // The clock stays where it is: a long list scrolls up over it (iOS's lock screen) while it fades, so the date and the
         // numerals never show through the notifications passing over them.
-        val clockK = if (land) 1f else (1f - scroller.position / (CLOCK_FADE_PT * u)).coerceIn(0f, 1f)
-        if (clockK > 0.003f) {
-            val tone = clockTone()
-            val ck = ((dateText.hashCode().toLong() shl 32) xor (System.identityHashCode(clockGlass).toLong() shl 12)) xor
-                (System.identityHashCode(clockGlassOld).toLong() shl 2) xor Math.round(clockFade.value * 255f).toLong() xor
-                (if (clockGlass == null) clockText.hashCode().toLong() else 0L) xor (System.identityHashCode(wallpaper).toLong() shl 40) xor
-                (Math.round(tone * 255f).toLong() shl 24) xor (Math.round(Appearance.dark * 255f).toLong() shl 52)
-            if (ck != clockKey || !clockNode.hasDisplayList()) {
-                clockNode.setPosition(0, 0, width, (clockBox(RectF()).bottom + 40f * u).toInt())
-                val rc = clockNode.beginRecording()
-                try { drawClock(rc, 0f, 1f) } finally { clockNode.endRecording() }
-                clockKey = ck
-            }
-            clockNode.setAlpha(clockK)
-            c.drawRenderNode(clockNode)
-        }
+        clock.draw(c, if (land) 1f else (1f - scroller.position / (CLOCK_FADE_PT * u)).coerceIn(0f, 1f))
         c.save()
         drawList(c, sy)
-        if (!land) drawButtons(c)
+        if (!land) buttons.draw(c)
         c.restore()
         if (c !== canvas) {
             sheetNode.endRecording()
@@ -829,7 +680,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             frosts.clear()
             warmFrost()
             // The numerals on screen stay until the new wallpaper's are made (they cross-fade then).
-            refreshClock()
+            clock.refresh()
         }
     }
 
@@ -916,70 +767,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         if (sharp?.bitmap !== wp.bitmap || sharpMatrix != wpMatrix) { sharpMatrix.set(wpMatrix); sharp = BackdropImage(wp.bitmap, Matrix(wpMatrix)) }
         f.setBackdrop(sharp)
         f.draw(c, MaterialPainter.BARE, width.toFloat(), height.toFloat(), 0f, 0f, 0f, 1f, 1f, under)
-    }
-
-    private val clockRect = RectF()
-
-    // The clock's tone (home's: [dev.launcher.app.home.LabelTone]): light glass and a white date, dark ones over a bright
-    // wallpaper. Worked out again for a new wallpaper, size or appearance only.
-    private var toneOf: Wallpaper? = null
-    private var toneDim = -1f
-    private var toneW = 0
-    private var toneValue = 0f
-    private val toneArea = RectF()
-
-    private fun clockTone(): Float {
-        val wp = wallpaper ?: return 0f
-        val dim = Appearance.wallpaperDim
-        if (wp !== toneOf || dim != toneDim || width != toneW) {
-            toneOf = wp; toneDim = dim; toneW = width
-            clockBox(toneArea)
-            toneArea.top -= 40f * u   // the date above the numerals
-            toneValue = dev.launcher.app.home.LabelTone.of(wp.luminanceUnder(toneArea, width, height))
-        }
-        return toneValue
-    }
-
-    private fun drawClock(c: Canvas, dy: Float, k: Float) {
-        clockBox(clockRect)
-        clockRect.offset(0f, dy)
-        val tone = clockTone()
-        val col = dev.launcher.app.home.LabelTone.color(tone)
-        datePaint.color = alpha(col, k * (0xF2 / 255f))
-        dateShadow.color = alpha(Design.color(NcTokens.TEXT_SHADOW), 1f - tone)
-        dateShadow.apply(datePaint)
-        if (land) c.drawText(dateText, Design.pt(NcTokens.LAND_CLOCK_X, u),
-            clockRect.top + clockRect.height() * dev.launcher.app.home.ClockNumerals.TOP - Design.pt(NcTokens.LAND_DATE_GAP, u), datePaint)
-        else c.drawText(dateText, width / 2f, clockRect.top - 13f * u, datePaint)
-        val g = clockGlass
-        if (g != null) {
-            val f = clockFade.value.coerceIn(0f, 1f)
-            clockGlassOld?.let { drawClockGlass(c, it, (1f - f) * k) }
-            if (clockFromPlain && f < 1f && clockText.isNotEmpty()) drawPlainClock(c, col, (1f - f) * k)
-            drawClockGlass(c, g, f * k)
-        } else if (clockText.isNotEmpty()) drawPlainClock(c, col, k)
-        else clockLog("nothing to draw (no numerals, no time yet)")
-    }
-
-    private fun drawPlainClock(c: Canvas, col: Int, a: Float) {
-        if (a <= 0.003f) return
-        val baseline = dev.launcher.app.home.ClockNumerals.layout(solidDigits, clockRect.width(), clockRect.height(), android.text.format.DateFormat.is24HourFormat(context))
-        solidDigits.color = alpha(col, a * (0xF2 / 255f))
-        c.drawText(clockText, clockRect.left + numeralsX(solidDigits, clockText, clockRect.width()), clockRect.top + baseline, solidDigits)
-    }
-
-    private fun drawClockGlass(c: Canvas, g: GlassDrawable, a: Float) {
-        if (a <= 0.003f) return
-        g.tone = clockTone()
-        g.originX = clockRect.left
-        g.originY = clockRect.top
-        g.scale = 1f
-        g.setBounds(0, 0, clockRect.width().roundToInt(), clockRect.height().roundToInt() + dev.launcher.app.ClockShadow.reach.roundToInt())
-        g.alpha = (255 * a).roundToInt()
-        c.save()
-        c.translate(clockRect.left, clockRect.top)
-        g.draw(c)
-        c.restore()
     }
 
     /** The platters' text: white on clear glass in light and dark (the kit), and a secondary for the player. */
@@ -1453,45 +1240,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         return x0
     }
 
-    private val torchK = MotionValue(0f, 100f, inv)
-    private val holdTorch = MotionValue(0f, 100f, inv)
-    private val holdCamera = MotionValue(0f, 100f, inv)
-
-    /** Where the flashlight's (0) or the camera's (1) button is centred, and its radius (the kit's lock screen controls). */
-    private fun buttonX(i: Int): Float { val c = Design.pt(NcTokens.BUTTON_INSET_X, u) + buttonR(); return if (i == 0) c else width - c }
-    private fun buttonY(): Float = height - Design.pt(NcTokens.BUTTON_BOTTOM, u) - buttonR()
-    private fun buttonR(): Float = Design.pt(NcTokens.BUTTON_SIZE, u) / 2f
-
-    /**
-     * The flashlight and camera buttons at the bottom (iOS: touch and hold): the kit's clear glass discs with a light
-     * grey symbol added to the glass (plus-lighter); the flashlight on is a white disc with a dark symbol.
-     */
-    private fun drawButtons(c: Canvas) {
-        val on = if (host.torchOn) 1f else 0f
-        if (torchK.target != on) torchK.animateTo(on, TOGGLE)
-        val r = buttonR()
-        val y = buttonY()
-        val mat = Design.material(NcTokens.BUTTON)
-        val onFill = listOf(Fill(ColorValue.Ref(NcTokens.BUTTON_ON.name), 1f, 1f, Blend.NORMAL))
-        val symbol = Design.pt(NcTokens.BUTTON_SYMBOL, u)
-        val symColor = Design.color(NcTokens.BUTTON_SYMBOL_COLOR)
-        val symBlend = Design.blend(NcTokens.BUTTON_SYMBOL_BLEND)
-        for (i in 0..1) {
-            val x = buttonX(i)
-            val hold = if (i == 0) holdTorch.value else holdCamera.value
-            val s = 1f + 0.22f * hold
-            val t = if (i == 0) torchK.value.coerceIn(0f, 1f) else 0f
-            c.save()
-            c.scale(s, s, x, y)
-            drawGlass(c, mat, x - r, y - r, 2 * r, 2 * r, r, 1f, s, x - r * s, y - r * s, over = onFill, overK = t)
-            val res = if (i == 0) R.drawable.sym_flashlight else R.drawable.sym_camera
-            // Off: the kit's grey, added to the glass; on: dark on the white disc (they cross-fade).
-            glyphs.draw(c, res, x, y, symbol, alpha(symColor, 1f - t), symBlend)
-            if (t > 0.003f) glyphs.draw(c, res, x, y, symbol, alpha(Design.color(NcTokens.BUTTON_ON_SYMBOL), t))
-            c.restore()
-        }
-    }
-
     /**
      * One surface of material [m], [w] x [h] at [x], [y] with corner [radius], faded by [alpha]. [screenX], [screenY]: where
      * its corner really is on the sheet, [scale]: how much it is scaled there (what its glass samples). It sees the
@@ -1698,21 +1446,12 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         }
     }
 
-    private val holdFire = Runnable {
-        if (mode != Mode.HOLD) return@Runnable
-        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-        if (touchTarget == "torch") host.torch() else host.camera()
-        holdTorch.animateTo(0f, PRESS_OUT); holdCamera.animateTo(0f, PRESS_OUT)
-        mode = Mode.NONE
-    }
-
     private fun cancelTouch() {
         removeCallbacks(longPress)
-        removeCallbacks(holdFire)
         touched?.press?.animateTo(0f, PRESS_OUT)
         touched = null
         for (p in presses.values) p.animateTo(0f, PRESS_OUT)
-        holdTorch.animateTo(0f, PRESS_OUT); holdCamera.animateTo(0f, PRESS_OUT)
+        buttons.cancel()
         mode = Mode.NONE
     }
 
@@ -1773,17 +1512,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             invalidate()
             return
         }
-        // Flashlight and camera: touch and hold (portrait only).
-        val by = buttonY() + sy
-        if (!land) for (i in 0..1) {
-            if (hypot(x - buttonX(i), y - by) < buttonR() + 5f * u) {
-                mode = Mode.HOLD
-                touchTarget = if (i == 0) "torch" else "camera"
-                (if (i == 0) holdTorch else holdCamera).animateTo(1f, HOLD_IN)
-                postDelayed(holdFire, HOLD_MS)
-                return
-            }
-        }
+        // Flashlight and camera: touch and hold (upright only).
+        if (!land && buttons.down(x, y - sy)) { mode = Mode.HOLD; return }
         val wasMoving = scroller.isMovingVisibly()
         scroller.stop()
         // A revealed swipe: a tap on its buttons acts, anywhere else puts it back.
@@ -1861,7 +1591,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
             }
             Mode.SCROLL -> scroller.dragBy(lastY - y)
             Mode.CLOSE -> host.closeDrag(1, dy, 0f)
-            Mode.HOLD -> if (far) { removeCallbacks(holdFire); holdTorch.animateTo(0f, PRESS_OUT); holdCamera.animateTo(0f, PRESS_OUT); mode = Mode.NONE }
+            Mode.HOLD -> if (far) { buttons.cancel(); mode = Mode.NONE }
             Mode.MENU -> {
                 val i = longLookAt(x, y)
                 if (i != menuPressed) { menuPressed = i; invalidate() }
@@ -1872,7 +1602,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     private fun up(x: Float, y: Float, vx: Float, vy: Float) {
         removeCallbacks(longPress)
-        removeCallbacks(holdFire)
         when (mode) {
             Mode.PRESS -> {
                 val b = touched
@@ -1893,7 +1622,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
                     else -> if (m.open()) host.close()
                 }
             }
-            Mode.HOLD -> { holdTorch.animateTo(0f, PRESS_OUT); holdCamera.animateTo(0f, PRESS_OUT) }
+            Mode.HOLD -> buttons.up()
             Mode.MENU -> {
                 val m = menu
                 val i = menuPressed
@@ -2021,12 +1750,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val CONTENT_AFTER = 0.35f
         /** The gap between the list at rest and the top of the flashlight and camera buttons (pt). */
         const val LIST_ABOVE_BUTTONS_PT = 10f
-        /** Landscape: the room left at the sides of the numerals' box for the glass's rims and shadow (pt). */
-        const val CLOCK_SIDE_PT = 16f
         /** Landscape: how near the screen's top and bottom the long look may come (pt; portrait keeps clear of the bar). */
         const val LOOK_EDGE_LAND_PT = 12f
-        const val HOLD_MS = 380L
-        val clockIo = Executors.newSingleThreadExecutor()
         val REFLOW get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_REFLOW)
         val APPEAR get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_APPEAR)
         val LEAVE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_LEAVE)
@@ -2034,11 +1759,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val SWIPE_OUT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_SWIPE_OUT)
         val PRESS_IN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.PRESS_IN)
         val PRESS_OUT get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.PRESS_OUT)
-        val HOLD_IN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_HOLD)
-        val TOGGLE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_TOGGLE)
         val CONFIRM get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_CONFIRM)
         val MENU_OPEN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_MENU_OPEN)
         val MENU_CLOSE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_MENU_CLOSE)
-        val CLOCK_TICK get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_CLOCK_TICK)
     }
 }
