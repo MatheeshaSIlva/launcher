@@ -237,7 +237,15 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         })
     }
 
-    private fun NavLink.powerMenu() { (ctx as? android.accessibilityservice.AccessibilityService)?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_POWER_DIALOG) }
+    /**
+     * The phone's power menu, through the accessibility service (Android's global action; One UI logs its answer as
+     * "GlobalActions: showDialog ..."). What Android said is in our log: the S24 showed no menu once (2026-10-20).
+     */
+    private fun NavLink.powerMenu() {
+        val svc = ctx as? android.accessibilityservice.AccessibilityService
+        val ok = svc?.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_POWER_DIALOG)
+        AppLog.log("[shade] power menu: ${when (ok) { null -> "no accessibility service"; true -> "asked"; false -> "refused by Android" }}")
+    }
 
     /**
      * The status bar is [h] px tall now (the window manager's, in this rotation: One UI's landscape bar is not its portrait
@@ -285,6 +293,18 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 // script's pictures of a panel at rest, never caught mid-pull).
                 if (i.getStringExtra("do") == "open") handler.post { begin(if (i.getStringExtra("panel") == "nc") Panel.NC else Panel.CC); openFully(0f) }
                 if (i.getStringExtra("do") == "close") handler.post { close(0f) }
+                // --es do cc_expand_frames --es control CONNECTIVITY [--ei fps 60] [--ei hold 200]: a module of Control Center
+                // (open first) grown into its large form and back at exact times, Control Center drawn into PNGs in
+                // files/dev-out/expand/ (adb pull; ends with .done): the choreography frame by frame.
+                if (i.getStringExtra("do") == "cc_expand_frames") handler.post {
+                    val ctl = Control.entries.firstOrNull { it.name == i.getStringExtra("control") }
+                    val dir = java.io.File(ctx.getExternalFilesDir(null), "dev-out/expand").apply { deleteRecursively(); mkdirs() }
+                    if (panel != Panel.CC || ctl == null) AppLog.log("[shade] test expand: ${if (ctl == null) "no control ${i.getStringExtra("control")}" else "Control Center is not open"}")
+                    else cc.renderExpandFrames(ctl, i.getIntExtra("fps", 60), i.getIntExtra("hold", 200).toLong(), dir) { n ->
+                        java.io.File(dir, ".done").writeText("$n\n")
+                        AppLog.log("[shade] test: $n frames of ${ctl.name} expanding in ${dir.path}")
+                    }
+                }
                 // Opens one of OUR test notifications (by its title) as a tap on its platter would: a script never taps the
                 // list on the phone (it holds the owner's own notifications).
                 if (i.getStringExtra("do") == "nc_open") handler.post {

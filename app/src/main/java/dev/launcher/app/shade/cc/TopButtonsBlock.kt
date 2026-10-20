@@ -2,6 +2,7 @@ package dev.launcher.app.shade.cc
 
 import android.graphics.Canvas
 import android.view.HapticFeedbackConstants
+import dev.launcher.app.AppLog
 import dev.launcher.app.R
 import dev.launcher.app.design.Design
 import dev.launcher.app.motion.MotionValue
@@ -80,6 +81,7 @@ class TopButtonsBlock(private val panel: CcPanel, private val onPlus: () -> Unit
 
     private val hold = Runnable {
         if (pressed != 1) return@Runnable
+        AppLog.log("[cc] power held: the power menu asked for")
         panel.view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         powerPress.animateTo(0f, PRESS_OUT)
         pressed = -1

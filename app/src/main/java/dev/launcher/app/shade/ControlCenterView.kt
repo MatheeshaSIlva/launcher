@@ -204,6 +204,10 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
     /** Control Center rests open: edit mode's layer of empty cells is drawn now, not on edit mode's first frame. */
     fun prerecord() = grid.prerecord()
 
+    /** For checks: [control]'s module grown and put back at exact times, drawn into PNGs ([ControlGridBlock.renderExpandFrames]). */
+    fun renderExpandFrames(control: Control, fps: Int, holdMs: Long, dir: java.io.File, done: (Int) -> Unit) =
+        grid.renderExpandFrames(control, fps, holdMs, dir, done)
+
     // ------------------------------------------------------------------ open and close
 
     /** How present Control Center is (from the shade, every frame): 0 closed .. 1 open. */

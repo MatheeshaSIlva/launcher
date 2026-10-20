@@ -30,9 +30,10 @@ import kotlin.math.roundToInt
  * - Timer: a large slider of durations; letting go starts that timer in the clock app (it does not open).
  * - Now Playing: the player large: artwork, title, the track's progress, the transport, the volume, the output.
  * - Focus: Do Not Disturb and Focus settings.
- * Everything moves on springs from where the module was and back; the panel can be grabbed while it moves. It is drawn as
- * the modules are ([CcSurfaces], `comp.cc.*` tokens): the module's clear glass, its circles the kit's wells (their colour
- * when on), a slider's level and a white button the kit's "on" fill.
+ * It is the module grown (see [draw]): it starts as the module looks, where the module is, and its parts fly to their
+ * places in the large form on the panel's spring while what is new comes in; back, the same way, so neither end changes
+ * anything at once. It is drawn as the modules are ([CcSurfaces], `comp.cc.*` tokens): the module's clear glass, its
+ * circles the kit's wells (their colour when on), a slider's level and a white button the kit's "on" fill.
  */
 internal class CcExpanded(ctx: Context, private val host: Host) {
     interface Host {
@@ -47,6 +48,10 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         fun setSlider(c: Control, v: Float, final: Boolean)
         /** How present the expanded module is (0..1): the other controls and the status row fade with it. */
         fun expandProgress(k: Float)
+        /** Where [c]'s module is drawn now ([Source]): the expanded module starts and ends as it. */
+        fun moduleSource(c: Control, out: Source)
+        /** How far one of Connectivity's circles is on (0..1, on its spring), as the module draws it. */
+        fun subOn(c: Control): Float
         /** Closes Control Center (something opened over it). */
         fun closeAll()
     }
@@ -74,8 +79,6 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         private set
     var kind: Kind? = null
         private set
-    private val from = RectF()
-    private var fromRadius = 0f
     private val target = RectF()
     private var targetRadius = 0f
     private var closing = false
@@ -84,8 +87,10 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
     private var h = 0f
 
     private val inv: (Float) -> Unit = { host.invalidate() }
-    private val k: MotionValue = MotionValue(0f, 100f, { host.expandProgress(it.coerceIn(0f, 1f)); host.invalidate() }) {
-        if (closing && k.value <= 0.002f) { closing = false; control = null; kind = null; host.expandProgress(0f); host.invalidate() }
+    // (Its scale: 0..1 moves the panel up to a screen's height, and a MotionValue rests within half a unit of its scale; at
+    // 100 it stopped 0.005 short, ~4 px on the S24, and jumped the rest at the end of every opening and closing.)
+    private val k: MotionValue = MotionValue(0f, 2000f, { host.expandProgress(it.coerceIn(0f, 1f)); host.invalidate() }) {
+        if (closing && k.value <= STAND_IN) { closing = false; control = null; kind = null; host.expandProgress(0f); host.invalidate() }
     }
 
     val isOpen get() = control != null
@@ -111,10 +116,13 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         control = c
         kind = kd
         closing = false
-        from.set(rect)
-        fromRadius = radius
         layout(kd)
-        pressed = -1
+        // The rest of the gesture that opened it (a hold: the finger is still down) is not a touch on it: its lift once
+        // read as a tap outside and closed it again, unless a touch before had left "moved" set.
+        pressed = -2
+        moved = false
+        sliding = false
+        handler.removeCallbacks(hold)
         when (kd) {
             Kind.FLASHLIGHT -> level.snapTo(if (host.state.torch) host.state.torchLevel / host.state.torchLevels.toFloat() else 0f)
             Kind.TIMER -> level.snapTo(TIMER_STEPS.indexOf(lastTimer).coerceAtLeast(0) / (TIMER_STEPS.size - 1f))
@@ -133,6 +141,15 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         pressed = -1
         k.animateTo(0f, CLOSE)
     }
+
+    /** For checks (frames at exact times): the module [v] of its way open, opening or [closing] (its springs' curves: [openCurve], [closeCurve]). */
+    fun simulate(v: Float, closing: Boolean) {
+        this.closing = closing
+        k.snapTo(v)
+        host.expandProgress(v.coerceIn(0f, 1f))
+    }
+    val openCurve get() = OPEN
+    val closeCurve get() = CLOSE
 
     /** Control Center closed: gone at once. */
     fun dismissNow() {
@@ -182,43 +199,98 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         }
     }
 
-    // ------------------------------------------------------------------ drawing
+    // ------------------------------------------------------------------ drawing: the module, grown
+
+    /**
+     * Where the module is drawn now, read again at every frame ([Host.moduleSource]): its rect on screen (with its press's
+     * swell), its corner, the scale it is drawn at, its own size, the side Connectivity's circles are drawn for, its place's
+     * columns, how far it is on, its press, and the part of it pressed with that press.
+     */
+    class Source {
+        val rect = RectF()
+        var radius = 0f
+        var scale = 1f
+        var w = 0f
+        var h = 0f
+        var unit = 1f
+        var cols = 1
+        var on = 0f
+        var press = 0f
+        var sub: Any? = null
+        var subPress = 0f
+    }
+    private val src = Source()
 
     private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+    private fun smooth(x: Float): Float { val v = x.coerceIn(0f, 1f); return v * v * (3f - 2f * v) }
+    /** What only the large form has: in over the last part of the way out (once what flies is nearly in place), gone over the first part of the way back. */
+    private fun appear(t: Float) = smooth((t - 0.55f) / 0.4f)
+    /** What only the module has: gone over the first third of the way out, back over the last third of the way back. */
+    private fun leave(t: Float) = 1f - smooth(t / 0.35f)
+    /** How far what comes in still has to rise into its place (px), at [a] of its way in. */
+    private fun rise(a: Float) = (1f - a) * pt(RISE_PT)
+    /** A point of the module ([local]: in its own size, px) on screen, where the module is drawn now. */
+    private fun sx(local: Float) = src.rect.left + local * src.scale
+    private fun sy(local: Float) = src.rect.top + local * src.scale
+    /**
+     * Where a point of the large form ([x] / [y], px on screen once open) is in the panel as it is now: what only the large
+     * form has comes in inside the growing panel, settling into its place as the panel does.
+     */
+    private fun gx(x: Float) = frame.left + (x - target.left) * frame.width() / target.width().coerceAtLeast(1f)
+    private fun gy(y: Float) = frame.top + (y - target.top) * frame.height() / target.height().coerceAtLeast(1f)
+    /** Where a point of the module ([local], px) is in the panel as it grows: what only the module has rides with it. */
+    private fun fx(local: Float) = frame.left + local / src.w.coerceAtLeast(1f) * frame.width()
+    private fun fy(local: Float) = frame.top + local / src.h.coerceAtLeast(1f) * frame.height()
 
-    /** Draws the expanded module, faded by [fade] (Control Center itself going away). */
+    /** The panel is the module on screen (Control Center leaves the module out meanwhile): from the first frame of the way out to the last of the way back. */
+    val standsIn get() = control != null && k.value > STAND_IN
+
+    /**
+     * Draws the module grown [k] of the way into its large form, faded by [fade] (Control Center itself going away). At 0 it
+     * is the module exactly as Control Center draws it (where it is now, still swollen from the press that held it), at 1
+     * the large form: the panel grows on the spring, and every part the two have in common flies from its place in the
+     * module to its place in the large form, its size with it; what only the large form has comes in over the second half
+     * of the way, rising a little into its place, and what only the module has goes over the first third, riding with the
+     * panel. Back is the same way, so the module is in its place, as it was, the frame the panel lets it go.
+     */
     fun draw(c: Canvas, fade: Float) {
         fonts.refresh()
         val kd = kind ?: return
-        val kv = k.value
-        if (kv <= 0.002f || fade <= 0.003f) return
+        val ctl = control ?: return
+        val t = k.value
+        if (t <= STAND_IN || fade <= 0.003f) return
         panelAlpha = fade.coerceIn(0f, 1f)
-        val t = kv.coerceAtLeast(0f)
-        rect.set(lerp(from.left, target.left, t), lerp(from.top, target.top, t), lerp(from.right, target.right, t), lerp(from.bottom, target.bottom, t))
-        val radius = lerp(fromRadius, targetRadius, t.coerceIn(0f, 1f)).coerceAtMost(min(rect.width(), rect.height()) / 2f)
-        frame.set(rect)
-        // The panel takes over from the module at once (it is drawn where the module is); what it shows fades in once it has
-        // grown a little, and goes first when it closes.
-        val content = ((kv - 0.25f) / 0.6f).coerceIn(0f, 1f) * panelAlpha
-        drawPanel(c, frame, radius)
+        host.moduleSource(ctl, src)
+        if (src.rect.isEmpty) return
+        val tc = t.coerceIn(0f, 1f)
+        frame.set(lerp(src.rect.left, target.left, t), lerp(src.rect.top, target.top, t), lerp(src.rect.right, target.right, t), lerp(src.rect.bottom, target.bottom, t))
+        val radius = lerp(src.radius, targetRadius, tc).coerceAtMost(min(frame.width(), frame.height()) / 2f)
         when (kd) {
-            Kind.CONNECTIVITY -> drawConnectivity(c, frame, content)
-            Kind.MEDIA -> drawMedia(c, frame, content)
-            Kind.FOCUS -> drawFocus(c, frame, content)
-            else -> drawSlider(c, kd, frame, radius, content)
+            Kind.CONNECTIVITY -> { drawPanel(c, radius); drawConnectivity(c, t) }
+            Kind.MEDIA -> { drawPanel(c, radius); drawMedia(c, t) }
+            Kind.FOCUS -> drawFocus(c, t, radius)
+            else -> drawSlider(c, kd, t, radius)
         }
     }
 
-    private fun drawPanel(c: Canvas, r: RectF, radius: Float) {
+    /** The panel's glass where it is now ([frame]), as bright as the module's press still makes it, lit [on] ([accent]'s colour, else the white "on" fill). */
+    private fun drawPanel(c: Canvas, radius: Float, on: Float = 0f, accent: dev.launcher.app.design.ColorKey? = null) {
         c.save()
-        c.translate(r.left, r.top)
-        host.surfaces.module(c, r.width(), r.height(), radius, r.left, r.top, alpha = panelAlpha)
+        c.translate(frame.left, frame.top)
+        host.surfaces.module(c, frame.width(), frame.height(), radius, frame.left, frame.top, alpha = panelAlpha, press = src.press,
+            on = on, accent = accent)
         c.restore()
     }
 
-    /** A round well centred at ([cx], [cy]), [d] across, drawn on the panel (screen coordinates). */
-    private fun well(c: Canvas, cx: Float, cy: Float, d: Float, alpha: Float, on: Float = 0f, accent: dev.launcher.app.design.ColorKey? = null) =
-        host.surfaces.well(c, cx - d / 2f, cy - d / 2f, d, d, d / 2f, cx - d / 2f, cy - d / 2f, 1f, alpha, on, accent)
+    /** A round well centred at ([cx], [cy]), [d] across, its corner as Control Center's ([wellRadius]), on screen. */
+    private fun well(c: Canvas, cx: Float, cy: Float, d: Float, alpha: Float, on: Float = 0f, accent: dev.launcher.app.design.ColorKey? = null, press: Float = 0f) =
+        host.surfaces.well(c, cx - d / 2f, cy - d / 2f, d, d, wellRadius(d, on), cx - d / 2f, cy - d / 2f, 1f, alpha, on, accent, press)
+
+    /** The corner of a symbol's well [d] across, off or as far on as [on] (iOS 27: a circle both ways; Pixel: 16 dp on), as Control Center's. */
+    private fun wellRadius(d: Float, on: Float): Float {
+        val off = min(host.surfaces.pt(CcTokens.WELL_CORNER), d / 2f)
+        return if (on <= 0f) off else off + (min(host.surfaces.pt(CcTokens.WELL_ON_CORNER), d / 2f) - off) * on.coerceIn(0f, 1f)
+    }
 
     private fun white() = Design.color(CcTokens.SYMBOL_COLOR)
 
@@ -231,10 +303,23 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         small.blendMode = Design.blend(CcTokens.DETAIL_BLEND).toBlendMode()
     }
 
+    /** The baseline of [p]'s text in a line box [lineH] tall from [top] (half leading, as Control Center places its words). */
+    private fun baseline(p: Paint, top: Float, lineH: Float): Float {
+        p.getFontMetrics(fm)
+        return top + (lineH - (fm.descent - fm.ascent)) / 2f - fm.ascent
+    }
+    private val fm = Paint.FontMetrics()
+
     private var panelAlpha = 1f
 
+    /**
+     * The large form's circles in its two columns, in an order that lets each fly from its place in the module without
+     * crossing another's way or another's words (the module: Airplane and Hotspot over Wi-Fi, Cellular, Bluetooth, Location
+     * and NFC small at its bottom right): Wi-Fi stays at the bottom left, Cellular rises between it and Airplane, Bluetooth
+     * up on the right, Location over to the bottom right (NFC under Wi-Fi).
+     */
     private fun connItems(): List<Control> {
-        val l = mutableListOf(Control.AIRPLANE, Control.HOTSPOT, Control.WIFI, Control.BLUETOOTH, Control.CELLULAR, Control.LOCATION)
+        val l = mutableListOf(Control.AIRPLANE, Control.HOTSPOT, Control.CELLULAR, Control.BLUETOOTH, Control.WIFI, Control.LOCATION)
         if (host.state.hasNfc) l += Control.NFC
         return l
     }
@@ -254,27 +339,66 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
 
     private val pt2 = FloatArray(2)
 
-    private fun drawConnectivity(c: Canvas, r: RectF, a: Float) {
-        if (a <= 0.003f) return
+    /**
+     * Connectivity: its circles fly from the module (three large, four small: [CcConnectivity]) to two columns of large
+     * circles, each one's name and state coming in under it; a circle only the module has (Dark Mode where there is no NFC)
+     * rides with the panel as it grows, and goes.
+     */
+    private fun drawConnectivity(c: Canvas, t: Float) {
+        val tc = t.coerceIn(0f, 1f)
         val st = host.state
-        for ((i, ctl) in connItems().withIndex()) {
-            connCenter(i, r, pt2)
-            val on = st.isOn(ctl)
+        val sf = host.surfaces
+        val parts = CcConnectivity.circles(if (st.hasNfc) Control.NFC else Control.DARK_MODE)
+        // The module draws its circles for its size against the kit's 155 pt, and is drawn at its scale.
+        val ks = min(src.w, src.h) / src.unit.coerceAtLeast(1f) * src.scale
+        val items = connItems()
+        val words = appear(tc) * panelAlpha
+        val up = rise(appear(tc))
+        val white = white()
+        val onAccent = Design.color(CcTokens.SYMBOL_ON_ACCENT)
+        for ((i, ctl) in items.withIndex()) {
+            connCenter(i, target, pt2)
+            var cx = pt2[0]
+            var cy = pt2[1]
+            var d = sf.pt(CcTokens.CONN_BIG)
+            var sym = sf.pt(CcTokens.CONN_SYMBOL_BIG)
+            var a = panelAlpha
+            val m = parts.firstOrNull { it.control == ctl }
+            if (m != null) {
+                val held = if (src.sub == ctl) 1f - 0.06f * src.subPress else 1f
+                cx = lerp(src.rect.left + m.fx * src.rect.width(), cx, t)
+                cy = lerp(src.rect.top + m.fy * src.rect.height(), cy, t)
+                d = lerp(sf.pt(if (m.big) CcTokens.CONN_BIG else CcTokens.CONN_SMALL) * ks * held, d, t)
+                sym = lerp(sf.pt(if (m.big) CcTokens.CONN_SYMBOL_BIG else CcTokens.CONN_SYMBOL_SMALL) * ks * held, sym, t)
+            } else a *= appear(tc)
             val p = if (pressed == i) press.value else 0f
-            val d = host.surfaces.pt(CcTokens.CONN_BIG) * (1f - 0.06f * p)
-            well(c, pt2[0], pt2[1], d, a, if (on) 1f else 0f, CcTokens.accent(ctl))
-            glyphs.draw(c, ctl.icon, pt2[0], pt2[1], host.surfaces.pt(CcTokens.CONN_SYMBOL_BIG), alpha(white(), a))
-            titleType(13f)
-            title.textAlign = Paint.Align.CENTER
-            title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
-            val maxW = r.width() / 2f - pt(16f)
-            c.drawText(TextUtils.ellipsize(ctl.title, title, maxW, TextUtils.TruncateAt.END).toString(), pt2[0], pt2[1] + pt(29f) + pt(18f), title)
-            detailType(12f, a)
-            small.textAlign = Paint.Align.CENTER
-            c.drawText(TextUtils.ellipsize(connStatus(ctl, on), small, maxW, TextUtils.TruncateAt.END).toString(), pt2[0], pt2[1] + pt(29f) + pt(34f), small)
-            small.blendMode = null
-            title.textAlign = Paint.Align.LEFT
-            small.textAlign = Paint.Align.LEFT
+            d *= 1f - 0.06f * p
+            sym *= 1f - 0.06f * p
+            val on = host.subOn(ctl)
+            well(c, cx, cy, d, a, on, CcTokens.accent(ctl))
+            glyphs.draw(c, ctl.icon, cx, cy, sym, alpha(mix(white, onAccent, on), a), on)
+            if (words > 0.003f) {
+                titleType(13f)
+                title.textAlign = Paint.Align.CENTER
+                title.color = alpha(Design.color(CcTokens.LABEL_COLOR), words)
+                val maxW = target.width() / 2f - pt(16f)
+                c.drawText(TextUtils.ellipsize(ctl.title, title, maxW, TextUtils.TruncateAt.END).toString(), cx, cy + pt(47f) + up, title)
+                detailType(12f, words)
+                small.textAlign = Paint.Align.CENTER
+                c.drawText(TextUtils.ellipsize(connStatus(ctl, on > 0.5f), small, maxW, TextUtils.TruncateAt.END).toString(), cx, cy + pt(63f) + up, small)
+                small.blendMode = null
+                title.textAlign = Paint.Align.LEFT
+                small.textAlign = Paint.Align.LEFT
+            }
+        }
+        val gone = leave(tc) * panelAlpha
+        if (gone > 0.003f) for (m in parts) if (m.control !in items) {
+            val x = frame.left + m.fx * frame.width()
+            val y = frame.top + m.fy * frame.height()
+            val on = host.subOn(m.control)
+            well(c, x, y, sf.pt(if (m.big) CcTokens.CONN_BIG else CcTokens.CONN_SMALL) * ks, gone, on, CcTokens.accent(m.control))
+            glyphs.draw(c, m.control.icon, x, y, sf.pt(if (m.big) CcTokens.CONN_SYMBOL_BIG else CcTokens.CONN_SYMBOL_SMALL) * ks,
+                alpha(mix(white, onAccent, on), gone), on)
         }
     }
 
@@ -287,36 +411,103 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         else -> level.value
     }
 
-    private fun drawSlider(c: Canvas, kd: Kind, r: RectF, radius: Float, a: Float) {
+    /**
+     * A slider grown out of its module. Brightness and Volume grow as they are, their level and symbol with them (the
+     * symbol from the module's size to the slider's). A round control (the Flashlight, the Timer) becomes one: its light
+     * (all of it while on) turns into the level and its symbol slides down to the slider's; a wide one's well and words go
+     * as it grows. Brightness's buttons and the Timer's time come in around it.
+     */
+    private fun drawSlider(c: Canvas, kd: Kind, t: Float, radius: Float) {
+        val ctl = control ?: return
+        val tc = t.coerceIn(0f, 1f)
+        val sf = host.surfaces
         val v = sliderValue(kd).coerceIn(0f, 1f)
+        val isSlider = kd == Kind.BRIGHTNESS || kd == Kind.VOLUME
+        val wide = !isSlider && src.cols > 1
         val icon = when (kd) {
             Kind.BRIGHTNESS -> R.drawable.sym_sun
             Kind.VOLUME -> if (v <= 0.001f) R.drawable.sym_volume_off else R.drawable.sym_volume
             Kind.FLASHLIGHT -> R.drawable.sym_flashlight
             else -> R.drawable.sym_timer
         }
-        val accent = when (kd) {
-            Kind.BRIGHTNESS -> Control.BRIGHTNESS.accent
-            Kind.VOLUME -> Control.VOLUME.accent
-            Kind.FLASHLIGHT -> Control.FLASHLIGHT.accent
-            else -> Control.TIMER.accent
+        drawPanel(c, radius)
+        // The level, from the module's: a slider's own, a round control's light (the whole of it when on), a wide one's none.
+        val w = frame.width()
+        val h = frame.height()
+        val fillH = lerp(if (isSlider) v else if (wide) 0f else src.on, v, tc) * h
+        if (fillH > 0.5f) {
+            c.save()
+            c.translate(frame.left, frame.top)
+            c.clipRect(0f, h - fillH, w, h)
+            sf.onFill(c, w, h, radius, frame.left, frame.top, 1f, panelAlpha)
+            c.restore()
         }
-        // The module's slider, large (its symbol smaller while it grows out of the module).
-        val sym = Design.pt(CcTokens.EXPANDED_SLIDER_SYMBOL, u) * (r.width() / Design.pt(CcTokens.EXPANDED_SLIDER_WIDTH, u)).coerceIn(0.5f, 1f)
-        c.save()
-        c.translate(r.left, r.top)
-        CcSlider.draw(c, host.surfaces, glyphs, r.width(), r.height(), radius, r.left, r.top, v, icon, accent, sym, panelAlpha)
-        c.restore()
+        // The symbol: from its place in the module (a slider's a square's width up from its bottom, a round control's middle,
+        // a wide one's well) to the slider's, its size between the module's and the slider's.
+        val wellD = sf.pt(CcTokens.WELL_SIZE)
+        val pad = sf.pt(CcTokens.WIDE_PADDING)
+        val fromX = if (wide) sx(pad + wellD / 2f) else src.rect.centerX()
+        val fromY = if (isSlider) src.rect.bottom - src.rect.width() / 2f else src.rect.centerY()
+        val fromSize = sf.pt(if (wide) CcTokens.WELL_SYMBOL else CcTokens.SYMBOL) * src.scale
+        val gx = lerp(fromX, target.centerX(), t)
+        val gy = lerp(fromY, target.bottom - target.width() / 2f, t)
+        val sym = lerp(fromSize, Design.pt(CcTokens.EXPANDED_SLIDER_SYMBOL, u), tc)
+        // Its colour: the slider's (the control's while the level covers it), from the module's (a toggle: its accent when on).
+        val span = Design.num(CcTokens.SLIDER_COVER) * sym
+        val covered = ((fillH - ((frame.bottom - gy) - span / 2f)) / span.coerceAtLeast(0.001f)).coerceIn(0f, 1f)
+        val sliderColor = mix(white(), ctl.accent, covered)
+        val color = when {
+            isSlider -> sliderColor
+            ctl.kind == Control.Kind.TOGGLE -> mix(mix(white(), if (ctl.style == Control.Style.COLOR) Design.color(CcTokens.SYMBOL_ON_ACCENT) else ctl.accent, src.on), sliderColor, smooth(tc))
+            else -> mix(white(), sliderColor, smooth(tc))
+        }
+        val lit = if (ctl.kind == Control.Kind.TOGGLE) lerp(src.on, 1f, tc) else 1f
+        // A wide control's well and words go as it grows (riding with the panel).
+        val gone = leave(tc) * panelAlpha
+        if (wide && gone > 0.003f) {
+            val on = if (ctl.kind == Control.Kind.TOGGLE) src.on else 0f
+            well(c, fx(pad + wellD / 2f), fy(src.h / 2f), wellD * src.scale, gone, on, if (ctl.style == Control.Style.COLOR) CcTokens.accent(ctl) else null)
+            val state = if (ctl.kind == Control.Kind.TOGGLE) (if (src.on > 0.5f) "On" else "Off") else null
+            moduleWords(c, ctl.title, state, fx(pad + wellD + sf.pt(CcTokens.WIDE_GAP)), fy(src.h / 2f), (src.w - 2 * pad - wellD - sf.pt(CcTokens.WIDE_GAP)) * src.scale, gone)
+        }
+        glyphs.draw(c, icon, gx, gy, sym, alpha(color, panelAlpha), lit)
+        val a = appear(tc) * panelAlpha
         if (a <= 0.003f) return
         when (kd) {
             Kind.TIMER -> {
                 big.textSize = pt(28f)
                 big.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
-                c.drawText(timerLabel(timerStep()), r.centerX(), r.top - pt(22f), big)
+                c.drawText(timerLabel(timerStep()), frame.centerX(), frame.top - pt(22f) + rise(appear(tc)), big)
             }
-            Kind.BRIGHTNESS -> drawBrightnessButtons(c, r, a)
+            Kind.BRIGHTNESS -> drawBrightnessButtons(c, frame, a, rise(appear(tc)))
             else -> {}
         }
+    }
+
+    /**
+     * A module's name and, under it, its state, as Control Center writes them in a wide control ([x] the words' left, [cy]
+     * their middle, [maxW] their room, all on screen at the module's scale), faded by [a]: what the module says as it goes.
+     */
+    private fun moduleWords(c: Canvas, name: String, sub: String?, x: Float, cy: Float, maxW: Float, a: Float) {
+        val s = src.scale
+        host.surfaces.text(title, CcTokens.TITLE)
+        title.textSize *= s
+        title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
+        val tLine = Design.text(CcTokens.TITLE).lineHeightPt * u * s
+        val t = TextUtils.ellipsize(name, title, maxW, TextUtils.TruncateAt.END).toString()
+        if (sub == null) {
+            c.drawText(t, x, baseline(title, cy - tLine / 2f, tLine), title)
+            return
+        }
+        host.surfaces.text(small, CcTokens.DETAIL)
+        small.textSize *= s
+        val dLine = Design.text(CcTokens.DETAIL).lineHeightPt * u * s
+        val top = cy - (tLine + dLine) / 2f
+        c.drawText(t, x, baseline(title, top, tLine), title)
+        small.color = alpha(Design.color(CcTokens.DETAIL_COLOR), a)
+        small.blendMode = Design.blend(CcTokens.DETAIL_BLEND).toBlendMode()
+        c.drawText(TextUtils.ellipsize(sub, small, maxW, TextUtils.TruncateAt.END).toString(), x, baseline(small, top + tLine, dLine), small)
+        small.blendMode = null
     }
 
     private fun brightnessButtons(): List<Triple<String, Int, Boolean>> {
@@ -333,18 +524,19 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         out[1] = r.bottom + pt(52f)
     }
 
-    private fun drawBrightnessButtons(c: Canvas, r: RectF, a: Float) {
+    private fun drawBrightnessButtons(c: Canvas, r: RectF, a: Float, up: Float) {
         for ((i, b) in brightnessButtons().withIndex()) {
             buttonCenter(i, r, pt2)
+            val y = pt2[1] + up
             val p = if (pressed == i) press.value else 0f
             val d = pt(56f) * (1f - 0.06f * p)
             // Off: a well; on: the kit's white "on" fill, with a dark symbol.
-            well(c, pt2[0], pt2[1], d, a, if (b.third) 1f else 0f)
-            glyphs.draw(c, b.second, pt2[0], pt2[1], pt(25f), alpha(if (b.third) Design.color(CcTokens.SYMBOL_ON) else white(), a))
+            well(c, pt2[0], y, d, a, if (b.third) 1f else 0f)
+            glyphs.draw(c, b.second, pt2[0], y, pt(25f), alpha(if (b.third) Design.color(CcTokens.SYMBOL_ON) else white(), a))
             titleType(12f)
             title.textAlign = Paint.Align.CENTER
             title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
-            c.drawText(b.first, pt2[0], pt2[1] + pt(28f) + pt(18f), title)
+            c.drawText(b.first, pt2[0], y + pt(28f) + pt(18f), title)
             title.textAlign = Paint.Align.LEFT
         }
     }
@@ -356,41 +548,91 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         return if (s >= 3600) "${s / 3600} hr" else "${s / 60} min"
     }
 
-    // Now Playing, large: artwork and titles at the top, the output at the top right, the track's progress, the transport,
-    // the volume.
-    private fun drawMedia(c: Canvas, r: RectF, a: Float) {
-        if (a <= 0.003f) return
+    /**
+     * Now Playing grown out of the module: the artwork from the module's corner to the top left (64 pt), the output's well
+     * to the top right, the title and the artist beside the artwork (the title's type turning into the large one's), the
+     * transport down to its row; the track's progress with its times and the volume come in, the wide player's scrubber
+     * goes.
+     */
+    private fun drawMedia(c: Canvas, t: Float) {
+        val tc = t.coerceIn(0f, 1f)
         val m = host.media
+        val sf = host.surfaces
+        val s = src.scale
+        val wide = src.cols >= 4
+        val r = target
         val pad = pt(22f)
-        val art = pt(64f)
-        rect.set(r.left + pad, r.top + pad, r.left + pad + art, r.top + pad + art)
+        val artL = pt(64f)
+        // The module's places (as ControlGridBlock.drawMedia lays them out, in its own size).
+        val artS = sf.pt(CcTokens.ART)
+        val axS = sf.pt(CcTokens.ART_X)
+        val ayS = sf.pt(CcTokens.ART_Y)
+        val apD = sf.pt(CcTokens.OUTPUT)
+        val apX = src.w - 15f * u - apD / 2f
+        val apY = 13f * u + apD / 2f
+        // The artwork (a well with a note until there is one).
+        val size = lerp(artS * s, artL, t)
+        val left = lerp(sx(axS), r.left + pad, t)
+        val top = lerp(sy(ayS), r.top + pad, t)
+        val artR = lerp(sf.pt(CcTokens.ART_CORNER) * s, pt(14f), tc)
         val bmp = m.art
         if (bmp != null && !bmp.isRecycled) {
-            artwork.draw(c, bmp, rect, pt(14f), a)
+            // Drawn at the large size and scaled: the artwork's shader keeps its matrix (built again at every new size).
+            val k = size / artL
+            c.save()
+            c.translate(left, top)
+            c.scale(k, k)
+            box.set(0f, 0f, artL, artL)
+            artwork.draw(c, bmp, box, artR / k, panelAlpha)
+            c.restore()
         } else {
-            host.surfaces.well(c, rect.left, rect.top, art, art, pt(14f), rect.left, rect.top, 1f, a)
-            glyphs.draw(c, R.drawable.sym_music, rect.centerX(), rect.centerY(), pt(28f), alpha(Design.color(CcTokens.MEDIA_PLACEHOLDER), a))
+            sf.well(c, left, top, size, size, artR, left, top, 1f, panelAlpha)
+            glyphs.draw(c, R.drawable.sym_music, left + size / 2f, top + size / 2f, lerp(sf.pt(CcTokens.WELL_SYMBOL) * s, pt(28f), tc),
+                alpha(Design.color(CcTokens.MEDIA_PLACEHOLDER), panelAlpha))
         }
-        val tx = rect.right + pt(14f)
+        // The output.
         val outR = pt(20f)
-        val outX = r.right - pad - outR
-        val maxW = outX - outR - pt(10f) - tx
-        titleType(17f)
-        title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
-        c.drawText(TextUtils.ellipsize(m.title ?: "Not Playing", title, maxW, TextUtils.TruncateAt.END).toString(), tx, rect.top + pt(26f), title)
-        m.artist?.let {
-            host.surfaces.text(small, CcTokens.MEDIA_TITLE)
-            small.color = alpha(Design.color(CcTokens.MEDIA_TEXT_COLOR), a)
-            small.blendMode = Design.blend(CcTokens.MEDIA_TEXT_BLEND).toBlendMode()
-            c.drawText(TextUtils.ellipsize(it, small, maxW, TextUtils.TruncateAt.END).toString(), tx, rect.top + pt(48f), small)
-            small.blendMode = null
+        val ox = lerp(sx(apX), r.right - pad - outR, t)
+        val oy = lerp(sy(apY), r.top + pad + outR, t)
+        // (Pressed, the module's lights up, the large form's shrinks a little.)
+        val outPress = (if (src.sub == "output") src.subPress else 0f) * (1f - tc)
+        val outShrink = 1f - 0.06f * (if (pressed == M_OUTPUT) press.value else 0f)
+        well(c, ox, oy, lerp(apD * s, 2 * outR, t) * outShrink, panelAlpha, press = outPress)
+        glyphs.draw(c, R.drawable.sym_airplay, ox, oy, lerp(sf.pt(CcTokens.WELL_SYMBOL) * s, sf.pt(CcTokens.WELL_SYMBOL), tc), alpha(white(), panelAlpha))
+        // The words: the module's (its type, MEDIA_TITLE, in its grey added to the glass) turning into the large form's.
+        drawMediaWords(c, t, wide, apX, apD)
+        // The transport.
+        val dim = if (m.active) 1f else 0.45f
+        val byS = src.h - 24f * u
+        val xsS = if (wide) floatArrayOf(src.w / 2f - 64f * u, src.w / 2f, src.w / 2f + 64f * u) else floatArrayOf(34f * u, src.w / 2f, src.w - 34f * u)
+        for ((i, id) in listOf(M_PREV, M_PLAY, M_NEXT).withIndex()) {
+            val sub = when (id) { M_PREV -> "prev"; M_NEXT -> "next"; else -> "play" }
+            val p = lerp(if (src.sub == sub) src.subPress else 0f, if (pressed == id) press.value else 0f, tc)
+            val x = lerp(sx(xsS[i]), r.centerX() + (i - 1) * pt(86f), t)
+            val y = lerp(sy(byS), r.top + pt(204f), t)
+            val res = when (id) { M_PREV -> R.drawable.sym_rewind; M_NEXT -> R.drawable.sym_forward; else -> if (m.playing) R.drawable.sym_pause else R.drawable.sym_play }
+            val sz = lerp(sf.pt(if (id == M_PLAY) CcTokens.PLAY else CcTokens.TRANSPORT) * s, (if (id == M_PLAY) 44f else 36f) * u, t) * (1f - 0.12f * p)
+            glyphs.draw(c, res, x, y, sz, alpha(white(), panelAlpha * (if (id == M_PLAY) 1f else dim) * (1f - 0.35f * p)))
         }
-        well(c, outX, rect.top + outR, 2 * outR * (1f - 0.06f * (if (pressed == M_OUTPUT) press.value else 0f)), a)
-        glyphs.draw(c, R.drawable.sym_airplay, outX, rect.top + outR, host.surfaces.pt(CcTokens.WELL_SYMBOL), alpha(white(), a))
-        // The track's progress.
-        val sy = r.top + pt(128f)
-        val x0 = r.left + pad
-        val x1 = r.right - pad
+        // The wide player's scrubber goes.
+        val gone = leave(tc) * panelAlpha
+        if (wide && m.duration > 0 && gone > 0.003f) {
+            val y = fy(byS - 30f * u)
+            stroke.strokeWidth = 4f * u * s
+            stroke.color = alpha(Design.color(CcTokens.MEDIA_TRACK), gone)
+            val x0 = fx(16f * u)
+            val x1 = fx(src.w - 16f * u)
+            c.drawLine(x0, y, x1, y, stroke)
+            stroke.color = alpha(Design.color(CcTokens.MEDIA_PROGRESS), gone)
+            c.drawLine(x0, y, x0 + (x1 - x0) * (m.positionNow().toFloat() / m.duration).coerceIn(0f, 1f), y, stroke)
+        }
+        // The track's progress and the volume come in.
+        val a = appear(tc) * panelAlpha
+        if (a <= 0.003f) return
+        val up = rise(appear(tc))
+        val x0 = gx(r.left + pad)
+        val x1 = gx(r.right - pad)
+        val sy = gy(r.top + pt(128f)) + up
         stroke.strokeWidth = pt(6f)
         stroke.color = alpha(Design.color(CcTokens.MEDIA_TRACK), a)
         c.drawLine(x0, sy, x1, sy, stroke)
@@ -406,18 +648,7 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
             small.textAlign = Paint.Align.LEFT
             if (m.playing) host.invalidate()
         }
-        // The transport.
-        val by = r.top + pt(204f)
-        val dim = if (m.active) 1f else 0.45f
-        for ((i, id) in listOf(M_PREV, M_PLAY, M_NEXT).withIndex()) {
-            val x = r.centerX() + (i - 1) * pt(86f)
-            val p = if (pressed == id) press.value else 0f
-            val res = when (id) { M_PREV -> R.drawable.sym_rewind; M_NEXT -> R.drawable.sym_forward; else -> if (m.playing) R.drawable.sym_pause else R.drawable.sym_play }
-            val size = (if (id == M_PLAY) 44f else 36f) * u * (1f - 0.12f * p)
-            glyphs.draw(c, res, x, by, size, alpha(white(), a * (if (id == M_PLAY) 1f else dim) * (1f - 0.35f * p)))
-        }
-        // The volume.
-        val vy = r.top + pt(278f)
+        val vy = gy(r.top + pt(278f)) + up
         val v = host.sliderValue(Control.VOLUME).coerceIn(0f, 1f)
         val vx0 = x0 + pt(30f)
         val vx1 = x1 - pt(30f)
@@ -430,6 +661,64 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
         glyphs.draw(c, R.drawable.sym_volume, x1 - pt(10f), vy, pt(18f), alpha(Design.color(CcTokens.MEDIA_SECONDARY), a))
     }
 
+    /**
+     * The player's title and artist, from where the module writes them (beside the artwork in the wide player, under it in
+     * the square one; one line, "Not Playing", when there is nothing) to beside the large artwork: each line flies, its
+     * size with it, the title's type cross-fading from the module's (its grey added to the glass) to the large title.
+     */
+    private fun drawMediaWords(c: Canvas, t: Float, wide: Boolean, apX: Float, apD: Float) {
+        val tc = t.coerceIn(0f, 1f)
+        val m = host.media
+        val sf = host.surfaces
+        val s = src.scale
+        val r = target
+        val pad = pt(22f)
+        val artL = pt(64f)
+        val name = m.title ?: "Not Playing"
+        val artist = if (m.title != null) m.artist else null
+        // The module's: MEDIA_TITLE at 74 pt (wide: beside the artwork), two lines with an artist, else one in the middle.
+        host.surfaces.text(small, CcTokens.MEDIA_TITLE)
+        val sizeS = small.textSize
+        val line = Design.text(CcTokens.MEDIA_TITLE).lineHeightPt * u
+        val txS = if (wide) sf.pt(CcTokens.ART_X) + sf.pt(CcTokens.ART) + 13f * u else 14f * u
+        val maxS = (if (wide) apX - apD / 2f - 10f * u else src.w - 15f * u) - txS
+        val topS = if (wide) sf.pt(CcTokens.ART_Y) + 4f * u else 74f * u
+        val nameBaseS = baseline(small, if (artist != null) topS else topS + line / 2f, line)
+        val artistBaseS = baseline(small, topS + line, line)
+        // The large form's: the title at 17 pt, the artist in the module's type, beside the artwork.
+        val txL = r.left + pad + artL + pt(14f)
+        val maxL = r.right - pad - 2 * pt(20f) - pt(10f) - txL
+        val x = lerp(sx(txS), txL, t)
+        val maxW = lerp(maxS * s, maxL, tc)
+        val k = smooth(tc / 0.7f)
+        // The title: both types at the same place and size, one going as the other comes.
+        val nameY = lerp(sy(nameBaseS), r.top + pad + pt(26f), t)
+        titleType(17f)
+        val sizeL = title.textSize
+        val nameSize = lerp(sizeS * s, sizeL, t)
+        if (k < 0.997f) {
+            small.textSize = nameSize
+            small.color = alpha(Design.color(CcTokens.MEDIA_TEXT_COLOR), panelAlpha * (1f - k))
+            small.blendMode = Design.blend(CcTokens.MEDIA_TEXT_BLEND).toBlendMode()
+            c.drawText(TextUtils.ellipsize(name, small, maxW, TextUtils.TruncateAt.END).toString(), x, nameY, small)
+            small.blendMode = null
+        }
+        if (k > 0.003f) {
+            title.textSize = nameSize
+            title.color = alpha(Design.color(CcTokens.LABEL_COLOR), panelAlpha * k)
+            c.drawText(TextUtils.ellipsize(name, title, maxW, TextUtils.TruncateAt.END).toString(), x, nameY, title)
+        }
+        // The artist: the module's type in both.
+        if (artist != null) {
+            host.surfaces.text(small, CcTokens.MEDIA_TITLE)
+            small.textSize = lerp(sizeS * s, sizeS, t)
+            small.color = alpha(Design.color(CcTokens.MEDIA_TEXT_COLOR), panelAlpha)
+            small.blendMode = Design.blend(CcTokens.MEDIA_TEXT_BLEND).toBlendMode()
+            c.drawText(TextUtils.ellipsize(artist, small, maxW, TextUtils.TruncateAt.END).toString(), x, lerp(sy(artistBaseS), r.top + pad + pt(48f), t), small)
+            small.blendMode = null
+        }
+    }
+
     private fun fmt(ms: Long): String { val s = ms / 1000; return "${s / 60}:${(s % 60).toString().padStart(2, '0')}" }
 
     private fun focusRow(i: Int, r: RectF, out: RectF) {
@@ -439,29 +728,119 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
 
     private val rowRect = RectF()
 
-    private fun drawFocus(c: Canvas, r: RectF, a: Float) {
-        if (a <= 0.003f) return
-        val dnd = host.state.dnd
-        for (i in 0 until 2) {
-            focusRow(i, r, rowRect)
-            val p = if (pressed == i) press.value else 0f
-            val on = i == 0 && dnd
-            // Each row a well (its colour when on), lighter under the finger.
-            host.surfaces.well(c, rowRect.left, rowRect.top, rowRect.width(), rowRect.height(), pt(28f), rowRect.left, rowRect.top, 1f, a,
-                if (on) 1f else 0f, CcTokens.accent(Control.FOCUS), p)
-            val cy = rowRect.centerY()
-            glyphs.draw(c, if (i == 0) R.drawable.sym_moon else R.drawable.sym_settings, rowRect.left + pt(30f), cy, pt(22f), alpha(white(), a))
-            titleType(16f)
-            title.color = alpha(Design.color(CcTokens.LABEL_COLOR), a)
-            c.drawText(if (i == 0) "Do Not Disturb" else "Focus Settings", rowRect.left + pt(58f), cy + pt(5.5f), title)
-            if (on) {
-                detailType(13f, a)
-                small.textAlign = Paint.Align.RIGHT
-                c.drawText("On", rowRect.right - pt(20f), cy + pt(4.5f), small)
-                small.textAlign = Paint.Align.LEFT
-                small.blendMode = null
+    /**
+     * Focus grown out of the module: its well (a wide module's, at its left) grows into Do Not Disturb's row, the moon
+     * flying to its place there and the module's name, where it says Do Not Disturb, to the row's (a one-cell module, lit
+     * whole while on, gives its light to the row's well as it comes in); Focus Settings' row comes in under it; what only
+     * the module says ("Focus", its chevron, "On" under the name) goes.
+     */
+    private fun drawFocus(c: Canvas, t: Float, radius: Float) {
+        val tc = t.coerceIn(0f, 1f)
+        val sf = host.surfaces
+        val st = host.state
+        val on = src.on
+        val one = src.cols == 1
+        val accent = CcTokens.accent(Control.FOCUS)
+        val gone = leave(tc) * panelAlpha
+        val comes = appear(tc) * panelAlpha
+        val up = rise(appear(tc))
+        drawPanel(c, radius, on = if (one) on * leave(tc) else 0f, accent = if (one) accent else null)
+        val white = white()
+        val wellD = sf.pt(CcTokens.WELL_SIZE)
+        val pad = sf.pt(CcTokens.WIDE_PADDING)
+        // Do Not Disturb's row as it is now ([box]): a wide module's well growing into it, or (a one-cell module has none) the
+        // row coming in where the panel will have it. What the row holds is laid out in it as it grows.
+        focusRow(0, target, rowRect)
+        val p0 = if (pressed == 0) press.value else 0f
+        if (!one) {
+            val l = sx(pad)
+            val tp = sy((src.h - wellD) / 2f)
+            val d = wellD * src.scale
+            box.set(lerp(l, rowRect.left, t), lerp(tp, rowRect.top, t), lerp(l + d, rowRect.right, t), lerp(tp + d, rowRect.bottom, t))
+            sf.well(c, box.left, box.top, box.width(), box.height(), lerp(wellRadius(wellD, on) * src.scale, pt(28f), tc), box.left, box.top, 1f,
+                panelAlpha, on, accent, p0)
+        } else {
+            val tp = gy(rowRect.top) + up
+            box.set(gx(rowRect.left), tp, gx(rowRect.right), tp + rowRect.height())
+            if (comes > 0.003f) sf.well(c, box.left, box.top, box.width(), box.height(), pt(28f), box.left, box.top, 1f, comes, on, accent, p0)
+        }
+        // The moon: in the module's well (or its middle) to the row's start.
+        val mx = if (one) lerp(src.rect.centerX(), box.left + pt(30f), t) else box.left + lerp(wellD * src.scale / 2f, pt(30f), t)
+        val my = if (one) lerp(src.rect.centerY(), box.centerY(), t) else box.centerY()
+        val msz = lerp(sf.pt(if (one) CcTokens.SYMBOL else CcTokens.WELL_SYMBOL) * src.scale, pt(22f), tc)
+        val moonColor = if (one) white else mix(mix(white, Design.color(CcTokens.SYMBOL_ON_ACCENT), on), white, smooth(tc))
+        glyphs.draw(c, R.drawable.sym_moon, mx, my, msz, alpha(moonColor, panelAlpha), lerp(on, 1f, tc))
+        // The name: where the module says Do Not Disturb it flies into the row; else the module's "Focus" goes and the row's comes.
+        val txS = pad + wellD + sf.pt(CcTokens.WIDE_GAP)
+        val maxS = (src.w - txS - pad) * src.scale
+        val nameX = box.left + pt(58f)
+        val nameY = box.centerY() + pt(5.5f)
+        if (!one && on > 0.5f) {
+            host.surfaces.text(title, CcTokens.TITLE)
+            val sizeS = title.textSize
+            val tLine = Design.text(CcTokens.TITLE).lineHeightPt * u
+            val dLine = Design.text(CcTokens.DETAIL).lineHeightPt * u
+            val baseS = baseline(title, src.h / 2f - (tLine + dLine) / 2f, tLine)
+            title.textSize = lerp(sizeS * src.scale, pt(16f), t)
+            title.color = alpha(Design.color(CcTokens.LABEL_COLOR), panelAlpha)
+            val maxW = lerp(maxS, rowRect.width() - pt(58f) - pt(60f), tc)
+            c.drawText(TextUtils.ellipsize("Do Not Disturb", title, maxW, TextUtils.TruncateAt.END).toString(),
+                lerp(sx(txS), nameX, t), lerp(sy(baseS), nameY, t), title)
+            if (gone > 0.003f) moduleSub(c, "On", fx(txS), fy(src.h / 2f - (tLine + dLine) / 2f + tLine), dLine * src.scale, gone)
+        } else {
+            if (gone > 0.003f && !one) {
+                moduleWords(c, "Focus", null, fx(txS), fy(src.h / 2f), maxS, gone)
+                host.surfaces.text(title, CcTokens.TITLE)
+                title.textSize *= src.scale
+                glyphs.draw(c, R.drawable.sym_unfold, fx(txS) + title.measureText("Focus") + 9f * u * src.scale, fy(src.h / 2f), 15f * u * src.scale,
+                    alpha(Design.color(CcTokens.CHEVRON_COLOR), gone))
+            }
+            if (comes > 0.003f) {
+                titleType(16f)
+                title.color = alpha(Design.color(CcTokens.LABEL_COLOR), comes)
+                c.drawText("Do Not Disturb", nameX, nameY + (if (one) 0f else up), title)
             }
         }
+        // "On" at the row's end.
+        if (comes > 0.003f && st.dnd) {
+            detailType(13f, comes)
+            small.textAlign = Paint.Align.RIGHT
+            c.drawText("On", box.right - pt(20f), box.centerY() + pt(4.5f) + (if (one) 0f else up), small)
+            small.textAlign = Paint.Align.LEFT
+            small.blendMode = null
+        }
+        // Focus Settings comes in under it.
+        if (comes <= 0.003f) return
+        focusRow(1, target, rowRect)
+        val p1 = if (pressed == 1) press.value else 0f
+        val l1 = gx(rowRect.left)
+        val y1 = gy(rowRect.top) + up
+        box.set(l1, y1, gx(rowRect.right), y1 + rowRect.height())
+        sf.well(c, box.left, box.top, box.width(), box.height(), pt(28f), box.left, box.top, 1f, comes, 0f, accent, p1)
+        val cy1 = box.centerY()
+        glyphs.draw(c, R.drawable.sym_settings, l1 + pt(30f), cy1, pt(22f), alpha(white, comes))
+        titleType(16f)
+        title.color = alpha(Design.color(CcTokens.LABEL_COLOR), comes)
+        c.drawText("Focus Settings", l1 + pt(58f), cy1 + pt(5.5f), title)
+    }
+
+    /** The module's state line under its name ([x] its left, [top] its line's top, [lineH] its line), faded by [a]. */
+    private fun moduleSub(c: Canvas, sub: String, x: Float, top: Float, lineH: Float, a: Float) {
+        host.surfaces.text(small, CcTokens.DETAIL)
+        small.textSize *= src.scale
+        small.color = alpha(Design.color(CcTokens.DETAIL_COLOR), a)
+        small.blendMode = Design.blend(CcTokens.DETAIL_BLEND).toBlendMode()
+        c.drawText(sub, x, baseline(small, top, lineH), small)
+        small.blendMode = null
+    }
+
+    private val box = RectF()
+
+    private fun mix(a: Int, b: Int, t: Float): Int {
+        if (t <= 0f) return a
+        if (t >= 1f) return b
+        fun ch(s: Int) = ((((a shr s) and 0xFF) + ((((b shr s) and 0xFF) - ((a shr s) and 0xFF)) * t)) + 0.5f).toInt() shl s
+        return ch(24) or ch(16) or ch(8) or ch(0)
     }
 
     // ------------------------------------------------------------------ touch
@@ -647,6 +1026,10 @@ internal class CcExpanded(ctx: Context, private val host: Host) {
 
     private companion object {
         const val ROW_PT = 106f
+        /** Below this much of the way out the module is itself again (the panel stands in for it above): under half a pixel from it. */
+        const val STAND_IN = 0.0005f
+        /** How far below its place what comes in starts (pt): it rises into place as it comes. Judged. */
+        const val RISE_PT = 10f
         /** A press held this long on an item is a hold (ms; Control Center's own). */
         const val HOLD_MS = 450L
         const val P_SLIDER = 100

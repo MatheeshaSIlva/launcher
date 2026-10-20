@@ -39,3 +39,32 @@ internal object CcSlider {
         return ch(24) or ch(16) or ch(8) or ch(0)
     }
 }
+
+/**
+ * Connectivity's circles where Apple's kit has them (2570:20605: 57 pt circles at 14 and 84.67 pt, 25.67 pt ones at 84.67
+ * and 116 pt of the 155 pt module), as fractions of the module, and whether each is a large one: Control Center draws them
+ * so, and its expanded module grows out of them ([CcExpanded]). The fourth small circle is NFC where there is NFC, else Dark
+ * Mode.
+ */
+internal object CcConnectivity {
+    class Circle(val control: Control, val fx: Float, val fy: Float, val big: Boolean) {
+        /** Its radius as a fraction of the module (the touch's reach is measured from it). */
+        val rf get() = if (big) BIG else SMALL
+    }
+
+    fun circles(fourth: Control): List<Circle> = if (fourth == Control.NFC) withNfc else withDarkMode
+
+    private const val BIG = 28.5f / 155f
+    private const val SMALL = 12.835f / 155f
+    private fun make(fourth: Control) = listOf(
+        Circle(Control.AIRPLANE, (14f + 28.5f) / 155f, (13f + 28.5f) / 155f, true),
+        Circle(Control.HOTSPOT, (84.67f + 28.5f) / 155f, (13f + 28.5f) / 155f, true),
+        Circle(Control.WIFI, (14f + 28.5f) / 155f, (84f + 28.5f) / 155f, true),
+        Circle(Control.CELLULAR, (84.67f + 12.835f) / 155f, (84f + 12.835f) / 155f, false),
+        Circle(Control.BLUETOOTH, (116f + 12.835f) / 155f, (84f + 12.835f) / 155f, false),
+        Circle(Control.LOCATION, (84.67f + 12.835f) / 155f, (115.33f + 12.835f) / 155f, false),
+        Circle(fourth, (116f + 12.835f) / 155f, (115.33f + 12.835f) / 155f, false),
+    )
+    private val withNfc = make(Control.NFC)
+    private val withDarkMode = make(Control.DARK_MODE)
+}

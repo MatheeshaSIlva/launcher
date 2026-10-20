@@ -30,6 +30,7 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 import dev.launcher.app.shade.AppTiles
+import dev.launcher.app.shade.CcConnectivity
 import dev.launcher.app.shade.CcExpanded
 import dev.launcher.app.shade.CcGrid
 import dev.launcher.app.shade.CcItem
@@ -120,6 +121,8 @@ class ControlGridBlock(
             this@ControlGridBlock.invalidate()
         }
         override fun expandProgress(k: Float) { syncEditProgress(k); this@ControlGridBlock.invalidate() }
+        override fun moduleSource(c: Control, out: CcExpanded.Source) = sourceOf(c, out)
+        override fun subOn(c: Control): Float = subActiveOf(c).value.coerceIn(0f, 1f)
         override fun closeAll() = host.close()
     })
 
@@ -568,9 +571,11 @@ class ControlGridBlock(
             fade = k + ((1f - leaving(cx, cy)) - k) * cs
         }
         out.alpha = fade * appear.coerceIn(0f, 1f) * (if (edit > 0f && a !== dragged) 1f - 0.08f * edit else 1f)
-        // A module grown into its large form: the others fade away, and it gives way to its large form at once.
+        // A module grown into its large form: it is that form while it stands in for it (CcExpanded starts and ends as the
+        // module), and the others give way.
         val ex = expanded.presence
-        if (ex > 0f) out.alpha *= if (expanded.control == it.control) (1f - ex * 6f).coerceAtLeast(0f) else 1f - ex
+        if (expanded.control == it.control) { if (expanded.standsIn) out.alpha = 0f }
+        else if (ex > 0f) out.alpha *= 1f - smooth(ex / 0.8f)
         // A control's menu: the held control lifts a little, the others fade back.
         val mk = menuK.value.coerceIn(0f, 1f)
         if (mk > 0f && menuOf != null) { if (a === menuOf) out.scale *= 1f + MENU_LIFT * mk else out.alpha *= 1f - MENU_FADE * mk }
@@ -818,21 +823,10 @@ class ControlGridBlock(
         CcSlider.draw(c, host.surfaces, glyphs, w, h, radius, recX, recY, v, icon, ctl.accent, host.surfaces.pt(CcTokens.SYMBOL), alpha)
     }
 
-    // Connectivity: three large circles and four small ones where Apple's kit has them (2570:20605: 57 pt circles at 14 and
-    // 84.67 pt, 25.67 pt ones at 84.67 and 116 pt of the 155 pt module), as fractions of the module; their sizes are tokens.
+    // Connectivity: three large circles and four small ones where Apple's kit has them (CcConnectivity: shared with its expanded
+    // form, which grows out of them), as fractions of the module; their sizes are tokens.
     private val connectivitySubs: List<Triple<Control, FloatArray, Float>> by lazy {
-        val fourth = if (host.state.hasNfc) Control.NFC else Control.DARK_MODE
-        val big = 28.5f / 155f
-        val small = 12.835f / 155f
-        listOf(
-            Triple(Control.AIRPLANE, floatArrayOf((14f + 28.5f) / 155f, (13f + 28.5f) / 155f), big),
-            Triple(Control.HOTSPOT, floatArrayOf((84.67f + 28.5f) / 155f, (13f + 28.5f) / 155f), big),
-            Triple(Control.WIFI, floatArrayOf((14f + 28.5f) / 155f, (84f + 28.5f) / 155f), big),
-            Triple(Control.CELLULAR, floatArrayOf((84.67f + 12.835f) / 155f, (84f + 12.835f) / 155f), small),
-            Triple(Control.BLUETOOTH, floatArrayOf((116f + 12.835f) / 155f, (84f + 12.835f) / 155f), small),
-            Triple(Control.LOCATION, floatArrayOf((84.67f + 12.835f) / 155f, (115.33f + 12.835f) / 155f), small),
-            Triple(fourth, floatArrayOf((116f + 12.835f) / 155f, (115.33f + 12.835f) / 155f), small),
-        )
+        CcConnectivity.circles(if (host.state.hasNfc) Control.NFC else Control.DARK_MODE).map { Triple(it.control, floatArrayOf(it.fx, it.fy), it.rf) }
     }
 
     private val subActive = HashMap<Control, MotionValue>()
@@ -1361,10 +1355,72 @@ class ControlGridBlock(
         }
     }
 
+    /**
+     * For checks (adb, `TEST_SHADE cc_expand_frames`): [control]'s module grown into its large form and back (a control with
+     * a menu instead, the camera: its menu opened and closed) at exact times ([fps] a second, held open [holdMs]), Control
+     * Center drawn at each into PNGs in [dir] (half size): the real drawing frame by frame, where a recording of the
+     * emulator shows a few frames a second.
+     */
+    fun renderExpandFrames(control: Control, fps: Int, holdMs: Long, dir: java.io.File, done: (Int) -> Unit) {
+        val a = anims.values.firstOrNull { it.item.control == control && !it.removing }
+        val menu = a != null && expanded.kindFor(control) == null
+        if (a == null || !(if (menu) openMenu(a) else expandFrom(a))) { done(0); return }
+        val open = dev.launcher.app.motion.CurveTiming(if (menu) Motion.profile.menuOpen else expanded.openCurve)
+        val close = dev.launcher.app.motion.CurveTiming(if (menu) Motion.profile.menuClose else expanded.closeCurve)
+        val step = 1000f / fps.coerceIn(10, 240)
+        val opened = open.durationMs + holdMs
+        val frames = ((opened + close.durationMs + 50) / step).toInt() + 1
+        fun frame(n: Int) {
+            if (n >= frames) {
+                if (menu) { menuK.snapTo(0f); menuOf = null; menuPressed = -1; syncEditProgress() } else expanded.dismissNow()
+                invalidate(); done(n); return
+            }
+            val t = n * step
+            val closing = t >= opened
+            val k = if (!closing) open.atMs(t) else 1f - close.atMs(t - opened)
+            if (menu) { menuK.snapTo(k); syncEditProgress() } else expanded.simulate(k, closing)
+            val pic = dev.launcher.app.design.ViewPicture.render(view)
+            val soft = pic?.let { dev.launcher.app.design.ViewPicture.softCopy(it, 0.5f) }
+            try {
+                soft?.let { b ->
+                    java.io.File(dir, "f%03d_%04dms_%s_k%.3f.png".format(n, t.toInt(), if (closing) "close" else "open", k)).outputStream()
+                        .use { b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                }
+            } catch (_: Throwable) { }
+            soft?.recycle()
+            view.post { frame(n + 1) }
+        }
+        view.post { frame(0) }
+    }
+
+    /**
+     * Where [c]'s module is drawn now, for the expanded module that grows out of it ([CcExpanded.Source]): its rect on
+     * screen with its press's swell (the press lets go on its own spring meanwhile), its corner, scale and own size.
+     */
+    private fun sourceOf(c: Control, out: CcExpanded.Source) {
+        val a = anims.values.firstOrNull { it.item.control == c && !it.removing }
+        if (a == null || !placementOf(a, gridTop(), editK.value, place)) { out.rect.setEmpty(); return }
+        val s = place.scale
+        val cx = place.left + place.w / 2f
+        val cy = place.top + place.h / 2f
+        out.rect.set(cx - place.w * s / 2f, cy - place.h * s / 2f, cx + place.w * s / 2f, cy + place.h * s / 2f)
+        out.radius = radiusFor(place.w, place.h, a.active.value) * s
+        out.scale = s
+        out.w = place.w
+        out.h = place.h
+        out.unit = 2 * min(cellW, cellH) + gap
+        out.cols = a.item.w
+        out.on = a.active.value.coerceIn(0f, 1f)
+        out.press = a.press.value
+        out.sub = a.sub
+        out.subPress = a.subPress.value
+    }
+
     /** Grows [a] into its large form, from where it is drawn now. False if it has none. */
     private fun expandFrom(a: Anim): Boolean {
         if (expanded.kindFor(a.item.control) == null) return false
-        a.press.snapTo(0f); a.subPress.snapTo(0f)
+        // (Its press lets go on its own spring: the expanded module starts from it as it is, swollen, and follows it.)
+        a.press.animateTo(0f, PRESS_OUT); a.subPress.animateTo(0f, PRESS_OUT)
         placementOf(a, gridTop(), editK.value, place)
         val r = RectF(place.left, place.top, place.left + place.w, place.top + place.h)
         return expanded.open(a.item.control, r, radiusFor(place.w, place.h, a.active.value), width.toFloat(), height.toFloat(), u)
