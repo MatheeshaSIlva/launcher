@@ -54,7 +54,7 @@ import kotlin.math.roundToInt
  * Drag a control to move it (others move on to make room), tap empty space to leave.
  */
 @SuppressLint("ViewConstructor")
-class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
+class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), dev.launcher.app.shade.cc.CcPanel {
     interface Host {
         val state: ControlState
         val media: Media
@@ -76,6 +76,18 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         fun clickTile(id: String)
     }
 
+    // ---- the blocks it is made of (the layout file's: docs/LAYOUT_FILES.md), and what it gives them ([CcPanel])
+
+    override val view: View get() = this
+    override val panelWidth: Int get() = width
+    override val panelHeight: Int get() = height
+    override val closingK: Float get() = closeK.value
+
+    /** "+" and power (`top-buttons`). */
+    private val buttons = dev.launcher.app.shade.cc.TopButtonsBlock(this) { enterEdit() }
+    /** The row the status bar's icons come down into (`status-row`). */
+    private val statusRow = dev.launcher.app.shade.cc.StatusRowBlock(this)
+
     private val glyphs = Glyphs(ctx)
     // The theme's fonts, kept when it changes (B4b: Fonts.Followers).
     private val fonts = Fonts.Followers(this) { tokensChanged() }
@@ -89,7 +101,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
 
     // ------------------------------------------------------------------ geometry (px)
 
-    private var u = 1f
+    override var u = 1f
+        private set
     /** A cell's width and height, and the step from one to the next across and down (a cell and the gap). */
     private var cellW = 0f
     private var cellH = 0f
@@ -99,12 +112,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var gridLeft = 0f
     private var gridTopRest = 0f
     private var gridTopEdit = 0f
-    private var btnY = 0f
-    private var btnR = 0f
     private var rows = 6
-    /** Centre of the status row (px): the status bar's right group comes down to it. */
-    var rowY = 0f
-        private set
 
     private val prefs = ctx.getSharedPreferences("control_center", Context.MODE_PRIVATE)
 
@@ -138,7 +146,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     /** The grid's columns: the user's count (Layouts, Notifications and controls), at most what fits at this size. */
     private var cols = 4
     /** Wider than tall (a display turned for an app in landscape). */
-    private val landscape get() = width > height
+    override val landscape get() = width > height
     /** The columns shown: [cols] upright, as many as fit across in landscape. */
     private var shownCols = 4
     /** In landscape, where each control is shown (the page flowed across [shownCols]); null upright: its own place. */
@@ -182,9 +190,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         gridLeft = (width - gridW) / 2f
         gridTopRest = sf.pt(if (landscape) CcTokens.GRID_TOP_LANDSCAPE else CcTokens.GRID_TOP)
         gridTopEdit = sf.pt(CcTokens.GRID_TOP_EDIT)
-        rowY = sf.pt(if (landscape) CcTokens.ROW_Y_LANDSCAPE else CcTokens.ROW_Y)
-        btnR = sf.pt(CcTokens.BUTTON_SIZE) / 2f
-        btnY = sf.pt(CcTokens.BUTTON_TOP) + btnR
+        statusRow.syncTokens()
+        buttons.syncTokens()
         rows = max(4, ((height - gridTopRest - 96f * u + gap) / pitchY).toInt())
         layout?.let { it.rows = max(rows, it.usedRows()) }
         sf.text(title, CcTokens.TITLE)
@@ -316,21 +323,21 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     // ------------------------------------------------------------------ open / edit progress
 
     /** How present Control Center is (from the shade, every frame): 0 closed .. 1 open. */
-    var progress = 0f
+    override var progress = 0f
         set(v) { if (field != v) { field = v; invalidate() } }
 
     /** How far the controls and the status row are pulled below their place (px; negative: lifted while closing). */
-    var pullOffset = 0f
+    override var pullOffset = 0f
         set(v) { if (field != v) { field = v; invalidate() } }
 
     /** The status row's centre now (px): the status bar's right group rides on it. */
-    val statusRowY get() = rowY + pullOffset
+    val statusRowY get() = statusRow.shownY
 
     /** How far in the status row runs (px; 0: the bar's own sides): in landscape lined up with the grid (iOS 27: 6 pt in). */
-    val statusRowInset get() = if (landscape) gridLeft + 6f * u else 0f
+    val statusRowInset get() = statusRow.inset(gridLeft)
 
     /** The controls' opacity for how present the panel is: quickly in, and they outlast the blur when it closes. */
-    private fun presence(): Float = kotlin.math.sqrt(progress.coerceIn(0f, 1f))
+    override fun presence(): Float = kotlin.math.sqrt(progress.coerceIn(0f, 1f))
 
     /**
      * Closing (0 not .. 1 closing, on a spring, so a panel grabbed back while it closes never jumps): the controls fold
@@ -345,10 +352,10 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     /** How far a control centred at [cx], [cy] has left (0..1): the farther from the top-right corner, the sooner. */
-    private fun leaving(cx: Float, cy: Float): Float {
+    override fun leaving(cx: Float, cy: Float): Float {
         val gone = 1f - progress.coerceIn(0f, 1f)
         val far = (kotlin.math.hypot(width - cx, cy) / kotlin.math.hypot(width.toFloat(), height * 0.8f)).coerceIn(0f, 1f)
-        val local = ((gone - (1f - far) * LEAVE_STAGGER) / (1f - LEAVE_STAGGER)).coerceIn(0f, 1f)
+        val local = ((gone - (1f - far) * dev.launcher.app.shade.cc.CcClose.STAGGER) / (1f - dev.launcher.app.shade.cc.CcClose.STAGGER)).coerceIn(0f, 1f)
         return local * local * (3f - 2f * local)
     }
 
@@ -453,7 +460,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         val ex = expanded.presence
         val mk = if (menuOf != null) menuK.value.coerceIn(0f, 1f) else 0f
         // Not in landscape (iOS 27: one status line there, no "+" nor power).
-        if (!landscape) drawTopButtons(c, (1f - edit) * (1f - ex) * (1f - mk))
+        if (!landscape) buttons.draw(c, (1f - edit) * (1f - ex) * (1f - mk))
         if (edit > 0.001f) drawEmptySlots(c, top, edit)
         else if (warmSlots && slotsNode.hasDisplayList()) { slotsNode.setAlpha(0.003f); c.drawRenderNode(slotsNode); warmSlots = false }
         for (a in anims.values) if (a !== dragged && a !== menuOf) drawItem(c, a, top, edit)
@@ -465,47 +472,6 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     private fun smooth(t: Float): Float { val x = t.coerceIn(0f, 1f); return x * x * (3f - 2f * x) }
-
-    private val plusPress = MotionValue(0f, 100f, inv)
-    private val powerPress = MotionValue(0f, 100f, inv)
-
-    /** Where "+" (0) and the power button (1) are centred horizontally (the kit: 38 pt from the sides). */
-    private fun buttonX(i: Int): Float { val c = host.surfaces.pt(CcTokens.BUTTON_INSET_X) + btnR; return if (i == 0) c else width - c }
-
-    /** "+" and power: the kit's near-black added to what is behind (plus-lighter), a light symbol. */
-    private fun drawTopButtons(c: Canvas, base: Float) {
-        if (base <= 0.003f) return
-        val sf = host.surfaces
-        val mat = Design.material(CcTokens.BUTTON)
-        val symbol = sf.pt(CcTokens.BUTTON_SYMBOL)
-        val col = Design.color(CcTokens.BUTTON_SYMBOL_COLOR)
-        val cs = closeK.value.coerceIn(0f, 1f)
-        val k0 = presence()
-        for (i in 0..1) {
-            var x = buttonX(i)
-            var y = btnY
-            val p = if (i == 0) plusPress.value else powerPress.value
-            var s = 1f + 0.08f * p
-            var k = k0
-            if (cs > 0.001f) {
-                // As the controls: back into the corner (see closeK).
-                val e = leaving(x, y)
-                x += (width - x) * LEAVE_PULL * e * cs
-                y += -y * LEAVE_PULL * e * cs
-                s *= 1f - LEAVE_SHRINK * e * cs
-                k += ((1f - e) - k) * cs
-            }
-            k *= base
-            if (k <= 0.003f) continue
-            val d = btnR * 2f
-            c.save()
-            c.translate(x - btnR * s, y - btnR * s)
-            c.scale(s, s)
-            sf.draw(c, mat, d, d, btnR, x - btnR * s, y - btnR * s, s, k, p)
-            glyphs.draw(c, if (i == 0) R.drawable.sym_plus else R.drawable.sym_power, btnR, btnR, symbol, alpha(col, k))
-            c.restore()
-        }
-    }
 
     /**
      * Edit mode: every free cell as a faint disc of glass (it reads on a light or a dark backdrop alike). All of them in one
@@ -646,9 +612,9 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             val cx = out.left + w / 2f
             val cy = t + h / 2f
             val e = leaving(cx, cy) * cs
-            out.left += (width - cx) * LEAVE_PULL * e
-            out.top += -cy * LEAVE_PULL * e
-            out.scale *= 1f - LEAVE_SHRINK * e
+            out.left += (width - cx) * dev.launcher.app.shade.cc.CcClose.PULL * e
+            out.top += -cy * dev.launcher.app.shade.cc.CcClose.PULL * e
+            out.scale *= 1f - dev.launcher.app.shade.cc.CcClose.SHRINK * e
             fade = k + ((1f - leaving(cx, cy)) - k) * cs
         }
         out.alpha = fade * appear.coerceIn(0f, 1f) * (if (edit > 0f && a !== dragged) 1f - 0.08f * edit else 1f)
@@ -1058,7 +1024,6 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     private var downX = 0f
     private var downY = 0f
     private var touched: Anim? = null
-    private var button = 0
     private var sliding: Anim? = null
     private var sliderFrom = 0f
     private var dragged: Anim? = null
@@ -1092,6 +1057,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         editBase = null
         dragged?.let { d -> d.lift.animateTo(0f, DROP); syncTarget(d, true) }
         dragged = null
+        buttons.cancel()
         mode = Mode.NONE
     }
 
@@ -1167,10 +1133,8 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
     }
 
     private fun downNormal(x: Float, y: Float) {
-        // The top buttons.
-        if (!landscape && hypot(x - buttonX(0), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 0; plusPress.animateTo(1f, PRESS_IN); return }
-        // Power: held until the phone vibrates, as iOS's (a tap does nothing: the power menu is not a tap away).
-        if (!landscape && hypot(x - buttonX(1), y - btnY) < btnR + 10f * u) { mode = Mode.BUTTON; button = 1; powerPress.animateTo(1f, PRESS_IN); postDelayed(longPress, LONG_MS); return }
+        // The top buttons ("+" on a tap; power held until the phone vibrates).
+        if (!landscape && buttons.down(x, y)) { mode = Mode.BUTTON; return }
         val a = hit(x, y)
         if (a == null) {
             mode = Mode.EMPTY
@@ -1232,7 +1196,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             }
             Mode.CLOSE -> host.closeDrag(1, dy, 0f)
             Mode.SLIDER -> slide(sliding ?: return, y, final = false)
-            Mode.BUTTON -> if (far) { removeCallbacks(longPress); plusPress.animateTo(0f, PRESS_OUT); powerPress.animateTo(0f, PRESS_OUT); mode = Mode.NONE }
+            Mode.BUTTON -> if (far) { buttons.cancel(); mode = Mode.NONE }
             Mode.ADD -> if (far) { addPress.animateTo(0f, PRESS_OUT); mode = Mode.NONE }
             Mode.EDIT_PRESS -> if (far) {
                 val a = touched ?: return
@@ -1264,10 +1228,7 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
             Mode.SLIDER -> endSlider()
             Mode.CLOSE -> host.closeDrag(2, y - downY, vy)
             Mode.EMPTY -> if (!longFired) host.close()
-            Mode.BUTTON -> {
-                plusPress.animateTo(0f, PRESS_OUT); powerPress.animateTo(0f, PRESS_OUT)
-                if (button == 0) enterEdit()
-            }
+            Mode.BUTTON -> buttons.up()
             Mode.ADD -> { addPress.animateTo(0f, PRESS_OUT); host.openGallery() }
             Mode.REMOVE -> touched?.let { remove(it) }
             Mode.EDIT_PRESS -> touched?.press?.animateTo(0f, PRESS_OUT)
@@ -1290,12 +1251,6 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         longFired = true
         when (mode) {
             Mode.EMPTY -> { mode = Mode.NONE; enterEdit() }
-            Mode.BUTTON -> if (button == 1) {
-                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                powerPress.animateTo(0f, PRESS_OUT)
-                mode = Mode.NONE
-                host.powerMenu()
-            }
             Mode.PRESS -> {
                 val a = touched ?: return
                 performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
@@ -1573,11 +1528,6 @@ class ControlCenterView(ctx: Context, private val host: Host) : View(ctx) {
         const val SLOT_ALPHA = 0.55f
         /** Room around a control's layer for its rims (the kit's are within 2 pt of the edge). */
         const val LAYER_MARGIN_PT = 4f
-        /** Closing (see closeK): how much of the close the nearest control waits, how far each drifts toward the corner
-         *  (of its distance), how much it shrinks; the spring the choreography blends in and out on. Judged. */
-        const val LEAVE_STAGGER = 0.45f
-        const val LEAVE_PULL = 0.16f
-        const val LEAVE_SHRINK = 0.22f
         /** A control's menu: how much the held control grows, how far the others fade back. Judged (as home's lifted icon). */
         const val MENU_LIFT = 0.05f
         const val MENU_FADE = 0.8f

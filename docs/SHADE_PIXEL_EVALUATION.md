@@ -341,7 +341,17 @@ one before and pushed on its own:
   file as before; copies of your own without the clock and the buttons (the stack resting at the bottom of the taller
   area) and without the buttons (lower, under the clock).
 
-Next, stage 3: Control Center as blocks (the status row, the grid, its modules and sliders, the editor).
+On the S24 (9d54bb3, Matheesha): "everything works the same".
+
+**Stage 3, Control Center as blocks (started 2026-10-20)**, in three steps, as stage 2:
+- 3a: "+" and power (`shade/cc/TopButtonsBlock`: their drawing, the press, the power button held until the phone
+  vibrates) and the status row (`shade/cc/StatusRowBlock`: its centre, pulled with the controls, and how far in it runs
+  turned) are blocks, given the panel's view, size, point, presence, pull and its closing choreography through
+  `shade/cc/CcPanel` (the choreography's numbers: `CcClose`). Checked on the emulator against 2c: Control Center upright
+  and turned the same pictures but for home's clock widget under the glass; "+" enters edit mode, a press dragged off it
+  does nothing, a tap on power does nothing and a hold opens the power dialog.
+- 3b: the grid (its controls, modules, sliders, edit mode, the menu of a held control, the expanded modules).
+- 3c: which blocks Control Center has is the file's.
 
 ## References
 
