@@ -37,6 +37,7 @@
      {"block": "brightness"},
      {"block": "tiles", "columns": {"option": "qs-columns"}, "quick-rows": 2, "rows": 4},
      {"block": "qs-footer"},
+     {"block": "media"},
      {"block": "notification-cards"},
      {"block": "notification-footer"}
     ],

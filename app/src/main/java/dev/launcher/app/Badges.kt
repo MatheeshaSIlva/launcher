@@ -39,9 +39,12 @@ object Badges {
         //   adb shell am broadcast -a dev.launcher.app.TEST_NOTIFY -p dev.launcher.app --es title T --es text X [--ei id N]
         //   (... --ei id N --ez cancel true: removes it again; --es open PACKAGE: a tap opens that app; --ez avatar true:
         //   with a picture, wider than tall, to check how pictures are cropped and rounded)
+        //   (--ez media true: a media session playing, with its art and a media notification, as a music app's: the shade's
+        //   media player; --ez playing false pauses it; with --ez cancel true it goes)
         val notify = object : android.content.BroadcastReceiver() {
             override fun onReceive(c: Context, i: android.content.Intent) {
                 val nm = c.getSystemService(android.app.NotificationManager::class.java)
+                if (i.getBooleanExtra("media", false)) { testMedia(c, nm, i); return }
                 if (i.getBooleanExtra("cancel", false)) { nm.cancel(1000 + i.getIntExtra("id", 0)); return }
                 nm.createNotificationChannel(android.app.NotificationChannel(TEST_CHANNEL, "Test", android.app.NotificationManager.IMPORTANCE_HIGH))
                 val n = android.app.Notification.Builder(c, TEST_CHANNEL)
@@ -71,6 +74,53 @@ object Badges {
         // Senders must hold DUMP: adb's shell does, other apps cannot.
         if (android.os.Build.VERSION.SDK_INT >= 33) ctx.registerReceiver(r, f, android.Manifest.permission.DUMP, null, Context.RECEIVER_EXPORTED)
         else ctx.registerReceiver(r, f, android.Manifest.permission.DUMP, null)
+    }
+
+    private var testSession: android.media.session.MediaSession? = null
+
+    /** The media test: a session with a title, an artist, art and a playback position, and its media notification. */
+    private fun testMedia(c: Context, nm: android.app.NotificationManager, i: android.content.Intent) {
+        val id = 1000 + i.getIntExtra("id", 77)
+        if (i.getBooleanExtra("cancel", false)) {
+            nm.cancel(id)
+            testSession?.run { isActive = false; release() }
+            testSession = null
+            return
+        }
+        val playing = i.getBooleanExtra("playing", true)
+        val session = testSession ?: android.media.session.MediaSession(c, "LauncherTest").also { testSession = it }
+        val art = android.graphics.Bitmap.createBitmap(512, 512, android.graphics.Bitmap.Config.ARGB_8888).also { b ->
+            val p = android.graphics.Paint().apply {
+                shader = android.graphics.LinearGradient(0f, 0f, 512f, 512f, 0xFF7B2FF7.toInt(), 0xFFF107A3.toInt(), android.graphics.Shader.TileMode.CLAMP)
+            }
+            android.graphics.Canvas(b).drawRect(0f, 0f, 512f, 512f, p)
+        }
+        session.setMetadata(android.media.MediaMetadata.Builder()
+            .putString(android.media.MediaMetadata.METADATA_KEY_TITLE, i.getStringExtra("title") ?: "Test Song")
+            .putString(android.media.MediaMetadata.METADATA_KEY_ARTIST, i.getStringExtra("text") ?: "Test Artist")
+            .putString(android.media.MediaMetadata.METADATA_KEY_ALBUM, "Test Album")
+            .putLong(android.media.MediaMetadata.METADATA_KEY_DURATION, 200_000L)
+            .putBitmap(android.media.MediaMetadata.METADATA_KEY_ALBUM_ART, art)
+            .build())
+        session.setPlaybackState(android.media.session.PlaybackState.Builder()
+            .setState(if (playing) android.media.session.PlaybackState.STATE_PLAYING else android.media.session.PlaybackState.STATE_PAUSED,
+                65_000L, if (playing) 1f else 0f, android.os.SystemClock.elapsedRealtime())
+            .setActions(android.media.session.PlaybackState.ACTION_PLAY or android.media.session.PlaybackState.ACTION_PAUSE or
+                android.media.session.PlaybackState.ACTION_PLAY_PAUSE or android.media.session.PlaybackState.ACTION_SKIP_TO_NEXT or
+                android.media.session.PlaybackState.ACTION_SKIP_TO_PREVIOUS or android.media.session.PlaybackState.ACTION_SEEK_TO)
+            .build())
+        session.isActive = true
+        nm.createNotificationChannel(android.app.NotificationChannel("test-media", "Test media", android.app.NotificationManager.IMPORTANCE_LOW))
+        val n = android.app.Notification.Builder(c, "test-media")
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(i.getStringExtra("title") ?: "Test Song")
+            .setContentText(i.getStringExtra("text") ?: "Test Artist")
+            .setLargeIcon(art)
+            .setStyle(android.app.Notification.MediaStyle().setMediaSession(session.sessionToken))
+            .setOngoing(playing)
+            .build()
+        nm.notify(id, n)
+        AppLog.log("[badges] test media ${if (playing) "playing" else "paused"}")
     }
 
     /** A test notification's picture: a gradient 4:3 wide, orange to blue (a crop shows as the ends cut off). */

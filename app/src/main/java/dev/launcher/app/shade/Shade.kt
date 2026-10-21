@@ -242,6 +242,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override fun thread() = handler
             override fun notifications() = shownNotifs()
             override fun clickTile(id: String) = this@Shade.clickTile(id)
+            override val media get() = this@Shade.media
             override fun editAfterUnlock() {
                 close()
                 Unlock.then(ctx, "edit Quick Settings") {
@@ -427,6 +428,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         override fun opening() {
             state.readAll()
             state.readDetails()
+            media.refresh()
             shadeView.barHeight = barHeight
             shadeView.prepare()
             liveBlur.maxBlurPx = liveBlurMax(QsTokens.BACKGROUND)

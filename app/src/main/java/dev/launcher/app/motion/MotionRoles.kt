@@ -182,6 +182,7 @@ object MotionRoles {
         r("qs.edit", "Editing tiles", "Quick Settings giving way to their edit page, and back."),
         r("qs.edit-place", "Tiles rearranged", "Tiles moving to their places on the edit page."),
         r("qs.edit-appear", "Edit page buttons", "Undo, a tile added or taken out, Reset's question fading in and out."),
+        r("qs.media", "Media player", "The play button changing shape and the wave calming, with play and pause."),
     ))
 
     val BANNERS = MotionGroup("Banners", "Notifications popping up over apps and home.", listOf(

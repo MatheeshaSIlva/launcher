@@ -83,6 +83,8 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
         class Tiles(val columns: Count, val quickRows: Int, val rows: Int) : Block("tiles")
         /** Under the tiles: the build number, the page dots and the edit button; at the foot, the user, settings and power. */
         object QsFooter : Block("qs-footer")
+        /** The media player: under the quick row at the first stage, under the build number in Quick Settings. */
+        object Media : Block("media")
         /** The notifications as cards: an app's group and a section joined as one column of cards, the silent ones apart. */
         object NotificationCards : Block("notification-cards")
         /** Under the notifications: the history, Clear all and the notification settings. */
@@ -133,7 +135,7 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
         private val BLOCKS = mapOf(
             Kind.NOTIFICATION_CENTER to listOf("lock-clock", "notifications", "corner-buttons"),
             Kind.CONTROL_CENTER to listOf("top-buttons", "status-row", "control-grid"),
-            Kind.SHADE to listOf("qs-header", "brightness", "tiles", "qs-footer", "notification-cards", "notification-footer"),
+            Kind.SHADE to listOf("qs-header", "brightness", "tiles", "qs-footer", "media", "notification-cards", "notification-footer"),
         )
         /** The blocks a panel cannot be without. */
         private val REQUIRED = mapOf(
@@ -231,6 +233,7 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
                     Block.Tiles(count(b, "columns", options), quick, rows)
                 }
                 "qs-footer" -> Block.QsFooter
+                "media" -> Block.Media
                 "notification-cards" -> Block.NotificationCards
                 "notification-footer" -> Block.NotificationFooter
                 else -> b.fail("block: '$id' (${BLOCKS.values.flatten().joinToString()})")

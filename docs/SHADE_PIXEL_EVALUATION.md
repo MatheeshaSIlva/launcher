@@ -493,8 +493,8 @@ notifications) and Quick Settings, their transitions declared in `scene/ui/compo
 
 Not like Android 17's yet: the status bar's own look in the header's row (our status bar's layout: its time and icons,
 as on home), Quick Share's glyph (Play services' own), a Bluetooth device's dots (the connection is not read), the user's
-avatar. Still to come: the media player, Pixel's landscape, the dual shade (Android 17 on a phone ignores its
-`dual_shade` setting: Pixel's file keeps one place).
+avatar. Still to come: Pixel's landscape, the dual shade (Android 17 on a phone ignores its `dual_shade` setting:
+Pixel's file keeps one place).
 
 **Stage 4, the edit page (2026-10-21).** Android 17's "Edit tiles" (`shade/qs/QsEditPage`), read from SystemUIGoogle
 (EditModeKt, EditTileKt, EditModeTileDefaults, QuickSettingsScene's InternalScenes) and measured on the emulator's own
@@ -536,6 +536,30 @@ drag):
 
 Motion roles: motion.qs.edit (the crossfade), motion.qs.edit-place (tiles to their places), motion.qs.edit-appear (undo, a
 tile added or taken out, Reset's question); tokens `comp.qs.edit-page.*`.
+
+**Stage 5, the media player (2026-10-21).** Android 17's (SystemUIGoogle's "remedia", MediaKt; measured on the emulator
+with a test session of ours: `TEST_NOTIFY --ez media true [--ez playing false] [--ez cancel true]`, a session with art and
+its media notification, as a music app's): the layout file's `media` block (`shade/qs/MediaBlock`), on our `Media`.
+
+- A 379 x 176 dp card 16 dp under the quick row at the first stage and 16 dp under the build number's row in Quick
+  Settings, moving between the two as they expand; the notification scrim rests under it, and while it comes or goes
+  (the appear role) the notifications make way. Its media notification leaves the cards meanwhile.
+- Its colours from the art, as Android's media colour scheme: the art's main colour (WallpaperColors) as a hue; the ground
+  that hue at tone 14 and chroma 27 with the art over it, centre-cropped, at 25 % in the middle falling to 12 % at the
+  edges (one picture the card's size, made off the drawing thread for each art); the play button, the app's symbol and
+  the output chip at tone 90, the play symbol at tone 10; the words, the wave, the thumb and the arrows white. A new art
+  crossfades in. Against the emulator's own card under the same art: every point within 2 to 6 levels.
+- The app's own small symbol at the top left (24 dp), the output chip at the top right (32 x 24 dp outlined, the cast
+  symbol: Settings' media output panel), the title (titleMedium) and artist (bodyMedium) centred on the play button (72 x
+  48 dp: a rounded square of 16 dp corners while playing, round while paused, its symbol crossfading; its corners tighten
+  while pressed), previous and next (Material Symbols' outlined skip symbols, 48 dp targets) with the line between them:
+  Android's squiggly progress, a wave 20 dp long, 1.5 dp high and 2 dp thick travelling 8 dp a second up to a 4 x 16 dp
+  thumb, the track after it white at 30 %; paused, or while the finger drags the thumb (seeking), the wave calms to a line
+  (motion.qs.media). A tap on the card opens the app.
+
+Not like Android 17's yet: several sessions (Android shows a carousel; ours the session `Media` picks), the swipe that
+reveals the card's settings and dismisses it, timestamps while seeking, the output switcher itself (Android's dialog: ours
+opens Settings' media output panel), and the card's light following the touch (remedia's ripple).
 
 ## References
 

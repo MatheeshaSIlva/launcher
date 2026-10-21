@@ -1042,6 +1042,13 @@
    ],
    "src": "kit:AOSP SystemUI scene container: Quick Settings coming to rest whole after the second pull"
   },
+  "motion.qs.media": {
+   "spring": [
+    0.31,
+    1.0
+   ],
+   "src": "kit:AOSP SystemUI remedia: the play button's shape and the wave's height following play and pause (spring, stiffness 400)"
+  },
   "motion.qs.open": {
    "spring": [
     0.32,

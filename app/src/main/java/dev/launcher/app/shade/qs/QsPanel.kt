@@ -77,6 +77,8 @@ interface QsPanel {
         fun thread(): android.os.Handler
         /** The notifications to show now (over the lock screen, what its settings allow: none, or their content hidden). */
         fun notifications(): List<Notifs.Item>
+        /** The media session the shade follows (the media player). */
+        val media: dev.launcher.app.shade.Media
         /** An app's tile tapped: SystemUI clicks it ([dev.launcher.app.shade.AppTiles]). */
         fun clickTile(id: String)
         /** The edit button over the lock screen: the shade goes, and once unlocked comes back with the edit page (Android's). */

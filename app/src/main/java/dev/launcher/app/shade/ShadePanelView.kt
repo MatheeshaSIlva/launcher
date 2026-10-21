@@ -18,6 +18,7 @@ import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.shade.qs.BrightnessBlock
 import dev.launcher.app.shade.qs.CardsBlock
 import dev.launcher.app.shade.qs.QsFooterBlock
+import dev.launcher.app.shade.qs.MediaBlock
 import dev.launcher.app.shade.qs.QsEditPage
 import dev.launcher.app.shade.qs.QsHeaderBlock
 import dev.launcher.app.shade.qs.QsPanel
@@ -69,8 +70,12 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
 
     override val squish: Float get() = lerp(Design.num(QsTokens.SQUISH).coerceIn(0f, 1f), 1f, p)
 
-    /** The scrim's top at the first stage's rest: under the quick row (or the bar, without tiles). */
-    private fun scrimRest(): Float = (tiles?.quickBottomRest ?: barHeight.toFloat()) + Design.pt(QsTokens.SHELF_INSET, u)
+    /** The scrim's top at the first stage's rest: under the quick row (or the bar, without tiles), and the media player as it shows. */
+    private fun scrimRest(): Float {
+        val quick = tiles?.quickBottomRest ?: barHeight.toFloat()
+        val under = media?.let { lerp(quick, it.firstBottomRest(), it.shown) } ?: quick
+        return under + Design.pt(QsTokens.SHELF_INSET, u)
+    }
 
     override val scrimTop: Float get() = lerp(0f, scrimRest(), p) + expandK * (height - scrimRest())
 
@@ -87,6 +92,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     private var footer: QsFooterBlock? = null
     private var cards: CardsBlock? = null
     private var edit: QsEditPage? = null
+    private var media: MediaBlock? = null
     private var builtFrom: ShadeStructure.Panel? = null
 
     private fun build() {
@@ -102,6 +108,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
             CardsBlock(this, context, withFooter = p.block<ShadeStructure.Block.NotificationFooter>() != null)
         }
         edit = t?.let { QsEditPage(this, { tiles }, { tiles?.layout(); invalidate() }, { stopEdit() }) }
+        media = p.block<ShadeStructure.Block.Media>()?.let { MediaBlock(this) { tiles } }
     }
 
     /** Lays the blocks out for the size and the design (they read their tokens here). */
@@ -134,6 +141,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         header?.refresh()
         brightness?.sync(animate = false)
         tiles?.syncStates(animate = false)
+        media?.sync(animate = false)
         footer?.refresh()
         cards?.setItems(host.notifications(), animate = false)
         removeCallbacks(minute)
@@ -263,6 +271,16 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         editV.animateTo(0f, Motion.role(MotionTokens.QS_EDIT))
     }
 
+    /** The media changed: the player follows (coming, going, playing), the cards give its notification to it or take it back. */
+    private val mediaChanged: () -> Unit = {
+        if (progress > 0f) {
+            media?.sync(animate = true)
+            cards?.setItems(host.notifications(), animate = true)
+        }
+    }
+
+    init { host.media.addListener(mediaChanged) }
+
     /** Apps' tiles changed (found again, or their states read): the tiles follow. */
     private val appTilesChanged: () -> Unit = { if (progress > 0f) stateChanged() }
 
@@ -318,6 +336,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
             brightness?.draw(c)
             tiles?.draw(c)
             footer?.drawRow(c)
+            media?.draw(c)
         }
         c.restoreToCount(save)
         cards?.draw(c)
@@ -327,7 +346,8 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
 
     // ------------------------------------------------------------------ touches
 
-    private enum class Mode { NONE, TILE, BRIGHTNESS, FOOTER, CARD, SWIPE, SCROLL, EXPAND, PAGE, CLOSE, IGNORE }
+    private enum class Mode { NONE, TILE, BRIGHTNESS, FOOTER, MEDIA, SEEK, CARD, SWIPE, SCROLL, EXPAND, PAGE, CLOSE, IGNORE }
+    private var mediaTarget = MediaBlock.Target.NONE
     private var mode = Mode.NONE
     private var decided = false
     private var downX = 0f
@@ -366,9 +386,11 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                 expandFrom = expand.value.coerceIn(0f, 1f)
                 pageFrom = pageV.value
                 val t = tiles?.tileAt(x, y) ?: -1
+                mediaTarget = media?.targetAt(x, y) ?: MediaBlock.Target.NONE
                 mode = when {
                     stage2 && brightness?.contains(x, y) == true -> Mode.BRIGHTNESS.also { brightness?.drag(0, x) }
                     footer?.contains(x, y) == true -> Mode.FOOTER.also { footer?.press(x, y) }
+                    mediaTarget != MediaBlock.Target.NONE -> Mode.MEDIA.also { media?.press(mediaTarget, true) }
                     t >= 0 -> Mode.TILE.also {
                         tile = t
                         tiles?.press(t, true)
@@ -387,9 +409,12 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                     if (mode == Mode.TILE) tiles?.press(tile, false)
                     if (mode == Mode.FOOTER) footer?.release(tap = false)
                     if (mode == Mode.CARD) cards?.release()
+                    if (mode == Mode.MEDIA) media?.press(mediaTarget, false)
                     val sideways = abs(dx) > abs(dy)
                     mode = when {
                         mode == Mode.BRIGHTNESS -> Mode.BRIGHTNESS
+                        // The media player's line dragged sideways: seeking.
+                        mode == Mode.MEDIA && mediaTarget == MediaBlock.Target.LINE && sideways -> Mode.SEEK
                         sideways && stage2 && tiles?.inGrid(downX, downY) == true && (tiles?.pages ?: 1) > 1 -> Mode.PAGE
                         sideways && mode == Mode.CARD && cards?.beginSwipe(downX, downY) == true -> Mode.SWIPE
                         sideways -> Mode.IGNORE
@@ -409,6 +434,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                         val pages = tiles?.pages ?: 1
                         pageV.snapTo((pageFrom - dx / width).coerceIn(-0.25f, pages - 0.75f))
                     }
+                    Mode.SEEK -> media?.seek(x)
                     Mode.SWIPE -> cards?.swipeBy(dx)
                     Mode.SCROLL -> cards?.scrollBy(lastY - y)
                     // The finger moves the scrim (and so the stage) one to one.
@@ -430,6 +456,8 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                         if (up && !decided && !longFired) tiles?.tap(tile, x, y)
                     }
                     Mode.FOOTER -> footer?.release(tap = up && !decided)
+                    Mode.MEDIA -> { media?.press(mediaTarget, false); if (up && !decided) media?.tap(mediaTarget) }
+                    Mode.SEEK -> media?.endSeek(commit = up)
                     Mode.BRIGHTNESS -> brightness?.drag(2, x)
                     Mode.CARD -> { cards?.release(); if (up && !decided) cards?.tap(x, y) }
                     Mode.SWIPE -> cards?.endSwipe(vx)

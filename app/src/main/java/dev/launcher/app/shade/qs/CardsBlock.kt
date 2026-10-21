@@ -82,7 +82,9 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
 
     /** The notifications changed (or the panel opens: [animate] false lays them out where they are). */
     fun setItems(items: List<Notifs.Item>, animate: Boolean) {
-        cards = cardsOf(items.filter { !it.summary || items.none { o -> o !== it && o.groupKey == it.groupKey } })
+        // (A media notification is the media player's while it shows one, as Android's.)
+        val playing = panel.host.media.active
+        cards = cardsOf(items.filter { (!it.media || !playing) && (!it.summary || items.none { o -> o !== it && o.groupKey == it.groupKey }) })
         loadIcons()
         relayout(animate)
     }

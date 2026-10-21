@@ -55,6 +55,8 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
     /** The quick row's bottom with its tiles whole (where the notification scrim rests under it). */
     val quickBottomRest: Float get() = quickTop + max(quickRows, 1) * (tileH + gap) - gap
     val fullBottom: Float get() = fullTop + rows * (tileH + gap) - gap
+    /** The quick row's bottom as it is now (its tiles squished at the start of the pull). */
+    fun quickBottomNow(): Float = quickTop + max(quickRows, 1) * (tileH * panel.squish + gap) - gap
 
     /** Rows a page: the layout's, or as many as fit above the footer (a turned screen holds fewer; more pages then). */
     private var rows = spec.rows

@@ -279,7 +279,65 @@ object QsTokens {
     val EDIT_AUTO_SCROLL_SPEED = NumberKey("comp.qs.edit-page.auto-scroll-speed")
 
     /** Every key, with the kind the code reads it as (the theme test checks each one resolves to it). */
+    // ---- The media player (Android 17's remedia: the layout file's `media` block).
+    /** The card: its height and corners, its padding; under the quick row at the first stage, under the build number in Quick Settings. */
+    val MEDIA_HEIGHT = NumberKey("comp.qs.media.height")
+    val MEDIA_CORNER = NumberKey("comp.qs.media.corner")
+    val MEDIA_PADDING = NumberKey("comp.qs.media.padding")
+    val MEDIA_TOP_GAP = NumberKey("comp.qs.media.top-gap")
+    val MEDIA_QS_GAP = NumberKey("comp.qs.media.qs-gap")
+    /** The app's symbol at the top left; the output chip at the top right (outlined, with the cast symbol). */
+    val MEDIA_APP_SYMBOL = NumberKey("comp.qs.media.app-symbol")
+    val MEDIA_CHIP_WIDTH = NumberKey("comp.qs.media.chip-width")
+    val MEDIA_CHIP_HEIGHT = NumberKey("comp.qs.media.chip-height")
+    val MEDIA_CHIP_STROKE = NumberKey("comp.qs.media.chip-stroke")
+    val MEDIA_CHIP_SYMBOL = NumberKey("comp.qs.media.chip-symbol")
+    /** The title and the artist, white, centred on the play button. */
+    val MEDIA_TITLE = TextKey("comp.qs.media.title")
+    val MEDIA_ARTIST = TextKey("comp.qs.media.artist")
+    val MEDIA_TEXT_COLOR = ColorKey("comp.qs.media.text-color")
+    /** The play button: its size and place (its top under the card's), its corners playing, paused and pressed, its symbol. */
+    val MEDIA_PLAY_WIDTH = NumberKey("comp.qs.media.play-width")
+    val MEDIA_PLAY_HEIGHT = NumberKey("comp.qs.media.play-height")
+    val MEDIA_PLAY_TOP = NumberKey("comp.qs.media.play-top")
+    val MEDIA_PLAY_CORNER = NumberKey("comp.qs.media.play-corner")
+    val MEDIA_PAUSED_CORNER = NumberKey("comp.qs.media.paused-corner")
+    val MEDIA_PRESSED_CORNER = NumberKey("comp.qs.media.pressed-corner")
+    val MEDIA_PLAY_SYMBOL = NumberKey("comp.qs.media.play-symbol")
+    /** Previous and next (their targets, symbols, the gap to the line, the row's centre under the card's top). */
+    val MEDIA_NAV = NumberKey("comp.qs.media.nav")
+    val MEDIA_NAV_SYMBOL = NumberKey("comp.qs.media.nav-symbol")
+    val MEDIA_NAV_GAP = NumberKey("comp.qs.media.nav-gap")
+    val MEDIA_NAV_CENTER = NumberKey("comp.qs.media.nav-centre")
+    /** The line: the wave up to the thumb (its length, height, stroke and travel a second), the faint track after it, the thumb. */
+    val MEDIA_WAVE_LENGTH = NumberKey("comp.qs.media.wave-length")
+    val MEDIA_WAVE_AMPLITUDE = NumberKey("comp.qs.media.wave-amplitude")
+    val MEDIA_WAVE_STROKE = NumberKey("comp.qs.media.wave-stroke")
+    val MEDIA_WAVE_SPEED = NumberKey("comp.qs.media.wave-speed")
+    val MEDIA_TRACK = NumberKey("comp.qs.media.track")
+    val MEDIA_TRACK_ALPHA = NumberKey("comp.qs.media.track-alpha")
+    val MEDIA_THUMB_WIDTH = NumberKey("comp.qs.media.thumb-width")
+    val MEDIA_THUMB_HEIGHT = NumberKey("comp.qs.media.thumb-height")
+    /** The colours from the art: the art's strength over the ground; the ground's, the light's (the play button, the app's symbol, the chip) and the play symbol's tones of the art's hue; the hue's least chroma; the colour without art. */
+    val MEDIA_ART_ALPHA = NumberKey("comp.qs.media.art-alpha")
+    val MEDIA_ART_CENTER_ALPHA = NumberKey("comp.qs.media.art-centre-alpha")
+    val MEDIA_GROUND_TONE = NumberKey("comp.qs.media.ground-tone")
+    val MEDIA_LIGHT_TONE = NumberKey("comp.qs.media.light-tone")
+    val MEDIA_ON_LIGHT_TONE = NumberKey("comp.qs.media.on-light-tone")
+    val MEDIA_CHROMA = NumberKey("comp.qs.media.chroma")
+    val MEDIA_GROUND_CHROMA = NumberKey("comp.qs.media.ground-chroma")
+    val MEDIA_FALLBACK = ColorKey("comp.qs.media.fallback")
+    val MEDIA_PRESS_LAYER = NumberKey("comp.qs.media.press-layer")
+
     val KEYS: List<dev.launcher.app.design.Key<*>> = listOf(
+        MEDIA_HEIGHT, MEDIA_CORNER, MEDIA_PADDING, MEDIA_TOP_GAP, MEDIA_QS_GAP, MEDIA_APP_SYMBOL, MEDIA_CHIP_WIDTH,
+        MEDIA_CHIP_HEIGHT, MEDIA_CHIP_STROKE, MEDIA_CHIP_SYMBOL, MEDIA_TITLE, MEDIA_ARTIST, MEDIA_TEXT_COLOR,
+        MEDIA_PLAY_WIDTH, MEDIA_PLAY_HEIGHT, MEDIA_PLAY_TOP, MEDIA_PLAY_CORNER, MEDIA_PAUSED_CORNER, MEDIA_PRESSED_CORNER,
+        MEDIA_PLAY_SYMBOL, MEDIA_NAV, MEDIA_NAV_SYMBOL, MEDIA_NAV_GAP, MEDIA_NAV_CENTER, MEDIA_WAVE_LENGTH,
+        MEDIA_WAVE_AMPLITUDE, MEDIA_WAVE_STROKE, MEDIA_WAVE_SPEED, MEDIA_TRACK, MEDIA_TRACK_ALPHA, MEDIA_THUMB_WIDTH,
+        MEDIA_THUMB_HEIGHT, MEDIA_ART_ALPHA, MEDIA_ART_CENTER_ALPHA, MEDIA_GROUND_TONE, MEDIA_LIGHT_TONE, MEDIA_ON_LIGHT_TONE, MEDIA_CHROMA,
+        MEDIA_GROUND_CHROMA,
+        MEDIA_FALLBACK, MEDIA_PRESS_LAYER,
         EDIT_BAR_CENTER, EDIT_BAR_HEIGHT, EDIT_BAR_START, EDIT_BAR_SYMBOL, EDIT_TITLE, EDIT_TITLE_TOP,
         EDIT_COLLAPSED_TITLE_START, EDIT_SUBTITLE, EDIT_TEXT_COLOR, EDIT_GRID_TOP, EDIT_GRID_PADDING, EDIT_GRID_CORNER,
         EDIT_GRID_STROKE, EDIT_GRID_FILL, EDIT_ACCENT, EDIT_ON_ACCENT, EDIT_TILE_GAP, EDIT_SELECTION_STROKE,
