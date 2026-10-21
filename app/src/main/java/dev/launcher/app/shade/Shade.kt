@@ -549,6 +549,20 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (i.getStringExtra("do") == "nc_expand") handler.post { if (panel === ncPanel) nc.expandList() }
                 // --es do qs_expand | qs_collapse: Android's shade's Quick Settings expanded or collapsed, as a fling would.
                 if (i.getStringExtra("do") == "qs_expand") handler.post { if (panel === shadePanel) shadeView.expandTo(true) }
+                // --es do qs_tiles --es list "app:COMPONENT,WIFI:w,..." : Android's shade's tiles set as listed (a control's name or
+                // an app's tile, ":w" two columns wide; "reset": a Pixel's own), to compare with a phone's own Quick Settings.
+                if (i.getStringExtra("do") == "qs_tiles") handler.post {
+                    val list = i.getStringExtra("list") ?: return@post
+                    if (list == "reset") dev.launcher.app.shade.qs.QsTileStore.reset(ctx)
+                    else dev.launcher.app.shade.qs.QsTileStore.set(ctx, list.split(",").mapNotNull { e ->
+                        val wide = e.endsWith(":w")
+                        val name = e.removeSuffix(":w")
+                        if (name.startsWith("app:")) dev.launcher.app.shade.qs.QsTiles.appTile(name.removePrefix("app:"), wide)
+                        else Control.entries.firstOrNull { it.name == name }?.let { dev.launcher.app.shade.qs.QsTiles.tileOf(it, wide) }
+                    })
+                    shadeView.designChanged()
+                    AppLog.log("[qs] test: the tiles are $list")
+                }
                 if (i.getStringExtra("do") == "qs_collapse") handler.post { if (panel === shadePanel) shadeView.expandTo(false) }
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
                 // --es do open [--es panel cc|nc], --es do close: a panel opened as a released pull opens it, and closed (a

@@ -417,7 +417,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                     mediaTarget != MediaBlock.Target.NONE -> Mode.MEDIA.also { media?.press(mediaTarget, true) }
                     t >= 0 -> Mode.TILE.also {
                         tile = t
-                        tiles?.press(t, true)
+                        tiles?.press(t, true, x, y)
                         postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
                     }
                     !stage2 && cards?.contains(x, y) == true -> Mode.CARD.also { cards?.press(x, y) }

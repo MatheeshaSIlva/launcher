@@ -102,6 +102,18 @@ object QsTokens {
     val BOUNCE = NumberKey("comp.qs.tile.bounce")
     val ICON_POP = NumberKey("comp.qs.tile.icon-pop")
     val TEXT_POP = NumberKey("comp.qs.tile.text-pop")
+    /** Material's press ripple (tiles, a tile's box, the footer's buttons): the content colour's share while pressed, the
+     *  circle's first size (a part of the target's longer side) and how far past the target's half diagonal it grows. */
+    val RIPPLE_ALPHA = NumberKey("comp.qs.ripple.alpha")
+    val RIPPLE_START = NumberKey("comp.qs.ripple.start")
+    val RIPPLE_EXTRA = NumberKey("comp.qs.ripple.extra")
+    /** Words that do not fit: the fade at their end, and the marquee (its speed a second, the wait before it, the rest
+     *  between passes, the gap before the words come round, as a part of the width). */
+    val LABEL_FADE = NumberKey("comp.qs.tile.label-fade")
+    val MARQUEE_SPEED = NumberKey("comp.qs.tile.marquee-speed")
+    val MARQUEE_DELAY = NumberKey("comp.qs.tile.marquee-delay")
+    val MARQUEE_REST = NumberKey("comp.qs.tile.marquee-rest")
+    val MARQUEE_SPACING = NumberKey("comp.qs.tile.marquee-spacing")
 
     // ---- Under the tiles: the build number, the page dots, the edit button.
     val BUILD = TextKey("comp.qs.build.text")
@@ -111,6 +123,7 @@ object QsTokens {
     /** A page's dot, and the current page's (a pill). */
     val DOT = NumberKey("comp.qs.dots.size")
     val DOT_ACTIVE = NumberKey("comp.qs.dots.active-width")
+    val DOT_GAP = NumberKey("comp.qs.dots.gap")
     val DOT_COLOR = ColorKey("comp.qs.dots.color")
     val DOT_ACTIVE_COLOR = ColorKey("comp.qs.dots.active-color")
     val EDIT_SYMBOL = NumberKey("comp.qs.edit.symbol")
@@ -121,6 +134,8 @@ object QsTokens {
     val FOOTER_MATERIAL = MaterialKey("comp.qs.footer.material")
     val FOOTER_SYMBOL = NumberKey("comp.qs.footer.symbol")
     val FOOTER_SYMBOL_COLOR = ColorKey("comp.qs.footer.symbol-color")
+    /** The user's button: the default avatar's colour. */
+    val FOOTER_USER_COLOR = ColorKey("comp.qs.footer.user-color")
     val POWER_MATERIAL = MaterialKey("comp.qs.footer.power-material")
     val POWER_SYMBOL_COLOR = ColorKey("comp.qs.footer.power-symbol-color")
     /** The footer row's centre above the screen's bottom edge, and the space between its buttons. */
@@ -187,6 +202,12 @@ object QsTokens {
     /** The round buttons' width beside Clear all, and the row's space under the last card. */
     val CLEAR_SIDE = NumberKey("comp.qs.clear.side-width")
     val CLEAR_GAP = NumberKey("comp.qs.clear.gap")
+    /** The buttons drawn inside the row (its height is their touch), the space between them, and their symbols. */
+    val CLEAR_INSET = NumberKey("comp.qs.clear.inset")
+    val CLEAR_SPACING = NumberKey("comp.qs.clear.spacing")
+    val CLEAR_SYMBOL = NumberKey("comp.qs.clear.symbol")
+    /** A pressed card's or footer button's ripple (the platform's highlight colour, whole). */
+    val CARD_RIPPLE = ColorKey("comp.qs.card.ripple")
 
     // ---- The edit page (Android 17's "Edit tiles": the current tiles to choose, rearrange and resize; the tiles to add by
     // category; Reset).
@@ -371,15 +392,15 @@ object QsTokens {
         BRIGHTNESS_SYMBOL, BRIGHTNESS_SYMBOL_OFF,
         TILES_TOP, QUICK_TOP, SQUISH, TILE_HEIGHT, TILE_GAP, TILE, TILE_ON, TILE_UNAVAILABLE, TILE_CORNER, TILE_ON_CORNER,
         BOX, BOX_CORNER, BOX_ON_CORNER, BOX_MATERIAL, TILE_INSET, TILE_TEXT_GAP, TILE_END, SYMBOL, LARGE_SYMBOL, SYMBOL_COLOR,
-        ON_SYMBOL_COLOR, LABEL, DETAIL, LABEL_COLOR, DETAIL_COLOR, ON_LABEL_COLOR, UNAVAILABLE_COLOR, BOUNCE, ICON_POP, TEXT_POP,
-        BUILD, BUILD_COLOR, BUILD_ROW, DOT, DOT_ACTIVE, DOT_COLOR, DOT_ACTIVE_COLOR, EDIT_SYMBOL, EDIT_COLOR,
-        FOOTER_BUTTON, FOOTER_MATERIAL, FOOTER_SYMBOL, FOOTER_SYMBOL_COLOR, POWER_MATERIAL, POWER_SYMBOL_COLOR, FOOTER_BOTTOM,
+        ON_SYMBOL_COLOR, LABEL, DETAIL, LABEL_COLOR, DETAIL_COLOR, ON_LABEL_COLOR, UNAVAILABLE_COLOR, BOUNCE, ICON_POP, TEXT_POP, RIPPLE_ALPHA, RIPPLE_START, RIPPLE_EXTRA, LABEL_FADE, MARQUEE_SPEED, MARQUEE_DELAY, MARQUEE_REST, MARQUEE_SPACING,
+        BUILD, BUILD_COLOR, BUILD_ROW, DOT, DOT_ACTIVE, DOT_GAP, DOT_COLOR, DOT_ACTIVE_COLOR, EDIT_SYMBOL, EDIT_COLOR,
+        FOOTER_BUTTON, FOOTER_MATERIAL, FOOTER_SYMBOL, FOOTER_SYMBOL_COLOR, FOOTER_USER_COLOR, POWER_MATERIAL, POWER_SYMBOL_COLOR, FOOTER_BOTTOM,
         FOOTER_GAP, FOOTER_PILL, FOOTER_PILL_TEXT, FOOTER_PILL_PADDING, FOOTER_PILL_GAP,
         CARDS_TOP, SHELF, SHELF_CORNER, SHELF_INSET, ACTION_COLOR, ACTION_TEXT, ACTIONS_HEIGHT, ACTION_INSET, ACTION_PADDING,
         ACTIONS_BOTTOM, TITLE_GAP, TEXT_GAP, CHIP_WIDTH, CHIP_HEIGHT, CARD, CARD_CORNER, JOINED_CORNER, JOINED_GAP,
         CARD_GAP, CARD_PADDING, CARD_ICON, ICON_FILL, ICON_COLOR, CARD_APP, CARD_TITLE, CARD_BODY, CARD_TITLE_COLOR,
         CARD_TEXT_COLOR, CHIP_FILL, CHIP_TEXT, SECTION, SECTION_COLOR, SECTION_HEIGHT, CLEAR_FILL, CLEAR_TEXT, CLEAR_TEXT_COLOR,
-        CLEAR_HEIGHT, CLEAR_SIDE, CLEAR_GAP,
+        CLEAR_HEIGHT, CLEAR_SIDE, CLEAR_GAP, CLEAR_INSET, CLEAR_SPACING, CLEAR_SYMBOL, CARD_RIPPLE,
     )
 
     val ALL: List<String> = KEYS.map { it.name }

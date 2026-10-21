@@ -1070,6 +1070,36 @@
    ],
    "src": "kit:Compose's HorizontalPager as Quick Settings use it (PagerDefaults.flingBehavior: spring, stiffness 400, no bounce)"
   },
+  "motion.qs.ripple": {
+   "bezier": [
+    0.4,
+    0,
+    0.2,
+    1
+   ],
+   "ms": 225,
+   "src": "kit:Compose's RippleAnimation: the ripple spreading from the finger to the target's middle in 225 ms (FastOutSlowIn)"
+  },
+  "motion.qs.ripple-in": {
+   "bezier": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "ms": 75,
+   "src": "kit:Compose's RippleAnimation: fading in over 75 ms (linear)"
+  },
+  "motion.qs.ripple-out": {
+   "bezier": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "ms": 150,
+   "src": "kit:Compose's RippleAnimation: fading out over 150 ms once grown and let go (linear)"
+  },
   "motion.qs.slider-icon": {
    "bezier": [
     0.4,

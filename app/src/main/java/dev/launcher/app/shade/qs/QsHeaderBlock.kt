@@ -31,6 +31,24 @@ internal class QsHeaderBlock(private val panel: QsPanel, private val ctx: Contex
     /** The time before the minute turned, fading out as the new one comes ([tick] 0 .. 1). */
     private var lastTime = ""
     private val tick = dev.launcher.app.motion.MotionValue(1f, 1000f, { panel.view.invalidate() })
+    private var lastDetail = ""
+
+    /** A data network's short name as Android's status bar and Mobile data tile give it (SettingsLib's MobileMappings). */
+    private fun networkName(t: Int): String = when (t) {
+        android.telephony.TelephonyManager.NETWORK_TYPE_NR -> "5G"
+        android.telephony.TelephonyManager.NETWORK_TYPE_LTE, android.telephony.TelephonyManager.NETWORK_TYPE_IWLAN -> "LTE"
+        android.telephony.TelephonyManager.NETWORK_TYPE_HSPAP -> "H+"
+        android.telephony.TelephonyManager.NETWORK_TYPE_HSDPA, android.telephony.TelephonyManager.NETWORK_TYPE_HSUPA,
+        android.telephony.TelephonyManager.NETWORK_TYPE_HSPA -> "H"
+        android.telephony.TelephonyManager.NETWORK_TYPE_UMTS, android.telephony.TelephonyManager.NETWORK_TYPE_TD_SCDMA,
+        android.telephony.TelephonyManager.NETWORK_TYPE_EVDO_0, android.telephony.TelephonyManager.NETWORK_TYPE_EVDO_A,
+        android.telephony.TelephonyManager.NETWORK_TYPE_EVDO_B, android.telephony.TelephonyManager.NETWORK_TYPE_EHRPD -> "3G"
+        android.telephony.TelephonyManager.NETWORK_TYPE_EDGE -> "E"
+        android.telephony.TelephonyManager.NETWORK_TYPE_GPRS -> "G"
+        android.telephony.TelephonyManager.NETWORK_TYPE_CDMA, android.telephony.TelephonyManager.NETWORK_TYPE_1xRTT -> "1X"
+        else -> ""
+    }
+
     /** The carrier's name arriving (it is read off this thread): it fades in. */
     private val carrierIn = dev.launcher.app.motion.MotionValue(0f, 1000f, { panel.view.invalidate() })
 
@@ -53,13 +71,15 @@ internal class QsHeaderBlock(private val panel: QsPanel, private val ctx: Contex
         // shown when it comes (it changes rarely: the last one meanwhile).
         val h = panel.host.thread()
         io.execute {
-            val name = try {
-                (ctx.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager).networkOperatorName ?: ""
-            } catch (_: Throwable) { "" }
+            val tm = ctx.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
+            val name = try { tm.networkOperatorName ?: "" } catch (_: Throwable) { "" }
+            // Mobile data's tile says the network too, as Android's ("T-Mobile, LTE"); the header the name alone.
+            val type = try { networkName(tm.dataNetworkType) } catch (_: Throwable) { "" }
+            val detail = listOf(name, type).filter { it.isNotEmpty() }.joinToString(", ")
             h.post {
+                if (detail != lastDetail) { lastDetail = detail; onCarrier(detail) }
                 if (name != carrier) {
                     carrier = name
-                    onCarrier(name)
                     // Arriving while it shows, it fades in; before, it is simply there.
                     if (panel.expandK > 0.5f) { carrierIn.snapTo(0f); carrierIn.animateTo(1f, dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.APPEAR_FADE)) }
                     else carrierIn.snapTo(1f)

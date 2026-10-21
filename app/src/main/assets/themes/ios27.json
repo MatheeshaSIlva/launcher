@@ -2887,6 +2887,11 @@
    "pt": 16,
    "src": "kit:AOSP core dimens.xml notification_2025_margin 16 dp"
   },
+  "comp.qs.card.ripple": {
+   "light": "#1f000000",
+   "dark": "#33ffffff",
+   "src": "kit:AOSP framework (Android 17, the emulator's framework.jar and framework-res.apk): a notification's background and the footer's buttons press with the platform ripple in colorControlHighlight (black at 12 % light, white at 20 % dark)"
+  },
   "comp.qs.card.text-color": {
    "ref": "component.notification.label-color",
    "src": "judged:the shared notification's words"
@@ -2940,9 +2945,21 @@
    "pt": 48,
    "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the notification footer's buttons 48 dp tall"
   },
+  "comp.qs.clear.inset": {
+   "pt": 4,
+   "src": "measured:Android 17 emulator's own shade (2026-10-22, 2.625 px a dp): the footer's 48 dp row holds buttons 40 dp tall, 4 dp in from its top and bottom (y 1336-1442 px, 18 dp under the last card)"
+  },
   "comp.qs.clear.side-width": {
    "pt": 60,
    "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the history and settings buttons 60 dp wide"
+  },
+  "comp.qs.clear.spacing": {
+   "pt": 8,
+   "src": "measured:Android 17 emulator's own shade (2026-10-22, 2.625 px a dp): Clear all 8 dp from the round buttons (21 px)"
+  },
+  "comp.qs.clear.symbol": {
+   "pt": 20,
+   "src": "kit:AOSP notification footer: the history and settings symbols 20 dp"
   },
   "comp.qs.clear.text": {
    "ref": "component.button.text",
@@ -2957,12 +2974,16 @@
    "src": "judged:the controls' words"
   },
   "comp.qs.dots.active-width": {
-   "pt": 16,
-   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): qs_page_indicator_width 16 dp (the current page a pill)"
+   "pt": 12,
+   "src": "measured:Android 17 emulator's own Quick Settings (2026-10-21, 2.625 px a dp): the current page a pill 32 x 16 px (12 x 6 dp; AOSP's qs_page_indicator_width 16 dp is the old page indicator's)"
   },
   "comp.qs.dots.color": {
    "ref": "component.control.detail-color",
    "src": "judged:the controls' secondary words"
+  },
+  "comp.qs.dots.gap": {
+   "pt": 4,
+   "src": "measured:Android 17 emulator's own Quick Settings (2026-10-21, 2.625 px a dp): 10 px between the dots"
   },
   "comp.qs.dots.size": {
    "pt": 6,
@@ -3353,6 +3374,10 @@
    "ref": "component.round-button.symbol-color",
    "src": "judged:the shared round button's symbol"
   },
+  "comp.qs.footer.user-color": {
+   "ref": "component.round-button.symbol-color",
+   "src": "judged:the shared round button's symbol"
+  },
   "comp.qs.header.carrier": {
    "text": {
     "family": "text",
@@ -3639,6 +3664,18 @@
    "pt": 2,
    "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): pip_umo_seekbar_progress_stroke_width 2 dp"
   },
+  "comp.qs.ripple.alpha": {
+   "factor": 0.1,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): tiles, the footer's buttons and the edit page press with Compose's ripple(), Material 3's pressed alpha 0.10 of the content colour"
+  },
+  "comp.qs.ripple.extra": {
+   "pt": 10,
+   "src": "kit:Compose's RippleAnimation: a bounded ripple grows to the target's half diagonal and 10 dp"
+  },
+  "comp.qs.ripple.start": {
+   "factor": 0.3,
+   "src": "kit:Compose's RippleAnimation: the circle starts at 0.3 of the target's longer side"
+  },
   "comp.qs.section.color": {
    "ref": "component.notification.label-color",
    "src": "judged:the shared notification's words"
@@ -3725,9 +3762,29 @@
    "ref": "component.control.label-color",
    "src": "judged:the shared control's name"
   },
+  "comp.qs.tile.label-fade": {
+   "pt": 14,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): CommonTileDefaults.TileLabelBlurWidth 14 dp (the fade measured 42 px)"
+  },
   "comp.qs.tile.large-symbol": {
    "pt": 24,
    "src": "judged:the shared control's symbol size"
+  },
+  "comp.qs.tile.marquee-delay": {
+   "factor": 2000,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): TileLabel's basicMarquee waits 2000 ms (ms)"
+  },
+  "comp.qs.tile.marquee-rest": {
+   "factor": 1200,
+   "src": "kit:Compose's basicMarquee: 1200 ms between passes (ms)"
+  },
+  "comp.qs.tile.marquee-spacing": {
+   "factor": 0.3333,
+   "src": "kit:Compose's basicMarquee: the words come round a third of the width behind themselves"
+  },
+  "comp.qs.tile.marquee-speed": {
+   "pt": 30,
+   "src": "kit:Compose's basicMarquee (TileLabel): 30 dp a second"
   },
   "comp.qs.tile.material": {
    "ref": "component.control.material",

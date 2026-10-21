@@ -10,6 +10,10 @@ as string resources) are resolved from the APK's resource table; a colour that n
 NAME: a drawable (e.g. vd_wifi); OUT: the file's name in CACHE_DIR/apk/ (NAME's by default); SKIP: elements (by their
 android:name) left out with what they hold (an animated icon's base drawn as one of its states: Bluetooth's without the
 earbuds' dots). Writes CACHE_DIR/apk/<OUT>.xml. The APK is data: parsed through aapt2, never run.
+
+An animated vector (Android 17's Quick Settings icons: qs_flashlight_icon_off...) is compiled into pieces: its vector and
+each target's animator are files of their own, named by resource id. They are put back inline (aapt:attr), as the source
+had them, so build_icon_set.py can take the animation's first or last frame.
 """
 import os
 import re
@@ -27,6 +31,20 @@ def aapt2():
     tools = os.path.join(sdk, 'build-tools')
     best = sorted(os.listdir(tools))[-1]
     return os.path.join(tools, best, 'aapt2.exe' if os.name == 'nt' else 'aapt2')
+
+
+def files(exe, apk):
+    """Resource id -> the file it is (res/drawable/$qs_flashlight_icon_off__0.xml ...)."""
+    out = subprocess.run([exe, 'dump', 'resources', apk], capture_output=True, text=True, errors='replace').stdout
+    res = {}
+    lines = out.replace('\r', '').split('\n')
+    for i, l in enumerate(lines):
+        m = re.match(r'\s+resource (0x[0-9a-f]+) \S+', l)
+        if m and i + 1 < len(lines):
+            f = re.match(r'\s+\(\S*\) \(file\) (\S+)', lines[i + 1])
+            if f:
+                res[m.group(1)] = f.group(1)
+    return res
 
 
 def strings(exe, apk):
@@ -56,8 +74,8 @@ def value(attr, v, strs):
     return v
 
 
-def convert(exe, apk, name, strs, skip=()):
-    out = subprocess.run([exe, 'dump', 'xmltree', apk, '--file', f'res/drawable/{name}.xml'], capture_output=True, text=True,
+def convert(exe, apk, name, strs, skip=(), path=None):
+    out = subprocess.run([exe, 'dump', 'xmltree', apk, '--file', path or f'res/drawable/{name}.xml'], capture_output=True, text=True,
                          errors='replace').stdout.replace('\r', '')
     lines = out.split('\n')
     stack = []        # (indent, tag) of the elements open
@@ -105,11 +123,41 @@ def convert(exe, apk, name, strs, skip=()):
         if m and open_tag[0] is not None:
             attr = m.group(1)
             v = value(attr, m.group(2), strs)
-            if attr in ('name', 'tint') or v.startswith('?') or v.startswith('@'):
+            # (An animated vector's vector and animators are kept as references: put back inline after.)
+            if attr in ('drawable', 'animation') and v.startswith('@0x'):
+                open_tag[0] += f' android:{attr}="{v}"'
+                continue
+            # (Names kept: an animated vector's targets name its groups and paths.)
+            if attr == 'name':
+                open_tag[0] += f' android:name="{v}"'
+                continue
+            if attr == 'tint' or v.startswith('?') or v.startswith('@'):
                 continue
             open_tag[0] += f' android:{attr}="{v}"'
     close_to(-1)
     return '\n'.join(xml) + '\n'
+
+
+def inline_refs(exe, apk, xml, strs, fls, depth=0):
+    """[xml] with each reference to another compiled file (an animated vector's vector, a target's animator) put inline."""
+    import xml.etree.ElementTree as ET
+    ET.register_namespace('android', A)
+    ET.register_namespace('aapt', 'http://schemas.android.com/aapt')
+    root = ET.fromstring(xml.split('\n', 1)[1] if xml.startswith('<?xml') else xml)
+    for el in root.iter():
+        for attr in ('drawable', 'animation'):
+            key = '{%s}%s' % (A, attr)
+            ref = el.get(key)
+            if not ref or not ref.startswith('@0x'):
+                continue
+            path = fls.get(ref[1:])
+            if not path or depth > 3:
+                continue
+            sub = inline_refs(exe, apk, convert(exe, apk, None, strs, path=path), strs, fls, depth + 1)
+            del el.attrib[key]
+            holder = ET.SubElement(el, '{http://schemas.android.com/aapt}attr', {'name': 'android:' + attr})
+            holder.append(ET.fromstring(sub.split('\n', 1)[1] if sub.startswith('<?xml') else sub))
+    return '<?xml version="1.0" encoding="utf-8"?>\n' + ET.tostring(root, encoding='unicode') + '\n'
 
 
 def main():
@@ -118,6 +166,7 @@ def main():
     apk, cache = sys.argv[1], sys.argv[2]
     exe = aapt2()
     strs = strings(exe, apk)
+    fls = files(exe, apk)
     os.makedirs(os.path.join(cache, 'apk'), exist_ok=True)
     for arg in sys.argv[3:]:
         parts = arg.split('/')
@@ -125,6 +174,8 @@ def main():
         out = parts[1] if len(parts) > 1 and parts[1] else name
         skip = tuple(parts[2].split('+')) if len(parts) > 2 else ()
         xml = convert(exe, apk, name, strs, skip)
+        if '@0x' in xml:
+            xml = inline_refs(exe, apk, xml, strs, fls)
         with open(os.path.join(cache, 'apk', out + '.xml'), 'w', encoding='utf-8', newline='\n') as f:
             f.write(xml)
         print(out, len(xml))

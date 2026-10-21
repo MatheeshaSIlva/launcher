@@ -878,6 +878,12 @@ copy it wholesale — port the working pieces cleanly. File map:
   shows a dark grey until it comes (over 2 s on a busy emulator): Android's shade opened grey and brown. Drawn as they are
   they lie over what really is under them (`CcSurfaces.plainDirect`). And a clip or a shape with its top corners alone
   round goes through the GPU's stencil at every frame; one radius with the other corners off the screen is analytic.
+- **The Android 17 emulator has no Google Sans**: its Pixel overlay names `google-sans` and `google-sans-text`, which the
+  image does not carry (`cmd font dump`), so the emulator's own shade draws plain Roboto, and a view style whose weight
+  comes from a font family (`variable-title-small-emphasized`) draws regular. Against it compare places, sizes and
+  colours, never the width of words or a family-named style's weight (ours draws Google Sans Flex, as a Pixel). And
+  compare every state of an element, not its first look: an active two-target tile's corners differed from Android's for
+  days because only off tiles were measured (docs/SHADE_PIXEL_EVALUATION.md, stage 8).
 - **A Kotlin lambda taking an `Int` boxes it at every call** (`(Int) -> Boolean` called per pixel: ~40 MB of Integers per
   glass clock build, a GC at every minute). Hot loops take arrays or plain parameters.
 - **A GPU bitmap's `copy(ARGB_8888)` reads the whole image back on the render thread** (14-32 ms for home's picture, every

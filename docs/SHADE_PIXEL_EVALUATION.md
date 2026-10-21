@@ -604,8 +604,10 @@ I couldn't scroll down the notifications ... not sure if the shade background co
   went through the GPU's stencil), and the clips around the scrim and the cards have one radius (their bottom corners
   below the screen). The emulator's frame times swing by 2x between identical runs: the frame pacing is the S24's to judge.
 - The corners: every tile, box, slider, button, card and the media card measured against the emulator's own at full
-  resolution: the same. None of Android 17's buttons change shape when pressed (its footer, tiles and cards checked in
-  SystemUIGoogle). Not reproduced; the S24's are to be shown.
+  resolution, and called the same. **Wrong** (Matheesha's S24 screenshot, the same day): an active two-target tile (Wi-Fi,
+  Mobile data) stayed a capsule with only its box rounded; Android's is a 24 dp rounded rectangle whenever the tile is
+  active, whatever lights up (TileDefaults.tileRadius). The comparison looked at off tiles and at one-target tiles only.
+  Fixed in stage 8, and the whole shade compared again region by region.
 
 ## References
 
@@ -624,3 +626,47 @@ card swipes aside as Android's (remedia's SwipeToReveal, measured): it keeps its
 right, what is on it sliding left under that edge, uncovering a 48 dp round settings button in surface (onSurface symbol)
 centred in the room; it stays aside past half the way or flung, a tap on the card or a swipe back returns it, and it goes
 back when the panel changes stage or closes (`motion.qs.media-reveal`). The button opens Android's media controls settings.
+
+**Stage 8, everything compared again (2026-10-22).** After the missed corners, the emulator's own shade and ours were put
+side by side with the same tiles (`TEST_SHADE --es do qs_tiles`), region by region at full resolution: the first stage,
+Quick Settings, the edit page, the notifications, light and dark, and the dex read for each difference. Fixed:
+
+- An active tile's corners follow its state, the box concentric in it (above).
+- Presses: Android's tiles (and a two-target tile's box on its own), the footer's buttons and the edit page's tiles press
+  with Compose's `ripple()` (TileKt, CommonTileKt, EditTileKt, ToolbarKt); ours had none, and our footer buttons shrank,
+  which Android's never do. `shade/qs/Ripple` is Compose's RippleAnimation: the content colour at 10 % (Material 3's
+  pressed alpha), a circle from 0.3 of the target's longer side at the finger to its half diagonal and 10 dp at its
+  middle in 225 ms (FastOutSlowIn), in over 75 ms, out over 150 ms once grown and let go; a new press leaves the last one
+  fading (`motion.qs.ripple`, `-in`, `-out`; `comp.qs.ripple.*`). Notification cards and the footer's buttons under them
+  are framework Views: the platform ripple in `colorControlHighlight` (`comp.qs.card.ripple`) in place of our white press
+  layer.
+- Modes keeps its filled symbol while off and says nothing more ("Modes" alone), as Android 17's tile (the pixel set's
+  `moon.off`, AOSP's outline, is gone).
+- The notifications' footer: a 48 dp row of 40 dp buttons inset 4 dp (they were 48 dp tall, 4 dp too close to the last
+  card); Clear all in `variable-title-medium-emphasized` at 16 sp (TextAppearance.NotificationFooterButton; it was
+  labelLarge 14); the chevron's pill in the notification's protection colour, surfaceEffect3 (primary at 15 % in light,
+  accent1_100 at 10 % in dark: Notification.Builder.bindExpandButton), not surfaceContainerHighest; a collapsed card's
+  text runs under the chevron's column to the card's padding, as Android's (ours stopped at the chevron).
+- Notification text: the framework's TextAppearances (Notification, .Title, .Info) set no letter spacing (ours had
+  Material's 0.25 to 0.4); the title is `variable-title-small-emphasized`, emphasized on a Pixel.
+
+Found on the way: **the emulator has no Google Sans.** Its Pixel overlay names `google-sans` and `google-sans-text`
+(PixelConfigOverlayCommon), which the image does not carry (`cmd font dump`: Roboto, Roboto Flex, Source Sans Pro), so
+the emulator's own shade draws its text in plain Roboto (spurred G, straight-tailed y), and view text that takes its
+weight from a font family (`variable-title-small-emphasized`) comes out regular. Text widths and weights measured
+against the emulator's own are Roboto's: compare positions, sizes and colours there, never the width of words or the
+weight of a family-named style (ours draws Google Sans Flex, as a Pixel).
+
+Still different, and why:
+
+- The status bar's icons: Android's header and bar show the ringer (vibrate, silent) and Do Not Disturb by the signal;
+  ours has only the iOS status bar layout (Do Not Disturb by the time, no ringer). A Pixel status bar is that element's
+  own round.
+- Screen record: Android's default tiles include it; we have no such control (SystemUI's own tile runs its own
+  MediaProjection dialog, which an app cannot open).
+- Colours on the emulator: Android's palette there comes from the preset seed the test gives it, ours (Auto) from the
+  test wallpaper, a near-grey that Material's scoring answers with Google blue: ours is the brighter blue. With the
+  palette following the wallpaper (a real phone), the 0-3 levels above hold.
+- The flashlight on the emulator: Android shows the tile unavailable, ours shows it off (why not looked into yet; the
+  S24 has a torch).
+

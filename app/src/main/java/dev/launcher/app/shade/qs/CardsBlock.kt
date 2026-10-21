@@ -58,12 +58,12 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         var expanded = false
     }
 
-    /** A row's motion: where it is (content px), how present, how far swiped, how pressed. */
+    /** A row's motion: where it is (content px), how present, how far swiped, its press's ripple. */
     private inner class Anim {
         val y = MotionValue(0f, 2f, { panel.view.invalidate() })
         val alpha = MotionValue(0f, 1000f, { panel.view.invalidate() })
         val swipe = MotionValue(0f, 2f, { panel.view.invalidate() })
-        val press = MotionValue(0f, 1000f, { panel.view.invalidate() })
+        val ripple = Ripple { panel.view.invalidate() }
         var height = 0f
         var leaving: Row? = null
     }
@@ -325,16 +325,18 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val top = if (row.first) big else joined
         val bottom = if (row.last) big else joined
         radii[0] = top; radii[1] = top; radii[2] = bottom; radii[3] = bottom
-        val press = a.press.value.coerceIn(0f, 1f)
         c.save()
         c.translate(r.left, r.top)
-        panel.surfaces.draw(c, Design.material(QsTokens.CARD), r.width(), r.height(), big, r.left, r.top, 1f, alpha, press, radii = radii)
+        panel.surfaces.draw(c, Design.material(QsTokens.CARD), r.width(), r.height(), big, r.left, r.top, 1f, alpha, radii = radii)
+        // (Pressed: the platform's ripple, as a notification's background has, in the theme's highlight colour.)
+        if (a.ripple.active) a.ripple.draw(c, r.width(), r.height(), big, Design.color(QsTokens.CARD_RIPPLE), alpha, u, share = 1f, radii = radii)
         c.restore()
         val pad = Design.pt(QsTokens.CARD_PADDING, u)
         val icon = Design.pt(QsTokens.CARD_ICON, u)
-        // The app's own icon in a circle (Android 16's notifications show it, not the small symbol); without one, the small
-        // symbol on a circle of the palette's colour.
-        val app = appIcon(item.pkg)
+        // The app's own icon in a circle (Android 16's notifications show it, not the small symbol), except a system app's (Play
+        // Protect's shield, measured on the emulator's own): its small symbol on a circle of the notification's colour; without
+        // an icon, the small symbol on the palette's colour.
+        val app = if (item.pkg in systemApps) null else appIcon(item.pkg)
         if (app != null) {
             val cx = r.left + pad + icon / 2f
             val cy = r.top + pad + icon / 2f
@@ -347,7 +349,8 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             app.draw(c)
             c.restore()
         } else {
-            fill.color = faded(Design.color(QsTokens.ICON_FILL), alpha)
+            val own = if (item.pkg in systemApps && item.color != 0) item.color or (0xFF shl 24) else 0
+            fill.color = faded(if (own != 0) own else Design.color(QsTokens.ICON_FILL), alpha)
             c.drawCircle(r.left + pad + icon / 2f, r.top + pad + icon / 2f, icon / 2f, fill)
         }
         if (app == null) smallIcon(item)?.let { d ->
@@ -409,7 +412,8 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             if (actionsOf(item).isNotEmpty() && !panel.host.locked) drawActions(c, item, r, y, alpha)
         } else {
             val text = item.text?.toString()?.replace('\n', ' ')
-            if (!text.isNullOrBlank()) c.drawText(ellipsize(text, body, maxW), tx, baselineIn(body, y, bl), body)
+            // (Collapsed, the text runs under the chevron's column to the card's padding, as Android's.)
+            if (!text.isNullOrBlank()) c.drawText(ellipsize(text, body, r.right - pad - tx), tx, baselineIn(body, y, bl), body)
         }
     }
 
@@ -492,16 +496,20 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     private val footerSettings = RectF()
 
     private fun drawFooter(c: Canvas, r: RectF, a: Float) {
-        val h = r.height()
+        // (The row is Android's 48 dp of touch; its buttons are drawn inside it, inset top and bottom.)
+        val inset = Design.pt(QsTokens.CLEAR_INSET, u)
+        val top = r.top + inset
+        val bottom = r.bottom - inset
+        val h = bottom - top
         val side = Design.pt(QsTokens.CLEAR_SIDE, u)
-        val gap = 8f * u
-        footerHistory.set(r.left, r.top, r.left + side, r.bottom)
-        footerSettings.set(r.right - side, r.top, r.right, r.bottom)
+        val gap = Design.pt(QsTokens.CLEAR_SPACING, u)
+        footerHistory.set(r.left, top, r.left + side, bottom)
+        footerSettings.set(r.right - side, top, r.right, bottom)
         // Clear all between them while anything can go, growing from its middle as it comes.
         val k = clearAll.value.coerceIn(0f, 1f)
         val cx = (footerHistory.right + footerSettings.left) / 2f
         val half = (footerSettings.left - footerHistory.right) / 2f - gap
-        if (k > 0.003f) footerClear.set(cx - half * (0.7f + 0.3f * k), r.top, cx + half * (0.7f + 0.3f * k), r.bottom) else footerClear.setEmpty()
+        if (k > 0.003f) footerClear.set(cx - half * (0.7f + 0.3f * k), top, cx + half * (0.7f + 0.3f * k), bottom) else footerClear.setEmpty()
         fill.color = faded(Design.color(QsTokens.CLEAR_FILL), a)
         c.drawRoundRect(footerHistory, h / 2f, h / 2f, fill)
         c.drawRoundRect(footerSettings, h / 2f, h / 2f, fill)
@@ -509,8 +517,19 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             fill.color = faded(Design.color(QsTokens.CLEAR_FILL), a * k)
             c.drawRoundRect(footerClear, h / 2f, h / 2f, fill)
         }
+        // Pressed: the platform's ripple over the button.
+        val rc = Design.color(QsTokens.CARD_RIPPLE)
+        for (b in FooterButton.entries) {
+            val rp = footerRipples.getValue(b)
+            val rect = footerRect(b)
+            if (!rp.active || rect.isEmpty) continue
+            c.save()
+            c.translate(rect.left, rect.top)
+            rp.draw(c, rect.width(), rect.height(), h / 2f, rc, a, u, share = 1f)
+            c.restore()
+        }
         val col = faded(Design.color(QsTokens.CLEAR_TEXT_COLOR), a)
-        val s = 20f * u
+        val s = Design.pt(QsTokens.CLEAR_SYMBOL, u)
         panel.glyphs.draw(c, R.drawable.sym_history, footerHistory.centerX(), footerHistory.centerY(), s, col)
         panel.glyphs.draw(c, R.drawable.sym_notification_settings, footerSettings.centerX(), footerSettings.centerY(), s, col)
         if (footerClear.isEmpty) return
@@ -547,6 +566,9 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         return d
     }
 
+    /** Apps that came with the phone (their notifications keep the small symbol, as Android's). */
+    private val systemApps = HashSet<String>()
+
     private fun smallIcon(item: Notifs.Item): Drawable? = icons[item.key + "|" + item.postTime]
 
     private fun loadIcons() {
@@ -556,7 +578,12 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val h = panel.host.thread()
         io.execute {
             val got = want.associate { it.key + "|" + it.postTime to (try { it.smallIcon?.loadDrawable(ctx)?.mutate() } catch (_: Throwable) { null }) }
+            // Which apps came with the phone (asked here, off the drawing thread: a call into the package manager).
+            val system = want.map { it.pkg }.distinct().filter { p ->
+                try { (ctx.packageManager.getApplicationInfo(p, 0).flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0 } catch (_: Throwable) { false }
+            }
             h.post {
+                systemApps.addAll(system)
                 icons.putAll(got)
                 if (icons.size > 200) icons.keys.retainAll(cards.flatMap { c -> c.items.map { it.key + "|" + it.postTime } }.toSet())
                 panel.view.invalidate()
@@ -581,17 +608,44 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
 
     private var pressed: Row? = null
 
+    private enum class FooterButton { HISTORY, CLEAR, SETTINGS }
+    private val footerRipples = FooterButton.entries.associateWith { Ripple { panel.view.invalidate() } }
+    private var pressedFooter: FooterButton? = null
+
+    private fun footerRect(b: FooterButton) = when (b) {
+        FooterButton.HISTORY -> footerHistory
+        FooterButton.CLEAR -> footerClear
+        FooterButton.SETTINGS -> footerSettings
+    }
+
     /** A finger down on a card: it darkens a little while held (Android's ripple, as the iOS platters press). */
+    /** A finger down at ([x], [y]): the platform's ripple spreads from it over the card or footer button under it. */
     fun press(x: Float, y: Float) {
-        val row = rowAt(x, y)?.takeIf { it.kind != Kind.HEADING && it.kind != Kind.FOOTER } ?: return
+        val row = rowAt(x, y)?.takeIf { it.kind != Kind.HEADING } ?: return
+        if (row.kind == Kind.FOOTER) {
+            val b = when {
+                !footerClear.isEmpty && clearAll.target > 0.5f && footerClear.contains(x, y) -> FooterButton.CLEAR
+                footerHistory.contains(x, y) -> FooterButton.HISTORY
+                footerSettings.contains(x, y) -> FooterButton.SETTINGS
+                else -> return
+            }
+            val rect = footerRect(b)
+            pressedFooter = b
+            footerRipples.getValue(b).press(x - rect.left, y - rect.top)
+            return
+        }
+        val a = anims[row.key] ?: return
         pressed = row
-        anims[row.key]?.press?.animateTo(1f, Motion.role(MotionTokens.PRESS_IN))
+        place(row, a, r)
+        a.ripple.press(x - r.left, y - r.top)
     }
 
     fun release() {
+        pressedFooter?.let { footerRipples.getValue(it).release() }
+        pressedFooter = null
         val row = pressed ?: return
         pressed = null
-        anims[row.key]?.press?.animateTo(0f, Motion.role(MotionTokens.PRESS_OUT))
+        anims[row.key]?.ripple?.release()
     }
 
     /** The list has been scrolled (a drag down scrolls it back before it expands Quick Settings). */

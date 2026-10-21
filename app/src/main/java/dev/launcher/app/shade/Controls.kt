@@ -118,9 +118,15 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
     var rotationLock = false; private set
     var silent = false; private set
     var torch = false; private set
+    /** The torch cannot be used now (the camera has it): Android's Flashlight tile shows unavailable. */
+    var torchUnavailable = false; private set
+    /** The phone has a torch at all (else no Flashlight tile). */
+    val hasTorch: Boolean get() = torchId != null || !started
     var dnd = false; private set
     var darkMode = false; private set
     var lowPower = false; private set
+    /** Plugged in (Android's Battery Saver tile is unavailable meanwhile). */
+    var plugged = false; private set
     /** Brightness as the slider shows it (0..1, perceptual), and media volume (0..1). */
     var brightness = 0.5f; private set
     var volume = 0.5f; private set
@@ -179,6 +185,9 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
         }
         darkMode = (ctx.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         lowPower = try { ctx.getSystemService(PowerManager::class.java).isPowerSaveMode } catch (_: Throwable) { false }
+        plugged = try {
+            (ctx.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))?.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+        } catch (_: Throwable) { false }
         val nfcAdapter = try { android.nfc.NfcAdapter.getDefaultAdapter(ctx) } catch (_: Throwable) { null }
         hasNfc = nfcAdapter != null
         nfc = try { nfcAdapter?.isEnabled == true } catch (_: Throwable) { false }
@@ -292,7 +301,11 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
 
     private val torchCb = object : CameraManager.TorchCallback() {
         override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
-            if (cameraId == torchId) { torch = enabled; changed() }
+            if (cameraId == torchId) { torch = enabled; torchUnavailable = false; changed() }
+        }
+        // (The camera in use, or no torch the system will drive: Android's Flashlight tile is unavailable meanwhile.)
+        override fun onTorchModeUnavailable(cameraId: String) {
+            if (cameraId == torchId) { torchUnavailable = true; changed() }
         }
     }
 
@@ -320,6 +333,8 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
             addAction("android.media.VOLUME_CHANGED_ACTION")
             addAction(NotificationManager.ACTION_INTERRUPTION_FILTER_CHANGED)
             addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+            addAction(Intent.ACTION_POWER_CONNECTED)
+            addAction(Intent.ACTION_POWER_DISCONNECTED)
             addAction(LocationManager.MODE_CHANGED_ACTION)
             addAction("android.nfc.action.ADAPTER_STATE_CHANGED")
             addAction(Intent.ACTION_CONFIGURATION_CHANGED)
@@ -543,7 +558,7 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
     /** Whether a control can work on this phone at all (no NFC chip: no NFC control). */
     fun available(c: Control): Boolean = when (c) {
         Control.NFC -> hasNfc
-        Control.FLASHLIGHT -> torchId != null || !started
+        Control.FLASHLIGHT -> (torchId != null || !started) && !torchUnavailable
         // The app-backed controls only where such an app is installed (asked of the package manager once per opening of a
         // panel, [readAll]: drawing asks at every frame).
         Control.QUICK_SHARE, Control.VOICE_MEMO, Control.RECOGNIZE_MUSIC, Control.TRANSLATE, Control.MAGNIFIER, Control.WALLET,

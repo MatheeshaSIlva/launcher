@@ -30,10 +30,11 @@ internal class QsFooterBlock(private val panel: QsPanel, private val ctx: Contex
     private val build = "${Build.VERSION.RELEASE} (${Build.ID})"
 
     private enum class Button(val symbol: Int) {
-        PILL(R.drawable.sym_qs_info), USER(R.drawable.sym_qs_user), SETTINGS(R.drawable.sym_qs_settings), POWER(R.drawable.sym_qs_power),
+        PILL(R.drawable.sym_qs_info), USER(R.drawable.sym_qs_user_avatar), SETTINGS(R.drawable.sym_qs_settings), POWER(R.drawable.sym_qs_power),
         EDIT(R.drawable.sym_qs_edit)
     }
-    private val presses = Button.entries.associateWith { MotionValue(0f, 1000f, { panel.view.invalidate() }) }
+    /** Each button's press: Material's ripple from the finger, as Android's (its buttons keep their size). */
+    private val ripples = Button.entries.associateWith { Ripple { panel.view.invalidate() } }
 
     /** Apps running in the foreground (Android's "N apps are active"), read through the shell when the panel opens. */
     private var activeApps = 0
@@ -98,7 +99,8 @@ internal class QsFooterBlock(private val panel: QsPanel, private val ctx: Contex
             // The current page's dot a pill, growing and shrinking as the pages slide.
             val d = Design.pt(QsTokens.DOT, u)
             val pill = Design.pt(QsTokens.DOT_ACTIVE, u)
-            val total = (pages - 1) * (d + d) + pill
+            val gap = Design.pt(QsTokens.DOT_GAP, u)
+            val total = (pages - 1) * (d + gap) + pill
             var x = (panel.side + rowRight()) / 2f - total / 2f
             val cy = top + rowHeight / 2f
             for (i in 0 until pages) {
@@ -107,12 +109,15 @@ internal class QsFooterBlock(private val panel: QsPanel, private val ctx: Contex
                 dot.color = faded(mix(Design.color(QsTokens.DOT_COLOR), Design.color(QsTokens.DOT_ACTIVE_COLOR), k), a)
                 r.set(x, cy - d / 2f, x + w, cy + d / 2f)
                 c.drawRoundRect(r, d / 2f, d / 2f, dot)
-                x += w + d
+                x += w + gap
             }
         }
         editPlace(r)
-        val s = 1f - 0.08f * presses.getValue(Button.EDIT).value
-        panel.glyphs.draw(c, Button.EDIT.symbol, r.centerX(), r.centerY(), Design.pt(QsTokens.EDIT_SYMBOL, u) * s, faded(Design.color(QsTokens.EDIT_COLOR), a))
+        val editCol = Design.color(QsTokens.EDIT_COLOR)
+        ripples.getValue(Button.EDIT).let { rp ->
+            if (rp.active) { c.save(); c.translate(r.left, r.top); rp.draw(c, r.width(), r.height(), r.height() / 2f, editCol, a, u); c.restore() }
+        }
+        panel.glyphs.draw(c, Button.EDIT.symbol, r.centerX(), r.centerY(), Design.pt(QsTokens.EDIT_SYMBOL, u), faded(editCol, a))
     }
 
     // ------------------------------------------------------------------ the footer's actions
@@ -156,13 +161,13 @@ internal class QsFooterBlock(private val panel: QsPanel, private val ctx: Contex
 
     fun press(x: Float, y: Float) {
         pressed = buttonAt(x, y)
-        pressed?.let { presses.getValue(it).animateTo(1f, Motion.role(MotionTokens.PRESS_IN)) }
+        pressed?.let { b -> place(b, r); ripples.getValue(b).press(x - r.left, y - r.top) }
     }
 
     fun release(tap: Boolean) {
         val b = pressed ?: return
         pressed = null
-        presses.getValue(b).animateTo(0f, Motion.role(MotionTokens.PRESS_OUT))
+        ripples.getValue(b).release()
         if (!tap) return
         panel.view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
         when (b) {
@@ -180,19 +185,20 @@ internal class QsFooterBlock(private val panel: QsPanel, private val ctx: Contex
         for (b in listOf(Button.PILL, Button.USER, Button.SETTINGS, Button.POWER)) {
             if (!place(b, r)) continue
             val a = if (b == Button.PILL) a * pillIn.value.coerceIn(0f, 1f) else a
-            val press = presses.getValue(b).value
             val power = b == Button.POWER
-            val s = 1f - 0.06f * press
+            val content = Design.color(if (power) QsTokens.POWER_SYMBOL_COLOR else QsTokens.FOOTER_SYMBOL_COLOR)
             c.save()
-            c.scale(s, s, r.centerX(), r.centerY())
             c.translate(r.left, r.top)
             val mat = when (b) { Button.POWER -> QsTokens.POWER_MATERIAL; Button.PILL -> QsTokens.FOOTER_PILL; else -> QsTokens.FOOTER_MATERIAL }
-            panel.surfaces.draw(c, Design.material(mat), r.width(), r.height(), r.height() / 2f, r.left, r.top, s, a, press)
+            panel.surfaces.draw(c, Design.material(mat), r.width(), r.height(), r.height() / 2f, r.left, r.top, 1f, a)
+            ripples.getValue(b).let { if (it.active) it.draw(c, r.width(), r.height(), r.height() / 2f, content, a, u) }
             c.restore()
-            val symCol = faded(Design.color(if (power) QsTokens.POWER_SYMBOL_COLOR else QsTokens.FOOTER_SYMBOL_COLOR), a)
+            val symCol = faded(content, a)
             val sym = Design.pt(QsTokens.FOOTER_SYMBOL, u)
             if (b != Button.PILL) {
-                panel.glyphs.draw(c, b.symbol, r.centerX(), r.centerY(), sym * s, symCol)
+                // (The user's button: Android's default avatar in its own colour, primary on a Pixel.)
+                val col = if (b == Button.USER) faded(Design.color(QsTokens.FOOTER_USER_COLOR), a) else symCol
+                panel.glyphs.draw(c, b.symbol, r.centerX(), r.centerY(), sym, col)
                 continue
             }
             // "N apps are active": the info symbol 20 dp in, the words 14 dp after it, a chevron 20 dp from the end.

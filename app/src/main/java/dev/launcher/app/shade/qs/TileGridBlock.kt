@@ -75,7 +75,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         fullTop = panel.barHeight + Design.pt(if (panel.split) QsTokens.LAND_TILES_TOP else QsTokens.TILES_TOP, u)
         // The person's own (the edit page's), less what this phone cannot have (a flashlight; an app's tile whose app is gone).
         tiles = QsTileStore.tiles(panel.view.context).filter {
-            (it.control != Control.FLASHLIGHT || panel.host.state.available(it.control)) &&
+            (it.control != Control.FLASHLIGHT || panel.host.state.hasTorch) &&
                 (it.tile == null || !AppTiles.found || AppTiles.info(it.tile) != null)
         }
         // Room down to the build number's row and the footer's buttons under it.
@@ -100,6 +100,18 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         var released = true
         /** Tapped: its symbol or words popping out (0..1) and back. */
         val pop: MotionValue = MotionValue(0f, 1000f, { panel.view.invalidate() }, { popBack() })
+        /** Material's press ripple, over the whole tile or over its box (a two-target tile's toggle) where it was pressed. */
+        val ripple = Ripple { panel.view.invalidate() }
+        var rippleBox = false
+        /**
+         * Its words (name and state) as shown, and the ones before them while they give way (0..1 on the state's spring):
+         * new words crossfade in, both drawn live (Android swaps them at once; Modes turning on goes from one line to two).
+         */
+        var name: String? = null
+        var sub: String? = null
+        var oldName: String? = null
+        var oldSub: String? = null
+        val words = MotionValue(1f, 1000f, { panel.view.invalidate() })
         var state = TileState.INACTIVE
 
         fun settleBounce() {
@@ -137,7 +149,12 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     /** The panel closed: presses and pops at rest. */
     fun closed() {
-        for (a in anims.values) { a.bounce.snapTo(0f); a.released = true; a.pop.snapTo(0f) }
+        for (a in anims.values) {
+            a.bounce.snapTo(0f); a.released = true; a.pop.snapTo(0f); a.ripple.clear()
+            // (Words that changed while closed show as they are at the next opening, not fading from before.)
+            a.words.snapTo(1f); a.name = null; a.oldName = null
+        }
+        marqueeFrom = 0L
     }
 
     // ------------------------------------------------------------------ where each tile is
@@ -242,16 +259,29 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     // ------------------------------------------------------------------ touches
 
-    /** A finger down on tile [i] (or up): it grows into its neighbours while held (Android's BounceOnPressNode). */
-    fun press(i: Int, down: Boolean) {
+    /**
+     * A finger down on tile [i] at ([x], [y]) (or up): it grows into its neighbours while held (Android's BounceOnPressNode),
+     * and Material's ripple spreads from the finger over what it pressed (the tile, or a two-target tile's box).
+     */
+    fun press(i: Int, down: Boolean, x: Float = 0f, y: Float = 0f) {
         val t = tiles.getOrNull(i) ?: return
         val a = anim(t)
         if (down) {
             a.released = false
             a.bounce.animateTo(1f, Motion.role(MotionTokens.QS_TILE_BOUNCE))
+            if (a.state == TileState.UNAVAILABLE) return
+            place(i, r)
+            a.rippleBox = t.wide && t.dualTarget && inBox(i, x, y)
+            if (a.rippleBox) {
+                val boxH = min(Design.pt(QsTokens.BOX, u) * r.height() / tileH.coerceAtLeast(1f), r.height())
+                a.ripple.press(x - (r.left + Design.pt(QsTokens.TILE_INSET, u)), y - (r.centerY() - boxH / 2f))
+            } else {
+                a.ripple.press(x - r.left, y - r.top)
+            }
         } else {
             a.released = true
             if (a.bounce.value >= 0.75f || !a.bounce.isAnimating) a.settleBounce()
+            a.ripple.release()
         }
     }
 
@@ -331,12 +361,17 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         val boxOn = a.box.value.coerceIn(0f, 1f)
         val gone = a.gone.value.coerceIn(0f, 1f)
         // The background: off, lit whole, or faint while it cannot be used.
-        val corner = min(lerp(Design.pt(QsTokens.TILE_CORNER, u), Design.pt(QsTokens.TILE_ON_CORNER, u), lit), h / 2f)
+        // Its corners follow its state, whatever lights up (Android's TileDefaults.tileRadius: 24 dp while active, a capsule
+        // otherwise): a two-target tile that lights only its box is a rounded rectangle too, the box concentric in it.
+        val corner = min(lerp(Design.pt(QsTokens.TILE_CORNER, u), Design.pt(QsTokens.TILE_ON_CORNER, u), max(lit, boxOn) * (1f - gone)), h / 2f)
         c.save()
         c.translate(r.left, r.top)
         if (gone < 1f) sf.draw(c, Design.material(QsTokens.TILE), r.width(), h, corner, r.left, r.top, 1f, alpha * (1f - gone),
             under = under, over = Design.material(QsTokens.TILE_ON).fills, overK = lit)
         if (gone > 0f) sf.draw(c, Design.material(QsTokens.TILE_UNAVAILABLE), r.width(), h, corner, r.left, r.top, 1f, alpha * gone, under = under)
+        // (Pressed: Material's ripple in the tile's content colour.)
+        if (a.ripple.active && !a.rippleBox) a.ripple.draw(c, r.width(), h, corner,
+            mix(Design.color(if (t.wide) QsTokens.LABEL_COLOR else QsTokens.SYMBOL_COLOR), Design.color(if (t.wide) QsTokens.ON_LABEL_COLOR else QsTokens.ON_SYMBOL_COLOR), lit), alpha, u)
         c.restore()
         val offC = Design.color(QsTokens.SYMBOL_COLOR)
         val onC = Design.color(QsTokens.ON_SYMBOL_COLOR)
@@ -345,7 +380,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         if (!t.wide) {
             val s = 1f + (Design.num(QsTokens.ICON_POP) - 1f) * pop
             val col = mix(mix(offC, onC, lit), goneC, gone)
-            symbol(c, t, r.centerX(), r.centerY(), Design.pt(QsTokens.SYMBOL, u) * s, faded(col, alpha), lit)
+            symbol(c, t, r.centerX(), r.centerY(), Design.pt(QsTokens.SYMBOL, u) * s, faded(col, alpha), if (edit) editLook(t) else lit)
             return
         }
         // A large tile: its box (squished with the tile) 8 dp in, the symbol in it, the words after it.
@@ -362,43 +397,80 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
             // (On the tile: its own fills lie between what is behind and the box, as they do on screen.)
             sf.draw(c, Design.material(QsTokens.BOX_MATERIAL), boxSize, boxH, bc, bx, by, 1f, alpha * (1f - gone),
                 under = under + Design.material(QsTokens.TILE).fills, over = Design.material(QsTokens.TILE_ON).fills, overK = boxOn)
+            if (a.ripple.active && a.rippleBox) a.ripple.draw(c, boxSize, boxH, bc, mix(offC, onC, boxOn), alpha, u)
             c.restore()
         }
         val symOn = if (t.dualTarget) boxOn else lit
         val sym = faded(mix(mix(offC, onC, symOn), goneC, gone), alpha)
-        symbol(c, t, bx + boxSize / 2f, r.centerY(), Design.pt(QsTokens.LARGE_SYMBOL, u), sym, symOn)
+        symbol(c, t, bx + boxSize / 2f, r.centerY(), Design.pt(QsTokens.LARGE_SYMBOL, u), sym, if (edit) editLook(t) else symOn)
         // The words (a tap pops them out a little, from their middle).
         val tx = bx + boxSize + Design.pt(QsTokens.TILE_TEXT_GAP, u)
         val maxW = (r.right - Design.pt(QsTokens.TILE_END, u)) - tx
         if (maxW <= 4f * u) return
-        Design.text(QsTokens.LABEL).applyTo(label, u)
-        label.color = faded(mix(mix(Design.color(QsTokens.LABEL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), lit), goneC, gone), alpha)
-        val ll = Design.text(QsTokens.LABEL).lineHeightPt * u
         // (On the edit page: an app's tile names its app, as Android's; ours say nothing more.)
-        val sub = if (edit) t.tile?.let { AppTiles.info(it)?.appLabel } else QsTiles.detail(panel.host.state, t, carrier, a.state)
-        val name = fitted(if (edit) QsTiles.name(t) else QsTiles.shownName(panel.host.state, t), label, maxW)
+        // (Quick Share on the edit page names Play services, as Android's: its tile is theirs.)
+        val sub = if (edit) (t.tile ?: if (t.control == Control.QUICK_SHARE) quickShareTile() else null)?.let { AppTiles.info(it)?.appLabel }
+            else QsTiles.detail(panel.host.state, t, carrier, a.state)
+        val name = if (edit) QsTiles.name(t) else QsTiles.shownName(panel.host.state, t)
+        if (!edit && (name != a.name || sub != a.sub)) {
+            if (a.name != null) {
+                // (A change while the last still fades: the words before it keep fading out, the newest come in.)
+                if (!a.words.isAnimating) { a.oldName = a.name; a.oldSub = a.sub; a.words.snapTo(0f) }
+                a.words.animateTo(1f, Motion.role(MotionTokens.QS_TILE_STATE))
+            }
+            a.name = name
+            a.sub = sub
+        }
+        val k = if (edit) 1f else a.words.value.coerceIn(0f, 1f)
         val s = 1f + (Design.num(QsTokens.TEXT_POP) - 1f) * pop
         c.save()
         c.scale(s, s, tx + maxW / 2f, r.centerY())
-        if (sub == null) {
-            c.drawText(name, tx, baselineIn(label, r.centerY() - ll / 2f, ll), label)
-        } else {
-            Design.text(QsTokens.DETAIL).applyTo(detail, u)
-            detail.color = faded(mix(mix(Design.color(QsTokens.DETAIL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), lit), goneC, gone), alpha)
-            val dl = Design.text(QsTokens.DETAIL).lineHeightPt * u
-            val top = r.centerY() - (ll + dl) / 2f
-            c.drawText(name, tx, baselineIn(label, top, ll), label)
-            c.drawText(fitted(sub, detail, maxW), tx, baselineIn(detail, top + ll, dl), detail)
-        }
+        val old = a.oldName
+        if (!edit && k < 1f && old != null) drawWords(c, old, a.oldSub, tx, maxW, r, alpha * (1f - k), lit, gone)
+        drawWords(c, name, sub, tx, maxW, r, alpha * k, lit, gone)
         c.restore()
+    }
+
+    /** A large tile's [name] and [sub] (its state, if any) after its box, centred on the tile's middle, faded to [alpha]. */
+    private fun drawWords(c: Canvas, name: String, sub: String?, tx: Float, maxW: Float, r: RectF, alpha: Float, lit: Float, gone: Float) {
+        if (alpha <= 0.003f) return
+        val goneC = Design.color(QsTokens.UNAVAILABLE_COLOR)
+        Design.text(QsTokens.LABEL).applyTo(label, u)
+        label.color = faded(mix(mix(Design.color(QsTokens.LABEL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), lit), goneC, gone), alpha)
+        val ll = Design.text(QsTokens.LABEL).lineHeightPt * u
+        if (sub == null) {
+            drawLabel(c, name, label, tx, baselineIn(label, r.centerY() - ll / 2f, ll), maxW)
+            return
+        }
+        Design.text(QsTokens.DETAIL).applyTo(detail, u)
+        detail.color = faded(mix(mix(Design.color(QsTokens.DETAIL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), lit), goneC, gone), alpha)
+        val dl = Design.text(QsTokens.DETAIL).lineHeightPt * u
+        val top = r.centerY() - (ll + dl) / 2f
+        drawLabel(c, name, label, tx, baselineIn(label, top, ll), maxW)
+        drawLabel(c, sub, detail, tx, baselineIn(detail, top + ll, dl), maxW)
     }
 
     /** A tile's symbol: its control's, or an app's tile's own. */
     private fun symbol(c: Canvas, t: QsTile, cx: Float, cy: Float, size: Float, color: Int, on: Float) {
         // (Quick Share is Play services' own tile on a Pixel: its symbol where the phone has it.)
         val id = t.tile ?: if (t.control == Control.QUICK_SHARE) quickShareTile() else null
-        if (id != null) panel.glyphs.drawTile(c, id, cx, cy, size, color) else panel.glyphs.draw(c, t.control.icon, cx, cy, size, color, on)
+        if (id != null) { panel.glyphs.drawTile(c, id, cx, cy, size, color); return }
+        // Auto-rotate is our orientation lock the other way round: the lock's symbol while the tile is off, Android's
+        // auto-rotate symbol while it is on, crossfading with the state.
+        if (t.control == Control.ROTATION_LOCK) {
+            val k = on.coerceIn(0f, 1f)
+            if (k < 1f) panel.glyphs.draw(c, dev.launcher.app.R.drawable.sym_rotation_lock, cx, cy, size, faded(color, 1f - k))
+            if (k > 0f) panel.glyphs.draw(c, dev.launcher.app.R.drawable.sym_rotation, cx, cy, size, faded(color, k))
+            return
+        }
+        panel.glyphs.draw(c, t.control.icon, cx, cy, size, color, on)
     }
+
+    /**
+     * Which look of its symbol a tile shows on the edit page (its configured one, whatever its state: Android's edit page
+     * draws each tile's QSTileConfig icon): Auto-rotate's and Modes' on looks, the rest off.
+     */
+    private fun editLook(t: QsTile): Float = if (t.control == Control.ROTATION_LOCK || t.control == Control.FOCUS) 1f else 0f
 
     private var quickShareFor: List<AppTiles.Info>? = null
     private var quickShareId: String? = null
@@ -415,6 +487,53 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     /** The carrier's name and network as Mobile data's state (the header reads it off the drawing thread). */
     var carrier = ""
+
+    // ------------------------------------------------------------------ words that do not fit (Android's TileLabel)
+
+    /** When the words started showing (their marquee waits from there); 0 while the panel is closed. */
+    private var marqueeFrom = 0L
+
+    /** The words show anew (the edit page's tiles are new ones: their marquee waits again). */
+    fun restartMarquee() { marqueeFrom = 0L }
+    private val stops = FloatArray(4)
+    private val stopColors = IntArray(4)
+
+    /**
+     * Words at ([x], [baseline]) in [p], within [maxW]: as Android 17's tile label (BasicText with a faded edge and
+     * basicMarquee): what does not fit fades out over its last 14 dp, and 2 s after the panel showed it scrolls left at
+     * 30 dp a second, coming round again a third of the width behind itself, resting 1.2 s between passes, its start
+     * fading while it scrolls.
+     */
+    private fun drawLabel(c: Canvas, text: String, p: TextPaint, x: Float, baseline: Float, maxW: Float) {
+        val w = p.measureText(text)
+        if (w <= maxW || maxW <= 0f) { c.drawText(text, x, baseline, p); return }
+        val now = android.os.SystemClock.uptimeMillis()
+        if (marqueeFrom == 0L) marqueeFrom = now
+        val gap = maxW * Design.num(QsTokens.MARQUEE_SPACING)
+        val travel = w + gap
+        val speed = Design.pt(QsTokens.MARQUEE_SPEED, u)
+        val run = (travel / speed * 1000f).toLong().coerceAtLeast(1L)
+        val rest = Motion.ms(QsTokens.MARQUEE_REST)
+        val wait = Motion.ms(QsTokens.MARQUEE_DELAY)
+        val t = now - marqueeFrom - wait
+        val offset = if (t <= 0L) 0f else ((t % (run + rest)).coerceAtMost(run)) * speed / 1000f
+        // Keep it moving while it scrolls; wake again when the next pass begins.
+        if (t <= 0L) panel.view.postInvalidateDelayed(-t + 1)
+        else if (t % (run + rest) < run) panel.view.postInvalidateOnAnimation()
+        else panel.view.postInvalidateDelayed(run + rest - t % (run + rest) + 1)
+        val fade = Design.pt(QsTokens.LABEL_FADE, u)
+        val col = p.color
+        val clear = col and 0x00FFFFFF
+        stops[0] = 0f; stops[1] = (fade / maxW).coerceIn(0f, 0.5f); stops[2] = (1f - fade / maxW).coerceIn(0.5f, 1f); stops[3] = 1f
+        stopColors[0] = if (offset > 0.5f) clear else col; stopColors[1] = col; stopColors[2] = col; stopColors[3] = clear
+        p.shader = android.graphics.LinearGradient(x, 0f, x + maxW, 0f, stopColors, stops, android.graphics.Shader.TileMode.CLAMP)
+        val save = c.save()
+        c.clipRect(x, baseline - p.textSize * 2f, x + maxW, baseline + p.textSize)
+        c.drawText(text, x - offset, baseline, p)
+        if (offset > 0f) c.drawText(text, x - offset + travel, baseline, p)
+        c.restoreToCount(save)
+        p.shader = null
+    }
 
     /** Words cut to fit, kept (ellipsizing every tile's words at every frame was a tenth of the panel's drawing). */
     private data class Fit(val text: String, val width: Int, val size: Float, val face: android.graphics.Typeface?)

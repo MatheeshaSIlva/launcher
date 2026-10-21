@@ -140,6 +140,8 @@ object QsTiles {
         }
         !state.available(t.control) -> TileState.UNAVAILABLE
         t.control == Control.CELLULAR && state.airplane -> TileState.UNAVAILABLE
+        // (Android's Battery Saver cannot be turned on while the phone charges.)
+        t.control == Control.LOW_POWER && state.plugged -> TileState.UNAVAILABLE
         isOn(state, t) -> TileState.ACTIVE
         else -> TileState.INACTIVE
     }
@@ -154,7 +156,8 @@ object QsTiles {
         return when (t.control) {
             Control.WIFI -> if (on) state.wifiName ?: "Not connected" else "Off"
             Control.CELLULAR -> if (on) carrier.ifEmpty { null } ?: "On" else "Off"
-            Control.FOCUS -> if (on) "On" else "Off"
+            // (Modes: no words while none is on, as Android 17's tile.)
+            Control.FOCUS -> if (on) "On" else null
             Control.BLUETOOTH -> if (on) null else "Off"
             else -> null
         }

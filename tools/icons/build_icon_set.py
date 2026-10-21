@@ -38,40 +38,47 @@ def tile(path):
     return {'on': ('aosp', path + '_on.xml', 'end'), 'off': ('aosp', path + '_off.xml', 'end')}
 
 
+def apktile(name):
+    """Android 17's own tile pair out of its SystemUIGoogle (extract_apk_vectors.py into CACHE_DIR/apk): on and off, each at
+    the end of its animation."""
+    return {'on': ('apk', name + '_on', 'end'), 'off': ('apk', name + '_off', 'end')}
+
+
 def aosp(path, frame='static', scale=None):
     """[scale]: drawn at that part of the symbol's size (Android draws some at their own small size in a larger slot)."""
     return {'on': ('aosp', path, frame) + ((scale,) if scale else ())}
 
 
-# Pixel: Android's own Quick Settings symbols (AOSP SystemUI, read 2026-10-19), as each tile names them (qs/tiles/*.java).
+# Pixel: Android's own Quick Settings symbols, as each tile names them: Android 17's own (its SystemUIGoogle APK, read
+# 2026-10-21: AOSP main's differ, Auto-rotate's, Flashlight's, Battery Saver's...), AOSP main's where the APK has none.
 PIXEL = {
-    'airplane': tile(SUI + 'qs_airplane_icon'),
-    'low_power': tile(SUI + 'qs_battery_saver_icon'),
+    'airplane': apktile('qs_airplane_icon'),
+    'low_power': apktile('qs_battery_saver_icon'),
     # Bluetooth on without a device: its base drawn without the earbuds' dots (what qs_bluetooth_icon_disconnected ends on).
-    'bluetooth': {'on': ('apk', 'bluetooth_plain', 'static'), 'off': ('aosp', KEY + 'qs_bluetooth_icon_off.xml', 'end')},
-    'data_saver': tile(SUI + 'qs_data_saver_icon'),
-    # Do Not Disturb: on, the filled circle with its bar (Android 17's tile); off, AOSP's outline.
-    'moon': {'on': ('url', 'https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/do_not_disturb_on/materialsymbolsrounded/do_not_disturb_on_fill1_24px.svg', 'static'),
-             'off': ('aosp', SUI + 'qs_dnd_icon_off.xml', 'end')},
-    'flashlight': tile(SUI + 'qs_flashlight_icon'),
-    'hotspot': tile(SUI + 'qs_hotspot_icon'),
-    'location': tile(SUI + 'qs_location_icon'),
-    'screen_record': tile(SUI + 'qs_screen_record_icon'),
-    'dark_mode': tile(KEY + 'qs_light_dark_theme_icon'),
-    'invert': tile(KEY + 'qs_invert_colors_icon'),
+    'bluetooth': {'on': ('apk', 'bluetooth_plain', 'static'), 'off': ('apk', 'qs_bluetooth_icon_off', 'end')},
+    'data_saver': apktile('qs_data_saver_icon'),
+    # Modes: the filled circle with its bar, on and off alike (Android 17's Modes tile keeps its icon; only its colours
+    # follow the state).
+    'moon': {'on': ('url', 'https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/do_not_disturb_on/materialsymbolsrounded/do_not_disturb_on_fill1_24px.svg', 'static')},
+    'flashlight': apktile('qs_flashlight_icon'),
+    'hotspot': apktile('qs_hotspot_icon'),
+    'location': apktile('qs_location_icon'),
+    'screen_record': apktile('qs_screen_record_icon'),
+    'dark_mode': apktile('qs_light_dark_theme_icon'),
+    'invert': apktile('qs_invert_colors_icon'),
     # Rotation: Pixel's tile is "Auto-rotate", lit while the screen turns; ours is the lock, lit while it does not.
-    'rotation': aosp(KEY + 'qs_auto_rotate_icon_on.xml', 'end'),
-    'rotation_lock': aosp(KEY + 'qs_auto_rotate_icon_off.xml', 'end'),
-    'alarm': aosp(SUI + 'ic_alarm.xml'),
-    'captions': aosp(SUI + 'ic_volume_odi_captions.xml'),
-    'grayscale': aosp(SUI + 'ic_qs_color_correction.xml'),
+    'rotation': {'on': ('apk', 'qs_auto_rotate_icon_on', 'end')},
+    'rotation_lock': {'on': ('apk', 'qs_auto_rotate_icon_off', 'end')},
+    'alarm': {'on': ('apk', 'ic_alarm', 'static')},
+    'captions': {'on': ('apk', 'ic_volume_odi_captions', 'static')},
+    'grayscale': {'on': ('apk', 'ic_qs_color_correction', 'static')},
     'extra_dim': aosp(SUI + 'ic_reduce_bright_colors.xml'),
-    'hearing': aosp(SUI + 'qs_hearing_devices_icon.xml'),
-    'mirroring': aosp(SUI + 'ic_cast.xml'),
-    'nfc': aosp(SUI + 'ic_qs_nfc.xml'),
-    'note': aosp(SUI + 'ic_qs_notes.xml'),
-    'qr': aosp(SUI + 'ic_qr_code_scanner.xml'),
-    'text_size': aosp(SUI + 'ic_qs_font_scaling.xml'),
+    'hearing': {'on': ('apk', 'qs_hearing_devices_icon', 'static')},
+    'mirroring': {'on': ('apk', 'ic_cast', 'static')},
+    'nfc': {'on': ('apk', 'ic_qs_nfc', 'static')},
+    'note': {'on': ('apk', 'ic_qs_notes', 'static')},
+    'qr': {'on': ('apk', 'ic_qr_code_scanner', 'static')},
+    'text_size': {'on': ('apk', 'ic_qs_font_scaling', 'static')},
     'wallet': {'on': ('apk', 'ic_wallet_lockscreen', 'static')},
     'settings': aosp(SUI + 'ic_settings.xml'),
     'sun': aosp(SUI + 'ic_brightness_full.xml'),

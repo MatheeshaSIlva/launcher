@@ -146,6 +146,7 @@ internal class QsEditPage(
     /** The page comes: the tiles as Quick Settings show them, the first chosen, at the top. */
     fun begin() {
         open = true
+        grid()?.restartMarquee()
         tiles = ArrayList(grid()?.tiles ?: QsTileStore.tiles(ctx))
         history.clear()
         undoK.snapTo(0f)
@@ -255,7 +256,7 @@ internal class QsEditPage(
 
     private fun reset() {
         haptic(HapticFeedbackConstants.CONTEXT_CLICK)
-        commit(QsTiles.DEFAULT.filter { it.control != Control.FLASHLIGHT || panel.host.state.available(it.control) })
+        commit(QsTiles.DEFAULT.filter { it.control != Control.FLASHLIGHT || panel.host.state.hasTorch })
         QsTileStore.reset(ctx)
     }
 
@@ -315,7 +316,9 @@ internal class QsEditPage(
         val st = panel.host.state
         val list = ArrayList<Offer>()
         for (e in QsTiles.CATALOG) {
-            if (!st.available(e.control) && e.control != Control.CELLULAR && e.control != Control.WIFI) continue
+            // (One the phone cannot use now is still offered where it is on the panel already, as Android's lists it.)
+            val have = tiles.any { it.tile == null && it.control == e.control }
+            if (!st.available(e.control) && !have && e.control != Control.CELLULAR && e.control != Control.WIFI) continue
             list += Offer(QsTile(e.control, false, e.label), e.category, MotionValue(0f, 1000f, { inv() }))
         }
         // Apps' own tiles where Android lists them; one named as a control of ours is that control (Quick Share, Live Caption).
@@ -502,6 +505,7 @@ internal class QsEditPage(
             }
             if (d != null && !d.fromBox && cell.tile.key == d.tile.key) { drawSlot(c, r, a * shown); continue }
             g.drawPlain(c, cell.tile, r, a * shown, boxFill.fills)
+            drawRipple(c, cell.tile.key, r, a * shown)
             val sel = cell.sel.value.coerceIn(0f, 1f)
             if (sel > 0.003f && d == null) drawSelection(c, r, a * shown * sel)
         }
@@ -570,6 +574,7 @@ internal class QsEditPage(
                 val ca = a * lerp(1f, addedAlpha, added)
                 // The tile as a capsule with its symbol (one column's look, whatever it will be), its name under it.
                 g.drawPlain(c, o.tile, cr, ca, category.fills)
+                drawRipple(c, o, cr, ca)
                 val lay = label(QsTiles.name(o.tile), cr.width())
                 style(cellPaint, QsTokens.EDIT_CELL_LABEL, textColor, ca)
                 for (l in 0 until lay.lineCount) {
@@ -788,8 +793,38 @@ internal class QsEditPage(
     private val slop = ViewConfiguration.get(panel.view.context).scaledTouchSlop.toFloat()
     private val resizing get() = mode == Mode.RESIZE
 
+    /**
+     * Material's ripple over the tile pressed (its key: a tile's, or the offer), as Android's edit page draws one: started
+     * at the tile's first draw after the touch (where it is then), let go with the touch.
+     */
+    private val tileRipple = Ripple { inv() }
+    private var rippleKey: Any? = null
+    private var rippleX = 0f
+    private var rippleY = Float.NaN
+
+    private var rippleHeld = false
+
+    private fun rippleFrom(key: Any, x: Float, cy: Float) { rippleKey = key; rippleX = x; rippleY = cy; rippleHeld = true; inv() }
+
+    private fun releaseRipple() { rippleHeld = false; tileRipple.release() }
+
+    private fun drawRipple(c: Canvas, key: Any, r: RectF, alpha: Float) {
+        if (key != rippleKey) return
+        if (!rippleY.isNaN()) {
+            tileRipple.press(rippleX - r.left, rippleY - r.top)
+            rippleY = Float.NaN
+            if (!rippleHeld) tileRipple.release()
+        }
+        if (!tileRipple.active) return
+        c.save()
+        c.translate(r.left, r.top)
+        tileRipple.draw(c, r.width(), r.height(), min(Design.pt(QsTokens.TILE_CORNER, u), r.height() / 2f), Design.color(QsTokens.LABEL_COLOR), alpha, u)
+        c.restore()
+    }
+
     private val longPress = Runnable {
         if (decided) return@Runnable
+        releaseRipple()
         val t = when (mode) {
             Mode.TILE -> tiles.firstOrNull { it.key == touchedKey }?.let { it to true }
             Mode.OFFER -> touchedOffer?.takeIf { it.added.target < 0.5f }?.let { it.tile to false }
@@ -849,12 +884,14 @@ internal class QsEditPage(
         tileAt(x, cy)?.let { k ->
             mode = Mode.TILE
             touchedKey = k
+            rippleFrom(k, x, cy)
             panel.view.postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
             return
         }
         offerAt(x, cy)?.let { o ->
             mode = Mode.OFFER
             touchedOffer = o
+            if (o.added.target < 0.5f) rippleFrom(o, x, cy)
             panel.view.postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
             return
         }
@@ -868,6 +905,7 @@ internal class QsEditPage(
         if (!decided && hypot(dx, dy) > slop) {
             decided = true
             panel.view.removeCallbacks(longPress)
+            releaseRipple()
             when (mode) {
                 Mode.BUTTON -> { pressDown(press, false); press = Press.NONE; mode = Mode.IGNORE }
                 Mode.HANDLE -> if (abs(dx) > abs(dy)) beginResize() else beginScroll()
@@ -892,6 +930,7 @@ internal class QsEditPage(
 
     private fun up(x: Float, y: Float, up: Boolean, vy: Float) {
         panel.view.removeCallbacks(longPress)
+        releaseRipple()
         val tap = up && !decided
         when (mode) {
             Mode.BUTTON -> {
