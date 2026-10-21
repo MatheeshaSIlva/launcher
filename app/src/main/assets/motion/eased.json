@@ -778,6 +778,16 @@
    "ms": 390,
    "src": "judged:test preset: iOS 27's spring (0.31 s, damping 1.0) as a bezier (emphasized decelerate, 390 ms)"
   },
+  "motion.qs.media-reveal": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 390,
+   "src": "judged:test preset: iOS 27's spring (0.31 s, damping 1.0) as a bezier (emphasized decelerate, 390 ms)"
+  },
   "motion.qs.open": {
    "bezier": [
     0.3,

@@ -51,8 +51,6 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
     /** Playing (0 paused .. 1): the play button's shape and the wave's height. */
     private val playingV = MotionValue(0f, 1000f, { inv() })
     private val pressV = MotionValue(0f, 1000f, { inv() })
-    /** Seeking (0 .. 1): the wave calms to a line while the finger holds the thumb, and comes back after. */
-    private val seekV = MotionValue(0f, 1000f, { inv() })
 
     /** What the card shows (kept while it goes, the session's own fields already empty then). */
     private var title = ""
@@ -211,7 +209,80 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
         val top = lerp(firstTop(), secondTop(), panel.expandK)
         val left = if (panel.split) panel.side + panel.halfWidth + Design.pt(QsTokens.LAND_MIDDLE, u) else panel.side
         out.set(left, top, panel.panelWidth - panel.side, top + height())
+        // (Swiped aside: the card moves left over the settings button it uncovers.)
+        out.offset(revealV.value, 0f)
         return out
+    }
+
+    // ------------------------------------------------------------------ swiped aside (remedia's SwipeToReveal)
+
+    /** How far the card is swiped aside (px, 0 .. -[revealDistance]): it uncovers a round settings button where it was. */
+    private val revealV = MotionValue(0f, 1f, { inv() })
+    private var revealFrom = 0f
+
+    private fun revealDistance() = Design.pt(QsTokens.MEDIA_REVEAL_BUTTON, u) + 2f * Design.pt(QsTokens.MEDIA_REVEAL_MARGIN, u)
+
+    /** A sideways drag on the card begins. */
+    fun beginReveal() {
+        revealV.stop()
+        revealFrom = revealV.value
+    }
+
+    /** It follows the finger; past either end it gives a little (a rubber band). */
+    fun revealBy(dx: Float) {
+        val d = revealDistance()
+        val raw = revealFrom + dx
+        revealV.snapTo(when {
+            raw > 0f -> dev.launcher.app.motion.Motion.rubberBand(raw, d)
+            raw < -d -> -d + dev.launcher.app.motion.Motion.rubberBand(raw + d, d)
+            else -> raw
+        })
+    }
+
+    /** Let go at [vx] px/s: it stays aside past half the way (or flung that way), else goes back. */
+    fun endReveal(vx: Float) {
+        val d = revealDistance()
+        val fling = 400f * u
+        val open = when {
+            vx <= -fling -> true
+            vx >= fling -> false
+            else -> revealV.value < -d / 2f
+        }
+        revealV.animateTo(if (open) -d else 0f, Motion.role(MotionTokens.QS_MEDIA_REVEAL), vx)
+    }
+
+    /** Back to its place (the panel closed or went to its other stage, a tap elsewhere). */
+    fun closeReveal(animate: Boolean = true) {
+        if (revealV.target == 0f && revealV.value == 0f) return
+        if (animate) revealV.animateTo(0f, Motion.role(MotionTokens.QS_MEDIA_REVEAL)) else revealV.snapTo(0f)
+    }
+
+    val revealed: Boolean get() = revealV.target < 0f
+
+    private val revealButton = RectF()
+
+    /** The settings button the card uncovers: centred in the room it leaves, as large as it is uncovered. */
+    private fun placeRevealButton(out: RectF): Float {
+        val right = card.right - revealV.value
+        val room = right - card.right
+        val size = Design.pt(QsTokens.MEDIA_REVEAL_BUTTON, u)
+        val k = (room / revealDistance()).coerceIn(0f, 1f)
+        val cx = (card.right + right) / 2f
+        val cy = card.centerY()
+        out.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f)
+        return k
+    }
+
+    private fun drawRevealButton(c: Canvas, a: Float) {
+        if (revealV.value >= -0.5f) return
+        val k = placeRevealButton(revealButton)
+        if (k <= 0.003f) return
+        val s = 0.6f + 0.4f * k
+        fill.style = Paint.Style.FILL
+        fill.color = faded(Design.color(QsTokens.MEDIA_REVEAL_FILL), a * k)
+        c.drawCircle(revealButton.centerX(), revealButton.centerY(), revealButton.width() / 2f * s, fill)
+        panel.glyphs.draw(c, R.drawable.sym_qs_settings, revealButton.centerX(), revealButton.centerY(),
+            Design.pt(QsTokens.MEDIA_NAV_SYMBOL, u) * s, faded(Design.color(QsTokens.MEDIA_REVEAL_SYMBOL), a * k))
     }
 
     // ------------------------------------------------------------------ drawing
@@ -235,6 +306,22 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
         val a = shown * panel.shown
         if (a <= 0.003f || look == null) return
         place(card)
+        drawRevealButton(c, a)
+        // Swiped aside, the card keeps its left edge and narrows from the right, what is on it sliding left under that edge
+        // (Android's SwipeToReveal): it is drawn moved and cut to what is left of it.
+        val save = c.save()
+        if (revealV.value < -0.5f) {
+            val r0 = Design.pt(QsTokens.MEDIA_CORNER, u)
+            clipPath.rewind()
+            clipPath.addRoundRect(card.left - revealV.value, card.top, card.right, card.bottom, r0, r0, android.graphics.Path.Direction.CW)
+            c.clipPath(clipPath)
+        }
+        try { drawCard(c, a) } finally { c.restoreToCount(save) }
+    }
+
+    private val clipPath = Path()
+
+    private fun drawCard(c: Canvas, a: Float) {
         val corner = Design.pt(QsTokens.MEDIA_CORNER, u)
         val now = look!!
         val before = lookBefore
@@ -395,7 +482,8 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
         val length = Design.pt(QsTokens.MEDIA_WAVE_LENGTH, u)
         // (Wrapped at the strip's whole width: a wrap at the fractional length made a jump of under a pixel.)
         if (media.playing && seekAt == null) phase = (phase + dt * Design.pt(QsTokens.MEDIA_WAVE_SPEED, u)) % Math.round(length).coerceAtLeast(2)
-        val amp = Design.pt(QsTokens.MEDIA_WAVE_AMPLITUDE, u) * playing * (1f - seekV.value.coerceIn(0f, 1f))
+        // (Seeking, the wave holds still under the finger, as Android's: it keeps its height.)
+        val amp = Design.pt(QsTokens.MEDIA_WAVE_AMPLITUDE, u) * playing
         // The track after the thumb.
         stroke.strokeWidth = Design.pt(QsTokens.MEDIA_TRACK, u)
         stroke.color = faded(white, a * Design.num(QsTokens.MEDIA_TRACK_ALPHA))
@@ -447,13 +535,16 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
 
     // ------------------------------------------------------------------ touches
 
-    enum class Target { NONE, CARD, PLAY, PREVIOUS, NEXT, OUTPUT, LINE }
+    enum class Target { NONE, CARD, PLAY, PREVIOUS, NEXT, OUTPUT, LINE, SETTINGS }
 
     /** What a finger at ([x], [y]) is on (NONE: not the card). */
     fun targetAt(x: Float, y: Float): Target {
         if (shown < 0.5f || panel.shown < 0.5f) return Target.NONE
         place(card)
+        if (revealV.value < -0.5f && placeRevealButton(revealButton) > 0.5f && revealButton.contains(x, y)) return Target.SETTINGS
         if (!card.contains(x, y)) return Target.NONE
+        // (Swiped aside, a tap on the card puts it back.)
+        if (revealed) return Target.CARD
         val nav = Design.pt(QsTokens.MEDIA_NAV, u)
         val ny = card.top + Design.pt(QsTokens.MEDIA_NAV_CENTER, u)
         // (Compact: next beside the play button.)
@@ -488,7 +579,8 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
             Target.NEXT -> { haptic(HapticFeedbackConstants.CONTEXT_CLICK); m.next() }
             Target.OUTPUT -> panel.host.launch(android.content.Intent("com.android.settings.panel.action.MEDIA_OUTPUT")
                 .putExtra("com.android.settings.panel.extra.PACKAGE_NAME", pkg).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-            Target.CARD, Target.LINE -> if (m.open()) panel.host.close()
+            Target.CARD, Target.LINE -> if (revealed) closeReveal() else if (m.open()) panel.host.close()
+            Target.SETTINGS -> { haptic(HapticFeedbackConstants.CONTEXT_CLICK); panel.host.launch(android.content.Intent("android.settings.ACTION_MEDIA_CONTROLS_SETTINGS")) }
             Target.NONE -> {}
         }
     }
@@ -500,10 +592,7 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
         val x0 = lineX0()
         val x1 = lineX1()
         if (x1 <= x0) return
-        if (seekAt == null) {
-            haptic(HapticFeedbackConstants.CLOCK_TICK)
-            seekV.animateTo(1f, Motion.role(MotionTokens.QS_MEDIA))
-        }
+        if (seekAt == null) haptic(HapticFeedbackConstants.CLOCK_TICK)
         seekAt = ((x - x0) / (x1 - x0)).coerceIn(0f, 1f)
         inv()
     }
@@ -511,7 +600,6 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
     fun endSeek(commit: Boolean) {
         val f = seekAt ?: return
         seekAt = null
-        seekV.animateTo(0f, Motion.role(MotionTokens.QS_MEDIA))
         if (commit && media.duration > 0L) media.seekTo((f * media.duration).toLong())
         inv()
     }

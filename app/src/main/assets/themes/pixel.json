@@ -1117,6 +1117,14 @@
    "color": "@on_surface",
    "src": "kit:AOSP notification footer: onSurface"
   },
+  "comp.qs.media.reveal-fill": {
+   "color": "@surface",
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): the uncovered settings button on surface (249, 249, 254)"
+  },
+  "comp.qs.media.reveal-symbol": {
+   "color": "@on_surface",
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): its symbol in onSurface"
+  },
   "comp.qs.edit-page.title": {
    "text": {
     "family": "google:Google Sans Flex",

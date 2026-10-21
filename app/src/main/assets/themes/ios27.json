@@ -3573,6 +3573,22 @@
    "pt": 16,
    "src": "measured:Android 17 emulator's own media player (2026-10-21, 2.625 px a dp): 16 dp under the build number's row (from y 1597 px)"
   },
+  "comp.qs.media.reveal-button": {
+   "pt": 48,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): remedia RevealedContent's button 48 dp (126 px measured)"
+  },
+  "comp.qs.media.reveal-fill": {
+   "ref": "component.control.label-color",
+   "src": "judged:a light button (iOS has no such one)"
+  },
+  "comp.qs.media.reveal-margin": {
+   "pt": 18,
+   "src": "measured:Android 17 emulator's own media player (2026-10-21, 2.625 px a dp): the card swiped 219 px aside, the button centred in the room"
+  },
+  "comp.qs.media.reveal-symbol": {
+   "color": "#000000",
+   "src": "judged:dark on it"
+  },
   "comp.qs.media.text-color": {
    "color": "#ffffff",
    "src": "measured:Android 17 emulator's own media player (2026-10-21, 2.625 px a dp): the words, the wave, the thumb and the arrows white"

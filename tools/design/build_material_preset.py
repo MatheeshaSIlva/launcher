@@ -170,7 +170,7 @@ KEEP = {
     # Android's shade's own (already Android's: read from SystemUIGoogle).
     'motion.qs.open', 'motion.qs.close', 'motion.qs.expand', 'motion.qs.collapse', 'motion.qs.tile-bounce', 'motion.qs.tile-state',
     'motion.qs.tile-pop', 'motion.qs.tile-pop-back', 'motion.qs.slider-icon', 'motion.qs.edit', 'motion.qs.edit-place',
-    'motion.qs.edit-appear', 'motion.qs.media', 'motion.qs.page',
+    'motion.qs.edit-appear', 'motion.qs.media', 'motion.qs.page', 'motion.qs.media-reveal',
 }
 
 # iOS 27's spring bounces visibly at this damping or below (0.5 % past its place).

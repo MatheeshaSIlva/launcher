@@ -395,8 +395,22 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     /** A tile's symbol: its control's, or an app's tile's own. */
     private fun symbol(c: Canvas, t: QsTile, cx: Float, cy: Float, size: Float, color: Int, on: Float) {
-        val id = t.tile
+        // (Quick Share is Play services' own tile on a Pixel: its symbol where the phone has it.)
+        val id = t.tile ?: if (t.control == Control.QUICK_SHARE) quickShareTile() else null
         if (id != null) panel.glyphs.drawTile(c, id, cx, cy, size, color) else panel.glyphs.draw(c, t.control.icon, cx, cy, size, color, on)
+    }
+
+    private var quickShareFor: List<AppTiles.Info>? = null
+    private var quickShareId: String? = null
+
+    /** Play services' Quick Share tile, if the phone has it with a symbol of its own (found again when the tiles change). */
+    private fun quickShareTile(): String? {
+        val all = AppTiles.all
+        if (all !== quickShareFor) {
+            quickShareFor = all
+            quickShareId = all.firstOrNull { it.pkg == "com.google.android.gms" && it.id.contains("SharingTileService") && it.icon != null }?.id
+        }
+        return quickShareId
     }
 
     /** The carrier's name and network as Mobile data's state (the header reads it off the drawing thread). */

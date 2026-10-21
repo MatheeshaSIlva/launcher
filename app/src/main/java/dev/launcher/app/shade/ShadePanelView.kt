@@ -165,6 +165,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         twoFingers = false
         cards?.closed()
         tiles?.closed()
+        media?.closeReveal(animate = false)
         editing = false
         editV.snapTo(0f)
         edit?.end()
@@ -244,6 +245,8 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     private fun expandTravel(): Float = (height - scrimRest()).coerceAtLeast(1f)
 
     private fun settleExpand(open: Boolean, v: Float) {
+        // (A card swiped aside goes back as the stage changes, as Android's carousel resets.)
+        media?.closeReveal()
         if (open) expand.animateTo(1f, Motion.role(MotionTokens.QS_EXPAND), v)
         else {
             expand.animateTo(0f, Motion.role(MotionTokens.QS_COLLAPSE), v)
@@ -367,7 +370,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
 
     // ------------------------------------------------------------------ touches
 
-    private enum class Mode { NONE, TILE, BRIGHTNESS, FOOTER, MEDIA, SEEK, CARD, SWIPE, SCROLL, EXPAND, PAGE, CLOSE, IGNORE }
+    private enum class Mode { NONE, TILE, BRIGHTNESS, FOOTER, MEDIA, SEEK, REVEAL, CARD, SWIPE, SCROLL, EXPAND, PAGE, CLOSE, IGNORE }
     private var mediaTarget = MediaBlock.Target.NONE
     private var mode = Mode.NONE
     private var decided = false
@@ -435,7 +438,9 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                     mode = when {
                         mode == Mode.BRIGHTNESS -> Mode.BRIGHTNESS
                         // The media player's line dragged sideways: seeking.
-                        mode == Mode.MEDIA && mediaTarget == MediaBlock.Target.LINE && sideways -> Mode.SEEK
+                        mode == Mode.MEDIA && mediaTarget == MediaBlock.Target.LINE && sideways && media?.revealed != true -> Mode.SEEK
+                        // Sideways elsewhere on the card: it is swiped aside over its settings button (remedia's SwipeToReveal).
+                        mode == Mode.MEDIA && sideways -> Mode.REVEAL.also { media?.beginReveal() }
                         sideways && stage2 && tiles?.inGrid(downX, downY) == true && (tiles?.pages ?: 1) > 1 -> Mode.PAGE
                         sideways && mode == Mode.CARD && cards?.beginSwipe(downX, downY) == true -> Mode.SWIPE
                         sideways -> Mode.IGNORE
@@ -456,6 +461,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                         pageV.snapTo((pageFrom - dx / width).coerceIn(-0.25f, pages - 0.75f))
                     }
                     Mode.SEEK -> media?.seek(x)
+                    Mode.REVEAL -> media?.revealBy(dx)
                     Mode.SWIPE -> cards?.swipeBy(dx)
                     Mode.SCROLL -> cards?.scrollBy(lastY - y)
                     // The finger moves the scrim (and so the stage) one to one.
@@ -479,6 +485,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                     Mode.FOOTER -> footer?.release(tap = up && !decided)
                     Mode.MEDIA -> { media?.press(mediaTarget, false); if (up && !decided) media?.tap(mediaTarget) }
                     Mode.SEEK -> media?.endSeek(commit = up)
+                    Mode.REVEAL -> media?.endReveal(vx)
                     Mode.BRIGHTNESS -> brightness?.drag(2, x)
                     Mode.CARD -> { cards?.release(); if (up && !decided) cards?.tap(x, y) }
                     Mode.SWIPE -> cards?.endSwipe(vx)

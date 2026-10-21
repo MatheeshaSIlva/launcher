@@ -328,6 +328,11 @@ object QsTokens {
     val MEDIA_GROUND_CHROMA = NumberKey("comp.qs.media.ground-chroma")
     val MEDIA_FALLBACK = ColorKey("comp.qs.media.fallback")
     val MEDIA_PRESS_LAYER = NumberKey("comp.qs.media.press-layer")
+    /** Swiped aside, the card uncovers a round settings button: its size, the room either side of it, its colours. */
+    val MEDIA_REVEAL_BUTTON = NumberKey("comp.qs.media.reveal-button")
+    val MEDIA_REVEAL_MARGIN = NumberKey("comp.qs.media.reveal-margin")
+    val MEDIA_REVEAL_FILL = ColorKey("comp.qs.media.reveal-fill")
+    val MEDIA_REVEAL_SYMBOL = ColorKey("comp.qs.media.reveal-symbol")
 
     // ---- Turned (the layout's landscape "split", Android's own).
     /** Turned (the layout's landscape "split"): between the two halves; the slider's and the tiles' tops under the status bar; the notifications' width. */
@@ -346,7 +351,7 @@ object QsTokens {
         MEDIA_WAVE_AMPLITUDE, MEDIA_WAVE_STROKE, MEDIA_WAVE_SPEED, MEDIA_TRACK, MEDIA_TRACK_ALPHA, MEDIA_THUMB_WIDTH,
         MEDIA_THUMB_HEIGHT, MEDIA_ART_ALPHA, MEDIA_ART_CENTER_ALPHA, MEDIA_GROUND_TONE, MEDIA_LIGHT_TONE, MEDIA_ON_LIGHT_TONE, MEDIA_CHROMA,
         MEDIA_GROUND_CHROMA,
-        MEDIA_FALLBACK, MEDIA_PRESS_LAYER,
+        MEDIA_FALLBACK, MEDIA_PRESS_LAYER, MEDIA_REVEAL_BUTTON, MEDIA_REVEAL_MARGIN, MEDIA_REVEAL_FILL, MEDIA_REVEAL_SYMBOL,
         EDIT_BAR_CENTER, EDIT_BAR_HEIGHT, EDIT_BAR_START, EDIT_BAR_SYMBOL, EDIT_TITLE, EDIT_TITLE_TOP,
         EDIT_COLLAPSED_TITLE_START, EDIT_SUBTITLE, EDIT_TEXT_COLOR, EDIT_GRID_TOP, EDIT_GRID_PADDING, EDIT_GRID_CORNER,
         EDIT_GRID_STROKE, EDIT_GRID_FILL, EDIT_ACCENT, EDIT_ON_ACCENT, EDIT_TILE_GAP, EDIT_SELECTION_STROKE,

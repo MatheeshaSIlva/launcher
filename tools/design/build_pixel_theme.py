@@ -262,6 +262,8 @@ T = {
     'comp.qs.clear.fill': color('@surface_container_high', EMU + ': Clear all and the round buttons on a card\'s colour'),
     'comp.qs.clear.text': text(14, 20, 500, 0.1, 'kit:AOSP notification footer: labelLarge'),
     'comp.qs.clear.text-color': color('@on_surface', 'kit:AOSP notification footer: onSurface'),
+    'comp.qs.media.reveal-fill': color('@surface', EMU + ': the uncovered settings button on surface (249, 249, 254)'),
+    'comp.qs.media.reveal-symbol': color('@on_surface', EMU + ': its symbol in onSurface'),
     # The edit page (Android 17's Edit tiles).
     'comp.qs.edit-page.title': text(28, 33, 400, 0, EMU + ': Edit tiles in headlineMedium (28 sp), its box 33 dp (no extra line spacing)'),
     'comp.qs.edit-page.subtitle': text(14, 16, 400, 0.25, EMU + ': the line under the title in bodyMedium'),

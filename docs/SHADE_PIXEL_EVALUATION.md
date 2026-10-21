@@ -554,11 +554,11 @@ its media notification, as a music app's): the layout file's `media` block (`sha
   48 dp: a rounded square of 16 dp corners while playing, round while paused, its symbol crossfading; its corners tighten
   while pressed), previous and next (Material Symbols' outlined skip symbols, 48 dp targets) with the line between them:
   Android's squiggly progress, a wave 20 dp long, 1.5 dp high and 2 dp thick travelling 8 dp a second up to a 4 x 16 dp
-  thumb, the track after it white at 30 %; paused, or while the finger drags the thumb (seeking), the wave calms to a line
+  thumb, the track after it white at 30 %; paused, the wave calms to a line (while the finger drags the thumb it holds still, as Android's: no timestamps)
   (motion.qs.media). A tap on the card opens the app.
 
-Not like Android 17's yet: several sessions (Android shows a carousel; ours the session `Media` picks), the swipe that
-reveals the card's settings and dismisses it, timestamps while seeking, the output switcher itself (Android's dialog: ours
+Not like Android 17's yet: several sessions (Android shows a carousel; ours the session `Media` picks), the long press's
+options (hide the player), the output switcher itself (Android's dialog: ours
 opens Settings' media output panel), and the card's light following the touch (remedia's ripple).
 
 **Stage 6, turned (2026-10-21).** Pixel's file says `"landscape": "split"`, Android 17's own arrangement on a turned phone
@@ -618,3 +618,9 @@ I couldn't scroll down the notifications ... not sure if the shade background co
   quick rows, 4 rows a page), `compose/features/.../shade/ui/composable/` (single shade, overlays for the separate mode).
 - Coverage of the Material 3 Expressive shade (Android 16 QPR1): Android Authority, 9to5Google (resizable tiles, pills when
   off, rounded rectangles when on, the blur, the Clear all row); the split ("Separate") option reported in Android 16 betas.
+
+**Stage 7, the rest.** Quick Share's tile draws Play services' own symbol where the phone has its tile (AppTiles). The media
+card swipes aside as Android's (remedia's SwipeToReveal, measured): it keeps its left edge and narrows by 84 dp from the
+right, what is on it sliding left under that edge, uncovering a 48 dp round settings button in surface (onSurface symbol)
+centred in the room; it stays aside past half the way or flung, a tap on the card or a swipe back returns it, and it goes
+back when the panel changes stage or closes (`motion.qs.media-reveal`). The button opens Android's media controls settings.

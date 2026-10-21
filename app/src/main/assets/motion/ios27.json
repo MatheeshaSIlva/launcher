@@ -1049,6 +1049,13 @@
    ],
    "src": "kit:AOSP SystemUI remedia: the play button's shape and the wave's height following play and pause (spring, stiffness 400)"
   },
+  "motion.qs.media-reveal": {
+   "spring": [
+    0.31,
+    1.0
+   ],
+   "src": "kit:AOSP SystemUI remedia SwipeToReveal: the card settling aside or back (judged: Compose's default spring at stiffness 400)"
+  },
   "motion.qs.open": {
    "spring": [
     0.32,

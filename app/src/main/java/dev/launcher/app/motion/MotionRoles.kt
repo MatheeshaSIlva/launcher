@@ -183,6 +183,7 @@ object MotionRoles {
         r("qs.edit-place", "Tiles rearranged", "Tiles moving to their places on the edit page."),
         r("qs.edit-appear", "Edit page buttons", "Undo, a tile added or taken out, Reset's question fading in and out."),
         r("qs.page", "Turning pages", "Quick Settings' pages settling after a sideways swipe."),
+        r("qs.media-reveal", "Media card aside", "The media card settling aside over its settings button, or back."),
         r("qs.media", "Media player", "The play button changing shape and the wave calming, with play and pause."),
     ))
 
