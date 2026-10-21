@@ -146,7 +146,7 @@ object MotionRoles {
         r("cc.drop", "Dropping", "A dragged control dropping into its place."),
         r("cc.gallery.open", "Gallery opening", "The controls gallery coming up."),
         r("cc.gallery.close", "Gallery closing", "The controls gallery going."),
-        r("cc.backdrop-hold", "Background holding", "The live background turning into a still picture before an app starts."),
+        r("cc.backdrop-hold", "Background holding", "The live background turning into a still picture before an app starts, or while Android stops blurring."),
     ))
 
     val NOTIFICATIONS = MotionGroup("Notifications", "Notification Center and its notifications.", listOf(

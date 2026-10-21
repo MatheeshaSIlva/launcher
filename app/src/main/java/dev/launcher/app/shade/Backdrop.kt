@@ -132,6 +132,14 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
         set(v) { if (field != v) { field = v; apply() } }
 
     /**
+     * With [live]: how far our own picture has taken the place of a live blur the system no longer draws (0..1, see
+     * [LiveBlur.on]): Android stops blurring behind windows when it likes (Battery Saver), and the panel lay over a sharp
+     * screen.
+     */
+    var liveGone = 0f
+        set(v) { val k = v.coerceIn(0f, 1f); if (field != k) { field = k; apply() } }
+
+    /**
      * Blur radius (px, at full size), the veil over the picture ([veilRgb], how much of it shows now: [veilAlpha], 0..1; a
      * dark veil dims what is behind, a light one lightens it) and visibility (0..1) for this frame.
      */
@@ -143,7 +151,7 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun apply() {
-        val pic = if (live) freeze else 1f
+        val pic = if (live) max(freeze, liveGone) else 1f
         val has = source != null && shown > 0f && pic > 0f
         val minBlur = MIN_LOW_BLUR_DP * resources.displayMetrics.density
         val mix = if (Build.VERSION.SDK_INT >= 31) (blurPx / minBlur).coerceIn(0f, 1f) else 0f
@@ -154,8 +162,8 @@ class BackdropView(ctx: Context) : FrameLayout(ctx) {
         low.alpha = if (has) mix * shown * pic else 0f
         sharp.alpha = if (has && mix < 1f) shown * pic else 0f
         // Without a picture of what is behind (none could be taken), a deeper veil instead of the blur: the sharp app through
-        // a light veil was busy behind the controls.
-        veilView.alpha = (if (source == null && !live) veilAlpha * 2.1f else veilAlpha).coerceIn(0f, 0.78f) * (if (shown > 0f) 1f else 0f)
+        // a light veil was busy behind the controls. (As far as the picture would have shown.)
+        veilView.alpha = (if (source == null) veilAlpha * (1f + 1.1f * pic) else veilAlpha).coerceIn(0f, 0.78f) * (if (shown > 0f) 1f else 0f)
     }
 
     private companion object {

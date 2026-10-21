@@ -138,6 +138,14 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val backdrop = BackdropView(ctx)
     /** Control Center's live background where the system can blur what is behind a window (see [LiveBlur]). */
     private val liveBlur = LiveBlur(ctx, wm)
+    /**
+     * How far our own picture of what is behind has taken the place of the system's live blur (0: the system blurs, 1: our
+     * picture), for Control Center and Android's shade. Android stops blurring behind windows when it likes and starts again
+     * ([LiveBlur.on]): our picture comes over the blur's last frame, and gives way once the blur is back, on
+     * `motion.cc.backdrop-hold` ([liveBlurTurned]).
+     */
+    private val liveGone = MotionValue(if (liveBlur.on) 0f else 1f, 1000f, { backdrop.liveGone = it }) { liveGoneRests() }
+        .also { backdrop.liveGone = it.value }
     private val semBlurProbe by lazy { SemBlurProbe(ctx, wm, handler) }
     /** Over the lock screen, takes the focus from it while a panel comes in: One UI's fingerprint icon goes then (see [FocusHolder]). */
     private val focusHolder = FocusHolder(ctx, wm) { ev -> handler.post { root.dispatchKeyEvent(ev) } }
@@ -306,6 +314,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // did not listen, and caught up late in one step).
         android.os.Handler(android.os.Looper.getMainLooper()).post { dev.launcher.app.theme.Appearance.addListener(onAppearance) }
         media.addListener { cc.invalidate(); nc.mediaChanged() }
+        liveBlur.onTurned = { on -> handler.post { liveBlurTurned(on) } }
         Unlock.onAsk = unlockAsked
         // The apps' Quick Settings tiles, for Control Center's gallery (found in the background, again on app changes).
         AppTiles.start(ctx)
@@ -705,7 +714,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val bgKey = if (ccP != null) CcTokens.BACKGROUND else QsTokens.BACKGROUND
         if (bgP != null) {
             // Live where the system can blur behind a window (the app or home keeps moving under it), else our blurred
-            // picture of what was behind.
+            // picture of what was behind (also while Android does not blur: [liveGone]).
             val live = liveBlur.available
             backdrop.live = live
             // The background on the controls' own curve (they show at the square root of the progress): linear, the blur
@@ -715,7 +724,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             val bk = if (ccP != null) kotlin.math.sqrt(bgP.coerceIn(0f, 1f)) else 1f - (1f - bgP.coerceIn(0f, 1f)).let { it * it }
             // (Its blur grows in step with the pull.)
             val blurK = if (ccP != null) bk else bgP.coerceIn(0f, 1f)
-            if (live) liveBlur.set(blurK, true)
+            // (Not while the system does not blur: new parameters would end the last blur at once, under our picture coming.)
+            if (live && liveBlur.on) liveBlur.set(blurK, true)
             val veil = veilOf(bgKey)
             backdrop.set(blurRadius(bgKey) * blurK, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
             if (ccP != null) bar.setRowAlpha(1f - editK)
@@ -799,6 +809,24 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val unit = dev.launcher.app.design.Scale.unitPx(ctx, ctx.resources.displayMetrics.widthPixels.coerceAtMost(ctx.resources.displayMetrics.heightPixels))
         return dev.launcher.app.design.Blur.sigmaPx(m.frostPt + (m.frostDarkPt - m.frostPt) * dev.launcher.app.theme.Appearance.dark, unit)
     }
+
+    /**
+     * Android stopped blurring behind windows, or blurs again ([LiveBlur.on]). With Control Center or Android's shade up:
+     * stopped, the blur's window is left as it is (the window manager keeps its last blur until the window changes) while
+     * our picture comes over it, and rests once covered ([liveGoneRests]); again, the window takes its parameters again
+     * under our picture, which gives way once the blur is on the screen. With neither up, the next pull starts as it is.
+     */
+    private fun liveBlurTurned(on: Boolean) {
+        if (on != liveBlur.on) return   // (turned again since: that change follows)
+        val curve = Motion.role(dev.launcher.app.motion.MotionTokens.CC_BACKDROP_HOLD)
+        if (shownProgress(ccPanel) == null && shownProgress(shadePanel) == null) { liveGone.snapTo(if (on) 0f else 1f); return }
+        if (!on) { liveGone.animateTo(1f, curve); return }
+        applyProgress()
+        liveBlur.afterApplied { handler.post { if (liveBlur.on && liveGone.target > 0f) liveGone.animateTo(0f, curve) } }
+    }
+
+    /** Our picture all over a live blur the system no longer draws: the blur's window rests (one pixel, nothing to compose). */
+    private fun liveGoneRests() { if (!liveBlur.on && liveGone.value >= 1f) liveBlur.set(0f, false) }
 
     /** The live blur at full strength for the background [key], in its mode's own unit (see [LiveBlur.maxBlurPx]). */
     private fun liveBlurMax(key: dev.launcher.app.design.MaterialKey): Float = when (liveBlur.mode) {
@@ -1479,9 +1507,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * how long to wait before starting the app (0: nothing to hold, the background is our picture already).
      */
     private fun holdBackdrop(): Long {
-        if (panel !== ccPanel || !liveBlur.available || backdrop.source == null) return 0L
+        if (panel !== ccPanel || !liveBlur.available || liveGone.value >= 1f || backdrop.source == null) return 0L
         backdropHold?.cancel()
-        val hold = android.animation.ValueAnimator.ofFloat(backdrop.freeze, 1f).apply {
+        // (From as much of our picture as shows: some may have come over a blur the system stopped drawing, [liveGone].)
+        val hold = android.animation.ValueAnimator.ofFloat(max(backdrop.freeze, liveGone.value), 1f).apply {
             timed(Motion.role(dev.launcher.app.motion.MotionTokens.CC_BACKDROP_HOLD))
             addUpdateListener { a -> backdrop.freeze = a.animatedValue as Float }
             start()

@@ -279,7 +279,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   its plain surfaces drawn as they are, `CcSurfaces.plainDirect`), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
   Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),
-  that blurs what is behind (One UI: Samsung's view blur on its full-screen view; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded
+  that blurs what is behind (One UI: Samsung's view blur on its full-screen view; Android's cross-window blur elsewhere,
+  the shade's own picture in its place while Android does not blur); `CcExpanded` is iOS's expanded
   modules; a notification's app opens out of its platter on a card inside the shade's window (`Shade.openFrom`). iOS 27
   consistency, item by item: `docs/IOS27_EVALUATION.md`.
 
@@ -390,6 +391,19 @@ copy it wholesale — port the working pieces cleanly. File map:
   8-bit step). The window manager already counted the window as dimming for its blur flag (`isDimming`: the navigation
   bar's colour), so nothing else changes. Check: during `input swipe 900 5 900 1900 7000` the layer reads "visible ...
   alpha=0.000976562".
+- **Android stops blurring behind windows while we run, and starts again** (AOSP's `BlurController`: Battery Saver, the
+  developer option for window blurs, a video in tunnel mode, critical heat). `isCrossWindowBlurEnabled`, read once, kept
+  the standard live blur on with nothing drawn: Control Center and Android's shade lay over a sharp screen (emulator; not
+  the S24, whose blur is Samsung's view blur), and a launcher started in Battery Saver never blurred live again.
+  `LiveBlur.on` follows `addCrossWindowBlurEnabledListener`, the standard mode is chosen by SurfaceFlinger's support
+  (`ro.surface_flinger.supports_background_blur`), and the shade's own picture takes the blur's place on
+  `motion.cc.backdrop-hold` (`Shade.liveGone`). The window manager applies a change of the system's blur only at a window's
+  next relayout (at rest: still blurred 1.5 s after it stopped, still sharp after it started again): while our picture
+  comes over the last blur, the blur's window gets no new parameters (SurfaceFlinger kept radius 108 through the fade);
+  when blur returns they are sent again, and our picture gives way once they are laid out (`LiveBlur.afterApplied`). On
+  Android 17 `wm disable-blur` fails (it writes the setting as package android): `settings put global
+  disable_window_blurs 1` (`settings delete` undoes). Battery Saver refuses while charging: `dumpsys battery unplug`,
+  `cmd power set-mode 1` (dark mode comes with it), then `cmd power set-mode 0`, `dumpsys battery reset`.
 - **The picture of home behind cards is blurrier than home's own blur at the same radius** (it blurs a quarter-size copy
   and scales it up: about twice the look). Handing over from one to the other mid-flight pulsed the whole screen sharp
   for a frame (opening an app during a close). Never swap them mid-motion: keep the picture until something replaces

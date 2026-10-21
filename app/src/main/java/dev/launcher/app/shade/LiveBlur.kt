@@ -24,6 +24,8 @@ import java.util.concurrent.TimeUnit
  *   cross-window blur is off on the S24 and cannot be switched on without root.
  * - Elsewhere, where the system allows cross-window blur (Android 12+): `FLAG_BLUR_BEHIND` with `blurBehindRadius`, and a
  *   dim too faint to see, without which SurfaceFlinger kept the blur hidden while a finger held the panel ([writeStrength]).
+ *   Android stops blurring behind windows whenever it likes (Battery Saver, the developer option, a video in tunnel mode,
+ *   heat) and starts again later: [on] follows it, and the panels' own picture takes the blur's place meanwhile.
  * - Otherwise [available] is false and Control Center keeps its own blurred picture of what was behind (BackdropView).
  *
  * The window lives on a thread of its own: each change of its parameters is a relayout (10-50 ms of the window's thread),
@@ -59,17 +61,41 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         x = IDLE_X; y = IDLE_Y
     }
 
+    // (Standard: also while Android does not blur now, on a phone that can: the window must be there, under the shade's, for
+    // when it blurs again. Chosen by Android's blur alone, a launcher started in Battery Saver never blurred live again.)
     val mode: Mode = when {
         dev.launcher.app.design.SamsungBlur.available -> Mode.SAMSUNG_VIEW
         samsungFlag() != null -> Mode.SAMSUNG
-        Build.VERSION.SDK_INT >= 31 && try { wm.isCrossWindowBlurEnabled } catch (_: Throwable) { false } -> Mode.STANDARD
+        Build.VERSION.SDK_INT >= 31 && (systemBlurs() || blurSupported()) -> Mode.STANDARD
         else -> Mode.NONE
     }
 
     @Volatile private var added = false
-    /** True while the window is there and its blur can be used. */
+    /** True while the window is there and its blur can be used (it shows only while the system blurs: [on]). */
     val available get() = added && mode != Mode.NONE && !failed
     @Volatile private var failed = false
+
+    /**
+     * Whether the system blurs behind windows now. Standard blur only: Android's answer, followed as it changes
+     * (`addCrossWindowBlurEnabledListener`); while it is no, `FLAG_BLUR_BEHIND` draws nothing and the panel lay over a sharp
+     * screen. Samsung's blurs are always on.
+     */
+    @Volatile var on = when (mode) { Mode.STANDARD -> systemBlurs(); Mode.NONE -> false; else -> true }
+        private set
+    /** [on] changed (called on the window's thread). */
+    @Volatile var onTurned: ((Boolean) -> Unit)? = null
+    private var listening = false
+    private val blurExecutor = java.util.concurrent.Executor { h.post(it) }
+    private val blurListener = java.util.function.Consumer<Boolean> { yes ->
+        if (yes == on) return@Consumer
+        // The window manager takes up a change of the system's blur only when the window changes (a relayout): until then it
+        // keeps the blur it had, or the lack of it (emulator: blurred 1.5 s after Android stopped, sharp after it started
+        // again). The next [set] sends the window's parameters again, whatever they are.
+        strengthNow = -1f
+        on = yes
+        AppLog.log("[blur] the system ${if (yes) "blurs behind windows again" else "stopped blurring behind windows"}")
+        onTurned?.invoke(yes)
+    }
 
     /** Strength wanted (0..1) and whether the window should show; read by the window's thread. */
     @Volatile private var want = 0f
@@ -95,7 +121,12 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
                 if (mode == Mode.SAMSUNG) setupSamsung()
                 wm.addView(view, lp)
                 added = true
-                AppLog.log("[blur] live blur window added ($mode)")
+                // (Called at once with Android's answer now.)
+                if (mode == Mode.STANDARD && Build.VERSION.SDK_INT >= 31 && !listening) {
+                    wm.addCrossWindowBlurEnabledListener(blurExecutor, blurListener)
+                    listening = true
+                }
+                AppLog.log("[blur] live blur window added ($mode${if (mode == Mode.STANDARD) ", the system blurs: $on" else ""})")
             } catch (t: Throwable) {
                 failed = true
                 AppLog.log("[blur] live blur window FAILED: ${t.javaClass.simpleName}: ${t.message}")
@@ -111,6 +142,8 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         h.post {
             if (added) try { wm.removeView(view) } catch (_: Throwable) { }
             added = false
+            if (listening && Build.VERSION.SDK_INT >= 31) try { wm.removeCrossWindowBlurEnabledListener(blurListener) } catch (_: Throwable) { }
+            listening = false
         }
     }
 
@@ -128,6 +161,18 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         if (pending) return
         pending = true
         h.postAtFrontOfQueue(apply)
+    }
+
+    /**
+     * [then] runs (on the window's thread) once what was [set] before has reached the screen: new parameters go with the
+     * window's next traversal, after that frame's callbacks (the first frame), so by the second the relayout is done and the
+     * window manager has given SurfaceFlinger its blur, which shows by the third.
+     */
+    fun afterApplied(then: () -> Unit) {
+        h.post {
+            val frames = android.view.Choreographer.getInstance()
+            frames.postFrameCallback { frames.postFrameCallback { frames.postFrameCallback { then() } } }
+        }
     }
 
     private val apply = Runnable {
@@ -270,6 +315,17 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         try { cls.getDeclaredMethod("semSetEnterDimDuration", Long::class.javaPrimitiveType).also { it.isAccessible = true }.invoke(lp, 0L) } catch (_: Throwable) { }
         try { cls.getDeclaredMethod("semSetExitDimDuration", Long::class.javaPrimitiveType).also { it.isAccessible = true }.invoke(lp, 0L) } catch (_: Throwable) { }
     }
+
+    private fun systemBlurs(): Boolean = Build.VERSION.SDK_INT >= 31 && try { wm.isCrossWindowBlurEnabled } catch (_: Throwable) { false }
+
+    /**
+     * Whether this phone can blur behind windows at all, whether or not Android does now: SurfaceFlinger's own switches, as
+     * the window manager reads them (`ro.surface_flinger.supports_background_blur`, unless `persist.sys.sf.disable_blurs`).
+     */
+    private fun blurSupported(): Boolean = try {
+        val get = Class.forName("android.os.SystemProperties").getMethod("getBoolean", String::class.java, Boolean::class.javaPrimitiveType)
+        get.invoke(null, "ro.surface_flinger.supports_background_blur", false) == true && get.invoke(null, "persist.sys.sf.disable_blurs", false) != true
+    } catch (_: Throwable) { false }
 
     private fun samsungFlag(): Int? = try {
         val cls = WindowManager.LayoutParams::class.java
