@@ -1085,6 +1085,11 @@ SEED = {
     'comp.qs.media.chroma': {'factor': 48, 'src': "judged:Material's content style keeps the art's colourfulness, at least 48"},
     'comp.qs.media.fallback': {'color': '#5a6378', 'src': 'judged:a quiet blue grey where there is no art'},
     'comp.qs.media.press-layer': {'factor': 0.1, 'src': "kit:Material 3 state layer: pressed, the content's colour at 10 %"},
+    'comp.qs.land.middle': {'pt': 16, 'src': "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the tiles on the left 433 dp, the player on the right 433 dp, 16 dp between"},
+    'comp.qs.land.brightness-top': {'pt': 22, 'src': "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the slider from 46 dp, 22 dp under the status bar"},
+    'comp.qs.land.tiles-top': {'pt': 96, 'src': "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the tiles from 120.4 dp, 96 dp under the status bar"},
+    'comp.qs.land.cards-width': {'pt': 644, 'src': "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the notification cards 644 dp wide, centred"},
+    'comp.qs.media.compact-height': {'pt': 128, 'src': "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the first stage's player 433 x 128 dp (no line; next beside the play button)"},
 }
 
 

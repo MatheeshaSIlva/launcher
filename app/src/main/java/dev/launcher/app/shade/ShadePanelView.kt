@@ -53,6 +53,9 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     override val panelWidth: Int get() = width
     override val panelHeight: Int get() = height
     override val side: Float get() = Design.pt(QsTokens.SIDE, u)
+    override var split = false
+        private set
+    override val halfWidth: Float get() = (width - 2f * side - Design.pt(QsTokens.LAND_MIDDLE, u)) / 2f
     override var barHeight = 0
     override val glyphs = Glyphs(ctx, QsTokens.SYMBOLS)
 
@@ -73,7 +76,8 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     /** The scrim's top at the first stage's rest: under the quick row (or the bar, without tiles), and the media player as it shows. */
     private fun scrimRest(): Float {
         val quick = tiles?.quickBottomRest ?: barHeight.toFloat()
-        val under = media?.let { lerp(quick, it.firstBottomRest(), it.shown) } ?: quick
+        // (Turned, the player lies beside the quick row: the scrim under whichever reaches lower.)
+        val under = media?.let { lerp(quick, if (split) maxOf(quick, it.firstBottomRest()) else it.firstBottomRest(), it.shown) } ?: quick
         return under + Design.pt(QsTokens.SHELF_INSET, u)
     }
 
@@ -116,6 +120,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         if (width == 0) return
         u = Scale.unitPx(context, min(width, height))
         surfaces.unit(u)
+        split = width > height && ShadeStructure.current().shadeSplit
         tiles?.layout()
         cards?.layout()
         edit?.layout()

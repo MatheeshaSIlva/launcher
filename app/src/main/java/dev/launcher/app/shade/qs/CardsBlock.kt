@@ -115,7 +115,11 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     private fun line(k: dev.launcher.app.design.TextKey) = Design.text(k).lineHeightPt * u
 
     private val textX get() = Design.pt(QsTokens.CARD_PADDING, u) * 2f + Design.pt(QsTokens.CARD_ICON, u)
-    private fun textWidth() = panel.panelWidth - 2f * panel.side - textX - Design.pt(QsTokens.CARD_PADDING, u)
+    private fun textWidth() = cardsWidth() - textX - Design.pt(QsTokens.CARD_PADDING, u)
+
+    /** The cards' width (turned and split, Android's narrower column, centred) and where they start. */
+    private fun cardsWidth(): Float = (panel.panelWidth - 2f * panel.side).let { if (panel.split) kotlin.math.min(it, Design.pt(QsTokens.LAND_CARDS_WIDTH, u)) else it }
+    private fun cardsLeft(): Float = (panel.panelWidth - cardsWidth()) / 2f
 
     /** Lays the rows out again: each to its new place ([animate]: on the reflow curve, new ones fading in). */
     private fun relayout(animate: Boolean) {
@@ -241,7 +245,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     /** Row [row]'s rectangle on screen now (its motion, the scroll, the scrim) into [out]. */
     private fun place(row: Row, a: Anim, out: RectF) {
         val top = listTop + a.y.value - scroller.position
-        out.set(panel.side + a.swipe.value, top, panel.panelWidth - panel.side + a.swipe.value, top + row.height)
+        out.set(cardsLeft() + a.swipe.value, top, cardsLeft() + cardsWidth() + a.swipe.value, top + row.height)
     }
 
     // ------------------------------------------------------------------ drawing

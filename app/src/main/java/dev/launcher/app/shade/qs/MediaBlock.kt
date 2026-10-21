@@ -94,8 +94,9 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
 
     /** A scheme from [art]'s main colour and the card's ground made with it, off the drawing thread; the card crossfades into it. */
     private fun look(art: Bitmap?) {
-        val w = (panel.panelWidth - 2f * panel.side).toInt()
-        val h = height().toInt()
+        // (The picture is as wide as the card and as tall as the whole card: compact, its middle shows.)
+        val w = cardWidth().toInt()
+        val h = fullHeight().toInt()
         if (lookAsked && art === lookFor && w == lookW && h == lookH) return
         lookAsked = true
         lookFor = art
@@ -169,23 +170,45 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
 
     // ------------------------------------------------------------------ where it is
 
-    /** Its top under the quick row as it is now (the tiles squished at the start of the pull). */
-    private fun firstTop(): Float = (tiles()?.quickBottomNow() ?: panel.barHeight.toFloat()) + Design.pt(QsTokens.MEDIA_TOP_GAP, u)
+    /**
+     * Its top under the quick row as it is now (the tiles squished at the start of the pull); turned and split, the compact
+     * card beside the quick row, centred on it.
+     */
+    private fun firstTop(): Float {
+        val t = tiles()
+        if (panel.split && t != null) return (t.quickTop + t.quickBottomNow()) / 2f - compactHeight() / 2f
+        return (t?.quickBottomNow() ?: panel.barHeight.toFloat()) + Design.pt(QsTokens.MEDIA_TOP_GAP, u)
+    }
 
-    /** Its top under the build number in Quick Settings. */
-    private fun secondTop(): Float = (tiles()?.fullBottom ?: panel.barHeight.toFloat()) + Design.pt(QsTokens.BUILD_ROW, u) +
-        Design.pt(QsTokens.MEDIA_QS_GAP, u)
+    /** Its top under the build number in Quick Settings; turned and split, beside the tiles and that row, centred on them. */
+    private fun secondTop(): Float {
+        val t = tiles()
+        if (panel.split && t != null) return (t.fullTop + t.fullBottom + Design.pt(QsTokens.BUILD_ROW, u)) / 2f - fullHeight() / 2f
+        return (t?.fullBottom ?: panel.barHeight.toFloat()) + Design.pt(QsTokens.BUILD_ROW, u) + Design.pt(QsTokens.MEDIA_QS_GAP, u)
+    }
 
-    fun height(): Float = Design.pt(QsTokens.MEDIA_HEIGHT, u)
+    private fun fullHeight(): Float = Design.pt(QsTokens.MEDIA_HEIGHT, u)
+    private fun cardWidth(): Float = if (panel.split) panel.halfWidth else panel.panelWidth - 2f * panel.side
+    private fun compactHeight(): Float = Design.pt(QsTokens.MEDIA_COMPACT_HEIGHT, u)
+
+    /** How compact it is (turned and split at the first stage: no line, next beside the play button), growing as Quick Settings expand. */
+    private fun compactK(): Float = if (panel.split) 1f - panel.expandK else 0f
+
+    fun height(): Float = lerp(fullHeight(), compactHeight(), compactK())
 
     /** Its bottom at the first stage's rest (the notification scrim rests under it, as far as it shows). */
-    fun firstBottomRest(): Float = (tiles()?.quickBottomRest ?: panel.barHeight.toFloat()) + Design.pt(QsTokens.MEDIA_TOP_GAP, u) + height()
+    fun firstBottomRest(): Float {
+        val t = tiles()
+        if (panel.split && t != null) return (t.quickTop + t.quickBottomRest) / 2f + compactHeight() / 2f
+        return (t?.quickBottomRest ?: panel.barHeight.toFloat()) + Design.pt(QsTokens.MEDIA_TOP_GAP, u) + fullHeight()
+    }
 
     private val card = RectF()
 
     private fun place(out: RectF): RectF {
         val top = lerp(firstTop(), secondTop(), panel.expandK)
-        out.set(panel.side, top, panel.panelWidth - panel.side, top + height())
+        val left = if (panel.split) panel.side + panel.halfWidth + Design.pt(QsTokens.LAND_MIDDLE, u) else panel.side
+        out.set(left, top, panel.panelWidth - panel.side, top + height())
         return out
     }
 
@@ -216,7 +239,7 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
         val k = lookV.value.coerceIn(0f, 1f)
         fun col(f: (Look) -> Int) = if (before == null || k >= 1f) f(now) else mix(f(before), f(now), k)
         // The ground with the art over it (a new art's crossfading over the old); made again for a new size.
-        if (now.picture == null || now.picture.width != card.width().toInt() || now.picture.height != card.height().toInt()) look(lookFor)
+        if (now.picture == null || now.picture.width != card.width().toInt()) look(lookFor)
         if (before != null && k < 1f) drawGround(c, before, corner, a)
         drawGround(c, now, corner, a * (if (before != null) k else 1f))
 
@@ -268,13 +291,24 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
             c.drawText(TextUtils.ellipsize(artist, artistPaint, maxW, TextUtils.TruncateAt.END).toString(), tx, baselineIn(artistPaint, ty + tl, al), artistPaint)
         }
 
-        // Previous and next, the line between them.
+        // Previous and next, the line between them (compact, next beside the play button instead).
         val nav = Design.pt(QsTokens.MEDIA_NAV, u)
         val ny = card.top + Design.pt(QsTokens.MEDIA_NAV_CENTER, u)
         val ns = Design.pt(QsTokens.MEDIA_NAV_SYMBOL, u)
-        panel.glyphs.draw(c, R.drawable.sym_media_previous, card.left + nav / 2f, ny, ns, faded(white, a))
-        panel.glyphs.draw(c, R.drawable.sym_media_next, card.right - nav / 2f, ny, ns, faded(white, a))
-        drawLine(c, ny, white, a, pk)
+        val ck = compactK()
+        if (ck > 0.003f) {
+            playRect(r)
+            panel.glyphs.draw(c, R.drawable.sym_media_next, r.left - Design.pt(QsTokens.MEDIA_NAV_GAP, u) - nav / 2f, r.centerY(), ns, faded(white, a * ck))
+        }
+        val la = a * (1f - ck)
+        if (la > 0.003f) {
+            val save = c.save()
+            c.clipRect(card)
+            panel.glyphs.draw(c, R.drawable.sym_media_previous, card.left + nav / 2f, ny, ns, faded(white, la))
+            panel.glyphs.draw(c, R.drawable.sym_media_next, card.right - nav / 2f, ny, ns, faded(white, la))
+            drawLine(c, ny, white, la, pk)
+            c.restoreToCount(save)
+        } else if (media.playing && panel.shown > 0f) panel.view.postInvalidateOnAnimation()
     }
 
     private fun drawGround(c: Canvas, l: Look, corner: Float, a: Float) {
@@ -287,8 +321,8 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
             return
         }
         if (shaderFor !== pic) { shaderFor = pic; shader = BitmapShader(pic, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP) }
-        m.setScale(card.width() / pic.width, card.height() / pic.height)
-        m.postTranslate(card.left, card.top)
+        m.setScale(card.width() / pic.width, 1f)
+        m.postTranslate(card.left, card.centerY() - pic.height / 2f)
         shader!!.setLocalMatrix(m)
         artPaint.shader = shader
         artPaint.alpha = (255 * a).toInt().coerceIn(0, 255)
@@ -375,7 +409,12 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
         if (!card.contains(x, y)) return Target.NONE
         val nav = Design.pt(QsTokens.MEDIA_NAV, u)
         val ny = card.top + Design.pt(QsTokens.MEDIA_NAV_CENTER, u)
-        if (kotlin.math.abs(y - ny) <= nav / 2f) return when {
+        // (Compact: next beside the play button.)
+        if (compactK() > 0.5f) {
+            playRect(r)
+            val nx = r.left - Design.pt(QsTokens.MEDIA_NAV_GAP, u) - nav / 2f
+            if (kotlin.math.abs(x - nx) <= nav / 2f && kotlin.math.abs(y - r.centerY()) <= nav / 2f) return Target.NEXT
+        } else if (kotlin.math.abs(y - ny) <= nav / 2f) return when {
             x <= card.left + nav -> Target.PREVIOUS
             x >= card.right - nav -> Target.NEXT
             else -> Target.LINE

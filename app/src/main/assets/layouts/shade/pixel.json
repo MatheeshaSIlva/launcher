@@ -41,7 +41,7 @@
      {"block": "notification-cards"},
      {"block": "notification-footer"}
     ],
-    "landscape": "as-portrait"
+    "landscape": "split"
    }
   ]
  }

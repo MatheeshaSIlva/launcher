@@ -72,12 +72,15 @@ internal class QsFooterBlock(private val panel: QsPanel, private val ctx: Contex
     // ------------------------------------------------------------------ the row under the grid
 
     /** The build row's top now (under the grid, moving with it) and its height. */
+    /** The build number's row ends at the panel's side (turned and split: at the left half's end, under the tiles). */
+    private fun rowRight(): Float = if (panel.split) panel.side + panel.halfWidth else panel.panelWidth - panel.side
+
     private fun rowTop() = (tiles?.fullBottom ?: (panel.barHeight + Design.pt(QsTokens.TILES_TOP, u))) + panel.gridShift
     private val rowHeight get() = Design.pt(QsTokens.BUILD_ROW, u)
 
     private fun editPlace(out: RectF): Float {
         val s = rowHeight
-        val cx = panel.panelWidth - panel.side - s / 2f
+        val cx = rowRight() - s / 2f
         out.set(cx - s / 2f, rowTop(), cx + s / 2f, rowTop() + s)
         return panel.contentAlpha
     }
@@ -96,7 +99,7 @@ internal class QsFooterBlock(private val panel: QsPanel, private val ctx: Contex
             val d = Design.pt(QsTokens.DOT, u)
             val pill = Design.pt(QsTokens.DOT_ACTIVE, u)
             val total = (pages - 1) * (d + d) + pill
-            var x = panel.panelWidth / 2f - total / 2f
+            var x = (panel.side + rowRight()) / 2f - total / 2f
             val cy = top + rowHeight / 2f
             for (i in 0 until pages) {
                 val k = (1f - kotlin.math.abs(panel.page - i)).coerceIn(0f, 1f)

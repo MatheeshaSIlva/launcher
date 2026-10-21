@@ -103,6 +103,12 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
 
     /** How Notification Center opens. */
     val opens: Opens get() = notificationCenter?.block<Block.Notifications>()?.opens ?: Opens.STACKED
+    /**
+     * Android's shade in landscape split in two (Android's own: Quick Settings' tiles on the left half, the media player on
+     * the right, the brightness slider and the footer across; the notifications under them, narrower), else as upright.
+     */
+    val shadeSplit: Boolean get() = shade?.landscape == "split"
+
     /** Notification Center in landscape: the clock beside the list (else as upright). */
     val ncClockBesideList: Boolean get() = notificationCenter?.landscape == NcLandscape.CLOCK_BESIDE_LIST.id
     /** Notification Center shows the date and the clock, and the flashlight and the camera. */
@@ -146,7 +152,7 @@ class ShadeStructure(val panels: List<Panel>, private val pulls: Map<String, Lis
         private val LANDSCAPE = mapOf(
             Kind.NOTIFICATION_CENTER to NcLandscape.entries.map { it.id },
             Kind.CONTROL_CENTER to listOf("flow"),
-            Kind.SHADE to listOf("as-portrait"),
+            Kind.SHADE to listOf("as-portrait", "split"),
         )
 
         /**

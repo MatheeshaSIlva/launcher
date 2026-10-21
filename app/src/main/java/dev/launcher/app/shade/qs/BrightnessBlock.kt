@@ -34,7 +34,7 @@ internal class BrightnessBlock(private val panel: QsPanel) {
 
     /** Where the slider's row is now (the handle's height across the panel) and its fade. */
     private fun place(out: RectF): Float {
-        val top = panel.barHeight + Design.pt(QsTokens.BRIGHTNESS_TOP, u) + panel.gridShift
+        val top = panel.barHeight + Design.pt(if (panel.split) QsTokens.LAND_BRIGHTNESS_TOP else QsTokens.BRIGHTNESS_TOP, u) + panel.gridShift
         out.set(panel.side, top, panel.panelWidth - panel.side, top + Design.pt(QsTokens.BRIGHTNESS_HEIGHT, u))
         return panel.contentAlpha
     }

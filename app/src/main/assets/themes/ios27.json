@@ -3427,6 +3427,22 @@
    "pt": 96,
    "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): ShadeHeader.Dimensions.ExpandedHeight 120 dp, from the screen's top: 96 dp under its 24 dp status bar"
   },
+  "comp.qs.land.brightness-top": {
+   "pt": 22,
+   "src": "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the slider from 46 dp, 22 dp under the status bar"
+  },
+  "comp.qs.land.cards-width": {
+   "pt": 644,
+   "src": "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the notification cards 644 dp wide, centred"
+  },
+  "comp.qs.land.middle": {
+   "pt": 16,
+   "src": "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the tiles on the left 433 dp, the player on the right 433 dp, 16 dp between"
+  },
+  "comp.qs.land.tiles-top": {
+   "pt": 96,
+   "src": "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the tiles from 120.4 dp, 96 dp under the status bar"
+  },
   "comp.qs.media.app-symbol": {
    "pt": 24,
    "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): qs_media_app_icon_size 24 dp, the app's symbol at the top left"
@@ -3468,6 +3484,10 @@
   "comp.qs.media.chroma": {
    "factor": 48,
    "src": "judged:Material's content style keeps the art's colourfulness, at least 48"
+  },
+  "comp.qs.media.compact-height": {
+   "pt": 128,
+   "src": "measured:Android 17 emulator's own shade turned (2026-10-21, 2.625 px a dp, 914 x 411 dp): the first stage's player 433 x 128 dp (no line; next beside the play button)"
   },
   "comp.qs.media.corner": {
    "pt": 24,

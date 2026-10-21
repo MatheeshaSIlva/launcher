@@ -493,8 +493,8 @@ notifications) and Quick Settings, their transitions declared in `scene/ui/compo
 
 Not like Android 17's yet: the status bar's own look in the header's row (our status bar's layout: its time and icons,
 as on home), Quick Share's glyph (Play services' own), a Bluetooth device's dots (the connection is not read), the user's
-avatar. Still to come: Pixel's landscape, the dual shade (Android 17 on a phone ignores its `dual_shade` setting:
-Pixel's file keeps one place).
+avatar. Still to come: the dual shade (Android 17 on a phone ignores its `dual_shade` setting: Pixel's file keeps one
+place).
 
 **Stage 4, the edit page (2026-10-21).** Android 17's "Edit tiles" (`shade/qs/QsEditPage`), read from SystemUIGoogle
 (EditModeKt, EditTileKt, EditModeTileDefaults, QuickSettingsScene's InternalScenes) and measured on the emulator's own
@@ -560,6 +560,21 @@ its media notification, as a music app's): the layout file's `media` block (`sha
 Not like Android 17's yet: several sessions (Android shows a carousel; ours the session `Media` picks), the swipe that
 reveals the card's settings and dismisses it, timestamps while seeking, the output switcher itself (Android's dialog: ours
 opens Settings' media output panel), and the card's light following the touch (remedia's ripple).
+
+**Stage 6, turned (2026-10-21).** Pixel's file says `"landscape": "split"`, Android 17's own arrangement on a turned phone
+(measured on the emulator turned, 914 x 411 dp: tools/shots/stock/ls_*):
+
+- The first stage: the quick row on the left half (433 dp, 4 columns, 2 rows), a compact player on the right half (433 x
+  128 dp: no line; next beside the play button) centred on the quick row; the notifications under them on the full-width
+  scrim, as cards 644 dp wide, centred.
+- Quick Settings: the brightness slider across, 22 dp under the status bar; the tiles on the left half 96 dp under it (2
+  rows a page, pages turning within the half), the build number's row under them (its dots and edit button within the
+  half); the full player on the right half, centred on the tiles and that row, growing out of the compact one as they
+  expand (its line row coming in); the footer across at the foot. No large clock: the status bar's row stays as it is,
+  the date beside the time.
+- Against the emulator's own: the compact player 36.2 to 163.4 dp (its 163.8), the full player 132.2 to 307.4 (132.6 to
+  308.2), the slider 52.2 to 91.4 (91.8); upright unchanged (the player 192.0 to 367.6 and 608.0 to 783.6, its 608.4 to
+  784.0).
 
 ## References
 

@@ -93,12 +93,14 @@ internal class QsHeaderBlock(private val panel: QsPanel, private val ctx: Contex
         val clockRow = Design.pt(QsTokens.CLOCK_ROW, u)
         val dateTop = bar + Design.pt(QsTokens.DATE_TOP, u)
         val dateRow = Design.pt(QsTokens.DATE_ROW, u)
-        val collapsedOut = 1f - range(0f, 0.14f, e)
-        val expandedIn = range(0.58f, 1f, e)
+        // (Turned and split, Android keeps the bar's row: the date stays beside the time, no large clock.)
+        val split = panel.split
+        val collapsedOut = if (split) 1f else 1f - range(0f, 0.14f, e)
+        val expandedIn = if (split) 0f else range(0.58f, 1f, e)
 
         // The clock: the bar's time hands over to it (the bar's fades as this one comes over the first part of the way,
         // [QsPanel.Host.expandChanged]), and it grows from there into the large clock.
-        val clockK = smooth(0f, 0.15f, e)
+        val clockK = if (split) 0f else smooth(0f, 0.15f, e)
         if (clockK > 0.003f && time.isNotEmpty()) {
             Design.text(QsTokens.CLOCK).applyTo(text, u)
             val fullSize = text.textSize
@@ -129,7 +131,7 @@ internal class QsHeaderBlock(private val panel: QsPanel, private val ctx: Contex
             val timeBox = maxOf(host.timeRight() - host.timeLeft(), Design.pt(QsTokens.CLOCK_MIN_WIDTH, u))
             val besideTime = host.timeLeft() + timeBox + Design.pt(QsTokens.DATE_GAP, u)
             val x = lerp(host.timeLeft(), besideTime, host.timeShown())
-            c.drawText(date, x, host.timeBaseline() + e * Design.pt(QsTokens.COLLAPSED_SHIFT, u), text)
+            c.drawText(date, x, host.timeBaseline() + (if (split) 0f else e) * Design.pt(QsTokens.COLLAPSED_SHIFT, u), text)
         }
 
         if (expandedIn <= 0.003f) return
@@ -158,7 +160,7 @@ internal class QsHeaderBlock(private val panel: QsPanel, private val ctx: Contex
         panel.barHeight + Design.pt(QsTokens.DATE_TOP, u) + Design.pt(QsTokens.DATE_ROW, u) / 2f + expandedShift(panel.expandK)
 
     /** How present the expanded rows are (they come in over Quick Settings' last 42 %). */
-    fun expandedRowIn(): Float = range(0.58f, 1f, panel.expandK)
+    fun expandedRowIn(): Float = if (panel.split) 0f else range(0.58f, 1f, panel.expandK)
 
     private companion object {
         val io: java.util.concurrent.Executor = java.util.concurrent.Executors.newSingleThreadExecutor()

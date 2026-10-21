@@ -275,7 +275,7 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   its blocks in `shade/qs/`: `QsHeaderBlock`, `BrightnessBlock`, `TileGridBlock`, `QsFooterBlock`, `CardsBlock`; its edit page
   `QsEditPage` (Android 17's Edit tiles; the tiles kept in `QsTileStore`), the media player `MediaBlock` (Android 17's
   remedia, its colours from the art); tokens
-  `comp.qs.*`, motion `motion.qs.*`; Pixel's layout, a preview; docs/SHADE_PIXEL_EVALUATION.md step 4, stages 3 to 5), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
+  `comp.qs.*`, motion `motion.qs.*`; Pixel's layout, a preview; docs/SHADE_PIXEL_EVALUATION.md step 4, stages 3 to 6; turned, the layout's `split`: Android's own landscape), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
   Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),
   that blurs what is behind (One UI: Samsung's view blur on its full-screen view; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded

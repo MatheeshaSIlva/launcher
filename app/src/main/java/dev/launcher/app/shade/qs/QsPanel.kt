@@ -44,6 +44,10 @@ interface QsPanel {
     val surfaces: CcSurfaces
     val glyphs: Glyphs
     val host: Host
+    /** Turned, and the layout splits it (Android's landscape): the tiles on the left half, the media player on the right. */
+    val split: Boolean
+    /** Each half's width while [split]. */
+    val halfWidth: Float
     /** How much of Quick Settings shows (1; less while their edit page comes over them, 0 under it). */
     val shown: Float
     /** The edit button: Quick Settings give way to their edit page. */

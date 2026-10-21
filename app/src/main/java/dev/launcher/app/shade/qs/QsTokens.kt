@@ -329,7 +329,16 @@ object QsTokens {
     val MEDIA_FALLBACK = ColorKey("comp.qs.media.fallback")
     val MEDIA_PRESS_LAYER = NumberKey("comp.qs.media.press-layer")
 
+    // ---- Turned (the layout's landscape "split", Android's own).
+    /** Turned (the layout's landscape "split"): between the two halves; the slider's and the tiles' tops under the status bar; the notifications' width. */
+    val LAND_MIDDLE = NumberKey("comp.qs.land.middle")
+    val LAND_BRIGHTNESS_TOP = NumberKey("comp.qs.land.brightness-top")
+    val LAND_TILES_TOP = NumberKey("comp.qs.land.tiles-top")
+    val LAND_CARDS_WIDTH = NumberKey("comp.qs.land.cards-width")
+    val MEDIA_COMPACT_HEIGHT = NumberKey("comp.qs.media.compact-height")
+
     val KEYS: List<dev.launcher.app.design.Key<*>> = listOf(
+        LAND_MIDDLE, LAND_BRIGHTNESS_TOP, LAND_TILES_TOP, LAND_CARDS_WIDTH, MEDIA_COMPACT_HEIGHT,
         MEDIA_HEIGHT, MEDIA_CORNER, MEDIA_PADDING, MEDIA_TOP_GAP, MEDIA_QS_GAP, MEDIA_APP_SYMBOL, MEDIA_CHIP_WIDTH,
         MEDIA_CHIP_HEIGHT, MEDIA_CHIP_STROKE, MEDIA_CHIP_SYMBOL, MEDIA_TITLE, MEDIA_ARTIST, MEDIA_TEXT_COLOR,
         MEDIA_PLAY_WIDTH, MEDIA_PLAY_HEIGHT, MEDIA_PLAY_TOP, MEDIA_PLAY_CORNER, MEDIA_PAUSED_CORNER, MEDIA_PRESSED_CORNER,

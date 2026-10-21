@@ -63,7 +63,8 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     /** Lays the tiles out for the panel's size and the layout's numbers (and what the phone has). */
     fun layout() {
-        val w = panel.panelWidth.toFloat()
+        // (Turned and split: the left half.)
+        val w = if (panel.split) panel.halfWidth + 2f * panel.side else panel.panelWidth.toFloat()
         tileH = Design.pt(QsTokens.TILE_HEIGHT, u)
         gap = Design.pt(QsTokens.TILE_GAP, u)
         // The layout's columns, at most what leaves a tile its height across (a symbol needs that much).
@@ -71,7 +72,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         cols = spec.columns.value.coerceIn(1, room)
         colW = (w - 2 * panel.side - (cols - 1) * gap) / cols
         quickTop = panel.barHeight + Design.pt(QsTokens.QUICK_TOP, u)
-        fullTop = panel.barHeight + Design.pt(QsTokens.TILES_TOP, u)
+        fullTop = panel.barHeight + Design.pt(if (panel.split) QsTokens.LAND_TILES_TOP else QsTokens.TILES_TOP, u)
         // The person's own (the edit page's), less what this phone cannot have (a flashlight; an app's tile whose app is gone).
         tiles = QsTileStore.tiles(panel.view.context).filter {
             (it.control != Control.FLASHLIGHT || panel.host.state.available(it.control)) &&
@@ -151,7 +152,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
     private fun place(i: Int, out: RectF): Float {
         val p = places[i]
         val e = panel.expandK
-        val pageX = (p.page - panel.page) * panel.panelWidth
+        val pageX = (p.page - panel.page) * pageWidth()
         var left = panel.side + p.col * (colW + gap) + pageX
         var right = left + p.span * colW + (p.span - 1) * gap
         // The row's presses: this tile's own and its neighbours'.
@@ -170,6 +171,9 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
             panel.contentAlpha
         }
     }
+
+    /** How far one page lies from the next (turned and split: the left half and the gap after it). */
+    private fun pageWidth(): Float = if (panel.split) panel.halfWidth + Design.pt(QsTokens.LAND_MIDDLE, u) else panel.panelWidth.toFloat()
 
     private var edgeL = 0f
     private var edgeR = 0f
@@ -233,7 +237,8 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
     }
 
     /** The grid's area at the second stage (sideways swipes there turn pages). */
-    fun inGrid(x: Float, y: Float): Boolean = y >= fullTop - gap && y <= fullBottom + gap
+    fun inGrid(x: Float, y: Float): Boolean = y >= fullTop - gap && y <= fullBottom + gap &&
+        (!panel.split || x <= panel.side + panel.halfWidth)
 
     // ------------------------------------------------------------------ touches
 
@@ -298,12 +303,16 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     fun draw(c: Canvas) {
         if (tiles.isEmpty()) return
+        // (Turned and split, pages turn within the left half: the player's half shows none of them.)
+        val save = c.save()
+        if (panel.split) c.clipRect(0f, 0f, panel.side + panel.halfWidth + Design.pt(QsTokens.LAND_MIDDLE, u) / 2f, panel.panelHeight.toFloat())
         val w = panel.panelWidth
         for (i in tiles.indices) {
             val f = place(i, r)
             if (f <= 0.003f || r.right < 0f || r.left > w || r.height() <= 0.5f) continue
             drawTile(c, tiles[i], anim(tiles[i]), r, f)
         }
+        c.restoreToCount(save)
     }
 
     /**
