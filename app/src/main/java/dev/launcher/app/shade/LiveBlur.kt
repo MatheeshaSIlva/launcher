@@ -28,6 +28,8 @@ import java.util.concurrent.TimeUnit
  *   heat) and starts again later: [on] follows it, and the panels' own picture takes the blur's place meanwhile.
  * - Otherwise [available] is false and Control Center keeps its own blurred picture of what was behind (BackdropView).
  *
+ * Samsung's view blur and Android's blur behind take their radius from the strength on one scale ([radiusAt]).
+ *
  * The window lives on a thread of its own: each change of its parameters is a relayout (10-50 ms of the window's thread),
  * which must never land on the shade's thread while a finger moves. Whenever Control Center is closed it is one empty
  * pixel without blur (nothing to compose), never a GONE view: the window manager waits for every window of ours to draw
@@ -153,7 +155,10 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         thread.quitSafely()
     }
 
-    /** This frame's strength (0..1) of the blur; [show] false hides the window (the panel closed). */
+    /**
+     * This frame's strength (0..1) of the blur, how strong it looks (its radius on that scale: [radiusAt]); [show] false hides
+     * the window (the panel closed).
+     */
     fun set(strength: Float, show: Boolean) {
         if (!available) return
         want = strength.coerceIn(0f, 1f)
@@ -205,13 +210,14 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
     }
 
     /**
-     * Samsung's view blur at strength [k] (its radius: it does not follow the view's alpha). A blur looks about as strong as
-     * the logarithm of its radius: a radius that fell in step with Control Center stayed a heavy blur until its last frames
-     * and then cleared at once (Matheesha's video: the panel gone, home still blurred for half a second, then sharp in one
-     * frame). The radius follows [k] on that scale instead, (1 + max)^k - 1, so the blur clears as the controls fade.
+     * The strength for [set] at which the radius is [fraction] of its full one: for a blur whose radius follows a motion in
+     * step (Android's shade, as Android's own). Samsung's dim follows the strength as it is.
      */
+    fun strengthOfRadius(fraction: Float): Float = if (mode == Mode.SAMSUNG) fraction else strengthOfRadius(fraction, maxBlurPx)
+
+    /** Samsung's view blur at strength [k] (its radius: it does not follow the view's alpha). */
     private fun viewBlur(k: Float) {
-        val r = if (k <= 0f) 0 else Math.round(Math.pow(1.0 + maxBlurPx, k.toDouble()) - 1.0).toInt()
+        val r = radiusAt(k, maxBlurPx)
         if (r <= 0) dev.launcher.app.design.SamsungBlur.clear(view)
         else if (!dev.launcher.app.design.SamsungBlur.set(view, r, 0f, 0)) throw IllegalStateException("Samsung view blur refused")
         view.invalidate()
@@ -235,7 +241,7 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
                 val f = WindowManager.LayoutParams.FLAG_BLUR_BEHIND or WindowManager.LayoutParams.FLAG_DIM_BEHIND
                 lp.flags = if (k > 0f) lp.flags or f else lp.flags and f.inv()
                 lp.dimAmount = if (k > 0f) STANDARD_DIM else 0f
-                lp.blurBehindRadius = Math.round(maxBlurPx * k)
+                lp.blurBehindRadius = radiusAt(k, maxBlurPx)
             }
             Mode.NONE -> {}
         }
@@ -293,18 +299,32 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
         }
     }
 
-    private companion object {
+    companion object {
+        /**
+         * The radius at strength [k] (0..1) of a blur [max] at full strength, Samsung's view blur and Android's blur behind
+         * alike. A blur looks about as strong as the logarithm of its radius: a radius that fell in step with Control Center
+         * stayed a heavy blur until its last frames and then cleared at once (Matheesha's video, Samsung's view blur: the panel
+         * gone, home still blurred for half a second, then sharp in one frame). On that scale, (1 + max)^k - 1, the blur
+         * clears as the controls fade.
+         */
+        fun radiusAt(k: Float, max: Float): Int =
+            if (k <= 0f || max <= 0f) 0 else Math.round(Math.pow(1.0 + max, k.toDouble()) - 1.0).toInt()
+
+        /** The strength at which [radiusAt] gives [fraction] of [max] (its inverse). */
+        fun strengthOfRadius(fraction: Float, max: Float): Float =
+            if (fraction <= 0f || max <= 0f) 0f else (Math.log1p(max * fraction.toDouble()) / Math.log1p(max.toDouble())).toFloat()
+
         /** How long the prewarm's blur stays (a few frames: SurfaceFlinger composes it at least once; ms). */
-        const val PREWARM_MS = 300L
+        private const val PREWARM_MS = 300L
         /** Where the idle pixel lies: just past the screen's top-left corner. */
-        const val IDLE_X = -4
-        const val IDLE_Y = -4
+        private const val IDLE_X = -4
+        private const val IDLE_Y = -4
         /**
          * The standard blur's dim (black's alpha): above 0 for SurfaceFlinger (see [writeStrength]), under half a step of
          * 8-bit colour even on white (255 / 1024 = 0.25), so the picture is the blur's alone. 2^-10 is exact in the half
          * precision SurfaceFlinger keeps alpha in.
          */
-        const val STANDARD_DIM = 1f / 1024f
+        private const val STANDARD_DIM = 1f / 1024f
     }
 
     private fun setupSamsung() {

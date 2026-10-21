@@ -722,10 +722,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             // (Android's shade: its blur and background come early in the pull and finish gently: measured on Android 17's own,
             // the screen behind half covered at a quarter of the way.)
             val bk = if (ccP != null) kotlin.math.sqrt(bgP.coerceIn(0f, 1f)) else 1f - (1f - bgP.coerceIn(0f, 1f)).let { it * it }
-            // (Its blur grows in step with the pull.)
+            // (Its blur's radius grows in step with the pull, as Android's own; Control Center's blur looks as strong as the
+            // controls show, the live blur's own scale.)
             val blurK = if (ccP != null) bk else bgP.coerceIn(0f, 1f)
             // (Not while the system does not blur: new parameters would end the last blur at once, under our picture coming.)
-            if (live && liveBlur.on) liveBlur.set(blurK, true)
+            if (live && liveBlur.on) liveBlur.set(if (ccP != null) blurK else liveBlur.strengthOfRadius(blurK), true)
             val veil = veilOf(bgKey)
             backdrop.set(blurRadius(bgKey) * blurK, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
             if (ccP != null) bar.setRowAlpha(1f - editK)
