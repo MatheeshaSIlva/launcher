@@ -23,6 +23,15 @@ class LiveBlurTest {
         assertTrue(LiveBlur.radiusAt(0.25f, 54f) <= 2)
     }
 
+    @Test fun theShadesPictureTakesTheSameScaleUnrounded() {
+        for (i in 0..20) {
+            val k = i / 20f
+            assertEquals(LiveBlur.radiusAt(k, 108f).toDouble(), LiveBlur.exactRadiusAt(k, 108f), 0.5)
+        }
+        assertEquals(0.0, LiveBlur.exactRadiusAt(0f, 108f), 0.0)
+        assertEquals(108.0, LiveBlur.exactRadiusAt(1f, 108f), 1e-9)
+    }
+
     @Test fun strengthOfRadiusIsItsInverse() {
         for (max in listOf(8f, 54f, 150f)) for (i in 0..20) {
             val f = i / 20f

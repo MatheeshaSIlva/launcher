@@ -307,8 +307,13 @@ class LiveBlur(ctx: Context, private val wm: WindowManager) {
          * gone, home still blurred for half a second, then sharp in one frame). On that scale, (1 + max)^k - 1, the blur
          * clears as the controls fade.
          */
-        fun radiusAt(k: Float, max: Float): Int =
-            if (k <= 0f || max <= 0f) 0 else Math.round(Math.pow(1.0 + max, k.toDouble()) - 1.0).toInt()
+        fun radiusAt(k: Float, max: Float): Int = Math.round(exactRadiusAt(k, max)).toInt()
+
+        /**
+         * [radiusAt] before rounding, for a blur that takes any radius: the shade's own picture of what is behind
+         * (BackdropView), which crossfades with the live blur and must look as strong at every point of a pull.
+         */
+        fun exactRadiusAt(k: Float, max: Float): Double = if (k <= 0f || max <= 0f) 0.0 else Math.pow(1.0 + max, k.toDouble()) - 1.0
 
         /** The strength at which [radiusAt] gives [fraction] of [max] (its inverse). */
         fun strengthOfRadius(fraction: Float, max: Float): Float =

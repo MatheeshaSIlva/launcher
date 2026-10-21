@@ -379,7 +379,10 @@ copy it wholesale — port the working pieces cleanly. File map:
   sets the radius on that scale, (1 + max)^k - 1, Samsung's view blur and Android's blur behind alike (`LiveBlur.radiusAt`;
   Android's was still in step until 2026-10-22: early in a pull, the controls still faint, it was already 45 of 108 px and
   home a flat smear, now 6; closing, the controls gone, 34, now 3). Android's shade keeps its radius in step with the pull,
-  as Android's own (`LiveBlur.strengthOfRadius`). And One UI 9 has no `View.semSetBlurEnabled`: a null `SemBlurInfo`
+  as Android's own (`LiveBlur.strengthOfRadius`). The shade's own picture of what is behind (BackdropView: no live blur,
+  Android not blurring, a launch's hold) takes each panel's radius on the same scale (`LiveBlur.exactRadiusAt`): left in
+  step, it was 41 px where the live blur was 5, and the two crossfade at any point of a pull. And One UI 9 has no
+  `View.semSetBlurEnabled`: a null `SemBlurInfo`
   clears a view's blur (`SamsungBlur.clear`).
 - **SurfaceFlinger does not re-check a layer's visibility when only its blur radius changes** (Android 17 emulator; the
   standard blur, `LiveBlur` mode STANDARD: Pixels and other non-Samsung phones). Android's blur behind a window is the

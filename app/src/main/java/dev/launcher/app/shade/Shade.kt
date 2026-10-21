@@ -728,7 +728,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             // (Not while the system does not blur: new parameters would end the last blur at once, under our picture coming.)
             if (live && liveBlur.on) liveBlur.set(if (ccP != null) blurK else liveBlur.strengthOfRadius(blurK), true)
             val veil = veilOf(bgKey)
-            backdrop.set(blurRadius(bgKey) * blurK, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
+            // Our picture blurred as the live blur is at this point of the pull (its radius on the same scale): the two
+            // crossfade when Android stops or starts blurring, and a launch holds the picture, at any point of a pull.
+            val pictureBlur = if (ccP != null) LiveBlur.exactRadiusAt(blurK, blurRadius(bgKey)).toFloat() else blurRadius(bgKey) * blurK
+            backdrop.set(pictureBlur, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
             if (ccP != null) bar.setRowAlpha(1f - editK)
         }
         if (ncP != null) nc.progress = ncP
