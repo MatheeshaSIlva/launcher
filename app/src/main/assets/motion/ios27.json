@@ -1056,6 +1056,13 @@
    ],
    "src": "kit:AOSP SystemUI scene container: the shade coming to rest after a pull (SwipeAnimation's fling spring, stopped at its place)"
   },
+  "motion.qs.page": {
+   "spring": [
+    0.31,
+    1.0
+   ],
+   "src": "kit:Compose's HorizontalPager as Quick Settings use it (PagerDefaults.flingBehavior: spring, stiffness 400, no bounce)"
+  },
   "motion.qs.slider-icon": {
    "bezier": [
     0.4,

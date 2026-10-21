@@ -275,7 +275,8 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   its blocks in `shade/qs/`: `QsHeaderBlock`, `BrightnessBlock`, `TileGridBlock`, `QsFooterBlock`, `CardsBlock`; its edit page
   `QsEditPage` (Android 17's Edit tiles; the tiles kept in `QsTileStore`), the media player `MediaBlock` (Android 17's
   remedia, its colours from the art); tokens
-  `comp.qs.*`, motion `motion.qs.*`; Pixel's layout, a preview; docs/SHADE_PIXEL_EVALUATION.md step 4, stages 3 to 6; turned, the layout's `split`: Android's own landscape), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
+  `comp.qs.*`, motion `motion.qs.*`; Pixel's layout, a preview; docs/SHADE_PIXEL_EVALUATION.md step 4, stages 3 to 7; turned, the layout's `split`: Android's own landscape;
+  its plain surfaces drawn as they are, `CcSurfaces.plainDirect`), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
   Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),
   that blurs what is behind (One UI: Samsung's view blur on its full-screen view; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded
@@ -871,6 +872,12 @@ copy it wholesale — port the working pieces cleanly. File map:
   after its window is added (`LiveBlur.prewarmCorner`; a strength that rounds to radius 0 is no blur at all).
 - **Another app's name or icon (`getApplicationLabel`, `getApplicationIcon`) loads that app's resources** (`LoadApkAssets`:
   65 ms for the Permission Controller): never on a drawing thread. `shade/AppInfo` reads them before Notifs publishes.
+  Nor whether an app exists (`getLaunchIntentForPackage`): Android's shade asked it for every app-backed tile at every frame
+  (a tenth of the process while it was open; `ControlState.available` keeps the answers per opening).
+- **A plain surface (Material colours, no glass) composed by the painter waits for our picture of what is behind** and
+  shows a dark grey until it comes (over 2 s on a busy emulator): Android's shade opened grey and brown. Drawn as they are
+  they lie over what really is under them (`CcSurfaces.plainDirect`). And a clip or a shape with its top corners alone
+  round goes through the GPU's stencil at every frame; one radius with the other corners off the screen is analytic.
 - **A Kotlin lambda taking an `Int` boxes it at every call** (`(Int) -> Boolean` called per pixel: ~40 MB of Integers per
   glass clock build, a GC at every minute). Hot loops take arrays or plain parameters.
 - **A GPU bitmap's `copy(ARGB_8888)` reads the whole image back on the render thread** (14-32 ms for home's picture, every

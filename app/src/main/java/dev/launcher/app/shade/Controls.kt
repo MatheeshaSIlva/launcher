@@ -162,6 +162,7 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
     // ------------------------------------------------------------------ reading
 
     fun readAll() {
+        appBacked.clear()
         val cr = ctx.contentResolver
         airplane = Settings.Global.getInt(cr, Settings.Global.AIRPLANE_MODE_ON, 0) == 1
         bluetooth = Settings.Global.getInt(cr, "bluetooth_on", 0) == 1
@@ -543,11 +544,13 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
     fun available(c: Control): Boolean = when (c) {
         Control.NFC -> hasNfc
         Control.FLASHLIGHT -> torchId != null || !started
-        // The app-backed controls only where such an app is installed.
+        // The app-backed controls only where such an app is installed (asked of the package manager once per opening of a
+        // panel, [readAll]: drawing asks at every frame).
         Control.QUICK_SHARE, Control.VOICE_MEMO, Control.RECOGNIZE_MUSIC, Control.TRANSLATE, Control.MAGNIFIER, Control.WALLET,
-        Control.HOME -> intentFor(c) != null
+        Control.HOME -> appBacked.getOrPut(c) { intentFor(c) != null }
         else -> true
     }
+    private val appBacked = java.util.concurrent.ConcurrentHashMap<Control, Boolean>()
 
     private companion object {
         val QUICK_SHARE_APPS = listOf("com.samsung.android.app.sharelive")

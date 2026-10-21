@@ -576,6 +576,37 @@ opens Settings' media output panel), and the card's light following the touch (r
   308.2), the slider 52.2 to 91.4 (91.8); upright unchanged (the player 192.0 to 367.6 and 608.0 to 783.6, its 608.4 to
   784.0).
 
+**Stage 7, Matheesha on the S24 (2026-10-21): "the expanded controls swiping mechanism is broken ... when music is playing,
+I couldn't scroll down the notifications ... not sure if the shade background colours work properly".**
+
+- Quick Settings' pages: a sideways swipe left the pages where the finger let go (the release was never handled). Now
+  Compose's pager as Quick Settings use it (PagerDefaults' snap): a fling of 400 dp/s turns to the next page that way,
+  else the nearer page, one page at most, on `motion.qs.page` (spring, stiffness 400). Checked with real touches: flings
+  both ways, a short drag back, a drag past half on.
+- The notifications' scroll: its end was worked out when the list was laid out, while the shade was still closed (the
+  scrim at the top: the whole height to scroll in), so a list that only just overflowed could not scroll at all, and the
+  media player (it lowers the scrim 192 dp) made it so for most lists. The list's viewport is now under the scrim where it
+  will rest (the player's coming or going counted), checked again whenever that place moves and at each drag.
+- The background under five wallpapers (warm, green, blue, dark, light; Android's palette given each one's main colour,
+  as a wallpaper change does on a Pixel: the emulator does not take a palette from a wallpaper an app sets until its
+  picker or a screen-off), the emulator's own shade and ours over the same home: the first stage and Quick Settings within
+  0 to 3 levels everywhere (tools/shots/wp). Found on the way: the panel's tiles, buttons and cards (plain Material colours,
+  no glass) were composed by the painter over our picture of what is behind, which comes after the panel starts (over
+  2 s on a busy emulator) and stood in for a dark grey until then: the shade opened dark grey and brown and lightened
+  once the picture came. Plain materials are now drawn as they are, over what really is under them (the system's live
+  blur, the veil, a tile under a symbol's circle): `CcSurfaces.plainDirect`, on while Android's shade draws.
+- Performance (emulator, simpleperf and Perfetto while the shade stayed open with music playing, which draws it at every
+  frame): recording a frame of the panel took 7.7 ms, the tiles 6.75 of it: every tile asked the package manager at every
+  frame whether its app exists (`ControlState.available` for Wallet, Quick Share, Device controls: a tenth of the
+  process), every text style parsed its font family's name again (`Fonts.parse`), every tile's words were ellipsized again.
+  Kept now (per opening, once, per words and width): 2.7 ms a frame, the tiles 0.65. The media player's wave is one
+  wavelength drawn into a strip once and laid along the line (a stroked path the line's length, made at every frame,
+  went through the GPU's stencil), and the clips around the scrim and the cards have one radius (their bottom corners
+  below the screen). The emulator's frame times swing by 2x between identical runs: the frame pacing is the S24's to judge.
+- The corners: every tile, box, slider, button, card and the media card measured against the emulator's own at full
+  resolution: the same. None of Android 17's buttons change shape when pressed (its footer, tiles and cards checked in
+  SystemUIGoogle). Not reproduced; the S24's are to be shown.
+
 ## References
 
 - Captures (emulator, Android 17 SystemUI, 1080 x 2400, 420 dpi): `tools/shots/shade_qqs.png` (first pull),

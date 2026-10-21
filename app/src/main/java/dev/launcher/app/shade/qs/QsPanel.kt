@@ -31,6 +31,8 @@ interface QsPanel {
     /** Where the notification scrim's top is now (px): it comes down from the top edge with the first stage, and goes out
      *  through the bottom edge with the second, the cards on it. */
     val scrimTop: Float
+    /** Where the notification scrim comes to rest at the first stage (the cards' list scrolls within what is under it). */
+    val scrimRestTop: Float
     /** Quick Settings' content beyond the quick row (the brightness, the rest of the grid, the build row): its fade, and how
      *  far it is from its place (it moves with the grid as the quick row's tiles go to theirs). */
     val contentAlpha: Float

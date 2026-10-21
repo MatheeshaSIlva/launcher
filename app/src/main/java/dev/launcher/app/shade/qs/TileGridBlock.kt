@@ -375,8 +375,8 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         label.color = faded(mix(mix(Design.color(QsTokens.LABEL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), lit), goneC, gone), alpha)
         val ll = Design.text(QsTokens.LABEL).lineHeightPt * u
         // (On the edit page: an app's tile names its app, as Android's; ours say nothing more.)
-        val sub = if (edit) t.tile?.let { AppTiles.info(it)?.appLabel } else QsTiles.detail(panel.host.state, t, carrier)
-        val name = TextUtils.ellipsize(if (edit) QsTiles.name(t) else QsTiles.shownName(panel.host.state, t), label, maxW, TextUtils.TruncateAt.END).toString()
+        val sub = if (edit) t.tile?.let { AppTiles.info(it)?.appLabel } else QsTiles.detail(panel.host.state, t, carrier, a.state)
+        val name = fitted(if (edit) QsTiles.name(t) else QsTiles.shownName(panel.host.state, t), label, maxW)
         val s = 1f + (Design.num(QsTokens.TEXT_POP) - 1f) * pop
         c.save()
         c.scale(s, s, tx + maxW / 2f, r.centerY())
@@ -388,7 +388,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
             val dl = Design.text(QsTokens.DETAIL).lineHeightPt * u
             val top = r.centerY() - (ll + dl) / 2f
             c.drawText(name, tx, baselineIn(label, top, ll), label)
-            c.drawText(TextUtils.ellipsize(sub, detail, maxW, TextUtils.TruncateAt.END).toString(), tx, baselineIn(detail, top + ll, dl), detail)
+            c.drawText(fitted(sub, detail, maxW), tx, baselineIn(detail, top + ll, dl), detail)
         }
         c.restore()
     }
@@ -401,6 +401,15 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     /** The carrier's name and network as Mobile data's state (the header reads it off the drawing thread). */
     var carrier = ""
+
+    /** Words cut to fit, kept (ellipsizing every tile's words at every frame was a tenth of the panel's drawing). */
+    private data class Fit(val text: String, val width: Int, val size: Float, val face: android.graphics.Typeface?)
+    private val fits = object : LinkedHashMap<Fit, String>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Fit, String>?) = size > 96
+    }
+
+    private fun fitted(text: String, p: TextPaint, maxW: Float): String =
+        fits.getOrPut(Fit(text, maxW.toInt(), p.textSize, p.typeface)) { TextUtils.ellipsize(text, p, maxW.toInt().toFloat(), TextUtils.TruncateAt.END).toString() }
 
     companion object {
         /** Toggles that change what the phone shares or how it is reached: over the lock screen they wait for an unlock. */

@@ -46,6 +46,8 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
     /** Shown (0 .. 1): the card comes and goes on the appear role, the notifications under it making way. */
     private val shownV = MotionValue(0f, 1000f, { inv() })
     val shown: Float get() = shownV.value.coerceIn(0f, 1f)
+    /** Whether it is coming (1) or going (0): where the notifications will rest. */
+    val shownTarget: Float get() = shownV.target
     /** Playing (0 paused .. 1): the play button's shape and the wave's height. */
     private val playingV = MotionValue(0f, 1000f, { inv() })
     private val pressV = MotionValue(0f, 1000f, { inv() })
@@ -342,6 +344,45 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
         return if (d <= 0L) 0f else (media.positionNow().toFloat() / d).coerceIn(0f, 1f)
     }
 
+    private var waveBitmap: Bitmap? = null
+    private var waveShader: BitmapShader? = null
+    private var waveAmp = -1f
+    private val waveMatrix = Matrix()
+    private val wavePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private var tintFor = 0
+    private var tint: android.graphics.PorterDuffColorFilter? = null
+
+    private fun waveTint(color: Int): android.graphics.PorterDuffColorFilter {
+        val c = color or (0xFF shl 24)
+        if (tint == null || tintFor != c) { tintFor = c; tint = android.graphics.PorterDuffColorFilter(c, android.graphics.PorterDuff.Mode.SRC_IN) }
+        return tint!!
+    }
+
+    /** One wavelength of the wave at [amp] (white; tinted as it is drawn), drawn again only when its height changes. */
+    private fun waveTile(length: Float, amp: Float, sw: Float): Bitmap {
+        val w = Math.round(length).coerceAtLeast(2)
+        val h = kotlin.math.ceil(2f * Design.pt(QsTokens.MEDIA_WAVE_AMPLITUDE, u) + sw + 4f).toInt()
+        waveBitmap?.let { if (it.width == w && it.height == h && kotlin.math.abs(amp - waveAmp) < 0.1f) return it }
+        val b = waveBitmap?.takeIf { it.width == w && it.height == h } ?: Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).also {
+            waveBitmap = it
+            waveShader = BitmapShader(it, Shader.TileMode.REPEAT, Shader.TileMode.CLAMP)
+        }
+        b.eraseColor(0)
+        val cv = Canvas(b)
+        val pp = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = sw; color = -1; strokeCap = Paint.Cap.ROUND }
+        wave.rewind()
+        // (Three wavelengths across the strip of one: its ends meet whatever lies next to them.)
+        var x = -w.toFloat()
+        wave.moveTo(x, h / 2f + amp * sin(2.0 * PI * x / w).toFloat())
+        while (x < 2f * w) {
+            x += 0.5f
+            wave.lineTo(x, h / 2f + amp * sin(2.0 * PI * x / w).toFloat())
+        }
+        cv.drawPath(wave, pp)
+        waveAmp = amp
+        return b
+    }
+
     /** Android's squiggly line: a travelling wave up to the thumb (flat while paused), a faint track after it. */
     private fun drawLine(c: Canvas, y: Float, white: Int, a: Float, playing: Float) {
         val x0 = lineX0()
@@ -352,25 +393,31 @@ internal class MediaBlock(private val panel: QsPanel, private val tiles: () -> T
         val dt = if (lastNs == 0L) 0f else ((now - lastNs) / 1e9f).coerceIn(0f, 1f / 30f)
         lastNs = now
         val length = Design.pt(QsTokens.MEDIA_WAVE_LENGTH, u)
-        if (media.playing && seekAt == null) phase = (phase + dt * Design.pt(QsTokens.MEDIA_WAVE_SPEED, u)) % length
+        // (Wrapped at the strip's whole width: a wrap at the fractional length made a jump of under a pixel.)
+        if (media.playing && seekAt == null) phase = (phase + dt * Design.pt(QsTokens.MEDIA_WAVE_SPEED, u)) % Math.round(length).coerceAtLeast(2)
         val amp = Design.pt(QsTokens.MEDIA_WAVE_AMPLITUDE, u) * playing * (1f - seekV.value.coerceIn(0f, 1f))
         // The track after the thumb.
         stroke.strokeWidth = Design.pt(QsTokens.MEDIA_TRACK, u)
         stroke.color = faded(white, a * Design.num(QsTokens.MEDIA_TRACK_ALPHA))
         if (x1 > tx) c.drawLine(tx, y, x1, y, stroke)
-        // The wave up to it.
+        // The wave up to it: one wavelength drawn once into a strip and laid along the line, moved by the phase (a stroked
+        // path the line's length, made anew at every frame, was two stencilled paths a frame on the GPU). Flat, a line.
         if (tx > x0) {
-            wave.rewind()
-            wave.moveTo(x0, y)
-            val step = max(1f, u)
-            var x = x0
-            while (x < tx) {
-                x = min(x + step, tx)
-                wave.lineTo(x, y + amp * sin(2.0 * PI * (x - x0 + phase) / length).toFloat())
+            val sw = Design.pt(QsTokens.MEDIA_WAVE_STROKE, u)
+            if (amp < 0.25f) {
+                stroke.strokeWidth = sw
+                stroke.color = faded(white, a)
+                c.drawLine(x0, y, tx, y, stroke)
+            } else {
+                val tile = waveTile(length, amp, sw)
+                val h = tile.height.toFloat()
+                waveMatrix.setTranslate(x0 - phase, y - h / 2f)
+                waveShader?.setLocalMatrix(waveMatrix)
+                wavePaint.shader = waveShader
+                wavePaint.colorFilter = waveTint(white)
+                wavePaint.alpha = (255 * a).toInt().coerceIn(0, 255)
+                c.drawRect(x0, y - h / 2f, tx, y + h / 2f, wavePaint)
             }
-            stroke.strokeWidth = Design.pt(QsTokens.MEDIA_WAVE_STROKE, u)
-            stroke.color = faded(white, a)
-            c.drawPath(wave, stroke)
         }
         // The thumb.
         val tw = Design.pt(QsTokens.MEDIA_THUMB_WIDTH, u)

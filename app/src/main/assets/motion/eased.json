@@ -788,6 +788,16 @@
    "ms": 480,
    "src": "judged:test preset: iOS 27's spring (0.32 s, damping 0.8) as a bezier (back-out, 480 ms)"
   },
+  "motion.qs.page": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 390,
+   "src": "judged:test preset: iOS 27's spring (0.31 s, damping 1.0) as a bezier (emphasized decelerate, 390 ms)"
+  },
   "motion.qs.tile-bounce": {
    "bezier": [
     0.05,

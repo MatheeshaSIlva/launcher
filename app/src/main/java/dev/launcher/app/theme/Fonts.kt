@@ -102,10 +102,13 @@ object Fonts {
     private fun read(key: ChoiceKey): String = try { Design.choice(key) } catch (_: Throwable) { FontFamily.Inter.id }
 
     /** [id]'s family; one that names none is Inter (logged once). */
-    private fun parse(id: String): FontFamily = FontFamily.parse(id) ?: run {
+    /** (Parsed once each: text styles naming a family ask at every draw.) */
+    private val parsed = java.util.concurrent.ConcurrentHashMap<String, FontFamily>()
+
+    private fun parse(id: String): FontFamily = parsed.getOrPut(id) { FontFamily.parse(id) ?: run {
         if (synchronized(warned) { warned.add(id) }) AppLog.log("[fonts] '$id' is not a font family (inter, system, system-serif, system-mono, google:Name): Inter")
         FontFamily.Inter
-    }
+    } }
 
     // ------------------------------------------------------------------ typefaces
 

@@ -145,9 +145,10 @@ object QsTiles {
     }
 
     /** The words under a wide tile's name (null: none, as Android's when the name says it all). */
-    fun detail(state: ControlState, t: QsTile, carrier: String): String? {
+    fun detail(state: ControlState, t: QsTile, carrier: String, known: TileState? = null): String? {
         if (t.tile != null) return AppTiles.state(t.tile)?.secondary?.takeIf { it.isNotEmpty() }
-        val s = stateOf(state, t)
+        // (Drawing passes the state it already has: working it out asks the package manager for the app-backed tiles.)
+        val s = known ?: stateOf(state, t)
         if (s == TileState.UNAVAILABLE) return "Unavailable"
         val on = s == TileState.ACTIVE
         return when (t.control) {

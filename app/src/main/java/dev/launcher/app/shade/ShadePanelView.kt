@@ -74,12 +74,16 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     override val squish: Float get() = lerp(Design.num(QsTokens.SQUISH).coerceIn(0f, 1f), 1f, p)
 
     /** The scrim's top at the first stage's rest: under the quick row (or the bar, without tiles), and the media player as it shows. */
-    private fun scrimRest(): Float {
+    private fun scrimRest(final: Boolean = false): Float {
         val quick = tiles?.quickBottomRest ?: barHeight.toFloat()
         // (Turned, the player lies beside the quick row: the scrim under whichever reaches lower.)
-        val under = media?.let { lerp(quick, if (split) maxOf(quick, it.firstBottomRest()) else it.firstBottomRest(), it.shown) } ?: quick
+        val under = media?.let {
+            lerp(quick, if (split) maxOf(quick, it.firstBottomRest()) else it.firstBottomRest(), if (final) it.shownTarget else it.shown)
+        } ?: quick
         return under + Design.pt(QsTokens.SHELF_INSET, u)
     }
+
+    override val scrimRestTop: Float get() = scrimRest(final = true)
 
     override val scrimTop: Float get() = lerp(0f, scrimRest(), p) + expandK * (height - scrimRest())
 
@@ -324,6 +328,12 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
 
     override fun onDraw(c: Canvas) {
         if (progress <= 0.002f || width == 0) return
+        // (Android's surfaces are plain colours: drawn as they are, over what really is under them; see CcSurfaces.plainDirect.)
+        surfaces.plainDirect = true
+        try { drawPanel(c) } finally { surfaces.plainDirect = false }
+    }
+
+    private fun drawPanel(c: Canvas) {
         cards?.beginFrame()
         // Quick Settings under the notification scrim: what the scrim covers does not show through it (Android draws it
         // over them, opaque to what it hides), around its rounded top corners it does.
@@ -331,22 +341,28 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         val corner = Design.pt(QsTokens.SHELF_CORNER, u)
         val save = c.save()
         if (cards != null && top < height) {
+            // (One radius, the bottom corners below the screen: analytic on the GPU, where top corners alone took the stencil.)
             scrimPath.rewind()
-            for (i in 0 until 4) scrimRadii[i] = corner
-            scrimPath.addRoundRect(0f, top, width.toFloat(), height + corner, scrimRadii, Path.Direction.CW)
+            scrimPath.addRoundRect(0f, top, width.toFloat(), height + 2f * corner, corner, corner, Path.Direction.CW)
             c.clipOutPath(scrimPath)
         }
         if (shown > 0.003f) {
-            footer?.drawActions(c)
-            brightness?.draw(c)
-            tiles?.draw(c)
-            footer?.drawRow(c)
-            media?.draw(c)
+            traced("qs: footer") { footer?.drawActions(c) }
+            traced("qs: brightness") { brightness?.draw(c) }
+            traced("qs: tiles") { tiles?.draw(c) }
+            traced("qs: build row") { footer?.drawRow(c) }
+            traced("qs: media") { media?.draw(c) }
         }
         c.restoreToCount(save)
-        cards?.draw(c)
-        if (shown > 0.003f) header?.draw(c)
-        edit?.draw(c, range(0.5f, 1f, editV.value))
+        traced("qs: cards") { cards?.draw(c) }
+        if (shown > 0.003f) traced("qs: header") { header?.draw(c) }
+        traced("qs: edit page") { edit?.draw(c, range(0.5f, 1f, editV.value)) }
+    }
+
+    /** [block] as a section of its own in a trace (what each part of the panel costs to record). */
+    private inline fun traced(name: String, block: () -> Unit) {
+        android.os.Trace.beginSection(name)
+        try { block() } finally { android.os.Trace.endSection() }
     }
 
     // ------------------------------------------------------------------ touches
@@ -467,6 +483,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                     Mode.CARD -> { cards?.release(); if (up && !decided) cards?.tap(x, y) }
                     Mode.SWIPE -> cards?.endSwipe(vx)
                     Mode.SCROLL -> cards?.endScroll(-vy)
+                    Mode.PAGE -> settlePage(vx)
                     Mode.EXPAND -> {
                         val dy = y - downY
                         val d = expandTravel()
@@ -486,7 +503,26 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         return true
     }
 
+    /**
+     * The tiles' pages let go: Compose's pager as Quick Settings use it (PagerDefaults' snap): a fling of 400 dp/s turns to
+     * the next page that way, else the nearer page; one page at most from where the swipe began, on the page role.
+     */
+    private fun settlePage(vx: Float) {
+        val pages = tiles?.pages ?: 1
+        val now = pageV.value
+        val from = Math.round(pageFrom)
+        val target = when {
+            vx <= -PAGE_FLING_DP * u -> kotlin.math.floor(now).toInt() + 1
+            vx >= PAGE_FLING_DP * u -> kotlin.math.ceil(now).toInt() - 1
+            else -> Math.round(now)
+        }.coerceIn(from - 1, from + 1).coerceIn(0, pages - 1)
+        // (The spring takes the finger's speed, in pages a second.)
+        pageV.animateTo(target.toFloat(), Motion.role(MotionTokens.QS_PAGE), -vx / width.coerceAtLeast(1))
+    }
+
     private companion object {
+        /** Compose's pager: a fling this fast turns the page (dp/s; MinFlingVelocityDp). */
+        const val PAGE_FLING_DP = 400f
         /** Android's scene layout: a fling this fast decides (dp/s; SwipeDetectorDefaults.VelocityThreshold). */
         const val VELOCITY_DP = 125f
         /** And this much travel toward the other scene does (dp; DragControllerImpl's positional threshold). */

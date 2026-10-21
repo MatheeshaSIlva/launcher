@@ -471,6 +471,7 @@ SEED = {
     'motion.qs.tile-pop-back': {'bezier': [1, 0, 0.95, 1], 'ms': 167, 'src': "kit:AOSP SystemUI BounceableTileViewModel.animateBounce: and back in 167 ms (BounceEndEasing)"},
     'motion.qs.edit': {'bezier': [0.4, 0, 0.2, 1], 'ms': 500, 'src': "kit:AOSP SystemUI QuickSettingsScene InternalScenes: Quick Settings to their edit page in tween(500), the panel fading out over the first half and the page in over the second"},
     'motion.qs.edit-place': {'spring': [0.31, 0.75], 'src': "kit:AOSP SystemUI EditModeTileDefaults.TilePlacementSpec: tiles moving to their places on the edit page on spring(stiffness 400, damping 0.75)"},
+    'motion.qs.page': {'spring': [0.31, 1.0], 'src': "kit:Compose's HorizontalPager as Quick Settings use it (PagerDefaults.flingBehavior: spring, stiffness 400, no bounce)"},
     'motion.qs.media': {'spring': [0.31, 1.0], 'src': "kit:AOSP SystemUI remedia: the play button's shape and the wave's height following play and pause (spring, stiffness 400)"},
     'motion.qs.edit-appear': {'spring': [0.31, 1.0], 'src': "kit:AOSP SystemUI edit page: undo, a tile added or taken out, Reset's question fading in and out (Compose's fadeIn and fadeOut: spring(stiffness 400))"},
     'motion.qs.slider-icon': {'bezier': [0.4, 0, 0.2, 1], 'ms': 100, 'src': "kit:AOSP SystemUI brightness AnimationSpecs.IconAppearSpec: the slider's symbol moving between its tracks (tween 100 ms)"},

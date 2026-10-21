@@ -34,7 +34,10 @@ class LauncherApp : Application() {
                 android.os.Trace.beginSection("launcher: configuration changed")
                 try {
                     dev.launcher.app.design.Design.onScale(newConfig.densityDpi, newConfig.fontScale)
-                    if (diff and ASSETS_PATHS != 0) dev.launcher.app.design.Design.onConfiguration()
+                    if (diff and ASSETS_PATHS != 0) {
+                        AppLog.log("[design] the phone's assets changed (a palette overlay): its colours read again")
+                        dev.launcher.app.design.Design.onConfiguration()
+                    }
                     dev.launcher.app.theme.Appearance.onConfiguration(newConfig)
                 } finally { android.os.Trace.endSection() }
             }

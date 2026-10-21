@@ -100,7 +100,8 @@ object Moments {
             "nc.confirm", "press-in", "press-out"),
         glue = ks("nc.launch-fade", "nc.time-fade"))
     val QUICK_SETTINGS = Moment("qs", MomentPart.SHADE, "Quick Settings", "Android's shade pulled down, Quick Settings expanding, a tile pressed and tapped.",
-        ks("qs.open", "qs.close", "qs.expand", "qs.collapse", "qs.tile-bounce", "qs.tile-state", "qs.tile-pop", "qs.edit", "qs.edit-place"),
+        ks("qs.open", "qs.close", "qs.expand", "qs.collapse", "qs.tile-bounce", "qs.tile-state", "qs.tile-pop", "qs.edit", "qs.edit-place",
+            "qs.page"),
         glue = ks("qs.tile-pop-back", "qs.slider-icon", "qs.edit-appear", "qs.media"))
     val LOCK_SCREEN = Moment("lock", MomentPart.SHADE, "Lock screen", "The lock screen's buttons and clock, and the time over it.",
         ks("nc.hold", "nc.toggle", "nc.clock-tick", "statusbar.lock"))

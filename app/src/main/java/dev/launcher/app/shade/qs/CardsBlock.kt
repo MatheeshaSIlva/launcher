@@ -234,11 +234,19 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     /** The first row's top now: inside the notification scrim, which the panel moves. */
     private val listTop get() = panel.scrimTop + Design.pt(QsTokens.CARDS_TOP, u)
 
-    private fun visibleHeight() = panel.panelHeight - (panel.scrimTop + Design.pt(QsTokens.CARDS_TOP, u)) - bottomInset()
+    /**
+     * The list's viewport: under the scrim where it rests at the first stage (not where it is now: laid out while the shade
+     * was still closed, the list had its whole height and could not scroll to its end; the media player lowers the scrim).
+     */
+    private fun visibleHeight() = panel.panelHeight - (panel.scrimRestTop + Design.pt(QsTokens.CARDS_TOP, u)) - bottomInset()
+    private var boundsFor = Float.NaN
 
     private fun bottomInset() = 24f * u
 
-    private fun bounds() = scroller.setBounds(0f, max(0f, contentHeight - visibleHeight()), visibleHeight())
+    private fun bounds() {
+        boundsFor = panel.scrimRestTop
+        scroller.setBounds(0f, max(0f, contentHeight - visibleHeight()), visibleHeight())
+    }
 
     private val r = RectF()
 
@@ -268,6 +276,8 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     }
 
     fun draw(c: Canvas) {
+        // (The scrim's place of rest moved: the media player came or went, the quick row's rows changed.)
+        if (panel.scrimRestTop != boundsFor) bounds()
         val top = panel.scrimTop
         if (top >= panel.panelHeight || rows.isEmpty() && !withFooter) return
         // The scrim the notifications lie on: across the screen from its top, its top corners round.
@@ -284,9 +294,10 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val listAlpha = range(0.25f, 0.88f, p)
         if (listAlpha <= 0.003f) return
         val save = c.save()
+        // (Every corner round, the bottom ones below the screen: a clip of one radius is analytic on the GPU; with the top
+        // corners alone round it went through the stencil at every frame.)
         clip.rewind()
-        for (i in 0 until 4) clipRadii[i] = corner
-        clip.addRoundRect(0f, top, panel.panelWidth.toFloat(), panel.panelHeight.toFloat(), clipRadii, Path.Direction.CW)
+        clip.addRoundRect(0f, top, panel.panelWidth.toFloat(), panel.panelHeight + 2f * corner, corner, corner, Path.Direction.CW)
         c.clipPath(clip)
         for ((_, a) in anims) a.leaving?.let { drawRow(c, it, a, listAlpha) }
         for (row in rows) drawRow(c, row, anims[row.key] ?: continue, listAlpha)
@@ -588,7 +599,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     /** The list has more below (a drag up scrolls it before it closes the shade). */
     val canScrollDown: Boolean get() = contentHeight > visibleHeight() && scroller.position < contentHeight - visibleHeight() - 0.5f
 
-    fun beginScroll() = scroller.beginDrag()
+    fun beginScroll() { bounds(); scroller.beginDrag() }
     fun scrollBy(dy: Float) = scroller.dragBy(dy)
     fun endScroll(vy: Float) = scroller.endDrag(vy)
 
