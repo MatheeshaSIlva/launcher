@@ -167,6 +167,9 @@ KEEP = {
     'motion.arrival.hold', 'motion.wallpaper.reveal', 'motion.home.rebuild', 'motion.settings.hint', 'motion.widgets.row',
     'motion.cc.backdrop-hold', 'motion.nc.launch-fade', 'motion.banner.app-fade', 'motion.appearance.change',
     'motion.statusbar.charge-shimmer',
+    # Android's shade's own (already Android's: read from SystemUIGoogle).
+    'motion.qs.open', 'motion.qs.close', 'motion.qs.expand', 'motion.qs.collapse', 'motion.qs.tile-bounce', 'motion.qs.tile-state',
+    'motion.qs.tile-pop', 'motion.qs.tile-pop-back', 'motion.qs.slider-icon',
 }
 
 # iOS 27's spring bounces visibly at this damping or below (0.5 % past its place).

@@ -35,9 +35,10 @@ class Moment(
 }
 
 /**
- * The 23 moments (docs/PLAN_SETTINGS_V2.md): every animation of the launcher belongs to exactly one (a test checks it), so a
+ * The 24 moments (docs/PLAN_SETTINGS_V2.md): every animation of the launcher belongs to exactly one (a test checks it), so a
  * moment's feel is one value whatever it holds. Built from the plan's table: Apps 4, Home 6, App Library 2, Notifications &
- * Control Center 6, Status bar 3 (Charging joined it with the charging moment, 2026-10-18), and two everywhere.
+ * Control Center 7 (Quick Settings, Android's shade, joined it on 2026-10-21), Status bar 3 (Charging joined it with the
+ * charging moment, 2026-10-18), and two everywhere.
  */
 object Moments {
     private fun k(s: String) = "motion.$s"
@@ -98,6 +99,9 @@ object Moments {
         ks("nc.open", "nc.close", "nc.appear", "nc.leave", "nc.reflow", "nc.swipe-out", "nc.swipe-back", "nc.menu-open", "nc.menu-close",
             "nc.confirm", "press-in", "press-out"),
         glue = ks("nc.launch-fade", "nc.time-fade"))
+    val QUICK_SETTINGS = Moment("qs", MomentPart.SHADE, "Quick Settings", "Android's shade pulled down, Quick Settings expanding, a tile pressed and tapped.",
+        ks("qs.open", "qs.close", "qs.expand", "qs.collapse", "qs.tile-bounce", "qs.tile-state", "qs.tile-pop"),
+        glue = ks("qs.tile-pop-back", "qs.slider-icon"))
     val LOCK_SCREEN = Moment("lock", MomentPart.SHADE, "Lock screen", "The lock screen's buttons and clock, and the time over it.",
         ks("nc.hold", "nc.toggle", "nc.clock-tick", "statusbar.lock"))
     val BANNERS = Moment("banners", MomentPart.SHADE, "Banners", "Notifications swooping in over apps and home, and flung away.",
@@ -117,7 +121,7 @@ object Moments {
         ks("settings.open", "settings.focus", "settings.hint", "sheet.push"))
 
     val ALL = listOf(OPENING, CLOSING, SWITCHING, SWITCHER, PAGES, FOLDERS, UNLOCKING, EDITING, LITTLE, NEW_LOOK, LIBRARY, MENUS,
-        CONTROL_CENTER, CONTROLS, CC_EDITING, NOTIFICATION_CENTER, LOCK_SCREEN, BANNERS, STATUS_ICONS, BARS, CHARGING, SCROLLING, SETTINGS)
+        CONTROL_CENTER, CONTROLS, CC_EDITING, NOTIFICATION_CENTER, QUICK_SETTINGS, LOCK_SCREEN, BANNERS, STATUS_ICONS, BARS, CHARGING, SCROLLING, SETTINGS)
 
     private val byRole: Map<String, Moment> = HashMap<String, Moment>().apply { for (m in ALL) for (r in m.all) put(r, m) }
 

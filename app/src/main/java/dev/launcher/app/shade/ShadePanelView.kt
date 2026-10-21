@@ -3,6 +3,7 @@ package dev.launcher.app.shade
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Path
 import android.graphics.RectF
 import android.view.MotionEvent
 import android.view.VelocityTracker
@@ -21,20 +22,26 @@ import dev.launcher.app.shade.qs.QsHeaderBlock
 import dev.launcher.app.shade.qs.QsPanel
 import dev.launcher.app.shade.qs.QsTokens
 import dev.launcher.app.shade.qs.TileGridBlock
-import dev.launcher.app.shade.qs.smooth
+import dev.launcher.app.shade.qs.lerp
+import dev.launcher.app.shade.qs.range
 import kotlin.math.abs
 import kotlin.math.hypot
-import kotlin.math.max
 import kotlin.math.min
 
 /**
  * Android's shade (the layout file's `shade` panel; step 4 of docs/SHADE_PIXEL_EVALUATION.md): Quick Settings over the
- * notifications in one panel, in two stages. The first pull ([progress], the shade's) shows the quick row under the status
- * bar (its date beside the time) over the notifications as cards; pulling on, or a drag down on the panel, expands Quick
- * Settings ([expandK], this view's own spring): the large clock, the brightness slider, the paged grid and its footer,
- * the notifications going down out of sight. A drag up collapses them again, and from the first stage closes the panel.
- * Made of the blocks its structure names (`qs-header`, `brightness`, `tiles`, `qs-footer`, `notification-cards`,
- * `notification-footer`), drawn on the shade's material renderer over the blurred screen.
+ * notifications in one panel, in two stages, as Android 17's scene container plays them (read from its SystemUIGoogle).
+ *
+ * The first pull ([progress], the shade's: the finger's travel over the screen's height) brings the shade: the status
+ * bar's row becomes its header (the date beside the time), the quick row's tiles grow from 30 % of their height to whole
+ * under it, and the notification scrim comes down from the top edge over them, the cards on it fading in over the first
+ * half. A pull never goes further: Quick Settings expand with a second swipe down on the open shade (or a pull with two
+ * fingers) ([expandK], this view's own spring, over the scrim's way to the bottom edge): the quick row's tiles move to
+ * their places in the grid, the rest of Quick Settings comes in with them (from 43 % to 95 %), the scrim and its cards go
+ * out through the bottom edge, the header's time grows into the large clock while the date and the status icons leave the
+ * bar's row (by 14 %) for the date's row under the clock (from 58 %). A swipe up goes back a stage (or closes from the
+ * first); Back collapses first. A release goes on to the stage it was headed for once the finger moved 56 dp toward it,
+ * or flung at 125 dp/s (Android's scene layout's thresholds).
  */
 @SuppressLint("ViewConstructor")
 class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val surfaces: CcSurfaces) : View(ctx), QsPanel {
@@ -47,15 +54,28 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     override var barHeight = 0
     override val glyphs = Glyphs(ctx, QsTokens.SYMBOLS)
 
-    /** The first stage (the shade's: 0 closed .. 1 open). */
+    /** The first stage (the shade's: 0 closed .. 1 open; a spring past 1 holds at 1, as the scene stops at its place). */
     override var progress = 0f
         set(v) { if (field != v) { field = v; invalidate() } }
+
+    private val p: Float get() = progress.coerceIn(0f, 1f)
 
     private val expand = MotionValue(0f, 1000f, { invalidate(); host.expandChanged() })
     override val expandK: Float get() = expand.value.coerceIn(0f, 1f)
 
     private val pageV = MotionValue(0f, 1000f, { invalidate() })
     override val page: Float get() = pageV.value
+
+    override val squish: Float get() = lerp(Design.num(QsTokens.SQUISH).coerceIn(0f, 1f), 1f, p)
+
+    /** The scrim's top at the first stage's rest: under the quick row (or the bar, without tiles). */
+    private fun scrimRest(): Float = (tiles?.quickBottomRest ?: barHeight.toFloat()) + Design.pt(QsTokens.SHELF_INSET, u)
+
+    override val scrimTop: Float get() = lerp(0f, scrimRest(), p) + expandK * (height - scrimRest())
+
+    override val contentAlpha: Float get() = range(0.43f, 0.95f, expandK)
+
+    override val gridShift: Float get() = tiles?.let { (1f - expandK) * (it.quickTop - it.fullTop) } ?: 0f
 
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
 
@@ -73,9 +93,9 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         builtFrom = p
         val t = p.block<ShadeStructure.Block.Tiles>()?.let { TileGridBlock(this, it) }
         tiles = t
-        header = p.block<ShadeStructure.Block.QsHeader>()?.let { QsHeaderBlock(this, context) }
-        brightness = p.block<ShadeStructure.Block.Brightness>()?.let { BrightnessBlock(this, t) }
-        footer = p.block<ShadeStructure.Block.QsFooter>()?.let { QsFooterBlock(this, t) }
+        header = p.block<ShadeStructure.Block.QsHeader>()?.let { QsHeaderBlock(this, context) { name -> tiles?.carrier = name } }
+        brightness = p.block<ShadeStructure.Block.Brightness>()?.let { BrightnessBlock(this) }
+        footer = p.block<ShadeStructure.Block.QsFooter>()?.let { QsFooterBlock(this, context, t) }
         cards = p.block<ShadeStructure.Block.NotificationCards>()?.let {
             CardsBlock(this, context, withFooter = p.block<ShadeStructure.Block.NotificationFooter>() != null)
         }
@@ -87,14 +107,8 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         u = Scale.unitPx(context, min(width, height))
         surfaces.unit(u)
         tiles?.layout()
-        cards?.listTop = cardsTop()
+        cards?.layout()
     }
-
-    /** Where the cards start at the first stage: under the quick row (or the bar, without tiles). */
-    private fun cardsTop(): Float = (tiles?.quickBottom ?: barHeight.toFloat()) + Design.pt(QsTokens.CARDS_TOP, u)
-
-    /** Quick Settings' content bottom at the second stage: the cards go below it. */
-    private fun qsBottom(): Float = footer?.bottom ?: tiles?.fullBottom ?: (barHeight.toFloat() + 200f * u)
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
@@ -109,9 +123,11 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         layoutBlocks()
         expand.snapTo(0f)
         pageV.snapTo(0f)
+        twoFingers = false
         header?.refresh()
         brightness?.sync(animate = false)
         tiles?.syncStates(animate = false)
+        footer?.refresh()
         cards?.setItems(host.notifications(), animate = false)
         removeCallbacks(minute)
         postDelayed(minute, 60_000L - System.currentTimeMillis() % 60_000L)
@@ -122,7 +138,9 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     fun onClosed() {
         expand.snapTo(0f)
         pageV.snapTo(0f)
+        twoFingers = false
         cards?.closed()
+        tiles?.closed()
         removeCallbacks(minute)
         removeCallbacks(longPress)
         mode = Mode.NONE
@@ -150,8 +168,8 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         cards?.setItems(host.notifications(), animate = true)
     }
 
-    /** Quick Settings expand ([open]) or collapse, as a fling would (Back, the shade's tests). */
-    fun expandTo(open: Boolean) = settleExpand(if (open) FLING * 2f else -FLING * 2f)
+    /** Quick Settings expand ([open]) or collapse on their own (Back, the shade's tests). */
+    fun expandTo(open: Boolean) = settleExpand(open, 0f)
 
     /** The design changed (sizes, fonts): laid out again. */
     fun designChanged() {
@@ -159,32 +177,49 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         invalidate()
     }
 
-    // ------------------------------------------------------------------ the second stage
+    // ------------------------------------------------------------------ the first stage: the shade's pull
 
-    /** How far the finger travels for the first stage, and from there to Quick Settings whole (px). */
-    fun firstTravel(): Float = max(220f * u, cardsTop() + 48f * u)
-    private fun expandTravel(): Float = max(300f * u, qsBottom() - (tiles?.quickBottom ?: 0f))
+    /** How far the finger travels for the first stage (Android's swipe from the top: the screen's height). */
+    fun firstTravel(): Float = height.toFloat().coerceAtLeast(1f)
 
-    /** The shade's own pull went on past the first stage ([dy] from where it took the panel): Quick Settings follow. */
-    fun pulled(dy: Float) {
-        val over = dy - firstTravel()
-        if (over <= 0f && expand.value == 0f) return
-        expand.snapTo((over / expandTravel()).coerceIn(0f, 1f))
+    /**
+     * Whether a swipe that moved [offset] px toward the stage it leads to (of [distance]), let go at [velocity] px/s toward
+     * it, goes there: Android's scene layout (DragControllerImpl.onDragStopped): a fling of 125 dp/s decides; else 56 dp of
+     * travel does; else whichever end is nearer.
+     */
+    fun commits(offset: Float, velocity: Float, distance: Float): Boolean {
+        val vThreshold = VELOCITY_DP * u
+        if (offset < 0f) return false
+        if (velocity <= -vThreshold) return false
+        if (velocity >= vThreshold) return true
+        if (offset >= POSITIONAL_DP * u) return true
+        return abs(offset - distance) < abs(offset)
     }
 
-    /** The shade's pull let go at [vy] px/s: Quick Settings settle open or closed. */
-    fun released(vy: Float) = settleExpand(vy)
+    /** Two fingers pulled the shade: Quick Settings come with it whole (Android's two-finger swipe from the top). */
+    private var twoFingers = false
 
-    private fun settleExpand(vy: Float) {
-        val open = when {
-            vy > FLING -> true
-            vy < -FLING -> false
-            else -> expand.value > 0.5f
-        }
-        val v = vy / expandTravel()
-        if (open) expand.animateTo(1f, Motion.role(MotionTokens.CC_OPEN), v)
+    fun pullHasTwoFingers() {
+        if (twoFingers) return
+        twoFingers = true
+        expand.snapTo(p)
+    }
+
+    /** The shade's pull moved: with two fingers Quick Settings expand with it. */
+    fun pulled() { if (twoFingers) expand.snapTo(p) }
+
+    /** The shade's pull let go to open: with two fingers, Quick Settings whole. */
+    fun released(vy: Float) { if (twoFingers) settleExpand(true, vy / expandTravel()) }
+
+    // ------------------------------------------------------------------ the second stage
+
+    /** How far the finger travels for Quick Settings (Android: the scrim's way from its place to the bottom edge). */
+    private fun expandTravel(): Float = (height - scrimRest()).coerceAtLeast(1f)
+
+    private fun settleExpand(open: Boolean, v: Float) {
+        if (open) expand.animateTo(1f, Motion.role(MotionTokens.QS_EXPAND), v)
         else {
-            expand.animateTo(0f, Motion.role(MotionTokens.CC_CLOSE), v)
+            expand.animateTo(0f, Motion.role(MotionTokens.QS_COLLAPSE), v)
             pageV.animateTo(0f, Motion.role(MotionTokens.PAGE_SNAP))
         }
     }
@@ -192,33 +227,46 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     /** Back: Quick Settings collapse first (true); at the first stage the shade closes. */
     fun back(): Boolean {
         if (expand.target <= 0f && expand.value < 0.02f) return false
-        settleExpand(-FLING * 2f)
+        settleExpand(false, 0f)
         return true
     }
+
+    /** Where the expanded header's date row is now (its centre, px) and how present (the status bar draws its icons there). */
+    fun headerRowY(): Float = header?.expandedRowY() ?: 0f
+    fun headerRowIn(): Float = header?.expandedRowIn() ?: 0f
 
     /** Where cards are swiped (Android's back gesture stays off that edge while the panel is open). */
     fun swipeBand(out: RectF) {
         if (cards == null || expandK > 0.5f) { out.setEmpty(); return }
-        out.set(0f, cardsTop(), width.toFloat(), height.toFloat())
+        out.set(0f, scrimTop, width.toFloat(), height.toFloat())
     }
 
     // ------------------------------------------------------------------ drawing
 
+    private val scrimPath = Path()
+    private val scrimRadii = FloatArray(8)
+
     override fun onDraw(c: Canvas) {
         if (progress <= 0.002f || width == 0) return
-        val k = progress.coerceIn(0f, 1f)
-        // The panel comes down with the pull: its content from a little above, fading in.
-        val alpha = smooth(0.05f, 0.7f, k)
-        val shift = -(1f - k) * 64f * u
         cards?.beginFrame()
+        // Quick Settings under the notification scrim: what the scrim covers does not show through it (Android draws it
+        // over them, opaque to what it hides), around its rounded top corners it does.
+        val top = scrimTop
+        val corner = Design.pt(QsTokens.SHELF_CORNER, u)
         val save = c.save()
-        c.translate(0f, shift)
-        cards?.draw(c, alpha, qsBottom())
-        tiles?.draw(c, alpha)
-        brightness?.draw(c, alpha)
-        header?.draw(c, alpha)
-        footer?.draw(c, alpha)
+        if (cards != null && top < height) {
+            scrimPath.rewind()
+            for (i in 0 until 4) scrimRadii[i] = corner
+            scrimPath.addRoundRect(0f, top, width.toFloat(), height + corner, scrimRadii, Path.Direction.CW)
+            c.clipOutPath(scrimPath)
+        }
+        footer?.drawActions(c)
+        brightness?.draw(c)
+        tiles?.draw(c)
+        footer?.drawRow(c)
         c.restoreToCount(save)
+        cards?.draw(c)
+        header?.draw(c)
     }
 
     // ------------------------------------------------------------------ touches
@@ -246,10 +294,8 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
-        // (The view covers the screen from its corner: its coordinates are the screen's, less the content's shift.)
-        val shift = -(1f - progress.coerceIn(0f, 1f)) * 64f * u
         val x = e.x
-        val y = e.y - shift
+        val y = e.y
         if (e.actionMasked == MotionEvent.ACTION_DOWN) { vt?.recycle(); vt = VelocityTracker.obtain() }
         vt?.addMovement(e)
         val stage2 = expandK > 0.5f
@@ -259,18 +305,18 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                 decided = false
                 longFired = false
                 expand.stop()
-                expandFrom = expand.value
+                expandFrom = expand.value.coerceIn(0f, 1f)
                 pageFrom = pageV.value
                 val t = tiles?.tileAt(x, y) ?: -1
                 mode = when {
                     stage2 && brightness?.contains(x, y) == true -> Mode.BRIGHTNESS.also { brightness?.drag(0, x) }
-                    stage2 && footer?.contains(x, y) == true -> Mode.FOOTER.also { footer?.press(x, y) }
+                    footer?.contains(x, y) == true -> Mode.FOOTER.also { footer?.press(x, y) }
                     t >= 0 -> Mode.TILE.also {
                         tile = t
                         tiles?.press(t, true)
                         postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
                     }
-                    !stage2 && cards?.contains(x, y, qsBottom()) == true -> Mode.CARD
+                    !stage2 && cards?.contains(x, y) == true -> Mode.CARD.also { cards?.press(x, y) }
                     else -> Mode.NONE
                 }
             }
@@ -282,17 +328,20 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                     removeCallbacks(longPress)
                     if (mode == Mode.TILE) tiles?.press(tile, false)
                     if (mode == Mode.FOOTER) footer?.release(tap = false)
+                    if (mode == Mode.CARD) cards?.release()
                     val sideways = abs(dx) > abs(dy)
                     mode = when {
                         mode == Mode.BRIGHTNESS -> Mode.BRIGHTNESS
                         sideways && stage2 && tiles?.inGrid(downX, downY) == true && (tiles?.pages ?: 1) > 1 -> Mode.PAGE
-                        sideways && mode == Mode.CARD && cards?.beginSwipe(downX, downY, qsBottom()) == true -> Mode.SWIPE
+                        sideways && mode == Mode.CARD && cards?.beginSwipe(downX, downY) == true -> Mode.SWIPE
                         sideways -> Mode.IGNORE
-                        // Down: the list scrolls back first, then Quick Settings expand; up: the list scrolls, else the
-                        // panel collapses (from Quick Settings) or closes (from the first stage).
-                        !stage2 && dy > 0f && mode == Mode.CARD && cards?.scrolled == true -> Mode.SCROLL.also { cards?.beginScroll() }
-                        !stage2 && dy < 0f && mode == Mode.CARD && cards?.canScroll == true -> Mode.SCROLL.also { cards?.beginScroll() }
-                        !stage2 && dy < 0f && expandFrom <= 0.001f -> Mode.CLOSE.also { host.closeDrag(0, dy, 0f) }
+                        // Quick Settings: up collapses them, down goes nowhere further.
+                        stage2 -> if (dy < 0f) Mode.EXPAND else Mode.IGNORE
+                        // The first stage: down, the list scrolls back first, then Quick Settings expand; up, the list
+                        // scrolls while it can, else the shade closes.
+                        dy > 0f && mode == Mode.CARD && cards?.scrolled == true -> Mode.SCROLL.also { cards?.beginScroll() }
+                        dy < 0f && mode == Mode.CARD && cards?.canScrollDown == true -> Mode.SCROLL.also { cards?.beginScroll() }
+                        dy < 0f -> Mode.CLOSE.also { host.closeDrag(0, dy, 0f) }
                         else -> Mode.EXPAND
                     }
                 }
@@ -304,11 +353,8 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                     }
                     Mode.SWIPE -> cards?.swipeBy(dx)
                     Mode.SCROLL -> cards?.scrollBy(lastY - y)
-                    Mode.EXPAND -> {
-                        val v = expandFrom + dy / expandTravel()
-                        // Past Quick Settings whole it resists.
-                        expand.snapTo(if (v > 1f) 1f + Motion.rubberBand((v - 1f) * expandTravel(), height.toFloat()) / expandTravel() else v.coerceAtLeast(0f))
-                    }
+                    // The finger moves the scrim (and so the stage) one to one.
+                    Mode.EXPAND -> expand.snapTo((expandFrom + dy / expandTravel()).coerceIn(0f, 1f))
                     Mode.CLOSE -> host.closeDrag(1, dy, 0f)
                     else -> {}
                 }
@@ -327,18 +373,19 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
                     }
                     Mode.FOOTER -> footer?.release(tap = up && !decided)
                     Mode.BRIGHTNESS -> brightness?.drag(2, x)
-                    Mode.CARD -> if (up && !decided) cards?.tap(x, y, qsBottom())
+                    Mode.CARD -> { cards?.release(); if (up && !decided) cards?.tap(x, y) }
                     Mode.SWIPE -> cards?.endSwipe(vx)
                     Mode.SCROLL -> cards?.endScroll(-vy)
-                    Mode.EXPAND -> settleExpand(vy)
-                    Mode.PAGE -> {
-                        val pages = tiles?.pages ?: 1
-                        val target = (pageV.value - (vx / width) * 0.25f).let { Math.round(it).toFloat() }.coerceIn(0f, (pages - 1).toFloat())
-                        pageV.animateTo(target, Motion.role(MotionTokens.PAGE_SNAP), -vx / width)
+                    Mode.EXPAND -> {
+                        val dy = y - downY
+                        val d = expandTravel()
+                        // Toward the other stage: down from the first, up from Quick Settings.
+                        val open = if (expandFrom < 0.5f) commits(dy, vy, d) else !commits(-dy, -vy, d)
+                        settleExpand(open, vy / d)
                     }
                     Mode.CLOSE -> host.closeDrag(2, y - downY, vy)
-                    // A tap on nothing (under the cards, between the tiles): the panel closes, as Android's.
-                    Mode.NONE -> if (up && !decided && !stage2 && y > cardsTop()) host.close()
+                    // A tap on nothing under the cards: the shade closes, as Android's.
+                    Mode.NONE -> if (up && !decided && !stage2 && y > scrimTop) host.close()
                     else -> {}
                 }
                 mode = Mode.NONE
@@ -349,7 +396,9 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     }
 
     private companion object {
-        /** A fling's speed (px/s) that decides the stage whatever the position. */
-        const val FLING = 1200f
+        /** Android's scene layout: a fling this fast decides (dp/s; SwipeDetectorDefaults.VelocityThreshold). */
+        const val VELOCITY_DP = 125f
+        /** And this much travel toward the other scene does (dp; DragControllerImpl's positional threshold). */
+        const val POSITIONAL_DP = 56f
     }
 }

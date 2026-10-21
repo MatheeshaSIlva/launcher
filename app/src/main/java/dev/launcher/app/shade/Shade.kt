@@ -114,6 +114,15 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         open fun followed(dy: Float) {}
         /** ... and let go at [vy] px/s to open. */
         open fun released(vy: Float) {}
+        /**
+         * Whether a pull that brought it [dy] px from where it took it, let go at [vy] px/s, opens it: a fling either way
+         * decides, else past 40 % stays (each panel may have its own rule: Android's shade has its scenes').
+         */
+        open fun releaseOpens(progress: Float, dy: Float, vy: Float): Boolean = when {
+            vy > FLING -> true
+            vy < -FLING -> false
+            else -> progress > 0.4f
+        }
         open fun opensFully() {}
         open fun closes() {}
         /** It goes out on its own under the panel pulled now. */
@@ -420,20 +429,24 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             bar.setShadeHeader(false, 1f)
         }
         override fun gone() { shadeView.progress = 0f; backdrop.set(0f, 0, 0f, 0f) }
-        override val openCurve get() = NC_OPEN
-        override val closeCurve get() = NC_CLOSE
+        override val openCurve get() = QS_OPEN
+        override val closeCurve get() = QS_CLOSE
+        // Android's swipe from the top: the finger's travel over the screen's height (the shade's scene comes at that pace,
+        // lagging the finger), and its thresholds on letting go.
         override fun travel() = shadeView.firstTravel()
         override fun fingerProgress(y: Float, dy: Float) = (dy / travel()).coerceIn(0f, 1f)
         override fun caughtProgress(from: Float, dy: Float) = (from + dy / travel()).coerceIn(0f, 1f)
+        override fun releaseOpens(progress: Float, dy: Float, vy: Float) = shadeView.commits(dy, vy, travel())
         override fun drag(phase: Int, dy: Float, vy: Float) {
             when (phase) {
                 1 -> progress.snapTo((dragFrom + dy / travel()).coerceIn(0f, 1f))
-                2 -> dragEnds(vy / travel(), vy)
+                // A swipe up from the open shade closes it once it went 56 dp or was flung (its scene's thresholds).
+                2 -> if (shadeView.commits(-dy, -vy, dragFrom * travel())) close(vy / travel()) else openFully(vy / travel())
             }
         }
         override fun touch(e: MotionEvent) = shadeView.dispatchTouchEvent(e)
         override fun back() = shadeView.back()
-        override fun followed(dy: Float) = shadeView.pulled(dy)
+        override fun followed(dy: Float) = shadeView.pulled()
         override fun released(vy: Float) = shadeView.released(vy)
         override fun swipeBand(out: android.graphics.RectF) = shadeView.swipeBand(out)
     }
@@ -669,10 +682,14 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             backdrop.live = live
             // The background on the controls' own curve (they show at the square root of the progress): linear, the blur
             // was all but gone while the controls still showed at a third (it cleared in one frame as they faded).
-            val bk = kotlin.math.sqrt(bgP.coerceIn(0f, 1f))
-            if (live) liveBlur.set(bk, true)
+            // (Android's shade: its blur and background come early in the pull and finish gently: measured on Android 17's own,
+            // the screen behind half covered at a quarter of the way.)
+            val bk = if (ccP != null) kotlin.math.sqrt(bgP.coerceIn(0f, 1f)) else 1f - (1f - bgP.coerceIn(0f, 1f)).let { it * it }
+            // (Its blur grows in step with the pull.)
+            val blurK = if (ccP != null) bk else bgP.coerceIn(0f, 1f)
+            if (live) liveBlur.set(blurK, true)
             val veil = veilOf(bgKey)
-            backdrop.set(blurRadius(bgKey) * bk, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
+            backdrop.set(blurRadius(bgKey) * blurK, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
             if (ccP != null) bar.setRowAlpha(1f - editK)
         }
         if (ncP != null) nc.progress = ncP
@@ -694,7 +711,13 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         )
         // (The bar's time hands over to the shade's clock at its own place as Quick Settings start to expand: the clock then
         // grows out of it into the large one.)
-        bar.setShadeHeader(shP != null && shP > 0f, 1f - dev.launcher.app.shade.qs.smooth(0f, 0.15f, shadeView.expandK))
+        // The status icons leave the bar's row (down 48 dp and out by 14 %) for the expanded header's date row (from 58 %), as
+        // Android's collapsed and expanded headers cross.
+        val e = shadeView.expandK
+        bar.setShadeHeader(shP != null && shP > 0f, 1f - dev.launcher.app.shade.qs.smooth(0f, 0.15f, e),
+            1f - dev.launcher.app.shade.qs.range(0f, 0.14f, e), e * 48f * u(), shadeView.headerRowIn(), shadeView.headerRowY(),
+            // (On the date's row they end at the panel's side, as Android's expanded header does.)
+            (root.width - shadeView.side) - bar.iconsRight)
     }
 
     /** [p]'s progress while it shows (the panel pulled or open, or one on its way out under it), else null. */
@@ -1016,6 +1039,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun pull(e: MotionEvent) {
         val dy = e.rawY - downY
         when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> twoFingerPull = false
+            MotionEvent.ACTION_POINTER_DOWN -> twoFingerPull = true
             MotionEvent.ACTION_MOVE -> pullTo(e.rawX, e.rawY, dy)
             MotionEvent.ACTION_UP -> {
                 stopStream()
@@ -1067,7 +1092,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             p.pullBegins(caught)
             begin(p)
             progress.stop()
-            downY = y
+            // Android's shade counts the pull from where the finger passed the touch slop (its scene layout keeps the move
+            // beyond it); the others from where this move is.
+            downY = if (p === shadePanel) downY + slop else y
         }
         follow(y, y - downY)
     }
@@ -1076,9 +1103,16 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun follow(y: Float, dy: Float) {
         if (locked && !focusHolder.held && SystemClock.uptimeMillis() - touchDownAt > HANDOVER_MS) focusHolder.take()
         val p = panel ?: return
+        lastFollowDy = dy
         progress.snapTo(if (pullFrom >= 0f) p.caughtProgress(pullFrom, dy) else p.fingerProgress(y, dy))
+        if (twoFingerPull && p === shadePanel) shadeView.pullHasTwoFingers()
         p.followed(dy)
     }
+
+    /** How far the pull has brought the panel since it took it (px), for its release rule. */
+    private var lastFollowDy = 0f
+    /** A second finger landed during a pull from the top (Android's two-finger swipe: Quick Settings whole). */
+    private var twoFingerPull = false
 
     /** Where the pulled panel was when the pull caught it on its way out (-1: the pull brought it from closed). */
     private var pullFrom = -1f
@@ -1180,11 +1214,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun release(vy: Float) {
         val p = panel ?: return
         val v = vy / p.travel()
-        val open = when {
-            vy > FLING -> true
-            vy < -FLING -> false
-            else -> progress.value > 0.4f
-        }
+        val open = p.releaseOpens(progress.value, lastFollowDy, vy)
         if (open) {
             openFully(v)
             p.released(vy)
@@ -1719,6 +1749,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val CC_CLOSE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_CLOSE)
         val CC_SETTLE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_SETTLE)
         val NC_OPEN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_OPEN)
+        val QS_OPEN get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.QS_OPEN)
+        val QS_CLOSE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.QS_CLOSE)
         val NC_CLOSE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_CLOSE)
     }
 }

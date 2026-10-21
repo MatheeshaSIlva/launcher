@@ -3,6 +3,7 @@ package dev.launcher.app.shade.qs
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.RectF
+import android.os.Build
 import android.text.TextPaint
 import android.text.TextUtils
 import android.view.HapticFeedbackConstants
@@ -17,15 +18,18 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Quick Settings' tiles (the `tiles` block): at the first stage the first page's first rows (the quick row) under the
- * status bar; as Quick Settings expand, those tiles move to their places in the grid and the rest of it comes in, paged
- * sideways. A tile's colour and corners follow its toggle; a wide tile that turns on and off lights only its box (its
- * toggle; the rest of it opens the control's page), as Android's.
+ * Quick Settings' tiles (the `tiles` block), as Android 17's: at the first stage the first page's first rows (the quick
+ * row) under the status bar, growing from squished to whole as the shade comes; as Quick Settings expand those tiles move
+ * to their places in the grid, the rest of it coming in with them, paged sideways. Each tile draws its state as Android's
+ * TileDefaults do: off on the faint surface (a capsule), on in primary (24 dp corners), a two-target tile lighting only
+ * its box (a circle off, a rounded square on), one that cannot be used now faint; the colours and corners follow the
+ * state on its spring. A pressed tile grows 8 dp into its neighbours in the row, a tapped one's symbol (or its words)
+ * pops, and the phone answers a toggle as Android's does (on, off; a long press).
  */
 internal class TileGridBlock(private val panel: QsPanel, private val spec: ShadeStructure.Block.Tiles) {
     private val u get() = panel.u
 
-    /** The tiles shown (the available ones, in order) and where each is. */
+    /** The tiles shown (in order) and where each is. */
     var tiles: List<QsTile> = emptyList()
         private set
     private var places: List<QsTiles.Place> = emptyList()
@@ -44,7 +48,8 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
     /** Rows the quick row shows (as many of the first page's first rows as hold tiles). */
     private var quickRows = 0
 
-    val quickBottom: Float get() = quickTop + max(quickRows, 1) * (tileH + gap) - gap
+    /** The quick row's bottom with its tiles whole (where the notification scrim rests under it). */
+    val quickBottomRest: Float get() = quickTop + max(quickRows, 1) * (tileH + gap) - gap
     val fullBottom: Float get() = fullTop + rows * (tileH + gap) - gap
 
     /** Rows a page: the layout's, or as many as fit above the footer (a turned screen holds fewer; more pages then). */
@@ -60,10 +65,10 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         cols = spec.columns.value.coerceIn(1, room)
         colW = (w - 2 * panel.side - (cols - 1) * gap) / cols
         quickTop = panel.barHeight + Design.pt(QsTokens.QUICK_TOP, u)
-        fullTop = Design.pt(QsTokens.TILES_TOP, u)
-        tiles = QsTiles.DEFAULT.filter { panel.host.state.available(it.control) }
-        // Room down to the footer's buttons and the build number's row above them.
-        val footer = Design.pt(QsTokens.FOOTER_BOTTOM, u) + Design.pt(QsTokens.FOOTER_BUTTON, u) / 2f + 48f * u
+        fullTop = panel.barHeight + Design.pt(QsTokens.TILES_TOP, u)
+        tiles = QsTiles.DEFAULT.filter { it.control != Control.FLASHLIGHT || panel.host.state.available(it.control) }
+        // Room down to the build number's row and the footer's buttons under it.
+        val footer = Design.pt(QsTokens.FOOTER_BOTTOM, u) + Design.pt(QsTokens.FOOTER_BUTTON, u) / 2f + Design.pt(QsTokens.BUILD_ROW, u)
         rows = (((panel.panelHeight - footer - fullTop) + gap) / (tileH + gap)).toInt().coerceIn(1, spec.rows)
         places = QsTiles.flow(tiles, cols, rows)
         pages = (places.lastOrNull()?.page ?: 0) + 1
@@ -74,36 +79,125 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     // ------------------------------------------------------------------ each tile's motion
 
-    private inner class Anim(c: Control) {
-        val on = MotionValue(0f, 1000f, { panel.view.invalidate() })
-        val press = MotionValue(0f, 1000f, { panel.view.invalidate() })
+    private inner class Anim {
+        /** Its background lit (primary), its box lit, how unavailable it is: each on the state's spring. */
+        val lit = MotionValue(0f, 1000f, { panel.view.invalidate() })
+        val box = MotionValue(0f, 1000f, { panel.view.invalidate() })
+        val gone = MotionValue(0f, 1000f, { panel.view.invalidate() })
+        /** Pressed: grown into its neighbours (0..1 of 8 dp). Let go, it waits to be three quarters grown, then goes back. */
+        val bounce = MotionValue(0f, 1000f, { panel.view.invalidate(); if (released && it >= 0.75f) settleBounce() })
+        var released = true
+        /** Tapped: its symbol or words popping out (0..1) and back. */
+        val pop: MotionValue = MotionValue(0f, 1000f, { panel.view.invalidate() }, { popBack() })
+        var state = TileState.INACTIVE
+
+        fun settleBounce() {
+            if (bounce.target == 0f) return
+            bounce.animateTo(0f, Motion.role(MotionTokens.QS_TILE_BOUNCE))
+        }
+
+        fun popBack() {
+            if (pop.target == 1f) pop.animateTo(0f, Motion.role(MotionTokens.QS_TILE_POP_BACK))
+        }
     }
     private val anims = HashMap<Control, Anim>()
-    private fun anim(c: Control) = anims.getOrPut(c) { Anim(c) }
+    private fun anim(c: Control) = anims.getOrPut(c) { Anim() }
 
-    /** The tiles follow their controls' states ([animate]: on the toggle's curve, else at once). */
+    /** The tiles follow their controls' states ([animate]: on the state's spring, else at once). */
     fun syncStates(animate: Boolean = true) {
+        val st = panel.host.state
         for (t in tiles) {
-            val target = if (QsTiles.isOn(panel.host.state, t)) 1f else 0f
             val a = anim(t.control)
-            if (a.on.target == target && (a.on.isAnimating || a.on.value == target)) continue
-            if (animate) a.on.animateTo(target, Motion.role(MotionTokens.CC_TOGGLE)) else a.on.snapTo(target)
+            val s = QsTiles.stateOf(st, t)
+            a.state = s
+            val on = s == TileState.ACTIVE
+            set(a.lit, if (on && !t.dualTarget) 1f else 0f, animate)
+            set(a.box, if (on && t.dualTarget) 1f else 0f, animate)
+            set(a.gone, if (s == TileState.UNAVAILABLE) 1f else 0f, animate)
         }
+    }
+
+    private fun set(v: MotionValue, target: Float, animate: Boolean) {
+        if (v.target == target && (v.isAnimating || v.value == target)) return
+        if (animate) v.animateTo(target, Motion.role(MotionTokens.QS_TILE_STATE)) else v.snapTo(target)
+    }
+
+    /** The panel closed: presses and pops at rest. */
+    fun closed() {
+        for (a in anims.values) { a.bounce.snapTo(0f); a.released = true; a.pop.snapTo(0f) }
     }
 
     // ------------------------------------------------------------------ where each tile is
 
-    /** Tile [i]'s rectangle now (between its quick-row place and its place in the grid) into [out]; its fade. */
+    private fun quick(p: QsTiles.Place) = p.page == 0 && p.row < spec.quickRows
+
+    /**
+     * Tile [i]'s rectangle now into [out], and its fade: a quick-row tile between its place under the bar (squished) and its
+     * place in the grid; the others in the grid, moved with it and faded in with Quick Settings' content. Presses grow a
+     * tile into its neighbours in the row (the gaps stay).
+     */
     private fun place(i: Int, out: RectF): Float {
         val p = places[i]
         val e = panel.expandK
-        val x = panel.side + p.col * (colW + gap) + (p.page - panel.page) * panel.panelWidth
-        val w = p.span * colW + (p.span - 1) * gap
+        val pageX = (p.page - panel.page) * panel.panelWidth
+        var left = panel.side + p.col * (colW + gap) + pageX
+        var right = left + p.span * colW + (p.span - 1) * gap
+        // The row's presses: this tile's own and its neighbours'.
+        bounceEdges(i)
+        left += edgeL; right += edgeR
         val yFull = fullTop + p.row * (tileH + gap)
-        val quick = p.page == 0 && p.row < spec.quickRows
-        val y = if (quick) lerp(quickTop + p.row * (tileH + gap), yFull, e) else yFull - (1f - e) * 24f * u
-        out.set(x, y, x + w, y + tileH)
-        return if (quick) 1f else smooth(0.35f, 1f, e)
+        return if (quick(p)) {
+            val hs = tileH * panel.squish
+            val yQuick = quickTop + p.row * (hs + gap)
+            val top = lerp(yQuick, yFull, e)
+            out.set(left, top, right, top + lerp(hs, tileH, e))
+            1f
+        } else {
+            val top = yFull + panel.gridShift
+            out.set(left, top, right, top + tileH)
+            panel.contentAlpha
+        }
+    }
+
+    private var edgeL = 0f
+    private var edgeR = 0f
+
+    /** How far a press moves tile [i]'s left and right edges (px, into [edgeL], [edgeR]): its own growth and its neighbours'. */
+    private fun bounceEdges(i: Int) {
+        val p = places[i]
+        val size = Design.pt(QsTokens.BOUNCE, u)
+        val prev = i - 1
+        val next = i + 1
+        val hasPrev = prev >= 0 && places[prev].let { it.page == p.page && it.row == p.row }
+        val hasNext = next < places.size && places[next].let { it.page == p.page && it.row == p.row }
+        fun grow(j: Int) = anims[tiles[j].control]?.bounce?.value?.coerceIn(0f, 1.2f)?.times(size) ?: 0f
+        var l = 0f
+        var r = 0f
+        val own = grow(i)
+        if (own > 0f) when {
+            hasPrev && hasNext -> { l -= own / 2f; r += own / 2f }
+            hasNext -> r += own
+            hasPrev -> l -= own
+        }
+        // A neighbour's growth takes from this tile's side next to it.
+        if (hasPrev) {
+            val g = grow(prev)
+            if (g > 0f) {
+                val pp = prev - 1
+                val prevHasPrev = pp >= 0 && places[pp].let { it.page == p.page && it.row == p.row }
+                l += if (prevHasPrev) g / 2f else g
+            }
+        }
+        if (hasNext) {
+            val g = grow(next)
+            if (g > 0f) {
+                val nn = next + 1
+                val nextHasNext = nn < places.size && places[nn].let { it.page == p.page && it.row == p.row }
+                r -= if (nextHasNext) g / 2f else g
+            }
+        }
+        edgeL = l
+        edgeR = r
     }
 
     private val r = RectF()
@@ -117,14 +211,13 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         return -1
     }
 
-    /** ([x], [y]) is on tile [i]'s box (a wide toggle's own target). */
+    /** ([x], [y]) is on tile [i]'s box (a two-target tile's toggle). */
     fun inBox(i: Int, x: Float, y: Float): Boolean {
         val t = tiles.getOrNull(i) ?: return false
-        if (!t.wide || !t.toggles) return !t.wide || t.toggles
+        if (!t.dualTarget) return true
         place(i, r)
         val inset = Design.pt(QsTokens.TILE_INSET, u)
-        val box = min(Design.pt(QsTokens.BOX, u), r.height() - 2 * inset)
-        return x <= r.left + inset + box + inset
+        return x <= r.left + inset + Design.pt(QsTokens.BOX, u) + inset
     }
 
     /** The grid's area at the second stage (sideways swipes there turn pages). */
@@ -132,33 +225,51 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     // ------------------------------------------------------------------ touches
 
+    /** A finger down on tile [i] (or up): it grows into its neighbours while held (Android's BounceOnPressNode). */
     fun press(i: Int, down: Boolean) {
         val t = tiles.getOrNull(i) ?: return
         val a = anim(t.control)
-        a.press.animateTo(if (down) 1f else 0f, Motion.role(if (down) MotionTokens.CC_PRESS_IN else MotionTokens.CC_PRESS_OUT))
+        if (down) {
+            a.released = false
+            a.bounce.animateTo(1f, Motion.role(MotionTokens.QS_TILE_BOUNCE))
+        } else {
+            a.released = true
+            if (a.bounce.value >= 0.75f || !a.bounce.isAnimating) a.settleBounce()
+        }
     }
 
-    /** A tap on tile [i] at ([x], [y]): its box (or a one-column tile) toggles, the rest of a wide one opens its page. */
+    /** A tap on tile [i] at ([x], [y]): its box (or a one-target toggle) toggles, the rest of a two-target tile opens its page. */
     fun tap(i: Int, x: Float, y: Float) {
         val t = tiles.getOrNull(i) ?: return
+        val a = anim(t.control)
+        if (a.state == TileState.UNAVAILABLE) return
         val st = panel.host.state
+        // Its symbol (a tile of one column) or its words pop.
+        a.pop.animateTo(1f, Motion.role(MotionTokens.QS_TILE_POP))
         if (t.toggles && inBox(i, x, y)) {
             if (panel.host.locked && t.control in SECURE) { panel.host.launch(st.settingsFor(t.control)); return }
-            panel.view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+            val turningOn = a.state != TileState.ACTIVE
+            haptic(if (turningOn) TOGGLE_ON else TOGGLE_OFF)
             st.toggle(t.control)
             syncStates()
             return
         }
-        // A wide toggle's words open its page; a tile that does not toggle does what it names.
+        // A two-target tile's words open its page; a tile that does not toggle does what it names.
+        haptic(HapticFeedbackConstants.CONTEXT_CLICK)
         panel.host.launch(if (t.toggles) st.settingsFor(t.control) ?: st.intentFor(t.control) else st.intentFor(t.control))
     }
 
     /** A long press on tile [i]: the control's page. */
     fun longPress(i: Int) {
         val t = tiles.getOrNull(i) ?: return
-        panel.view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        haptic(HapticFeedbackConstants.LONG_PRESS)
         val st = panel.host.state
         panel.host.launch(st.settingsFor(t.control) ?: st.intentFor(t.control))
+    }
+
+    private fun haptic(kind: Int) {
+        val k = if (Build.VERSION.SDK_INT < 34 && (kind == TOGGLE_ON || kind == TOGGLE_OFF)) HapticFeedbackConstants.CLOCK_TICK else kind
+        panel.view.performHapticFeedback(k)
     }
 
     // ------------------------------------------------------------------ drawing
@@ -166,82 +277,92 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
     private val label = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val detail = TextPaint(Paint.ANTI_ALIAS_FLAG)
 
-    /** The tiles, faded by [alpha] (the panel's opening). */
-    fun draw(c: Canvas, alpha: Float) {
-        if (alpha <= 0.003f || tiles.isEmpty()) return
+    fun draw(c: Canvas) {
+        if (tiles.isEmpty()) return
         val w = panel.panelWidth
         for (i in tiles.indices) {
-            val f = place(i, r) * alpha
-            if (f <= 0.003f || r.right < 0f || r.left > w) continue
-            val t = tiles[i]
-            val a = anim(t.control)
-            drawTile(c, t, r, f, a.on.value.coerceIn(0f, 1f), a.press.value)
+            val f = place(i, r)
+            if (f <= 0.003f || r.right < 0f || r.left > w || r.height() <= 0.5f) continue
+            drawTile(c, tiles[i], anim(tiles[i].control), r, f)
         }
     }
 
-    private fun drawTile(c: Canvas, t: QsTile, r: RectF, alpha: Float, on: Float, press: Float) {
+    private fun drawTile(c: Canvas, t: QsTile, a: Anim, r: RectF, alpha: Float) {
         val sf = panel.surfaces
         val h = r.height()
-        // A wide toggle keeps its tile's colour and lights its box; the others light whole.
-        val dual = t.wide && t.toggles
-        val tileOn = if (dual) 0f else on
-        val corner = min(lerp(Design.pt(QsTokens.TILE_CORNER, u), Design.pt(QsTokens.TILE_ON_CORNER, u), tileOn), h / 2f)
-        // (A press sinks the tile a little, as a control's.)
-        val s = 1f - 0.04f * press
+        val lit = a.lit.value.coerceIn(0f, 1f)
+        val boxOn = a.box.value.coerceIn(0f, 1f)
+        val gone = a.gone.value.coerceIn(0f, 1f)
+        // The background: off, lit whole, or faint while it cannot be used.
+        val corner = min(lerp(Design.pt(QsTokens.TILE_CORNER, u), Design.pt(QsTokens.TILE_ON_CORNER, u), lit), h / 2f)
         c.save()
-        c.scale(s, s, r.centerX(), r.centerY())
         c.translate(r.left, r.top)
-        sf.draw(c, Design.material(QsTokens.TILE), r.width(), h, corner, r.left, r.top, s, alpha, press,
-            over = Design.material(QsTokens.TILE_ON).fills, overK = tileOn)
+        if (gone < 1f) sf.draw(c, Design.material(QsTokens.TILE), r.width(), h, corner, r.left, r.top, 1f, alpha * (1f - gone),
+            over = Design.material(QsTokens.TILE_ON).fills, overK = lit)
+        if (gone > 0f) sf.draw(c, Design.material(QsTokens.TILE_UNAVAILABLE), r.width(), h, corner, r.left, r.top, 1f, alpha * gone)
         c.restore()
-        val symbol = Design.pt(QsTokens.SYMBOL, u)
         val offC = Design.color(QsTokens.SYMBOL_COLOR)
         val onC = Design.color(QsTokens.ON_SYMBOL_COLOR)
+        val goneC = Design.color(QsTokens.UNAVAILABLE_COLOR)
+        val pop = a.pop.value.coerceIn(0f, 1.2f)
         if (!t.wide) {
-            panel.glyphs.draw(c, t.control.icon, r.centerX(), r.centerY(), symbol * s, faded(mix(offC, onC, on), alpha), on)
+            val s = 1f + (Design.num(QsTokens.ICON_POP) - 1f) * pop
+            val col = mix(mix(offC, onC, lit), goneC, gone)
+            panel.glyphs.draw(c, t.control.icon, r.centerX(), r.centerY(), Design.pt(QsTokens.SYMBOL, u) * s, faded(col, alpha), lit)
             return
         }
+        // A large tile: its box (squished with the tile) 8 dp in, the symbol in it, the words after it.
         val inset = Design.pt(QsTokens.TILE_INSET, u)
-        val box = min(Design.pt(QsTokens.BOX, u), h - 2 * inset)
+        val boxSize = Design.pt(QsTokens.BOX, u)
+        val squish = h / tileH.coerceAtLeast(1f)
+        val boxH = min(boxSize * squish, h)
         val bx = r.left + inset
-        val by = r.top + (h - box) / 2f
-        if (dual) {
-            val bc = min(lerp(Design.pt(QsTokens.BOX_CORNER, u), Design.pt(QsTokens.BOX_ON_CORNER, u), on), box / 2f)
+        val by = r.centerY() - boxH / 2f
+        if (t.dualTarget && gone < 1f) {
+            val bc = min(lerp(Design.pt(QsTokens.BOX_CORNER, u), Design.pt(QsTokens.BOX_ON_CORNER, u), boxOn), boxH / 2f)
             c.save()
-            c.scale(s, s, r.centerX(), r.centerY())
             c.translate(bx, by)
-            sf.draw(c, Design.material(QsTokens.BOX_MATERIAL), box, box, bc, bx, by, s, alpha,
-                over = Design.material(QsTokens.TILE_ON).fills, overK = on)
+            sf.draw(c, Design.material(QsTokens.BOX_MATERIAL), boxSize, boxH, bc, bx, by, 1f, alpha * (1f - gone),
+                over = Design.material(QsTokens.TILE_ON).fills, overK = boxOn)
             c.restore()
         }
-        val sym = faded(mix(offC, onC, on), alpha)
-        panel.glyphs.draw(c, t.control.icon, r.centerX() + (bx + box / 2f - r.centerX()) * s, r.centerY() + (by + box / 2f - r.centerY()) * s,
-            symbol * s, sym, on)
-        // The name and the state beside the box.
-        val tx = r.centerX() + (bx + box + Design.pt(QsTokens.TILE_TEXT_GAP, u) - r.centerX()) * s
-        val maxW = (r.right - inset) - tx
+        val symOn = if (t.dualTarget) boxOn else lit
+        val sym = faded(mix(mix(offC, onC, symOn), goneC, gone), alpha)
+        panel.glyphs.draw(c, t.control.icon, bx + boxSize / 2f, r.centerY(), Design.pt(QsTokens.LARGE_SYMBOL, u), sym, symOn)
+        // The words (a tap pops them out a little, from their middle).
+        val tx = bx + boxSize + Design.pt(QsTokens.TILE_TEXT_GAP, u)
+        val maxW = (r.right - Design.pt(QsTokens.TILE_END, u)) - tx
+        if (maxW <= 4f * u) return
         Design.text(QsTokens.LABEL).applyTo(label, u)
-        label.textSize *= s
-        label.color = faded(if (dual) Design.color(QsTokens.LABEL_COLOR) else mix(Design.color(QsTokens.LABEL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), tileOn), alpha)
-        val ll = Design.text(QsTokens.LABEL).lineHeightPt * u * s
-        val sub = QsTiles.detail(panel.host.state, t)
+        label.color = faded(mix(mix(Design.color(QsTokens.LABEL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), lit), goneC, gone), alpha)
+        val ll = Design.text(QsTokens.LABEL).lineHeightPt * u
+        val sub = QsTiles.detail(panel.host.state, t, carrier)
         val name = TextUtils.ellipsize(t.label, label, maxW, TextUtils.TruncateAt.END).toString()
+        val s = 1f + (Design.num(QsTokens.TEXT_POP) - 1f) * pop
+        c.save()
+        c.scale(s, s, tx + maxW / 2f, r.centerY())
         if (sub == null) {
             c.drawText(name, tx, baselineIn(label, r.centerY() - ll / 2f, ll), label)
-            return
+        } else {
+            Design.text(QsTokens.DETAIL).applyTo(detail, u)
+            detail.color = faded(mix(mix(Design.color(QsTokens.DETAIL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), lit), goneC, gone), alpha)
+            val dl = Design.text(QsTokens.DETAIL).lineHeightPt * u
+            val top = r.centerY() - (ll + dl) / 2f
+            c.drawText(name, tx, baselineIn(label, top, ll), label)
+            c.drawText(TextUtils.ellipsize(sub, detail, maxW, TextUtils.TruncateAt.END).toString(), tx, baselineIn(detail, top + ll, dl), detail)
         }
-        Design.text(QsTokens.DETAIL).applyTo(detail, u)
-        detail.textSize *= s
-        detail.color = faded(if (dual) Design.color(QsTokens.DETAIL_COLOR) else mix(Design.color(QsTokens.DETAIL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), tileOn), alpha)
-        val dl = Design.text(QsTokens.DETAIL).lineHeightPt * u * s
-        val top = r.centerY() - (ll + dl) / 2f
-        c.drawText(name, tx, baselineIn(label, top, ll), label)
-        c.drawText(TextUtils.ellipsize(sub, detail, maxW, TextUtils.TruncateAt.END).toString(), tx, baselineIn(detail, top + ll, dl), detail)
+        c.restore()
     }
+
+    /** The carrier's name and network as Mobile data's state (the header reads it off the drawing thread). */
+    var carrier = ""
 
     companion object {
         /** Toggles that change what the phone shares or how it is reached: over the lock screen they wait for an unlock. */
         private val SECURE = setOf(Control.WIFI, Control.BLUETOOTH, Control.CELLULAR, Control.AIRPLANE, Control.LOCATION,
             Control.HOTSPOT, Control.NFC, Control.DATA_SAVER)
+        /** HapticFeedbackConstants.TOGGLE_ON / TOGGLE_OFF (API 34): Android's tile haptics (MSDL SWITCH_ON / SWITCH_OFF). */
+        const val TOGGLE_ON = 21
+        const val TOGGLE_OFF = 22
     }
 }

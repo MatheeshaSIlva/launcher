@@ -202,8 +202,9 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   handed one: an int alpha past 255 flashes, an edge-anchored panel shows a gap). A preset's Speed and Bounce
   (`motion.adjust.*`, the settings' Fine-tune) apply where a curve is read (`Design.curve` through `motion/MotionAdjust`;
   Bounce scales existing overshoot only); times a motion is staged by go through `Motion.ms` (speed and slow motion).
-  The settings show motion as **moments** (V2, `docs/PLAN_SETTINGS_V2.md`; `motion/Moments.kt`): 23 things a person
-  notices (Charging, the status bar's charging moment, joined the plan's 22 on 2026-10-18) ("Opening apps", "Folders"), each holding its roles (every editable role in exactly one; a test checks it) and
+  The settings show motion as **moments** (V2, `docs/PLAN_SETTINGS_V2.md`; `motion/Moments.kt`): 24 things a person
+  notices (Charging, the status bar's charging moment, joined the plan's 22 on 2026-10-18; Quick Settings, Android's
+  shade, on 2026-10-21) ("Opening apps", "Folders"), each holding its roles (every editable role in exactly one; a test checks it) and
   its glue (roles nobody sees alone, unlisted, following its feel). Each moment has its own Speed and Bounce
   (`motion.adjust.<moment>.speed/.bounce`, 1 = as the preset), applied on top of the preset's wherever a curve is read
   (`Design.curve`, `Design.previewCurve`, `Draft.motionCurve` through `MotionAdjust.speed/bounce`), and some a character
@@ -269,9 +270,10 @@ Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **
   `TopButtonsBlock`, `StatusRowBlock`, `ControlGridBlock`; without a status row the bar stays as it is over it; `CcLayout`,
   `CcGallery`, `Controls`; apps' Quick Settings tiles as controls: `AppTiles`, run by SystemUI
   through `cmd statusbar add-tile/click-tile`), banners (`BannerView`) and Android's shade for a layout that has one
-  (`ShadePanelView`: Quick Settings over the notifications in two stages, the first pull's quick row and cards growing
-  into Quick Settings; its blocks in `shade/qs/`: `QsHeaderBlock`, `BrightnessBlock`, `TileGridBlock`, `QsFooterBlock`,
-  `CardsBlock`; tokens `comp.qs.*`; Pixel's layout, a preview), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
+  (`ShadePanelView`: Quick Settings over the notifications in two stages as Android 17's scene container plays them, read
+  from its SystemUIGoogle: a pull brings the quick row over the notifications, a second swipe expands Quick Settings;
+  its blocks in `shade/qs/`: `QsHeaderBlock`, `BrightnessBlock`, `TileGridBlock`, `QsFooterBlock`, `CardsBlock`; tokens
+  `comp.qs.*`, motion `motion.qs.*`; Pixel's layout, a preview; docs/SHADE_PIXEL_EVALUATION.md step 4, stage 3), all drawn by the material renderer. Notifications come from `Notifs` (the listener); what each control does from `ControlState` (own APIs, else
   shell commands). Design notes and measurements: `docs/PROGRESS.md` ("Phase 4"), `docs/IOS_DESIGN.md`.
   Control Center's live background is `LiveBlur`: an empty window of its own, added just before the shade's (so under it),
   that blurs what is behind (One UI: Samsung's view blur on its full-screen view; Android's cross-window blur elsewhere); `CcExpanded` is iOS's expanded

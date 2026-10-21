@@ -511,18 +511,38 @@ class StatusBarView(ctx: Context) : View(ctx) {
      * the shade), so the moon and the notification icons make way, shrinking away on their springs; [timeAlpha]: the time
      * gives way to the shade's large clock as Quick Settings expand.
      */
-    fun setShadeHeader(on: Boolean, timeAlpha: Float) {
+    fun setShadeHeader(on: Boolean, timeAlpha: Float, rowAlpha: Float = 1f, rowShift: Float = 0f, expandedAlpha: Float = 0f,
+                       expandedY: Float = 0f, expandedDx: Float = 0f) {
         val a = timeAlpha.coerceIn(0f, 1f)
-        if (on == header && a == timeFade) return
+        val ro = rowAlpha.coerceIn(0f, 1f)
+        val ea = expandedAlpha.coerceIn(0f, 1f)
+        if (on == header && a == timeFade && ro == headerRowAlpha && rowShift == headerRowShift && ea == headerExpandedAlpha &&
+            expandedY == headerExpandedY && expandedDx == headerExpandedDx) return
         val relay = on != header
         header = on
         timeFade = a
+        headerRowAlpha = ro; headerRowShift = rowShift; headerExpandedAlpha = ea; headerExpandedY = expandedY
+        headerExpandedDx = expandedDx
         if (relay) relayout()
         invalidate()
     }
 
     private var header = false
     private var timeFade = 1f
+    /**
+     * As Android's shade expands into Quick Settings, the status icons leave the bar's row (going down [headerRowShift] px
+     * and out: [headerRowAlpha]) for the expanded header's date row (centred at [headerExpandedY], coming in:
+     * [headerExpandedAlpha]), as its collapsed and expanded headers cross.
+     */
+    private var headerRowAlpha = 1f
+    private var headerRowShift = 0f
+    private var headerExpandedAlpha = 0f
+    private var headerExpandedY = 0f
+    /** How far the expanded copy sits right of the bar's own place (the panel's side, not the bar's). */
+    private var headerExpandedDx = 0f
+
+    /** Where the bar's right group ends (px): a panel lines its own rows up with it, or moves it to theirs. */
+    val iconsRight: Float get() = width - SIDE_PT * u
 
     /** Where the time ends (px): Android's shade writes the date after it. */
     val timeRight: Float get() = timeSlot.x.value + clockText.width(time)
@@ -978,21 +998,30 @@ class StatusBarView(ctx: Context) : View(ctx) {
         val inMoment = co > 0.0005f || ck > 0.0005f
         val dk = if (inMoment) smooth(ck / CHARGE_DISSOLVED_AT) else 0f
         if (dk > 0f) dissolveBlur(DISSOLVE_BLUR_PT * u * dk)
-        var leftX = SIDE_PT * u + max(0f, ccInset - SIDE_PT * u)
-        for (s in listOf(cellSlot, typeSlot, wifiSlot, vpnSlot)) {
-            val ccX = leftX
-            if (s.wanted) leftX += s.width + 5.6f * u
-            drawSlot(c, s, s.x.value + (ccX - s.x.value) * smooth(cc), y, content, rightK * (1f - dk), 1f - DISSOLVE_SHRINK * dk)
-        }
-        if (dk > 0f) dissolveBlur(0f)
-        if (inMoment) {
-            drawChargeCapsule(c, y, co, ck, content, rightK, inset)
-            // The light through the battery's charge runs while the capsule shows (the springs draw the rest).
-            postInvalidateOnAnimation()
-        } else {
-            // The percentage appears beside the battery (the battery's own number fades out of it).
-            drawSlot(c, boltSlot, boltSlot.x.value - inset, y, content, rightK)
-            drawSlot(c, batterySlot, batterySlot.x.value - inset, y, content, rightK)
+        // Over Android's shade expanding, the group in the bar's row goes down and out, and comes in on the expanded
+        // header's date row (the same icons: its collapsed and expanded headers cross).
+        val rows = if (header && headerExpandedAlpha > 0.003f) 2 else 1
+        for (row in 0 until rows) {
+            val ry = if (row == 0) y + (if (header) headerRowShift else 0f) else headerExpandedY
+            val rk = rightK * if (!header) 1f else if (row == 0) headerRowAlpha else headerExpandedAlpha
+            val dx = if (row == 1) headerExpandedDx else 0f
+            if (rk <= 0.003f) continue
+            var leftX = SIDE_PT * u + max(0f, ccInset - SIDE_PT * u)
+            for (s in listOf(cellSlot, typeSlot, wifiSlot, vpnSlot)) {
+                val ccX = leftX
+                if (s.wanted) leftX += s.width + 5.6f * u
+                drawSlot(c, s, s.x.value + (ccX - s.x.value) * smooth(cc) + dx, ry, content, rk * (1f - dk), 1f - DISSOLVE_SHRINK * dk)
+            }
+            if (dk > 0f && row == rows - 1) dissolveBlur(0f)
+            if (inMoment) {
+                drawChargeCapsule(c, ry, co, ck, content, rk, inset - dx)
+                // The light through the battery's charge runs while the capsule shows (the springs draw the rest).
+                postInvalidateOnAnimation()
+            } else {
+                // The percentage appears beside the battery (the battery's own number fades out of it).
+                drawSlot(c, boltSlot, boltSlot.x.value - inset + dx, ry, content, rk)
+                drawSlot(c, batterySlot, batterySlot.x.value - inset + dx, ry, content, rk)
+            }
         }
         if (cc > 0f && rightK > 0f) {
             label.color = content

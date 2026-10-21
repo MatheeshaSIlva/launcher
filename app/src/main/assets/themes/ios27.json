@@ -2711,9 +2711,29 @@
    "ref": "component.panel.material",
    "src": "judged:the screen behind blurred and veiled, as behind Control Center"
   },
+  "comp.qs.brightness.corner": {
+   "pt": 12,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): brightness InternalDimensions.SliderTrackRoundedCorner 12 dp"
+  },
+  "comp.qs.brightness.gap": {
+   "pt": 6,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): brightness InternalDimensions.ThumbTrackGapSize 6 dp"
+  },
   "comp.qs.brightness.height": {
    "pt": 52,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the slider 137 px tall"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): BrightnessSliderDimensions thumbHeight 52 dp (the slider's row)"
+  },
+  "comp.qs.brightness.icon": {
+   "pt": 28,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): BrightnessSliderDimensions iconSize 28 dp"
+  },
+  "comp.qs.brightness.icon-padding": {
+   "pt": 6,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): brightness InternalDimensions.IconPadding 6 dp"
+  },
+  "comp.qs.brightness.inner-corner": {
+   "pt": 2,
+   "src": "kit:Material 3 Expressive slider: a track's corners beside the handle 2 dp"
   },
   "comp.qs.brightness.level": {
    "ref": "component.control.on-material",
@@ -2723,31 +2743,77 @@
    "ref": "component.control.on-symbol-color",
    "src": "judged:a symbol on a control that is on"
   },
+  "comp.qs.brightness.symbol-off-color": {
+   "ref": "component.control.symbol-color",
+   "src": "judged:a symbol on a control that is off"
+  },
+  "comp.qs.brightness.thumb-color": {
+   "ref": "component.control.label-color",
+   "src": "judged:the controls' words"
+  },
+  "comp.qs.brightness.thumb-width": {
+   "pt": 4,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): BrightnessSliderDimensions thumbWidth 4 dp"
+  },
   "comp.qs.brightness.top": {
-   "pt": 150,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the slider from y 394 px"
+   "pt": 126,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the slider from y 394 px, 126 dp under the status bar"
   },
   "comp.qs.brightness.track": {
    "ref": "component.control.material",
    "src": "judged:a control that is off"
   },
+  "comp.qs.brightness.track-height": {
+   "pt": 40,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): BrightnessSliderDimensions trackHeight 40 dp"
+  },
   "comp.qs.build.color": {
    "ref": "component.control.detail-color",
    "src": "judged:the controls' secondary words"
+  },
+  "comp.qs.build.row": {
+   "pt": 48,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): qs Dimensions.FooterHeight 48 dp, right under the grid"
   },
   "comp.qs.build.text": {
    "text": {
     "family": "text",
     "weight": 400,
-    "size": 12,
-    "line": 16,
-    "tracking": 0.4
+    "size": 14,
+    "line": 20,
+    "tracking": 0.25
    },
-   "src": "kit:AOSP SystemUI: the build number in bodySmall (12/16)"
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the build number in bodyMedium"
   },
-  "comp.qs.card.action-outline": {
-   "color": "#ffffff4d",
-   "src": "judged:a faint outline in the label's white (iOS has no outlined actions)"
+  "comp.qs.card.action": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP notification 2025 template: actions as words in labelLarge"
+  },
+  "comp.qs.card.action-color": {
+   "ref": "component.notification.label-color",
+   "src": "judged:the shared notification's words"
+  },
+  "comp.qs.card.action-inset": {
+   "pt": 4,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the actions 4 dp in from the card and 4 dp apart"
+  },
+  "comp.qs.card.action-padding": {
+   "pt": 12,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): an action's words 12 dp in from its ends"
+  },
+  "comp.qs.card.actions-bottom": {
+   "pt": 6,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the card's edge 6 dp under its actions"
+  },
+  "comp.qs.card.actions-height": {
+   "pt": 48,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the actions' row 48 dp tall (android:id/actions_container)"
   },
   "comp.qs.card.app": {
    "text": {
@@ -2757,7 +2823,7 @@
     "line": 20,
     "tracking": 0.25
    },
-   "src": "kit:AOSP SystemUI notification 2025 template: the app's name and time in bodyMedium (14/20)"
+   "src": "kit:AOSP notification 2025 template: the app's name and time in bodyMedium (14/20)"
   },
   "comp.qs.card.body": {
    "ref": "component.notification.body",
@@ -2777,17 +2843,25 @@
    "ref": "component.button.fill",
    "src": "judged:the shared button's fill"
   },
+  "comp.qs.card.chip-height": {
+   "pt": 18,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the chevron's pill 26 x 18 dp"
+  },
+  "comp.qs.card.chip-width": {
+   "pt": 26,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the chevron's pill 26 x 18 dp (android:id/expand_button_pill)"
+  },
   "comp.qs.card.corner": {
-   "ref": "component.notification.corner",
-   "src": "judged:the shared notification's corner"
+   "pt": 28,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_corner_radius 28 dp"
   },
   "comp.qs.card.gap": {
-   "pt": 18,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): groups and sections 47 px apart"
+   "pt": 16,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_section_divider_height = notification_side_paddings_single 16 dp"
   },
   "comp.qs.card.icon": {
-   "ref": "component.notification.icon",
-   "src": "judged:the shared notification's icon"
+   "pt": 40,
+   "src": "kit:AOSP core dimens.xml notification_2025_icon_circle_size 40 dp"
   },
   "comp.qs.card.icon-color": {
    "color": "#ffffff",
@@ -2799,23 +2873,27 @@
   },
   "comp.qs.card.joined-corner": {
    "pt": 4,
-   "src": "kit:AOSP SystemUI dimens.xml notification_corner_radius_small 4 dp"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_corner_radius_small 4 dp"
   },
   "comp.qs.card.joined-gap": {
    "pt": 2,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): joined cards 6 px apart"
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): joined cards 5 px apart"
   },
   "comp.qs.card.material": {
    "ref": "component.notification.material",
    "src": "judged:the shared notification"
   },
   "comp.qs.card.padding": {
-   "ref": "component.notification.padding",
-   "src": "judged:the shared notification's padding"
+   "pt": 16,
+   "src": "kit:AOSP core dimens.xml notification_2025_margin 16 dp"
   },
   "comp.qs.card.text-color": {
    "ref": "component.notification.label-color",
    "src": "judged:the shared notification's words"
+  },
+  "comp.qs.card.text-gap": {
+   "pt": 7.5,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): its text 7.5 dp under the title"
   },
   "comp.qs.card.title": {
    "ref": "component.notification.title",
@@ -2824,6 +2902,10 @@
   "comp.qs.card.title-color": {
    "ref": "component.notification.label-color",
    "src": "judged:the shared notification's words"
+  },
+  "comp.qs.card.title-gap": {
+   "pt": 6,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): an expanded card's title 6 dp under its app's line"
   },
   "comp.qs.cards.shelf": {
    "material": {
@@ -2835,24 +2917,32 @@
    "src": "judged:iOS lays its notifications on nothing (an empty material)"
   },
   "comp.qs.cards.shelf-corner": {
-   "pt": 28,
-   "src": "kit:AOSP SystemUI: the notification shelf's top corners 28 dp (measured: about 30 dp on the emulator)"
+   "pt": 32,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_scrim_corner_radius 32 dp"
   },
   "comp.qs.cards.shelf-inset": {
    "pt": 16,
-   "src": "measured:Android 17 emulator's own shade: the shelf's top 41 px above the first card"
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the notification scrim from y 504 px, 42 px under the quick row"
   },
   "comp.qs.cards.top": {
-   "pt": 32,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the first card 86 px under the quick row"
+   "pt": 16,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the first row 42 px inside the notification scrim"
   },
   "comp.qs.clear.fill": {
    "ref": "component.button.fill",
    "src": "judged:the shared button"
   },
+  "comp.qs.clear.gap": {
+   "pt": 14,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the row 14 dp under the last card"
+  },
   "comp.qs.clear.height": {
-   "ref": "component.button.height",
-   "src": "judged:the shared button"
+   "pt": 48,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the notification footer's buttons 48 dp tall"
+  },
+  "comp.qs.clear.side-width": {
+   "pt": 60,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the history and settings buttons 60 dp wide"
   },
   "comp.qs.clear.text": {
    "ref": "component.button.text",
@@ -2866,25 +2956,63 @@
    "ref": "component.control.label-color",
    "src": "judged:the controls' words"
   },
+  "comp.qs.dots.active-width": {
+   "pt": 16,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): qs_page_indicator_width 16 dp (the current page a pill)"
+  },
   "comp.qs.dots.color": {
    "ref": "component.control.detail-color",
    "src": "judged:the controls' secondary words"
   },
   "comp.qs.dots.size": {
    "pt": 6,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): page dots about 6 dp, the current one a pill twice as long"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): qs_page_indicator_dot_width 6.4 dp"
+  },
+  "comp.qs.edit.color": {
+   "ref": "component.control.label-color",
+   "src": "judged:the controls' words"
+  },
+  "comp.qs.edit.symbol": {
+   "pt": 24,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the edit button's symbol 24 dp in its 48 dp target"
   },
   "comp.qs.footer.bottom": {
    "pt": 52,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the footer's buttons centred 136 px above the bottom edge"
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the footer's row centred 136 px above the bottom edge"
   },
   "comp.qs.footer.button": {
-   "ref": "component.round-button.size",
-   "src": "judged:the shared round button"
+   "pt": 40,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): FooterActionsDefaults.FooterButtonHeight 40 dp (48 dp to touch)"
+  },
+  "comp.qs.footer.gap": {
+   "pt": 8,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the footer's 40 dp buttons 48 dp apart"
   },
   "comp.qs.footer.material": {
    "ref": "component.round-button.material",
    "src": "judged:the shared round button"
+  },
+  "comp.qs.footer.pill": {
+   "ref": "component.round-button.material",
+   "src": "judged:the shared round button, as a pill"
+  },
+  "comp.qs.footer.pill-gap": {
+   "pt": 14,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the words 14 dp after the symbol"
+  },
+  "comp.qs.footer.pill-padding": {
+   "pt": 20,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the pill's symbol 20 dp in, its chevron 20 dp from the end"
+  },
+  "comp.qs.footer.pill-text": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): the footer's text button in labelLarge"
   },
   "comp.qs.footer.power-material": {
    "ref": "component.control.on-material",
@@ -2895,8 +3023,8 @@
    "src": "judged:a symbol on a control that is on"
   },
   "comp.qs.footer.symbol": {
-   "ref": "component.round-button.symbol",
-   "src": "judged:the shared round button's symbol"
+   "pt": 20,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the footer's symbols 53 px"
   },
   "comp.qs.footer.symbol-color": {
    "ref": "component.round-button.symbol-color",
@@ -2910,7 +3038,11 @@
     "line": 20,
     "tracking": 0.1
    },
-   "src": "kit:AOSP SystemUI shade header: the carrier in titleSmall (14/20, 500)"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): the carrier in titleSmall (14/20, 500)"
+  },
+  "comp.qs.header.carrier-end": {
+   "pt": 4,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): qs_carrier_margin_width 4 dp"
   },
   "comp.qs.header.clock": {
    "text": {
@@ -2920,11 +3052,23 @@
     "line": 44,
     "tracking": 0
    },
-   "src": "kit:AOSP SystemUI shade header: the large clock in displaySmall (36/44)"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): the status bar's time (14 sp) scaled by qqs_expand_clock_scale 2.57"
+  },
+  "comp.qs.header.clock-min-width": {
+   "pt": 48,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the time's box 126 px wide whatever the time (a 48 dp touch target)"
+  },
+  "comp.qs.header.clock-row": {
+   "pt": 48,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the expanded clock's row 126 px tall (the carrier centred on it)"
   },
   "comp.qs.header.clock-top": {
-   "pt": 32,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the expanded clock's line from y 84 px"
+   "pt": 8,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the expanded clock's row from y 84 px, 8 dp under the 24 dp status bar"
+  },
+  "comp.qs.header.collapsed-shift": {
+   "pt": 48,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): ShadeHeader.Dimensions.CollapsedHeightForTransitions 48 dp (the bar's row goes down as far as it leaves)"
   },
   "comp.qs.header.color": {
    "ref": "component.control.label-color",
@@ -2938,15 +3082,27 @@
     "line": 20,
     "tracking": 0.1
    },
-   "src": "kit:AOSP SystemUI shade header: the date in titleSmall (14/20, 500)"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): the shade header's date in titleSmall (14/20, 500)"
   },
   "comp.qs.header.date-gap": {
-   "pt": 8,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the date 8 dp after the status bar's time at the first pull"
+   "pt": 3,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the date 8 px after the time's box at the first pull"
+  },
+  "comp.qs.header.date-row": {
+   "pt": 24,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): ShadeHeader.Dimensions.ChipMinimumHeight 24 dp, the date's row"
   },
   "comp.qs.header.date-top": {
-   "pt": 100,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the date's line from y 262 px"
+   "pt": 72,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the date's row from y 252 px (its text centred at 283.5 px), 72 dp under the status bar"
+  },
+  "comp.qs.header.expanded-shift": {
+   "pt": 72,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): ExpandedHeight 120 dp less CollapsedHeightForTransitions 48 dp (the expanded rows come from as far above)"
+  },
+  "comp.qs.header.height": {
+   "pt": 96,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): ShadeHeader.Dimensions.ExpandedHeight 120 dp, from the screen's top: 96 dp under its 24 dp status bar"
   },
   "comp.qs.section.color": {
    "ref": "component.notification.label-color",
@@ -2954,7 +3110,7 @@
   },
   "comp.qs.section.height": {
    "pt": 48,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the Silent heading's row about 48 dp"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_section_header_height 48 dp"
   },
   "comp.qs.section.text": {
    "text": {
@@ -2968,15 +3124,19 @@
   },
   "comp.qs.side": {
    "pt": 16,
-   "src": "kit:AOSP SystemUI dimens.xml qs_horizontal_margin, notification_side_paddings 16 dp"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): qs_horizontal_margin = notification_side_paddings_single 16 dp"
   },
   "comp.qs.symbols": {
    "ref": "sys.symbols",
    "src": "judged:the theme's icon set"
   },
+  "comp.qs.tile.bounce": {
+   "pt": 8,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): BounceableTileViewModel.BounceSize 8 dp"
+  },
   "comp.qs.tile.box": {
    "pt": 56,
-   "src": "kit:AOSP SystemUI CommonTile.kt ToggleTargetSize 56 dp"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): common_tile_default_toggle_target_size 56 dp"
   },
   "comp.qs.tile.box-corner": {
    "ref": "component.control.well-corner",
@@ -3002,17 +3162,25 @@
    "ref": "component.control.detail-color",
    "src": "judged:the shared control's state"
   },
+  "comp.qs.tile.end-padding": {
+   "pt": 8,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): common_tile_default_dual_target_end_padding 8 dp"
+  },
   "comp.qs.tile.gap": {
    "pt": 8,
-   "src": "kit:AOSP SystemUI dimens.xml qs_tile_margin_horizontal / _vertical 8 dp"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): qs_tile_margin_horizontal / _vertical 8 dp"
   },
   "comp.qs.tile.height": {
    "pt": 72,
-   "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/CommonTile.kt TileHeight 72 dp"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): common_tile_default_tile_height 72 dp"
+  },
+  "comp.qs.tile.icon-pop": {
+   "factor": 1.1,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): a tapped small tile's symbol to 1.1 (Tile.kt)"
   },
   "comp.qs.tile.inset": {
    "pt": 8,
-   "src": "kit:AOSP SystemUI CommonTile.kt TilePadding 8 dp"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): common_tile_default_start_padding 8 dp"
   },
   "comp.qs.tile.label": {
    "ref": "component.control.title",
@@ -3021,6 +3189,10 @@
   "comp.qs.tile.label-color": {
    "ref": "component.control.label-color",
    "src": "judged:the shared control's name"
+  },
+  "comp.qs.tile.large-symbol": {
+   "pt": 24,
+   "src": "judged:the shared control's symbol size"
   },
   "comp.qs.tile.material": {
    "ref": "component.control.material",
@@ -3044,7 +3216,7 @@
   },
   "comp.qs.tile.symbol": {
    "pt": 24,
-   "src": "kit:AOSP SystemUI CommonTile.kt: a symbol about 24 dp drawn (IconSize 32 dp, LargeTileIconSize 28 dp with their padding)"
+   "src": "judged:the shared control's symbol size"
   },
   "comp.qs.tile.symbol-color": {
    "ref": "component.control.symbol-color",
@@ -3052,19 +3224,42 @@
   },
   "comp.qs.tile.text-gap": {
    "pt": 6,
-   "src": "kit:AOSP SystemUI CommonTile.kt TileArrangementPadding 6 dp"
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): CommonTileDefaults.TileArrangementPadding 6 dp"
   },
-  "comp.qs.tile.unavailable-alpha": {
-   "factor": 0.38,
-   "src": "kit:Material 3: content of a disabled control at 38 %"
+  "comp.qs.tile.text-pop": {
+   "factor": 1.06,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): a tapped large tile's words to 1.06 (Tile.kt)"
+  },
+  "comp.qs.tile.unavailable-color": {
+   "color": "#ffffff52",
+   "src": "judged:a control that cannot be used now, faint (Material: 38 %)"
+  },
+  "comp.qs.tile.unavailable-material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#ffffff",
+      0.06,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:a faint trace of a control that cannot be used now"
   },
   "comp.qs.tiles.quick-top": {
    "pt": 0,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the quick row right under the status bar (y 63 px, the bar's height)"
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the quick row right under the status bar (y 63 px, the bar's height)"
+  },
+  "comp.qs.tiles.squish": {
+   "factor": 0.3,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): GoneScene TilesSquishiness 0.3 (the quick row's tiles grow to whole as the shade comes)"
   },
   "comp.qs.tiles.top": {
-   "pt": 232,
-   "src": "measured:Android 17 emulator's own shade (tools/shots/pxref, 2.625 px a dp): the expanded grid from y 610 px"
+   "pt": 208,
+   "src": "measured:Android 17 emulator's own shade (2026-10-21, 2.625 px a dp): the expanded grid from y 610 px, 208 dp under the status bar"
   },
   "comp.settings.accent": {
    "ref": "sys.color.accent",
@@ -4793,6 +4988,37 @@
    "material": {
     "frost": 0,
     "fills": [
+     [
+      "@system_accent1_500",
+      [
+       0.25,
+       0.25
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent2_100|@system_accent2_800",
+      [
+       0.24,
+       0.3
+      ],
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "comp.qs.tile.unavailable-material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "#ffffff",
+      0.06,
+      "NORMAL"
+     ],
      [
       "@system_accent1_500",
       [

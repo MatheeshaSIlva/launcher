@@ -169,6 +169,18 @@ object MotionRoles {
         r("press-out", "Notification let go", "And let go."),
     ))
 
+    val QUICK_SETTINGS = MotionGroup("Quick Settings", "Android's shade: Quick Settings over the notifications.", listOf(
+        r("qs.open", "Opening", "The shade coming to rest after a pull."),
+        r("qs.close", "Closing", "The shade going."),
+        r("qs.expand", "Expanding", "Quick Settings coming to rest whole after the second pull."),
+        r("qs.collapse", "Collapsing", "Quick Settings going back to the quick row over the notifications."),
+        r("qs.tile-bounce", "Tile pressed", "A pressed tile growing into its neighbours, and back."),
+        r("qs.tile-state", "Tile changing state", "A tile's colours and corners following its state."),
+        r("qs.tile-pop", "Tile tapped", "A tapped tile's symbol or words popping out."),
+        r("qs.tile-pop-back", "Tile tapped: back", "And back to their size."),
+        r("qs.slider-icon", "Slider symbol", "The brightness slider's symbol moving between its tracks."),
+    ))
+
     val BANNERS = MotionGroup("Banners", "Notifications popping up over apps and home.", listOf(
         r("banner.in", "Banner in", "A banner swooping in from the top."),
         r("banner.out", "Banner out", "A banner going."),
@@ -227,14 +239,14 @@ object MotionRoles {
         r("style.closing", "Going home: style", "How an app goes back into its icon."),
     ))
 
-    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE, MOMENTS, STYLES)
+    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, QUICK_SETTINGS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE, MOMENTS, STYLES)
 
     /**
      * What the settings' Motion lets a person retime, by group (docs/PLAN_MOTION.md): every animation but the App Switcher's
      * geometry and gestures (behaviour: the Recents layout's options, D3), slow motion (Developer) and the preset's overall
      * speed and bounce (Motion's Fine-tune).
      */
-    val EDITABLE: List<MotionGroup> = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, BANNERS, BARS, APPEARANCE)
+    val EDITABLE: List<MotionGroup> = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, QUICK_SETTINGS, BANNERS, BARS, APPEARANCE)
         .map { g -> MotionGroup(g.title, g.description, g.roles.filter { !it.behaviour }) }
 
     fun find(key: String): Pair<MotionGroup, MotionRole>? {

@@ -12,7 +12,9 @@ import dev.launcher.app.shade.Notifs
 /**
  * What Android's shade (the layout file's `shade` panel: [dev.launcher.app.shade.ShadePanelView]) gives the blocks it is
  * made of: its view (thread, redraws, haptics), its size and scale, how far it is open (the first stage) and how far
- * Quick Settings are expanded (the second), the renderer its surfaces are drawn with, and what the shade does for it.
+ * Quick Settings are expanded (the second), where the notification scrim is, the renderer its surfaces are drawn with, and
+ * what the shade does for it. The stages and what each part does on them are Android 17's scene transitions (Gone to Shade,
+ * Shade to Quick Settings: docs/SHADE_PIXEL_EVALUATION.md, step 4).
  */
 interface QsPanel {
     val view: View
@@ -20,15 +22,24 @@ interface QsPanel {
     val u: Float
     val panelWidth: Int
     val panelHeight: Int
-    /** The first stage: 0 closed .. 1 open. */
+    /** The first stage: 0 closed .. 1 open (held at 1 past it: the scene stops at its place). */
     val progress: Float
     /** The second stage: 0 the first (the quick row over the notifications) .. 1 Quick Settings whole. */
     val expandK: Float
+    /** How tall the quick row's tiles are, of their height: Android's squishiness, 0.3 as the shade starts to come. */
+    val squish: Float
+    /** Where the notification scrim's top is now (px): it comes down from the top edge with the first stage, and goes out
+     *  through the bottom edge with the second, the cards on it. */
+    val scrimTop: Float
+    /** Quick Settings' content beyond the quick row (the brightness, the rest of the grid, the build row): its fade, and how
+     *  far it is from its place (it moves with the grid as the quick row's tiles go to theirs). */
+    val contentAlpha: Float
+    val gridShift: Float
     /** Which page of tiles shows (fractional while swiped). */
     val page: Float
     /** Between the screen's sides and the content (px). */
     val side: Float
-    /** The status bar's height (px): the first stage starts under it. */
+    /** The status bar's height (px): the quick row starts under it, and the expanded header's rows count from it. */
     val barHeight: Int
     val surfaces: CcSurfaces
     val glyphs: Glyphs
@@ -37,7 +48,7 @@ interface QsPanel {
     /** What the shade does for the panel. */
     interface Host {
         val state: ControlState
-        /** Where the status bar's time ends (px): the first stage's date sits beside it. */
+        /** Where the status bar's time ends (px). */
         fun timeRight(): Float
         /** Where the status bar's time starts, its baseline and its size (px): the large clock grows out of it. */
         fun timeLeft(): Float
@@ -54,7 +65,7 @@ interface QsPanel {
         fun open(item: Notifs.Item, from: RectF?): Boolean
         fun send(pi: PendingIntent?): Boolean
         fun powerMenu()
-        /** The panel's stage changed (the status bar's time gives way to the large clock as Quick Settings expand). */
+        /** The panel's stage changed (the status bar's time and icons give way to the expanded header as Quick Settings expand). */
         fun expandChanged()
         /** Over the lock screen (what the notifications show, and whether a tile may act at once). */
         val locked: Boolean
@@ -69,6 +80,16 @@ interface QsPanel {
 internal fun smooth(a: Float, b: Float, x: Float): Float {
     val t = ((x - a) / (b - a)).coerceIn(0f, 1f)
     return t * t * (3f - 2f * t)
+}
+
+/** [x] from [a] to [b] as a straight fraction (Android's scene transitions' fractionRange: linear unless eased). */
+internal fun range(a: Float, b: Float, x: Float): Float = ((x - a) / (b - a)).coerceIn(0f, 1f)
+
+/** Material's standard easing (cubic-bezier 0.4, 0, 0.2, 1: Android's "Legacy" FastOutSlowIn), at [t]. */
+internal fun fastOutSlowIn(t: Float): Float {
+    val x = t.coerceIn(0f, 1f).toDouble()
+    val s = dev.launcher.app.motion.BezierMath.solveS(x, 0.4, 0.2)
+    return dev.launcher.app.motion.BezierMath.y(s, 0.0, 1.0).toFloat()
 }
 
 internal fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t

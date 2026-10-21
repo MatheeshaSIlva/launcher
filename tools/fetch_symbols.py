@@ -83,6 +83,8 @@ SYMBOLS = {
     # Android's shade: the notification history and settings beside Clear all.
     "history": "history",
     "notification_settings": "notification_settings",
+    # Quick Settings' edit button (Android 17's EditModeButton draws Dashboard2Edit, this symbol).
+    "dashboard_2_edit": "qs_edit",
 }
 
 URL = "https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/{0}/materialsymbolsrounded/{0}_fill1_24px.svg"

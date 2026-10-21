@@ -439,10 +439,62 @@ by frame (no part crossing another: the slider once passed over the tiles and th
 lies as upright with as many rows a page as fit (Pixel's own landscape, a row of tiles over a centred column, is still
 to come).
 
-Still to come for Pixel: the second place (Separately: Android 16's dual shade, notifications from the left and Quick
-Settings from the right), its landscape, the media player, the status icons moving to the expanded header's date row,
-editing (a page of its own), the motion's own roles (the expand uses Control Center's open and close for now) and
-haptics, then the measured comparison of every part.
+**Stage 3, Pixel's shade as Android 17 plays it (2026-10-21).** Matheesha on the S24 (c10e23e): "swiping it down went
+straight to the controls only, which is not how android handles it ... the button states, haptics and animations still
+needs work ... the button radiuses and paddings didn't match in several places". Everything below was read from the
+emulator's own SystemUIGoogle (Android 17, `adb pull /system_ext/priv-app/SystemUIGoogle/SystemUIGoogle.apk`: its
+resources with `aapt2 dump`, its code with `dexdump -d`; names are not obfuscated) and measured on its own shade
+(tools/shots/stock: screenshots while a real touch held each stage, `uiautomator dump` for bounds; our accessibility
+service off). The emulator's shade is the scene container ("Flexiglass"): scenes Gone, Shade (the quick row over the
+notifications) and Quick Settings, their transitions declared in `scene/ui/composable/transitions/`.
+
+- The stages: a pull from the top never goes past the quick row (Gone to Shade: the finger's travel over the screen's
+  height, counted from where it passed the touch slop); a second swipe down on the open shade (on the tiles, or on the
+  cards once their list is at its top) expands Quick Settings, the notification scrim and its cards following the finger
+  one to one out through the bottom edge (Shade to Quick Settings: the distance is the scrim's way to the bottom edge); two
+  fingers bring Quick Settings with the pull. A swipe up goes back a stage, Back too. On letting go a stage commits once
+  the finger moved 56 dp toward it or flung at 125 dp/s (DragControllerImpl, SwipeDetectorDefaults), else the nearer end;
+  the spring is stopped at its place (the scene layout bounds the offset).
+- Gone to Shade (toSingleShadeTransition, measured frame by frame): the quick row's tiles grow from 30 % of their height
+  (GoneScene TilesSquishiness 0.3, verticalSquish: the box too, the words and symbols not), the notification scrim comes
+  down from the top edge over them (translate from Edge.Top) and comes in with the pull, the header's date beside the time
+  over the first half (linear), the cards from a quarter to 88 %, the background's tint early and its blur with the pull.
+- Shade to Quick Settings (shadeToQuickSettingsTransition): the quick row's tiles move to their places in the grid (shared
+  elements), the rest of Quick Settings fades in from 43 % to 95 % moving with the grid (anchoredTranslate to the grid
+  anchor), the footer's actions over the first 83 ms of 500 (under the scrim until it passes), the bar's row (date,
+  status icons) down 48 dp and out by 14 %, the clock growing from the bar's time (ShadeHeaderClock, ClockScale 2.57), the
+  expanded rows (date with the status icons, the carrier) from 72 and 48 dp above, in from 58 %.
+- The background: ShadeColors.shadePanel (shade_panel_fg accent1_100 at 40 % / accent1_800 at 32 % over shade_panel_bg
+  neutral tone 98 at 40 % / tone 4 at 32 % over black at 32 % / 64 %) over the blur; the notification scrim surfaceEffect0
+  (accent1_100 / accent1_800 at 50 %, 32 dp corners). Measured against the emulator's own at each stage of a pull: the
+  composite and the blur's detail within a few levels.
+- Tiles (TileDefaults, CommonTileDefaults, the resources): 72 dp, 8 dp apart; off in surfaceEffect1 (surface at 54 %), a
+  capsule; on in primary, 24 dp corners; a two-target tile lights its 56 dp box only (surfaceEffect2 off: white 32 % /
+  accent1_100 15 %, a circle; primary on, 16 dp); unavailable surface at 18 % with onSurfaceVariant at 38 %; names in
+  labelLarge emphasized, states in labelMedium, onSurface. Colours and corners follow the state on spring() (1500, 1). A
+  press grows the tile 8 dp into its neighbours (BounceableTileViewModel, BounceOnPressNode: spring 1500, back once three
+  quarters there); a tap pops its symbol to 1.1 (a small tile) or its words to 1.06 (167 ms out on cubic 0.05/0/0/1, 167
+  ms back on 1/0/0.95/1); haptics as TileHapticsViewModel's tokens: toggle on, toggle off, long press. Pixel's default
+  set and order (quick_settings_tiles_default, large: Wi-Fi, Bluetooth, Mobile data, Quick Share, Do Not Disturb, Wallet).
+  Android 17's own glyphs where they changed from AOSP main (vd_wifi, vd_cell, the plain Bluetooth, Wallet, Device
+  controls; Do Not Disturb filled when on): tools/icons/extract_apk_vectors.py.
+- The slider (BrightnessSliderDimensions, InternalDimensions): 40 dp tracks either side of a 4 x 52 dp handle, 6 dp gaps,
+  12 dp outer and 2 dp inner corners, the symbol (low up to 20 %, full from 80 %, medium between) at the end of the
+  inactive track or of the active one when the other has no room, crossing on a 100 ms tween; ticks while dragged.
+- The header 120 dp; the build number's row 48 dp right under the grid, the edit button (Dashboard2Edit) at its end; the
+  footer's actions: "N apps are active" (the shell's foreground services of apps with a launcher entry), the user,
+  settings, power; 40 dp buttons 48 dp apart, 52 dp above the bottom edge.
+- Cards (Android 16's template, measured): the first expanded (config_autoExpandFirstNotification) with its app's line,
+  title, whole text and actions as words in primary; the app's own icon in the 40 dp circle; all words onSurface; Clear
+  all and the Silent heading's clear button only while something can go; history and settings 60 x 48 dp, 14 dp under the
+  last card.
+- Motion roles of their own (motion.qs.*: open, close, expand, collapse, tile-bounce, tile-state, tile-pop, slider-icon;
+  the moment "Quick Settings"), every size a comp.qs.* token with its source.
+
+Not like Android 17's yet: the status bar's own look in the header's row (our status bar's layout: its time and icons,
+as on home), Quick Share's glyph (Play services' own), a Bluetooth device's dots (the connection is not read), the user's
+avatar. Still to come: editing (a page of its own: the edit button opens the settings meanwhile), the media player,
+Pixel's landscape, the dual shade (Android 17 on a phone ignores its `dual_shade` setting: Pixel's file keeps one place).
 
 ## References
 

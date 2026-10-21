@@ -10,6 +10,8 @@ Sources are Android vector drawables (a plain vector, or an animated vector at i
 Settings icons animate between their off and on looks) and SVGs, downloaded once into CACHE_DIR (untrusted data: parsed,
 never run). Each symbol keeps its source in the file.
 
+    python -I tools/icons/extract_apk_vectors.py SystemUIGoogle.apk CACHE_DIR vd_wifi vd_cell ic_wallet_lockscreen controls_icon \
+        vd_bluetooth_buds/bluetooth_plain/circle_left+circle_right
     python -I tools/icons/build_icon_set.py CACHE_DIR
 """
 import base64
@@ -45,9 +47,12 @@ def aosp(path, frame='static', scale=None):
 PIXEL = {
     'airplane': tile(SUI + 'qs_airplane_icon'),
     'low_power': tile(SUI + 'qs_battery_saver_icon'),
-    'bluetooth': tile(KEY + 'qs_bluetooth_icon'),
+    # Bluetooth on without a device: its base drawn without the earbuds' dots (what qs_bluetooth_icon_disconnected ends on).
+    'bluetooth': {'on': ('apk', 'bluetooth_plain', 'static'), 'off': ('aosp', KEY + 'qs_bluetooth_icon_off.xml', 'end')},
     'data_saver': tile(SUI + 'qs_data_saver_icon'),
-    'moon': tile(SUI + 'qs_dnd_icon'),
+    # Do Not Disturb: on, the filled circle with its bar (Android 17's tile); off, AOSP's outline.
+    'moon': {'on': ('url', 'https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/do_not_disturb_on/materialsymbolsrounded/do_not_disturb_on_fill1_24px.svg', 'static'),
+             'off': ('aosp', SUI + 'qs_dnd_icon_off.xml', 'end')},
     'flashlight': tile(SUI + 'qs_flashlight_icon'),
     'hotspot': tile(SUI + 'qs_hotspot_icon'),
     'location': tile(SUI + 'qs_location_icon'),
@@ -67,7 +72,7 @@ PIXEL = {
     'note': aosp(SUI + 'ic_qs_notes.xml'),
     'qr': aosp(SUI + 'ic_qr_code_scanner.xml'),
     'text_size': aosp(SUI + 'ic_qs_font_scaling.xml'),
-    'wallet': aosp(SUI + 'ic_qs_wallet.xml'),
+    'wallet': {'on': ('apk', 'ic_wallet_lockscreen', 'static')},
     'settings': aosp(SUI + 'ic_settings.xml'),
     'sun': aosp(SUI + 'ic_brightness_full.xml'),
     'volume': aosp(SUI + 'ic_volume_media.xml'),
@@ -79,7 +84,11 @@ PIXEL = {
     # The media player's skip buttons: 12 dp symbols in 24 dp slots (filled to the slot they were twice play's size).
     'forward': aosp(SUI + 'ic_media_next.xml', scale=0.5),
     'rewind': aosp(SUI + 'ic_media_prev.xml', scale=0.5),
-    'wifi': aosp(CORE + 'ic_wifi_signal_4.xml'),
+    # Android 17's tiles where they changed from AOSP main's (its SystemUIGoogle: extract_apk_vectors.py into CACHE_DIR/apk
+    # first): Wi-Fi's two arcs and a dot, Mobile data's arrows (vd_cell: what ic_cell_on rests on), Wallet's card, Device controls.
+    'wifi': {'on': ('apk', 'vd_wifi', 'static')},
+    'cellular': {'on': ('apk', 'vd_cell', 'static')},
+    'home': {'on': ('apk', 'controls_icon', 'static')},
     # (The media output button keeps the app's own: AOSP's seamless-transfer symbol is a music note.)
 }
 
@@ -96,6 +105,9 @@ SETS = {
 # ---------------------------------------------------------------------------------------------------------------- fetch
 
 def fetch(cache, kind, path):
+    if kind == 'apk':
+        # Android 17's own icons, out of its SystemUIGoogle APK by extract_apk_vectors.py (never downloaded here).
+        return open(os.path.join(cache, 'apk', path + '.xml'), 'rb').read()
     dest = os.path.join(cache, kind, path.replace('/', '__'))
     if not os.path.exists(dest):
         os.makedirs(os.path.dirname(dest), exist_ok=True)
@@ -377,7 +389,7 @@ def symbol(cache, src):
     box, layers = from_svg(data) if path.endswith('.svg') else from_vector(data, frame, cache, kind)
     if not layers:
         raise ValueError('nothing drawn')
-    where = ('AOSP frameworks/base ' + path) if kind == 'aosp' else path
+    where = ('AOSP frameworks/base ' + path) if kind == 'aosp' else         (f"Android 17 SystemUIGoogle res/drawable/{path}.xml (tools/icons/extract_apk_vectors.py)" if kind == 'apk' else path)
     what = {'end': ' (its last frame)', 'start': ' (its first frame)', 'static': ''}[frame]
     out = {'src': where + what, 'box': [round(x, 3) for x in box], 'layers': layers}
     if len(src) > 3:

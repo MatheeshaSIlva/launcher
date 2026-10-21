@@ -24,13 +24,13 @@ class MomentsTest {
     }
 
     @Test fun theMomentsAreThePlansTable() {
-        assertEquals(23, Moments.ALL.size)
+        assertEquals(24, Moments.ALL.size)
         val perPart = Moments.ALL.groupingBy { it.part }.eachCount()
-        assertEquals(mapOf(MomentPart.APPS to 4, MomentPart.HOME to 6, MomentPart.LIBRARY to 2, MomentPart.SHADE to 6,
+        assertEquals(mapOf(MomentPart.APPS to 4, MomentPart.HOME to 6, MomentPart.LIBRARY to 2, MomentPart.SHADE to 7,
             MomentPart.STATUS_BAR to 3, MomentPart.EVERYWHERE to 2), perPart)
-        assertEquals(listOf(5, 4, 2, 9, 4, 2, 4, 12, 9, 4, 8, 9, 5, 7, 9, 12, 4, 5, 5, 5, 4, 3, 4), Moments.ALL.map { it.roles.size })
+        assertEquals(listOf(5, 4, 2, 9, 4, 2, 4, 12, 9, 4, 8, 9, 5, 7, 9, 12, 7, 4, 5, 5, 5, 4, 3, 4), Moments.ALL.map { it.roles.size })
         // The glue: animations nobody sees on their own follow their moment, unlisted.
-        assertEquals(13, Moments.ALL.sumOf { it.glue.size })
+        assertEquals(15, Moments.ALL.sumOf { it.glue.size })
         assertEquals("ids twice", Moments.ALL.size, Moments.ALL.map { it.id }.toSet().size)
     }
 
