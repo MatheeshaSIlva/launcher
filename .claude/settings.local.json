@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'CLAUDE.md: the S24'\\\\''s palette test \\(with Matheesha'\\\\''s go\\): Samsung'\\\\''s applyWallpaperColor passes its own signature check from the shell but Android refuses the shell'\\\\''s fabricated overlays at commit, so One UI'\\\\''s own palette cannot be set through Shizuku \\(its memory put back with the original lists\\); Android'\\\\''s palette setting recolours Material You'\\\\''s role colours on One UI 9 \\(SystemUI'\\\\''s dynamic overlay sits above Samsung'\\\\''s\\), not the shade palettes nor Samsung'\\\\''s apps. *)",
+      "Bash(git push *)",
+      "Bash(tools/build.sh)",
+      "Bash(export JAVA_HOME=\"/c/Program Files/Eclipse Adoptium/jdk-17.0.20.101-hotspot\")",
+      "Bash(./gradlew testDebugUnitTest -q)",
+      "Bash(awk '{t+=$1; f+=$2; e+=$3} END {print \"tests\", t, \"failures\", f, \"errors\", e}')"
+    ]
+  }
+}

@@ -12,6 +12,14 @@ debugging). The app also works without Shizuku as a plain launcher; Shizuku unlo
 
 Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **Galaxy S24, Android 16, One UI**.
 
+## Why it exists (what we sell)
+
+Not another app: it gives people back control of their own device, and it must feel like a part of the system itself,
+premium, alive, well thought out and detailed, as iOS does. Matheesha: "that's what we will sell to the customers". Every
+change, however small, is judged by that: a seam where a stock part shows through, a look or a motion the user cannot
+change, a dropped frame or a state that pops each breaks the promise. Before calling anything done, run the polish pass
+(`.claude/skills/polish-pass`).
+
 ## The three rules that outrank every feature
 
 1. **Perfectly smooth.** Open, close, swipe and panel pulls follow the finger and hold the display's refresh rate
