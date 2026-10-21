@@ -738,6 +738,26 @@
    "ms": 480,
    "src": "judged:test preset: iOS 27's spring (0.32 s, damping 0.8) as a bezier (back-out, 480 ms)"
   },
+  "motion.qs.edit-appear": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 390,
+   "src": "judged:test preset: iOS 27's spring (0.31 s, damping 1.0) as a bezier (emphasized decelerate, 390 ms)"
+  },
+  "motion.qs.edit-place": {
+   "bezier": [
+    0.3,
+    1.25,
+    0.55,
+    1
+   ],
+   "ms": 460,
+   "src": "judged:test preset: iOS 27's spring (0.31 s, damping 0.75) as a bezier (back-out, 460 ms)"
+  },
   "motion.qs.expand": {
    "bezier": [
     0.3,

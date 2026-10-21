@@ -1117,6 +1117,164 @@
    "color": "@on_surface",
    "src": "kit:AOSP notification footer: onSurface"
   },
+  "comp.qs.edit-page.title": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 28,
+    "line": 33,
+    "tracking": 0
+   },
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): Edit tiles in headlineMedium (28 sp), its box 33 dp (no extra line spacing)"
+  },
+  "comp.qs.edit-page.subtitle": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 14,
+    "line": 16,
+    "tracking": 0.25
+   },
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): the line under the title in bodyMedium"
+  },
+  "comp.qs.edit-page.text-color": {
+   "color": "@on_surface",
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): the title, its line and the categories' names in onSurface"
+  },
+  "comp.qs.edit-page.grid-fill": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@primary",
+      0.15,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): inside the box primary at 15 % (18, 15, 12 levels darker than the panel around it)"
+  },
+  "comp.qs.edit-page.accent": {
+   "color": "@primary",
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): the box's border, a chosen tile's outline and handle, the badges and buttons in primary"
+  },
+  "comp.qs.edit-page.on-accent": {
+   "color": "@on_primary",
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): on primary in onPrimary"
+  },
+  "comp.qs.edit-page.slot-color": {
+   "color": "@on_surface/11",
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): where a dragged tile will land, 11 % darker than the box"
+  },
+  "comp.qs.edit-page.category": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface",
+      0.32,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): AvailableTileGrid on surface at 32 %"
+  },
+  "comp.qs.edit-page.category-text": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 600,
+    "size": 16,
+    "line": 24,
+    "tracking": 0.15
+   },
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): CategoryHeader in titleMediumEmphasized"
+  },
+  "comp.qs.edit-page.cell-label": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 12,
+    "line": 16,
+    "tracking": 0.5
+   },
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): AvailableTileGridCell's name in labelMedium"
+  },
+  "comp.qs.edit-page.button-text": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 500,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.1
+   },
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): RemoveButton in labelLarge"
+  },
+  "comp.qs.edit-page.button-off-fill": {
+   "color": "@on_surface/10",
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): RemoveButton disabled on onSurface at 10 %"
+  },
+  "comp.qs.edit-page.button-off-text": {
+   "color": "@on_surface/38",
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): RemoveButton disabled in onSurface at 38 %"
+  },
+  "comp.qs.edit-page.undo-material": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface",
+      0.54,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): the undo button on surfaceEffect1"
+  },
+  "comp.qs.edit-page.dialog": {
+   "material": {
+    "frost": 0,
+    "fills": [
+     [
+      "@surface",
+      1.0,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): Reset all tiles? on surface"
+  },
+  "comp.qs.edit-page.dialog-title": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 24,
+    "line": 32,
+    "tracking": 0
+   },
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): the question in headlineSmall, centred"
+  },
+  "comp.qs.edit-page.dialog-text": {
+   "text": {
+    "family": "google:Google Sans Flex",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.25
+   },
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): its words in bodyMedium, centred"
+  },
+  "comp.qs.edit-page.dialog-text-color": {
+   "color": "@on_surface_variant",
+   "src": "measured:Android 17 emulator's own shade (2026-10-21): its words in onSurfaceVariant (93, 95, 104)"
+  },
   "comp.cc.accent.accessibility": {
    "color": "@on_primary",
    "src": "kit:AOSP SystemUI qs/panels/ui/compose/infinitegrid/Tile.kt: activeTileColors, icon onPrimary (this accent is the lit symbol's colour)"

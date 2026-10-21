@@ -179,6 +179,9 @@ object MotionRoles {
         r("qs.tile-pop", "Tile tapped", "A tapped tile's symbol or words popping out."),
         r("qs.tile-pop-back", "Tile tapped: back", "And back to their size."),
         r("qs.slider-icon", "Slider symbol", "The brightness slider's symbol moving between its tracks."),
+        r("qs.edit", "Editing tiles", "Quick Settings giving way to their edit page, and back."),
+        r("qs.edit-place", "Tiles rearranged", "Tiles moving to their places on the edit page."),
+        r("qs.edit-appear", "Edit page buttons", "Undo, a tile added or taken out, Reset's question fading in and out."),
     ))
 
     val BANNERS = MotionGroup("Banners", "Notifications popping up over apps and home.", listOf(

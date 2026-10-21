@@ -2968,6 +2968,329 @@
    "pt": 6,
    "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): qs_page_indicator_dot_width 6.4 dp"
   },
+  "comp.qs.edit-page.accent": {
+   "ref": "sys.color.accent",
+   "src": "judged:the theme's accent"
+  },
+  "comp.qs.edit-page.added-alpha": {
+   "factor": 0.38,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): a tile already added at 38 % (its surface 13 levels over the box)"
+  },
+  "comp.qs.edit-page.auto-scroll-speed": {
+   "pt": 190,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): EditModeTileDefaults.AUTO_SCROLL_SPEED 2 ms a pixel (500 px a second: 190 dp at 2.625 px a dp)"
+  },
+  "comp.qs.edit-page.auto-scroll-zone": {
+   "pt": 100,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): EditModeTileDefaults.AUTO_SCROLL_DISTANCE 100"
+  },
+  "comp.qs.edit-page.badge": {
+   "pt": 24,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the add badge a 24 dp circle, centred 14 dp under the tile's top and 15 dp in from its end"
+  },
+  "comp.qs.edit-page.badge-end": {
+   "pt": 15,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): centred 15 dp in from the tile's end"
+  },
+  "comp.qs.edit-page.badge-symbol": {
+   "pt": 18,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the plus 10 dp across (Icons.Default.Add at 18 dp)"
+  },
+  "comp.qs.edit-page.badge-top": {
+   "pt": 14,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): centred 14 dp under the tile's top"
+  },
+  "comp.qs.edit-page.bar-center": {
+   "pt": 40,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the bar's row (back, undo, Remove) centred 64 dp from the top, 40 dp under the status bar"
+  },
+  "comp.qs.edit-page.bar-end": {
+   "pt": 4,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): Remove's end 4 dp inside the page (Material's top app bar: 4 dp)"
+  },
+  "comp.qs.edit-page.bar-height": {
+   "pt": 64,
+   "src": "kit:Material 3 TopAppBar: its row 64 dp (the page scrolls under its bottom)"
+  },
+  "comp.qs.edit-page.bar-start": {
+   "pt": 16,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the back arrow 16 dp inside the page (32 dp from the screen's edge)"
+  },
+  "comp.qs.edit-page.bar-symbol": {
+   "pt": 24,
+   "src": "kit:Material: a 24 dp symbol in a 48 dp target"
+  },
+  "comp.qs.edit-page.button-height": {
+   "pt": 36,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): Remove 181 x 94 px"
+  },
+  "comp.qs.edit-page.button-off-fill": {
+   "color": "#7676801f",
+   "src": "judged:a faint fill"
+  },
+  "comp.qs.edit-page.button-off-text": {
+   "color": "#3c3c434d",
+   "src": "judged:faint words"
+  },
+  "comp.qs.edit-page.button-padding": {
+   "pt": 10,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): RemoveButton's padding 10 dp"
+  },
+  "comp.qs.edit-page.button-text": {
+   "ref": "component.button.text",
+   "src": "judged:the shared button's words"
+  },
+  "comp.qs.edit-page.category": {
+   "ref": "component.control.material",
+   "src": "judged:the shared control"
+  },
+  "comp.qs.edit-page.category-gap": {
+   "pt": 2,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): AvailableTileGrid's categories 2 dp apart"
+  },
+  "comp.qs.edit-page.category-inner-corner": {
+   "pt": 4,
+   "src": "judged:Material 3 Expressive's grouped list: inner corners 4 dp"
+  },
+  "comp.qs.edit-page.category-padding": {
+   "pt": 16,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): AvailableTileGrid padding 16 dp"
+  },
+  "comp.qs.edit-page.category-symbol": {
+   "pt": 24,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the heading's symbol 24 dp, its words 8 dp after it (CategoryHeader)"
+  },
+  "comp.qs.edit-page.category-symbol-gap": {
+   "pt": 8,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): CategoryHeader: 8 dp between the symbol and the words"
+  },
+  "comp.qs.edit-page.category-text": {
+   "text": {
+    "family": "text",
+    "weight": 600,
+    "size": 16,
+    "line": 24,
+    "tracking": 0.15
+   },
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): CategoryHeader in titleMediumEmphasized"
+  },
+  "comp.qs.edit-page.category-tiles-top": {
+   "pt": 72,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): a category's first tiles 189 px under its top"
+  },
+  "comp.qs.edit-page.cell-label": {
+   "text": {
+    "family": "text",
+    "weight": 500,
+    "size": 12,
+    "line": 16,
+    "tracking": 0.5
+   },
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): AvailableTileGridCell's name in labelMedium"
+  },
+  "comp.qs.edit-page.cell-label-gap": {
+   "pt": 6,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the name 6 dp under the tile (a 94 dp cell)"
+  },
+  "comp.qs.edit-page.cell-row-gap": {
+   "pt": 16,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): rows 110 dp apart (a 94 dp cell and 16)"
+  },
+  "comp.qs.edit-page.collapsed-title-start": {
+   "pt": 56,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): scrolled, the title in the bar's row 56 dp inside the page (x 196 px)"
+  },
+  "comp.qs.edit-page.dialog": {
+   "ref": "component.sheet.material",
+   "src": "judged:the shared sheet"
+  },
+  "comp.qs.edit-page.dialog-button-gap": {
+   "pt": 8,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): Cancel's word 20 dp before OK (its box 8 dp before it)"
+  },
+  "comp.qs.edit-page.dialog-button-padding": {
+   "pt": 24,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): OK 152 px wide (24 dp either side of its word), Cancel's word 12 dp in"
+  },
+  "comp.qs.edit-page.dialog-buttons-gap": {
+   "pt": 39,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): OK 39 dp under the words, 23 dp above the box's bottom"
+  },
+  "comp.qs.edit-page.dialog-corner": {
+   "pt": 28,
+   "src": "kit:Material 3 dialog: 28 dp corners"
+  },
+  "comp.qs.edit-page.dialog-from": {
+   "factor": 0.9,
+   "src": "kit:AOSP dialog_enter: a dialog grows in from 90 % as it fades in"
+  },
+  "comp.qs.edit-page.dialog-padding": {
+   "pt": 24,
+   "src": "kit:Material 3 dialog: 24 dp inside"
+  },
+  "comp.qs.edit-page.dialog-scrim": {
+   "color": "#00000099",
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the page dimmed to 40 % (black at 60 %, Android's dialog dim)"
+  },
+  "comp.qs.edit-page.dialog-text": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 14,
+    "line": 20,
+    "tracking": 0.25
+   },
+   "src": "kit:Material 3 dialog: its words in bodyMedium"
+  },
+  "comp.qs.edit-page.dialog-text-color": {
+   "ref": "component.control.detail-color",
+   "src": "judged:secondary words"
+  },
+  "comp.qs.edit-page.dialog-text-gap": {
+   "pt": 16,
+   "src": "kit:Material 3 dialog: 16 dp under the title"
+  },
+  "comp.qs.edit-page.dialog-title": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 24,
+    "line": 32,
+    "tracking": 0
+   },
+   "src": "kit:Material 3 dialog: its title in headlineSmall"
+  },
+  "comp.qs.edit-page.grid-corner": {
+   "pt": 28,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): EditModeTileDefaults.GridBackgroundCornerRadius 28 dp"
+  },
+  "comp.qs.edit-page.grid-fill": {
+   "material": {
+    "fills": [
+     [
+      "#0088ff",
+      [
+       0.15,
+       0.15
+      ],
+      "NORMAL"
+     ]
+    ]
+   },
+   "src": "judged:the accent at 15 %, as Android's primary"
+  },
+  "comp.qs.edit-page.grid-padding": {
+   "pt": 10,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): EditModeTileDefaults.CurrentTilesGridPadding 10 dp"
+  },
+  "comp.qs.edit-page.grid-stroke": {
+   "pt": 2,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): CurrentTilesGrid's border 2 dp"
+  },
+  "comp.qs.edit-page.grid-top": {
+   "pt": 178,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the current tiles' box from y 530 px, 178 dp under the status bar"
+  },
+  "comp.qs.edit-page.handle-height": {
+   "pt": 16,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the resize handle 20 x 40 px"
+  },
+  "comp.qs.edit-page.handle-target": {
+   "pt": 48,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): its target 126 px (EditTileDecoration)"
+  },
+  "comp.qs.edit-page.handle-width": {
+   "pt": 8,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the resize handle 20 x 40 px on the outline at the tile's end"
+  },
+  "comp.qs.edit-page.lifted-alpha": {
+   "factor": 0.5,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): a lifted tile left at half at its place (EditModeTileDefaults.PLACEHOLDER_ALPHA)"
+  },
+  "comp.qs.edit-page.on-accent": {
+   "color": "#ffffff",
+   "src": "judged:white on the accent"
+  },
+  "comp.qs.edit-page.page-bottom": {
+   "pt": 30,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the page ends 30 dp under Reset (above the navigation bar)"
+  },
+  "comp.qs.edit-page.press-layer": {
+   "factor": 0.1,
+   "src": "kit:Material 3 state layer: pressed, the content's colour at 10 %"
+  },
+  "comp.qs.edit-page.reset-height": {
+   "pt": 40,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): Reset 155 x 104 px"
+  },
+  "comp.qs.edit-page.reset-padding": {
+   "pt": 12,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): Reset's words 12 dp in from its ends"
+  },
+  "comp.qs.edit-page.reset-top": {
+   "pt": 40,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): Reset 109 px under the last category"
+  },
+  "comp.qs.edit-page.section-gap": {
+   "pt": 10,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the categories 26 px under the current tiles' box"
+  },
+  "comp.qs.edit-page.selection-stroke": {
+   "pt": 2,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): a chosen tile's outline 5 px inside its edge"
+  },
+  "comp.qs.edit-page.shadow-alpha": {
+   "factor": 0.7071,
+   "src": "kit:AOSP WindowManager DragState: a drag shadow at 0.7071 unless opaque"
+  },
+  "comp.qs.edit-page.slot-color": {
+   "color": "#0000001c",
+   "src": "judged:a faint dark well"
+  },
+  "comp.qs.edit-page.subtitle": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 14,
+    "line": 16,
+    "tracking": 0.25
+   },
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): Select tiles to rearrange and resize in bodyMedium, its box 16 dp right under the title"
+  },
+  "comp.qs.edit-page.text-button-padding": {
+   "pt": 12,
+   "src": "kit:Material 3 text button: its word 12 dp in (Cancel)"
+  },
+  "comp.qs.edit-page.text-color": {
+   "ref": "component.control.label-color",
+   "src": "judged:the controls' words"
+  },
+  "comp.qs.edit-page.tile-gap": {
+   "pt": 6,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): tiles 16 px apart on the edit page (the panel's 8 dp)"
+  },
+  "comp.qs.edit-page.title": {
+   "text": {
+    "family": "text",
+    "weight": 400,
+    "size": 28,
+    "line": 33,
+    "tracking": 0
+   },
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): Edit tiles in headlineMedium (28 sp: its letters 21 dp tall), as large once it sits in the bar"
+  },
+  "comp.qs.edit-page.title-top": {
+   "pt": 95,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the title's words from y 312 px, 95 dp under the status bar"
+  },
+  "comp.qs.edit-page.undo": {
+   "pt": 40,
+   "src": "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): undo a 40 dp circle before Remove once something changed"
+  },
+  "comp.qs.edit-page.undo-material": {
+   "ref": "component.control.material",
+   "src": "judged:the shared control"
+  },
   "comp.qs.edit.color": {
    "ref": "component.control.label-color",
    "src": "judged:the controls' words"
@@ -5007,6 +5330,37 @@
     ],
     "innerShadows": [],
     "shadows": []
+   },
+   "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
+  },
+  "comp.qs.edit-page.grid-fill": {
+   "material": {
+    "fills": [
+     [
+      "#0088ff",
+      [
+       0.15,
+       0.15
+      ],
+      "NORMAL"
+     ],
+     [
+      "@system_accent1_500",
+      [
+       0.25,
+       0.25
+      ],
+      "COLOR"
+     ],
+     [
+      "@system_accent2_100|@system_accent2_800",
+      [
+       0.24,
+       0.3
+      ],
+      "NORMAL"
+     ]
+    ]
    },
    "src": "judged:Material You: the glass takes the wallpaper's colour (a colour layer of the palette's accent, a faint wash of its tone)"
   },

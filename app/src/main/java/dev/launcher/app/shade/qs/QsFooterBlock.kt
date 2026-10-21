@@ -115,7 +115,7 @@ internal class QsFooterBlock(private val panel: QsPanel, private val ctx: Contex
     // ------------------------------------------------------------------ the footer's actions
 
     /** The footer's actions' fade: in over the expansion's first sixth (Android: its first 83 ms of 500). */
-    private val actionsAlpha get() = range(0f, 0.166f, panel.expandK)
+    private val actionsAlpha get() = range(0f, 0.166f, panel.expandK) * panel.shown
 
     /** Button [b]'s circle (or the pill) into [out], and whether it shows. */
     private fun place(b: Button, out: RectF): Boolean {
@@ -167,7 +167,7 @@ internal class QsFooterBlock(private val panel: QsPanel, private val ctx: Contex
             Button.POWER -> panel.host.powerMenu()
             Button.USER -> panel.host.launch(Intent("android.settings.USER_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             Button.PILL -> panel.host.launch(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            Button.EDIT -> panel.host.launch(Intent(ctx, dev.launcher.app.settings.SettingsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            Button.EDIT -> panel.startEdit()
         }
     }
 

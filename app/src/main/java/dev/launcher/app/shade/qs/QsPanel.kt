@@ -44,6 +44,10 @@ interface QsPanel {
     val surfaces: CcSurfaces
     val glyphs: Glyphs
     val host: Host
+    /** How much of Quick Settings shows (1; less while their edit page comes over them, 0 under it). */
+    val shown: Float
+    /** The edit button: Quick Settings give way to their edit page. */
+    fun startEdit()
 
     /** What the shade does for the panel. */
     interface Host {
@@ -73,6 +77,10 @@ interface QsPanel {
         fun thread(): android.os.Handler
         /** The notifications to show now (over the lock screen, what its settings allow: none, or their content hidden). */
         fun notifications(): List<Notifs.Item>
+        /** An app's tile tapped: SystemUI clicks it ([dev.launcher.app.shade.AppTiles]). */
+        fun clickTile(id: String)
+        /** The edit button over the lock screen: the shade goes, and once unlocked comes back with the edit page (Android's). */
+        fun editAfterUnlock()
     }
 }
 

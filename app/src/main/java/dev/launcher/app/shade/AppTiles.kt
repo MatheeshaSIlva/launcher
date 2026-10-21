@@ -40,6 +40,10 @@ object AppTiles {
         val icon: Drawable.ConstantState?,
         /** It says it is a switch (on / off), not a button. */
         val toggleable: Boolean,
+        /** Its app came with the phone (Android's edit page lists such tiles as "From system apps", the rest "From apps"). */
+        val system: Boolean = false,
+        /** The category it says it belongs in (its `android.service.quicksettings.TILE_CATEGORY`: CATEGORY_CONNECTIVITY...). */
+        val category: String? = null,
     )
 
     /** What SystemUI shows for a tile now: its label and subtitle (the app may change both), and [state] (Tile.STATE_*). */
@@ -103,7 +107,9 @@ object AppTiles {
             val label = try { si.loadLabel(pm).toString().trim() } catch (_: Throwable) { "" }
             val appLabel = try { si.applicationInfo.loadLabel(pm).toString().trim() } catch (_: Throwable) { si.packageName }
             out += Info(cn.flattenToString(), si.packageName, label.ifEmpty { appLabel }, appLabel, symbolOf(pm, si),
-                si.metaData?.getBoolean(TileService.META_DATA_TOGGLEABLE_TILE, false) == true)
+                si.metaData?.getBoolean(TileService.META_DATA_TOGGLEABLE_TILE, false) == true,
+                (si.applicationInfo.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP)) != 0,
+                si.metaData?.getString("android.service.quicksettings.TILE_CATEGORY"))
         }
         out.sortWith(compareBy(String.CASE_INSENSITIVE_ORDER, Info::appLabel).thenBy(String.CASE_INSENSITIVE_ORDER, Info::label))
         all = out

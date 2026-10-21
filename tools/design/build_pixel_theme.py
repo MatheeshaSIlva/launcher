@@ -262,6 +262,25 @@ T = {
     'comp.qs.clear.fill': color('@surface_container_high', EMU + ': Clear all and the round buttons on a card\'s colour'),
     'comp.qs.clear.text': text(14, 20, 500, 0.1, 'kit:AOSP notification footer: labelLarge'),
     'comp.qs.clear.text-color': color('@on_surface', 'kit:AOSP notification footer: onSurface'),
+    # The edit page (Android 17's Edit tiles).
+    'comp.qs.edit-page.title': text(28, 33, 400, 0, EMU + ': Edit tiles in headlineMedium (28 sp), its box 33 dp (no extra line spacing)'),
+    'comp.qs.edit-page.subtitle': text(14, 16, 400, 0.25, EMU + ': the line under the title in bodyMedium'),
+    'comp.qs.edit-page.text-color': color('@on_surface', EMU + ': the title, its line and the categories\' names in onSurface'),
+    'comp.qs.edit-page.grid-fill': material([['@primary', 0.15, 'NORMAL']], src=EMU + ': inside the box primary at 15 % (18, 15, 12 levels darker than the panel around it)'),
+    'comp.qs.edit-page.accent': color('@primary', SUI + ': the box\'s border, a chosen tile\'s outline and handle, the badges and buttons in primary'),
+    'comp.qs.edit-page.on-accent': color('@on_primary', SUI + ': on primary in onPrimary'),
+    'comp.qs.edit-page.slot-color': color('@on_surface/11', EMU + ': where a dragged tile will land, 11 % darker than the box'),
+    'comp.qs.edit-page.category': material([['@surface', 0.32, 'NORMAL']], src=SUI + ': AvailableTileGrid on surface at 32 %'),
+    'comp.qs.edit-page.category-text': text(16, 24, 600, 0.15, SUI + ': CategoryHeader in titleMediumEmphasized'),
+    'comp.qs.edit-page.cell-label': text(12, 16, 500, 0.5, SUI + ': AvailableTileGridCell\'s name in labelMedium'),
+    'comp.qs.edit-page.button-text': text(14, 20, 500, 0.1, SUI + ': RemoveButton in labelLarge'),
+    'comp.qs.edit-page.button-off-fill': color('@on_surface/10', SUI + ': RemoveButton disabled on onSurface at 10 %'),
+    'comp.qs.edit-page.button-off-text': color('@on_surface/38', SUI + ': RemoveButton disabled in onSurface at 38 %'),
+    'comp.qs.edit-page.undo-material': material([['@surface', 0.54, 'NORMAL']], src=SUI + ': the undo button on surfaceEffect1'),
+    'comp.qs.edit-page.dialog': material([['@surface', 1.0, 'NORMAL']], src=EMU + ': Reset all tiles? on surface'),
+    'comp.qs.edit-page.dialog-title': text(24, 32, 400, 0, EMU + ': the question in headlineSmall, centred'),
+    'comp.qs.edit-page.dialog-text': text(14, 20, 400, 0.25, EMU + ': its words in bodyMedium, centred'),
+    'comp.qs.edit-page.dialog-text-color': color('@on_surface_variant', EMU + ': its words in onSurfaceVariant (93, 95, 104)'),
 }
 
 

@@ -8,11 +8,13 @@ import android.text.TextPaint
 import android.text.TextUtils
 import android.view.HapticFeedbackConstants
 import dev.launcher.app.design.Design
+import dev.launcher.app.design.Fill
 import dev.launcher.app.design.applyTo
 import dev.launcher.app.layout.ShadeStructure
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.MotionTokens
 import dev.launcher.app.motion.MotionValue
+import dev.launcher.app.shade.AppTiles
 import dev.launcher.app.shade.Control
 import kotlin.math.max
 import kotlin.math.min
@@ -38,6 +40,8 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
 
     // Geometry (px), set by layout().
     private var cols = 4
+    /** The grid's columns (the edit page lays its tiles out on as many). */
+    val columns: Int get() = cols
     private var colW = 0f
     private var tileH = 0f
     private var gap = 0f
@@ -66,14 +70,18 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         colW = (w - 2 * panel.side - (cols - 1) * gap) / cols
         quickTop = panel.barHeight + Design.pt(QsTokens.QUICK_TOP, u)
         fullTop = panel.barHeight + Design.pt(QsTokens.TILES_TOP, u)
-        tiles = QsTiles.DEFAULT.filter { it.control != Control.FLASHLIGHT || panel.host.state.available(it.control) }
+        // The person's own (the edit page's), less what this phone cannot have (a flashlight; an app's tile whose app is gone).
+        tiles = QsTileStore.tiles(panel.view.context).filter {
+            (it.control != Control.FLASHLIGHT || panel.host.state.available(it.control)) &&
+                (it.tile == null || !AppTiles.found || AppTiles.info(it.tile) != null)
+        }
         // Room down to the build number's row and the footer's buttons under it.
         val footer = Design.pt(QsTokens.FOOTER_BOTTOM, u) + Design.pt(QsTokens.FOOTER_BUTTON, u) / 2f + Design.pt(QsTokens.BUILD_ROW, u)
         rows = (((panel.panelHeight - footer - fullTop) + gap) / (tileH + gap)).toInt().coerceIn(1, spec.rows)
         places = QsTiles.flow(tiles, cols, rows)
         pages = (places.lastOrNull()?.page ?: 0) + 1
         quickRows = places.filter { it.page == 0 && it.row < spec.quickRows }.maxOfOrNull { it.row + 1 } ?: 0
-        for (t in tiles) anim(t.control)
+        for (t in tiles) anim(t)
         syncStates(animate = false)
     }
 
@@ -100,14 +108,16 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
             if (pop.target == 1f) pop.animateTo(0f, Motion.role(MotionTokens.QS_TILE_POP_BACK))
         }
     }
-    private val anims = HashMap<Control, Anim>()
-    private fun anim(c: Control) = anims.getOrPut(c) { Anim() }
+    private val anims = HashMap<String, Anim>()
+    private fun anim(t: QsTile) = anims.getOrPut(t.key) { Anim() }
+    /** A tile as the edit page draws it: at rest and off, whatever its state. */
+    private val plain = Anim()
 
     /** The tiles follow their controls' states ([animate]: on the state's spring, else at once). */
     fun syncStates(animate: Boolean = true) {
         val st = panel.host.state
         for (t in tiles) {
-            val a = anim(t.control)
+            val a = anim(t)
             val s = QsTiles.stateOf(st, t)
             a.state = s
             val on = s == TileState.ACTIVE
@@ -151,7 +161,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
             val yQuick = quickTop + p.row * (hs + gap)
             val top = lerp(yQuick, yFull, e)
             out.set(left, top, right, top + lerp(hs, tileH, e))
-            1f
+            panel.shown
         } else {
             val top = yFull + panel.gridShift
             out.set(left, top, right, top + tileH)
@@ -170,7 +180,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         val next = i + 1
         val hasPrev = prev >= 0 && places[prev].let { it.page == p.page && it.row == p.row }
         val hasNext = next < places.size && places[next].let { it.page == p.page && it.row == p.row }
-        fun grow(j: Int) = anims[tiles[j].control]?.bounce?.value?.coerceIn(0f, 1.2f)?.times(size) ?: 0f
+        fun grow(j: Int) = anims[tiles[j].key]?.bounce?.value?.coerceIn(0f, 1.2f)?.times(size) ?: 0f
         var l = 0f
         var r = 0f
         val own = grow(i)
@@ -228,7 +238,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
     /** A finger down on tile [i] (or up): it grows into its neighbours while held (Android's BounceOnPressNode). */
     fun press(i: Int, down: Boolean) {
         val t = tiles.getOrNull(i) ?: return
-        val a = anim(t.control)
+        val a = anim(t)
         if (down) {
             a.released = false
             a.bounce.animateTo(1f, Motion.role(MotionTokens.QS_TILE_BOUNCE))
@@ -241,11 +251,17 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
     /** A tap on tile [i] at ([x], [y]): its box (or a one-target toggle) toggles, the rest of a two-target tile opens its page. */
     fun tap(i: Int, x: Float, y: Float) {
         val t = tiles.getOrNull(i) ?: return
-        val a = anim(t.control)
+        val a = anim(t)
         if (a.state == TileState.UNAVAILABLE) return
         val st = panel.host.state
         // Its symbol (a tile of one column) or its words pop.
         a.pop.animateTo(1f, Motion.role(MotionTokens.QS_TILE_POP))
+        // An app's tile: SystemUI clicks it (the app does what its tile does), its state follows.
+        t.tile?.let { id ->
+            haptic(if (t.toggles || AppTiles.info(id)?.toggleable == true) (if (a.state != TileState.ACTIVE) TOGGLE_ON else TOGGLE_OFF) else HapticFeedbackConstants.CONTEXT_CLICK)
+            panel.host.clickTile(id)
+            return
+        }
         if (t.toggles && inBox(i, x, y)) {
             if (panel.host.locked && t.control in SECURE) { panel.host.launch(st.settingsFor(t.control)); return }
             val turningOn = a.state != TileState.ACTIVE
@@ -264,6 +280,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         val t = tiles.getOrNull(i) ?: return
         haptic(HapticFeedbackConstants.LONG_PRESS)
         val st = panel.host.state
+        t.tile?.let { panel.host.launch(AppTiles.settingsIntent(panel.view.context, it)); return }
         panel.host.launch(st.settingsFor(t.control) ?: st.intentFor(t.control))
     }
 
@@ -283,11 +300,20 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         for (i in tiles.indices) {
             val f = place(i, r)
             if (f <= 0.003f || r.right < 0f || r.left > w || r.height() <= 0.5f) continue
-            drawTile(c, tiles[i], anim(tiles[i].control), r, f)
+            drawTile(c, tiles[i], anim(tiles[i]), r, f)
         }
     }
 
-    private fun drawTile(c: Canvas, t: QsTile, a: Anim, r: RectF, alpha: Float) {
+    /**
+     * [t] in [r] as the edit page shows it: off and at rest, an app's tile with its app's name under its own. [under]: the
+     * fills of what it lies on (the renderer composes a surface over the screen behind the panel, not over what was drawn).
+     */
+    fun drawPlain(c: Canvas, t: QsTile, r: RectF, alpha: Float, under: List<Fill> = emptyList()) {
+        if (alpha <= 0.003f) return
+        drawTile(c, t, plain, r, alpha, edit = true, under = under)
+    }
+
+    private fun drawTile(c: Canvas, t: QsTile, a: Anim, r: RectF, alpha: Float, edit: Boolean = false, under: List<Fill> = emptyList()) {
         val sf = panel.surfaces
         val h = r.height()
         val lit = a.lit.value.coerceIn(0f, 1f)
@@ -298,8 +324,8 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         c.save()
         c.translate(r.left, r.top)
         if (gone < 1f) sf.draw(c, Design.material(QsTokens.TILE), r.width(), h, corner, r.left, r.top, 1f, alpha * (1f - gone),
-            over = Design.material(QsTokens.TILE_ON).fills, overK = lit)
-        if (gone > 0f) sf.draw(c, Design.material(QsTokens.TILE_UNAVAILABLE), r.width(), h, corner, r.left, r.top, 1f, alpha * gone)
+            under = under, over = Design.material(QsTokens.TILE_ON).fills, overK = lit)
+        if (gone > 0f) sf.draw(c, Design.material(QsTokens.TILE_UNAVAILABLE), r.width(), h, corner, r.left, r.top, 1f, alpha * gone, under = under)
         c.restore()
         val offC = Design.color(QsTokens.SYMBOL_COLOR)
         val onC = Design.color(QsTokens.ON_SYMBOL_COLOR)
@@ -308,7 +334,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         if (!t.wide) {
             val s = 1f + (Design.num(QsTokens.ICON_POP) - 1f) * pop
             val col = mix(mix(offC, onC, lit), goneC, gone)
-            panel.glyphs.draw(c, t.control.icon, r.centerX(), r.centerY(), Design.pt(QsTokens.SYMBOL, u) * s, faded(col, alpha), lit)
+            symbol(c, t, r.centerX(), r.centerY(), Design.pt(QsTokens.SYMBOL, u) * s, faded(col, alpha), lit)
             return
         }
         // A large tile: its box (squished with the tile) 8 dp in, the symbol in it, the words after it.
@@ -322,13 +348,14 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
             val bc = min(lerp(Design.pt(QsTokens.BOX_CORNER, u), Design.pt(QsTokens.BOX_ON_CORNER, u), boxOn), boxH / 2f)
             c.save()
             c.translate(bx, by)
+            // (On the tile: its own fills lie between what is behind and the box, as they do on screen.)
             sf.draw(c, Design.material(QsTokens.BOX_MATERIAL), boxSize, boxH, bc, bx, by, 1f, alpha * (1f - gone),
-                over = Design.material(QsTokens.TILE_ON).fills, overK = boxOn)
+                under = under + Design.material(QsTokens.TILE).fills, over = Design.material(QsTokens.TILE_ON).fills, overK = boxOn)
             c.restore()
         }
         val symOn = if (t.dualTarget) boxOn else lit
         val sym = faded(mix(mix(offC, onC, symOn), goneC, gone), alpha)
-        panel.glyphs.draw(c, t.control.icon, bx + boxSize / 2f, r.centerY(), Design.pt(QsTokens.LARGE_SYMBOL, u), sym, symOn)
+        symbol(c, t, bx + boxSize / 2f, r.centerY(), Design.pt(QsTokens.LARGE_SYMBOL, u), sym, symOn)
         // The words (a tap pops them out a little, from their middle).
         val tx = bx + boxSize + Design.pt(QsTokens.TILE_TEXT_GAP, u)
         val maxW = (r.right - Design.pt(QsTokens.TILE_END, u)) - tx
@@ -336,8 +363,9 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         Design.text(QsTokens.LABEL).applyTo(label, u)
         label.color = faded(mix(mix(Design.color(QsTokens.LABEL_COLOR), Design.color(QsTokens.ON_LABEL_COLOR), lit), goneC, gone), alpha)
         val ll = Design.text(QsTokens.LABEL).lineHeightPt * u
-        val sub = QsTiles.detail(panel.host.state, t, carrier)
-        val name = TextUtils.ellipsize(t.label, label, maxW, TextUtils.TruncateAt.END).toString()
+        // (On the edit page: an app's tile names its app, as Android's; ours say nothing more.)
+        val sub = if (edit) t.tile?.let { AppTiles.info(it)?.appLabel } else QsTiles.detail(panel.host.state, t, carrier)
+        val name = TextUtils.ellipsize(if (edit) QsTiles.name(t) else QsTiles.shownName(panel.host.state, t), label, maxW, TextUtils.TruncateAt.END).toString()
         val s = 1f + (Design.num(QsTokens.TEXT_POP) - 1f) * pop
         c.save()
         c.scale(s, s, tx + maxW / 2f, r.centerY())
@@ -352,6 +380,12 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
             c.drawText(TextUtils.ellipsize(sub, detail, maxW, TextUtils.TruncateAt.END).toString(), tx, baselineIn(detail, top + ll, dl), detail)
         }
         c.restore()
+    }
+
+    /** A tile's symbol: its control's, or an app's tile's own. */
+    private fun symbol(c: Canvas, t: QsTile, cx: Float, cy: Float, size: Float, color: Int, on: Float) {
+        val id = t.tile
+        if (id != null) panel.glyphs.drawTile(c, id, cx, cy, size, color) else panel.glyphs.draw(c, t.control.icon, cx, cy, size, color, on)
     }
 
     /** The carrier's name and network as Mobile data's state (the header reads it off the drawing thread). */

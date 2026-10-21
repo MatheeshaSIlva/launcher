@@ -84,7 +84,8 @@ internal class QsHeaderBlock(private val panel: QsPanel, private val ctx: Contex
 
     fun draw(c: Canvas) {
         val e = panel.expandK
-        val color = Design.color(QsTokens.HEADER_COLOR)
+        // (Everything in it fades with Quick Settings as their edit page comes.)
+        val color = faded(Design.color(QsTokens.HEADER_COLOR), panel.shown)
         val host = panel.host
         val bar = panel.barHeight.toFloat()
         // The header's rows at the second stage, under the status bar.

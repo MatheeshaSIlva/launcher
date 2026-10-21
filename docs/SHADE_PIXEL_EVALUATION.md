@@ -493,8 +493,49 @@ notifications) and Quick Settings, their transitions declared in `scene/ui/compo
 
 Not like Android 17's yet: the status bar's own look in the header's row (our status bar's layout: its time and icons,
 as on home), Quick Share's glyph (Play services' own), a Bluetooth device's dots (the connection is not read), the user's
-avatar. Still to come: editing (a page of its own: the edit button opens the settings meanwhile), the media player,
-Pixel's landscape, the dual shade (Android 17 on a phone ignores its `dual_shade` setting: Pixel's file keeps one place).
+avatar. Still to come: the media player, Pixel's landscape, the dual shade (Android 17 on a phone ignores its
+`dual_shade` setting: Pixel's file keeps one place).
+
+**Stage 4, the edit page (2026-10-21).** Android 17's "Edit tiles" (`shade/qs/QsEditPage`), read from SystemUIGoogle
+(EditModeKt, EditTileKt, EditModeTileDefaults, QuickSettingsScene's InternalScenes) and measured on the emulator's own
+(tools/shots/stock: ee_*, ea_*, ed_*, er_*: screenshots under 10x slow animations and while `input motionevent` held a
+drag):
+
+- Quick Settings give way to it on a tween of 500 ms (FastOutSlowIn): they fade out over the first half, the page in over
+  the second (fractionRange on each scene's root), the header and the status bar's row with them; back the same way.
+  Back (or the arrow) leaves it. Over the lock screen the edit button asks for the unlock first and the shade comes back
+  with the page.
+- The page: the arrow, undo (a 40 dp circle on surfaceEffect1, once something changed) and Remove (primary, 36 dp tall;
+  faint while no tile is chosen) in a 64 dp row 40 dp under the status bar; "Edit tiles" (28 sp) and "Select tiles to
+  rearrange and resize" (14 sp) scrolling under the row, the title coming into it once gone (Material's top title
+  easing). The current tiles in a box 178 dp under the status bar: 10 dp inside, 28 dp corners, a 2 dp primary border,
+  primary at 15 % inside, tiles 6 dp apart (the panel's are 8), each drawn off and at rest (an app's tile with its app's
+  name under its own). One is always chosen (AutoSelectTiles: the first, else one just added): a 2 dp primary outline
+  inside its edge and an 8 x 16 dp handle on it at its end.
+- A tap chooses a tile; the handle (or a drag of it: the width follows the finger, past halfway the tile is the other
+  size) makes it small or large; a long press lifts a tile (left at half at its place, a dark slot where it will land:
+  onSurface at 11 %, the drag shadow at 0.7071), the others making way on TilePlacementSpec (spring 400, damping 0.75);
+  let go outside the box it is taken out; near the page's ends the page scrolls (AUTO_SCROLL_DISTANCE, _SPEED).
+- The tiles to add, by category (TileCategory: Connectivity, Utilities, Display, Privacy, Accessibility, From system
+  apps, From apps; SystemUI's own category symbols), each category a box on surface at 32 %, 2 dp apart, the first and
+  last rounded 28 dp; 4 a row, 82 dp wide, the name under it (two lines at most, labelMedium), a 24 dp primary badge with
+  a plus; one already in the box at 38 % without a badge. A tap adds it at the end (chosen), a long press drags it in.
+  Apps' tiles: a system app's in the category its tile declares (`android.service.quicksettings.TILE_CATEGORY`, Settings'
+  Audio streams in Connectivity), else From system apps; others From apps; one named as a control of ours (Quick Share,
+  Live Caption) is that control.
+- Reset at the end (40 dp, primary): "Reset all tiles?" (a 379 dp box on surface, 28 dp corners, the page dimmed by black
+  at 60 %, Android's dialog dim), Cancel and OK; undo can bring the tiles back.
+- Every change is kept at once (`shade/qs/QsTileStore`, files/shared_prefs/qs_tiles.xml; a Pixel's own until changed) and
+  Quick Settings under the page follow it. Do Not Disturb's tile is "Modes" there (Android 16's Modes tile), "Do Not
+  Disturb" in Quick Settings while it is on.
+- Found on the way: a symbol's circle on a two-target tile was drawn over the screen behind the panel, not over the tile
+  (the renderer composes a surface over its backdrop, not over what was drawn): it came out darker than the tile, Quick
+  Settings' off tiles too. The tile's fills now lie under it (`under`), as the box's under the tiles in it.
+- The emulator has no Google Sans (its SystemUI draws in Roboto Flex): its words are about 11 % narrower than ours (the
+  Pixel theme's Google Sans Flex, as a Pixel's), so a name like "Airplane mode" takes two lines here and one there.
+
+Motion roles: motion.qs.edit (the crossfade), motion.qs.edit-place (tiles to their places), motion.qs.edit-appear (undo, a
+tile added or taken out, Reset's question); tokens `comp.qs.edit-page.*`.
 
 ## References
 

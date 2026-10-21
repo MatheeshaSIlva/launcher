@@ -188,8 +188,110 @@ object QsTokens {
     val CLEAR_SIDE = NumberKey("comp.qs.clear.side-width")
     val CLEAR_GAP = NumberKey("comp.qs.clear.gap")
 
+    // ---- The edit page (Android 17's "Edit tiles": the current tiles to choose, rearrange and resize; the tiles to add by
+    // category; Reset).
+    /** The bar's row (back, undo, Remove): its centre under the status bar, its height (the page scrolls under its bottom). */
+    val EDIT_BAR_CENTER = NumberKey("comp.qs.edit-page.bar-center")
+    val EDIT_BAR_HEIGHT = NumberKey("comp.qs.edit-page.bar-height")
+    /** The back arrow's start inside the page, and the bar's symbols' size. */
+    val EDIT_BAR_START = NumberKey("comp.qs.edit-page.bar-start")
+    val EDIT_BAR_SYMBOL = NumberKey("comp.qs.edit-page.bar-symbol")
+    /** The title ("Edit tiles"): where its words start under the status bar, where it sits in the bar once scrolled away, and the line under it. */
+    val EDIT_TITLE = TextKey("comp.qs.edit-page.title")
+    val EDIT_TITLE_TOP = NumberKey("comp.qs.edit-page.title-top")
+    val EDIT_COLLAPSED_TITLE_START = NumberKey("comp.qs.edit-page.collapsed-title-start")
+    val EDIT_SUBTITLE = TextKey("comp.qs.edit-page.subtitle")
+    /** The page's words (the title, its line, the categories' names, the tiles' names). */
+    val EDIT_TEXT_COLOR = ColorKey("comp.qs.edit-page.text-color")
+    /** The current tiles' box: its top under the status bar, its padding and corners, its border and fill. */
+    val EDIT_GRID_TOP = NumberKey("comp.qs.edit-page.grid-top")
+    val EDIT_GRID_PADDING = NumberKey("comp.qs.edit-page.grid-padding")
+    val EDIT_GRID_CORNER = NumberKey("comp.qs.edit-page.grid-corner")
+    val EDIT_GRID_STROKE = NumberKey("comp.qs.edit-page.grid-stroke")
+    val EDIT_GRID_FILL = MaterialKey("comp.qs.edit-page.grid-fill")
+    /** The page's accent (the box's border, a chosen tile's outline and handle, the badges, the buttons) and what is drawn on it. */
+    val EDIT_ACCENT = ColorKey("comp.qs.edit-page.accent")
+    val EDIT_ON_ACCENT = ColorKey("comp.qs.edit-page.on-accent")
+    /** Between tiles on the page. */
+    val EDIT_TILE_GAP = NumberKey("comp.qs.edit-page.tile-gap")
+    /** A chosen tile: its outline, the resize handle on it at its end (a pill) and the handle's target. */
+    val EDIT_SELECTION_STROKE = NumberKey("comp.qs.edit-page.selection-stroke")
+    val EDIT_HANDLE_WIDTH = NumberKey("comp.qs.edit-page.handle-width")
+    val EDIT_HANDLE_HEIGHT = NumberKey("comp.qs.edit-page.handle-height")
+    val EDIT_HANDLE_TARGET = NumberKey("comp.qs.edit-page.handle-target")
+    /** Dragging: where the tile will land, the tile left at its place while lifted, and the tile under the finger. */
+    val EDIT_SLOT_COLOR = ColorKey("comp.qs.edit-page.slot-color")
+    val EDIT_LIFTED_ALPHA = NumberKey("comp.qs.edit-page.lifted-alpha")
+    val EDIT_SHADOW_ALPHA = NumberKey("comp.qs.edit-page.shadow-alpha")
+    /** The tiles to add, by category: boxes under the current tiles' box, 2 dp apart (the first and last rounded), each with its heading. */
+    val EDIT_SECTION_GAP = NumberKey("comp.qs.edit-page.section-gap")
+    val EDIT_CATEGORY = MaterialKey("comp.qs.edit-page.category")
+    val EDIT_CATEGORY_GAP = NumberKey("comp.qs.edit-page.category-gap")
+    val EDIT_CATEGORY_INNER_CORNER = NumberKey("comp.qs.edit-page.category-inner-corner")
+    val EDIT_CATEGORY_PADDING = NumberKey("comp.qs.edit-page.category-padding")
+    val EDIT_CATEGORY_TEXT = TextKey("comp.qs.edit-page.category-text")
+    val EDIT_CATEGORY_SYMBOL = NumberKey("comp.qs.edit-page.category-symbol")
+    val EDIT_CATEGORY_SYMBOL_GAP = NumberKey("comp.qs.edit-page.category-symbol-gap")
+    val EDIT_CATEGORY_TILES = NumberKey("comp.qs.edit-page.category-tiles-top")
+    /** A tile to add: its name under it (two lines at most), the rows' gap, how faint one already added is. */
+    val EDIT_CELL_LABEL = TextKey("comp.qs.edit-page.cell-label")
+    val EDIT_CELL_LABEL_GAP = NumberKey("comp.qs.edit-page.cell-label-gap")
+    val EDIT_CELL_ROW_GAP = NumberKey("comp.qs.edit-page.cell-row-gap")
+    val EDIT_ADDED_ALPHA = NumberKey("comp.qs.edit-page.added-alpha")
+    /** The add badge on a tile to add: its size, its centre from the tile's top and end, its plus. */
+    val EDIT_BADGE = NumberKey("comp.qs.edit-page.badge")
+    val EDIT_BADGE_TOP = NumberKey("comp.qs.edit-page.badge-top")
+    val EDIT_BADGE_END = NumberKey("comp.qs.edit-page.badge-end")
+    val EDIT_BADGE_SYMBOL = NumberKey("comp.qs.edit-page.badge-symbol")
+    /** The bar's Remove button (a pill): its words, height and padding; off (no tile chosen) faint. */
+    val EDIT_BUTTON_TEXT = TextKey("comp.qs.edit-page.button-text")
+    val EDIT_BUTTON_HEIGHT = NumberKey("comp.qs.edit-page.button-height")
+    val EDIT_BUTTON_PADDING = NumberKey("comp.qs.edit-page.button-padding")
+    val EDIT_BUTTON_OFF_FILL = ColorKey("comp.qs.edit-page.button-off-fill")
+    val EDIT_BUTTON_OFF_TEXT = ColorKey("comp.qs.edit-page.button-off-text")
+    /** Undo (once something changed): a round button before Remove. */
+    val EDIT_UNDO = NumberKey("comp.qs.edit-page.undo")
+    val EDIT_UNDO_MATERIAL = MaterialKey("comp.qs.edit-page.undo-material")
+    /** Reset, under the categories: its gap above, its height and padding, the room under it to the page's end. */
+    val EDIT_RESET_TOP = NumberKey("comp.qs.edit-page.reset-top")
+    val EDIT_RESET_HEIGHT = NumberKey("comp.qs.edit-page.reset-height")
+    val EDIT_RESET_PADDING = NumberKey("comp.qs.edit-page.reset-padding")
+    val EDIT_PAGE_BOTTOM = NumberKey("comp.qs.edit-page.page-bottom")
+    /** Reset's question ("Reset all tiles?"): its box over the dimmed page, its words and buttons. */
+    val EDIT_DIALOG = MaterialKey("comp.qs.edit-page.dialog")
+    val EDIT_DIALOG_CORNER = NumberKey("comp.qs.edit-page.dialog-corner")
+    val EDIT_DIALOG_PADDING = NumberKey("comp.qs.edit-page.dialog-padding")
+    val EDIT_DIALOG_TITLE = TextKey("comp.qs.edit-page.dialog-title")
+    val EDIT_DIALOG_TEXT = TextKey("comp.qs.edit-page.dialog-text")
+    val EDIT_DIALOG_TEXT_COLOR = ColorKey("comp.qs.edit-page.dialog-text-color")
+    val EDIT_DIALOG_TEXT_GAP = NumberKey("comp.qs.edit-page.dialog-text-gap")
+    val EDIT_DIALOG_BUTTONS_GAP = NumberKey("comp.qs.edit-page.dialog-buttons-gap")
+    val EDIT_DIALOG_BUTTON_PADDING = NumberKey("comp.qs.edit-page.dialog-button-padding")
+    val EDIT_DIALOG_SCRIM = ColorKey("comp.qs.edit-page.dialog-scrim")
+    /** Remove's end inside the page; Cancel's padding and its gap before OK; a pressed button's layer; a dialog's growth; a
+     *  drag's scrolling near the page's ends (its zone and speed). */
+    val EDIT_BAR_END = NumberKey("comp.qs.edit-page.bar-end")
+    val EDIT_TEXT_BUTTON_PADDING = NumberKey("comp.qs.edit-page.text-button-padding")
+    val EDIT_DIALOG_BUTTON_GAP = NumberKey("comp.qs.edit-page.dialog-button-gap")
+    val EDIT_PRESS_LAYER = NumberKey("comp.qs.edit-page.press-layer")
+    val EDIT_DIALOG_FROM = NumberKey("comp.qs.edit-page.dialog-from")
+    val EDIT_AUTO_SCROLL_ZONE = NumberKey("comp.qs.edit-page.auto-scroll-zone")
+    val EDIT_AUTO_SCROLL_SPEED = NumberKey("comp.qs.edit-page.auto-scroll-speed")
+
     /** Every key, with the kind the code reads it as (the theme test checks each one resolves to it). */
     val KEYS: List<dev.launcher.app.design.Key<*>> = listOf(
+        EDIT_BAR_CENTER, EDIT_BAR_HEIGHT, EDIT_BAR_START, EDIT_BAR_SYMBOL, EDIT_TITLE, EDIT_TITLE_TOP,
+        EDIT_COLLAPSED_TITLE_START, EDIT_SUBTITLE, EDIT_TEXT_COLOR, EDIT_GRID_TOP, EDIT_GRID_PADDING, EDIT_GRID_CORNER,
+        EDIT_GRID_STROKE, EDIT_GRID_FILL, EDIT_ACCENT, EDIT_ON_ACCENT, EDIT_TILE_GAP, EDIT_SELECTION_STROKE,
+        EDIT_HANDLE_WIDTH, EDIT_HANDLE_HEIGHT, EDIT_HANDLE_TARGET, EDIT_SLOT_COLOR, EDIT_LIFTED_ALPHA, EDIT_SHADOW_ALPHA,
+        EDIT_SECTION_GAP, EDIT_CATEGORY, EDIT_CATEGORY_GAP, EDIT_CATEGORY_INNER_CORNER, EDIT_CATEGORY_PADDING,
+        EDIT_CATEGORY_TEXT, EDIT_CATEGORY_SYMBOL, EDIT_CATEGORY_SYMBOL_GAP, EDIT_CATEGORY_TILES, EDIT_CELL_LABEL,
+        EDIT_CELL_LABEL_GAP, EDIT_CELL_ROW_GAP, EDIT_ADDED_ALPHA, EDIT_BADGE, EDIT_BADGE_TOP, EDIT_BADGE_END,
+        EDIT_BADGE_SYMBOL, EDIT_BUTTON_TEXT, EDIT_BUTTON_HEIGHT, EDIT_BUTTON_PADDING, EDIT_BUTTON_OFF_FILL,
+        EDIT_BUTTON_OFF_TEXT, EDIT_UNDO, EDIT_UNDO_MATERIAL, EDIT_RESET_TOP, EDIT_RESET_HEIGHT, EDIT_RESET_PADDING,
+        EDIT_PAGE_BOTTOM, EDIT_DIALOG, EDIT_DIALOG_CORNER, EDIT_DIALOG_PADDING, EDIT_DIALOG_TITLE, EDIT_DIALOG_TEXT,
+        EDIT_DIALOG_TEXT_COLOR, EDIT_DIALOG_TEXT_GAP, EDIT_DIALOG_BUTTONS_GAP, EDIT_DIALOG_BUTTON_PADDING,
+        EDIT_DIALOG_SCRIM, EDIT_BAR_END, EDIT_TEXT_BUTTON_PADDING, EDIT_DIALOG_BUTTON_GAP, EDIT_PRESS_LAYER, EDIT_DIALOG_FROM, EDIT_AUTO_SCROLL_ZONE, EDIT_AUTO_SCROLL_SPEED,
         BACKGROUND, SIDE, SYMBOLS, CLOCK, DATE, CARRIER, HEADER_COLOR, HEADER_HEIGHT, CLOCK_TOP, CLOCK_ROW, DATE_TOP, DATE_ROW,
         CLOCK_MIN_WIDTH, DATE_GAP, COLLAPSED_SHIFT, EXPANDED_SHIFT, CARRIER_END,
         BRIGHTNESS_TOP, BRIGHTNESS_HEIGHT, BRIGHTNESS_TRACK_HEIGHT, BRIGHTNESS_CORNER, BRIGHTNESS_INNER_CORNER, BRIGHTNESS_GAP,

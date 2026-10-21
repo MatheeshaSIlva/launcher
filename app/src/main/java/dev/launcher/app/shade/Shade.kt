@@ -241,6 +241,18 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             override val locked get() = this@Shade.locked
             override fun thread() = handler
             override fun notifications() = shownNotifs()
+            override fun clickTile(id: String) = this@Shade.clickTile(id)
+            override fun editAfterUnlock() {
+                close()
+                Unlock.then(ctx, "edit Quick Settings") {
+                    handler.post {
+                        if (!uses(shadePanel.kind) || locked) return@post
+                        begin(shadePanel); openFully(0f)
+                        shadeView.expandTo(true)
+                        shadeView.startEdit()
+                    }
+                }
+            }
         }, surfaces)
         banner = BannerView(ctx, object : BannerView.Host {
             override val barHeight get() = this@Shade.barHeight
@@ -713,9 +725,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // grows out of it into the large one.)
         // The status icons leave the bar's row (down 48 dp and out by 14 %) for the expanded header's date row (from 58 %), as
         // Android's collapsed and expanded headers cross.
+        // (All of it fades with Quick Settings as their edit page comes over them.)
         val e = shadeView.expandK
-        bar.setShadeHeader(shP != null && shP > 0f, 1f - dev.launcher.app.shade.qs.smooth(0f, 0.15f, e),
-            1f - dev.launcher.app.shade.qs.range(0f, 0.14f, e), e * 48f * u(), shadeView.headerRowIn(), shadeView.headerRowY(),
+        val qs = shadeView.shown
+        bar.setShadeHeader(shP != null && shP > 0f, (1f - dev.launcher.app.shade.qs.smooth(0f, 0.15f, e)) * qs,
+            (1f - dev.launcher.app.shade.qs.range(0f, 0.14f, e)) * qs, e * dev.launcher.app.design.Design.pt(QsTokens.COLLAPSED_SHIFT, u()),
+            shadeView.headerRowIn() * qs, shadeView.headerRowY(),
             // (On the date's row they end at the panel's side, as Android's expanded header does.)
             (root.width - shadeView.side) - bar.iconsRight)
     }

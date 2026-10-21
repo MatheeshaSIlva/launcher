@@ -18,6 +18,7 @@ import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.shade.qs.BrightnessBlock
 import dev.launcher.app.shade.qs.CardsBlock
 import dev.launcher.app.shade.qs.QsFooterBlock
+import dev.launcher.app.shade.qs.QsEditPage
 import dev.launcher.app.shade.qs.QsHeaderBlock
 import dev.launcher.app.shade.qs.QsPanel
 import dev.launcher.app.shade.qs.QsTokens
@@ -73,7 +74,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
 
     override val scrimTop: Float get() = lerp(0f, scrimRest(), p) + expandK * (height - scrimRest())
 
-    override val contentAlpha: Float get() = range(0.43f, 0.95f, expandK)
+    override val contentAlpha: Float get() = range(0.43f, 0.95f, expandK) * shown
 
     override val gridShift: Float get() = tiles?.let { (1f - expandK) * (it.quickTop - it.fullTop) } ?: 0f
 
@@ -85,6 +86,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     private var tiles: TileGridBlock? = null
     private var footer: QsFooterBlock? = null
     private var cards: CardsBlock? = null
+    private var edit: QsEditPage? = null
     private var builtFrom: ShadeStructure.Panel? = null
 
     private fun build() {
@@ -99,6 +101,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         cards = p.block<ShadeStructure.Block.NotificationCards>()?.let {
             CardsBlock(this, context, withFooter = p.block<ShadeStructure.Block.NotificationFooter>() != null)
         }
+        edit = t?.let { QsEditPage(this, { tiles }, { tiles?.layout(); invalidate() }, { stopEdit() }) }
     }
 
     /** Lays the blocks out for the size and the design (they read their tokens here). */
@@ -108,6 +111,7 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         surfaces.unit(u)
         tiles?.layout()
         cards?.layout()
+        edit?.layout()
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -121,6 +125,9 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     fun prepare() {
         build()
         layoutBlocks()
+        editing = false
+        editV.snapTo(0f)
+        edit?.end()
         expand.snapTo(0f)
         pageV.snapTo(0f)
         twoFingers = false
@@ -141,6 +148,9 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         twoFingers = false
         cards?.closed()
         tiles?.closed()
+        editing = false
+        editV.snapTo(0f)
+        edit?.end()
         removeCallbacks(minute)
         removeCallbacks(longPress)
         mode = Mode.NONE
@@ -224,8 +234,51 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
         }
     }
 
-    /** Back: Quick Settings collapse first (true); at the first stage the shade closes. */
+    // ------------------------------------------------------------------ the edit page
+
+    /** Quick Settings' edit page is open (it takes every touch and Back). */
+    private var editing = false
+
+    /**
+     * Quick Settings giving way to their edit page (0 .. 1, on its role: Android 17's tween of 500 ms): they fade out over
+     * the first half, the page in over the second; back the same way.
+     */
+    private val editV: MotionValue = MotionValue(0f, 1000f, { invalidate(); host.expandChanged() }, { if (!editing && editV.value <= 0.001f) edit?.end() })
+
+    override val shown: Float get() = 1f - range(0f, 0.5f, editV.value)
+
+    override fun startEdit() {
+        val e = edit ?: return
+        if (editing) return
+        if (host.locked) { host.editAfterUnlock(); return }
+        editing = true
+        // (Coming back before the page had gone: it carries on as it was.)
+        if (!e.open) e.begin()
+        editV.animateTo(1f, Motion.role(MotionTokens.QS_EDIT))
+    }
+
+    private fun stopEdit() {
+        if (!editing) return
+        editing = false
+        editV.animateTo(0f, Motion.role(MotionTokens.QS_EDIT))
+    }
+
+    /** Apps' tiles changed (found again, or their states read): the tiles follow. */
+    private val appTilesChanged: () -> Unit = { if (progress > 0f) stateChanged() }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        AppTiles.addListener(host.thread(), appTilesChanged)
+    }
+
+    override fun onDetachedFromWindow() {
+        AppTiles.removeListener(appTilesChanged)
+        super.onDetachedFromWindow()
+    }
+
+    /** Back: the edit page goes first, then Quick Settings collapse (true); at the first stage the shade closes. */
     fun back(): Boolean {
+        if (editing) return edit?.back() ?: false
         if (expand.target <= 0f && expand.value < 0.02f) return false
         settleExpand(false, 0f)
         return true
@@ -260,13 +313,16 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
             scrimPath.addRoundRect(0f, top, width.toFloat(), height + corner, scrimRadii, Path.Direction.CW)
             c.clipOutPath(scrimPath)
         }
-        footer?.drawActions(c)
-        brightness?.draw(c)
-        tiles?.draw(c)
-        footer?.drawRow(c)
+        if (shown > 0.003f) {
+            footer?.drawActions(c)
+            brightness?.draw(c)
+            tiles?.draw(c)
+            footer?.drawRow(c)
+        }
         c.restoreToCount(save)
         cards?.draw(c)
-        header?.draw(c)
+        if (shown > 0.003f) header?.draw(c)
+        edit?.draw(c, range(0.5f, 1f, editV.value))
     }
 
     // ------------------------------------------------------------------ touches
@@ -294,6 +350,8 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        // The edit page takes every touch while it is open (Quick Settings again as soon as it is going).
+        if (editing) { edit?.touch(e); return true }
         val x = e.x
         val y = e.y
         if (e.actionMasked == MotionEvent.ACTION_DOWN) { vt?.recycle(); vt = VelocityTracker.obtain() }
