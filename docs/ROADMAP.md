@@ -20,7 +20,7 @@ Rules:
 
 | ID | Name | Status | Started | Finished |
 |----|------|--------|---------|----------|
-| M0 | Safety net | ACTIVE | 2026-10-22 | |
+| M0 | Safety net | DONE | 2026-10-22 | 2026-10-22 |
 | M1 | Regression and smoothness baseline | TODO | | |
 | M2 | Pixel shade layout signed off | TODO | | |
 | M3 | Theme builder: look | TODO | | |
@@ -37,7 +37,8 @@ Acceptance criteria:
 - [x] `scripts/check.sh` (via `scripts/check.local.sh`) runs the debug build, Android lint and `testDebugUnitTest` with
       JDK 17 from Git Bash, and passes on the current `main`. Lint uses a committed baseline (`lint-baseline.xml`) so only
       new issues fail
-- [ ] The Stop hook (`.claude/hooks/stop-check.sh`) runs `scripts/check.sh` correctly from Claude Code on Windows
+- [x] The Stop hook (`.claude/hooks/stop-check.sh`) runs `scripts/check.sh` correctly from Claude Code on Windows
+      (verified 2026-10-22: a deliberately failing unit test turned the gate red and the hook blocked the stop)
 - [x] Stale worktrees are pruned, the empty `lc/` is removed, and `CLAUDE.md.kit-new` is merged into CLAUDE.md (or
       dropped) with the owner's OK
 - [x] Known existing bugs are listed in the Bug backlog below, with repro steps where known
@@ -124,7 +125,7 @@ Seeded from CLAUDE.md's open items. Severities are drafts (`ASSUMPTION`); the ow
 - [B-012] P2 (ASSUMPTION), shade, the stock SystemUI notification launch animation may still play with animation scales at 0 (CLAUDE.md says re-test). Repro: tap a notification with our shade on, S24. Status: needs re-test
 - [B-013] P3 (ASSUMPTION), blur, a Samsung dim-blur stress run dropped to 60 Hz at the strongest level, first use had a 125 ms hitch; may be obsolete (One UI 9 uses the view blur). Repro: needs a fresh S24 check. Status: needs re-test
 - [B-014] P3 (ASSUMPTION), status bar (emulator only), our charging capsule (57 px) would not cover Android 17's full-height charging chip; related to B-002. Repro: emulator, plug-in. Status: open
-- [B-015] P3 (ASSUMPTION), tooling, the Stop hook's 40-line tail shows lint's generic explanation and Gradle's "Try:" block, not the failing test or the lint file:line. Repro: add a new lint error and a failing test, run the hook. Status: open
+- [B-015] P3 (ASSUMPTION), tooling, the Stop hook's 40-line tail shows lint's generic explanation and Gradle's "Try:" block, not the failing test or the lint file:line. Repro: add a new lint error and a failing test, run the hook. Status: open; on 2026-10-22 a failing test alone did show its name and file:line in the tail (the lint half is unchecked)
 - [B-016] P3 (ASSUMPTION), tooling, new lint warnings pass the gate silently (only new errors fail, per D-010); the roadmap's M0 wording says "only new issues fail". Repro: add `Build.VERSION.SDK_INT >= 21` in a new file, run the gate. Status: open (see Q-002)
 - [B-017] P3 (ASSUMPTION), tooling, the Stop hook skips the gate when a source file is renamed into docs/ (awk keeps only the new path of `R old -> new`). Repro: `git mv` a .kt file to docs/X.md, run the hook. Status: open
 
