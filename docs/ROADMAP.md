@@ -20,7 +20,7 @@ Rules:
 
 | ID | Name | Status | Started | Finished |
 |----|------|--------|---------|----------|
-| M0 | Safety net | TODO | | |
+| M0 | Safety net | ACTIVE | 2026-10-22 | |
 | M1 | Regression and smoothness baseline | TODO | | |
 | M2 | Pixel shade layout signed off | TODO | | |
 | M3 | Theme builder: look | TODO | | |
@@ -34,13 +34,13 @@ Status values: TODO, ACTIVE, DONE, BLOCKED.
 ### M0: Safety net
 Goal: make it cheap to know whether a change broke something, on the Windows dev machine.
 Acceptance criteria:
-- [ ] `scripts/check.sh` (via `scripts/check.local.sh`) runs the debug build, Android lint and `testDebugUnitTest` with
+- [x] `scripts/check.sh` (via `scripts/check.local.sh`) runs the debug build, Android lint and `testDebugUnitTest` with
       JDK 17 from Git Bash, and passes on the current `main`. Lint uses a committed baseline (`lint-baseline.xml`) so only
       new issues fail
 - [ ] The Stop hook (`.claude/hooks/stop-check.sh`) runs `scripts/check.sh` correctly from Claude Code on Windows
-- [ ] Stale worktrees are pruned, the empty `lc/` is removed, and `CLAUDE.md.kit-new` is merged into CLAUDE.md (or
+- [x] Stale worktrees are pruned, the empty `lc/` is removed, and `CLAUDE.md.kit-new` is merged into CLAUDE.md (or
       dropped) with the owner's OK
-- [ ] Known existing bugs are listed in the Bug backlog below, with repro steps where known
+- [x] Known existing bugs are listed in the Bug backlog below, with repro steps where known
 
 ### M1: Regression and smoothness baseline
 Goal: know where each core journey stands, so a regression shows up as a number or a failed step.
@@ -115,6 +115,18 @@ Seeded from CLAUDE.md's open items. Severities are drafts (`ASSUMPTION`); the ow
 - [B-003] P2, status bar, no call capsule of our own (iOS's green). Repro: an ongoing call. Status: open
 - [B-004] P2, switcher, SurfaceFlinger composite takes 6-8 ms on the S24 while the App Switcher is open, so one late composite repeats a frame. Repro: `scenario_switcher.sh`. Status: open
 - [B-005] P3, links, in-app links still use the stock animations. Repro: open a link from an app. Status: open
+- [B-006] P2 (ASSUMPTION), tooling, tools/reinstall.sh, scenario_library.sh and scenario_switcher.sh were CRLF on disk (likely carriage-return errors under Git Bash). Repro: `git ls-files --eol | grep 'w/crlf.*eol=lf'`. Status: fixed in M0
+- [B-007] P2 (ASSUMPTION), tooling, scripts/check.sh and stop-check.sh were mode 644 in git: on a Linux/cloud checkout the Stop hook skipped the gate silently. Repro: `git ls-files -s scripts .claude/hooks`. Status: fixed in M0
+- [B-008] P1 (ASSUMPTION), repo, the unpushed local main held a checkpoint commit (c4fa8da) that turned 206 files to CRLF, and had split from origin/main by 3 commits. Repro: `git diff --stat 1d16f45 c4fa8da` vs `--ignore-cr-at-eol`. Status: fixed in M0 (branch rebuilt on origin/main; local main still points at the old commits until fast-forwarded)
+- [B-009] P3 (ASSUMPTION), compatibility, lint reports 58 NewApi errors (minSdk 29): possible crashes on Android 10-13; v1 targets only the S24. Repro: lintDebug. Status: open, baselined
+- [B-010] P3 (ASSUMPTION), shade, QsHeaderBlock.kt reads dataNetworkType without a permission check (caught by try/catch: the network type may be empty). Repro: lint MissingPermission. Status: open
+- [B-011] P2 (ASSUMPTION), shade, launching an app from a notification uses the app's own transition, no card from the platter. Repro: tap a notification in NC or a banner over home. Status: open
+- [B-012] P2 (ASSUMPTION), shade, the stock SystemUI notification launch animation may still play with animation scales at 0 (CLAUDE.md says re-test). Repro: tap a notification with our shade on, S24. Status: needs re-test
+- [B-013] P3 (ASSUMPTION), blur, a Samsung dim-blur stress run dropped to 60 Hz at the strongest level, first use had a 125 ms hitch; may be obsolete (One UI 9 uses the view blur). Repro: needs a fresh S24 check. Status: needs re-test
+- [B-014] P3 (ASSUMPTION), status bar (emulator only), our charging capsule (57 px) would not cover Android 17's full-height charging chip; related to B-002. Repro: emulator, plug-in. Status: open
+- [B-015] P3 (ASSUMPTION), tooling, the Stop hook's 40-line tail shows lint's generic explanation and Gradle's "Try:" block, not the failing test or the lint file:line. Repro: add a new lint error and a failing test, run the hook. Status: open
+- [B-016] P3 (ASSUMPTION), tooling, new lint warnings pass the gate silently (only new errors fail, per D-010); the roadmap's M0 wording says "only new issues fail". Repro: add `Build.VERSION.SDK_INT >= 21` in a new file, run the gate. Status: open (see Q-002)
+- [B-017] P3 (ASSUMPTION), tooling, the Stop hook skips the gate when a source file is renamed into docs/ (awk keeps only the new path of `R old -> new`). Repro: `git mv` a .kt file to docs/X.md, run the hook. Status: open
 
 ## Parking lot
 Ideas that are not in scope. The owner decides if and when they become milestones.

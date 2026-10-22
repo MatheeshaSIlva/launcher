@@ -1,0 +1,3014 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<issues format="6" by="lint 8.7.3" type="baseline" client="gradle" dependencies="false" name="AGP (8.7.3)" variant="all" version="8.7.3">
+
+    <issue
+        id="MissingPermission"
+        message="Call requires permission which may be rejected by user: code should explicitly check to see if permission is available (with `checkPermission`) or explicitly handle a potential `SecurityException`"
+        errorLine1="            val type = try { networkName(tm.dataNetworkType) } catch (_: Throwable) { &quot;&quot; }"
+        errorLine2="                                         ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/qs/QsHeaderBlock.kt"
+            line="77"
+            column="42"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        e.commit()"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/StockBarSettings.kt"
+            line="46"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="            p.edit().clear().commit()"
+        errorLine2="                             ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/StockBarSettings.kt"
+            line="69"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        prefs(ctx).edit().clear().commit()"
+        errorLine2="                                  ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/StockBarSettings.kt"
+            line="80"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        if (!p.contains(ORIGINAL)) p.edit().putString(ORIGINAL, current ?: UNSET).commit()"
+        errorLine2="                                                                                  ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="181"
+            column="83"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="            p.edit().putString(PUSHED, json).commit()"
+        errorLine2="                                             ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="191"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        if (pushed == null) { if (original != null) p.edit().remove(ORIGINAL).commit(); return null }"
+        errorLine2="                                                                              ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="201"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        p.edit().remove(PUSHED).remove(ORIGINAL).commit()"
+        errorLine2="                                                 ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="207"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                field.text.isNotBlank() -> String.format(&quot;%,d&quot;, n) + if (n == 1) &quot; match&quot; else &quot; matches&quot;"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/settings/FontSearch.kt"
+            line="408"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                category == 0 -> &quot;All &quot; + String.format(&quot;%,d&quot;, n) + &quot; Google Fonts&quot;"
+        errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/settings/FontSearch.kt"
+            line="409"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="DefaultLocale"
+        message="Implicitly using the default locale is a common source of bugs: Use `String.format(Locale, ...)` instead"
+        errorLine1="                else -> String.format(&quot;%,d&quot;, n) + &quot; fonts&quot;"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/settings/FontSearch.kt"
+            line="410"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.service.quicksettings.TileService#META_DATA_TOGGLEABLE_TILE`"
+        errorLine1="                si.metaData?.getBoolean(TileService.META_DATA_TOGGLEABLE_TILE, false) == true,"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/AppTiles.kt"
+            line="110"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`"
+        errorLine1="        c.systemBarsBehavior = if (behavior == &quot;swipe&quot;) WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else WindowInsetsController.BEHAVIOR_DEFAULT"
+        errorLine2="                                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="93"
+            column="57"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`"
+        errorLine1="        c.systemBarsBehavior = if (behavior == &quot;swipe&quot;) WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else WindowInsetsController.BEHAVIOR_DEFAULT"
+        errorLine2="                                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="93"
+            column="57"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 31 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_DEFAULT`"
+        errorLine1="        c.systemBarsBehavior = if (behavior == &quot;swipe&quot;) WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else WindowInsetsController.BEHAVIOR_DEFAULT"
+        errorLine2="                                                                                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="93"
+            column="123"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 31 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_DEFAULT`"
+        errorLine1="        c.systemBarsBehavior = if (behavior == &quot;swipe&quot;) WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else WindowInsetsController.BEHAVIOR_DEFAULT"
+        errorLine2="                                                                                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="93"
+            column="123"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#APPEARANCE_LIGHT_STATUS_BARS`"
+        errorLine1="        c.setSystemBarsAppearance(if (light) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)"
+        errorLine2="                                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="100"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#APPEARANCE_LIGHT_STATUS_BARS`"
+        errorLine1="        c.setSystemBarsAppearance(if (light) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)"
+        errorLine2="                                                                                                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="100"
+            column="106"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 33 (current min is 29): `android.provider.Settings#ACTION_ALL_APPS_NOTIFICATION_SETTINGS`"
+        errorLine1="                    footerSettings.contains(x, y) -> panel.host.launch(Intent(android.provider.Settings.ACTION_ALL_APPS_NOTIFICATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))"
+        errorLine2="                                                                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/qs/CardsBlock.kt"
+            line="706"
+            column="79"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.HapticFeedbackConstants#REJECT`"
+        errorLine1="                            else performHapticFeedback(HapticFeedbackConstants.REJECT)"
+        errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/CcGallery.kt"
+            line="247"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.HapticFeedbackConstants#CONFIRM`"
+        errorLine1="        listener.haptic(android.view.HapticFeedbackConstants.CONFIRM)"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/DeckView.kt"
+            line="938"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="1065"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/HomeActivity.kt"
+            line="97"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/HomeActivity.kt"
+            line="97"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/LiveBlur.kt"
+            line="55"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 31 (current min is 29): `android.service.notification.NotificationListenerService.Ranking#VISIBILITY_NO_OVERRIDE`"
+        errorLine1="            val lockVis = if (ranked) r.lockscreenVisibilityOverride else NotificationListenerService.Ranking.VISIBILITY_NO_OVERRIDE"
+        errorLine2="                                                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Notifs.kt"
+            line="116"
+            column="75"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/SemBlurProbe.kt"
+            line="61"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/SemBlurProbe.kt"
+            line="205"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`"
+        errorLine1="                    it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
+        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="328"
+            column="45"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`"
+        errorLine1="                    it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
+        errorLine2="                                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="328"
+            column="45"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="547"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 33 (current min is 29): `android.Manifest.permission#POST_NOTIFICATIONS`"
+        errorLine1="        val missing = listOf(Manifest.permission.WRITE_SECURE_SETTINGS, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.READ_PHONE_STATE)"
+        errorLine2="                                                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/ShizukuLink.kt"
+            line="147"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 31 (current min is 29): `android.R.attr#windowSplashScreenBackground`"
+        errorLine1="        val wanted = intArrayOf(android.R.attr.windowSplashScreenBackground, android.R.attr.windowBackground, android.R.attr.colorBackground)"
+        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/apps/SplashColors.kt"
+            line="43"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 31 (current min is 29): `android.R.attr#windowSplashScreenBackground`"
+        errorLine1="        val c = colorAt(android.R.attr.windowSplashScreenBackground) ?: colorAt(android.R.attr.windowBackground) ?: colorAt(android.R.attr.colorBackground)"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/apps/SplashColors.kt"
+            line="54"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/SwitcherInput.kt"
+            line="73"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="45"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="45"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`"
+        errorLine1="                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="70"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`"
+        errorLine1="                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="70"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.Window#setDecorFitsSystemWindows`"
+        errorLine1="        window.setDecorFitsSystemWindows(false)"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="40"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets#isVisible`"
+        errorLine1="            AppLog.log(&quot;[barstest] own insets: status ${if (insets.isVisible(WindowInsets.Type.statusBars())) &quot;visible&quot; else &quot;hidden&quot;}, &quot; +"
+        errorLine2="                                                                   ~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="66"
+            column="68"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#statusBars`"
+        errorLine1="            AppLog.log(&quot;[barstest] own insets: status ${if (insets.isVisible(WindowInsets.Type.statusBars())) &quot;visible&quot; else &quot;hidden&quot;}, &quot; +"
+        errorLine2="                                                                                               ~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="66"
+            column="96"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets#getInsetsIgnoringVisibility`"
+        errorLine1="                &quot;top ${insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top}px, cut-out ${insets.displayCutout?.boundingRects}&quot;)"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="67"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#statusBars`"
+        errorLine1="                &quot;top ${insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top}px, cut-out ${insets.displayCutout?.boundingRects}&quot;)"
+        errorLine2="                                                                            ~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="67"
+            column="77"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.Window#getInsetsController`"
+        errorLine1="        val c = window.insetsController ?: return"
+        errorLine2="                       ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="92"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#setSystemBarsBehavior`"
+        errorLine1="        c.systemBarsBehavior = if (behavior == &quot;swipe&quot;) WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else WindowInsetsController.BEHAVIOR_DEFAULT"
+        errorLine2="          ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="93"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#navigationBars`"
+        errorLine1="            &quot;status&quot; -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }"
+        errorLine2="                                                   ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="95"
+            column="52"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#statusBars`"
+        errorLine1="            &quot;status&quot; -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }"
+        errorLine2="                                                                                               ~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="95"
+            column="96"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#hide`"
+        errorLine1="            &quot;status&quot; -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }"
+        errorLine2="                                                                        ~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="95"
+            column="73"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#show`"
+        errorLine1="            &quot;status&quot; -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }"
+        errorLine2="                            ~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="95"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#systemBars`"
+        errorLine1="            &quot;all&quot; -> c.hide(WindowInsets.Type.systemBars())"
+        errorLine2="                                              ~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="96"
+            column="47"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#hide`"
+        errorLine1="            &quot;all&quot; -> c.hide(WindowInsets.Type.systemBars())"
+        errorLine2="                       ~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="96"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#systemBars`"
+        errorLine1="            else -> c.show(WindowInsets.Type.systemBars())"
+        errorLine2="                                             ~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="97"
+            column="46"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#show`"
+        errorLine1="            else -> c.show(WindowInsets.Type.systemBars())"
+        errorLine2="                      ~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="97"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#setSystemBarsAppearance`"
+        errorLine1="        c.setSystemBarsAppearance(if (light) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)"
+        errorLine2="          ~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="100"
+            column="11"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.graphics.RenderEffect#createBlurEffect`"
+        errorLine1="            if (r > 0f) content.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP))"
+        errorLine2="                                                             ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/FrostCache.kt"
+            line="82"
+            column="62"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.graphics.RenderNode#setRenderEffect`"
+        errorLine1="            if (r > 0f) content.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP))"
+        errorLine2="                                ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/FrostCache.kt"
+            line="82"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowManager#getMaximumWindowMetrics`"
+        errorLine1="                    val h = (try { wm?.maximumWindowMetrics?.bounds?.height() } catch (_: Throwable) { null } ?: sh.toInt()).coerceAtLeast(1).toFloat()"
+        errorLine2="                                       ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="498"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowMetrics#getBounds`"
+        errorLine1="                    val h = (try { wm?.maximumWindowMetrics?.bounds?.height() } catch (_: Throwable) { null } ?: sh.toInt()).coerceAtLeast(1).toFloat()"
+        errorLine2="                                                             ~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="498"
+            column="62"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.view.View#getRootSurfaceControl`"
+        errorLine1="        if (catching) cardWindow?.rootSurfaceControl?.setTouchableRegion(fullRegion())"
+        errorLine2="                                  ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="1450"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 33 (current min is 29): `android.view.AttachedSurfaceControl#setTouchableRegion`"
+        errorLine1="        if (catching) cardWindow?.rootSurfaceControl?.setTouchableRegion(fullRegion())"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="1450"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.view.View#getRootSurfaceControl`"
+        errorLine1="        val cardRoot = cardWindow?.rootSurfaceControl"
+        errorLine2="                                   ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="4890"
+            column="36"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.view.View#getRootSurfaceControl`"
+        errorLine1="        val winRoot = st.rootSurfaceControl"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="4891"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 34 (current min is 29): `android.view.ViewTreeObserver#addOnWindowVisibilityChangeListener`"
+        errorLine1="        window.decorView.viewTreeObserver.addOnWindowVisibilityChangeListener(windowShown)"
+        errorLine2="                                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/HomeActivity.kt"
+            line="123"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Field requires API level 30 (current min is 29): `android.graphics.Bitmap.CompressFormat#WEBP_LOSSY`"
+        errorLine1="                tmp.outputStream().use { half.compress(android.graphics.Bitmap.CompressFormat.WEBP_LOSSY, 85, it) }"
+        errorLine2="                                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/settings/HomeSlide.kt"
+            line="161"
+            column="56"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Field requires API level 30 (current min is 29): `android.view.SurfaceControl.Transaction#CREATOR`"
+        errorLine1="                        val t = data.readTypedObject(SurfaceControl.Transaction.CREATOR)"
+        errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/InstantTransitions.kt"
+            line="57"
+            column="54"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 33 (current min is 31): `android.view.SurfaceControl.Transaction#addTransactionCommittedListener`"
+        errorLine1="                                t.addTransactionCommittedListener({ it.run() }) {"
+        errorLine2="                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/InstantTransitions.kt"
+            line="66"
+            column="35"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Field requires API level 30 (current min is 29): `android.view.SurfaceControl.Transaction#CREATOR`"
+        errorLine1="                        val t = data.readTypedObject(SurfaceControl.Transaction.CREATOR)"
+        errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
+            line="120"
+            column="54"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.graphics.RenderEffect#createBlurEffect`"
+        errorLine1="                sheetNode.setRenderEffect(if (r > 0.5f) android.graphics.RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)"
+        errorLine2="                                                                                      ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/NotificationCenterView.kt"
+            line="370"
+            column="87"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.graphics.RenderNode#setRenderEffect`"
+        errorLine1="                sheetNode.setRenderEffect(if (r > 0.5f) android.graphics.RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)"
+        errorLine2="                          ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/NotificationCenterView.kt"
+            line="370"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.service.notification.NotificationListenerService.Ranking#getLockscreenVisibilityOverride`"
+        errorLine1="            val lockVis = if (ranked) r.lockscreenVisibilityOverride else NotificationListenerService.Ranking.VISIBILITY_NO_OVERRIDE"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Notifs.kt"
+            line="116"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets#getInsetsIgnoringVisibility`"
+        errorLine1="        navInset = panel.view.rootWindowInsets?.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars())?.bottom?.toFloat() ?: 0f"
+        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/qs/QsEditPage.kt"
+            line="136"
+            column="49"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#navigationBars`"
+        errorLine1="        navInset = panel.view.rootWindowInsets?.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars())?.bottom?.toFloat() ?: 0f"
+        errorLine2="                                                                                                           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/qs/QsEditPage.kt"
+            line="136"
+            column="108"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.graphics.RenderEffect#createBlurEffect`"
+        errorLine1="            low.setRenderEffect(if (r >= 0.5f) RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)"
+        errorLine2="                                                            ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/SceneBlur.kt"
+            line="55"
+            column="61"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.graphics.RenderNode#setRenderEffect`"
+        errorLine1="            low.setRenderEffect(if (r >= 0.5f) RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP) else null)"
+        errorLine2="                ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/SceneBlur.kt"
+            line="55"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowManager#getMaximumWindowMetrics`"
+        errorLine1="        windowManager.maximumWindowMetrics.bounds.let { b -> ViewPicture.prepare(minOf(b.width(), b.height()), maxOf(b.width(), b.height()), 2) }"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/settings/SettingsActivity.kt"
+            line="459"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowMetrics#getBounds`"
+        errorLine1="        windowManager.maximumWindowMetrics.bounds.let { b -> ViewPicture.prepare(minOf(b.width(), b.height()), maxOf(b.width(), b.height()), 2) }"
+        errorLine2="                                           ~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/settings/SettingsActivity.kt"
+            line="459"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.View#getWindowInsetsController`"
+        errorLine1="                v.windowInsetsController?.let {"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="327"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#setSystemBarsBehavior`"
+        errorLine1="                    it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="328"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#navigationBars`"
+        errorLine1="                    it.hide(android.view.WindowInsets.Type.navigationBars())"
+        errorLine2="                                                           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="329"
+            column="60"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#hide`"
+        errorLine1="                    it.hide(android.view.WindowInsets.Type.navigationBars())"
+        errorLine2="                       ~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="329"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.app.PendingIntent#isActivity`"
+        errorLine1="        if (from == null || !pi.isActivity || panel !== ncPanel) return Notifs.open(ctx, item).also { if (it) close() }"
+        errorLine2="                                ~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="1423"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.app.PendingIntent#isActivity`"
+        errorLine1="        if (!locked || !pi.isActivity) return Notifs.send(ctx, pi).also { if (it &amp;&amp; closePanel &amp;&amp; panel != null) close() }"
+        errorLine2="                           ~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="1656"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.view.View#getRootSurfaceControl`"
+        errorLine1="        val sc = root.rootSurfaceControl ?: return"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="1710"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 33 (current min is 29): `android.graphics.RuntimeShader()`"
+        errorLine1="        try { return RuntimeShader(sksl) } finally { android.os.Trace.endSection() }"
+        errorLine2="                     ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/Shaders.kt"
+            line="10"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.SurfaceControlViewHost#getSurfacePackage`"
+        errorLine1="        val pkg = try { sp.surfacePackage } catch (_: Throwable) { null } ?: return false"
+        errorLine2="                           ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
+            line="97"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.SurfaceControlViewHost#release`"
+        errorLine1="        thread?.postDelayed({ try { l?.release() } catch (_: Throwable) { } }, RELEASE_AFTER_MS)"
+        errorLine2="                                       ~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
+            line="117"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#setFitInsetsTypes`"
+        errorLine1="            setFitInsetsTypes(0)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="47"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#setFitInsetsTypes`"
+        errorLine1="            setFitInsetsTypes(0)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="47"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.Window#setDecorFitsSystemWindows`"
+        errorLine1="        window.setDecorFitsSystemWindows(false)"
+        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="49"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.View#getWindowInsetsController`"
+        errorLine1="            window.decorView.windowInsetsController?.let {"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="69"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#setSystemBarsBehavior`"
+        errorLine1="                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="70"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#systemBars`"
+        errorLine1="                it.hide(WindowInsets.Type.systemBars())"
+        errorLine2="                                          ~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="71"
+            column="43"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#hide`"
+        errorLine1="                it.hide(WindowInsets.Type.systemBars())"
+        errorLine2="                   ~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="71"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowManager#getMaximumWindowMetrics`"
+        errorLine1="            val b = activity.windowManager.maximumWindowMetrics.bounds"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="99"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.view.WindowMetrics#getBounds`"
+        errorLine1="            val b = activity.windowManager.maximumWindowMetrics.bounds"
+        errorLine2="                                                                ~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="99"
+            column="65"/>
+    </issue>
+
+    <issue
+        id="NewApi"
+        message="Call requires API level 30 (current min is 29): `android.content.ContextWrapper#getDisplay`"
+        errorLine1="            val turn = when (activity.display?.rotation) {"
+        errorLine2="                                      ~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TurnCover.kt"
+            line="102"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="OldTargetApi"
+        message="Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the `android.os.Build.VERSION_CODES` javadoc for details."
+        errorLine1="        targetSdk = 34"
+        errorLine2="        ~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="18"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="                        val info = data.readTypedObject(Class.forName(&quot;android.window.TransitionInfo&quot;).getField(&quot;CREATOR&quot;).get(null) as Parcelable.Creator&lt;Any>)"
+        errorLine2="                                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/InstantTransitions.kt"
+            line="56"
+            column="57"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="            val iface = Class.forName(&quot;android.window.IRemoteTransitionFinishedCallback\$Stub&quot;).getMethod(&quot;asInterface&quot;, IBinder::class.java).invoke(null, cb)"
+        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/InstantTransitions.kt"
+            line="161"
+            column="25"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val iface = Class.forName(&quot;android.window.IRemoteTransition\$Stub&quot;).getMethod(&quot;asInterface&quot;, IBinder::class.java).invoke(null, runner)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/InstantTransitions.kt"
+            line="172"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val rtClass = Class.forName(&quot;android.window.RemoteTransition&quot;)"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/InstantTransitions.kt"
+            line="173"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val ifaceClass = Class.forName(&quot;android.window.IRemoteTransition&quot;)"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/InstantTransitions.kt"
+            line="174"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val rtClass = Class.forName(&quot;android.window.RemoteTransition&quot;)"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/InstantTransitions.kt"
+            line="185"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val get = Class.forName(&quot;android.os.SystemProperties&quot;).getMethod(&quot;getBoolean&quot;, String::class.java, Boolean::class.javaPrimitiveType)"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/LiveBlur.kt"
+            line="351"
+            column="19"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="            log(&quot;RemoteTransition constructors: &quot; + Class.forName(&quot;android.window.RemoteTransition&quot;).constructors.joinToString { c -> c.parameterTypes.joinToString(&quot;,&quot;, &quot;(&quot;, &quot;)&quot;) { it.simpleName } })"
+        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
+            line="46"
+            column="53"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val iface = Class.forName(&quot;android.window.IRemoteTransition\$Stub&quot;).getMethod(&quot;asInterface&quot;, IBinder::class.java).invoke(null, runner)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
+            line="62"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val rtClass = Class.forName(&quot;android.window.RemoteTransition&quot;)"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
+            line="63"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val ifaceClass = Class.forName(&quot;android.window.IRemoteTransition&quot;)"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
+            line="64"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="                        val creator = Class.forName(&quot;android.window.TransitionInfo&quot;).getField(&quot;CREATOR&quot;).get(null) as Parcelable.Creator&lt;Any>"
+        errorLine2="                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
+            line="118"
+            column="39"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="                val iface = Class.forName(&quot;android.window.IRemoteTransitionFinishedCallback\$Stub&quot;).getMethod(&quot;asInterface&quot;, IBinder::class.java).invoke(null, cb)"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
+            line="204"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="            val info = Class.forName(&quot;android.view.SemBlurInfo&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SamsungBlur.kt"
+            line="44"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="            builder = Class.forName(&quot;android.view.SemBlurInfo\$Builder&quot;)"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SamsungBlur.kt"
+            line="45"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="    private val infoCls by lazy { try { Class.forName(&quot;android.view.SemBlurInfo&quot;) } catch (_: Throwable) { null } }"
+        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/SemBlurProbe.kt"
+            line="26"
+            column="41"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="    private val builderCls by lazy { try { Class.forName(&quot;android.view.SemBlurInfo\$Builder&quot;) } catch (_: Throwable) { null } }"
+        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/SemBlurProbe.kt"
+            line="27"
+            column="44"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="                val iface = Class.forName(&quot;$PROJECTION_WATCHER\$Stub&quot;).getMethod(&quot;asInterface&quot;, IBinder::class.java).invoke(null, cb)"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/ShellService.kt"
+            line="445"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val binder = Class.forName(&quot;android.os.ServiceManager&quot;).getMethod(&quot;getService&quot;, String::class.java)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/ShellService.kt"
+            line="536"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        try { Class.forName(&quot;android.hardware.input.InputManagerGlobal&quot;).getMethod(&quot;getInstance&quot;).invoke(null)!! }"
+        errorLine2="              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/TouchInjector.kt"
+            line="16"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="            val cls = Class.forName(&quot;android.window.WindowInfosListenerForTest&quot;)"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/WindowWatch.kt"
+            line="30"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`notify` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.TEST_NOTIFY"
+        errorLine1="        else ctx.registerReceiver(notify, nf, android.Manifest.permission.DUMP, null)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/Badges.kt"
+            line="72"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`r` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.TEST_BADGE"
+        errorLine1="        else ctx.registerReceiver(r, f, android.Manifest.permission.DUMP, null)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/Badges.kt"
+            line="76"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`r` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.DESIGN_RELOAD"
+        errorLine1="        else appCtx.registerReceiver(r, f, android.Manifest.permission.DUMP, null)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/Design.kt"
+            line="165"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`r` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.TEST_STATUS"
+        errorLine1="        else app.registerReceiver(r, f, android.Manifest.permission.DUMP, null)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="561"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`testRecord!!` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.TEST_RECORD"
+        errorLine1="        else registerReceiver(testRecord!!, IntentFilter(&quot;dev.launcher.app.TEST_RECORD&quot;), Manifest.permission.DUMP, null)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/HomeActivity.kt"
+            line="160"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`r` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.SETUP"
+        errorLine1="        else c.registerReceiver(r, filter, android.Manifest.permission.DUMP, null)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/layout/Setup.kt"
+            line="57"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`it` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.TEST_SHADE"
+        errorLine1="                else ctx.registerReceiver(it, f, android.Manifest.permission.DUMP, handler)"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="612"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`probe` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.CALM_PROBE"
+        errorLine1="            if (Build.VERSION.SDK_INT >= 33) c.registerReceiver(probe, filter, Context.RECEIVER_NOT_EXPORTED) else c.registerReceiver(probe, filter)"
+        errorLine2="                                                                                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SystemCalm.kt"
+            line="51"
+            column="116"/>
+    </issue>
+
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`r` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.TEST_WALLPAPER"
+        errorLine1="            else ctx.registerReceiver(r, filter, android.Manifest.permission.DUMP, null)"
+        errorLine2="                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/Wallpaper.kt"
+            line="121"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.compose:compose-bom than 2024.10.01 is available: 2026.09.00"
+        errorLine1="    implementation(platform(&quot;androidx.compose:compose-bom:2024.10.01&quot;))"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="65"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0"
+        errorLine1="    implementation(&quot;androidx.activity:activity-compose:1.9.3&quot;)"
+        errorLine2="                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="build.gradle.kts"
+            line="69"
+            column="20"/>
+    </issue>
+
+    <issue
+        id="LockedOrientationActivity"
+        message="Expecting `android:screenOrientation=&quot;unspecified&quot;` or `&quot;fullSensor&quot;` for this activity so the user can use the application in any orientation and provide a great experience on Chrome OS devices"
+        errorLine1="            android:screenOrientation=&quot;portrait&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="71"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="LockedOrientationActivity"
+        message="Expecting `android:screenOrientation=&quot;unspecified&quot;` or `&quot;fullSensor&quot;` for this activity so the user can use the application in any orientation and provide a great experience on Chrome OS devices"
+        errorLine1="            android:screenOrientation=&quot;portrait&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="107"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="SwitchIntDef"
+        message="Switch statement on an `int` with known associated constant missing case `ApplicationInfo.CATEGORY_UNDEFINED`"
+        errorLine1="                when (info.category) {"
+        errorLine2="                ~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/apps/AppCategory.kt"
+            line="103"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed."
+        errorLine1="            android:screenOrientation=&quot;portrait&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="71"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed."
+        errorLine1="            android:screenOrientation=&quot;portrait&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="107"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed."
+        errorLine1="            android:screenOrientation=&quot;locked&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="145"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed."
+        errorLine1="            android:screenOrientation=&quot;locked&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="159"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="        val id = res.getIdentifier(&quot;pip_corner_radius&quot;, &quot;dimen&quot;, &quot;com.android.systemui&quot;)"
+        errorLine2="                     ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="2068"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="        val id = app.resources.getIdentifier(name, &quot;dimen&quot;, &quot;android&quot;)"
+        errorLine2="                               ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="2073"
+            column="32"/>
+    </issue>
+
+    <issue
+        id="DiscouragedApi"
+        message="Use of this function is discouraged because resource reflection makes it harder to perform build optimizations and compile-time verification of code. It is much more efficient to retrieve resources by identifier (e.g. `R.foo.bar`) than by name (e.g. `getIdentifier(&quot;bar&quot;, &quot;foo&quot;, null)`)."
+        errorLine1="            val res = resources.getIdentifier(&quot;sym_$n&quot;, &quot;drawable&quot;, context.packageName)"
+        errorLine2="                                ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/PreviewActivity.kt"
+            line="88"
+            column="33"/>
+    </issue>
+
+    <issue
+        id="SetWorldReadable"
+        message="Setting file permissions to world-readable can be risky, review carefully"
+        errorLine1="            f.setReadable(true, false)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/ShellService.kt"
+            line="59"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="DataExtractionRules"
+        message="The attribute `android:allowBackup` is deprecated from Android 12 and higher and may be removed in future versions. Consider adding the attribute `android:dataExtractionRules` specifying an `@xml` resource which configures cloud backups and device transfers on Android 12 and higher."
+        errorLine1="        android:allowBackup=&quot;false&quot;"
+        errorLine2="                             ~~~~~">
+        <location
+            file="src/main/AndroidManifest.xml"
+            line="54"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="                LightingColorFilter((0xFF shl 24) or (k shl 16) or (k shl 8) or k, 0)"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/IconView.kt"
+            line="154"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="                LightingColorFilter((0xFF shl 24) or (k shl 16) or (k shl 8) or k, 0)"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/IconView.kt"
+            line="154"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="            val hues = IntArray(7) { Color.HSVToColor(floatArrayOf(it * 60f, 0.75f, 1f)) }"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/PipTestActivity.kt"
+            line="96"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="            fill.shader = LinearGradient(l, 0f, l + pw, 0f, hues, null, Shader.TileMode.CLAMP)"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/PipTestActivity.kt"
+            line="97"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="            fill.shader = LinearGradient(l, 0f, l + pw, 0f, hues, null, Shader.TileMode.CLAMP)"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/PipTestActivity.kt"
+            line="97"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="            fill.shader = LinearGradient(0f, t, 0f, t + ph, Color.argb(0, 255, 255, 255), Color.argb(150, 255, 255, 255), Shader.TileMode.CLAMP)"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/PipTestActivity.kt"
+            line="99"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="            fill.shader = LinearGradient(0f, t, 0f, t + ph, Color.argb(0, 255, 255, 255), Color.argb(150, 255, 255, 255), Shader.TileMode.CLAMP)"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/PipTestActivity.kt"
+            line="99"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="                val under = if (frost != null &amp;&amp; dim > 0.001f) listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(0xFF000000.toInt(), 0xFF000000.toInt()), dim, dim, dev.launcher.app.design.Blend.NORMAL)) else emptyList()"
+        errorLine2="                                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/SemBlurProbe.kt"
+            line="187"
+            column="71"/>
+    </issue>
+
+    <issue
+        id="DrawAllocation"
+        message="Avoid object allocations during draw/layout operations (preallocate and reuse instead)"
+        errorLine1="                val under = if (frost != null &amp;&amp; dim > 0.001f) listOf(dev.launcher.app.design.Fill(dev.launcher.app.design.ColorValue.Literal(0xFF000000.toInt(), 0xFF000000.toInt()), dim, dim, dev.launcher.app.design.Blend.NORMAL)) else emptyList()"
+        errorLine2="                                                                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/SemBlurProbe.kt"
+            line="187"
+            column="100"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="            if (android.os.Build.VERSION.SDK_INT >= 27)"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/Design.kt"
+            line="721"
+            column="17"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is never &lt; 29"
+        errorLine1="        if (android.os.Build.VERSION.SDK_INT &lt; 29) return"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/EditMode.kt"
+            line="168"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="        if (Build.VERSION.SDK_INT >= 26) window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/HomeActivity.kt"
+            line="122"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is never &lt; 29"
+        errorLine1="        if (android.os.Build.VERSION.SDK_INT &lt; 28 || android.app.Application.getProcessName() == packageName) watchNotificationListener(1)"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/LauncherApp.kt"
+            line="55"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="                if (android.os.Build.VERSION.SDK_INT >= 27) getSystemService(android.app.NotificationManager::class.java).isNotificationListenerAccessGranted(cn)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/LauncherApp.kt"
+            line="70"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="            val person = if (Build.VERSION.SDK_INT >= 28) b.getParcelable&lt;android.app.Person>(&quot;sender_person&quot;) else null"
+        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Notifs.kt"
+            line="221"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is never &lt; 29"
+        errorLine1="        if (Build.VERSION.SDK_INT &lt; 26) return null"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/PipTestActivity.kt"
+            line="53"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="        if (Build.VERSION.SDK_INT >= 26) window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/settings/SettingsActivity.kt"
+            line="189"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="        val cut = if (Build.VERSION.SDK_INT >= 29) try { root.display?.cutout?.boundingRectTop } catch (_: Throwable) { null } else null"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Shade.kt"
+            line="1098"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="        val cutout = if (Build.VERSION.SDK_INT >= 29) try { display?.cutout?.boundingRectTop } catch (_: Throwable) { null } else null"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/statusbar/StatusBarView.kt"
+            line="916"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="        val cutout = if (Build.VERSION.SDK_INT >= 29) try { display?.cutout?.boundingRectTop } catch (_: Throwable) { null } else null"
+        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/statusbar/StatusBarView.kt"
+            line="937"
+            column="26"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="                if (android.os.Build.VERSION.SDK_INT >= 27) android.app.WallpaperColors.fromBitmap(bmp)"
+        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/Wallpaper.kt"
+            line="152"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="ObsoleteSdkInt"
+        message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 29. Merge all the resources in this folder into `mipmap-anydpi`.">
+        <location
+            file="src/main/res/mipmap-anydpi-v26"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `Apps` which has field `ctx` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/apps/Apps.kt"
+            line="56"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private lateinit var ctx: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/apps/Apps.kt"
+            line="61"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `Design` which has field `appCtx` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/design/Design.kt"
+            line="10"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private lateinit var appCtx: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/Design.kt"
+            line="56"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `Fonts` which has field `ctx` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/theme/Fonts.kt"
+            line="12"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private lateinit var ctx: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/theme/Fonts.kt"
+            line="26"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `GestureNav` which has field `strip` pointing to `View`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="50"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    // ------------------------------------------------------------------ windows (nav thread)"
+        errorLine2="    ^">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="113"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private var root: FrameLayout? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="115"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `PreviewView` which has field `lowBlur` pointing to `FrameLayout`); this is a memory leak"
+        errorLine1="    private var backdrop: PreviewView? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="116"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `Shade` which has field `ctx` pointing to `Context`); this is a memory leak"
+        errorLine1="    private var shade: dev.launcher.app.shade.Shade? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="421"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `SwitcherInput` which has field `view` pointing to `View`); this is a memory leak"
+        errorLine1="    private var input: dev.launcher.app.switcher.SwitcherInput? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="4334"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    /**"
+        errorLine2="    ^">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="4673"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `PreviewView` which has field `lowBlur` pointing to `FrameLayout`); this is a memory leak"
+        errorLine1="    private var back2: PreviewView? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="4680"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private var dim2: View? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="4681"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `Icons` which has field `ctx` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/apps/Icons.kt"
+            line="96"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private lateinit var ctx: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/apps/Icons.kt"
+            line="101"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `LaunchStats` which has field `ctx` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/apps/LaunchStats.kt"
+            line="7"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private lateinit var ctx: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/apps/LaunchStats.kt"
+            line="13"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `Notifs` which has field `service` pointing to `NotificationListenerService`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Notifs.kt"
+            line="23"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    @Volatile internal var service: NotificationListenerService? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/Notifs.kt"
+            line="92"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `SettingsPrefs` which has field `app` pointing to `Context`); this is a memory leak"
+        errorLine1="/** The settings&apos; own choices that are not the design&apos;s (Developer&apos;s switches, the folds left open), kept in the app&apos;s preferences. */"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/settings/SettingsPrefs.kt"
+            line="8"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private var app: Context? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/settings/SettingsPrefs.kt"
+            line="28"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `Setup` which has field `appCtx` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/layout/Setup.kt"
+            line="14"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private var appCtx: Context? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/layout/Setup.kt"
+            line="32"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `SwitcherHost` which has field `root` pointing to `View`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
+            line="15"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private var root: View? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
+            line="49"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private var ctx: Context? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
+            line="50"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `SwitcherActivity` which has field `surface` pointing to `SurfaceView`); this is a memory leak"
+        errorLine1="    @Volatile private var current: SwitcherActivity? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
+            line="127"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `SystemPalette` which has field `app` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="12"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private var app: Context? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="53"
+            column="5"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (825 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="        android:pathData=&quot;M346,800L240,800Q207,800 183.5,776.5Q160,753 160,720L160,614L83,536Q72,524 66,509.5Q60,495 60,480Q60,465 66,450.5Q72,436 83,424L160,346L160,240Q160,207 183.5,183.5Q207,160 240,160L346,160L424,83Q436,72 450.5,66Q465,60 480,60Q495,60 509.5,66Q524,72 536,83L614,160L720,160Q753,160 776.5,183.5Q800,207 800,240L800,346L877,424Q888,436 894,450.5Q900,465 900,480Q900,495 894,509.5Q888,524 877,536L800,614L800,720Q800,753 776.5,776.5Q753,800 720,800L614,800L536,877Q524,888 509.5,894Q495,900 480,900Q465,900 450.5,894Q436,888 424,877L346,800ZM480,680Q563,680 621.5,621.5Q680,563 680,480Q680,397 621.5,338.5Q563,280 480,280Q397,280 338.5,338.5Q280,397 280,480Q280,563 338.5,621.5Q397,680 480,680ZM480,600Q430,600 395,565Q360,530 360,480Q360,430 395,395Q430,360 480,360Q530,360 565,395Q600,430 600,480Q600,530 565,565Q530,600 480,600Z&quot; />"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_brightness_full.xml"
+            line="11"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (833 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="            android:pathData=&quot;M320-320v50q0 13 8.5 21.5T350-240q13 0 21.5-8.5T380-270v-50h50q13 0 21.5-8.5T460-350q0-13-8.5-21.5T430-380h-50v-50q0-13-8.5-21.5T350-460q-13 0-21.5 8.5T320-430v50h-50q-13 0-21.5 8.5T240-350q0 13 8.5 21.5T270-320h50Zm230 50h140q13 0 21.5-8.5T720-300q0-13-8.5-21.5T690-330H550q-13 0-21.5 8.5T520-300q0 13 8.5 21.5T550-270Zm0-100h140q13 0 21.5-8.5T720-400q0-13-8.5-21.5T690-430H550q-13 0-21.5 8.5T520-400q0 13 8.5 21.5T550-370Zm70-208 35 35q9 9 21 9t21-9q8-8 8.5-20.5T698-585l-36-37 35-35q9-9 9-21t-9-21q-9-9-21-9t-21 9l-35 35-35-35q-9-9-21-9t-21 9q-9 9-9 21t9 21l35 35-36 37q-8 9-8 21t9 21q9 9 21 9t21-9l35-35Zm-340-14h140q13 0 21.5-8.5T450-622q0-13-8.5-21.5T420-652H280q-13 0-21.5 8.5T250-622q0 13 8.5 21.5T280-592Zm-80 472q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Z&quot; />"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_calculator.xml"
+            line="11"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (945 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="            android:pathData=&quot;M148-560q0 55 18.5 109.5T221-350q9 11 9 25.5T220-300q-10 10-24.5 9T172-303q-46-57-69-122T80-560q0-70 23-135t69-122q9-11 23.5-12t24.5 9q10 10 10 24.5t-9 25.5q-36 46-54.5 100.5T148-560Zm132 0q0 29 9 59t29 56q8 11 8 25t-10 24q-10 10-24 9.5T269-398q-28-36-42.5-77.5T212-560q0-43 14.5-84.5T269-722q9-11 23-11.5t24 9.5q10 10 9.5 24t-8.5 25q-19 25-28 54.5t-9 60.5Zm107 400-18 54q-4 11-14 18.5T333-80q-20 0-31-15.5t-5-34.5l118-355q-16-14-25.5-33t-9.5-42q0-42 29-71t71-29q42 0 71 29t29 71q0 23-9.5 42T545-485l118 355q6 18-4.5 34T628-80q-12 0-22.5-7T591-106l-17-54H387Zm26-80h134l-67-200-67 200Zm267-320q0-29-9-59t-29-56q-8-11-8-25t10-24q10-10 24.5-9.5T691-722q27 36 41 77.5t16 84.5q0 43-14.5 84.5T691-398q-9 11-23 11.5t-24-9.5q-10-10-9.5-24t8.5-25q19-25 28-54.5t9-60.5Zm132 0q0-55-18.5-109.5T739-770q-9-11-9-25.5t10-24.5q10-10 24.5-9t23.5 12q46 57 69 122t23 135q0 70-21.5 135T789-303q-10 11-24 12.5t-25-9.5q-10-10-10-24.5t9-25.5q36-46 54.5-100.5T812-560Z&quot; />"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_cellular.xml"
+            line="11"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (855 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="            android:pathData=&quot;M480-80q-33 0-56.5-23.5T400-160h160q0 33-23.5 56.5T480-80ZM200-200q-17 0-28.5-11.5T160-240q0-17 11.5-28.5T200-280h40v-280q0-58 25-108t69-83q22-17 46-3.5t21 47.5q-1 6-1 13.5v13.5q0 118 81.5 199.5T680-399q17 0 28.5 10.5T720-362v82h40q17 0 28.5 11.5T800-240q0 17-11.5 28.5T760-200H200Zm472-280q-14 0-24.5-9T634-512l-6-28q-12-5-22.5-10.5T584-564l-29 9q-13 4-25.5-1T510-572l-8-14q-7-12-5-26t13-23l22-19q-2-13-2-26t2-26l-22-19q-11-9-13-22.5t5-25.5l9-15q7-11 19-16t25-1l29 9q11-8 21.5-13.5T628-820l6-29q3-14 13.5-22.5T672-880h16q14 0 24.5 9t13.5 23l6 28q12 5 22.5 10.5T776-796l29-9q13-4 25.5 1t19.5 16l8 14q7 12 5 26t-13 23l-22 19q2 13 2 26t-2 26l22 19q11 9 13 22.5t-5 25.5l-9 15q-7 11-19 16t-25 1l-29-9q-11 8-21.5 13.5T732-540l-6 29q-3 14-13.5 22.5T688-480h-16Zm8-120q33 0 56.5-23.5T760-680q0-33-23.5-56.5T680-760q-33 0-56.5 23.5T600-680q0 33 23.5 56.5T680-600Z&quot; />"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_notification_settings.xml"
+            line="11"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (1159 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="            android:pathData=&quot;M120-680q-17 0-28.5-11.5T80-720v-120q0-17 11.5-28.5T120-880h120q17 0 28.5 11.5T280-840q0 17-11.5 28.5T240-800h-80v80q0 17-11.5 28.5T120-680Zm0 600q-17 0-28.5-11.5T80-120v-120q0-17 11.5-28.5T120-280q17 0 28.5 11.5T160-240v80h80q17 0 28.5 11.5T280-120q0 17-11.5 28.5T240-80H120Zm600 0q-17 0-28.5-11.5T680-120q0-17 11.5-28.5T720-160h80v-80q0-17 11.5-28.5T840-280q17 0 28.5 11.5T880-240v120q0 17-11.5 28.5T840-80H720Zm120-600q-17 0-28.5-11.5T800-720v-80h-80q-17 0-28.5-11.5T680-840q0-17 11.5-28.5T720-880h120q17 0 28.5 11.5T880-840v120q0 17-11.5 28.5T840-680ZM700-200v-60h60v60h-60Zm0-120v-60h60v60h-60Zm-60 60v-60h60v60h-60Zm-60 60v-60h60v60h-60Zm-60-60v-60h60v60h-60Zm120-120v-60h60v60h-60Zm-60 60v-60h60v60h-60Zm-60-60v-60h60v60h-60Zm40-140q-17 0-28.5-11.5T520-560v-160q0-17 11.5-28.5T560-760h160q17 0 28.5 11.5T760-720v160q0 17-11.5 28.5T720-520H560ZM240-200q-17 0-28.5-11.5T200-240v-160q0-17 11.5-28.5T240-440h160q17 0 28.5 11.5T440-400v160q0 17-11.5 28.5T400-200H240Zm0-320q-17 0-28.5-11.5T200-560v-160q0-17 11.5-28.5T240-760h160q17 0 28.5 11.5T440-720v160q0 17-11.5 28.5T400-520H240Zm20 260h120v-120H260v120Zm0-320h120v-120H260v120Zm320 0h120v-120H580v120Z&quot; />"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_qr.xml"
+            line="11"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (1377 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="&lt;path android:fillColor=&quot;#ffffffff&quot; android:pathData=&quot;M240,800Q207,800 183.5,776.5Q160,753 160,720Q160,687 183.5,663.5Q207,640 240,640Q273,640 296.5,663.5Q320,687 320,720Q320,753 296.5,776.5Q273,800 240,800ZM480,800Q447,800 423.5,776.5Q400,753 400,720Q400,687 423.5,663.5Q447,640 480,640Q513,640 536.5,663.5Q560,687 560,720Q560,753 536.5,776.5Q513,800 480,800ZM720,800Q687,800 663.5,776.5Q640,753 640,720Q640,687 663.5,663.5Q687,640 720,640Q753,640 776.5,663.5Q800,687 800,720Q800,753 776.5,776.5Q753,800 720,800ZM240,560Q207,560 183.5,536.5Q160,513 160,480Q160,447 183.5,423.5Q207,400 240,400Q273,400 296.5,423.5Q320,447 320,480Q320,513 296.5,536.5Q273,560 240,560ZM480,560Q447,560 423.5,536.5Q400,513 400,480Q400,447 423.5,423.5Q447,400 480,400Q513,400 536.5,423.5Q560,447 560,480Q560,513 536.5,536.5Q513,560 480,560ZM720,560Q687,560 663.5,536.5Q640,513 640,480Q640,447 663.5,423.5Q687,400 720,400Q753,400 776.5,423.5Q800,447 800,480Q800,513 776.5,536.5Q753,560 720,560ZM240,320Q207,320 183.5,296.5Q160,273 160,240Q160,207 183.5,183.5Q207,160 240,160Q273,160 296.5,183.5Q320,207 320,240Q320,273 296.5,296.5Q273,320 240,320ZM480,320Q447,320 423.5,296.5Q400,273 400,240Q400,207 423.5,183.5Q447,160 480,160Q513,160 536.5,183.5Q560,207 560,240Q560,273 536.5,296.5Q513,320 480,320ZM720,320Q687,320 663.5,296.5Q640,273 640,240Q640,207 663.5,183.5Q687,160 720,160Q753,160 776.5,183.5Q800,207 800,240Q800,273 776.5,296.5Q753,320 720,320Z&quot;>"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_qs_cat_apps.xml"
+            line="4"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (1017 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="&lt;path android:fillColor=&quot;#ffffffff&quot; android:pathData=&quot;M346,800L240,800Q207,800 183.5,776.5Q160,753 160,720L160,614L83,536Q72,524 66,509.5Q60,495 60,480Q60,465 66,450.5Q72,436 83,424L160,346L160,240Q160,207 183.5,183.5Q207,160 240,160L346,160L424,83Q436,72 450.5,66Q465,60 480,60Q495,60 509.5,66Q524,72 536,83L614,160L720,160Q753,160 776.5,183.5Q800,207 800,240L800,346L877,424Q888,436 894,450.5Q900,465 900,480Q900,495 894,509.5Q888,524 877,536L800,614L800,720Q800,753 776.5,776.5Q753,800 720,800L614,800L536,877Q524,888 509.5,894Q495,900 480,900Q465,900 450.5,894Q436,888 424,877L346,800ZM380,720L480,820Q480,820 480,820Q480,820 480,820L580,720L720,720Q720,720 720,720Q720,720 720,720L720,580L820,480Q820,480 820,480Q820,480 820,480L720,380L720,240Q720,240 720,240Q720,240 720,240L580,240L480,140Q480,140 480,140Q480,140 480,140L380,240L240,240Q240,240 240,240Q240,240 240,240L240,380L140,480Q140,480 140,480Q140,480 140,480L240,580L240,720Q240,720 240,720Q240,720 240,720L380,720ZM480,680Q563,680 621.5,621.5Q680,563 680,480Q680,397 621.5,338.5Q563,280 480,280L480,680Z&quot;>"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_qs_cat_display.xml"
+            line="4"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (1588 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="&lt;path android:fillColor=&quot;#ffffffff&quot; android:pathData=&quot;M200,840Q167,840 143.5,816.5Q120,793 120,760L120,640Q120,623 131.5,611.5Q143,600 160,600Q177,600 188.5,611.5Q200,623 200,640L200,760Q200,760 200,760Q200,760 200,760L320,760Q337,760 348.5,771.5Q360,783 360,800Q360,817 348.5,828.5Q337,840 320,840L200,840ZM760,840L640,840Q623,840 611.5,828.5Q600,817 600,800Q600,783 611.5,771.5Q623,760 640,760L760,760Q760,760 760,760Q760,760 760,760L760,640Q760,623 771.5,611.5Q783,600 800,600Q817,600 828.5,611.5Q840,623 840,640L840,760Q840,793 816.5,816.5Q793,840 760,840ZM120,200Q120,167 143.5,143.5Q167,120 200,120L320,120Q337,120 348.5,131.5Q360,143 360,160Q360,177 348.5,188.5Q337,200 320,200L200,200Q200,200 200,200Q200,200 200,200L200,320Q200,337 188.5,348.5Q177,360 160,360Q143,360 131.5,348.5Q120,337 120,320L120,200ZM840,200L840,320Q840,337 828.5,348.5Q817,360 800,360Q783,360 771.5,348.5Q760,337 760,320L760,200Q760,200 760,200Q760,200 760,200L640,200Q623,200 611.5,188.5Q600,177 600,160Q600,143 611.5,131.5Q623,120 640,120L760,120Q793,120 816.5,143.5Q840,167 840,200ZM480,720Q501,720 515.5,705.5Q530,691 530,670Q530,649 515.5,634.5Q501,620 480,620Q459,620 444.5,634.5Q430,649 430,670Q430,691 444.5,705.5Q459,720 480,720ZM480,308Q506,308 525.5,324Q545,340 545,365Q545,388 530.5,406Q516,424 499,439Q473,462 459.5,482.5Q446,503 444,532Q443,546 454,556.5Q465,567 480,567Q494,567 505.5,557Q517,547 519,532Q521,515 531,502Q541,489 560,470Q595,435 606.5,413.5Q618,392 618,362Q618,308 579,274Q540,240 480,240Q439,240 406.5,258.5Q374,277 357,311Q351,323 356.5,335.5Q362,348 375,353Q388,358 401.5,353Q415,348 423,337Q434,323 448.5,315.5Q463,308 480,308Z&quot;>"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_qs_cat_unknown.xml"
+            line="4"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (946 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="&lt;path android:fillColor=&quot;#ffffffff&quot; android:pathData=&quot;M433,880Q406,880 386.5,862Q367,844 363,818L354,752Q341,747 329.5,740Q318,733 307,725L245,751Q220,762 195,753Q170,744 156,721L109,639Q95,616 101,590Q107,564 128,547L181,507Q180,500 180,493.5Q180,487 180,480Q180,473 180,466.5Q180,460 181,453L128,413Q107,396 101,370Q95,344 109,321L156,239Q170,216 195,207Q220,198 245,209L307,235Q318,227 330,220Q342,213 354,208L363,142Q367,116 386.5,98Q406,80 433,80L527,80Q554,80 573.5,98Q593,116 597,142L606,208Q619,213 630.5,220Q642,227 653,235L715,209Q740,198 765,207Q790,216 804,239L851,321Q865,344 859,370Q853,396 832,413L779,453Q780,460 780,466.5Q780,473 780,480Q780,487 780,493.5Q780,500 778,507L831,547Q852,564 858,590Q864,616 850,639L802,721Q788,744 763,753Q738,762 713,751L653,725Q642,733 630,740Q618,747 606,752L597,818Q593,844 573.5,862Q554,880 527,880L433,880ZM482,620Q540,620 581,579Q622,538 622,480Q622,422 581,381Q540,340 482,340Q423,340 382.5,381Q342,422 342,480Q342,538 382.5,579Q423,620 482,620Z&quot;>"
+        errorLine2="                                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_qs_cat_utilities.xml"
+            line="4"
+            column="55"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (946 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="        android:pathData=&quot;M433,880Q406,880 386.5,862Q367,844 363,818L354,752Q341,747 329.5,740Q318,733 307,725L245,751Q220,762 195,753Q170,744 156,721L109,639Q95,616 101,590Q107,564 128,547L181,507Q180,500 180,493.5Q180,487 180,480Q180,473 180,466.5Q180,460 181,453L128,413Q107,396 101,370Q95,344 109,321L156,239Q170,216 195,207Q220,198 245,209L307,235Q318,227 330,220Q342,213 354,208L363,142Q367,116 386.5,98Q406,80 433,80L527,80Q554,80 573.5,98Q593,116 597,142L606,208Q619,213 630.5,220Q642,227 653,235L715,209Q740,198 765,207Q790,216 804,239L851,321Q865,344 859,370Q853,396 832,413L779,453Q780,460 780,466.5Q780,473 780,480Q780,487 780,493.5Q780,500 778,507L831,547Q852,564 858,590Q864,616 850,639L802,721Q788,744 763,753Q738,762 713,751L653,725Q642,733 630,740Q618,747 606,752L597,818Q593,844 573.5,862Q554,880 527,880L433,880ZM482,620Q540,620 581,579Q622,538 622,480Q622,422 581,381Q540,340 482,340Q423,340 382.5,381Q342,422 342,480Q342,538 382.5,579Q423,620 482,620Z&quot; />"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_qs_settings.xml"
+            line="10"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (1373 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="        android:pathData=&quot;M5.85,17.1Q7.125,16.125 8.7,15.562Q10.275,15 12,15Q13.725,15 15.3,15.562Q16.875,16.125 18.15,17.1Q19.025,16.075 19.513,14.775Q20,13.475 20,12Q20,8.675 17.663,6.337Q15.325,4 12,4Q8.675,4 6.338,6.337Q4,8.675 4,12Q4,13.475 4.488,14.775Q4.975,16.075 5.85,17.1ZM12,13Q10.525,13 9.512,11.988Q8.5,10.975 8.5,9.5Q8.5,8.025 9.512,7.012Q10.525,6 12,6Q13.475,6 14.488,7.012Q15.5,8.025 15.5,9.5Q15.5,10.975 14.488,11.988Q13.475,13 12,13ZM12,22Q9.925,22 8.1,21.212Q6.275,20.425 4.925,19.075Q3.575,17.725 2.788,15.9Q2,14.075 2,12Q2,9.925 2.788,8.1Q3.575,6.275 4.925,4.925Q6.275,3.575 8.1,2.787Q9.925,2 12,2Q14.075,2 15.9,2.787Q17.725,3.575 19.075,4.925Q20.425,6.275 21.212,8.1Q22,9.925 22,12Q22,14.075 21.212,15.9Q20.425,17.725 19.075,19.075Q17.725,20.425 15.9,21.212Q14.075,22 12,22ZM12,20Q13.325,20 14.5,19.613Q15.675,19.225 16.65,18.5Q15.675,17.775 14.5,17.387Q13.325,17 12,17Q10.675,17 9.5,17.387Q8.325,17.775 7.35,18.5Q8.325,19.225 9.5,19.613Q10.675,20 12,20ZM12,11Q12.65,11 13.075,10.575Q13.5,10.15 13.5,9.5Q13.5,8.85 13.075,8.425Q12.65,8 12,8Q11.35,8 10.925,8.425Q10.5,8.85 10.5,9.5Q10.5,10.15 10.925,10.575Q11.35,11 12,11ZM12,9.5Q12,9.5 12,9.5Q12,9.5 12,9.5Q12,9.5 12,9.5Q12,9.5 12,9.5Q12,9.5 12,9.5Q12,9.5 12,9.5Q12,9.5 12,9.5Q12,9.5 12,9.5ZM12,18.5Q12,18.5 12,18.5Q12,18.5 12,18.5Q12,18.5 12,18.5Q12,18.5 12,18.5Q12,18.5 12,18.5Q12,18.5 12,18.5Q12,18.5 12,18.5Q12,18.5 12,18.5Z&quot; />"
+        errorLine2="                          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_qs_user.xml"
+            line="10"
+            column="27"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (810 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="            android:pathData=&quot;M480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280Zm320-200q0-42-10-81t-29-74q-8-15-6.5-32t15.5-27q14-10 31-6t25 18q26 45 40 95.5T880-480q0 56-14.5 107T825-277q-8 14-24.5 17.5T770-266q-14-10-16-27t6-32q19-35 29.5-73.5T800-480ZM480-800q-43 0-81.5 10.5T325-760q-15 8-32 6t-27-16q-10-14-6.5-30.5T277-825q45-26 96-40.5T480-880q56 0 107 14.5t96 40.5q15 8 18.5 24.5T695-770q-10 14-27 16t-32-6q-35-19-74-29.5T480-800ZM160-480q0 43 10.5 81.5T200-325q8 15 6 32t-16 27q-14 10-30.5 6.5T135-277q-26-45-40.5-96T80-480q0-56 14-106.5t40-95.5q8-14 25-18t31 6q14 10 15.5 27t-6.5 32q-19 35-29 74t-10 81Zm320 320q42 0 81-10t74-29q15-8 31.5-6t26.5 16q10 14 6.5 30.5T682-134q-45 26-95.5 40T480-80q-56 0-106.5-14T278-134q-14-8-18-25t6-31q10-14 27-15.5t32 6.5q35 19 74 29t81 10Z&quot; />"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_screen_record.xml"
+            line="11"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="VectorPath"
+        message="Very long vector path (967 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector."
+        errorLine1="            android:pathData=&quot;M480-280q-83 0-141.5-58.5T280-480q0-83 58.5-141.5T480-680q83 0 141.5 58.5T680-480q0 83-58.5 141.5T480-280ZM80-440q-17 0-28.5-11.5T40-480q0-17 11.5-28.5T80-520h80q17 0 28.5 11.5T200-480q0 17-11.5 28.5T160-440H80Zm720 0q-17 0-28.5-11.5T760-480q0-17 11.5-28.5T800-520h80q17 0 28.5 11.5T920-480q0 17-11.5 28.5T880-440h-80ZM480-760q-17 0-28.5-11.5T440-800v-80q0-17 11.5-28.5T480-920q17 0 28.5 11.5T520-880v80q0 17-11.5 28.5T480-760Zm0 720q-17 0-28.5-11.5T440-80v-80q0-17 11.5-28.5T480-200q17 0 28.5 11.5T520-160v80q0 17-11.5 28.5T480-40ZM226-678l-43-42q-12-11-11.5-28t11.5-29q12-12 29-12t28 12l42 43q11 12 11 28t-11 28q-11 12-27.5 11.5T226-678Zm494 495-42-43q-11-12-11-28.5t11-27.5q11-12 27.5-11.5T734-282l43 42q12 11 11.5 28T777-183q-12 12-29 12t-28-12Zm-42-495q-12-11-11.5-27.5T678-734l42-43q11-12 28-11.5t29 11.5q12 12 12 29t-12 28l-43 42q-12 11-28 11t-28-11ZM183-183q-12-12-12-29t12-28l43-42q12-11 28.5-11t27.5 11q12 11 11.5 27.5T282-226l-42 43q-11 12-28 11.5T183-183Z&quot; />"
+        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/res/drawable/sym_sun.xml"
+            line="11"
+            column="31"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_apps` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_apps.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_arrow_down` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_arrow_down.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_bed` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_bed.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_grid` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_grid.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_hearing` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_hearing.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_minus` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_minus.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_qs_cat_unknown` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot; android:height=&quot;24dp&quot; android:width=&quot;24dp&quot; android:viewportWidth=&quot;960&quot; android:viewportHeight=&quot;960&quot;>"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_qs_cat_unknown.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_qs_user` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_qs_user.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_recents` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_recents.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_record` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_record.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_screen_record` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_screen_record.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_shield` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_shield.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_spring` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_spring.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="UnusedResources"
+        message="The resource `R.drawable.sym_statusbar` appears to be unused"
+        errorLine1="&lt;vector xmlns:android=&quot;http://schemas.android.com/apk/res/android&quot;"
+        errorLine2="^">
+        <location
+            file="src/main/res/drawable/sym_statusbar.xml"
+            line="3"
+            column="1"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `AppLibraryView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class AppLibraryView(ctx: Context, val host: DrawerHost) : FrameLayout(ctx), AppDrawer {"
+        errorLine2="      ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/drawer/AppLibraryView.kt"
+            line="42"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `SearchBar` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="internal class SearchBar(ctx: Context, private val lib: AppLibraryView) : FrameLayout(ctx) {"
+        errorLine2="               ~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/drawer/AppLibraryView.kt"
+            line="412"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `CardBadgeView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class CardBadgeView(context: Context, private val card: CardView) : View(context) {"
+        errorLine2="      ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/CardView.kt"
+            line="417"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `DeckView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class DeckView(ctx: Context, private val listener: Listener) : View(ctx) {"
+        errorLine2="      ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/DeckView.kt"
+            line="40"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `GlassView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class GlassView(ctx: Context, private val style: GlassStyle, private val unitPx: Float,"
+        errorLine2="      ~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/GlassView.kt"
+            line="28"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `PageView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class PageView(ctx: Context, private val m: HomeMetrics, private val makeView: (HomeItem) -> View?) : ViewGroup(ctx) {"
+        errorLine2="      ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/HomeViews.kt"
+            line="21"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `ClockWidgetView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class ClockWidgetView(ctx: Context, m: HomeMetrics, spanX: Int, spanY: Int, style: String? = null) : WidgetFrameView(ctx, m, spanX, spanY) {"
+        errorLine2="      ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/HomeViews.kt"
+            line="186"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `DockView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class DockView(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {"
+        errorLine2="      ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/HomeViews.kt"
+            line="907"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `PageIndicator` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class PageIndicator(ctx: Context, private val m: HomeMetrics) : FrameLayout(ctx) {"
+        errorLine2="      ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/HomeViews.kt"
+            line="977"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `IconView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class IconView(ctx: Context, private val m: HomeMetrics, private val showLabel: Boolean) : View(ctx), TonedLabel {"
+        errorLine2="      ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/IconView.kt"
+            line="26"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `IconSetPreview` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="private class IconSetPreview(ctx: android.content.Context, id: String) : View(ctx) {"
+        errorLine2="              ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/PreviewActivity.kt"
+            line="70"
+            column="15"/>
+    </issue>
+
+    <issue
+        id="ViewConstructor"
+        message="Custom view `WallpaperView` is missing constructor used by tools: `(Context)` or `(Context,AttributeSet)` or `(Context,AttributeSet,int)`"
+        errorLine1="class WallpaperView(ctx: Context, private val cellPx: Float) : View(ctx) {"
+        errorLine2="      ~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/WallpaperView.kt"
+            line="16"
+            column="7"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="Custom view `SearchBar` overrides `onTouchEvent` but not `performClick`"
+        errorLine1="    override fun onTouchEvent(event: MotionEvent): Boolean {"
+        errorLine2="                 ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/drawer/AppLibraryView.kt"
+            line="531"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="Custom view `Bar` overrides `onTouchEvent` but not `performClick`"
+        errorLine1="        override fun onTouchEvent(e: MotionEvent): Boolean {"
+        errorLine2="                     ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/EditMode.kt"
+            line="1245"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="Custom view ``FrameLayout`` has `setOnTouchListener` called on it but does not override `performClick`"
+        errorLine1="        stripView.setOnTouchListener { _, e -> onTouch(e) }"
+        errorLine2="        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="1082"
+            column="9"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="`onTouch` lambda should call `View#performClick` when a click is detected"
+        errorLine1="        stripView.setOnTouchListener { _, e -> onTouch(e) }"
+        errorLine2="                                     ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="1082"
+            column="38"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="Custom view ``CardHost`` has `setOnTouchListener` called on it but does not override `performClick`"
+        errorLine1="            host.setOnTouchListener { _, e -> onCardWindowTouch(e); true }"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="1217"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="`onTouch` lambda should call `View#performClick` when a click is detected"
+        errorLine1="            host.setOnTouchListener { _, e -> onCardWindowTouch(e); true }"
+        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/GestureNav.kt"
+            line="1217"
+            column="37"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="Custom view `IconView` overrides `onTouchEvent` but not `performClick`"
+        errorLine1="    override fun onTouchEvent(event: MotionEvent): Boolean {"
+        errorLine2="                 ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/home/IconView.kt"
+            line="180"
+            column="18"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="`onTouch` lambda should call `View#performClick` when a click is detected"
+        errorLine1="            r.setOnTouchListener { _, e -> listener?.onWindowTouch(MotionEvent.obtain(e)); true }"
+        errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
+            line="87"
+            column="34"/>
+    </issue>
+
+    <issue
+        id="ClickableViewAccessibility"
+        message="`onTouch` lambda should call `View#performClick` when a click is detected"
+        errorLine1="                    setOnTouchListener { _, e ->"
+        errorLine2="                                       ^">
+        <location
+            file="src/main/java/dev/launcher/app/switcher/SwitcherInput.kt"
+            line="54"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            text = &quot;Cancel&quot;"
+        errorLine2="                    ~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/drawer/AppLibraryView.kt"
+            line="81"
+            column="21"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Status bar test\nbars $bars, swipe $behavior, legacy $legacy, light $light, orientation $orient, cut-out $cutout&quot;"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="117"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        state.text = &quot;Status bar test\nbars $bars, swipe $behavior, legacy $legacy, light $light, orientation $orient, cut-out $cutout&quot;"
+        errorLine2="                      ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="117"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        state.text = &quot;Status bar test\nbars $bars, swipe $behavior, legacy $legacy, light $light, orientation $orient, cut-out $cutout&quot;"
+        errorLine2="                                       ~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="117"
+            column="40"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        state.text = &quot;Status bar test\nbars $bars, swipe $behavior, legacy $legacy, light $light, orientation $orient, cut-out $cutout&quot;"
+        errorLine2="                                                 ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="117"
+            column="50"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        state.text = &quot;Status bar test\nbars $bars, swipe $behavior, legacy $legacy, light $light, orientation $orient, cut-out $cutout&quot;"
+        errorLine2="                                                                  ~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="117"
+            column="67"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        state.text = &quot;Status bar test\nbars $bars, swipe $behavior, legacy $legacy, light $light, orientation $orient, cut-out $cutout&quot;"
+        errorLine2="                                                                                  ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="117"
+            column="83"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        state.text = &quot;Status bar test\nbars $bars, swipe $behavior, legacy $legacy, light $light, orientation $orient, cut-out $cutout&quot;"
+        errorLine2="                                                                                                ~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="117"
+            column="97"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        state.text = &quot;Status bar test\nbars $bars, swipe $behavior, legacy $legacy, light $light, orientation $orient, cut-out $cutout&quot;"
+        errorLine2="                                                                                                                     ~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
+            line="117"
+            column="118"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        header.text = &quot;Design tokens (${Design.keys().size}, $edited edited)&quot;"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/DesignActivity.kt"
+            line="143"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        header.text = &quot;Design tokens (${Design.keys().size}, $edited edited)&quot;"
+        errorLine2="                       ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/DesignActivity.kt"
+            line="143"
+            column="24"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        header.text = &quot;Design tokens (${Design.keys().size}, $edited edited)&quot;"
+        errorLine2="                                                                    ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/DesignActivity.kt"
+            line="143"
+            column="69"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        themeButton.text = &quot;Theme: ${Design.themeName}  ▾&quot;"
+        errorLine2="                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/DesignActivity.kt"
+            line="144"
+            column="28"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        themeButton.text = &quot;Theme: ${Design.themeName}  ▾&quot;"
+        errorLine2="                            ~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/DesignActivity.kt"
+            line="144"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        motionButton.text = &quot;Animations: ${Design.motionName}  ▾&quot;"
+        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/DesignActivity.kt"
+            line="145"
+            column="29"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        motionButton.text = &quot;Animations: ${Design.motionName}  ▾&quot;"
+        errorLine2="                             ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/DesignActivity.kt"
+            line="145"
+            column="30"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ^">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ^">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ^">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ^">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                      ~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="23"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            &quot;Status bar: ${if (SystemRestore.statusBarHidden(this)) &quot;hidden by the launcher (comes back by itself if the launcher or Shizuku stops)&quot; else &quot;normal&quot;}\n&quot; +"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="89"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            &quot;Status bar: ${if (SystemRestore.statusBarHidden(this)) &quot;hidden by the launcher (comes back by itself if the launcher or Shizuku stops)&quot; else &quot;normal&quot;}\n&quot; +"
+        errorLine2="             ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="89"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            &quot;Animation scales now: ${SystemRestore.currentScales(this)}\n&quot; +"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="90"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            &quot;Animation scales now: ${SystemRestore.currentScales(this)}\n&quot; +"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="90"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            &quot;Restore animations without Shizuku: ${if (SystemRestore.canWriteSecureSettings(this)) &quot;yes&quot; else &quot;not set up (connect Shizuku once)&quot;}\n&quot; +"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="91"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            &quot;Restore animations without Shizuku: ${if (SystemRestore.canWriteSecureSettings(this)) &quot;yes&quot; else &quot;not set up (connect Shizuku once)&quot;}\n&quot; +"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="91"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            &quot;Safety notification: ${if (SafetyNotification.canPost(this)) &quot;allowed&quot; else &quot;blocked&quot;}&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="92"
+            column="13"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            &quot;Safety notification: ${if (SafetyNotification.canPost(this)) &quot;allowed&quot; else &quot;blocked&quot;}&quot;"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="92"
+            column="14"/>
+    </issue>
+
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        result.text = &quot;Restoring...&quot;"
+        errorLine2="                       ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="96"
+            column="24"/>
+    </issue>
+
+</issues>

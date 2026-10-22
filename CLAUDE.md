@@ -1,5 +1,7 @@
 # CLAUDE.md — Launcher (working name)
 
+@docs/OPERATING_RULES.md
+
 Read this first. It is the briefing for everything built so far and everything planned. Deeper detail lives in
 `docs/REQUIREMENTS.md` (what we are building) and `docs/PROBE_FINDINGS.md` (what the feasibility probes proved, with numbers).
 

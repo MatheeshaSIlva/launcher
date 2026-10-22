@@ -31,7 +31,7 @@ If round 3 still does not converge, stop. Give the owner a short summary of what
 ## 4. Close out
 - Tick only the roadmap criteria that are verified. If the milestone is fully done, set Status DONE and Finished to today's date.
 - Append any decisions to `docs/DECISIONS.md`. Log newly found bugs in the Bug backlog and ideas in the Parking lot.
-- Commit on the branch with a clear message. Do not push or merge.
+- Commit on the branch with a clear message. Push to main only after check, review and QA pass AND the owner says go for this task.
 
 ## 5. Report to the owner (10 lines or fewer)
 - What changed, in plain words

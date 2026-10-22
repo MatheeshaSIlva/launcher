@@ -1,6 +1,6 @@
 # Project operating rules
 
-@docs/SPEC.md
+@SPEC.md
 
 The spec above is the locked direction of this project. Everything below is how work gets done here.
 
@@ -37,7 +37,7 @@ Use `/ship <item>` for features and `/fix <bug>` for bugs. The pipeline is:
 4. `scripts/check.sh` must be green (you run it yourself; never trust a claim)
 5. reviewer reviews plan + diff in fresh context
 6. qa-tester attacks the acceptance criteria
-7. you update ROADMAP/DECISIONS, commit, and report
+7. you update ROADMAP/DECISIONS, commit, and report; the push to main happens only after the gates pass and the owner says go, as a fast-forward of main to the branch
 
 Do not forward the implementer's self-assessment to the reviewer or QA. They get the plan, the acceptance criteria and the diff, so their judgment is independent.
 
@@ -62,7 +62,7 @@ If the owner is unavailable (unattended run, or a question went unanswered), wri
 - New behavior ships with tests. A bug fix ships with a test that failed before the fix.
 - Keep changes small: one concern per branch, roughly 200 changed lines per step. If a plan is bigger, split it.
 - No new dependencies, permissions or config flags without owner approval.
-- Do not push or merge. The owner merges.
+- Do not push or merge on your own. The orchestrator pushes to main only after check, review and QA pass AND the owner says go for that task.
 
 ## Honest reporting
 

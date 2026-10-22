@@ -5,6 +5,9 @@ plugins {
 }
 
 android {
+    lint {
+        baseline = file("lint-baseline.xml")
+    }
     namespace = "dev.launcher.app"
     compileSdk = 35
 
