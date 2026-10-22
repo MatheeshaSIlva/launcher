@@ -850,6 +850,9 @@ copy it wholesale — port the working pieces cleanly. File map:
   allocation (on the shared render thread, 4 ms for a screen) and then for the GPU (6.6 ms): the settings' home gesture
   waited 15 ms at its touch. Where the picture can come a frame later, `ViewPicture.drawLater` (a `HardwareBufferRenderer`
   into a buffer made ahead with `prepare`, the fence waited for on a worker; the caller waits only for the sync).
+  The renderer must not be closed from that draw callback while the issuing thread may still be inside `draw()`: closing
+  deletes the RenderProxy and the mutex the caller waits to re-take (native abort "pthread_mutex_lock called on a destroyed
+  mutex", S24, B-031). `RenderLease` lets it go once the caller is back and the callback is done, whichever comes last.
 - **HardwareBuffers a binder call returns stay open in the sender** until its garbage collector runs: the shell service kept
   every task snapshot it sent (~10 MB of graphics memory each). Close them once written into the reply (`ShellService.onTransact`).
 - **A warm-up must run after what it warms has arrived**: the App Library's ran 0.9 s after a start, before its apps and

@@ -128,6 +128,7 @@ object ViewPicture {
         val buffer = spare(w, h) ?: try { HardwareBuffer.create(w, h, HardwareBuffer.RGBA_8888, 1, USAGE) } catch (_: Throwable) { null }
         if (buffer == null) { val b = draw(w, h, what, opaque, block); handler.post { then(b) }; return }
         var renderer: android.graphics.HardwareBufferRenderer? = null
+        var leased: RenderLease? = null
         try {
             val root = RenderNode("view-picture")
             root.setPosition(0, 0, w, h)
@@ -137,31 +138,40 @@ object ViewPicture {
                 block(c)
             } finally { root.endRecording() }
             val r = android.graphics.HardwareBufferRenderer(buffer).also { renderer = it }
+            // (The renderer goes when this thread is back from draw() and the callback is done: closed from the callback alone
+            // it deleted the mutex this thread was still waiting on, B-031.)
+            val lease = RenderLease {
+                try { r.close() } catch (_: Throwable) { }
+                buffer.close()   // (the bitmap keeps its own reference)
+            }
+            leased = lease
             r.setContentRoot(root)
             val srgb = ColorSpace.get(ColorSpace.Named.SRGB)
             val t0 = android.os.SystemClock.uptimeMillis()
-            r.obtainRenderRequest().setColorSpace(srgb).draw(worker) { result ->
-                var b: Bitmap? = null
-                val issued = android.os.SystemClock.uptimeMillis() - t0
-                try {
-                    // (Its fence says when the GPU is done: wrapped before, a picture could be read half drawn. See [draw].)
-                    result.fence.use { if (it.isValid) it.awaitForever() }
-                    if (result.status == android.graphics.HardwareBufferRenderer.RenderResult.SUCCESS) b = Bitmap.wrapHardwareBuffer(buffer, srgb)
-                    else AppLog.log("[design] no picture of $what as it shows (status ${result.status})")
-                } catch (t: Throwable) {
-                    AppLog.log("[design] no picture of $what as it shows (${t.javaClass.simpleName}: ${t.message})")
-                } finally {
-                    try { r.close() } catch (_: Throwable) { }
-                    buffer.close()   // (the bitmap keeps its own reference)
+            try {
+                r.obtainRenderRequest().setColorSpace(srgb).draw(worker) { result ->
+                    var b: Bitmap? = null
+                    val issued = android.os.SystemClock.uptimeMillis() - t0
+                    try {
+                        // (Its fence says when the GPU is done: wrapped before, a picture could be read half drawn. See [draw].)
+                        result.fence.use { if (it.isValid) it.awaitForever() }
+                        if (result.status == android.graphics.HardwareBufferRenderer.RenderResult.SUCCESS) b = Bitmap.wrapHardwareBuffer(buffer, srgb)
+                        else AppLog.log("[design] no picture of $what as it shows (status ${result.status})")
+                    } catch (t: Throwable) {
+                        AppLog.log("[design] no picture of $what as it shows (${t.javaClass.simpleName}: ${t.message})")
+                    } finally {
+                        lease.completed()
+                    }
+                    val took = android.os.SystemClock.uptimeMillis() - t0
+                    if (took > SLOW_MS) AppLog.log("[design] picture of $what in $took ms (drawn from $issued ms)")
+                    handler.post { then(b) }
                 }
-                val took = android.os.SystemClock.uptimeMillis() - t0
-                if (took > SLOW_MS) AppLog.log("[design] picture of $what in $took ms (drawn from $issued ms)")
-                handler.post { then(b) }
-            }
+            } finally { lease.issued() }
         } catch (t: Throwable) {
             AppLog.log("[design] no picture of $what as it shows (${t.javaClass.simpleName}: ${t.message})")
-            try { renderer?.close() } catch (_: Throwable) { }
-            buffer.close()
+            val l = leased
+            if (l != null) { l.completed(); l.issued() }   // (the draw never ran its callback: let go once)
+            else { try { renderer?.close() } catch (_: Throwable) { }; buffer.close() }
             handler.post { then(null) }
         }
     }
