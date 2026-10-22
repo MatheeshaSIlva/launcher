@@ -91,3 +91,39 @@ Context: Review of M0: a Linux or other checkout without the Adoptium path would
 Decision: Amends D-009. Order is JAVA_HOME_17, then the Adoptium path, then an inherited JAVA_HOME only if it really is Java 17 (the `version "` line, so JAVA_TOOL_OPTIONS noise does not matter). Any other version is refused.
 Alternatives considered: Windows-only selection (D-009 as written).
 Consequences / revisit when: Revisit if Gradle moves past 8.9 and JDK 17 is no longer required.
+
+### D-014: M1 split into four slices (2026-10-22) [owner]
+Context: M1's criterion 2 (S24 scenario runs) and the timing in criterion 1 need the owner and the phone.
+Decision: Slice 1 JOURNEYS.md plus an emulator smoke script; slice 2 the S24 perf runner and summary parser; slice 3 the owner's S24 run and timed journeys run; slice 4 bug entries from the results. Slice 1 first.
+Alternatives considered: Slices 1 and 2 together (larger change).
+Consequences / revisit when: M1 stays ACTIVE until slice 4.
+
+### D-015: Bug severity guide (2026-10-22) [owner]
+Context: Criterion 4 of M1 and M7's "zero P0/P1" need shared severities.
+Decision: P0 crash, stuck stock UI, frozen home, blocked gestures; P1 a core journey step broken; P2 a missed refresh, a pop or a stock seam; P3 cosmetic or tooling.
+Alternatives considered: Missed refreshes as P1.
+Consequences / revisit when: Missed refreshes do not block v1 by severity; M6 still requires 0.
+
+### D-016: Emulator smoke script rules (2026-10-22) [agent]
+Context: The smoke installs and taps without looking.
+Decision: tools/smoke_emulator.sh refuses any serial that is not emulator-*; exit 0 pass, 1 step failed, 2 preflight or usage. It never force-stops, never starts Shizuku, never enables accessibility (preflight prints the command instead). The app is launched through Spotlight with Enter and closed with the bar swipe, judged by `[nav]` log counts and the focused window. Panels are opened by real touchscreen pulls (kswipe.sh): Control Center and Notification Center under ios, Android's shade under pixel; the shade setup is restored from the `[setup]` line. Not part of scripts/check.sh (needs a running emulator).
+Alternatives considered: TEST_SHADE open hooks (skip the gesture path); am start (skips our launch path).
+Consequences / revisit when: Revisit if Spotlight's top hit proves unreliable on the emulator.
+
+### D-017: The smoke needs the emulator to itself (2026-10-22) [agent]
+Context: Review of M1 slice 1: the smoke clears logcat, installs, and switches the shade setup, which would disturb another session on the same emulator.
+Decision: The smoke does not detect other sessions; its header says it needs exclusive use, as CLAUDE.md already asks (agree on the emulator first). It restores the full shade setup (layout, placement and options) on success, failure and interrupt.
+Alternatives considered: Refusing to run without a confirmation flag; reading logcat from a start time instead of clearing.
+Consequences / revisit when: Revisit if parallel sessions on one emulator become common.
+
+### D-018: A fourth round for M1 slice 1 (2026-10-22) [owner]
+Context: Round 3 ended with reviewer REVISE (the panel steps did not check which panel opened) and QA FAIL (J1 step 7 named widget menu items that do not exist).
+Decision: The owner allowed a fourth round limited to those two issues and QA's small notes, then review and QA again.
+Alternatives considered: Committing as is with the issues logged as bugs.
+Consequences / revisit when: One-off exception to the three-round limit; not a precedent.
+
+### D-019: M1 slice 1 committed with QA's FAIL recorded (2026-10-22) [owner]
+Context: Round 4 ended with the gate green and reviewer APPROVE, but QA FAIL on AC7 (5 of 9 smoke runs passed on an emulator that was swapping at 150-200 ms a frame; 5 of 5 on a fresh one).
+Decision: Commit slice 1 on the branch as is, with QA's verdict recorded as given. B-022 to B-026 stay open, and hardening the smoke becomes its own small task. M1's criterion 3 stays unticked until that task passes QA.
+Alternatives considered: Another round to harden the smoke first.
+Consequences / revisit when: Until the hardening lands, run the smoke on a freshly booted emulator.

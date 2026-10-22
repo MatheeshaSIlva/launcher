@@ -962,6 +962,7 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
   older, `kill <pid>`, then restart the app); a long-running emulator runs out of memory
   and swaps (blurs take seconds, ANRs): restart it after some hours; enable our accessibility service with
   `settings put secure enabled_accessibility_services dev.launcher.app/dev.launcher.app.NavAccessibilityService`.
+- `tools/smoke_emulator.sh` (emulator only, exits non-zero on failure; 2 when its preconditions are not met): installs the local APK, checks "gesture strip on", opens and closes an app through Spotlight and opens and closes Control Center, Notification Center and Android's shade with real touchscreen pulls. Manual journeys: `docs/JOURNEYS.md`.
 - `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
 - A panel at rest for a screenshot: `am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do open [--es
   panel cc|nc]` (opened as a released pull opens it), `--es do close` (emulator; on the S24 never Notification Center).

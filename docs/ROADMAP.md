@@ -21,7 +21,7 @@ Rules:
 | ID | Name | Status | Started | Finished |
 |----|------|--------|---------|----------|
 | M0 | Safety net | DONE | 2026-10-22 | 2026-10-22 |
-| M1 | Regression and smoothness baseline | TODO | | |
+| M1 | Regression and smoothness baseline | ACTIVE | 2026-10-22 | |
 | M2 | Pixel shade layout signed off | TODO | | |
 | M3 | Theme builder: look | TODO | | |
 | M4 | Theme builder: motion and layouts | TODO | | |
@@ -48,10 +48,13 @@ Goal: know where each core journey stands, so a regression shows up as a number 
 Acceptance criteria:
 - [ ] `docs/JOURNEYS.md` lists a short manual regression script per core journey (steps plus the expected result), so the
       owner can run it in 10 minutes after any build
+      Status 2026-10-22: `docs/JOURNEYS.md` written (slice 1, reviewer APPROVE, QA AC1/AC2 pass); waits for the owner's timed run
 - [ ] Each existing S24 scenario script (`scenario_*.sh`) is run on one build, and its missed refreshes per animation are
       recorded in `docs/PERF_BASELINE.md` with the build sha, the date and the phone's temperature
 - [ ] An emulator smoke script installs the build, checks "gesture strip on" in the log, opens and closes an app, and opens
       and closes each panel. It exits non-zero on failure
+      Status 2026-10-22: `tools/smoke_emulator.sh` built (slice 1). Reviewer APPROVE; QA round 4 FAIL as given (5 of 9
+      runs on an overloaded emulator; 13 of 13 on fresh ones). Not ticked until the hardening task (B-022 to B-026) passes QA
 - [ ] Every journey step that fails or misses refreshes becomes a Bug backlog entry with a severity
 
 ### M2: Pixel shade layout signed off
@@ -128,6 +131,15 @@ Seeded from CLAUDE.md's open items. Severities are drafts (`ASSUMPTION`); the ow
 - [B-015] P3 (ASSUMPTION), tooling, the Stop hook's 40-line tail shows lint's generic explanation and Gradle's "Try:" block, not the failing test or the lint file:line. Repro: add a new lint error and a failing test, run the hook. Status: open; on 2026-10-22 a failing test alone did show its name and file:line in the tail (the lint half is unchecked)
 - [B-016] P3 (ASSUMPTION), tooling, new lint warnings pass the gate silently (only new errors fail, per D-010); the roadmap's M0 wording says "only new issues fail". Repro: add `Build.VERSION.SDK_INT >= 21` in a new file, run the gate. Status: open (see Q-002)
 - [B-017] P3 (ASSUMPTION), tooling, the Stop hook skips the gate when a source file is renamed into docs/ (awk keeps only the new path of `R old -> new`). Repro: `git mv` a .kt file to docs/X.md, run the hook. Status: open
+- [B-018] P0 (ASSUMPTION: seen on the emulator only), gestures, after an install the gesture strip sometimes never comes back: the log shows `[a11y] service connected`, `[flags] ... stock gestures blocked`, then 3 ms later `stock gestures on`, and no `gesture strip on`; the service stays bound and nothing recovers until the accessibility setting is toggled. Looks like the attach/detach race GestureNav.detach comments on. Repro: `tools/smoke_emulator.sh` repeatedly (2 of ~12 runs on 2026-10-22 failed at `strip`). Status: open
+- [B-019] P2 (ASSUMPTION: emulator, scripted swipe), gestures, a 150 ms bar swipe to 72 % of the height after a launch was read as a cancelled close (`[nav] back to the app`) in 1 of 6 manual and 2 of 9 smoke runs; longer swipes always closed. May be a close-threshold sensitivity issue or only the emulator's coarse injected events. Repro: `input swipe W/2 H-12 W/2 H*0.72 150` right after opening Clock. Status: open (the smoke uses a 220 ms swipe to 45 %)
+- [B-020] P2 (ASSUMPTION), gestures, Back from the side edges is Android's own gesture with its stock arrow: a stock seam next to our gesture set (SPEC: one gesture set everywhere). Repro: swipe from a side edge in any app. Status: open
+- [B-021] P2 (ASSUMPTION: emulator, seen in screenshots), home widgets, an app widget that is not set up (Calendar's "Sign in") sits on a white square larger than its rounded card, and the square shows through Notification Center's sheet while the rest of home does not. Repro: emulator home with the Calendar widget, then open Notification Center (tools/shots/qa_home_after_run1.png, smoke_nc.png). Status: needs a look
+- [B-022] P3 (proposed), tooling, tools/smoke_emulator.sh prints `ok home` while a bar swipe has opened the App Switcher (an overlay, so HomeActivity keeps the focus); the next step then acts on the deck and fails at the wrong step. Repro: smoke on a loaded emulator (QA round 4, runs 2-3). Fix: fail or recover on a new `[switcher] open from home` line after the home and cleanup swipes. Status: open
+- [B-023] P3 (proposed), tooling, the smoke's failure cleanup swipes blindly: it left the deck open (run 1), and right after an install, before the strip was back, a swipe launched Chrome from the dock. Repro: QA round 4, the forced md5 mismatch. Status: open
+- [B-024] P3 (proposed), tooling, the smoke's preflight refuses our accessibility service in Android's short form (`dev.launcher.app/.NavAccessibilityService`, which Android writes itself when it rewrites the list) and its hint then appends a duplicate. Status: open
+- [B-025] P3 (proposed), tooling, the smoke's end step fails on any crash-buffer line naming dev.launcher.app (including the :shell process) without printing them, so the evidence is lost at the next run's clear. Repro: QA round 4, run 4 (cause unknown). Status: open
+- [B-026] P3 (proposed), tooling, the smoke is reliable only on a healthy emulator: 5 of 9 passes on one up ~1 h, swapping, 150-200 ms frames, a vendor uwb service crash-looping; 13 of 13 on fresh ones (round 3 QA 8/8, orchestrator 5/5 on 2026-10-22). The fixed 220 ms bar swipe and 40 s settle bound are fragile under load. Status: open
 
 ## Parking lot
 Ideas that are not in scope. The owner decides if and when they become milestones.
