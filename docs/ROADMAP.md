@@ -51,6 +51,7 @@ Acceptance criteria:
       Status 2026-10-22: `docs/JOURNEYS.md` written (slice 1, reviewer APPROVE, QA AC1/AC2 pass); waits for the owner's timed run
 - [ ] Each existing S24 scenario script (`scenario_*.sh`) is run on one build, and its missed refreshes per animation are
       recorded in `docs/PERF_BASELINE.md` with the build sha, the date and the phone's temperature
+      Status 2026-10-22: partial run recorded (shade and Notification Center in full, home's motion in part); six scripts
 - [x] An emulator smoke script installs the build, checks "gesture strip on" in the log, opens and closes an app, and opens
       and closes each panel. It exits non-zero on failure
       Status 2026-10-22: `tools/smoke_emulator.sh` built (slice 1), hardened (B-022 to B-026; D-020 to D-022). Reviewer
@@ -144,6 +145,10 @@ Seeded from CLAUDE.md's open items. Severities are drafts (`ASSUMPTION`); the ow
 - [B-027] P3, tooling, the smoke's crash excerpt starts 2 lines before the first line naming the app, which misses a native crash's `Fatal signal` headline (a tombstone names the thread `main`, 12 lines above). Signal, pid and backtrace still print and the full buffer is saved. Repro: `SMOKE_FORCE=crash`. Status: open
 - [B-028] P3, tooling, `SMOKE_FORCE=deck` passes even if the hold was read as a plain swipe (the recovery would then not have run); only the `note home:` line shows it did. Repro: read a deck run's output. Status: open
 - [B-029] P3, tooling, the emulator degrades within ~20 minutes of repeated smoke runs (median frame 18-25 ms fresh, 38-65 ms after 10-17 installs, 85-125 ms after ~2 h with swap filling), so long QA sessions get refused by the overload gate. Repro: run the smoke 15 times in a row. Status: open (restart the emulator between long batches)
+- [B-030] P1 (proposed: privacy risk on the owner's phone), tooling, scenario_shade.sh (and likely scenario_nc_scroll.sh and scenario_sweep.sh's shade section) assume the iOS shade layout and never check it: under the Pixel layout the Control Center pull opened Android's shade and the "empty space" tap at 85 % height landed on a real notification (Samsung's battery protection), opening Device care. The focus gate stopped the run. Repro: S24 on the pixel shade layout, `scenario_shade.sh`, 2026-10-22. Fix: refuse unless the `[setup]` shade layout is the one the script expects. Status: open
+- [B-031] P0, shade, the launcher crashed on the S24 while Control Center opened (scenario_shade.sh run 3, 2026-10-22 23:47:30, build 2438a9f): native abort "FORTIFY: pthread_mutex_lock called on a destroyed mutex" on a worker thread in `ViewPicture.drawLater` called from `shade.BlurBaker.bake`; Android restarted it (home's cold-start arrival). Looks like a bake racing the release of its renderer or buffer. Repro: scenario_shade.sh 3 runs on the iOS shade layout, shortly after switching the layout from pixel. Status: open
+- [B-032] P2 (proposed), tooling, six of eight S24 scenario scripts stop before measuring: the icon templates in tools/shots/tpl_*.png no longer match home ("Calculator icon not found", "tpl_util.png not found", "Games tile not found") and Spotlight's keyboard did not come up after the pull. Repro: run scenario_spotlight_close/library/switch/switcher/more/sweep on the S24, 2026-10-22. Status: open
+- [B-033] P2, motion, missed refreshes in the S24 baseline (docs/PERF_BASELINE.md run 1): Notification Center's stack fanning out (2, 1, 1 in three runs), its scroll (1 in four of six), page to App Library and back (1-2), Notification Center open (1 in one of six), Control Center edit in (1 in one of three). Status: open (M6)
 
 ## Parking lot
 Ideas that are not in scope. The owner decides if and when they become milestones.
