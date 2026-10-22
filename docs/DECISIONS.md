@@ -127,3 +127,22 @@ Context: Round 4 ended with the gate green and reviewer APPROVE, but QA FAIL on 
 Decision: Commit slice 1 on the branch as is, with QA's verdict recorded as given. B-022 to B-026 stay open, and hardening the smoke becomes its own small task. M1's criterion 3 stays unticked until that task passes QA.
 Alternatives considered: Another round to harden the smoke first.
 Consequences / revisit when: Until the hardening lands, run the smoke on a freshly booted emulator.
+
+### D-020: SMOKE_FORCE test hook in the smoke (2026-10-22) [owner]
+Context: The smoke's recovery paths (a deck opened by a bar swipe, a failure before the strip is up, a crash, an overloaded emulator) only run when the emulator misbehaves, so they cannot be tested on demand.
+Decision: Approved by the owner. One env var, `SMOKE_FORCE=deck|deck-fail|early-fail|crash|overload`, forces one path; unset changes nothing; an unknown value is a usage error (exit 2). Documented in the script's header. It is a flag of a test tool, not an app config flag.
+Alternatives considered: Separate scripts per repro; waiting for the emulator to fail by itself.
+Consequences / revisit when: QA runs each value once. Revisit if the values multiply.
+
+### D-021: The shell service process counts as ours in the end check (2026-10-22) [agent]
+Context: The end check counted crash-buffer lines naming dev.launcher.app, which already includes the `dev.launcher.app:shell` process, but a crash of it was not printed or saved.
+Decision: The end step fails on any crash-buffer line naming dev.launcher.app, `:shell` included, prints up to 40 lines from the first one and saves the whole buffer to tools/shots/smoke_crash.txt. Reason: that process holds the status bar flags and the watchdog sync, so its crash is a real P0 under D-015. The buffer is still cleared before the install.
+Alternatives considered: Ignoring `:shell` (misses a P0).
+Consequences / revisit when: Revisit if QA shows install-time crashes of the old service only.
+
+### D-022: Overload is refused, not adapted to; a deck opened by a bar swipe is recovered (2026-10-22) [agent]
+Context: QA's 5 of 9 runs failed on an emulator swapping at 150-200 ms a frame (B-026); the deck opens on any stall of 150 ms or more between injected events (B-022).
+Decision: After home settles, the median frame time over the two home swipes is read from `dumpsys gfxinfo` (frames since a reset). Above FRAME_LIMIT_MS (80, script constant) the run exits 2 "SMOKE REFUSED ... emulator overloaded" with the restart command, after cleanup; with fewer than 5 frames the check is skipped with a note. Healthy medians measured 2026-10-22 on an emulator up about 2 h (load 0.5 to 2.3, 328 MB free of 3.9 GB): 19, 40, 44, 46, 46, 48 ms (also 22, 40, 44 in forced runs). 3 x 48 = 144, which the plan's 40-80 clamp brings down to 80 (the ceiling comes from that clamp, not from a measurement); QA records fresh-emulator medians and the limit is revisited from them. Refused runs read 85 to 125 ms at load 4 to 5 after many installs. A deck opened by a home bar swipe is closed with a note and the run continues; one over the app fails at `app`. Amends D-016: exit 2 also means "emulator unfit", possibly after the install, with cleanup.
+Alternatives considered: Slower swipes or longer settle bounds (the deck opens on any stall of 150 ms, so stretching makes holds likelier and does not remove the cause); swap use as the signal (550/750 MB used at load 0.34, not a reliable sign).
+QA on a freshly booted emulator (2026-10-22, 22:40 boot): 18, 19, 19, 19, 22, 25 ms in the first runs, rising to 38-65 ms after 10-17 installs in 20 minutes (swap 495 of 733 MB); every plain run passed, so the limit stays 80.
+Consequences / revisit when: A run on a swapping emulator measures the emulator, not the build. Revisit the limit if a fresh emulator's medians come near it, or if healthy runs are refused.
