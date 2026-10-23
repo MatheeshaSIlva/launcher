@@ -5,11 +5,16 @@
 # bar) and checks the focused window before each block of touches. Never taps or presses a platter: on the phone the
 # list holds real notifications too, and a tap opens its app.
 # PRIVACY: Notification Center shows the phone's own notifications: this script never screenshots or records it.
+# PRECONDITION: the phone's shade layout is iOS 27 with Notifications on the left (shade: ios / split-top); the pulls below
+# are written for it. Read first from the app's files (tools/lib/shade_layout.sh), before the notifications are posted;
+# anything else refuses (exit 2) before a touch, and the message says how to switch.
 #   DEVICE=<serial> [N=3] tools/scenario_nc_scroll.sh
 cd "$(dirname "$0")/.."
 ADB="${ADB:-$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe}"
 D=(-s "$DEVICE")
 N=${N:-3}
+. tools/lib/shade_layout.sh
+require_shade_layout ios split-top
 size=$("$ADB" "${D[@]}" shell wm size | tail -1 | awk '{print $NF}' | tr -d '\r')
 W=${size%x*}; H=${size#*x}
 focus() { "$ADB" "${D[@]}" shell dumpsys window | grep mCurrentFocus; }

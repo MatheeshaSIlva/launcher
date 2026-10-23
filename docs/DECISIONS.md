@@ -152,3 +152,15 @@ Context: QA found that new lint warnings pass the gate (B-016) while M0's criter
 Decision: Only new lint errors fail the gate; warnings do not. M0's criterion now says "new errors".
 Alternatives considered: `warningsAsErrors` (every new warning blocks a stop).
 Consequences / revisit when: Warnings can pile up unseen; revisit if a warning class hides real bugs (the drift audit can count them).
+
+### D-024: Scenario scripts read the shade layout through the files export (2026-10-24) [agent]
+Context: B-030: the shade scenario scripts tapped blindly under the Pixel layout. They must know the phone's shade layout before any touch.
+Decision: A script asks the app for its files (`DESIGN_RELOAD --es files export`, read-only: no design reload), waits for `dev-out/.done` and reads the shade's layout and placement from `dev-out/setup.json`. A script written for one layout refuses (non-zero exit, before any touch) when the phone is on another, or when the layout cannot be read. It never switches the layout itself (that is the owner's setting).
+Alternatives considered: The `[setup]` log line (printed only at the app's start; can be gone from the log buffer). A new query broadcast in the app (an app change for a tooling bug). Switching the layout for the run and back (changes the owner's setup; a crash mid-run would leave it switched).
+Consequences / revisit when: Every scripted run on the phone first exports the app's files (a few hundred KB written to its external folder). Revisit if a script needs another element's layout too.
+
+### D-025: The gate runs the shell tests under tools/tests (2026-10-24) [owner]
+Context: B-030's layout guard keeps the scenario scripts from tapping the owner's phone under the wrong shade layout. Its test (`tools/tests/scenario_layout_guard_test.sh`, fake adb, no device, about 2 min) ran only by hand, so a regression in a privacy guard would go unseen. The reviewer asked whether it belongs in the gate.
+Decision: Yes (owner, 2026-10-24: "yes, add it to the check"). `scripts/check.local.sh` runs every `tools/tests/*_test.sh` after Gradle, and the gate fails if any of them fails.
+Alternatives considered: Running it by hand when the scripts change; running it only when tools/ changed.
+Consequences / revisit when: Every gate run (and so every stop of a Claude session through the Stop hook) takes about 2 minutes longer. Revisit if the shell tests grow past a few minutes.

@@ -30,9 +30,25 @@ export JAVA_HOME="$home"
 
 ./gradlew --continue --console=plain assembleDebug lintDebug testDebugUnitTest
 rc=$?
+[ "$rc" -eq 0 ] || echo "gradle exit $rc"
+
+# Shell tests (D-025): every tools/tests/*_test.sh, in name order; each must exit 0.
+failed=""
+for t in tools/tests/*_test.sh; do
+  [ -f "$t" ] || continue
+  echo "==> $t"
+  if bash "$t"; then
+    echo "shell test PASSED: $t"
+  else
+    echo "shell test FAILED: $t"
+    failed="$failed $t"
+    [ "$rc" -ne 0 ] || rc=1
+  fi
+done
+
 if [ "$rc" -eq 0 ]; then
   echo "CHECK PASSED"
 else
-  echo "CHECK FAILED (gradle exit $rc)"
+  echo "CHECK FAILED (gradle exit status or shell tests:${failed:- none failed})"
 fi
 exit "$rc"

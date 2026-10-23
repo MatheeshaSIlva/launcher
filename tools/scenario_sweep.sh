@@ -6,6 +6,9 @@
 # the App Switcher are measured by frame stats only.
 #   DEVICE=<serial> [SWEEP_CSV=file SWEEP_RUN=name] tools/scenario_sweep.sh [SECTION...]
 #   sections: home launch switcher shade settings (default: all); SWEEP_CSV appends run,step,window,shown,missed,gpu_p90,gpu_max,cpu_max
+# PRECONDITION of the shade section: the phone's shade layout is iOS 27 with Notifications on the left (shade: ios /
+# split-top), read from the app's files (tools/lib/shade_layout.sh) when the run starts and again when that section
+# starts; anything else refuses (exit 2) before the first touch of any section (or of the shade section), and the message says how to switch. The other sections do not depend on it.
 # Templates (cut on this phone, tools/shots/): tpl_s_calc.png (Calculator in the library's Utilities cluster, the library
 # dragged up ~500 px), tpl_s_util.png (that cluster's small icons: opens the folder), tpl_f_clock.png and tpl_f_set.png
 # (Clock and Launcher settings inside the open folder).
@@ -74,6 +77,7 @@ want() { [ $# -eq 0 ] || [[ " $SECTIONS " == *" $1 "* ]]; }
 SECTIONS="$*"
 [ -z "$SECTIONS" ] && SECTIONS="home launch switcher shade settings"
 export DEVICE
+want shade && { . tools/lib/shade_layout.sh; require_shade_layout ios split-top; }   # before any section's first touch
 
 if want home; then
   echo "== home's own motion"
@@ -136,6 +140,7 @@ if want switcher; then
 fi
 
 if want shade; then
+  require_shade_layout ios split-top   # again: the setup may have changed during the sections before
   echo "== shade (frame stats only)"
   home_p1
   reset; "$ADB" "${D[@]}" shell input swipe 900 10 900 900 250; sleep 1.2; measure cc_open
