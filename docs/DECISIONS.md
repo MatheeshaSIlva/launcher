@@ -146,3 +146,9 @@ Decision: After home settles, the median frame time over the two home swipes is 
 Alternatives considered: Slower swipes or longer settle bounds (the deck opens on any stall of 150 ms, so stretching makes holds likelier and does not remove the cause); swap use as the signal (550/750 MB used at load 0.34, not a reliable sign).
 QA on a freshly booted emulator (2026-10-22, 22:40 boot): 18, 19, 19, 19, 22, 25 ms in the first runs, rising to 38-65 ms after 10-17 installs in 20 minutes (swap 495 of 733 MB); every plain run passed, so the limit stays 80.
 Consequences / revisit when: A run on a swapping emulator measures the emulator, not the build. Revisit the limit if a fresh emulator's medians come near it, or if healthy runs are refused.
+
+### D-023: New lint warnings do not block the gate (2026-10-24) [owner]
+Context: QA found that new lint warnings pass the gate (B-016) while M0's criterion said "only new issues fail" (Q-002).
+Decision: Only new lint errors fail the gate; warnings do not. M0's criterion now says "new errors".
+Alternatives considered: `warningsAsErrors` (every new warning blocks a stop).
+Consequences / revisit when: Warnings can pile up unseen; revisit if a warning class hides real bugs (the drift audit can count them).

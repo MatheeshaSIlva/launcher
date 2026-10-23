@@ -6,8 +6,12 @@ Format:
 `- [Q-001] (blocks: M2 | not blocking) Question? Options: A (recommended), B. Context: why it matters.`
 
 ## Open
-- [Q-001] (not blocking) Confirm the draft severities of B-006 to B-014 and add any bugs you see on the phone now. Context: M0 seeded the backlog from CLAUDE.md and lint.
-- [Q-002] (not blocking) Should new lint warnings fail the gate too? Options: A (recommended) no, only new errors fail; reword M0's criterion to "only new errors fail"; B set `warningsAsErrors` (every new warning blocks a stop). Context: QA found B-016; the criterion's wording says "issues".
+- (none)
 
 ## Answered
-- (none)
+- [Q-001] Confirm the draft severities of B-006 to B-014 and add any bugs you see on the phone now. Answer (2026-10-24):
+  "the bugs I noticed are mentioned above": the Pixel shade's crashes (B-031), expanded notifications (B-034), the
+  notification tap highlight (B-035), the tiles' state animations (B-036), iOS's glass pull-down (B-037). The draft
+  severities stand.
+- [Q-002] Should new lint warnings fail the gate too? Answer (2026-10-24): "just the errors are enough" (option A). M0's
+  criterion reworded, B-016 closed as intended (D-023).
