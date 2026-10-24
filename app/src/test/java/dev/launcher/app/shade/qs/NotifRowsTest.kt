@@ -360,4 +360,108 @@ class NotifRowsTest {
         assertEquals(Head.TIME, rows.of("g/b").head)
         assertTrue(rows.of("g/a").expanded)
     }
+
+    // ------------------------------------------------------------------ the motion draws the expanded content of a folding row
+
+    @Test fun theExpandedFirstLineIsWhatTheRowShowsWhenOpenWhateverItsStateNow() {
+        // (A row folding is collapsed in the model but still draws its expanded content: the head must not come from the
+        // model's own `head`, which is NONE then.)
+        val cards = listOf(single("a"), CardIn("g", Section.ALERTING, listOf("g/a", "g/b"), untimed = setOf("g/a")))
+        val s = ExpandState().also { it.closedFirst += "a"; it.opened += "g" }
+        val rows = build(cards, s)
+        assertEquals(Head.NONE, rows.of("a").head)
+        assertEquals(Head.APP_TIME, NotifRows.expandedHead(RowKind.CARD, true))
+        assertEquals(Head.APP_TIME, NotifRows.expandedHead(RowKind.CARD, false))
+        assertEquals(Head.NONE, rows.of("g/b").head)
+        assertEquals(Head.TIME, NotifRows.expandedHead(RowKind.CHILD, true))
+        assertEquals(Head.NONE, NotifRows.expandedHead(RowKind.CHILD, false))
+        assertEquals(Head.NONE, NotifRows.expandedHead(RowKind.GROUP, true))
+        // Once open, the model agrees.
+        s.expandedChildren += "g/b"; s.closedFirst -= "a"
+        val open = build(cards, s)
+        assertEquals(NotifRows.expandedHead(RowKind.CHILD, true), open.of("g/b").head)
+        assertEquals(NotifRows.expandedHead(RowKind.CARD, true), open.of("a").head)
+    }
+
+    // ------------------------------------------------------------------ actions of a row that is folding or growing
+
+    @Test fun anActionBelowTheRowsCurrentEdgeCannotBeTapped() {
+        // (An expanded card's actions lie at 200..248; the row is mid-fold, 0..150 tall: they are not on it.)
+        assertTrue(NotifRows.reachable(200f, 248f, 0f, 260f))
+        assertFalse(NotifRows.reachable(200f, 248f, 0f, 150f))
+        assertFalse(NotifRows.reachable(200f, 248f, 0f, 220f))
+        assertTrue(NotifRows.reachable(200f, 248f, 0f, 247.6f))
+        assertFalse(NotifRows.reachable(200f, 248f, 0f, 247f))
+        assertFalse(NotifRows.reachable(-30f, 18f, 0f, 260f))
+    }
+
+    // ------------------------------------------------------------------ the part two cuts of a title share, drawn once
+
+    private fun shared(a: String, b: String) = NotifRows.sharedPrefix(a, b)
+
+    @Test fun plainTextKeepsItsWholeCommonStart() {
+        assertEquals(9, shared("Hello wor\u2026", "Hello world"))
+        assertEquals(5, shared("Hello", "Hello world"))
+        assertEquals(0, shared("abc", "xyz"))
+    }
+
+    @Test fun neverBetweenTheHalvesOfASurrogatePair() {
+        // (Both 😀 and 😁 start with the same high surrogate.)
+        assertEquals(1, shared("a\uD83D\uDE00", "a\uD83D\uDE01"))
+        assertEquals(3, shared("a\uD83D\uDE00b", "a\uD83D\uDE00c"))
+    }
+
+    @Test fun aCombiningMarkStaysWithItsLetter() {
+        assertEquals(3, shared("ae\u0301", "ae\u0301x"))
+        // (The longer one has a mark the shorter lacks: not after the bare letter.)
+        assertEquals(1, shared("ae", "ae\u0301"))
+    }
+
+    @Test fun aJoinedEmojiSequenceIsNotSplit() {
+        val man = "\uD83D\uDC68"
+        val woman = "\uD83D\uDC69"
+        val girl = "\uD83D\uDC67"
+        assertEquals(1, shared("x$man\u200D$woman", "x$man\u200D$girl"))
+        // (Whole, with something else after it: a clean split.)
+        assertEquals(1 + 2 + 1 + 2, shared("x$man\u200D$woman!", "x$man\u200D$woman?"))
+    }
+
+    @Test fun aSkinToneModifierStaysWithItsEmoji() {
+        val thumb = "\uD83D\uDC4D"
+        assertEquals(1, shared("x$thumb\uD83C\uDFFD", "x$thumb\uD83C\uDFFF"))
+        assertEquals(1, shared("x$thumb", "x$thumb\uD83C\uDFFD"))
+    }
+
+    @Test fun aFlagIsNotSplitInHalf() {
+        val u = "\uD83C\uDDFA"
+        assertEquals(1, shared("x$u\uD83C\uDDF8", "x$u\uD83C\uDDE6"))
+        assertEquals(5, shared("x$u\uD83C\uDDF8!", "x$u\uD83C\uDDF8?"))
+    }
+
+    @Test fun rightToLeftTextIsNeverSplit() {
+        assertEquals(0, shared("\u05E9\u05DC\u05D5\u05DD\u2026", "\u05E9\u05DC\u05D5\u05DD \u05E2\u05D5\u05DC\u05DD"))
+        // (An LTR title holding an RTL name.)
+        assertEquals(0, shared("Title \u05E9\u05DC\u05D5\u05DD\u2026", "Title \u05E9\u05DC\u05D5\u05DD x"))
+        // (The cut one is LTR, the other has an RTL ending.)
+        assertEquals(0, shared("Title \u2026", "Title \u05E9"))
+    }
+
+    @Test fun lettersThatJoinAreNeverSplit() {
+        assertEquals(0, shared("\u0645\u0631\u062D\u0628\u0627\u2026", "\u0645\u0631\u062D\u0628\u0627 \u0628\u0643"))
+        // (Mongolian: joining, though written left to right.)
+        assertEquals(0, shared("\u182E\u1823\u1829\u2026", "\u182E\u1823\u1829\u182D"))
+    }
+
+    @Test fun anIndicConjunctIsNotSplit() {
+        // Sinhala "shri": SHA, AL-LAKUNA, ZWJ, RA, II-PILLA; "kssa": KA, AL-LAKUNA, ZWJ, SSA.
+        val shri = "\u0DC1\u0DCA\u200D\u0DBB\u0DD3"
+        val kssa = "\u0D9A\u0DCA\u200D\u0DC2"
+        assertEquals(5, shared(shri, shri + "x"))
+        assertEquals(0, shared("\u0DC1\u0DCA\u200D\u0DBB\u0DCF", shri))
+        assertEquals(4, shared(kssa + "x", kssa + "y"))
+        assertEquals(0, shared("\u0D9A\u0DCA\u200D", kssa))
+        // (A virama joining the next letter without a joiner: Devanagari "ksha".)
+        assertEquals(0, shared("\u0915\u094D\u2026", "\u0915\u094D\u0937"))
+        assertEquals(3, shared("\u0915\u094D\u0937a", "\u0915\u094D\u0937b"))
+    }
 }

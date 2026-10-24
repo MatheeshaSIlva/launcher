@@ -46,6 +46,8 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
 
     /** One row of the list: its model (what it shows; [key] stays the same across rebuilds), the card it belongs to, its place. */
     private class Row(val m: RowModel, val card: Card?) {
+        /** A group's count as its chip writes it (made once, not at every frame). */
+        val countLabel: String = if (m.count > 0) m.count.toString() else ""
         val key get() = m.key
         val kind get() = m.kind
         val section get() = m.section
@@ -56,13 +58,17 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         var height = 0f
     }
 
-    /** A row's motion: where it is (content px), how present, how far swiped, its press's ripple. */
+    /**
+     * A row's motion: where it is and how tall (content px), how open (0 collapsed or closed, 1 expanded or opened: the
+     * crossfade between its two contents and its chevron's turn), how present, how far swiped, its press's ripple.
+     */
     private inner class Anim {
         val y = MotionValue(0f, 2f, { panel.view.invalidate() })
+        val h = MotionValue(0f, 2f, { panel.view.invalidate() })
+        val k = MotionValue(0f, 1000f, { panel.view.invalidate() })
         val alpha = MotionValue(0f, 1000f, { panel.view.invalidate() })
         val swipe = MotionValue(0f, 2f, { panel.view.invalidate() })
         val ripple = Ripple { panel.view.invalidate() }
-        var height = 0f
         var leaving: Row? = null
     }
 
@@ -89,7 +95,12 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     }
 
     /** The panel's size or the design changed: the rows measured again. */
-    fun layout() = relayout(animate = false)
+    fun layout() {
+        // (What was worked out for the old size and fonts.)
+        itemTexts.clear()
+        groupCache.clear()
+        relayout(animate = false)
+    }
 
     private fun sectionOf(it: Notifs.Item): Section = when {
         it.ongoing && it.importance >= android.app.NotificationManager.IMPORTANCE_DEFAULT -> Section.ONGOING
@@ -153,6 +164,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             y += r.height
         }
         contentHeight = y
+        hairlinePx = hairline()
         // Rows that went fade out where they were; the others move to their places.
         val keys = out.map { it.key }.toHashSet()
         for ((k, a) in anims) {
@@ -167,21 +179,44 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
                 val n = a ?: Anim().also { anims[r.key] = it }
                 n.leaving = null
                 n.y.snapTo(r.top)
+                n.h.snapTo(r.height)
+                n.k.snapTo(openness(r))
                 n.swipe.snapTo(0f)
                 if (animate) { n.alpha.snapTo(0f); n.alpha.animateTo(1f, Motion.role(MotionTokens.NC_APPEAR)) } else n.alpha.snapTo(1f)
-            } else if (animate) a.y.animateTo(r.top, Motion.role(MotionTokens.NC_REFLOW)) else a.y.snapTo(r.top)
-            anims.getValue(r.key).height = r.height
+            } else if (animate) {
+                // (Place, height and openness on one role in one frame: a row that grows or folds never has one of them
+                // ahead of the others. A second change mid-way starts from where each is, with its speed.)
+                val reflow = Motion.role(MotionTokens.NC_REFLOW)
+                a.y.animateTo(r.top, reflow)
+                a.h.animateTo(r.height, reflow)
+                if (a.k.target != openness(r)) a.k.animateTo(openness(r), reflow)
+            } else {
+                a.y.snapTo(r.top)
+                a.h.snapTo(r.height)
+                a.k.snapTo(openness(r))
+            }
         }
+        // (What is kept for the rows' texts goes with the rows that went.)
+        val itemKeys = cards.flatMapTo(HashSet()) { c -> c.items.map { it.key } }
+        itemTexts.keys.retainAll(itemKeys)
+        groupCache.keys.retainAll(keys)
         anims.entries.removeAll { (k, a) -> k !in keys && a.leaving != null && !a.alpha.isAnimating }
         rows = out
+        // (A closed group's lines are made here, not in its first frame; an opened group keeps them to fade out.)
+        for (r in out) if (r.kind == RowKind.GROUP) r.card?.let { groupLines(it, minOf(r.m.lines, it.items.size)) }
         follow(clearAll, cards.any { it.items.any { i -> i.clearable } }, animate)
         follow(clearSilent, cards.any { it.section == Section.SILENT && it.items.any { i -> i.clearable } }, animate)
         bounds()
         panel.view.invalidate()
     }
 
+    /** How open [r] is meant to be: 1 for an expanded card or child and an opened group's header, 0 otherwise. */
+    private fun openness(r: Row) = if (r.expanded) 1f else 0f
+
     /** The hairline above an opened group's child: its token's width, at least one pixel (Android's is 0.5 dp, 1 px). */
     private fun hairline(): Float = max(1f, Math.round(Design.pt(QsTokens.DIVIDER_WIDTH, u)).toFloat())
+    /** [hairline], measured once per layout (drawn at every frame of a row that moves). */
+    private var hairlinePx = 1f
 
     /** A collapsed card's text line (none without text). */
     private fun bodyLine(r: Row): Float = if (r.item?.text.isNullOrBlank()) 0f else line(QsTokens.CARD_BODY)
@@ -198,17 +233,172 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         StaticLayout.Builder.obtain(s, 0, s.length, paint, width.toInt().coerceAtLeast(1)).setMaxLines(lines)
             .setEllipsize(TextUtils.TruncateAt.END).setLineSpacing(0f, 1f).setIncludePad(false).build()
 
+    /**
+     * What a card draws of its notification that takes work to make, kept while the notification, the width and the time's
+     * label stay the same, so that a row whose two contents are both drawn at every frame of its motion makes nothing at
+     * them (a notification is immutable: [item] is the key).
+     */
+    private class ItemText(
+        val item: Notifs.Item, val width: Int, val age: Long, val app: String,
+        /** Its time's label, or null when it shows none (showWhen off). */
+        val time: String?,
+        /** "App • time" (or the app alone). */
+        val appLine: String,
+        /** " • time" (empty with none), in a collapsed card's title line. */
+        val tail: String,
+        val name: String,
+        /** The text on one line (newlines as spaces), or null. */
+        val oneLine: String?,
+    ) {
+        /** The whole text broken into lines (the last cut with an ellipsis), made on first use. */
+        var full: Array<String>? = null
+        /** The actions it shows, their words and the words cut to the width they were last drawn at (made on first use). */
+        var actions: List<Notification.Action>? = null
+        var words: Array<String>? = null
+        var wordCuts: Array<Cut>? = null
+        /** The title (cut for the collapsed and the expanded width) and the first line of its text, as they glide between. */
+        val titleGlide = Glide()
+        val textGlide = Glide()
+        /** The app's line and a child's first line, cut to the width they were last drawn at. */
+        val appCut = Cut()
+        val headCut = Cut()
+    }
+
+    /**
+     * What a card shows of one string in two states that differ only in where it is cut (the collapsed title ends before its
+     * " • time", the collapsed text at an ellipsis, the expanded text at a line's end): the part both share ([prefix], drawn
+     * once, at one place), and the two endings, which cross-fade. Made when the widths change, never while drawing.
+     */
+    private class Glide {
+        var w0 = -1
+        var w1 = -1
+        var prefix = ""
+        var end0 = ""
+        var end1 = ""
+        /** Where the endings start (the prefix's width), and where the first whole string ends. */
+        var dx = 0f
+        var width0 = 0f
+
+        fun set(w0: Int, w1: Int, a: String, b: String, paint: TextPaint) {
+            this.w0 = w0
+            this.w1 = w1
+            // (Where a split is unsafe, 0: both whole, cross-fading; see NotifRows.sharedPrefix.)
+            val n = NotifRows.sharedPrefix(a, b)
+            prefix = a.substring(0, n)
+            end0 = a.substring(n)
+            end1 = b.substring(n)
+            dx = paint.measureText(prefix)
+            width0 = paint.measureText(a)
+        }
+    }
+
+    /** A string cut to a width, kept while neither changes. */
+    private class Cut {
+        var w = -1
+        var src: String? = null
+        var out = ""
+    }
+
+    private fun cut(c: Cut, s: String, p: TextPaint, w: Int): String {
+        if (c.w == w && c.src === s) return c.out
+        c.w = w
+        c.src = s
+        c.out = ellipsize(s, p, w.toFloat())
+        return c.out
+    }
+
+    private fun actionsFor(e: ItemText): List<Notification.Action> = e.actions ?: actionsOf(e.item).also { acts ->
+        e.actions = acts
+        e.words = Array(acts.size) { acts[it].title.toString() }
+        e.wordCuts = Array(acts.size) { Cut() }
+    }
+
+    private val itemTexts = HashMap<String, ItemText>()
+
+    private fun itemText(item: Notifs.Item): ItemText {
+        val w = textWidth().toInt().coerceAtLeast(1)
+        val age = (System.currentTimeMillis() - item.postTime) / 60_000L
+        val app = AppInfo.label(ctx, item.pkg)
+        val old = itemTexts[item.key]
+        if (old != null && old.item === item && old.width == w && old.age == age && old.app == app) return old
+        val time = if (showsWhen(item)) timeLabel(item.postTime) else null
+        val e = ItemText(
+            item, w, age, app, time, if (time != null) "$app • $time" else app, if (time != null) " • $time" else "",
+            (item.title ?: app).toString(), item.text?.toString()?.replace('\n', ' ')?.takeIf { it.isNotBlank() },
+        )
+        itemTexts[item.key] = e
+        return e
+    }
+
+    private val noLines = emptyArray<String>()
+
+    private fun fullLines(e: ItemText): Array<String> {
+        e.full?.let { return it }
+        val t = fullText(e.item)
+        val out = if (t == null) noLines else {
+            Design.text(QsTokens.CARD_BODY).applyTo(measure, u)
+            val layout = textLayout(t, measure, e.width.toFloat(), MAX_LINES)
+            Array(layout.lineCount) { i ->
+                if (i == layout.lineCount - 1 && layout.getEllipsisCount(i) > 0)
+                    ellipsize(t.substring(layout.getLineStart(i)).replace('\n', ' '), measure, e.width.toFloat())
+                else t.substring(layout.getLineStart(i), layout.getLineEnd(i)).trimEnd('\n')
+            }
+        }
+        e.full = out
+        return out
+    }
+
+    /** A closed group's one line of a notification: its title, then its text from [dx] (null when the title fills the line). */
+    private class GroupLine(val name: String?, val text: String?, val dx: Float)
+
+    /** The lines a closed group lists, for the notifications [items] and a text column [width] wide. */
+    private class GroupLines(val items: Array<Notifs.Item>, val width: Int, val lines: Array<GroupLine>)
+
+    private val groupCache = HashMap<String, GroupLines>()
+
+    /**
+     * [card]'s [n] latest lines as a closed group draws them (Android's hybrid view: the text after the title and
+     * [QsTokens.GROUP_LINE_GAP], each cut with an ellipsis at the card's padding; the text is left out when the title alone
+     * fills the line).
+     */
+    private fun groupLines(card: Card, n: Int): GroupLines {
+        val w = textWidth().toInt().coerceAtLeast(1)
+        val old = groupCache[card.key]
+        if (old != null && old.width == w && old.items.size == n) {
+            var same = true
+            for (i in 0 until n) if (old.items[i] !== card.items[i]) { same = false; break }
+            if (same) return old
+        }
+        val gap = Design.pt(QsTokens.GROUP_LINE_GAP, u)
+        val avail = w.toFloat()
+        Design.text(QsTokens.CARD_TITLE).applyTo(title, u)
+        Design.text(QsTokens.CARD_BODY).applyTo(body, u)
+        val lines = Array(n) { i ->
+            val it = card.items[i]
+            val name = it.title?.toString()?.replace('\n', ' ')?.takeIf { s -> s.isNotBlank() }
+            val text = it.text?.toString()?.replace('\n', ' ')?.takeIf { s -> s.isNotBlank() }
+            var x = 0f
+            var shownName: String? = null
+            var cut = false
+            if (name != null) {
+                val shown = ellipsize(name, title, avail - x)
+                shownName = shown
+                if (shown != name) cut = true else x += title.measureText(shown) + if (text != null) gap else 0f
+            }
+            GroupLine(shownName, if (!cut && text != null && x < avail) ellipsize(text, body, avail - x) else null, x)
+        }
+        return GroupLines(Array(n) { card.items[it] }, w, lines).also { groupCache[card.key] = it }
+    }
+
     /** An expanded card: its app's line, its title, its whole text, and a row of its actions. */
     private fun expandedHeight(r: Row): Float {
         val item = r.item ?: return 0f
         val pad = Design.pt(QsTokens.CARD_PADDING, u)
-        var h = pad + (if (r.m.head != Head.NONE) line(QsTokens.CARD_APP) + Design.pt(QsTokens.TITLE_GAP, u) else 0f) +
+        val e = itemText(item)
+        var h = pad + (if (NotifRows.expandedHead(r.kind, e.time != null) != Head.NONE) line(QsTokens.CARD_APP) + Design.pt(QsTokens.TITLE_GAP, u) else 0f) +
             line(QsTokens.CARD_TITLE) + Design.pt(QsTokens.TEXT_GAP, u)
-        fullText(item)?.let { t ->
-            Design.text(QsTokens.CARD_BODY).applyTo(measure, u)
-            h += textLayout(t, measure, textWidth(), MAX_LINES).lineCount * line(QsTokens.CARD_BODY)
-        }
-        h += if (actionsOf(item).isNotEmpty() && !panel.host.locked) Design.pt(QsTokens.ACTIONS_HEIGHT, u) + Design.pt(QsTokens.ACTIONS_BOTTOM, u) else pad
+        h += fullLines(e).size * line(QsTokens.CARD_BODY)
+        h += if (actionsFor(e).isNotEmpty() && !panel.host.locked) Design.pt(QsTokens.ACTIONS_HEIGHT, u) + Design.pt(QsTokens.ACTIONS_BOTTOM, u) else pad
         // (A card is at least as tall as its icon; a child has none.)
         return if (r.m.icon) max(h, pad * 2 + Design.pt(QsTokens.CARD_ICON, u)) else h
     }
@@ -237,11 +427,11 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
 
     private val r = RectF()
 
-    /** Row [row]'s rectangle on screen now (its motion, the scroll, the scrim) into [out]. */
+    /** Row [row]'s rectangle on screen now (its motion, its height's, the scroll, the scrim) into [out]. */
     private fun place(row: Row, a: Anim, out: RectF) {
         val top = listTop + a.y.value - scroller.position
         val dx = swipeOf(row, a)
-        out.set(cardsLeft() + dx, top, cardsLeft() + cardsWidth() + dx, top + row.height)
+        out.set(cardsLeft() + dx, top, cardsLeft() + cardsWidth() + dx, top + a.h.value.coerceAtLeast(0f))
     }
 
     /**
@@ -334,10 +524,14 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         // (Pressed: the platform's ripple, as a notification's background has, in the theme's highlight colour.)
         if (a.ripple.active) a.ripple.draw(c, r.width(), r.height(), big, Design.color(QsTokens.CARD_RIPPLE), alpha, u, share = 1f, radii = radii)
         c.restore()
+        // The content lies within the row's rectangle as it is now (a rect clip: analytic): a row growing or folding shows
+        // no more of it than it has room for.
+        c.save()
+        c.clipRect(r)
         val pad = Design.pt(QsTokens.CARD_PADDING, u)
         val icon = Design.pt(QsTokens.CARD_ICON, u)
         // An opened group's child: a hairline across the card's top, its content under it.
-        val inset = if (row.m.divider) hairline() else 0f
+        val inset = if (row.m.divider) hairlinePx else 0f
         if (inset > 0f) {
             fill.color = faded(Design.color(QsTokens.DIVIDER), alpha)
             c.drawRect(r.left, r.top, r.right, r.top + inset, fill)
@@ -374,94 +568,124 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             d.draw(c)
             c.restore()
         }
+        val e = itemText(item)
+        // How open it is now: its two contents are drawn in this proportion (the first and last frames of a fold show one).
+        val k = a.k.value.coerceIn(0f, 1f)
         val tx = r.left + textX
-        val chipW = drawChip(c, row, r, pad, alpha, inset)
+        val chipW = drawChip(c, row, r, pad, alpha, inset, k)
         val maxW = r.right - pad - chipW - tx
-        val titleColor = faded(Design.color(QsTokens.CARD_TITLE_COLOR), alpha)
-        val textColor = faded(Design.color(QsTokens.CARD_TEXT_COLOR), alpha)
-        var y = r.top + inset + pad
-        val time = if (showsWhen(item)) timeLabel(item.postTime) else null
-        Design.text(QsTokens.CARD_APP).applyTo(small, u)
-        small.color = textColor
-        if (row.m.head != Head.NONE) {
-            // The first line: the app and the time, or the time alone (a child's: the app is its header's), then the title.
-            val al = line(QsTokens.CARD_APP)
-            val label = if (row.m.head == Head.TIME) time.orEmpty() else {
-                val appName = AppInfo.label(ctx, item.pkg)
-                if (time != null) "$appName • $time" else appName
-            }
-            // (A header is that line alone, in the middle of its icon.)
-            val lineTop = if (row.kind == RowKind.HEADER) y + (icon - al) / 2f else y
-            c.drawText(ellipsize(label, small, maxW), tx, baselineIn(small, lineTop, al), small)
-            if (row.kind == RowKind.HEADER) return
-            // A closed group lists its latest notifications one line each under it.
-            if (row.kind == RowKind.GROUP) { drawGroupLines(c, row, r, tx, pad, titleColor, textColor); return }
-            y += al + if (row.expanded) Design.pt(QsTokens.TITLE_GAP, u) else 0f
-        }
-        Design.text(QsTokens.CARD_TITLE).applyTo(title, u)
-        title.color = titleColor
-        val tl = line(QsTokens.CARD_TITLE)
-        val name = (item.title ?: AppInfo.label(ctx, item.pkg)).toString()
-        if (row.m.head != Head.NONE || time == null) {
-            c.drawText(ellipsize(name, title, if (row.expanded) r.right - pad - tx else maxW), tx, baselineIn(title, y, tl), title)
+        if (row.kind == RowKind.GROUP || row.kind == RowKind.HEADER) {
+            drawGroup(c, row, e, r, tx, pad, icon, inset, maxW, alpha, k)
         } else {
-            // A collapsed card: the title, then " • time" in the app line's type.
-            val tail = " • $time"
-            val shown = ellipsize(name, title, maxW - small.measureText(tail))
-            val base = baselineIn(title, y, tl)
-            c.drawText(shown, tx, base, title)
-            c.drawText(tail, tx + title.measureText(shown), base, small)
+            drawCardText(c, row, e, r, tx, pad, inset, maxW, alpha, k)
         }
-        y += tl + if (row.expanded) Design.pt(QsTokens.TEXT_GAP, u) else 0f
-        Design.text(QsTokens.CARD_BODY).applyTo(body, u)
-        body.color = textColor
-        val bl = line(QsTokens.CARD_BODY)
-        if (row.expanded) {
-            fullText(item)?.let { t ->
-                val layout = textLayout(t, body, textWidth(), MAX_LINES)
-                for (i in 0 until layout.lineCount) {
-                    val s = t.substring(layout.getLineStart(i), layout.getLineEnd(i)).trimEnd('\n')
-                    val shown = if (i == layout.lineCount - 1 && layout.getEllipsisCount(i) > 0)
-                        ellipsize(t.substring(layout.getLineStart(i)).replace('\n', ' '), body, textWidth()) else s
-                    c.drawText(shown, tx, baselineIn(body, y, bl), body)
-                    y += bl
-                }
-            }
-            if (actionsOf(item).isNotEmpty() && !panel.host.locked) drawActions(c, item, r, y, alpha)
-        } else {
-            val text = item.text?.toString()?.replace('\n', ' ')
-            // (Collapsed, the text runs under the chevron's column to the card's padding, as Android's.)
-            if (!text.isNullOrBlank()) c.drawText(ellipsize(text, body, r.right - pad - tx), tx, baselineIn(body, y, bl), body)
-        }
+        c.restore()
     }
 
     /**
-     * A closed group's rows: the title and the text of each of its latest [RowModel.lines] notifications on one line
-     * ("Podcast New episode available", Android's hybrid view: the text after the title and [QsTokens.GROUP_LINE_GAP]),
-     * each cut with an ellipsis at the card's padding; the text is left out when the title alone fills the line.
+     * A card's (or a child's) text as it goes between collapsed and expanded, [k] of the way: what both states show is drawn
+     * once, at a place between theirs (the title, the text's first line; where their strings differ only their endings
+     * cross-fade), and what only one shows fades (the " • time" after the collapsed title; the app's or the time's line, the
+     * rest of the text and the actions of the expanded card).
      */
-    private fun drawGroupLines(c: Canvas, row: Row, r: RectF, tx: Float, pad: Float, titleColor: Int, textColor: Int) {
-        val items = row.card?.items ?: return
-        val lineH = Design.pt(QsTokens.GROUP_LINE, u)
-        val gap = Design.pt(QsTokens.GROUP_LINE_GAP, u)
-        val right = r.right - pad
+    private fun drawCardText(c: Canvas, row: Row, e: ItemText, r: RectF, tx: Float, pad: Float, inset: Float, maxW: Float, alpha: Float, k: Float) {
+        val head = NotifRows.expandedHead(row.kind, e.time != null)
+        val al = line(QsTokens.CARD_APP)
+        val tl = line(QsTokens.CARD_TITLE)
+        val bl = line(QsTokens.CARD_BODY)
+        val titleGap = if (head != Head.NONE) al + Design.pt(QsTokens.TITLE_GAP, u) else 0f
+        val textGap = Design.pt(QsTokens.TEXT_GAP, u)
+        val top = r.top + inset + pad
+        Design.text(QsTokens.CARD_APP).applyTo(small, u)
         Design.text(QsTokens.CARD_TITLE).applyTo(title, u)
-        title.color = titleColor
         Design.text(QsTokens.CARD_BODY).applyTo(body, u)
-        body.color = textColor
-        for (i in 0 until minOf(row.m.lines, items.size)) {
-            val it = items[i]
-            val base = baselineIn(title, r.top + Design.pt(QsTokens.GROUP_LINES_TOP, u) + i * lineH, lineH)
-            val name = it.title?.toString()?.replace('\n', ' ')?.takeIf { s -> s.isNotBlank() }
-            val text = it.text?.toString()?.replace('\n', ' ')?.takeIf { s -> s.isNotBlank() }
-            var x = tx
-            if (name != null) {
-                val shown = ellipsize(name, title, right - x)
-                c.drawText(shown, x, base, title)
-                if (shown != name) continue
-                x += title.measureText(shown) + if (text != null) gap else 0f
-            }
-            if (text != null && x < right) c.drawText(ellipsize(text, body, right - x), x, base, body)
+        val titleColor = Design.color(QsTokens.CARD_TITLE_COLOR)
+        val textColor = Design.color(QsTokens.CARD_TEXT_COLOR)
+        // The first line of an expanded card: the app and the time, or a child's time alone. It comes in once the title has
+        // moved clear of its place.
+        val headAlpha = alpha * range(0.4f, 1f, k)
+        if (head != Head.NONE && headAlpha > 0.003f) {
+            small.color = faded(textColor, headAlpha)
+            val label = if (head == Head.TIME) e.time.orEmpty() else e.appLine
+            c.drawText(cut(e.headCut, label, small, maxW.toInt().coerceAtLeast(1)), tx, baselineIn(small, top, al), small)
+        }
+        // The title: one draw, moving down by what the expanded card puts above it; cut for the collapsed width (its " •
+        // time" after it) and for the expanded one (the chip beside it only with no line above).
+        val wc = (if (e.time == null) maxW else maxW - small.measureText(e.tail)).toInt().coerceAtLeast(1)
+        val we = (if (head != Head.NONE) r.right - pad - tx else maxW).toInt().coerceAtLeast(1)
+        val tg = e.titleGlide
+        if (tg.w0 != wc || tg.w1 != we) tg.set(wc, we, ellipsize(e.name, title, wc.toFloat()), ellipsize(e.name, title, we.toFloat()), title)
+        val titleBase = baselineIn(title, top + k * titleGap, tl)
+        title.color = faded(titleColor, alpha)
+        c.drawText(tg.prefix, tx, titleBase, title)
+        if (k < 0.997f && tg.end0.isNotEmpty()) {
+            title.color = faded(titleColor, alpha * (1f - k))
+            c.drawText(tg.end0, tx + tg.dx, titleBase, title)
+        }
+        if (k > 0.003f && tg.end1.isNotEmpty()) {
+            title.color = faded(titleColor, alpha * k)
+            c.drawText(tg.end1, tx + tg.dx, titleBase, title)
+        }
+        val tailAlpha = alpha * (1f - range(0f, 0.5f, k))
+        if (e.time != null && tailAlpha > 0.003f) {
+            small.color = faded(textColor, tailAlpha)
+            c.drawText(e.tail, tx + tg.width0, titleBase, small)
+        }
+        // The text: its first line is the collapsed card's one line, moving down to the expanded card's first.
+        val lines = fullLines(e)
+        val xg = e.textGlide
+        if (xg.w0 < 0) xg.set(e.width, e.width, ellipsize(e.oneLine.orEmpty(), body, e.width.toFloat()), if (lines.isEmpty()) "" else lines[0], body)
+        val textTop = top + tl + k * (titleGap + textGap)
+        val textBase = baselineIn(body, textTop, bl)
+        body.color = faded(textColor, alpha)
+        c.drawText(xg.prefix, tx, textBase, body)
+        if (k < 0.997f && xg.end0.isNotEmpty()) {
+            body.color = faded(textColor, alpha * (1f - k))
+            c.drawText(xg.end0, tx + xg.dx, textBase, body)
+        }
+        if (k > 0.003f && xg.end1.isNotEmpty()) {
+            body.color = faded(textColor, alpha * k)
+            c.drawText(xg.end1, tx + xg.dx, textBase, body)
+        }
+        if (k <= 0.003f) return
+        // The rest of the expanded card, in its own places.
+        val ek = alpha * k
+        body.color = faded(textColor, ek)
+        var y = top + titleGap + tl + textGap + bl
+        for (i in 1 until lines.size) {
+            c.drawText(lines[i], tx, baselineIn(body, y, bl), body)
+            y += bl
+        }
+        if (lines.isEmpty()) y = top + titleGap + tl + textGap
+        if (actionsFor(e).isNotEmpty() && !panel.host.locked) drawActions(c, e, row.key, r, y, ek, k >= 0.5f)
+    }
+
+    /**
+     * A group, closed or opened: the app's line (an opened group's, with its icon, in the middle of the header; the line
+     * settles there as the group opens), and while closed a line of each of its latest notifications, fading out as it opens.
+     */
+    private fun drawGroup(c: Canvas, row: Row, e: ItemText, r: RectF, tx: Float, pad: Float, icon: Float, inset: Float, maxW: Float, alpha: Float, k: Float) {
+        Design.text(QsTokens.CARD_APP).applyTo(small, u)
+        small.color = faded(Design.color(QsTokens.CARD_TEXT_COLOR), alpha)
+        val al = line(QsTokens.CARD_APP)
+        val lineTop = r.top + inset + pad + k * (icon - al) / 2f
+        c.drawText(cut(e.appCut, e.appLine, small, maxW.toInt().coerceAtLeast(1)), tx, baselineIn(small, lineTop, al), small)
+        if (k >= 0.997f) return
+        val card = row.card ?: return
+        // (Opening, the lines it listed are still the ones it has: a header takes them from what the group last drew.)
+        val g = (if (row.kind == RowKind.GROUP) groupLines(card, minOf(row.m.lines, card.items.size)) else groupCache[card.key]) ?: return
+        val a = alpha * (1f - k)
+        Design.text(QsTokens.CARD_TITLE).applyTo(title, u)
+        title.color = faded(Design.color(QsTokens.CARD_TITLE_COLOR), a)
+        Design.text(QsTokens.CARD_BODY).applyTo(body, u)
+        body.color = faded(Design.color(QsTokens.CARD_TEXT_COLOR), a)
+        val lineH = Design.pt(QsTokens.GROUP_LINE, u)
+        val first = r.top + Design.pt(QsTokens.GROUP_LINES_TOP, u)
+        for (i in g.lines.indices) {
+            val l = g.lines[i]
+            val base = baselineIn(title, first + i * lineH, lineH)
+            l.name?.let { c.drawText(it, tx, base, title) }
+            l.text?.let { c.drawText(it, tx + l.dx, base, body) }
         }
     }
 
@@ -470,17 +694,17 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         try { item.sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN, true) } catch (_: Throwable) { true }
 
     /** A group's count and chevron, or a card's chevron, at the top right; returns the room it takes. */
-    private fun drawChip(c: Canvas, row: Row, r: RectF, pad: Float, a: Float, inset: Float): Float {
+    private fun drawChip(c: Canvas, row: Row, r: RectF, pad: Float, a: Float, inset: Float, k: Float): Float {
         val h = Design.pt(QsTokens.CHIP_HEIGHT, u)
         val cw = Design.pt(QsTokens.CHIP_WIDTH, u)
-        val count = row.m.count
         Design.text(QsTokens.CHIP_TEXT).applyTo(small, u)
-        val label = if (count > 0) "$count" else ""
+        val label = row.countLabel
         val w = (if (label.isEmpty()) 0f else small.measureText(label) + 4f * u) + cw
-        // (A header's chip is in the middle of its row, as its one line is.)
-        val chipTop = if (row.kind == RowKind.HEADER) r.top + (r.height() - h) / 2f else r.top + inset + pad
-        val chip = RectF(r.right - pad - w, chipTop, r.right - pad, chipTop + h)
-        chips[row.key] = chip
+        // (A group's chip settles in the middle of its header's icon as the group opens, as its one line does.)
+        val icon = Design.pt(QsTokens.CARD_ICON, u)
+        val chipTop = r.top + inset + pad + if (row.kind == RowKind.GROUP || row.kind == RowKind.HEADER) k * (icon - h) / 2f else 0f
+        val chip = chips.getOrPut(row.key) { RectF() }
+        chip.set(r.right - pad - w, chipTop, r.right - pad, chipTop + h)
         fill.color = faded(Design.color(QsTokens.CHIP_FILL), a)
         c.drawRoundRect(chip, h / 2f, h / 2f, fill)
         val col = faded(Design.color(QsTokens.CARD_TITLE_COLOR), a)
@@ -489,11 +713,11 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             small.textAlign = Paint.Align.LEFT
             c.drawText(label, chip.left + 8f * u, baselineIn(small, chip.top, h), small)
         }
-        // Down while closed, up while open.
+        // Down while closed, up while open, turning with the row's opening.
         val cx = chip.right - cw / 2f
         if (row.m.chevron != Chevron.NONE) {
             c.save()
-            c.rotate(if (row.m.chevron == Chevron.UP) -90f else 90f, cx, chip.centerY())
+            c.rotate(90f - 180f * k, cx, chip.centerY())
             panel.glyphs.draw(c, R.drawable.sym_chevron, cx, chip.centerY(), 16f * u, col)
             c.restore()
         }
@@ -501,11 +725,30 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     }
 
     private val chips = HashMap<String, RectF>()
-    private val actionHits = ArrayList<Pair<Notification.Action, RectF>>()
+    /** An action's place to tap, in the row it belongs to (pooled: nothing is made while drawing). */
+    private class Hit {
+        var action: Notification.Action? = null
+        val rect = RectF()
+        var key = ""
+    }
 
-    /** A card's actions: words in a row (Android 16's template), each with room around it to tap. */
-    private fun drawActions(c: Canvas, item: Notifs.Item, r: RectF, top: Float, a: Float) {
-        val acts = actionsOf(item)
+    private val hitPool = ArrayList<Hit>()
+    private var hitCount = 0
+
+    private fun nextHit(): Hit {
+        if (hitCount == hitPool.size) hitPool += Hit()
+        return hitPool[hitCount++]
+    }
+
+    /**
+     * A card's actions: words in a row (Android 16's template), each with room around it to tap. One can be tapped only if
+     * [hits] and it lies wholly within its row's rectangle as it is now (a row folding is clipped to it: an action below
+     * its edge is not shown, and the row under it is what a tap there means).
+     */
+    private fun drawActions(c: Canvas, e: ItemText, key: String, r: RectF, top: Float, a: Float, hits: Boolean) {
+        val acts = actionsFor(e)
+        val words = e.words ?: return
+        val cuts = e.wordCuts ?: return
         val h = Design.pt(QsTokens.ACTIONS_HEIGHT, u)
         val padX = Design.pt(QsTokens.ACTION_PADDING, u)
         val inset = Design.pt(QsTokens.ACTION_INSET, u)
@@ -514,16 +757,23 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         small.color = faded(Design.color(QsTokens.ACTION_COLOR), a)
         var x = r.left + inset
         val end = r.right - inset
-        for (act in acts) {
-            val words = act.title.toString()
-            val w = minOf(small.measureText(words) + 2 * padX, end - x)
+        val reachable = hits && NotifRows.reachable(top, top + h, r.top, r.bottom)
+        for (i in acts.indices) {
+            val act = acts[i]
+            val w = minOf(small.measureText(words[i]) + 2 * padX, end - x)
             if (w <= 2 * padX) break
-            val b = RectF(x, top, x + w, top + h)
-            c.drawText(ellipsize(words, small, w - 2 * padX), x + padX, baselineIn(small, top, h), small)
-            actionHits += act to b
+            // (Cut to a whole pixel more than the room, so that words that just fit are not.)
+            c.drawText(cut(cuts[i], words[i], small, (w - 2 * padX).toInt() + 1), x + padX, baselineIn(small, top, h), small)
+            if (reachable) {
+                val hit = nextHit()
+                hit.action = act
+                hit.key = key
+                hit.rect.set(x, top, x + w, top + h)
+            }
             x += w + inset
         }
     }
+
 
     private val headingClear = RectF()
 
@@ -771,7 +1021,11 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         chips[row.key]?.let { chip ->
             if (x >= chip.left - 8f * u && y <= chip.bottom + 8f * u) { toggle(row); return true }
         }
-        for ((act, b) in actionHits) if (b.contains(x, y)) { panel.host.send(act.actionIntent); return true }
+        // (An action of the row under the finger only: one of another row never lies under it.)
+        for (i in 0 until hitCount) {
+            val hit = hitPool[i]
+            if (hit.key == row.key && hit.rect.contains(x, y)) { panel.host.send(hit.action?.actionIntent); return true }
+        }
         // A group's body opens it, an opened group's header closes it; a card (or a child) opens its app.
         if (row.kind == RowKind.GROUP || row.kind == RowKind.HEADER) { toggle(row); return true }
         val item = row.item ?: return true
@@ -816,10 +1070,10 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         state.clear()
         swiping = null
         pressed = null
-        actionHits.clear()
+        hitCount = 0
     }
 
-    fun beginFrame() = actionHits.clear()
+    fun beginFrame() { hitCount = 0 }
 
     private companion object {
         val io = Executors.newSingleThreadExecutor()

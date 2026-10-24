@@ -1,5 +1,8 @@
 package dev.launcher.app.shade.qs
 
+import java.text.BreakIterator
+import java.text.Bidi
+
 // The Pixel shade's notification list as rows (B-034, D-027): which rows a card or an app's group makes, what each shows, and
 // what a chevron toggles. Pure: keys in, rows out (no android.* types), so it is tested on the JVM; CardsBlock keeps heights,
 // drawing and motion.
@@ -95,8 +98,8 @@ internal object NotifRows {
                 firstCard = false
                 if (n <= 1) {
                     val open = (first && c.key !in state.closedFirst) || c.key in state.opened
-                    out += row(c.key, RowKind.CARD, s, c.key, 0, open, 0, 0, true, if (open) Head.APP_TIME else Head.NONE,
-                        if (open) Chevron.UP else Chevron.DOWN)
+                    out += row(c.key, RowKind.CARD, s, c.key, 0, open, 0, 0, true,
+                        if (open) expandedHead(RowKind.CARD, true) else Head.NONE, if (open) Chevron.UP else Chevron.DOWN)
                 } else if (c.key !in state.opened) {
                     out += row(c.key, RowKind.GROUP, s, c.key, 0, false, minOf(n, if (first && c.key !in state.closedFirst) LINES_FIRST else LINES_COLLAPSED), n,
                         true, Head.APP_TIME, Chevron.DOWN)
@@ -106,7 +109,8 @@ internal object NotifRows {
                         val k = c.itemKeys[i]
                         val open = k in state.expandedChildren
                         // (Expanded, its first line is its time alone: with no time there is no line.)
-                        out += row(k, RowKind.CHILD, s, c.key, i, open, 0, 0, false, if (open && k !in c.untimed) Head.TIME else Head.NONE,
+                        out += row(k, RowKind.CHILD, s, c.key, i, open, 0, 0, false,
+                            if (open) expandedHead(RowKind.CHILD, k !in c.untimed) else Head.NONE,
                             if (open) Chevron.UP else Chevron.DOWN, divider = true)
                     }
                 }
@@ -132,6 +136,100 @@ internal object NotifRows {
             }
         }
         return out
+    }
+
+    /**
+     * What the first line of a [kind] row's expanded content names, whether the row is expanded or on its way (the motion draws
+     * the expanded content while a row folds): a card the app and the time, a child the time alone ([timed]; with no time
+     * there is no line), anything else nothing.
+     */
+    fun expandedHead(kind: RowKind, timed: Boolean): Head = when (kind) {
+        RowKind.CARD -> Head.APP_TIME
+        RowKind.CHILD -> if (timed) Head.TIME else Head.NONE
+        else -> Head.NONE
+    }
+
+    /**
+     * Whether an action spanning [top]..[bottom] can be tapped in a row now spanning [rowTop]..[rowBottom]: only if it lies
+     * wholly within it (half a pixel's slack). A row that is folding or growing clips its content to its rectangle, and an
+     * action below its edge is not shown, and over the row beneath it, which a tap there is meant for.
+     */
+    fun reachable(top: Float, bottom: Float, rowTop: Float, rowBottom: Float): Boolean =
+        top >= rowTop - 0.5f && bottom <= rowBottom + 0.5f
+
+    /**
+     * How many leading characters of [a] and [b] (one string cut two ways) can be drawn once, apart from their endings, which
+     * are drawn at the prefix's width after it: the common start, drawn back to where both are cut cleanly. 0 (draw both
+     * whole, cross-fading) where a split is unsafe: either has right-to-left text (an ending would land on the wrong side)
+     * or a script whose letters join (a split loses their joined forms), and anywhere inside a grapheme (a surrogate pair,
+     * a combining mark, a joiner or variation selector, a skin-tone modifier, half a flag, an Indic conjunct: a virama
+     * before the letter it joins). Made when the strings change, never while drawing.
+     */
+    fun sharedPrefix(a: String, b: String): Int {
+        var n = 0
+        val m = minOf(a.length, b.length)
+        while (n < m && a[n] == b[n]) n++
+        if (n == 0 || needsBidi(a) || needsBidi(b) || joins(a) || joins(b)) return 0
+        val ba = BreakIterator.getCharacterInstance().apply { setText(a) }
+        val bb = BreakIterator.getCharacterInstance().apply { setText(b) }
+        while (n > 0 && !(ba.isBoundary(n) && bb.isBoundary(n) && cleanSplit(a, b, n))) n--
+        return n
+    }
+
+    private fun needsBidi(s: String) = Bidi.requiresBidi(s.toCharArray(), 0, s.length)
+
+    // (The right-to-left joining scripts newer than API 29's, Adlam and Manichaean, are caught by needsBidi.)
+    private fun joins(s: String): Boolean {
+        var i = 0
+        while (i < s.length) {
+            val cp = s.codePointAt(i)
+            when (Character.UnicodeScript.of(cp)) {
+                Character.UnicodeScript.ARABIC, Character.UnicodeScript.SYRIAC, Character.UnicodeScript.NKO,
+                Character.UnicodeScript.MONGOLIAN, Character.UnicodeScript.PHAGS_PA, Character.UnicodeScript.MANDAIC -> return true
+                else -> {}
+            }
+            i += Character.charCount(cp)
+        }
+        return false
+    }
+
+    /** A letter's extenders: what must stay with the letter before it. */
+    private fun extends(cp: Int): Boolean = when (Character.getType(cp).toByte()) {
+        Character.NON_SPACING_MARK, Character.ENCLOSING_MARK, Character.COMBINING_SPACING_MARK -> true
+        else -> cp == 0x200D || cp == 0x200C || cp in 0xFE00..0xFE0F || cp in 0xE0100..0xE01EF ||
+            cp in 0x1F3FB..0x1F3FF || cp in 0xE0020..0xE007F
+    }
+
+    private fun inScript(cp: Int, script: Character.UnicodeScript) = cp >= 0 && Character.isLetter(cp) && Character.UnicodeScript.of(cp) == script
+
+    private fun regional(cp: Int) = cp in 0x1F1E6..0x1F1FF
+
+    /** Whether cutting both at [n] (a boundary of each) is clean: not mid-pair, not before an extender, not after a joiner. */
+    private fun cleanSplit(a: String, b: String, n: Int): Boolean {
+        if (n >= a.length && n >= b.length) return true
+        if (n > 0 && Character.isHighSurrogate(a[n - 1]) && (a.getOrNull(n)?.let { Character.isLowSurrogate(it) } == true ||
+                b.getOrNull(n)?.let { Character.isLowSurrogate(it) } == true)) return false
+        val nextA = if (n < a.length) a.codePointAt(n) else -1
+        val nextB = if (n < b.length) b.codePointAt(n) else -1
+        if ((nextA >= 0 && extends(nextA)) || (nextB >= 0 && extends(nextB))) return false
+        if (n == 0) return true
+        val prev = a.codePointBefore(n)
+        if (prev == 0x200D) return false
+        // A virama (a nonspacing mark of an Indic script: Java cannot tell it from a vowel sign, which is as well kept with the
+        // next letter of its script) before a letter of its own script joins it into a conjunct.
+        if (Character.getType(prev) == Character.NON_SPACING_MARK.toInt()) {
+            val script = Character.UnicodeScript.of(prev)
+            if (script != Character.UnicodeScript.INHERITED && script != Character.UnicodeScript.COMMON &&
+                (inScript(nextA, script) || inScript(nextB, script))) return false
+        }
+        // Half a flag: a regional indicator that is the odd one of its run, with another to follow.
+        if ((nextA >= 0 && regional(nextA)) || (nextB >= 0 && regional(nextB))) {
+            var run = 0
+            var i = n
+            while (i > 0 && regional(a.codePointBefore(i))) { run++; i -= Character.charCount(a.codePointBefore(i)) }
+            if (run % 2 == 1) return false
+        }
+        return true
     }
 
     /** What a tap on [row]'s chevron (or a group's body) does to [state]. */
