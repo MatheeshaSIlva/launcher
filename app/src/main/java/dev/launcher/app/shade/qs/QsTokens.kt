@@ -206,6 +206,20 @@ object QsTokens {
     val CLEAR_INSET = NumberKey("comp.qs.clear.inset")
     val CLEAR_SPACING = NumberKey("comp.qs.clear.spacing")
     val CLEAR_SYMBOL = NumberKey("comp.qs.clear.symbol")
+    /**
+     * Inside an opened group: the hairline above each child (its colour, its width), as the gap between children shows what
+     * is behind them in Android 17 (0.5 dp; the scrim's colour).
+     */
+    val DIVIDER = ColorKey("comp.qs.card.divider")
+    val DIVIDER_WIDTH = NumberKey("comp.qs.card.divider-width")
+    /**
+     * A closed group's one-line rows ("Title Text", Android's hybrid view): one row's height, the card's top to the first row,
+     * the last row to the card's bottom, and the space between the title and the text.
+     */
+    val GROUP_LINE = NumberKey("comp.qs.card.group-line")
+    val GROUP_LINES_TOP = NumberKey("comp.qs.card.group-lines-top")
+    val GROUP_LINES_BOTTOM = NumberKey("comp.qs.card.group-lines-bottom")
+    val GROUP_LINE_GAP = NumberKey("comp.qs.card.group-line-gap")
     /** A pressed card's or footer button's ripple (the platform's highlight colour, whole). */
     val CARD_RIPPLE = ColorKey("comp.qs.card.ripple")
 
@@ -401,6 +415,7 @@ object QsTokens {
         CARD_GAP, CARD_PADDING, CARD_ICON, ICON_FILL, ICON_COLOR, CARD_APP, CARD_TITLE, CARD_BODY, CARD_TITLE_COLOR,
         CARD_TEXT_COLOR, CHIP_FILL, CHIP_TEXT, SECTION, SECTION_COLOR, SECTION_HEIGHT, CLEAR_FILL, CLEAR_TEXT, CLEAR_TEXT_COLOR,
         CLEAR_HEIGHT, CLEAR_SIDE, CLEAR_GAP, CLEAR_INSET, CLEAR_SPACING, CLEAR_SYMBOL, CARD_RIPPLE,
+        DIVIDER, DIVIDER_WIDTH, GROUP_LINE, GROUP_LINES_TOP, GROUP_LINES_BOTTOM, GROUP_LINE_GAP,
     )
 
     val ALL: List<String> = KEYS.map { it.name }

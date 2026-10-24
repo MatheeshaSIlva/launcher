@@ -135,10 +135,13 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             r.height = when (r.kind) {
                 RowKind.HEADING -> Design.pt(QsTokens.SECTION_HEIGHT, u)
                 RowKind.FOOTER -> Design.pt(QsTokens.CLEAR_HEIGHT, u)
-                RowKind.GROUP -> pad * 2 + max(icon, line(QsTokens.CARD_APP) + line(QsTokens.CARD_TITLE) + line(QsTokens.CARD_BODY))
+                // (A closed group: its app's line, then one line of each of its latest notifications, as Android's.)
+                RowKind.GROUP -> max(pad * 2 + icon, Design.pt(QsTokens.GROUP_LINES_TOP, u) +
+                    r.m.lines * Design.pt(QsTokens.GROUP_LINE, u) + Design.pt(QsTokens.GROUP_LINES_BOTTOM, u))
                 RowKind.HEADER -> pad * 2 + icon
-                // (A child is a card without its icon's column: its height is its text's alone.)
-                else -> if (r.expanded) expandedHeight(r) else pad * 2 + max(if (r.m.icon) icon else 0f, line(QsTokens.CARD_TITLE) + bodyLine(r))
+                // (A child is a card without its icon's column: its height is its text's alone, and the hairline above it.)
+                else -> (if (r.expanded) expandedHeight(r) else pad * 2 + max(if (r.m.icon) icon else 0f, line(QsTokens.CARD_TITLE) + bodyLine(r))) +
+                    (if (r.m.divider) hairline() else 0f)
             }
             y += when (r.m.gapBefore) {
                 Gap.NONE -> 0f
@@ -176,6 +179,9 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         bounds()
         panel.view.invalidate()
     }
+
+    /** The hairline above an opened group's child: its token's width, at least one pixel (Android's is 0.5 dp, 1 px). */
+    private fun hairline(): Float = max(1f, Math.round(Design.pt(QsTokens.DIVIDER_WIDTH, u)).toFloat())
 
     /** A collapsed card's text line (none without text). */
     private fun bodyLine(r: Row): Float = if (r.item?.text.isNullOrBlank()) 0f else line(QsTokens.CARD_BODY)
@@ -330,6 +336,12 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         c.restore()
         val pad = Design.pt(QsTokens.CARD_PADDING, u)
         val icon = Design.pt(QsTokens.CARD_ICON, u)
+        // An opened group's child: a hairline across the card's top, its content under it.
+        val inset = if (row.m.divider) hairline() else 0f
+        if (inset > 0f) {
+            fill.color = faded(Design.color(QsTokens.DIVIDER), alpha)
+            c.drawRect(r.left, r.top, r.right, r.top + inset, fill)
+        }
         // The app's own icon in a circle (Android 16's notifications show it, not the small symbol), except a system app's (Play
         // Protect's shield, measured on the emulator's own): its small symbol on a circle of the notification's colour; without
         // an icon, the small symbol on the palette's colour.
@@ -363,11 +375,11 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             c.restore()
         }
         val tx = r.left + textX
-        val chipW = drawChip(c, row, r, pad, alpha)
+        val chipW = drawChip(c, row, r, pad, alpha, inset)
         val maxW = r.right - pad - chipW - tx
         val titleColor = faded(Design.color(QsTokens.CARD_TITLE_COLOR), alpha)
         val textColor = faded(Design.color(QsTokens.CARD_TEXT_COLOR), alpha)
-        var y = r.top + pad
+        var y = r.top + inset + pad
         val time = if (showsWhen(item)) timeLabel(item.postTime) else null
         Design.text(QsTokens.CARD_APP).applyTo(small, u)
         small.color = textColor
@@ -382,6 +394,8 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             val lineTop = if (row.kind == RowKind.HEADER) y + (icon - al) / 2f else y
             c.drawText(ellipsize(label, small, maxW), tx, baselineIn(small, lineTop, al), small)
             if (row.kind == RowKind.HEADER) return
+            // A closed group lists its latest notifications one line each under it.
+            if (row.kind == RowKind.GROUP) { drawGroupLines(c, row, r, tx, pad, titleColor, textColor); return }
             y += al + if (row.expanded) Design.pt(QsTokens.TITLE_GAP, u) else 0f
         }
         Design.text(QsTokens.CARD_TITLE).applyTo(title, u)
@@ -421,12 +435,42 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         }
     }
 
+    /**
+     * A closed group's rows: the title and the text of each of its latest [RowModel.lines] notifications on one line
+     * ("Podcast New episode available", Android's hybrid view: the text after the title and [QsTokens.GROUP_LINE_GAP]),
+     * each cut with an ellipsis at the card's padding; the text is left out when the title alone fills the line.
+     */
+    private fun drawGroupLines(c: Canvas, row: Row, r: RectF, tx: Float, pad: Float, titleColor: Int, textColor: Int) {
+        val items = row.card?.items ?: return
+        val lineH = Design.pt(QsTokens.GROUP_LINE, u)
+        val gap = Design.pt(QsTokens.GROUP_LINE_GAP, u)
+        val right = r.right - pad
+        Design.text(QsTokens.CARD_TITLE).applyTo(title, u)
+        title.color = titleColor
+        Design.text(QsTokens.CARD_BODY).applyTo(body, u)
+        body.color = textColor
+        for (i in 0 until minOf(row.m.lines, items.size)) {
+            val it = items[i]
+            val base = baselineIn(title, r.top + Design.pt(QsTokens.GROUP_LINES_TOP, u) + i * lineH, lineH)
+            val name = it.title?.toString()?.replace('\n', ' ')?.takeIf { s -> s.isNotBlank() }
+            val text = it.text?.toString()?.replace('\n', ' ')?.takeIf { s -> s.isNotBlank() }
+            var x = tx
+            if (name != null) {
+                val shown = ellipsize(name, title, right - x)
+                c.drawText(shown, x, base, title)
+                if (shown != name) continue
+                x += title.measureText(shown) + if (text != null) gap else 0f
+            }
+            if (text != null && x < right) c.drawText(ellipsize(text, body, right - x), x, base, body)
+        }
+    }
+
     /** Whether [item] shows its time (Android's showWhen). */
     private fun showsWhen(item: Notifs.Item): Boolean =
         try { item.sbn.notification.extras.getBoolean(Notification.EXTRA_SHOW_WHEN, true) } catch (_: Throwable) { true }
 
     /** A group's count and chevron, or a card's chevron, at the top right; returns the room it takes. */
-    private fun drawChip(c: Canvas, row: Row, r: RectF, pad: Float, a: Float): Float {
+    private fun drawChip(c: Canvas, row: Row, r: RectF, pad: Float, a: Float, inset: Float): Float {
         val h = Design.pt(QsTokens.CHIP_HEIGHT, u)
         val cw = Design.pt(QsTokens.CHIP_WIDTH, u)
         val count = row.m.count
@@ -434,7 +478,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val label = if (count > 0) "$count" else ""
         val w = (if (label.isEmpty()) 0f else small.measureText(label) + 4f * u) + cw
         // (A header's chip is in the middle of its row, as its one line is.)
-        val chipTop = if (row.kind == RowKind.HEADER) r.top + (r.height() - h) / 2f else r.top + pad
+        val chipTop = if (row.kind == RowKind.HEADER) r.top + (r.height() - h) / 2f else r.top + inset + pad
         val chip = RectF(r.right - pad - w, chipTop, r.right - pad, chipTop + h)
         chips[row.key] = chip
         fill.color = faded(Design.color(QsTokens.CHIP_FILL), a)

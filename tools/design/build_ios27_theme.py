@@ -991,6 +991,12 @@ SEED = {
     'comp.qs.clear.inset': {'pt': 4, 'src': "measured:Android 17 emulator's own shade (2026-10-22, 2.625 px a dp): the footer's 48 dp row holds buttons 40 dp tall, 4 dp in from its top and bottom (y 1336-1442 px, 18 dp under the last card)"},
     'comp.qs.clear.spacing': {'pt': 8, 'src': "measured:Android 17 emulator's own shade (2026-10-22, 2.625 px a dp): Clear all 8 dp from the round buttons (21 px)"},
     'comp.qs.clear.symbol': {'pt': 20, 'src': 'kit:AOSP notification footer: the history and settings symbols 20 dp'},
+    'comp.qs.card.divider': {'ref': 'sys.color.separator', 'src': "judged:the theme's separator between an opened group's children (Android's gap shows the scrim)"},
+    'comp.qs.card.divider-width': {'pt': 0.5, 'src': "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_children_container_divider_height = notification_minimum_spacing_between_children 0.5 dp (1 px on the emulator's 2.625 px a dp, measured)"},
+    'comp.qs.card.group-line': {'pt': 27.4, 'src': "measured:Android 17 emulator's own shade (2026-10-24, 2.625 px a dp): a closed group's one-line rows 72 px apart (14 sp title and text on one line, hybrid view notification_hybrid.xml)"},
+    'comp.qs.card.group-lines-top': {'pt': 35, 'src': "measured:Android 17 emulator's own shade (2026-10-24, 2.625 px a dp): the first row's baseline 140 px under the card's top, the row 27.4 dp tall with its text centred"},
+    'comp.qs.card.group-lines-bottom': {'pt': 11, 'src': "measured:Android 17 emulator's own shade (2026-10-24, 2.625 px a dp): a closed group 121 px plus 72 px a row (3 rows 337 px, 2 rows 265 px)"},
+    'comp.qs.card.group-line-gap': {'pt': 4, 'src': "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_hybrid.xml, the title's paddingEnd 4 dp"},
     'comp.qs.card.ripple': {'light': '#1f000000', 'dark': '#33ffffff', 'src': "kit:AOSP framework (Android 17, the emulator's framework.jar and framework-res.apk): a notification's background and the footer's buttons press with the platform ripple in colorControlHighlight (black at 12 % light, white at 20 % dark)"},
     # Android's shade's edit page (Android 17's Edit tiles; its sizes as the emulator's, its colours the shared ones).
     'comp.qs.edit-page.bar-center': {'pt': 40, 'src': "measured:Android 17 emulator's own edit page (2026-10-21, 2.625 px a dp): the bar's row (back, undo, Remove) centred 64 dp from the top, 40 dp under the status bar"},

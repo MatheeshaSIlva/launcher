@@ -257,6 +257,7 @@ T = {
     'comp.qs.card.title-color': color('@on_surface', 'kit:AOSP notification: the title in onSurface'),
     'comp.qs.card.text-color': color('@on_surface', EMU + ': the text in onSurface (48, 50, 59 on the emulator, as the title)'),
     'comp.qs.card.chip-fill': color('@primary/15|@system_accent1_100/10', "kit:AOSP framework (Android 17, the emulator's framework.jar and framework-res.apk): the chevron's pill is the notification's protection colour, customColorSurfaceEffect3 (primary at 15 % in light, accent1_100 at 10 % in dark), flattened over the card (Notification.Builder.bindExpandButton)"),
+    'comp.qs.card.divider': color('@primary/12|@system_accent1_100/8', "measured:Android 17 emulator's own shade (2026-10-24): the 1 px between an opened group's children shows the notification scrim, (207, 218, 237) light and (36, 51, 70) dark over cards of (231, 235, 246) and (25, 34, 44) (a step of -24, -17, -9 and +11, +17, +26); here a tint over the card that steps -23, -16, -11 in light and about +15 in dark"),
     'comp.qs.card.chip': text(12, 16, 500, 0.5, 'kit:AOSP notification: the count in labelMedium'),
     'comp.qs.section.text': text(14, 20, 500, 0.1, 'kit:AOSP notification section header: titleSmall'),
     'comp.qs.section.color': color('@on_surface_variant', 'kit:AOSP notification section header: onSurfaceVariant'),

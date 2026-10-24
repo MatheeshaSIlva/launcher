@@ -2855,9 +2855,33 @@
    "pt": 28,
    "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_corner_radius 28 dp"
   },
+  "comp.qs.card.divider": {
+   "ref": "sys.color.separator",
+   "src": "judged:the theme's separator between an opened group's children (Android's gap shows the scrim)"
+  },
+  "comp.qs.card.divider-width": {
+   "pt": 0.5,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_children_container_divider_height = notification_minimum_spacing_between_children 0.5 dp (1 px on the emulator's 2.625 px a dp, measured)"
+  },
   "comp.qs.card.gap": {
    "pt": 16,
    "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_section_divider_height = notification_side_paddings_single 16 dp"
+  },
+  "comp.qs.card.group-line": {
+   "pt": 27.4,
+   "src": "measured:Android 17 emulator's own shade (2026-10-24, 2.625 px a dp): a closed group's one-line rows 72 px apart (14 sp title and text on one line, hybrid view notification_hybrid.xml)"
+  },
+  "comp.qs.card.group-line-gap": {
+   "pt": 4,
+   "src": "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK): notification_hybrid.xml, the title's paddingEnd 4 dp"
+  },
+  "comp.qs.card.group-lines-bottom": {
+   "pt": 11,
+   "src": "measured:Android 17 emulator's own shade (2026-10-24, 2.625 px a dp): a closed group 121 px plus 72 px a row (3 rows 337 px, 2 rows 265 px)"
+  },
+  "comp.qs.card.group-lines-top": {
+   "pt": 35,
+   "src": "measured:Android 17 emulator's own shade (2026-10-24, 2.625 px a dp): the first row's baseline 140 px under the card's top, the row 27.4 dp tall with its text centred"
   },
   "comp.qs.card.icon": {
    "pt": 40,

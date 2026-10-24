@@ -181,6 +181,32 @@ class NotifRowsTest {
         assertEquals(9, rows.of("g1").count)
     }
 
+    // Read on the emulator's own shade (2026-10-24): the first group lists 5 until the user closes it by its header, then 2;
+    // the second group (and a silent one) lists 2 whatever was done to the first.
+    @Test fun aFirstGroupTheUserClosedAgainListsTwoLinesLikeStock() {
+        val cards = listOf(group("g1", 9), group("g2", 9))
+        val s = ExpandState()
+        NotifRows.toggle(build(cards, s).of("g1"), s)
+        assertEquals(RowKind.HEADER, build(cards, s).of("g1").kind)
+        NotifRows.toggle(build(cards, s).of("g1"), s)
+        val rows = build(cards, s)
+        assertEquals(RowKind.GROUP, rows.of("g1").kind)
+        assertEquals(2, rows.of("g1").lines)
+        assertEquals(2, rows.of("g2").lines)
+        // (It stays so when the group is opened and closed once more.)
+        NotifRows.toggle(rows.of("g1"), s)
+        NotifRows.toggle(build(cards, s).of("g1"), s)
+        assertEquals(2, build(cards, s).of("g1").lines)
+    }
+
+    @Test fun closingTheStateAtThePanelsCloseGivesTheFirstGroupItsFiveLinesBack() {
+        val s = ExpandState()
+        NotifRows.toggle(build(listOf(group("g1", 9)), s).of("g1"), s)
+        NotifRows.toggle(build(listOf(group("g1", 9)), s).of("g1"), s)
+        s.clear()
+        assertEquals(5, build(listOf(group("g1", 9)), s).of("g1").lines)
+    }
+
     @Test fun theLinesNeverExceedTheChildren() {
         assertEquals(3, build(listOf(group("g", 3))).first().lines)
         assertEquals(2, build(listOf(single("x"), group("g", 2))).of("g").lines)

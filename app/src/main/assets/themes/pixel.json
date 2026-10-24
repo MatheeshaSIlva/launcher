@@ -1080,6 +1080,11 @@
    "dark": "@system_accent1_100/10",
    "src": "kit:AOSP framework (Android 17, the emulator's framework.jar and framework-res.apk): the chevron's pill is the notification's protection colour, customColorSurfaceEffect3 (primary at 15 % in light, accent1_100 at 10 % in dark), flattened over the card (Notification.Builder.bindExpandButton)"
   },
+  "comp.qs.card.divider": {
+   "light": "@primary/12",
+   "dark": "@system_accent1_100/8",
+   "src": "measured:Android 17 emulator's own shade (2026-10-24): the 1 px between an opened group's children shows the notification scrim, (207, 218, 237) light and (36, 51, 70) dark over cards of (231, 235, 246) and (25, 34, 44) (a step of -24, -17, -9 and +11, +17, +26); here a tint over the card that steps -23, -16, -11 in light and about +15 in dark"
+  },
   "comp.qs.card.chip": {
    "text": {
     "family": "google:Google Sans Flex",

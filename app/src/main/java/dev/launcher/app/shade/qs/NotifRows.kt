@@ -54,7 +54,10 @@ internal class RowModel(
         internal set
 }
 
-/** What the user opened (keys): groups, cards opened by their chevron, children, and first cards closed by theirs. */
+/**
+ * What the user opened (keys): groups, cards opened by their chevron, children, and the first card (a card or a group) closed
+ * by the user (Android's hasUserChangedExpansion: it then lists what any other card does).
+ */
 internal class ExpandState {
     val opened = HashSet<String>()
     val expandedChildren = HashSet<String>()
@@ -70,7 +73,10 @@ internal class ExpandState {
 internal object NotifRows {
     // Android's own (AOSP NotificationChildrenContainer): the lines a closed group lists (NUMBER_OF_CHILDREN_WHEN_COLLAPSED,
     // and the first notification's 5 of NUMBER_OF_CHILDREN_WHEN_SYSTEM_EXPANDED), the children an opened group shows
-    // (NUMBER_OF_CHILDREN_WHEN_CHILDREN_EXPANDED; the owner's answer, D-026).
+    // (NUMBER_OF_CHILDREN_WHEN_CHILDREN_EXPANDED; the owner's answer, D-026). The 5 is the row's own expanded state, not its
+    // place: getMaxAllowedVisibleChildren reads isExpanded() (the first row is system-expanded until the user changes its
+    // expansion), so a first group the user opened and closed again lists 2 (read on the emulator's own shade, 2026-10-24,
+    // B-034 slice 2). A silent group is no different (its notifications are not "minimized": that is importance MIN).
     const val LINES_COLLAPSED = 2
     const val LINES_FIRST = 5
     const val MAX_CHILDREN = 8
@@ -92,7 +98,7 @@ internal object NotifRows {
                     out += row(c.key, RowKind.CARD, s, c.key, 0, open, 0, 0, true, if (open) Head.APP_TIME else Head.NONE,
                         if (open) Chevron.UP else Chevron.DOWN)
                 } else if (c.key !in state.opened) {
-                    out += row(c.key, RowKind.GROUP, s, c.key, 0, false, minOf(n, if (first) LINES_FIRST else LINES_COLLAPSED), n,
+                    out += row(c.key, RowKind.GROUP, s, c.key, 0, false, minOf(n, if (first && c.key !in state.closedFirst) LINES_FIRST else LINES_COLLAPSED), n,
                         true, Head.APP_TIME, Chevron.DOWN)
                 } else {
                     out += row(c.key, RowKind.HEADER, s, c.key, 0, true, 0, n, true, Head.APP_TIME, Chevron.UP)
@@ -140,8 +146,9 @@ internal object NotifRows {
             }
             RowKind.GROUP -> state.opened += key
             // A child that was expanded is still expanded when the group opens again (Android 17's own shade, step 0 of
-            // B-034: the emulator's), so its state is not touched here.
-            RowKind.HEADER -> state.opened -= key
+            // B-034: the emulator's), so its state is not touched here. Closing it is the user changing its expansion: the
+            // first group then lists 2 lines, not 5 (and stays so: nothing takes it out of closedFirst).
+            RowKind.HEADER -> { state.opened -= key; state.closedFirst += key }
             RowKind.CHILD -> if (!state.expandedChildren.remove(row.key)) state.expandedChildren += row.key
             RowKind.HEADING, RowKind.FOOTER -> {}
         }
