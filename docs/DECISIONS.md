@@ -207,3 +207,15 @@ Decision: As Android 17's SystemUIGoogle (read from the emulator's APK): a notif
 Alternatives considered: keep a faint card ripple (not what Android draws); keep fading the whole card (the scrim shows through it).
 Consequences / revisit when: B-045's squash and the slot closing under a card still flying out show more with an opaque surface; revisit if the owner sees a press state on a real Pixel's shade.
 
+### D-033: Animated tile symbols: Android's choreography in the icon set, timed through a new role (2026-10-24) [owner]
+Context: B-036. Android 17 plays each tile icon's AnimatedVectorDrawable on a state change (150-800 ms per icon); ours crossfaded.
+Decision: Each animation is exported into the icon set (tracks with cubic or accelerate-decelerate interpolators, normalised at build time) and played
+by a pure player. Its timeline is rescaled by a new role, `motion.qs.tile-symbol`, in the Quick Settings moment (owner's
+answer B), whose default gives exactly Android's timings. An interrupted symbol reverses from where it is (Android restarts the
+other animation from its start: a jump, which rule 3 forbids). Sets without animations keep the crossfade. Pixel tiles only;
+Control Center later (Parking lot).
+Alternatives considered: timing as the icon set's own data at the preset's speed (no role); every morph on `qs.tile-state`;
+SystemUI's own drawables at runtime (One UI has no Pixel SystemUI).
+Consequences / revisit when: a role whose curve editor is about timing more than shape; revisit its form if the settings
+cannot show it meaningfully.
+

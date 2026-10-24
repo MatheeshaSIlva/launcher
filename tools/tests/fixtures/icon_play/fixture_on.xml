@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A small animated vector in the form tools/icons/extract_apk_vectors.py writes (interpolators inline), for
+     tools/tests/icon_play_test.sh: a group turned and moved along a motion path by two entries (overshoot), a morph
+     (relative commands in its first look, no interpolator: the default), a bar whose stroke grows and whose trim runs
+     (linear, delayed), a path faded on an interpolator given as path data, a group that rests at scale 0 and grows in after a delay. -->
+<animated-vector xmlns:aapt="http://schemas.android.com/aapt" xmlns:android="http://schemas.android.com/apk/res/android">
+<target android:name="turn">
+<aapt:attr name="android:animation"><set>
+<objectAnimator android:duration="300" android:startOffset="100" android:valueFrom="0" android:valueTo="90" android:propertyName="rotation">
+<aapt:attr name="android:interpolator"><pathInterpolator android:controlX1="0.26" android:controlY1="1.5" android:controlX2="0.27" android:controlY2="1">
+</pathInterpolator></aapt:attr></objectAnimator>
+</set></aapt:attr></target>
+<target android:name="turn">
+<aapt:attr name="android:animation"><set>
+<objectAnimator android:duration="400" android:startOffset="0" android:propertyXName="translateX" android:propertyYName="translateY" android:pathData="M0,0 L10,0 C10,5 5,10 0,10" android:propertyName="translateXY">
+<aapt:attr name="android:interpolator"><linearInterpolator>
+</linearInterpolator></aapt:attr></objectAnimator>
+</set></aapt:attr></target>
+<target android:name="blob">
+<aapt:attr name="android:animation"><set>
+<objectAnimator android:duration="250" android:startOffset="0" android:valueFrom="m2,2 c2,-2 6,-2 8,0 v8 h-8 z" android:valueTo="M4,4 C6,2 10,2 12,4 L12,12 L4,12 Z" android:valueType="2" android:propertyName="pathData">
+</objectAnimator>
+</set></aapt:attr></target>
+<target android:name="bar">
+<aapt:attr name="android:animation"><set android:ordering="1">
+<objectAnimator android:duration="100" android:startOffset="0" android:valueFrom="0" android:valueTo="3" android:propertyName="strokeWidth">
+<aapt:attr name="android:interpolator"><linearInterpolator>
+</linearInterpolator></aapt:attr></objectAnimator>
+<objectAnimator android:duration="200" android:startOffset="0" android:valueFrom="0" android:valueTo="1" android:propertyName="trimPathEnd">
+<aapt:attr name="android:interpolator"><linearInterpolator>
+</linearInterpolator></aapt:attr></objectAnimator>
+</set></aapt:attr></target>
+<target android:name="fade">
+<aapt:attr name="android:animation"><set>
+<objectAnimator android:duration="200" android:startOffset="50" android:valueFrom="1" android:valueTo="0.4" android:propertyName="fillAlpha">
+<aapt:attr name="android:interpolator"><pathInterpolator android:pathData="M 0.0,0.0 c0.4,0 0.2,1 1.0,1.0">
+</pathInterpolator></aapt:attr></objectAnimator>
+</set></aapt:attr></target>
+<target android:name="grow">
+<aapt:attr name="android:animation"><set>
+<objectAnimator android:duration="200" android:startOffset="100" android:valueFrom="0" android:valueTo="1" android:propertyName="scaleX">
+<aapt:attr name="android:interpolator"><linearInterpolator>
+</linearInterpolator></aapt:attr></objectAnimator>
+<objectAnimator android:duration="200" android:startOffset="100" android:valueFrom="0" android:valueTo="1" android:propertyName="scaleY">
+<aapt:attr name="android:interpolator"><linearInterpolator>
+</linearInterpolator></aapt:attr></objectAnimator>
+</set></aapt:attr></target>
+<aapt:attr name="android:drawable"><vector android:name="root_vector" android:height="24dp" android:width="24dp" android:viewportWidth="24" android:viewportHeight="24">
+<group android:name="root_group" android:pivotX="12" android:pivotY="12" android:scaleX="0.5" android:scaleY="0.5">
+<group android:name="turn" android:pivotX="8" android:pivotY="8">
+<path android:name="blob" android:fillColor="#ffffffff" android:pathData="M4,4 C6,2 10,2 12,4 L12,12 L4,12 Z">
+</path>
+<path android:name="bar" android:strokeColor="#ffffffff" android:strokeWidth="3" android:strokeLineCap="1" android:trimPathEnd="0" android:pathData="M2,20 L22,20">
+</path>
+</group>
+<path android:name="fade" android:fillColor="#80ffffff" android:pathData="M18,2 L22,2 L22,6 Z">
+</path>
+<group android:name="grow" android:pivotX="20" android:pivotY="9" android:scaleX="0" android:scaleY="0">
+<path android:name="dot" android:fillColor="#ffffffff" android:pathData="M19,8 L21,8 L21,10 L19,10 Z">
+</path>
+</group>
+</group>
+</vector></aapt:attr></animated-vector>

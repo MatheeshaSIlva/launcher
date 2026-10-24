@@ -13,7 +13,9 @@ earbuds' dots). Writes CACHE_DIR/apk/<OUT>.xml. The APK is data: parsed through 
 
 An animated vector (Android 17's Quick Settings icons: qs_flashlight_icon_off...) is compiled into pieces: its vector and
 each target's animator are files of their own, named by resource id. They are put back inline (aapt:attr), as the source
-had them, so build_icon_set.py can take the animation's first or last frame.
+had them, so build_icon_set.py can take the animation's first or last frame, or its whole play (`android:interpolator`
+too: the app's anim/overshoot, ease_out ... or a framework one, put in as the interpolator's own element; a reference
+that cannot be resolved stops the run).
 """
 import os
 import re
@@ -24,6 +26,22 @@ A = 'http://schemas.android.com/apk/res/android'
 ELEMENT = re.compile(r'(\s*)E: (\S+)')
 ATTR = re.compile(r'\s*A: (?:http://schemas\.android\.com/apk/res/android:)?(\w+)(?:\(0x[0-9a-f]+\))?=(.*)$')
 NAME = re.compile(r':name(?:\(0x[0-9a-f]+\))?="([^"]*)"')
+
+
+# The framework's interpolators by resource id (android.R.interpolator, checked against android-37's android.jar): the
+# ones that are one cubic Bezier as a pathInterpolator, the rest as their own element (build_icon_set.py refuses them).
+def _path(x1, y1, x2, y2):
+    return f'<pathInterpolator xmlns:android="{A}" android:controlX1="{x1}" android:controlY1="{y1}" android:controlX2="{x2}" android:controlY2="{y2}"/>'
+
+
+FRAMEWORK_INTERPOLATORS = {
+    '0x010c000b': f'<linearInterpolator xmlns:android="{A}"/>',
+    '0x010c000d': _path(0.4, 0.0, 0.2, 1.0),    # fast_out_slow_in
+    '0x010c000e': _path(0.0, 0.0, 0.2, 1.0),    # linear_out_slow_in
+    **{f'0x010c{i:04x}': f'<{n}Interpolator xmlns:android="{A}"/>' for i, n in enumerate(
+        ['accelerate', 'decelerate', 'accelerate', 'decelerate', 'accelerate', 'decelerate', 'accelerateDecelerate',
+         'anticipate', 'overshoot', 'anticipateOvershoot', 'bounce'])},
+}
 
 
 def aapt2():
@@ -124,7 +142,7 @@ def convert(exe, apk, name, strs, skip=(), path=None):
             attr = m.group(1)
             v = value(attr, m.group(2), strs)
             # (An animated vector's vector and animators are kept as references: put back inline after.)
-            if attr in ('drawable', 'animation') and v.startswith('@0x'):
+            if attr in ('drawable', 'animation', 'interpolator') and v.startswith('@0x'):
                 open_tag[0] += f' android:{attr}="{v}"'
                 continue
             # (Names kept: an animated vector's targets name its groups and paths.)
@@ -145,15 +163,18 @@ def inline_refs(exe, apk, xml, strs, fls, depth=0):
     ET.register_namespace('aapt', 'http://schemas.android.com/aapt')
     root = ET.fromstring(xml.split('\n', 1)[1] if xml.startswith('<?xml') else xml)
     for el in root.iter():
-        for attr in ('drawable', 'animation'):
+        for attr in ('drawable', 'animation', 'interpolator'):
             key = '{%s}%s' % (A, attr)
             ref = el.get(key)
             if not ref or not ref.startswith('@0x'):
                 continue
             path = fls.get(ref[1:])
-            if not path or depth > 3:
+            if attr == 'interpolator' and not path and ref[1:] not in FRAMEWORK_INTERPOLATORS:
+                raise SystemExit(f'interpolator {ref} is in neither the APK nor the framework table')
+            if (not path and ref[1:] not in FRAMEWORK_INTERPOLATORS) or depth > 3:
                 continue
-            sub = inline_refs(exe, apk, convert(exe, apk, None, strs, path=path), strs, fls, depth + 1)
+            sub = FRAMEWORK_INTERPOLATORS.get(ref[1:]) if not path else inline_refs(
+                exe, apk, convert(exe, apk, None, strs, path=path), strs, fls, depth + 1)
             del el.attrib[key]
             holder = ET.SubElement(el, '{http://schemas.android.com/aapt}attr', {'name': 'android:' + attr})
             holder.append(ET.fromstring(sub.split('\n', 1)[1] if sub.startswith('<?xml') else sub))
