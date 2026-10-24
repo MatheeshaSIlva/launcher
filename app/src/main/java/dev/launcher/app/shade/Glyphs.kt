@@ -75,8 +75,10 @@ class Glyphs(private val ctx: Context, private val symbols: ChoiceKey = CcTokens
     private fun draw(c: Canvas, d: Drawable, cx: Float, cy: Float, size: Float, color: Int) {
         val s = size.toInt().coerceAtLeast(1)
         d.setBounds(0, 0, s, s)
-        d.setTint(color or (0xFF shl 24))
-        d.alpha = (color ushr 24) and 0xFF
+        // (The colour's own alpha tints the vector: a drawable's alpha beside an opaque tint left a fading symbol at full
+        // strength, a card's chevron outliving its text.)
+        d.setTint(color)
+        d.alpha = 255
         // Placed by translation (sub-pixel), drawn at whole-pixel bounds (its cache keeps its size while it moves).
         val save = c.save()
         c.translate(cx - s / 2f, cy - s / 2f)

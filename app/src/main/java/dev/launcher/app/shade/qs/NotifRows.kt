@@ -232,6 +232,19 @@ internal object NotifRows {
         return true
     }
 
+    /** [foldLine]'s answer for a child that has no line of the closed group to fold into. */
+    const val BELOW = -1
+
+    /**
+     * Where a child of an opened group comes from when the group opens, and goes back to when it closes: the closed group's
+     * line [index] of [lines] it listed (the notification's place among the group's latest), or [BELOW] for a child past them
+     * (it comes from the closed card's bottom, and goes there).
+     */
+    fun foldLine(index: Int, lines: Int): Int = if (index in 0 until lines) index else BELOW
+
+    /** The top of the closed group's line [line]: [headerTop] plus the space above the first line, then one [lineHeight] each. */
+    fun foldTop(headerTop: Float, linesTop: Float, lineHeight: Float, line: Int): Float = headerTop + linesTop + line * lineHeight
+
     /** What a tap on [row]'s chevron (or a group's body) does to [state]. */
     fun toggle(row: RowModel, state: ExpandState) {
         val key = row.cardKey ?: return

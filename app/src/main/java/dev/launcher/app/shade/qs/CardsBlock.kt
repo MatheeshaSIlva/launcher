@@ -68,14 +68,27 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val k = MotionValue(0f, 1000f, { panel.view.invalidate() })
         val alpha = MotionValue(0f, 1000f, { panel.view.invalidate() })
         val swipe = MotionValue(0f, 2f, { panel.view.invalidate() })
+        /**
+         * How far a child of a group is from the line it is the card form of (0: it is that one-line row of the closed group,
+         * 1: a child of its own): it unfolds from its line as the group opens and folds back into it as it closes.
+         */
+        val fold = MotionValue(1f, 1000f, { panel.view.invalidate() })
         val ripple = Ripple { panel.view.invalidate() }
         var leaving: Row? = null
+        /** The closed group's line this child unfolds from and folds into, or [NotifRows.BELOW]. */
+        var line = NotifRows.BELOW
+        /** Leaving by folding into its line: it keeps showing (and is drawn over its group) until it is that line. */
+        var folding = false
+        /** Anything of it still moving. */
+        val busy get() = alpha.isAnimating || y.isAnimating || h.isAnimating || k.isAnimating || fold.isAnimating
     }
 
     private var cards: List<Card> = emptyList()
     /** [cards] as the row model takes them (kept from the last layout). */
     private var cardIns: List<CardIn> = emptyList()
     private var rows: List<Row> = emptyList()
+    /** Some row is on its way out (the list at rest has none: nothing to look through at a frame). */
+    private var anyLeaving = false
     private val anims = HashMap<String, Anim>()
     /** What the user opened: groups, cards (or closed: the first), children (keys). */
     private val state = ExpandState()
@@ -165,28 +178,67 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         }
         contentHeight = y
         hairlinePx = hairline()
-        // Rows that went fade out where they were; the others move to their places.
+        // Rows that went fade out where they were (a child of a group that closed folds back into the group's lines); the
+        // others move to their places.
         val keys = out.map { it.key }.toHashSet()
         for ((k, a) in anims) {
             if (k in keys || a.leaving != null) continue
             val old = rows.firstOrNull { it.key == k } ?: continue
             a.leaving = old
-            if (animate) a.alpha.animateTo(0f, Motion.role(MotionTokens.NC_LEAVE)) else a.alpha.snapTo(0f)
+            a.folding = false
+            if (animate) leave(a, old, out) else a.alpha.snapTo(0f)
         }
+        val reflow = Motion.role(MotionTokens.NC_REFLOW)
         for (r in out) {
             val a = anims[r.key]
-            if (a == null || a.leaving != null) {
-                val n = a ?: Anim().also { anims[r.key] = it }
-                n.leaving = null
-                n.y.snapTo(r.top)
-                n.h.snapTo(r.height)
-                n.k.snapTo(openness(r))
+            if (a != null && a.leaving != null) {
+                // A key that comes back while it is still going carries on from where it is (never a jump): its place,
+                // height, openness and fold on the reflow, its presence on the appear.
+                a.leaving = null
+                a.folding = false
+                if (animate) {
+                    a.y.animateTo(r.top, reflow)
+                    a.h.animateTo(r.height, reflow)
+                    a.k.animateTo(openness(r), reflow)
+                    a.fold.animateTo(1f, reflow)
+                    a.alpha.animateTo(1f, Motion.role(MotionTokens.NC_APPEAR))
+                    if (abs(a.swipe.value) > 0.5f) a.swipe.animateTo(0f, Motion.role(MotionTokens.NC_SWIPE_BACK))
+                } else {
+                    a.y.snapTo(r.top)
+                    a.h.snapTo(r.height)
+                    a.k.snapTo(openness(r))
+                    a.fold.snapTo(1f)
+                    a.alpha.snapTo(1f)
+                    a.swipe.snapTo(0f)
+                }
+            } else if (a == null) {
+                val n = Anim().also { anims[r.key] = it }
                 n.swipe.snapTo(0f)
-                if (animate) { n.alpha.snapTo(0f); n.alpha.animateTo(1f, Motion.role(MotionTokens.NC_APPEAR)) } else n.alpha.snapTo(1f)
+                val from = if (animate) unfoldFrom(r) else null
+                if (from != null) {
+                    // A child of a group that opens: it starts where its line was (or at the closed card's bottom) and
+                    // grows to its place with the rest; what the line showed is what it shows, until it is its own.
+                    n.line = from.line
+                    n.y.snapTo(from.y)
+                    n.h.snapTo(from.h)
+                    n.k.snapTo(0f)
+                    n.fold.snapTo(from.fold)
+                    n.alpha.snapTo(from.alpha)
+                    n.y.animateTo(r.top, reflow)
+                    n.h.animateTo(r.height, reflow)
+                    if (openness(r) != 0f) n.k.animateTo(openness(r), reflow)
+                    if (from.fold != 1f) n.fold.animateTo(1f, reflow)
+                    if (from.alpha != 1f) n.alpha.animateTo(1f, Motion.role(MotionTokens.NC_APPEAR))
+                } else {
+                    n.y.snapTo(r.top)
+                    n.h.snapTo(r.height)
+                    n.k.snapTo(openness(r))
+                    n.fold.snapTo(1f)
+                    if (animate) { n.alpha.snapTo(0f); n.alpha.animateTo(1f, Motion.role(MotionTokens.NC_APPEAR)) } else n.alpha.snapTo(1f)
+                }
             } else if (animate) {
                 // (Place, height and openness on one role in one frame: a row that grows or folds never has one of them
                 // ahead of the others. A second change mid-way starts from where each is, with its speed.)
-                val reflow = Motion.role(MotionTokens.NC_REFLOW)
                 a.y.animateTo(r.top, reflow)
                 a.h.animateTo(r.height, reflow)
                 if (a.k.target != openness(r)) a.k.animateTo(openness(r), reflow)
@@ -200,8 +252,9 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val itemKeys = cards.flatMapTo(HashSet()) { c -> c.items.map { it.key } }
         itemTexts.keys.retainAll(itemKeys)
         groupCache.keys.retainAll(keys)
-        anims.entries.removeAll { (k, a) -> k !in keys && a.leaving != null && !a.alpha.isAnimating }
+        anims.entries.removeAll { (k, a) -> k !in keys && a.leaving != null && !a.busy }
         rows = out
+        anyLeaving = anims.values.any { it.leaving != null }
         // (A closed group's lines are made here, not in its first frame; an opened group keeps them to fade out.)
         for (r in out) if (r.kind == RowKind.GROUP) r.card?.let { groupLines(it, minOf(r.m.lines, it.items.size)) }
         follow(clearAll, cards.any { it.items.any { i -> i.clearable } }, animate)
@@ -212,6 +265,41 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
 
     /** How open [r] is meant to be: 1 for an expanded card or child and an opened group's header, 0 otherwise. */
     private fun openness(r: Row) = if (r.expanded) 1f else 0f
+
+    /** [old] leaves: it fades where it is, or if it was a child of a group that closed, folds back (into its line or below). */
+    private fun leave(a: Anim, old: Row, out: List<Row>) {
+        val group = if (old.kind == RowKind.CHILD) out.firstOrNull { it.kind == RowKind.GROUP && it.key == old.m.cardKey } else null
+        if (group == null) { a.alpha.animateTo(0f, Motion.role(MotionTokens.NC_LEAVE)); return }
+        val line = NotifRows.foldLine(group.card?.items?.indexOfFirst { it.key == old.key } ?: -1, group.m.lines)
+        val reflow = Motion.role(MotionTokens.NC_REFLOW)
+        a.k.animateTo(0f, reflow)
+        a.line = line
+        if (line == NotifRows.BELOW) {
+            // Under the lines: into the closed card's bottom, fading as the card takes its place.
+            a.y.animateTo(group.top + group.height, reflow)
+            a.h.animateTo(0f, reflow)
+            a.alpha.animateTo(0f, Motion.role(MotionTokens.NC_LEAVE))
+        } else {
+            // Into its line, which the group shows again once it is there (the same strings in the same place).
+            a.folding = true
+            a.y.animateTo(NotifRows.foldTop(group.top, Design.pt(QsTokens.GROUP_LINES_TOP, u), Design.pt(QsTokens.GROUP_LINE, u), line), reflow)
+            a.h.animateTo(Design.pt(QsTokens.GROUP_LINE, u), reflow)
+            a.fold.animateTo(0f, reflow)
+        }
+    }
+
+    /** Where a child that comes with a group opening starts (and how much it shows of itself there). */
+    private class Start(val y: Float, val h: Float, val fold: Float, val line: Int, val alpha: Float)
+
+    private fun unfoldFrom(r: Row): Start? {
+        if (r.kind != RowKind.CHILD) return null
+        val g = rows.firstOrNull { it.kind == RowKind.GROUP && it.key == r.m.cardKey } ?: return null
+        val ha = anims[g.key] ?: return null
+        val line = NotifRows.foldLine(g.card?.items?.indexOfFirst { it.key == r.key } ?: -1, g.m.lines)
+        if (line == NotifRows.BELOW) return Start(ha.y.value + ha.h.value, 0f, 1f, line, 0f)
+        return Start(NotifRows.foldTop(ha.y.value, Design.pt(QsTokens.GROUP_LINES_TOP, u), Design.pt(QsTokens.GROUP_LINE, u), line),
+            Design.pt(QsTokens.GROUP_LINE, u), 0f, line, 1f - ha.k.value.coerceIn(0f, 1f))
+    }
 
     /** The hairline above an opened group's child: its token's width, at least one pixel (Android's is 0.5 dp, 1 px). */
     private fun hairline(): Float = max(1f, Math.round(Design.pt(QsTokens.DIVIDER_WIDTH, u)).toFloat())
@@ -491,12 +579,28 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         clip.rewind()
         clip.addRoundRect(0f, top, panel.panelWidth.toFloat(), panel.panelHeight + 2f * corner, corner, corner, Path.Direction.CW)
         c.clipPath(clip)
-        for ((_, a) in anims) a.leaving?.let { drawRow(c, it, a, listAlpha) }
+        // (Rows that fade away lie under the others; a child folding into its group's line lies over the group.)
+        // (Only while something is leaving: no iterator is made at a frame of a list at rest.)
+        if (anyLeaving) {
+            var still = false
+            val going = anims.values.iterator()
+            while (going.hasNext()) {
+                val a = going.next()
+                val old = a.leaving ?: continue
+                if (!a.busy) { going.remove(); continue }
+                still = true
+                if (!a.folding) drawRow(c, old, a, listAlpha)
+            }
+            anyLeaving = still
+        }
         for (row in rows) drawRow(c, row, anims[row.key] ?: continue, listAlpha)
+        if (anyLeaving) for ((_, a) in anims) if (a.folding) a.leaving?.let { drawRow(c, it, a, listAlpha) }
+        for (row in rows) if (row.kind == RowKind.GROUP || row.kind == RowKind.HEADER) drawRow(c, row, anims[row.key] ?: continue, listAlpha, iconOnly = true)
         c.restoreToCount(save)
     }
 
-    private fun drawRow(c: Canvas, row: Row, a: Anim, listAlpha: Float) {
+    /** [iconOnly]: only a group header's icon, drawn after the rows that lie over it. */
+    private fun drawRow(c: Canvas, row: Row, a: Anim, listAlpha: Float, iconOnly: Boolean = false) {
         place(row, a, r)
         if (r.bottom < 0f || r.top > panel.panelHeight) return
         // A swiped card fades as it goes.
@@ -506,42 +610,18 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         when (row.kind) {
             RowKind.HEADING -> drawHeading(c, r, f)
             RowKind.FOOTER -> drawFooter(c, r, f)
-            else -> drawCard(c, row, a, r, f)
+            else -> if (iconOnly) drawHeaderIcon(c, row, r, f) else drawCard(c, row, a, r, f)
         }
     }
 
-    private fun cornerPx(k: Corner, big: Float, joined: Float) = when (k) { Corner.BIG -> big; Corner.JOINED -> joined; Corner.NONE -> 0f }
-
-    private fun drawCard(c: Canvas, row: Row, a: Anim, r: RectF, alpha: Float) {
-        val item = row.item ?: return
-        val big = Design.pt(QsTokens.CARD_CORNER, u)
-        val joined = Design.pt(QsTokens.JOINED_CORNER, u)
-        val top = cornerPx(row.m.top, big, joined)
-        val bottom = cornerPx(row.m.bottom, big, joined)
-        radii[0] = top; radii[1] = top; radii[2] = bottom; radii[3] = bottom
-        c.save()
-        c.translate(r.left, r.top)
-        panel.surfaces.draw(c, Design.material(QsTokens.CARD), r.width(), r.height(), big, r.left, r.top, 1f, alpha, radii = radii)
-        // (Pressed: the platform's ripple, as a notification's background has, in the theme's highlight colour.)
-        if (a.ripple.active) a.ripple.draw(c, r.width(), r.height(), big, Design.color(QsTokens.CARD_RIPPLE), alpha, u, share = 1f, radii = radii)
-        c.restore()
-        // The content lies within the row's rectangle as it is now (a rect clip: analytic): a row growing or folding shows
-        // no more of it than it has room for.
-        c.save()
-        c.clipRect(r)
-        val pad = Design.pt(QsTokens.CARD_PADDING, u)
-        val icon = Design.pt(QsTokens.CARD_ICON, u)
-        // An opened group's child: a hairline across the card's top, its content under it.
-        val inset = if (row.m.divider) hairlinePx else 0f
-        if (inset > 0f) {
-            fill.color = faded(Design.color(QsTokens.DIVIDER), alpha)
-            c.drawRect(r.left, r.top, r.right, r.top + inset, fill)
-        }
-        // The app's own icon in a circle (Android 16's notifications show it, not the small symbol), except a system app's (Play
-        // Protect's shield, measured on the emulator's own): its small symbol on a circle of the notification's colour; without
-        // an icon, the small symbol on the palette's colour.
+    /**
+     * The app's own icon in a circle (Android 16's notifications show it, not the small symbol), except a system app's (Play
+     * Protect's shield, measured on the emulator's own): its small symbol on a circle of the notification's colour; without
+     * an icon, the small symbol on the palette's colour. (A group's child has none: its text starts where a card's does,
+     * under the header's icon.)
+     */
+    private fun drawAppIcon(c: Canvas, row: Row, item: Notifs.Item, r: RectF, pad: Float, icon: Float, alpha: Float) {
         val app = if (item.pkg in systemApps) null else appIcon(item.pkg)
-        // (A group's child has none: its text starts where a card's does, under the header's icon.)
         if (row.m.icon && app != null) {
             val cx = r.left + pad + icon / 2f
             val cy = r.top + pad + icon / 2f
@@ -569,18 +649,69 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             d.draw(c)
             c.restore()
         }
+    }
+
+    private fun drawHeaderIcon(c: Canvas, row: Row, r: RectF, alpha: Float) {
+        val item = row.item ?: return
+        c.save()
+        c.clipRect(r)
+        drawAppIcon(c, row, item, r, Design.pt(QsTokens.CARD_PADDING, u), Design.pt(QsTokens.CARD_ICON, u), alpha)
+        c.restore()
+    }
+
+    private fun cornerPx(k: Corner, big: Float, joined: Float) = when (k) { Corner.BIG -> big; Corner.JOINED -> joined; Corner.NONE -> 0f }
+
+    private fun drawCard(c: Canvas, row: Row, a: Anim, r: RectF, alpha: Float) {
+        val item = row.item ?: return
+        val big = Design.pt(QsTokens.CARD_CORNER, u)
+        val joined = Design.pt(QsTokens.JOINED_CORNER, u)
+        // (No corner is more than half the row's height: a child that is a line of a group is a few dp tall.)
+        val cap = r.height() / 2f
+        val top = minOf(cornerPx(row.m.top, big, joined), cap)
+        val bottom = minOf(cornerPx(row.m.bottom, big, joined), cap)
+        radii[0] = top; radii[1] = top; radii[2] = bottom; radii[3] = bottom
+        val fold = a.fold.value.coerceIn(0f, 1f)
+        val gl = if (fold < 0.999f && a.line != NotifRows.BELOW) lineOf(row, a) else null
+        val fo = if (gl != null) fold else 1f
+        c.save()
+        c.translate(r.left, r.top)
+        panel.surfaces.draw(c, Design.material(QsTokens.CARD), r.width(), r.height(), big, r.left, r.top, 1f, alpha, radii = radii)
+        // (Pressed: the platform's ripple, as a notification's background has, in the theme's highlight colour.)
+        if (a.ripple.active) a.ripple.draw(c, r.width(), r.height(), big, Design.color(QsTokens.CARD_RIPPLE), alpha, u, share = 1f, radii = radii)
+        c.restore()
+        // The content lies within the row's rectangle as it is now (a rect clip: analytic): a row growing or folding shows
+        // no more of it than it has room for.
+        c.save()
+        c.clipRect(r)
+        val pad = Design.pt(QsTokens.CARD_PADDING, u)
+        val icon = Design.pt(QsTokens.CARD_ICON, u)
+        // An opened group's child: a hairline across the card's top (coming in as it unfolds), its content under it.
+        val inset = if (row.m.divider) hairlinePx * fo else 0f
+        if (inset > 0f) {
+            fill.color = faded(Design.color(QsTokens.DIVIDER), alpha)
+            c.drawRect(r.left, r.top, r.right, r.top + hairlinePx * fo, fill)
+        }
+        // (A group's header has its icon drawn last: the children unfolding from its lines lie over it.)
+        if ((row.kind != RowKind.GROUP && row.kind != RowKind.HEADER) || a.leaving != null) drawAppIcon(c, row, item, r, pad, icon, alpha)
         val e = itemText(item)
         // How open it is now: its two contents are drawn in this proportion (the first and last frames of a fold show one).
         val k = a.k.value.coerceIn(0f, 1f)
         val tx = r.left + textX
-        val chipW = drawChip(c, row, r, pad, alpha, inset, k)
+        // (Its chevron comes in as the child grows out of the line, which has none.)
+        val chipW = drawChip(c, row, r, pad, alpha * range(0.35f, 1f, fo), inset, k)
         val maxW = r.right - pad - chipW - tx
         if (row.kind == RowKind.GROUP || row.kind == RowKind.HEADER) {
             drawGroup(c, row, e, r, tx, pad, icon, inset, maxW, alpha, k)
         } else {
-            drawCardText(c, row, e, r, tx, pad, inset, maxW, alpha, k)
+            drawCardText(c, row, e, r, tx, pad, inset, maxW, alpha, k, fo, gl)
         }
         c.restore()
+    }
+
+    /** The line of its closed group that [row] (a child) unfolds from or folds into, as the group last drew it; null if that is not known. */
+    private fun lineOf(row: Row, a: Anim): GroupLine? {
+        val g = groupCache[row.m.cardKey ?: return null] ?: return null
+        return if (a.line in g.lines.indices && g.items[a.line].key == row.key) g.lines[a.line] else null
     }
 
     /**
@@ -589,7 +720,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
      * cross-fade), and what only one shows fades (the " • time" after the collapsed title; the app's or the time's line, the
      * rest of the text and the actions of the expanded card).
      */
-    private fun drawCardText(c: Canvas, row: Row, e: ItemText, r: RectF, tx: Float, pad: Float, inset: Float, maxW: Float, alpha: Float, k: Float) {
+    private fun drawCardText(c: Canvas, row: Row, e: ItemText, r: RectF, tx: Float, pad: Float, inset: Float, maxW: Float, alpha: Float, k: Float, fo: Float, gl: GroupLine?) {
         val head = NotifRows.expandedHead(row.kind, e.time != null)
         val al = line(QsTokens.CARD_APP)
         val tl = line(QsTokens.CARD_TITLE)
@@ -602,6 +733,10 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         Design.text(QsTokens.CARD_BODY).applyTo(body, u)
         val titleColor = Design.color(QsTokens.CARD_TITLE_COLOR)
         val textColor = Design.color(QsTokens.CARD_TEXT_COLOR)
+        // Still a line of its group (a child unfolding from it, or folding back): its title and text lie where the line's
+        // did, and glide to their places in the card as it grows ([fo]); what the line did not show comes in with it.
+        val lineBase = if (gl != null) baselineIn(title, r.top, Design.pt(QsTokens.GROUP_LINE, u)) else 0f
+        val titleAlpha = if (gl != null && gl.name == null) alpha * fo else alpha
         // The first line of an expanded card: the app and the time, or a child's time alone. It comes in once the title has
         // moved clear of its place.
         val headAlpha = alpha * range(0.4f, 1f, k)
@@ -616,48 +751,77 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val we = (if (head != Head.NONE) r.right - pad - tx else maxW).toInt().coerceAtLeast(1)
         val tg = e.titleGlide
         if (tg.w0 != wc || tg.w1 != we) tg.set(wc, we, ellipsize(e.name, title, wc.toFloat()), ellipsize(e.name, title, we.toFloat()), title)
-        val titleBase = baselineIn(title, top + k * titleGap, tl)
-        title.color = faded(titleColor, alpha)
-        c.drawText(tg.prefix, tx, titleBase, title)
-        if (k < 0.997f && tg.end0.isNotEmpty()) {
-            title.color = faded(titleColor, alpha * (1f - k))
-            c.drawText(tg.end0, tx + tg.dx, titleBase, title)
+        val cardTitleBase = baselineIn(title, top + k * titleGap, tl)
+        val titleBase = if (gl != null) lineBase + fo * (cardTitleBase - lineBase) else cardTitleBase
+        var tailX = tx + tg.width0
+        title.color = faded(titleColor, titleAlpha)
+        if (gl != null) {
+            // On its line: the title is cut to the room it has, from the line's (the card's width) to the card's own as it
+            // unfolds, so that at fold 0 it is the string the line draws and at fold 1 the one the card does.
+            val room = e.width + (wc + (we - wc) * k - e.width) * fo
+            tailX = drawCut(c, e.name, tx, titleBase, title, room)
+        } else {
+            c.drawText(tg.prefix, tx, titleBase, title)
+            if (k < 0.997f && tg.end0.isNotEmpty()) {
+                title.color = faded(titleColor, titleAlpha * (1f - k))
+                c.drawText(tg.end0, tx + tg.dx, titleBase, title)
+            }
+            if (k > 0.003f && tg.end1.isNotEmpty()) {
+                title.color = faded(titleColor, titleAlpha * k)
+                c.drawText(tg.end1, tx + tg.dx, titleBase, title)
+            }
         }
-        if (k > 0.003f && tg.end1.isNotEmpty()) {
-            title.color = faded(titleColor, alpha * k)
-            c.drawText(tg.end1, tx + tg.dx, titleBase, title)
-        }
-        val tailAlpha = alpha * (1f - range(0f, 0.5f, k))
+        val tailAlpha = alpha * (1f - range(0f, 0.5f, k)) * range(0.4f, 1f, fo)
         if (e.time != null && tailAlpha > 0.003f) {
             small.color = faded(textColor, tailAlpha)
-            c.drawText(e.tail, tx + tg.width0, titleBase, small)
+            c.drawText(e.tail, tailX, titleBase, small)
         }
         // The text: its first line is the collapsed card's one line, moving down to the expanded card's first.
         val lines = fullLines(e)
         val xg = e.textGlide
         if (xg.w0 < 0) xg.set(e.width, e.width, ellipsize(e.oneLine.orEmpty(), body, e.width.toFloat()), if (lines.isEmpty()) "" else lines[0], body)
         val textTop = top + tl + k * (titleGap + textGap)
-        val textBase = baselineIn(body, textTop, bl)
-        body.color = faded(textColor, alpha)
-        c.drawText(xg.prefix, tx, textBase, body)
-        if (k < 0.997f && xg.end0.isNotEmpty()) {
-            body.color = faded(textColor, alpha * (1f - k))
-            c.drawText(xg.end0, tx + xg.dx, textBase, body)
-        }
-        if (k > 0.003f && xg.end1.isNotEmpty()) {
-            body.color = faded(textColor, alpha * k)
-            c.drawText(xg.end1, tx + xg.dx, textBase, body)
+        val cardTextBase = baselineIn(body, textTop, bl)
+        // (On its line the text follows the title on the same baseline; a line whose title filled it had none.)
+        val onLine = gl != null && gl.text != null
+        // (First it drops to the line under the title, then slides back under it: a straight glide crosses the title. By
+        // construction: the drop is whole (the card's own offset of its text from its title, where the line boxes do not
+        // overlap) by fo 0.5, where the slide starts, and until then the text stays right of the title's end and its gap.)
+        val textBase = if (onLine) titleBase + (cardTextBase - cardTitleBase) * range(0f, 0.5f, fo) else cardTextBase
+        val textLeft = if (onLine) tx + (1f - range(0.5f, 1f, fo)) * gl!!.dx else tx
+        val textAlpha = if (gl != null && !onLine) alpha * range(0.4f, 1f, fo) else alpha
+        if (gl != null) {
+            // On its line: cut to what is left of the card's text room from where it is, never past it (at fold 0 the line's
+            // own string, at fold 1 the card's).
+            val room = e.width - (textLeft - tx)
+            body.color = faded(textColor, textAlpha * (1f - k))
+            e.oneLine?.let { drawCut(c, it, textLeft, textBase, body, room) }
+            if (k > 0.003f && lines.isNotEmpty()) {
+                body.color = faded(textColor, textAlpha * k)
+                drawCut(c, lines[0], textLeft, textBase, body, room)
+            }
+        } else {
+            body.color = faded(textColor, textAlpha)
+            c.drawText(xg.prefix, textLeft, textBase, body)
+            if (k < 0.997f && xg.end0.isNotEmpty()) {
+                body.color = faded(textColor, textAlpha * (1f - k))
+                c.drawText(xg.end0, textLeft + xg.dx, textBase, body)
+            }
+            if (k > 0.003f && xg.end1.isNotEmpty()) {
+                body.color = faded(textColor, textAlpha * k)
+                c.drawText(xg.end1, textLeft + xg.dx, textBase, body)
+            }
         }
         if (k <= 0.003f) return
-        // The rest of the expanded card, in its own places.
+        // The rest of the expanded card travels with the first line (its place now), each line under the one before.
         val ek = alpha * k
         body.color = faded(textColor, ek)
-        var y = top + titleGap + tl + textGap + bl
+        var y = textTop + bl
         for (i in 1 until lines.size) {
             c.drawText(lines[i], tx, baselineIn(body, y, bl), body)
             y += bl
         }
-        if (lines.isEmpty()) y = top + titleGap + tl + textGap
+        if (lines.isEmpty()) y = textTop
         if (actionsFor(e).isNotEmpty() && !panel.host.locked) drawActions(c, e, row.key, r, y, ek, k >= 0.5f)
     }
 
@@ -683,6 +847,9 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val lineH = Design.pt(QsTokens.GROUP_LINE, u)
         val first = r.top + Design.pt(QsTokens.GROUP_LINES_TOP, u)
         for (i in g.lines.indices) {
+            // (A line whose child is unfolding from it or folding into it is drawn by the child, until it is the line again.)
+            val own = anims[g.items[i].key]
+            if (own != null && own.line == i && own.fold.value > 0.001f) continue
             val l = g.lines[i]
             val base = baselineIn(title, first + i * lineH, lineH)
             l.name?.let { c.drawText(it, tx, base, title) }
@@ -842,7 +1009,50 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         small.textAlign = Paint.Align.LEFT
     }
 
-    private fun ellipsize(s: String, p: TextPaint, w: Float) = TextUtils.ellipsize(s, p, max(1f, w), TextUtils.TruncateAt.END).toString()
+    /**
+     * [s] cut to [w] with an ellipsis (as a line that does not fit is). Cut as [drawCut] cuts, so that a string made here and
+     * one drawn there at the same room are the same.
+     */
+    private fun ellipsize(s: String, p: TextPaint, w: Float): String {
+        val room = max(1f, w)
+        if (p.breakText(s, true, room, null) >= s.length) return s
+        return s.substring(0, cutAt(s, p, room)) + ELLIPSIS
+    }
+
+    /** How many characters of [s] stay before the ellipsis when it is cut to [room] (never inside a surrogate pair or before a mark). */
+    private fun cutAt(s: String, p: TextPaint, room: Float): Int {
+        var m = p.breakText(s, true, max(1f, room - p.measureText(ELLIPSIS)), null)
+        while (m > 0 && (Character.isHighSurrogate(s[m - 1]) || s[m - 1] == '\u200D' || (m < s.length && isMark(s[m])))) m--
+        return m
+    }
+
+    private fun isMark(ch: Char): Boolean = when (Character.getType(ch).toByte()) {
+        Character.NON_SPACING_MARK, Character.ENCLOSING_MARK, Character.COMBINING_SPACING_MARK -> true
+        else -> ch == '\u200D' || ch == '\u200C' || ch in '\uFE00'..'\uFE0F'
+    }
+
+    /**
+     * [s] drawn from [x] cut to [room] as [ellipsize] cuts it, made of nothing (a row that moves draws a different room at every
+     * frame: its text is cut to what it has, never past it, and with no step from one cut to the next). Returns where it ends.
+     */
+    private fun drawCut(c: Canvas, s: String, x: Float, y: Float, p: TextPaint, room: Float): Float {
+        if (room < 1f || s.isEmpty()) return x
+        if (p.breakText(s, true, room, null) >= s.length) {
+            c.drawText(s, x, y, p)
+            return x + p.measureText(s)
+        }
+        // One run, the string [ellipsize] makes (the cut text and the ellipsis): drawn apart, the ellipsis of right-to-left text
+        // would land beside its first word instead of at the cut end.
+        val m = cutAt(s, p, room)
+        if (cutBuf.size < m + 1) cutBuf = CharArray(max(m + 1, cutBuf.size * 2))
+        s.toCharArray(cutBuf, 0, 0, m)
+        cutBuf[m] = '\u2026'
+        c.drawText(cutBuf, 0, m + 1, x, y, p)
+        return x + p.measureText(cutBuf, 0, m + 1)
+    }
+
+    /** The cut string of [drawCut] (grown when a longer one comes; drawing is on one thread). */
+    private var cutBuf = CharArray(128)
 
     private fun timeLabel(t: Long): String {
         val d = System.currentTimeMillis() - t
@@ -1080,5 +1290,6 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val io = Executors.newSingleThreadExecutor()
         /** An expanded card's text at most this many lines (Android's big text in the shade). */
         const val MAX_LINES = 7
+        const val ELLIPSIS = "\u2026"
     }
 }

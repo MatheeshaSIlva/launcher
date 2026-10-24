@@ -464,4 +464,36 @@ class NotifRowsTest {
         assertEquals(0, shared("\u0915\u094D\u2026", "\u0915\u094D\u0937"))
         assertEquals(3, shared("\u0915\u094D\u0937a", "\u0915\u094D\u0937b"))
     }
+
+    // ------------------------------------------------------------------ slice 3b-1: children unfolding out of a group's lines
+
+    @Test fun aChildOnOneOfTheListedLinesFoldsToThatLine() {
+        for (i in 0 until 2) assertEquals(i, NotifRows.foldLine(i, 2))
+        for (i in 0 until 5) assertEquals(i, NotifRows.foldLine(i, 5))
+    }
+
+    @Test fun aChildPastTheListedLinesFoldsBelow() {
+        assertEquals(NotifRows.BELOW, NotifRows.foldLine(2, 2))
+        assertEquals(NotifRows.BELOW, NotifRows.foldLine(7, 5))
+        assertEquals(NotifRows.BELOW, NotifRows.foldLine(0, 0))
+    }
+
+    @Test fun anUnknownChildFoldsBelow() {
+        assertEquals(NotifRows.BELOW, NotifRows.foldLine(-1, 2))
+    }
+
+    @Test fun theLinesPlacesFollowTheHeadersTopOneLineEach() {
+        assertEquals(110f, NotifRows.foldTop(100f, 10f, 20f, 0), 0f)
+        assertEquals(130f, NotifRows.foldTop(100f, 10f, 20f, 1), 0f)
+        assertEquals(210f, NotifRows.foldTop(100f, 10f, 20f, 5), 0f)
+    }
+
+    @Test fun theLinesOfTheFirstGroupAreTheFoldLinesOfItsChildren() {
+        // The model's own count (5 for the first group, 2 for others) is what a child folds into.
+        val closed = build(listOf(group("a|g", 6)))
+        val lines = closed.first().lines
+        assertEquals(NotifRows.LINES_FIRST, lines)
+        assertEquals(4, NotifRows.foldLine(4, lines))
+        assertEquals(NotifRows.BELOW, NotifRows.foldLine(5, lines))
+    }
 }

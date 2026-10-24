@@ -123,6 +123,6 @@ internal fun mix(a: Int, b: Int, t: Float): Int {
 
 /** The baseline that centres [p]'s text in a line [lineH] tall from [top]. */
 internal fun baselineIn(p: android.graphics.Paint, top: Float, lineH: Float): Float {
-    val fm = p.fontMetrics
-    return top + lineH / 2f - (fm.ascent + fm.descent) / 2f
+    // (ascent() and descent() read the metrics without making a FontMetrics: this is called many times a row at every frame.)
+    return top + lineH / 2f - (p.ascent() + p.descent()) / 2f
 }

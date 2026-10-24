@@ -182,3 +182,9 @@ Context: B-034 slice 3a crossfaded a card's collapsed and expanded content at th
 Decision: What both states show (the title, the first line of text) is drawn once, at a place interpolated by the row's openness `k`; only what differs fades (the " • time" tail at 1-k; the app or time line, the rest of the text and the actions at k). Amends D-027's crossfade for a card's own content; a group's one-line rows still fade as the header settles, and children unfolding is slice 3b. Still not Android's TransformState.
 Alternatives considered: Keeping the crossfade (fails the polish pass); Android's per-element transforms (more than needed for the same look).
 Consequences / revisit when: Ellipsized strings for both widths are kept per item so the glide allocates nothing per frame.
+
+### D-029: A fourth round for B-034 slice 3b-1; it ships only with 3b-2 (2026-10-24) [owner]
+Context: Slice 3b-1 (groups unfolding and folding) used its three implement-review-QA rounds; what is left is the "…" of a long right-to-left notification drawn on the wrong side during a group's unfold (drawCut draws it as a separate run). The reviewer also asked that 3b-1 not reach the phone without 3b-2, whose single surface per card removes the corner pops seen while rows separate and rejoin.
+Decision: The owner allowed a fourth round for that fix alone (draw the cut text and its "…" as one run). 3b-1 stays unpushed until 3b-2 is done; both ship together.
+Alternatives considered: Logging the RTL ellipsis as a P2 bug and moving on; pausing the motion work.
+Consequences / revisit when: Slices of this size have needed three rounds each; plan the next ones smaller.
