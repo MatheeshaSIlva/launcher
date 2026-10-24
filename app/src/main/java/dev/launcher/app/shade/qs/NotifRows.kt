@@ -2,6 +2,7 @@ package dev.launcher.app.shade.qs
 
 import java.text.BreakIterator
 import java.text.Bidi
+import kotlin.math.abs
 
 // The Pixel shade's notification list as rows (B-034, D-027): which rows a card or an app's group makes, what each shows, and
 // what a chevron toggles. Pure: keys in, rows out (no android.* types), so it is tested on the JVM; CardsBlock keeps heights,
@@ -55,6 +56,12 @@ internal class RowModel(
         internal set
     var gapBefore = Gap.NONE
         internal set
+    // The corners of the whole card the row belongs to (an opened group is one surface: its header's top, its last child's
+    // bottom); a row that is a card by itself, its own.
+    var outerTop = Corner.NONE
+        internal set
+    var outerBottom = Corner.NONE
+        internal set
 }
 
 /**
@@ -65,11 +72,14 @@ internal class ExpandState {
     val opened = HashSet<String>()
     val expandedChildren = HashSet<String>()
     val closedFirst = HashSet<String>()
+    /** The groups (keys) the list has had two or more of while the panel was open: they stay groups when one is left. */
+    val groups = HashSet<String>()
 
     fun clear() {
         opened.clear()
         expandedChildren.clear()
         closedFirst.clear()
+        groups.clear()
     }
 }
 
@@ -84,6 +94,13 @@ internal object NotifRows {
     const val LINES_FIRST = 5
     const val MAX_CHILDREN = 8
 
+    /**
+     * Whether a card of [count] notifications under [key] (an app's group key) is a group: two or more, or one that was a group
+     * while the panel has been open (Android's own: the header and its last notification stay as one card, the count gone
+     * from the chip, until the next opening).
+     */
+    fun staysGroup(key: String, count: Int, state: ExpandState): Boolean = count > 1 || key in state.groups
+
     fun build(cards: List<CardIn>, state: ExpandState, footer: Boolean): List<RowModel> {
         val out = ArrayList<RowModel>()
         var firstCard = true
@@ -96,15 +113,16 @@ internal object NotifRows {
                 val n = c.itemKeys.size
                 val first = firstCard
                 firstCard = false
-                if (n <= 1) {
+                if (n > 1) state.groups += c.key
+                if (!staysGroup(c.key, n, state)) {
                     val open = (first && c.key !in state.closedFirst) || c.key in state.opened
                     out += row(c.key, RowKind.CARD, s, c.key, 0, open, 0, 0, true,
                         if (open) expandedHead(RowKind.CARD, true) else Head.NONE, if (open) Chevron.UP else Chevron.DOWN)
                 } else if (c.key !in state.opened) {
-                    out += row(c.key, RowKind.GROUP, s, c.key, 0, false, minOf(n, if (first && c.key !in state.closedFirst) LINES_FIRST else LINES_COLLAPSED), n,
+                    out += row(c.key, RowKind.GROUP, s, c.key, 0, false, minOf(n, if (first && c.key !in state.closedFirst) LINES_FIRST else LINES_COLLAPSED), shown(n),
                         true, Head.APP_TIME, Chevron.DOWN)
                 } else {
-                    out += row(c.key, RowKind.HEADER, s, c.key, 0, true, 0, n, true, Head.APP_TIME, Chevron.UP)
+                    out += row(c.key, RowKind.HEADER, s, c.key, 0, true, 0, shown(n), true, Head.APP_TIME, Chevron.UP)
                     for (i in 0 until minOf(n, MAX_CHILDREN)) {
                         val k = c.itemKeys[i]
                         val open = k in state.expandedChildren
@@ -122,6 +140,16 @@ internal object NotifRows {
                 r.bottom = if (i + 1 < out.size && out[i + 1].kind == RowKind.CHILD) Corner.NONE
                     else if (i == out.size - 1) Corner.BIG else Corner.JOINED
             }
+        }
+        var i = 0
+        while (i < out.size) {
+            var j = i
+            if (out[i].kind == RowKind.HEADER) while (j + 1 < out.size && out[j + 1].kind == RowKind.CHILD && out[j + 1].cardKey == out[i].cardKey) j++
+            for (n in i..j) {
+                out[n].outerTop = out[i].top
+                out[n].outerBottom = out[j].bottom
+            }
+            i = j + 1
         }
         if (footer && cards.isNotEmpty()) out += simple("footer", RowKind.FOOTER, Section.SILENT)
         // The space above each: none inside a card (and above the first), joined between cards (also under a heading, whose
@@ -244,6 +272,79 @@ internal object NotifRows {
 
     /** The top of the closed group's line [line]: [headerTop] plus the space above the first line, then one [lineHeight] each. */
     fun foldTop(headerTop: Float, linesTop: Float, lineHeight: Float, line: Int): Float = headerTop + linesTop + line * lineHeight
+
+    /**
+     * Whether a child of an opened group is swiped by itself, so that it slides out of its card as a sheet of its own: it moves
+     * ([own]) and neither is it flying with its header ([together]: launched with it) nor is the header ([header]) moving.
+     * Children that fly with their header, even one that has overtaken it (an underdamped spring), share the group's surface.
+     */
+    fun apart(own: Float, header: Float, together: Boolean): Boolean = !together && abs(own) > 0.5f && abs(header) < 0.5f
+
+    /**
+     * The pieces an opened group's surface splits into around the children swiped by themselves (as Android's own: the rows above
+     * one are a card, the rows below another, the child a third, and the slot between shows what is behind). [top]..[bottom]:
+     * the group's extent; [cutTop]/[cutBottom] the first [n] cut children's, in order from the top. Writes each piece as four
+     * numbers into [out]: its top and bottom, then the index of the cut above it and the one below it (-1: the group's own
+     * end, with the card's own corner; any other: a cut, with the big corner, turning with that cut's split). Pieces under
+     * half a pixel are left out. Returns how many pieces; [out] holds 4 * (n + 1).
+     */
+    fun pieces(top: Float, bottom: Float, cutTop: FloatArray, cutBottom: FloatArray, n: Int, out: FloatArray): Int {
+        var cursor = top
+        var above = -1
+        var k = 0
+        for (i in 0 until n) {
+            if (cutTop[i] - cursor > 0.5f) {
+                out[k * 4] = cursor; out[k * 4 + 1] = cutTop[i]; out[k * 4 + 2] = above.toFloat(); out[k * 4 + 3] = i.toFloat()
+                k++
+            }
+            cursor = maxOf(cursor, cutBottom[i])
+            above = i
+        }
+        if (bottom - cursor > 0.5f) {
+            out[k * 4] = cursor; out[k * 4 + 1] = bottom; out[k * 4 + 2] = above.toFloat(); out[k * 4 + 3] = -1f
+            k++
+        }
+        return k
+    }
+
+    /**
+     * Where a child that closes up as it leaves ([index] among the old rows, its card's old rows [lo]..[hi]) closes to, so
+     * that its slot always lies between its moving neighbours and the hole closes with them: the new top of the first row of
+     * its card after it that stays, or if it was the card's last, the new bottom of the last one before it that stays.
+     * [tops]/[bottoms]: each old row's place in the new layout, NaN for a row that is gone. NaN if none stays.
+     */
+    fun closeTarget(index: Int, lo: Int, hi: Int, tops: FloatArray, bottoms: FloatArray): Float {
+        for (j in index + 1..hi) if (!tops[j].isNaN()) return tops[j]
+        for (i in index - 1 downTo lo) if (!bottoms[i].isNaN()) return bottoms[i]
+        return Float.NaN
+    }
+
+    /** The count a group's chip writes: none for a group of one (only its chevron stays). */
+    fun shown(n: Int): Int = if (n > 1) n else 0
+
+    /**
+     * Which ends of its card a child that closes up as it leaves ([index] among the old rows, its card's old rows [lo]..[hi])
+     * leaves: 1 if no row of the card before it stays (it is the top: the card's own top corner), 2 if none after it stays
+     * (the bottom). [stays]: whether each old row is in the new layout. A child that leaves from the middle is 0.
+     */
+    fun endsAt(index: Int, lo: Int, hi: Int, stays: BooleanArray): Int {
+        var before = false
+        for (i in lo until index) if (stays[i]) before = true
+        var after = false
+        for (j in index + 1..hi) if (stays[j]) after = true
+        return (if (before) 0 else 1) or (if (after) 0 else 2)
+    }
+
+    /**
+     * Where the corner of the piece of a group's surface beside a cut starts when the cut is not split (0, the rows meet) :
+     * the card's own corner [outer] only for a cut that is leaving from that end of the card ([atEnd]), so that the card is
+     * as it was when the child is gone; a cut that is a drag or a return always starts square, so that nothing changes at
+     * the first pixel.
+     */
+    fun cutRest(leaving: Boolean, atEnd: Boolean, outer: Float): Float = if (leaving && atEnd) outer else 0f
+
+    /** A cut's corner, from [rest] to the [big] one as the cut's [split] goes 0 to 1. */
+    fun cutCorner(rest: Float, big: Float, split: Float): Float = rest + (big - rest) * split
 
     /** What a tap on [row]'s chevron (or a group's body) does to [state]. */
     fun toggle(row: RowModel, state: ExpandState) {

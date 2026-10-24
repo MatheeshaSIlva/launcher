@@ -73,14 +73,28 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
          * 1: a child of its own): it unfolds from its line as the group opens and folds back into it as it closes.
          */
         val fold = MotionValue(1f, 1000f, { panel.view.invalidate() })
+        /** How much of the app's icon it shows (a child that becomes a card gains it, a card that becomes a child loses it). */
+        val icon = MotionValue(1f, 1000f, { panel.view.invalidate() })
+        /** How much of the hairline above it (a child's) it shows. */
+        val div = MotionValue(0f, 1000f, { panel.view.invalidate() })
         val ripple = Ripple { panel.view.invalidate() }
         var leaving: Row? = null
+        /** A child that leaves: whether it was its card's top (no row before it stays) or bottom (none after it), for its cut's corners. */
+        var endTop = false
+        var endBottom = false
+        /**
+         * How far a child swiped by itself is split from its group (0: one of its rows, 1: a card of its own with the big
+         * corners all round, and the group above and below it with big corners where it was).
+         */
+        val split = MotionValue(0f, 1000f, { panel.view.invalidate() })
+        /** A child launched to fly with its header (it shares the group's surface all the way). */
+        var withHeader = false
         /** The closed group's line this child unfolds from and folds into, or [NotifRows.BELOW]. */
         var line = NotifRows.BELOW
         /** Leaving by folding into its line: it keeps showing (and is drawn over its group) until it is that line. */
         var folding = false
         /** Anything of it still moving. */
-        val busy get() = alpha.isAnimating || y.isAnimating || h.isAnimating || k.isAnimating || fold.isAnimating
+        val busy get() = alpha.isAnimating || y.isAnimating || h.isAnimating || k.isAnimating || fold.isAnimating || icon.isAnimating || div.isAnimating || split.isAnimating
     }
 
     private var cards: List<Card> = emptyList()
@@ -130,7 +144,8 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             val gk = "${it.pkg}|${it.groupKey}"
             if (gk in seen) continue
             val members = items.filter { o -> !o.summary && "${o.pkg}|${o.groupKey}" == gk }.sortedByDescending { o -> o.postTime }
-            if (members.size > 1) { seen += gk; out += Card(gk, sectionOf(it), members) } else out += Card(it.key, sectionOf(it), listOf(it))
+            // (A group that has fallen to one notification while the panel is open stays a group of one: the header and its child.)
+            if (NotifRows.staysGroup(gk, members.size, state)) { seen += gk; out += Card(gk, sectionOf(it), members) } else out += Card(it.key, sectionOf(it), listOf(it))
         }
         return Section.entries.flatMap { s -> out.filter { it.section == s } }
     }
@@ -196,11 +211,16 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
                 // height, openness and fold on the reflow, its presence on the appear.
                 a.leaving = null
                 a.folding = false
+                a.withHeader = false
+                a.endTop = false
+                a.endBottom = false
                 if (animate) {
                     a.y.animateTo(r.top, reflow)
                     a.h.animateTo(r.height, reflow)
                     a.k.animateTo(openness(r), reflow)
                     a.fold.animateTo(1f, reflow)
+                    a.icon.animateTo(iconOf(r), reflow)
+                    a.div.animateTo(dividerOf(r), reflow)
                     a.alpha.animateTo(1f, Motion.role(MotionTokens.NC_APPEAR))
                     if (abs(a.swipe.value) > 0.5f) a.swipe.animateTo(0f, Motion.role(MotionTokens.NC_SWIPE_BACK))
                 } else {
@@ -208,12 +228,16 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
                     a.h.snapTo(r.height)
                     a.k.snapTo(openness(r))
                     a.fold.snapTo(1f)
+                    a.icon.snapTo(iconOf(r))
+                    a.div.snapTo(dividerOf(r))
                     a.alpha.snapTo(1f)
                     a.swipe.snapTo(0f)
                 }
             } else if (a == null) {
                 val n = Anim().also { anims[r.key] = it }
                 n.swipe.snapTo(0f)
+                n.icon.snapTo(iconOf(r))
+                n.div.snapTo(dividerOf(r))
                 val from = if (animate) unfoldFrom(r) else null
                 if (from != null) {
                     // A child of a group that opens: it starts where its line was (or at the closed card's bottom) and
@@ -242,10 +266,14 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
                 a.y.animateTo(r.top, reflow)
                 a.h.animateTo(r.height, reflow)
                 if (a.k.target != openness(r)) a.k.animateTo(openness(r), reflow)
+                if (a.icon.target != iconOf(r)) a.icon.animateTo(iconOf(r), reflow)
+                if (a.div.target != dividerOf(r)) a.div.animateTo(dividerOf(r), reflow)
             } else {
                 a.y.snapTo(r.top)
                 a.h.snapTo(r.height)
                 a.k.snapTo(openness(r))
+                a.icon.snapTo(iconOf(r))
+                a.div.snapTo(dividerOf(r))
             }
         }
         // (What is kept for the rows' texts goes with the rows that went.)
@@ -265,11 +293,55 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
 
     /** How open [r] is meant to be: 1 for an expanded card or child and an opened group's header, 0 otherwise. */
     private fun openness(r: Row) = if (r.expanded) 1f else 0f
+    private fun iconOf(r: Row) = if (r.m.icon) 1f else 0f
+    private fun dividerOf(r: Row) = if (r.m.divider) 1f else 0f
+
+    /** Which ends of its card child [old] leaves ([NotifRows.endsAt]), as the old rows and the layout [out] say. */
+    private fun cardEnds(old: Row, out: List<Row>): Int {
+        val idx = rows.indexOfFirst { it.key == old.key }
+        if (idx < 0) return 0
+        var lo = idx
+        var hi = idx
+        while (lo > 0 && rows[lo - 1].m.cardKey == old.m.cardKey) lo--
+        while (hi + 1 < rows.size && rows[hi + 1].m.cardKey == old.m.cardKey) hi++
+        return NotifRows.endsAt(idx, lo, hi, BooleanArray(rows.size) { i -> out.any { it.key == rows[i].key } })
+    }
+
+    /** Where child [old] (of the old rows) closes up to in the layout [out] (null: stays). */
+    private fun closeTarget(old: Row, out: List<Row>): Float? {
+        val idx = rows.indexOfFirst { it.key == old.key }
+        if (idx < 0) return null
+        var lo = idx
+        var hi = idx
+        while (lo > 0 && rows[lo - 1].m.cardKey == old.m.cardKey) lo--
+        while (hi + 1 < rows.size && rows[hi + 1].m.cardKey == old.m.cardKey) hi++
+        val tops = FloatArray(rows.size) { Float.NaN }
+        val bottoms = FloatArray(rows.size) { Float.NaN }
+        for (i in rows.indices) out.firstOrNull { it.key == rows[i].key }?.let { tops[i] = it.top; bottoms[i] = it.top + it.height }
+        val t = NotifRows.closeTarget(idx, lo, hi, tops, bottoms)
+        return if (t.isNaN()) null else t
+    }
 
     /** [old] leaves: it fades where it is, or if it was a child of a group that closed, folds back (into its line or below). */
     private fun leave(a: Anim, old: Row, out: List<Row>) {
         val group = if (old.kind == RowKind.CHILD) out.firstOrNull { it.kind == RowKind.GROUP && it.key == old.m.cardKey } else null
-        if (group == null) { a.alpha.animateTo(0f, Motion.role(MotionTokens.NC_LEAVE)); return }
+        if (group == null) {
+            a.alpha.animateTo(0f, Motion.role(MotionTokens.NC_LEAVE))
+            // A child of an opened group closes up as it fades (the card's surface is one, and follows the rows' extent); one that
+            // flies with its header does not (whole until gone).
+            if (old.kind == RowKind.CHILD && !a.withHeader) {
+                a.h.animateTo(0f, Motion.role(MotionTokens.NC_REFLOW))
+                // (Where its gap lies among its neighbours in the new layout, not where it was.)
+                closeTarget(old, out)?.let { a.y.animateTo(it, Motion.role(MotionTokens.NC_REFLOW)) }
+                // (Which end of its card it was, for the corners of its cut: set once, when it leaves.)
+                val ends = cardEnds(old, out)
+                a.endTop = ends and 1 != 0
+                a.endBottom = ends and 2 != 0
+            }
+            // (Its card and the rows round it come back together as it closes up.)
+            if (a.split.target != 0f) a.split.animateTo(0f, Motion.role(MotionTokens.NC_REFLOW))
+            return
+        }
         val line = NotifRows.foldLine(group.card?.items?.indexOfFirst { it.key == old.key } ?: -1, group.m.lines)
         val reflow = Motion.role(MotionTokens.NC_REFLOW)
         a.k.animateTo(0f, reflow)
@@ -580,23 +652,179 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         clip.addRoundRect(0f, top, panel.panelWidth.toFloat(), panel.panelHeight + 2f * corner, corner, corner, Path.Direction.CW)
         c.clipPath(clip)
         // (Rows that fade away lie under the others; a child folding into its group's line lies over the group.)
-        // (Only while something is leaving: no iterator is made at a frame of a list at rest.)
+        // (Only while something is leaving: no iterator is made at a frame of a list at rest. The leavers are gathered once.)
+        leaverCount = 0
         if (anyLeaving) {
-            var still = false
             val going = anims.values.iterator()
             while (going.hasNext()) {
                 val a = going.next()
-                val old = a.leaving ?: continue
+                if (a.leaving == null) continue
                 if (!a.busy) { going.remove(); continue }
-                still = true
-                if (!a.folding) drawRow(c, old, a, listAlpha)
+                if (leaverCount == leavers.size) leavers += a else leavers[leaverCount] = a
+                leaverCount++
             }
-            anyLeaving = still
+            anyLeaving = leaverCount > 0
         }
+        curListAlpha = listAlpha
+        gatherUnions()
+        for (i in 0 until leaverCount) { val a = leavers[i]; val old = a.leaving; if (old != null && !a.folding) drawRow(c, old, a, listAlpha) }
         for (row in rows) drawRow(c, row, anims[row.key] ?: continue, listAlpha)
-        if (anyLeaving) for ((_, a) in anims) if (a.folding) a.leaving?.let { drawRow(c, it, a, listAlpha) }
+        for (i in 0 until leaverCount) { val a = leavers[i]; val old = a.leaving; if (old != null && a.folding) drawRow(c, old, a, listAlpha) }
         for (row in rows) if (row.kind == RowKind.GROUP || row.kind == RowKind.HEADER) drawRow(c, row, anims[row.key] ?: continue, listAlpha, iconOnly = true)
         c.restoreToCount(save)
+    }
+
+    /** Rows on their way out, gathered once for a frame (pooled). */
+    private val leavers = ArrayList<Anim>()
+    private var leaverCount = 0
+    private var curListAlpha = 1f
+
+    /**
+     * An app's group is drawn as one surface, closed or opened or between: from its first row's top to the lowest bottom of
+     * its rows (leaving ones too), with the card's own outer corners, so that rows opening and closing never make a seam, a
+     * rim or a corner that turns in one frame. A child swiped by itself is cut out of it as Android's own does: it slides out
+     * as a card of its own (big corners all round), the rows above and below it are a card each with big corners where it
+     * was, and the slot shows what is behind; each corner turns with the child's [Anim.split]. (A group that falls to one
+     * item stays a group while the panel is open, as Android's: [NotifRows.staysGroup].) Pooled.
+     */
+    private class Union {
+        var key = ""
+        var base: Row? = null
+        var baseAnim: Anim? = null
+        var dx = 0f
+        var top = 0f
+        var bottom = 0f
+        /** The strongest presence of its rows (a fading header does not fade a card that stays). */
+        var alpha = 0f
+        var drawn = false
+        /** The children cut out of it, in order from the top: where they are and how split. */
+        var cuts = 0
+        val cutTop = FloatArray(MAX_CUTS)
+        val cutBottom = FloatArray(MAX_CUTS)
+        val cutSplit = FloatArray(MAX_CUTS)
+        /** Whether each is leaving, and from which end of the card (where its cut's corners come to rest). */
+        val cutLeaving = BooleanArray(MAX_CUTS)
+        val cutEndTop = BooleanArray(MAX_CUTS)
+        val cutEndBottom = BooleanArray(MAX_CUTS)
+        val pieces = FloatArray(4 * (MAX_CUTS + 1))
+    }
+
+    private val unions = ArrayList<Union>()
+    private var unionCount = 0
+    private val unionRadii = FloatArray(4)
+
+    private fun unionFor(key: String?): Union? {
+        if (key == null) return null
+        for (i in 0 until unionCount) { val un = unions[i]; if (un.key == key) return un }
+        return null
+    }
+
+    private fun addUnion(key: String, base: Row, a: Anim) {
+        if (unionCount == unions.size) unions += Union()
+        val un = unions[unionCount++]
+        un.key = key
+        un.base = base
+        un.baseAnim = a
+        un.dx = a.swipe.value
+        un.top = a.y.value
+        un.bottom = a.y.value + max(a.h.value, 0f)
+        un.alpha = a.alpha.value.coerceIn(0f, 1f)
+        un.drawn = false
+        un.cuts = 0
+    }
+
+    private fun isBase(k: RowKind) = k == RowKind.GROUP || k == RowKind.HEADER
+
+    /** The group whose surface [row] is part of: its card's (a plain card has none). */
+    private fun unionKeyOf(row: Row): String? = if (row.kind == RowKind.GROUP || row.kind == RowKind.HEADER || row.kind == RowKind.CHILD) row.m.cardKey else null
+
+    private fun gatherUnions() {
+        // (Nothing of the last frame stays referenced.)
+        for (i in unions.indices) { unions[i].base = null; unions[i].baseAnim = null }
+        unionCount = 0
+        for (i in rows.indices) {
+            val row = rows[i]
+            if (isBase(row.kind)) addUnion(row.m.cardKey ?: continue, row, anims[row.key] ?: continue)
+        }
+        for (i in 0 until leaverCount) {
+            val a = leavers[i]
+            val old = a.leaving ?: continue
+            if (isBase(old.kind)) addUnion(old.m.cardKey ?: continue, old, a)
+        }
+        for (i in rows.indices) {
+            val row = rows[i]
+            if (row.kind == RowKind.CHILD) join(row, anims[row.key] ?: continue)
+        }
+        for (i in 0 until leaverCount) {
+            val a = leavers[i]
+            val old = a.leaving ?: continue
+            if (old.kind == RowKind.CHILD) join(old, a)
+        }
+    }
+
+    /** Whether [a] (a child of [un]'s group) is cut out of it: swiped by itself, or still turning back into a row. */
+    private fun isCut(un: Union, a: Anim) = NotifRows.apart(a.swipe.value, un.dx, a.withHeader) || a.split.value > 0.003f
+
+    private fun join(row: Row, a: Anim) {
+        val un = unionFor(unionKeyOf(row)) ?: return
+        un.bottom = max(un.bottom, a.y.value + max(a.h.value, 0f))
+        // (Its split follows where its swipe is heading: it turns back as a return begins, not when it has settled; one
+        // that is leaving has its own, set as it left.)
+        if (a.leaving == null) {
+            val want = if (NotifRows.apart(a.swipe.target, un.dx, a.withHeader)) 1f else 0f
+            if (a.split.target != want) a.split.animateTo(want, Motion.role(MotionTokens.NC_REFLOW))
+        }
+        if (!isCut(un, a)) { un.alpha = max(un.alpha, a.alpha.value.coerceIn(0f, 1f)); return }
+        if (un.cuts == MAX_CUTS) return
+        // (In order from the top.)
+        var i = un.cuts++
+        val t = a.y.value
+        while (i > 0 && un.cutTop[i - 1] > t) {
+            un.cutTop[i] = un.cutTop[i - 1]; un.cutBottom[i] = un.cutBottom[i - 1]; un.cutSplit[i] = un.cutSplit[i - 1]
+            un.cutLeaving[i] = un.cutLeaving[i - 1]; un.cutEndTop[i] = un.cutEndTop[i - 1]; un.cutEndBottom[i] = un.cutEndBottom[i - 1]
+            i--
+        }
+        un.cutLeaving[i] = a.leaving != null
+        un.cutEndTop[i] = a.endTop
+        un.cutEndBottom[i] = a.endBottom
+        un.cutTop[i] = t
+        un.cutBottom[i] = t + max(a.h.value, 0f)
+        un.cutSplit[i] = a.split.value.coerceIn(0f, 1f)
+    }
+
+    private fun swipeFadeOf(dx: Float) = 1f - (abs(dx) / (panel.panelWidth * 0.6f)).coerceIn(0f, 1f)
+
+    /** The group's surface, once for a frame (by the first of its rows to draw), under all of their contents. */
+    private fun drawUnion(c: Canvas, un: Union) {
+        val base = un.base ?: return
+        val left = cardsLeft() + un.dx
+        val top = listTop + un.top - scroller.position
+        val big = Design.pt(QsTokens.CARD_CORNER, u)
+        val joined = Design.pt(QsTokens.JOINED_CORNER, u)
+        val outerTop = cornerPx(base.m.outerTop, big, joined)
+        val outerBottom = cornerPx(base.m.outerBottom, big, joined)
+        val alpha = curListAlpha * un.alpha * swipeFadeOf(un.dx)
+        val n = NotifRows.pieces(un.top, max(un.bottom, un.top), un.cutTop, un.cutBottom, un.cuts, un.pieces)
+        for (k in 0 until n) {
+            val pt = un.pieces[k * 4]
+            val pb = un.pieces[k * 4 + 1]
+            val above = un.pieces[k * 4 + 2].toInt()
+            val below = un.pieces[k * 4 + 3].toInt()
+            val cap = (pb - pt) / 2f
+            // (The card's own corner at the group's ends; at a cut the big one, turning with the cut's split.)
+            // (At a cut the corner turns from where it rests to the big one with the cut's split. It rests square, the rows meeting,
+            // except where the cut is a child leaving from that end of its card: then the card's own corner, so that the card
+            // is as it was when the child is gone. A cut that is a drag or a return always starts square.)
+            val ct = minOf(if (above < 0) outerTop else NotifRows.cutCorner(
+                NotifRows.cutRest(un.cutLeaving[above], un.cutEndTop[above], outerTop), big, un.cutSplit[above]), cap)
+            val cb = minOf(if (below < 0) outerBottom else NotifRows.cutCorner(
+                NotifRows.cutRest(un.cutLeaving[below], un.cutEndBottom[below], outerBottom), big, un.cutSplit[below]), cap)
+            unionRadii[0] = ct; unionRadii[1] = ct; unionRadii[2] = cb; unionRadii[3] = cb
+            c.save()
+            c.translate(left, top + (pt - un.top))
+            panel.surfaces.draw(c, Design.material(QsTokens.CARD), cardsWidth(), pb - pt, big, left, top + (pt - un.top), 1f, alpha, radii = unionRadii)
+            c.restore()
+        }
     }
 
     /** [iconOnly]: only a group header's icon, drawn after the rows that lie over it. */
@@ -604,7 +832,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         place(row, a, r)
         if (r.bottom < 0f || r.top > panel.panelHeight) return
         // A swiped card fades as it goes.
-        val swipeFade = 1f - (abs(swipeOf(row, a)) / (panel.panelWidth * 0.6f)).coerceIn(0f, 1f)
+        val swipeFade = swipeFadeOf(swipeOf(row, a))
         val f = listAlpha * a.alpha.value.coerceIn(0f, 1f) * swipeFade
         if (f <= 0.003f) return
         when (row.kind) {
@@ -620,9 +848,9 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
      * an icon, the small symbol on the palette's colour. (A group's child has none: its text starts where a card's does,
      * under the header's icon.)
      */
-    private fun drawAppIcon(c: Canvas, row: Row, item: Notifs.Item, r: RectF, pad: Float, icon: Float, alpha: Float) {
+    private fun drawAppIcon(c: Canvas, show: Boolean, item: Notifs.Item, r: RectF, pad: Float, icon: Float, alpha: Float) {
         val app = if (item.pkg in systemApps) null else appIcon(item.pkg)
-        if (row.m.icon && app != null) {
+        if (show && app != null) {
             val cx = r.left + pad + icon / 2f
             val cy = r.top + pad + icon / 2f
             circle.rewind()
@@ -633,12 +861,12 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             app.alpha = (255 * alpha).toInt().coerceIn(0, 255)
             app.draw(c)
             c.restore()
-        } else if (row.m.icon) {
+        } else if (show) {
             val own = if (item.pkg in systemApps && item.color != 0) item.color or (0xFF shl 24) else 0
             fill.color = faded(if (own != 0) own else Design.color(QsTokens.ICON_FILL), alpha)
             c.drawCircle(r.left + pad + icon / 2f, r.top + pad + icon / 2f, icon / 2f, fill)
         }
-        if (row.m.icon && app == null) smallIcon(item)?.let { d ->
+        if (show && app == null) smallIcon(item)?.let { d ->
             val s = (icon * 0.55f).toInt().coerceAtLeast(1)
             d.setBounds(0, 0, s, s)
             val col = faded(Design.color(QsTokens.ICON_COLOR), alpha)
@@ -655,7 +883,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val item = row.item ?: return
         c.save()
         c.clipRect(r)
-        drawAppIcon(c, row, item, r, Design.pt(QsTokens.CARD_PADDING, u), Design.pt(QsTokens.CARD_ICON, u), alpha)
+        drawAppIcon(c, row.m.icon, item, r, Design.pt(QsTokens.CARD_PADDING, u), Design.pt(QsTokens.CARD_ICON, u), alpha)
         c.restore()
     }
 
@@ -667,6 +895,12 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val joined = Design.pt(QsTokens.JOINED_CORNER, u)
         // (No corner is more than half the row's height: a child that is a line of a group is a few dp tall.)
         val cap = r.height() / 2f
+        // (A group's rows share one surface, drawn by the first of them: [drawUnion]. A child swiped by itself slides out
+        // on a sheet of its own over its slot: the sheet comes in with the swipe and its corners go from the card's to a
+        // small one with the distance, so that none changes in a frame.)
+        val un = unionFor(unionKeyOf(row))
+        if (un != null && !un.drawn) { un.drawn = true; drawUnion(c, un) }
+        val sheet = un != null && row.kind == RowKind.CHILD && isCut(un, a)
         val top = minOf(cornerPx(row.m.top, big, joined), cap)
         val bottom = minOf(cornerPx(row.m.bottom, big, joined), cap)
         radii[0] = top; radii[1] = top; radii[2] = bottom; radii[3] = bottom
@@ -675,7 +909,15 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val fo = if (gl != null) fold else 1f
         c.save()
         c.translate(r.left, r.top)
-        panel.surfaces.draw(c, Design.material(QsTokens.CARD), r.width(), r.height(), big, r.left, r.top, 1f, alpha, radii = radii)
+        if (un == null) panel.surfaces.draw(c, Design.material(QsTokens.CARD), r.width(), r.height(), big, r.left, r.top, 1f, alpha, radii = radii)
+        else if (sheet) {
+            // A card of its own: its corners go to the big one all round as it splits from the group.
+            val t = a.split.value.coerceIn(0f, 1f)
+            val st = minOf(top + (big - top) * t, cap)
+            val sb = minOf(bottom + (big - bottom) * t, cap)
+            radii[0] = st; radii[1] = st; radii[2] = sb; radii[3] = sb
+            panel.surfaces.draw(c, Design.material(QsTokens.CARD), r.width(), r.height(), big, r.left, r.top, 1f, alpha, radii = radii)
+        }
         // (Pressed: the platform's ripple, as a notification's background has, in the theme's highlight colour.)
         if (a.ripple.active) a.ripple.draw(c, r.width(), r.height(), big, Design.color(QsTokens.CARD_RIPPLE), alpha, u, share = 1f, radii = radii)
         c.restore()
@@ -686,13 +928,15 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val pad = Design.pt(QsTokens.CARD_PADDING, u)
         val icon = Design.pt(QsTokens.CARD_ICON, u)
         // An opened group's child: a hairline across the card's top (coming in as it unfolds), its content under it.
-        val inset = if (row.m.divider) hairlinePx * fo else 0f
+        val inset = hairlinePx * a.div.value.coerceIn(0f, 1f) * fo
         if (inset > 0f) {
             fill.color = faded(Design.color(QsTokens.DIVIDER), alpha)
-            c.drawRect(r.left, r.top, r.right, r.top + hairlinePx * fo, fill)
+            c.drawRect(r.left, r.top, r.right, r.top + inset, fill)
         }
         // (A group's header has its icon drawn last: the children unfolding from its lines lie over it.)
-        if ((row.kind != RowKind.GROUP && row.kind != RowKind.HEADER) || a.leaving != null) drawAppIcon(c, row, item, r, pad, icon, alpha)
+        // (A child that becomes a card fades its icon in, and a card that becomes a child fades it out.)
+        val iconK = a.icon.value.coerceIn(0f, 1f)
+        if ((row.kind != RowKind.GROUP && row.kind != RowKind.HEADER) || a.leaving != null) drawAppIcon(c, iconK > 0.003f, item, r, pad, icon, alpha * iconK)
         val e = itemText(item)
         // How open it is now: its two contents are drawn in this proportion (the first and last frames of a fold show one).
         val k = a.k.value.coerceIn(0f, 1f)
@@ -1198,10 +1442,10 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val dir = if (a.swipe.value != 0f) kotlin.math.sign(a.swipe.value) else kotlin.math.sign(vx)
         val target = dir * panel.panelWidth * 1.1f
         a.swipe.animateTo(target, Motion.role(MotionTokens.NC_SWIPE_OUT), vx)
-        // (An opened group's children fly with their header, each on its own: one left after the others are cancelled
-        // becomes a card of its own, which must stay where the flight put it.)
+        // (An opened group's children fly with their header, each on its own, so whichever is cancelled last stays
+        // where the flight put it.)
         if (row.kind == RowKind.HEADER) for (c in rows) if (c.kind == RowKind.CHILD && c.card?.key == row.key) {
-            anims[c.key]?.swipe?.animateTo(target, Motion.role(MotionTokens.NC_SWIPE_OUT), vx)
+            anims[c.key]?.let { it.withHeader = true; it.swipe.animateTo(target, Motion.role(MotionTokens.NC_SWIPE_OUT), vx) }
         }
         panel.view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
         for (it in itemsOf(row)) Notifs.cancel(it)
@@ -1269,7 +1513,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             val along = if (m.kind == RowKind.HEADER) rows.filter { it.kind == RowKind.CHILD && it.card?.key == m.key }.mapNotNull { anims[it.key] } else emptyList()
             panel.view.postDelayed({
                 a.swipe.animateTo(panel.panelWidth * 1.1f, Motion.role(MotionTokens.NC_SWIPE_OUT))
-                for (c in along) c.swipe.animateTo(panel.panelWidth * 1.1f, Motion.role(MotionTokens.NC_SWIPE_OUT))
+                for (c in along) { c.withHeader = true; c.swipe.animateTo(panel.panelWidth * 1.1f, Motion.role(MotionTokens.NC_SWIPE_OUT)) }
             }, delay)
         }
         panel.view.postDelayed({ for (it in gone) Notifs.cancel(it) }, (k * step).coerceAtMost(step * 6) + step * 3)
@@ -1287,6 +1531,8 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     fun beginFrame() { hitCount = 0 }
 
     private companion object {
+        /** The most children cut out of one group's surface at once. */
+        const val MAX_CUTS = 16
         val io = Executors.newSingleThreadExecutor()
         /** An expanded card's text at most this many lines (Android's big text in the shade). */
         const val MAX_LINES = 7

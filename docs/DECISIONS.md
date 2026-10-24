@@ -188,3 +188,15 @@ Context: Slice 3b-1 (groups unfolding and folding) used its three implement-revi
 Decision: The owner allowed a fourth round for that fix alone (draw the cut text and its "…" as one run). 3b-1 stays unpushed until 3b-2 is done; both ship together.
 Alternatives considered: Logging the RTL ellipsis as a P2 bug and moving on; pausing the motion work.
 Consequences / revisit when: Slices of this size have needed three rounds each; plan the next ones smaller.
+
+### D-030: A fourth round for B-034 slice 3b-2, limited to the dissolve; motion work in smaller slices (2026-10-24) [owner]
+Context: Slice 3b-2 (one surface per card, stock's cut of a swiped child, B-038) used its three rounds; two defects remain, both when a group of two loses a notification: the survivor slides through the removed child's closing slot (scrim or doubled words in the card), and the app's icon shows twice for the first half of the motion.
+Decision: The owner allowed a fourth round limited to those two (a leaving child closes where its gap lies among its neighbours; one icon kept at the header's place through the handover), then the gate, a final review and QA; 3b-1 and 3b-2 ship together (D-029). Future motion work is planned in smaller slices: every slice of B-034 needed all its rounds.
+Alternatives considered: Shipping with the two logged as P2 bugs; pausing B-034's motion work.
+Consequences / revisit when: Revisit the slice size at the next motion item.
+
+### D-031: A fifth, last round for B-034 slice 3b-2 (2026-10-24) [owner]
+Context: Round 4 (D-030) fixed the dissolve's slot and icon where header and survivor touch, but its extra corner fix snapped the corners at the first frame of every drag of a group's last child (a regression), and when the upper child of a group of two is swiped away the survivor's top corners round in one frame at the end and the single icon hangs over the scrim.
+Decision: One last narrow round: a cut's resting corners decided from structure when the child leaves (whether any row of its old card before or after it stays), never from geometry each frame, so a drag or a return always starts from square; the upper-child dissolve copied from the emulator's stock shade, captured first. QA follows at once. If anything still fails, 3b-1 and 3b-2 ship without round 4's corner change, the rest logged as bugs.
+Alternatives considered: Reverting round 4's corner change and shipping with the two logged; pausing.
+Consequences / revisit when: No further rounds on 3b-2.

@@ -496,4 +496,208 @@ class NotifRowsTest {
         assertEquals(4, NotifRows.foldLine(4, lines))
         assertEquals(NotifRows.BELOW, NotifRows.foldLine(5, lines))
     }
+
+    // ------------------------------------------------------------------ slice 3b-2: one surface per card
+
+    @Test fun everyRowOfAnOpenedGroupHasTheCardsOuterCorners() {
+        val s = ExpandState().also { it.opened += "a|g" }
+        // (Another card above it and one below: the group's top is joined, its bottom too.)
+        val rows = build(listOf(single("x"), group("a|g", 3), single("y")), s)
+        for (r in rows.filter { it.cardKey == "a|g" }) {
+            assertEquals(Corner.JOINED, r.outerTop)
+            assertEquals(Corner.JOINED, r.outerBottom)
+        }
+        // (The corners of the rows themselves stay: none inside the card.)
+        assertEquals(Corner.NONE, rows.of("a|g/item1").top)
+        assertEquals(Corner.NONE, rows.of("a|g").bottom)
+    }
+
+    @Test fun aGroupAtTheEndsOfASectionHasBigOuterCorners() {
+        val s = ExpandState().also { it.opened += "a|g" }
+        val rows = build(listOf(group("a|g", 3)), s)
+        for (r in rows) {
+            assertEquals(Corner.BIG, r.outerTop)
+            assertEquals(Corner.BIG, r.outerBottom)
+        }
+    }
+
+    @Test fun aClosedGroupAndACardKeepTheirOwnCornersAsOuter() {
+        val rows = build(listOf(single("x"), group("a|g", 3), single("y")))
+        for (r in rows) {
+            assertEquals(r.top, r.outerTop)
+            assertEquals(r.bottom, r.outerBottom)
+        }
+    }
+
+    @Test fun aGroupsOuterCornersAreTheSameClosedOrOpen() {
+        val cards = listOf(single("x"), group("a|g", 3))
+        val closed = build(cards).of("a|g")
+        val open = build(cards, ExpandState().also { it.opened += "a|g" })
+        assertEquals(closed.outerTop, open.of("a|g").outerTop)
+        assertEquals(closed.outerBottom, open.of("a|g/item3").outerBottom)
+    }
+
+    // ------------------------------------------------------------------ round 5: a group stays one while the panel is open
+
+    private fun lone(key: String, section: Section = Section.ALERTING) = CardIn(key, section, listOf("$key/item1"))
+
+    @Test fun aGroupOfTwoLosingOneStaysAGroupOfOneWhileOpen() {
+        val s = ExpandState()
+        build(listOf(group("a|g", 2)), s)
+        val rows = build(listOf(lone("a|g")), s)
+        assertEquals(listOf(RowKind.GROUP), rows.map { it.kind })
+        assertEquals("a|g", rows.first().key)
+        assertEquals(1, rows.first().lines)
+        assertEquals(0, rows.first().count)
+    }
+
+    @Test fun anOpenedGroupOfOneIsItsHeaderAndItsChildWithNoCount() {
+        val s = ExpandState().also { it.opened += "a|g" }
+        build(listOf(group("a|g", 2)), s)
+        val rows = build(listOf(lone("a|g")), s)
+        assertEquals(listOf(RowKind.HEADER, RowKind.CHILD), rows.map { it.kind })
+        assertEquals(0, rows.first().count)
+        assertFalse(rows.last().icon)
+        assertTrue(rows.last().divider)
+        // (The card's corners as any group's: the header's top, the child's bottom, none between.)
+        assertEquals(Corner.BIG, rows.first().outerTop)
+        assertEquals(Corner.BIG, rows.last().outerBottom)
+    }
+
+    @Test fun theChipOfAGroupOfTwoOrMoreStillCounts() {
+        assertEquals(2, build(listOf(group("a|g", 2))).first().count)
+        assertEquals(1, NotifRows.shown(1).coerceAtLeast(1))
+        assertEquals(0, NotifRows.shown(1))
+        assertEquals(5, NotifRows.shown(5))
+    }
+
+    @Test fun afterTheStateIsClearedALoneNotificationIsACard() {
+        val s = ExpandState()
+        build(listOf(group("a|g", 2)), s)
+        s.clear()
+        // (A group of one under its own key is no group any more; the notification is a card under its own key.)
+        val rows = build(listOf(single("a|g/item1")), s)
+        assertEquals(listOf(RowKind.CARD), rows.map { it.kind })
+        assertFalse(NotifRows.staysGroup("a|g", 1, s))
+    }
+
+    @Test fun aCardThatWasNeverAGroupStaysACard() {
+        val s = ExpandState()
+        val rows = build(listOf(single("x"), group("a|g", 3)), s)
+        assertEquals(RowKind.CARD, rows.first().kind)
+        assertFalse(NotifRows.staysGroup("x", 1, s))
+        assertTrue(NotifRows.staysGroup("a|g", 1, s))
+    }
+
+    // ------------------------------------------------------------------ round 5: a cut's resting corners, from structure
+
+    @Test fun aChildLeavingFromTheTopOfItsCardIsTheTopEnd() {
+        // (Rows: header, child. The header goes with it: nothing before stays, nothing after.)
+        assertEquals(3, NotifRows.endsAt(1, 0, 1, booleanArrayOf(false, false)))
+        // (A child with a header that stays is not the top.)
+        assertEquals(2, NotifRows.endsAt(1, 0, 1, booleanArrayOf(true, false)))
+    }
+
+    @Test fun theLastChildLeavingWithRowsBeforeItIsTheBottomEnd() {
+        assertEquals(2, NotifRows.endsAt(3, 0, 3, booleanArrayOf(true, true, true, false)))
+    }
+
+    @Test fun aChildLeavingFromTheMiddleIsNeitherEnd() {
+        assertEquals(0, NotifRows.endsAt(2, 0, 3, booleanArrayOf(true, true, false, true)))
+        assertEquals(0, NotifRows.endsAt(1, 0, 3, booleanArrayOf(true, false, true, true)))
+    }
+
+    @Test fun aCutStartsSquareUnlessItIsLeavingFromThatEnd() {
+        assertEquals(28f, NotifRows.cutRest(true, true, 28f), 0f)
+        assertEquals(0f, NotifRows.cutRest(false, true, 28f), 0f)
+        assertEquals(0f, NotifRows.cutRest(true, false, 28f), 0f)
+        assertEquals(0f, NotifRows.cutRest(false, false, 28f), 0f)
+    }
+
+    @Test fun aCutsCornerRunsFromItsRestToTheBigOne() {
+        assertEquals(0f, NotifRows.cutCorner(0f, 28f, 0f), 0f)
+        assertEquals(28f, NotifRows.cutCorner(0f, 28f, 1f), 0f)
+        assertEquals(28f, NotifRows.cutCorner(28f, 28f, 0.4f), 0f)
+        assertEquals(16f, NotifRows.cutCorner(4f, 28f, 0.5f), 0f)
+    }
+
+    // ------------------------------------------------------------------ round 2: who shares a group's surface
+
+    @Test fun childrenFlyingWithTheirHeaderShareItsSurface() {
+        // (Launched with it: even a child ahead of its header, or one whose header has not yet moved half a pixel.)
+        assertFalse(NotifRows.apart(300f, 120f, true))
+        assertFalse(NotifRows.apart(900f, 300f, true))
+        assertFalse(NotifRows.apart(0.8f, 0.2f, true))
+    }
+
+    @Test fun aChildSwipedAloneDoesNot() {
+        assertTrue(NotifRows.apart(40f, 0f, false))
+        assertTrue(NotifRows.apart(-300f, 0.3f, false))
+    }
+
+    @Test fun aChildNotMovingOrWithAMovingHeaderStaysInTheSurface() {
+        assertFalse(NotifRows.apart(0f, 0f, false))
+        assertFalse(NotifRows.apart(0.4f, 0f, false))
+        assertFalse(NotifRows.apart(40f, 300f, false))
+    }
+
+    // A group of a header (0..100) and three children (100..200, 200..300, 300..400), a child cut out of it by its swipe.
+    private fun pieces(vararg cuts: Pair<Float, Float>): List<List<Float>> {
+        val out = FloatArray(4 * (cuts.size + 1))
+        val n = NotifRows.pieces(0f, 400f, FloatArray(cuts.size) { cuts[it].first }, FloatArray(cuts.size) { cuts[it].second }, cuts.size, out)
+        return (0 until n).map { k -> out.slice(k * 4 until k * 4 + 4) }
+    }
+
+    @Test fun aMiddleChildCutOutSplitsTheGroupIntoTheRowsAboveAndBelow() {
+        // (Above: the card's own top, the big corner at the cut; below: the big corner at the cut, the card's own bottom.)
+        assertEquals(listOf(listOf(0f, 200f, -1f, 0f), listOf(300f, 400f, 0f, -1f)), pieces(200f to 300f))
+    }
+
+    @Test fun theFirstChildCutOutLeavesTheHeaderAlone() {
+        assertEquals(listOf(listOf(0f, 100f, -1f, 0f), listOf(200f, 400f, 0f, -1f)), pieces(100f to 200f))
+    }
+
+    @Test fun theLastChildCutOutLeavesNoPieceBelow() {
+        assertEquals(listOf(listOf(0f, 300f, -1f, 0f)), pieces(300f to 400f))
+    }
+
+    @Test fun noCutLeavesTheWholeGroup() {
+        assertEquals(listOf(listOf(0f, 400f, -1f, -1f)), pieces())
+    }
+
+    @Test fun twoNeighbouringChildrenCutOutLeaveTheEndsOnly() {
+        assertEquals(listOf(listOf(0f, 100f, -1f, 0f), listOf(300f, 400f, 1f, -1f)), pieces(100f to 200f, 200f to 300f))
+    }
+
+    @Test fun aCutThatHasClosedUpLeavesNoGapPiece() {
+        // (A swiped child that has been removed is a cut of no height: the rows above and below meet.)
+        assertEquals(listOf(listOf(0f, 200f, -1f, 0f), listOf(200f, 400f, 0f, -1f)), pieces(200f to 200f))
+    }
+
+    // ------------------------------------------------------------------ round 4: where a leaving child closes up
+
+    private val nan = Float.NaN
+
+    @Test fun anUpperChildClosesToTheNewTopOfTheRowAfterIt() {
+        // (Header, upper child [leaving], survivor: the survivor's new top is the group's place.)
+        assertEquals(40f, NotifRows.closeTarget(1, 0, 2, floatArrayOf(nan, nan, 40f), floatArrayOf(nan, nan, 180f)), 0f)
+    }
+
+    @Test fun aLowerChildClosesToTheNewBottomOfTheRowBeforeIt() {
+        assertEquals(180f, NotifRows.closeTarget(2, 0, 2, floatArrayOf(nan, 40f, nan), floatArrayOf(nan, 180f, nan)), 0f)
+    }
+
+    @Test fun aMiddleChildClosesToTheRowAfterItNotBefore() {
+        assertEquals(60f, NotifRows.closeTarget(2, 0, 3, floatArrayOf(0f, 30f, nan, 60f), floatArrayOf(30f, 60f, nan, 100f)), 0f)
+    }
+
+    @Test fun theRowsAfterItAreOnlyThoseOfItsOwnCard() {
+        // (The next card, past [hi], is not a neighbour inside the card: the gap above it is not the child's.)
+        assertEquals(60f, NotifRows.closeTarget(2, 0, 2, floatArrayOf(0f, 30f, nan, 120f), floatArrayOf(30f, 60f, nan, 200f)), 0f)
+    }
+
+    @Test fun aChildWhoseCardIsAllGoneHasNoTarget() {
+        assertTrue(NotifRows.closeTarget(1, 0, 2, floatArrayOf(nan, nan, nan), floatArrayOf(nan, nan, nan)).isNaN())
+    }
+
 }
