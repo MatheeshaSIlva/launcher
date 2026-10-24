@@ -221,11 +221,12 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     /** A collapsed card's text line (none without text). */
     private fun bodyLine(r: Row): Float = if (r.item?.text.isNullOrBlank()) 0f else line(QsTokens.CARD_BODY)
 
-    /** What an expanded card shows of its text: its whole text (its big text where it has one), up to [MAX_LINES] lines. */
-    private fun fullText(item: Notifs.Item): String? {
-        val big = try { item.sbn.notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT) } catch (_: Throwable) { null }
-        return (big ?: item.text)?.toString()?.takeIf { it.isNotBlank() }
-    }
+    /**
+     * What an expanded card shows of its text: its whole text, up to [MAX_LINES] lines. The item's text already holds the
+     * big text where there is one ([Notifs.read]) and is what redaction replaces: the raw notification is never read here,
+     * it would show on the lock screen what the item hides.
+     */
+    private fun fullText(item: Notifs.Item): String? = item.text?.toString()?.takeIf { it.isNotBlank() }
 
     private val measure = TextPaint(Paint.ANTI_ALIAS_FLAG)
 
