@@ -2912,9 +2912,13 @@
    "src": "kit:AOSP core dimens.xml notification_2025_margin 16 dp"
   },
   "comp.qs.card.ripple": {
-   "light": "#1f000000",
-   "dark": "#33ffffff",
-   "src": "kit:AOSP framework (Android 17, the emulator's framework.jar and framework-res.apk): a notification's background and the footer's buttons press with the platform ripple in colorControlHighlight (black at 12 % light, white at 20 % dark)"
+   "light": "#0000001f",
+   "dark": "#ffffff33",
+   "src": "kit:AOSP SystemUIGoogle (Android 17 emulator): the footer buttons' (History, Clear all, Settings) ripple, notif_footer_btn_background, in colorControlHighlight (black at 12 % light, white at 20 % dark); written #rrggbbaa as every theme colour. A notification's own background (notification_material_bg) has no ripple"
+  },
+  "comp.qs.card.swipe-fade-end": {
+   "factor": 0.6,
+   "src": "kit:AOSP SystemUIGoogle (Android 17): SwipeHelper SWIPE_PROGRESS_FADE_END 0.6, the share of its width a swiped notification has gone when its content has faded out (alpha = 1 - progress / 0.6; its background stays opaque)"
   },
   "comp.qs.card.text-color": {
    "ref": "component.notification.label-color",

@@ -700,4 +700,38 @@ class NotifRowsTest {
         assertTrue(NotifRows.closeTarget(1, 0, 2, floatArrayOf(nan, nan, nan), floatArrayOf(nan, nan, nan)).isNaN())
     }
 
+    // ------------------------------------------------------------------ B-035: a swiped card's content fades, its surface does not
+
+    @Test fun aSwipedCardsContentFadesLinearlyToNothingAtSixTenthsOfItsWidth() {
+        assertEquals(1f, NotifRows.swipeFade(0f, 1000f, 0.6f), 1e-6f)
+        assertEquals(0.5f, NotifRows.swipeFade(300f, 1000f, 0.6f), 1e-6f)
+        assertEquals(0.5f, NotifRows.swipeFade(-300f, 1000f, 0.6f), 1e-6f)
+        assertEquals(0f, NotifRows.swipeFade(600f, 1000f, 0.6f), 1e-6f)
+        assertEquals(0f, NotifRows.swipeFade(1100f, 1000f, 0.6f), 0f)
+    }
+
+    @Test fun noWidthOrNoEndLeavesTheContentWhole() {
+        assertEquals(1f, NotifRows.swipeFade(200f, 0f, 0.6f), 0f)
+        assertEquals(1f, NotifRows.swipeFade(200f, 1000f, 0f), 0f)
+    }
+
+    @Test fun aSwipedCardsSurfaceKeepsItsListAndPresenceAlphaAtAnySwipe() {
+        for (list in floatArrayOf(1f, 0.6f)) for (presence in floatArrayOf(1f, 0.4f, 0f)) {
+            val want = list * presence
+            for (dx in floatArrayOf(0f, 300f, 600f, 1100f, -300f)) {
+                // (The surface's alpha has no swipe in it: it is the same at every dx.)
+                assertEquals(want, NotifRows.surfaceAlpha(list, presence), 0f)
+                val fade = NotifRows.swipeFade(dx, 1000f, 0.6f)
+                assertEquals(want * fade, NotifRows.contentAlpha(NotifRows.surfaceAlpha(list, presence), fade), 1e-6f)
+            }
+        }
+    }
+
+    @Test fun theContentAlphaIsTheSurfacesTimesWhatTheSwipeLeaves() {
+        assertEquals(0.5f, NotifRows.contentAlpha(1f, NotifRows.swipeFade(300f, 1000f, 0.6f)), 1e-6f)
+        assertEquals(0f, NotifRows.contentAlpha(1f, NotifRows.swipeFade(600f, 1000f, 0.6f)), 0f)
+        assertEquals(0f, NotifRows.contentAlpha(1f, NotifRows.swipeFade(1100f, 1000f, 0.6f)), 0f)
+        assertEquals(0.3f, NotifRows.contentAlpha(NotifRows.surfaceAlpha(0.6f, 1f), 0.5f), 1e-6f)
+    }
+
 }

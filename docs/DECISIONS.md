@@ -200,3 +200,10 @@ Context: Round 4 (D-030) fixed the dissolve's slot and icon where header and sur
 Decision: One last narrow round: a cut's resting corners decided from structure when the child leaves (whether any row of its old card before or after it stays), never from geometry each frame, so a drag or a return always starts from square; the upper-child dissolve copied from the emulator's stock shade, captured first. QA follows at once. If anything still fails, 3b-1 and 3b-2 ship without round 4's corner change, the rest logged as bugs.
 Alternatives considered: Reverting round 4's corner change and shipping with the two logged; pausing.
 Consequences / revisit when: No further rounds on 3b-2.
+
+### D-032: Notification cards have no press highlight; a swiped card fades only its content (2026-10-24)
+Context: B-035 (a light blue highlight on tap and drag in the Pixel shade). 1d16f45 had given notification cards the platform's press ripple.
+Decision: As Android 17's SystemUIGoogle (read from the emulator's APK): a notification's background (`notification_material_bg`) is a layer-list with no ripple, so our cards show no press state; the footer buttons keep a ripple in colorControlHighlight (`notif_footer_btn_background`). A swiped card's surface stays opaque and only its content fades, `1 - clamp(|dx| / card width / 0.6)` (SwipeHelper.getSwipeAlpha via ExpandableNotificationRow.setContentAlpha; `config_fadeDependingOnAmountSwiped` false on the emulator and the S24). The 0.6 is the token `comp.qs.card.swipe-fade-end`.
+Alternatives considered: keep a faint card ripple (not what Android draws); keep fading the whole card (the scrim shows through it).
+Consequences / revisit when: B-045's squash and the slot closing under a card still flying out show more with an opaque surface; revisit if the owner sees a press state on a real Pixel's shade.
+

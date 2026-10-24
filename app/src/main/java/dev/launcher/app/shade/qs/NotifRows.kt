@@ -343,6 +343,21 @@ internal object NotifRows {
      */
     fun cutRest(leaving: Boolean, atEnd: Boolean, outer: Float): Float = if (leaving && atEnd) outer else 0f
 
+    /** The alpha of a card's surface: its list's times its own presence. A swipe never takes part (Android 17 fades a swiped row's content only). */
+    fun surfaceAlpha(list: Float, presence: Float): Float = list * presence
+
+    /** The alpha of a card's content (texts, icon, chip, hairline): its [surface] alpha times what a swipe leaves ([swipeFade]). */
+    fun contentAlpha(surface: Float, swipeFade: Float): Float = surface * swipeFade
+
+    /**
+     * How much of a swiped card's content is left (Android 17's SwipeHelper: progress = the swipe over the card's width, alpha
+     * = 1 - progress / [end]): 1 at rest, 0 once it has gone [end] of its width. Its surface is not faded by it.
+     */
+    fun swipeFade(dx: Float, width: Float, end: Float): Float {
+        if (width <= 0f || end <= 0f) return 1f
+        return 1f - (kotlin.math.abs(dx) / width / end).coerceIn(0f, 1f)
+    }
+
     /** A cut's corner, from [rest] to the [big] one as the cut's [split] goes 0 to 1. */
     fun cutCorner(rest: Float, big: Float, split: Float): Float = rest + (big - rest) * split
 

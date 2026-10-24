@@ -60,7 +60,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
 
     /**
      * A row's motion: where it is and how tall (content px), how open (0 collapsed or closed, 1 expanded or opened: the
-     * crossfade between its two contents and its chevron's turn), how present, how far swiped, its press's ripple.
+     * crossfade between its two contents and its chevron's turn), how present, how far swiped.
      */
     private inner class Anim {
         val y = MotionValue(0f, 2f, { panel.view.invalidate() })
@@ -77,7 +77,6 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val icon = MotionValue(1f, 1000f, { panel.view.invalidate() })
         /** How much of the hairline above it (a child's) it shows. */
         val div = MotionValue(0f, 1000f, { panel.view.invalidate() })
-        val ripple = Ripple { panel.view.invalidate() }
         var leaving: Row? = null
         /** A child that leaves: whether it was its card's top (no row before it stays) or bottom (none after it), for its cut's corners. */
         var endTop = false
@@ -792,7 +791,8 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         un.cutSplit[i] = a.split.value.coerceIn(0f, 1f)
     }
 
-    private fun swipeFadeOf(dx: Float) = 1f - (abs(dx) / (panel.panelWidth * 0.6f)).coerceIn(0f, 1f)
+    /** What is left of a swiped card's content (Android's: against the card's own width); its surface keeps its alpha. */
+    private fun swipeFadeOf(dx: Float) = NotifRows.swipeFade(dx, cardsWidth(), Design.num(QsTokens.CARD_SWIPE_FADE_END))
 
     /** The group's surface, once for a frame (by the first of its rows to draw), under all of their contents. */
     private fun drawUnion(c: Canvas, un: Union) {
@@ -803,7 +803,7 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         val joined = Design.pt(QsTokens.JOINED_CORNER, u)
         val outerTop = cornerPx(base.m.outerTop, big, joined)
         val outerBottom = cornerPx(base.m.outerBottom, big, joined)
-        val alpha = curListAlpha * un.alpha * swipeFadeOf(un.dx)
+        val alpha = NotifRows.surfaceAlpha(curListAlpha, un.alpha)
         val n = NotifRows.pieces(un.top, max(un.bottom, un.top), un.cutTop, un.cutBottom, un.cuts, un.pieces)
         for (k in 0 until n) {
             val pt = un.pieces[k * 4]
@@ -831,14 +831,14 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
     private fun drawRow(c: Canvas, row: Row, a: Anim, listAlpha: Float, iconOnly: Boolean = false) {
         place(row, a, r)
         if (r.bottom < 0f || r.top > panel.panelHeight) return
-        // A swiped card fades as it goes.
+        // A swiped card's content fades as it goes (Android's setContentAlpha); its surface stays whole.
         val swipeFade = swipeFadeOf(swipeOf(row, a))
-        val f = listAlpha * a.alpha.value.coerceIn(0f, 1f) * swipeFade
+        val f = NotifRows.surfaceAlpha(listAlpha, a.alpha.value.coerceIn(0f, 1f))
         if (f <= 0.003f) return
         when (row.kind) {
-            RowKind.HEADING -> drawHeading(c, r, f)
-            RowKind.FOOTER -> drawFooter(c, r, f)
-            else -> if (iconOnly) drawHeaderIcon(c, row, r, f) else drawCard(c, row, a, r, f)
+            RowKind.HEADING -> drawHeading(c, r, NotifRows.contentAlpha(f, swipeFade))
+            RowKind.FOOTER -> drawFooter(c, r, NotifRows.contentAlpha(f, swipeFade))
+            else -> if (iconOnly) drawHeaderIcon(c, row, r, NotifRows.contentAlpha(f, swipeFade)) else drawCard(c, row, a, r, f, swipeFade)
         }
     }
 
@@ -889,7 +889,9 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
 
     private fun cornerPx(k: Corner, big: Float, joined: Float) = when (k) { Corner.BIG -> big; Corner.JOINED -> joined; Corner.NONE -> 0f }
 
-    private fun drawCard(c: Canvas, row: Row, a: Anim, r: RectF, alpha: Float) {
+    /** [alpha]: the card's surface; [fade]: how much of its content a swipe leaves (the content is drawn at [alpha] times it). */
+    private fun drawCard(c: Canvas, row: Row, a: Anim, r: RectF, alpha: Float, fade: Float) {
+        val ca = NotifRows.contentAlpha(alpha, fade)
         val item = row.item ?: return
         val big = Design.pt(QsTokens.CARD_CORNER, u)
         val joined = Design.pt(QsTokens.JOINED_CORNER, u)
@@ -918,9 +920,10 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
             radii[0] = st; radii[1] = st; radii[2] = sb; radii[3] = sb
             panel.surfaces.draw(c, Design.material(QsTokens.CARD), r.width(), r.height(), big, r.left, r.top, 1f, alpha, radii = radii)
         }
-        // (Pressed: the platform's ripple, as a notification's background has, in the theme's highlight colour.)
-        if (a.ripple.active) a.ripple.draw(c, r.width(), r.height(), big, Design.color(QsTokens.CARD_RIPPLE), alpha, u, share = 1f, radii = radii)
+        // (No press highlight: Android 17's notification background is a solid shape and a focus ring, no ripple.)
         c.restore()
+        // (A swiped card's content may be gone while its surface is still there.)
+        if (ca <= 0.003f) return
         // The content lies within the row's rectangle as it is now (a rect clip: analytic): a row growing or folding shows
         // no more of it than it has room for.
         c.save()
@@ -930,24 +933,24 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         // An opened group's child: a hairline across the card's top (coming in as it unfolds), its content under it.
         val inset = hairlinePx * a.div.value.coerceIn(0f, 1f) * fo
         if (inset > 0f) {
-            fill.color = faded(Design.color(QsTokens.DIVIDER), alpha)
+            fill.color = faded(Design.color(QsTokens.DIVIDER), ca)
             c.drawRect(r.left, r.top, r.right, r.top + inset, fill)
         }
         // (A group's header has its icon drawn last: the children unfolding from its lines lie over it.)
         // (A child that becomes a card fades its icon in, and a card that becomes a child fades it out.)
         val iconK = a.icon.value.coerceIn(0f, 1f)
-        if ((row.kind != RowKind.GROUP && row.kind != RowKind.HEADER) || a.leaving != null) drawAppIcon(c, iconK > 0.003f, item, r, pad, icon, alpha * iconK)
+        if ((row.kind != RowKind.GROUP && row.kind != RowKind.HEADER) || a.leaving != null) drawAppIcon(c, iconK > 0.003f, item, r, pad, icon, ca * iconK)
         val e = itemText(item)
         // How open it is now: its two contents are drawn in this proportion (the first and last frames of a fold show one).
         val k = a.k.value.coerceIn(0f, 1f)
         val tx = r.left + textX
         // (Its chevron comes in as the child grows out of the line, which has none.)
-        val chipW = drawChip(c, row, r, pad, alpha * range(0.35f, 1f, fo), inset, k)
+        val chipW = drawChip(c, row, r, pad, ca * range(0.35f, 1f, fo), inset, k)
         val maxW = r.right - pad - chipW - tx
         if (row.kind == RowKind.GROUP || row.kind == RowKind.HEADER) {
-            drawGroup(c, row, e, r, tx, pad, icon, inset, maxW, alpha, k)
+            drawGroup(c, row, e, r, tx, pad, icon, inset, maxW, ca, k)
         } else {
-            drawCardText(c, row, e, r, tx, pad, inset, maxW, alpha, k, fo, gl)
+            drawCardText(c, row, e, r, tx, pad, inset, maxW, ca, k, fo, gl)
         }
         c.restore()
     }
@@ -1362,8 +1365,6 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
 
     fun contains(x: Float, y: Float) = rowAt(x, y) != null
 
-    private var pressed: Row? = null
-
     private enum class FooterButton { HISTORY, CLEAR, SETTINGS }
     private val footerRipples = FooterButton.entries.associateWith { Ripple { panel.view.invalidate() } }
     private var pressedFooter: FooterButton? = null
@@ -1374,34 +1375,27 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         FooterButton.SETTINGS -> footerSettings
     }
 
-    /** A finger down on a card: it darkens a little while held (Android's ripple, as the iOS platters press). */
-    /** A finger down at ([x], [y]): the platform's ripple spreads from it over the card or footer button under it. */
+    /**
+     * A finger down at ([x], [y]): the platform's ripple spreads from it over the footer button under it. A card does not
+     * press (Android 17's notification background has no ripple).
+     */
     fun press(x: Float, y: Float) {
         val row = rowAt(x, y)?.takeIf { it.kind != RowKind.HEADING } ?: return
-        if (row.kind == RowKind.FOOTER) {
-            val b = when {
-                !footerClear.isEmpty && clearAll.target > 0.5f && footerClear.contains(x, y) -> FooterButton.CLEAR
-                footerHistory.contains(x, y) -> FooterButton.HISTORY
-                footerSettings.contains(x, y) -> FooterButton.SETTINGS
-                else -> return
-            }
-            val rect = footerRect(b)
-            pressedFooter = b
-            footerRipples.getValue(b).press(x - rect.left, y - rect.top)
-            return
+        if (row.kind != RowKind.FOOTER) return
+        val b = when {
+            !footerClear.isEmpty && clearAll.target > 0.5f && footerClear.contains(x, y) -> FooterButton.CLEAR
+            footerHistory.contains(x, y) -> FooterButton.HISTORY
+            footerSettings.contains(x, y) -> FooterButton.SETTINGS
+            else -> return
         }
-        val a = anims[row.key] ?: return
-        pressed = row
-        place(row, a, r)
-        a.ripple.press(x - r.left, y - r.top)
+        val rect = footerRect(b)
+        pressedFooter = b
+        footerRipples.getValue(b).press(x - rect.left, y - rect.top)
     }
 
     fun release() {
         pressedFooter?.let { footerRipples.getValue(it).release() }
         pressedFooter = null
-        val row = pressed ?: return
-        pressed = null
-        anims[row.key]?.ripple?.release()
     }
 
     /** The list has been scrolled (a drag down scrolls it back before it expands Quick Settings). */
@@ -1524,7 +1518,6 @@ internal class CardsBlock(private val panel: QsPanel, private val ctx: Context, 
         scroller.jumpTo(0f)
         state.clear()
         swiping = null
-        pressed = null
         hitCount = 0
     }
 

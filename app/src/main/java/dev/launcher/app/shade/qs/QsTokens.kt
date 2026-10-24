@@ -222,6 +222,8 @@ object QsTokens {
     val GROUP_LINE_GAP = NumberKey("comp.qs.card.group-line-gap")
     /** A pressed card's or footer button's ripple (the platform's highlight colour, whole). */
     val CARD_RIPPLE = ColorKey("comp.qs.card.ripple")
+    /** How much of its width a swiped card has gone when its content has faded out (its surface stays whole). */
+    val CARD_SWIPE_FADE_END = NumberKey("comp.qs.card.swipe-fade-end")
 
     // ---- The edit page (Android 17's "Edit tiles": the current tiles to choose, rearrange and resize; the tiles to add by
     // category; Reset).
@@ -414,7 +416,7 @@ object QsTokens {
         ACTIONS_BOTTOM, TITLE_GAP, TEXT_GAP, CHIP_WIDTH, CHIP_HEIGHT, CARD, CARD_CORNER, JOINED_CORNER, JOINED_GAP,
         CARD_GAP, CARD_PADDING, CARD_ICON, ICON_FILL, ICON_COLOR, CARD_APP, CARD_TITLE, CARD_BODY, CARD_TITLE_COLOR,
         CARD_TEXT_COLOR, CHIP_FILL, CHIP_TEXT, SECTION, SECTION_COLOR, SECTION_HEIGHT, CLEAR_FILL, CLEAR_TEXT, CLEAR_TEXT_COLOR,
-        CLEAR_HEIGHT, CLEAR_SIDE, CLEAR_GAP, CLEAR_INSET, CLEAR_SPACING, CLEAR_SYMBOL, CARD_RIPPLE,
+        CLEAR_HEIGHT, CLEAR_SIDE, CLEAR_GAP, CLEAR_INSET, CLEAR_SPACING, CLEAR_SYMBOL, CARD_RIPPLE, CARD_SWIPE_FADE_END,
         DIVIDER, DIVIDER_WIDTH, GROUP_LINE, GROUP_LINES_TOP, GROUP_LINES_BOTTOM, GROUP_LINE_GAP,
     )
 
