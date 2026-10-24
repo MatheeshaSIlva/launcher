@@ -164,3 +164,15 @@ Context: B-030's layout guard keeps the scenario scripts from tapping the owner'
 Decision: Yes (owner, 2026-10-24: "yes, add it to the check"). `scripts/check.local.sh` runs every `tools/tests/*_test.sh` after Gradle, and the gate fails if any of them fails.
 Alternatives considered: Running it by hand when the scripts change; running it only when tools/ changed.
 Consequences / revisit when: Every gate run (and so every stop of a Claude session through the Stop hook) takes about 2 minutes longer. Revisit if the shell tests grow past a few minutes.
+
+### D-026: An opened notification group shows at most 8 children, as Android 17 (2026-10-24) [owner]
+Context: B-034. Android 17 shows at most 8 children of an opened group (AOSP NotificationChildrenContainer, NUMBER_OF_CHILDREN_WHEN_CHILDREN_EXPANDED); the rest are reached by dismissing others or opening the app.
+Decision: Copy it (owner, 2026-10-24: "Copy Android: max 8"). The count chip shows the total, and swiping the group's header clears all of them.
+Alternatives considered: Showing every child.
+Consequences / revisit when: Notifications past the 8th are hidden in the Pixel shade's opened group.
+
+### D-027: The Pixel shade's notification list as a pure row model (2026-10-24) [agent]
+Context: B-034: the structure (which rows a card or group makes, what each shows, what a chevron toggles) lived inside the View class CardsBlock, untestable on the JVM, and a child's chevron closed its group.
+Decision: The structure is a pure model, `shade/qs/NotifRows` (keys in, rows out, toggle on a state of key sets; no android.* types), tested on the JVM; CardsBlock keeps heights, drawing and motion. Android's counts (2 lines collapsed, 5 for the first card, 8 children opened) are code constants with their AOSP source, not tokens or layout options. Pixel cards keep Notification Center's motion roles (nc.reflow, nc.appear, nc.leave); a card's height and content crossfade move on nc.reflow with the rows' places. Swiping an opened group's header takes the whole group; Clear all flies it out as one card. Whether a child stays expanded after its group is closed and reopened copies the emulator's own shade (forgotten if it cannot be read). Plan: docs/plans/B-034.md, three slices (structure, look, motion), each through the gates; slice 1 may ship alone.
+Alternatives considered: Fixing toggle() in place (fixes the chevron, not the missing header or the look, and stays untested).
+Consequences / revisit when: Revisit the roles if the Pixel shade gets motion roles of its own.

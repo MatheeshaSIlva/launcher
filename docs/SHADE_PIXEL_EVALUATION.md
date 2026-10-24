@@ -670,3 +670,15 @@ Still different, and why:
 - The flashlight on the emulator: Android shows the tile unavailable, ours shows it off (why not looked into yet; the
   S24 has a torch).
 
+
+## B-034 step 0: a child expanded in Android's own group (2026-10-24, emulator, our accessibility service off)
+
+On Android 17's own shade (two groups, Shell with three notifications and Launcher with twelve): a group opened by its
+chip shows a header ("Shell • 14m", the count, an up chevron), then each notification without an icon, each with its own
+chevron. A child's chevron expands that child only (its first line becomes the time alone, "14m", then the title and
+the whole text); the group stays open and the other children stay as they were. The header's chevron closes the group
+into its collapsed card; **opened again, the child was still expanded** (`NotifRows.toggle` copies it: a header closing
+the group leaves `expandedChildren` alone; our panel closing forgets them all, as it does the opened groups: not checked on Android's).
+Seen on the way: the first card's group, once closed by its header, listed 2 lines again (3 before the first
+closing: its three children, so the 5 of the first card applied), not 5. Not copied in slice 1 (the collapsed lines
+are slice 2's); see the plan's slice 2 before drawing them. Screenshots: `tools/shots/b034_s1_step0_a..e.png`.
