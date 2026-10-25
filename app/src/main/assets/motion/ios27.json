@@ -879,6 +879,16 @@
    ],
    "src": "judged:a notification arriving in the list"
   },
+  "motion.nc.bar-fade": {
+   "bezier": [
+    0.365,
+    0,
+    0.635,
+    1
+   ],
+   "ms": 200,
+   "src": "judged:the status bar fading out as a pull over home starts, and back in on commit (iOS 27 drops it at the first frame; the owner wants a fade, never a cut)"
+  },
   "motion.nc.clock-tick": {
    "spring": [
     0.45,
@@ -924,6 +934,16 @@
    ],
    "src": "judged:a notification leaving"
   },
+  "motion.nc.lens-in": {
+   "bezier": [
+    0.365,
+    0,
+    0.635,
+    1
+   ],
+   "ms": 160,
+   "src": "judged:the lens bands taking hold when the picture they bend arrives late (the rim and the dim show first)"
+  },
   "motion.nc.menu-close": {
    "spring": [
     0.26,
@@ -945,12 +965,52 @@
    ],
    "src": "judged:Notification Center coming down"
   },
+  "motion.nc.pull-dim-app": {
+   "bezier": [
+    0.365,
+    0,
+    0.635,
+    1
+   ],
+   "ms": 400,
+   "src": "measured:iOS 27 capture pass 10 (over an app the dim ramps in over ~0.4 s at the pull's start)"
+  },
+  "motion.nc.pull-dim-home": {
+   "bezier": [
+    0.365,
+    0,
+    0.635,
+    1
+   ],
+   "ms": 60,
+   "src": "measured:iOS 27 capture pass 10 (the 30 % dim below the sheet over home arrives in ~60 ms)"
+  },
+  "motion.nc.pull-undim": {
+   "bezier": [
+    0.365,
+    0,
+    0.635,
+    1
+   ],
+   "ms": 180,
+   "src": "measured:iOS 27 capture pass 10 (the dim clears in ~0.15-0.2 s when the pull falls back)"
+  },
   "motion.nc.reflow": {
    "spring": [
     0.4,
     0.88
    ],
    "src": "judged:the list's notifications moving to new places"
+  },
+  "motion.nc.reveal": {
+   "bezier": [
+    0.365,
+    0,
+    0.635,
+    1
+   ],
+   "ms": 70,
+   "src": "judged:from pass 10 (on commit the sheet's own content arrives 'at once'; a short fade so nothing pops)"
   },
   "motion.nc.swipe-back": {
    "spring": [

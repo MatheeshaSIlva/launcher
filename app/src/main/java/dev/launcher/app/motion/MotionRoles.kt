@@ -165,6 +165,12 @@ object MotionRoles {
         r("nc.clock-tick", "Clock: the minute", "The lock screen clock's numerals changing at the minute."),
         r("nc.launch-fade", "Opening an app", "The card of an app opened from a notification fading into the app."),
         r("nc.time-fade", "Time changing", "A notification's time label changing to its new text."),
+        r("nc.pull-dim-home", "Pull dims home", "What is behind dimming as Notification Center is pulled down over home."),
+        r("nc.pull-dim-app", "Pull dims an app", "What is behind dimming as Notification Center is pulled down over an app."),
+        r("nc.pull-undim", "Pull let go", "The dim clearing when a pull falls back."),
+        r("nc.reveal", "Contents arriving", "Notification Center's own contents arriving once a pull is let go open."),
+        r("nc.lens-in", "Glass edge arriving", "The bent edge of the pulled sheet taking hold when the picture behind it comes late."),
+        r("nc.bar-fade", "Status bar fading", "The status bar fading away as Notification Center is pulled over home, and back."),
         r("press-in", "Notification pressed", "A notification or a button as it is pressed."),
         r("press-out", "Notification let go", "And let go."),
     ))

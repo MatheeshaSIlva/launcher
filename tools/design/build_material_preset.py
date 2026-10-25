@@ -135,6 +135,12 @@ ROLES = {
     'motion.nc.toggle': ('effects', 'default'),
     'motion.nc.clock-tick': ('effects', 'slow'),
     'motion.nc.time-fade': ('effects', 'default'),
+    'motion.nc.pull-dim-home': ('effects', 'fast'),
+    'motion.nc.pull-dim-app': ('effects', 'default'),
+    'motion.nc.pull-undim': ('effects', 'fast'),
+    'motion.nc.reveal': ('effects', 'fast'),
+    'motion.nc.lens-in': ('effects', 'default'),
+    'motion.nc.bar-fade': ('effects', 'default'),
     'motion.press-in': ('spatial', 'fast'),
     'motion.press-out': ('spatial', 'fast'),
     # Banners

@@ -45,8 +45,10 @@ UI kit (`docs/IOS27_KIT.md`); where the running system differs from the kit, the
   so for ~0.1 s faint control outlines sit over an already sharp home screen. The whole close takes ~0.18 s.
 - **Notification Center open**: not a panel over home: the lock screen ("cover sheet") slides down as a solid sheet, the
   wallpaper inside it staying still (a window moving over it), the clock and date riding down with the sheet's bottom
-  part; the bottom edge is a liquid-glass rim that **bends towards the finger** (lower under the touch), with the home
-  indicator on it. Home underneath is neither blurred nor scaled.
+  part; the bottom edge is a liquid-glass rim with a lens band, with the home indicator on it. Home underneath is neither
+  blurred nor scaled. (An earlier reading said the edge "bends towards the finger", lower under the touch: capture pass 10
+  shows it straight; at finger x 70, 201 and 352 the edge differs by under 1 grey level, `docs/plans/B-037.md`. While the
+  finger holds the sheet it is clear glass with lens bands at the bottom and the sides, and its own content arrives on commit.)
 - **Folder open**: the folder's icons grow out of the folder icon (scale 0.19 to 1) while moving to the panel's place;
   the panel (clear glass) grows with them; the title ("Utilities", large, white) fades in above; home blurs behind.
   Nothing overshoots visibly. Close: the reverse, faster.

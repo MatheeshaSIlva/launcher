@@ -99,10 +99,29 @@ object NcTokens {
     val LAND_LIST_RIGHT = NumberKey("comp.nc.land.list-right")
     val LAND_LIST_BOTTOM = NumberKey("comp.nc.land.list-bottom")
 
+    // The clear slab of a pull (B-037, D-035; read by shade/nc/NcGlassProfile's callers). Lengths in points.
+    val GLASS_BAND = NumberKey("comp.nc.glass.band")
+    val GLASS_MIRROR = NumberKey("comp.nc.glass.mirror")
+    val GLASS_STRETCH_FROM = NumberKey("comp.nc.glass.stretch-from")
+    val GLASS_MIRROR_FROM = NumberKey("comp.nc.glass.mirror-from")
+    val GLASS_CORNER = NumberKey("comp.nc.glass.corner")
+    val GLASS_SIDE = NumberKey("comp.nc.glass.side")
+    val GLASS_SIDE_FROM = NumberKey("comp.nc.glass.side-from")
+    val GLASS_RIM_WIDTH = NumberKey("comp.nc.glass.rim-width")
+    val GLASS_RIM_COLOR = ColorKey("comp.nc.glass.rim-color")
+    val GLASS_RIM_FRINGE = NumberKey("comp.nc.glass.rim-fringe")
+    val GLASS_DISPERSION = NumberKey("comp.nc.glass.dispersion")
+    /** What is behind, below the sheet's edge, dimmed; and the faint dim over the clear interior. */
+    val GLASS_DIM = ColorKey("comp.nc.glass.dim")
+    val GLASS_INTERIOR_DIM = ColorKey("comp.nc.glass.interior.dim")
+    val GLASS_LENS_STRENGTH = NumberKey("comp.nc.glass.lens-strength")
+
     val ALL = listOf(PLATTER, CORNER, SYMBOLS, PADDING, ICON, TEXT_X, TEXT_TOP, MIN_HEIGHT, TITLE, BODY, TIME, LABEL, TIME_COLOR, TIME_BLEND,
         MARGIN, GAP, OVERLAY, FADE_TOP, FADE_BOTTOM, FADE_LENGTH, LIST_TOP, LIST_BOTTOM, SHELF_HEIGHT, SHELF_SHOW, SHELF_INSET1, SHELF_INSET2, STACK_TEXT_TOP, STACK_MIN_HEIGHT,
         PEEK_SHOW, PEEK_HEIGHT, PEEK_INSET, MORE_INSET, PEEK_CORNER, PEEK_ICON, BUTTON, BUTTON_SIZE, BUTTON_INSET_X,
         BUTTON_BOTTOM, BUTTON_SYMBOL, BUTTON_SYMBOL_COLOR, BUTTON_SYMBOL_BLEND, BUTTON_ON, BUTTON_ON_SYMBOL, MEDIA_PLACEHOLDER, MEDIA_TRACK, HEADER_COLOR, TEXT_SHADOW, LOOK_CARD, LOOK_CORNER, LOOK_INSET, LOOK_LABEL,
         MENU_GAP, LOOK_DIM, LOOK_BLUR, LAND_CLOCK_X, LAND_CLOCK_TOP, LAND_CLOCK_HEIGHT, LAND_DATE_SIZE, LAND_DATE_GAP, LAND_LIST_TOP,
-        LAND_LIST_RIGHT, LAND_LIST_BOTTOM).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
+        LAND_LIST_RIGHT, LAND_LIST_BOTTOM,
+        GLASS_BAND, GLASS_MIRROR, GLASS_STRETCH_FROM, GLASS_MIRROR_FROM, GLASS_CORNER, GLASS_SIDE, GLASS_SIDE_FROM, GLASS_RIM_WIDTH,
+        GLASS_RIM_COLOR, GLASS_RIM_FRINGE, GLASS_DISPERSION, GLASS_DIM, GLASS_INTERIOR_DIM, GLASS_LENS_STRENGTH).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
 }
