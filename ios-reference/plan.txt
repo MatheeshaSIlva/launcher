@@ -1,1 +1,3 @@
-normal: test01b_grantNotifications test62_ncLandscape
+setup media ios-reference/wallpaper.jpg
+fullres: test81_ncGlassHome test82_ncGlassApp
+normal: test80_wallpaper test81_ncGlassHome test82_ncGlassApp

@@ -9,7 +9,10 @@ only way to see the real thing move.
   in points) and prints `REFMARK <unix time> <what>` lines.
 - `RefHost/`: a tiny app that posts local notifications on cue (`-post <set> <delay>`), for real banners and stacks.
 - `capture.sh`: records the screen around each scenario (`simctl io recordVideo`).
-- `plan.txt`: what a push runs: `normal: <tests>|all` and `slow <factor>: <tests>` lines. The slow pass turns on the
+- `wallpaper.jpg`: a still test wallpaper (colour fields and a 20 pt grid that shows any lensing; EXIF date 2030 so the
+  photo picker lists it as the newest), added to Photos by a `setup media FILE` line and set by `test80_wallpaper`.
+- `plan.txt`: what a push runs: `normal: <tests>|all` and `slow <factor>: <tests>` lines (`setup media FILE` adds a picture to
+  Photos; `fullres: <tests>` also keeps those tests' video at 2 px per point, `video_full.mp4`). The slow pass turns on the
   Simulator's Slow Animations (`cadebug.swift`, CoreSimulator's own switch) so each animation spans many frames; the
   tests stretch their pauses by the factor. `test98_calibrate` (known springs in RefHost) checks the chain and measures
   the real factor. A fresh simulator each run: `test00_setupControls` first when Control Center needs controls.

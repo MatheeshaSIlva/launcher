@@ -90,6 +90,9 @@ jobs:
                   xcrun simctl spawn "$UDID" defaults write com.apple.Accessibility EnhancedBackgroundContrastEnabled -bool true
                   xcrun simctl shutdown "$UDID"; xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b
                   xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active --wifiBars 3                     --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100 || true ;;
+                "setup media "*)
+                  # A picture for the Photos library (e.g. a still wallpaper the tests set): "setup media FILE".
+                  xcrun simctl addmedia "$UDID" "${line#setup media }" || echo "addmedia failed: $line" ;;
                 "setup dark")
                   xcrun simctl ui "$UDID" appearance dark || true ;;
                 "setup light")
@@ -115,6 +118,8 @@ jobs:
         if: always()
         run: |
           which ffmpeg > /dev/null || brew install ffmpeg > /dev/null
+          # "fullres: tests" in plan.txt: those tests also get video_full.mp4 at 2 px per point (fine edges: rims, lenses).
+          FULL=" $(grep '^fullres:' ios-reference/plan.txt | cut -d: -f2- | tr -s ' ') "
           for d in $(find out -name video.mp4 -exec dirname {} \;); do
             d="$d/"
             t=${d#out/}; t=${t%/}; s="small/$t"; mkdir -p "$s"
@@ -123,6 +128,9 @@ jobs:
               ffmpeg -nostdin -loglevel error -i "$d/video.mp4" -fps_mode passthrough -vf "scale=402:-2" \
                 -c:v libx264 -crf 24 -preset medium -pix_fmt yuv420p "$s/video.mp4" || true
               ffprobe -v error -select_streams v:0 -show_entries frame=pts_time -of csv=p=0 "$d/video.mp4" > "$s/video_times.txt" || true
+              case "$FULL" in *" $(basename "$t") "*)
+                ffmpeg -nostdin -loglevel error -i "$d/video.mp4" -fps_mode passthrough -vf "scale=804:-2"                   -c:v libx264 -crf 20 -preset medium -pix_fmt yuv420p "$s/video_full.mp4" || true ;;
+              esac
             fi
             for p in "$d"/*.png; do
               [ -f "$p" ] && ffmpeg -nostdin -loglevel error -i "$p" -vf "scale=603:-2" "$s/$(basename "$p")" || true
