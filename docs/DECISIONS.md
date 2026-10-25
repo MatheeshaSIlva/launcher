@@ -230,3 +230,16 @@ crossfade is the player's too (a turn mid-fade fades back, never starts a play f
 Alternatives considered: copy Android's restart (a visible jump, against rule 3); the caller owning the crossfade.
 Consequences / revisit when: ours differs from a Pixel only in those interrupted or jumping cases.
 
+### D-035: Notification Center's pull is a clear glass slab (2026-10-25) [owner]
+Context: B-037. iOS 27's Notification Center, while pulled and held, is clear glass over what is behind, with lens edges and
+a 30 % dim below; its own content arrives on commit (capture pass 10).
+Decision: In the iOS layout the pull shows a clear slab: the transparent window lets the live screen show through, a new
+edge view draws the dim, corners, rim and lens bands with its own shader and an inward sampling profile (MaterialPainter is
+unchanged), sampling a sharp picture of what is behind (an app's kept snapshot; home baked sharp; on the lock screen the
+wallpaper, drawn inside the sheet too so One UI's lock screen never shows). A standstill release opens past 62.5 %; over
+home the status bar fades out and back in on a role; the dim ramps on two roles (home, app). Look values are
+`comp.nc.glass.*` tokens; the threshold is a code constant with its source.
+Alternatives considered: a lens band over an opaque sliding sheet (not iOS's); MaterialPainter's outward lens (would restyle
+every glass); keeping the bar over home; one dim ramp; the old sheet on the lock screen.
+Consequences / revisit when: step 2 (the commit reveal, the clock's drop, the close) is planned after the S24 check.
+
