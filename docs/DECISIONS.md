@@ -243,3 +243,10 @@ Alternatives considered: a lens band over an opaque sliding sheet (not iOS's); M
 every glass); keeping the bar over home; one dim ramp; the old sheet on the lock screen.
 Consequences / revisit when: step 2 (the commit reveal, the clock's drop, the close) is planned after the S24 check.
 
+### D-036: A fourth round for B-037 step 1, limited to two smoothness costs (2026-10-25) [owner]
+Context: step 1's QA failed AC7 (NC's full-screen layer drawn in the commit's first frame: the content waited off screen,
+so its layer was never prepared) and found home's picture for the lens baked on the shade's thread at every pull's start.
+Decision: one more implement, review and QA round, limited to preparing the sheet's layer before the commit and baking
+home's picture off the shade's thread; measured with a Perfetto trace.
+Alternatives considered: push now and fix in step 2; hold.
+
