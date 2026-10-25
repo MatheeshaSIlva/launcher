@@ -63,16 +63,17 @@ class NcGlassLens {
     fun geometry(band: Float, mirror: Float, stretchFrom: Float, mirrorFrom: Float, side: Float, sideFrom: Float, corner: Float, dispersion: Float) {
         this.band = band; this.corner = corner; this.side = side
         u("band", band); u("mirror", mirror); u("stretchFrom", stretchFrom); u("mirrorFrom", mirrorFrom)
-        u("side", side); u("sideFrom", sideFrom); u("corner", corner); u("dispersion", dispersion)
+        u("side", side); u("sideFrom", sideFrom); u("dispersion", dispersion)
     }
 
     /**
      * The bands of a slab [w] wide whose bottom edge is at [y]. [bend] scales the displacement (0: none), [cover] the opacity,
      * [mix] how much of the newest picture shows (1: only it); [tint] (r, g, b, a) and [tint2] are laid over what the bands
-     * read, as the slab lays them over what it shows (its interior dim; the lock screen's wallpaper dim).
+     * read, as the slab lays them over what it shows (its interior dim; the wallpaper's dim). [corner]: the outline's radius now.
      */
-    fun draw(c: Canvas, w: Float, y: Float, bend: Float, cover: Float, mix: Float, tint: FloatArray, tint2: FloatArray) {
-        u("screenW", w); u("edgeY", y); u("bend", bend); u("cover", cover); u("mixNew", mix)
+    fun draw(c: Canvas, w: Float, y: Float, bend: Float, cover: Float, mix: Float, tint: FloatArray, tint2: FloatArray, corner: Float = this.corner) {
+        this.corner = corner
+        u("screenW", w); u("edgeY", y); u("bend", bend); u("cover", cover); u("mixNew", mix); u("corner", corner)
         u4("tint", tint); u4("tint2", tint2)
         // (Rects, not a layer: the bottom band follows the edge, the sides take the rest of the slab's height.)
         val split = max(y - (max(band, corner) + 1f), 0f)

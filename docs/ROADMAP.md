@@ -165,6 +165,7 @@ Seeded from CLAUDE.md's open items. Severities are drafts (`ASSUMPTION`); the ow
 - [B-047] P3 (proposed), icons (the `pixel` set, every element using it), the symbols taken from Android's APK draw butt caps, miter joins and non-zero fill where Android draws round caps (Location's slash, Auto-rotate, Hotspot), and even-odd fill (Flashlight's body): aapt2 dumps `strokeLineCap`, `strokeLineJoin` and `fillType` as numbers and `build_icon_set.py`'s static decode compares names. A fix changes those symbols' look. Status: fixed with B-036 slice 3a (2026-10-25, owner: fix with slice 3)
 - [B-048] P3 (proposed), shade (Pixel layout), the Extra dim tile's symbol is AOSP's static `ic_reduce_bright_colors`; Android 17 shows `qs_extra_dim_icon_on/off` (animated). Status: open (B-036 slice 1, 2026-10-25)
 - [B-049] P3 (proposed), shade (iOS layout), Control Center under the Pixel theme showed an empty glass slot in the small-module row, left of the timer (emulator, B-036's QA, tools/shots/b036qa/12_cc_pixelsyms.png); not compared with main, maybe not new. Status: open, unverified (2026-10-25)
+- [B-050] P2 (proposed), shade (iOS layout), during a held Notification Center pull right after a design reload (tools/slowmo.sh, a theme or token change), the area below the edge shows black (home's dock region) until the next redraw. Seen twice on the emulator (B-037 step 1 QA; slice 2a1 round 2). Status: open, unverified on the S24 (2026-10-25)
 
 ## Parking lot
 Ideas that are not in scope. The owner decides if and when they become milestones.

@@ -20,6 +20,9 @@ import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewOutlineProvider
+import android.graphics.Outline
+import kotlin.math.floor
 import dev.launcher.app.AppLog
 import dev.launcher.app.GlassDrawable
 import dev.launcher.app.GlassMask
@@ -157,11 +160,13 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         val nu = Scale.unitPx(context, min(w, h))
         if (mp == null || nu != u) { mp = MaterialPainter.create(nu); flat = MaterialPainter.create(nu) }
         u = nu
+        displayR = -1f   // (asked again: the display may have turned)
         list.resized()
         frosts.clear()
         syncTokens()
         warmFrost()
         translationY = sheetY()
+        updateEdge()
         list.relayout(animate = false)
         clock.resized(w, h)
     }
@@ -200,9 +205,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
 
     /**
      * 0 = above the screen, 1 = in place (the sheet's bottom edge follows the finger). The sheet is drawn once into its own
-     * GPU layer and only that layer moves (translationY): what it shows does not change while it slides (as on iOS), so a
-     * pull costs one texture per frame instead of the wallpaper, the glass clock and every glass platter (S24: its GPU time
-     * per frame was 7-9 ms, close to the 8.3 ms a frame has at 120 Hz).
+     * GPU layer and nothing in it moves: what it shows does not change while the edge slides (as on iOS: the wallpaper stays
+     * still), a rounded outline on the layer ([updateEdge], a property of its node: no layout, no new picture of the layer)
+     * shows as much of it as the edge has reached. A pull costs one texture per frame instead of the wallpaper, the glass
+     * clock and every glass platter (S24: its GPU time per frame was 7-9 ms, close to the 8.3 ms a frame has at 120 Hz).
      */
     override var progress = 0f
         set(v) {
@@ -210,6 +216,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
             val was = field
             field = v
             translationY = sheetY()
+            updateEdge()
             showContent()
             if (was <= 0.002f && v > 0.002f) invalidate()
             list.opened(v)
@@ -228,19 +235,84 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
             showContent()
         }
 
-    /** Over the lock screen ([setLocked]). */
-    private var lockedNow = false
-
     private fun showContent() {
-        alpha = dev.launcher.app.shade.nc.NcGlassProfile.contentAlpha(progress, reveal, lockedNow)
+        alpha = dev.launcher.app.shade.nc.NcGlassProfile.contentAlpha(progress, reveal)
         translationX = if (dev.launcher.app.shade.nc.NcGlassProfile.contentWaits(progress, reveal)) width.toFloat() else 0f
     }
 
     init {
         alpha = 0f   // closed until the first pull (the setter is not run for the first value); its layer comes with it
+        // Not for the accessibility tree: a changed outline would tell it about this view at every frame of a pull (it draws
+        // only; nothing in it is a node), and ours is always on.
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                // A round rect whose top corners are off the view (its bottom corners keep their radius however short the sheet).
+                val r = edgeRadius
+                outline.setRoundRect(0, floor(min(-r, edgeY - 2f * r)).toInt(), view.width, Math.round(edgeY), r)
+            }
+        }
     }
 
-    override fun sheetY(): Float = -(1f - min(progress, 1f)) * height + max(0f, progress - 1f) * height * 0.0f
+    /** The sheet's bottom edge now (px from the top of the screen): the finger's, then the open curve's. */
+    var edgeY = 0f
+        private set
+    /** The outline's corner radius now: the token's, easing to the display's own as the edge lands ([NcGlassProfile.outlineRadius]). */
+    var edgeRadius = 0f
+        private set
+    /** How much of the edge's look (rim, interior dim, lens) shows: it falls to nothing as the sheet lands. */
+    var edgeChrome = 1f
+        private set
+
+    /** The sheet does not slide: its content is still ([NcGlassProfile.contentStill]) and the outline moves; closed, it is parked above. */
+    override fun sheetY(): Float = if (dev.launcher.app.shade.nc.NcGlassProfile.contentStill(progress)) 0f else -height.toFloat()
+
+    /** The comp.nc.glass.corner token in px, as the edge draws it. */
+    private fun tokenCorner(): Float = min(Design.pt(NcTokens.GLASS_CORNER, u), width / 2f).coerceAtLeast(1f)
+
+    /**
+     * The display's own bottom corner (px): what the outline's corners ease to as the sheet lands (so they meet the screen's and
+     * are never square). A display without rounded corners gives 0; where it cannot be asked (API 30-), the token's.
+     */
+    private var displayR = -1f
+    private var displaySource = ""
+    private var displayLogged = ""
+
+    private fun displayCorner(): Float {
+        if (android.os.Build.VERSION.SDK_INT < 31) { displaySource = "API below 31: the token's"; return tokenCorner() }
+        val d = display ?: (context.getSystemService(Context.DISPLAY_SERVICE) as android.hardware.display.DisplayManager)
+            .getDisplay(android.view.Display.DEFAULT_DISPLAY)
+        if (d == null) { displaySource = "no display: the token's"; return tokenCorner() }
+        return try {
+            val c = d.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_LEFT)
+            displaySource = if (c == null) "getRoundedCorner gave null: a square display" else "getRoundedCorner bottom left"
+            c?.radius?.toFloat() ?: 0f
+        } catch (t: Throwable) { displaySource = "getRoundedCorner threw ${t.javaClass.simpleName}: the token's"; tokenCorner() }
+    }
+
+    /**
+     * The outline that shows the still content: bottom at the edge, [NcGlassProfile.outlineRadius] corners. A property of the
+     * layer's node (`invalidateOutline` rebuilds only the outline); off once the edge is at the screen's bottom (nothing to cut).
+     */
+    private fun updateEdge() {
+        if (width == 0) return
+        val h = height.toFloat()
+        // (A whole pixel: the outline takes ints, and the edge, the wallpaper and the lens all draw at this same edge.)
+        val y = Math.round(min(progress, 1f) * h).toFloat()
+        val tok = tokenCorner()
+        if (displayR < 0f) displayR = displayCorner().also {
+            val line = "[nc] display corner radius ${it.roundToInt()} px ($displaySource)"
+            if (line != displayLogged) { displayLogged = line; AppLog.log(line) }
+        }
+        val r = dev.launcher.app.shade.nc.NcGlassProfile.outlineRadius(y, h, tok, displayR)
+        edgeChrome = dev.launcher.app.shade.nc.NcGlassProfile.chrome(y, h, tok)
+        if (y == edgeY && r == edgeRadius) return
+        edgeY = y
+        edgeRadius = r
+        val clip = !dev.launcher.app.shade.nc.NcGlassProfile.landed(y, h)
+        if (clipToOutline != clip) clipToOutline = clip
+        if (clip) invalidateOutline()
+    }
 
     /** About to open: what it shows is brought up to date (wallpaper, clock, notifications). */
     fun prepare() {
@@ -293,8 +365,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
      * full list as the phone unlocks (the notifications arrive as any new one does).
      */
     fun setLocked(locked: Boolean, p: LockPrivacy? = list.privacyNow) {
-        lockedNow = locked
-        showContent()
         list.setLocked(locked, p)
     }
 
