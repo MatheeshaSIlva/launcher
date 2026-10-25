@@ -57,6 +57,9 @@ Acceptance criteria:
 - [ ] `tools/fidelity/capture.sh` puts the Android 17 emulator in each named state of the plan's matrix and saves a
       screenshot, for ours and for stock, on a fixed setup (demo-mode status bar, font scale, locale, wallpaper, the same
       test notifications). Two captures of one state diff within tolerance (the harness's own noise is under it)
+      Status 2026-10-26 (slice 1): capture.sh covers 4 states (quick row, expanded, a tile off and on), light and dark, ours
+      and stock; the self-diff gate (`tools/fidelity/selfdiff.sh`) passed live with every noise pair at 0.0 (54 pairs incl.
+      sanity pairs). The rest of the matrix comes in later slices, so this stays open
 - [ ] Golden set: stock Android 17's shade for every state in the matrix, light and dark (storage decided in a D-entry)
 - [ ] Motion: slow-motion frames (10x) of the pull, the second stage, the edit page and a tile toggle, stock against ours,
       compared at the same progress, not the same time
@@ -187,6 +190,7 @@ Seeded from CLAUDE.md's open items. Severities are drafts (`ASSUMPTION`); the ow
 - [B-047] P3 (proposed), icons (the `pixel` set, every element using it), the symbols taken from Android's APK draw butt caps, miter joins and non-zero fill where Android draws round caps (Location's slash, Auto-rotate, Hotspot), and even-odd fill (Flashlight's body): aapt2 dumps `strokeLineCap`, `strokeLineJoin` and `fillType` as numbers and `build_icon_set.py`'s static decode compares names. A fix changes those symbols' look. Status: fixed with B-036 slice 3a (2026-10-25, owner: fix with slice 3)
 - [B-048] P3 (proposed), shade (Pixel layout), the Extra dim tile's symbol is AOSP's static `ic_reduce_bright_colors`; Android 17 shows `qs_extra_dim_icon_on/off` (animated). Status: open (B-036 slice 1, 2026-10-25)
 - [B-049] P3 (proposed), shade (iOS layout), Control Center under the Pixel theme showed an empty glass slot in the small-module row, left of the timer (emulator, B-036's QA, tools/shots/b036qa/12_cc_pixelsyms.png); not compared with main, maybe not new. Status: open, unverified (2026-10-25)
+- [B-051] P3 (proposed), shade (Pixel layout), our notification cards never show Android 17's "recently alerted" bell beside the time (stock shows it for 30 s after a notification alerts; SystemUI `RowAlertTimeCoordinator`). Found by MF slice 1. Status: open (2026-10-26)
 
 ## Parking lot
 Ideas that are not in scope. The owner decides if and when they become milestones.

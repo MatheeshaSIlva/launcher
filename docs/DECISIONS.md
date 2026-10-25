@@ -296,3 +296,10 @@ a shell cannot cancel, its age text following the faked clock); the clock is set
 untouched and sets only stock's (the lists differ until a later slice can drive ours'). Battery `set status 3` is added so
 ours shows no charging bolt. Ours' font and colour overrides go in `design/user-<theme>.json` (user edits are per theme).
 
+### D-040: MF slice 1's harness details and a third round (2026-10-26)
+Decision: The emulator's modem is set unregistered for a capture run (its signal bars swing on their own every ~90 s; demo
+mode does not reach ours), restored after. The test notification is posted at 10:00:00 and the clock held at 10:00:45, so
+SystemUI's 30 s "recently alerted" bell is gone in every capture while the time still reads 10:00 and "now". A restore
+counts only when our gesture strip is really back (B-018). The fake-device test scales its polls (`POLL_SCALE`, 0.1 in the
+test, 1 for real runs). The owner allowed a third round (2026-10-26) limited to the fake test's flakiness under load.
+
