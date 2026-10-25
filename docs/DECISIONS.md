@@ -268,3 +268,26 @@ unclear, and the look is GPU tuning, not readable code); Microsoft's remote iOS 
 Consequences / revisit when: if MF's baseline shows the diff cannot tell real gaps from noise (a font the emulator lacks,
 blur, antialiasing), settle masks and tolerances before anything else. CLAUDE.md's size (121 KB, loaded by every agent) is
 a separate open decision.
+
+### D-038: Fidelity captures use one font on both sides; goldens live in the repo (2026-10-26) [owner]
+Context: MF slice 1. The Android 17 emulator has no Google Sans (stock draws Roboto, ours Google Sans Flex), so words would
+flood the diff; golden captures need a home (~400 KB a PNG, ~20 MB for the full matrix, recaptured per Android build).
+Decision: (1) For captures only, ours draws the system font (`sys.font.text`/`sys.font.display` = `system` through a
+temporary design override, restored after); positions, sizes, colours and truncation are compared, and the few styles whose
+weight comes from a font-family name are masked. Google Sans Flex itself is judged on a real Pixel or the S24. (2) Goldens
+live in the repo: `tools/fidelity/golden/<android-build>/<theme>/<state>.png` with a manifest, PNGs optimised.
+Alternatives considered: masking every text box; installing Google Sans (user build, no root); an orphan branch, release
+assets, Git LFS.
+Consequences / revisit when: history grows ~20 MB per recapture; revisit if recaptures become frequent.
+
+### D-039: How the fidelity harness captures (2026-10-26)
+Context: MF slice 1's plan (docs/plans/MF_FIDELITY.md).
+Decision: The harness fixes the real device state on both sides (UTC, 24 h, the clock at 2026-11-02 10:00 UTC, battery
+unplugged at 100 %, brightness 127, DND off) rather than demo mode, which ours ignores (used only if a probe shows a need);
+both sides post the one test notification through `TEST_NOTIFY` (same sender and icon, cancellable); states are reached
+with `cmd statusbar expand-*` and our TEST_SHADE hooks at rest, no touches (held touches as the fallback); slice 1's tile is
+Auto-rotate (`accelerometer_rotation`; Flashlight is unavailable on the emulator, DND would hide the notification); sides
+switch by the accessibility list with the prior state saved and restored on every exit; the gate is 3 in-session captures
+plus a cross-session pair with `diff.py`'s defaults and a headroom of overall mean <= 0.2, worst cell <= 0.5.
+Alternatives considered: `cmd notification post` on stock (no cancel, another sender); held touches as the first method.
+

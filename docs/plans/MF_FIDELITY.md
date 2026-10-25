@@ -39,3 +39,34 @@ time. Our spring physics make time comparisons meaningless; progress comparisons
 ## Done when
 `docs/FIDELITY_BASELINE.md` lists every state's score, every region over tolerance is fixed or a logged bug with its
 heatmap, and `/ship`'s fidelity track runs on it. iOS comes after, on a GPU-Mac capture or recordings from a real iPhone.
+
+## Slice 1 plan (architect, 2026-10-26): `tools/fidelity/capture.sh` and the self-diff gate
+Verified read-only on emulator-5554: Android 17 (sdk 37), `user` build (no root), 1080x2400 at 420 dpi, font_scale 1.0,
+en-US, palette preset D2DCF0 TONAL_SPOT; `cmd statusbar expand-notifications|expand-settings|collapse|set-tiles` exist;
+`cmd alarm set-time/set-timezone`, `cmd uimode night` exist; `cmd notification post` has no cancel; SystemUI carries the
+demo-mode machinery (its syntax on Android 17 unverified). The 219 files in `tools/shots/stock` have no setup record: not a
+golden.
+- Scope: `capture.sh` (`--side ours|stock --state quick|expanded|tile-off|tile-on|all --theme light|dark|both --out DIR
+  [--repeat N] [--restore] [--dry-run]`; exit 0 / 1 not reached or not at rest / 2 preconditions), `selfdiff.sh` (the gate,
+  `diff.py` unchanged), `tools/tests/fidelity_capture_test.sh` (fake adb). Output `tools/shots/fidelity/<run>/<side>/<theme>/
+  <state>.png` + `manifest.json` (git-ignored). No app code change.
+- Step 1 probes on the emulator, recorded in the script's header: demo mode; `set-time` sticking with auto time off;
+  `expand-*` reaching stage 1 and 2 on stock (else held `input motionevent`); `set-tiles` specs on Android 17 and Auto-rotate
+  following `accelerometer_rotation` on both sides; adb handles for ours' system colours and fonts; `TEST_NOTIFY` on the
+  stock shade; a byte-exact export/import round trip of setup.json and design/. Stop if stage 2 cannot be reached.
+- Side switch by the accessibility list (others kept; B-018 retry, never force-stop), the prior state saved to
+  `tools/shots/fidelity/.prior/` before the first change, teardown on EXIT/INT/TERM, `--restore` after a kill.
+- Fixed setup on both sides: UTC, 24 h, auto time off, clock 2026-11-02 10:00 UTC, battery unplugged at 100 %, brightness
+  127, DND off, Auto-rotate on, font scale and locale asserted, palette asserted by seed and style; tiles set on both sides;
+  ours on the Pixel layout and theme with the system's colours. Demo mode only if a probe shows it is needed (ours ignores
+  it). One notification fixture on both sides through `TEST_NOTIFY`.
+- States without touches: collapse, night mode, clock, (quick: the notification, heads-up waited out), open, wait for
+  rest (two identical screencaps 400 ms apart, at most 10 s), focus checked; tile-off/on by `accelerometer_rotation`.
+- Gate: 3 in-session captures per side, theme and state (pairs 1-2, 2-3) and a cross-session pair (quick, expanded),
+  `diff.py` defaults, headroom overall mean <= 0.2 and worst cell <= 0.5; sanity pairs (light vs dark and tile-off vs
+  tile-on must fail; the tile's cells only).
+- Acceptance criteria AC1-AC9 (preconditions refuse untouched; the device as before after a run, a SIGTERM and --restore;
+  emulator usable; 16 PNGs 1080x2400 with a manifest; the self-diffs and cross-session pairs within headroom; the sanity
+  pairs; the shell test, check.sh and diff.py's tests; the probes' answers in the header).
+- Owner's answers (2026-10-26, D-038): one font on both sides (ours on the system font for captures, restored after; the
+  font override is built in slice 1 as a switch); goldens in the repo under `tools/fidelity/golden/<android-build>/`.
