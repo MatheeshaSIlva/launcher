@@ -1303,6 +1303,175 @@ final class Scenarios: XCTestCase {
         home()
     }
 
+    // MARK: - B-037: Notification Center's leading edge over a still wallpaper (2026-10-25)
+
+    /// Apps that may host a step of the wallpaper flow (Settings presents PosterBoard's gallery, editor and photo picker).
+    private var wallpaperApps: [(String, XCUIApplication)] {
+        [("posterboard", XCUIApplication(bundleIdentifier: "com.apple.PosterBoard")), ("prefs", prefs),
+         ("photos", XCUIApplication(bundleIdentifier: "com.apple.mobileslideshow")), ("springboard", sb)]
+    }
+
+    private func isUp(_ a: XCUIApplication) -> Bool { a.state != .notRunning && a.state != .unknown }
+
+    /// The first element on screen whose label matches `pred`, in any app of the wallpaper flow (never home's icons).
+    private func findOnScreen(_ what: String, _ pred: NSPredicate, timeout: Double = 6) -> XCUIElement? {
+        let screen = CGRect(x: 0, y: 0, width: w, height: h)
+        let types: [XCUIElement.ElementType] = [.button, .cell, .staticText, .image, .other]
+        let t0 = Date()
+        repeat {
+            for (name, app) in wallpaperApps where isUp(app) {
+                for ty in types {
+                    for e in app.descendants(matching: ty).matching(pred).allElementsBoundByIndex.prefix(8) where e.exists {
+                        let f = e.frame
+                        if f.width > 1 && f.height > 1 && screen.intersects(f) {
+                            mark("found \(what) in \(name) as type \(ty.rawValue) '\(e.label)' at \(f)")
+                            return e
+                        }
+                    }
+                }
+            }
+            usleep(400_000)
+        } while Date().timeIntervalSince(t0) < timeout
+        mark("no \(what) after \(Int(timeout)) s")
+        return nil
+    }
+
+    private func tapElement(_ name: String, _ e: XCUIElement) {
+        let f = e.frame
+        tap(name, min(max(f.midX, 4), w - 4), min(max(f.midY, 4), h - 4))
+    }
+
+    /// A screenshot and the trees of every app of the flow that runs (what to read when a step finds nothing).
+    private func wallpaperStep(_ name: String) {
+        shot(name)
+        for (n, app) in wallpaperApps where isUp(app) && n != "springboard" {
+            let a = XCTAttachment(string: app.debugDescription)
+            a.name = "\(name)-\(n).txt"
+            a.lifetime = .keepAlways
+            add(a)
+        }
+        tree(name)
+    }
+
+    /// The photo the workflow added (`setup media`: its EXIF date is 2030, so its label says 2030 and it is the newest),
+    /// else the last thumbnail on screen (bottom right: the newest).
+    private func pickPhoto() -> Bool {
+        if let e = findOnScreen("photo 2030", NSPredicate(format: "label CONTAINS '2030'"), timeout: 5) {
+            tapElement("photo-2030", e)
+            return true
+        }
+        var best: XCUIElement?
+        var bestKey: (Int, Int, Int) = (-1, -1, -1)
+        for (name, app) in wallpaperApps where isUp(app) && name != "springboard" {
+            for ty in [XCUIElement.ElementType.image, .cell] {
+                for e in app.descendants(matching: ty).allElementsBoundByIndex.prefix(60) where e.exists {
+                    let f = e.frame
+                    guard f.width >= 60, f.height >= 60, f.width < w * 0.9, f.minY > 80, f.maxY < h - 20 else { continue }
+                    let k = (e.label.hasPrefix("Photo") ? 1 : 0, Int(f.minY), Int(f.minX))
+                    if k > bestKey { bestKey = k; best = e }
+                }
+            }
+        }
+        guard let e = best else { mark("no thumbnail to pick"); return false }
+        mark("picking the last thumbnail '\(e.label)' at \(e.frame)")
+        tapElement("photo-last", e)
+        return true
+    }
+
+    /// Settings > Wallpaper > Add New Wallpaper > `kind` ("Photos": our photo; "Color") > Add > Set as Wallpaper Pair.
+    private func setWallpaper(_ kind: String) -> Bool {
+        freshSettings()
+        guard openRow("Wallpaper") else { return false }
+        wait(2.5)
+        wallpaperStep("wp-\(kind)-1-page")
+        guard let add = findOnScreen("Add New Wallpaper", NSPredicate(format: "label CONTAINS[c] 'Add New'")) else { return false }
+        tapElement("wp-add-new", add)
+        wait(3)
+        wallpaperStep("wp-\(kind)-2-gallery")
+        let kindPred = kind == "Color" ? NSPredicate(format: "label ==[c] 'Color' OR label ==[c] 'Colour'")
+                                       : NSPredicate(format: "label ==[c] %@", kind)
+        var k = findOnScreen(kind, kindPred)
+        if k == nil {
+            // The gallery's top row scrolls sideways: look further along it.
+            for i in 0..<3 where k == nil {
+                drag("wp-row-left-\(i)", CGPoint(x: w * 0.85, y: h * 0.2), CGPoint(x: w * 0.15, y: h * 0.2), velocity: 800, hold: 0.3)
+                wait(1)
+                k = findOnScreen(kind, kindPred, timeout: 2)
+            }
+        }
+        guard let kindButton = k else { return false }
+        tapElement("wp-\(kind)", kindButton)
+        wait(3.5)
+        wallpaperStep("wp-\(kind)-3-chosen")
+        if kind == "Photos" {
+            if let all = findOnScreen("All", NSPredicate(format: "label ==[c] 'All'"), timeout: 2) { tapElement("wp-all", all); wait(2) }
+            guard pickPhoto() else { return false }
+            wait(4)
+            wallpaperStep("wp-\(kind)-4-editor")
+        }
+        guard let done = findOnScreen("Add", NSPredicate(format: "label ==[c] 'Add' OR label ==[c] 'Done'"), timeout: 8) else { return false }
+        tapElement("wp-editor-add", done)
+        wait(2.5)
+        wallpaperStep("wp-\(kind)-5-added")
+        if let pair = findOnScreen("Set as Wallpaper Pair", NSPredicate(format: "label BEGINSWITH[c] 'Set as Wallpaper'"), timeout: 6) {
+            tapElement("wp-pair", pair)
+            wait(3)
+        }
+        wallpaperStep("wp-\(kind)-6-set")
+        return true
+    }
+
+    /// Sets a still wallpaper (the workflow's photo; Settings' Color if that route fails) and shows the result.
+    func test80_wallpaper() {
+        var ok = setWallpaper("Photos")
+        mark("wallpaper photo route: \(ok ? "went through" : "failed")")
+        if !ok {
+            home()
+            ok = setWallpaper("Color")
+            mark("wallpaper color route: \(ok ? "went through" : "failed")")
+        }
+        home()
+        wait(1.5)
+        shot("home-after-wallpaper")
+        tree("home-after-wallpaper")
+        openNC("nc-after-wallpaper")
+        wait(2.5)
+        shot("nc-after-wallpaper")
+        closeFromBottom("nc-after-wallpaper-close")
+        wait(2)
+        prefs.terminate()
+        home()
+    }
+
+    /// Slow Notification Center pulls (350 pt/s) from the top left to a point, held still 1.5 s (still frames of the
+    /// sheet's leading edge), then let go from a standstill; each from a fresh start over `app` (or home).
+    private func ncSlowPulls(_ prefix: String, over app: XCUIApplication?, _ ends: [(String, CGFloat, CGFloat)]) {
+        for (name, x, fy) in ends {
+            if let app = app { app.activate(); wait(2.5) } else { home() }
+            shot("\(prefix)-\(name)-before")
+            drag("\(prefix)-\(name)", CGPoint(x: 70, y: 2), CGPoint(x: x, y: h * fy), velocity: 350, hold: 1.5)
+            wait(2.5)
+            shot("\(prefix)-\(name)-after")
+            closeFromBottom("\(prefix)-\(name)-close")
+            wait(2.5)
+        }
+    }
+
+    /// Over home: to the middle (twice), to three quarters, and to the middle with the finger at the centre and at the
+    /// right (does the edge bend toward the finger?).
+    func test81_ncGlassHome() {
+        ncSlowPulls("home", over: nil, [("mid", 70, 0.5), ("mid2", 70, 0.5), ("deep", 70, 0.75),
+                                        ("mid-centre", w / 2, 0.5), ("mid-right", w - 50, 0.5)])
+        home()
+    }
+
+    /// Over an app (Settings' first page: bright, detailed rows): does the edge bend the app as it bends home?
+    func test82_ncGlassApp() {
+        freshSettings()
+        ncSlowPulls("app", over: prefs, [("mid", 70, 0.5), ("deep", 70, 0.75), ("mid-centre", w / 2, 0.5)])
+        home()
+    }
+
     // MARK: - Calibration
 
     /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the
