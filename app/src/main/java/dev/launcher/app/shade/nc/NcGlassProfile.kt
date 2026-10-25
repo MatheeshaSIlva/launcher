@@ -22,6 +22,10 @@ object NcGlassProfile {
      * above (no seam). Its last [mirror] points read a flattened mirror copy, from [mirrorFrom] above the edge (at e = 0)
      * falling to [stretchFrom] (at e = [mirror]). Both parts are flat at the fold, so the profile has a smooth turning point
      * there and no kink.
+     *
+     * Strictly increasing from [mirror] to [band] only while 3 * ([band] - [stretchFrom]) > [band] - [mirror] (24 > 22 with the
+     * tokens' 26, 4, 18): a caller whose tokens break it (the token editor) clamps [stretchFrom] below
+     * [band] - ([band] - [mirror]) / 3, or the band folds back on itself.
      */
     fun bottomSampleDist(e: Float, band: Float, mirror: Float, stretchFrom: Float, mirrorFrom: Float): Float {
         if (e >= band) return e
@@ -33,9 +37,24 @@ object NcGlassProfile {
 
     /** The side band: [side] points wide, reading from [from] at the screen's edge (e = 0) to [side] at its inner side, rising. */
     fun sideSampleDist(e: Float, side: Float, from: Float): Float {
-        if (e >= side) return e
+        if (side <= 0f || e >= side) return e
         return rising((if (e < 0f) 0f else e) / side, from, side, side)
     }
+
+    /**
+     * The sheet's own content over the clear slab: invisible while closed, whole while it waits off screen, then fading in.
+     * Over the lock screen ([locked]) it is whole as soon as it arrives (the slab's wallpaper above it fades instead): two
+     * layers fading against each other would let One UI's lock screen show through (k * (1 - k), a quarter at the middle).
+     */
+    fun contentAlpha(progress: Float, reveal: Float, locked: Boolean = false): Float = when {
+        progress <= 0.002f -> 0f
+        reveal <= 0f -> 1f
+        locked -> 1f
+        else -> reveal.coerceAtMost(1f)
+    }
+
+    /** The content waits drawn but off the screen while a pull holds the clear slab ([contentAlpha] is 1 there). */
+    fun contentWaits(progress: Float, reveal: Float): Boolean = progress > 0.002f && reveal <= 0f
 
     /**
      * A release: a fling faster than [flingPx] (px/s, down is positive) opens or closes by its direction; otherwise the panel

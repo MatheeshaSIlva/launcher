@@ -111,6 +111,9 @@ object NcTokens {
     val GLASS_RIM_COLOR = ColorKey("comp.nc.glass.rim-color")
     val GLASS_RIM_FRINGE = NumberKey("comp.nc.glass.rim-fringe")
     val GLASS_DISPERSION = NumberKey("comp.nc.glass.dispersion")
+    /** The red outside and blue inside of the rim's fringe (with their alpha). */
+    val GLASS_FRINGE_OUT = ColorKey("comp.nc.glass.fringe-out-color")
+    val GLASS_FRINGE_IN = ColorKey("comp.nc.glass.fringe-in-color")
     /** What is behind, below the sheet's edge, dimmed; and the faint dim over the clear interior. */
     val GLASS_DIM = ColorKey("comp.nc.glass.dim")
     val GLASS_INTERIOR_DIM = ColorKey("comp.nc.glass.interior.dim")
@@ -123,5 +126,5 @@ object NcTokens {
         MENU_GAP, LOOK_DIM, LOOK_BLUR, LAND_CLOCK_X, LAND_CLOCK_TOP, LAND_CLOCK_HEIGHT, LAND_DATE_SIZE, LAND_DATE_GAP, LAND_LIST_TOP,
         LAND_LIST_RIGHT, LAND_LIST_BOTTOM,
         GLASS_BAND, GLASS_MIRROR, GLASS_STRETCH_FROM, GLASS_MIRROR_FROM, GLASS_CORNER, GLASS_SIDE, GLASS_SIDE_FROM, GLASS_RIM_WIDTH,
-        GLASS_RIM_COLOR, GLASS_RIM_FRINGE, GLASS_DISPERSION, GLASS_DIM, GLASS_INTERIOR_DIM, GLASS_LENS_STRENGTH).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
+        GLASS_RIM_COLOR, GLASS_RIM_FRINGE, GLASS_FRINGE_OUT, GLASS_FRINGE_IN, GLASS_DISPERSION, GLASS_DIM, GLASS_INTERIOR_DIM, GLASS_LENS_STRENGTH).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
 }

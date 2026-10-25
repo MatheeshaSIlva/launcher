@@ -972,6 +972,8 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
 - A panel at rest for a screenshot: `am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do open [--es
   panel cc|nc]` (opened as a released pull opens it), `--es do close` (emulator; on the S24 never Notification Center).
+- Notification Center held as a finger holds the pull (B-037, the clear slab; emulator only): `TEST_SHADE --es do pull --ef at
+  0.5` holds it at that progress until `--es do release` (decided as a standstill release: opens from 62.5 %) or `--es do close`.
 - Android's shade's tile symbols (B-036): with the shade opened once, `am broadcast -a dev.launcher.app.TEST_SHADE -p
   dev.launcher.app --es do tile-frames --es control FLASHLIGHT [--ez on true|false] [--ez wide true] [--ef interrupt 0.4]
   [--ei fps 120] [--es bg '#RRGGBB']` draws the real tile going to on (or off) at exact steps into

@@ -2474,6 +2474,14 @@
    "color": "#f5e6c8cc",
    "src": "judged:from pass 10's rim (tan over dark, yellow-olive over white): a warm light"
   },
+  "comp.nc.glass.fringe-out-color": {
+   "color": "#ff453a99",
+   "src": "judged:from pass 10 (the rim's red and blue fringes: their hues and strength were not measured)"
+  },
+  "comp.nc.glass.fringe-in-color": {
+   "color": "#0a84ff99",
+   "src": "judged:from pass 10 (the rim's red and blue fringes: their hues and strength were not measured)"
+  },
   "comp.nc.glass.rim-fringe": {
    "pt": 0.6,
    "src": "judged:the red and blue separation along the rim, how far apart they sit (pass 10 shows red/blue fringes; their width was not measured)"

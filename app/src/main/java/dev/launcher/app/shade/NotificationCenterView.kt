@@ -145,6 +145,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         fit(w, h)
+        showContent()   // (off screen while clear: by the new width)
     }
 
     /**
@@ -209,10 +210,31 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
             val was = field
             field = v
             translationY = sheetY()
-            alpha = if (v <= 0.002f) 0f else 1f
+            showContent()
             if (was <= 0.002f && v > 0.002f) invalidate()
             list.opened(v)
         }
+
+    /**
+     * How far the sheet's own content has arrived over the clear slab of a pull (B-037, D-035): 0 while a finger holds it
+     * (the slab shows what is behind, [NcGlassEdge] draws its outline), 1 once it opens. Until then the sheet stays drawn
+     * and ready but off the screen: a tiny view alpha (1/1024) did not hide it (the sheet showed whole over the slab, S24's
+     * emulator), and alpha 0 would not keep its layer up to date.
+     */
+    var reveal = 0f
+        set(v) {
+            if (field == v) return
+            field = v
+            showContent()
+        }
+
+    /** Over the lock screen ([setLocked]). */
+    private var lockedNow = false
+
+    private fun showContent() {
+        alpha = dev.launcher.app.shade.nc.NcGlassProfile.contentAlpha(progress, reveal, lockedNow)
+        translationX = if (dev.launcher.app.shade.nc.NcGlassProfile.contentWaits(progress, reveal)) width.toFloat() else 0f
+    }
 
     init {
         alpha = 0f   // closed until the first pull (the setter is not run for the first value); its layer comes with it
@@ -270,7 +292,11 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
      * Over the lock screen ([locked]) or not: the list shows what the lock screen's settings allow, and grows into the
      * full list as the phone unlocks (the notifications arrive as any new one does).
      */
-    fun setLocked(locked: Boolean, p: LockPrivacy? = list.privacyNow) = list.setLocked(locked, p)
+    fun setLocked(locked: Boolean, p: LockPrivacy? = list.privacyNow) {
+        lockedNow = locked
+        showContent()
+        list.setLocked(locked, p)
+    }
 
     /** Where notifications are swiped (this view's coordinates, the sheet at rest): the shade keeps Android's back gesture off its right edge. */
     fun swipeBand(out: RectF) = list.swipeBand(out)

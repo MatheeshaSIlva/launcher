@@ -677,7 +677,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
         charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
         // Plugged in where One UI plays its charging animation (not over the lock screen, nor with a panel open: it does not
         // play there; nor while our bar is away).
-        if (!was && charging && settled && chargeMomentWanted && showing && lockTarget == 0f && ccOpen == 0f && nc == 0f && interactive()) startChargeMoment()
+        if (!was && charging && settled && chargeMomentWanted && showing && lockTarget == 0f && ccOpen == 0f && nc == 0f && !clearSlab && interactive()) startChargeMoment()
         if (was && !charging && chargeMoment) {
             if (keepCoverOnUnplug?.invoke() == true) AppLog.log("[statusbar] unplugged: the capsule stays while One UI's charging animation plays")
             else endChargeMoment()
@@ -961,8 +961,32 @@ class StatusBarView(ctx: Context) : View(ctx) {
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), if (tall || barH <= 0) full else min(full, barH))
     }
 
+    /** Notification Center's clear slab is pulled (the panel counts as open for the charging moment though [nc] is 0 then). */
+    @Volatile private var clearSlab = false
+
+    fun setClearSlab(on: Boolean) { clearSlab = on }
+
+    /** The bar as faded by Notification Center's pull over home (1 shown; set by the shade on `motion.nc.bar-fade`). */
+    private var fadeK = 1f
+
+    fun setFade(k: Float) {
+        if (k == fadeK) return
+        fadeK = k
+        invalidate()
+    }
+
     override fun onDraw(c: Canvas) {
         if (width == 0) return
+        val f = fadeK
+        if (picturing || f >= 0.999f) { drawBar(c); return }
+        if (f <= 0.003f) return
+        // The bar's band only (a layer the size of the screen would be made for the fade); Control Center's row lies lower.
+        val n = c.saveLayerAlpha(0f, 0f, width.toFloat(), if (ccOpen > 0.001f) height.toFloat() else min(height, barHeight).toFloat(), (255 * f).toInt())
+        drawBar(c)
+        c.restoreToCount(n)
+    }
+
+    private fun drawBar(c: Canvas) {
         val u = u
         val cy = centreLine()
         // Control Center's veil's choice over it (white over iOS's), the wallpaper's over Notification Center, else the app's

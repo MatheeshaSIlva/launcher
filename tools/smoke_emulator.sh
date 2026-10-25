@@ -224,7 +224,7 @@ open_panel() { # STEP NAME LOGNAME X: a real pull from the top at X; opens when 
   local step=$1 name=$2 logname=$3 x=$4 o0 c0 d0
   deck_open && fail "$step" "App Switcher open before the pull"
   o0=$(cnt "\[shade\] $logname opening\$"); c0=$(cnt '\[shade\] closed')
-  tools/kswipe.sh "$x" 8 "$x" $((H*60/100)) 14 3 >/dev/null
+  tools/kswipe.sh "$x" 8 "$x" $((H*75/100)) 14 3 >/dev/null
   opened() { [ "$(cnt "\[shade\] $logname opening\$")" -gt "$o0" ]; }
   poll 4 opened || fail "$step" "$name: no new '[shade] $logname opening' line"
   poll 4 focus_has_any 'LauncherFocus|LauncherStatusBar' || fail "$step" "$name: neither LauncherFocus nor LauncherStatusBar focused: $(focus)"

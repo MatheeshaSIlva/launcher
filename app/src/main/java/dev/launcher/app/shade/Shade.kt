@@ -26,6 +26,8 @@ import dev.launcher.app.shade.qs.QsPanel
 import dev.launcher.app.shade.qs.QsTokens
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.design.Curve
+import dev.launcher.app.design.CurveKey
+import dev.launcher.app.motion.MotionTokens
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.motion.timed
 import dev.launcher.app.statusbar.StatusBarView
@@ -160,6 +162,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val cc: ControlCenterView
     private val gallery: CcGallery
     private val nc: NotificationCenterView
+    /** The outline of Notification Center's clear slab while it is pulled (B-037): the dim below, the corners, the rim. */
+    private val ncEdge = dev.launcher.app.shade.nc.NcGlassEdge(ctx)
     /** Android's shade (a layout's `shade` panel): Quick Settings over the notifications in one panel. */
     private val shadeView: ShadePanelView
     private val banner: BannerView
@@ -298,6 +302,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val mp = FrameLayout.LayoutParams.MATCH_PARENT
         root.addView(backdrop, FrameLayout.LayoutParams(mp, mp))
         root.addView(nc, FrameLayout.LayoutParams(mp, mp))
+        root.addView(ncEdge, FrameLayout.LayoutParams(mp, mp))
         root.addView(cc, FrameLayout.LayoutParams(mp, mp))
         root.addView(shadeView, FrameLayout.LayoutParams(mp, mp))
         root.addView(gallery, FrameLayout.LayoutParams(mp, mp))
@@ -333,10 +338,14 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         })
     }
 
-    /** iOS 27's Notification Center: a sheet that slides down with the finger, its bottom edge under it. */
+    /**
+     * iOS 27's Notification Center: a sheet that slides down with the finger, its bottom edge under it. While a finger holds
+     * the pull it is a clear slab (B-037, D-035): what is behind shows through, dimmed below the edge ([ncEdge]); its own
+     * content arrives when the pull opens it ([ncCommit]).
+     */
     private val ncPanel: Panel = object : Panel(ShadeStructure.Kind.NOTIFICATION_CENTER, "Notification Center") {
-        override fun opening() { nc.prepare(); media.refresh() }
-        override fun cleanUp() { nc.onClosed() }
+        override fun opening() { nc.prepare(); media.refresh(); ncEdge.locked = locked; ncEdge.wallpaper = nc.wallpaper }
+        override fun cleanUp() { nc.onClosed(); ncRest() }
         override fun gone() { nc.progress = 0f }
         override val openCurve get() = NC_OPEN
         override val closeCurve get() = NC_CLOSE
@@ -356,6 +365,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 2 -> dragEnds(vy / travel(), vy)
             }
         }
+        // A release from a standstill opens past 62.5 % (iOS: 50 % falls back, 75 % opens); flings as every panel's.
+        override fun releaseOpens(progress: Float, dy: Float, vy: Float) = dev.launcher.app.shade.nc.NcGlassProfile.releaseOpens(progress, vy, FLING)
+        override fun pullBegins(caught: Boolean) = ncPullBegins()
+        override fun opensFully() = ncCommit()
+        override fun closes() = ncFallBack()
+        override fun goesUnder() = ncFallBack()
         override fun touch(e: MotionEvent) = nc.dispatchTouchEvent(e)
         override fun back() = nc.onBack()
         override fun swipeBand(out: android.graphics.RectF) = nc.swipeBand(out)
@@ -599,7 +614,20 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                     if (!uses(p.kind)) { AppLog.log("[shade] test: the layout's place has no ${p.name}"); return@post }
                     begin(p); openFully(0f)
                 }
-                if (i.getStringExtra("do") == "close") handler.post { close(0f) }
+                if (i.getStringExtra("do") == "close") handler.post { close(0f); testHeld = false }
+                // --es do pull [--ef at 0.5], then --es do release | close: Notification Center held at that progress as a finger
+                // holds it (the clear slab), until released (as a standstill release decides) or closed.
+                if (i.getStringExtra("do") == "pull") handler.post {
+                    if (!uses(ncPanel.kind)) { AppLog.log("[shade] test: the layout's place has no ${ncPanel.name}"); return@post }
+                    ncPanel.pullBegins(panel === ncPanel)
+                    begin(ncPanel)
+                    progress.stop()
+                    pullFrom = -1f
+                    lastFollowDy = i.getFloatExtra("at", 0.5f) * root.height
+                    progress.snapTo(i.getFloatExtra("at", 0.5f))
+                    testHeld = true
+                }
+                if (i.getStringExtra("do") == "release") handler.post { if (testHeld && panel != null) { testHeld = false; release(0f) } }
                 // --es do cc_expand_frames --es control CONNECTIVITY [--ei fps 60] [--ei hold 200]: a module of Control Center
                 // (open first) grown into its large form and back at exact times, Control Center drawn into PNGs in
                 // files/dev-out/expand/ (adb pull; ends with .done): the choreography frame by frame.
@@ -645,6 +673,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             false
         }
     }
+
+    /** A pull held by the test hook (`do pull`), waiting for `do release`. */
+    private var testHeld = false
 
     /** This shade is replaced (its accessibility service went): it stops listening, its blur thread ends. */
     private var testHook: android.content.BroadcastReceiver? = null
@@ -721,6 +752,54 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private var lastPullDy = 0f
 
+    // ---- Notification Center's clear slab (B-037, D-035)
+
+    /** How far its own content has arrived (0: the clear slab a finger holds, 1: the sheet), on `motion.nc.reveal`. */
+    private val ncReveal = MotionValue(0f, 1000f, { applyProgress() })
+    /** The dim below the slab's edge (0..1), on the pull-dim roles in, `motion.nc.pull-undim` out. */
+    private val ncDim = MotionValue(0f, 1000f, { applyProgress() })
+    /** The status bar over home while the slab is pulled (1 shown), on `motion.nc.bar-fade`. */
+    private val ncBar = MotionValue(1f, 1000f, { bar.setFade(it) })
+
+    private fun MotionValue.goTo(to: Float, role: CurveKey) { if (target != to) animateTo(to, Motion.role(role)) }
+
+    /** Home is what the shade lies over (not the lock screen, not an app). */
+    private fun overHome(): Boolean = !locked && (nav.closingHome() ||
+        (nav.bringing() == null && (nav.homeShown() || (nav.frontPackage() == ctx.packageName && nav.frontClass()?.endsWith(".HomeActivity") == true))))
+
+    /**
+     * A pull of Notification Center begins (or catches it on its way out): what is behind dims below its edge, quickly over
+     * home and the lock screen, over ~0.4 s over an app (iOS 27, pass 10), and over home the status bar fades out. A sheet that
+     * has arrived is only moved on.
+     */
+    private fun ncPullBegins() {
+        if (ncReveal.target >= 1f) return
+        val home = overHome()
+        ncDim.goTo(1f, if (home || locked) MotionTokens.NC_PULL_DIM_HOME else MotionTokens.NC_PULL_DIM_APP)
+        if (home) ncBar.goTo(0f, MotionTokens.NC_BAR_FADE)
+    }
+
+    /** The pull opens it: its content arrives over the slab, the dim clears under it and the bar comes back. */
+    private fun ncCommit() {
+        ncReveal.goTo(1f, MotionTokens.NC_REVEAL)
+        ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+        ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
+    }
+
+    /** The pull falls back (or the panel goes under another): the dim clears and the bar comes back. */
+    private fun ncFallBack() {
+        if (ncReveal.target >= 1f) return
+        ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+        ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
+    }
+
+    /** Closed: the content waits for the next pull. What is still fading (the dim, the bar) is left to finish. */
+    private fun ncRest() {
+        ncReveal.snapTo(0f)
+        if (ncDim.target > 0f) ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+        ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
+    }
+
     private fun applyProgress() {
         val ccP = shownProgress(ccPanel)
         val ncP = shownProgress(ncPanel)
@@ -752,7 +831,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             backdrop.set(pictureBlur, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
             if (ccP != null) bar.setRowAlpha(1f - editK)
         }
-        if (ncP != null) nc.progress = ncP
+        if (ncP != null) { nc.reveal = ncReveal.value; nc.progress = ncP; ncEdge.wallpaper = nc.wallpaper }
+        // (The clear slab's outline goes on drawing while its dim fades out after the panel is closed.)
+        ncEdge.set(min(ncP ?: 0f, 1f) * root.height, ncDim.value, 1f - ncReveal.value)
+        bar.setClearSlab(ncP != null && ncReveal.value <= 0f)
         if (ccP == null && ncP == null && shP == null) {
             cc.progress = 0f
             nc.progress = 0f
@@ -763,7 +845,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // Over Android's shade the bar stays as it is (no status row), its content following the veil; its time gives way to
         // the shade's large clock as Quick Settings expand, and the date comes beside it.
         bar.setPanel(
-            (bgP ?: 0f).coerceIn(0f, 1f) * l, (ncP ?: 0f).coerceIn(0f, 1f) * l,
+            // (Notification Center counts for the bar once its content arrives: over the clear slab the bar is as it was.)
+            (bgP ?: 0f).coerceIn(0f, 1f) * l, (ncP ?: 0f).coerceIn(0f, 1f) * l * ncReveal.value,
             if (ncP != null) nc.wantsDarkContent() else 0f,
             if (ccP != null) cc.statusRowY else 0f, if (ccP != null) cc.statusRowInset else 0f,
             if (bgP != null) veilOf(bgKey).darkContent else 0f,
@@ -935,6 +1018,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun finishClose() {
         val was = panel
         panel = null
+        testHeld = false
         progress.snapTo(0f)
         applyProgress()
         for (p in panels) if (p !== leavingPanel) p.cleanUp()
@@ -1638,6 +1722,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             AppLog.log("[shade] ${if (l) "over the lock screen" else "unlocked"}")
             bar.setLocked(l)
             nc.setLocked(l)
+            ncEdge.locked = l
+            ncEdge.wallpaper = nc.wallpaper
             shadeView.notifsChanged()
             if (l) { cc.exitEdit(animate = false); gallery.dismissNow(); banner.clear(keepRinging = true); readLockPrivacy() }
         }

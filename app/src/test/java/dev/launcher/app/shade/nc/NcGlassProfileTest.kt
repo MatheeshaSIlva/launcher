@@ -58,6 +58,27 @@ class NcGlassProfileTest {
         assertEquals(1f, (side(15f) - side(14.99f)) / 0.01f, 0.05f)
     }
 
+    @Test fun theContentWaitsOffScreenWhileClearAndFadesInOnReveal() {
+        assertEquals(0f, NcGlassProfile.contentAlpha(0f, 0f), 0f)
+        assertEquals(0f, NcGlassProfile.contentAlpha(0.001f, 1f), 0f)
+        assertFalse(NcGlassProfile.contentWaits(0f, 0f))
+        assertEquals(1f, NcGlassProfile.contentAlpha(0.5f, 0f), 0f)
+        assertTrue(NcGlassProfile.contentWaits(0.5f, 0f))
+        assertEquals(0.3f, NcGlassProfile.contentAlpha(0.5f, 0.3f), 0f)
+        assertFalse(NcGlassProfile.contentWaits(0.5f, 0.3f))
+        assertEquals(1f, NcGlassProfile.contentAlpha(1f, 1f), 0f)
+        // Over the lock screen it is whole from the first frame of its arrival.
+        assertEquals(1f, NcGlassProfile.contentAlpha(0.5f, 0.05f, locked = true), 0f)
+        assertEquals(0f, NcGlassProfile.contentAlpha(0f, 0.5f, locked = true), 0f)
+        assertTrue(NcGlassProfile.contentWaits(0.5f, 0f))
+    }
+
+    @Test fun aSideBandOfNoWidthReadsItself() {
+        assertEquals(0f, NcGlassProfile.sideSampleDist(0f, 0f, 6f), 0f)
+        assertEquals(3f, NcGlassProfile.sideSampleDist(3f, 0f, 6f), 0f)
+        assertEquals(3f, NcGlassProfile.sideSampleDist(3f, -1f, 6f), 0f)
+    }
+
     @Test fun aStandstillReleaseOpensPastTheMidpointBetweenIosFiftyAndSeventyFive() {
         val fling = 900f
         assertFalse(NcGlassProfile.releaseOpens(0.50f, 0f, fling))
