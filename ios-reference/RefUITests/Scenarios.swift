@@ -1472,6 +1472,71 @@ final class Scenarios: XCTestCase {
         home()
     }
 
+    // MARK: - B-037 step 2: Notification Center's commit and close over an app, and a close with notifications (pass 11)
+
+    /// Over an app (Settings' first page), three times: a slow pull (350 pt/s) from the top left to three quarters of the
+    /// height, held still 0.5 s, let go (it opens): every frame of the commit over an app. Closed fast in between.
+    func test83_ncOpenApp() {
+        freshSettings()
+        for i in 1...3 {
+            prefs.activate()
+            wait(2.5)
+            if i == 1 { shot("app-before") }
+            drag("nc-open-app-\(i)", CGPoint(x: 70, y: 2), CGPoint(x: 70, y: h * 0.75), velocity: 350, hold: 0.5)
+            wait(2.5)
+            if i == 1 { shot("nc-open-over-app"); tree("nc-open-over-app") }
+            closeFromBottom("nc-close-fast-\(i)")
+            wait(2.5)
+        }
+        home()
+    }
+
+    /// Notification Center open over an app, closed by a slow swipe up from the bottom edge (350 pt/s) to 35 % of the
+    /// height, held still 0.8 s, let go (twice); then opened again and closed with a fast swipe up.
+    func test84_ncCloseApp() {
+        freshSettings()
+        for i in 1...2 {
+            prefs.activate()
+            wait(2.5)
+            openNC("nc-open-\(i)")
+            wait(2.5)
+            if i == 1 { shot("nc-open-over-app") }
+            drag("nc-close-slow-\(i)", CGPoint(x: w / 2, y: h - 4), CGPoint(x: w / 2, y: h * 0.35), velocity: 350, hold: 0.8)
+            wait(2.5)
+            if i == 1 { shot("app-after-close") }
+        }
+        prefs.activate()
+        wait(2.5)
+        openNC("nc-open-3")
+        wait(2.5)
+        closeFromBottom("nc-close-fast")
+        wait(2.5)
+        home()
+    }
+
+    /// Notifications on the sheet (four, from the host app: one stack) over home, closed by the same slow held swipe up:
+    /// do they stay still while the edge rises or go up with it? First collapsed, then the stack fanned out.
+    func test85_ncCloseNotifs() {
+        post("four", in: 20)
+        letBannersPass()
+        for i in 1...2 {
+            home()
+            openNC("nc-open-\(i)")
+            wait(2.5)
+            if i == 2, let p = platters.last {
+                let f = p.frame
+                tap("nc-fan-out", f.midX, f.midY)
+                wait(2)
+            }
+            shot("nc-notifs-\(i)")
+            tree("nc-notifs-\(i)")
+            mark("platters " + platters.prefix(6).map { "\($0.frame)" }.joined(separator: "; "))
+            drag("nc-close-slow-\(i)", CGPoint(x: w / 2, y: h - 4), CGPoint(x: w / 2, y: h * 0.35), velocity: 350, hold: 0.8)
+            wait(2.5)
+        }
+        home()
+    }
+
     // MARK: - Calibration
 
     /// Known springs and a linear move (RefHost's CalibrationView): proves the measurement chain and gives the
