@@ -969,6 +969,12 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
 - A panel at rest for a screenshot: `am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do open [--es
   panel cc|nc]` (opened as a released pull opens it), `--es do close` (emulator; on the S24 never Notification Center).
+- Android's shade's tile symbols (B-036): with the shade opened once, `am broadcast -a dev.launcher.app.TEST_SHADE -p
+  dev.launcher.app --es do tile-frames --es control FLASHLIGHT [--ez on true|false] [--ez wide true] [--ef interrupt 0.4]
+  [--ei fps 120] [--es bg '#RRGGBB']` draws the real tile going to on (or off) at exact steps into
+  `files/dev-out/tiles/<CONTROL>_on|off[_int][_wide]/f<n>_<ms>.png` (adb pull; `.done` ends it; the phone's own state is
+  untouched; `--ef interrupt` turns it back once the way there is that fraction done). The log says how many steps the
+  symbol ran (at speed 1: its play's length / 8.33 ms).
 - A theme pushed through the inbox (`files/themes/<id>.json`) wins over the app's own until removed (`--es files remove
   --es path themes/<id>.json`): a stale copy from an earlier test hid a new build's theme changes.
 - Do not run `uiautomator dump` while gesture nav is on (it unbinds accessibility services).

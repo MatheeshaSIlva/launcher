@@ -6,14 +6,21 @@ import android.graphics.RectF
 import android.os.Build
 import android.text.TextPaint
 import android.text.TextUtils
+import android.view.Choreographer
 import android.view.HapticFeedbackConstants
+import dev.launcher.app.AppLog
 import dev.launcher.app.design.Design
 import dev.launcher.app.design.Fill
+import dev.launcher.app.design.SymbolMotion
+import dev.launcher.app.design.SymbolPlayer
+import dev.launcher.app.design.ViewPicture
 import dev.launcher.app.design.applyTo
 import dev.launcher.app.layout.ShadeStructure
 import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.MotionTokens
 import dev.launcher.app.motion.MotionValue
+import dev.launcher.app.motion.RoleTiming
+import dev.launcher.app.motion.SymbolTime
 import dev.launcher.app.shade.AppTiles
 import dev.launcher.app.shade.Control
 import kotlin.math.max
@@ -113,6 +120,17 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         var oldSub: String? = null
         val words = MotionValue(1f, 1000f, { panel.view.invalidate() })
         var state = TileState.INACTIVE
+        /**
+         * Its symbol's plays (B-036): null where its set has none for this tile (its looks then follow the state spring). Made
+         * again when the design changed or the set's plays became ready ([playsFor], [playsReady]).
+         */
+        var player: SymbolPlayer? = null
+        var onPlay: SymbolMotion? = null
+        var offPlay: SymbolMotion? = null
+        var playsFor = -1
+        var playsReady = false
+        /** When the player was last moved (the frame's time, ns; 0 at rest: the next step starts from nothing). */
+        var lastNs = 0L
 
         fun settleBounce() {
             if (bounce.target == 0f) return
@@ -131,11 +149,14 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
     /** The tiles follow their controls' states ([animate]: on the state's spring, else at once). */
     fun syncStates(animate: Boolean = true) {
         val st = panel.host.state
+        // (A symbol plays only for a change seen: not as the panel opens, nor for one that came while it was closed.)
+        val play = animate && panel.progress > 0f
         for (t in tiles) {
             val a = anim(t)
             val s = QsTiles.stateOf(st, t)
             a.state = s
             val on = s == TileState.ACTIVE
+            playerOf(t, a)?.let { if (play) { it.toward(on, stateTiming.get().durationMs.toFloat()); startClock() } else it.snap(on) }
             set(a.lit, if (on && !t.dualTarget) 1f else 0f, animate)
             set(a.box, if (on && t.dualTarget) 1f else 0f, animate)
             set(a.gone, if (s == TileState.UNAVAILABLE) 1f else 0f, animate)
@@ -153,6 +174,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
             a.bounce.snapTo(0f); a.released = true; a.pop.snapTo(0f); a.ripple.clear()
             // (Words that changed while closed show as they are at the next opening, not fading from before.)
             a.words.snapTo(1f); a.name = null; a.oldName = null
+            a.player?.snap(a.state == TileState.ACTIVE); a.lastNs = 0L
         }
         marqueeFrom = 0L
     }
@@ -339,7 +361,13 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         val w = panel.panelWidth
         for (i in tiles.indices) {
             val f = place(i, r)
-            if (f <= 0.003f || r.right < 0f || r.left > w || r.height() <= 0.5f) continue
+            if (f <= 0.003f || r.right < 0f || r.left > w || r.height() <= 0.5f) {
+                // (Not shown now, on another page or hidden: a play that cannot be seen rests, it does not wait mid-way.)
+                val a = anim(tiles[i])
+                val p = a.player
+                if (p != null && !p.atRest) { p.snap(a.state == TileState.ACTIVE); a.lastNs = 0L }
+                continue
+            }
             drawTile(c, tiles[i], anim(tiles[i]), r, f)
         }
         c.restoreToCount(save)
@@ -380,7 +408,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         if (!t.wide) {
             val s = 1f + (Design.num(QsTokens.ICON_POP) - 1f) * pop
             val col = mix(mix(offC, onC, lit), goneC, gone)
-            symbol(c, t, r.centerX(), r.centerY(), Design.pt(QsTokens.SYMBOL, u) * s, faded(col, alpha), if (edit) editLook(t) else lit)
+            symbol(c, t, a, edit, r.centerX(), r.centerY(), Design.pt(QsTokens.SYMBOL, u) * s, faded(col, alpha), if (edit) editLook(t) else lit)
             return
         }
         // A large tile: its box (squished with the tile) 8 dp in, the symbol in it, the words after it.
@@ -402,7 +430,7 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         }
         val symOn = if (t.dualTarget) boxOn else lit
         val sym = faded(mix(mix(offC, onC, symOn), goneC, gone), alpha)
-        symbol(c, t, bx + boxSize / 2f, r.centerY(), Design.pt(QsTokens.LARGE_SYMBOL, u), sym, if (edit) editLook(t) else symOn)
+        symbol(c, t, a, edit, bx + boxSize / 2f, r.centerY(), Design.pt(QsTokens.LARGE_SYMBOL, u), sym, if (edit) editLook(t) else symOn)
         // The words (a tap pops them out a little, from their middle).
         val tx = bx + boxSize + Design.pt(QsTokens.TILE_TEXT_GAP, u)
         val maxW = (r.right - Design.pt(QsTokens.TILE_END, u)) - tx
@@ -450,17 +478,93 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
         drawLabel(c, sub, detail, tx, baselineIn(detail, top + ll, dl), maxW)
     }
 
-    /** A tile's symbol: its control's, or an app's tile's own. */
-    private fun symbol(c: Canvas, t: QsTile, cx: Float, cy: Float, size: Float, color: Int, on: Float) {
+    /** The id of the app tile whose symbol [t] draws (an app's tile; Quick Share where the phone has Play services' own), else null. */
+    private fun appSymbol(t: QsTile): String? = t.tile ?: if (t.control == Control.QUICK_SHARE) quickShareTile() else null
+
+    private val stateTiming = RoleTiming(MotionTokens.QS_TILE_STATE)
+    private val symbolTiming = RoleTiming(MotionTokens.QS_TILE_SYMBOL)
+
+    /** Auto-rotate's looks (ours is the orientation lock the other way round: its on look is Android's auto-rotate symbol). */
+    private val rotationOn = dev.launcher.app.R.drawable.sym_rotation
+    private val rotationOff = dev.launcher.app.R.drawable.sym_rotation_lock
+
+    /**
+     * [t]'s symbol player (B-036), null if its set has no play for it, has not built them yet, or [t] draws an app's own
+     * symbol. Made again when the design changed or the plays became ready, at rest on [a]'s state.
+     */
+    private fun playerOf(t: QsTile, a: Anim): SymbolPlayer? {
+        val v = Design.version
+        val ready = panel.glyphs.playsReady()
+        if (a.playsFor == v && a.playsReady == ready) return a.player
+        a.playsFor = v; a.playsReady = ready
+        a.onPlay = null; a.offPlay = null; a.player = null
+        if (!ready || appSymbol(t) != null) return null
+        val rot = t.control == Control.ROTATION_LOCK
+        // (Auto-rotate's two plays are two symbols of the set; every other control's are its `X` and its `X.off`.)
+        a.onPlay = panel.glyphs.motion(if (rot) rotationOn else t.control.icon)
+        a.offPlay = panel.glyphs.motion(if (rot) rotationOff else t.control.icon, off = !rot)
+        if (a.onPlay != null || a.offPlay != null) a.player = SymbolPlayer(a.onPlay, a.offPlay, a.state == TileState.ACTIVE)
+        return a.player
+    }
+
+    /**
+     * The clock the players move on: the time of the frame being drawn, as the choreographer gave it to a callback that runs
+     * while anything plays (the test hook sets one by hand). 0 until the first frame of a run has come.
+     */
+    private var testClock = false
+    private var frameNs = 0L
+    private var ticking = false
+    /** A frame drawn left a symbol moving (the clock runs on for the next one). */
+    private var movingSeen = false
+    private val tick = object : Choreographer.FrameCallback {
+        override fun doFrame(ns: Long) {
+            frameNs = ns
+            if (movingSeen) { movingSeen = false; Choreographer.getInstance().postFrameCallback(this) } else ticking = false
+        }
+    }
+    private fun startClock() {
+        movingSeen = true
+        if (ticking || testClock) return
+        ticking = true; frameNs = 0L
+        Choreographer.getInstance().postFrameCallback(tick)
+    }
+
+    /** A tile's symbol: its control's, or an app's tile's own; playing, where its set carries Android's animations. */
+    private fun symbol(c: Canvas, t: QsTile, a: Anim, edit: Boolean, cx: Float, cy: Float, size: Float, color: Int, on: Float) {
         // (Quick Share is Play services' own tile on a Pixel: its symbol where the phone has it.)
-        val id = t.tile ?: if (t.control == Control.QUICK_SHARE) quickShareTile() else null
+        val id = appSymbol(t)
         if (id != null) { panel.glyphs.drawTile(c, id, cx, cy, size, color); return }
+        val p = if (edit) null else playerOf(t, a)
+        if (p == null) { still(c, t, cx, cy, size, color, on); return }
+        // A started motion keeps real time (a stall does not slow it): a play on the symbol role's clock, a crossfade on real time.
+        if (p.atRest) a.lastNs = 0L else {
+            if (!ticking && !testClock) startClock()   // (drawn with no frame callback pending: the clock starts for the next frame)
+            val ns = frameNs
+            val dt = if (a.lastNs == 0L || ns == 0L) 0f else (ns - a.lastNs) / 1_000_000f
+            a.lastNs = ns
+            p.advance(if (p.motion != null) SymbolTime.dt(dt, symbolTiming.get()) else dt)
+        }
+        val m = p.motion
+        if (m != null) {
+            val rot = t.control == Control.ROTATION_LOCK
+            val toOn = m === a.onPlay
+            panel.glyphs.drawPlaying(c, if (rot && !toOn) rotationOff else if (rot) rotationOn else t.control.icon, !toOn && !rot, m,
+                SymbolTime.at(p.progress, m.ms, symbolTiming.get()), cx, cy, size, color)
+        } else {
+            // (A look with no play to arrive by crossfades on the state's curve, which a turn back keeps whole.)
+            still(c, t, cx, cy, size, color, if (p.atRest) p.onShare else stateTiming.get().at(p.onShare))
+        }
+        if (!p.atRest) { movingSeen = true; panel.view.postInvalidateOnAnimation() }
+    }
+
+    /** [t]'s symbol as its static looks, [on] (0..1) of the way from the off look to the on look. */
+    private fun still(c: Canvas, t: QsTile, cx: Float, cy: Float, size: Float, color: Int, on: Float) {
         // Auto-rotate is our orientation lock the other way round: the lock's symbol while the tile is off, Android's
         // auto-rotate symbol while it is on, crossfading with the state.
         if (t.control == Control.ROTATION_LOCK) {
             val k = on.coerceIn(0f, 1f)
-            if (k < 1f) panel.glyphs.draw(c, dev.launcher.app.R.drawable.sym_rotation_lock, cx, cy, size, faded(color, 1f - k))
-            if (k > 0f) panel.glyphs.draw(c, dev.launcher.app.R.drawable.sym_rotation, cx, cy, size, faded(color, k))
+            if (k < 1f) panel.glyphs.draw(c, rotationOff, cx, cy, size, faded(color, 1f - k))
+            if (k > 0f) panel.glyphs.draw(c, rotationOn, cx, cy, size, faded(color, k))
             return
         }
         panel.glyphs.draw(c, t.control.icon, cx, cy, size, color, on)
@@ -483,6 +587,77 @@ internal class TileGridBlock(private val panel: QsPanel, private val spec: Shade
             quickShareId = all.firstOrNull { it.pkg == "com.google.android.gms" && it.id.contains("SharingTileService") && it.icon != null }?.id
         }
         return quickShareId
+    }
+
+    /**
+     * For checks (adb, `TEST_SHADE tile-frames`): [control]'s tile ([wide]: two columns) as drawn in the panel (its size, its
+     * colours) going to [on] from the other state, at exact steps of 1000 / [fps] ms into PNGs in [dir]: the symbol on its
+     * clock, the colours on the state's curve, nothing of the phone touched. [interrupt] > 0 turns it back once the way there
+     * is that fraction done. [done] gets the frames written and those the symbol ran (-1: the shade has not been laid out).
+     */
+    fun renderFrames(control: Control, wide: Boolean, on: Boolean, interrupt: Float, fps: Int, bg: Int, dir: java.io.File, done: (Int, Int) -> Unit) {
+        if (colW <= 0f) { done(-1, 0); return }
+        if (testClock) { AppLog.log("[shade] test tile-frames: the last run is still going"); return }
+        val t = QsTiles.tileOf(control, wide)
+        val a = Anim()
+        val rect = RectF(0f, 0f, if (wide) 2 * colW + gap else colW, tileH)
+        val colour = if (t.dualTarget) a.box else a.lit
+        val step = 1000f / fps.coerceIn(10, 240)
+        val fadeMs = stateTiming.get().durationMs.toFloat()
+        a.state = if (on) TileState.INACTIVE else TileState.ACTIVE
+        colour.snapTo(if (on) 0f else 1f)
+        val p = playerOf(t, a)
+        a.state = if (on) TileState.ACTIVE else TileState.INACTIVE
+        p?.toward(on, fadeMs)
+        // The colours: from where they were to the state, on its curve; turned back, from where they are.
+        var from = colour.value
+        var to = if (on) 1f else 0f
+        var t0 = 0f
+        var turned = false
+        var played = 0
+        var n = 0
+        testClock = true
+        fun finish(frames: Int) { testClock = false; done(frames, played) }
+        // One frame; true when the run is over (done, failed or the panel's view gone: the clock is never left set by hand).
+        fun step(): Boolean {
+            if (!panel.view.isAttachedToWindow) { AppLog.log("[shade] test tile-frames: the panel's view is gone at frame $n"); return true }
+            val ms = n * step
+            frameNs = 1_000_000_000L + (ms * 1_000_000f).toLong()
+            colour.snapTo(from + (to - from) * stateTiming.get().atMs(ms - t0).coerceIn(0f, 1f))
+            val moving = p != null && !p.atRest
+            if (moving) played = n
+            val shot = ViewPicture.draw(rect.width().toInt(), rect.height().toInt(), "tile") { c ->
+                c.drawColor(bg)
+                drawTile(c, t, a, rect, 1f)
+            }
+            val soft = shot?.let { ViewPicture.softCopy(it) }
+            try {
+                soft?.let { b ->
+                    java.io.File(dir, "f%03d_%04dms%s.png".format(n, ms.toInt(), if (turned && ms - t0 < step * 1.5f) "_turned" else "")).outputStream()
+                        .use { b.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                }
+            } catch (_: Throwable) { }
+            soft?.recycle(); shot?.recycle()
+            if (p != null && !turned && interrupt > 0f) {
+                val way = if (p.motion != null) p.progress else if (p.headingOn) p.onShare else 1f - p.onShare
+                if (!p.atRest && way >= interrupt) {
+                    turned = true
+                    from = colour.value; to = 1f - to; t0 = ms
+                    a.state = if (on) TileState.INACTIVE else TileState.ACTIVE
+                    p.toward(!on, fadeMs)
+                }
+            }
+            n++
+            val settled = (p == null || p.atRest) && ms - t0 >= stateTiming.get().durationMs
+            return settled && !(p != null && interrupt > 0f && !turned) || n > 400
+        }
+        fun frame() {
+            val over = try { step() } catch (t: Throwable) {
+                AppLog.log("[shade] test tile-frames failed at frame $n: ${t.javaClass.simpleName}: ${t.message}"); true
+            }
+            if (over) finish(n) else panel.view.postDelayed({ frame() }, 16L)   // (a breath between frames: the emulator's GPU stalled in a long run)
+        }
+        panel.view.post { frame() }
     }
 
     /** The carrier's name and network as Mobile data's state (the header reads it off the drawing thread). */

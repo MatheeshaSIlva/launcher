@@ -32,7 +32,7 @@ class Glyphs(private val ctx: Context, private val symbols: ChoiceKey = CcTokens
             val name = nameOf(res)
             val glyph = s.glyph(name)
             if (glyph != null) {
-                val off = if (on < 1f) s.glyph("$name.off") else null
+                val off = if (on < 1f) s.glyph(keyOf(res, true)) else null
                 if (off == null) { glyph.draw(c, cx, cy, size, color, setPaint); return }
                 val k = on.coerceIn(0f, 1f)
                 if (k < 1f) off.draw(c, cx, cy, size, faded(color, 1f - k), setPaint)
@@ -55,6 +55,13 @@ class Glyphs(private val ctx: Context, private val symbols: ChoiceKey = CcTokens
      */
     fun motion(res: Int, off: Boolean = false): SymbolMotion? = set()?.motion(keyOf(res, off))
 
+    /** The set's plays are all built (a drawing thread may ask [motion] and [drawPlaying]; before, the looks crossfade). */
+    fun playsReady(): Boolean {
+        // (Never reads the set's file nor waits for its reading: a set not yet loaded is not ready.)
+        if (Design.version == setVersion) return set?.playsReady == true
+        return IconSets.peek(try { Design.choice(symbols) } catch (_: Throwable) { null })?.playsReady == true
+    }
+
     /**
      * Symbol [res] ([off]: its `.off` look's frame, the box and scale of the same slot) at [timeMs] into [motion] (the
      * one [motion] gave), as [draw] places and tints it. Nothing for a symbol the set does not carry.
@@ -74,8 +81,9 @@ class Glyphs(private val ctx: Context, private val symbols: ChoiceKey = CcTokens
         val v = Design.version
         if (v != setVersion) {
             setVersion = v
-            drawers.clear()
-            set = IconSets.get(ctx, try { Design.choice(symbols) } catch (_: Throwable) { null })
+            val now = IconSets.get(ctx, try { Design.choice(symbols) } catch (_: Throwable) { null })
+            // (The drawers belong to the set's motions: a design change that leaves the set as it is keeps them.)
+            if (now !== set) { drawers.clear(); set = now }
         }
         return set
     }

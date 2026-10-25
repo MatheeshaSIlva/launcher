@@ -73,13 +73,16 @@ object IconSets {
 
         /** Symbol [name] (an app symbol's name without `sym_`, maybe with `.off`), or null if the set leaves it out. */
         @Synchronized fun glyph(name: String): Glyph? = glyphs.getOrPut(name) {
-            icons.optJSONObject(name)?.let { try { parse(it) } catch (t: Throwable) { AppLog.log("[icons] $id/$name: ${t.message}"); null } }
+            icons.optJSONObject(name)?.let { try { parse(it, "$id/$name") } catch (t: Throwable) { AppLog.log("[icons] $id/$name: ${t.message}"); null } }
         }
 
         val names: List<String> get() = icons.keys().asSequence().toList().sorted()
 
         private val motions = ConcurrentHashMap<String, Any>()   // (a value: a SymbolMotion, or NO_PLAY)
         @Volatile private var prepared = false
+
+        /** Every play of this set is built ([preparePlays] ran): a drawing thread may ask [motion] without building one. */
+        val playsReady: Boolean get() = prepared
 
         /**
          * Symbol [name]'s animation (its `play`), or null if it has none or cannot be read (logged). Built from the file's
@@ -102,7 +105,7 @@ object IconSets {
             var n = 0
             for (name in names) if (motion(name) != null) n++
             prepared = true
-            AppLog.log("[icons] $id: $n plays ready in ${(System.nanoTime() - t0) / 1_000_000} ms")
+            AppLog.log("[icons] $id: $n plays ready in ${(System.nanoTime() - t0) / 1_000_000} ms on ${Thread.currentThread().name}")
         }
     }
 
@@ -123,14 +126,25 @@ object IconSets {
     private val sets = ConcurrentHashMap<String, IconSet>()
     private val missing = ConcurrentHashMap.newKeySet<String>()
 
-    /** Set [id] (null for the app's own, or a set that cannot be read: its names then fall back to the app's own). */
+    private val readLock = Any()
+
+    /** Set [id] if it is already read, else null: never reads a file nor waits for one being read (a drawing thread's ask). */
+    fun peek(id: String?): IconSet? = if (id == null || id == OWN) null else sets[id]
+
+    /**
+     * Set [id] (null for the app's own, or a set that cannot be read: its names then fall back to the app's own). One
+     * instance is ever published for an id (a drawing thread asking while [preparePlays]' worker reads waits for it rather
+     * than reading the file again, and its plays are those of the instance it gets).
+     */
     fun get(ctx: Context, id: String?): IconSet? {
         if (id == null || id == OWN || id in missing) return null
         sets[id]?.let { return it }
-        val set = read(ctx, id)
-        if (set == null) { missing += id; AppLog.log("[icons] no set '$id': the app's own symbols"); return null }
-        sets[id] = set
-        return set
+        synchronized(readLock) {
+            sets[id]?.let { return it }
+            val set = read(ctx, id)
+            if (set == null) { missing += id; AppLog.log("[icons] no set '$id': the app's own symbols"); return null }
+            return sets.putIfAbsent(id, set) ?: set
+        }
     }
 
     @Volatile private var listed: List<Pair<String, String>>? = null
@@ -155,11 +169,11 @@ object IconSets {
         val f = File(File(ctx.filesDir, DIR), "$id.json")
         val text = if (f.exists()) f.readText() else ctx.assets.open("$DIR/$id.json").bufferedReader().use { it.readText() }
         val o = JSONObject(text)
-        AppLog.log("[icons] $id: ${text.length / 1024} KB read and parsed in ${(System.nanoTime() - t0) / 1_000_000} ms")
+        AppLog.log("[icons] $id: ${text.length / 1024} KB read and parsed in ${(System.nanoTime() - t0) / 1_000_000} ms on ${Thread.currentThread().name}")
         IconSet(id, o.optString("name", id), o.getJSONObject("icons"))
     } catch (_: Throwable) { null }
 
-    private fun parse(o: JSONObject): Glyph {
+    private fun parse(o: JSONObject, what: String): Glyph {
         val b = o.getJSONArray("box")
         val box = RectF(b.getDouble(0).toFloat(), b.getDouble(1).toFloat(),
             (b.getDouble(0) + b.getDouble(2)).toFloat(), (b.getDouble(1) + b.getDouble(3)).toFloat())
@@ -177,8 +191,14 @@ object IconSets {
             l.optJSONArray("clip")?.let { cs -> for (j in 0 until cs.length()) cs.getJSONObject(j).let { cp -> clips += pathOf(cp.getString("d"), matrixOf(cp.optJSONArray("m"))) } }
             layers += Layer(trimmed, if (l.has("a")) l.getDouble("a").toFloat() else 1f, l.optDouble("s", 0.0).toFloat() * scale,
                 l.optDouble("sa", 1.0).toFloat(),
-                when (l.optString("cap")) { "round" -> Paint.Cap.ROUND; "square" -> Paint.Cap.SQUARE; else -> Paint.Cap.BUTT },
-                when (l.optString("join")) { "round" -> Paint.Join.ROUND; "bevel" -> Paint.Join.BEVEL; else -> Paint.Join.MITER },
+                when (val cap = l.optString("cap")) {
+                    "round" -> Paint.Cap.ROUND; "square" -> Paint.Cap.SQUARE; "", "butt" -> Paint.Cap.BUTT
+                    else -> { AppLog.log("[icons] $what: unknown cap '$cap' (drawn butt)"); Paint.Cap.BUTT }
+                },
+                when (val join = l.optString("join")) {
+                    "round" -> Paint.Join.ROUND; "bevel" -> Paint.Join.BEVEL; "", "miter" -> Paint.Join.MITER
+                    else -> { AppLog.log("[icons] $what: unknown join '$join' (drawn miter)"); Paint.Join.MITER }
+                },
                 clips)
         }
         return Glyph(box, layers, o.optDouble("scale", 1.0).toFloat())

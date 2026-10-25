@@ -199,6 +199,13 @@ class ShadePanelView(ctx: Context, override val host: QsPanel.Host, override val
     /** Quick Settings expand ([open]) or collapse on their own (Back, the shade's tests). */
     fun expandTo(open: Boolean) = settleExpand(open, 0f)
 
+    /** For checks (`TEST_SHADE tile-frames`): see [TileGridBlock.renderFrames]. False if the shade has no tiles yet (never opened). */
+    fun renderTileFrames(control: dev.launcher.app.shade.Control, wide: Boolean, on: Boolean, interrupt: Float, fps: Int, bg: Int, dir: java.io.File, done: (Int, Int) -> Unit): Boolean {
+        val t = tiles ?: return false
+        t.renderFrames(control, wide, on, interrupt, fps, bg, dir, done)
+        return true
+    }
+
     /** The design changed (sizes, fonts): laid out again. */
     fun designChanged() {
         layoutBlocks()

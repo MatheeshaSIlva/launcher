@@ -550,6 +550,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // The live blur's window first: it must sit under this one.
         liveBlur.attach()
         liveBlur.maxBlurPx = liveBlurMax(CcTokens.BACKGROUND)
+        preparePlays()
         // adb test hook (senders must hold DUMP: adb's shell does, other apps cannot):
         //   am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do nc_expand
         // fans Notification Center's collapsed stack out, so a script can scroll it without tapping a notification.
@@ -571,6 +572,23 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                     })
                     shadeView.designChanged()
                     AppLog.log("[qs] test: the tiles are $list")
+                }
+                // --es do tile-frames --es control FLASHLIGHT [--ez on true|false] [--ez wide true] [--ef interrupt 0.4] [--ei fps 120]
+                // [--es bg '#RRGGBB']: Android's shade's tile (open the shade once first) going to on (or off) from the other state,
+                // drawn at exact steps into PNGs in files/dev-out/tiles/CONTROL_on|off[_int]/ (adb pull; ends with .done): the
+                // symbol's play frame by frame, the phone's own state untouched. [interrupt]: turned back at that fraction.
+                if (i.getStringExtra("do") == "tile-frames") handler.post {
+                    val ctl = Control.entries.firstOrNull { it.name == i.getStringExtra("control") }
+                    val on = i.getBooleanExtra("on", true)
+                    val interrupt = i.getFloatExtra("interrupt", 0f)
+                    if (ctl == null) { AppLog.log("[shade] test tile-frames: no control ${i.getStringExtra("control")}"); return@post }
+                    val dir = java.io.File(ctx.getExternalFilesDir(null), "dev-out/tiles/${ctl.name}_${if (on) "on" else "off"}${if (interrupt > 0f) "_int" else ""}${if (i.getBooleanExtra("wide", false)) "_wide" else ""}")
+                        .apply { deleteRecursively(); mkdirs() }
+                    val bg = try { android.graphics.Color.parseColor(i.getStringExtra("bg") ?: "#DDE3EA") } catch (_: Throwable) { 0xFFDDE3EA.toInt() }
+                    if (!shadeView.renderTileFrames(ctl, i.getBooleanExtra("wide", false), on, interrupt, i.getIntExtra("fps", 120), bg, dir) { n, ran ->
+                            java.io.File(dir, ".done").writeText("$n\n")
+                            AppLog.log("[shade] test: $n frames of ${ctl.name} going ${if (on) "on" else "off"} in ${dir.path} (the symbol ran $ran steps)")
+                        }) AppLog.log("[shade] test tile-frames: Android's shade has no tiles yet (open it once)")
                 }
                 if (i.getStringExtra("do") == "qs_collapse") handler.post { if (panel === shadePanel) shadeView.expandTo(false) }
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
@@ -964,7 +982,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private val ccWarmOnDesign: () -> Unit = { handler.post { warmCcSoon(CC_WARM_START_MS) } }
     /** Android's shade takes up a new design (its sizes, its fonts). */
-    private val shadeOnDesign: () -> Unit = { handler.post { shadeView.designChanged() } }
+    private val shadeOnDesign: () -> Unit = { preparePlays(); handler.post { shadeView.designChanged() } }
+
+    /** The tiles' symbols' plays (B-036) are read and built on a worker of their own as soon as a design names the set. */
+    private fun preparePlays() = dev.launcher.app.design.IconSets.preparePlays(ctx, try { dev.launcher.app.design.Design.choice(QsTokens.SYMBOLS) } catch (_: Throwable) { null })
 
     /**
      * [old] makes way for the other panel: it goes on closing by itself, from where it is and as fast as it was going

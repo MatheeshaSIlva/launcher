@@ -100,8 +100,10 @@ class SymbolDrawer(private val motion: SymbolMotion) {
     }
 
     /**
-     * [src] from [start] to [end] of its whole length (every contour after another), shifted by [offset], as VectorDrawable
-     * trims, into [trimmed]. False (nothing written) for a path with no length.
+     * [src] from [start] to [end] of its whole length (every contour after another), shifted by [offset], into [trimmed].
+     * VectorDrawable trims the first contour only and a start of 1 with an end of 0 draws nothing there; the icons that are
+     * trimmed in the shipped sets are one contour and none of them has that pair, so this takes the whole length as the static symbol's does
+     * ([IconSets]). False (nothing written) for a path with no length.
      */
     private fun trim(src: Path, start: Float, end: Float, offset: Float): Boolean {
         measure.setPath(src, false)

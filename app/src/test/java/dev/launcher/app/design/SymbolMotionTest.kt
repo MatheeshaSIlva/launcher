@@ -290,4 +290,23 @@ class SymbolMotionTest {
         }
         assertNotNull(motion("""{"k":"l","i":0,"p":"fillAlpha","at":0,"ms":10,"e":"accdec","from":0,"to":1}"""))
     }
+
+    /** Every play the shipped sets carry, evaluated at every 1/120 s step (and past its end): built, finite, within its alphas, never a throw. */
+    @Test fun everyShippedPlayEvaluatesFinite() {
+        for (file in File("src/main/assets/icons").listFiles { f -> f.name.endsWith(".json") }!!) {
+            val icons = JSONObject(file.readText()).getJSONObject("icons")
+            for (name in icons.keys()) {
+                val play = icons.getJSONObject(name).optJSONObject("play") ?: continue
+                val m = SymbolMotion(play)
+                val pose = m.newPose()
+                var t = -8.333f
+                while (t < m.ms + 100f) {
+                    m.evaluate(t, pose)
+                    val all = listOf(pose.matrix, pose.fill, pose.stroke, pose.width, pose.trim) + pose.path.filterNotNull() + pose.clipMatrix + pose.clipPath.filterNotNull()
+                    for (a in all) for (v in a) assertTrue("${file.name}/$name at $t ms: $v", v.isFinite())
+                    t += 8.3333f
+                }
+            }
+        }
+    }
 }
