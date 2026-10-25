@@ -14,6 +14,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.sqrt
@@ -23,7 +24,9 @@ import kotlin.math.sqrt
  * symbols as vector paths, drawn in place of the app's own (`res/drawable/sym_<name>.xml`, Material Symbols Rounded)
  * wherever a theme names the set (`sys.symbols`, read through each element's own token: `comp.cc.symbols` ...). Written by
  * `tools/icons/build_icon_set.py`, each symbol with its source. A name the set leaves out is drawn with the app's own;
- * `NAME.off` is the look of a control that is off (the shade crossfades the two as it turns on and off).
+ * `NAME.off` is the look of a control that is off (the shade crossfades the two as it turns on and off), or plays the
+ * symbol's animation when the symbol has a `play` (B-036: [IconSet.motion], built on its first ask; [preparePlays] builds a
+ * set's off the drawing thread).
  */
 object IconSets {
     /** The app's own symbols: no file, every name drawn from its drawable. */
@@ -74,6 +77,47 @@ object IconSets {
         }
 
         val names: List<String> get() = icons.keys().asSequence().toList().sorted()
+
+        private val motions = ConcurrentHashMap<String, Any>()   // (a value: a SymbolMotion, or NO_PLAY)
+        @Volatile private var prepared = false
+
+        /**
+         * Symbol [name]'s animation (its `play`), or null if it has none or cannot be read (logged). Built from the file's
+         * data on the first ask and kept: a few hundred microseconds a symbol, so never first asked on a drawing thread
+         * ([preparePlays] asks for them all ahead).
+         */
+        fun motion(name: String): SymbolMotion? {
+            val hit = motions[name] ?: run {
+                val built = icons.optJSONObject(name)?.optJSONObject("play")?.let {
+                    try { SymbolMotion(it) } catch (t: Throwable) { AppLog.log("[icons] $id/$name: its play: ${t.message}"); null }
+                }
+                motions.putIfAbsent(name, built ?: NO_PLAY) ?: built ?: NO_PLAY
+            }
+            return hit as? SymbolMotion
+        }
+
+        internal fun preparePlays() {
+            if (prepared) return
+            val t0 = System.nanoTime()
+            var n = 0
+            for (name in names) if (motion(name) != null) n++
+            prepared = true
+            AppLog.log("[icons] $id: $n plays ready in ${(System.nanoTime() - t0) / 1_000_000} ms")
+        }
+    }
+
+    private val NO_PLAY = Any()
+    private val io by lazy { Executors.newSingleThreadExecutor { r -> Thread(r, "icon-plays").apply { isDaemon = true } } }
+
+    /**
+     * Reads set [id] (if not yet read) and builds every play of it, on a worker thread of its own: call it as soon as a
+     * theme names the set, so that the first toggle of a tile builds nothing on a drawing thread. Nothing for the app's own
+     * symbols, a set that cannot be read, or a set already prepared.
+     */
+    fun preparePlays(ctx: Context, id: String?) {
+        if (id == null || id == OWN) return
+        val app = ctx.applicationContext
+        io.execute { try { get(app, id)?.preparePlays() } catch (t: Throwable) { AppLog.log("[icons] $id: plays: ${t.message}") } }
     }
 
     private val sets = ConcurrentHashMap<String, IconSet>()
@@ -107,9 +151,11 @@ object IconSets {
     fun clear() { sets.clear(); missing.clear(); listed = null }
 
     private fun read(ctx: Context, id: String): IconSet? = try {
+        val t0 = System.nanoTime()
         val f = File(File(ctx.filesDir, DIR), "$id.json")
         val text = if (f.exists()) f.readText() else ctx.assets.open("$DIR/$id.json").bufferedReader().use { it.readText() }
         val o = JSONObject(text)
+        AppLog.log("[icons] $id: ${text.length / 1024} KB read and parsed in ${(System.nanoTime() - t0) / 1_000_000} ms")
         IconSet(id, o.optString("name", id), o.getJSONObject("icons"))
     } catch (_: Throwable) { null }
 
@@ -138,7 +184,7 @@ object IconSets {
         return Glyph(box, layers, o.optDouble("scale", 1.0).toFloat())
     }
 
-    private fun pathOf(d: String, m: Matrix?): Path {
+    internal fun pathOf(d: String, m: Matrix?): Path {
         val p = PathParser().parsePathString(d).toPath().asAndroidPath()
         if (m != null) p.transform(m)
         return p

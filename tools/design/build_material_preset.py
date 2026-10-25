@@ -169,6 +169,7 @@ KEEP = {
     'motion.statusbar.charge-shimmer',
     # Android's shade's own (already Android's: read from SystemUIGoogle).
     'motion.qs.open', 'motion.qs.close', 'motion.qs.expand', 'motion.qs.collapse', 'motion.qs.tile-bounce', 'motion.qs.tile-state',
+    'motion.qs.tile-symbol',
     'motion.qs.tile-pop', 'motion.qs.tile-pop-back', 'motion.qs.slider-icon', 'motion.qs.edit', 'motion.qs.edit-place',
     'motion.qs.edit-appear', 'motion.qs.media', 'motion.qs.page', 'motion.qs.media-reveal', 'motion.qs.ripple', 'motion.qs.ripple-in', 'motion.qs.ripple-out',
 }

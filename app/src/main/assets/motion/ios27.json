@@ -1144,6 +1144,16 @@
    ],
    "src": "kit:AOSP SystemUI Tile.kt: a tile's colours and corners following its state (animateColorAsState, animateDpAsState: spring() stiffness 1500, damping 1)"
   },
+  "motion.qs.tile-symbol": {
+   "bezier": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "ms": 500,
+   "src": "judged:B-036: a tile's symbol playing its animation: linear over 500 ms is Android's own timing for every symbol (its length / 500 stretches each symbol's animation, its curve reshapes the progress; a straight line keeps each symbol's own easing)"
+  },
   "motion.scroll.deceleration": {
    "factor": 0.998,
    "src": "judged:UIScrollView's normal deceleration (per ms)"

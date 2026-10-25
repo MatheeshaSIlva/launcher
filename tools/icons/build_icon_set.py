@@ -357,16 +357,16 @@ def flatten(vector, overrides):
                         layer['a'] = round(fill, 3)
                 else:
                     layer['a'] = 0
-                if p.get('fillType') == 'evenOdd':
+                if enum(p.get('fillType'), FILL_TYPES) == 'evenOdd':
                     layer['even'] = 1
                 if stroke > 0.004:
                     layer['s'] = round(stroke_w, 3)
                     if stroke < 0.996:
                         layer['sa'] = round(stroke, 3)
-                    if p.get('strokeLineCap') in ('round', 'square'):
-                        layer['cap'] = p['strokeLineCap']
-                    if p.get('strokeLineJoin') in ('round', 'bevel'):
-                        layer['join'] = p['strokeLineJoin']
+                    if enum(p.get('strokeLineCap'), CAPS) in ('round', 'square'):
+                        layer['cap'] = enum(p['strokeLineCap'], CAPS)
+                    if enum(p.get('strokeLineJoin'), JOINS) in ('round', 'bevel'):
+                        layer['join'] = enum(p['strokeLineJoin'], JOINS)
                 trim = [float(p.get('trimPathStart', 0.0)), float(p.get('trimPathEnd', 1.0)), float(p.get('trimPathOffset', 0.0))]
                 if trim != [0.0, 1.0, 0.0]:
                     if abs(trim[1] - trim[0]) < 0.001:
@@ -430,9 +430,18 @@ def r4(v):
     return int(v) if v == int(v) else v
 
 
+CAPS, JOINS, FILL_TYPES = ('butt', 'round', 'square'), ('miter', 'round', 'bevel'), ('nonZero', 'evenOdd')
+
+
 def enum(v, names):
-    """An attribute that aapt2 dumps as its number (strokeLineCap="1") or that a source writes as its name."""
-    return names[int(v)] if v is not None and v.isdigit() else v
+    """An attribute that aapt2 dumps as its number (strokeLineCap="1") or that a source writes as its name. A number or name
+    outside [names] stops the build (B-047: reading numbers as names drew every APK-sourced symbol with butt caps, miter joins
+    and the non-zero rule)."""
+    if v is not None and v.isdigit() and int(v) < len(names):
+        v = names[int(v)]
+    if v is not None and v not in names:
+        raise ValueError(f'{v!r} is none of {names}')
+    return v
 
 
 def normalise(d):
@@ -593,6 +602,11 @@ def rests(k, i, tr, groups, layers, clips, colours):
     return [tr['from']], [base]
 
 
+def width_track(todo, name):
+    """Does an animator change the stroke width of the path [name]? (todo: the tracks by target name)."""
+    return any(t['p'] == 'strokeWidth' for t in todo.get(name, []))
+
+
 def play_of(data):
     """The animation of an animated vector (the shape is described at the top of this file)."""
     root = ET.fromstring(data)
@@ -629,10 +643,10 @@ def play_of(data):
                 lay = {'n': name, 'g': parent, 'd': a['pathData'].strip()}
                 trim = [r4(a.get('trimPathStart', 0.0)), r4(a.get('trimPathEnd', 1.0)), r4(a.get('trimPathOffset', 0.0))]
                 for key, val, dflt in (('a', r4(fc * a.get('fillAlpha', 1.0)), 1), ('s', r4(a.get('strokeWidth', 0.0)), 0),
-                                       ('sa', r4(sc * a.get('strokeAlpha', 1.0)) if sc else None, 1), ('trim', trim, [0, 1, 0]),
-                                       ('cap', enum(a.get('strokeLineCap'), ('butt', 'round', 'square')), 'butt'),
-                                       ('join', enum(a.get('strokeLineJoin'), ('miter', 'round', 'bevel')), 'miter'),
-                                       ('even', int(enum(a.get('fillType'), ('nonZero', 'evenOdd')) == 'evenOdd'), 0),
+                                       ('sa', r4(sc * a.get('strokeAlpha', 1.0)) if sc else 0 if a.get('strokeWidth') or width_track(todo, name) else None, 1), ('trim', trim, [0, 1, 0]),
+                                       ('cap', enum(a.get('strokeLineCap'), CAPS), 'butt'),
+                                       ('join', enum(a.get('strokeLineJoin'), JOINS), 'miter'),
+                                       ('even', int(enum(a.get('fillType'), FILL_TYPES) == 'evenOdd'), 0),
                                        ('clip', active[:], [])):
                     if val not in (dflt, None):
                         lay[key] = val
@@ -718,7 +732,7 @@ def tracked(play, t):
 
 def evaluate(play, t):
     """The play at [t] ms, per layer: its world matrix `m`, its path numbers `p` (None: as `d`), `a`, `sa` and `s` (alphas
-    clamped to 0..1, width to 0 and up, as drawn), `trim`, and its clips (`m`, `p`, `d`)."""
+    clamped to 0..1, width to 0 and up, as drawn), `cap`, `join`, `even`, `trim`, and its clips (`m`, `p`, `d`)."""
     st, mats = tracked(play, t), []
     for i, g in enumerate(play['groups']):
         v, (px, py), (sx, sy), (tx, ty) = st.get(('g', i), {}), g.get('pivot', [0, 0]), g.get('scale', [1, 1]), g.get('translate', [0, 0])
@@ -731,7 +745,8 @@ def evaluate(play, t):
         v, tm = st.get(('l', i), {}), lay.get('trim', [0, 1, 0])
         out.append({'n': lay.get('n'), 'm': world(lay['g']), 'p': v.get('pathData'), 'd': lay['d'],
                     'a': min(1.0, max(0.0, v.get('fillAlpha', lay.get('a', 1)))), 'sa': min(1.0, max(0.0, v.get('strokeAlpha', lay.get('sa', 1)))),
-                    's': max(0.0, v.get('strokeWidth', lay.get('s', 0))),
+                    's': max(0.0, v.get('strokeWidth', lay.get('s', 0))), 'cap': lay.get('cap', 'butt'), 'join': lay.get('join', 'miter'),
+                    'even': lay.get('even', 0),
                     'trim': [v.get('trimPathStart', tm[0]), v.get('trimPathEnd', tm[1]), v.get('trimPathOffset', tm[2])],
                     'clip': [{'m': world(play['clips'][c]['g']), 'p': st.get(('c', c), {}).get('pathData'), 'd': play['clips'][c]['d']}
                              for c in lay.get('clip', [])]})
@@ -790,9 +805,13 @@ def matches_static(play, layers):
                 any(abs(x - y) > 1e-3 for x, y in zip(l['p'], normalise(s['d'])[1])):
             return f"{l['n']}: path"
         stroke = lambda w, a: a if w > 0 else 0   # noqa: E731 (a static layer has an alpha only for a stroke it draws)
-        if abs(l['a'] - s.get('a', 1)) > 2e-3 or abs(stroke(l['s'], l['sa']) - stroke(s.get('s', 0), s.get('sa', 1))) > 2e-3 or abs(l['s'] - s.get('s', 0)) > 2e-3 or \
+        if abs(l['a'] - s.get('a', 1)) > 2e-3 or abs(stroke(l['s'], l['sa']) - stroke(s.get('s', 0), s.get('sa', 1))) > 2e-3 or abs((l['s'] if l['sa'] > 0.004 else 0) - s.get('s', 0)) > 2e-3 or \
                 any(abs(x - y) > 1e-3 for x, y in zip(l['trim'], s.get('trim', [0, 1, 0]))) or len(l['clip']) != len(s.get('clip', [])):
             return f"{l['n']}: paint, trim or clip"
+        if l['even'] != s.get('even', 0):
+            return f"{l['n']}: fill rule"
+        if l['s'] > 0 and l['sa'] > 0.004 and (l['cap'] != s.get('cap', 'butt') or l['join'] != s.get('join', 'miter')):   # (a static layer keeps them only for a stroke it draws)
+            return f"{l['n']}: stroke cap or join"
     return ''
 
 

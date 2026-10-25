@@ -102,6 +102,47 @@ with tempfile.TemporaryDirectory() as cache:
     check('a symbol from an animated vector at its end carries its play', sym.get('play') == play)
     check('the play ends on the symbol\'s static look', B.matches_static(sym['play'], sym['layers']) == '', B.matches_static(sym['play'], sym['layers']))
     check('a symbol at another frame carries none (the set crossfades as before)', 'play' not in B.symbol(cache, ('apk', 'fixture_on', 'static')))
+# B-047: aapt2 dumps fillType, strokeLineCap and strokeLineJoin as numbers; the static look reads them as the play does
+STYLED = SRC.replace('android:strokeLineCap="1"', 'android:strokeLineCap="1" android:strokeLineJoin="2"')     .replace('<path android:name="blob" android:fillColor="#ffffffff"', '<path android:name="blob" android:fillType="1" android:fillColor="#ffffffff"')
+with tempfile.TemporaryDirectory() as cache:
+    os.makedirs(os.path.join(cache, 'apk'))
+    with open(os.path.join(cache, 'apk', 'styled.xml'), 'w', encoding='utf-8') as f:
+        f.write(STYLED)
+    styled = B.symbol(cache, ('apk', 'styled', 'end'))
+    by_d = {l['d']: l for l in styled['layers']}
+    bar_l, blob_l = by_d['M2,20 L22,20'], by_d['M4,4 C6,2 10,2 12,4 L12,12 L4,12 Z']
+    check('a static look decodes the numbers aapt2 dumps: stroke cap 1 round, join 2 bevel, fill type 1 even-odd',
+          bar_l.get('cap') == 'round' and bar_l.get('join') == 'bevel' and blob_l.get('even') == 1 and 'cap' not in blob_l, (bar_l, blob_l))
+    check('its play carries the same cap, join and fill rule', [(l.get('cap'), l.get('join'), l.get('even')) for l in styled['play']['layers']][:2] == [(None, None, 1), ('round', 'bevel', None)], styled['play']['layers'][:2])
+    check('the styled symbol still ends on its static look', B.matches_static(styled['play'], styled['layers']) == '')
+    names = STYLED.replace('strokeLineCap="1"', 'strokeLineCap="round"').replace('strokeLineJoin="2"', 'strokeLineJoin="bevel"').replace('fillType="1"', 'fillType="evenOdd"')
+    with open(os.path.join(cache, 'apk', 'named.xml'), 'w', encoding='utf-8') as f:
+        f.write(names)
+    check('a source that writes the names reads the same', B.symbol(cache, ('apk', 'named', 'end'))['layers'] == styled['layers'])
+    for what, bad, want in (('a butt cap', dict(cap=None), 'stroke cap or join'), ('a miter join', dict(join=None), 'stroke cap or join'), ('a non-zero fill', dict(even=None), 'fill rule')):
+        layers = [dict(l) for l in styled['layers']]
+        tgt = bar_l if 'cap' in bad or 'join' in bad else blob_l
+        tweaked = [{k: v for k, v in l.items() if not (l['d'] == tgt['d'] and k in bad)} for l in layers]
+        got = B.matches_static(styled['play'], tweaked)
+        check(f'the end-of-play check refuses a static look with {what}', want in got, got)
+    for bad in ('strokeLineCap="7"', 'strokeLineCap="zigzag"'):
+        try:
+            B.from_vector(STYLED.replace('strokeLineCap="1"', bad).encode(), 'static', cache, 'apk')
+            check('an unknown cap is refused: ' + bad, False, 'accepted')
+        except ValueError as e:
+            check('an unknown cap is refused: ' + bad, 'is none of' in str(e), str(e))
+# A path with a stroke width but no stroke colour is never stroked: its stroke alpha is written as 0 (the player would take the default, 1)
+NOCOLOUR = SRC.replace('<path android:name="blob" android:fillColor="#ffffffff"', '<path android:name="blob" android:strokeWidth="2" android:fillColor="#ffffffff"')
+nc_play = B.play_of(NOCOLOUR.encode())
+check('a width without a stroke colour carries a stroke alpha of 0 (and a path with a colour does not need one)',
+      nc_play['layers'][0].get('s') == 2 and nc_play['layers'][0].get('sa') == 0 and 'sa' not in play['layers'][1], nc_play['layers'][:2])
+check('so it draws no stroke at any time', all(B.evaluate(nc_play, t)[0]['sa'] == 0 for t in (0, 150, 400)))
+with tempfile.TemporaryDirectory() as cache:
+    os.makedirs(os.path.join(cache, 'apk'))
+    with open(os.path.join(cache, 'apk', 'nocolour.xml'), 'w', encoding='utf-8') as f:
+        f.write(NOCOLOUR)
+    nc = B.symbol(cache, ('apk', 'nocolour', 'end'))
+    check('and ends on its static look (no stroke there)', 's' not in nc['layers'][0] and B.matches_static(nc['play'], nc['layers']) == '', B.matches_static(nc['play'], nc['layers']))
 c = B.continuity({**play, 'ms': 0}, play)
 check('a look meeting itself has no gap', c == [0.0, 0.0, 0.0, 0], c)
 c = B.continuity(play, play)

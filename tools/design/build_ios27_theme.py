@@ -467,6 +467,7 @@ SEED = {
     'motion.qs.collapse': {'spring': [0.32, 0.8], 'src': "kit:AOSP SystemUI scene container: Quick Settings back to the quick row over the notifications"},
     'motion.qs.tile-bounce': {'spring': [0.16, 1.0], 'src': "kit:AOSP SystemUI BounceableTileViewModel: a pressed tile growing 8 dp into its neighbours on spring() (stiffness 1500, damping 1)"},
     'motion.qs.tile-state': {'spring': [0.16, 1.0], 'src': "kit:AOSP SystemUI Tile.kt: a tile's colours and corners following its state (animateColorAsState, animateDpAsState: spring() stiffness 1500, damping 1)"},
+    'motion.qs.tile-symbol': {'bezier': [0, 0, 1, 1], 'ms': 500, 'src': "judged:B-036: a tile's symbol playing its animation: linear over 500 ms is Android's own timing for every symbol (its length / 500 stretches each symbol's animation, its curve reshapes the progress; a straight line keeps each symbol's own easing)"},
     'motion.qs.tile-pop': {'bezier': [0.05, 0, 0, 1], 'ms': 167, 'src': "kit:AOSP SystemUI BounceableTileViewModel.animateBounce: a tapped tile's symbol to 1.1 (its words to 1.06) in 167 ms (BounceStartEasing)"},
     'motion.qs.tile-pop-back': {'bezier': [1, 0, 0.95, 1], 'ms': 167, 'src': "kit:AOSP SystemUI BounceableTileViewModel.animateBounce: and back in 167 ms (BounceEndEasing)"},
     'motion.qs.ripple': {'bezier': [0.4, 0, 0.2, 1], 'ms': 225, 'src': "kit:Compose's RippleAnimation: the ripple spreading from the finger to the target's middle in 225 ms (FastOutSlowIn)"},

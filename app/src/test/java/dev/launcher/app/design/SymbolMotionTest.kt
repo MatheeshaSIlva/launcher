@@ -108,6 +108,13 @@ class SymbolMotionTest {
         assertEquals(listOf(false, true, false), m.layerEvenOdd.toList())
     }
 
+    @Test fun anUnknownCapOrJoinIsABadFileNotAButtOrMiter() {
+        for (bad in listOf("\"cap\":\"zigzag\"", "\"join\":\"sharp\"")) {
+            val threw = try { SymbolMotion(JSONObject("{\"ms\":0,\"groups\":[],\"layers\":[{\"n\":\"a\",\"g\":-1,\"d\":\"M0 0L1 1\",$bad}],\"tracks\":[]}")); false } catch (_: IllegalArgumentException) { true }
+            assertTrue(bad, threw)
+        }
+    }
+
     @Test fun theFixtureCoversTheHardParts() {
         // (so that the comparison above means something: delay, overshoot, motion path, morph, group at scale 0)
         val play = fixture.getJSONObject("play")
@@ -260,6 +267,13 @@ class SymbolMotionTest {
             for ((n, i) in shown.withIndex()) {
                 val sm = statics.getJSONObject(n).optJSONArray("m")?.let { floats(it) } ?: floatArrayOf(1f, 0f, 0f, 0f, 1f, 0f)
                 assertNear("$name layer $i matrix", sm, pose.matrix, i * 6)
+                // B-047: the same fill rule, and (for a stroke that draws) the same cap and join, as the static layer draws.
+                val st = statics.getJSONObject(n)
+                assertEquals("$name layer $i fill rule", st.optInt("even", 0) == 1, m.layerEvenOdd[i])
+                if (pose.width[i] > 0f && pose.stroke[i] > 0.004f) {
+                    assertEquals("$name layer $i cap", listOf("butt", "round", "square").indexOf(st.optString("cap", "butt")), m.layerCap[i])
+                    assertEquals("$name layer $i join", listOf("miter", "round", "bevel").indexOf(st.optString("join", "miter")), m.layerJoin[i])
+                }
             }
         }
         assertTrue("the Pixel set carries plays: $plays", plays >= 15)

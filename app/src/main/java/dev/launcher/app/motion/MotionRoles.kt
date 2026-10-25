@@ -176,6 +176,7 @@ object MotionRoles {
         r("qs.collapse", "Collapsing", "Quick Settings going back to the quick row over the notifications."),
         r("qs.tile-bounce", "Tile pressed", "A pressed tile growing into its neighbours, and back."),
         r("qs.tile-state", "Tile changing state", "A tile's colours and corners following its state."),
+        r("qs.tile-symbol", "Tile symbol playing", "A tile's symbol playing its animation as the tile turns on or off: the length stretches every symbol (500 ms is Android's own pace), the curve reshapes it."),
         r("qs.tile-pop", "Tile tapped", "A tapped tile's symbol or words popping out."),
         r("qs.tile-pop-back", "Tile tapped: back", "And back to their size."),
         r("qs.ripple", "Press ripple", "A pressed tile's or button's ripple spreading from the finger."),

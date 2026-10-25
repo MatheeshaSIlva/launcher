@@ -80,8 +80,8 @@ class SymbolMotion(play: JSONObject) {
         layerGroup = IntArray(ls.length()) { ls.getJSONObject(it).getInt("g") }
         layerD = Array(ls.length()) { ls.getJSONObject(it).getString("d") }
         layerClips = Array(ls.length()) { ls.getJSONObject(it).optJSONArray("clip")?.let { c -> IntArray(c.length()) { j -> c.getInt(j) } } ?: NONE }
-        layerCap = IntArray(ls.length()) { listOf("butt", "round", "square").indexOf(ls.getJSONObject(it).optString("cap", "butt")).coerceAtLeast(0) }
-        layerJoin = IntArray(ls.length()) { listOf("miter", "round", "bevel").indexOf(ls.getJSONObject(it).optString("join", "miter")).coerceAtLeast(0) }
+        layerCap = IntArray(ls.length()) { enumOf(ls.getJSONObject(it), "cap", CAPS) }
+        layerJoin = IntArray(ls.length()) { enumOf(ls.getJSONObject(it), "join", JOINS) }
         layerEvenOdd = BooleanArray(ls.length()) { ls.getJSONObject(it).optInt("even", 0) == 1 }
         layerCmds = arrayOfNulls(ls.length())
         layerBase = arrayOfNulls(ls.length())
@@ -237,6 +237,12 @@ class SymbolMotion(play: JSONObject) {
             "strokeAlpha", "strokeWidth", "trimPathStart", "trimPathEnd", "trimPathOffset")
         const val TRANSLATE_XY = 5; const val PATH = 6; const val FILL = 7; const val STROKE = 8; const val WIDTH = 9; const val TRIM = 10
         val ARGS = intArrayOf(2, 2, 6, 0)
+        val CAPS = listOf("butt", "round", "square")
+        val JOINS = listOf("miter", "round", "bevel")
+
+        /** Layer [o]'s [key] as the index of its name in [names] (the first, the default, when it has none); an unknown name is a bad file. */
+        fun enumOf(o: JSONObject, key: String, names: List<String>): Int =
+            names.indexOf(o.optString(key, names[0])).also { require(it >= 0) { "layer ${o.optString("n")}: $key '${o.optString(key)}' is none of $names" } }
 
         fun pair(o: JSONObject, key: String, dflt: Float) = o.optJSONArray(key)?.let { floatArrayOf(it.getDouble(0).toFloat(), it.getDouble(1).toFloat()) } ?: floatArrayOf(dflt, dflt)
         fun floats(a: JSONArray) = FloatArray(a.length()) { a.getDouble(it).toFloat() }

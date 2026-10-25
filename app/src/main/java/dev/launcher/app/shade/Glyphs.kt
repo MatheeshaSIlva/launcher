@@ -8,6 +8,8 @@ import dev.launcher.app.design.Blend
 import dev.launcher.app.design.ChoiceKey
 import dev.launcher.app.design.Design
 import dev.launcher.app.design.IconSets
+import dev.launcher.app.design.SymbolDrawer
+import dev.launcher.app.design.SymbolMotion
 import dev.launcher.app.design.toBlendMode
 
 /**
@@ -20,7 +22,9 @@ class Glyphs(private val ctx: Context, private val symbols: ChoiceKey = CcTokens
 
     /**
      * Draws symbol [res] centred on [cx],[cy], [size] px square, in [color] (ARGB: its alpha fades it); [on]: how far its
-     * control is on (a set's symbol with an off look crossfades from it to its on look; the drawables have one look).
+     * control is on (a set's symbol with an off look crossfades from it to its on look; the drawables have one look). With
+     * `on` the symbol player's `onShare` (eased by the caller) this is also the crossfade of a look that has no play to
+     * arrive by (B-036).
      */
     fun draw(c: Canvas, res: Int, cx: Float, cy: Float, size: Float, color: Int, on: Float = 1f) {
         if (size <= 0.5f || (color ushr 24) == 0) return
@@ -39,6 +43,28 @@ class Glyphs(private val ctx: Context, private val symbols: ChoiceKey = CcTokens
         draw(c, cache.getOrPut(res) { ctx.getDrawable(res)!!.mutate() }, cx, cy, size, color)
     }
 
+    private val offNames = HashMap<Int, String>()
+    private val drawers = HashMap<SymbolMotion, SymbolDrawer>()
+
+    /** Symbol [res]'s name in the set, or its `.off` look's. */
+    private fun keyOf(res: Int, off: Boolean): String = if (!off) nameOf(res) else offNames.getOrPut(res) { nameOf(res) + ".off" }
+
+    /**
+     * Symbol [res]'s animation in the set now ([off]: the one to the off look, the `.off` symbol's), null if the set has
+     * none (the looks crossfade). Built on its first ask: have [IconSets.preparePlays] run first, so no drawing thread builds one.
+     */
+    fun motion(res: Int, off: Boolean = false): SymbolMotion? = set()?.motion(keyOf(res, off))
+
+    /**
+     * Symbol [res] ([off]: its `.off` look's frame, the box and scale of the same slot) at [timeMs] into [motion] (the
+     * one [motion] gave), as [draw] places and tints it. Nothing for a symbol the set does not carry.
+     */
+    fun drawPlaying(c: Canvas, res: Int, off: Boolean, motion: SymbolMotion, timeMs: Float, cx: Float, cy: Float, size: Float, color: Int) {
+        if (size <= 0.5f || (color ushr 24) == 0) return
+        val glyph = set()?.glyph(keyOf(res, off)) ?: return
+        drawers.getOrPut(motion) { SymbolDrawer(motion) }.draw(c, glyph, timeMs, cx, cy, size, color, setPaint)
+    }
+
     private val setPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var setVersion = -1
     private var set: IconSets.IconSet? = null
@@ -48,6 +74,7 @@ class Glyphs(private val ctx: Context, private val symbols: ChoiceKey = CcTokens
         val v = Design.version
         if (v != setVersion) {
             setVersion = v
+            drawers.clear()
             set = IconSets.get(ctx, try { Design.choice(symbols) } catch (_: Throwable) { null })
         }
         return set
