@@ -1,2 +1,2 @@
-fullres: test83_ncOpenApp test84_ncCloseApp test85_ncCloseNotifs
-normal: test01b_grantNotifications test83_ncOpenApp test84_ncCloseApp test85_ncCloseNotifs
+fullres: test85_ncCloseNotifs
+normal: test01b_grantNotifications test85_ncCloseNotifs

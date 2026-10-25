@@ -1523,7 +1523,14 @@ final class Scenarios: XCTestCase {
             home()
             openNC("nc-open-\(i)")
             wait(2.5)
-            if i == 2, let p = platters.last {
+            // Pass 11's first try: the four sat just under the screen's bottom (y 874) and nothing showed on the sheet.
+            // A swipe up from the middle brings them onto it (as on iOS's lock screen).
+            if visiblePlatters().isEmpty {
+                drag("nc-reveal-\(i)", CGPoint(x: w / 2, y: h * 0.8), CGPoint(x: w / 2, y: h * 0.5), velocity: 600, hold: 0.3)
+                wait(2)
+            }
+            mark("visible " + visiblePlatters().map { "\($0.frame)" }.joined(separator: "; "))
+            if i == 2, let p = visiblePlatters().last {
                 let f = p.frame
                 tap("nc-fan-out", f.midX, f.midY)
                 wait(2)
