@@ -41,6 +41,21 @@ Use `/ship <item>` for features and `/fix <bug>` for bugs. The pipeline is:
 
 Do not forward the implementer's self-assessment to the reviewer or QA. They get the plan, the acceptance criteria and the diff, so their judgment is independent.
 
+## Tracks (D-037)
+
+`/ship` names the track in one line before it starts.
+
+- **Fidelity track**: anything that must look or move like a reference (Android 17's shade; iOS 27 once it has one). The
+  architect names the states and the golden to match. The implementer captures ours, runs `tools/fidelity/diff.py`, fixes
+  the largest regions and repeats until it passes, or stops after 6 passes with no gain and reports the regions left.
+  No reviewer or QA opinion on how it looks: one review of the code only. The owner's S24 check is the last step.
+- **Quick track**: a small, clear fix with no new behaviour. Implementer plus `scripts/check.sh`, then report. No architect,
+  reviewer or QA, unless the change touches crashes, privacy or threading.
+- **Full pipeline**: crashes, privacy, architecture, and new behaviour that has no reference.
+
+Architect, reviewer and QA default to Sonnet. The orchestrator passes `model: opus` on the Agent call only for crashes,
+privacy and architecture work.
+
 ## Ask the owner vs decide and log
 
 **Ask** (use AskUserQuestion, with a recommended option first) when:
@@ -48,7 +63,7 @@ Do not forward the implementer's self-assessment to the reviewer or QA. They get
 - the work would change scope, a milestone, or the spec
 - a new dependency, permission, or external service is needed
 - the architecture would change in a way that is hard to reverse
-- three review rounds have not converged
+- two rounds have not converged
 - something is destructive or irreversible
 
 **Decide and log in DECISIONS.md** for everything smaller: naming, file layout, internal structure, library-internal choices that are easy to reverse.
@@ -62,6 +77,11 @@ If the owner is unavailable (unattended run, or a question went unanswered), wri
 - New behavior ships with tests. A bug fix ships with a test that failed before the fix.
 - Keep changes small: one concern per branch, roughly 200 changed lines per step. If a plan is bigger, split it.
 - No new dependencies, permissions or config flags without owner approval.
+- **Fidelity is a number**: a "looks or moves like X" criterion is met when `tools/fidelity/diff.py` passes against the
+  reference capture. "Measured and called the same" by eye does not count (stage 8; B-046).
+- **The S24 is free to use** (owner, 2026-10-25): frame stats, scenario scripts and screenshots. Check which window has
+  the focus right before every capture (the phone can lock between two steps); the owner says sensitive notifications
+  show no previews.
 - Do not push or merge on your own. The orchestrator pushes to main only after check, review and QA pass AND the owner says go for that task.
 
 ## Honest reporting
@@ -73,6 +93,6 @@ If the owner is unavailable (unattended run, or a question went unanswered), wri
 
 ## Limits
 
-- At most 3 implement, review, QA rounds per task. Then stop and escalate with a summary of what keeps failing.
+- At most 2 implement, review, QA rounds per task. Then stop and escalate with a summary of what keeps failing.
 - One active milestone at a time. New ideas go to the Parking lot in `docs/ROADMAP.md`.
 - Run `/audit` after every 3 to 5 completed tasks, or whenever the owner feels the project is drifting.

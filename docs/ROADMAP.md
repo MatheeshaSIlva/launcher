@@ -21,7 +21,8 @@ Rules:
 | ID | Name | Status | Started | Finished |
 |----|------|--------|---------|----------|
 | M0 | Safety net | DONE | 2026-10-22 | 2026-10-22 |
-| M1 | Regression and smoothness baseline | ACTIVE | 2026-10-22 | |
+| MF | Fidelity harness (Pixel first) | ACTIVE | 2026-10-25 | |
+| M1 | Regression and smoothness baseline | BLOCKED | 2026-10-22 | |
 | M2 | Pixel shade layout signed off | TODO | | |
 | M3 | Theme builder: look | TODO | | |
 | M4 | Theme builder: motion and layouts | TODO | | |
@@ -42,6 +43,27 @@ Acceptance criteria:
 - [x] Stale worktrees are pruned, the empty `lc/` is removed, and `CLAUDE.md.kit-new` is merged into CLAUDE.md (or
       dropped) with the owner's OK
 - [x] Known existing bugs are listed in the Bug backlog below, with repro steps where known
+
+### MF: Fidelity harness (Pixel first)
+Goal: "it matches the real one" becomes a number an agent can loop on, not a judgment. Added by the owner on 2026-10-25
+(D-037) because gaps to Android 17 and iOS 27 kept passing review and QA and showing up on the S24. Plan:
+`docs/plans/MF_FIDELITY.md`. M1 waits (the owner's timed JOURNEYS run, B-032's scripts); B-037 pauses until MF's baseline
+is done. iOS is out of scope here (no live reference; see D-037).
+Acceptance criteria:
+- [ ] `tools/fidelity/diff.py` compares two screenshots region by region (grid cells and named regions, masks, heatmap,
+      JSON, exit code over tolerance), with unit tests that include the B-046 tile colour and the stage-8 corner radius
+      Status 2026-10-25: written and its 10 tests pass on Linux (Python 3, Pillow); the repo's agents run
+      `python -m unittest discover -s tools/fidelity` on this machine before ticking
+- [ ] `tools/fidelity/capture.sh` puts the Android 17 emulator in each named state of the plan's matrix and saves a
+      screenshot, for ours and for stock, on a fixed setup (demo-mode status bar, font scale, locale, wallpaper, the same
+      test notifications). Two captures of one state diff within tolerance (the harness's own noise is under it)
+- [ ] Golden set: stock Android 17's shade for every state in the matrix, light and dark (storage decided in a D-entry)
+- [ ] Motion: slow-motion frames (10x) of the pull, the second stage, the edit page and a tile toggle, stock against ours,
+      compared at the same progress, not the same time
+- [ ] Baseline run: every state diffed once; each region over tolerance is fixed or logged as a bug with its heatmap;
+      scores recorded in `docs/FIDELITY_BASELINE.md`
+- [ ] The rule is in force (OPERATING_RULES, Fidelity): a look-or-move-like-X criterion is met when the diff passes, never
+      "called the same" by eye
 
 ### M1: Regression and smoothness baseline
 Goal: know where each core journey stands, so a regression shows up as a number or a failed step.

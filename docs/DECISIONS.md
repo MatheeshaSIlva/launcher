@@ -250,3 +250,21 @@ Decision: one more implement, review and QA round, limited to preparing the shee
 home's picture off the shade's thread; measured with a Perfetto trace.
 Alternatives considered: push now and fix in step 2; hold.
 
+
+### D-037: A fidelity harness before more polish; the pipeline gets tracks (2026-10-25) [owner]
+Context: The owner keeps finding gaps to Android 17 and iOS 27 on the S24 that review and QA passed (B-046's tile colour;
+the active tiles' corners "called the same" in stage 8). The gates compare the work with the plan, and the plan comes from
+the agents' own reading, so a wrong reading passes every gate. Four days into the pipeline 1 of 8 milestones is done and
+motion slices run to 4-5 rounds (D-030, D-031, D-036).
+Decision: (1) New milestone MF, Pixel first, because the emulator's stock shade is a live reference: anything that must
+look or move like a reference is accepted by a diff under tolerance (`tools/fidelity/diff.py`), never by eye. (2) M1 is
+BLOCKED until MF's baseline is done; B-037 pauses. (3) `/ship` has three tracks (fidelity, quick, full), a 2-round cap, and
+architect, reviewer and QA default to Sonnet (Opus by override for crashes, privacy and architecture). (4) Agents may use
+the S24 freely (frame stats, scenario scripts, screenshots), checking the focused window before each capture; the owner
+says sensitive notifications show no previews. (5) iOS stays on the Simulator reference (`ios-reference/`). A GPU Mac
+rented for one run of that suite, or a borrowed iPhone for scripted screen recordings, is the owner's call.
+Alternatives considered: more rounds on the same gates (what the last days cost); reverse-engineering iOS (closed, legally
+unclear, and the look is GPU tuning, not readable code); Microsoft's remote iOS simulator for Windows (needs a paired Mac).
+Consequences / revisit when: if MF's baseline shows the diff cannot tell real gaps from noise (a font the emulator lacks,
+blur, antialiasing), settle masks and tolerances before anything else. CLAUDE.md's size (121 KB, loaded by every agent) is
+a separate open decision.
