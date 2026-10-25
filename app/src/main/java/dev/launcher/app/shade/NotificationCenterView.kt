@@ -331,6 +331,12 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         invalidate()
     }
 
+    /** A pull begins: the glass clock waits above its place, to drop when the pull opens it ([clockDrops]). */
+    fun clockWaits() = clock.waits()
+
+    /** The pull opened it: the glass numerals drop into place (`motion.nc.clock-drop`) and the date comes in. */
+    fun clockDrops() = clock.drops()
+
     /** Fans the collapsed stack out into the list, and every app's stack too (the adb test hook). */
     fun expandList() = list.expandList()
 

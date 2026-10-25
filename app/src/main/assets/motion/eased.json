@@ -578,6 +578,16 @@
    "ms": 630,
    "src": "judged:test preset: iOS 27's spring (0.42 s, damping 0.82) as a bezier (back-out, 630 ms)"
   },
+  "motion.nc.clock-drop": {
+   "bezier": [
+    0.05,
+    0.7,
+    0.1,
+    1
+   ],
+   "ms": 380,
+   "src": "judged:test preset: iOS 27's spring (0.3 s, damping 1.0) as a bezier (emphasized decelerate, 380 ms)"
+  },
   "motion.nc.clock-tick": {
    "bezier": [
     0.05,

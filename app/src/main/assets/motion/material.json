@@ -504,6 +504,13 @@
    ],
    "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
   },
+  "motion.nc.clock-drop": {
+   "spring": [
+    0.3223,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, default, critically damped: iOS 27 does not overshoot here spring (stiffness 380, damping 1)"
+  },
   "motion.nc.clock-tick": {
    "spring": [
     0.2221,
@@ -524,6 +531,13 @@
     0.6
    ],
    "src": "judged:Material 3 Expressive's spatial, fast spring (stiffness 800, damping 0.6)"
+  },
+  "motion.nc.date-in": {
+   "spring": [
+    0.1571,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's effects, default spring (stiffness 1600, damping 1)"
   },
   "motion.nc.hold": {
    "spring": [

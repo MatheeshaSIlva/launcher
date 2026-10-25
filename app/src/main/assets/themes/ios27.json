@@ -2388,6 +2388,10 @@
    "ref": "component.round-button.symbol-color",
    "src": "judged:the shared component style (component.round-button.symbol-color)"
   },
+  "comp.nc.clock.drop": {
+   "pt": 160,
+   "src": "measured:iOS 27 capture pass 10 (on commit the glass numerals enter at -45 pt (top of the numerals) and come to rest at 116 pt: 160 pt of travel, from pass 10's frame F566, the first with the numerals; the simulator has no GPU, so not checked at 120 Hz; pass 11 measured ~196 pt over an app but its first ~80 ms were dropped frames, so pass 10's 160 is kept)"
+  },
   "comp.nc.count.fill": {
    "color": "#ffffff",
    "src": "measured:the iOS 27 Simulator"
@@ -2454,6 +2458,14 @@
    "factor": 0.12,
    "src": "judged:the cyan/magenta separation in the flipped copy at the edge, as a share of how far it reads from (pass 10 shows it there, about a point or two; its amount was not measured)"
   },
+  "comp.nc.glass.fringe-in-color": {
+   "color": "#0a84ff99",
+   "src": "judged:from pass 10 (the rim's red and blue fringes: their hues and strength were not measured)"
+  },
+  "comp.nc.glass.fringe-out-color": {
+   "color": "#ff453a99",
+   "src": "judged:from pass 10 (the rim's red and blue fringes: their hues and strength were not measured)"
+  },
   "comp.nc.glass.interior.dim": {
    "color": "#0000000d",
    "src": "judged:from pass 10 (the clear slab shows home or the app 1-10 % darker)"
@@ -2473,14 +2485,6 @@
   "comp.nc.glass.rim-color": {
    "color": "#f5e6c8cc",
    "src": "judged:from pass 10's rim (tan over dark, yellow-olive over white): a warm light"
-  },
-  "comp.nc.glass.fringe-out-color": {
-   "color": "#ff453a99",
-   "src": "judged:from pass 10 (the rim's red and blue fringes: their hues and strength were not measured)"
-  },
-  "comp.nc.glass.fringe-in-color": {
-   "color": "#0a84ff99",
-   "src": "judged:from pass 10 (the rim's red and blue fringes: their hues and strength were not measured)"
   },
   "comp.nc.glass.rim-fringe": {
    "pt": 0.6,

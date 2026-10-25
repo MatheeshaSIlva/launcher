@@ -388,6 +388,7 @@ SEED = {
     'motion.nc.reveal': {'bezier': [0.365, 0, 0.635, 1], 'ms': 70, 'src': "judged:from pass 10 (on commit the sheet's own content arrives 'at once'; a short fade so nothing pops)"},
     'motion.nc.lens-in': {'bezier': [0.365, 0, 0.635, 1], 'ms': 160, 'src': "judged:the lens bands taking hold when the picture they bend arrives late (the rim and the dim show first)"},
     'motion.nc.bar-fade': {'bezier': [0.365, 0, 0.635, 1], 'ms': 200, 'src': "judged:the status bar fading out as a pull over home starts, and back in on commit (iOS 27 drops it at the first frame; the owner wants a fade, never a cut)"},
+    'motion.nc.date-in': {'bezier': [0.7, -0.8, 0.8, 1], 'ms': 150, 'src': "judged:from pass 10 (on commit the date appears ~125-150 ms after the clock starts to drop, nearly opaque); the curve dips below 0 first, which reads as 0: under 0.1 for the first ~90 ms, 0.65 at 125 ms, whole at 150 ms (a plain ease cannot hold back that long and still arrive)"},
     'motion.arrival.hold': {'bezier': [0.333, 0, 0.667, 1], 'ms': 140, 'src': "judged:home easing into the arrival's first frame while the unlock holds it (smoothstep); as the code timed it before B3"},
     'motion.widgets.row-stagger': {'ms': 28, 'src': "judged:each of the widget gallery's rows arriving after the one above; as the code timed it before B3"},
     'motion.switcher.clear-stagger': {'ms': 45, 'src': "judged:Clear all: each card flicked away after the one before; as the code timed it before B3"},
@@ -437,6 +438,7 @@ SEED = {
     'motion.nc.menu-open': {'spring': [0.35, 0.8], 'src': 'judged:a notification held: the long look opening'},
     'motion.nc.menu-close': {'spring': [0.26, 1.0], 'src': 'judged:and closing'},
     'motion.nc.clock-tick': {'spring': [0.45, 1.0], 'src': "judged:the clock's numerals crossfading at the minute"},
+    'motion.nc.clock-drop': {'spring': [0.30, 1.0], 'src': "measured:fitted to iOS 27 capture pass 10 (the glass numerals drop ~160 pt, ~90 % of it in ~170 ms and a soft tail to ~570 ms; a critically damped spring of response 0.30 s, not checked at 120 Hz)"},
     'motion.banner.in': {'spring': [0.64, 0.61], 'src': 'judged:a banner swooping in from the top'},
     'motion.banner.out': {'spring': [0.3, 1.0], 'src': 'judged:and going'},
     'motion.banner.fly': {'spring': [0.35, 1.0], 'src': 'judged:a banner flung away sideways'},
@@ -753,6 +755,7 @@ SEED = {
     'comp.nc.glass.dim': {'color': '#0000004d', 'src': "measured:iOS 27 capture pass 10 (what is behind, below the edge, is dimmed by a uniform 30 % black, no gradient)"},
     'comp.nc.glass.interior.dim': {'color': '#0000000d', 'src': "judged:from pass 10 (the clear slab shows home or the app 1-10 % darker)"},
     'comp.nc.glass.lens-strength': {'factor': 1, 'src': "judged:how strongly the lens bands bend (1: the measured profile; 0: none)"},
+    'comp.nc.clock.drop': {'pt': 160, 'src': "measured:iOS 27 capture pass 10 (on commit the glass numerals enter at -45 pt (top of the numerals) and come to rest at 116 pt: 160 pt of travel, from pass 10's frame F566, the first with the numerals; the simulator has no GPU, so not checked at 120 Hz; pass 11 measured ~196 pt over an app but its first ~80 ms were dropped frames, so pass 10's 160 is kept)"},
     # Control Center (docs/tokens/ios27-kit.json "controlCenter"; geometry of the running system where it differs: docs/IOS27_KIT.md)
     'comp.cc.background.material': {'ref': 'ref.material.overlay.control-center', 'src': 'kit:2524:24518'},
     'comp.cc.background.samsung-strength': {'factor': 0.15, 'src': "judged:One UI's dim-to-blur strength (blur and dim come together there; 0.35 and 0.6 were too strong on the S24)"},

@@ -348,7 +348,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * content arrives when the pull opens it ([ncCommit]).
      */
     private val ncPanel: Panel = object : Panel(ShadeStructure.Kind.NOTIFICATION_CENTER, "Notification Center") {
-        override fun opening() { nc.prepare(); media.refresh(); ncEdge.locked = locked; ncWall.locked = locked; ncWall.wallpaper = nc.wallpaper; prepareLens() }
+        override fun opening() { nc.prepare(); if (ncReveal.target < 1f) nc.clockWaits(); media.refresh(); ncEdge.locked = locked; ncWall.locked = locked; ncWall.wallpaper = nc.wallpaper; prepareLens() }
         override fun cleanUp() { nc.onClosed(); ncRest(); ncEdge.clearPicture(); lensHome = null }
         override fun gone() { nc.progress = 0f }
         override val openCurve get() = NC_OPEN
@@ -787,6 +787,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private fun ncCommit() {
         // The bands at the edge bend the sheet's own wallpaper from here (pass 10), not what was behind the slab.
         nc.wallpaper?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true) }
+        if (ncReveal.target < 1f) nc.clockDrops()
         ncReveal.goTo(1f, MotionTokens.NC_REVEAL)
         ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)

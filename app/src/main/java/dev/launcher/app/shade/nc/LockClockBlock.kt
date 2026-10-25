@@ -14,6 +14,8 @@ import dev.launcher.app.Wallpaper
 import dev.launcher.app.design.Design
 import dev.launcher.app.home.ClockNumerals
 import dev.launcher.app.home.LabelTone
+import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.MotionTokens
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.shade.NcTokens
 import dev.launcher.app.theme.Appearance
@@ -230,42 +232,105 @@ class LockClockBlock(private val panel: NcPanel) {
         return toneValue
     }
 
-    /** What it shows, recorded once and drawn again from its layer until that changes (see [draw]). */
+    /**
+     * What it shows, recorded once and drawn again from its layer until that changes (see [draw]): the numerals and the date
+     * are nodes of their own (each in a layer), so that on a commit they move and fade by their node's properties alone
+     * ([applyProps]) while the sheet's layer is not recorded again.
+     */
     private val node = android.graphics.RenderNode("nc-clock").apply { setUseCompositingLayer(true, null) }
     private var nodeKey = Long.MIN_VALUE
+    private val dateNode = android.graphics.RenderNode("nc-date").apply { setUseCompositingLayer(true, null) }
+    private var dateKey = Long.MIN_VALUE
+    /** The clock's presence as [draw] was last asked for it (the date's opacity is this times its arrival). */
+    private var presence = 1f
 
-    /** Its layer made anew at the next draw (a reopen once showed the last session's faded clock). */
-    fun forget() { nodeKey = Long.MIN_VALUE }
+    /** Its layers made anew at the next draw (a reopen once showed the last session's faded clock). */
+    fun forget() { nodeKey = Long.MIN_VALUE; dateKey = Long.MIN_VALUE }
+
+    // ---- the drop on a commit (B-037 step 2, slice 2b)
+
+    /** 1: the numerals are [NcTokens.CLOCK_DROP] above their place (just entering); 0: in place. */
+    private val enter = MotionValue(0f, 1000f, { moved() })
+    /** The date's arrival, 0..1, on `motion.nc.date-in` (it stays under 0.1 for the drop's first ~90 ms). */
+    private val dateIn = MotionValue(1f, 1000f, { moved() })
+
+    /** A pull begins: the sheet's content waits (clear), the clock above its place with no date, ready to drop. */
+    fun waits() { enter.snapTo(1f); dateIn.snapTo(0f) }
+
+    /** The pull opened it: the numerals drop into place and the date comes in. A drop on its way goes on from where it is. */
+    fun drops() {
+        enter.animateTo(0f, Motion.role(MotionTokens.NC_CLOCK_DROP))
+        dateIn.animateTo(1f, Motion.role(MotionTokens.NC_DATE_IN))
+    }
+
+    private fun moved() {
+        applyProps()
+        // invalidateOutline(), not invalidate(): it asks the window for a frame without recording the sheet again (invalidate()
+        // would record the whole sheet and damage its whole layer); only the nodes' properties changed.
+        view.invalidateOutline()
+    }
+
+    private fun applyProps() {
+        val dy = ClockDrop.offset(enter.value, Design.pt(NcTokens.CLOCK_DROP, u))
+        node.setTranslationY(dy)
+        dateNode.setTranslationY(dy)
+        node.setAlpha(presence)
+        dateNode.setAlpha(ClockDrop.dateAlpha(dateIn.value, presence))
+    }
 
     /** Draws it at [k] of its presence (a long list scrolled up over it fades it). */
     fun draw(c: Canvas, k: Float) {
         if (k <= 0.003f) return
+        presence = k
         val tone = tone()
-        val key = ((dateText.hashCode().toLong() shl 32) xor (System.identityHashCode(glass).toLong() shl 12)) xor
+        box(rect)
+        val top = rect.top.toInt()
+        val dateY = dateBaseline()
+        val nk = (System.identityHashCode(glass).toLong() shl 12) xor
             (System.identityHashCode(glassOld).toLong() shl 2) xor Math.round(fade.value * 255f).toLong() xor
             (if (glass == null) text.hashCode().toLong() else 0L) xor (System.identityHashCode(panel.wallpaper).toLong() shl 40) xor
             (Math.round(tone * 255f).toLong() shl 24) xor (Math.round(Appearance.dark * 255f).toLong() shl 52) xor
             (panel.panelWidth.toLong() shl 16) xor (if (beside) 1L shl 62 else 0L)
-        if (key != nodeKey || !node.hasDisplayList()) {
-            node.setPosition(0, 0, panel.panelWidth, (box(RectF()).bottom + 40f * u).toInt())
+        if (nk != nodeKey || !node.hasDisplayList()) {
+            node.setPosition(0, top, panel.panelWidth, (rect.bottom + 40f * u).toInt())
             val rc = node.beginRecording()
-            try { drawClock(rc) } finally { node.endRecording() }
-            nodeKey = key
+            try { rc.translate(0f, -top.toFloat()); drawNumerals(rc) } finally { node.endRecording() }
+            nodeKey = nk
         }
-        node.setAlpha(k)
+        // The date: its own band (the shadow's reach round the text), keyed by what it shows.
+        val fm = datePaint.fontMetrics
+        val reach = 8f * u
+        val dTop = Math.floor((dateY + fm.top - reach).toDouble()).toInt()
+        val dBottom = Math.ceil((dateY + fm.bottom + reach).toDouble()).toInt()
+        val dk = (dateText.hashCode().toLong() shl 32) xor (Math.round(tone * 255f).toLong() shl 24) xor
+            (Math.round(Appearance.dark * 255f).toLong() shl 52) xor (panel.panelWidth.toLong() shl 16) xor
+            (if (beside) 1L shl 62 else 0L) xor dTop.toLong()
+        if (dk != dateKey || !dateNode.hasDisplayList()) {
+            dateNode.setPosition(0, dTop, panel.panelWidth, dBottom)
+            val rc = dateNode.beginRecording()
+            try { rc.translate(0f, -dTop.toFloat()); drawDate(rc, dateY) } finally { dateNode.endRecording() }
+            dateKey = dk
+        }
+        applyProps()
         c.drawRenderNode(node)
+        c.drawRenderNode(dateNode)
     }
 
-    private fun drawClock(c: Canvas) {
-        box(rect)
-        val tone = tone()
-        val col = LabelTone.color(tone)
+    /** The date's baseline (px): across the top, above the numerals' box; beside the list, over the numerals at the left. */
+    private fun dateBaseline(): Float =
+        if (beside) rect.top + rect.height() * ClockNumerals.TOP - Design.pt(NcTokens.LAND_DATE_GAP, u) else rect.top - 13f * u
+
+    private fun drawDate(c: Canvas, y: Float) {
+        val col = LabelTone.color(tone())
         datePaint.color = alpha(col, 0xF2 / 255f)
-        dateShadow.color = alpha(Design.color(NcTokens.TEXT_SHADOW), 1f - tone)
+        dateShadow.color = alpha(Design.color(NcTokens.TEXT_SHADOW), 1f - tone())
         dateShadow.apply(datePaint)
-        if (beside) c.drawText(dateText, Design.pt(NcTokens.LAND_CLOCK_X, u),
-            rect.top + rect.height() * ClockNumerals.TOP - Design.pt(NcTokens.LAND_DATE_GAP, u), datePaint)
-        else c.drawText(dateText, panel.panelWidth / 2f, rect.top - 13f * u, datePaint)
+        c.drawText(dateText, if (beside) Design.pt(NcTokens.LAND_CLOCK_X, u) else panel.panelWidth / 2f, y, datePaint)
+    }
+
+    private fun drawNumerals(c: Canvas) {
+        box(rect)
+        val col = LabelTone.color(tone())
         val g = glass
         if (g != null) {
             val f = fade.value.coerceIn(0f, 1f)
@@ -306,6 +371,6 @@ class LockClockBlock(private val panel: NcPanel) {
         /** The room left at the sides of the numerals' box beside the list, for the glass's rims and shadow (pt). */
         const val SIDE_PT = 16f
         val io = Executors.newSingleThreadExecutor()
-        val TICK get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.NC_CLOCK_TICK)
+        val TICK get() = Motion.role(MotionTokens.NC_CLOCK_TICK)
     }
 }

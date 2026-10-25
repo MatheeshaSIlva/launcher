@@ -210,6 +210,8 @@ internal object MotionSamples {
         add("nc.time-fade", Spec(Kind.FADE, Rect(0.7f, 0.42f, 0.9f, 0.45f), 0f, 1f, m("nc.time-fade")))
         for (n in listOf("nc.pull-dim-home", "nc.pull-dim-app", "nc.reveal", "nc.lens-in")) add(n, Spec(Kind.FADE, WHOLE, 0f, 1f, m(n)))
         add("nc.pull-undim", Spec(Kind.FADE, WHOLE, 1f, 0f, m("nc.pull-dim-app")))
+        add("nc.clock-drop", Spec(Kind.SLIDE_DOWN, CLOCK, 0f, 1f, m("nc.clock-drop")))
+        add("nc.date-in", Spec(Kind.FADE, CLOCK, 0f, 1f, m("nc.date-in")))
         add("nc.bar-fade", Spec(Kind.FADE, STATUS, 1f, 0f, m("nc.bar-fade")))
         pair("press-in", "press-out", Kind.PRESS, PLATTERS)
         // Banners.

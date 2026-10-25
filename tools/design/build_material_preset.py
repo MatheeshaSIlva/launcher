@@ -141,6 +141,8 @@ ROLES = {
     'motion.nc.reveal': ('effects', 'fast'),
     'motion.nc.lens-in': ('effects', 'default'),
     'motion.nc.bar-fade': ('effects', 'default'),
+    'motion.nc.date-in': ('effects', 'default'),
+    'motion.nc.clock-drop': ('spatial', 'default'),
     'motion.press-in': ('spatial', 'fast'),
     'motion.press-out': ('spatial', 'fast'),
     # Banners
