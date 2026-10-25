@@ -2451,8 +2451,8 @@
    "src": "measured:iOS 27 capture pass 10 (what is behind, below the edge, is dimmed by a uniform 30 % black, no gradient)"
   },
   "comp.nc.glass.dispersion": {
-   "factor": 0.2,
-   "src": "judged:the cyan/magenta separation in the lens bands (pass 10 shows it in the mirror; its amount was not measured)"
+   "factor": 0.12,
+   "src": "judged:the cyan/magenta separation in the flipped copy at the edge, as a share of how far it reads from (pass 10 shows it there, about a point or two; its amount was not measured)"
   },
   "comp.nc.glass.interior.dim": {
    "color": "#0000000d",
@@ -2463,12 +2463,12 @@
    "src": "judged:how strongly the lens bands bend (1: the measured profile; 0: none)"
   },
   "comp.nc.glass.mirror": {
-   "pt": 4,
-   "src": "measured:iOS 27 capture pass 10 (the band's last 3-5 pt are a flattened mirror copy)"
+   "pt": 5,
+   "src": "judged:iOS 27 capture pass 10's c82 crop (iOS flips a whole word into the band's last ~4.5-6 pt)"
   },
   "comp.nc.glass.mirror-from": {
-   "pt": 28,
-   "src": "measured:iOS 27 capture pass 10 (the mirror copies content ~25-30 pt above)"
+   "pt": 36,
+   "src": "judged:iOS 27 capture pass 10's c82 crop (the flipped word is content ~22-36 pt above the edge)"
   },
   "comp.nc.glass.rim-color": {
    "color": "#f5e6c8cc",

@@ -18,6 +18,7 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.widget.FrameLayout
 import dev.launcher.app.AppLog
+import dev.launcher.app.HomePicture
 import dev.launcher.app.Unlock
 import dev.launcher.app.layout.Element
 import dev.launcher.app.layout.Setup
@@ -344,8 +345,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * content arrives when the pull opens it ([ncCommit]).
      */
     private val ncPanel: Panel = object : Panel(ShadeStructure.Kind.NOTIFICATION_CENTER, "Notification Center") {
-        override fun opening() { nc.prepare(); media.refresh(); ncEdge.locked = locked; ncEdge.wallpaper = nc.wallpaper }
-        override fun cleanUp() { nc.onClosed(); ncRest() }
+        override fun opening() { nc.prepare(); media.refresh(); ncEdge.locked = locked; ncEdge.wallpaper = nc.wallpaper; prepareLens() }
+        override fun cleanUp() { nc.onClosed(); ncRest(); ncEdge.clearPicture(); lensHome = null }
         override fun gone() { nc.progress = 0f }
         override val openCurve get() = NC_OPEN
         override val closeCurve get() = NC_CLOSE
@@ -1014,6 +1015,33 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     }
 
     private var backdropLogs = 0
+
+    private var lensHome: HomePicture? = null
+
+    /**
+     * The sharp picture the clear slab's lens bands bend, fetched as a pull begins (B-037): an app's kept picture as it is (a
+     * fresher one crossfades in), home baked sharp at half size off the UI threads, the lock screen's wallpaper. None: no lens.
+     */
+    private fun prepareLens() {
+        if (android.os.Build.VERSION.SDK_INT < 33) return
+        val opening = panel
+        nav.backdrop { src ->
+            if (panel !== opening || src == null) return@backdrop
+            when (src) {
+                // (A kept picture of an app whose screen changed since would show the old one, sharp, against the live content:
+                // the lens waits for the fresh picture, rim and dim only until then.)
+                is BackdropSource.App -> if (!src.stale) ncEdge.setPicture(src.bitmap, android.graphics.Matrix().apply { setScale(root.width.toFloat() / src.bitmap.width, root.height.toFloat() / src.bitmap.height) })
+                is BackdropSource.Wall -> ncEdge.setPicture(src.wallpaper.bitmap, src.wallpaper.matrix(root.width, root.height))
+                is BackdropSource.Home -> {
+                    if (src.picture === lensHome) return@backdrop
+                    lensHome = src.picture
+                    BlurBaker.bake(src, root.width, root.height, 0.5f, 0f, 0, handler) { bmp, m ->
+                        if (panel === opening && bmp != null) ncEdge.setPicture(bmp, m)
+                    }
+                }
+            }
+        }
+    }
 
     private fun finishClose() {
         val was = panel

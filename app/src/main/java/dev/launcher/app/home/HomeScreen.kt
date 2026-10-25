@@ -1891,6 +1891,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
                         dev.launcher.app.settings.MotionWarmUp.warmUp(m?.u ?: 0f)
                         // And the cards' transition styles (the first bubble after an update: a 76 ms frame).
                         dev.launcher.app.CardStyleWarmUp.warmUp()
+                        // And Notification Center's lens bands (its first pull after an update compiled them inside a frame).
+                        dev.launcher.app.shade.nc.NcGlassLens.warmUp()
                         // And home's menus (the first edit menu after an update: 46 ms of compiling in its first frame), and
                         // blurs at every radius a menu's or a close's ramps through.
                         warmMenu()

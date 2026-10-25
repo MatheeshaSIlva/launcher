@@ -9,9 +9,9 @@ import org.junit.Test
 class NcGlassProfileTest {
     // The tokens' values (comp.nc.glass.band, mirror, stretch-from, mirror-from, side, side-from).
     private val d = 26f
-    private val m = 4f
+    private val m = 5f
     private val s = 18f
-    private val mf = 28f
+    private val mf = 36f
     private fun bottom(e: Float) = NcGlassProfile.bottomSampleDist(e, d, m, s, mf)
     private fun side(e: Float) = NcGlassProfile.sideSampleDist(e, 15f, 6f)
 
@@ -43,7 +43,7 @@ class NcGlassProfileTest {
     }
 
     @Test fun theEdgeReadsTheMirrorAndTheFoldTheStretch() {
-        assertTrue("at the edge ${bottom(0f)}", bottom(0f) in 25f..30f)
+        assertTrue("at the edge ${bottom(0f)}", bottom(0f) in 22f..40f)
         assertTrue("at the fold ${bottom(m)}", bottom(m) in 15f..20f)
         assertEquals(mf, bottom(0f), 1e-4f)
     }
@@ -93,5 +93,15 @@ class NcGlassProfileTest {
         // Slower than a fling: the position decides.
         assertFalse(NcGlassProfile.releaseOpens(0.3f, 800f, 900f))
         assertTrue(NcGlassProfile.releaseOpens(0.9f, -800f, 900f))
+    }
+
+    @Test fun aStretchPastTheLimitIsClampedSoTheBandStaysMonotone() {
+        val limit = NcGlassProfile.stretchLimit(d, m)
+        assertTrue(s < limit)
+        // A token past the limit, clamped by the caller (NcGlassEdge): still rising from the fold to the top.
+        val from = minOf(24f, limit)
+        var prev = NcGlassProfile.bottomSampleDist(m, d, m, from, mf)
+        var e = m + 0.1f
+        while (e <= d) { val v = NcGlassProfile.bottomSampleDist(e, d, m, from, mf); assertTrue("at $e: $v after $prev", v > prev); prev = v; e += 0.1f }
     }
 }

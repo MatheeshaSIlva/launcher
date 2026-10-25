@@ -23,8 +23,8 @@ object NcGlassProfile {
      * falling to [stretchFrom] (at e = [mirror]). Both parts are flat at the fold, so the profile has a smooth turning point
      * there and no kink.
      *
-     * Strictly increasing from [mirror] to [band] only while 3 * ([band] - [stretchFrom]) > [band] - [mirror] (24 > 22 with the
-     * tokens' 26, 4, 18): a caller whose tokens break it (the token editor) clamps [stretchFrom] below
+     * Strictly increasing from [mirror] to [band] only while 3 * ([band] - [stretchFrom]) > [band] - [mirror] (24 > 21 with the
+     * tokens' 26, 5, 18): a caller whose tokens break it (the token editor) clamps [stretchFrom] below
      * [band] - ([band] - [mirror]) / 3, or the band folds back on itself.
      */
     fun bottomSampleDist(e: Float, band: Float, mirror: Float, stretchFrom: Float, mirrorFrom: Float): Float {
@@ -65,6 +65,36 @@ object NcGlassProfile {
         vy < -flingPx -> false
         else -> progress >= OPEN_AT
     }
+
+    /**
+     * The largest [stretchFrom] the bottom profile accepts (see [bottomSampleDist]): a token past it (the token editor) is
+     * clamped to just under it, or the band folds back on itself.
+     */
+    fun stretchLimit(band: Float, mirror: Float): Float = band - (band - mirror) / 3f - 0.01f
+
+    /**
+     * The same two profiles for the GPU, line for line ([bottomSampleDist], [sideSampleDist], [rising]); the lens shader
+     * ([NcGlassLens]) declares the uniforms `band mirror stretchFrom mirrorFrom side sideFrom` (px) before this. A change to one
+     * is a change to the other (only the Kotlin is covered by a test; the emulator shows the GPU's).
+     */
+    const val AGSL = """
+float rising(float t, float a, float b, float span) {
+    float t2 = t * t;
+    float t3 = t2 * t;
+    return a + (b - a) * (3.0 * t2 - 2.0 * t3) + span * (t3 - t2);
+}
+float bottomS(float e) {
+    if (e >= band) return e;
+    if (e > mirror) return rising((e - mirror) / (band - mirror), stretchFrom, band, band - mirror);
+    if (mirror <= 0.0) return stretchFrom;
+    float u = max(e, 0.0) / mirror;
+    return stretchFrom + (mirrorFrom - stretchFrom) * (1.0 - u * u * (3.0 - 2.0 * u));
+}
+float sideS(float e) {
+    if (side <= 0.0 || e >= side) return e;
+    return rising(max(e, 0.0) / side, sideFrom, side, side);
+}
+"""
 
     /**
      * From [a] at [t] = 0 to [b] at 1 over [span] (the length the unit interval stands for): flat at the start, slope 1 at the

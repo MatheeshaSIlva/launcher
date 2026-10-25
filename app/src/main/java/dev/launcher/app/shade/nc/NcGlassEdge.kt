@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -13,6 +14,9 @@ import android.view.View
 import dev.launcher.app.Wallpaper
 import dev.launcher.app.design.Design
 import dev.launcher.app.design.Scale
+import dev.launcher.app.motion.Motion
+import dev.launcher.app.motion.MotionTokens
+import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.shade.NcTokens
 import dev.launcher.app.theme.Appearance
 import kotlin.math.max
@@ -27,14 +31,22 @@ import kotlin.math.min
  *
  * From the bottom up: (on the lock screen) the wallpaper inside the slab, still, so One UI's lock screen never shows through;
  * the faint dim over the clear interior; the dim of everything below the edge, outside the rounded corners too; the rim,
- * about a point wide, round the corners and up both sides, with a chromatic fringe (interim: the lens shader of slice 1c
- * replaces it). All lengths and colours are the `comp.nc.glass.*` tokens ([NcTokens]).
+ * about a point wide, round the corners and up both sides, with a chromatic fringe. Between the interior dim and the dim
+ * below, the lens bands ([NcGlassLens]) bend a sharp picture of what is behind ([setPicture]; none yet: rim and dim only, and
+ * the lens grows in on `motion.nc.lens-in` when one comes). All lengths and colours are the `comp.nc.glass.*` tokens ([NcTokens]).
  */
 @SuppressLint("ViewConstructor")
 class NcGlassEdge(ctx: Context) : View(ctx) {
     private var edgeY = 0f
     private var dimK = 0f
     private var chromeK = 1f
+
+    // The lens (API 33): how far it has taken hold (0..1) and how far the newest picture has replaced the one before it.
+    private val lens: NcGlassLens? = if (android.os.Build.VERSION.SDK_INT >= 33) NcGlassLens() else null
+    private val lensK = MotionValue(0f, 1000f, { invalidate() })
+    private val mixK = MotionValue(1f, 1000f, { invalidate() })
+    private val tint = FloatArray(4)
+    private val tint2 = FloatArray(4)
 
     /** Over the lock screen the slab's interior is the [wallpaper], drawn still. */
     var locked = false
@@ -56,7 +68,30 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
         // Drawn while there is anything to show, and once more as it goes (the frame that clears it).
         val was = visibleNow()
         edgeY = y; dimK = dim; chromeK = chrome
+        if (chrome <= MIN_K && lens?.has == true) clearPicture()
         if (was || visibleNow()) invalidate()
+    }
+
+    /**
+     * [b] is what is behind the slab, sharp ([toScreen] maps its pixels to the screen's). The first one makes the lens grow in;
+     * a fresher one crossfades from the one before. Both on `motion.nc.lens-in`. A picture of the other orientation (an app
+     * turned) or one arriving after the sheet's content has is not used.
+     */
+    fun setPicture(b: Bitmap, toScreen: Matrix) {
+        val l = lens ?: return
+        if (chromeK <= MIN_K || (width > 0 && (b.width > b.height) != (width > height))) return
+        val first = !l.has
+        if (!l.set(b, toScreen)) return
+        val role = Motion.role(MotionTokens.NC_LENS_IN)
+        if (first) { lensK.snapTo(0f); mixK.snapTo(1f); lensK.animateTo(1f, role) }
+        else { mixK.snapTo(0f); mixK.animateTo(1f, role) }
+    }
+
+    /** The slab is gone (or its content is whole): the pictures go with it. */
+    fun clearPicture() {
+        lens?.clear()
+        lensK.snapTo(0f)
+        mixK.snapTo(1f)
     }
 
     private fun visibleNow() = dimK > MIN_K || (chromeK > MIN_K && edgeY > 0f)
@@ -68,6 +103,7 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
     private var corner = 0f
     private var rimW = 1f
     private var fringe = 0f
+    private var lensStrength = 0f
     private var wedge: Bitmap? = null
 
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -87,6 +123,12 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
         corner = min(Design.pt(NcTokens.GLASS_CORNER, u), width / 2f).coerceAtLeast(1f)
         rimW = max(Design.pt(NcTokens.GLASS_RIM_WIDTH, u), 1f)
         fringe = Design.pt(NcTokens.GLASS_RIM_FRINGE, u)
+        val band = Design.pt(NcTokens.GLASS_BAND, u)
+        val mirror = Design.pt(NcTokens.GLASS_MIRROR, u)
+        lensStrength = Design.num(NcTokens.GLASS_LENS_STRENGTH)
+        lens?.geometry(band, mirror, min(Design.pt(NcTokens.GLASS_STRETCH_FROM, u), NcGlassProfile.stretchLimit(band, mirror)),
+            Design.pt(NcTokens.GLASS_MIRROR_FROM, u), Design.pt(NcTokens.GLASS_SIDE, u), Design.pt(NcTokens.GLASS_SIDE_FROM, u),
+            corner, Design.num(NcTokens.GLASS_DISPERSION))
         val r = Math.round(corner)
         if (wedge?.width != r) wedge = makeWedge(r)
     }
@@ -130,6 +172,8 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
             if (paint.alpha > 0) c.drawRoundRect(0f, top, w, y, r, r, paint)
         }
 
+        drawLens(c, y, dim, chrome)
+
         if (dim > MIN_K) {
             paint.color = withAlpha(Design.color(NcTokens.GLASS_DIM), dim)
             if (y < h) c.drawRect(0f, y, w, h, paint)
@@ -148,6 +192,19 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
         }
 
         if (chrome > MIN_K && y > 0.5f) drawRim(c, top, y, chrome)
+    }
+
+    /** The lens bands over the interior, once a picture of what is behind is held (the tints are what the slab lays over it). */
+    private fun drawLens(c: Canvas, y: Float, dim: Float, chrome: Float) {
+        val l = lens ?: return
+        val k = lensK.value
+        if (!l.has || k <= MIN_K || chrome <= MIN_K || y <= 0.5f || lensStrength <= 0.001f) return
+        val ic = Design.color(NcTokens.GLASS_INTERIOR_DIM)
+        tint[0] = ((ic shr 16) and 0xFF) / 255f; tint[1] = ((ic shr 8) and 0xFF) / 255f; tint[2] = (ic and 0xFF) / 255f
+        tint[3] = ((ic ushr 24) and 0xFF) / 255f * dim * chrome
+        tint2[3] = if (locked) Appearance.wallpaperDim * chrome else 0f
+        // (The bands' opacity comes in ahead of the bend, which starts slowly: a half-bent picture never lies over live content.)
+        l.draw(c, width.toFloat(), y, k * k * lensStrength, min(1f, 4f * k) * chrome, mixK.value, tint, tint2)
     }
 
     /** The wallpaper inside the slab's outline, where the screen's own place for it is (still while the sheet moves). */

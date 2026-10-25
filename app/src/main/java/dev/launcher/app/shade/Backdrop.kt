@@ -32,7 +32,8 @@ import kotlin.math.max
 sealed class BackdropSource {
     abstract fun draw(c: Canvas, w: Float, h: Float)
 
-    class App(val bitmap: Bitmap) : BackdropSource() {
+    /** [stale]: its screen changed after this picture was taken (it would show the app as it was). */
+    class App(val bitmap: Bitmap, val stale: Boolean = false) : BackdropSource() {
         private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
         private val dst = RectF()
         override fun draw(c: Canvas, w: Float, h: Float) { dst.set(0f, 0f, w, h); c.drawBitmap(bitmap, null, dst, paint) }
@@ -194,7 +195,8 @@ object BlurBaker {
                 val rc = content.beginRecording()
                 // Covering the image exactly (a rounded size at one scale left the last column and row half transparent).
                 try { rc.scale(bw / w.toFloat(), bh / h.toFloat()); source.draw(rc, w.toFloat(), h.toFloat()) } finally { content.endRecording() }
-                content.setRenderEffect(RenderEffect.createBlurEffect(radiusPx * scale, radiusPx * scale, Shader.TileMode.CLAMP))
+                // (Radius 0: a sharp copy, no effect.)
+                if (radiusPx > 0f) content.setRenderEffect(RenderEffect.createBlurEffect(radiusPx * scale, radiusPx * scale, Shader.TileMode.CLAMP))
                 dev.launcher.app.design.ViewPicture.drawLater(bw, bh, "the shade's backdrop", block = { c ->
                     c.drawRenderNode(content); c.drawColor(veil)
                 }, handler = handler) { b ->
@@ -215,7 +217,7 @@ object BlurBaker {
                 val rc = content.beginRecording()
                 // Covering the image exactly (a rounded size at one scale left the last column and row half transparent).
                 try { rc.scale(bw / w.toFloat(), bh / h.toFloat()); source.draw(rc, w.toFloat(), h.toFloat()) } finally { content.endRecording() }
-                content.setRenderEffect(RenderEffect.createBlurEffect(radiusPx * scale, radiusPx * scale, Shader.TileMode.CLAMP))
+                if (radiusPx > 0f) content.setRenderEffect(RenderEffect.createBlurEffect(radiusPx * scale, radiusPx * scale, Shader.TileMode.CLAMP))
                 val root = RenderNode("shade-bake")
                 root.setPosition(0, 0, bw, bh)
                 val c = root.beginRecording()

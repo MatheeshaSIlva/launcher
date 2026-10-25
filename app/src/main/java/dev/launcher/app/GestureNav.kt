@@ -653,7 +653,7 @@ object GestureNav {
         val pkg = bringing ?: lastFrontPkg
         val kept = pkg?.let { images[it] }
         if (shadeLogs < 6) { shadeLogs++; AppLog.log("[shade] behind: $pkg, kept picture ${if (kept != null) "${SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L)} ms old" else "none"}${if (pkg != null && keptIsStale(pkg)) " (stale)" else ""}") }
-        if (kept != null) then(dev.launcher.app.shade.BackdropSource.App(kept))
+        if (kept != null) then(dev.launcher.app.shade.BackdropSource.App(kept, keptIsStale(pkg)))
         val fresh = kept == null || keptIsStale(pkg) || SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L) > 2_000L
         val s = ShizukuLink.service ?: run { if (kept == null) then(null); return }
         if (!fresh) return
