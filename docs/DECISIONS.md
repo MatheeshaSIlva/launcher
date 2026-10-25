@@ -290,4 +290,9 @@ Auto-rotate (`accelerometer_rotation`; Flashlight is unavailable on the emulator
 switch by the accessibility list with the prior state saved and restored on every exit; the gate is 3 in-session captures
 plus a cross-session pair with `diff.py`'s defaults and a headroom of overall mean <= 0.2, worst cell <= 0.5.
 Alternatives considered: `cmd notification post` on stock (no cancel, another sender); held touches as the first method.
+Addendum (2026-10-26, from slice 1's probes): the device's time zone is not changed (setting it posts a system notification
+a shell cannot cancel, its age text following the faked clock); the clock is set so the device's own zone reads 10:00 on
+2026-11-02. Ours' Quick Settings tile list lives in shared preferences that adb cannot read or restore, so slice 1 leaves it
+untouched and sets only stock's (the lists differ until a later slice can drive ours'). Battery `set status 3` is added so
+ours shows no charging bolt. Ours' font and colour overrides go in `design/user-<theme>.json` (user edits are per theme).
 
