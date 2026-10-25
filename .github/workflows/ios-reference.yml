@@ -39,12 +39,13 @@ jobs:
           import json, re, subprocess
           d = json.loads(subprocess.check_output(["xcrun", "simctl", "list", "-j"]))
           rts = [r for r in d["runtimes"] if r.get("platform") == "iOS" and r.get("isAvailable")]
-          rt = max(rts, key=lambda r: [int(x) for x in r["version"].split(".")])
           def num(t):
               m = re.match(r"iPhone (\d+) Pro$", t["name"])
               return int(m.group(1)) if m else -1
-          types = [t for t in rt.get("supportedDeviceTypes", []) if num(t) > 0]
-          ty = max(types, key=num)
+          # The newest runtime that offers an iPhone Pro (2026-10-25: the image's iOS 27.1 listed none).
+          rts.sort(key=lambda r: [int(x) for x in r["version"].split(".")], reverse=True)
+          rt = next(r for r in rts if any(num(t) > 0 for t in r.get("supportedDeviceTypes", [])))
+          ty = max((t for t in rt["supportedDeviceTypes"] if num(t) > 0), key=num)
           print(f"RUNTIME='{rt['identifier']}'")
           print(f"RUNTIME_NAME='{rt['name']}'")
           print(f"TYPE='{ty['identifier']}'")
