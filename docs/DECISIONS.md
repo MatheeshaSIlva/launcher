@@ -218,4 +218,5 @@ Alternatives considered: timing as the icon set's own data at the preset's speed
 SystemUI's own drawables at runtime (One UI has no Pixel SystemUI).
 Consequences / revisit when: a role whose curve editor is about timing more than shape; revisit its form if the settings
 cannot show it meaningfully.
-
+Addendum (2026-10-25, owner): the role stretches and warps: a curve with a length (default linear 500 ms); length / 500
+scales each icon's timeline, the curve reshapes its progress. B-047's static decode is fixed with slice 3.

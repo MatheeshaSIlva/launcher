@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A second small animated vector for SymbolMotionTest (tools/tests/gen_symbol_motion_resources.sh): a clip-path under a
+     non-root group (turned, inside a scaled root) morphed by a delayed track, and two sequential tracks on one property twice
+     (a rotation turning 0 to 45 then 45 to 90 on another curve; a path morphing A to B then B to C). -->
+<animated-vector xmlns:aapt="http://schemas.android.com/aapt" xmlns:android="http://schemas.android.com/apk/res/android">
+<target android:name="mask">
+<aapt:attr name="android:animation"><set>
+<objectAnimator android:duration="200" android:startOffset="100" android:valueFrom="M2,2 L22,2 L22,22 L2,22 Z" android:valueTo="M6,6 L18,6 L18,18 L6,18 Z" android:valueType="2" android:propertyName="pathData">
+</objectAnimator>
+</set></aapt:attr></target>
+<target android:name="spin">
+<aapt:attr name="android:animation"><set android:ordering="1">
+<objectAnimator android:duration="150" android:startOffset="0" android:valueFrom="0" android:valueTo="45" android:propertyName="rotation">
+<aapt:attr name="android:interpolator"><linearInterpolator>
+</linearInterpolator></aapt:attr></objectAnimator>
+<objectAnimator android:duration="150" android:startOffset="0" android:valueFrom="45" android:valueTo="90" android:propertyName="rotation">
+<aapt:attr name="android:interpolator"><pathInterpolator android:controlX1="0.4" android:controlY1="0" android:controlX2="0.2" android:controlY2="1">
+</pathInterpolator></aapt:attr></objectAnimator>
+</set></aapt:attr></target>
+<target android:name="shape">
+<aapt:attr name="android:animation"><set android:ordering="1">
+<objectAnimator android:duration="150" android:startOffset="0" android:valueFrom="M4,4 L20,4 L20,20 L4,20 Z" android:valueTo="M5,5 L19,3 L20,20 L4,19 Z" android:valueType="2" android:propertyName="pathData">
+<aapt:attr name="android:interpolator"><linearInterpolator>
+</linearInterpolator></aapt:attr></objectAnimator>
+<objectAnimator android:duration="150" android:startOffset="0" android:valueFrom="M5,5 L19,3 L20,20 L4,19 Z" android:valueTo="M8,8 L16,8 L16,16 L8,16 Z" android:valueType="2" android:propertyName="pathData">
+</objectAnimator>
+</set></aapt:attr></target>
+<aapt:attr name="android:drawable"><vector android:name="root_vector" android:height="24dp" android:width="24dp" android:viewportWidth="24" android:viewportHeight="24">
+<group android:name="root_group" android:pivotX="12" android:pivotY="12" android:scaleX="0.5" android:scaleY="0.5">
+<group android:name="spin" android:pivotX="10" android:pivotY="14" android:translateX="2">
+<clip-path android:name="mask" android:pathData="M2,2 L22,2 L22,22 L2,22 Z">
+</clip-path>
+<path android:name="shape" android:fillColor="#ffffffff" android:pathData="M4,4 L20,4 L20,20 L4,20 Z">
+</path>
+</group>
+</group>
+</vector></aapt:attr></animated-vector>

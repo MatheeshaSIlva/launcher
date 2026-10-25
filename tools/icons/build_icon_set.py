@@ -22,7 +22,7 @@ the easing: a cubic [x1, y1, x2, y2] or "accdec", what Android uses for an anima
 t: its base value, then every track whose `at` has come in file order, each at its eased fraction (held at its end after
 it): the last to write a property wins. Before a property's first track begins Android shows that track's `from`; the
 play shows the base, so an animation whose delayed first track does not start from its target's base is refused (as is a
-looping animation, or an interpolator that is not one cubic).
+looping animation, or an interpolator that is not one cubic with its controls' x within 0..1).
 
     python -I tools/icons/build_icon_set.py --play AVD.xml [T1,T2,...]    its play and its values at those times (ms)
 
@@ -510,6 +510,13 @@ def polyline(d):
     return [r4(p) for p in pts], [r4(n) for n in lens]
 
 
+def cubic(c):
+    """[c] if it is a cubic whose x is a function of time (x1 and x2 within 0..1: both evaluators solve it for x by bisection)."""
+    if not (0 <= c[0] <= 1 and 0 <= c[2] <= 1):
+        raise ValueError(f'interpolator {c} has a control x outside 0..1 (not a function of time)')
+    return c
+
+
 def ease_of(el, ref=None):
     """An animator's interpolator (its inline element from extract_apk_vectors.py, or a reference to a standard one) as a cubic
     [x1, y1, x2, y2] (a pathInterpolator's controls, or its path data when that is one cubic from 0,0 to 1,1) or "accdec"."""
@@ -532,11 +539,11 @@ def ease_of(el, ref=None):
             return [0, 0, 1, 1]
         if cmds != 'MC' or n[:2] != [0, 0] or n[-2:] != [1, 1]:
             raise ValueError(f"interpolator path {a['pathData']!r} is not one cubic from 0,0 to 1,1")
-        return [r4(v) for v in n[2:6]]
+        return cubic([r4(v) for v in n[2:6]])
     k = ['controlX1', 'controlY1', 'controlX2', 'controlY2']
     if not all(x in a for x in k):
         raise ValueError('a pathInterpolator with fewer than two control points is not a cubic Bezier')
-    return [r4(float(a[x])) for x in k]
+    return cubic([r4(float(a[x])) for x in k])
 
 
 def tracks_of(el, start, out):

@@ -109,6 +109,8 @@ check('a look meeting another is measured', c[0] > 1, c)
 
 # ----------------------------------------------------------------------------------------------------------- refusals
 refused('an interpolator of two cubics is refused', SRC.replace('M 0.0,0.0 c0.4,0 0.2,1 1.0,1.0', 'M 0,0 C0.1,0 0.2,0.5 0.5,0.5 C0.6,0.5 0.8,1 1,1'), 'one cubic')
+refused('a cubic whose control x leaves 0..1 is refused (x would not be a function of time)', SRC.replace('controlX2="0.27"', 'controlX2="1.3"'), 'outside 0..1')
+refused('a path-data cubic whose control x leaves 0..1 is refused', SRC.replace('M 0.0,0.0 c0.4,0 0.2,1 1.0,1.0', 'M 0,0 C-0.2,0 0.2,1 1,1'), 'outside 0..1')
 refused('a repeating animation is refused', SRC.replace('android:duration="300"', 'android:duration="300" android:repeatCount="-1"'), 'repeating')
 refused('an interpolator that is not a cubic is refused', SRC.replace('<linearInterpolator>\n</linearInterpolator>', '<accelerateInterpolator>\n</accelerateInterpolator>', 1), 'not a cubic Bezier')
 refused('a delayed first track that does not start from the base is refused',
