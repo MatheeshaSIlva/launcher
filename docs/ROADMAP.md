@@ -58,8 +58,8 @@ Acceptance criteria:
       screenshot, for ours and for stock, on a fixed setup (demo-mode status bar, font scale, locale, wallpaper, the same
       test notifications). Two captures of one state diff within tolerance (the harness's own noise is under it)
       Status 2026-10-26 (slice 1): capture.sh covers 4 states (quick row, expanded, a tile off and on), light and dark, ours
-      and stock; the self-diff gate (`tools/fidelity/selfdiff.sh`) passed live with every noise pair at 0.0 (54 pairs incl.
-      sanity pairs). The rest of the matrix comes in later slices, so this stays open
+      and stock; the self-diff gate (`tools/fidelity/selfdiff.sh`) passed live with every noise pair at 0.0 (50 pairs incl.
+      sanity pairs; the 4 quick-vs-expanded pairs added after were checked on the same captures). The rest of the matrix comes in later slices, so this stays open
 - [ ] Golden set: stock Android 17's shade for every state in the matrix, light and dark (storage decided in a D-entry)
 - [ ] Motion: slow-motion frames (10x) of the pull, the second stage, the edit page and a tile toggle, stock against ours,
       compared at the same progress, not the same time
