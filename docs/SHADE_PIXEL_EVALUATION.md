@@ -289,14 +289,18 @@ bar themes as well": the symbol set below is built as icon sets any element can 
   crossed pin when off), flashlight (an outline when off), auto-rotate, dark theme, colour inversion and correction,
   extra dim, cast, NFC, notes, QR, font size, wallet, alarm, live caption, hearing devices, the settings gear, brightness,
   media volume (Pixel's music note), the ringer, the media buttons. Calculator, timer, camera and the others Android has no
-  tile for keep the app's own. Animated icons are taken at their last frame (what SystemUI shows at rest).
+  tile for keep the app's own. Animated icons rest at their last frame (what SystemUI shows at rest) and carry their animation as a `play` (B-036).
 - **Built by `tools/icons/build_icon_set.py`** from Android vector drawables (plain or animated: groups' transforms,
   motion paths, several animation targets per group, trims, clip paths) and SVGs; reviewed on the preview page
   (`PreviewActivity --es icons pixel`: each symbol beside the app's own and its off look).
 - **The Pixel theme names the set**; the settings choose one for the whole phone (Look › More › Symbols: Launcher or
   Pixel), so theme and symbols combine freely (iOS 27's glass with Pixel's symbols was checked on the emulator).
-- **What Pixel animates, we crossfade**: its icons morph between off and on (animated vectors); ours fade one into the other
-  on the toggle's curve. The morphs are motion's (step 4).
+- **Pixel's icon morphs play** (B-036, 2026-10-25): a tile turning on or off plays Android 17's animated vector for that
+  look (exported into the set's `play`, played by `SymbolPlayer` on `motion.qs.tile-symbol`, which at its default gives
+  Android's timings); nothing plays when the panel opens. Two differences on purpose: a turn mid-way reverses from where it is
+  (Android starts the other animation from its first frame: a jump), and a look with no animation to arrive by (Bluetooth
+  turning on, Android's starts from the earbud circles) crossfades. Large tiles play too (Android's large tile draws its icon
+  through the same painter). Extra dim still shows AOSP's static icon (B-048).
 
 ## Step 3: the shade as blocks (started 2026-10-20)
 

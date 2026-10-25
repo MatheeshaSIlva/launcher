@@ -220,3 +220,13 @@ Consequences / revisit when: a role whose curve editor is about timing more than
 cannot show it meaningfully.
 Addendum (2026-10-25, owner): the role stretches and warps: a curve with a length (default linear 500 ms); length / 500
 scales each icon's timeline, the curve reshapes its progress. B-047's static decode is fixed with slice 3.
+
+### D-034: An icon's state change reverses in place, and the player owns the crossfade (2026-10-25)
+Context: B-036. Android 17 restarts the other animated vector from its first frame when a tile is toggled mid-animation,
+and Bluetooth turning on (no device) starts from an icon that the off icon does not end on: both jump.
+Decision: `SymbolPlayer` reverses the running play from where it is; a look with no play to arrive by crossfades, and the
+crossfade is the player's too (a turn mid-fade fades back, never starts a play from frame 0). Only Pixel tiles play
+(Control Center later); the crossfade eases on `motion.qs.tile-state`.
+Alternatives considered: copy Android's restart (a visible jump, against rule 3); the caller owning the crossfade.
+Consequences / revisit when: ours differs from a Pixel only in those interrupted or jumping cases.
+

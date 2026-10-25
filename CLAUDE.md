@@ -180,8 +180,11 @@ change, a dropped frame or a state that pops each breaks the promise. Before cal
   `launcher`) where a theme names a set (`sys.symbols`, read through each element's own token: `comp.cc.symbols`,
   `comp.nc.symbols`, `comp.banner.symbols`; the status bar's next); a name the set leaves out falls back to the app's own,
   `NAME.off` is a control's look while off (crossfaded as it turns on: `Glyphs.draw(..., on)`), `scale` a small symbol in
-  a larger slot. Written by `tools/icons/build_icon_set.py CACHE` from Android vector drawables (an animated one at its
-  first or last frame) and SVGs, each symbol with its source: `pixel` is AOSP SystemUI's Quick Settings icons as each
+  a larger slot, `play` the animation that ends on that look (an animated vector's tracks, cubic or accelerate-decelerate
+  easing, morphs normalised to absolute M/L/C/Z: `design/SymbolMotion`; the Pixel tiles play it through `SymbolPlayer` on
+  `motion.qs.tile-symbol`, reversing in place, and crossfade a look without one; read and built on a worker,
+  `IconSets.preparePlays`, never on a drawing thread). Written by `tools/icons/build_icon_set.py CACHE` from Android vector
+  drawables (an animated one at its first or last frame, its animation as `play`; aapt2 writes enums as numbers) and SVGs, each symbol with its source: `pixel` is AOSP SystemUI's Quick Settings icons as each
   tile names them (the Pixel theme names it). The settings choose one for the whole phone (Look › More › Symbols); a
   set's every symbol beside the app's own: `am start -n dev.launcher.app/.PreviewActivity --es icons ID`.
   **A theme per element** (`design/TokenParts`): an element's code reads only its own namespace (`comp.statusbar.*`,
