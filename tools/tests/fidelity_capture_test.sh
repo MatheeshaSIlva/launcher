@@ -29,13 +29,22 @@ VERBOSE="${VERBOSE:-}"
 # the fake's sleep takes no time, so a poll that never succeeds (the strip that never comes) costs a fake-adb call per try:
 # its bound is scaled down (capture.sh's POLL_SCALE; every poll still tries at least once, the retries still run)
 POLL_SCALE="${POLL_SCALE:-0.1}"
+# Every fake adb call is a bash fork (~60-80 ms on Windows), so the scenarios run in a pool of JOBS at a time, not all at once
+# (30 at once starved each other past their time bounds). CAP_TIMEOUT bounds one capture.sh/golden.sh run, HANG_WAIT the wait for a
+# hung run to reach its hang (seconds).
+JOBS_MAX="${JOBS_MAX:-6}"
+CAP_TIMEOUT="${CAP_TIMEOUT:-600}"
+HANG_WAIT="${HANG_WAIT:-120}"
 export REAL_SLEEP="$(command -v sleep)"
 BIN="$WORK/bin"; mkdir -p "$BIN"
 
-printf '#!/usr/bin/env bash\nexit 0\n' > "$BIN/sleep"
+# (shebangs name /bin/bash, not `env bash`: one exec less per call, ~35 ms of the ~110 a fake call cost; and `sleep` is a bash function
+# that capture.sh's own bash inherits: no process at all. The file is for anything that is not bash)
+printf '#!/bin/bash\nexit 0\n' > "$BIN/sleep"
+sleep() { return 0; }; export -f sleep
 
 cat > "$BIN/adb" <<'EOF'
-#!/usr/bin/env bash
+#!/bin/bash
 # Fake adb for tools/tests/fidelity_capture_test.sh. Env: FAKE_STATE.
 D="$FAKE_STATE/dev"; LOGF="$FAKE_STATE/adb.log"
 APP="$D/sdcard/Android/data/dev.launcher.app/files"
@@ -92,6 +101,8 @@ dumpsys() {
     window:) rd _v "$D/focus"; echo "  mCurrentFocus=Window{1a2b u0 $_v}";;
     notification:*)
       echo "  NotificationRecord(0x1: pkg=dev.launcher.app user=UserHandle{0} id=7 tag=null importance=2 key=x|channel=safety)"
+      # Android's own overlay notice, present while our accessibility service is on (the shade hides it by design): no record a shade lists
+      [[ "$(sget secure enabled_accessibility_services)" == *"$OURS"* ]] && echo "  NotificationRecord(0x4: pkg=android user=UserHandle{0} id=0 tag=com.android.server.wm.AlertWindowNotification - dev.launcher.app importance=1 key=0|android|0|com.android.server.wm.AlertWindowNotification - dev.launcher.app|1000: Notification(channel=com.android.server.wm.AlertWindowNotification - dev.launcher.app))"
       [ -f "$D/foreign" ] && echo "  NotificationRecord(0x3: pkg=com.android.vending user=UserHandle{0} id=951340667 tag=null importance=2 key=z|channel=account)"
       local f; for f in "$D"/notif_*; do
         [ -f "$f" ] || continue
@@ -222,15 +233,19 @@ muts() { grep -c '^MUT ' "$S/adb.log"; }
 
 # capture.sh against the fake: run_cap [ENV=..] -- ARGS...; output in $S/out.txt, exit in RC
 run_cap() {
-  local envs=()
+  local envs=() T0=$SECONDS
   while [ "$1" != -- ]; do envs+=("$1"); shift; done; shift
   env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE=emulator-5554 FID_PRIOR="$S/prior" FAKE_STATE="$S" POLL_SCALE="$POLL_SCALE" "${envs[@]}" \
-    timeout 300 bash "$REPO/tools/fidelity/capture.sh" "$@" > "$S/out.txt" 2>&1 < /dev/null
+    timeout "$CAP_TIMEOUT" bash "$REPO/tools/fidelity/capture.sh" "$@" > "$S/out.txt" 2>&1 < /dev/null
   RC=$?
+  timed_out capture.sh
 }
 
 # ---------------------------------------------------------------- results (a scenario writes lines to $S/result)
 FAILS=0
+# A run killed by its time bound (timeout exits 124) is told apart from a failed check: "TIMED OUT after N s". The bounds are
+# generous multiples of the measured times of a scenario's longest run (see JOBS below), never a part of what a check asserts.
+timed_out() { { echo "=== run: $1 (exit $RC)"; cat "$S/out.txt"; } >> "$S/allout.txt"; echo "$((SECONDS - T0)) s  $NAME: $1" >> "$WORK/runs.txt"; [ "$RC" = 124 ] && echo "FAIL  $NAME: TIMED OUT after $CAP_TIMEOUT s ($1 killed by its time bound: a slow machine or too many jobs, not a logic failure)" >> "$S/result"; return 0; }
 chk() {   # chk "description" CONDITION-COMMAND...  (records PASS or FAIL in $S/result)
   local d="$1"; shift
   if "$@" > /dev/null 2>&1; then echo "PASS  $NAME: $d" >> "$S/result"; else echo "FAIL  $NAME: $d" >> "$S/result"; fi
@@ -242,7 +257,9 @@ finish() {   # prints the output tail when something failed (or VERBOSE)
   chk "every adb call named the emulator (-s emulator-*)" test "$(grep -c '^NOSERIAL' "$S/adb.log")" = 0
   if grep -q '^FAIL' "$S/result" || [ -n "$VERBOSE" ]; then
     { echo "        --- $NAME: capture.sh output (last 12 lines):"; tail -12 "$S/out.txt" | sed 's/^/        | /'
-      echo "        --- $NAME: MUT calls: $(grep -c '^MUT ' "$S/adb.log")"; } >> "$S/result"
+      echo "        --- $NAME: MUT calls: $(grep -c '^MUT ' "$S/adb.log")"
+      echo "        --- $NAME: WARNING / fork lines of every run, with the run's header (a spurious one under load: fork failures show here):"
+      grep -hE '^=== run|WARNING|fork|Resource temporarily|retry' "$S/allout.txt" 2>/dev/null | cut -c1-240 | sed 's/^/        | /'; } >> "$S/result"
   fi
 }
 
@@ -414,7 +431,7 @@ sc_notrest() {
   finish
 }
 
-wait_hang() { local i; for ((i = 0; i < 1200; i++)); do [ -f "$S/dev/hanging" ] && return 0; "$REAL_SLEEP" 0.1; done; return 1; }
+wait_hang() { local i; for ((i = 0; i < HANG_WAIT * 10; i++)); do [ -f "$S/dev/hanging" ] && return 0; "$REAL_SLEEP" 0.1; done; echo "FAIL  $NAME: TIMED OUT after $HANG_WAIT s waiting for the run to reach its hang (a kill or a stall, not a logic failure)" >> "$S/result"; return 1; }
 run_bg() {   # ARGS: capture.sh in the background -> PID
   : > "$S/out.txt"   # (appended to below: a file opened for append keeps the lines of a trap that runs after a kill)
   env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE=emulator-5554 FID_PRIOR="$S/prior" FAKE_STATE="$S" POLL_SCALE="$POLL_SCALE" \
@@ -489,9 +506,11 @@ d = ImageDraw.Draw(im)
 d.rectangle([60, 300, 1000, 900], fill=(60, 120, 200, 255))
 im.save(sys.argv[1])" "$1"; }
 run_golden() {   # run_golden ARGS...: golden.sh on the fake; output in $S/out.txt, exit in RC
+  local T0=$SECONDS
   env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE="${GDEVICE:-emulator-5554}" FID_PRIOR="$S/prior" FAKE_STATE="$S" POLL_SCALE="$POLL_SCALE" \
-    GOLDEN_STAGE="$S/stage" timeout 300 bash "$REPO/tools/fidelity/golden.sh" "$@" > "$S/out.txt" 2>&1 < /dev/null
+    GOLDEN_STAGE="$S/stage" timeout "$CAP_TIMEOUT" bash "$REPO/tools/fidelity/golden.sh" "$@" > "$S/out.txt" 2>&1 < /dev/null
   RC=$?
+  timed_out golden.sh
 }
 sc_golden() {
   NAME="golden"; new_dev "$NAME" "$ACC_BOTH" ''
@@ -524,6 +543,13 @@ sc_golden() {
   mkdir -p "$S/g4"; cp -r "$S/g2/FAKE.260101.001" "$S/g4/"; sed -i '/"notifications"/d' "$S/g4/FAKE.260101.001/manifest.json"
   run_golden verify --root "$S/g4"
   chk "a golden with no notification set fails verify (exit 1, says recapture)" rc_out 1 "FAIL  the manifest records no notification set.*recapture"
+  finish
+}
+sc_golden_against() {   # the middle third of golden's cases (a recapture with another notification set), a scenario of its own so that they run side by side (the longest scenario bounds the run)
+  NAME="golden-against"; new_dev "$NAME" "$ACC_BOTH" ''
+  real_png "$WORK/golden_shot2.png"; cp "$WORK/golden_shot2.png" "$S/shot.png"
+  run_golden capture --root "$S/g2"
+  chk "setup: the capture to compare against: exit 0" eq "$RC" 0
   # a recapture with another notification set (Play Protect's arrived): identical pictures, but verify --against fails and names why
   : > "$D/foreign"; rm -rf "$S/stage"; run_golden capture --root "$S/g5"; rm -f "$D/foreign"
   chk "a capture with a foreign notification stores it in its manifest" has "com.android.vending id=951340667" "$S/g5/FAKE.260101.001/manifest.json"
@@ -531,6 +557,13 @@ sc_golden() {
   chk "--against a recapture with another notification set fails (exit 1) and says so" rc_out 1 "FAIL  --against: the notifications at capture differ.*stored: pkg=dev.launcher.app.*other: .*com.android.vending"
   run_golden verify --root "$S/g5" --against "$S/g2"
   chk "  the other way round too (exit 1)" rc_out 1 "FAIL  --against: the notifications at capture differ"
+  finish
+}
+sc_golden_diff() {   # the last third of golden's cases (a recapture compared, a changed file, a missing one), again a scenario of its own
+  NAME="golden-diff"; new_dev "$NAME" "$ACC_BOTH" ''
+  real_png "$WORK/golden_shot3.png"; cp "$WORK/golden_shot3.png" "$S/shot.png"
+  run_golden capture --root "$S/g2"
+  chk "setup: the capture to compare against: exit 0" eq "$RC" 0
   # a second session's capture of the same build (the fake gives the same picture: identical), and a changed file
   rm -rf "$S/stage"; run_golden capture --root "$S/g3"
   run_golden verify --root "$S/g2" --against "$S/g3"
@@ -574,6 +607,7 @@ sc_notifwarn() {   # ours side: a warning when its notification set differs from
 }
 ' > "$S/gold/FAKE.260101.001/manifest.json"
   run_cap GOLDEN_ROOT="$S/gold" -- --side ours --state quick --theme light --out "$S/out2"
+  chk "  Android's own overlay notice (pkg=android id=0, present while ours is on) is no record: not in the set, so no warning" test "$(grep -c 'pkg=android' "$S/out1/manifest.json")" = 0
   chk "another set: a warning that names both sets, the run still exits 0" rc_out 0 "WARNING: this run's notifications differ from the golden's.*golden: pkg=dev.launcher.app id=7;.*now: pkg=dev.launcher.app id=1001;"
   printf '{
  "files": []
@@ -596,9 +630,19 @@ sc_static() {   # capture.sh itself: adb is called in a(), ap() and emu() only (
   finish
 }
 
-# ---------------------------------------------------------------- run them all at once
+# ---------------------------------------------------------------- run them, JOBS_MAX at a time (the slowest first)
 JOBS=()
-job() { [ -z "${ONLY:-}" ] || [[ " $* " == *" $ONLY "* ]] || return 0; ( "$@" ) & JOBS+=($!); }
+timed() { local t0=$SECONDS; "$@"; echo "$((SECONDS - t0)) s  $NAME" >> "$WORK/times.txt"; }
+job() {
+  [ -z "${ONLY:-}" ] || [[ " $* " == *" $ONLY "* ]] || return 0
+  while [ "$(jobs -rp | wc -l)" -ge "$JOBS_MAX" ]; do wait -n 2>/dev/null || true; done
+  ( timed "$@" ) & JOBS+=($!)
+}
+job sc_golden   # (the longest ones first, golden in three scenarios so that its parts overlap: the longest bounds the run)
+job sc_golden_against
+job sc_golden_diff
+job sc_notifwarn
+job sc_slowclock
 job sc_refuse sdk b_sdk "not Android 17"
 job sc_refuse size b_size "display size"
 job sc_refuse shizuku b_shizuku "2 shizuku_server"
@@ -620,20 +664,18 @@ job sc_stock stock-other "$ACC_BOTH"
 job sc_stock stock-alone "dev.launcher.app/dev.launcher.app.NavAccessibilityService"
 job sc_dump
 job sc_notrest
-job sc_slowclock
 job sc_foreign
-job sc_notifwarn
 job sc_sigterm stock
 job sc_sigterm ours
 job sc_kill
 job sc_nostrip
-job sc_golden
 job sc_static
 for j in "${JOBS[@]}"; do wait "$j"; done
 
+[ -z "$VERBOSE" ] || { sort -rn "$WORK/times.txt" 2>/dev/null | sed 's/^/time  /'; sort -rn "$WORK/runs.txt" 2>/dev/null | head -5 | sed 's/^/run   /'; }
 for r in "$WORK"/*/result; do [ -f "$r" ] && cat "$r"; done > "$WORK/all.txt"
 cat "$WORK/all.txt"
 FAILS=$(grep -c '^FAIL' "$WORK/all.txt"); PASSES=$(grep -c '^PASS' "$WORK/all.txt")
 SCEN=$(ls "$WORK"/*/result 2>/dev/null | wc -l)
 echo "fidelity_capture_test: $SCEN scenarios, $PASSES checks passed, $FAILS failed"
-[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 30 ]; }
+[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 32 ]; }

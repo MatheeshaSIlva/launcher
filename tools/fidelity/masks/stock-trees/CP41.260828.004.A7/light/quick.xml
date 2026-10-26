@@ -1,0 +1,247 @@
+<?xml version='1.0' encoding='utf-8'?>
+<hierarchy rotation="0">
+  <node text="" resource-id="com.android.systemui:id/scene_window_root" class="android.widget.FrameLayout" content-desc="" bounds="[0,0][1080,2400]">
+    <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" bounds="[0,0][1080,2400]">
+      <node text="" resource-id="" class="androidx.compose.ui.platform.ComposeView" content-desc="" bounds="[0,0][1080,2400]">
+        <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[0,0][1080,2400]" />
+      </node>
+    </node>
+    <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" bounds="[0,0][1080,2400]">
+      <node text="" resource-id="" class="androidx.compose.ui.platform.ComposeView" content-desc="" bounds="[0,0][1080,2400]">
+        <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[0,0][1080,2400]">
+          <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[0,0][1080,2400]" />
+        </node>
+      </node>
+    </node>
+    <node text="" resource-id="com.android.systemui:id/shared_notification_container" class="android.view.ViewGroup" content-desc="" bounds="[0,0][1080,2400]">
+      <node text="" resource-id="com.android.systemui:id/notification_stack_scroller" class="android.widget.ScrollView" content-desc="" bounds="[0,0][1080,2316]">
+        <node text="" resource-id="com.android.systemui:id/expandableNotificationRow" class="android.widget.FrameLayout" content-desc="" bounds="[42,546][1038,813]">
+          <node text="" resource-id="com.android.systemui:id/backgroundNormal" class="android.view.View" content-desc="" bounds="[42,546][1038,813]" />
+          <node text="" resource-id="com.android.systemui:id/backgroundDimmed" class="android.view.View" content-desc="" bounds="[42,546][1038,813]" />
+          <node text="" resource-id="com.android.systemui:id/expanded" class="android.widget.FrameLayout" content-desc="" bounds="[42,546][1038,813]">
+            <node text="" resource-id="android:id/status_bar_latest_event_content" class="android.widget.FrameLayout" content-desc="" bounds="[42,546][1038,813]">
+              <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" bounds="[42,546][1038,813]">
+                <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" bounds="[42,546][1038,771]">
+                  <node text="" resource-id="android:id/notification_header" class="android.widget.RelativeLayout" content-desc="" bounds="[42,546][1038,735]">
+                    <node text="" resource-id="android:id/alternate_expand_target" class="android.widget.FrameLayout" content-desc="" bounds="[42,546][231,735]" />
+                    <node text="" resource-id="android:id/notification_top_line" class="android.view.ViewGroup" content-desc="" bounds="[42,588][886,631]">
+                      <node text="Launcher" resource-id="android:id/app_name_text" class="android.widget.TextView" content-desc="" bounds="[231,588][364,631]" />
+                      <node text="•" resource-id="android:id/time_divider" class="android.widget.TextView" content-desc="" bounds="[374,588][385,631]" />
+                      <node text="now" resource-id="android:id/time" class="android.widget.TextView" content-desc="" bounds="[395,588][455,631]" />
+                    </node>
+                    <node text="" resource-id="android:id/icon" class="android.widget.ImageView" content-desc="" bounds="[84,588][189,693]" />
+                    <node text="" resource-id="android:id/expand_button" class="android.widget.Button" content-desc="Collapse" bounds="[886,546][1038,678]">
+                      <node text="" resource-id="android:id/expand_button_pill" class="android.widget.LinearLayout" content-desc="" bounds="[928,588][996,636]">
+                        <node text="" resource-id="android:id/expand_button_icon" class="android.widget.ImageView" content-desc="" bounds="[941,591][983,633]" />
+                      </node>
+                    </node>
+                  </node>
+                  <node text="" resource-id="android:id/notification_main_column" class="android.widget.LinearLayout" content-desc="" bounds="[231,646][996,771]">
+                    <node text="Fidelity fixture" resource-id="android:id/title" class="android.widget.TextView" content-desc="" bounds="[231,646][996,697]" />
+                    <node text="One test notification" resource-id="android:id/text" class="android.widget.TextView" content-desc="" bounds="[231,718][996,771]" />
+                  </node>
+                </node>
+                <node text="" resource-id="android:id/actions_container" class="android.widget.FrameLayout" content-desc="" bounds="[42,771][1038,797]" />
+              </node>
+            </node>
+          </node>
+          <node text="" resource-id="com.android.systemui:id/fake_shadow" class="android.widget.FrameLayout" content-desc="" bounds="[42,546][1038,813]" />
+        </node>
+        <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" bounds="[42,860][1038,986]">
+          <node text="" resource-id="com.android.systemui:id/content" class="android.widget.LinearLayout" content-desc="" bounds="[53,860][1027,986]">
+            <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" bounds="[53,860][901,986]">
+              <node text="Silent" resource-id="com.android.systemui:id/header_label" class="android.widget.TextView" content-desc="" bounds="[53,860][207,986]" />
+            </node>
+            <node text="" resource-id="com.android.systemui:id/btn_clear_all" class="android.widget.ImageView" content-desc="Clear all silent notifications" bounds="[901,860][1027,986]" />
+          </node>
+        </node>
+        <node text="" resource-id="com.android.systemui:id/expandableNotificationRow" class="android.widget.FrameLayout" content-desc="" bounds="[42,991][1038,1181]">
+          <node text="" resource-id="com.android.systemui:id/backgroundNormal" class="android.view.View" content-desc="" bounds="[42,991][1038,1408]" />
+          <node text="" resource-id="com.android.systemui:id/backgroundDimmed" class="android.view.View" content-desc="" bounds="[42,991][1038,1408]" />
+          <node text="" resource-id="com.android.systemui:id/expanded" class="android.widget.FrameLayout" content-desc="" bounds="[42,991][1038,1408]">
+            <node text="" resource-id="android:id/status_bar_latest_event_content" class="android.widget.FrameLayout" content-desc="" bounds="[42,991][1038,1181]">
+              <node text="" resource-id="android:id/alternate_expand_target" class="android.widget.FrameLayout" content-desc="" bounds="[42,991][231,1181]" />
+              <node text="" resource-id="android:id/icon" class="android.widget.ImageView" content-desc="" bounds="[84,1033][189,1138]" />
+              <node text="" resource-id="android:id/notification_headerless_view_row" class="android.widget.FrameLayout" content-desc="" bounds="[231,991][1038,1181]">
+                <node text="" resource-id="android:id/notification_headerless_view_column" class="android.widget.LinearLayout" content-desc="" bounds="[231,1023][1038,1149]">
+                  <node text="" resource-id="android:id/notification_top_line" class="android.view.ViewGroup" content-desc="" bounds="[231,1034][902,1085]">
+                    <node text="Google Play Protect is turned on" resource-id="android:id/title" class="android.widget.TextView" content-desc="" bounds="[231,1034][758,1085]" />
+                    <node text="•" resource-id="android:id/time_divider" class="android.widget.TextView" content-desc="" bounds="[768,1040][779,1083]" />
+                    <node text="now" resource-id="android:id/time" class="android.widget.TextView" content-desc="" bounds="[789,1040][849,1083]" />
+                  </node>
+                  <node text="" resource-id="android:id/notification_main_column" class="android.widget.LinearLayout" content-desc="" bounds="[231,1085][1038,1149]">
+                    <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" bounds="[231,1085][996,1138]">
+                      <node text="This feature protects your device from harmful apps" resource-id="android:id/text" class="android.widget.TextView" content-desc="" bounds="[231,1085][996,1138]" />
+                    </node>
+                  </node>
+                </node>
+                <node text="" resource-id="android:id/expand_button_touch_container" class="android.widget.FrameLayout" content-desc="" bounds="[886,991][1038,1181]">
+                  <node text="" resource-id="android:id/expand_button" class="android.widget.Button" content-desc="Expand" bounds="[886,991][1038,1181]">
+                    <node text="" resource-id="android:id/expand_button_pill" class="android.widget.LinearLayout" content-desc="" bounds="[928,1033][996,1081]">
+                      <node text="" resource-id="android:id/expand_button_icon" class="android.widget.ImageView" content-desc="" bounds="[941,1036][983,1078]" />
+                    </node>
+                  </node>
+                </node>
+              </node>
+            </node>
+          </node>
+          <node text="" resource-id="com.android.systemui:id/fake_shadow" class="android.widget.FrameLayout" content-desc="" bounds="[42,991][1038,1408]" />
+        </node>
+        <node text="" resource-id="com.android.systemui:id/expandableNotificationRow" class="android.widget.FrameLayout" content-desc="" bounds="[42,1186][1038,1376]">
+          <node text="" resource-id="com.android.systemui:id/backgroundNormal" class="android.view.View" content-desc="" bounds="[42,1186][1038,1603]" />
+          <node text="" resource-id="com.android.systemui:id/backgroundDimmed" class="android.view.View" content-desc="" bounds="[42,1186][1038,1603]" />
+          <node text="" resource-id="com.android.systemui:id/expanded" class="android.widget.FrameLayout" content-desc="" bounds="[42,1186][1038,1603]">
+            <node text="" resource-id="android:id/status_bar_latest_event_content" class="android.widget.FrameLayout" content-desc="" bounds="[42,1186][1038,1376]">
+              <node text="" resource-id="android:id/alternate_expand_target" class="android.widget.FrameLayout" content-desc="" bounds="[42,1186][231,1376]" />
+              <node text="" resource-id="android:id/icon" class="android.widget.ImageView" content-desc="" bounds="[84,1228][189,1333]" />
+              <node text="" resource-id="android:id/notification_headerless_view_row" class="android.widget.FrameLayout" content-desc="" bounds="[231,1186][1038,1376]">
+                <node text="" resource-id="android:id/notification_headerless_view_column" class="android.widget.LinearLayout" content-desc="" bounds="[231,1218][1038,1344]">
+                  <node text="" resource-id="android:id/notification_top_line" class="android.view.ViewGroup" content-desc="" bounds="[231,1229][902,1280]">
+                    <node text="Launcher safety" resource-id="android:id/title" class="android.widget.TextView" content-desc="" bounds="[231,1229][494,1280]" />
+                  </node>
+                  <node text="" resource-id="android:id/notification_main_column" class="android.widget.LinearLayout" content-desc="" bounds="[231,1280][1038,1344]">
+                    <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" bounds="[231,1280][996,1333]">
+                      <node text="Tap Restore system if the status bar or animations look wrong." resource-id="android:id/text" class="android.widget.TextView" content-desc="" bounds="[231,1280][996,1333]" />
+                    </node>
+                  </node>
+                </node>
+                <node text="" resource-id="android:id/expand_button_touch_container" class="android.widget.FrameLayout" content-desc="" bounds="[886,1186][1038,1376]">
+                  <node text="" resource-id="android:id/expand_button" class="android.widget.Button" content-desc="Expand" bounds="[886,1186][1038,1376]">
+                    <node text="" resource-id="android:id/expand_button_pill" class="android.widget.LinearLayout" content-desc="" bounds="[928,1228][996,1276]">
+                      <node text="" resource-id="android:id/expand_button_icon" class="android.widget.ImageView" content-desc="" bounds="[941,1231][983,1273]" />
+                    </node>
+                  </node>
+                </node>
+              </node>
+            </node>
+          </node>
+          <node text="" resource-id="com.android.systemui:id/fake_shadow" class="android.widget.FrameLayout" content-desc="" bounds="[42,1186][1038,1603]" />
+        </node>
+        <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" bounds="[42,1381][1038,1539]">
+          <node text="" resource-id="com.android.systemui:id/content" class="android.widget.FrameLayout" content-desc="" bounds="[42,1381][1038,1539]">
+            <node text="" resource-id="" class="android.view.ViewGroup" content-desc="" bounds="[42,1413][1038,1539]">
+              <node text="" resource-id="com.android.systemui:id/history_button" class="android.widget.Button" content-desc="Notification history" bounds="[42,1413][199,1539]" />
+              <node text="Clear all" resource-id="com.android.systemui:id/dismiss_text" class="android.widget.Button" content-desc="Clear all notifications." bounds="[220,1413][860,1539]" />
+              <node text="" resource-id="com.android.systemui:id/settings_button" class="android.widget.Button" content-desc="Notification settings" bounds="[881,1413][1038,1539]" />
+            </node>
+          </node>
+        </node>
+      </node>
+    </node>
+    <node text="" resource-id="com.android.systemui:id/scene_container_root_composable" class="android.widget.FrameLayout" content-desc="" bounds="[0,0][1080,2400]">
+      <node text="" resource-id="" class="androidx.compose.ui.platform.ComposeView" content-desc="" bounds="[0,0][1080,2400]">
+        <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[0,0][1080,2400]">
+          <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[0,0][1080,2400]">
+            <node text="" resource-id="" class="androidx.compose.ui.viewinterop.AndroidViewHolder" content-desc="" bounds="[0,0][1080,2400]">
+              <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[0,0][1080,2400]" />
+            </node>
+            <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[0,0][1080,2400]">
+              <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[0,0][1080,2400]" />
+              <node text="" resource-id="com.android.systemui:id/shade_header_root" class="android.view.View" content-desc="" bounds="[0,0][1080,63]">
+                <node text="" resource-id="com.android.systemui:id/expanded_header_clock" class="android.view.View" content-desc="" bounds="[42,0][168,63]">
+                  <node text="10:00" resource-id="" class="android.widget.TextView" content-desc="" bounds="[24,0][150,95]" />
+                </node>
+                <node text="Mon, Nov 2" resource-id="" class="android.widget.TextView" content-desc="" bounds="[176,10][357,53]" />
+                <node text="" resource-id="" class="androidx.compose.ui.viewinterop.AndroidViewHolder" content-desc="" bounds="[790,3][960,61]">
+                  <node text="" resource-id="" class="android.widget.LinearLayout" content-desc="" bounds="[790,3][960,61]">
+                    <node text="" resource-id="" class="android.widget.ImageView" content-desc="Ringer vibrate." bounds="[790,3][840,61]" />
+                    <node text="" resource-id="com.android.systemui:id/mobile_combo" class="android.widget.FrameLayout" content-desc="Cellular, no signal" bounds="[840,3][901,61]">
+                      <node text="" resource-id="com.android.systemui:id/mobile_group" class="android.widget.LinearLayout" content-desc="" bounds="[848,3][893,61]">
+                        <node text="" resource-id="" class="android.widget.FrameLayout" content-desc="" bounds="[848,16][893,48]">
+                          <node text="" resource-id="com.android.systemui:id/mobile_signal" class="android.widget.ImageView" content-desc="" bounds="[848,16][893,48]" />
+                        </node>
+                      </node>
+                    </node>
+                    <node text="" resource-id="com.android.systemui:id/wifi_combo" class="android.widget.FrameLayout" content-desc="" bounds="[901,3][960,61]">
+                      <node text="" resource-id="com.android.systemui:id/wifi_group" class="android.widget.LinearLayout" content-desc="" bounds="[909,3][952,61]">
+                        <node text="" resource-id="com.android.systemui:id/wifi_combo" class="android.widget.FrameLayout" content-desc="" bounds="[909,16][952,48]">
+                          <node text="" resource-id="com.android.systemui:id/wifi_signal" class="android.widget.ImageView" content-desc="Wifi signal full." bounds="[909,16][952,48]" />
+                        </node>
+                      </node>
+                    </node>
+                  </node>
+                </node>
+                <node text="" resource-id="com.android.systemui:id/battery_meter_composable_view" class="android.view.View" content-desc="" bounds="[968,15][1038,49]">
+                  <node text="" resource-id="com.android.systemui:id/battery" class="android.view.View" content-desc="" bounds="[968,15][1038,49]">
+                    <node text="" resource-id="" class="android.view.View" content-desc="Battery 100 percent." bounds="[968,15][1031,49]" />
+                  </node>
+                </node>
+              </node>
+              <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[42,63][1038,462]">
+                <node text="" resource-id="com.android.systemui:id/quick_qs_panel" class="android.view.View" content-desc="" bounds="[42,63][1038,462]">
+                  <node text="" resource-id="com.android.systemui:id/qqs_tile_layout" class="android.view.View" content-desc="" bounds="[42,63][1038,462]">
+                    <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[42,63][530,252]">
+                      <node text="" resource-id="com.android.systemui:id/tile_expandable" class="android.view.View" content-desc="" bounds="[42,63][530,252]">
+                        <node text="" resource-id="com.android.systemui:id/qs_tile_large" class="android.view.View" content-desc="" bounds="[42,63][530,252]">
+                          <node text="" resource-id="com.android.systemui:id/qs_tile_toggle_target" class="android.view.View" content-desc="" bounds="[63,84][210,231]">
+                            <node text="" resource-id="" class="android.view.View" content-desc="Wi-Fi, AndroidWifi" bounds="[63,84][210,231]" />
+                            <node text="" resource-id="com.android.systemui:id/qs_tile_icon" class="android.view.View" content-desc="" bounds="[100,121][174,195]" />
+                            <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[63,84][210,231]" />
+                          </node>
+                          <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[226,95][509,221]">
+                            <node text="Wi-Fi" resource-id="" class="android.widget.TextView" content-desc="" bounds="[226,118][509,161]" />
+                            <node text="AndroidWifi" resource-id="" class="android.widget.TextView" content-desc="" bounds="[226,161][509,198]" />
+                          </node>
+                          <node text="" resource-id="" class="android.widget.Button" content-desc="" bounds="[42,63][530,252]" />
+                        </node>
+                      </node>
+                    </node>
+                    <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[551,63][1038,252]">
+                      <node text="" resource-id="com.android.systemui:id/tile_expandable" class="android.view.View" content-desc="" bounds="[551,63][1038,252]">
+                        <node text="" resource-id="com.android.systemui:id/qs_tile_large" class="android.view.View" content-desc="" bounds="[551,63][1038,252]">
+                          <node text="" resource-id="com.android.systemui:id/qs_tile_toggle_target" class="android.view.View" content-desc="" bounds="[572,84][719,231]">
+                            <node text="" resource-id="" class="android.view.View" content-desc="Bluetooth." bounds="[572,84][719,231]" />
+                            <node text="" resource-id="com.android.systemui:id/qs_tile_icon" class="android.view.View" content-desc="" bounds="[609,121][683,195]" />
+                            <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[572,84][719,231]" />
+                          </node>
+                          <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[735,95][1017,221]">
+                            <node text="Bluetooth" resource-id="" class="android.widget.TextView" content-desc="" bounds="[735,136][1017,179]" />
+                          </node>
+                          <node text="" resource-id="" class="android.widget.Button" content-desc="" bounds="[551,63][1038,252]" />
+                        </node>
+                      </node>
+                    </node>
+                    <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[42,273][530,462]">
+                      <node text="" resource-id="com.android.systemui:id/tile_expandable" class="android.view.View" content-desc="" bounds="[42,273][530,462]">
+                        <node text="" resource-id="com.android.systemui:id/qs_tile_large" class="android.view.View" content-desc="" bounds="[42,273][530,462]">
+                          <node text="" resource-id="com.android.systemui:id/qs_tile_toggle_target" class="android.view.View" content-desc="" bounds="[63,294][210,441]">
+                            <node text="" resource-id="" class="android.view.View" content-desc="Mobile data" bounds="[63,294][210,441]" />
+                            <node text="" resource-id="com.android.systemui:id/qs_tile_icon" class="android.view.View" content-desc="" bounds="[100,331][174,405]" />
+                            <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[63,294][210,441]" />
+                          </node>
+                          <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[226,305][509,431]">
+                            <node text="Mobile data" resource-id="" class="android.widget.TextView" content-desc="" bounds="[226,328][509,371]" />
+                            <node text="No service" resource-id="" class="android.widget.TextView" content-desc="" bounds="[226,371][509,408]" />
+                          </node>
+                          <node text="" resource-id="" class="android.widget.Button" content-desc="" bounds="[42,273][530,462]" />
+                        </node>
+                      </node>
+                    </node>
+                    <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[551,273][1038,462]">
+                      <node text="" resource-id="com.android.systemui:id/tile_expandable" class="android.view.View" content-desc="" bounds="[551,273][1038,462]">
+                        <node text="" resource-id="com.android.systemui:id/qs_tile_large" class="android.view.View" content-desc="" bounds="[551,273][1038,462]">
+                          <node text="" resource-id="com.android.systemui:id/qs_tile_toggle_target" class="android.view.View" content-desc="" bounds="[572,294][719,441]">
+                            <node text="" resource-id="" class="android.view.View" content-desc="Modes. " bounds="[572,294][719,441]" />
+                            <node text="" resource-id="com.android.systemui:id/qs_tile_icon" class="android.view.View" content-desc="" bounds="[609,331][683,405]" />
+                            <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[572,294][719,441]" />
+                          </node>
+                          <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[735,305][1017,431]">
+                            <node text="Modes" resource-id="" class="android.widget.TextView" content-desc="" bounds="[735,346][1017,389]" />
+                          </node>
+                          <node text="" resource-id="" class="android.widget.Button" content-desc="" bounds="[551,273][1038,462]" />
+                        </node>
+                      </node>
+                    </node>
+                  </node>
+                </node>
+              </node>
+              <node text="" resource-id="com.android.systemui:id/notifications_container" class="android.view.View" content-desc="" bounds="[0,504][1080,2400]">
+                <node text="" resource-id="" class="android.widget.ScrollView" content-desc="" bounds="[0,546][1080,2337]" />
+              </node>
+            </node>
+          </node>
+        </node>
+      </node>
+    </node>
+  </node>
+</hierarchy>

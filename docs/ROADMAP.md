@@ -68,6 +68,8 @@ Acceptance criteria:
       compared at the same progress, not the same time
 - [ ] Baseline run: every state diffed once; each region over tolerance is fixed or logged as a bug with its heatmap;
       scores recorded in `docs/FIDELITY_BASELINE.md`
+      Status 2026-10-26 (slice 3): baseline 1 for slice 1's 4 states x light/dark in `docs/FIDELITY_BASELINE.md`; its gaps
+      logged as B-052 to B-060; the font override does not reach the Pixel shade's text yet (D-042), baseline 2 follows
 - [ ] The rule is in force (OPERATING_RULES, Fidelity): a look-or-move-like-X criterion is met when the diff passes, never
       "called the same" by eye
 
@@ -194,6 +196,15 @@ Seeded from CLAUDE.md's open items. Severities are drafts (`ASSUMPTION`); the ow
 - [B-048] P3 (proposed), shade (Pixel layout), the Extra dim tile's symbol is AOSP's static `ic_reduce_bright_colors`; Android 17 shows `qs_extra_dim_icon_on/off` (animated). Status: open (B-036 slice 1, 2026-10-25)
 - [B-049] P3 (proposed), shade (iOS layout), Control Center under the Pixel theme showed an empty glass slot in the small-module row, left of the timer (emulator, B-036's QA, tools/shots/b036qa/12_cc_pixelsyms.png); not compared with main, maybe not new. Status: open, unverified (2026-10-25)
 - [B-051] P3 (proposed), shade (Pixel layout), our notification cards never show Android 17's "recently alerted" bell beside the time (stock shows it for 30 s after a notification alerts; SystemUI `RowAlertTimeCoordinator`). Found by MF slice 1. Status: open (2026-10-26)
+- [B-052] P2 (proposed), shade (Pixel layout), expanded Quick Settings: our build label and edit button sit ~210 px lower than Android 17's (fidelity baseline 1). Status: open (2026-10-26)
+- [B-053] P2 (proposed), status bar (Pixel), our bar and the shade's header row differ from Android 17's: no vibrate or signal icon (ours writes "No Service"), items ~40 px further in, another battery glyph (baseline 1). Status: open (2026-10-26)
+- [B-054] P2 (proposed), shade (Pixel), carrier text reads "T-Mobile" / "T-Mobile, 5G" while the modem is unregistered; Android says "No service" (carrier text and the Mobile data tile): ours may read another source than the system's service state (baseline 1). Status: open (2026-10-26)
+- [B-055] P3 (proposed), shade (Pixel), the gesture handle is drawn under Android's shade and missing under ours (baseline 1). Status: open (2026-10-26)
+- [B-056] P3 (proposed), shade (Pixel), notifications: our Silent header, cards and footer buttons sit 5-6 px higher than Android's; the app-icon circle differs in size and place; another app's icon tint (Play Protect) brighter; the "Launcher" header text offset (baseline 1). Status: open (2026-10-26)
+- [B-057] P3 (proposed), shade (Pixel), the backdrop's tone: dark ~5-10 levels lighter and bluer than Android's, the blurred wallpaper's blotches differ (baseline 1). Status: open (2026-10-26)
+- [B-058] P3 (proposed), shade (Pixel), ours shows a "1 app is active" pill in the footer where Android 17 shows none for the same foreground service (baseline 1). Status: open (2026-10-26)
+- [B-059] P3 (proposed), shade (Pixel), ours hides the Flashlight tile on a device without a torch; Android shows it, unavailable (baseline 1). Status: open (2026-10-26)
+- [B-060] P2 (proposed), shade (Pixel), its text styles name Google Sans Flex directly, so a theme's or the user's font does not reach them (tile labels, clock, date, section labels); the fidelity captures' system-font override cannot either. Owner 2026-10-26: make it reach (D-042). Status: open (2026-10-26)
 
 ## Parking lot
 Ideas that are not in scope. The owner decides if and when they become milestones.

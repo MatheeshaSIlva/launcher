@@ -321,3 +321,12 @@ turned on" notification arrives ~25 minutes after a boot and changes the Silent 
 notification set changes mid-run, and every capture and golden records its notification set, so ours and the golden are
 compared only with the same set.
 
+### D-042: The Pixel shade's text takes its font from the theme (2026-10-26) [owner]
+Context: MF slice 3's first baseline: the capture's system-font override (D-038) did not reach most of the Pixel shade's
+text, whose styles name Google Sans Flex directly, so glyphs and widths differed from stock's Roboto and inflated every
+score (B-060).
+Decision: The Pixel shade's text styles read their family from the theme's font tokens, so the capture-only system font,
+and a user's or theme's font, applies to all of its text. Then baseline 2.
+Alternatives considered: masking every text box (over the 6 % cap, blind to text size, colour and truncation); accepting
+the noise.
+

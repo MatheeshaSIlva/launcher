@@ -1,0 +1,62 @@
+{
+ "format": 1,
+ "name": "pixel-system-font",
+ "max_share": 0.06,
+ "about": "What the fidelity diff ignores on the Pixel shade, and why (D-038, D-041). tools/fidelity/maskgen.py reads stock's uiautomator trees (capture.sh --side stock --dump) and writes masks/pixel-system-font.json and masks/pixel-regions.json from these rules. A rule never hides a tile, the header or the first notification card, except the own bounds of a text node whose weight comes from a font-family name.",
+ "rules": [
+  {
+   "id": "notification-title-weight",
+   "kind": "node",
+   "match": {"resource_id": "^title$"},
+   "pad": [40, 6],
+   "limit": [
+    {"match": {"resource_id": "^(time_divider|time)$"}, "scope": "^expandableNotificationRow$", "from": "left"},
+    {"match": {"resource_id": "^text$"}, "scope": "^expandableNotificationRow$", "from": "top"}
+   ],
+   "text_node": true,
+   "required": true,
+   "states": ["quick"],
+   "why": "A notification's title is set in the family-named style variable-title-small-emphasized (TextAppearance.DeviceDefault.Notification.Title): on a Pixel the family carries the semibold weight. The emulator has no such font and stock draws the title in plain Roboto, regular; ours draws Google Sans Flex at 600 (comp.qs.card.title). Weight and glyph widths cannot match here, so each title's own bounds (grown 40 px sideways for the wider bold text, 6 px up and down) are ignored, but the growth stops at the left edge of the row's time label and its divider (a 'now' that a wider title pushes aside stays a finding) and at the top edge of the body text below; the card's place, size, colour and the other text are still compared.",
+   "evidence": "docs/SHADE_PIXEL_EVALUATION.md lines 650-662 ('the emulator has no Google Sans ... a view style whose weight comes from a font family comes out regular'); app/src/main/assets/themes/pixel.json comp.qs.card.title (family google:Google Sans Flex, weight 600, src names variable-title-small-emphasized); stock's tree: TextView resource-id title in each notification row (fixture [231,646][996,697], Play Protect, Launcher safety); golden light/quick.png against ours: stock's 'Fidelity fixture' regular, ours semibold."
+  },
+  {
+   "id": "clear-all-weight",
+   "kind": "node",
+   "match": {"resource_id": "^dismiss_text$"},
+   "center": [300, 72],
+   "text_node": true,
+   "required": true,
+   "states": ["quick"],
+   "why": "The notification footer's Clear all button is set in variable-title-medium-emphasized (TextAppearance.NotificationFooterButton), a family-named style: stock draws it regular in Roboto, ours semibold in Google Sans Flex (comp.qs.clear.text). Only a 300 x 72 px box around the words (the node is the whole 640 px button) is ignored: the button's fill, shape and place stay in the comparison.",
+   "evidence": "docs/SHADE_PIXEL_EVALUATION.md lines 650 and 660; pixel.json comp.qs.clear.text (weight 600, src names variable-title-medium-emphasized); stock's tree: Button resource-id dismiss_text, text 'Clear all', bounds [220,1413][860,1539]; golden light/quick.png against ours: regular against semibold."
+  },
+  {
+   "id": "foreground-service-pill",
+   "kind": "before",
+   "anchor": {"resource_id": "^qs_footer_actions$"},
+   "until": {"resource_id": "^multi_user_switch$"},
+   "pad": [0, -21],
+   "required": true,
+   "states": ["expanded", "tile-off", "tile-on"],
+   "why": "Ours lists a '1 app is active' pill left of the footer's buttons (our own foreground service, Launcher safety); stock's footer shows none for the same service on this emulator (checked: stock's tree in every expanded state has no such node, and its picture none). The two sides genuinely differ in what the footer lists, so the footer's row left of the user button (21 px less above and below, the pill's own height) is ignored; the three buttons are compared. A logged gap, not a fixture fix: see docs/FIDELITY_BASELINE.md.",
+   "evidence": "stock's tree (light/expanded.xml): qs_footer_actions [0,2179][1080,2337] holds multi_user_switch, settings_button_container and pm_lite only, the first at x 672; ours' picture light/expanded.png: the pill at x 42-660, y 2210-2316; probe i of capture.sh's header (the same service on both sides)."
+  },
+  {
+   "id": "silent-tail",
+   "kind": "below",
+   "enabled": false,
+   "anchor": {"text": "^Fidelity fixture$"},
+   "climb": "^expandableNotificationRow$",
+   "until": {"resource_id": "^notification_stack_scroller$"},
+   "why": "WEIGHED AND NOT USED: D-041 expected a stock-only Silent tail. The sides list the same rows (Google Play Protect, Launcher safety, History / Clear all / Settings): the notification sets are equal (the manifest's notifications line, capture.sh's warning silent) and both pictures show the same three rows, so nothing is ignored. Their differences (the cards' heights, the time label moved by a wider title) stay in the diff as findings.",
+   "evidence": "stock quick.xml: rows at [42,991] (Play Protect) and [42,1186] (Launcher safety), then the footer buttons at y 1413; ours' quick.png (3 cards, same footer); golden manifest and ours' manifest: 'pkg=com.android.vending id=951340667;pkg=dev.launcher.app id=1;pkg=dev.launcher.app id=1001;' on both."
+  }
+ ],
+ "regions": [
+  {"id": "tiles", "name": "tile-{n}-{label}", "match": {"resource_id": "^tile_expandable$"}, "protect": true},
+  {"id": "header", "name": "header", "match": {"resource_id": "^shade_header_root$"}, "first": true, "protect": true},
+  {"id": "first-card", "name": "first-notification-card", "match": {"resource_id": "^expandableNotificationRow$"}, "first": true, "protect": true},
+  {"id": "footer-notifications", "name": "footer", "match": {"resource_id": "^(history_button|dismiss_text|settings_button)$"}, "union": true},
+  {"id": "footer-actions", "name": "footer", "match": {"resource_id": "^qs_footer_actions$"}, "first": true}
+ ]
+}

@@ -1,0 +1,44 @@
+{
+ "expanded.png": {
+  "footer": [0, 2179, 1080, 158],
+  "header": [42, 0, 996, 315],
+  "tile-1-wi-fi": [42, 610, 488, 189],
+  "tile-2-bluetooth": [551, 610, 487, 189],
+  "tile-3-mobile-data": [42, 820, 488, 189],
+  "tile-4-modes": [551, 820, 487, 189],
+  "tile-5-airplane-mode": [42, 1030, 234, 189],
+  "tile-6-auto-rotate-screen": [297, 1030, 233, 189],
+  "tile-7-flashlight": [551, 1030, 233, 189]
+ },
+ "quick.png": {
+  "first-notification-card": [42, 546, 996, 267],
+  "footer": [42, 1413, 996, 126],
+  "header": [0, 0, 1080, 63],
+  "tile-1-wi-fi": [42, 63, 488, 189],
+  "tile-2-bluetooth": [551, 63, 487, 189],
+  "tile-3-mobile-data": [42, 273, 488, 189],
+  "tile-4-modes": [551, 273, 487, 189]
+ },
+ "tile-off.png": {
+  "footer": [0, 2179, 1080, 158],
+  "header": [42, 0, 996, 315],
+  "tile-1-wi-fi": [42, 610, 488, 189],
+  "tile-2-bluetooth": [551, 610, 487, 189],
+  "tile-3-mobile-data": [42, 820, 488, 189],
+  "tile-4-modes": [551, 820, 487, 189],
+  "tile-5-airplane-mode": [42, 1030, 234, 189],
+  "tile-6-auto-rotate-screen": [297, 1030, 233, 189],
+  "tile-7-flashlight": [551, 1030, 233, 189]
+ },
+ "tile-on.png": {
+  "footer": [0, 2179, 1080, 158],
+  "header": [42, 0, 996, 315],
+  "tile-1-wi-fi": [42, 610, 488, 189],
+  "tile-2-bluetooth": [551, 610, 487, 189],
+  "tile-3-mobile-data": [42, 820, 488, 189],
+  "tile-4-modes": [551, 820, 487, 189],
+  "tile-5-airplane-mode": [42, 1030, 234, 189],
+  "tile-6-auto-rotate-screen": [297, 1030, 233, 189],
+  "tile-7-flashlight": [551, 1030, 233, 189]
+ }
+}

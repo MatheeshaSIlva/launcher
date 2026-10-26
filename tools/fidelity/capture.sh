@@ -494,7 +494,10 @@ post_fixture() {
   return 0
 }
 notif_set() { # the notification records posted now (package, id, tag), sorted: what a capture shows besides the fixture
-  ash dumpsys notification --noredact | grep 'NotificationRecord(' | sed -E 's/^ *NotificationRecord\([^:]*: //; s/ user=[^ ]*//; s/ (tag|importance|key)=.*//' | sort | tr '\n' ';'
+  # Android's own "Launcher is displaying over other apps" notice (pkg=android id=0, tag AlertWindowNotification) is left out: the
+  # system posts it while our accessibility service is on (overlay windows) and our shade hides it by design; stock's side never has it
+  # (service off), so it is no record a shade lists (MF slice 3, from slice 2's notes).
+  ash dumpsys notification --noredact | grep 'NotificationRecord(' | grep -v 'pkg=android user=[^ ]* id=0 tag=com[.]android[.]server[.]wm[.]AlertWindowNotification' | sed -E 's/^ *NotificationRecord\([^:]*: //; s/ user=[^ ]*//; s/ (tag|importance|key)=.*//' | sort | tr '\n' ';'
 }
 manifest_notifs() { # MANIFEST -> the notification set it records (capture.sh's setup block, or a golden's own line); nothing when it has none
   pyx -c "
