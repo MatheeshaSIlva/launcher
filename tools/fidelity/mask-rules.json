@@ -33,13 +33,14 @@
   {
    "id": "foreground-service-pill",
    "kind": "before",
+   "enabled": false,
    "anchor": {"resource_id": "^qs_footer_actions$"},
    "until": {"resource_id": "^multi_user_switch$"},
    "pad": [0, -21],
    "required": true,
    "states": ["expanded", "tile-off", "tile-on"],
-   "why": "Ours lists a '1 app is active' pill left of the footer's buttons (our own foreground service, Launcher safety); stock's footer shows none for the same service on this emulator (checked: stock's tree in every expanded state has no such node, and its picture none). The two sides genuinely differ in what the footer lists, so the footer's row left of the user button (21 px less above and below, the pill's own height) is ignored; the three buttons are compared. A logged gap, not a fixture fix: see docs/FIDELITY_BASELINE.md.",
-   "evidence": "stock's tree (light/expanded.xml): qs_footer_actions [0,2179][1080,2337] holds multi_user_switch, settings_button_container and pm_lite only, the first at x 672; ours' picture light/expanded.png: the pill at x 42-660, y 2210-2316; probe i of capture.sh's header (the same service on both sides)."
+   "why": "OFF since the 2026-10-27 golden (B-062, D-045): both sides now list the '1 app is active' pill left of the footer's buttons (our own foreground service, Launcher safety), so the pill is compared. Stock's pill depends on the emulator's session: the 2026-10-26 golden had none (its tree's qs_footer_actions held the three buttons only, the first at x 672), and while that was so this rule ignored the row left of the user button (21 px less above and below, the pill's own height). Turn it on again for a golden whose stock footer has no pill.",
+   "evidence": "stock's tree (light/expanded.xml, 2026-10-27): qs_footer_actions [0,2179][1080,2337] holds a '1 app is active' row [42,2202][660,2328] before multi_user_switch [672,2201][798,2327], in every expanded state, light and dark; the golden's light/expanded.png shows it; ours' picture light/expanded.png: the pill at x 42-660, y 2210-2316."
   },
   {
    "id": "silent-tail",
@@ -48,8 +49,8 @@
    "anchor": {"text": "^Fidelity fixture$"},
    "climb": "^expandableNotificationRow$",
    "until": {"resource_id": "^notification_stack_scroller$"},
-   "why": "WEIGHED AND NOT USED: D-041 expected a stock-only Silent tail. The sides list the same rows (Google Play Protect, Launcher safety, History / Clear all / Settings): the notification sets are equal (the manifest's notifications line, capture.sh's warning silent) and both pictures show the same three rows, so nothing is ignored. Their differences (the cards' heights, the time label moved by a wider title) stay in the diff as findings.",
-   "evidence": "stock quick.xml: rows at [42,991] (Play Protect) and [42,1186] (Launcher safety), then the footer buttons at y 1413; ours' quick.png (3 cards, same footer); golden manifest and ours' manifest: 'pkg=com.android.vending id=951340667;pkg=dev.launcher.app id=1;pkg=dev.launcher.app id=1001;' on both."
+   "why": "WEIGHED AND NOT USED: D-041 expected a stock-only Silent tail. The sides list the same rows (the fixture; Silent: Launcher safety; History / Clear all / Settings): the notification sets are equal (the manifest's notifications line, the fixed set since B-062: capture.sh snoozes other apps' notifications) and both pictures show the same rows, so nothing is ignored. Their differences (the cards' heights, the time label moved by a wider title) stay in the diff as findings.",
+   "evidence": "stock quick.xml (2026-10-27): the fixture's row at [42,546], the Silent row at [42,991] (Launcher safety), then the footer buttons at y 1218; golden manifest: 'pkg=dev.launcher.app id=1;pkg=dev.launcher.app id=1001;'. (The 2026-10-26 golden also listed Google Play Protect, on both sides then.)"
   }
  ],
  "regions": [

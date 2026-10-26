@@ -43,7 +43,7 @@ ROW = tree(
     node("View", "shade_header_root", "", "", "[0,0][1080,63]") +
     node("FrameLayout", "expandableNotificationRow", "", "", "[42,991][1038,1181]",
          node("LinearLayout", "notification_top_line", "", "", "[231,1034][902,1085]",
-              node("TextView", "title", "Google Play Protect is turned on", "", "[231,1034][758,1085]") +
+              node("TextView", "title", "A notification with a long title", "", "[231,1034][758,1085]") +
               node("TextView", "time_divider", "", "", "[768,1040][779,1083]") +
               node("TextView", "time", "now", "", "[789,1040][849,1083]")) +
          node("LinearLayout", "notification_main_column", "", "", "[231,1085][1038,1149]",

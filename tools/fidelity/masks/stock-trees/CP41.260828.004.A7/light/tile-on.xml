@@ -173,6 +173,13 @@
               </node>
               <node text="" resource-id="com.android.systemui:id/qs_footer_actions" class="android.view.View" content-desc="" bounds="[0,2179][1080,2337]">
                 <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[31,2200][1049,2326]">
+                  <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[31,2201][671,2327]">
+                    <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[42,2202][660,2328]">
+                      <node text="" resource-id="" class="android.view.View" content-desc="" bounds="[42,2202][660,2328]">
+                        <node text="1 app is active" resource-id="" class="android.widget.TextView" content-desc="" bounds="[180,2243][533,2286]" />
+                      </node>
+                    </node>
+                  </node>
                   <node text="" resource-id="com.android.systemui:id/multi_user_switch" class="android.view.View" content-desc="" bounds="[672,2201][798,2327]">
                     <node text="" resource-id="" class="android.view.View" content-desc="Signed in as Owner" bounds="[708,2237][761,2290]" />
                   </node>

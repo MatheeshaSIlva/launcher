@@ -344,4 +344,9 @@ Addendum to D-043 (2026-10-27, probe l): `cmd notification unsnooze` from the sh
 harness never calls it; snoozed records are brought back by moving the faked clock past their `until` (the system reposts
 them, same key), before the real clock is restored; snoozes last 1 h; the jump is capped at the faked base + 3 h; a pending
 snooze that is not ours makes a run refuse.
+Addendum to D-041 (2026-10-27, B-062 part 2): the recaptured golden's stock footer lists the same "1 app is active" pill
+ours does (the 2026-10-26 golden had none: stock's pill depends on the emulator's session), so the
+`foreground-service-pill` mask rule is off and the pill is compared (masks only where the sides genuinely differ). The rule
+stays in mask-rules.json, off, with its why: turn it on again for a golden whose stock footer has no pill. B-058 now covers
+how the two pills differ.
 

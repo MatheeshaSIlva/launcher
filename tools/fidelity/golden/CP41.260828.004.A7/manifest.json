@@ -1,21 +1,21 @@
 {
  "tool": "tools/fidelity/golden.sh",
  "side": "stock",
- "date": "2026-10-26T11:14:35Z",
+ "date": "2026-10-26T22:17:08Z",
  "build_id": "CP41.260828.004.A7",
  "fingerprint": "google/sdk_gphone16k_x86_64/emu64xa16k:17/CP41.260828.004.A7/16296984:user/dev-keys",
  "capture": "capture.sh --side stock --state all --theme both (setup and fixture in its manifest.json: kept in tools/shots/fidelity while it lasts)",
  "tiles_stock": "wifi,bt,cell,dnd,airplane,rotation,flashlight",
- "notifications": "pkg=com.android.vending id=951340667;pkg=dev.launcher.app id=1;pkg=dev.launcher.app id=1001;",
+ "notifications": "pkg=dev.launcher.app id=1;pkg=dev.launcher.app id=1001;",
  "files": [
-  {"path": "light/quick.png", "theme": "light", "state": "quick", "size": [1080, 2400], "bytes": 208072, "md5": "5fc9dbce3f433cf996ae7539cf383cbf", "source_md5": "e604203b3e3b3c561b93cea9d996e54d"},
-  {"path": "light/expanded.png", "theme": "light", "state": "expanded", "size": [1080, 2400], "bytes": 206103, "md5": "eb1e37cc175ad74baa8d501a1b6aa20e", "source_md5": "9a7a212bb370e98f044ad148e37f5bfc"},
-  {"path": "light/tile-off.png", "theme": "light", "state": "tile-off", "size": [1080, 2400], "bytes": 207572, "md5": "b2ac336ef339ea265f64caa8ebbc0bc1", "source_md5": "faf889768e20568b8bbc0771fa278cb1"},
-  {"path": "light/tile-on.png", "theme": "light", "state": "tile-on", "size": [1080, 2400], "bytes": 206103, "md5": "eb1e37cc175ad74baa8d501a1b6aa20e", "source_md5": "9a7a212bb370e98f044ad148e37f5bfc"},
-  {"path": "dark/quick.png", "theme": "dark", "state": "quick", "size": [1080, 2400], "bytes": 202269, "md5": "6ce6128f86749f5115b2f7ebc408f39c", "source_md5": "3540a547f744f0bbf3e35f808dda8a87"},
-  {"path": "dark/expanded.png", "theme": "dark", "state": "expanded", "size": [1080, 2400], "bytes": 203419, "md5": "fc02c9417057a06bf43ea2899129d599", "source_md5": "c0683e4ce17817ced1125306895012ca"},
-  {"path": "dark/tile-off.png", "theme": "dark", "state": "tile-off", "size": [1080, 2400], "bytes": 203972, "md5": "b3d452e93d1c0c101121f7fa8424745e", "source_md5": "9058b0e4c97f0dfc7d202929e9e0418b"},
-  {"path": "dark/tile-on.png", "theme": "dark", "state": "tile-on", "size": [1080, 2400], "bytes": 203419, "md5": "fc02c9417057a06bf43ea2899129d599", "source_md5": "c0683e4ce17817ced1125306895012ca"}
+  {"path": "light/quick.png", "theme": "light", "state": "quick", "size": [1080, 2400], "bytes": 182085, "md5": "6384b6bea196724201811f4dd83b3f38", "source_md5": "82be329dae0403be3e2152661629a872"},
+  {"path": "light/expanded.png", "theme": "light", "state": "expanded", "size": [1080, 2400], "bytes": 211657, "md5": "ec6a2cc1e18c7538fb642dad533a4e95", "source_md5": "39417dd90100f6f0a384415f523e97fe"},
+  {"path": "light/tile-off.png", "theme": "light", "state": "tile-off", "size": [1080, 2400], "bytes": 213131, "md5": "c326df81c9382ce8af2d83926f97c9c5", "source_md5": "43107ddc5d598974deb751be415906de"},
+  {"path": "light/tile-on.png", "theme": "light", "state": "tile-on", "size": [1080, 2400], "bytes": 211657, "md5": "ec6a2cc1e18c7538fb642dad533a4e95", "source_md5": "39417dd90100f6f0a384415f523e97fe"},
+  {"path": "dark/quick.png", "theme": "dark", "state": "quick", "size": [1080, 2400], "bytes": 176685, "md5": "04c9d5766675bf4fd0798c6eaab3afaf", "source_md5": "d6f54701921ab39a48f5126f68539df3"},
+  {"path": "dark/expanded.png", "theme": "dark", "state": "expanded", "size": [1080, 2400], "bytes": 208293, "md5": "ebef6bd648247e5dbd37ef6f606f4712", "source_md5": "5d767c139fd29505b50aed87ac46e95b"},
+  {"path": "dark/tile-off.png", "theme": "dark", "state": "tile-off", "size": [1080, 2400], "bytes": 208868, "md5": "fa062dfdd1df1e5c91a0ebde01e526d2", "source_md5": "4cbd758032b02bedb94b772b85a77c30"},
+  {"path": "dark/tile-on.png", "theme": "dark", "state": "tile-on", "size": [1080, 2400], "bytes": 208293, "md5": "ebef6bd648247e5dbd37ef6f606f4712", "source_md5": "5d767c139fd29505b50aed87ac46e95b"}
  ],
- "total_bytes": 1640929
+ "total_bytes": 1620669
 }

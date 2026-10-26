@@ -70,6 +70,8 @@ Acceptance criteria:
       scores recorded in `docs/FIDELITY_BASELINE.md`
       Status 2026-10-26 (slice 3): baseline 1 for slice 1's 4 states x light/dark in `docs/FIDELITY_BASELINE.md`; its gaps
       logged as B-052 to B-060; the font override does not reach the Pixel shade's text yet (D-042), baseline 2 follows
+      Status 2026-10-27 (B-062): baseline 2, canonical, on a golden recaptured without other apps' notifications; its
+      clusters map to B-052 to B-061 (B-058 reworded: both sides now show the footer's pill)
 - [ ] The rule is in force (OPERATING_RULES, Fidelity): a look-or-move-like-X criterion is met when the diff passes, never
       "called the same" by eye
 
@@ -202,11 +204,11 @@ Seeded from CLAUDE.md's open items. Severities are drafts (`ASSUMPTION`); the ow
 - [B-055] P3 (proposed), shade (Pixel), the gesture handle is drawn under Android's shade and missing under ours (baseline 1). Status: open (2026-10-26)
 - [B-056] P3 (proposed), shade (Pixel), notifications: our Silent header, cards and footer buttons sit 5-6 px higher than Android's; the app-icon circle differs in size and place; another app's icon tint (Play Protect) brighter; the "Launcher" header text offset (baseline 1). Status: open (2026-10-26)
 - [B-057] P3 (proposed), shade (Pixel), the backdrop's tone: dark ~5-10 levels lighter and bluer than Android's, the blurred wallpaper's blotches differ (baseline 1). Status: open (2026-10-26)
-- [B-058] P3 (proposed), shade (Pixel), ours shows a "1 app is active" pill in the footer where Android 17 shows none for the same foreground service (baseline 1). Status: open (2026-10-26)
+- [B-058] P3 (proposed), shade (Pixel), ours shows a "1 app is active" pill in the footer where Android 17 shows none for the same foreground service (baseline 1). Status: open (2026-10-26); 2026-10-27: on the recaptured golden stock shows the same pill (session-dependent), so it is compared now and the item covers how the two pills differ (footer cluster 11044 px at mean 7.09 light, 17112 px at 10.87 dark, baseline 2); the mask rule is off (D-041 addendum)
 - [B-059] P3 (proposed), shade (Pixel), ours hides the Flashlight tile on a device without a torch; Android shows it, unavailable (baseline 1). Status: open (2026-10-26)
 - [B-060] P2 (proposed), shade (Pixel), its text styles name Google Sans Flex directly, so a theme's or the user's font does not reach them (tile labels, clock, date, section labels); the fidelity captures' system-font override cannot either. Owner 2026-10-26: make it reach (D-042). Status: fixed on the emulator (2026-10-27): the Pixel theme's 31 text styles name a font role (text/display); default look unchanged (8 captures pixel-identical before/after), a font change reaches every Pixel shade text live; FontsTest guards shipped themes
 - [B-061] P3 (proposed), shade (Pixel), weight residue: on the system font our header clock (500), carrier and date draw heavier and wider than Android 17's; the Pixel theme's weights need checking against stock's, the tile labels (600) too once they can be compared unmasked (fidelity baseline 2). Status: open (2026-10-27)
-- [B-062] P2 (proposed), fidelity harness, the goldens' notification set includes Google Play's "Play Protect is turned on" notification, which on some boots never arrives (1 h 25 min without it on 2026-10-27), so baseline.sh's notification-set gate cannot pass and the quick state is not comparable; the harness must not depend on another app's notification (e.g. snooze foreign notifications on both sides, or recapture the goldens without it). Status: open (2026-10-27)
+- [B-062] P2 (proposed), fidelity harness, the goldens' notification set includes Google Play's "Play Protect is turned on" notification, which on some boots never arrives (1 h 25 min without it on 2026-10-27), so baseline.sh's notification-set gate cannot pass and the quick state is not comparable; the harness must not depend on another app's notification (e.g. snooze foreign notifications on both sides, or recapture the goldens without it). Status: fixed 2026-10-27 on ship/b062-foreign-notifs (D-043): capture.sh snoozes other apps' notifications for a run and brings them back by the clock; golden recaptured with the fixed set; baseline 2 canonical (reviewer APPROVE; QA pending at the time of writing)
 
 ## Parking lot
 Ideas that are not in scope. The owner decides if and when they become milestones.
