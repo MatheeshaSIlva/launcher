@@ -106,3 +106,18 @@ captures before/after pixel-identical (8 pairs, diff.py exit 0, headroom 0.0); A
 glyph clusters on tile labels, clock/date, section labels, notification text gone or reduced, recorded in
 docs/FIDELITY_BASELINE.md; AC3 FontsTest fails on the old pixel.json, passes on the new; AC4 a font change reaches all Pixel
 shade text without a restart; AC5 scripts/check.sh green.
+
+## B-062 plan (architect, 2026-10-27): other apps' notifications snoozed for the run
+- capture.sh, both sides: after the clock is set and before the fixture, snooze every record not ours (`cmd notification
+  snooze --for 21600000 KEY`; our overlay notice already ignored), keys saved to `.prior/snoozed.txt` first; sweep again at
+  the start of every state; a record arriving during a state still fails it; unsnooze explicitly in teardown and
+  `--restore`, verified (dirty kept if not; a record its owner cancelled meanwhile is fine); `--dry-run` lists them. The
+  fixed set is {our safety notification, the fixture}.
+- golden.sh capture/verify and baseline.sh's gate refuse a set with another app's package.
+- Probe l first (a stand-in TEST_NOTIFY record): snooze from the shell, the record leaves the list and both shades, survives
+  the clock jump, unsnooze restores it; stop and re-plan if snoozing does not hide it.
+- Then (part 2) the golden recaptured without Play Protect (old folder's facts in docs/FIDELITY_BASELINE.md, git history keeps
+  the PNGs), stock trees and masks regenerated, baseline 2 run canonically and the provisional section replaced.
+- AC1-AC10 as in the architect's plan (fixed set in every manifest; snooze order; restore on every exit incl. kill -9 +
+  --restore; refused snooze fails setup; mid-state arrival fails the state; dry-run untouched; gates reject foreign sets;
+  live: same set with and without Play Protect; golden 8/8; baseline.sh canonical).

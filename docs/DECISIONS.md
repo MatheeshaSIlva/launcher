@@ -330,3 +330,14 @@ and a user's or theme's font, applies to all of its text. Then baseline 2.
 Alternatives considered: masking every text box (over the 6 % cap, blind to text size, colour and truncation); accepting
 the noise.
 
+### D-043: The fidelity harness snoozes other apps' notifications for a run (2026-10-27)
+Context: B-062. The goldens' notification set held Google Play's "Play Protect is turned on" notification, which arrives
+~25 min after some boots and never after others, so the baseline gate could not pass and the quick state was not comparable.
+Decision: For a run, both sides snooze every notification record not ours (`cmd notification snooze`, after the clock is
+set, 6 h bound) and unsnooze them explicitly afterwards (verified; dirty kept otherwise); a sweep at each state's start; a
+record arriving during a state still fails it. Goldens, verify and the baseline gate must hold no other app's package. The
+committed golden is replaced by a recapture (the old one stays in git history; its facts in docs/FIDELITY_BASELINE.md).
+Supersedes the part of D-041's addendum that recorded Play Protect as part of the set.
+Alternatives considered: cancelling (no shell route; Play reposts); recapturing without it (it can still arrive mid-run);
+keeping both goldens per build.
+
