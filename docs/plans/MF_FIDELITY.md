@@ -95,3 +95,14 @@ Acceptance criteria AC1-AC9 as in the architect's plan (AC1-AC5 and AC9 for slic
   changes mid-run. Before the baseline run: have the ours-side notification warning ignore Android's own overlay notice
   (`pkg=android id=0`, present while our service is on, hidden by our shade), or it fires on every run.
 - Both sides list "Launcher safety" in the Silent section (probe i): mask rules start from what both show.
+
+## B-060 plan (architect, 2026-10-27): the Pixel shade's text takes its family from the theme (D-042)
+Cause: the Pixel theme's builder (`tools/design/build_pixel_theme.py`, `FONT`, `text()`) writes the literal family
+`google:Google Sans Flex` into all 31 text tokens; only "text"/"display" resolve through `sys.font.*`. The code already
+follows tokens at draw time. Fix: `text()` takes a role ("text"; "display" for the header clock 36, edit page title 28 and
+dialog title 24), pixel.json regenerated (only the 31 family lines change), `sys.font.text/display` stay Google Sans Flex
+(no default look change); `FontsTest` requires shipped themes' styles to name a role, not a family. AC1 ours `--font off`
+captures before/after pixel-identical (8 pairs, diff.py exit 0, headroom 0.0); AC2 baseline 2 with `--font system`, the
+glyph clusters on tile labels, clock/date, section labels, notification text gone or reduced, recorded in
+docs/FIDELITY_BASELINE.md; AC3 FontsTest fails on the old pixel.json, passes on the new; AC4 a font change reaches all Pixel
+shade text without a restart; AC5 scripts/check.sh green.
