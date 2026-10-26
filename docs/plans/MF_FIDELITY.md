@@ -121,3 +121,14 @@ shade text without a restart; AC5 scripts/check.sh green.
 - AC1-AC10 as in the architect's plan (fixed set in every manifest; snooze order; restore on every exit incl. kill -9 +
   --restore; refused snooze fails setup; mid-state arrival fails the state; dry-run untouched; gates reject foreign sets;
   live: same set with and without Play Protect; golden 8/8; baseline.sh canonical).
+
+### B-062 revision 2 (2026-10-27, after probe l)
+Probe l: shell snooze hides a record from the list and both shades and survives backward clock jumps, but
+`cmd notification unsnooze` is refused for the shell AND drops the record (data loss); a forward clock jump past the
+snooze's `until` makes the system repost it with the same key. So: never call unsnooze; snooze for 1 h after the clock
+is set, saving each key and its `until` (from dumpsys "Pending snoozed notifications") to `.prior/snoozed.txt`; in teardown
+and `--restore`, before auto_time is restored, `cmd alarm set-time` to max(until) + 5 s (capped at CLOCK_BASE + 3 h), poll
+until the keys left the pending list (one more nudge), then restore the clock; a precondition refuses a pending snooze that
+is not ours. Probes m (does a reposted record alert) and n (a forward jump reposts within 8 s, with auto_time 0 and 1; the
+line format with spaced keys) first. Fake model: snooze moves a record to a snoozed list with until; `set-time` reposts
+expired ones; `unsnooze` drops the record and logs UNSNOOZE (the harness must never call it). AC1-AC12 as the revision.

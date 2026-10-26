@@ -340,4 +340,8 @@ committed golden is replaced by a recapture (the old one stays in git history; i
 Supersedes the part of D-041's addendum that recorded Play Protect as part of the set.
 Alternatives considered: cancelling (no shell route; Play reposts); recapturing without it (it can still arrive mid-run);
 keeping both goldens per build.
+Addendum to D-043 (2026-10-27, probe l): `cmd notification unsnooze` from the shell is refused and drops the record, so the
+harness never calls it; snoozed records are brought back by moving the faked clock past their `until` (the system reposts
+them, same key), before the real clock is restored; snoozes last 1 h; the jump is capped at the faked base + 3 h; a pending
+snooze that is not ours makes a run refuse.
 
