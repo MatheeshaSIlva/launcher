@@ -111,7 +111,9 @@
 #   leaves them known. They come back in teardown and in --restore by MOVING THE FAKED CLOCK past the latest `until` (restore_snoozed:
 #   auto_time 0, set-time to max(until) + 5 s, poll <= 8 s that none is pending, one more nudge of 5 s, capped at CLOCK_BASE + 3 h:
 #   past that a WARNING, no jump, dirty kept), BEFORE the real clock is restored; `cmd notification unsnooze` is NEVER called (probe l:
-#   refused for the shell, and it drops the record). A record its owner cancelled while it was snoozed is gone: a NOTE. A pending
+#   refused for the shell, and it drops the record). A record its owner cancelled while it was snoozed is gone: a NOTE. A key whose
+#   until could not be read (dumpsys's pending list in another form, or absent: it reads as "none pending") is a WARNING at the snooze,
+#   and at the end unless it is posted again (dirty kept: without the list a lost record cannot be told from a cancelled one). A pending
 #   snooze that was not made by this tool makes a run refuse (exit 2): it would come back in the middle of the clock changes.
 #
 # Probes of B-062 (emulator-5554, Android 17 CP41.260828.004.A7, 2026-10-27; the stand-in was TEST_NOTIFY --ei id 9, key
@@ -557,6 +559,10 @@ pending_ours() { # the pending snoozes (KEY<TAB>UNTIL) of the keys this run snoo
   [ -s "$PRIOR_DIR/snoozed.txt" ] || return 0
   pending_until | awk -F'\t' 'NR == FNR { sub(/\r$/, ""); split($0, a, "\t"); k[a[1]] = 1; next } ($1 in k)' "$PRIOR_DIR/snoozed.txt" -
 }
+snoozed_untils() { # "KEY<TAB>UNTIL" once for every key this run snoozed (PRIOR/snoozed.txt; UNTIL empty when none was read at the snooze)
+  [ -s "$PRIOR_DIR/snoozed.txt" ] || return 0
+  awk -F'\t' '{ sub(/\r$/, "") } $1 == "" { next } !($1 in u) { o[++n] = $1; u[$1] = "" } $2 != "" { u[$1] = $2 } END { for (i = 1; i <= n; i++) printf "%s\t%s\n", o[i], u[o[i]] }' "$PRIOR_DIR/snoozed.txt"
+}
 key_hidden() { ! foreign_keys | grep -qxF -- "$1"; }
 snooze_foreign() { # snoozes every record that is not ours for 1 h (never unsnoozed by us: restore_snoozed moves the clock past it); keys saved first; 1 on a failure (says which)
   local keys=() k line u
@@ -571,9 +577,10 @@ snooze_foreign() { # snoozes every record that is not ours for 1 h (never unsnoo
     poll 3 key_hidden "$k" || { say "FAIL setup: the snooze of $k was refused or did not hide it"; return 1; }   # (gone: its app cancelled it meanwhile: not listed, fine)
   done
   line="$(pending_until)"
-  for k in "${keys[@]}"; do
-    u="$(printf '%s\n' "$line" | awk -F'\t' -v k="$k" '$1 == k { u = $2 } END { print u }')"
-    [ -z "$u" ] || printf '%s\t%s\n' "$k" "$u" >> "$PRIOR_DIR/snoozed.txt"
+  for k in "${keys[@]}"; do   # (the key through ENVIRON: awk -v would read a backslash in a tag as an escape)
+    u="$(printf '%s\n' "$line" | K="$k" awk -F'\t' '$1 == ENVIRON["K"] { u = $2 } END { print u }')"
+    if [ -n "$u" ]; then printf '%s\t%s\n' "$k" "$u" >> "$PRIOR_DIR/snoozed.txt"
+    else say "WARNING: no until was read for the snoozed $k (dumpsys's pending snooze list is not in the form this tool reads): the clock cannot bring it back at the end: unless it is posted again by then, the run ends with a warning and keeps the dirty marker"; fi
   done
   say "snoozed ${#keys[@]} notification(s) of other apps for 1 h: $(printf '%s ' "${keys[@]}")"
   return 0
@@ -666,21 +673,22 @@ strip_as_before() { # the gesture strip as the prior list says: up when ours is 
 }
 snoozed_back() { [ -z "$(pending_ours)" ]; }
 restore_snoozed() { # B-062: brings our snoozed records back by moving the faked clock past their `until` (the system reposts them, same key); never `cmd notification unsnooze`
-  local pend max T
+  local pend max T cap
   [ -s "$PRIOR_DIR/snoozed.txt" ] || return 0
   pend="$(pending_ours)"
-  [ -n "$pend" ] || return 0   # none is pending any more (back already, or gone)
+  [ -n "$pend" ] || return 0   # none is pending any more (back already, or gone; or the pending list could not be read: verify_restored checks every key)
   max="$(printf '%s\n' "$pend" | awk -F'\t' '$2 > m { m = $2 } END { printf "%.0f", m }')"
   T=$((max + 5000))
   [ -n "${CLOCK_BASE:-}" ] || clock_base
   if [ -z "${CLOCK_BASE:-}" ] || [ "$T" -gt $((CLOCK_BASE + SNOOZE_CAP_MS)) ]; then
-    say "WARNING: the snoozed notifications' until ($max) is more than 3 h past the faked clock's base (${CLOCK_BASE:-unknown}): the clock is not moved that far; they stay snoozed until then (keys in $PRIOR_DIR/snoozed.txt)"
+    say "WARNING: the snoozed notifications' until ($max) is more than 3 h past the faked clock's base (${CLOCK_BASE:-unknown}): the clock is not moved that far; they stay snoozed until then (keys in $PRIOR_DIR/snoozed.txt). Check them by hand, then remove $PRIOR_DIR/dirty"
     RESTORE_RC=1; return 1
   fi
+  cap=$((CLOCK_BASE + SNOOZE_CAP_MS))   # (every set-time stays within it, the nudge too)
   a shell settings put global auto_time 0 >/dev/null 2>&1
   a shell cmd alarm set-time "$T" >/dev/null 2>&1
   if ! poll 8 snoozed_back; then
-    T=$((T + 5000)); say "restore: the snoozed notifications are still pending after 8 s, moving the clock on once more"
+    T=$((T + 5000)); [ "$T" -le "$cap" ] || T=$cap; say "restore: the snoozed notifications are still pending after 8 s, moving the clock on once more"
     a shell cmd alarm set-time "$T" >/dev/null 2>&1
     poll 8 snoozed_back || { say "WARNING: still snoozed after the clock passed their until: $(pending_ours | cut -f1 | tr '\n' ' ')"; RESTORE_RC=1; return 1; }
   fi
@@ -688,7 +696,7 @@ restore_snoozed() { # B-062: brings our snoozed records back by moving the faked
   return 0
 }
 verify_restored() { # the settings and the app's files against the prior; says what differs (warnings), sets RESTORE_RC
-  local ns f d bad=""
+  local ns f d k u bad=""
   strip_as_before || { say "WARNING: our gesture strip is not $(has_svc "$(prior_value enabled_accessibility_services)" && echo up || echo down) as it was before (the accessibility list is back)"; bad=1; }
   for ns in system secure global; do
     ash settings list $ns | sort > "$TMPD/after-$ns.txt"
@@ -709,9 +717,21 @@ verify_restored() { # the settings and the app's files against the prior; says w
   else say "WARNING: the app's files could not be exported to check them"; bad=1; fi
   d="$(pending_ours | cut -f1)"
   [ -z "$d" ] || { say "WARNING: still snoozed by this run (they come back when the clock passes their until; capture.sh --restore tries again):"; echo "$d" | cut -c1-160 | sed 's/^/    /'; bad=1; }
-  if [ -f "$PRIOR_DIR/notifs-before.txt" ]; then   # the list as it was: a record gone meanwhile (cancelled by its app while snoozed) or new is a note, never a failure
+  # every key this run snoozed is posted again, or explained: one with a known until, gone after the clock passed it, was
+  # cancelled by its app (the note below, when it was listed before the run); one with no until read is not known to be back
+  # (dumpsys's pending list in another form, or absent, reads as "none pending": it may still be snoozed until a date days ahead),
+  # and a cancelled one cannot be told from it: a warning
+  : > "$TMPD/snooze-lost.txt"
+  if [ -s "$PRIOR_DIR/snoozed.txt" ]; then
+    ash cmd notification list > "$TMPD/posted.txt"; printf '%s\n' "$d" > "$TMPD/pending.txt"
+    while IFS=$'\t' read -r k u; do
+      [ -n "$u" ] || grep -qxF -- "$k" "$TMPD/posted.txt" || grep -qxF -- "$k" "$TMPD/pending.txt" || printf '%s\n' "$k" >> "$TMPD/snooze-lost.txt"
+    done < <(snoozed_untils)
+    [ ! -s "$TMPD/snooze-lost.txt" ] || { say "WARNING: snoozed by this run with no until read, and not posted again (it may still be snoozed, until a date this tool cannot know, or its app cancelled it): check them by hand in the shade, then remove $PRIOR_DIR/dirty:"; cut -c1-160 "$TMPD/snooze-lost.txt" | sed 's/^/    /'; bad=1; }
+  fi
+  if [ -f "$PRIOR_DIR/notifs-before.txt" ]; then   # the list as it was: a record gone meanwhile (cancelled by its app while snoozed) or new is a note, never a failure (the keys warned about above left out)
     notif_keys > "$TMPD/notifs-after.txt"; sort "$PRIOR_DIR/notifs-before.txt" > "$TMPD/notifs-before.txt"
-    d="$(comm -23 "$TMPD/notifs-before.txt" "$TMPD/notifs-after.txt")"; [ -z "$d" ] || { say "NOTE: gone since before the run (its app cancelled it, or the user did):"; echo "$d" | cut -c1-160 | sed 's/^/    /'; }
+    d="$(comm -23 "$TMPD/notifs-before.txt" "$TMPD/notifs-after.txt" | grep -vxFf "$TMPD/snooze-lost.txt")"; [ -z "$d" ] || { say "NOTE: gone since before the run (its app cancelled it, or the user did):"; echo "$d" | cut -c1-160 | sed 's/^/    /'; }
     d="$(comm -13 "$TMPD/notifs-before.txt" "$TMPD/notifs-after.txt")"; [ -z "$d" ] || { say "NOTE: new since before the run:"; echo "$d" | cut -c1-160 | sed 's/^/    /'; }
   fi
   for f in voice data; do

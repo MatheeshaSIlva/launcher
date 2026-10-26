@@ -130,7 +130,11 @@ dumpsys() {
       echo "  Snoozed notifications:"
       for f in "$D"/snoozed_*; do [ -f "$f" ] || continue; IFS=$'\t' read -r k u < "$f"; echo "    key: $k"; done
       echo; echo " Pending snoozed notifications"
-      for f in "$D"/snoozed_*; do [ -f "$f" ] || continue; IFS=$'\t' read -r k u < "$f"; echo "    key: $k until: $u"; done;;
+      for f in "$D"/snoozed_*; do
+        [ -f "$f" ] || continue; IFS=$'\t' read -r k u < "$f"
+        _fmt=""; [ -f "$FAKE_STATE/sw_pendfmt" ] && rd _fmt "$FAKE_STATE/sw_pendfmt"   # QA: a dump in another form (nountil: no until; eq: key=K until=N; none: no lines)
+        case "$_fmt" in nountil) echo "    key: $k";; eq) echo "    key=$k until=$u";; none) ;; *) echo "    key: $k until: $u";; esac
+      done;;
     battery:*) mut dumpsys battery "${@:2}"; if [ "${2:-}" = reset ]; then rm -f "$D/battery"; else echo "$*" >> "$D/battery"; fi;;
   esac
 }
@@ -158,7 +162,9 @@ notif_cmd() {   # cmd notification list | snooze --for MS KEY | unsnooze KEY (th
       echo "0|dev.launcher.app|7|null|10232"
       [[ "$(sget secure enabled_accessibility_services)" == *"$OURS"* ]] && echo "0|android|0|com.android.server.wm.AlertWindowNotification - dev.launcher.app|1000"
       for f in "$D"/notif_*; do [ -f "$f" ] && echo "0|dev.launcher.app|$((1000 + ${f##*notif_}))|null|10232"; done
-      if [ ! -f "$FAKE_STATE/sw_listhide" ]; then for f in "$D"/foreign_*; do [ -f "$f" ] && { rd k "$f"; echo "$k"; }; done; fi;;
+      if [ ! -f "$FAKE_STATE/sw_listhide" ]; then for f in "$D"/foreign_*; do [ -f "$f" ] && { rd k "$f"; echo "$k"; }; done; fi
+      # QA: a record that arrives right after the first list that follows the fixture (between the sweep and the recorded set)
+      if [ -f "$D/arrive_after_list" ] && [ -f "$D/notif_1" ]; then rd _k "$D/arrive_after_list"; command rm -f "$D/arrive_after_list"; printf '%s' "$_k" > "$D/foreign_arrived"; fi;;
     snooze)
       mut cmd notification snooze "$2" "$3" "$4"
       if [ -f "$FAKE_STATE/sw_snoozerefused" ]; then echo "Error occurred. Check logcat for details."; return 1; fi
@@ -841,6 +847,108 @@ sc_static() {   # capture.sh itself: adb is called in a(), ap() and emu() only (
   finish
 }
 
+# ---------------------------------------------------------------- QA additions (B-062 part 1): attacks on the snooze model
+not() { ! "$@"; }
+sc_qa_pendfmt() {   # $1 = how the dump writes its pending list (nountil | eq | none): no `until` can be read. The record then stays snoozed
+  # until the faked date (days away): the run must not end exit 0 and "as before" with the record silently gone.
+  NAME="qa-pendfmt-$1"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"
+  printf '%s' "$1" > "$S/sw_pendfmt"
+  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  chk "the key reached snoozed.txt (saved before the snooze)" hasF "$KEY_VEND" "$S/prior/snoozed.txt"
+  chk "no silent loss: the record is live again, OR the run warned/failed and kept the dirty marker" \
+      bash -c '[ -f "$0/dev/foreign_vend" ] || { [ "$1" != 0 ] && grep -q "WARNING" "$0/out.txt" && [ -f "$0/prior/dirty" ]; }' "$S" "$RC"
+  chk "it did not say 'the device is as before' while the record is still snoozed" \
+      bash -c '! { [ -f "$0/dev/snoozed_vend" ] && grep -q "the device is as before" "$0/out.txt"; }' "$S"
+  finish
+}
+sc_qa_kill() {   # $1 = keyonly (killed before the until was saved) | neversnoozed (killed after the key was saved, before the snooze)
+  NAME="qa-kill-$1"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign chat "$KEY_SPACE"
+  local before; before="$(snap "$S")"
+  echo expand > "$D/hang"
+  run_bg --side stock --state quick --theme light --out "$S/out"
+  chk "the run reached its first panel" wait_hang
+  kill -KILL "$PID" 2>/dev/null; kill -KILL "$(<"$D/hang.pid")" 2>/dev/null
+  wait "$PID" 2>/dev/null
+  chk "the record is snoozed, the run left it so" test -f "$D/snoozed_chat"
+  case "$1" in
+    keyonly) printf '%s\t\n' "$KEY_SPACE" > "$S/prior/snoozed.txt";;
+    neversnoozed) mv "$D/snoozed_chat" "$D/foreign_chat"; before="$(snap "$S")"; before="$(echo "$before" | grep -v 'prior' )";;
+  esac
+  [ "$1" = neversnoozed ] && before="$(snap "$S")"
+  run_cap -- --restore
+  chk "--restore exits 0" eq "$RC" 0
+  chk "the record is live, nothing left snoozed" test -f "$D/foreign_chat" -a "$(ls "$D"/snoozed_* 2>/dev/null | wc -l)" = 0
+  chk "no dirty marker" test ! -e "$S/prior/dirty"
+  run_cap -- --restore
+  chk "a second --restore: exit 0, nothing to do" eq "$RC" 0
+  finish
+}
+sc_qa_cap() {   # $1 = edge | over | edge-norepost: the until sits exactly at / 1 ms past the 3 h cap (until + 5 s = base + 3 h)
+  NAME="qa-cap-$1"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"
+  case "$1" in over) printf 7195001 > "$S/sw_snoozeextra";; *) printf 7195000 > "$S/sw_snoozeextra";; esac
+  [ "$1" = edge-norepost ] && : > "$S/sw_norepost"
+  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  local cap=$((1793613600000 + 10800000))
+  case "$1" in
+    edge) chk "exit 0, the record is back (the cap is inclusive)" eq "$RC" 0; chk "  the clock went to exactly base + 3 h" test "$(grep -c "^MUT cmd alarm set-time $cap\$" "$S/adb.log")" = 1;;
+    over) chk "exit 1 with the cap warning" rc_out 1 "more than 3 h past";;
+    edge-norepost) chk "the clock never went past base + 3 h, not even for the nudge" test "$(grep '^MUT cmd alarm set-time' "$S/adb.log" | awk -v c=$cap '$5 > c { n++ } END { print n + 0 }')" = 0;;
+  esac
+  finish
+}
+sc_qa_arrive() {   # a record arriving after the last sweep and before the set is recorded: the setup fails, nothing is recorded, the device is put back
+  NAME="qa-arrive"; new_dev "$NAME" "$ACC_BOTH" ''
+  local before; before="$(snap "$S")"
+  printf '%s' "$KEY_VEND" > "$D/arrive_after_list"
+  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  chk "exit 1" eq "$RC" 1
+  chk "FAIL setup names the package" has "FAIL setup: another app's notification is still posted after the snooze.*com.android.vending" "$S/out.txt"
+  chk "no picture" test ! -e "$S/out/stock/light/quick.png"
+  rm -f "$D/foreign_arrived"
+  chk "the device is as before" eq "$(snap "$S")" "$before"
+  finish
+}
+sc_qa_keys() {   # keys with '|' in the tag, shell metacharacters, a backslash, a quote-free but nasty tag
+  NAME="qa-keys"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign pipe '0|com.example.p|1|a|b|c|10101'
+  add_foreign meta '0|com.example.q|2|$HOME `id` "q" * ; &|10101'
+  add_foreign bsl '0|com.example.r|3|C:\dir\new until: 5|10101'
+  local before; before="$(snap "$S")"
+  run_cap -- --side ours --state quick --theme light --out "$S/out"
+  chk "exit 0" eq "$RC" 0
+  chk "three snoozes" eq "$(grep -c '^MUT cmd notification snooze' "$S/adb.log")" 3
+  chk "all three keys are in snoozed.txt with an until" test "$(awk -F'\t' '$2 ~ /^[0-9]+$/' "$S/prior/snoozed.txt" | wc -l)" = 3
+  chk "all three are live again, nothing snoozed" test -f "$D/foreign_pipe" -a -f "$D/foreign_meta" -a -f "$D/foreign_bsl" -a "$(ls "$D"/snoozed_* 2>/dev/null | wc -l)" = 0
+  chk "the device is as before" eq "$(snap "$S")" "$before"
+  finish
+}
+sc_qa_dry_pending() {   # --dry-run with a pending snooze that is not ours: refused, nothing touched
+  NAME="qa-dry-pending"; new_dev "$NAME" "$ACC_BOTH" ''
+  b_pending
+  local before; before="$(snap "$S")"
+  run_cap -- --side ours --state quick --theme light --out "$S/out" --dry-run
+  chk "exit 2 and REFUSED" rc_out 2 "REFUSED.*pending snooze"
+  chk "no mutating call" eq "$(muts)" 0
+  chk "the device is as before" eq "$(snap "$S")" "$before"
+  finish
+}
+sc_qa_rerun() {   # two clean runs one after the other (different records): the second starts from an empty snoozed.txt and restores only its own
+  NAME="qa-rerun"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"
+  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  chk "run 1 exit 0" eq "$RC" 0
+  rm -f "$D/foreign_vend"; add_foreign chat "$KEY_SPACE"
+  local before; before="$(snap "$S")"
+  run_cap -- --side stock --state quick --theme light --out "$S/out2"
+  chk "run 2 exit 0" eq "$RC" 0
+  chk "snoozed.txt holds only run 2's key" test "$(grep -c vending "$S/prior/snoozed.txt")" = 0 -a "$(grep -c example.chat "$S/prior/snoozed.txt")" -ge 1
+  chk "the device is as before run 2" eq "$(snap "$S")" "$before"
+  finish
+}
+
 # ---------------------------------------------------------------- run them, JOBS_MAX at a time (the slowest first)
 JOBS=()
 timed() { local t0=$SECONDS; "$@"; echo "$((SECONDS - t0)) s  $NAME" >> "$WORK/times.txt"; }
@@ -893,6 +1001,18 @@ job sc_kill
 job sc_kill real
 job sc_nostrip
 job sc_static
+job sc_qa_pendfmt nountil
+job sc_qa_pendfmt eq
+job sc_qa_pendfmt none
+job sc_qa_kill keyonly
+job sc_qa_kill neversnoozed
+job sc_qa_cap edge
+job sc_qa_cap over
+job sc_qa_cap edge-norepost
+job sc_qa_arrive
+job sc_qa_keys
+job sc_qa_dry_pending
+job sc_qa_rerun
 for j in "${JOBS[@]}"; do wait "$j"; done
 
 [ -z "$VERBOSE" ] || { sort -rn "$WORK/times.txt" 2>/dev/null | sed 's/^/time  /'; sort -rn "$WORK/runs.txt" 2>/dev/null | head -5 | sed 's/^/run   /'; }
@@ -901,4 +1021,4 @@ cat "$WORK/all.txt"
 FAILS=$(grep -c '^FAIL' "$WORK/all.txt"); PASSES=$(grep -c '^PASS' "$WORK/all.txt")
 SCEN=$(ls "$WORK"/*/result 2>/dev/null | wc -l)
 echo "fidelity_capture_test: $SCEN scenarios, $PASSES checks passed, $FAILS failed"
-[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 44 ]; }
+[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 56 ]; }

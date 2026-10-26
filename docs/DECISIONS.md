@@ -343,7 +343,10 @@ keeping both goldens per build.
 Addendum to D-043 (2026-10-27, probe l): `cmd notification unsnooze` from the shell is refused and drops the record, so the
 harness never calls it; snoozed records are brought back by moving the faked clock past their `until` (the system reposts
 them, same key), before the real clock is restored; snoozes last 1 h; the jump is capped at the faked base + 3 h; a pending
-snooze that is not ours makes a run refuse.
+snooze that is not ours makes a run refuse. A snoozed key whose `until` was never read and that is not posted again at
+the end is a WARNING that keeps the dirty marker (B-062 round 2): `--restore` repeats it, on purpose, until the
+notifications are checked by hand and `.prior/dirty` is removed; a key with a known `until` that is gone after the jump is
+a NOTE (its app cancelled it).
 Addendum to D-041 (2026-10-27, B-062 part 2): the recaptured golden's stock footer lists the same "1 app is active" pill
 ours does (the 2026-10-26 golden had none: stock's pill depends on the emulator's session), so the
 `foreground-service-pill` mask rule is off and the pill is compared (masks only where the sides genuinely differ). The rule
