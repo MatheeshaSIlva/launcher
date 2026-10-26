@@ -2,6 +2,7 @@ package dev.launcher.app.design
 
 import android.content.Context
 import dev.launcher.app.AppLog
+import dev.launcher.app.shade.qs.QsTileStore
 import java.io.File
 
 /**
@@ -12,11 +13,15 @@ import java.io.File
  *                                  layout files reloaded
  *   --es files export              the design files, themes, presets, layout files and choices copied to files/dev-out/
  *   --es files remove --es path P  files/P deleted, design and layout files reloaded
+ * One file is not a file: [QS_TILES] (`qs_tiles.txt`), Android's shade's tile list kept in shared preferences. Export writes
+ * it into dev-out (`reset` or the kept list, see QsTileList); import in dev-in applies it and takes it out of dev-in. Both
+ * work with the accessibility service off.
  * Each writes what it did to the log; export ends with dev-out/.done (its file count), so a script knows it is complete.
  */
 object DevFiles {
     private const val IN = "dev-in"
     private const val OUT = "dev-out"
+    const val QS_TILES = "qs_tiles.txt"
 
     /** What export copies (each a file or a folder under the app's files). */
     private val EXPORTED = listOf("design", "themes", "motion", "icons", "layouts", "setup.json", "home_layout.json")
@@ -31,6 +36,12 @@ object DevFiles {
                     val src = File(ext, IN)
                     var n = 0
                     src.walkTopDown().filter { it.isFile }.forEach { f ->
+                        if (f.relativeTo(src).path == QS_TILES) {
+                            QsTileStore.apply(ctx, f.readText())
+                            f.delete()
+                            n++
+                            return@forEach
+                        }
                         val dst = File(root, f.relativeTo(src).path)
                         if (!inside(dst)) { AppLog.log("[dev] skipped ${f.name}: outside the app's files"); return@forEach }
                         dst.parentFile?.mkdirs()
@@ -55,6 +66,8 @@ object DevFiles {
                             n++
                         }
                     }
+                    File(out, QS_TILES).writeText(QsTileStore.dump(ctx) + "\n")
+                    n++
                     File(out, ".done").writeText("$n\n")
                     AppLog.log("[dev] exported $n file(s) to $OUT")
                 }

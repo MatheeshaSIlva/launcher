@@ -87,3 +87,11 @@ Slice 3 (steps 5-7): `maskgen.py` + `mask-rules.json` from stock's dump (family-
 Silent tail below the fixture card and the "1 app is active" footer, each rule with a why, at most 6 % of a picture),
 `scores.py` + `baseline.sh`, the first ours-vs-stock run into `docs/FIDELITY_BASELINE.md`.
 Acceptance criteria AC1-AC9 as in the architect's plan (AC1-AC5 and AC9 for slice 2).
+
+## Slice 2 done (2026-10-26); notes for slice 3
+- Ours' tile list is set to stock's counterpart (`WIFI:w,BLUETOOTH:w,CELLULAR:w,FOCUS:w,AIRPLANE,ROTATION_LOCK,FLASHLIGHT`)
+  and restored exactly; ours hides Flashlight on the emulator (no torch): 6 tiles against stock's 7, a baseline entry.
+- Goldens record their notification set (Play Protect, our safety notification, the fixture); capture fails if the set
+  changes mid-run. Before the baseline run: have the ours-side notification warning ignore Android's own overlay notice
+  (`pkg=android id=0`, present while our service is on, hidden by our shade), or it fires on every run.
+- Both sides list "Launcher safety" in the Silent section (probe i): mask rules start from what both show.

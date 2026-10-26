@@ -579,13 +579,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 // an app's tile, ":w" two columns wide; "reset": a Pixel's own), to compare with a phone's own Quick Settings.
                 if (i.getStringExtra("do") == "qs_tiles") handler.post {
                     val list = i.getStringExtra("list") ?: return@post
-                    if (list == "reset") dev.launcher.app.shade.qs.QsTileStore.reset(ctx)
-                    else dev.launcher.app.shade.qs.QsTileStore.set(ctx, list.split(",").mapNotNull { e ->
-                        val wide = e.endsWith(":w")
-                        val name = e.removeSuffix(":w")
-                        if (name.startsWith("app:")) dev.launcher.app.shade.qs.QsTiles.appTile(name.removePrefix("app:"), wide)
-                        else Control.entries.firstOrNull { it.name == name }?.let { dev.launcher.app.shade.qs.QsTiles.tileOf(it, wide) }
-                    })
+                    dev.launcher.app.shade.qs.QsTileStore.apply(ctx, list)
                     shadeView.designChanged()
                     AppLog.log("[qs] test: the tiles are $list")
                 }

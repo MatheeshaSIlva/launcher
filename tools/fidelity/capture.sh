@@ -4,11 +4,14 @@
 # one state can be diffed (tools/fidelity/diff.py) and the harness's own noise measured (tools/fidelity/selfdiff.sh).
 #
 #   tools/fidelity/capture.sh --side ours|stock --state quick|expanded|tile-off|tile-on|all --theme light|dark|both
-#       --out DIR [--repeat N] [--font system|off] [--dry-run]
+#       --out DIR [--repeat N] [--font system|off] [--dump] [--dry-run]
 #   tools/fidelity/capture.sh --restore         puts the device back from tools/shots/fidelity/.prior/ (after a kill)
 #   --state and --theme also take a comma list (quick,expanded). Output: DIR/<side>/<theme>/<state>.png (with --repeat N > 1:
 #   DIR/r<K>/<side>/<theme>/<state>.png) and DIR/manifest.json. Exit 0 done; 1 a state not reached or not at rest (the device
 #   is still put back); 2 usage or a precondition not met (nothing was touched). EMULATOR ONLY (refuses other serials).
+#   --dump (stock side only; with ours it is refused, exit 2): also saves stock's uiautomator tree of each state next to its
+#   picture (DIR/stock/<theme>/<state>.xml, the manifest says so): slice 3's mask rules read it. Our service is off on that side
+#   (nothing to unbind: a dump with it on unbinds every accessibility service, CLAUDE.md), checked before each dump.
 #   [DEVICE=emulator-5554] [ADB=path]. Sourceable: functions only, main runs when executed.
 #
 # States (the shade is Android's, Pixel layout; light and dark by `cmd uimode night`):
@@ -20,14 +23,17 @@
 #   own zone (D-039 said UTC: changing the zone makes Android post "Your time zone changed", which a shell cannot take back; reset
 #   before every state: it keeps running, and the notification says "now"), battery unplugged at 100 % (status discharging),
 #   brightness 127 (manual), DND off, Auto-rotate on, portrait, one notification (TEST_NOTIFY id 1 "Fidelity fixture", with the
-#   app's own "Launcher safety" one), stock's tiles wifi,bt,cell,dnd,airplane,rotation,flashlight. Asserted, never set: 1080x2400
+#   app's own "Launcher safety" one), stock's tiles wifi,bt,cell,dnd,airplane,rotation,flashlight (on both sides: STOCK_TILES) and,
+#   on the ours side, ours' list the counterpart of it (OURS_TILES, below). Asserted, never set: 1080x2400
 #   at 420 dpi, font scale 1.0, en-US, palette seed D2DCF0 TONAL_SPOT, the emulator is Android 17. Ours: shade pixel/together,
 #   theme pixel, the system's colours (sys.color.style = system) and, with --font system (default for ours, D-038), the system font
 #   (sys.font.text and sys.font.display = system), both through design/user-<theme>.json (merged with what is there, put back
-#   byte for byte). Ours' tile list is the app's own saved choice (shared preferences: not readable over adb), so it is NOT
-#   changed: ours' and stock's lists are not yet the same (a later slice's job).
+#   byte for byte). Ours' tile list is the app's own saved choice (shared preferences; MF slice 2): read and set over adb as
+#   the virtual file qs_tiles.txt of the app's export and import (`reset`, or `KEY[:w],...`: shade/qs/QsTileList), so it is saved
+#   in the prior export and put back from it (a kept list that equals the default stays kept: "reset" and the list are told apart).
 # The prior state is saved once, before the first change, to tools/shots/fidelity/.prior/ (settings lists, a byte-exact
-#   export of the app's files, the values below) with a `dirty` marker; a new run refuses while it exists (use --restore).
+#   export of the app's files incl. qs_tiles.txt, the values below) with a `dirty` marker; a new run refuses while it exists
+#   (use --restore) and refuses an app too old to export qs_tiles.txt (exit 2).
 #
 # The emulator's modem swings its signal bars all the time (NR ssRsrp -44 .. -102 dBm in a sawtooth of ~90 s, so 1 to 4 bars; found by
 #   the first self-diff: both sides' status bar and quick settings header differed in the signal icon, cells col 9 rows 0 and 2).
@@ -74,7 +80,28 @@
 #   waits 33 s so the bell the posting itself drew is gone by its own timer. Both sides do the same (ours has no bell yet, which
 #   is for a later slice to fill: the golden is the state after 30 s). The fixture stays a high-importance, alerting one (the
 #   alerting section, not "Silent"), the look we compare against later. The minute stays 10:00 and the age text "now" (< 60 s)
-#   as long as a state is taken within ~14 s of its clock being set: checked after each capture.
+#   as long as a state is taken within ~14 s of its clock being set: checked after each capture. The first open after a boot can be
+#   slower than that (the first live self-diff after a restart: 10:01:01 on two ours states), so the clock is set again once the panel is
+#   reached, right before the rest check, and a state whose guard still fails is retried once from its first clock set.
+#
+# Probes of MF slice 2 (emulator-5554, Android 17 CP41.260828.004.A7, 2026-10-26):
+#  i. Notification records on the stock side (service off): ours' two only, the fixture (id 1001, channel test, importance 3: the
+#     alerting section) and "Launcher safety" (id 1, foreground service, channel safety, importance 2: the Silent section, one
+#     collapsed card with an Expand button), and no other package's: stock shows a Silent tail under the fixture (and, below it,
+#     the History / Clear all / Settings row); ours (checked on its quick PNG) lists the same two, the fixture and a
+#     Silent "Launcher safety" card with the same History / Clear all / Settings row, and no overlay notice: so the Silent tail is not
+#     stock-only on this emulator (D-041 (3) expected it to be; slice 3 decides its mask rule from the dump and the pictures).
+#  j. Stock after `set-tiles 'wifi,bt,cell,dnd,airplane,rotation,flashlight'` (stage 2, uiautomator bounds): Wi-Fi, Bluetooth, Mobile
+#     data and Modes (dnd) are LARGE (two columns, 2 a row: x 63-509 and 572-1017), Airplane mode, Auto-rotate and Flashlight small
+#     (3 a row, 233 wide: the Auto-rotate tile [297,1030][530,1219]). So ours' counterpart is OURS_TILES, with those four wide.
+#  k. `uiautomator dump` with our service off: works (a 45-50 KB tree of SystemUI's shade with text, content-desc and bounds of every
+#     node), the settings (system, secure, global) are the same before and after, the strip stays down, nothing is left in /sdcard.
+#
+# The notification set present once the fixture is posted (NOTIFS: package and id of every record, sorted) is recorded in the
+#   manifest's setup ("notifications") and kept by golden.sh in the golden's manifest: a notification that arrives later (Google
+#   Play's "Play Protect is turned on", ~25 min after a boot) adds a card to the Silent section, so a diff against a golden taken
+#   without it differs for that reason. The ours side warns when its set differs from the golden's of the build (GOLDEN_ROOT,
+#   default tools/fidelity/golden); golden.sh verify --against fails on a different set.
 #
 # Timings are sleeps and bounded polls only. Never `am force-stop` (CLAUDE.md); the accessibility service is switched through
 # the setting's list (others kept), B-018's missed strip is retried by switching it off and on.
@@ -89,6 +116,7 @@ PRIOR_DIR="${FID_PRIOR:-$FID_ROOT/tools/shots/fidelity/.prior}"
 CLOCK_MS=1793613600000          # 2026-11-02 10:00:00 UTC
 CLOCK_SHOW_S=45                 # the clock while a state is captured: 10:00:45 (see "The recently-alerted bell" in the header)
 STOCK_TILES="wifi,bt,cell,dnd,airplane,rotation,flashlight"
+OURS_TILES="WIFI:w,BLUETOOTH:w,CELLULAR:w,FOCUS:w,AIRPLANE,ROTATION_LOCK,FLASHLIGHT"   # stock's, as ours names them; the wide marks are probe j's
 FIXTURE_ID=1
 ALL_STATES="quick expanded tile-off tile-on"
 # settings the run changes (ns key); their prior values are kept in prior.tsv and put back
@@ -129,9 +157,9 @@ png_size() { # FILE -> "W H" from the PNG header, or nothing
 json_str() { local s="${1//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "$s"; }
 
 # ---------------------------------------------------------------- arguments
-usage_err() { echo "capture.sh: $1" >&2; echo "usage: capture.sh --side ours|stock --state quick|expanded|tile-off|tile-on|all --theme light|dark|both --out DIR [--repeat N] [--font system|off] [--dry-run] | --restore" >&2; exit 2; }
+usage_err() { echo "capture.sh: $1" >&2; echo "usage: capture.sh --side ours|stock --state quick|expanded|tile-off|tile-on|all --theme light|dark|both --out DIR [--repeat N] [--font system|off] [--dump] [--dry-run] | --restore" >&2; exit 2; }
 parse_args() {
-  SIDE=""; STATES=""; THEMES=""; OUT=""; REPEAT=1; FONT=""; DRY=""; RESTORE=""
+  SIDE=""; STATES=""; THEMES=""; OUT=""; REPEAT=1; FONT=""; DRY=""; RESTORE=""; DUMP=""
   while [ $# -gt 0 ]; do
     case "$1" in
       --side) [ $# -ge 2 ] || usage_err "--side needs a value"; SIDE="$2"; shift 2;;
@@ -140,6 +168,7 @@ parse_args() {
       --out) [ $# -ge 2 ] || usage_err "--out needs a value"; OUT="$2"; shift 2;;
       --repeat) [ $# -ge 2 ] || usage_err "--repeat needs a value"; REPEAT="$2"; shift 2;;
       --font) [ $# -ge 2 ] || usage_err "--font needs a value"; FONT="$2"; shift 2;;
+      --dump) DUMP=1; shift;;
       --dry-run) DRY=1; shift;;
       --restore) RESTORE=1; shift;;
       -h|--help) usage_err "help";;
@@ -149,6 +178,7 @@ parse_args() {
   [ -n "$RESTORE" ] && return 0
   case "$SIDE" in ours|stock) ;; *) usage_err "--side must be ours or stock";; esac
   [ -n "$OUT" ] || usage_err "--out DIR is required"
+  [ -z "$DUMP" ] || [ "$SIDE" = stock ] || usage_err "--dump is for --side stock only (with our service on, a uiautomator dump would unbind it)"
   case "$REPEAT" in ''|*[!0-9]*|0) usage_err "--repeat must be a positive number";; esac
   [ "$REPEAT" -le 20 ] || usage_err "--repeat at most 20"
   case "$THEMES" in both|"") THEMES="light dark";; *) THEMES="${THEMES//,/ }";; esac
@@ -247,6 +277,7 @@ save_prior() {
   setting_get secure sysui_qs_tiles > "$PRIOR_DIR/tiles.txt"
   gsm_state voice > "$PRIOR_DIR/gsm-voice.txt"; gsm_state data > "$PRIOR_DIR/gsm-data.txt"
   export_files "$PRIOR_DIR/files" || { rm -rf "$PRIOR_DIR"; return 1; }
+  [ -s "$PRIOR_DIR/files/qs_tiles.txt" ] || { rm -rf "$PRIOR_DIR"; return 3; }   # an app that cannot say (or set) ours' tile list
   echo "$DEVICE $(date +%s)" > "$PRIOR_DIR/dirty"
 }
 restore_settings() { # puts the managed settings back from prior.tsv
@@ -326,6 +357,14 @@ reach() { # STATE: opens the panel for the state; true when it is up
   sleep 1.2
   return 0
 }
+dump_ui() { # FILE: stock's uiautomator tree (--dump), pulled and removed; only while our service is off (it would unbind it)
+  local f="$1" dev=/sdcard/fid_dump.xml
+  strip_down && ! has_svc "$(a11y_list)" || return 1
+  ap shell uiautomator dump $dev >/dev/null 2>&1
+  ap pull $dev "$(winpath "$f")" >/dev/null 2>&1
+  ap shell rm -f $dev >/dev/null 2>&1
+  [ -s "$f" ] && grep -q '<hierarchy' "$f"
+}
 cap_png() { a exec-out screencap -p > "$1" 2>/dev/null; }
 wait_rest() { # OUTFILE: two identical screencaps 400 ms apart (at most 25 tries); the second is kept
   local prev="$TMPD/rest_a.png" cur="$TMPD/rest_b.png" i
@@ -338,7 +377,13 @@ wait_rest() { # OUTFILE: two identical screencaps 400 ms apart (at most 25 tries
   return 1
 }
 
-capture_state() { # REPEAT-INDEX THEME STATE
+capture_state() { # REPEAT-INDEX THEME STATE: a state whose clock guard failed (the first open after a boot can take a minute) is taken once more from the clock set
+  local rc
+  try_state "$@"; rc=$?
+  if [ "$rc" = 3 ]; then say "retrying $2/$3 r$1 once from the clock set (the first attempt was too slow for 10:00)"; try_state "$@"; rc=$?; fi
+  [ "$rc" = 0 ] && return 0 || return 1
+}
+try_state() { # REPEAT-INDEX THEME STATE: 0 taken, 1 failed, 3 the clock left 10:00 while it was taken (to_home done, the caller may retry)
   local r="$1" theme="$2" state="$3" dir rel file wh
   [ "$REPEAT" -gt 1 ] && rel="r$r/$SIDE/$theme" || rel="$SIDE/$theme"
   dir="$OUT/$rel"; file="$dir/$state.png"; mkdir -p "$dir"
@@ -346,11 +391,14 @@ capture_state() { # REPEAT-INDEX THEME STATE
   to_home || { say "FAIL $theme/$state r$r: home did not come back ($(focus))"; return 1; }
   set_clock; sleep 1.2
   reach "$state" || { say "FAIL $theme/$state r$r: the panel did not open (focus: $(focus))"; to_home; return 1; }
+  set_clock   # again, now that the slow part (a cold first open, the tile list) is behind: 10:00:45 at the start of the rest check (the alert stays > 30 s old, the minute 10:00)
   if ! wait_rest "$file"; then say "FAIL $theme/$state r$r: NOT AT REST (two screencaps 400 ms apart never matched in 25 tries)"; to_home; return 1; fi
   wh=$(png_size "$file"); if [ "$wh" != "1080 2400" ]; then say "FAIL $theme/$state r$r: the picture is '$wh', not 1080 2400"; to_home; return 1; fi
-  [ "$(ash date +%H:%M)" = 10:00 ] || { say "FAIL $theme/$state r$r: the clock left 10:00 while the state was taken ($(ash date))"; to_home; return 1; }
+  if [ -n "$DUMP" ] && ! dump_ui "$dir/$state.xml"; then say "FAIL $theme/$state r$r: the uiautomator tree could not be saved"; to_home; return 1; fi
+  [ "$(notif_set)" = "$NOTIFS" ] || { say "FAIL $theme/$state r$r: a notification arrived or left while the run was going (was: $NOTIFS now: $(notif_set)): the picture is of another state"; to_home; return 1; }
+  [ "$(ash date +%H:%M)" = 10:00 ] || { say "FAIL $theme/$state r$r: the clock left 10:00 while the state was taken ($(ash date))"; to_home; return 3; }
   to_home || { say "FAIL $theme/$state r$r: the panel did not close ($(focus))"; return 1; }
-  MANIFEST_FILES+=("$rel/$state.png|$r|$theme|$state|$(md5sum "$file" | cut -d' ' -f1)")
+  MANIFEST_FILES+=("$rel/$state.png|$r|$theme|$state|$(md5sum "$file" | cut -d' ' -f1)|$([ -n "$DUMP" ] && echo "$rel/$state.xml")")
   say "ok $rel/$state.png"
   return 0
 }
@@ -361,19 +409,19 @@ write_manifest() {
     printf '{\n "tool": "tools/fidelity/capture.sh",\n "date": "%s",\n "device": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$DEVICE"
     printf ' "android": "%s",\n "uptime_s": "%s",\n' "$(json_str "$(ash getprop ro.build.fingerprint)")" "$(ash cat /proc/uptime | cut -d' ' -f1)"
     printf ' "side": "%s", "font": "%s", "repeat": %s,\n' "$SIDE" "$FONT" "$REPEAT"
-    printf ' "setup": {"timezone": "unchanged (the device zone)", "clock": "2026-11-02 10:00:45 local (fixture posted at 10:00:00)", "battery": "unplugged 100", "brightness": 127, "dnd": "off", "tiles_stock": "%s", "fixture": "TEST_NOTIFY id %s", "ours": "shade pixel/together, theme pixel, system colours", "modem": "voice and data unregistered"},\n' "$STOCK_TILES" "$FIXTURE_ID"
+    printf ' "setup": {"timezone": "unchanged (the device zone)", "clock": "2026-11-02 10:00:45 local (fixture posted at 10:00:00)", "battery": "unplugged 100", "brightness": 127, "dnd": "off", "tiles_stock": "%s", "tiles_ours": "%s", "fixture": "TEST_NOTIFY id %s", "ours": "shade pixel/together, theme pixel, system colours", "modem": "voice and data unregistered", "notifications": "%s"},\n' "$STOCK_TILES" "$OURS_TILES" "$FIXTURE_ID" "$(json_str "$NOTIFS")"
     printf ' "files": [\n'
     for e in "${MANIFEST_FILES[@]}"; do
-      IFS='|' read -r p r t s m <<< "$e"
+      IFS='|' read -r p r t s m d <<< "$e"
       [ -n "$first" ] || printf ',\n'; first=""
-      printf '  {"path": "%s", "repeat": %s, "theme": "%s", "state": "%s", "size": [1080, 2400], "md5": "%s"}' "$p" "$r" "$t" "$s" "$m"
+      printf '  {"path": "%s", "repeat": %s, "theme": "%s", "state": "%s", "size": [1080, 2400], "md5": "%s"%s}' "$p" "$r" "$t" "$s" "$m" "${d:+, \"dump\": \"$d\"}"
     done
     printf '\n ]\n}\n'
   } > "$f"
 }
 
 # ---------------------------------------------------------------- setup and teardown
-CHANGED=""; TD_DONE=""; ACTIVE_THEME=""; OVERRIDE_REL=""
+NOTIFS=""; CHANGED=""; TD_DONE=""; ACTIVE_THEME=""; OVERRIDE_REL=""; OURS_TILES_CHANGED=""
 apply_setup() {
   local kv ns key
   CHANGED=1
@@ -393,9 +441,9 @@ apply_setup() {
   clock_base || { say "FAIL setup: the device's zone offset could not be read ($(ash date +%z))"; return 1; }
   a shell cmd alarm set-time "$CLOCK_BASE" >/dev/null 2>&1
   [ "$(ash date +%H:%M)" = 10:00 ] || { say "FAIL setup: the clock did not take 10:00 ($(ash date))"; return 1; }
+  a shell "cmd statusbar set-tiles '$STOCK_TILES'" >/dev/null 2>&1   # both sides: ours' list is its counterpart (setup_ours)
+  [ "$(setting_get secure sysui_qs_tiles)" = "$STOCK_TILES" ] || { say "FAIL setup: stock's tiles were not set"; return 1; }
   if [ "$SIDE" = stock ]; then
-    a shell "cmd statusbar set-tiles '$STOCK_TILES'" >/dev/null 2>&1
-    [ "$(setting_get secure sysui_qs_tiles)" = "$STOCK_TILES" ] || { say "FAIL setup: stock's tiles were not set"; return 1; }
     ours_off || { say "FAIL setup: our strip did not go away (the service is still bound)"; return 1; }
   else
     setup_ours || return 1
@@ -416,6 +464,9 @@ setup_ours() {
   fi
   ACTIVE_THEME=pixel
   OVERRIDE_REL="design/user-$ACTIVE_THEME.json"
+  OURS_TILES_CHANGED=1
+  printf '%s\n' "$OURS_TILES" > "$TMPD/qs_tiles.txt"
+  import_file "$TMPD/qs_tiles.txt" qs_tiles.txt || { say "FAIL setup: ours' tile list could not be pushed"; return 1; }
   [ "$FONT" = system ] && want_font=("sys.font.text=system" "sys.font.display=system")
   merge_user "$expdir/$OVERRIDE_REL" "$TMPD/override.json" "sys.color.style=system" "${want_font[@]}" || { say "FAIL setup: the design override could not be made"; return 1; }
   import_file "$TMPD/override.json" "$OVERRIDE_REL" || { say "FAIL setup: the design override could not be pushed"; return 1; }
@@ -427,6 +478,7 @@ setup_ours() {
   [ "$lay" = "pixel together" ] || { say "FAIL setup: the shade is '$lay', not pixel together"; return 1; }
   [ "$(theme_of "$expdir")" = pixel ] || { say "FAIL setup: the theme is not pixel"; return 1; }
   cmp -s "$expdir/$OVERRIDE_REL" "$TMPD/override.json" || { say "FAIL setup: the design override did not arrive as written"; return 1; }
+  [ "$(tr -d '\r\n' < "$expdir/qs_tiles.txt" 2>/dev/null)" = "$OURS_TILES" ] || { say "FAIL setup: ours' tile list is '$(tr -d '\r\n' < "$expdir/qs_tiles.txt" 2>/dev/null)', not $OURS_TILES"; return 1; }
   return 0
 }
 post_fixture() {
@@ -438,6 +490,30 @@ post_fixture() {
   sleep 2
   set_clock   # ... and from here on the clock reads 10:00:45: its alert is older than 30 s, so no render of the row shows the bell
   sleep 33    # the bell the posting's own render showed leaves with its timer (30 s of real time); a heads-up / banner plays out too
+  NOTIFS="$(notif_set)"   # what the shade lists from here on: a system notification that arrives later (Play Protect's "turned on", ~25 min after a boot) is not ours to remove
+  return 0
+}
+notif_set() { # the notification records posted now (package, id, tag), sorted: what a capture shows besides the fixture
+  ash dumpsys notification --noredact | grep 'NotificationRecord(' | sed -E 's/^ *NotificationRecord\([^:]*: //; s/ user=[^ ]*//; s/ (tag|importance|key)=.*//' | sort | tr '\n' ';'
+}
+manifest_notifs() { # MANIFEST -> the notification set it records (capture.sh's setup block, or a golden's own line); nothing when it has none
+  pyx -c "
+import sys, json
+try:
+    d = json.load(open(sys.argv[1], encoding='utf-8'))
+    v = d.get('notifications', d.get('setup', {}).get('notifications'))
+    if isinstance(v, str):
+        sys.stdout.write(v)
+except Exception:
+    pass" "$(winpath "$1")"
+}
+warn_golden_notifs() { # ours side: this run's notification set against the golden's for this build (a different one scores Silent-section differences that are no regression)
+  local b mf g
+  b="$(ash getprop ro.build.id | tr -d '\r\n ')"; mf="${GOLDEN_ROOT:-$FID_ROOT/tools/fidelity/golden}/$b/manifest.json"
+  [ -f "$mf" ] || return 0
+  g="$(manifest_notifs "$mf")"
+  if [ -z "$g" ]; then say "WARNING: the golden of build $b ($mf) records no notification set: a Silent-section difference may come from a notification that was not there when it was taken"
+  elif [ "$g" != "$NOTIFS" ]; then say "WARNING: this run's notifications differ from the golden's for build $b (a Silent-section difference may come from that, not from a regression). golden: $g now: $NOTIFS"; fi
   return 0
 }
 fixture_posted() { ash dumpsys notification --noredact | grep -q "id=$((1000 + FIXTURE_ID)) "; }
@@ -465,6 +541,8 @@ teardown() {
       a shell am broadcast -a dev.launcher.app.SETUP -p $PKG --es element shade --es layout "${prior_shade% *}" --es placement "${prior_shade#* }" >/dev/null 2>&1; sleep 2
     fi
   fi
+  # ours' tile list as it was (reset, or the kept list: the prior export says which; works with the service off)
+  if [ -n "$OURS_TILES_CHANGED" ] && [ -s "$PRIOR_DIR/files/qs_tiles.txt" ]; then import_file "$PRIOR_DIR/files/qs_tiles.txt" qs_tiles.txt; fi
   a shell dumpsys battery reset >/dev/null 2>&1
   for f in voice data; do   # the modem as it was
     gv=$(tr -d '\r\n ' < "$PRIOR_DIR/gsm-$f.txt" 2>/dev/null)
@@ -473,7 +551,7 @@ teardown() {
   night=$(cat "$PRIOR_DIR/night.txt" 2>/dev/null | tr -d '\r\n ')
   case "$night" in yes|no|auto) a shell cmd uimode night "$night" >/dev/null 2>&1;; esac
   tiles=$(cat "$PRIOR_DIR/tiles.txt" 2>/dev/null | tr -d '\r')
-  if [ "$SIDE_RESTORE_TILES" = 1 ] && [ -n "$tiles" ] && [ "$tiles" != null ]; then a shell "cmd statusbar set-tiles '$tiles'" >/dev/null 2>&1; fi
+  if [ -n "$tiles" ] && [ "$tiles" != null ]; then a shell "cmd statusbar set-tiles '$tiles'" >/dev/null 2>&1; fi
   restore_settings
   # the service as it was (others kept); whether its strip is as it was is verify_restored's to check (strip_as_before)
   prior_list=$(prior_value enabled_accessibility_services)
@@ -482,7 +560,6 @@ teardown() {
   verify_restored
   [ "$RESTORE_RC" = 0 ] && rm -f "$PRIOR_DIR/dirty" || say "the prior state stays in $PRIOR_DIR (dirty): capture.sh --restore tries again"
 }
-SIDE_RESTORE_TILES=1
 strip_as_before() { # the gesture strip as the prior list says: up when ours is in it (B-018: switched off and on, twice), else down
   local prior_list cur try; prior_list=$(prior_value enabled_accessibility_services)
   if has_svc "$prior_list"; then
@@ -506,7 +583,7 @@ verify_restored() { # the settings and the app's files against the prior; says w
     [ -z "$d" ] || { say "WARNING: $ns settings differ from before:"; echo "$d" | cut -c1-160 | sed 's/^/    /'; bad=1; }
   done
   if export_files "$TMPD/exp_final"; then
-    for f in setup.json design/theme.txt design/elements.json design/motion.txt; do
+    for f in setup.json design/theme.txt design/elements.json design/motion.txt qs_tiles.txt; do
       [ -f "$PRIOR_DIR/files/$f" ] || [ -f "$TMPD/exp_final/$f" ] || continue   # absent before and after: nothing to compare
       cmp -s "$PRIOR_DIR/files/$f" "$TMPD/exp_final/$f" || { say "WARNING: $f differs from before"; bad=1; }
     done
@@ -532,7 +609,7 @@ main() {
   if [ -n "$RESTORE" ]; then
     case "$DEVICE" in emulator-*) ;; *) echo "capture.sh REFUSED: DEVICE=$DEVICE is not an emulator-*" >&2; rm -rf "$TMPD"; exit 2;; esac
     [ -f "$PRIOR_DIR/dirty" ] || { echo "capture.sh: nothing to restore ($PRIOR_DIR/dirty is not there)"; rm -rf "$TMPD"; exit 0; }
-    SIDE=stock; CHANGED=1; OVERRIDE_REL=""
+    SIDE=stock; CHANGED=1; OVERRIDE_REL=""; OURS_TILES_CHANGED=1   # (what the killed run changed is not known: ours' list too is put back)
     # which design file this run changed is not known: restore_overrides puts back the one this tool writes (user-pixel.json)
     restore_overrides
     teardown; local rc=$RESTORE_RC; rm -rf "$TMPD"; exit $rc
@@ -542,19 +619,22 @@ main() {
   if [ -n "$DRY" ]; then
     say "DRY RUN on $DEVICE ($(ash getprop ro.build.fingerprint)): nothing is changed"
     say "would save the prior state to $PRIOR_DIR, then set: 24 h, clock 2026-11-02 10:00 in the device's zone, battery unplugged at 100, brightness 127, DND off, Auto-rotate, the modem unregistered"
-    [ "$SIDE" = stock ] && say "would set stock's tiles to $STOCK_TILES and switch our accessibility service off (others kept)"
-    [ "$SIDE" = ours ] && say "would set ours to shade pixel/together, theme pixel, system colours, font $FONT (design/user-pixel.json), our service on"
+    say "would set stock's tiles to $STOCK_TILES"
+    [ "$SIDE" = stock ] && say "would switch our accessibility service off (others kept)$([ -n "$DUMP" ] && echo ", and save stock's uiautomator tree of each state (--dump)")"
+    [ "$SIDE" = ours ] && say "would set ours to shade pixel/together, theme pixel, system colours, font $FONT (design/user-pixel.json), tiles $OURS_TILES, our service on"
     say "would post the fixture notification (TEST_NOTIFY id $FIXTURE_ID) and capture, $REPEAT time(s): themes [$THEMES] states [$STATES] into $OUT/$SIDE/<theme>/<state>.png"
     say "would put everything back at the end"
     rm -rf "$TMPD"; exit 0
   fi
   mkdir -p "$OUT" || { echo "capture.sh REFUSED: cannot make $OUT" >&2; rm -rf "$TMPD"; exit 2; }
-  [ "$SIDE" = stock ] && SIDE_RESTORE_TILES=1 || SIDE_RESTORE_TILES=0
-  save_prior || { echo "capture.sh REFUSED: the prior state could not be saved (the app's files export failed: is the app running?)" >&2; rm -rf "$TMPD"; exit 2; }
+  save_prior; local sp=$?
+  [ "$sp" != 3 ] || { echo "capture.sh REFUSED: the app's export has no qs_tiles.txt (a build older than MF slice 2: install a newer one). Nothing was changed." >&2; rm -rf "$TMPD"; exit 2; }
+  [ "$sp" = 0 ] || { echo "capture.sh REFUSED: the prior state could not be saved (the app's files export failed: is the app running?)" >&2; rm -rf "$TMPD"; exit 2; }
   trap 'teardown; rm -rf "$TMPD"' EXIT
   trap 'say "interrupted"; teardown; rm -rf "$TMPD"; trap - EXIT; exit 130' INT TERM HUP
   local rc=0 r theme state
   apply_setup && post_fixture || rc=1
+  if [ "$rc" = 0 ] && [ "$SIDE" = ours ]; then warn_golden_notifs; fi
   if [ "$rc" = 0 ]; then
     for ((r = 1; r <= REPEAT; r++)); do
       for theme in $THEMES; do

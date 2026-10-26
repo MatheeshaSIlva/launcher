@@ -10,15 +10,21 @@
 # kill cases) really sleeps. Each scenario has its own device folder and runs in the background: the cases overlap.
 #
 # Also the modem (adb emu gsm voice|data: unregistered during a run, as it was after: the emulator's signal bars swing otherwise).
-# Cases: preconditions refuse with no mutating call (10 reasons, incl. a `dirty` marker); --dry-run touches nothing; a full
+# MF slice 2: ours' tile list is the fake's virtual qs_tiles.txt (state file $D/qs_tiles, absent = reset: the app's export says
+# `reset` or the list, its import applies it), `uiautomator dump` (stock's tree for --dump), ro.build.id; golden.sh runs on it too.
+# Notification set (D-041 addendum): the manifests record it, golden verify fails on a recapture with another one, ours warns against the golden's.
+# Cases: preconditions refuse with no mutating call (11 reasons, incl. a `dirty` marker and an app that cannot export its tile list; --dump with
+# ours); --dry-run touches nothing; a full
 # ours run and a stock run put everything back (other accessibility services kept, user-pixel.json merged and restored byte for
-# byte or removed when it was absent, settings, tiles, night mode, clock, battery, setup and theme); not at rest exits 1 with
-# "NOT AT REST" and still restores; SIGTERM mid-run restores; a SIGKILL leaves `dirty`, a new run is refused, --restore puts it
-# back.   tools/tests/fidelity_capture_test.sh   exit 0 all passed, 1 a case failed (listed)   VERBOSE=1 prints each run
+# byte or removed when it was absent, settings, tiles, ours' tile list (reset, or a kept list that equals the default, told
+# apart), night mode, clock, battery, setup and theme); not at rest exits 1 with "NOT AT REST" and still restores; SIGTERM mid-run
+# restores (both sides); a SIGKILL leaves `dirty`, a new run is refused, --restore puts it back (ours' list too); --dump saves a
+# tree per state and leaves nothing on the device; golden.sh: refuses (not an emulator, a build that already has a golden), stores
+# 8 pictures with a manifest, verifies them, notices a changed file and a second session's capture, and puts the device back.   tools/tests/fidelity_capture_test.sh   exit 0 all passed, 1 a case failed (listed)   VERBOSE=1 prints each run
 set -u
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+trap '[ -n "${KEEP:-}" ] || rm -rf "$WORK"' EXIT
 VERBOSE="${VERBOSE:-}"
 # the fake's sleep takes no time, so a poll that never succeeds (the strip that never comes) costs a fake-adb call per try:
 # its bound is scaled down (capture.sh's POLL_SCALE; every poll still tries at least once, the retries still run)
@@ -64,6 +70,7 @@ getprop() {
     ro.build.version.sdk) rd _v "$D/sdk"; echo "$_v";;
     persist.sys.locale|ro.product.locale) echo en-US;;
     ro.build.fingerprint) echo "fake/android17/user";;
+    ro.build.id) echo FAKE.260101.001;;
     persist.sys.timezone) echo UTC;;
   esac
 }
@@ -85,6 +92,7 @@ dumpsys() {
     window:) rd _v "$D/focus"; echo "  mCurrentFocus=Window{1a2b u0 $_v}";;
     notification:*)
       echo "  NotificationRecord(0x1: pkg=dev.launcher.app user=UserHandle{0} id=7 tag=null importance=2 key=x|channel=safety)"
+      [ -f "$D/foreign" ] && echo "  NotificationRecord(0x3: pkg=com.android.vending user=UserHandle{0} id=951340667 tag=null importance=2 key=z|channel=account)"
       local f; for f in "$D"/notif_*; do
         [ -f "$f" ] || continue
         echo "  NotificationRecord(0x2: pkg=dev.launcher.app user=UserHandle{0} id=$((1000 + ${f##*notif_})) tag=null importance=3 key=y|channel=test)"
@@ -105,13 +113,27 @@ cmd() {
       if [ $# -ge 3 ]; then mut cmd uimode night "$3"; printf '%s' "$3" > "$D/night"; else rd _v "$D/night"; echo "Night mode: $_v"; fi;;
   esac
 }
-app_export() { rm -rf "$APP/dev-out"; mkdir -p "$APP/dev-out/design"; cp "$APP/setup.json" "$APP/dev-out/"; cp "$APP"/design/* "$APP/dev-out/design/" 2>/dev/null; echo 2 > "$APP/dev-out/.done"; }
+app_export() {
+  rm -rf "$APP/dev-out"; mkdir -p "$APP/dev-out/design"; cp "$APP/setup.json" "$APP/dev-out/"; cp "$APP"/design/* "$APP/dev-out/design/" 2>/dev/null
+  if [ ! -f "$D/noqs" ]; then if [ -f "$D/qs_tiles" ]; then printf '%s\n' "$(<"$D/qs_tiles")" > "$APP/dev-out/qs_tiles.txt"; else echo reset > "$APP/dev-out/qs_tiles.txt"; fi; fi
+  echo 2 > "$APP/dev-out/.done"
+}
+uiautomator() { # the stock side's tree (--dump): a file on the fake sdcard, as the real one
+  [ "$1" = dump ] || return 1
+  [[ "$(sget secure enabled_accessibility_services)" == *"$OURS"* ]] && echo "UNBOUND $*" >> "$LOGF"   # (what a dump with our service on would do)
+  echo "UI hierchary dumped to: $2"; printf '<?xml version="1.0"?><hierarchy rotation="0"><node text="Fidelity fixture"/></hierarchy>' > "$2"   # ($2 is already the fake sdcard path: the shell branch replaced /sdcard/)
+}
 app_import() {
   local f rel
   [ -d "$APP/dev-in" ] || return 0
   while IFS= read -r f; do
-    rel="${f#"$APP/dev-in/"}"; mkdir -p "$APP/$(dirname "$rel")"; cp "$f" "$APP/$rel"
+    rel="${f#"$APP/dev-in/"}"
     echo "IMPORT $rel $(<"$f")" >> "$LOGF"
+    if [ "$rel" = qs_tiles.txt ]; then   # the virtual file: the list is applied, not stored as a file
+      _t="$(<"$f")"; _t="${_t%%$'\r'}"; if [ "${_t//[$' \t\n']/}" = reset ]; then command rm -f "$D/qs_tiles"; else printf '%s' "$_t" > "$D/qs_tiles"; fi
+      continue
+    fi
+    mkdir -p "$APP/$(dirname "$rel")"; cp "$f" "$APP/$rel"
   done < <(find "$APP/dev-in" -type f)
   rm -rf "$APP/dev-in"
 }
@@ -144,6 +166,10 @@ am() {
 rm() { mut rm "$@"; command rm "$@"; }
 mkdir() { mut mkdir "$@"; command mkdir "$@"; }
 shot() {
+  if [ -f "$D/foreignonce" ]; then command rm -f "$D/foreignonce"; : > "$D/foreign"; fi   # a system notification arrives while a state is taken
+  # a slow state: the clock runs 70 s ahead while the picture is taken (once, or every time)
+  if [ -f "$D/slowonce" ]; then command rm -f "$D/slowonce"; rd _c "$D/clock_ms"; printf '%s' $((_c + 70000)) > "$D/clock_ms"
+  elif [ -f "$D/slowalways" ]; then rd _c "$D/clock_ms"; printf '%s' $((_c + 70000)) > "$D/clock_ms"; fi
   cat "$FAKE_STATE/shot.png"
   [ -f "$D/notrest" ] && echo "$RANDOM$RANDOM$RANDOM"
 }
@@ -171,7 +197,7 @@ printf '\211PNG\r\n\032\n\000\000\000\rIHDR\000\000\004\070\000\000\011\140\010\
 
 # ---------------------------------------------------------------- a scenario's device
 ACC_BOTH="com.other.app/com.other.app.Service:dev.launcher.app/dev.launcher.app.NavAccessibilityService"
-new_dev() {   # $1 = scenario name, $2 = accessibility list ("" = none set), $3 = user-pixel.json content ("" = no file)
+new_dev() {   # $1 = scenario name, $2 = accessibility list ("" = none set), $3 = user-pixel.json content ("" = no file), $4 = ours' kept tile list ("" = none kept: reset)
   S="$WORK/$1"; D="$S/dev"; APPF="$D/sdcard/Android/data/dev.launcher.app/files"
   mkdir -p "$D/s/system" "$D/s/secure" "$D/s/global" "$APPF/design"
   cp "$WORK/shot.png" "$S/shot.png"; : > "$S/adb.log"
@@ -188,6 +214,7 @@ new_dev() {   # $1 = scenario name, $2 = accessibility list ("" = none set), $3 
   printf '{"version": 1, "elements": {"shade": {"layout": "ios", "placement": "split-top", "options": {}}}}' > "$APPF/setup.json"
   printf ios27 > "$APPF/design/theme.txt"; printf '{}' > "$APPF/design/elements.json"; printf ios27 > "$APPF/design/motion.txt"
   [ -n "$3" ] && printf '%s' "$3" > "$APPF/design/user-pixel.json"
+  [ -n "${4:-}" ] && printf '%s' "$4" > "$D/qs_tiles"
   return 0
 }
 snap() { ( cd "$1/dev" && find . -type f ! -path '*/dev-out/*' ! -path '*/dev-in/*' ! -name 'hang*' -print0 | sort -z | xargs -0 md5sum ); }
@@ -210,6 +237,7 @@ chk() {   # chk "description" CONDITION-COMMAND...  (records PASS or FAIL in $S/
 }
 has() { grep -qE -- "$1" "$2"; }
 eq() { [ "$1" = "$2" ]; }
+rc_out() { [ "$RC" = "$1" ] && grep -qE -- "$2" "$S/out.txt"; }   # the last run exited with $1 and its output has /$2/
 finish() {   # prints the output tail when something failed (or VERBOSE)
   chk "every adb call named the emulator (-s emulator-*)" test "$(grep -c '^NOSERIAL' "$S/adb.log")" = 0
   if grep -q '^FAIL' "$S/result" || [ -n "$VERBOSE" ]; then
@@ -241,6 +269,31 @@ b_palette() { printf '{"android.theme.customization.system_palette":"AABBCC"}' >
 b_dirty() { mkdir -p "$S/prior"; echo "emulator-5554 1" > "$S/prior/dirty"; }
 b_manifest() { mkdir -p "$S/out"; echo '{}' > "$S/out/manifest.json"; }
 b_notif() { : > "$D/notif_5"; }
+b_noqs() { : > "$D/noqs"; }
+
+sc_refuse_noqs() {   # an app older than slice 2: its export has no qs_tiles.txt. The refusal comes after the prior's first export,
+  # which is a read: no setting, no clock, no modem, no notification, no list is touched, and no dirty marker is left.
+  NAME="refuse-noqs"; new_dev "$NAME" "$ACC_BOTH" ''
+  b_noqs
+  local before; before="$(snap "$S")"
+  run_cap -- --side ours --state quick --theme light --out "$S/out"
+  chk "exit 2" eq "$RC" 2
+  chk "says REFUSED and names qs_tiles.txt" has "REFUSED.*qs_tiles.txt" "$S/out.txt"
+  chk "no setting, command, modem or notification was changed" test "$(grep '^MUT ' "$S/adb.log" | grep -cE 'settings (put|delete)|MUT cmd|MUT emu|MUT dumpsys|TEST_NOTIFY|SETUP|IMPORT|set-time')" = 0
+  chk "the device is as it was" eq "$(snap "$S")" "$before"
+  chk "no prior folder, no dirty marker, no PNG" test ! -e "$S/prior" -a ! -e "$S/out/ours"
+  finish
+}
+sc_refuse_dump_ours() {
+  NAME="refuse-dump-ours"; new_dev "$NAME" "$ACC_BOTH" ''
+  local before; before="$(snap "$S")"
+  run_cap -- --side ours --state quick --theme light --out "$S/out" --dump
+  chk "exit 2" eq "$RC" 2
+  chk "says --dump is for the stock side" has "dump is for --side stock only" "$S/out.txt"
+  chk "no mutating call" eq "$(muts)" 0
+  chk "the device is as it was" eq "$(snap "$S")" "$before"
+  finish
+}
 
 sc_dryrun() {
   NAME="dryrun"; new_dev "$NAME" "$ACC_BOTH" ''
@@ -254,8 +307,10 @@ sc_dryrun() {
   finish
 }
 
-sc_ours() {   # $1 = name, $2 = accessibility list, $3 = user-pixel.json content (or none)
-  NAME="$1"; new_dev "$NAME" "$2" "$3"
+OURS_WANT="WIFI:w,BLUETOOTH:w,CELLULAR:w,FOCUS:w,AIRPLANE,ROTATION_LOCK,FLASHLIGHT"
+DEFAULT_LIST="WIFI:w,BLUETOOTH:w,CELLULAR:w,QUICK_SHARE:w,FOCUS:w,WALLET:w,AIRPLANE,ROTATION_LOCK,FLASHLIGHT,LOW_POWER,ALARM,HOME,MIRRORING"
+sc_ours() {   # $1 = name, $2 = accessibility list, $3 = user-pixel.json content (or none), $4 = ours' kept tile list (or none: reset)
+  NAME="$1"; new_dev "$NAME" "$2" "$3" "${4:-}"
   local before; before="$(snap "$S")"
   run_cap -- --side ours --state quick,tile-off --theme light --out "$S/out"
   chk "exit 0" eq "$RC" 0
@@ -274,6 +329,12 @@ sc_ours() {   # $1 = name, $2 = accessibility list, $3 = user-pixel.json content
   chk "no dirty marker left" test ! -e "$S/prior/dirty"
   chk "the fixture is cancelled" test ! -e "$D/notif_1"
   chk "the user file is as it was" eq "$([ -f "$APPF/design/user-pixel.json" ] && cat "$APPF/design/user-pixel.json" || echo ABSENT)" "${3:-ABSENT}"
+  chk "stock's tiles were set on the ours side too" has "MUT cmd statusbar set-tiles wifi,bt,cell,dnd,airplane,rotation,flashlight" "$S/adb.log"
+  chk "ours' tile list was set to stock's counterpart" has "IMPORT qs_tiles.txt $OURS_WANT\$" "$S/adb.log"
+  chk "ours' tile list is as it was: $([ -n "${4:-}" ] && echo "the kept list" || echo reset)" eq "$([ -f "$D/qs_tiles" ] && cat "$D/qs_tiles" || echo RESET)" "${4:-RESET}"
+  chk "  and was put back with the prior's own text ($([ -n "${4:-}" ] && echo "not reset" || echo reset))" has "IMPORT qs_tiles.txt ${4:-reset}\$" "$S/adb.log"
+  chk "  the manifest names both lists" has '"tiles_ours": "'"$OURS_WANT"'"' "$S/out/manifest.json"
+  chk "  and the notification set at capture (the fixture and the safety one)" has '"notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;"' "$S/out/manifest.json"
   finish
 }
 
@@ -289,12 +350,57 @@ sc_stock() {   # $1 = name, $2 = accessibility list
   chk "night mode set to dark and given back" has "MUT cmd uimode night no" "$S/adb.log"
   chk "the clock was set and auto time given back" has "MUT cmd alarm set-time 1793613600000" "$S/adb.log"
   chk "no app broadcast touched the design (stock side)" test "$(grep -c 'IMPORT' "$S/adb.log")" = 0
+  chk "ours' tile list was not touched (stock side)" test "$(grep -c 'qs_tiles[.]txt' "$S/adb.log")" = 0
   chk "the device is as before (everything, byte for byte)" eq "$(snap "$S")" "$before"
   chk "no dirty marker left" test ! -e "$S/prior/dirty"
+  chk "the manifest names the notification set at capture" has '"notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;"' "$S/out/manifest.json"
   case "$2" in *com.other*) chk "the other service stayed in the list while ours was off" has "enabled_accessibility_services com.other.app/com.other.app.Service\$" "$S/adb.log";; esac
   finish
 }
 
+sc_dump() {   # --dump: stock's tree beside each picture, only with our service off, nothing left on the device
+  NAME="dump"; new_dev "$NAME" "$ACC_BOTH" ''
+  local before; before="$(snap "$S")"
+  run_cap -- --side stock --state quick,expanded --theme light,dark --out "$S/out" --dump
+  chk "exit 0" eq "$RC" 0
+  chk "4 pictures and 4 trees" test "$(ls "$S"/out/stock/*/*.png | wc -l)" = 4 -a "$(ls "$S"/out/stock/*/*.xml | wc -l)" = 4
+  chk "the trees are uiautomator's" has "<hierarchy" "$S/out/stock/light/quick.xml"
+  chk "the manifest names each tree" test "$(grep -c '"dump": "stock/' "$S/out/manifest.json")" = 4
+  chk "no dump ran with our service on" test "$(grep -c '^UNBOUND' "$S/adb.log")" = 0
+  chk "nothing of the dump is left on the device" test ! -e "$D/sdcard/fid_dump.xml"
+  chk "the device is as before (byte for byte)" eq "$(snap "$S")" "$before"
+  finish
+}
+sc_slowclock() {   # the clock guard: a slow state is taken again once; one that is slow every time fails (exit 1), the device is put back both ways
+  NAME="slowclock"; new_dev "$NAME" "$ACC_BOTH" ''
+  local before; before="$(snap "$S")"
+  : > "$D/slowonce"
+  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  chk "slow once: exit 0" eq "$RC" 0
+  chk "  says it retried" has "retrying light/quick" "$S/out.txt"
+  chk "  the picture and its manifest line are there" test -f "$S/out/stock/light/quick.png" -a "$(grep -c '"state": "quick"' "$S/out/manifest.json")" = 1
+  chk "  the clock was set again after the panel was reached (at least 7 set-time calls in all)" test "$(grep -c '^MUT cmd alarm set-time' "$S/adb.log")" -ge 7
+  chk "  the device is as before" eq "$(snap "$S")" "$before"
+  : > "$D/slowalways"
+  run_cap -- --side stock --state quick --theme light --out "$S/out2"
+  chk "slow every time: exit 1" eq "$RC" 1
+  chk "  names the clock" has "FAIL light/quick r1: the clock left 10:00" "$S/out.txt"
+  chk "  no picture kept in the manifest" test "$(grep -c '"state": "quick"' "$S/out2/manifest.json")" = 0
+  rm -f "$D/slowalways"
+  chk "  the device is put back all the same" eq "$(snap "$S")" "$before"
+  finish
+}
+sc_foreign() {   # a notification that arrives mid-run (Play Protect's) makes the state fail, never a silent difference
+  NAME="foreign"; new_dev "$NAME" "$ACC_BOTH" ''
+  local before; before="$(snap "$S")"
+  : > "$D/foreignonce"
+  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  chk "exit 1" eq "$RC" 1
+  chk "says a notification arrived, naming the package" has "FAIL light/quick r1: a notification arrived.*com.android.vending" "$S/out.txt"
+  rm -f "$D/foreign"
+  chk "the device is put back all the same" eq "$(snap "$S")" "$before"
+  finish
+}
 sc_notrest() {
   NAME="notrest"; new_dev "$NAME" "$ACC_BOTH" ''
   local before; before="$(snap "$S")"
@@ -315,11 +421,11 @@ run_bg() {   # ARGS: capture.sh in the background -> PID
     bash "$REPO/tools/fidelity/capture.sh" "$@" >> "$S/out.txt" 2>&1 < /dev/null &
   PID=$!
 }
-sc_sigterm() {
-  NAME="sigterm"; new_dev "$NAME" "$ACC_BOTH" ''
+sc_sigterm() {   # $1 = side (stock: hangs in the first panel's expand; ours: in its open, with a kept list to put back)
+  NAME="sigterm-$1"; new_dev "$NAME" "$ACC_BOTH" '' "$([ "$1" = ours ] && echo "$DEFAULT_LIST")"
   local before; before="$(snap "$S")"
-  echo expand > "$D/hang"
-  run_bg --side stock --state quick --theme dark --out "$S/out"
+  [ "$1" = ours ] && echo open > "$D/hang" || echo expand > "$D/hang"
+  run_bg --side "$1" --state quick --theme dark --out "$S/out"
   chk "the run reached its first panel" wait_hang
   kill -TERM "$PID" 2>/dev/null; kill -KILL "$(<"$D/hang.pid")" 2>/dev/null
   wait "$PID"; RC=$?
@@ -330,13 +436,14 @@ sc_sigterm() {
   finish
 }
 sc_kill() {
-  NAME="kill"; new_dev "$NAME" "$ACC_BOTH" '{"format":1,"name":"user","tokens":{"keep.me":{"choice":"x"}}}'
+  NAME="kill"; new_dev "$NAME" "$ACC_BOTH" '{"format":1,"name":"user","tokens":{"keep.me":{"choice":"x"}}}' "$DEFAULT_LIST"
   local before; before="$(snap "$S")"
   echo open > "$D/hang"
   run_bg --side ours --state quick --theme light --out "$S/out"
   chk "the run reached its first panel" wait_hang
   kill -KILL "$PID" 2>/dev/null; kill -KILL "$(<"$D/hang.pid")" 2>/dev/null
   wait "$PID" 2>/dev/null
+  chk "the device is left changed (ours' list too)" test "$(cat "$D/qs_tiles")" = "$OURS_WANT"
   chk "the device is left changed" test "$(snap "$S")" != "$before"
   chk "a dirty marker stays" test -f "$S/prior/dirty"
   local m; m="$(muts)"
@@ -347,6 +454,7 @@ sc_kill() {
   run_cap -- --restore
   chk "--restore exits 0" eq "$RC" 0
   chk "--restore puts the device back (byte for byte)" eq "$(snap "$S")" "$before"
+  chk "  ours' kept list is back as a list, not reset" eq "$(cat "$D/qs_tiles" 2>/dev/null || echo RESET)" "$DEFAULT_LIST"
   chk "  the dirty marker is gone" test ! -e "$S/prior/dirty"
   run_cap -- --restore
   chk "a second --restore has nothing to do: exit 0" eq "$RC" 0
@@ -372,6 +480,114 @@ sc_nostrip() {   # B-018 at the restore: the list is back but the strip never co
   chk "  the dirty marker is gone" test ! -e "$S/prior/dirty"
   finish
 }
+# golden.sh against the fake (golden.sh capture/verify; a real 1080x2400 picture so that pngopt.py takes it)
+real_png() { python -c "
+import sys
+from PIL import Image, ImageDraw
+im = Image.new('RGBA', (1080, 2400), (20, 24, 32, 255))
+d = ImageDraw.Draw(im)
+d.rectangle([60, 300, 1000, 900], fill=(60, 120, 200, 255))
+im.save(sys.argv[1])" "$1"; }
+run_golden() {   # run_golden ARGS...: golden.sh on the fake; output in $S/out.txt, exit in RC
+  env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE="${GDEVICE:-emulator-5554}" FID_PRIOR="$S/prior" FAKE_STATE="$S" POLL_SCALE="$POLL_SCALE" \
+    GOLDEN_STAGE="$S/stage" timeout 300 bash "$REPO/tools/fidelity/golden.sh" "$@" > "$S/out.txt" 2>&1 < /dev/null
+  RC=$?
+}
+sc_golden() {
+  NAME="golden"; new_dev "$NAME" "$ACC_BOTH" ''
+  real_png "$WORK/golden_shot.png"; cp "$WORK/golden_shot.png" "$S/shot.png"
+  local before; before="$(snap "$S")"
+  # refusals first: not an emulator, and a build that already has a golden (nothing touched, nothing written)
+  GDEVICE=FAKE-SERIAL run_golden capture --root "$S/g0"
+  chk "a non-emulator serial is refused (exit 2, nothing touched)" eq "$RC" 2
+  chk "  says so" has "REFUSED.*not an emulator" "$S/out.txt"
+  chk "  no mutating call, no folder" test "$(muts)" = 0 -a ! -e "$S/g0"
+  mkdir -p "$S/g1/FAKE.260101.001"; echo '{}' > "$S/g1/FAKE.260101.001/manifest.json"
+  run_golden capture --root "$S/g1"
+  chk "a build that already has a golden is refused (exit 2)" eq "$RC" 2
+  chk "  says it is never overwritten" has "REFUSED.*already exists" "$S/out.txt"
+  chk "  no mutating call" eq "$(muts)" 0
+  chk "  the existing manifest is untouched" eq "$(cat "$S/g1/FAKE.260101.001/manifest.json")" "{}"
+  # a capture that works: 8 pictures, a manifest, the device back as before
+  run_golden capture --root "$S/g2"
+  chk "capture: exit 0" eq "$RC" 0
+  chk "  8 PNGs under <build>/<theme>/<state>.png" test "$(ls "$S"/g2/FAKE.260101.001/*/*.png | wc -l)" = 8
+  chk "  a manifest with 8 files and the total" test "$(grep -c '"size": \[1080, 2400\]' "$S/g2/FAKE.260101.001/manifest.json")" = 8 -a "$(grep -c '"total_bytes"' "$S/g2/FAKE.260101.001/manifest.json")" = 1
+  chk "  no staging folder left" test ! -e "$S/g2/FAKE.260101.001.tmp"
+  chk "  the manifest records the notification set (read from the capture's manifest)" has '"notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;",' "$S/g2/FAKE.260101.001/manifest.json"
+  chk "  the device is as before" eq "$(snap "$S")" "$before"
+  run_golden verify --root "$S/g2"
+  chk "verify: exit 0" eq "$RC" 0
+  chk "  says OK and the total" has "golden verify: OK.*" "$S/out.txt"
+  chk "  prints the notification set at capture" has "notifications at capture: pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;" "$S/out.txt"
+  # a manifest that records no notification set (a golden of before) fails
+  mkdir -p "$S/g4"; cp -r "$S/g2/FAKE.260101.001" "$S/g4/"; sed -i '/"notifications"/d' "$S/g4/FAKE.260101.001/manifest.json"
+  run_golden verify --root "$S/g4"
+  chk "a golden with no notification set fails verify (exit 1, says recapture)" rc_out 1 "FAIL  the manifest records no notification set.*recapture"
+  # a recapture with another notification set (Play Protect's arrived): identical pictures, but verify --against fails and names why
+  : > "$D/foreign"; rm -rf "$S/stage"; run_golden capture --root "$S/g5"; rm -f "$D/foreign"
+  chk "a capture with a foreign notification stores it in its manifest" has "com.android.vending id=951340667" "$S/g5/FAKE.260101.001/manifest.json"
+  run_golden verify --root "$S/g2" --against "$S/g5"
+  chk "--against a recapture with another notification set fails (exit 1) and says so" rc_out 1 "FAIL  --against: the notifications at capture differ.*stored: pkg=dev.launcher.app.*other: .*com.android.vending"
+  run_golden verify --root "$S/g5" --against "$S/g2"
+  chk "  the other way round too (exit 1)" rc_out 1 "FAIL  --against: the notifications at capture differ"
+  # a second session's capture of the same build (the fake gives the same picture: identical), and a changed file
+  rm -rf "$S/stage"; run_golden capture --root "$S/g3"
+  run_golden verify --root "$S/g2" --against "$S/g3"
+  chk "against a second capture: exit 0, 8 of 8 identical" rc_out 0 "8 of 8 identical"
+  python -c "
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert('RGB'); im.putpixel((5, 5), (255, 0, 0)); im.save(sys.argv[1])" "$S/g3/FAKE.260101.001/dark/quick.png"
+  run_golden verify --root "$S/g3"
+  chk "a changed picture is noticed (exit 1, its md5)" rc_out 1 "FAIL  dark/quick.png: decoded md5"
+  rm "$S/g3/FAKE.260101.001/light/expanded.png"
+  run_golden verify --root "$S/g3"
+  chk "a missing picture is noticed (exit 1)" rc_out 1 "FAIL  light/expanded.png: missing"
+  run_golden verify --root "$S/g2" --against "$S/g3"
+  chk "--against: a picture missing in the other folder is a failure, not a crash" rc_out 1 "FAIL  light/expanded.png: cannot be read"
+  cp "$S/g2/FAKE.260101.001/light/expanded.png" "$S/g3/FAKE.260101.001/light/expanded.png"
+  run_golden verify --root "$S/g2" --against "$S/g3"
+  chk "--against: one changed pixel is listed as within noise (exit 0)" rc_out 0 "near  dark/quick.png"
+  python -c "
+import sys
+from PIL import Image, ImageDraw
+im = Image.open(sys.argv[1]).convert('RGB'); ImageDraw.Draw(im).rectangle([100, 700, 900, 1300], fill=(250, 250, 250)); im.save(sys.argv[1])" "$S/g3/FAKE.260101.001/light/tile-on.png"
+  run_golden verify --root "$S/g2" --against "$S/g3"
+  chk "--against: a real difference fails (exit 1, lists the file)" rc_out 1 "FAIL  light/tile-on.png: differs"
+  finish
+}
+sc_notifwarn() {   # ours side: a warning when its notification set differs from the golden's of the build (never a failure)
+  NAME="notifwarn"; new_dev "$NAME" "$ACC_BOTH" ''
+  local before; before="$(snap "$S")"
+  mkdir -p "$S/gold/FAKE.260101.001"
+  printf '{
+ "notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;",
+ "files": []
+}
+' > "$S/gold/FAKE.260101.001/manifest.json"
+  run_cap GOLDEN_ROOT="$S/gold" -- --side ours --state quick --theme light --out "$S/out1"
+  chk "the same set as the golden's: exit 0, no warning" test "$RC" = 0 -a "$(grep -c WARNING "$S/out.txt")" = 0
+  printf '{
+ "notifications": "pkg=dev.launcher.app id=7;",
+ "files": []
+}
+' > "$S/gold/FAKE.260101.001/manifest.json"
+  run_cap GOLDEN_ROOT="$S/gold" -- --side ours --state quick --theme light --out "$S/out2"
+  chk "another set: a warning that names both sets, the run still exits 0" rc_out 0 "WARNING: this run's notifications differ from the golden's.*golden: pkg=dev.launcher.app id=7;.*now: pkg=dev.launcher.app id=1001;"
+  printf '{
+ "files": []
+}
+' > "$S/gold/FAKE.260101.001/manifest.json"
+  run_cap GOLDEN_ROOT="$S/gold" -- --side ours --state quick --theme light --out "$S/out3"
+  chk "a golden with no record of it: a warning, exit 0" rc_out 0 "WARNING: the golden of build FAKE.260101.001 .*records no notification set"
+  run_cap GOLDEN_ROOT="$S/nogold" -- --side ours --state quick --theme light --out "$S/out4"
+  chk "no golden for the build: no warning" test "$RC" = 0 -a "$(grep -c WARNING "$S/out.txt")" = 0
+  run_cap GOLDEN_ROOT="$S/gold" -- --side stock --state quick --theme light --out "$S/out5"
+  chk "the stock side does not look at the golden" test "$RC" = 0 -a "$(grep -c WARNING "$S/out.txt")" = 0
+  chk "the device is as before" eq "$(snap "$S")" "$before"
+  finish
+}
 sc_static() {   # capture.sh itself: adb is called in a(), ap() and emu() only (each of them names the device)
   NAME="static"; S="$WORK/static"; mkdir -p "$S"; : > "$S/adb.log"
   local calls; calls="$(grep -nE '"\$ADB"' "$REPO/tools/fidelity/capture.sh" | grep -vE '^[0-9]+:(a|ap|emu)\(\) |^[0-9]+:ADB=' | grep -v '^[0-9]*:#' || true)"
@@ -392,16 +608,26 @@ job sc_refuse palette b_palette "palette"
 job sc_refuse dirty b_dirty "dirty"
 job sc_refuse manifest b_manifest "already holds a capture"
 job sc_refuse notif b_notif "another test notification"
+job sc_refuse_noqs
+job sc_refuse_dump_ours
 job sc_refuse serial true "not an emulator" FAKE-SERIAL
 job sc_dryrun
 job sc_ours ours-merge "com.other.app/com.other.app.Service" '{"format":1,"name":"user","tokens":{"keep.me":{"choice":"x"}}}'
 job sc_ours ours-fresh "" ''
+job sc_ours ours-kept-default "" '' "$DEFAULT_LIST"
+job sc_ours ours-kept-other "com.other.app/com.other.app.Service" '' "LOCATION,ROTATION_LOCK,HOTSPOT:w,FLASHLIGHT"
 job sc_stock stock-other "$ACC_BOTH"
 job sc_stock stock-alone "dev.launcher.app/dev.launcher.app.NavAccessibilityService"
+job sc_dump
 job sc_notrest
-job sc_sigterm
+job sc_slowclock
+job sc_foreign
+job sc_notifwarn
+job sc_sigterm stock
+job sc_sigterm ours
 job sc_kill
 job sc_nostrip
+job sc_golden
 job sc_static
 for j in "${JOBS[@]}"; do wait "$j"; done
 
@@ -410,4 +636,4 @@ cat "$WORK/all.txt"
 FAILS=$(grep -c '^FAIL' "$WORK/all.txt"); PASSES=$(grep -c '^PASS' "$WORK/all.txt")
 SCEN=$(ls "$WORK"/*/result 2>/dev/null | wc -l)
 echo "fidelity_capture_test: $SCEN scenarios, $PASSES checks passed, $FAILS failed"
-[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 20 ]; }
+[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 30 ]; }

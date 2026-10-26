@@ -61,6 +61,9 @@ Acceptance criteria:
       and stock; the self-diff gate (`tools/fidelity/selfdiff.sh`) passed live with every noise pair at 0.0 (50 pairs incl.
       sanity pairs; the 4 quick-vs-expanded pairs added after were checked on the same captures). The rest of the matrix comes in later slices, so this stays open
 - [ ] Golden set: stock Android 17's shade for every state in the matrix, light and dark (storage decided in a D-entry)
+      Status 2026-10-26 (slice 2): stock goldens for slice 1's 4 states x light/dark in
+      `tools/fidelity/golden/CP41.260828.004.A7/` (1.56 MB, lossless, notification set recorded, recaptured 8/8 identical;
+      D-038, D-041). The rest of the matrix comes later, so this stays open
 - [ ] Motion: slow-motion frames (10x) of the pull, the second stage, the edit page and a tile toggle, stock against ours,
       compared at the same progress, not the same time
 - [ ] Baseline run: every state diffed once; each region over tolerance is fixed or logged as a bug with its heatmap;
