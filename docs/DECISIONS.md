@@ -315,4 +315,9 @@ baseline, never as a silent mask. (4) `uiautomator dump` runs only on the stock 
 comes from a font-family name is masked per text node with a reason in `mask-rules.json` (D-038).
 Alternatives considered: a new broadcast for the tile list; stopping our foreground service for captures (removes a safety
 net); masking whole rows above the fixture.
+Addendum to D-041 (2026-10-26, slice 2's probes): on this emulator ours lists our "Launcher safety" notification too, so
+the Silent tail is not stock-only; slice 3's mask rules start from what both sides show. Google Play's "Play Protect is
+turned on" notification arrives ~25 minutes after a boot and changes the Silent section: a capture fails if the
+notification set changes mid-run, and every capture and golden records its notification set, so ours and the golden are
+compared only with the same set.
 
