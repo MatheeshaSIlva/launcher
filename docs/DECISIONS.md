@@ -303,3 +303,16 @@ SystemUI's 30 s "recently alerted" bell is gone in every capture while the time 
 counts only when our gesture strip is really back (B-018). The fake-device test scales its polls (`POLL_SCALE`, 0.1 in the
 test, 1 for real runs). The owner allowed a third round (2026-10-26) limited to the fake test's flakiness under load.
 
+### D-041: MF slice 2's mechanics (2026-10-26)
+Decision: (1) Ours' Quick Settings tile list is read and set over adb as a virtual `qs_tiles.txt` in DevFiles' export and
+import (works with the accessibility service off; "restored exactly" is a cmp of two exports), with the existing hook's
+grammar. (2) Goldens go under `tools/fidelity/golden/<ro.build.id>/`, optimised losslessly with Pillow only, identified by
+the md5 of the decoded pixels; a new Android build gets a new folder. (3) The fixture difference that comes from our app
+being alive (stock lists our "Launcher safety" foreground notification and the system's overlay notice in its Silent
+section, and an "N apps active" footer; ours hides its own overlay notice by design) is not removed: those rows lie below
+the fixture card, so slice 3 masks the stock-only Silent tail and the footer by rules from stock's dump, each named in the
+baseline, never as a silent mask. (4) `uiautomator dump` runs only on the stock side (our service off). (5) Text whose weight
+comes from a font-family name is masked per text node with a reason in `mask-rules.json` (D-038).
+Alternatives considered: a new broadcast for the tile list; stopping our foreground service for captures (removes a safety
+net); masking whole rows above the fixture.
+

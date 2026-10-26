@@ -70,3 +70,20 @@ golden.
   pairs; the shell test, check.sh and diff.py's tests; the probes' answers in the header).
 - Owner's answers (2026-10-26, D-038): one font on both sides (ours on the system font for captures, restored after; the
   font override is built in slice 1 as a switch); goldens in the repo under `tools/fidelity/golden/<android-build>/`.
+
+## Slice 2 plan (architect, 2026-10-26): ours' tile list over adb, stock goldens (steps 1-4); slice 3: masks and the baseline (steps 5-7)
+1. Probes (emulator, recorded in capture.sh's header as i-k): which notification records exist on the stock side besides
+   the fixture and which ours shows; stock tile sizes after `set-tiles` (fixes ours' `:w` marks); `uiautomator dump` with
+   our service off (works, leaves no difference, strip back).
+2. App: `shade/qs/QsTileList` (pure grammar `reset` | `KEY[:w],...`, also used by the existing `qs_tiles` hook),
+   `QsTileStore.dump/apply` (prefs read directly: the default and a kept list equal to it told apart), DevFiles export and
+   import of a virtual `qs_tiles.txt` (works with the service off); `QsTileListTest`.
+3. capture.sh: ours' list set to stock's counterpart (`WIFI,BLUETOOTH,CELLULAR,FOCUS,AIRPLANE,ROTATION_LOCK,FLASHLIGHT`, wide
+   marks from stock), restored and verified on every exit; `--dump` (stock only; ours refused untouched); the fake test
+   extended; selfdiff.sh live again.
+4. `golden.sh capture|verify` and `pngopt.py` (lossless Pillow re-encode, refuses lossy), goldens in
+   `tools/fidelity/golden/<ro.build.id>/<theme>/<state>.png` with a manifest (decoded-RGB md5); captured twice live, equal.
+Slice 3 (steps 5-7): `maskgen.py` + `mask-rules.json` from stock's dump (family-named-weight text nodes; the stock-only
+Silent tail below the fixture card and the "1 app is active" footer, each rule with a why, at most 6 % of a picture),
+`scores.py` + `baseline.sh`, the first ours-vs-stock run into `docs/FIDELITY_BASELINE.md`.
+Acceptance criteria AC1-AC9 as in the architect's plan (AC1-AC5 and AC9 for slice 2).
