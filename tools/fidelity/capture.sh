@@ -23,7 +23,7 @@
 #   own zone (D-039 said UTC: changing the zone makes Android post "Your time zone changed", which a shell cannot take back; reset
 #   before every state: it keeps running, and the notification says "now"), battery unplugged at 100 % (status discharging),
 #   brightness 127 (manual), DND off, Auto-rotate on, portrait, one notification (TEST_NOTIFY id 1 "Fidelity fixture", with the
-#   app's own "Launcher safety" one), stock's tiles wifi,bt,cell,dnd,airplane,rotation,flashlight (on both sides: STOCK_TILES) and,
+#   app's own "Launcher safety" one: the whole set; every record of another app is snoozed for the run, B-062, below), stock's tiles wifi,bt,cell,dnd,airplane,rotation,flashlight (on both sides: STOCK_TILES) and,
 #   on the ours side, ours' list the counterpart of it (OURS_TILES, below). Asserted, never set: 1080x2400
 #   at 420 dpi, font scale 1.0, en-US, palette seed D2DCF0 TONAL_SPOT, the emulator is Android 17. Ours: shade pixel/together,
 #   theme pixel, the system's colours (sys.color.style = system) and, with --font system (default for ours, D-038), the system font
@@ -103,6 +103,42 @@
 #   without it differs for that reason. The ours side warns when its set differs from the golden's of the build (GOLDEN_ROOT,
 #   default tools/fidelity/golden); golden.sh verify --against fails on a different set.
 #
+# Other apps' notifications are snoozed for the run (B-062, D-043; probes l-n below). The fixed set is {our safety notification, the
+#   fixture}: right after the clock is set (apply_setup), every record not ours is snoozed for 1 h (`cmd notification snooze --for
+#   3600000 KEY`, snooze_foreign; Android's overlay notice is left out, as in NOTIFS), and the sweep runs again at the start of every
+#   state and before the set is recorded; a record that arrives during a state still fails that state (the set check at its end).
+#   Each key goes to PRIOR/snoozed.txt BEFORE it is snoozed (KEY<TAB>, then KEY<TAB>UNTIL from dumpsys's pending list), so a kill
+#   leaves them known. They come back in teardown and in --restore by MOVING THE FAKED CLOCK past the latest `until` (restore_snoozed:
+#   auto_time 0, set-time to max(until) + 5 s, poll <= 8 s that none is pending, one more nudge of 5 s, capped at CLOCK_BASE + 3 h:
+#   past that a WARNING, no jump, dirty kept), BEFORE the real clock is restored; `cmd notification unsnooze` is NEVER called (probe l:
+#   refused for the shell, and it drops the record). A record its owner cancelled while it was snoozed is gone: a NOTE. A pending
+#   snooze that was not made by this tool makes a run refuse (exit 2): it would come back in the middle of the clock changes.
+#
+# Probes of B-062 (emulator-5554, Android 17 CP41.260828.004.A7, 2026-10-27; the stand-in was TEST_NOTIFY --ei id 9, key
+#   0|dev.launcher.app|1009|null|10232: a key is userId|pkg|id|tag|uid, and a tag may hold spaces, e.g. the overlay notice's
+#   0|android|0|com.android.server.wm.AlertWindowNotification - dev.launcher.app|1000: quote a key, read keys line by line):
+#  l. (a) `cmd notification snooze --for MS 'KEY'` works from the shell ("snoozing <KEY> until time: ..."). (b) The record leaves
+#     `cmd notification list` and dumpsys's "Notification List" (no NotificationRecord( line remains anywhere else: notif_set needs no
+#     section restriction); dumpsys shows `  Snoozed notifications:` / `    key: KEY` and ` Pending snoozed notifications` /
+#     `    key: KEY until: EPOCH_MS` (`until` is wall-clock time). (c) Neither our shade nor stock's lists it (screencaps looked at).
+#     (d) Backward clock jumps (-6 days), steps of +-45 s and the return to real time leave it snoozed; a FORWARD jump past `until`
+#     (+6 days with a 6 h snooze, +7 h) reposts it at once: so snooze after the clock is set, never before. (e) `cmd notification
+#     unsnooze 'KEY'` FAILS: "Permission Denial: getIntentSender() from pid=.., uid=2000 is not allowed to send as package android"
+#     (SnoozeHelper.repost -> createPendingIntent), and the record is DROPPED (gone from the list and the snoozed list, a second
+#     unsnooze says "no snoozed otification"): never call it. (f) A cancel by the owner while snoozed leaves the key in the snoozed
+#     list; at its expiry nothing is reposted (no zombie); an update of the same id stays hidden. (g) A silent ongoing record is
+#     snoozable too (the overlay notice, ONGOING_EVENT; our own FGS "Launcher safety", probe only) and both came back, new records
+#     with the same key, after a forward jump.
+#  m. A record reposted by the expiry alerts again: its mInterruptionTimeMs is set ~0.35 s after the repost (as at its first post), the
+#     vibrate key points at it, and stock's shade shows its "recently alerted" bell. It happens at teardown, the only place it is
+#     reposted, and nothing is captured then.
+#  n. A forward `cmd alarm set-time` past `until` reposts within ~1 s with auto_time 0 (962 ms) and with auto_time 1 (1191 ms); with
+#     auto_time 1 the clock then keeps the faked time until auto_time is switched off and on again (so restore_snoozed sets
+#     auto_time 0 first, and restore_settings gives the real time back). `until:` lines read as `^ *key: (.*) until: ([0-9]+)$`,
+#     greedy so a spaced key is whole. A key with a quote in its tag (`cmd notification post -t T "it's a tag" TEXT`: key
+#     0|com.android.shell|2020|it's a tag|2000) snoozes when written '...it'\''s a tag...', but the harness refuses it (fails
+#     setup naming the key: nothing is snoozed) rather than trust a quote through two shells.
+#
 # Timings are sleeps and bounded polls only. Never `am force-stop` (CLAUDE.md); the accessibility service is switched through
 # the setting's list (others kept), B-018's missed strip is retried by switching it off and on.
 
@@ -118,6 +154,8 @@ CLOCK_SHOW_S=45                 # the clock while a state is captured: 10:00:45 
 STOCK_TILES="wifi,bt,cell,dnd,airplane,rotation,flashlight"
 OURS_TILES="WIFI:w,BLUETOOTH:w,CELLULAR:w,FOCUS:w,AIRPLANE,ROTATION_LOCK,FLASHLIGHT"   # stock's, as ours names them; the wide marks are probe j's
 FIXTURE_ID=1
+SNOOZE_MS=3600000               # other apps' notifications are snoozed for 1 h of the faked clock (B-062: the clock stays within minutes of CLOCK_BASE)
+SNOOZE_CAP_MS=10800000          # restore_snoozed never moves the clock past CLOCK_BASE + 3 h
 ALL_STATES="quick expanded tile-off tile-on"
 # settings the run changes (ns key); their prior values are kept in prior.tsv and put back
 MANAGED="global:auto_time global:auto_time_zone global:zen_mode system:time_12_24 system:screen_brightness system:screen_brightness_mode system:accelerometer_rotation"
@@ -208,6 +246,9 @@ preconditions() {
   ash pm list packages | grep -qx "package:$PKG" || refuse "$PKG is not installed"
   focus_has HomeActivity || refuse "HomeActivity is not in front ($(focus))"
   [ -f "$PRIOR_DIR/dirty" ] && refuse "an earlier run left the device changed ($PRIOR_DIR/dirty): run capture.sh --restore first"
+  # a pending snooze that this tool did not make comes back when the clock moves (B-062): the run would find a foreign record in the middle of it
+  local pk; pk="$(pending_until | head -1)"
+  [ -z "$pk" ] || refuse "a notification is snoozed already (pending snooze: ${pk%%$'\t'*} until ${pk#*$'\t'}, the device clock's ms): the system would repost it in the middle of the run when the clock moves; let the snooze run out or clear that notification (its app, the shade's Snoozed list; never cmd notification unsnooze: it drops the record), then run again"
   # no other notification of ours' test channel than the fixture (id 1000 + FIXTURE_ID)
   if ash dumpsys notification --noredact | grep 'NotificationRecord(' | grep "pkg=$PKG" | grep 'channel=test' | grep -v 'g:Aggregate' | grep -vqE "id=$((1000 + FIXTURE_ID)) "; then
     refuse "another test notification of ours is posted (TEST_NOTIFY --ez cancel true --ei id N removes it)"
@@ -275,6 +316,7 @@ save_prior() {
   ash getprop persist.sys.timezone > "$PRIOR_DIR/timezone.txt"
   ash cmd uimode night | sed -E 's/^Night mode: *//' > "$PRIOR_DIR/night.txt"
   setting_get secure sysui_qs_tiles > "$PRIOR_DIR/tiles.txt"
+  notif_keys > "$PRIOR_DIR/notifs-before.txt"; : > "$PRIOR_DIR/snoozed.txt"   # (what the list holds now, and the keys this run snoozes)
   gsm_state voice > "$PRIOR_DIR/gsm-voice.txt"; gsm_state data > "$PRIOR_DIR/gsm-data.txt"
   export_files "$PRIOR_DIR/files" || { rm -rf "$PRIOR_DIR"; return 1; }
   [ -s "$PRIOR_DIR/files/qs_tiles.txt" ] || { rm -rf "$PRIOR_DIR"; return 3; }   # an app that cannot say (or set) ours' tile list
@@ -389,6 +431,7 @@ try_state() { # REPEAT-INDEX THEME STATE: 0 taken, 1 failed, 3 the clock left 10
   dir="$OUT/$rel"; file="$dir/$state.png"; mkdir -p "$dir"
   a shell settings put system accelerometer_rotation "$(tile_value "$state")" >/dev/null 2>&1
   to_home || { say "FAIL $theme/$state r$r: home did not come back ($(focus))"; return 1; }
+  snooze_foreign || { say "FAIL $theme/$state r$r: another app's notification could not be snoozed"; return 1; }   # the sweep: whatever arrived since the last state
   set_clock; sleep 1.2
   reach "$state" || { say "FAIL $theme/$state r$r: the panel did not open (focus: $(focus))"; to_home; return 1; }
   set_clock   # again, now that the slow part (a cold first open, the tile list) is behind: 10:00:45 at the start of the rest check (the alert stays > 30 s old, the minute 10:00)
@@ -441,6 +484,7 @@ apply_setup() {
   clock_base || { say "FAIL setup: the device's zone offset could not be read ($(ash date +%z))"; return 1; }
   a shell cmd alarm set-time "$CLOCK_BASE" >/dev/null 2>&1
   [ "$(ash date +%H:%M)" = 10:00 ] || { say "FAIL setup: the clock did not take 10:00 ($(ash date))"; return 1; }
+  snooze_foreign || return 1   # B-062: after the clock is set (a snooze's `until` is wall-clock time: a later jump forward would repost it), before the fixture
   a shell "cmd statusbar set-tiles '$STOCK_TILES'" >/dev/null 2>&1   # both sides: ours' list is its counterpart (setup_ours)
   [ "$(setting_get secure sysui_qs_tiles)" = "$STOCK_TILES" ] || { say "FAIL setup: stock's tiles were not set"; return 1; }
   if [ "$SIDE" = stock ]; then
@@ -490,7 +534,48 @@ post_fixture() {
   sleep 2
   set_clock   # ... and from here on the clock reads 10:00:45: its alert is older than 30 s, so no render of the row shows the bell
   sleep 33    # the bell the posting's own render showed leaves with its timer (30 s of real time); a heads-up / banner plays out too
-  NOTIFS="$(notif_set)"   # what the shade lists from here on: a system notification that arrives later (Play Protect's "turned on", ~25 min after a boot) is not ours to remove
+  snooze_foreign || return 1   # one more sweep: a record that arrived during the 35 s above is snoozed, not recorded
+  NOTIFS="$(notif_set)"   # what the shade lists from here on: the fixture and our own safety notification, nothing of another app (B-062)
+  local fk; fk="$(foreign_in "$NOTIFS")" && { say "FAIL setup: another app's notification is still posted after the snooze ($fk): the fixed set is the fixture and ours"; return 1; }
+  return 0
+}
+foreign_keys() { # the keys of the records in `cmd notification list` that are not ours (userId|pkg|id|tag|uid), one per line; Android's overlay notice is left out (as in notif_set)
+  ash cmd notification list | grep -E '^[0-9]+[|]' | grep -vE '^[0-9]+[|]android[|]0[|]com[.]android[.]server[.]wm[.]AlertWindowNotification' | awk -F'|' -v p="$PKG" '$2 != p'
+}
+notif_keys() { # every key in the list, sorted, without the overlay notice and our own test notifications (the fixture is cancelled at the end): what verify_restored compares
+  ash cmd notification list | grep -E '^[0-9]+[|]' | grep -vE '^[0-9]+[|]android[|]0[|]com[.]android[.]server[.]wm[.]AlertWindowNotification' | grep -vE "^[0-9]+[|]$PKG[|](1000|$((1000 + FIXTURE_ID)))[|]" | sort
+}
+foreign_in() { # SET (notif_set's form, "pkg=P id=N;...") -> the entries of another app's package, one per line; true when there is one
+  local f; f="$(printf '%s' "$1" | tr ';' '\n' | grep -E '^pkg=' | grep -vE "^pkg=$PKG( |$)")"
+  [ -n "$f" ] || return 1
+  printf '%s\n' "$f" | tr '\n' ' ' | sed 's/ $//'; return 0
+}
+pending_until() { # "KEY<TAB>UNTIL" for every pending snooze (dumpsys: "    key: KEY until: EPOCH_MS"; the key may hold spaces: anchored on the last " until: ")
+  ash dumpsys notification --noredact | sed -nE 's/^ *key: (.*) until: ([0-9]+) *$/\1\t\2/p'
+}
+pending_ours() { # the pending snoozes (KEY<TAB>UNTIL) of the keys this run snoozed (PRIOR/snoozed.txt)
+  [ -s "$PRIOR_DIR/snoozed.txt" ] || return 0
+  pending_until | awk -F'\t' 'NR == FNR { sub(/\r$/, ""); split($0, a, "\t"); k[a[1]] = 1; next } ($1 in k)' "$PRIOR_DIR/snoozed.txt" -
+}
+key_hidden() { ! foreign_keys | grep -qxF -- "$1"; }
+snooze_foreign() { # snoozes every record that is not ours for 1 h (never unsnoozed by us: restore_snoozed moves the clock past it); keys saved first; 1 on a failure (says which)
+  local keys=() k line u
+  mapfile -t keys < <(foreign_keys)
+  [ "${#keys[@]}" -gt 0 ] || return 0
+  for k in "${keys[@]}"; do   # all of them before any is touched: a key with a quote is not trusted through two shells
+    case "$k" in *"'"*) say "FAIL setup: the notification key $k holds a quote: the harness does not snooze it (nothing was snoozed for it; clear that notification)"; return 1;; esac
+  done
+  for k in "${keys[@]}"; do
+    printf '%s\t\n' "$k" >> "$PRIOR_DIR/snoozed.txt"   # on disk BEFORE the snooze: a kill leaves the key known
+    a shell "cmd notification snooze --for $SNOOZE_MS '$k'" >/dev/null 2>&1
+    poll 3 key_hidden "$k" || { say "FAIL setup: the snooze of $k was refused or did not hide it"; return 1; }   # (gone: its app cancelled it meanwhile: not listed, fine)
+  done
+  line="$(pending_until)"
+  for k in "${keys[@]}"; do
+    u="$(printf '%s\n' "$line" | awk -F'\t' -v k="$k" '$1 == k { u = $2 } END { print u }')"
+    [ -z "$u" ] || printf '%s\t%s\n' "$k" "$u" >> "$PRIOR_DIR/snoozed.txt"
+  done
+  say "snoozed ${#keys[@]} notification(s) of other apps for 1 h: $(printf '%s ' "${keys[@]}")"
   return 0
 }
 notif_set() { # the notification records posted now (package, id, tag), sorted: what a capture shows besides the fixture
@@ -511,12 +596,13 @@ except Exception:
     pass" "$(winpath "$1")"
 }
 warn_golden_notifs() { # ours side: this run's notification set against the golden's for this build (a different one scores Silent-section differences that are no regression)
-  local b mf g
+  local b mf g fk
   b="$(ash getprop ro.build.id | tr -d '\r\n ')"; mf="${GOLDEN_ROOT:-$FID_ROOT/tools/fidelity/golden}/$b/manifest.json"
   [ -f "$mf" ] || return 0
   g="$(manifest_notifs "$mf")"
-  if [ -z "$g" ]; then say "WARNING: the golden of build $b ($mf) records no notification set: a Silent-section difference may come from a notification that was not there when it was taken"
-  elif [ "$g" != "$NOTIFS" ]; then say "WARNING: this run's notifications differ from the golden's for build $b (a Silent-section difference may come from that, not from a regression). golden: $g now: $NOTIFS"; fi
+  if fk="$(foreign_in "$g")"; then say "WARNING: the golden of build $b ($mf) holds another app's notification ($fk): it was captured before other apps' notifications were snoozed (B-062); this run's set cannot match it: recapture the golden (golden.sh capture)"
+  elif [ -z "$g" ]; then say "WARNING: the golden of build $b ($mf) records no notification set: a Silent-section difference may come from a notification that was not there when it was taken"
+  elif [ "$g" != "$NOTIFS" ]; then say "WARNING: this run's notifications differ from the golden's for build $b (a Silent-section difference may come from that, not from a regression: the fixed set is the fixture and ours, other apps' notifications being snoozed). golden: $g now: $NOTIFS"; fi
   return 0
 }
 fixture_posted() { ash dumpsys notification --noredact | grep -q "id=$((1000 + FIXTURE_ID)) "; }
@@ -555,6 +641,7 @@ teardown() {
   case "$night" in yes|no|auto) a shell cmd uimode night "$night" >/dev/null 2>&1;; esac
   tiles=$(cat "$PRIOR_DIR/tiles.txt" 2>/dev/null | tr -d '\r')
   if [ -n "$tiles" ] && [ "$tiles" != null ]; then a shell "cmd statusbar set-tiles '$tiles'" >/dev/null 2>&1; fi
+  restore_snoozed   # (before the real clock comes back: they are reposted by the faked clock passing their until)
   restore_settings
   # the service as it was (others kept); whether its strip is as it was is verify_restored's to check (strip_as_before)
   prior_list=$(prior_value enabled_accessibility_services)
@@ -577,6 +664,29 @@ strip_as_before() { # the gesture strip as the prior list says: up when ours is 
   fi
   poll 10 strip_down
 }
+snoozed_back() { [ -z "$(pending_ours)" ]; }
+restore_snoozed() { # B-062: brings our snoozed records back by moving the faked clock past their `until` (the system reposts them, same key); never `cmd notification unsnooze`
+  local pend max T
+  [ -s "$PRIOR_DIR/snoozed.txt" ] || return 0
+  pend="$(pending_ours)"
+  [ -n "$pend" ] || return 0   # none is pending any more (back already, or gone)
+  max="$(printf '%s\n' "$pend" | awk -F'\t' '$2 > m { m = $2 } END { printf "%.0f", m }')"
+  T=$((max + 5000))
+  [ -n "${CLOCK_BASE:-}" ] || clock_base
+  if [ -z "${CLOCK_BASE:-}" ] || [ "$T" -gt $((CLOCK_BASE + SNOOZE_CAP_MS)) ]; then
+    say "WARNING: the snoozed notifications' until ($max) is more than 3 h past the faked clock's base (${CLOCK_BASE:-unknown}): the clock is not moved that far; they stay snoozed until then (keys in $PRIOR_DIR/snoozed.txt)"
+    RESTORE_RC=1; return 1
+  fi
+  a shell settings put global auto_time 0 >/dev/null 2>&1
+  a shell cmd alarm set-time "$T" >/dev/null 2>&1
+  if ! poll 8 snoozed_back; then
+    T=$((T + 5000)); say "restore: the snoozed notifications are still pending after 8 s, moving the clock on once more"
+    a shell cmd alarm set-time "$T" >/dev/null 2>&1
+    poll 8 snoozed_back || { say "WARNING: still snoozed after the clock passed their until: $(pending_ours | cut -f1 | tr '\n' ' ')"; RESTORE_RC=1; return 1; }
+  fi
+  say "the snoozed notifications are back"
+  return 0
+}
 verify_restored() { # the settings and the app's files against the prior; says what differs (warnings), sets RESTORE_RC
   local ns f d bad=""
   strip_as_before || { say "WARNING: our gesture strip is not $(has_svc "$(prior_value enabled_accessibility_services)" && echo up || echo down) as it was before (the accessibility list is back)"; bad=1; }
@@ -597,6 +707,13 @@ verify_restored() { # the settings and the app's files against the prior; says w
       else [ ! -f "$TMPD/exp_final/design/$f" ] || { say "WARNING: design/$f was left behind"; bad=1; }; fi
     done
   else say "WARNING: the app's files could not be exported to check them"; bad=1; fi
+  d="$(pending_ours | cut -f1)"
+  [ -z "$d" ] || { say "WARNING: still snoozed by this run (they come back when the clock passes their until; capture.sh --restore tries again):"; echo "$d" | cut -c1-160 | sed 's/^/    /'; bad=1; }
+  if [ -f "$PRIOR_DIR/notifs-before.txt" ]; then   # the list as it was: a record gone meanwhile (cancelled by its app while snoozed) or new is a note, never a failure
+    notif_keys > "$TMPD/notifs-after.txt"; sort "$PRIOR_DIR/notifs-before.txt" > "$TMPD/notifs-before.txt"
+    d="$(comm -23 "$TMPD/notifs-before.txt" "$TMPD/notifs-after.txt")"; [ -z "$d" ] || { say "NOTE: gone since before the run (its app cancelled it, or the user did):"; echo "$d" | cut -c1-160 | sed 's/^/    /'; }
+    d="$(comm -13 "$TMPD/notifs-before.txt" "$TMPD/notifs-after.txt")"; [ -z "$d" ] || { say "NOTE: new since before the run:"; echo "$d" | cut -c1-160 | sed 's/^/    /'; }
+  fi
   for f in voice data; do
     [ -s "$PRIOR_DIR/gsm-$f.txt" ] || continue
     [ "$(gsm_state $f)" = "$(tr -d '\r\n ' < "$PRIOR_DIR/gsm-$f.txt")" ] || { say "WARNING: the modem's $f state differs from before"; bad=1; }
@@ -615,6 +732,7 @@ main() {
     SIDE=stock; CHANGED=1; OVERRIDE_REL=""; OURS_TILES_CHANGED=1   # (what the killed run changed is not known: ours' list too is put back)
     # which design file this run changed is not known: restore_overrides puts back the one this tool writes (user-pixel.json)
     restore_overrides
+    clock_base   # (restore_snoozed's cap)
     teardown; local rc=$RESTORE_RC; rm -rf "$TMPD"; exit $rc
   fi
   preconditions
@@ -625,6 +743,8 @@ main() {
     say "would set stock's tiles to $STOCK_TILES"
     [ "$SIDE" = stock ] && say "would switch our accessibility service off (others kept)$([ -n "$DUMP" ] && echo ", and save stock's uiautomator tree of each state (--dump)")"
     [ "$SIDE" = ours ] && say "would set ours to shade pixel/together, theme pixel, system colours, font $FONT (design/user-pixel.json), tiles $OURS_TILES, our service on"
+    local fk; fk="$(foreign_keys | tr '\n' ' ')"
+    say "would snooze every notification of another app for 1 h once the clock is set (now: ${fk:-none}) and bring them back at the end by moving the clock past their until (never cmd notification unsnooze)"
     say "would post the fixture notification (TEST_NOTIFY id $FIXTURE_ID) and capture, $REPEAT time(s): themes [$THEMES] states [$STATES] into $OUT/$SIDE/<theme>/<state>.png"
     say "would put everything back at the end"
     rm -rf "$TMPD"; exit 0

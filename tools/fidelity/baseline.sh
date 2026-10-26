@@ -71,6 +71,8 @@ fi
 # the notification set: ours' against the golden's (capture.sh warns; here it is a stop)
 gn="$(manifest_notifs "$GOLDEN/manifest.json")"; on="$(manifest_notifs "$CAP/manifest.json")"
 [ -n "$gn" ] || fail_b "the golden records no notification set"
+if fk="$(foreign_in "$gn")"; then fail_b "the golden's notification set holds another app's notification ($fk): recapture it (golden.sh capture; other apps' notifications are snoozed, B-062)"; fi
+if fk="$(foreign_in "$on")"; then fail_b "ours' notification set holds another app's notification ($fk): no baseline (capture.sh snoozes other apps' notifications since B-062: a capture with one is of another state)"; fi
 [ "$gn" = "$on" ] || fail_b "ours' notification set differs from the golden's: a Silent-section difference would come from that. golden: $gn ours: $on"
 if [ -f "$OUT/capture.log" ] && grep -q 'WARNING' "$OUT/capture.log"; then fail_b "capture.sh warned (see $OUT/capture.log): no table"; fi
 for t in $THEMES_ALL; do for s in $STATES_ALL; do

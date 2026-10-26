@@ -21,6 +21,19 @@
 # restores (both sides); a SIGKILL leaves `dirty`, a new run is refused, --restore puts it back (ours' list too); --dump saves a
 # tree per state and leaves nothing on the device; golden.sh: refuses (not an emulator, a build that already has a golden), stores
 # 8 pictures with a manifest, verifies them, notices a changed file and a second session's capture, and puts the device back.   tools/tests/fidelity_capture_test.sh   exit 0 all passed, 1 a case failed (listed)   VERBOSE=1 prints each run
+#
+# B-062 (D-043, revision 2): the snooze model. Another app's record is a file foreign_NAME (its key userId|pkg|id|tag|uid) in the device
+# folder: it is in `cmd notification list` and the dump's records; `cmd notification snooze --for MS KEY` moves it to snoozed_NAME
+# (KEY<TAB>UNTIL, until = the fake clock + MS) and the dump then shows it only under "Snoozed notifications:" and " Pending snoozed
+# notifications" (`    key: KEY until: N`, keys with spaces); `cmd alarm set-time X` reposts every record whose until <= X (same key);
+# `cmd notification unsnooze` logs `MUT UNSNOOZE` and DROPS the record, as the real one does (every scenario asserts it was never called).
+# Switches are files in the scenario folder: sw_norepost, sw_nudge (the second jump past the until reposts), sw_snoozerefused,
+# sw_snoozeextra (ms added to every until), sw_ownercancel (a repost finds the record cancelled), sw_listhide (the list hides what the
+# dump shows). Scenarios: snooze-stock/-ours (two records, one with spaces; snoozed after the clock and before the fixture, keys saved
+# first, back by the clock before the real one), the sweep and a mid-state arrival (foreign), sigterm and kill with a record snoozed,
+# --restore with the clock still faked and back at real time (kill, kill-real), no repost / the nudge / the 3 h cap / a refused snooze /
+# an owner's cancel (a NOTE) / a record the list hides (snooze-*), a quote in a key (apostrophe), a pending snooze that is not ours
+# (refuse-pending), --dry-run listing them, golden.sh and baseline.sh refusing another app's package (golden*, baseline-gate).
 set -u
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d)"
@@ -103,17 +116,69 @@ dumpsys() {
       echo "  NotificationRecord(0x1: pkg=dev.launcher.app user=UserHandle{0} id=7 tag=null importance=2 key=x|channel=safety)"
       # Android's own overlay notice, present while our accessibility service is on (the shade hides it by design): no record a shade lists
       [[ "$(sget secure enabled_accessibility_services)" == *"$OURS"* ]] && echo "  NotificationRecord(0x4: pkg=android user=UserHandle{0} id=0 tag=com.android.server.wm.AlertWindowNotification - dev.launcher.app importance=1 key=0|android|0|com.android.server.wm.AlertWindowNotification - dev.launcher.app|1000: Notification(channel=com.android.server.wm.AlertWindowNotification - dev.launcher.app))"
-      [ -f "$D/foreign" ] && echo "  NotificationRecord(0x3: pkg=com.android.vending user=UserHandle{0} id=951340667 tag=null importance=2 key=z|channel=account)"
-      local f; for f in "$D"/notif_*; do
+      local f k u p i t; for f in "$D"/notif_*; do
         [ -f "$f" ] || continue
         echo "  NotificationRecord(0x2: pkg=dev.launcher.app user=UserHandle{0} id=$((1000 + ${f##*notif_})) tag=null importance=3 key=y|channel=test)"
-      done;;
+      done
+      # another app's records (foreign_NAME: the key userId|pkg|id|tag|uid): live ones are records; snoozed ones (snoozed_NAME: KEY<TAB>UNTIL)
+      # are only in the snoozed sections, as the real dumpsys has them (probe l)
+      for f in "$D"/foreign_*; do
+        [ -f "$f" ] || continue
+        rd k "$f"; IFS='|' read -r _u p i t _w <<< "$k"
+        echo "  NotificationRecord(0x3: pkg=$p user=UserHandle{0} id=$i tag=$t importance=2 key=$k: Notification(channel=x))"
+      done
+      echo "  Snoozed notifications:"
+      for f in "$D"/snoozed_*; do [ -f "$f" ] || continue; IFS=$'\t' read -r k u < "$f"; echo "    key: $k"; done
+      echo; echo " Pending snoozed notifications"
+      for f in "$D"/snoozed_*; do [ -f "$f" ] || continue; IFS=$'\t' read -r k u < "$f"; echo "    key: $k until: $u"; done;;
     battery:*) mut dumpsys battery "${@:2}"; if [ "${2:-}" = reset ]; then rm -f "$D/battery"; else echo "$*" >> "$D/battery"; fi;;
+  esac
+}
+fake_now() { if [ -f "$D/clock_ms" ]; then rd _now "$D/clock_ms"; else _now=1793000000000; fi; }
+repost_expired() {   # cmd alarm set-time X: the system's alarm brings back the snoozed records whose `until` has passed (same key), or drops those
+  # their app cancelled meanwhile (sw_ownercancel). Switches (files in $FAKE_STATE, outside the device folder): sw_norepost never reposts,
+  # sw_nudge reposts at the second set-time that passes an until (the first one is "too early")
+  local f k u need=1 n=0 el=()
+  for f in "$D"/snoozed_*; do [ -f "$f" ] || continue; IFS=$'\t' read -r k u < "$f"; [ "$u" -le "$1" ] && el+=("$f"); done
+  [ "${#el[@]}" -gt 0 ] || return 0
+  [ -f "$FAKE_STATE/jumps" ] && rd n "$FAKE_STATE/jumps"
+  n=$((n + 1)); echo "$n" > "$FAKE_STATE/jumps"
+  [ -f "$FAKE_STATE/sw_nudge" ] && need=2
+  [ -f "$FAKE_STATE/sw_norepost" ] && need=999
+  [ "$n" -ge "$need" ] || return 0
+  for f in "${el[@]}"; do
+    if [ ! -f "$FAKE_STATE/sw_ownercancel" ]; then IFS=$'\t' read -r k u < "$f"; printf '%s' "$k" > "$D/foreign_${f##*snoozed_}"; fi
+    command rm -f "$f"
+  done
+}
+notif_cmd() {   # cmd notification list | snooze --for MS KEY | unsnooze KEY (the real one is refused for the shell AND drops the record: probe l)
+  local f k u
+  case "$1" in
+    list)
+      echo "0|dev.launcher.app|7|null|10232"
+      [[ "$(sget secure enabled_accessibility_services)" == *"$OURS"* ]] && echo "0|android|0|com.android.server.wm.AlertWindowNotification - dev.launcher.app|1000"
+      for f in "$D"/notif_*; do [ -f "$f" ] && echo "0|dev.launcher.app|$((1000 + ${f##*notif_}))|null|10232"; done
+      if [ ! -f "$FAKE_STATE/sw_listhide" ]; then for f in "$D"/foreign_*; do [ -f "$f" ] && { rd k "$f"; echo "$k"; }; done; fi;;
+    snooze)
+      mut cmd notification snooze "$2" "$3" "$4"
+      if [ -f "$FAKE_STATE/sw_snoozerefused" ]; then echo "Error occurred. Check logcat for details."; return 1; fi
+      for f in "$D"/foreign_*; do
+        [ -f "$f" ] || continue; rd k "$f"; [ "$k" = "$4" ] || continue
+        fake_now; u=$((_now + $3)); [ -f "$FAKE_STATE/sw_snoozeextra" ] && { rd _x "$FAKE_STATE/sw_snoozeextra"; u=$((u + _x)); }
+        printf '%s\t%s' "$k" "$u" > "$D/snoozed_${f##*foreign_}"; command rm -f "$f"
+        echo "snoozing <$k> until time: (fake)"; return 0
+      done
+      echo "snoozing <$4>: no such notification";;
+    unsnooze)
+      mut UNSNOOZE "$2"
+      for f in "$D"/snoozed_*; do [ -f "$f" ] || continue; IFS=$'\t' read -r k u < "$f"; [ "$k" = "$2" ] && command rm -f "$f"; done   # (the record is dropped)
+      echo "Error occurred. Check logcat for details. Permission Denial: getIntentSender() from pid=1, uid=2000 is not allowed to send as package android"; return 1;;
   esac
 }
 cmd() {
   case "$1" in
-    alarm) mut cmd alarm "$2" "${3:-}"; printf '%s' "$3" > "$D/clock_ms";;
+    notification) shift; notif_cmd "$@";;
+    alarm) mut cmd alarm "$2" "${3:-}"; printf '%s' "$3" > "$D/clock_ms"; repost_expired "$3";;
     statusbar)
       case "$2" in
         expand-notifications|expand-settings) hang_if expand; echo "NotificationShade" > "$D/focus";;
@@ -177,7 +242,7 @@ am() {
 rm() { mut rm "$@"; command rm "$@"; }
 mkdir() { mut mkdir "$@"; command mkdir "$@"; }
 shot() {
-  if [ -f "$D/foreignonce" ]; then command rm -f "$D/foreignonce"; : > "$D/foreign"; fi   # a system notification arrives while a state is taken
+  if [ -f "$D/foreignonce" ]; then rd _k "$D/foreignonce"; command rm -f "$D/foreignonce"; printf '%s' "$_k" > "$D/foreign_arrived"; fi   # another app's notification (its key is in the file) arrives while a state is taken
   # a slow state: the clock runs 70 s ahead while the picture is taken (once, or every time)
   if [ -f "$D/slowonce" ]; then command rm -f "$D/slowonce"; rd _c "$D/clock_ms"; printf '%s' $((_c + 70000)) > "$D/clock_ms"
   elif [ -f "$D/slowalways" ]; then rd _c "$D/clock_ms"; printf '%s' $((_c + 70000)) > "$D/clock_ms"; fi
@@ -228,6 +293,13 @@ new_dev() {   # $1 = scenario name, $2 = accessibility list ("" = none set), $3 
   [ -n "${4:-}" ] && printf '%s' "$4" > "$D/qs_tiles"
   return 0
 }
+# other apps' notification records (the key is userId|pkg|id|tag|uid; a tag may hold spaces)
+KEY_VEND='0|com.android.vending|951340667|null|10050'
+KEY_SPACE='0|com.example.chat|42|chat thread - alice|10101'
+add_foreign() { printf '%s' "$2" > "$D/foreign_$1"; }   # NAME KEY
+hasF() { grep -qF -- "$1" "$2"; }
+lineno() { grep -nF -- "$1" "$S/adb.log" | head -1 | cut -d: -f1; }          # the first adb.log line holding the text
+lastlineno() { grep -nF -- "$1" "$S/adb.log" | tail -1 | cut -d: -f1; }
 snap() { ( cd "$1/dev" && find . -type f ! -path '*/dev-out/*' ! -path '*/dev-in/*' ! -name 'hang*' -print0 | sort -z | xargs -0 md5sum ); }
 muts() { grep -c '^MUT ' "$S/adb.log"; }
 
@@ -255,6 +327,7 @@ eq() { [ "$1" = "$2" ]; }
 rc_out() { [ "$RC" = "$1" ] && grep -qE -- "$2" "$S/out.txt"; }   # the last run exited with $1 and its output has /$2/
 finish() {   # prints the output tail when something failed (or VERBOSE)
   chk "every adb call named the emulator (-s emulator-*)" test "$(grep -c '^NOSERIAL' "$S/adb.log")" = 0
+  chk "never cmd notification unsnooze (the shell is refused AND the record is dropped: probe l)" test "$(grep -ci 'unsnooze' "$S/adb.log")" = 0
   if grep -q '^FAIL' "$S/result" || [ -n "$VERBOSE" ]; then
     { echo "        --- $NAME: capture.sh output (last 12 lines):"; tail -12 "$S/out.txt" | sed 's/^/        | /'
       echo "        --- $NAME: MUT calls: $(grep -c '^MUT ' "$S/adb.log")"
@@ -314,10 +387,14 @@ sc_refuse_dump_ours() {
 
 sc_dryrun() {
   NAME="dryrun"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"; add_foreign chat "$KEY_SPACE"
   local before; before="$(snap "$S")"
   run_cap -- --side ours --state quick --theme light --out "$S/out" --dry-run
   chk "exit 0" eq "$RC" 0
   chk "says DRY RUN" has "DRY RUN" "$S/out.txt"
+  chk "  and lists the records it would snooze (both keys, the spaced one whole)" test "$(grep -cF -e "$KEY_VEND" -e "$KEY_SPACE" "$S/out.txt")" -ge 1 -a "$(grep -c 'would snooze every notification of another app' "$S/out.txt")" = 1
+  chk "  the key with spaces is whole in the line" hasF "$KEY_SPACE" "$S/out.txt"
+  chk "  nothing was snoozed" test "$(grep -c 'notification snooze' "$S/adb.log")" = 0
   chk "no mutating call" eq "$(muts)" 0
   chk "the device is as it was" eq "$(snap "$S")" "$before"
   chk "no prior folder, no PNG" test ! -e "$S/prior" -a ! -e "$S/out"
@@ -407,15 +484,128 @@ sc_slowclock() {   # the clock guard: a slow state is taken again once; one that
   chk "  the device is put back all the same" eq "$(snap "$S")" "$before"
   finish
 }
-sc_foreign() {   # a notification that arrives mid-run (Play Protect's) makes the state fail, never a silent difference
+sc_foreign() {   # a notification that arrives mid-run (Play Protect's) makes that state fail, never a silent difference; the next state's sweep snoozes it
   NAME="foreign"; new_dev "$NAME" "$ACC_BOTH" ''
   local before; before="$(snap "$S")"
-  : > "$D/foreignonce"
-  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  printf '%s' "$KEY_VEND" > "$D/foreignonce"
+  run_cap -- --side stock --state quick,expanded --theme light --out "$S/out"
   chk "exit 1" eq "$RC" 1
   chk "says a notification arrived, naming the package" has "FAIL light/quick r1: a notification arrived.*com.android.vending" "$S/out.txt"
-  rm -f "$D/foreign"
+  chk "the next state's sweep snoozed it (its key, 1 h)" hasF "MUT cmd notification snooze --for 3600000 $KEY_VEND" "$S/adb.log"
+  chk "  and that state was taken (exit 1 is the first one's)" test "$(grep -c '"state": "expanded"' "$S/out/manifest.json")" = 1 -a "$(grep -c '"state": "quick"' "$S/out/manifest.json")" = 0
+  chk "  the arrival is in snoozed.txt for the restore" hasF "$KEY_VEND" "$S/prior/snoozed.txt"
+  chk "  and is back at the end (the clock moved past its until)" test -f "$D/foreign_arrived" -a "$(ls "$D"/snoozed_* 2>/dev/null | wc -l)" = 0
+  rm -f "$D/foreign_arrived"
   chk "the device is put back all the same" eq "$(snap "$S")" "$before"
+  finish
+}
+sc_snooze() {   # $1 = side: other apps' records (one with spaces in its tag) are snoozed after the clock is set and before the fixture, saved first, brought back by the clock
+  NAME="snooze-$1"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"; add_foreign chat "$KEY_SPACE"
+  local before; before="$(snap "$S")"
+  run_cap -- --side "$1" --state quick --theme light --out "$S/out"
+  chk "exit 0" eq "$RC" 0
+  chk "both records were snoozed for 1 h, the key with spaces whole" test "$(grep -cF -e "MUT cmd notification snooze --for 3600000 $KEY_VEND" -e "MUT cmd notification snooze --for 3600000 $KEY_SPACE" "$S/adb.log")" = 2
+  chk "  after the clock was set and before the fixture was posted" test "$(lineno 'MUT cmd alarm set-time 1793613600000')" -lt "$(lineno 'MUT cmd notification snooze')" -a "$(lineno 'MUT cmd notification snooze')" -lt "$(lineno 'Fidelity fixture')"
+  chk "  both keys are in snoozed.txt with the until the system reported (the clock then 10:00 + 1 h)" test "$(awk -F'\t' '$2 == 1793617200000' "$S/prior/snoozed.txt" | wc -l)" = 2 -a "$(awk -F'\t' '$2 == ""' "$S/prior/snoozed.txt" | wc -l)" = 2
+  chk "  the capture's notification set is the fixed one (no other app)" has '"notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;"' "$S/out/manifest.json"
+  chk "they were brought back by the clock: past the latest until + 5 s, before the real clock came back" test "$(lineno 'MUT cmd alarm set-time 1793617205000')" -gt 0 -a "$(lastlineno 'MUT cmd alarm set-time 1793617205000')" -lt "$(lastlineno 'MUT settings put global auto_time 1')"
+  chk "  both are live again, same keys, none left snoozed" test -f "$D/foreign_vend" -a -f "$D/foreign_chat" -a "$(ls "$D"/snoozed_* 2>/dev/null | wc -l)" = 0
+  chk "the device is as before (everything, byte for byte)" eq "$(snap "$S")" "$before"
+  chk "  said so, and the snoozed ones are back" has "the snoozed notifications are back" "$S/out.txt"
+  chk "no dirty marker left" test ! -e "$S/prior/dirty"
+  finish
+}
+sc_snooze_fail() {   # $1 = what goes wrong with the snoozed records at the restore (a switch of the fake), the rest of the case follows it
+  NAME="snooze-$1"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"
+  local before; before="$(snap "$S")"
+  case "$1" in
+    norepost)   # the clock passes the until and the system never reposts: both nudges are tried, a warning, the dirty marker stays; --restore finishes it
+      : > "$S/sw_norepost"
+      run_cap -- --side stock --state quick --theme light --out "$S/out"
+      chk "exit 1" eq "$RC" 1
+      chk "the clock was moved past the until + 5 s, then 5 s more (the nudge)" test "$(grep -c '^MUT cmd alarm set-time 1793617205000$' "$S/adb.log")" = 1 -a "$(grep -c '^MUT cmd alarm set-time 1793617210000$' "$S/adb.log")" = 1
+      chk "  says it moved the clock on once more" has "moving the clock on once more" "$S/out.txt"
+      chk "  and warns that the record is still snoozed, naming its key" has "WARNING: still snoozed after the clock passed their until: 0.com.android.vending" "$S/out.txt"
+      chk "the dirty marker stays" test -f "$S/prior/dirty"
+      chk "the record is still snoozed (not dropped)" test -f "$D/snoozed_vend" -a ! -f "$D/foreign_vend"
+      rm -f "$S/sw_norepost"
+      run_cap -- --restore
+      chk "--restore (the real clock back, the system working again): exit 0" eq "$RC" 0
+      chk "  the record is live again and the device is as before" eq "$(snap "$S")" "$before"
+      chk "  the dirty marker is gone" test ! -e "$S/prior/dirty";;
+    nudge)   # the first jump is too early for the system; the second one brings the record back: no warning
+      : > "$S/sw_nudge"
+      run_cap -- --side stock --state quick --theme light --out "$S/out"
+      chk "exit 0" eq "$RC" 0
+      chk "the clock was moved on once more (until + 10 s)" test "$(grep -c '^MUT cmd alarm set-time 1793617205000$' "$S/adb.log")" = 1 -a "$(grep -c '^MUT cmd alarm set-time 1793617210000$' "$S/adb.log")" = 1
+      chk "  said so, no warning" test "$(grep -c 'moving the clock on once more' "$S/out.txt")" = 1 -a "$(grep -c WARNING "$S/out.txt")" = 0
+      chk "the device is as before" eq "$(snap "$S")" "$before"
+      chk "no dirty marker left" test ! -e "$S/prior/dirty";;
+    cap)   # an until more than 3 h past the faked base (the system's clock was moved by someone else): no jump, a warning, the dirty marker stays
+      printf 14400000 > "$S/sw_snoozeextra"
+      run_cap -- --side stock --state quick --theme light --out "$S/out"
+      chk "exit 1" eq "$RC" 1
+      chk "a warning names the 3 h cap" has "WARNING: the snoozed notifications' until .* more than 3 h past the faked clock's base" "$S/out.txt"
+      chk "the clock was not moved past the base + 3 h (no set-time beyond 10:00 + 3 h)" test "$(grep '^MUT cmd alarm set-time' "$S/adb.log" | awk '{ if ($5 > 1793613600000 + 10800000) n++ } END { print n + 0 }')" = 0
+      chk "the dirty marker stays and the record is still snoozed" test -f "$S/prior/dirty" -a -f "$D/snoozed_vend"
+      chk "  with its key on file" hasF "$KEY_VEND" "$S/prior/snoozed.txt";;
+    refused)   # the system refuses the snooze (or it hides nothing): the setup fails naming the key, nothing was snoozed, no jump, the device is put back
+      : > "$S/sw_snoozerefused"
+      run_cap -- --side stock --state quick --theme light --out "$S/out"
+      chk "exit 1" eq "$RC" 1
+      chk "says the snooze of the key was refused" hasF "FAIL setup: the snooze of $KEY_VEND was refused" "$S/out.txt"
+      chk "no picture was taken" test ! -e "$S/out/stock"
+      chk "no clock jump was needed (nothing was pending)" test "$(grep -c '^MUT cmd alarm set-time 17936172' "$S/adb.log")" = 0
+      chk "the device is as before" eq "$(snap "$S")" "$before"
+      chk "no dirty marker left" test ! -e "$S/prior/dirty";;
+    ownercancel)   # the app cancelled the notification while it was snoozed: it is not reposted; a note, no failure
+      : > "$S/sw_ownercancel"
+      run_cap -- --side stock --state quick --theme light --out "$S/out"
+      chk "exit 0" eq "$RC" 0
+      chk "a NOTE names the key that is gone" hasF "NOTE: gone since before the run" "$S/out.txt"
+      chk "  with the key under it" hasF "$KEY_VEND" "$S/out.txt"
+      chk "no warning, the device says it is as before" test "$(grep -c WARNING "$S/out.txt")" = 0 -a "$(grep -c 'the device is as before' "$S/out.txt")" = 1
+      chk "the record is not back (cancelled), nothing else differs" eq "$(snap "$S")" "$(echo "$before" | grep -v foreign_vend)"
+      chk "no dirty marker left" test ! -e "$S/prior/dirty";;
+    listhide)   # a record the list does not show (so it cannot be snoozed) is posted by the dump: the set check at the fixture fails the setup
+      : > "$S/sw_listhide"
+      run_cap -- --side stock --state quick --theme light --out "$S/out"
+      chk "exit 1" eq "$RC" 1
+      chk "says another app's notification is still posted after the snooze, naming the package" has "FAIL setup: another app's notification is still posted after the snooze \(pkg=com.android.vending id=951340667\)" "$S/out.txt"
+      chk "the device is as before" eq "$(snap "$S")" "$before";;
+  esac
+  finish
+}
+sc_apostrophe() {   # a key with a quote is not trusted through two shells: the setup fails naming it, before anything is snoozed
+  NAME="apostrophe"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"; add_foreign q "0|com.example.chat|7|it's a tag|10101"
+  local before; before="$(snap "$S")"
+  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  chk "exit 1" eq "$RC" 1
+  chk "says the key holds a quote, naming it" hasF "FAIL setup: the notification key 0|com.example.chat|7|it's a tag|10101 holds a quote" "$S/out.txt"
+  chk "nothing was snoozed (the other record's neither)" test "$(grep -c 'notification snooze' "$S/adb.log")" = 0
+  chk "the device is as before" eq "$(snap "$S")" "$before"
+  chk "no dirty marker left" test ! -e "$S/prior/dirty"
+  finish
+}
+b_pending() { printf '%s\t%s' "$KEY_VEND" 1793000000000 > "$D/snoozed_x"; }   # someone else's snooze, pending
+sc_baseline_gate() {   # baseline.sh (no device: --ours-from) refuses a notification set with another app's package, on either side
+  NAME="baseline-gate"; S="$WORK/$NAME"; mkdir -p "$S/gold/FAKE.260101.001" "$S/cap/ours" "$S/capbad/ours" "$S/trees"; : > "$S/adb.log"
+  echo '{}' > "$S/masks.json"; echo '{}' > "$S/regions.json"
+  local clean='pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;' bad='pkg=com.android.vending id=951340667;pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;'
+  printf '{\n "notifications": "%s",\n "files": []\n}\n' "$clean" > "$S/gold/FAKE.260101.001/manifest.json"
+  printf '{"setup": {"notifications": "%s"}}\n' "$clean" > "$S/cap/manifest.json"
+  printf '{"setup": {"notifications": "%s"}}\n' "$bad" > "$S/capbad/manifest.json"
+  baseline() { env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE=emulator-5554 FAKE_STATE="$S" bash "$REPO/tools/fidelity/baseline.sh" --out "$S/out$1" --golden "$S/gold/FAKE.260101.001" --masks "$S/masks.json" --regions "$S/regions.json" --trees "$S/trees" --ours-from "$S/$2" --build FAKE.260101.001 > "$S/out.txt" 2>&1 < /dev/null; RC=$?; }
+  baseline 1 cap
+  chk "clean sets pass the gate (it stops later: no pictures)" rc_out 1 "ours/light/quick.png is missing"
+  baseline 2 capbad
+  chk "ours' set with another app's package: exit 1, says so and names it" rc_out 1 "ours' notification set holds another app's notification \(pkg=com.android.vending id=951340667\)"
+  printf '{\n "notifications": "%s",\n "files": []\n}\n' "$bad" > "$S/gold/FAKE.260101.001/manifest.json"
+  baseline 3 cap
+  chk "a golden that holds another app's package: exit 1, says recapture" rc_out 1 "the golden's notification set holds another app's notification.*recapture"
   finish
 }
 sc_notrest() {
@@ -440,6 +630,7 @@ run_bg() {   # ARGS: capture.sh in the background -> PID
 }
 sc_sigterm() {   # $1 = side (stock: hangs in the first panel's expand; ours: in its open, with a kept list to put back)
   NAME="sigterm-$1"; new_dev "$NAME" "$ACC_BOTH" '' "$([ "$1" = ours ] && echo "$DEFAULT_LIST")"
+  add_foreign chat "$KEY_SPACE"
   local before; before="$(snap "$S")"
   [ "$1" = ours ] && echo open > "$D/hang" || echo expand > "$D/hang"
   run_bg --side "$1" --state quick --theme dark --out "$S/out"
@@ -448,12 +639,14 @@ sc_sigterm() {   # $1 = side (stock: hangs in the first panel's expand; ours: in
   wait "$PID"; RC=$?
   chk "exit 130" eq "$RC" 130
   # (the handler's own words never reach the file on this MSYS; its effects do: that it ran is what the next lines prove)
+  chk "the other app's record, snoozed for the run, is live again (the clock moved past its until)" test -f "$D/foreign_chat" -a "$(ls "$D"/snoozed_* 2>/dev/null | wc -l)" = 0
   chk "the device is as before" eq "$(snap "$S")" "$before"
   chk "no dirty marker left" test ! -e "$S/prior/dirty"
   finish
 }
-sc_kill() {
-  NAME="kill"; new_dev "$NAME" "$ACC_BOTH" '{"format":1,"name":"user","tokens":{"keep.me":{"choice":"x"}}}' "$DEFAULT_LIST"
+sc_kill() {   # $1 = "real": the clock was put back to real time before --restore (a person's or auto_time's doing): restore_snoozed moves it forward again
+  NAME="kill${1:+-$1}"; new_dev "$NAME" "$ACC_BOTH" '{"format":1,"name":"user","tokens":{"keep.me":{"choice":"x"}}}' "$DEFAULT_LIST"
+  add_foreign chat "$KEY_SPACE"
   local before; before="$(snap "$S")"
   echo open > "$D/hang"
   run_bg --side ours --state quick --theme light --out "$S/out"
@@ -463,6 +656,9 @@ sc_kill() {
   chk "the device is left changed (ours' list too)" test "$(cat "$D/qs_tiles")" = "$OURS_WANT"
   chk "the device is left changed" test "$(snap "$S")" != "$before"
   chk "a dirty marker stays" test -f "$S/prior/dirty"
+  chk "the other app's record is left snoozed" test -f "$D/snoozed_chat" -a ! -f "$D/foreign_chat"
+  chk "  and its key is in snoozed.txt" hasF "$KEY_SPACE" "$S/prior/snoozed.txt"
+  if [ -n "${1:-}" ]; then command rm -f "$D/clock_ms"; printf 1 > "$D/s/global/auto_time"; fi   # the real clock is back
   local m; m="$(muts)"
   run_cap -- --side stock --state quick --theme light --out "$S/out3"
   chk "a new run is refused with exit 2" eq "$RC" 2
@@ -470,6 +666,7 @@ sc_kill() {
   chk "  with no mutating call" eq "$(muts)" "$m"
   run_cap -- --restore
   chk "--restore exits 0" eq "$RC" 0
+  chk "--restore brought the record back by moving the clock past its until (once, from the file and dumpsys's pending list)" test "$(grep -c 'MUT cmd alarm set-time 1793617205000' "$S/adb.log")" = 1
   chk "--restore puts the device back (byte for byte)" eq "$(snap "$S")" "$before"
   chk "  ours' kept list is back as a list, not reset" eq "$(cat "$D/qs_tiles" 2>/dev/null || echo RESET)" "$DEFAULT_LIST"
   chk "  the dirty marker is gone" test ! -e "$S/prior/dirty"
@@ -550,13 +747,21 @@ sc_golden_against() {   # the middle third of golden's cases (a recapture with a
   real_png "$WORK/golden_shot2.png"; cp "$WORK/golden_shot2.png" "$S/shot.png"
   run_golden capture --root "$S/g2"
   chk "setup: the capture to compare against: exit 0" eq "$RC" 0
-  # a recapture with another notification set (Play Protect's arrived): identical pictures, but verify --against fails and names why
-  : > "$D/foreign"; rm -rf "$S/stage"; run_golden capture --root "$S/g5"; rm -f "$D/foreign"
-  chk "a capture with a foreign notification stores it in its manifest" has "com.android.vending id=951340667" "$S/g5/FAKE.260101.001/manifest.json"
+  # a golden whose manifest holds another app's notification (one captured before B-062, Play Protect's): verify fails, says recapture; --against too
+  mkdir -p "$S/g5"; cp -r "$S/g2/FAKE.260101.001" "$S/g5/"; sed -i 's/"notifications": "/"notifications": "pkg=com.android.vending id=951340667;/' "$S/g5/FAKE.260101.001/manifest.json"
+  chk "(a manifest with another app's notification, as an old golden had)" has "com.android.vending id=951340667" "$S/g5/FAKE.260101.001/manifest.json"
+  run_golden verify --root "$S/g5"
+  chk "verify of a golden holding another app's package fails (exit 1), names it and says recapture" rc_out 1 "FAIL  the manifest records another app's notification \(pkg=com.android.vending id=951340667\).*recapture"
   run_golden verify --root "$S/g2" --against "$S/g5"
-  chk "--against a recapture with another notification set fails (exit 1) and says so" rc_out 1 "FAIL  --against: the notifications at capture differ.*stored: pkg=dev.launcher.app.*other: .*com.android.vending"
+  chk "--against a capture with another notification set fails (exit 1) and says so" rc_out 1 "FAIL  --against: the notifications at capture differ.*stored: pkg=dev.launcher.app.*other: .*com.android.vending"
+  chk "  and that the other capture's manifest holds another app's notification" has "FAIL  --against: the other capture's manifest records another app's notification" "$S/out.txt"
   run_golden verify --root "$S/g5" --against "$S/g2"
   chk "  the other way round too (exit 1)" rc_out 1 "FAIL  --against: the notifications at capture differ"
+  # a capture while another app's record cannot be snoozed away (the fake's list hides it from the harness, the dump shows it): capture.sh fails, no golden
+  add_foreign vend "$KEY_VEND"; : > "$S/sw_listhide"; rm -rf "$S/stage"; run_golden capture --root "$S/g6"
+  chk "a capture that cannot get rid of another app's notification writes no golden (exit 1)" rc_out 1 "no golden was written"
+  chk "  and no folder" test ! -e "$S/g6/FAKE.260101.001"
+  rm -f "$S/sw_listhide" "$D/foreign_vend"
   finish
 }
 sc_golden_diff() {   # the last third of golden's cases (a recapture compared, a changed file, a missing one), again a scenario of its own
@@ -627,6 +832,12 @@ sc_static() {   # capture.sh itself: adb is called in a(), ap() and emu() only (
   local calls; calls="$(grep -nE '"\$ADB"' "$REPO/tools/fidelity/capture.sh" | grep -vE '^[0-9]+:(a|ap|emu)\(\) |^[0-9]+:ADB=' | grep -v '^[0-9]*:#' || true)"
   chk "\$ADB is used only inside a, ap and emu" test -z "$calls"
   chk "  and those three each pass -s \"\$DEVICE\"" test "$(grep -cE '^(a|ap|emu)\(\) .*"\$ADB" -s "\$DEVICE"' "$REPO/tools/fidelity/capture.sh")" = 3
+  chk "capture.sh never runs cmd notification unsnooze (a shell call to it is nowhere)" test "$(grep -cE '(a|ap|ash) +shell.*notification +unsnooze' "$REPO/tools/fidelity/capture.sh")" = 0
+  local fi1 fi2
+  fi1="$(bash -c ". '$REPO/tools/fidelity/capture.sh'; r=\"\$(foreign_in 'pkg=dev.launcher.app id=7;pkg=com.x.y id=2;pkg=dev.launcher.app id=1001;')\"; echo \"\$r|rc=\$?\"" 2>&1)"
+  fi2="$(bash -c ". '$REPO/tools/fidelity/capture.sh'; r=\"\$(foreign_in 'pkg=dev.launcher.app id=7;pkg=dev.launcher.app id=1001;')\"; echo \"\$r|rc=\$?\"" 2>&1)"
+  chk "foreign_in names the other app's entry (and is true)" eq "$fi1" "pkg=com.x.y id=2|rc=0"
+  chk "  and is false for ours alone" eq "$fi2" "|rc=1"
   finish
 }
 
@@ -652,6 +863,7 @@ job sc_refuse palette b_palette "palette"
 job sc_refuse dirty b_dirty "dirty"
 job sc_refuse manifest b_manifest "already holds a capture"
 job sc_refuse notif b_notif "another test notification"
+job sc_refuse pending b_pending "pending snooze"
 job sc_refuse_noqs
 job sc_refuse_dump_ours
 job sc_refuse serial true "not an emulator" FAKE-SERIAL
@@ -665,9 +877,20 @@ job sc_stock stock-alone "dev.launcher.app/dev.launcher.app.NavAccessibilityServ
 job sc_dump
 job sc_notrest
 job sc_foreign
+job sc_snooze stock
+job sc_snooze ours
+job sc_snooze_fail norepost
+job sc_snooze_fail nudge
+job sc_snooze_fail cap
+job sc_snooze_fail refused
+job sc_snooze_fail ownercancel
+job sc_snooze_fail listhide
+job sc_apostrophe
+job sc_baseline_gate
 job sc_sigterm stock
 job sc_sigterm ours
 job sc_kill
+job sc_kill real
 job sc_nostrip
 job sc_static
 for j in "${JOBS[@]}"; do wait "$j"; done
@@ -678,4 +901,4 @@ cat "$WORK/all.txt"
 FAILS=$(grep -c '^FAIL' "$WORK/all.txt"); PASSES=$(grep -c '^PASS' "$WORK/all.txt")
 SCEN=$(ls "$WORK"/*/result 2>/dev/null | wc -l)
 echo "fidelity_capture_test: $SCEN scenarios, $PASSES checks passed, $FAILS failed"
-[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 32 ]; }
+[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 44 ]; }
