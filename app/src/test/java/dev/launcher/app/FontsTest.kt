@@ -51,4 +51,28 @@ class FontsTest {
             }
         }
     }
+
+    /**
+     * A shipped theme's text styles name a font role ("text" or "display", read through `sys.font.text` / `sys.font.display`),
+     * never a family: a literal family (Pixel's once named Google Sans Flex in all 31 styles) is out of reach of the user's font,
+     * a theme's own font token and the fidelity capture's system font (B-060, D-042).
+     */
+    @Test fun shippedThemesTextStylesNameARoleNotAFamily() {
+        val dir = File("src/main/assets/themes")
+        for (id in listOf("ios27", "graphite", "pixel")) {
+            val layers = ArrayList<Map<String, dev.launcher.app.design.Entry>>()
+            var cur: String? = id
+            while (cur != null) { val t = Theme.parse(File(dir, "$cur.json").readText()); layers.add(0, t.entries); cur = t.extends }
+            val r = Resolver(layers)
+            var styles = 0
+            for (k in layers.flatMap { it.keys }.toSet()) {
+                val v = try { r.resolve(k) } catch (_: Throwable) { continue }
+                if (v is Value.Text) {
+                    styles++
+                    assertTrue("$id: $k names the family '${v.style.family}', not a font role (text or display)", v.style.family == "text" || v.style.family == "display")
+                }
+            }
+            assertTrue("$id: its text styles were not found ($styles)", styles >= 40)
+        }
+    }
 }

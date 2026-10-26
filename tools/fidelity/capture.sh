@@ -58,8 +58,8 @@
 #  e. Ours: `TEST_SHADE --es do open --es panel shade` (focus LauncherFocus), `qs_expand`, `close`; the system colours and the font
 #     are tokens: files/design/user-<theme>.json ({"format":1,"name":"user","tokens":{"sys.font.text":{"choice":"system"},...}}),
 #     `DESIGN_RELOAD --es files import` logs "[design] reloaded: N edited" (the file for the ACTIVE theme: user.json belongs to
-#     iOS 27 only). With the font tokens set, text that a style ties to a family by name still draws Google Sans Flex (masks,
-#     a later slice). Verified.
+#     iOS 27 only). With the font tokens set, all of the Pixel shade's text draws the system font (its styles name the role
+#     "text" or "display", not a family: B-060, D-042); only text whose weight comes from a family name (600) is masked. Verified.
 #  f. `TEST_NOTIFY` posts also while our accessibility service is off (stock's shade shows it; id N is notification 1000+N,
 #     default N 0); the shell's argument list must be ONE string for adb shell, or words split (title "Fidelity", text "One"). A
 #     notification's "now" becomes "in 3m" if the clock is set back: post after the clock is set. Verified.

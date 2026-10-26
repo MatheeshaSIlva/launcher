@@ -128,7 +128,7 @@
   },
   "component.control.title": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 14,
     "line": 20,
@@ -138,7 +138,7 @@
   },
   "component.control.title-large": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 16,
     "line": 24,
@@ -148,7 +148,7 @@
   },
   "component.control.detail": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 400,
     "size": 14,
     "line": 20,
@@ -251,7 +251,7 @@
   },
   "comp.cc.media.title": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 14,
     "line": 20,
@@ -401,7 +401,7 @@
   },
   "component.notification.title": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 16,
     "line": 24,
@@ -411,7 +411,7 @@
   },
   "component.notification.body": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 400,
     "size": 14,
     "line": 20,
@@ -421,7 +421,7 @@
   },
   "component.notification.time": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 400,
     "size": 12,
     "line": 16,
@@ -483,7 +483,7 @@
   },
   "comp.nc.count.type": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 12,
     "line": 16,
@@ -570,7 +570,7 @@
   },
   "comp.nc.menu.type": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 14,
     "line": 20,
@@ -639,7 +639,7 @@
   },
   "component.button.text": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 14,
     "line": 20,
@@ -683,7 +683,7 @@
   },
   "comp.qs.header.clock": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "display",
     "weight": 500,
     "size": 36,
     "line": 44,
@@ -693,7 +693,7 @@
   },
   "comp.qs.header.date": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 14,
     "line": 20,
@@ -703,7 +703,7 @@
   },
   "comp.qs.header.carrier": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 14,
     "line": 20,
@@ -858,7 +858,7 @@
   },
   "comp.qs.tile.label": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 600,
     "size": 14,
     "line": 16.4,
@@ -868,7 +868,7 @@
   },
   "comp.qs.tile.detail": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 12,
     "line": 14.1,
@@ -894,7 +894,7 @@
   },
   "comp.qs.build.text": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 400,
     "size": 14,
     "line": 20,
@@ -977,7 +977,7 @@
   },
   "comp.qs.footer.pill-text": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 14,
     "line": 20,
@@ -1006,7 +1006,7 @@
   },
   "comp.qs.card.action": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 400,
     "size": 14,
     "line": 20,
@@ -1039,7 +1039,7 @@
   },
   "comp.qs.card.app": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 400,
     "size": 12,
     "line": 16,
@@ -1049,7 +1049,7 @@
   },
   "comp.qs.card.title": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 600,
     "size": 14,
     "line": 20,
@@ -1059,7 +1059,7 @@
   },
   "comp.qs.card.body": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 400,
     "size": 14,
     "line": 20,
@@ -1087,7 +1087,7 @@
   },
   "comp.qs.card.chip": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 12,
     "line": 16,
@@ -1097,7 +1097,7 @@
   },
   "comp.qs.section.text": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 14,
     "line": 20,
@@ -1115,7 +1115,7 @@
   },
   "comp.qs.clear.text": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 600,
     "size": 16,
     "line": 24,
@@ -1137,7 +1137,7 @@
   },
   "comp.qs.edit-page.title": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "display",
     "weight": 400,
     "size": 28,
     "line": 33,
@@ -1147,7 +1147,7 @@
   },
   "comp.qs.edit-page.subtitle": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 400,
     "size": 14,
     "line": 16,
@@ -1203,7 +1203,7 @@
   },
   "comp.qs.edit-page.category-text": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 600,
     "size": 16,
     "line": 24,
@@ -1213,7 +1213,7 @@
   },
   "comp.qs.edit-page.cell-label": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 12,
     "line": 16,
@@ -1223,7 +1223,7 @@
   },
   "comp.qs.edit-page.button-text": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 500,
     "size": 14,
     "line": 20,
@@ -1271,7 +1271,7 @@
   },
   "comp.qs.edit-page.dialog-title": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "display",
     "weight": 400,
     "size": 24,
     "line": 32,
@@ -1281,7 +1281,7 @@
   },
   "comp.qs.edit-page.dialog-text": {
    "text": {
-    "family": "google:Google Sans Flex",
+    "family": "text",
     "weight": 400,
     "size": 14,
     "line": 20,

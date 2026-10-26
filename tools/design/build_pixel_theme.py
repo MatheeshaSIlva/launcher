@@ -28,8 +28,10 @@ SUI = "kit:AOSP SystemUIGoogle (Android 17, read from the emulator's APK)"
 EMU = "measured:Android 17 emulator's own shade (2026-10-21)"
 
 
-def text(size, line, weight, tracking, src):
-    return {'text': {'family': FONT, 'weight': weight, 'size': size, 'line': line, 'tracking': tracking}, 'src': src}
+def text(size, line, weight, tracking, src, role='text'):
+    # The family is a role ('text' or 'display'), read through sys.font.text / sys.font.display (D-042): a font the user
+    # or a theme chooses reaches every style, never a family named here.
+    return {'text': {'family': role, 'weight': weight, 'size': size, 'line': line, 'tracking': tracking}, 'src': src}
 
 
 def material(fills, frost=0, src=''):
@@ -203,7 +205,7 @@ T = {
     'comp.qs.background': material([['#000000', [0.32, 0.64], 'NORMAL'], ['@surface|@surface_container_lowest', [0.4, 0.32], 'NORMAL'],
                                     ['@system_accent1_100|@system_accent1_800', [0.4, 0.32], 'NORMAL']], frost=24,
         src=SUI + ': ShadeColors.shadePanel (panel fg over bg over the scrim), over its blur (max_shade_window_blur_radius 34 dp: as strong as our 24 measured on the emulator, the detail left at each stage of the pull)'),
-    'comp.qs.header.clock': text(36, 44, 500, 0, SUI + ': the status bar time (14 sp) scaled 2.57, medium as the emulator own'),
+    'comp.qs.header.clock': text(36, 44, 500, 0, SUI + ': the status bar time (14 sp) scaled 2.57, medium as the emulator own', role='display'),
     'comp.qs.header.date': text(14, 20, 500, 0.1, SUI + ': the shade header\'s date (titleSmall, 14/20, 500)'),
     'comp.qs.header.carrier': text(14, 20, 500, 0.1, SUI + ': the carrier (titleSmall)'),
     'comp.qs.header.color': color('#000000|#ffffff', SUI + ': shade_header_text_color, black in light and white in dark'),
@@ -267,7 +269,7 @@ T = {
     'comp.qs.media.reveal-fill': color('@surface', EMU + ': the uncovered settings button on surface (249, 249, 254)'),
     'comp.qs.media.reveal-symbol': color('@on_surface', EMU + ': its symbol in onSurface'),
     # The edit page (Android 17's Edit tiles).
-    'comp.qs.edit-page.title': text(28, 33, 400, 0, EMU + ': Edit tiles in headlineMedium (28 sp), its box 33 dp (no extra line spacing)'),
+    'comp.qs.edit-page.title': text(28, 33, 400, 0, EMU + ': Edit tiles in headlineMedium (28 sp), its box 33 dp (no extra line spacing)', role='display'),
     'comp.qs.edit-page.subtitle': text(14, 16, 400, 0.25, EMU + ': the line under the title in bodyMedium'),
     'comp.qs.edit-page.text-color': color('@on_surface', EMU + ': the title, its line and the categories\' names in onSurface'),
     'comp.qs.edit-page.grid-fill': material([['@primary', 0.15, 'NORMAL']], src=EMU + ': inside the box primary at 15 % (18, 15, 12 levels darker than the panel around it)'),
@@ -282,7 +284,7 @@ T = {
     'comp.qs.edit-page.button-off-text': color('@on_surface/38', SUI + ': RemoveButton disabled in onSurface at 38 %'),
     'comp.qs.edit-page.undo-material': material([['@surface', 0.54, 'NORMAL']], src=SUI + ': the undo button on surfaceEffect1'),
     'comp.qs.edit-page.dialog': material([['@surface', 1.0, 'NORMAL']], src=EMU + ': Reset all tiles? on surface'),
-    'comp.qs.edit-page.dialog-title': text(24, 32, 400, 0, EMU + ': the question in headlineSmall, centred'),
+    'comp.qs.edit-page.dialog-title': text(24, 32, 400, 0, EMU + ': the question in headlineSmall, centred', role='display'),
     'comp.qs.edit-page.dialog-text': text(14, 20, 400, 0.25, EMU + ': its words in bodyMedium, centred'),
     'comp.qs.edit-page.dialog-text-color': color('@on_surface_variant', EMU + ': its words in onSurfaceVariant (93, 95, 104)'),
 }
