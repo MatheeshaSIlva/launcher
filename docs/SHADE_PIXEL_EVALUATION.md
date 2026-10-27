@@ -674,6 +674,33 @@ Still different, and why:
 - The flashlight on the emulator: Android shows the tile unavailable, ours shows it off (why not looked into yet; the
   S24 has a torch).
 
+**B-061, the header's text weights (2026-10-27, D-045).** Measured by stem width (`tools/fidelity/stems.py`: the median
+width of the strokes a row crosses) on baseline 2's pictures, both sides on Roboto: the expanded header clock, the date, a
+tile's label and its secondary label draw at stock's weight (within 0.11 px); the carrier text draws ~1 px heavier in ours
+(3.45 against 4.43 px light, 3.75 against 4.66 dark). The clock and the tile texts are Compose text: it asks the default
+family for the weight, Roboto is variable on Android 17, so the emulator draws what a Pixel draws. The carrier is View text,
+whose weight here comes from a family name. Its chain, read from the emulator's `SystemUIGoogle.apk` and
+`PixelConfigOverlayCommon.apk` (aapt2 `dump xmltree`, `dump resources`; `cmd overlay dump`):
+
+- `res/layout/shade_carrier_new.xml`: `ModernShadeCarrierGroupMobileView` `@id/carrier_combo`, `android:theme`
+  `Theme.SystemUI.QuickSettings.Header` (sets `android:fontFamily` "variable-body-medium-emphasized"), holding the
+  `AutoMarqueeTextView` `@id/mobile_carrier_text` with `android:textAppearance` `TextAppearance.QS.Status`.
+- `TextAppearance.QS.Status`: `textSize` `@dimen/status_bar_shade_header_text_size_sp` (14 sp), `textColor`
+  `@color/shade_header_text_color` (black, white at night), `fontFamily` "variable-body-medium-emphasized",
+  `letterSpacing` 0.01.
+- its parent `TextAppearance.QS`: `textStyle` normal (0), `textColor` `?attr/onShadeInactive`, `fontFamily`
+  `@android:string/config_bodyFontFamily` (the Pixel overlay: "google-sans-text"); its parent `TextAppearance`: empty.
+- No `textFontWeight` and no bold anywhere in the chain: the weight is the family's. The Pixel overlay's
+  `config_headlineFontFamily` is "google-sans", `config_headlineFontFamilyMedium` "google-sans-medium" (neither is used here).
+- The emulator has no family of that name (`cmd font dump`: sans-serif, roboto, roboto-flex, source-sans-pro, serif,
+  monospace and a few others; no `variable-*`, no `google-sans`), so it falls back to the default at textStyle normal:
+  Roboto Regular, 400. On a Pixel "variable-body-medium-emphasized" is Material 3 Expressive's emphasized Body Medium, 500 (inferred from the
+  name and M3 Expressive's type scale, not measured on a Pixel; the owner's S24 is a Samsung).
+
+Verdict **500**: the carrier's style is a medium family by name, the plan's rule for that case. `comp.qs.header.carrier`
+stays at 500; the 1 px stem gap is the emulator's missing family, not a theme error. Not a mask: the carrier's words still
+differ (B-054), and a `mobile_carrier_text` mask is only for after that fix.
+
 
 ## B-034 step 0: a child expanded in Android's own group (2026-10-24, emulator, our accessibility service off)
 

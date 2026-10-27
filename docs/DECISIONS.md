@@ -360,3 +360,17 @@ Models: architect and implementer on Opus (they decide and build); reviewer and 
 against written criteria), Opus override for crash, privacy and architecture work. This replaces the Sonnet defaults in
 D-037. New rule in OPERATING_RULES, "Keep the owner informed": one plain line before and after each stage, a 2-line plain
 summary at the top of every agent report, a 10-line end-of-task report, a 5-line answer to "what is happening".
+
+### D-045: Text weight is judged by stem width, and View text by its resource chain (2026-10-27)
+Context: B-061. Baseline 2 showed our Pixel header's clock and carrier text looking heavier than Android 17's on the
+emulator; by eye, every 500 and 600 in the Pixel theme was in doubt.
+Decision: Text weight is judged by the median stem width (`tools/fidelity/stems.py`) of the same box on both captures, not
+by eye. Only Compose-drawn text is representative on the emulator (it asks the default family, variable Roboto, for the
+weight); View text whose weight comes from a family name falls back to Roboto Regular there (the emulator has no
+`variable-*` or Google Sans family), so it is judged from its resource chain in SystemUI's APK: a regular family with no
+weight is 400, a medium or emphasized family is 500. Outcome: the clock, date, tile label and tile detail match within
+0.11 px; the carrier's chain ends in "variable-body-medium-emphasized" (500 on a Pixel, inferred from the name, not measured on one), so `comp.qs.header.carrier` stays
+500 and its ~1 px stem gap is recorded as an emulator artefact (docs/SHADE_PIXEL_EVALUATION.md, "B-061";
+docs/FIDELITY_BASELINE.md). `pixel.json` unchanged.
+Alternatives considered: lowering the carrier to 400 to match the emulator's picture (wrong on a real Pixel); masking the
+carrier (its words still differ, B-054).

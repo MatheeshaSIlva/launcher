@@ -103,9 +103,59 @@ gone or reduced; what is left on the text is not the family:
 - **Weight residue (B-061)**: the clock and the carrier text draw at weight 500 in ours and look lighter (about 400) and
   narrower on stock's emulator (side by side: `10:00` and `No service` are heavier and wider in ours). The tile labels (600)
   and notification title, Clear all (600) are still masked (weights from a family name, D-041). The weights were not tuned
-  here.
+  here. *Corrected by B-061 (below): measured, only the carrier is heavier (an emulator artefact); the clock, date and tile
+  labels match stock's weight. And baseline 2 never masked the tile labels: its masks are the quick state's 3 boxes (the
+  fixture's and the Silent row's titles, Clear all); the expanded states have none.*
 - Positions and content, each already a bug: B-052 (build label and edit button), B-053 (status icons), B-054 (carrier words),
   B-055 (the gesture handle), B-056 (notification rows), B-057 (backdrop), B-059 (the Flashlight tile).
+
+## Baseline 2, B-061 re-run (2026-10-27, branch ship/b061-pixel-weights)
+
+B-061 asked whether the Pixel theme's text weights match Android 17's. Weight is measured, not judged by eye (D-045):
+`tools/fidelity/stems.py STOCK OURS --box NAME=x0,y0,x1,y1` prints the median stem width (px) of the text in each box.
+
+Stems, stock / ours in px (the same in expanded, tile-off and tile-on; this re-run's ours equals baseline 2's ours here):
+
+| text (box x0,y0,x1,y1) | ours' token | light | dark | verdict |
+|---|---|---|---|---|
+| header clock (30,84,330,215) | `comp.qs.header.clock` 500 | 11.03 / 11.14 | 11.41 / 11.42 | same weight (+0.11, +0.01) |
+| date (30,255,330,312) | `comp.qs.header.date` 500 | 4.47 / 4.48 | 4.81 / 4.77 | same (+0.01, -0.04) |
+| Wi-Fi label (220,660,515,710) | `comp.qs.tile.label` 600 | 4.61 / 4.66 | 5.12 / 5.10 | same (+0.05, -0.02) |
+| Mobile data detail (220,915,515,958) | `comp.qs.tile.detail` 500 | 3.72 / 3.74 | 4.23 / 4.19 | same (+0.02, -0.04) |
+| carrier (700,110,1040,185) | `comp.qs.header.carrier` 500 | 3.45 / 4.43 | 3.75 / 4.66 | ours ~1 px heavier: an emulator artefact |
+
+**The carrier's ~1 px gap is an emulator artefact, not a theme error.** Its weight comes from a family name: SystemUIGoogle's
+`shade_carrier_new.xml` (`carrier_combo`, theme `Theme.SystemUI.QuickSettings.Header`) > `mobile_carrier_text` >
+`TextAppearance.QS.Status` (14 sp, fontFamily "variable-body-medium-emphasized", letterSpacing 0.01) > `TextAppearance.QS`
+(textStyle normal) > `TextAppearance`; no textFontWeight anywhere. The emulator has no such family (nor Google Sans) and
+draws Roboto Regular (400); a Pixel draws Body Medium emphasized, 500 (inferred from the family's name, not measured on a
+Pixel; the whole chain:
+`docs/SHADE_PIXEL_EVALUATION.md`, "B-061"). The token stays at 500 and `pixel.json` is unchanged. The clock, date and tile
+texts are Compose text, which the emulator draws at the asked weight: they match. The clock is ~1.8 % larger in ours (a
+size, not a weight; not changed here). The carrier's stems compare different words (stock "No service", ours "T-Mobile": B-054); the
+~0.95 px gap is a 400 against 500 step, where the same words elsewhere agree within 0.11 px. The quick row's time (ours:
+our status bar's; median stem 4.36 / 4.96 px light, 4.71 / 5.20 dark in the box (30,0,330,70) of the quick state; wider) belongs to the status bar element, B-053.
+
+Re-run: ours BUILD local of c8ca9a2 (no app change; the APK's md5 `d5688f1d82d7197d4af5c580f9f7d4da` checked on the
+emulator), `tools/fidelity/baseline.sh --out DIR`, every gate passed, the golden and masks of baseline 2.
+
+| state | theme | cells flagged / total | overall mean | % pixels differing | worst cell | baseline 2 mean |
+|---|---|---|---|---|---|---|
+| quick | light | 173 / 288 | 5.082 | 2.95 | col 3, row 6, box 270,600,90,100, mean 42.194 | 5.082 |
+| quick | dark | 287 / 288 | 10.598 | 3.92 | col 3, row 6, box 270,600,90,100, mean 47.009 | 10.598 |
+| expanded | light | 273 / 288 | 5.469 | 3.69 | col 2, row 1, box 180,100,90,100, mean 35.809 | 5.259 |
+| expanded | dark | 280 / 288 | 10.15 | 6.59 | col 2, row 1, box 180,100,90,100, mean 37.365 | 10.175 |
+| tile-off | light | 275 / 288 | 5.474 | 3.68 | col 2, row 1, box 180,100,90,100, mean 35.809 | 5.265 |
+| tile-off | dark | 280 / 288 | 10.176 | 6.57 | col 2, row 1, box 180,100,90,100, mean 37.365 | 10.201 |
+| tile-on | light | 273 / 288 | 5.469 | 3.69 | col 2, row 1, box 180,100,90,100, mean 35.809 | 5.259 |
+| tile-on | dark | 280 / 288 | 10.15 | 6.59 | col 2, row 1, box 180,100,90,100, mean 37.365 | 10.175 |
+
+Ours' 8 pictures are pixel-identical to baseline 2's ours except inside x 550-784, y 1029-1218 in the 6 expanded pictures:
+**the Flashlight tile**, which baseline 2's ours hid (B-059: no torch found) and this boot's ours shows, off (the emulator,
+rebooted since, now reports a camera with a flash unit: `dumpsys media.camera` "Has a flash unit: true"). That tile alone
+moves the light expanded states' means by +0.21 and the dark ones' by -0.025, and the tile pager's cluster (expanded light
+19940 -> 54597 px; dark 55722 -> 21712 px, where ours' tile now covers stock's unavailable one). Every named cluster outside it is as in baseline 2: the clock 3687 / 3747 px, the date 1515,
+the carrier 2694 / 2719. With `--font off` (the default look) the 8 pictures before and after are pixel-identical.
 
 ## Golden history
 
