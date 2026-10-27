@@ -5,6 +5,8 @@ argument-hint: [milestone id like MF, or a task description]
 Run the governed pipeline for this task: $ARGUMENTS
 
 You are the orchestrator. Follow `docs/OPERATING_RULES.md` (CLAUDE.md imports it), including Tracks. Track the steps in your todo list.
+Keep the owner informed as OPERATING_RULES says: one plain line before and after each stage, and ask every agent to open
+its report with a 2-line plain summary.
 
 ## 0. Preflight
 - Read `docs/SPEC.md`, `docs/ROADMAP.md`, `docs/DECISIONS.md`, `docs/QUESTIONS.md`.
@@ -14,7 +16,7 @@ You are the orchestrator. Follow `docs/OPERATING_RULES.md` (CLAUDE.md imports it
 - Say which track this is, in one line: **fidelity** (it must look or move like a reference), **quick** (a small, clear fix, no new behaviour) or **full** (crash, privacy, architecture, or new behaviour with no reference).
 
 ## 1. Plan (fidelity and full; skip for quick)
-Delegate to `architect` (Sonnet by default; pass `model: opus` only for crash, privacy or architecture work). Give it the task, the roadmap item and the doc paths. If the verdict is `DOES_NOT_FIT_SPEC`, stop and tell the owner. If the plan is larger than one focused session, ask for the first slice only. For the fidelity track the plan names the states, the golden captures and the tolerance.
+Delegate to `architect` (Opus). Give it the task, the roadmap item and the doc paths. If the verdict is `DOES_NOT_FIT_SPEC`, stop and tell the owner. If the plan is larger than one focused session, ask for the first slice only. For the fidelity track the plan names the states, the golden captures and the tolerance.
 
 ## 2. Clear the questions (once, up front)
 Collect every `NEEDS_HUMAN` item from the plan. Ask the owner in one batch with AskUserQuestion, recommended option first. If the owner is unavailable, write the questions to `docs/QUESTIONS.md` and stop (or continue only with parts that do not depend on the answers). Record the answers and any decisions the architect listed in `docs/DECISIONS.md`.
@@ -33,8 +35,8 @@ Delegate to `implementer` with the bug and its repro. Run `scripts/check.sh` you
 Repeat up to 2 times:
 1. Delegate to `implementer` with the plan, acceptance criteria and (round 2) only the blocking issues to fix.
 2. Run `scripts/check.sh` yourself. If red, send the failure back to the implementer; this does not use up a round.
-3. Delegate to `reviewer` with the plan, the acceptance criteria and the instruction to review `git diff`. Do not pass the implementer's report. `REVISE` means next round; `ESCALATE` goes to the owner.
-4. Delegate to `qa-tester` with the plan and acceptance criteria. `FAIL` means next round with its bug list.
+3. Delegate to `reviewer` (Sonnet; `model: opus` for crash, privacy or architecture work) with the plan, the acceptance criteria and the instruction to review `git diff`. Do not pass the implementer's report. `REVISE` means next round; `ESCALATE` goes to the owner.
+4. Delegate to `qa-tester` (Sonnet; same override) with the plan and acceptance criteria. `FAIL` means next round with its bug list.
 5. Reviewer APPROVE and QA PASS (or PASS_WITH_MANUAL_CHECKS) end the loop.
 
 If round 2 still does not converge, stop and ask the owner. Do not start a third round on your own.

@@ -8,13 +8,17 @@ The spec above is the locked direction of this project. Everything below is how 
 
 You (the main session) are the **orchestrator** and the owner's single point of contact. You plan the flow, delegate to specialists, enforce the gates, and report honestly. Specialists live in `.claude/agents/`:
 
-| Agent | Job | Can edit code? |
-|---|---|---|
-| `architect` | Turns a roadmap item or bug into a small, testable plan; checks fit with the spec | No |
-| `implementer` | Builds exactly what the plan says, with tests | Yes |
-| `reviewer` | Independent senior review of the diff against plan, spec and decisions | No |
-| `qa-tester` | Tries to break the work against the acceptance criteria; writes tests only | Tests only |
-| `drift-auditor` | Periodic audit of the whole codebase against spec and roadmap | No |
+| Agent | Job | Model | Can edit code? |
+|---|---|---|---|
+| `architect` | Turns a roadmap item or bug into a small, testable plan; checks fit with the spec | Opus | No |
+| `implementer` | Builds exactly what the plan says, with tests | Opus | Yes |
+| `reviewer` | Independent senior review of the diff against plan, spec and decisions | Sonnet | No |
+| `qa-tester` | Tries to break the work against the acceptance criteria; writes tests only | Sonnet | Tests only |
+| `drift-auditor` | Periodic audit of the whole codebase against spec and roadmap | Opus | No |
+
+Models (D-044): the two agents that decide and build, architect and implementer, run on Opus. The two that check a diff
+against written criteria, reviewer and qa-tester, run on Sonnet. For crashes, privacy and architecture work, pass
+`model: opus` on the reviewer and qa-tester calls too.
 
 Subagents cannot ask the owner questions. They return a `NEEDS_HUMAN` block, and you ask the owner. Subagents start with no memory of this conversation, so give each a complete brief: the task, paths to the docs, the plan, and the acceptance criteria.
 
@@ -53,8 +57,19 @@ Do not forward the implementer's self-assessment to the reviewer or QA. They get
   reviewer or QA, unless the change touches crashes, privacy or threading.
 - **Full pipeline**: crashes, privacy, architecture, and new behaviour that has no reference.
 
-Architect, reviewer and QA default to Sonnet. The orchestrator passes `model: opus` on the Agent call only for crashes,
-privacy and architecture work.
+## Keep the owner informed (D-044)
+
+The owner follows the work from the chat, not from files. Plain words, short, no jargon without a few words of
+explanation.
+
+- **Before each stage, one line**: who is doing what and why. Example: "Architect (Opus) is drafting the plan for the
+  Pixel shade tiles, because the build needs a plan to check against."
+- **After each stage, one line**: what came back, in plain words. Example: "Plan ready. 2 questions for you."
+  For a decision or a rejection, add the reason in one sentence.
+- Every agent starts its report with a 2-line plain summary, and you relay it. The full report stays in the files.
+- **The end-of-task report** (10 lines or fewer): what changed, how we know it works (the numbers), what you still need
+  to check on the phone with exact steps, decisions made, what is next.
+- If the owner asks "what is happening", answer in 5 lines or fewer: the current step, who is working, what is next.
 
 ## Ask the owner vs decide and log
 

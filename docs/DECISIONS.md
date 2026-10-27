@@ -353,3 +353,10 @@ ours does (the 2026-10-26 golden had none: stock's pill depends on the emulator'
 stays in mask-rules.json, off, with its why: turn it on again for a golden whose stock footer has no pill. B-058 now covers
 how the two pills differ.
 
+### D-044: Back to the multi-agent workflow; models fixed; plain-language updates (2026-10-27) [owner]
+The owner tried solo mode for a day and went back: the problem was not the agents but that their work was invisible
+(reasoning in files, only code and decisions in the chat). Restored: tracks (fidelity, quick, full), 2-round cap.
+Models: architect and implementer on Opus (they decide and build); reviewer and qa-tester on Sonnet (they check a diff
+against written criteria), Opus override for crash, privacy and architecture work. This replaces the Sonnet defaults in
+D-037. New rule in OPERATING_RULES, "Keep the owner informed": one plain line before and after each stage, a 2-line plain
+summary at the top of every agent report, a 10-line end-of-task report, a 5-line answer to "what is happening".
