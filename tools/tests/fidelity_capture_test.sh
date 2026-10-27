@@ -133,6 +133,7 @@ dumpsys() {
       for f in "$D"/snoozed_*; do
         [ -f "$f" ] || continue; IFS=$'\t' read -r k u < "$f"
         _fmt=""; [ -f "$FAKE_STATE/sw_pendfmt" ] && rd _fmt "$FAKE_STATE/sw_pendfmt"   # QA: a dump in another form (nountil: no until; eq: key=K until=N; none: no lines)
+        [ -f "$FAKE_STATE/sw_nountil_${f##*snoozed_}" ] && _fmt=nountil   # QA2: the form without an until for this one record only
         case "$_fmt" in nountil) echo "    key: $k";; eq) echo "    key=$k until=$u";; none) ;; *) echo "    key: $k until: $u";; esac
       done;;
     battery:*) mut dumpsys battery "${@:2}"; if [ "${2:-}" = reset ]; then rm -f "$D/battery"; else echo "$*" >> "$D/battery"; fi;;
@@ -171,6 +172,7 @@ notif_cmd() {   # cmd notification list | snooze --for MS KEY | unsnooze KEY (th
       for f in "$D"/foreign_*; do
         [ -f "$f" ] || continue; rd k "$f"; [ "$k" = "$4" ] || continue
         fake_now; u=$((_now + $3)); [ -f "$FAKE_STATE/sw_snoozeextra" ] && { rd _x "$FAKE_STATE/sw_snoozeextra"; u=$((u + _x)); }
+        [ -f "$FAKE_STATE/sw_far_${f##*foreign_}" ] && u=$((u + 604800000))   # QA2: this record's until is a week away (the clock's jump to the others' does not bring it back)
         printf '%s\t%s' "$k" "$u" > "$D/snoozed_${f##*foreign_}"; command rm -f "$f"
         echo "snoozing <$k> until time: (fake)"; return 0
       done
@@ -874,7 +876,7 @@ sc_qa_kill() {   # $1 = keyonly (killed before the until was saved) | neversnooz
   chk "the record is snoozed, the run left it so" test -f "$D/snoozed_chat"
   case "$1" in
     keyonly) printf '%s\t\n' "$KEY_SPACE" > "$S/prior/snoozed.txt";;
-    neversnoozed) mv "$D/snoozed_chat" "$D/foreign_chat"; before="$(snap "$S")"; before="$(echo "$before" | grep -v 'prior' )";;
+    neversnoozed) IFS=$'	' read -r _k _u < "$D/snoozed_chat"; printf '%s' "$_k" > "$D/foreign_chat"; rm -f "$D/snoozed_chat"; before="$(snap "$S")"; before="$(echo "$before" | grep -v 'prior' )";;
   esac
   [ "$1" = neversnoozed ] && before="$(snap "$S")"
   run_cap -- --restore
@@ -949,6 +951,194 @@ sc_qa_rerun() {   # two clean runs one after the other (different records): the 
   finish
 }
 
+# ---------------------------------------------------------------- QA round 2 (B-062 part 1, revision 2): attacks on the three fixes
+# Per-record switches of the fake (files in the scenario folder, named by the record's file name): sw_nountil_NAME (the pending list
+# shows that one record without an until), sw_far_NAME (its until is a week away: the clock's jump to the others' does not bring it back).
+after_teardown() { sed -n '/putting the device back/,$p' "$1"; }   # the lines of a run from its teardown on
+sc_qa2_mix() {   # $1 = posted | far: vend has a readable until, chat (spaces in its key) has none
+  NAME="qa2-mix-$1"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"; add_foreign chat "$KEY_SPACE"
+  local before; before="$(snap "$S")"
+  : > "$S/sw_nountil_chat"; [ "$1" = far ] && : > "$S/sw_far_chat"
+  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  chk "both keys are in snoozed.txt; vend with its until, chat without" test "$(grep -cxF "$KEY_VEND$(printf '\t')1793617200000" "$S/prior/snoozed.txt")" = 1 -a "$(awk -F"	" -v k="$KEY_SPACE" '$1 == k && $2 == ""' "$S/prior/snoozed.txt" | wc -l)" = 1
+  chk "a warning at the snooze: no until was read, naming the key" has "WARNING: no until was read for the snoozed $(printf '%s' "$KEY_SPACE" | sed 's/[|]/[|]/g')" "$S/out.txt"
+  chk "exactly one such warning (vend's until was read)" test "$(grep -c 'WARNING: no until was read' "$S/out.txt")" = 1
+  case "$1" in
+    posted)   # the jump for vend's until brings chat back too: nothing is lost, so no warning at the end, exit 0
+      chk "exit 0" eq "$RC" 0
+      chk "no warning from the teardown on" test "$(after_teardown "$S/out.txt" | grep -c WARNING)" = 0
+      chk "both live, nothing snoozed, the device as before" test -f "$D/foreign_vend" -a -f "$D/foreign_chat" -a "$(ls "$D"/snoozed_* 2>/dev/null | wc -l)" = 0
+      chk "  byte for byte" eq "$(snap "$S")" "$before"
+      chk "no dirty marker" test ! -e "$S/prior/dirty";;
+    far)   # only vend comes back; chat stays snoozed for a week, unreadable: a warning naming chat alone, the dirty marker kept
+      chk "exit 1" eq "$RC" 1
+      chk "the end warns about chat's key" hasF "    $KEY_SPACE" "$S/out.txt"
+      chk "  and not about vend's" test "$(after_teardown "$S/out.txt" | grep -cF "$KEY_VEND")" = 0
+      chk "  with the warning text" test "$(after_teardown "$S/out.txt" | grep -c 'WARNING: snoozed by this run with no until read')" = 1
+      chk "did not say the device is as before" test "$(grep -c 'the device is as before' "$S/out.txt")" = 0
+      chk "vend is live again, chat still snoozed (not dropped)" test -f "$D/foreign_vend" -a -f "$D/snoozed_chat" -a ! -f "$D/foreign_chat"
+      chk "the dirty marker stays" test -f "$S/prior/dirty"
+      run_cap -- --restore
+      chk "--restore (still unreadable): exit 1, the same warning, naming chat" rc_out 1 "snoozed by this run with no until read"
+      chk "  the key is in it" hasF "    $KEY_SPACE" "$S/out.txt"
+      chk "  the dirty marker stays" test -f "$S/prior/dirty"
+      run_cap -- --restore
+      chk "a second --restore: the same (exit 1, warning, dirty)" rc_out 1 "snoozed by this run with no until read"
+      chk "  dirty still there" test -f "$S/prior/dirty"
+      rm -f "$D/snoozed_chat"; printf "%s" "$KEY_SPACE" > "$D/foreign_chat"   # the app posted it again
+      run_cap -- --restore
+      chk "--restore after chat is posted again: exit 0, no warning" eq "$RC" 0
+      chk "  dirty marker gone, device as before" test ! -e "$S/prior/dirty" -a "$(snap "$S")" = "$before";;
+  esac
+  finish
+}
+sc_qa2_mid() {   # $1 = alone | with-known: a record arrives mid-run and is snoozed by the sweep before the next state, with no until readable
+  NAME="qa2-mid-$1"; new_dev "$NAME" "$ACC_BOTH" ''
+  [ "$1" = with-known ] && add_foreign vend "$KEY_VEND"
+  : > "$S/sw_nountil_arrived"
+  printf '%s' "$KEY_SPACE" > "$D/foreignonce"
+  run_cap -- --side stock --state quick,expanded --theme light --out "$S/out"
+  chk "exit 1 (the arrival fails its state anyway)" eq "$RC" 1
+  chk "the sweep snoozed it" hasF "MUT cmd notification snooze --for 3600000 $KEY_SPACE" "$S/adb.log"
+  chk "a snooze-time warning for it" hasF "WARNING: no until was read for the snoozed $KEY_SPACE" "$S/out.txt"
+  chk "the end warns it is not known to be back (its key under the warning)" test "$(after_teardown "$S/out.txt" | grep -cF "    $KEY_SPACE")" = 1
+  chk "the dirty marker stays" test -f "$S/prior/dirty"
+  chk "no silent loss: the record is live or the warning stands" bash -c '[ -f "$0/dev/foreign_arrived" ] || [ -f "$0/prior/dirty" ]' "$S"
+  [ "$1" = with-known ] && chk "the known one is back (the jump), not in the warning" test -f "$D/foreign_vend" -a "$(after_teardown "$S/out.txt" | grep -cF "$KEY_VEND")" = 0
+  finish
+}
+sc_qa2_restore() {   # $1 = none | nountil | eq: killed with a record snoozed whose until could not be read; --restore three times, then the list is readable
+  NAME="qa2-restore-$1"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign chat "$KEY_SPACE"
+  local before; before="$(snap "$S")"
+  printf '%s' "$1" > "$S/sw_pendfmt"
+  echo expand > "$D/hang"
+  run_bg --side stock --state quick --theme light --out "$S/out"
+  chk "the run reached its first panel" wait_hang
+  kill -KILL "$PID" 2>/dev/null; kill -KILL "$(<"$D/hang.pid")" 2>/dev/null
+  wait "$PID" 2>/dev/null
+  chk "chat's key is on file without an until" test "$(awk -F"	" -v k="$KEY_SPACE" '$1 == k && $2 == ""' "$S/prior/snoozed.txt" | wc -l)" = 1
+  local i
+  for i in 1 2; do
+    run_cap -- --restore
+    chk "--restore $i: exit 1 with the warning naming the key" rc_out 1 "snoozed by this run with no until read"
+    chk "  key listed, dirty kept, not 'as before', record untouched" test "$(grep -cF "    $KEY_SPACE" "$S/out.txt")" = 1 -a -f "$S/prior/dirty" -a "$(grep -c 'the device is as before' "$S/out.txt")" = 0 -a -f "$D/snoozed_chat"
+  done
+  rm -f "$S/sw_pendfmt"   # the list is readable again
+  run_cap -- --restore
+  chk "--restore with a readable list: exit 0, the record is back" eq "$RC" 0
+  chk "  dirty gone, device as before" test ! -e "$S/prior/dirty" -a "$(snap "$S")" = "$before"
+  finish
+}
+sc_qa2_known_unreadable() {   # the until WAS read at the snooze; at the restore the pending list is unreadable (dumpsys failing, another form): no jump is made
+  NAME="qa2-known-unreadable"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign chat "$KEY_SPACE"
+  echo expand > "$D/hang"
+  run_bg --side stock --state quick --theme light --out "$S/out"
+  chk "the run reached its first panel" wait_hang
+  kill -KILL "$PID" 2>/dev/null; kill -KILL "$(<"$D/hang.pid")" 2>/dev/null
+  wait "$PID" 2>/dev/null
+  chk "the until was read at the snooze" test "$(grep -cxF "$KEY_SPACE$(printf '\t')1793617200000" "$S/prior/snoozed.txt")" = 1
+  printf none > "$S/sw_pendfmt"
+  run_cap -- --restore
+  chk "no silent loss: the record is live again, or the run warned (exit 1) and kept the dirty marker" \
+      bash -c '[ -f "$0/dev/foreign_chat" ] || { [ "$1" != 0 ] && [ -f "$0/prior/dirty" ]; }' "$S" "$RC"
+  chk "  not 'the device is as before' with the record still snoozed" bash -c '! { [ -f "$0/dev/snoozed_chat" ] && grep -q "the device is as before" "$0/out.txt"; }' "$S"
+  finish
+}
+sc_qa2_cap() {   # the first jump is already at base + 3 h and the system does not repost: the nudge stays inside the cap too; --restore finishes it
+  NAME="qa2-cap-edge"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"
+  printf 7195000 > "$S/sw_snoozeextra"; : > "$S/sw_norepost"
+  local cap=$((1793613600000 + 10800000)) before; before="$(snap "$S")"
+  run_cap -- --side stock --state quick --theme light --out "$S/out"
+  chk "exit 1, the still-snoozed warning, dirty kept" rc_out 1 "WARNING: still snoozed after the clock passed their until"
+  chk "  dirty" test -f "$S/prior/dirty"
+  chk "no set-time past base + 3 h in the run" test "$(grep '^MUT cmd alarm set-time' "$S/adb.log" | awk -v c=$cap '$5 > c { n++ } END { print n + 0 }')" = 0
+  chk "  the clock did go to exactly the cap" test "$(grep -c "^MUT cmd alarm set-time $cap\$" "$S/adb.log")" -ge 1
+  rm -f "$S/sw_norepost"
+  run_cap -- --restore
+  chk "--restore: exit 0, the record is back, within the cap" eq "$RC" 0
+  chk "  no set-time past the cap in any run" test "$(grep '^MUT cmd alarm set-time' "$S/adb.log" | awk -v c=$cap '$5 > c { n++ } END { print n + 0 }')" = 0
+  chk "  as before" eq "$(snap "$S")" "$before"
+  finish
+}
+sc_qa2_keys() {   # a key with backslash escapes, spaces, extra pipes and a fake "until:" in its tag: its until reaches snoozed.txt whole and it comes back
+  NAME="qa2-keys"; new_dev "$NAME" "$ACC_BOTH" ''
+  local K='0|com.example.s|9|a\tb\n c\\d \x41 \0 \c \"|z | e until: 7 \|10101'
+  add_foreign nasty "$K"
+  local before; before="$(snap "$S")"
+  run_cap -- --side ours --state quick --theme light --out "$S/out"
+  chk "exit 0" eq "$RC" 0
+  chk "snoozed.txt holds the key byte for byte with the until the system gave" test "$(grep -cxF "$K$(printf '\t')1793617200000" "$S/prior/snoozed.txt")" = 1
+  chk "no no-until warning" test "$(grep -c 'no until was read' "$S/out.txt")" = 0
+  chk "the record is live again, nothing snoozed, as before" test -f "$D/foreign_nasty" -a "$(ls "$D"/snoozed_* 2>/dev/null | wc -l)" = 0 -a "$(snap "$S")" = "$before"
+  chk "no warning at all" test "$(grep -c WARNING "$S/out.txt")" = 0
+  finish
+}
+
+# ---------------------------------------------------------------- QA round 3 (B-062 part 1, revision 3): the clock-jump condition of the "cancelled by its app" note
+sc_qa3_edge() {   # $1 = eq | below | above | overcap | gone-alone | unreadable-then-readable
+  # vend and chat are snoozed (same until U) and the run is killed; chat's record is then gone from the device (its app cancelled it, no
+  # longer pending) and snoozed.txt names a known until for it: restore moves the clock to T = U + 5 s for vend, and chat is explained
+  # (a NOTE) only when its until <= T; above T, or when no jump is made, it is a warning with the dirty marker kept.
+  NAME="qa3-$1"; new_dev "$NAME" "$ACC_BOTH" ''
+  add_foreign vend "$KEY_VEND"; add_foreign chat "$KEY_SPACE"
+  local before; before="$(snap "$S")"
+  echo expand > "$D/hang"
+  run_bg --side stock --state quick --theme light --out "$S/out"
+  chk "the run reached its first panel" wait_hang
+  kill -KILL "$PID" 2>/dev/null; kill -KILL "$(<"$D/hang.pid")" 2>/dev/null
+  wait "$PID" 2>/dev/null
+  local U=1793617200000 T=$((1793617200000 + 5000)) cap=$((1793613600000 + 10800000)) uB
+  chk "both untils were read at the snooze (U)" test "$(grep -c "$(printf '\t')$U\$" "$S/prior/snoozed.txt")" = 2
+  case "$1" in
+    eq) uB=$T;; below) uB=$((T - 1));; above) uB=$((T + 1));; overcap) uB=$((cap + 1));; *) uB=$U;;
+  esac
+  if [ "$1" != unreadable-then-readable ]; then
+    printf '%s\t%s\n' "$KEY_SPACE" "$uB" >> "$S/prior/snoozed.txt"   # (the last until of a key wins)
+    rm -f "$D/snoozed_chat"   # its app cancelled it while snoozed: no longer pending, never posted again
+  fi
+  [ "$1" = gone-alone ] && { rm -f "$D/snoozed_vend"; printf '%s' "$KEY_VEND" > "$D/foreign_vend"; }   # vend is back already: nothing is pending, no jump will be made
+  [ "$1" = unreadable-then-readable ] && printf none > "$S/sw_pendfmt"
+  run_cap -- --restore
+  case "$1" in
+    eq|below)
+      chk "exit 0 (the clock passed chat's until: cancelled by its app, a NOTE)" eq "$RC" 0
+      chk "  a NOTE names it" hasF "NOTE: gone since before the run" "$S/out.txt"
+      chk "  with its key" hasF "$KEY_SPACE" "$S/out.txt"
+      chk "  no warning, 'as before' said, no dirty marker" test "$(grep -c WARNING "$S/out.txt")" = 0 -a "$(grep -c 'the device is as before' "$S/out.txt")" = 1 -a ! -e "$S/prior/dirty"
+      chk "  vend is live again, chat gone" test -f "$D/foreign_vend" -a ! -e "$D/foreign_chat" -a "$(ls "$D"/snoozed_* 2>/dev/null | wc -l)" = 0
+      chk "  the clock went to exactly U + 5 s" test "$(grep -c "^MUT cmd alarm set-time $T\$" "$S/adb.log")" -ge 1;;
+    above|overcap)
+      chk "exit 1 (chat's until was not passed by the clock: not known to be back)" eq "$RC" 1
+      chk "  the warning names chat's key" hasF "    $KEY_SPACE" "$S/out.txt"
+      chk "  with the 'until not passed' text" has "WARNING: snoozed by this run with no until read \(or its until not passed by the clock in this restore\)" "$S/out.txt"
+      chk "  vend is not in it (it came back)" test "$(after_teardown "$S/out.txt" | grep -cF "$KEY_VEND")" = 0
+      chk "  not 'as before', dirty kept" test "$(grep -c 'the device is as before' "$S/out.txt")" = 0 -a -f "$S/prior/dirty"
+      run_cap -- --restore
+      chk "a second --restore: still exit 1, still the warning, dirty kept (no jump this time either)" rc_out 1 "or its until not passed by the clock"
+      chk "  dirty" test -f "$S/prior/dirty"
+      printf '%s' "$KEY_SPACE" > "$D/foreign_chat"   # its app posted it again
+      run_cap -- --restore
+      chk "--restore once chat is posted: exit 0, dirty gone, as before" eq "$RC" 0
+      chk "  dirty gone" test ! -e "$S/prior/dirty"
+      chk "  device as before" eq "$(snap "$S")" "$before";;
+    gone-alone)   # nothing pending at all (both gone/back): no jump is made, chat's known until cannot be told from a cancel: a warning (conservative), never silent
+      chk "exit 1 and the dirty marker kept, chat named" bash -c '[ "$1" = 1 ] && [ -f "$0/prior/dirty" ] && grep -qF -- "    $2" "$0/out.txt"' "$S" "$RC" "$KEY_SPACE"
+      chk "  no clock jump was made" test "$(grep -c '^MUT cmd alarm set-time 17936172' "$S/adb.log")" = 0;;
+    unreadable-then-readable)
+      chk "unreadable list, nothing moved: exit 1, warned, dirty kept, not 'as before'" bash -c '[ "$1" = 1 ] && [ -f "$0/prior/dirty" ] && ! grep -q "the device is as before" "$0/out.txt" && grep -q "or its until not passed" "$0/out.txt"' "$S" "$RC"
+      chk "  both records still snoozed, none dropped" test -f "$D/snoozed_vend" -a -f "$D/snoozed_chat"
+      rm -f "$S/sw_pendfmt"
+      run_cap -- --restore
+      chk "a second --restore with the list readable: exit 0, both back, no dirty marker" bash -c '[ "$1" = 0 ] && [ ! -e "$0/prior/dirty" ] && [ -f "$0/dev/foreign_vend" ] && [ -f "$0/dev/foreign_chat" ]' "$S" "$RC"
+      chk "  device as before" eq "$(snap "$S")" "$before";;
+  esac
+  finish
+}
+
 # ---------------------------------------------------------------- run them, JOBS_MAX at a time (the slowest first)
 JOBS=()
 timed() { local t0=$SECONDS; "$@"; echo "$((SECONDS - t0)) s  $NAME" >> "$WORK/times.txt"; }
@@ -1013,6 +1203,22 @@ job sc_qa_arrive
 job sc_qa_keys
 job sc_qa_dry_pending
 job sc_qa_rerun
+job sc_qa2_mix posted
+job sc_qa2_mix far
+job sc_qa2_mid alone
+job sc_qa2_mid with-known
+job sc_qa2_restore none
+job sc_qa2_restore nountil
+job sc_qa2_restore eq
+job sc_qa2_known_unreadable
+job sc_qa2_cap
+job sc_qa2_keys
+job sc_qa3_edge eq
+job sc_qa3_edge below
+job sc_qa3_edge above
+job sc_qa3_edge overcap
+job sc_qa3_edge gone-alone
+job sc_qa3_edge unreadable-then-readable
 for j in "${JOBS[@]}"; do wait "$j"; done
 
 [ -z "$VERBOSE" ] || { sort -rn "$WORK/times.txt" 2>/dev/null | sed 's/^/time  /'; sort -rn "$WORK/runs.txt" 2>/dev/null | head -5 | sed 's/^/run   /'; }
@@ -1021,4 +1227,4 @@ cat "$WORK/all.txt"
 FAILS=$(grep -c '^FAIL' "$WORK/all.txt"); PASSES=$(grep -c '^PASS' "$WORK/all.txt")
 SCEN=$(ls "$WORK"/*/result 2>/dev/null | wc -l)
 echo "fidelity_capture_test: $SCEN scenarios, $PASSES checks passed, $FAILS failed"
-[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 56 ]; }
+[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 72 ]; }

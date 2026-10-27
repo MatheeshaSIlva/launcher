@@ -39,7 +39,7 @@
    "pad": [0, -21],
    "required": true,
    "states": ["expanded", "tile-off", "tile-on"],
-   "why": "OFF since the 2026-10-27 golden (B-062, D-045): both sides now list the '1 app is active' pill left of the footer's buttons (our own foreground service, Launcher safety), so the pill is compared. Stock's pill depends on the emulator's session: the 2026-10-26 golden had none (its tree's qs_footer_actions held the three buttons only, the first at x 672), and while that was so this rule ignored the row left of the user button (21 px less above and below, the pill's own height). Turn it on again for a golden whose stock footer has no pill.",
+   "why": "OFF since the 2026-10-27 golden (B-062, D-041 addendum): both sides now list the '1 app is active' pill left of the footer's buttons (our own foreground service, Launcher safety), so the pill is compared. Stock's pill depends on the emulator's session: the 2026-10-26 golden had none (its tree's qs_footer_actions held the three buttons only, the first at x 672), and while that was so this rule ignored the row left of the user button (21 px less above and below, the pill's own height). Turn it on again for a golden whose stock footer has no pill.",
    "evidence": "stock's tree (light/expanded.xml, 2026-10-27): qs_footer_actions [0,2179][1080,2337] holds a '1 app is active' row [42,2202][660,2328] before multi_user_switch [672,2201][798,2327], in every expanded state, light and dark; the golden's light/expanded.png shows it; ours' picture light/expanded.png: the pill at x 42-660, y 2210-2316."
   },
   {
