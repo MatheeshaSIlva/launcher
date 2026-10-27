@@ -18,6 +18,9 @@
 #           passes only if diff.py (defaults) exits 0 and headroom.py is within 0.2 overall and 0.5 worst cell, and is listed.
 # A golden holds the fixed set (the fixture and our own notification) only: capture.sh snoozes other apps' notifications for the run
 # (B-062, D-043), and capture, verify and --against refuse a manifest whose set holds another app's package (foreign_in).
+# The torch (B-063, D-046): capture copies the capture's `torch` (the camera facings with a flash unit, or none) into the golden's
+# manifest and refuses a missing or invalid one (unknown, changed during the run); verify fails a manifest without a valid one and
+# prints it; --against fails when the other capture's differs (and still compares every picture).
 # Exit 0 done / all as it must be; 1 a capture failed or a check did not hold; 2 usage or a precondition not met (nothing was
 # touched). EMULATOR ONLY for capture. [DEVICE=emulator-5554] [ADB=path] [GOLDEN_STAGE=DIR for the raw captures].
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -39,7 +42,7 @@ fsize() { wc -c < "$1" | tr -d ' \r\n'; }
 
 # ---------------------------------------------------------------- capture
 do_capture() {
-  local root="$1" build fp stage out tdir theme state n=0 total=0 first=1 bytes md5 srcmd5 res notifs fk
+  local root="$1" build fp stage out tdir theme state n=0 total=0 first=1 bytes md5 srcmd5 res notifs fk torch
   case "$DEVICE" in emulator-*) ;; *) refuse_g "DEVICE=$DEVICE is not an emulator-* serial (goldens are captured on the emulator only)";; esac
   [ "$(a get-state 2>/dev/null | tr -d '\r')" = device ] || refuse_g "$DEVICE is not a device in state 'device'"
   build="$(ash getprop ro.build.id | tr -d '\r\n ')"
@@ -56,11 +59,14 @@ do_capture() {
   notifs="$(manifest_notifs "$stage/manifest.json")"
   if [ -z "$notifs" ]; then echo "golden.sh: the capture's manifest records no notification set: no golden was written (the raw captures stay in $stage)" >&2; exit 1; fi
   if fk="$(foreign_in "$notifs")"; then echo "golden.sh: the capture's notification set holds another app's notification ($fk): a golden holds the fixture and ours only (capture.sh snoozes the others, B-062): no golden was written (the raw captures stay in $stage)" >&2; exit 1; fi
+  torch="$(manifest_torch "$stage/manifest.json")"
+  if [ -z "$torch" ]; then echo "golden.sh: the capture's manifest records no torch (the cameras with a flash unit, B-063): no golden was written (the raw captures stay in $stage)" >&2; exit 1; fi
+  if ! torch_valid "$torch"; then echo "golden.sh: the capture's torch is '$torch' (dumpsys media.camera unread, or it changed during the capture): a golden records none or a list of facings: no golden was written (the raw captures stay in $stage)" >&2; exit 1; fi
   tdir="$out.tmp"; rm -rf "$tdir"; mkdir -p "$tdir" || { echo "golden.sh: cannot make $tdir" >&2; exit 1; }
   {
     printf '{\n "tool": "tools/fidelity/golden.sh",\n "side": "stock",\n "date": "%s",\n "build_id": "%s",\n "fingerprint": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$build" "$(json_str "$fp")"
     printf ' "capture": "capture.sh --side stock --state all --theme both (setup and fixture in its manifest.json: kept in %s while it lasts)",\n' "tools/shots/fidelity"
-    printf ' "tiles_stock": "%s",\n "notifications": "%s",\n "files": [\n' "$STOCK_TILES" "$(json_str "$notifs")"
+    printf ' "tiles_stock": "%s",\n "notifications": "%s",\n "torch": "%s",\n "files": [\n' "$STOCK_TILES" "$(json_str "$notifs")" "$(json_str "$torch")"
     for theme in $THEMES_ALL; do
       mkdir -p "$tdir/$theme"
       for state in $STATES_ALL; do
@@ -87,7 +93,7 @@ mfield() { # MANIFEST PATH-VALUE KEY -> the value of KEY in the file entry with 
   sed -n "s|.*\"path\": \"$2\".*\"$3\": \"\{0,1\}\([^\",}]*\).*|\1|p" "$1" | head -1
 }
 do_verify() {
-  local root="$1" build="$2" other="$3" dtmp dir mf bad=0 total=0 sum n=0 theme state rel got b m dir2 same=0 near=0 py f o w dx hj gn on fk
+  local root="$1" build="$2" other="$3" dtmp dir mf bad=0 total=0 sum n=0 theme state rel got b m dir2 same=0 near=0 py f o w dx hj gn on fk gt ot
   py="$(command -v python3 || command -v python)"; dtmp="$(mktemp -d)"; trap 'rm -rf "$dtmp"' EXIT
   [ -d "$root" ] || refuse_g "$root is not a folder"
   if [ -z "$build" ]; then
@@ -115,6 +121,10 @@ do_verify() {
   if [ -z "$gn" ]; then echo "FAIL  the manifest records no notification set (recapture the golden: a notification that was there or not changes the Silent section)"; bad=1
   else echo "notifications at capture: $gn"; fi
   if fk="$(foreign_in "$gn")"; then echo "FAIL  the manifest records another app's notification ($fk): a golden holds the fixture and ours only (other apps' notifications are snoozed for a capture, B-062): recapture the golden"; bad=1; fi
+  gt="$(manifest_torch "$mf")"
+  if [ -z "$gt" ]; then echo "FAIL  the manifest records no torch (the cameras with a flash unit at capture, B-063: ours' Flashlight tile follows them): add it from evidence or recapture the golden"; bad=1
+  elif ! torch_valid "$gt"; then echo "FAIL  the manifest's torch is '$gt' (not none or a list of facings): recapture the golden"; bad=1
+  else echo "torch at capture: $gt"; fi
   echo "total: $total bytes = $(awk -v b="$total" 'BEGIN { printf "%.2f", b / 1048576 }') MB (target at most 4 MB)"
   [ "$total" -le "$MAX_BYTES" ] || echo "NOTE  over the 4 MB target: report it, never lower the quality"
   if [ -n "$other" ]; then
@@ -124,6 +134,10 @@ do_verify() {
     if fk="$(foreign_in "$on")"; then echo "FAIL  --against: the other capture's manifest records another app's notification ($fk): it is no reference of ours"; bad=1; fi
     if [ "$on" != "$gn" ]; then
       echo "FAIL  --against: the notifications at capture differ (a notification that arrives or leaves changes the Silent section, so the pictures are of other states). stored: ${gn:-(none)} other: ${on:-(none)}"; bad=1
+    fi
+    ot="$(manifest_torch "$dir2/manifest.json")"
+    if [ "$ot" != "$gt" ]; then
+      echo "FAIL  --against: the torch at capture differs (the cameras with a flash unit, B-063; the pictures are still compared below). stored: ${gt:-(none recorded)} other: ${ot:-(none recorded)}"; bad=1
     fi
     for theme in $THEMES_ALL; do
       for state in $STATES_ALL; do

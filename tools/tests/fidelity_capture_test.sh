@@ -34,6 +34,11 @@
 # --restore with the clock still faked and back at real time (kill, kill-real), no repost / the nudge / the 3 h cap / a refused snooze /
 # an owner's cancel (a NOTE) / a record the list hides (snooze-*), a quote in a key (apostrophe), a pending snooze that is not ours
 # (refuse-pending), --dry-run listing them, golden.sh and baseline.sh refusing another app's package (golden*, baseline-gate).
+#
+# B-063 (D-046): the torch. The fake's `dumpsys media.camera` prints the emulator's own dump form (tools/tests/fixtures/media_camera,
+# front camera with a flash unit); by default the same with no flash (`none`); $FAKE_STATE/camera = front | unknown | flip (none at the
+# first read, front after). Scenarios: torch-record (the parser, the setup field on both sides, reads only), torch-warn (unknown, a change,
+# ours against the golden's torch), baseline-gate (the torch gate), golden* (capture writes and refuses, verify and --against check).
 set -u
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$(mktemp -d)"
@@ -136,6 +141,11 @@ dumpsys() {
         [ -f "$FAKE_STATE/sw_nountil_${f##*snoozed_}" ] && _fmt=nountil   # QA2: the form without an until for this one record only
         case "$_fmt" in nountil) echo "    key: $k";; eq) echo "    key=$k until=$u";; none) ;; *) echo "    key: $k until: $u";; esac
       done;;
+    media.camera:*)   # B-063: the real dump's form (tools/tests/fixtures/media_camera); $FAKE_STATE/camera: front | unknown | flip (none at the
+      # first read, front after); default: the same two cameras with no flash (none). A read: no MUT line
+      _c=""; [ -f "$FAKE_STATE/camera" ] && rd _c "$FAKE_STATE/camera"
+      if [ "$_c" = flip ]; then if [ -f "$FAKE_STATE/camera_read" ]; then _c=front; else : > "$FAKE_STATE/camera_read"; _c=none; fi; fi
+      case "$_c" in front) cat "$FAKE_CAM_FRONT";; unknown) echo "Can't find service: media.camera";; *) cat "$FAKE_CAM_NONE";; esac;;
     battery:*) mut dumpsys battery "${@:2}"; if [ "${2:-}" = reset ]; then rm -f "$D/battery"; else echo "$*" >> "$D/battery"; fi;;
   esac
 }
@@ -275,6 +285,10 @@ case "${1:-}" in
 esac
 EOF
 chmod +x "$BIN"/*
+
+# the camera dumps (B-063): the emulator's own of 2026-10-28 (front camera with a flash unit, back without), and the same with no flash
+export FAKE_CAM_FRONT="$REPO/tools/tests/fixtures/media_camera/cp41-2026-10-28-front.txt" FAKE_CAM_NONE="$WORK/cam_none.txt"
+sed 's/Has a flash unit: true/Has a flash unit: false/' "$FAKE_CAM_FRONT" > "$FAKE_CAM_NONE"
 
 # a PNG header for 1080x2400 (all the harness reads of a screenshot besides comparing two of them byte for byte)
 printf '\211PNG\r\n\032\n\000\000\000\rIHDR\000\000\004\070\000\000\011\140\010\006\000\000\000fake-pixels' > "$WORK/shot.png"
@@ -437,6 +451,7 @@ sc_ours() {   # $1 = name, $2 = accessibility list, $3 = user-pixel.json content
   chk "  and was put back with the prior's own text ($([ -n "${4:-}" ] && echo "not reset" || echo reset))" has "IMPORT qs_tiles.txt ${4:-reset}\$" "$S/adb.log"
   chk "  the manifest names both lists" has '"tiles_ours": "'"$OURS_WANT"'"' "$S/out/manifest.json"
   chk "  and the notification set at capture (the fixture and the safety one)" has '"notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;"' "$S/out/manifest.json"
+  chk "  and the torch at capture (the fake's default dump: no camera with a flash)" has '"torch": "none"' "$S/out/manifest.json"
   finish
 }
 
@@ -456,6 +471,7 @@ sc_stock() {   # $1 = name, $2 = accessibility list
   chk "the device is as before (everything, byte for byte)" eq "$(snap "$S")" "$before"
   chk "no dirty marker left" test ! -e "$S/prior/dirty"
   chk "the manifest names the notification set at capture" has '"notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;"' "$S/out/manifest.json"
+  chk "  and the torch at capture (the fake's default dump: no camera with a flash)" has '"torch": "none"' "$S/out/manifest.json"
   case "$2" in *com.other*) chk "the other service stayed in the list while ours was off" has "enabled_accessibility_services com.other.app/com.other.app.Service\$" "$S/adb.log";; esac
   finish
 }
@@ -603,17 +619,44 @@ sc_baseline_gate() {   # baseline.sh (no device: --ours-from) refuses a notifica
   NAME="baseline-gate"; S="$WORK/$NAME"; mkdir -p "$S/gold/FAKE.260101.001" "$S/cap/ours" "$S/capbad/ours" "$S/trees"; : > "$S/adb.log"
   echo '{}' > "$S/masks.json"; echo '{}' > "$S/regions.json"
   local clean='pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;' bad='pkg=com.android.vending id=951340667;pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;'
-  printf '{\n "notifications": "%s",\n "files": []\n}\n' "$clean" > "$S/gold/FAKE.260101.001/manifest.json"
-  printf '{"setup": {"notifications": "%s"}}\n' "$clean" > "$S/cap/manifest.json"
-  printf '{"setup": {"notifications": "%s"}}\n' "$bad" > "$S/capbad/manifest.json"
+  printf '{\n "notifications": "%s",\n "torch": "none",\n "files": []\n}\n' "$clean" > "$S/gold/FAKE.260101.001/manifest.json"
+  printf '{"setup": {"notifications": "%s", "torch": "none"}}\n' "$clean" > "$S/cap/manifest.json"
+  printf '{"setup": {"notifications": "%s", "torch": "none"}}\n' "$bad" > "$S/capbad/manifest.json"
   baseline() { env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE=emulator-5554 FAKE_STATE="$S" bash "$REPO/tools/fidelity/baseline.sh" --out "$S/out$1" --golden "$S/gold/FAKE.260101.001" --masks "$S/masks.json" --regions "$S/regions.json" --trees "$S/trees" --ours-from "$S/$2" --build FAKE.260101.001 > "$S/out.txt" 2>&1 < /dev/null; RC=$?; }
   baseline 1 cap
   chk "clean sets pass the gate (it stops later: no pictures)" rc_out 1 "ours/light/quick.png is missing"
   baseline 2 capbad
   chk "ours' set with another app's package: exit 1, says so and names it" rc_out 1 "ours' notification set holds another app's notification \(pkg=com.android.vending id=951340667\)"
-  printf '{\n "notifications": "%s",\n "files": []\n}\n' "$bad" > "$S/gold/FAKE.260101.001/manifest.json"
+  printf '{\n "notifications": "%s",\n "torch": "none",\n "files": []\n}\n' "$bad" > "$S/gold/FAKE.260101.001/manifest.json"
   baseline 3 cap
   chk "a golden that holds another app's package: exit 1, says recapture" rc_out 1 "the golden's notification set holds another app's notification.*recapture"
+  # B-063: the torch gate (after the notification set's), no override
+  gold() { if [ -n "$1" ]; then printf '{\n "notifications": "%s",\n "torch": "%s",\n "files": []\n}\n' "$clean" "$1"; else printf '{\n "notifications": "%s",\n "files": []\n}\n' "$clean"; fi > "$S/gold/FAKE.260101.001/manifest.json"; }
+  capt() { mkdir -p "$S/cap-$1/ours"; if [ -n "$2" ]; then printf '{"setup": {"notifications": "%s", "torch": "%s"}}\n' "$clean" "$2"; else printf '{"setup": {"notifications": "%s"}}\n' "$clean"; fi > "$S/cap-$1/manifest.json"; }
+  capt front front; capt none ''; capt unk unknown; capt chg 'changed (setup none, end front)'
+  notable() { test ! -e "$S/out$1/scores.md" -a ! -e "$S/out$1/reports"; }
+  gold none; baseline 4 cap-front
+  chk "torch: ours front, golden none: exit 1, names both and the Flashlight tile, says cold boot or recapture" rc_out 1 "baseline.sh FAILED: the flash units differ.*Flashlight tile.*golden: none ours: front.*Cold-boot the emulator until dumpsys media.camera matches.*recapture the golden on this boot"
+  chk "  no table" notable 4
+  baseline 5 cap-none
+  chk "torch: ours' capture records none (made before B-063): exit 1, says recapture" rc_out 1 "baseline.sh FAILED: ours' capture records no torch: made before B-063: recapture"
+  chk "  no table" notable 5
+  baseline 6 cap-unk
+  chk "torch: ours unknown: exit 1, names it" rc_out 1 "baseline.sh FAILED: ours' torch is 'unknown'"
+  baseline 7 cap-chg
+  chk "torch: ours changed during the capture: exit 1, names it" rc_out 1 "baseline.sh FAILED: ours' torch is 'changed \(setup none, end front\)'"
+  chk "  no table" notable 7
+  gold ''; baseline 8 cap
+  chk "torch: a golden that records none: exit 1, says recapture" rc_out 1 "baseline.sh FAILED: the golden records no torch.*recapture the golden"
+  chk "  no table" notable 8
+  gold unknown; baseline 9 cap
+  chk "torch: a golden whose torch is unknown: exit 1, names it" rc_out 1 "baseline.sh FAILED: the golden's torch is 'unknown'"
+  gold 'changed (setup none, end front)'; baseline 10 cap
+  chk "torch: a golden whose torch changed: exit 1, names it" rc_out 1 "baseline.sh FAILED: the golden's torch is 'changed \(setup none, end front\)'"
+  gold front; baseline 11 cap-front
+  chk "torch: equal (front and front) passes the gate (it stops later: no pictures)" rc_out 1 "ours/light/quick.png is missing"
+  gold none; baseline 12 cap
+  chk "torch: equal (none and none) passes the gate too" rc_out 1 "ours/light/quick.png is missing"
   finish
 }
 sc_notrest() {
@@ -726,12 +769,12 @@ sc_golden() {
   chk "a non-emulator serial is refused (exit 2, nothing touched)" eq "$RC" 2
   chk "  says so" has "REFUSED.*not an emulator" "$S/out.txt"
   chk "  no mutating call, no folder" test "$(muts)" = 0 -a ! -e "$S/g0"
-  mkdir -p "$S/g1/FAKE.260101.001"; echo '{}' > "$S/g1/FAKE.260101.001/manifest.json"
+  mkdir -p "$S/g1/FAKE.260101.001"; echo '{"torch": "none"}' > "$S/g1/FAKE.260101.001/manifest.json"
   run_golden capture --root "$S/g1"
   chk "a build that already has a golden is refused (exit 2)" eq "$RC" 2
   chk "  says it is never overwritten" has "REFUSED.*already exists" "$S/out.txt"
   chk "  no mutating call" eq "$(muts)" 0
-  chk "  the existing manifest is untouched" eq "$(cat "$S/g1/FAKE.260101.001/manifest.json")" "{}"
+  chk "  the existing manifest is untouched" eq "$(cat "$S/g1/FAKE.260101.001/manifest.json")" '{"torch": "none"}'
   # a capture that works: 8 pictures, a manifest, the device back as before
   run_golden capture --root "$S/g2"
   chk "capture: exit 0" eq "$RC" 0
@@ -739,11 +782,28 @@ sc_golden() {
   chk "  a manifest with 8 files and the total" test "$(grep -c '"size": \[1080, 2400\]' "$S/g2/FAKE.260101.001/manifest.json")" = 8 -a "$(grep -c '"total_bytes"' "$S/g2/FAKE.260101.001/manifest.json")" = 1
   chk "  no staging folder left" test ! -e "$S/g2/FAKE.260101.001.tmp"
   chk "  the manifest records the notification set (read from the capture's manifest)" has '"notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;",' "$S/g2/FAKE.260101.001/manifest.json"
+  chk "  the manifest records the torch right after the notification set (read from the capture's manifest: the fake's default, none)" eq "$(grep -A1 '"notifications"' "$S/g2/FAKE.260101.001/manifest.json" | tail -1)" ' "torch": "none",'
   chk "  the device is as before" eq "$(snap "$S")" "$before"
   run_golden verify --root "$S/g2"
   chk "verify: exit 0" eq "$RC" 0
   chk "  says OK and the total" has "golden verify: OK.*" "$S/out.txt"
   chk "  prints the notification set at capture" has "notifications at capture: pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;" "$S/out.txt"
+  chk "  prints the torch at capture" has "^torch at capture: none$" "$S/out.txt"
+  # B-063: a golden that records no torch, or an invalid one, fails verify
+  mkdir -p "$S/g7"; cp -r "$S/g2/FAKE.260101.001" "$S/g7/"; sed -i '/"torch"/d' "$S/g7/FAKE.260101.001/manifest.json"
+  run_golden verify --root "$S/g7"
+  chk "a golden with no torch fails verify (exit 1, says so)" rc_out 1 "FAIL  the manifest records no torch"
+  mkdir -p "$S/g7u"; cp -r "$S/g2/FAKE.260101.001" "$S/g7u/"; sed -i 's/"torch": "none"/"torch": "unknown"/' "$S/g7u/FAKE.260101.001/manifest.json"
+  chk "(that manifest says unknown)" has '"torch": "unknown",' "$S/g7u/FAKE.260101.001/manifest.json"
+  run_golden verify --root "$S/g7u"
+  chk "a golden whose torch is unknown fails verify (exit 1, names it)" rc_out 1 "FAIL  the manifest's torch is 'unknown'"
+  # B-063: a capture whose torch could not be read writes no golden (the raw captures stay)
+  printf unknown > "$S/camera"; rm -rf "$S/stage"; run_golden capture --root "$S/g9"
+  chk "a capture with the torch unknown writes no golden (exit 1, names it)" rc_out 1 "the capture's torch is 'unknown'.*no golden was written"
+  chk "  and no folder; the raw captures stay" test ! -e "$S/g9/FAKE.260101.001" -a ! -e "$S/g9/FAKE.260101.001.tmp" -a -f "$S/stage/manifest.json"
+  chk "  capture.sh warned about it" has "WARNING: the torch is unknown" "$S/allout.txt"
+  chk "  the device is as before" eq "$(snap "$S")" "$before"
+  rm -f "$S/camera"
   # a manifest that records no notification set (a golden of before) fails
   mkdir -p "$S/g4"; cp -r "$S/g2/FAKE.260101.001" "$S/g4/"; sed -i '/"notifications"/d' "$S/g4/FAKE.260101.001/manifest.json"
   run_golden verify --root "$S/g4"
@@ -765,6 +825,12 @@ sc_golden_against() {   # the middle third of golden's cases (a recapture with a
   chk "  and that the other capture's manifest holds another app's notification" has "FAIL  --against: the other capture's manifest records another app's notification" "$S/out.txt"
   run_golden verify --root "$S/g5" --against "$S/g2"
   chk "  the other way round too (exit 1)" rc_out 1 "FAIL  --against: the notifications at capture differ"
+  # B-063: a capture of another torch (same pictures here): --against fails, and still compares every picture
+  mkdir -p "$S/g8"; cp -r "$S/g2/FAKE.260101.001" "$S/g8/"; sed -i 's/"torch": "none"/"torch": "front"/' "$S/g8/FAKE.260101.001/manifest.json"
+  run_golden verify --root "$S/g2" --against "$S/g8"
+  chk "--against a capture with another torch fails (exit 1), names both" rc_out 1 "FAIL  --against: the torch at capture differs.*stored: none other: front"
+  chk "  and still compares every picture (8 of 8 identical)" has "against .*g8: 8 of 8 identical" "$S/out.txt"
+  chk "  no other failure" test "$(grep -c '^FAIL' "$S/out.txt")" = 1
   # a capture while another app's record cannot be snoozed away (the fake's list hides it from the harness, the dump shows it): capture.sh fails, no golden
   add_foreign vend "$KEY_VEND"; : > "$S/sw_listhide"; rm -rf "$S/stage"; run_golden capture --root "$S/g6"
   chk "a capture that cannot get rid of another app's notification writes no golden (exit 1)" rc_out 1 "no golden was written"
@@ -809,6 +875,7 @@ sc_notifwarn() {   # ours side: a warning when its notification set differs from
   mkdir -p "$S/gold/FAKE.260101.001"
   printf '{
  "notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;",
+ "torch": "none",
  "files": []
 }
 ' > "$S/gold/FAKE.260101.001/manifest.json"
@@ -816,6 +883,7 @@ sc_notifwarn() {   # ours side: a warning when its notification set differs from
   chk "the same set as the golden's: exit 0, no warning" test "$RC" = 0 -a "$(grep -c WARNING "$S/out.txt")" = 0
   printf '{
  "notifications": "pkg=dev.launcher.app id=7;",
+ "torch": "none",
  "files": []
 }
 ' > "$S/gold/FAKE.260101.001/manifest.json"
@@ -823,6 +891,7 @@ sc_notifwarn() {   # ours side: a warning when its notification set differs from
   chk "  Android's own overlay notice (pkg=android id=0, present while ours is on) is no record: not in the set, so no warning" test "$(grep -c 'pkg=android' "$S/out1/manifest.json")" = 0
   chk "another set: a warning that names both sets, the run still exits 0" rc_out 0 "WARNING: this run's notifications differ from the golden's.*golden: pkg=dev.launcher.app id=7;.*now: pkg=dev.launcher.app id=1001;"
   printf '{
+ "torch": "none",
  "files": []
 }
 ' > "$S/gold/FAKE.260101.001/manifest.json"
@@ -832,6 +901,57 @@ sc_notifwarn() {   # ours side: a warning when its notification set differs from
   chk "no golden for the build: no warning" test "$RC" = 0 -a "$(grep -c WARNING "$S/out.txt")" = 0
   run_cap GOLDEN_ROOT="$S/gold" -- --side stock --state quick --theme light --out "$S/out5"
   chk "the stock side does not look at the golden" test "$RC" = 0 -a "$(grep -c WARNING "$S/out.txt")" = 0
+  chk "the device is as before" eq "$(snap "$S")" "$before"
+  finish
+}
+sc_torch_record() {   # B-063 (AC1): which cameras report a flash unit (dumpsys media.camera) lands in the manifest's setup, both sides; a read only
+  NAME="torch-record"; new_dev "$NAME" "$ACC_BOTH" ''
+  local before side; before="$(snap "$S")"
+  # the parser on the emulator's own dump (front camera with a flash unit, back without; tools/tests/fixtures/media_camera) and edge forms
+  tp() { bash -c ". '$REPO/tools/fidelity/capture.sh'; torch_parse"; }
+  tv() { bash -c ". '$REPO/tools/fidelity/capture.sh'; for v in \"\$@\"; do torch_valid \"\$v\" && printf y || printf n; done" _ "$@"; }
+  chk "parser: the emulator's real dump gives front" eq "$(tp < "$FAKE_CAM_FRONT")" front
+  chk "  both flashes false: none" eq "$(tp < "$FAKE_CAM_NONE")" none
+  chk "  both true: back,front (sorted)" eq "$(sed 's/flash unit: false/flash unit: true/' "$FAKE_CAM_FRONT" | tp)" back,front
+  chk "  adb's CRLF lines read the same" eq "$(sed 's/$/\r/' "$FAKE_CAM_FRONT" | tp)" front
+  chk "  an external camera with a flash: external" eq "$(printf '    Has a flash unit: true\n    Facing: External\n' | tp)" external
+  chk "  no camera (Number of camera devices: 0): none" eq "$(printf 'Number of camera devices: 0\n' | tp)" none
+  chk "  no such lines (the service missing): unknown" eq "$(printf "Can't find service: media.camera\n" | tp)" unknown
+  chk "  cameras listed but no flash lines: unknown" eq "$(grep -v 'Has a flash unit' "$FAKE_CAM_FRONT" | tp)" unknown
+  chk "  a flash line with no facing after it: unknown" eq "$(grep -v 'Facing: Back' "$FAKE_CAM_FRONT" | tp)" unknown
+  chk "valid: none, front, back,front; not: unknown, changed (...), empty, Front" eq "$(tv none front back,front unknown 'changed (setup none, end front)' '' Front)" yyynnnn
+  printf front > "$S/camera"
+  for side in stock ours; do
+    run_cap -- --side "$side" --state quick --theme light --out "$S/out-$side"
+    chk "$side side, the front dump: exit 0, no warning" test "$RC" = 0 -a "$(grep -c WARNING "$S/out.txt")" = 0
+    chk "  the manifest's setup records torch front" eq "$(bash -c ". '$REPO/tools/fidelity/capture.sh'; manifest_torch '$S/out-$side/manifest.json'")" front
+    chk "  inside the setup block" has '"setup": \{.*"torch": "front"\}' "$S/out-$side/manifest.json"
+  done
+  chk "dumpsys media.camera was read twice a run (setup, before the manifest)" test "$(grep -c '^adb -s emulator-5554 shell dumpsys media.camera$' "$S/adb.log")" = 4
+  chk "  and no MUT line names the camera" test "$(grep '^MUT' "$S/adb.log" | grep -c camera)" = 0
+  chk "the device is as before" eq "$(snap "$S")" "$before"
+  finish
+}
+sc_torch_warn() {   # B-063 (AC2, AC3): an unread torch and one that changes are WARNINGs; ours warns when the golden records another torch or none
+  NAME="torch-warn"; new_dev "$NAME" "$ACC_BOTH" ''
+  local before; before="$(snap "$S")"
+  printf unknown > "$S/camera"
+  run_cap -- --side stock --state quick --theme light --out "$S/out1"
+  chk "unknown: exit 0 and a WARNING naming the torch" rc_out 0 "WARNING: the torch is unknown: dumpsys media.camera"
+  chk "  the manifest records unknown" has '"torch": "unknown"' "$S/out1/manifest.json"
+  printf flip > "$S/camera"; rm -f "$S/camera_read"
+  run_cap -- --side stock --state quick --theme light --out "$S/out2"
+  chk "flip (none, then front): exit 0 and a WARNING naming both" rc_out 0 "WARNING: the torch changed during the run.*setup none, end front"
+  chk "  the manifest records the change" has '"torch": "changed \(setup none, end front\)"' "$S/out2/manifest.json"
+  mkdir -p "$S/gold/FAKE.260101.001"
+  printf '{\n "notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;",\n "torch": "none",\n "files": []\n}\n' > "$S/gold/FAKE.260101.001/manifest.json"
+  printf front > "$S/camera"
+  run_cap GOLDEN_ROOT="$S/gold" -- --side ours --state quick --theme light --out "$S/out3"
+  chk "ours, golden none, this boot front: exit 0 and a WARNING with both values" rc_out 0 "WARNING: this boot's flash units differ from the golden's for build FAKE.260101.001.*golden: none now: front"
+  chk "  that warning only (the same notification set)" test "$(grep -c WARNING "$S/out.txt")" = 1
+  printf '{\n "notifications": "pkg=dev.launcher.app id=1001;pkg=dev.launcher.app id=7;",\n "files": []\n}\n' > "$S/gold/FAKE.260101.001/manifest.json"
+  run_cap GOLDEN_ROOT="$S/gold" -- --side ours --state quick --theme light --out "$S/out4"
+  chk "ours, a golden that records no torch: exit 0 and a WARNING" rc_out 0 "WARNING: the golden of build FAKE.260101.001 .*records no torch"
   chk "the device is as before" eq "$(snap "$S")" "$before"
   finish
 }
@@ -1185,6 +1305,8 @@ job sc_snooze_fail ownercancel
 job sc_snooze_fail listhide
 job sc_apostrophe
 job sc_baseline_gate
+job sc_torch_record
+job sc_torch_warn
 job sc_sigterm stock
 job sc_sigterm ours
 job sc_kill
@@ -1227,4 +1349,4 @@ cat "$WORK/all.txt"
 FAILS=$(grep -c '^FAIL' "$WORK/all.txt"); PASSES=$(grep -c '^PASS' "$WORK/all.txt")
 SCEN=$(ls "$WORK"/*/result 2>/dev/null | wc -l)
 echo "fidelity_capture_test: $SCEN scenarios, $PASSES checks passed, $FAILS failed"
-[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 72 ]; }
+[ "$FAILS" = 0 ] && { [ -n "${ONLY:-}" ] || [ "$SCEN" = 74 ]; }

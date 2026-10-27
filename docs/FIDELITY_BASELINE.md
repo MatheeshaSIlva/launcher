@@ -75,6 +75,8 @@ Setup: as baseline 1 (same tile lists, `--font system`), with:
   active" pill ours does (session-dependent: the 2026-10-26 golden had none), so the `foreground-service-pill` rule is off and
   the pill is compared (D-041 addendum); B-058 is not a gap on this golden.
 - Ours: BUILD local of e6eef47 (B-060), the APK's md5 checked on the emulator.
+- Torch (B-063, D-046): `none`, no camera reporting a flash unit (not read at the time: the golden's manifest was backfilled
+  from evidence, since the golden and this ours capture are the same emulator boot and ours hid the Flashlight tile).
 - Command: `tools/fidelity/baseline.sh --out DIR` (all gates passed: same notification set, no capture warning). Per-cluster
   details in `docs/fidelity/baseline-2/scores.md`, heatmaps `docs/fidelity/baseline-2/<theme>-<state>-worst.png`.
 
@@ -157,6 +159,10 @@ moves the light expanded states' means by +0.21 and the dark ones' by -0.025, an
 19940 -> 54597 px; dark 55722 -> 21712 px, where ours' tile now covers stock's unavailable one). Every named cluster outside it is as in baseline 2: the clock 3687 / 3747 px, the date 1515,
 the carrier 2694 / 2719. With `--font off` (the default look) the 8 pictures before and after are pixel-identical.
 
+This re-run holds torch `front` against the golden's `none` and would not pass baseline.sh's torch gate since B-063 (D-046):
+the cause in one line, ours takes any camera with a flash unit for the Flashlight tile (B-065) and this boot's front camera
+reports one, while stock takes the back camera only.
+
 ## Golden history
 
 - `CP41.260828.004.A7`, 2026-10-26 (MF slice 2; used by baseline 1 and the provisional baseline 2): its quick state's Silent
@@ -165,4 +171,7 @@ the carrier 2694 / 2719. With `--font off` (the default look) the 8 pictures bef
   its pictures and manifest are in git history (the commit before B-062 part 2, `tools/fidelity/golden/CP41.260828.004.A7/`;
   light quick md5 `5fc9dbce3f433cf996ae7539cf383cbf`).
 - `CP41.260828.004.A7`, 2026-10-27 (B-062, current): the fixed set only (ours and the fixture), the footer pill shown;
-  8 pictures, 1.55 MB; light quick md5 `6384b6bea196724201811f4dd83b3f38`.
+  8 pictures, 1.55 MB; light quick md5 `6384b6bea196724201811f4dd83b3f38`. Torch `none` backfilled 2026-10-28 (B-063,
+  D-046; metadata only). A stock recapture on the boot of 2026-10-28 (torch `front`), checked with `golden.sh verify
+  --against`: the torch FAILs (`front` against `none`, as it must) and all 8 pictures are identical (decoded md5): stock's
+  shade ignores the front camera's flash.

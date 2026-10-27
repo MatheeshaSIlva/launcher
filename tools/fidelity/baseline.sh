@@ -7,7 +7,8 @@
 #
 # What it does: capture.sh --side ours --state all --theme both --font system (ours on the system font, the tile list as
 # slice 2 sets it; the device is put back as for any capture) into DIR/capture; checks that ours' notification set is the
-# golden's (a different set changes the Silent section: no baseline then); runs diff.py (defaults) on each of the 8 pairs with
+# golden's (a different set changes the Silent section: no baseline then) and that its torch (the cameras with a flash unit,
+# B-063) is the golden's (else no baseline: ours' Flashlight tile follows it); runs diff.py (defaults) on each of the 8 pairs with
 # the state's masks (maskgen.py pick of masks/pixel-system-font.json) and regions (masks/pixel-regions.json) into
 # DIR/reports/<theme>/<state>/ (report.json, heatmap.png, worst.png when a cell flags); then scores.py writes DIR/scores.md and
 # DIR/scores.json and prints the table with every flagged cluster named by the tightest stock node around it.
@@ -74,6 +75,13 @@ gn="$(manifest_notifs "$GOLDEN/manifest.json")"; on="$(manifest_notifs "$CAP/man
 if fk="$(foreign_in "$gn")"; then fail_b "the golden's notification set holds another app's notification ($fk): recapture it (golden.sh capture; other apps' notifications are snoozed, B-062)"; fi
 if fk="$(foreign_in "$on")"; then fail_b "ours' notification set holds another app's notification ($fk): no baseline (capture.sh snoozes other apps' notifications since B-062: a capture with one is of another state)"; fi
 [ "$gn" = "$on" ] || fail_b "ours' notification set differs from the golden's: a Silent-section difference would come from that. golden: $gn ours: $on"
+# the torch (B-063, D-046): which cameras report a flash unit decides whether ours shows the Flashlight tile; compared only when equal
+gt="$(manifest_torch "$GOLDEN/manifest.json")"; ot="$(manifest_torch "$CAP/manifest.json")"
+[ -n "$gt" ] || fail_b "the golden records no torch (the cameras with a flash unit at its capture, B-063): golden.sh capture writes it; recapture the golden"
+torch_valid "$gt" || fail_b "the golden's torch is '$gt' (not none or a list of facings): recapture the golden"
+[ -n "$ot" ] || fail_b "ours' capture records no torch: made before B-063: recapture"
+torch_valid "$ot" || fail_b "ours' torch is '$ot' (not none or a list of facings: unread, or it changed during the capture): no baseline; recapture"
+[ "$gt" = "$ot" ] || fail_b "the flash units differ (dumpsys media.camera; ours' Flashlight tile is there or not by them, so the expanded states would differ for that reason): golden: $gt ours: $ot. Cold-boot the emulator until dumpsys media.camera matches the golden's, or recapture the golden on this boot"
 if [ -f "$OUT/capture.log" ] && grep -q 'WARNING' "$OUT/capture.log"; then fail_b "capture.sh warned (see $OUT/capture.log): no table"; fi
 for t in $THEMES_ALL; do for s in $STATES_ALL; do
   [ -f "$CAP/ours/$t/$s.png" ] || fail_b "$CAP/ours/$t/$s.png is missing"

@@ -103,6 +103,12 @@
 #   without it differs for that reason. The ours side warns when its set differs from the golden's of the build (GOLDEN_ROOT,
 #   default tools/fidelity/golden); golden.sh verify --against fails on a different set.
 #
+# The torch (B-063, D-046; probe o): which camera facings report a flash unit (torch_state: `front`, `back,front`, `none`, or
+#   `unknown` when the dump cannot be read) is read before the setup and again before the manifest, and recorded in its setup
+#   ("torch"; `changed (setup X, end Y)` when the two differ). Ours' Flashlight tile is there or not by it, so the same app on two
+#   boots gives other expanded pictures. `unknown` and a change are WARNINGs (baseline.sh stops on any), the ours side warns when
+#   the golden of the build records another torch or none, and baseline.sh compares only captures whose torch is the golden's.
+#
 # Other apps' notifications are snoozed for the run (B-062, D-043; probes l-n below). The fixed set is {our safety notification, the
 #   fixture}: right after the clock is set (apply_setup), every record not ours is snoozed for 1 h (`cmd notification snooze --for
 #   3600000 KEY`, snooze_foreign; Android's overlay notice is left out, as in NOTIFS), and the sweep runs again at the start of every
@@ -140,6 +146,13 @@
 #     greedy so a spaced key is whole. A key with a quote in its tag (`cmd notification post -t T "it's a tag" TEXT`: key
 #     0|com.android.shell|2020|it's a tag|2000) snoozes when written '...it'\''s a tag...', but the harness refuses it (fails
 #     setup naming the key: nothing is snoozed) rather than trust a quote through two shells.
+#
+# Probe of B-063 (emulator-5554, Android 17 CP41.260828.004.A7, 2026-10-28, read-only):
+#  o. `dumpsys media.camera` (a read, no side effect) gives each camera's API1 info as `    Has a flash unit: true|false` followed by
+#     `    Facing: Front|Back` (AOSP writes External too), and "Number of camera devices: N" in its global info. This boot:
+#     device@1.1/internal/1 "Has a flash unit: true" "Facing: Front", device@1.1/internal/10 "Has a flash unit: false" "Facing:
+#     Back": torch_state printed `front`. Ours takes any camera with a flash (Controls.kt, B-065) and shows the Flashlight tile; stock
+#     takes the back camera only and shows it unavailable. Baseline 2's boot had no camera with a flash (ours hid the tile, B-059).
 #
 # Timings are sleeps and bounded polls only. Never `am force-stop` (CLAUDE.md); the accessibility service is switched through
 # the setting's list (others kept), B-018's missed strip is retried by switching it off and on.
@@ -454,7 +467,7 @@ write_manifest() {
     printf '{\n "tool": "tools/fidelity/capture.sh",\n "date": "%s",\n "device": "%s",\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$DEVICE"
     printf ' "android": "%s",\n "uptime_s": "%s",\n' "$(json_str "$(ash getprop ro.build.fingerprint)")" "$(ash cat /proc/uptime | cut -d' ' -f1)"
     printf ' "side": "%s", "font": "%s", "repeat": %s,\n' "$SIDE" "$FONT" "$REPEAT"
-    printf ' "setup": {"timezone": "unchanged (the device zone)", "clock": "2026-11-02 10:00:45 local (fixture posted at 10:00:00)", "battery": "unplugged 100", "brightness": 127, "dnd": "off", "tiles_stock": "%s", "tiles_ours": "%s", "fixture": "TEST_NOTIFY id %s", "ours": "shade pixel/together, theme pixel, system colours", "modem": "voice and data unregistered", "notifications": "%s"},\n' "$STOCK_TILES" "$OURS_TILES" "$FIXTURE_ID" "$(json_str "$NOTIFS")"
+    printf ' "setup": {"timezone": "unchanged (the device zone)", "clock": "2026-11-02 10:00:45 local (fixture posted at 10:00:00)", "battery": "unplugged 100", "brightness": 127, "dnd": "off", "tiles_stock": "%s", "tiles_ours": "%s", "fixture": "TEST_NOTIFY id %s", "ours": "shade pixel/together, theme pixel, system colours", "modem": "voice and data unregistered", "notifications": "%s", "torch": "%s"},\n' "$STOCK_TILES" "$OURS_TILES" "$FIXTURE_ID" "$(json_str "$NOTIFS")" "$(json_str "$TORCH")"
     printf ' "files": [\n'
     for e in "${MANIFEST_FILES[@]}"; do
       IFS='|' read -r p r t s m d <<< "$e"
@@ -466,9 +479,11 @@ write_manifest() {
 }
 
 # ---------------------------------------------------------------- setup and teardown
-NOTIFS=""; CHANGED=""; TD_DONE=""; ACTIVE_THEME=""; OVERRIDE_REL=""; OURS_TILES_CHANGED=""
+NOTIFS=""; CHANGED=""; TD_DONE=""; ACTIVE_THEME=""; OVERRIDE_REL=""; OURS_TILES_CHANGED=""; TORCH_SETUP=""; TORCH=""
 apply_setup() {
   local kv ns key
+  TORCH_SETUP="$(torch_state)"   # (a read, before any change: the cameras with a flash unit, B-063; read again before the manifest)
+  [ "$TORCH_SETUP" != unknown ] || say "WARNING: the torch is unknown: dumpsys media.camera gave no 'Has a flash unit' / 'Facing' pair (ours' Flashlight tile follows the flash units, B-063): baseline.sh will not compare this capture"
   CHANGED=1
   a shell settings put global auto_time 0 >/dev/null 2>&1
   a shell settings put global auto_time_zone 0 >/dev/null 2>&1
@@ -602,6 +617,47 @@ try:
 except Exception:
     pass" "$(winpath "$1")"
 }
+torch_parse() { # stdin: `dumpsys media.camera` -> the facings with a flash unit, sorted, lowercase, comma-joined (front, back,front,
+  # external...); none when cameras are listed and none has one (also "Number of camera devices: 0"); unknown when the dump has no
+  # "Has a flash unit" / "Facing" pair or a flash line has no facing after it (probe o)
+  tr -d '\r' | awk '
+    /^ *Number of camera devices: *0 *$/ { zero = 1 }
+    /^ *Has a flash unit: / { if (pend != "") bad = 1; pend = $0; sub(/^ *Has a flash unit: */, "", pend); sub(/ *$/, "", pend); next }
+    /^ *Facing: / { if (pend == "") next; f = $0; sub(/^ *Facing: */, "", f); sub(/ *$/, "", f); f = tolower(f)
+                    if (f !~ /^[a-z]+$/ || (pend != "true" && pend != "false")) bad = 1
+                    else if (pend == "true") has[f] = 1
+                    n++; pend = ""; next }
+    END {
+      if (pend != "" || bad) { print "unknown"; exit }
+      if (n == 0) { print (zero ? "none" : "unknown"); exit }
+      s = ""; for (k in has) s = s (s == "" ? "" : "\n") k
+      if (s == "") { print "none"; exit }
+      m = split(s, a, "\n"); for (i = 1; i <= m; i++) for (j = i + 1; j <= m; j++) if (a[j] < a[i]) { t = a[i]; a[i] = a[j]; a[j] = t }
+      o = a[1]; for (i = 2; i <= m; i++) o = o "," a[i]; print o
+    }'
+}
+torch_state() { ash dumpsys media.camera | torch_parse; }   # a read: no side effect
+torch_valid() { [ "$1" != unknown ] && [[ "$1" =~ ^(none|[a-z]+(,[a-z]+)*)$ ]]; }   # what a baseline may compare (not unknown, not "changed (...)")
+manifest_torch() { # MANIFEST -> the torch it records (a golden's own line, or capture.sh's setup block); nothing when it has none
+  pyx -c "
+import sys, json
+try:
+    d = json.load(open(sys.argv[1], encoding='utf-8'))
+    v = d.get('torch', d.get('setup', {}).get('torch'))
+    if isinstance(v, str):
+        sys.stdout.write(v)
+except Exception:
+    pass" "$(winpath "$1")"
+}
+warn_golden_torch() { # ours side: this run's flash units against the golden's for this build (ours' Flashlight tile follows them, B-063)
+  local b mf g
+  b="$(ash getprop ro.build.id | tr -d '\r\n ')"; mf="${GOLDEN_ROOT:-$FID_ROOT/tools/fidelity/golden}/$b/manifest.json"
+  [ -f "$mf" ] || return 0
+  g="$(manifest_torch "$mf")"
+  if [ -z "$g" ]; then say "WARNING: the golden of build $b ($mf) records no torch (the cameras with a flash unit at its capture, B-063): baseline.sh will not compare against it"
+  elif [ "$g" != "$TORCH_SETUP" ]; then say "WARNING: this boot's flash units differ from the golden's for build $b (ours' Flashlight tile follows them; baseline.sh will not compare): golden: $g now: $TORCH_SETUP"; fi
+  return 0
+}
 warn_golden_notifs() { # ours side: this run's notification set against the golden's for this build (a different one scores Silent-section differences that are no regression)
   local b mf g fk
   b="$(ash getprop ro.build.id | tr -d '\r\n ')"; mf="${GOLDEN_ROOT:-$FID_ROOT/tools/fidelity/golden}/$b/manifest.json"
@@ -611,6 +667,12 @@ warn_golden_notifs() { # ours side: this run's notification set against the gold
   elif [ -z "$g" ]; then say "WARNING: the golden of build $b ($mf) records no notification set: a Silent-section difference may come from a notification that was not there when it was taken"
   elif [ "$g" != "$NOTIFS" ]; then say "WARNING: this run's notifications differ from the golden's for build $b (a Silent-section difference may come from that, not from a regression: the fixed set is the fixture and ours, other apps' notifications being snoozed). golden: $g now: $NOTIFS"; fi
   return 0
+}
+torch_end() { # TORCH: the setup's reading, or "changed (setup X, end Y)" with a WARNING when a second reading differs
+  local e; e="$(torch_state)"; TORCH="$TORCH_SETUP"
+  [ "$e" = "$TORCH_SETUP" ] && return 0
+  say "WARNING: the torch changed during the run (the cameras with a flash unit, dumpsys media.camera; ours' Flashlight tile follows them, B-063): setup $TORCH_SETUP, end $e"
+  TORCH="changed (setup $TORCH_SETUP, end $e)"
 }
 fixture_posted() { ash dumpsys notification --noredact | grep -q "id=$((1000 + FIXTURE_ID)) "; }
 set_theme_mode() { # light|dark
@@ -780,7 +842,7 @@ main() {
   trap 'say "interrupted"; teardown; rm -rf "$TMPD"; trap - EXIT; exit 130' INT TERM HUP
   local rc=0 r theme state
   apply_setup && post_fixture || rc=1
-  if [ "$rc" = 0 ] && [ "$SIDE" = ours ]; then warn_golden_notifs; fi
+  if [ "$rc" = 0 ] && [ "$SIDE" = ours ]; then warn_golden_notifs; warn_golden_torch; fi
   if [ "$rc" = 0 ]; then
     for ((r = 1; r <= REPEAT; r++)); do
       for theme in $THEMES; do
@@ -791,6 +853,7 @@ main() {
       done
     done
   fi
+  torch_end   # (before the manifest: a torch that changed during the run is recorded as such)
   write_manifest
   teardown
   [ "$RESTORE_RC" = 0 ] || rc=1

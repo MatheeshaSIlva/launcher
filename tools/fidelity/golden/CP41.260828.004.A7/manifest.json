@@ -7,6 +7,8 @@
  "capture": "capture.sh --side stock --state all --theme both (setup and fixture in its manifest.json: kept in tools/shots/fidelity while it lasts)",
  "tiles_stock": "wifi,bt,cell,dnd,airplane,rotation,flashlight",
  "notifications": "pkg=dev.launcher.app id=1;pkg=dev.launcher.app id=1001;",
+ "torch": "none",
+ "torch_note": "backfilled 2026-10-28 (B-063, D-046), metadata only: not read at capture. This golden and baseline 2's ours capture are the same emulator boot (both place it at 18:57:28Z), and that ours hid the Flashlight tile (B-059: no camera with a flash unit on that boot). The boot of 2026-10-28 reports a front camera with a flash (dumpsys media.camera: device@1.1/internal/1 Has a flash unit: true, Facing: Front; internal/10 false, Back).",
  "files": [
   {"path": "light/quick.png", "theme": "light", "state": "quick", "size": [1080, 2400], "bytes": 182085, "md5": "6384b6bea196724201811f4dd83b3f38", "source_md5": "82be329dae0403be3e2152661629a872"},
   {"path": "light/expanded.png", "theme": "light", "state": "expanded", "size": [1080, 2400], "bytes": 211657, "md5": "ec6a2cc1e18c7538fb642dad533a4e95", "source_md5": "39417dd90100f6f0a384415f523e97fe"},

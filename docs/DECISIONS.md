@@ -374,3 +374,19 @@ weight is 400, a medium or emphasized family is 500. Outcome: the clock, date, t
 docs/FIDELITY_BASELINE.md). `pixel.json` unchanged.
 Alternatives considered: lowering the carrier to 400 to match the emulator's picture (wrong on a real Pixel); masking the
 carrier (its words still differ, B-054).
+
+### D-046: The harness records the torch per capture and per golden; the baseline compares only equal ones (2026-10-28)
+Context: B-063. Ours' Flashlight tile is there or not by whether the emulator's boot reports a camera with a flash unit
+(baseline 2's boot: none, the tile hidden; the boot of 2026-10-28: `dumpsys media.camera` gives the front camera a flash,
+the back none). Ours takes any camera with a flash (`Controls.kt`, B-065), Android's FlashlightController the back camera
+only, so the same app on two boots gave other expanded pictures (+0.21 on the light means, B-061's re-run).
+Decision: capture.sh records per capture which camera facings report a flash unit (`torch`, from `dumpsys media.camera`, a
+read: `front`, `back,front`, `none`; `unknown` and a change during the run are warnings and are recorded as such); golden.sh
+copies it into the golden's manifest and refuses a missing or invalid one; baseline.sh compares ours with the golden only
+when both record the same valid torch, with no override (exit 1, no table, remedy named: a cold boot until the dump
+matches, or a golden recaptured on this boot). The committed golden (`CP41.260828.004.A7`) is backfilled `none` from
+evidence (the same boot as baseline 2's ours, which hid the tile), metadata only: its pictures, md5s and total untouched.
+A boot with another value blocks the baseline until a cold boot matches or the golden is recaptured; revisit if that is
+frequent (B-065 removes the cause on ours' side).
+Alternatives considered: masking the tile (blind to B-059); a golden per torch state; gating on the back camera only
+(encodes the apps' code into the harness).
