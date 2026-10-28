@@ -399,3 +399,14 @@ Center's pages (B-067, after a capture), 5 home folders (B-093), 6 gestures (B-1
 7 the Pixel shade's own motion (B-127 to B-129). The new controls' motion roles go in a new moment, "Switches and sliders" (with
 its own Speed and Bounce), used wherever such controls are drawn (the settings, Control Center, Android's shade); not in
 "Settings app". B-037 step 2 resumes from its parked branch (D-037 had paused it for the fidelity harness).
+
+### D-048: B-037 step 2's pipeline and choices (2026-10-28)
+Full pipeline with measured numbers as acceptance criteria (iOS has no live reference, D-037); `diff.py` compares ours
+against ours only; reviewer and QA on Opus (render nodes, cross-thread pictures). On commit what was behind is drawn
+inside the sheet as a picture (home's content Picture zoomed, a fresh app snapshot faded, else today's content fade),
+rendered during the hold, never in the commit's first frame; `motion.nc.reveal` retimed to pass 11 and `motion.nc.open`
+fitted to the measured landing (both judged before); the dim below the edge holds through the landing (reverses slice
+1b's clearing on commit); a catch during the zoom lets it finish. The close reuses `comp.nc.glass.dim`; until 2c2/2c3 the
+cover fades out on `motion.nc.close-uncover`. Owner (2026-10-28): over the lock screen One UI's lock screen shows live
+below the closing sheet, dimmed 30 % and clearing as it leaves; 2c1 ships alone with the stand-in fade.
+Plan: docs/plans/B-037-step2.md.
