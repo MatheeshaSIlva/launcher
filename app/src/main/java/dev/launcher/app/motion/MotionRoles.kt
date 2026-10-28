@@ -171,6 +171,8 @@ object MotionRoles {
         r("nc.reveal", "Contents arriving", "Notification Center's own contents arriving once a pull is let go open."),
         r("nc.lens-in", "Glass edge arriving", "The bent edge of the pulled sheet taking hold when the picture behind it comes late."),
         r("nc.bar-fade", "Status bar fading", "The status bar fading away as Notification Center is pulled over home, and back."),
+        r("nc.clock-drop", "Clock dropping", "The glass clock dropping into place when Notification Center opens."),
+        r("nc.date-in", "Date arriving", "The date coming in as the clock drops."),
         r("press-in", "Notification pressed", "A notification or a button as it is pressed."),
         r("press-out", "Notification let go", "And let go."),
     ))

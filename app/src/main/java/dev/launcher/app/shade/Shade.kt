@@ -165,6 +165,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val nc: NotificationCenterView
     /** The outline of Notification Center's clear slab while it is pulled (B-037): the dim below, the corners, the rim. */
     private val ncEdge = dev.launcher.app.shade.nc.NcGlassEdge(ctx)
+    /** Over the lock screen, the wallpaper inside that outline, under the sheet (B-037 step 2): One UI's lock screen never shows through. */
+    private val ncWall = dev.launcher.app.shade.nc.NcSlabWallpaper(ctx)
     /** Android's shade (a layout's `shade` panel): Quick Settings over the notifications in one panel. */
     private val shadeView: ShadePanelView
     private val banner: BannerView
@@ -302,6 +304,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         })
         val mp = FrameLayout.LayoutParams.MATCH_PARENT
         root.addView(backdrop, FrameLayout.LayoutParams(mp, mp))
+        root.addView(ncWall, FrameLayout.LayoutParams(mp, mp))
         root.addView(nc, FrameLayout.LayoutParams(mp, mp))
         root.addView(ncEdge, FrameLayout.LayoutParams(mp, mp))
         root.addView(cc, FrameLayout.LayoutParams(mp, mp))
@@ -345,7 +348,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * content arrives when the pull opens it ([ncCommit]).
      */
     private val ncPanel: Panel = object : Panel(ShadeStructure.Kind.NOTIFICATION_CENTER, "Notification Center") {
-        override fun opening() { nc.prepare(); media.refresh(); ncEdge.locked = locked; ncEdge.wallpaper = nc.wallpaper; prepareLens() }
+        override fun opening() { nc.prepare(); if (ncReveal.target < 1f) nc.clockWaits(); media.refresh(); ncEdge.locked = locked; ncWall.locked = locked; ncWall.wallpaper = nc.wallpaper; prepareLens() }
         override fun cleanUp() { nc.onClosed(); ncRest(); ncEdge.clearPicture(); lensHome = null }
         override fun gone() { nc.progress = 0f }
         override val openCurve get() = NC_OPEN
@@ -776,6 +779,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     /** The pull opens it: its content arrives over the slab, the dim clears under it and the bar comes back. */
     private fun ncCommit() {
+        // The bands at the edge bend the sheet's own wallpaper from here (pass 10), not what was behind the slab.
+        nc.wallpaper?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true) }
+        if (ncReveal.target < 1f) nc.clockDrops()
         ncReveal.goTo(1f, MotionTokens.NC_REVEAL)
         ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
@@ -826,9 +832,13 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             backdrop.set(pictureBlur, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
             if (ccP != null) bar.setRowAlpha(1f - editK)
         }
-        if (ncP != null) { nc.reveal = ncReveal.value; nc.progress = ncP; ncEdge.wallpaper = nc.wallpaper }
-        // (The clear slab's outline goes on drawing while its dim fades out after the panel is closed.)
-        ncEdge.set(min(ncP ?: 0f, 1f) * root.height, ncDim.value, 1f - ncReveal.value)
+        if (ncP != null) { nc.reveal = ncReveal.value; nc.progress = ncP; ncWall.wallpaper = nc.wallpaper }
+        // The sheet's content is still and its outline moves ([NotificationCenterView.progress]); the edge's rim, corners and
+        // lens go on drawing at that outline until the sheet has landed, and its dim while it fades out after the panel is
+        // closed. The lock screen's wallpaper (under the sheet) stays whole until the content is (the content fades in over it).
+        val ncEdgeY = if (ncP != null) nc.edgeY else 0f
+        ncEdge.set(ncEdgeY, ncDim.value, nc.edgeChrome, nc.edgeRadius, ncReveal.target >= 1f)
+        ncWall.set(ncEdgeY, nc.edgeRadius, if (ncReveal.value >= 1f) 0f else 1f)
         bar.setClearSlab(ncP != null && ncReveal.value <= 0f)
         if (ccP == null && ncP == null && shP == null) {
             cc.progress = 0f
@@ -1020,17 +1030,18 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (android.os.Build.VERSION.SDK_INT < 33) return
         val opening = panel
         nav.backdrop { src ->
-            if (panel !== opening || src == null) return@backdrop
+            // (Once the pull has committed the bands bend the sheet's wallpaper: a picture arriving late is not theirs.)
+            if (panel !== opening || src == null || ncReveal.target >= 1f) return@backdrop
             when (src) {
                 // (A kept picture of an app whose screen changed since would show the old one, sharp, against the live content:
                 // the lens waits for the fresh picture, rim and dim only until then.)
                 is BackdropSource.App -> if (!src.stale) ncEdge.setPicture(src.bitmap, android.graphics.Matrix().apply { setScale(root.width.toFloat() / src.bitmap.width, root.height.toFloat() / src.bitmap.height) })
-                is BackdropSource.Wall -> ncEdge.setPicture(src.wallpaper.bitmap, src.wallpaper.matrix(root.width, root.height))
+                is BackdropSource.Wall -> ncEdge.setPicture(src.wallpaper.bitmap, src.wallpaper.matrix(root.width, root.height), wall = true)
                 is BackdropSource.Home -> {
                     if (src.picture === lensHome) return@backdrop
                     lensHome = src.picture
                     BlurBaker.bake(src, root.width, root.height, 0.5f, 0f, 0, handler) { bmp, m ->
-                        if (panel === opening && bmp != null) ncEdge.setPicture(bmp, m)
+                        if (panel === opening && bmp != null && ncReveal.target < 1f) ncEdge.setPicture(bmp, m)
                     }
                 }
             }
@@ -1745,7 +1756,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             bar.setLocked(l)
             nc.setLocked(l)
             ncEdge.locked = l
-            ncEdge.wallpaper = nc.wallpaper
+            ncWall.locked = l
+            ncWall.wallpaper = nc.wallpaper
             shadeView.notifsChanged()
             if (l) { cc.exitEdit(animate = false); gallery.dismissNow(); banner.clear(keepRinging = true); readLockPrivacy() }
         }

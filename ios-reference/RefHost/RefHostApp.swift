@@ -151,6 +151,11 @@ enum Poster {
                           ("p10", "Podcast", "New episode available"), ("p11", "Alex", "See you at the station at eight?"),
                           ("p12", "Photos", "You have a new memory: Summer by the sea.")]
             return people.map { ($0.0, $0.1, nil, $0.2, 0.35) }
+        case "four":
+            // Four short notifications (one app: one stack on Notification Center's sheet).
+            return [("q1", "Delivery", nil, "Your parcel is out for delivery.", 0.35), ("q2", "Reminder", nil, "Water the plants", 0.35),
+                    ("q3", "Maya", nil, "Are we still on for lunch tomorrow? I can book the place near the station.", 0.35),
+                    ("q4", "Calendar", nil, "Team standup in 15 minutes", 0.35)]
         case "long":
             return [("long", "A rather long title that will not fit on one line of a banner", "Subtitle line",
                      "A body that runs over several lines so the banner's maximum height and its truncation show. " +

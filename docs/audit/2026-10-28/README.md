@@ -32,8 +32,9 @@ B-089; E14 (Pixel QS pages "missing") is not a bug: the Pixel pager is built, th
 ## What is missing, by theme
 
 1. **Notification Center's open and close (the owner's first report)**: B-037 step 2. Released past 62.5 %, the content
-   fades in over 70 ms with no clock drop or zoom; the close is a flat sheet. Step 1 (the clear glass pull) is built on
-   `fix/b037-ios-glass-pull`, never merged (awaiting the owner's S24 check).
+   fades in over 70 ms with no clock drop or zoom; the close is a flat sheet. Step 1 (the clear glass pull) is on main since
+   2026-10-25 (5bd170a); step 2's slices 2a1 and 2b were parked on `fix/b037-ios-glass-pull` (D-037) and resume on
+   2026-10-28.
 2. **Squash and stretch** (the owner's second report): nothing deforms with velocity. The foundation is one shared
    primitive (B-116: `motion/Stretch.kt`, `motion.stretch.*`), then its uses: banners pulled (B-068) and arriving out of the
    island (B-070), glass that flexes and lights under the finger (B-066), the long-press menu popping out of the icon
@@ -54,9 +55,9 @@ B-089; E14 (Pixel QS pages "missing") is not a bug: the Pixel pager is built, th
 9. **Never measured** (judged values, captures exist): App Library and Spotlight pulls (B-098), home's depth and unlock
    (B-105), the App Switcher's springs (B-126), the page snap (B-102).
 
-## Suggested order (for the owner to confirm; the owner sets milestones)
+## Order (the owner chose this order on 2026-10-28, D-047)
 
-1. B-037 step 1 merged after the owner's S24 check, then step 2 (Notification Center's commit and close).
+1. B-037 step 2 (Notification Center's commit and close): the parked slices 2a1 and 2b, then 2a2 and 2c.
 2. B-116 (the stretch primitive), then B-066 (glass press) and B-094 (menu pop): the squash and stretch the owner sees most.
 3. B-092 then the controls' tokens and flags (B-083, B-085, B-082) for both themes.
 4. B-067 (Control Center pages) after an iOS 27 capture.
@@ -64,6 +65,6 @@ B-089; E14 (Pixel QS pages "missing") is not a bug: the Pixel pager is built, th
 6. B-107 to B-110 (gestures), B-112 (status bar capsules).
 7. The Pixel motion items (B-127, B-128, B-129).
 
-Open questions for the owner: (a) the new controls' motion roles in a new "Switches and sliders" moment or in "Settings
-app" (B-controls.md); (b) the Today view on home's first page (B-099); (c) settings swipe-back that follows the finger
+The owner's answer (2026-10-28, D-047): the new controls' motion roles go in a new "Switches and sliders" moment. Open
+questions: (b) the Today view on home's first page (B-099); (c) settings swipe-back that follows the finger
 again (B-113: removed on 2026-10-11 because it fired during scrolls).

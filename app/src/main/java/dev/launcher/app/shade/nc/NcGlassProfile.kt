@@ -9,6 +9,12 @@ package dev.launcher.app.shade.nc
  * edge (bottom: up into the sheet; sides: in from the screen's edge), and the answer is how far from the edge the picture
  * under it is read. Past the band a point reads itself (the answer is `e`), so the band meets what lies beyond it.
  */
+/** [argb] with its alpha taken by [k] (0..1): the edge's and the lock-screen wallpaper's paints. */
+internal fun ncAlpha(argb: Int, k: Float): Int {
+    val a = (((argb ushr 24) and 0xFF) * k.coerceIn(0f, 1f)).toInt()
+    return (a shl 24) or (argb and 0xFFFFFF)
+}
+
 object NcGlassProfile {
     /**
      * A release from a standstill opens the panel at this progress or past it. iOS 27 capture pass 10: released at 50 % it fell
@@ -42,19 +48,56 @@ object NcGlassProfile {
     }
 
     /**
-     * The sheet's own content over the clear slab: invisible while closed, whole while it waits off screen, then fading in.
-     * Over the lock screen ([locked]) it is whole as soon as it arrives (the slab's wallpaper above it fades instead): two
-     * layers fading against each other would let One UI's lock screen show through (k * (1 - k), a quarter at the middle).
+     * The sheet's own content over the clear slab: invisible while closed, whole while it waits off screen, then fading in on
+     * the reveal (over the lock screen too: the slab's wallpaper lies still under it, so the two are the same picture and the
+     * fade is only the overlay and the platters arriving).
      */
-    fun contentAlpha(progress: Float, reveal: Float, locked: Boolean = false): Float = when {
+    fun contentAlpha(progress: Float, reveal: Float): Float = when {
         progress <= 0.002f -> 0f
         reveal <= 0f -> 1f
-        locked -> 1f
         else -> reveal.coerceAtMost(1f)
     }
 
     /** The content waits drawn but off the screen while a pull holds the clear slab ([contentAlpha] is 1 there). */
     fun contentWaits(progress: Float, reveal: Float): Boolean = progress > 0.002f && reveal <= 0f
+
+    /**
+     * The content never moves once the sheet shows (B-037 step 2, pass 10: the wallpaper and the lock screen's things stay
+     * where they are while the sheet's edge slides down over them); the outline ([outlineRadius]) reveals it. Closed, it
+     * is parked above the screen.
+     */
+    fun contentStill(progress: Float): Boolean = progress > 0.002f
+
+    /**
+     * The corner radius of the sheet's outline with its bottom edge at [edgeY] on a screen [screenH] tall: [tokenR] while
+     * it is in the air, easing (a smoothstep over the last 3 radii of the way) to the display's own [displayR] as it lands,
+     * so the corners meet the screen's at rest and are never square on the way.
+     */
+    fun outlineRadius(edgeY: Float, screenH: Float, tokenR: Float, displayR: Float): Float {
+        val span = (tokenR * LAND_RADII).coerceAtLeast(1f)
+        val t = 1f - ((screenH - edgeY) / span).coerceIn(0f, 1f)
+        return tokenR + (displayR - tokenR) * (t * t * (3f - 2f * t))
+    }
+
+    /**
+     * How much of the edge's own look (rim, interior dim, lens) shows with the edge at [edgeY]: whole until the last 2 radii
+     * of the way, then falling to nothing as the sheet lands (a smoothstep), so the rim does not stay up the screen's sides.
+     */
+    fun chrome(edgeY: Float, screenH: Float, tokenR: Float): Float {
+        val t = ((screenH - edgeY) / (tokenR * 2f).coerceAtLeast(1f)).coerceIn(0f, 1f)
+        return t * t * (3f - 2f * t)
+    }
+
+    /**
+     * The edge lets go of its lens picture (the GPU's image with it) only once the sheet has committed and landed: a finger
+     * holding the pull at the screen's bottom (chrome 0) and moving back up still has its lens.
+     */
+    fun releasesPicture(chrome: Float, committed: Boolean): Boolean = committed && chrome <= 0.002f
+
+    /** The sheet's edge is at the screen's bottom: nothing is left to clip. */
+    fun landed(edgeY: Float, screenH: Float): Boolean = edgeY >= screenH - 0.5f
+
+    private const val LAND_RADII = 3f
 
     /**
      * A release: a fling faster than [flingPx] (px/s, down is positive) opens or closes by its direction; otherwise the panel

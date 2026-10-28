@@ -390,3 +390,12 @@ A boot with another value blocks the baseline until a cold boot matches or the g
 frequent (B-065 removes the cause on ours' side).
 Alternatives considered: masking the tile (blind to B-059); a golden per torch state; gating on the back camera only
 (encodes the apps' code into the harness).
+
+### D-047: The accuracy audit's order, and a moment for switches and sliders (2026-10-28) [owner]
+After the 2026-10-28 accuracy audit (docs/audit/2026-10-28/, B-066 to B-138) the owner chose its suggested order: 1 B-037 step 2
+(Notification Center's commit and close), 2 the squash-and-stretch primitive (B-116), then glass that reacts to touch (B-066) and
+the menu popping out of its icon (B-094), 3 switches and sliders for both themes (B-092 first, then B-083, B-085, B-082), 4 Control
+Center's pages (B-067, after a capture), 5 home folders (B-093), 6 gestures (B-107 to B-110) and the status bar's capsules (B-112),
+7 the Pixel shade's own motion (B-127 to B-129). The new controls' motion roles go in a new moment, "Switches and sliders" (with
+its own Speed and Bounce), used wherever such controls are drawn (the settings, Control Center, Android's shade); not in
+"Settings app". B-037 step 2 resumes from its parked branch (D-037 had paused it for the fidelity harness).
