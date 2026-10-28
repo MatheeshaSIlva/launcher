@@ -24,6 +24,17 @@ import dev.launcher.app.R
 import dev.launcher.app.ShizukuLink
 import java.util.concurrent.Executors
 
+/** A camera as the torch's choice reads it: its id, [facing] (`LENS_FACING`) and whether it has a flash. */
+internal data class TorchCandidate(val id: String, val facing: Int?, val hasFlash: Boolean?)
+
+/**
+ * The torch's camera, as Android's FlashlightControllerImpl.getCameraId chooses it (B-065): the first camera, in the
+ * system's order, with a flash that faces back; none otherwise (a flash on the front or an external camera is no torch).
+ * Read lazily, stopping at the first match, as Android does.
+ */
+internal fun torchCameraOf(cameras: Sequence<TorchCandidate>): String? =
+    cameras.firstOrNull { it.hasFlash == true && it.facing == CameraCharacteristics.LENS_FACING_BACK }?.id
+
 /** Most single controls: a circle, or (iOS 18+) a capsule showing their name. */
 private val ONE_OR_WIDE = listOf(Control.Size(1, 1), Control.Size(2, 1))
 
@@ -343,7 +354,10 @@ class ControlState(private val ctx: Context, private val handler: Handler) {
         try { ctx.registerReceiver(receiver, f, null, handler) } catch (t: Throwable) { AppLog.log("[controls] receiver: ${t.message}") }
         try {
             val cm = ctx.getSystemService(CameraManager::class.java)
-            torchId = cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
+            torchId = torchCameraOf(cm.cameraIdList.asSequence().map { id ->
+                val c = cm.getCameraCharacteristics(id)
+                TorchCandidate(id, c.get(CameraCharacteristics.LENS_FACING), c.get(CameraCharacteristics.FLASH_INFO_AVAILABLE))
+            })
             cm.registerTorchCallback(torchCb, handler)
         } catch (t: Throwable) { AppLog.log("[controls] torch: ${t.message}") }
         val s = ShizukuLink.service
