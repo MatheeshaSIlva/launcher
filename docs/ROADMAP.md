@@ -23,7 +23,8 @@ Rules:
 | ID | Name | Status | Started | Finished |
 |----|------|--------|---------|----------|
 | M0 | Safety net | DONE | 2026-10-22 | 2026-10-22 |
-| MF | Fidelity harness (Pixel first) | ACTIVE | 2026-10-25 | |
+| MS | iOS 27 shade finished (status bar, Notification Center, Control Center, banners) | ACTIVE | 2026-10-30 | |
+| MF | Fidelity harness (Pixel first) | BLOCKED (paused for MS, owner 2026-10-30) | 2026-10-25 | |
 | M1 | Regression and smoothness baseline | BLOCKED | 2026-10-22 | |
 | M2 | Pixel shade layout signed off | TODO | | |
 | M3 | Theme builder: look | TODO | | |
@@ -45,6 +46,21 @@ Acceptance criteria:
 - [x] Stale worktrees are pruned, the empty `lc/` is removed, and `CLAUDE.md.kit-new` is merged into CLAUDE.md (or
       dropped) with the owner's OK
 - [x] Known existing bugs are listed in the Bug backlog below, with repro steps where known
+
+### MS: iOS 27 shade finished
+Goal (owner, 2026-10-30: "after hours of effort the final result is inadequate"): the iOS 27 shade is finished as a whole:
+the status bar, Notification Center, Control Center and the banners look, move and feel like iOS 27 on the S24, with no seam
+the owner can find. No other element's work starts until the owner signs this off.
+Acceptance criteria:
+- [ ] An inventory (`docs/SHADE_IOS_INVENTORY.md`) lists every part of the four elements: every state, every transition
+      (open, close, pull, catch, reversal, arrivals, every control), its reference (an iOS 27 capture or a document, named),
+      what ours does, and a verdict (matches / off / missing) marked measured or judged. The owner has read it.
+- [ ] Every "off" or "missing" row is fixed, or moved out by the owner in writing; the order is the owner's.
+- [ ] Every transition is compared with its reference frame by frame (a side-by-side contact sheet at matching times), not
+      a single frame.
+- [ ] On the S24 (frame stats, never a capture of notifications or banners): every shade scenario shows 0 missed refreshes
+      warm, against the build before the milestone.
+- [ ] The owner uses it on the S24 for a day and signs it off in his words; anything he finds is a row in the inventory.
 
 ### MF: Fidelity harness (Pixel first)
 Goal: "it matches the real one" becomes a number an agent can loop on, not a judgment. Added by the owner on 2026-10-25

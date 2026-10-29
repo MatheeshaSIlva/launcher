@@ -99,6 +99,19 @@ If the owner is unavailable (unattended run, or a question went unanswered), wri
   show no previews.
 - Do not push or merge on your own. The orchestrator pushes to main only after check, review and QA pass AND the owner says go for that task.
 
+## Whole elements, not checklists (owner, 2026-10-30)
+
+Passing a task's checklist is not "done". Work is judged by whether the whole element is finished as the owner sees it.
+- Every element is worked as a milestone with an inventory first: every part, state and transition against its reference,
+  with a verdict. Bugs and slices are steps inside it, never the plan itself.
+- Only one element is open at a time. New findings in other elements go to the backlog; nothing there starts until the
+  open element is signed off by the owner on the S24.
+- Every report says, per claim, measured (on what: emulator, S24, reference capture) or judged. Emulator recordings judge
+  pictures, not motion; smoothness is the S24's frame stats only.
+- When a gate passes but the element is still visibly short of its reference, stop and tell the owner plainly; do not
+  file the gap as a follow-up and move on. "Push when done" means done as the element, not as the task.
+- An agent cut short by its turn limit has not verified what it did not reach: report those items as not done.
+
 ## Honest reporting
 
 - Say "done" only when the gates passed. State exactly what was verified and what was not.
