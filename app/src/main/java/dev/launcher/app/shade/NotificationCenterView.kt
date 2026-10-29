@@ -288,6 +288,19 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     var edgeChrome = 1f
         private set
 
+    /** The arrived sheet is closing (B-037 step 2, slice 2c1): set by the shade from the close's start until it opens again. */
+    var closing = false
+        set(v) { if (field != v) { field = v; updateEdge() } }
+    /** Its wallpaper drifts down as the edge rises: from the close's start until it is closed or has landed again ([dev.launcher.app.shade.nc.NcClose.drifts]). */
+    var drifting = false
+        private set
+    /** How far the wallpaper has drifted down now (px, a property of its node: [bgNode]). */
+    var drift = 0f
+        private set
+    /** Where the edge was as the close began (px): the drift and the lock screen's dim count from there. */
+    var driftFrom = 0f
+        private set
+
     /** The sheet does not slide: its content is still ([NcGlassProfile.contentStill]) and the outline moves; closed, it is parked above. */
     override fun sheetY(): Float = if (dev.launcher.app.shade.nc.NcGlassProfile.contentStill(progress)) 0f else -height.toFloat()
 
@@ -330,11 +343,22 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         }
         val r = dev.launcher.app.shade.nc.NcGlassProfile.outlineRadius(y, h, tok, displayR)
         edgeChrome = dev.launcher.app.shade.nc.NcGlassProfile.chrome(y, h, tok)
-        if (y == edgeY && r == edgeRadius) return
+        val landed = dev.launcher.app.shade.nc.NcGlassProfile.landed(y, h)
+        // Closing, the wallpaper drifts down by a share of the edge's travel (pass 5, 10): its node moves, nothing is recorded.
+        val was = drifting
+        drifting = dev.launcher.app.shade.nc.NcClose.drifts(closing, drifting, landed)
+        if (drifting && !was) driftFrom = y
+        val d = if (drifting) dev.launcher.app.shade.nc.NcClose.drift(y, driftFrom, Design.num(NcTokens.CLOSE_DRIFT)) else 0f
+        val moved = d != drift
+        if (moved) { drift = d; bgNode.setTranslationY(d); drifted.clear() }
+        if (y == edgeY && r == edgeRadius && !moved) return
         edgeY = y
         edgeRadius = r
-        val clip = !dev.launcher.app.shade.nc.NcGlassProfile.landed(y, h)
+        val clip = !landed
         if (clipToOutline != clip) clipToOutline = clip
+        // The outline and the wallpaper's node are properties (a frame, no recording); the surfaces' glass samples the
+        // wallpaper where it has drifted to, which is recorded with each draw: the sheet is recorded again then.
+        if (moved) invalidate()
         if (clip) invalidateOutline()
     }
 
@@ -361,10 +385,18 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     /** The pull opened it: the glass numerals drop into place (`motion.nc.clock-drop`) and the date comes in. */
     fun clockDrops() = clock.drops()
 
+    /** The sheet closes: the numerals lift off the screen's top (`motion.nc.clock-lift`) and the date fades out. */
+    fun clockLifts() = clock.lifts()
+
     /** Fans the collapsed stack out into the list, and every app's stack too (the adb test hook). */
     fun expandList() = list.expandList()
 
     fun onClosed() {
+        closing = false
+        drifting = false
+        drift = 0f
+        bgNode.setTranslationY(0f)
+        drifted.clear()
         list.closed()
         stopTicking()
         buttons.cancel()
@@ -469,14 +501,28 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         under = underFills()
         // The wallpaper with its overlay is a layer of its own once the overlay rests (not a full-screen pass every frame
         // of a scroll); while the overlay fades in or out it is drawn directly, one pass a frame.
-        if (list.dim.isAnimating) drawWallpaper(c, under)
+        // (Drifting, it is the node: it moves as a property.)
+        if (list.dim.isAnimating && drift == 0f) drawWallpaper(c, under)
         else {
             val bk = ((System.identityHashCode(wallpaper).toLong() shl 20) xor (Math.round(Appearance.dark * 255f).toLong() shl 8)) xor width.toLong() * 31 xor
                 height.toLong() xor (Math.round(list.dim.value * 255f).toLong() shl 48) xor (Design.version.toLong() shl 36)
             if (bk != bgKey || !bgNode.hasDisplayList()) {
-                bgNode.setPosition(0, 0, width, height)
+                // Above the top, as far as a close drifts it, the wallpaper's top mirrored (no seam where it meets): the
+                // band a drift brings onto the screen. Off the sheet's layer otherwise.
+                val ext = kotlin.math.ceil(Design.num(NcTokens.CLOSE_DRIFT).coerceIn(0f, 1f) * height).toInt()
+                bgNode.setPosition(0, -ext, width, height)
                 val rc = bgNode.beginRecording()
-                try { drawWallpaper(rc, under) } finally { bgNode.endRecording() }
+                try {
+                    rc.translate(0f, ext.toFloat())
+                    drawWallpaper(rc, under)
+                    if (ext > 0) {
+                        rc.save()
+                        rc.clipRect(0f, -ext.toFloat(), width.toFloat(), 0f)
+                        rc.scale(1f, -1f)
+                        drawWallpaper(rc, under)
+                        rc.restore()
+                    }
+                } finally { bgNode.endRecording() }
                 bgKey = bk
             }
             c.drawRenderNode(bgNode)
@@ -529,6 +575,12 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         return out
     }
 
+    /**
+     * About how much darker the sheet shows its wallpaper (0..1): the dark appearance's dim and the list's overlay as it is
+     * now. The edge's lens bands lay it over the wallpaper they bend (else a light frame ran round a closing sheet).
+     */
+    fun wallDarkness(): Float = 1f - (1f - Appearance.wallpaperDim) * (1f - overlayDarkness() * list.dim.value.coerceIn(0f, 1f))
+
     /** About how much the overlay darkens (0..1), for the status bar's choice of dark or light content. */
     private fun overlayDarkness(): Float {
         var keep = 1f
@@ -555,13 +607,19 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         val wp = wallpaper ?: return null
         val frostPx = m.frostNowPt() * u / 2f
         val screenSigma = kotlin.math.sqrt(frostPx * frostPx + behindPx * behindPx)
-        frosts[screenSigma]?.let { return it }
+        frosts[screenSigma]?.let { return withDrift(it) }
         wpFrostMatrix.set(wp.matrix(width, height))
         val sigma = screenSigma / wpFrostMatrix.mapRadius(1f).coerceAtLeast(0.001f)
-        val made = FrostCache.get(wp.bitmap, wpFrostMatrix, sigma, hnd()) { frosts.clear(); invalidate() }
-        if (made != null) { frosts[screenSigma] = made; return made }
-        return BackdropImage(wp.heavy, wp.heavyMatrix(width.coerceAtLeast(1), height.coerceAtLeast(1)))
+        val made = FrostCache.get(wp.bitmap, wpFrostMatrix, sigma, hnd()) { frosts.clear(); drifted.clear(); invalidate() }
+        if (made != null) { frosts[screenSigma] = made; return withDrift(made) }
+        return BackdropImage(wp.heavy, wp.heavyMatrix(width.coerceAtLeast(1), height.coerceAtLeast(1)).apply { postTranslate(0f, drift) })
     }
+
+    /** The frosts as the wallpaper lies now: moved down by a closing sheet's [drift] (one image per frost and drift). */
+    private val drifted = HashMap<BackdropImage, BackdropImage>()
+
+    private fun withDrift(b: BackdropImage): BackdropImage =
+        if (drift == 0f) b else drifted.getOrPut(b) { BackdropImage(b.bitmap, Matrix(b.toScreen).apply { postTranslate(0f, drift) }) }
 
     /** Starts making the blurs the surfaces here use, so they are there when Notification Center shows. */
     private fun warmFrost() {

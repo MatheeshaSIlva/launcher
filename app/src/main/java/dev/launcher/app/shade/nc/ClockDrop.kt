@@ -8,6 +8,9 @@ object ClockDrop {
     /** The clock's offset from its place (px, negative: above it) when [enter] of its way is still to go (1: just entered, 0: in place). */
     fun offset(enter: Float, dropPx: Float): Float = -dropPx * enter
 
+    /** The clock's offset (px, negative: up) with [k] of its lift done as the sheet closes (slice 2c1); [liftPx]: `comp.nc.clock.lift`. */
+    fun lifted(k: Float, liftPx: Float): Float = -liftPx * k
+
     /** The date's opacity: its own arrival [dateIn] (0..1) and the clock's presence [presence] (a long list fades it). */
     fun dateAlpha(dateIn: Float, presence: Float): Float = dateIn.coerceIn(0f, 1f) * presence.coerceIn(0f, 1f)
 }

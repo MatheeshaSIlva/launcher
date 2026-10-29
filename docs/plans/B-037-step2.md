@@ -213,3 +213,53 @@ close over home; 2c3 the app's snapshot arriving at ~1.2x blurred, settling in ~
   B-140 to B-144 (log cap, the sample's end, how often an app falls back on the S24, the gate's time bound under load,
   slow motion at the landing).
 - Gate: `scripts/check.sh` green when run with the machine idle (fidelity_capture_test.sh times out under load: B-143).
+
+### Slice 2c1 (implementer, 2026-10-29)
+- Built: the close's four triggers through `Shade.ncCloseBegins()` (Back, a tap, a release that falls back: `close()` ->
+  `ncCloses()`; a drag up from rest: the panel's `drag`, only when the finger moves up, decided before the sheet moves). On
+  it: the lens takes the sheet's wallpaper at once (`NcGlassEdge.setPicture(atOnce)`), the numerals lift
+  (`motion.nc.clock-lift`, bezier 0.4/0/1/1, 340 ms, `comp.nc.clock.lift` 250 pt), the date and the bar fade
+  (`motion.nc.date-out`, 200 ms), the wallpaper drifts down by `comp.nc.close.drift` (0.14) of the edge's travel since the
+  close began (`NcClose.drift`, `NotificationCenterView.updateEdge()`); below the edge the still wallpaper (`NcSlabWallpaper`
+  cover) dimmed by `comp.nc.glass.dim`, out on `motion.nc.close-uncover` (250 ms, the stand-in) once the sheet is gone. Over
+  the lock screen (owner) no cover, the dim clears with the sheet (`NcClose.lockDim`, the mode fixed at the close's start).
+  A reversal (`ncCommit` -> `ncReopens`): the clock back on `motion.nc.clock-drop` from where it is, the date in, the cover
+  out; the drift goes back with the edge until it lands (`NcClose.drifts`). Going under Control Center is no close
+  (`ncGoesUnder`: the dim, and a close's cover, out on `motion.nc.pull-undim`).
+- Deviations (D-051): the drift moves the wallpaper's node only (`bgNode`, recorded with its top band mirrored above the
+  screen; the whole view left a gap at the top and cut the lifting clock), and the platters' frost follows it (the sheet is
+  recorded again while the drift moves: a recorded glass keeps the shader it was drawn with, no node property can move what
+  it samples); a close from a landed sheet shows the cover and its dim whole at once (faded, the live dock showed under the
+  rising edge); the lens bands carry the sheet's own darkness (`wallDarkness()`: a light frame ran round a darkened sheet).
+- `motion.nc.close` not refitted: pass 11 test84's closes are drags that hold the edge at ~85-110 pt of 874 before the
+  release, and what follows is dropped frames (44.16 -> 45.41 s, 57.36 -> 58.60 s) or 1-2 frames under the app's crossfade:
+  no spring can be fitted (2-3 points over ~100 pt). Judged 0.38 s kept. With it the numerals' box stays above the edge (the
+  closest ~19 pt at ~240 ms, computed); the glass's shadow below the box (~40 pt) is cut between ~200 and ~300 ms.
+- Evidence (emulator-5554, slowmo 20, APK md5 e0412af2... installed and checked; round 1's recordings: `tools/shots/c1b_home`,
+  `c1_app`, `c1_lock`, frames in each `full/`):
+  - AC10: `NcCloseTest` (lift: the numerals' bottom past the top at ~301 ms; date under 5 % at ~172 ms; drift 0 at the
+    close's first frame for any start edge); 354 unit tests pass.
+  - AC11: over home and over an app the still wallpaper below the edge, no dock or app, at 0.691 of home's wallpaper
+    (median of 57 flat patches, `c1b_home`); rim, round corners and lens at the edge (`c1c_home/edge_1200.png`,
+    `edge_500.png`); the cover gives way after the close (`c1_home/tile05.png`). With two notifications fanned out
+    (`r2_platters/plat_56.png`, `plat_56b.png`) the wallpaper's features run on into the platters' frost with no step.
+  - A close ~50 ms after a commit (`r2_early`, frames 70-78): the wallpaper stays where it was at the close's first frame
+    and drifts gradually; below the edge the cover comes in on `pull-dim-home` (the sheet was still landing).
+  - A drag up from rest (`tools/kswipe.sh`, `r2_drag/m.png`): only the dimmed still wallpaper below the edge, no dock
+    under the corners.
+  - Control Center over a closing Notification Center (`r2_cc/m.png`): Control Center over the blurred home, no still
+    wallpaper under it (the cover leaves on `pull-undim` as Notification Center goes under).
+  - AC12 (`c1_rev`, `r2_rev/m.png`): the edge turns (585 px) and lands with no jump; the numerals come back from where they
+    were, the date returns, the wallpaper drifts back, the cover clears.
+  - AC13 (`c1_lock/m.png`): no cover; the live lock screen below, dimmed, the dim lightening as the sheet leaves.
+  - The clock against the edge (`r2_platters/clock.png`, frames 84-109): the numerals' ink stays above the edge; the
+    closest is ~77 px (~29 pt) as they leave the top; only the glass's shadow under them meets the edge.
+  - AC14: `smoke_emulator.sh` SMOKE PASS (iOS and Pixel paths).
+- Not checked: eased and material presets, dark mode, landscape, an unlock during a lock-screen close, the S24.
+- Round 3 (review, one blocking issue): while the drift moved, `updateEdge()` recorded the sheet again but did not rebuild
+  its outline (either/or), so after the lift the clip froze and the sheet showed below its rim at a close's tail, in slow
+  drags and on a reversal's way back (slowmo 20 hid it). Now both. Unslowed on emulator-5554 (APK md5 5e9699c0...): a
+  slow drag up from rest with the finger standing still over 0.5 s mid-way (`tools/kswipe.sh`, `r3_drag/edges.png`, frames
+  34-95), a close's last frames (`r3_close/edges.png`, `late.png`, frames 9-22) and a reversal (`r3_rev/edges.png`, frames
+  5-11): in every frame the sheet ends at its rim, the dimmed still wallpaper (or home, as a reversal clears the cover)
+  below it.

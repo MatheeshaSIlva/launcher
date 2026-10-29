@@ -174,6 +174,9 @@ object MotionRoles {
         r("nc.bar-fade", "Status bar fading", "The status bar fading away as Notification Center is pulled over home, and back."),
         r("nc.clock-drop", "Clock dropping", "The glass clock dropping into place when Notification Center opens."),
         r("nc.date-in", "Date arriving", "The date coming in as the clock drops."),
+        r("nc.clock-lift", "Clock lifting", "The glass clock lifting off the top of the screen as Notification Center closes."),
+        r("nc.date-out", "Date leaving", "The date and the status bar fading as Notification Center closes."),
+        r("nc.close-uncover", "Closed: what is behind", "The still wallpaper below a closed Notification Center giving way to home or the app."),
         r("press-in", "Notification pressed", "A notification or a button as it is pressed."),
         r("press-out", "Notification let go", "And let go."),
     ))

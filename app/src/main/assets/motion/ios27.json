@@ -896,6 +896,16 @@
    ],
    "src": "measured:fitted to iOS 27 capture pass 10 (the glass numerals drop ~160 pt, ~90 % of it in ~170 ms and a soft tail to ~570 ms; a critically damped spring of response 0.30 s, not checked at 120 Hz)"
   },
+  "motion.nc.clock-lift": {
+   "bezier": [
+    0.4,
+    0,
+    1,
+    1
+   ],
+   "ms": 340,
+   "src": "judged:from iOS 27 captures pass 5 test31, pass 10 and pass 11 test84 (closing, the glass numerals lift off within ~2 frames and are off the screen by ~300 ms; an accelerating ease with comp.nc.clock.lift puts their bottom past the screen's top at ~300 ms; frames from a simulator without a GPU, not checked at 120 Hz)"
+  },
   "motion.nc.clock-tick": {
    "spring": [
     0.45,
@@ -909,6 +919,16 @@
     1.0
    ],
    "src": "judged:and going"
+  },
+  "motion.nc.close-uncover": {
+   "bezier": [
+    0.365,
+    0,
+    0.635,
+    1
+   ],
+   "ms": 250,
+   "src": "judged:a stand-in (B-037 step 2, slice 2c1, D-048): the still wallpaper below a closed sheet fading into home or the app until their own arrivals (2c2, 2c3)"
   },
   "motion.nc.confirm": {
    "spring": [
@@ -926,6 +946,16 @@
    ],
    "ms": 150,
    "src": "judged:from pass 10 (on commit the date appears ~125-150 ms after the clock starts to drop, nearly opaque); the curve dips below 0 first, which reads as 0: under 0.1 for the first ~90 ms, 0.65 at 125 ms, whole at 150 ms (a plain ease cannot hold back that long and still arrive)"
+  },
+  "motion.nc.date-out": {
+   "bezier": [
+    0.365,
+    0,
+    0.635,
+    1
+   ],
+   "ms": 200,
+   "src": "judged:from iOS 27 captures pass 10 and pass 11 test84 (closing, the date and the status bar are gone within ~175 ms; this ease is under 5 % by ~170 ms)"
   },
   "motion.nc.hold": {
    "spring": [

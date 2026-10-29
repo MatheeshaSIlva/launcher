@@ -85,7 +85,7 @@ class LockClockBlock(private val panel: NcPanel) {
             val left = Design.pt(NcTokens.LAND_CLOCK_X, u) - SIDE_PT * u
             boxPaint.set(digitPaint)
             set(left, top, left + ClockNumerals.widthFor(boxPaint, h, true) + 2 * SIDE_PT * u, top + h)
-        } else set(36f * u, 110f * u, panel.panelWidth - 36f * u, 206f * u)
+        } else set(36f * u, 110f * u, panel.panelWidth - 36f * u, NUMERALS_BOTTOM_PT * u)
     }
 
     /** For measuring the box beside the list (the digits' paint as it is, sized by [box]). */
@@ -254,13 +254,26 @@ class LockClockBlock(private val panel: NcPanel) {
     /** The date's arrival, 0..1, on `motion.nc.date-in` (it stays under 0.1 for the drop's first ~90 ms). */
     private val dateIn = MotionValue(1f, 1000f, { moved() })
 
-    /** A pull begins: the sheet's content waits (clear), the clock above its place with no date, ready to drop. */
-    fun waits() { enter.snapTo(1f); dateIn.snapTo(0f) }
+    /** 1: lifted [NcTokens.CLOCK_LIFT] above its place, off the screen's top (the sheet closing, slice 2c1); 0: in place. */
+    private val lift = MotionValue(0f, 1000f, { moved() })
 
-    /** The pull opened it: the numerals drop into place and the date comes in. A drop on its way goes on from where it is. */
+    /** A pull begins: the sheet's content waits (clear), the clock above its place with no date, ready to drop. */
+    fun waits() { enter.snapTo(1f); lift.snapTo(0f); dateIn.snapTo(0f) }
+
+    /**
+     * The pull opened it: the numerals drop into place and the date comes in. A drop on its way goes on from where it is,
+     * and so does a lift a reversed close leaves (the clock comes back down from where it is).
+     */
     fun drops() {
         enter.animateTo(0f, Motion.role(MotionTokens.NC_CLOCK_DROP))
+        if (lift.target != 0f) lift.animateTo(0f, Motion.role(MotionTokens.NC_CLOCK_DROP))
         dateIn.animateTo(1f, Motion.role(MotionTokens.NC_DATE_IN))
+    }
+
+    /** The sheet closes: the numerals lift off the screen's top (`motion.nc.clock-lift`) and the date fades (`motion.nc.date-out`). */
+    fun lifts() {
+        lift.animateTo(1f, Motion.role(MotionTokens.NC_CLOCK_LIFT))
+        dateIn.animateTo(0f, Motion.role(MotionTokens.NC_DATE_OUT))
     }
 
     private fun moved() {
@@ -271,7 +284,7 @@ class LockClockBlock(private val panel: NcPanel) {
     }
 
     private fun applyProps() {
-        val dy = ClockDrop.offset(enter.value, Design.pt(NcTokens.CLOCK_DROP, u))
+        val dy = ClockDrop.offset(enter.value, Design.pt(NcTokens.CLOCK_DROP, u)) + ClockDrop.lifted(lift.value, Design.pt(NcTokens.CLOCK_LIFT, u))
         node.setTranslationY(dy)
         dateNode.setTranslationY(dy)
         node.setAlpha(presence)
@@ -367,10 +380,12 @@ class LockClockBlock(private val panel: NcPanel) {
         return (a shl 24) or (color and 0xFFFFFF)
     }
 
-    private companion object {
+    companion object {
+        /** The bottom of the numerals' box across the top (pt): what a close's lift must take above the screen. */
+        const val NUMERALS_BOTTOM_PT = 206f
         /** The room left at the sides of the numerals' box beside the list, for the glass's rims and shadow (pt). */
-        const val SIDE_PT = 16f
-        val io = Executors.newSingleThreadExecutor()
-        val TICK get() = Motion.role(MotionTokens.NC_CLOCK_TICK)
+        private const val SIDE_PT = 16f
+        private val io = Executors.newSingleThreadExecutor()
+        private val TICK get() = Motion.role(MotionTokens.NC_CLOCK_TICK)
     }
 }

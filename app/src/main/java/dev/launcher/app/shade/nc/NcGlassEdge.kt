@@ -15,7 +15,6 @@ import dev.launcher.app.motion.Motion
 import dev.launcher.app.motion.MotionTokens
 import dev.launcher.app.motion.MotionValue
 import dev.launcher.app.shade.NcTokens
-import dev.launcher.app.theme.Appearance
 import kotlin.math.max
 import kotlin.math.min
 
@@ -33,6 +32,7 @@ import kotlin.math.min
  * The edge goes on drawing after the pull commits, until the sheet has landed (step 2): its content stays still under the
  * outline ([dev.launcher.app.shade.NotificationCenterView]), and the corner radius it is given eases to the display's own as
  * the edge nears the bottom. (Over the lock screen the wallpaper inside the slab is [NcSlabWallpaper], under the sheet.)
+ * And as an arrived sheet closes (slice 2c1): the lens bends the sheet's own wallpaper again, as far down as it has drifted.
  */
 @SuppressLint("ViewConstructor")
 class NcGlassEdge(ctx: Context) : View(ctx) {
@@ -40,6 +40,8 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
     private var dimK = 0f
     private var chromeK = 1f
     private var radius = 0f
+    /** How far the sheet's wallpaper has drifted down (px): the lens reads the wallpaper there. */
+    private var picDy = 0f
     /** The pull has committed (its content is arriving): the lens's picture goes once the sheet lands, not while a finger holds it. */
     private var committed = false
     /** The newest picture is the wallpaper (after the commit): the bands then carry the wallpaper's dim, as the sheet's does. */
@@ -52,6 +54,10 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
     private val tint = FloatArray(4)
     private val tint2 = FloatArray(4)
 
+    /** How much darker than the wallpaper what the bands bend shows (the sheet's dims once its content is there). */
+    var wallDark = 0f
+        set(v) { if (field != v) { field = v; if (visibleNow()) invalidate() } }
+
     /** Over the lock screen the slab's interior is the [wallpaper], drawn still. */
     var locked = false
         set(v) { if (field != v) { field = v; invalidate() } }
@@ -63,14 +69,15 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
     /**
      * The sheet's bottom edge at [y] (px from the screen's top), the dim below it and over the interior at [dim] (0..1) and
      * the sheet's own outline (interior dim, rim, lens) at [chrome] (1 while the edge is in the air, falling to 0 as the sheet
-     * lands), its bottom corners [r] px (the outline's: [NcGlassProfile.outlineRadius]). Redrawn only when something changed.
+     * lands), its bottom corners [r] px (the outline's: [NcGlassProfile.outlineRadius]). [committed]: the sheet arrived and
+     * is not closing. [drift]: how far its wallpaper has drifted down. Redrawn only when something changed.
      */
-    fun set(y: Float, dim: Float, chrome: Float, r: Float, committed: Boolean) {
+    fun set(y: Float, dim: Float, chrome: Float, r: Float, committed: Boolean, drift: Float = 0f) {
         this.committed = committed
-        if (y == edgeY && dim == dimK && chrome == chromeK && r == radius) return
+        if (y == edgeY && dim == dimK && chrome == chromeK && r == radius && drift == picDy) return
         // Drawn while there is anything to show, and once more as it goes (the frame that clears it).
         val was = visibleNow()
-        edgeY = y; dimK = dim; chromeK = chrome; radius = r
+        edgeY = y; dimK = dim; chromeK = chrome; radius = r; picDy = drift
         if (lens?.has == true && NcGlassProfile.releasesPicture(chrome, committed)) clearPicture()
         if (was || visibleNow()) invalidate()
     }
@@ -79,16 +86,18 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
      * [b] is what is behind the slab, sharp ([toScreen] maps its pixels to the screen's). The first one makes the lens grow in;
      * a fresher one crossfades from the one before. Both on `motion.nc.lens-in`. A picture of the other orientation (an app
      * turned) or one arriving after the sheet has landed is not used. [wall]: it is the sheet's own wallpaper (at the commit
-     * the bands turn to it: they bend what the sheet shows).
+     * the bands turn to it: they bend what the sheet shows). [atOnce]: whole at once (a close: the edge is still at the bottom,
+     * where nothing of it shows).
      */
-    fun setPicture(b: Bitmap, toScreen: Matrix, wall: Boolean = false) {
+    fun setPicture(b: Bitmap, toScreen: Matrix, wall: Boolean = false, atOnce: Boolean = false) {
         val l = lens ?: return
         if (NcGlassProfile.releasesPicture(chromeK, committed) || (width > 0 && (b.width > b.height) != (width > height))) return
         val first = !l.has
         if (!l.set(b, toScreen)) return
         lensIsWall = wall
         val role = Motion.role(MotionTokens.NC_LENS_IN)
-        if (first) { lensK.snapTo(0f); mixK.snapTo(1f); lensK.animateTo(1f, role) }
+        if (first && atOnce) { lensK.snapTo(1f); mixK.snapTo(1f) }
+        else if (first) { lensK.snapTo(0f); mixK.snapTo(1f); lensK.animateTo(1f, role) }
         else { mixK.snapTo(0f); mixK.animateTo(1f, role) }
     }
 
@@ -201,9 +210,9 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
         tint[0] = ((ic shr 16) and 0xFF) / 255f; tint[1] = ((ic shr 8) and 0xFF) / 255f; tint[2] = (ic and 0xFF) / 255f
         tint[3] = ((ic ushr 24) and 0xFF) / 255f * dim * chrome
         // (The sheet's wallpaper is dimmed by the appearance: from the lock screen's start, after the commit as the bands turn to it.)
-        tint2[3] = Appearance.wallpaperDim * chrome * (if (locked) 1f else if (lensIsWall) mixK.value else 0f)
+        tint2[3] = wallDark * chrome * (if (locked) 1f else if (lensIsWall) mixK.value else 0f)
         // (The bands' opacity comes in ahead of the bend, which starts slowly: a half-bent picture never lies over live content.)
-        l.draw(c, width.toFloat(), y, k * k * lensStrength, min(1f, 4f * k) * chrome, mixK.value, tint, tint2, r)
+        l.draw(c, width.toFloat(), y, k * k * lensStrength, min(1f, 4f * k) * chrome, mixK.value, tint, tint2, r, picDy)
     }
 
     /** The rim along the edge, round the corners and up the sides; the fringe is red outside and blue inside (interim). */

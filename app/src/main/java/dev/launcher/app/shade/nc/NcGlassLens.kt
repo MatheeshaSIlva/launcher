@@ -70,10 +70,12 @@ class NcGlassLens {
      * The bands of a slab [w] wide whose bottom edge is at [y]. [bend] scales the displacement (0: none), [cover] the opacity,
      * [mix] how much of the newest picture shows (1: only it); [tint] (r, g, b, a) and [tint2] are laid over what the bands
      * read, as the slab lays them over what it shows (its interior dim; the wallpaper's dim). [corner]: the outline's radius now.
+     * [picDy]: the picture lies that far lower (px; a closing sheet's wallpaper drifting down).
      */
-    fun draw(c: Canvas, w: Float, y: Float, bend: Float, cover: Float, mix: Float, tint: FloatArray, tint2: FloatArray, corner: Float = this.corner) {
+    fun draw(c: Canvas, w: Float, y: Float, bend: Float, cover: Float, mix: Float, tint: FloatArray, tint2: FloatArray, corner: Float = this.corner,
+             picDy: Float = 0f) {
         this.corner = corner
-        u("screenW", w); u("edgeY", y); u("bend", bend); u("cover", cover); u("mixNew", mix); u("corner", corner)
+        u("screenW", w); u("edgeY", y); u("bend", bend); u("cover", cover); u("mixNew", mix); u("corner", corner); u("picDy", picDy)
         u4("tint", tint); u4("tint2", tint2)
         // (Rects, not a layer: the bottom band follows the edge, the sides take the rest of the slab's height.)
         val split = max(y - (max(band, corner) + 1f), 0f)
@@ -137,10 +139,12 @@ uniform float bend;
 uniform float cover;
 uniform float mixNew;
 uniform float dispersion;
+uniform float picDy;
 uniform float4 tint;
 uniform float4 tint2;
 ${NcGlassProfile.AGSL}
-half3 fetch(float2 p) {
+half3 fetch(float2 s) {
+    float2 p = float2(s.x, s.y - picDy);
     half3 a = pic.eval(p).rgb;
     return mixNew >= 0.999 ? a : mix(picOld.eval(p).rgb, a, half(mixNew));
 }

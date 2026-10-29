@@ -214,6 +214,9 @@ internal object MotionSamples {
         add("nc.reveal-zoom", Spec(Kind.ZOOM_AWAY, WHOLE))
         add("nc.clock-drop", Spec(Kind.SLIDE_DOWN, CLOCK, 0f, 1f, m("nc.clock-drop")))
         add("nc.date-in", Spec(Kind.FADE, CLOCK, 0f, 1f, m("nc.date-in")))
+        add("nc.clock-lift", Spec(Kind.SLIDE_DOWN, CLOCK, 1f, 0f, m("nc.clock-drop")))
+        add("nc.date-out", Spec(Kind.FADE, CLOCK, 1f, 0f, m("nc.date-in")))
+        add("nc.close-uncover", Spec(Kind.FADE, WHOLE, 1f, 0f, m("nc.pull-dim-home")))
         add("nc.bar-fade", Spec(Kind.FADE, STATUS, 1f, 0f, m("nc.bar-fade")))
         pair("press-in", "press-out", Kind.PRESS, PLATTERS)
         // Banners.

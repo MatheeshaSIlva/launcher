@@ -97,8 +97,8 @@ object Moments {
         sample = k("cc.lift"))
     val NOTIFICATION_CENTER = Moment("nc", MomentPart.SHADE, "Notification Center", "Notifications coming down, arriving, swiped away and held.",
         ks("nc.open", "nc.close", "nc.appear", "nc.leave", "nc.reflow", "nc.swipe-out", "nc.swipe-back", "nc.menu-open", "nc.menu-close",
-            "nc.confirm", "press-in", "press-out", "nc.pull-dim-home", "nc.pull-dim-app", "nc.pull-undim", "nc.reveal", "nc.reveal-zoom", "nc.bar-fade", "nc.clock-drop"),
-        glue = ks("nc.launch-fade", "nc.time-fade", "nc.lens-in", "nc.date-in"))
+            "nc.confirm", "press-in", "press-out", "nc.pull-dim-home", "nc.pull-dim-app", "nc.pull-undim", "nc.reveal", "nc.reveal-zoom", "nc.bar-fade", "nc.clock-drop", "nc.clock-lift"),
+        glue = ks("nc.launch-fade", "nc.time-fade", "nc.lens-in", "nc.date-in", "nc.date-out", "nc.close-uncover"))
     val QUICK_SETTINGS = Moment("qs", MomentPart.SHADE, "Quick Settings", "Android's shade pulled down, Quick Settings expanding, a tile pressed and tapped.",
         ks("qs.open", "qs.close", "qs.expand", "qs.collapse", "qs.tile-bounce", "qs.tile-state", "qs.tile-symbol", "qs.tile-pop", "qs.edit", "qs.edit-place",
             "qs.page"),

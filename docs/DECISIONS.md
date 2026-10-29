@@ -435,3 +435,20 @@ wrong picture. (2) The list's dim over the sheet's wallpaper fades in with the r
 say; before round 2 the dim faded in with the content, and "nothing pops" decides. Alternatives: a fresh picture taken at
 the commit (a recording in the commit's first frame, the cost the plan forbids); the dim at once (unmeasured, a visible
 step).
+
+### D-051: B-037 slice 2c1, the close's deviations and its spring (2026-10-29)
+
+Decided by the orchestrator after review (round 1 REVISE). (1) The close's drift moves the sheet's wallpaper only (`bgNode`,
+recorded with its top band mirrored above the screen), not the list or the clock: iOS's capture shows the wallpaper drifting,
+and the notifications moving with the edge is slice 2c1b; the platters' frost follows the drift so no seam shows. The drift is
+measured from where the edge was when the close began. (2) A close from a landed sheet (or a drag up that started from rest)
+shows the cover below the edge and its dim whole at once: at the screen's bottom they lie under the sheet's corners, and a
+fade let the live dock show under the rising edge; from a sheet still landing they come in on `motion.nc.pull-dim-home` as
+planned. (3) The lens bands carry the sheet's own darkness (dark mode and the list's overlay, `wallDarkness()`), also at the
+commit's landing (a light frame ran round a darkened sheet). (4) The status bar returns on `motion.nc.bar-fade` after a close.
+(5) Going under Control Center is not a close: Notification Center falls back as before and no cover shows under another
+panel. (6) `motion.nc.close` (judged, 0.38 s) stays as it is: pass 11 test84 cannot fit it (the capture drops the frames 
+of the rise: at most 2-3 edge points over ~100 pt), and computed with the shipped lift the numerals stay above the edge 
+all the way (closest ~19 pt at ~240 ms; only the glass's shadow is clipped between ~200 and ~300 ms; the round-1 
+report of a cut at ~150 ms was an estimate). Alternatives: the whole content layer drifting as the plan first said (a gap at the top, the clock
+cut); the close's spring as a follow-up (a visible cut shipped).

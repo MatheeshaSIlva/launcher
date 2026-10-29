@@ -352,7 +352,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private val ncPanel: Panel = object : Panel(ShadeStructure.Kind.NOTIFICATION_CENTER, "Notification Center") {
         override fun opening() { nc.prepare(); if (ncReveal.target < 1f) nc.clockWaits(); media.refresh(); ncEdge.locked = locked; ncWall.locked = locked; ncWall.wallpaper = nc.wallpaper; prepareLens() }
-        override fun cleanUp() { nc.onClosed(); ncRest(); ncEdge.clearPicture(); lensHome = null; revealEnds() }
+        override fun cleanUp() { val closed = nc.closing; nc.onClosed(); ncRest(closed); ncEdge.clearPicture(); lensHome = null; revealEnds() }
         override fun gone() { nc.progress = 0f }
         override val openCurve get() = NC_OPEN
         override val closeCurve get() = NC_CLOSE
@@ -367,6 +367,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             when (phase) {
                 1 -> {
                     val raw = dragFrom + dy / travel()
+                    // A drag up starts the close (its release may still open it again: [ncCommit]); a drag down never does.
+                    // Before the sheet moves: whether it was down is where the drag took it from.
+                    if (raw < dragFrom && ncReveal.target >= 1f) ncCloseBegins()
                     progress.snapTo(if (raw > 1f) 1f + Motion.rubberBand((raw - 1f) * travel(), root.height.toFloat()) / travel() else raw.coerceAtLeast(0f))
                 }
                 2 -> dragEnds(vy / travel(), vy)
@@ -377,7 +380,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         override fun pullBegins(caught: Boolean) = ncPullBegins()
         override fun opensFully() = ncCommit()
         override fun closes() = ncCloses()
-        override fun goesUnder() = ncCloses()
+        override fun goesUnder() = ncGoesUnder()
         override fun touch(e: MotionEvent) = nc.dispatchTouchEvent(e)
         override fun back() = nc.onBack()
         override fun swipeBand(out: android.graphics.RectF) = nc.swipeBand(out)
@@ -761,6 +764,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val ncDim = MotionValue(0f, 1000f, { applyProgress() })
     /** The status bar over home while the slab is pulled (1 shown), on `motion.nc.bar-fade`. */
     private val ncBar = MotionValue(1f, 1000f, { bar.setFade(it) })
+    /**
+     * Below a closing sheet's edge over home or an app (slice 2c1), the still wallpaper (0..1): in on `motion.nc.pull-dim-home`,
+     * out on `motion.nc.close-uncover` once the sheet is gone (a stand-in for home's and the app's own arrivals, 2c2, 2c3).
+     */
+    private val ncCover = MotionValue(0f, 1000f, { applyProgress() })
     /** How far what was behind has given way inside the sheet (0..1): on `motion.nc.reveal-zoom` over home, `motion.nc.reveal` over an app. */
     private val ncPicK: MotionValue = MotionValue(0f, 1000f, { applyProgress() }, { revealRests() })
     private var revealLogs = 0
@@ -792,6 +800,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * at once with no picture; else it fades in on `motion.nc.reveal`.
      */
     private fun ncCommit() {
+        if (nc.closing) ncReopens()
         // The bands at the edge bend the sheet's own wallpaper from here (pass 10), not what was behind the slab.
         nc.wallpaper?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true) }
         if (ncReveal.target < 1f) {
@@ -818,9 +827,54 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
     }
 
-    /** It starts closing (or goes under the other panel): a pull falls back; a sheet that arrived clears its dim as it goes. */
+    /** It starts closing (or goes under the other panel): a pull falls back; a sheet that arrived closes ([ncCloseBegins]). */
     private fun ncCloses() {
-        if (ncReveal.target < 1f) ncFallBack() else if (ncDim.target > 0f) ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+        if (ncReveal.target < 1f) ncFallBack() else ncCloseBegins()
+    }
+
+    /**
+     * It goes under the other panel, pulled over it: no close (nothing of the close plays under that panel's background). A
+     * pull falls back; an arrived sheet's dim clears, and a close already under way gives its cover and dim up at once.
+     */
+    private fun ncGoesUnder() {
+        if (ncReveal.target < 1f) { ncFallBack(); return }
+        ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+        ncCover.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+    }
+
+    /** The close started over the lock screen (its dim follows the sheet out, no cover), kept for the close's whole way. */
+    private var ncCloseLocked = false
+
+    /**
+     * The arrived sheet starts to close (B-037 step 2, slice 2c1; iOS 27 passes 5, 10, 11): Back, a tap, a drag up from rest,
+     * a release that falls back. Its edge bends its own wallpaper again as it rises, the numerals lift off the top, the date
+     * and the bar fade, the wallpaper drifts down ([NotificationCenterView.updateEdge]); below the edge the still wallpaper
+     * (over home and apps) dimmed, or over the lock screen the lock screen itself, dimmed until the sheet has left.
+     */
+    private fun ncCloseBegins() {
+        if (nc.closing) return
+        ncCloseLocked = locked
+        nc.closing = true
+        applyProgress()   // (the edge learns it is closing before it takes its picture)
+        nc.wallpaper?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true, atOnce = true) }
+        nc.clockLifts()
+        // With the sheet down nothing below it shows yet: the cover and its dim are whole at once (faded in, the live dock
+        // showed under the rising edge for their first frames); a close of a sheet still landing brings them in.
+        if (dev.launcher.app.shade.nc.NcGlassProfile.landed(nc.edgeY, root.height.toFloat())) {
+            ncDim.snapTo(1f)
+            if (!ncCloseLocked) ncCover.snapTo(1f)
+        } else {
+            ncDim.goTo(1f, MotionTokens.NC_PULL_DIM_HOME)
+            if (!ncCloseLocked) ncCover.goTo(1f, MotionTokens.NC_PULL_DIM_HOME)
+        }
+        ncBar.goTo(0f, MotionTokens.NC_DATE_OUT)
+    }
+
+    /** A close taken back (a drag or a pull let go open): the clock comes down from where it is, the cover clears. */
+    private fun ncReopens() {
+        nc.closing = false
+        nc.clockDrops()
+        ncCover.goTo(0f, MotionTokens.NC_CLOSE_UNCOVER)
     }
 
     /** The picture has given way: it goes (its GPU image with it). */
@@ -841,10 +895,15 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
     }
 
-    /** Closed: the content waits for the next pull. What is still fading (the dim, the bar) is left to finish. */
-    private fun ncRest() {
+    /**
+     * Closed: the content waits for the next pull. What is still fading (the dim, the bar) is left to finish; after a close
+     * ([closed]) the cover and its dim give way on `motion.nc.close-uncover` (over the lock screen the dim left with the sheet).
+     */
+    private fun ncRest(closed: Boolean) {
         ncReveal.snapTo(0f)
-        if (ncDim.target > 0f) ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+        if (closed && ncCloseLocked) ncDim.snapTo(0f)
+        else if (ncDim.target > 0f) ncDim.goTo(0f, if (closed) MotionTokens.NC_CLOSE_UNCOVER else MotionTokens.NC_PULL_UNDIM)
+        ncCover.goTo(0f, MotionTokens.NC_CLOSE_UNCOVER)
         ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
     }
 
@@ -884,11 +943,15 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // lens go on drawing at that outline until the sheet has landed, and its dim while it fades out after the panel is
         // closed. The lock screen's wallpaper (under the sheet) stays whole until the content is (the content fades in over it).
         val ncEdgeY = if (ncP != null) nc.edgeY else 0f
-        ncEdge.set(ncEdgeY, ncDim.value, nc.edgeChrome, nc.edgeRadius, ncReveal.target >= 1f)
-        ncWall.set(ncEdgeY, nc.edgeRadius, if (ncReveal.value >= 1f) 0f else 1f)
+        // (Over the lock screen a closing sheet's dim clears as it leaves; elsewhere the cover takes it out once it is gone.)
+        // (Which way is the close's, decided at its start: an unlock on the way changes nothing in one frame.)
+        val ncDimNow = if (ncCloseLocked && nc.drifting) dev.launcher.app.shade.nc.NcClose.lockDim(ncDim.value, ncEdgeY, nc.driftFrom) else ncDim.value
+        ncEdge.wallDark = if (ncReveal.target >= 1f) nc.wallDarkness() else dev.launcher.app.theme.Appearance.wallpaperDim
+        ncEdge.set(ncEdgeY, ncDimNow, nc.edgeChrome, nc.edgeRadius, ncReveal.target >= 1f && !nc.closing, nc.drift)
+        ncWall.set(ncEdgeY, nc.edgeRadius, if (ncReveal.value >= 1f) 0f else 1f, ncCover.value)
         ncPic.set(ncEdgeY, nc.edgeRadius, ncPicK.value, ncZoom, ncP != null && ncReveal.target >= 1f)
         // The dim below the edge holds from the commit until the sheet is down (where nothing below it shows), then clears.
-        if (ncP != null && ncReveal.target >= 1f && ncDim.target > 0f &&
+        if (ncP != null && ncReveal.target >= 1f && ncDim.target > 0f && !nc.closing &&
             dev.launcher.app.shade.nc.NcGlassProfile.landed(ncEdgeY, root.height.toFloat())) ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         bar.setClearSlab(ncP != null && ncReveal.value <= 0f)
         if (ccP == null && ncP == null && shP == null) {
