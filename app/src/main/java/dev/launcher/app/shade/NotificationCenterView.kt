@@ -235,9 +235,33 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
             showContent()
         }
 
+    /**
+     * The content is whole from the commit's first frame (B-037 step 2): a picture of what was behind gives way over it
+     * ([dev.launcher.app.shade.nc.NcRevealPicture]), or the lock screen (its wallpaper is under it already).
+     */
+    var revealWhole = false
+        set(v) {
+            if (field == v) return
+            field = v
+            showContent()
+        }
+
+    /**
+     * A commit: with the content [whole] from its first frame, the list's dim over the wallpaper comes in from nothing on
+     * [role] (the reveal's own) instead of stepping in; else it stays as it is. Interrupted, it goes on from where it is.
+     */
+    fun dimAtCommit(whole: Boolean, role: dev.launcher.app.design.Curve) {
+        val d = list.dim
+        val from = dev.launcher.app.shade.nc.NcReveal.dimFrom(whole, d.value)
+        val to = d.target
+        if (from == d.value || to <= 0f) return
+        d.snapTo(from)
+        d.animateTo(to, role)
+    }
+
     private fun showContent() {
-        alpha = dev.launcher.app.shade.nc.NcGlassProfile.contentAlpha(progress, reveal)
-        translationX = if (dev.launcher.app.shade.nc.NcGlassProfile.contentWaits(progress, reveal)) width.toFloat() else 0f
+        alpha = dev.launcher.app.shade.nc.NcGlassProfile.contentAlpha(progress, reveal, revealWhole)
+        translationX = if (dev.launcher.app.shade.nc.NcGlassProfile.contentWaits(progress, reveal, revealWhole)) width.toFloat() else 0f
     }
 
     init {

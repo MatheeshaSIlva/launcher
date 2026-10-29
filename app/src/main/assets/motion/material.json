@@ -616,6 +616,13 @@
    ],
    "src": "judged:Material 3 Expressive's effects, fast spring (stiffness 3800, damping 1)"
   },
+  "motion.nc.reveal-zoom": {
+   "spring": [
+    0.2221,
+    1.0
+   ],
+   "src": "judged:Material 3 Expressive's spatial, fast, critically damped: iOS 27 does not overshoot here spring (stiffness 800, damping 1)"
+  },
   "motion.nc.swipe-back": {
    "spring": [
     0.3223,

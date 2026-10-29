@@ -410,3 +410,28 @@ fitted to the measured landing (both judged before); the dim below the edge hold
 cover fades out on `motion.nc.close-uncover`. Owner (2026-10-28): over the lock screen One UI's lock screen shows live
 below the closing sheet, dimmed 30 % and clearing as it leaves; 2c1 ships alone with the stand-in fade.
 Plan: docs/plans/B-037-step2.md.
+
+### D-049: B-037 slice 2a2's criteria corrected by the capture (2026-10-28)
+AC2: the plan asked `motion.nc.open` to cover 90 % of the landing in 115 +- 30 ms; pass 10's frames (test81, rows 563-572 of
+video_times.txt: edge 655 to 861 pt over 0-232 ms) reach 90 % only between 188 and 222 ms (67 % at ~120 ms): the plan's
+"~115 ms" described the bulk of the slide. The role is fitted to the frames (critically damped, 0.33 s, from a standstill:
+the drag held 1.5 s before lifting; rms ~4-5 pt, re-checked by the reviewer) and AC2 now reads "matches pass 10's landing,
+rms < 6 pt, 90 % in 170-240 ms". AC3: the last held frame against the first frame after the commit differs only at
+anti-aliased edges and rims (home's recorded content drawn in a transparent layer: worst cell 4.4 grey levels, mean 0.51),
+steady and inside a zoom that is half faded by 62 ms; waived while it stays edge-only (re-measured after round 2), because
+drawing without the layer would render the Picture again at every frame of the zoom. AC6: an app's snapshot is used when it
+has the shade's orientation (a turned app under a turned shade), the fallback fade otherwise. Alternatives: holding the
+plan's 115 ms (contradicts the reference); drawing the picture without a layer (a render per frame).
+
+### D-050: B-037 slice 2a2, a third round and two rulings (2026-10-29)
+
+Decided by the orchestrator, the third round by the owner. QA failed round 2 (home's glass clock missing from the reveal's
+first frame after a theme change: home's picture had been recorded mid-reveal; the settings sample played the arrival). At
+the two-round limit the owner chose a third round (2026-10-29). Rulings in it: (1) home's picture zooms only while it is
+exactly what home shows (recorded at rest, nothing drawn since: `HomeBridge.shown`); otherwise the release takes the plan's
+fallback, the content fading in (AC6's path), so a minute tick or a widget update during a hold gives a fade rather than a
+wrong picture. (2) The list's dim over the sheet's wallpaper fades in with the reveal instead of stepping in at the commit
+(49 grey levels in one frame over home with a notification): iOS's capture (pass 10 test81) had an empty list and cannot
+say; before round 2 the dim faded in with the content, and "nothing pops" decides. Alternatives: a fresh picture taken at
+the commit (a recording in the commit's first frame, the cost the plan forbids); the dim at once (unmeasured, a visible
+step).

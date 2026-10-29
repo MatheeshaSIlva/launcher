@@ -665,8 +665,8 @@
     0.1,
     1
    ],
-   "ms": 550,
-   "src": "judged:test preset: iOS 27's spring (0.44 s, damping 1.0) as a bezier (emphasized decelerate, 550 ms)"
+   "ms": 410,
+   "src": "judged:test preset: iOS 27's spring (0.33 s, damping 1.0) as a bezier (emphasized decelerate, 410 ms)"
   },
   "motion.nc.reflow": {
    "bezier": [

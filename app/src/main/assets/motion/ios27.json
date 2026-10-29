@@ -977,10 +977,10 @@
   },
   "motion.nc.open": {
    "spring": [
-    0.44,
+    0.33,
     1.0
    ],
-   "src": "judged:Notification Center coming down"
+   "src": "measured:fitted to iOS 27 capture pass 10 test81 F564-F573 (released from a standstill at 75 %, the sheet's edge lands on a critically damped spring of response 0.33 s, rms 4 of 874 pt, start velocity 0; 90 % of the rest in ~0.20 s; frames from a simulator without a GPU, not checked at 120 Hz)"
   },
   "motion.nc.pull-dim-app": {
    "bezier": [
@@ -1021,13 +1021,23 @@
   },
   "motion.nc.reveal": {
    "bezier": [
-    0.365,
     0,
-    0.635,
+    0,
+    0.8,
     1
    ],
-   "ms": 70,
-   "src": "judged:from pass 10 (on commit the sheet's own content arrives 'at once'; a short fade so nothing pops)"
+   "ms": 200,
+   "src": "measured:iOS 27 capture pass 11 test83 (on commit over an app the app inside the sheet fades with no zoom: ~52 % left at +83 ms, ~10 % at +170 ms; this curve leaves 51 % and 8 %); also the content's fade where no picture of what was behind is held (B-037 step 2)"
+  },
+  "motion.nc.reveal-zoom": {
+   "bezier": [
+    0.6,
+    0,
+    0.5,
+    0.7
+   ],
+   "ms": 90,
+   "src": "measured:iOS 27 capture pass 10 test81 F563-F595 (on commit over home the icons inside the sheet zoom about the centre, ~1.24x at +35 ms, ~2x half faded at +62 ms, gone by ~90 ms; with shade/nc/NcReveal's schedule this curve gives 1.24x, 2.01x at 45 % opacity, 0 at 90 ms; frames from a simulator without a GPU, not checked at 120 Hz)"
   },
   "motion.nc.swipe-back": {
    "spring": [

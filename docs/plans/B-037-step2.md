@@ -112,3 +112,104 @@ capture of Notification Center on the S24.
 close over home; 2c3 the app's snapshot arriving at ~1.2x blurred, settling in ~0.4 s, handing over to the live app.
 
 ## Record (filled by the slices)
+
+### Slice 2-0 (implementer, 2026-10-28; emulator-5554, Android 17)
+- AC0.1: `scripts/check.sh` PASS on the merged branch before 2a2 (CHECK PASSED); `smoke_emulator.sh` SMOKE PASS (iOS and Pixel
+  paths); the installed APK's md5 equals the local build's (cc37d829..., then the 2a2 build checked the same way).
+- AC0.2 (slowmo 20, `tools/shots/b037s2_ac02.mp4`, frames in `tools/shots/b037s2_ac02/full`): the numerals' first frame shows
+  them cut by the screen's top (their bottom ~130 px, rest bottom 375 px: first seen >= 90 pt above rest at 2.69 px/pt), then
+  at rest; the bottom corners round in every frame (crops f19-f33); the content still: consecutive frames once whole differ
+  by a brightness change only (best vertical shift 0 px; mean diff <= 1.3 grey levels, the list's overlay fading in). The
+  emulator records ~4 frames a second, so "every frame" is every recorded frame.
+- AC0.3 (unslowed, `tools/shots/b037s2_ac03.pftrace`): after the release, NC's layer is updated in each frame of the drop
+  with 2 clears and 4 texture draws (0.8-2.3 ms "flush layers", two of 4.9 and 8.4 ms), no MaterialPainter pass: only the
+  clock's and the date's nodes are drawn again. The window's own "Drawing 0 0 1080 2400" is every frame's (the whole window
+  is redrawn each frame, as CLAUDE.md notes for the S24); the slice name cannot show the layer's damage rectangle.
+- AC0.4: the three follow-ups are present (ClockDropTest reads the files; `LockClockBlock.moved()`'s comment; the drop
+  token's src cites pass 11's ~196 pt). No change.
+
+### Slice 2a2 (implementer, 2026-10-28)
+- `motion.nc.open` fitted to pass 10 test81 F564-F573 (the edge per frame: 655, 676, 721, 765, 801, 814, 836, 850, 855,
+  861 of 874 pt at 0, 35, 62, 93, 120, 150, 178, 188, 222, 232 ms), start velocity 0, critically damped: response 0.33 s
+  (rms 4 pt, the release 5 ms after F564). `springfit.py`'s free fit took a release velocity (2032 pt/s, response 0.61,
+  damping 0.86) that a release from a standstill does not have, so the fit was constrained (v0 = 0, damping 1).
+  From a standstill at 0.75 it covers 90 % of the rest in ~0.20 s, not the 115 +- 30 ms AC2 asks: pass 10's own edge had
+  covered 89 % at 188 ms (the "~115 ms" was the bulk of the slide, F566-F570). AC2 as written is not met; `NcRevealTest`
+  checks the spring against the frames instead.
+- `motion.nc.reveal` 200 ms, bezier (0, 0, 0.8, 1): the app's picture 51 % at 83 ms, 8 % at 170 ms (pass 11: ~52 %, ~10 %).
+  `motion.nc.reveal-zoom` 90 ms, bezier (0.6, 0, 0.5, 0.7) with `NcReveal` (scale 1 + (zoom - 1) x 1.5 x k, alpha 1 - k^2):
+  1.24x at 35 ms, 2.01x at 62 ms at 45 % opacity, 0 at 90 ms. Material: spatial fast, critically damped (0.222 s).
+- AC3 (diff.py defaults, recordings at slowmo 20, the outline's inside rows 0-1660): over the app FAIL narrowly (28 of 288
+  cells, overall mean 1.18, 0.0 % of pixels past 12, worst cell mean 2.6 against 2.0: the search field and the coloured
+  icons, the snapshot against the live app); over home FAIL (54 cells, overall mean 0.51, 1.0 % of pixels, worst cell 4.4):
+  home's recorded picture draws text and the glass numerals' shadows darker than the live home (no offset: best shift 0),
+  a one-frame tone step on glyph edges at the commit. Two held frames diff to 0 cells; two frames after the commit to 0.
+  `tools/shots/b037s2_ac3/{home,app}`.
+- AC4 (`tools/shots/b037s2_home20.mp4`): home's widgets grow about the centre and fade out; the sheet's wallpaper, clock
+  and platters from the first frame; the dock below the edge unchanged (mean diff 0.00 in rows 2100-2300) until the edge
+  reaches it; `frame_glitch.py` 0 glitches (over the app too: `b037s2_app20.mp4`).
+- AC5 (`tools/shots/b037s2_ac5.pftrace`): `drawLayer [nc-reveal]` is rendered in the pull's first frame (flush 17.4 ms with
+  NC's own layers, emulator); the commit's frames render only NC's layer (the clock band, 0.7-3 ms). Scratch RenderTarget
+  across 11 commits: 46.9-53.8 MB, back to 46.9, no growth.
+- AC6: the lock screen (keyguard on, `b037s2_lock20.mp4`): "[nc] commit: the lock screen, whole at once", no One UI lock
+  screen inside the sheet, the clock drops. Stale, absent and landscape pictures: covered by `NcReveal.usable` in the unit
+  test only, not exercised on the emulator.
+- AC7: the dock under the dim is unchanged from the release until the edge covers it (above); the dim clears once landed.
+- AC8 (`b037s2_ac8.mp4`, over the app): a close 50 ms (nominal) after the commit rises with the clock, 0 glitches; a second
+  pull after the close is a clear slab over the app with the dim (`tools/shots/b037s2_ac8_second.png`). A catch during the
+  zoom: not exercised (the zoom runs on its own value, untouched by a pull).
+- AC9: `MomentsTest` (Notification Center's moment now 19 roles), the role and token tests pass. Eased and material on the
+  device, dark, and the settings' sample: not checked.
+
+### Round 2 (review REVISE, 2026-10-28)
+- Fix: `NcGlassProfile.contentWaits(progress, reveal, whole)`: with a picture (or the lock screen) the content is on screen
+  from the commit's first frame, not parked until `ncReveal` first moves (a commit in Choreographer's input phase gave one
+  frame of home's picture over live home). `revealUsable`'s dead `stale` parameter removed.
+- AC3 re-measured (diff.py defaults, rows 0-1660, slowmo 20; `tools/shots/b037s2_r2_ac3/{home,app}`): over the app PASS
+  (0 of 288 cells, overall mean 0.33; the next frame the same). Over home 17 of 288 cells: 12 are the sheet's glass clock
+  entering at the top (rows 0-140, by design: it arrives at once and drops), with that band masked 5 of 264 cells, overall
+  mean 0.14, 0.0 % of pixels past 12, worst 2.5: the Calendar widget's four top corners (home's recorded Picture loses the
+  widget's outline clip, CLAUDE.md's "a Picture of a view is drawn in software") and one glass numeral's edge. Edge-only.
+  The round 1 tone step on every glyph edge was the doubled frame this round fixed. `frame_glitch.py` 0 glitches on both
+  (`b037s2_r2_home20.mp4`, `b037s2_r2_app20.mp4`).
+- Orchestrator rulings: AC2 amended to "matches pass 10's landing, rms < 6 pt, 90 % in 170-240 ms" (the plan's 115 ms
+  described the bulk of the slide): met (`NcRevealTest`). AC3's remaining edge-only tone difference waived while it stays
+  edge-only (D-049). AC6: a landscape app's snapshot is used when the shade is landscape too (same orientation,
+  `NcReveal.usable`), the fallback fade otherwise.
+
+### Round 3 (QA FAIL, 2026-10-29)
+- P2, the clock gone in the commit's first frame over home: QA's pull was held while home still played the new theme's
+  reveal (the dock's icons change look in the held frames). Then the old look is a still picture over home, and the new
+  items stay at alpha 0 until the reveal's front reaches them. `recordAsShown` records `fg` alone: home without its big
+  clock (date and numerals) and with the small clock fading in. Fix: home marks a recording exact only when it is made at
+  rest (`isIdle`, no look or wallpaper reveal), and any later draw of home outdates it (`HomeBridge.shown`, `ShownPicture`;
+  `HomeActivity.recorded`, `drawWatch`). The shade takes home's picture only while it is exact, and checks again at the
+  commit. Otherwise the content fades in, the fallback the plan already has. `ShownPictureTest`. Emulator, slowmo 5: QA's
+  repro (`tools/shots/r3_theme/hi`, f031 held, f032 the first after the commit) shows the same clock in both, with the
+  content fading in ("[nc] commit: no picture of what was behind"). The plain release over home still zooms ("home's icons
+  zoom and fade"; f036/f037 of `r3_plain`, the clock and date in both). Over an app it fades (`r3_app`, f046/f047).
+- P3, the settings' sample of `motion.nc.reveal-zoom`: a sample of its own (`Kind.ZOOM_AWAY`). Notification Center is
+  whole underneath, and home's icons over it grow about the centre on `NcReveal.scale` with `comp.nc.glass.reveal-zoom`,
+  fading on `NcReveal.alpha` (`tools/shots/r3_sample_stage.png`).
+- Follow-up (orchestrator's call, "nothing pops"): since round 2 the content is whole from the commit's first frame, and
+  the list's dim over the sheet's wallpaper (`list.dim`, 0.28 black) stepped in with it (r3_plain f036→f037: clock band
+  212 → 163). At a commit whose content is whole (`revealWhole`) the dim now comes in from 0 on the reveal's own role
+  (`motion.nc.reveal-zoom` over home with a picture, `motion.nc.reveal` otherwise): `NcReveal.dimFrom`,
+  `NotificationCenterView.dimAtCommit`, called from `Shade.ncCommit`. A content fade-in is unchanged. Emulator, slowmo 5,
+  one notification (a list): over home the held frame and the frames after it change gradually (`r4_home1`: 214.7 at the
+  hold, then 202.6, 169.9, rest 166.8; the recorder catches few frames), over the app 2.9-3.7 grey levels a frame at the
+  commit (`r4_app2`, settling at 170). Two notifications show as the collapsed stack, which has no dim (`r4_home`).
+
+### Round 4 (QA FAIL on AC6, the owner chose a fourth round for that bug alone, 2026-10-29)
+- P2, a pull over an app that had just opened drew its starting window (the gear on a plain colour) inside the sheet at the
+  commit: Android reports the starting window as the app in front, so a fresh picture of it was handed over as not stale,
+  and the out-of-date check (`contentChangedAt` against the picture's time) caught it only for later requests. Fix: the
+  picture comes with a check the shade asks again at the commit (`BackdropSource.App.stillShown`, `App.outdated`,
+  `GestureNav.shadePicture`); changed since, the picture is dropped and the content fades in (`Shade.ncCommit`, "[nc]
+  commit: the app's picture is no longer what it shows"). `AppPictureTest`. Review: APPROVE. QA: PASS_WITH_MANUAL_CHECKS
+  (3 of 3 cold starts of Settings with no splash after the commit, `tools/shots/qa4_bug1..3`; an app open 7 s fades,
+  `qa4_app`; home zooms with the clock, `qa4_home`; smoke PASS).
+- Left open: B-139 (the held slab shows the starting window through the hold and gives way in one frame at the commit),
+  B-140 to B-144 (log cap, the sample's end, how often an app falls back on the S24, the gate's time bound under load,
+  slow motion at the landing).
+- Gate: `scripts/check.sh` green when run with the machine idle (fidelity_capture_test.sh times out under load: B-143).

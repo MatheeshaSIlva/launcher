@@ -190,7 +190,14 @@ object GestureNav {
     private val contentChangedAt = ConcurrentHashMap<String, Long>()
 
     /** Our latest picture of [pkg] was taken before its screen last changed (it would show the app as it was). */
-    private fun keptIsStale(pkg: String?): Boolean = pkg != null && (contentChangedAt[pkg] ?: 0L) > (imagesAt[pkg] ?: 0L)
+    private fun keptIsStale(pkg: String?): Boolean = pkg != null && dev.launcher.app.shade.BackdropSource.App.outdated(contentChangedAt[pkg], imagesAt[pkg] ?: 0L)
+
+    /**
+     * A picture of [pkg] taken at [takenAt], handed to the shade, which can ask later whether the app's screen changed since:
+     * one taken while the app's launch screen showed (it came to the front as the app) is outdated once the app draws.
+     */
+    private fun shadePicture(pkg: String, b: Bitmap, takenAt: Long, stale: Boolean) =
+        dev.launcher.app.shade.BackdropSource.App(b, stale) { !dev.launcher.app.shade.BackdropSource.App.outdated(contentChangedAt[pkg], takenAt) }
 
     /** From NavAccessibilityService: the window of [pkg] changed its content or scrolled. */
     fun onContentChanged(pkg: String?) {
@@ -653,7 +660,7 @@ object GestureNav {
         val pkg = bringing ?: lastFrontPkg
         val kept = pkg?.let { images[it] }
         if (shadeLogs < 6) { shadeLogs++; AppLog.log("[shade] behind: $pkg, kept picture ${if (kept != null) "${SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L)} ms old" else "none"}${if (pkg != null && keptIsStale(pkg)) " (stale)" else ""}") }
-        if (kept != null) then(dev.launcher.app.shade.BackdropSource.App(kept, keptIsStale(pkg)))
+        if (kept != null && pkg != null) then(shadePicture(pkg, kept, imagesAt[pkg] ?: 0L, keptIsStale(pkg)))
         val fresh = kept == null || keptIsStale(pkg) || SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L) > 2_000L
         val s = ShizukuLink.service ?: run { if (kept == null) then(null); return }
         if (!fresh) return
@@ -667,7 +674,7 @@ object GestureNav {
                 val b = try { snapshot(s, task.id, true) } catch (_: Throwable) { null }
                 if (shadeLogs < 12) { shadeLogs++; AppLog.log("[shade] fresh picture of $pkg: ${if (b != null) "${SystemClock.uptimeMillis() - t0} ms" else "none"}") }
                 nav.post {
-                    if (b != null) { remember(task.pkg, b, t0); then(dev.launcher.app.shade.BackdropSource.App(b)) }
+                    if (b != null) { remember(task.pkg, b, t0); then(shadePicture(task.pkg, b, t0, stale = false)) }
                     else if (kept == null) then(null)
                 }
             }

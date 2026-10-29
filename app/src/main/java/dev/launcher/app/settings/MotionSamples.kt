@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Rect
 import dev.launcher.app.motion.AppStyle
 import dev.launcher.app.motion.Moment
 import dev.launcher.app.motion.Moments
+import dev.launcher.app.shade.nc.NcReveal
 import kotlin.math.PI
 import kotlin.math.sin
 
@@ -72,7 +73,7 @@ internal object MotionSamples {
     /** How a sample moves: the kind of motion, drawn where the element is. */
     enum class Kind {
         APP, APP_CANCEL, DEPTH, SWITCH, SWITCH_BACK, CARD_FADE, GROW, SLIDE_DOWN, SLIDE_UP, SLIDE_SIDE, FADE, PRESS, MOVE, FLY,
-        LEVEL, ROLL, WIGGLE, ZOOM, REVEAL, RESIZE, LIFT, BANNER, CHARGE,
+        LEVEL, ROLL, WIGGLE, ZOOM, REVEAL, RESIZE, LIFT, BANNER, CHARGE, ZOOM_AWAY,
     }
 
     /**
@@ -210,6 +211,7 @@ internal object MotionSamples {
         add("nc.time-fade", Spec(Kind.FADE, Rect(0.7f, 0.42f, 0.9f, 0.45f), 0f, 1f, m("nc.time-fade")))
         for (n in listOf("nc.pull-dim-home", "nc.pull-dim-app", "nc.reveal", "nc.lens-in")) add(n, Spec(Kind.FADE, WHOLE, 0f, 1f, m(n)))
         add("nc.pull-undim", Spec(Kind.FADE, WHOLE, 1f, 0f, m("nc.pull-dim-app")))
+        add("nc.reveal-zoom", Spec(Kind.ZOOM_AWAY, WHOLE))
         add("nc.clock-drop", Spec(Kind.SLIDE_DOWN, CLOCK, 0f, 1f, m("nc.clock-drop")))
         add("nc.date-in", Spec(Kind.FADE, CLOCK, 0f, 1f, m("nc.date-in")))
         add("nc.bar-fade", Spec(Kind.FADE, STATUS, 1f, 0f, m("nc.bar-fade")))
@@ -415,6 +417,28 @@ internal object MotionSamples {
                 c.drawRoundRect(a.left, a.top + a.height() * 0.08f * kk, a.right, a.bottom + a.height() * 0.08f * kk, cornerOf(a), cornerOf(a), kit.paint)
                 card(kit, c, a.left, a.top, a.right, a.bottom, 1f)
                 c.restore()
+            }
+            Kind.ZOOM_AWAY -> {
+                // Notification Center arrived; home's icons over it grow about the centre past the token's zoom and fade, as
+                // the commit's reveal does (shade/nc/NcReveal).
+                val scene = kit.scene
+                if (scene != null) scene.drawNotificationCenter(c, 1f) else page(kit, c, 0f, 0f, w, h, kit.corner, 1f)
+                val al = NcReveal.alpha(kk, zooms = true)
+                if (al > 0.003f) {
+                    val s = NcReveal.scale(kk, dev.launcher.app.design.Design.num(dev.launcher.app.shade.NcTokens.GLASS_REVEAL_ZOOM))
+                    c.save()
+                    c.scale(s, s, w / 2f, h / 2f)
+                    val b = kit.home
+                    if (scene != null) scene.drawHome(c, al)
+                    else if (b != null) {
+                        kit.src.set(0, 0, b.width, b.height)
+                        kit.dst.set(0f, 0f, w, h)
+                        kit.image.alpha = (255 * al).toInt()
+                        c.drawBitmap(b, kit.src, kit.dst, kit.image)
+                        kit.image.alpha = 255
+                    }
+                    c.restore()
+                }
             }
             Kind.BANNER -> banner(kit, c, k)
             // Over the bar itself, after it ([drawOverBar]); a card where no phone is drawn.

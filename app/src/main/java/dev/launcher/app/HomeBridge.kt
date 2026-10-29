@@ -15,6 +15,25 @@ import java.util.concurrent.ConcurrentHashMap
 class HomePicture(val wallpaper: Picture?, val content: Picture)
 
 /**
+ * Which recording of home is exactly what home shows now: one made at rest, until home draws again. One made mid-motion never
+ * is: during a new look's reveal the old look's picture covers home and the new items wait unseen until the front reaches
+ * them, and a recording (home's content alone) showed home without its clock (B-037 step 2, slice 2a2: Notification Center's
+ * commit drew it). Generic on what identifies a recording, for its tests.
+ */
+class ShownPicture<T : Any> {
+    @Volatile private var exact: T? = null
+
+    /** [p] was just recorded; [atRest]: nothing on home moved or covered it. */
+    fun recorded(p: T?, atRest: Boolean) { exact = if (atRest) p else null }
+
+    /** Home drew again after the recording: it may show something else now. */
+    fun drew() { exact = null }
+
+    /** [p] is what home shows now. Any thread. */
+    fun isExactly(p: T?): Boolean = p != null && p === exact
+}
+
+/**
  * What gesture navigation (nav thread) needs from the home screen (main thread): where each visible app icon is, hiding
  * an icon while a card flies into or out of it, recorded pictures of home to draw behind cards, and when home has
  * actually drawn after coming back.
@@ -47,6 +66,9 @@ object HomeBridge {
     }
 
     @Volatile var home: Home? = null
+
+    /** Which picture of home (its content) is exactly what home shows now ([ShownPicture]); written by home. */
+    val shown = ShownPicture<Picture>()
 
     /** Home at rest as currently shown (page, drawer, folder), recorded whenever it settles. */
     @Volatile var preview: HomePicture? = null

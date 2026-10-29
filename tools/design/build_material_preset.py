@@ -139,6 +139,7 @@ ROLES = {
     'motion.nc.pull-dim-app': ('effects', 'default'),
     'motion.nc.pull-undim': ('effects', 'fast'),
     'motion.nc.reveal': ('effects', 'fast'),
+    'motion.nc.reveal-zoom': ('spatial', 'fast'),
     'motion.nc.lens-in': ('effects', 'default'),
     'motion.nc.bar-fade': ('effects', 'default'),
     'motion.nc.date-in': ('effects', 'default'),

@@ -580,7 +580,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         // of home again at the start of the gesture: 11-15 ms GPU frames at the start of a pull, traced on the S24).
         if (!drawnSinceRecord) HomeBridge.preview?.let { return it }
         for (c in screen.clocks) c.refresh(animate = false)
-        return screen.withHidden(null) { record() }?.also { recorded() }
+        return screen.withHidden(null) { record() }?.also { recorded(it) }
     }
 
     // Whether home has drawn a frame since its picture for gesture nav was recorded (a draw in the same frame as the
@@ -588,10 +588,15 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
     private var drawnSinceRecord = true
     private var recordedAt = 0L
 
-    private fun recorded() { drawnSinceRecord = false; recordedAt = android.os.SystemClock.uptimeMillis() }
+    private fun recorded(p: HomePicture) {
+        drawnSinceRecord = false
+        recordedAt = android.os.SystemClock.uptimeMillis()
+        // (Mid-motion it is not what shows: a new look's reveal covers home with the old look, its items still unseen.)
+        HomeBridge.shown.recorded(p.content, atRest = screen.isIdle && !screen.revealingLook && !screen.wallpaperView.transitioning)
+    }
 
     private val drawWatch = ViewTreeObserver.OnDrawListener {
-        if (android.os.SystemClock.uptimeMillis() - recordedAt > 6) drawnSinceRecord = true
+        if (android.os.SystemClock.uptimeMillis() - recordedAt > 6) { drawnSinceRecord = true; HomeBridge.shown.drew() }
     }
 
     override fun afterNextDraw(then: () -> Unit, timeoutMs: Long, label: String?) {
@@ -656,7 +661,7 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         for (c in screen.clocks) c.refresh(animate = false)
         val p = screen.withHidden(null) { record() } ?: return
         HomeBridge.setPreview(p)
-        recorded()
+        recorded(p)
         val pkg = lastLaunched ?: return
         if (!HomeBridge.hasWithout(pkg)) HomeBridge.putWithout(pkg, recordWithout(pkg))
         AppLog.log("[home] home changed out of sight behind $pkg: pictures of home recorded again")
@@ -675,8 +680,9 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         if (HomeBridge.touching) { recordPreviewSoon(); return }
         // The clock stops updating while home is in the background: make it show the time now before recording.
         for (c in screen.clocks) c.refresh(animate = false)
-        HomeBridge.setPreview(record() ?: return)
-        recorded()
+        val p = record() ?: return
+        HomeBridge.setPreview(p)
+        recorded(p)
     }
 
     private var previewTries = 0

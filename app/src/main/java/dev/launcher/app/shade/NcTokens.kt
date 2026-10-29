@@ -118,6 +118,8 @@ object NcTokens {
     val GLASS_DIM = ColorKey("comp.nc.glass.dim")
     val GLASS_INTERIOR_DIM = ColorKey("comp.nc.glass.interior.dim")
     val GLASS_LENS_STRENGTH = NumberKey("comp.nc.glass.lens-strength")
+    /** How far home's icons inside the sheet have zoomed when about half faded on a commit (B-037 step 2: shade/nc/NcReveal). */
+    val GLASS_REVEAL_ZOOM = NumberKey("comp.nc.glass.reveal-zoom")
 
     /** How far above its place the glass numerals enter on a commit (pt): they drop that far on `motion.nc.clock-drop`. */
     val CLOCK_DROP = NumberKey("comp.nc.clock.drop")
@@ -129,6 +131,6 @@ object NcTokens {
         MENU_GAP, LOOK_DIM, LOOK_BLUR, LAND_CLOCK_X, LAND_CLOCK_TOP, LAND_CLOCK_HEIGHT, LAND_DATE_SIZE, LAND_DATE_GAP, LAND_LIST_TOP,
         LAND_LIST_RIGHT, LAND_LIST_BOTTOM,
         GLASS_BAND, GLASS_MIRROR, GLASS_STRETCH_FROM, GLASS_MIRROR_FROM, GLASS_CORNER, GLASS_SIDE, GLASS_SIDE_FROM, GLASS_RIM_WIDTH,
-        GLASS_RIM_COLOR, GLASS_RIM_FRINGE, GLASS_FRINGE_OUT, GLASS_FRINGE_IN, GLASS_DISPERSION, GLASS_DIM, GLASS_INTERIOR_DIM, GLASS_LENS_STRENGTH,
+        GLASS_RIM_COLOR, GLASS_RIM_FRINGE, GLASS_FRINGE_OUT, GLASS_FRINGE_IN, GLASS_DISPERSION, GLASS_DIM, GLASS_INTERIOR_DIM, GLASS_LENS_STRENGTH, GLASS_REVEAL_ZOOM,
         CLOCK_DROP).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
 }

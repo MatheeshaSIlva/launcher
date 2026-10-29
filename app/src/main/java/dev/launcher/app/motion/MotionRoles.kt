@@ -169,6 +169,7 @@ object MotionRoles {
         r("nc.pull-dim-app", "Pull dims an app", "What is behind dimming as Notification Center is pulled down over an app."),
         r("nc.pull-undim", "Pull let go", "The dim clearing when a pull falls back."),
         r("nc.reveal", "Contents arriving", "Notification Center's own contents arriving once a pull is let go open."),
+        r("nc.reveal-zoom", "Home giving way", "Home's icons inside Notification Center zooming and fading as a pull over home is let go open."),
         r("nc.lens-in", "Glass edge arriving", "The bent edge of the pulled sheet taking hold when the picture behind it comes late."),
         r("nc.bar-fade", "Status bar fading", "The status bar fading away as Notification Center is pulled over home, and back."),
         r("nc.clock-drop", "Clock dropping", "The glass clock dropping into place when Notification Center opens."),

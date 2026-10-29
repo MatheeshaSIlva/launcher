@@ -73,6 +73,17 @@ class NcGlassProfileTest {
         assertTrue(NcGlassProfile.contentWaits(0.5f, 0f))
     }
 
+    @Test fun withAPictureOrOnTheLockScreenTheContentIsWholeFromTheCommit() {
+        // (B-037 step 2, slice 2a2: what was behind gives way over it instead.)
+        assertEquals(1f, NcGlassProfile.contentAlpha(0.76f, 0.01f, whole = true), 0f)
+        assertEquals(1f, NcGlassProfile.contentAlpha(0.5f, 0f, whole = true), 0f)
+        assertEquals(0f, NcGlassProfile.contentAlpha(0f, 0.5f, whole = true), 0f)
+        assertEquals(0.01f, NcGlassProfile.contentAlpha(0.76f, 0.01f, whole = false), 0f)
+        // On screen from the commit's first frame, before the reveal has moved (round 2's review).
+        assertFalse(NcGlassProfile.contentWaits(0.76f, 0f, whole = true))
+        assertTrue(NcGlassProfile.contentWaits(0.76f, 0f, whole = false))
+    }
+
     // B-037 step 2 (docs/plans/B-037.md slice 2a1): the content is still under a moving outline.
     private val tok = 135f
     private val disp = 120f

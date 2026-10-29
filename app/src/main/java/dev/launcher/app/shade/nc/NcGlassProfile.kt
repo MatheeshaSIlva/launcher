@@ -49,17 +49,20 @@ object NcGlassProfile {
 
     /**
      * The sheet's own content over the clear slab: invisible while closed, whole while it waits off screen, then fading in on
-     * the reveal (over the lock screen too: the slab's wallpaper lies still under it, so the two are the same picture and the
-     * fade is only the overlay and the platters arriving).
+     * the reveal; [whole]: whole at once from the commit (B-037 step 2: a picture of what was behind gives way over it, or
+     * the lock screen, whose wallpaper lies still under it).
      */
-    fun contentAlpha(progress: Float, reveal: Float): Float = when {
+    fun contentAlpha(progress: Float, reveal: Float, whole: Boolean = false): Float = when {
         progress <= 0.002f -> 0f
-        reveal <= 0f -> 1f
+        reveal <= 0f || whole -> 1f
         else -> reveal.coerceAtMost(1f)
     }
 
-    /** The content waits drawn but off the screen while a pull holds the clear slab ([contentAlpha] is 1 there). */
-    fun contentWaits(progress: Float, reveal: Float): Boolean = progress > 0.002f && reveal <= 0f
+    /**
+     * The content waits drawn but off the screen while a pull holds the clear slab ([contentAlpha] is 1 there); [whole]: it is
+     * on screen from the commit's first frame, before its reveal has moved (a picture of what was behind lies over it).
+     */
+    fun contentWaits(progress: Float, reveal: Float, whole: Boolean = false): Boolean = progress > 0.002f && reveal <= 0f && !whole
 
     /**
      * The content never moves once the sheet shows (B-037 step 2, pass 10: the wallpaper and the lock screen's things stay

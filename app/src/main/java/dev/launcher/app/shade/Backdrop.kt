@@ -32,11 +32,20 @@ import kotlin.math.max
 sealed class BackdropSource {
     abstract fun draw(c: Canvas, w: Float, h: Float)
 
-    /** [stale]: its screen changed after this picture was taken (it would show the app as it was). */
-    class App(val bitmap: Bitmap, val stale: Boolean = false) : BackdropSource() {
+    /**
+     * [stale]: its screen changed after this picture was taken (it would show the app as it was). [stillShown] asks the same
+     * again later (Notification Center's commit): a picture taken while the app's launch screen showed (its starting window
+     * comes to the front as the app) is outdated once the app's own window draws, after the picture was handed over.
+     */
+    class App(val bitmap: Bitmap, val stale: Boolean = false, val stillShown: () -> Boolean = { !stale }) : BackdropSource() {
         private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
         private val dst = RectF()
         override fun draw(c: Canvas, w: Float, h: Float) { dst.set(0f, 0f, w, h); c.drawBitmap(bitmap, null, dst, paint) }
+
+        companion object {
+            /** The app's screen last changed at [changedAt] (uptime ms, null: never seen), after a picture taken at [takenAt]. */
+            fun outdated(changedAt: Long?, takenAt: Long): Boolean = (changedAt ?: 0L) > takenAt
+        }
     }
 
     /** The wallpaper as the screen shows it (over the lock screen; One UI shows the home wallpaper there too). */

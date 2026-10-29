@@ -167,6 +167,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val ncEdge = dev.launcher.app.shade.nc.NcGlassEdge(ctx)
     /** Over the lock screen, the wallpaper inside that outline, under the sheet (B-037 step 2): One UI's lock screen never shows through. */
     private val ncWall = dev.launcher.app.shade.nc.NcSlabWallpaper(ctx)
+    /** What was behind the slab, drawn inside the sheet's outline as a pull commits, giving way (B-037 step 2, slice 2a2). */
+    private val ncPic = dev.launcher.app.shade.nc.NcRevealPicture(ctx)
     /** Android's shade (a layout's `shade` panel): Quick Settings over the notifications in one panel. */
     private val shadeView: ShadePanelView
     private val banner: BannerView
@@ -306,6 +308,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         root.addView(backdrop, FrameLayout.LayoutParams(mp, mp))
         root.addView(ncWall, FrameLayout.LayoutParams(mp, mp))
         root.addView(nc, FrameLayout.LayoutParams(mp, mp))
+        root.addView(ncPic, FrameLayout.LayoutParams(mp, mp))
         root.addView(ncEdge, FrameLayout.LayoutParams(mp, mp))
         root.addView(cc, FrameLayout.LayoutParams(mp, mp))
         root.addView(shadeView, FrameLayout.LayoutParams(mp, mp))
@@ -349,7 +352,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private val ncPanel: Panel = object : Panel(ShadeStructure.Kind.NOTIFICATION_CENTER, "Notification Center") {
         override fun opening() { nc.prepare(); if (ncReveal.target < 1f) nc.clockWaits(); media.refresh(); ncEdge.locked = locked; ncWall.locked = locked; ncWall.wallpaper = nc.wallpaper; prepareLens() }
-        override fun cleanUp() { nc.onClosed(); ncRest(); ncEdge.clearPicture(); lensHome = null }
+        override fun cleanUp() { nc.onClosed(); ncRest(); ncEdge.clearPicture(); lensHome = null; revealEnds() }
         override fun gone() { nc.progress = 0f }
         override val openCurve get() = NC_OPEN
         override val closeCurve get() = NC_CLOSE
@@ -373,8 +376,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         override fun releaseOpens(progress: Float, dy: Float, vy: Float) = dev.launcher.app.shade.nc.NcGlassProfile.releaseOpens(progress, vy, FLING)
         override fun pullBegins(caught: Boolean) = ncPullBegins()
         override fun opensFully() = ncCommit()
-        override fun closes() = ncFallBack()
-        override fun goesUnder() = ncFallBack()
+        override fun closes() = ncCloses()
+        override fun goesUnder() = ncCloses()
         override fun touch(e: MotionEvent) = nc.dispatchTouchEvent(e)
         override fun back() = nc.onBack()
         override fun swipeBand(out: android.graphics.RectF) = nc.swipeBand(out)
@@ -758,6 +761,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val ncDim = MotionValue(0f, 1000f, { applyProgress() })
     /** The status bar over home while the slab is pulled (1 shown), on `motion.nc.bar-fade`. */
     private val ncBar = MotionValue(1f, 1000f, { bar.setFade(it) })
+    /** How far what was behind has given way inside the sheet (0..1): on `motion.nc.reveal-zoom` over home, `motion.nc.reveal` over an app. */
+    private val ncPicK: MotionValue = MotionValue(0f, 1000f, { applyProgress() }, { revealRests() })
+    private var revealLogs = 0
+    /** `comp.nc.glass.reveal-zoom`, read as a reveal begins. */
+    private var ncZoom = 2f
 
     private fun MotionValue.goTo(to: Float, role: CurveKey) { if (target != to) animateTo(to, Motion.role(role)) }
 
@@ -777,14 +785,53 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (home) ncBar.goTo(0f, MotionTokens.NC_BAR_FADE)
     }
 
-    /** The pull opens it: its content arrives over the slab, the dim clears under it and the bar comes back. */
+    /**
+     * The pull opens it: its content arrives over the slab and the bar comes back. The dim below the edge holds until the
+     * sheet has landed ([applyProgress]). With a picture of what was behind, the content is whole at once and the picture
+     * gives way over it inside the outline (home's icons zooming, an app fading); over the lock screen the content is whole
+     * at once with no picture; else it fades in on `motion.nc.reveal`.
+     */
     private fun ncCommit() {
         // The bands at the edge bend the sheet's own wallpaper from here (pass 10), not what was behind the slab.
         nc.wallpaper?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true) }
-        if (ncReveal.target < 1f) nc.clockDrops()
+        if (ncReveal.target < 1f) {
+            nc.clockDrops()
+            // Home's picture only while it is still what home shows (home drew since: the content fades in instead). Taken
+            // mid-way through a new look's reveal it had no clock where the held frame showed one (QA, round 3).
+            val homeMoved = ncPic.zooms && !dev.launcher.app.HomeBridge.shown.isExactly(ncPic.held as? android.graphics.Picture)
+            // The app's likewise: one taken while its launch screen showed is outdated once the app has drawn (QA, round 4).
+            val appMoved = ncPicApp?.let { ncPic.held === it.bitmap && !it.stillShown() } == true
+            if (locked || homeMoved || appMoved) ncPic.clear()
+            ncPicApp = null
+            if ((homeMoved || appMoved) && revealLogs < 6) { revealLogs++; AppLog.log("[nc] commit: ${if (homeMoved) "home's picture is no longer what home shows" else "the app's picture is no longer what it shows"}") }
+            nc.revealWhole = locked || ncPic.has
+            // (The list's dim over the sheet's wallpaper comes in with what gives way, not at once.)
+            nc.dimAtCommit(nc.revealWhole, Motion.role(if (ncPic.has && ncPic.zooms) MotionTokens.NC_REVEAL_ZOOM else MotionTokens.NC_REVEAL))
+            if (revealLogs < 6) { revealLogs++; AppLog.log("[nc] commit: ${if (locked) "the lock screen, whole at once" else if (!ncPic.has) "no picture of what was behind: the content fades in" else if (ncPic.zooms) "home's icons zoom and fade" else "the app fades"}") }
+            if (ncPic.has) {
+                ncZoom = dev.launcher.app.design.Design.num(NcTokens.GLASS_REVEAL_ZOOM)
+                ncPicK.snapTo(0f)
+                ncPicK.goTo(1f, if (ncPic.zooms) MotionTokens.NC_REVEAL_ZOOM else MotionTokens.NC_REVEAL)
+            }
+        }
         ncReveal.goTo(1f, MotionTokens.NC_REVEAL)
-        ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
+    }
+
+    /** It starts closing (or goes under the other panel): a pull falls back; a sheet that arrived clears its dim as it goes. */
+    private fun ncCloses() {
+        if (ncReveal.target < 1f) ncFallBack() else if (ncDim.target > 0f) ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+    }
+
+    /** The picture has given way: it goes (its GPU image with it). */
+    private fun revealRests() { if (ncPicK.value >= 1f) ncPic.clear() }
+
+    /** The reveal's picture goes and the next pull starts clear. */
+    private fun revealEnds() {
+        ncPicK.snapTo(0f)
+        ncPic.clear()
+        ncPicApp = null
+        nc.revealWhole = false
     }
 
     /** The pull falls back (or the panel goes under another): the dim clears and the bar comes back. */
@@ -839,6 +886,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val ncEdgeY = if (ncP != null) nc.edgeY else 0f
         ncEdge.set(ncEdgeY, ncDim.value, nc.edgeChrome, nc.edgeRadius, ncReveal.target >= 1f)
         ncWall.set(ncEdgeY, nc.edgeRadius, if (ncReveal.value >= 1f) 0f else 1f)
+        ncPic.set(ncEdgeY, nc.edgeRadius, ncPicK.value, ncZoom, ncP != null && ncReveal.target >= 1f)
+        // The dim below the edge holds from the commit until the sheet is down (where nothing below it shows), then clears.
+        if (ncP != null && ncReveal.target >= 1f && ncDim.target > 0f &&
+            dev.launcher.app.shade.nc.NcGlassProfile.landed(ncEdgeY, root.height.toFloat())) ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         bar.setClearSlab(ncP != null && ncReveal.value <= 0f)
         if (ccP == null && ncP == null && shP == null) {
             cc.progress = 0f
@@ -1021,6 +1072,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var backdropLogs = 0
 
     private var lensHome: HomePicture? = null
+    /** The app's picture [ncPic] was given (asked again at the commit), or null. */
+    private var ncPicApp: BackdropSource.App? = null
 
     /**
      * The sharp picture the clear slab's lens bands bend, fetched as a pull begins (B-037): an app's kept picture as it is (a
@@ -1035,9 +1088,16 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             when (src) {
                 // (A kept picture of an app whose screen changed since would show the old one, sharp, against the live content:
                 // the lens waits for the fresh picture, rim and dim only until then.)
-                is BackdropSource.App -> if (!src.stale) ncEdge.setPicture(src.bitmap, android.graphics.Matrix().apply { setScale(root.width.toFloat() / src.bitmap.width, root.height.toFloat() / src.bitmap.height) })
+                is BackdropSource.App -> if (!src.stale) {
+                    ncEdge.setPicture(src.bitmap, android.graphics.Matrix().apply { setScale(root.width.toFloat() / src.bitmap.width, root.height.toFloat() / src.bitmap.height) })
+                    if (revealUsable(src.bitmap.width, src.bitmap.height)) { ncPic.setApp(src.bitmap); ncPicApp = src }
+                }
                 is BackdropSource.Wall -> ncEdge.setPicture(src.wallpaper.bitmap, src.wallpaper.matrix(root.width, root.height), wall = true)
                 is BackdropSource.Home -> {
+                    // (Its content alone, over the sheet's wallpaper: with the system drawing the wallpaper the content is
+                    // opaque black, and the content fades instead; nor one recorded mid-motion, which is not what shows.)
+                    val content = src.picture.content
+                    if (src.picture.wallpaper != null && revealUsable(content.width, content.height) && dev.launcher.app.HomeBridge.shown.isExactly(content)) ncPic.setHome(content)
                     if (src.picture === lensHome) return@backdrop
                     lensHome = src.picture
                     BlurBaker.bake(src, root.width, root.height, 0.5f, 0f, 0, handler) { bmp, m ->
@@ -1047,6 +1107,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             }
         }
     }
+
+    private fun revealUsable(w: Int, h: Int) = dev.launcher.app.shade.nc.NcReveal.usable(w, h, root.width, root.height, stale = false)
 
     private fun finishClose() {
         val was = panel

@@ -2482,6 +2482,10 @@
    "pt": 36,
    "src": "judged:iOS 27 capture pass 10's c82 crop (the flipped word is content ~22-36 pt above the edge)"
   },
+  "comp.nc.glass.reveal-zoom": {
+   "factor": 2.0,
+   "src": "measured:iOS 27 capture pass 10 test81 F566 (on commit over home the icons inside the sheet are ~2x their size when about half faded, +62 ms; they go on growing as they fade: shade/nc/NcReveal.REACH)"
+  },
   "comp.nc.glass.rim-color": {
    "color": "#f5e6c8cc",
    "src": "judged:from pass 10's rim (tan over dark, yellow-olive over white): a warm light"
