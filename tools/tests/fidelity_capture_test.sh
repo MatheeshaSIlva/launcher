@@ -48,11 +48,20 @@ VERBOSE="${VERBOSE:-}"
 # its bound is scaled down (capture.sh's POLL_SCALE; every poll still tries at least once, the retries still run)
 POLL_SCALE="${POLL_SCALE:-0.1}"
 # Every fake adb call is a bash fork (~60-80 ms on Windows), so the scenarios run in a pool of JOBS at a time, not all at once
-# (30 at once starved each other past their time bounds). CAP_TIMEOUT bounds one capture.sh/golden.sh run, HANG_WAIT the wait for a
-# hung run to reach its hang (seconds).
+# (30 at once starved each other past their time bounds).
+# The bounds, in seconds (B-143). The work here is fixed, its speed is not: a process start costs 0.1-0.4 s on the Windows dev
+# machine, several times that under load, and one golden capture (8 states) took 140 s alone and 490 s inside this test's own pool
+# on an idle machine (2026-10-29), so a wall-clock bound of 600 s per run failed whenever anything ran beside the test, with no
+# logic failure. What a run is stopped for is a stall: no progress (no fake adb call, no output) for STALL_S stops a run
+# (bounded), and for HANG_WAIT the wait for a run to reach its hang (wait_hang). STALL_S is 40 times the longest quiet stretch of a
+# healthy run (golden.sh's eight pngopt.py calls after its capture: ~15 s alone). CAP_TIMEOUT is only the backstop for a run that
+# keeps calling the fake without end (every loop in capture.sh is bounded), TEST_TIMEOUT the whole test's. Each kills the whole
+# process tree it bounds (bounded, kill_tree).
 JOBS_MAX="${JOBS_MAX:-6}"
-CAP_TIMEOUT="${CAP_TIMEOUT:-600}"
-HANG_WAIT="${HANG_WAIT:-120}"
+STALL_S="${STALL_S:-600}"
+CAP_TIMEOUT="${CAP_TIMEOUT:-3600}"
+HANG_WAIT="${HANG_WAIT:-$STALL_S}"
+TEST_TIMEOUT="${TEST_TIMEOUT:-7200}"
 export REAL_SLEEP="$(command -v sleep)"
 BIN="$WORK/bin"; mkdir -p "$BIN"
 
@@ -325,21 +334,56 @@ lastlineno() { grep -nF -- "$1" "$S/adb.log" | tail -1 | cut -d: -f1; }
 snap() { ( cd "$1/dev" && find . -type f ! -path '*/dev-out/*' ! -path '*/dev-in/*' ! -name 'hang*' -print0 | sort -z | xargs -0 md5sum ); }
 muts() { grep -c '^MUT ' "$S/adb.log"; }
 
+# ---------------------------------------------------------------- the bounds (B-143)
+progressed() {   # MARK: true when the scenario's run wrote its adb log or its output since MARK was touched (then touched again; bash's -nt: no fork)
+  if [ "$S/adb.log" -nt "$1" ] || [ "$S/out.txt" -nt "$1" ]; then : > "$1"; return 0; fi
+  return 1
+}
+kill_tree() {   # PID: KILLs every process under it (read from /proc: no fork), then it, and the process group of any of them that leads one
+  local c pp
+  for c in /proc/[0-9]*; do
+    { read -r pp < "$c/ppid"; } 2>/dev/null || continue   # (a process gone since the glob: its entry is gone too)
+    [ "$pp" = "$1" ] && kill_tree "${c#/proc/}"
+  done
+  kill -KILL -- "-$1" 2>/dev/null; kill -KILL "$1" 2>/dev/null
+  return 0
+}
+# A bounded run: timeout puts it in a process group of its own (timeout's pid is the group's number), TERMs the group at CAP_TIMEOUT
+# and KILLs it 10 s later; meanwhile a run with no progress for STALL_S is TERMed the same way (through timeout: checked every 5 s),
+# and once timeout is back, whatever is left of the group is KILLed. timeout returns as soon as its own child is gone: golden.sh
+# dies at the TERM at once, while the capture.sh it started traps TERM to put the device back and went on as an orphan (PPID 1) in
+# the scenario's folder, beside the scenario's next run (which it broke: its prior's dirty marker refused that run) and loading the
+# machine for every run after it (66 such processes after one stalled check, 2026-10-29).
+bounded() {   # CMD...: RC its exit status, 124 when a bound stopped it (BOUND says which); its whole process tree is gone on return
+  local tp sp fin st mark="$S/.progress" quiet=0
+  BOUND=""; : > "$mark"
+  timeout -k 10 "$CAP_TIMEOUT" "$@" & tp=$!
+  while :; do
+    "$REAL_SLEEP" 5 & sp=$!
+    wait -n -p fin "$tp" "$sp"; st=$?
+    if [ "$fin" = "$tp" ]; then RC=$st; kill -PIPE "$sp" 2>/dev/null; wait "$sp" 2>/dev/null; break; fi   # (PIPE: bash reports no death by it)
+    [ -n "$fin" ] || kill -0 "$tp" 2>/dev/null || { wait "$tp"; RC=$?; break; }   # (never seen: the run gone with no status from wait -n)
+    if progressed "$mark"; then quiet=0; else quiet=$((quiet + 5)); fi
+    if [ -z "$BOUND" ] && [ "$quiet" -ge "$STALL_S" ]; then BOUND="made no progress for $STALL_S s"; kill -TERM "$tp" 2>/dev/null; fi
+  done
+  kill -KILL -- "-$tp" 2>/dev/null   # (nothing is left after a run that ended by itself)
+  if [ -n "$BOUND" ] || [ "$RC" = 124 ] || [ "$RC" = 137 ]; then RC=124; BOUND="${BOUND:-ran past $CAP_TIMEOUT s}"; fi   # (137: timeout's KILL of its group reached timeout too)
+}
+
 # capture.sh against the fake: run_cap [ENV=..] -- ARGS...; output in $S/out.txt, exit in RC
 run_cap() {
   local envs=() T0=$SECONDS
   while [ "$1" != -- ]; do envs+=("$1"); shift; done; shift
-  env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE=emulator-5554 FID_PRIOR="$S/prior" FAKE_STATE="$S" POLL_SCALE="$POLL_SCALE" "${envs[@]}" \
-    timeout "$CAP_TIMEOUT" bash "$REPO/tools/fidelity/capture.sh" "$@" > "$S/out.txt" 2>&1 < /dev/null
-  RC=$?
+  bounded env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE=emulator-5554 FID_PRIOR="$S/prior" FAKE_STATE="$S" POLL_SCALE="$POLL_SCALE" "${envs[@]}" \
+    bash "$REPO/tools/fidelity/capture.sh" "$@" > "$S/out.txt" 2>&1 < /dev/null
   timed_out capture.sh
 }
 
 # ---------------------------------------------------------------- results (a scenario writes lines to $S/result)
 FAILS=0
-# A run killed by its time bound (timeout exits 124) is told apart from a failed check: "TIMED OUT after N s". The bounds are
-# generous multiples of the measured times of a scenario's longest run (see JOBS below), never a part of what a check asserts.
-timed_out() { { echo "=== run: $1 (exit $RC)"; cat "$S/out.txt"; } >> "$S/allout.txt"; echo "$((SECONDS - T0)) s  $NAME: $1" >> "$WORK/runs.txt"; [ "$RC" = 124 ] && echo "FAIL  $NAME: TIMED OUT after $CAP_TIMEOUT s ($1 killed by its time bound: a slow machine or too many jobs, not a logic failure)" >> "$S/result"; return 0; }
+# A run stopped by a bound (RC 124, see bounded) is told apart from a failed check: "TIMED OUT". The bounds catch a hung run, never a
+# slow one (see STALL_S), and are never a part of what a check asserts.
+timed_out() { { echo "=== run: $1 (exit $RC)"; cat "$S/out.txt"; } >> "$S/allout.txt"; echo "$((SECONDS - T0)) s  $NAME: $1" >> "$WORK/runs.txt"; [ "$RC" = 124 ] && echo "FAIL  $NAME: TIMED OUT: $1 $BOUND and was killed with its whole process tree (a hung run, not a logic failure)" >> "$S/result"; return 0; }
 chk() {   # chk "description" CONDITION-COMMAND...  (records PASS or FAIL in $S/result)
   local d="$1"; shift
   if "$@" > /dev/null 2>&1; then echo "PASS  $NAME: $d" >> "$S/result"; else echo "FAIL  $NAME: $d" >> "$S/result"; fi
@@ -672,7 +716,20 @@ sc_notrest() {
   finish
 }
 
-wait_hang() { local i; for ((i = 0; i < HANG_WAIT * 10; i++)); do [ -f "$S/dev/hanging" ] && return 0; "$REAL_SLEEP" 0.1; done; echo "FAIL  $NAME: TIMED OUT after $HANG_WAIT s waiting for the run to reach its hang (a kill or a stall, not a logic failure)" >> "$S/result"; return 1; }
+wait_hang() {   # until the run (run_bg) reaches its hang. Load only slows it (B-143): it fails when the run ends first, or makes no
+  # progress (no fake adb call, no output) for HANG_WAIT s, and then the run is killed with its whole process tree
+  local mark="$S/.progress" quiet=0
+  : > "$mark"
+  until [ -f "$S/dev/hanging" ]; do
+    kill -0 "$PID" 2>/dev/null || { echo "FAIL  $NAME: the run ended before it reached its hang" >> "$S/result"; return 1; }
+    "$REAL_SLEEP" 0.5
+    if progressed "$mark"; then quiet=0; else quiet=$((quiet + 1)); fi
+    if [ "$quiet" -ge $((HANG_WAIT * 2)) ]; then
+      kill_tree "$PID"
+      echo "FAIL  $NAME: TIMED OUT: the run made no progress for $HANG_WAIT s before its hang and was killed with its whole process tree (a hung run, not a logic failure)" >> "$S/result"; return 1
+    fi
+  done
+}
 run_bg() {   # ARGS: capture.sh in the background -> PID
   : > "$S/out.txt"   # (appended to below: a file opened for append keeps the lines of a trap that runs after a kill)
   env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE=emulator-5554 FID_PRIOR="$S/prior" FAKE_STATE="$S" POLL_SCALE="$POLL_SCALE" \
@@ -755,9 +812,8 @@ d.rectangle([60, 300, 1000, 900], fill=(60, 120, 200, 255))
 im.save(sys.argv[1])" "$1"; }
 run_golden() {   # run_golden ARGS...: golden.sh on the fake; output in $S/out.txt, exit in RC
   local T0=$SECONDS
-  env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE="${GDEVICE:-emulator-5554}" FID_PRIOR="$S/prior" FAKE_STATE="$S" POLL_SCALE="$POLL_SCALE" \
-    GOLDEN_STAGE="$S/stage" timeout "$CAP_TIMEOUT" bash "$REPO/tools/fidelity/golden.sh" "$@" > "$S/out.txt" 2>&1 < /dev/null
-  RC=$?
+  bounded env -u MSYS_NO_PATHCONV PATH="$BIN:$PATH" ADB="$BIN/adb" DEVICE="${GDEVICE:-emulator-5554}" FID_PRIOR="$S/prior" FAKE_STATE="$S" POLL_SCALE="$POLL_SCALE" \
+    GOLDEN_STAGE="$S/stage" bash "$REPO/tools/fidelity/golden.sh" "$@" > "$S/out.txt" 2>&1 < /dev/null
   timed_out golden.sh
 }
 sc_golden() {
@@ -1262,9 +1318,22 @@ sc_qa3_edge() {   # $1 = eq | below | above | overcap | gone-alone | unreadable-
 # ---------------------------------------------------------------- run them, JOBS_MAX at a time (the slowest first)
 JOBS=()
 timed() { local t0=$SECONDS; "$@"; echo "$((SECONDS - t0)) s  $NAME" >> "$WORK/times.txt"; }
+# The whole test's bound (B-143): a sleep beside the jobs; when it ends first, every job still running is killed with its process
+# tree (and the test fails). They are killed the same way when the test itself is interrupted (INT, TERM, HUP): no run outlives it.
+kill_jobs() { local j; for j in "${JOBS[@]}"; do kill_tree "$j"; done; }
+"$REAL_SLEEP" "$TEST_TIMEOUT" & DEADLINE=$!
+trap 'kill -PIPE "$DEADLINE" 2>/dev/null; [ -n "${KEEP:-}" ] || rm -rf "$WORK"' EXIT
+trap 'echo "fidelity_capture_test: interrupted: every scenario still running is killed with its process tree" >&2; kill_jobs; exit 130' INT TERM HUP
+running() { jobs -rp | grep -cvx "$DEADLINE"; }   # the jobs still running (the deadline's sleep left out)
+reap() {   # waits for a job to end; when it is the deadline, the others are killed
+  local p=""
+  wait -n -p p 2>/dev/null
+  if [ "$p" = "$DEADLINE" ]; then : > "$WORK/over_time"; kill_jobs; fi
+}
 job() {
   [ -z "${ONLY:-}" ] || [[ " $* " == *" $ONLY "* ]] || return 0
-  while [ "$(jobs -rp | wc -l)" -ge "$JOBS_MAX" ]; do wait -n 2>/dev/null || true; done
+  [ ! -e "$WORK/over_time" ] || return 0
+  while [ "$(running)" -ge "$JOBS_MAX" ]; do reap; done
   ( timed "$@" ) & JOBS+=($!)
 }
 job sc_golden   # (the longest ones first, golden in three scenarios so that its parts overlap: the longest bounds the run)
@@ -1341,10 +1410,12 @@ job sc_qa3_edge above
 job sc_qa3_edge overcap
 job sc_qa3_edge gone-alone
 job sc_qa3_edge unreadable-then-readable
-for j in "${JOBS[@]}"; do wait "$j"; done
+while [ "$(running)" -gt 0 ]; do reap; done
+kill -PIPE "$DEADLINE" 2>/dev/null
 
 [ -z "$VERBOSE" ] || { sort -rn "$WORK/times.txt" 2>/dev/null | sed 's/^/time  /'; sort -rn "$WORK/runs.txt" 2>/dev/null | head -5 | sed 's/^/run   /'; }
 for r in "$WORK"/*/result; do [ -f "$r" ] && cat "$r"; done > "$WORK/all.txt"
+[ ! -e "$WORK/over_time" ] || echo "FAIL  the whole test: TIMED OUT after $TEST_TIMEOUT s (TEST_TIMEOUT): every scenario still running was killed with its process tree" >> "$WORK/all.txt"
 cat "$WORK/all.txt"
 FAILS=$(grep -c '^FAIL' "$WORK/all.txt"); PASSES=$(grep -c '^PASS' "$WORK/all.txt")
 SCEN=$(ls "$WORK"/*/result 2>/dev/null | wc -l)
