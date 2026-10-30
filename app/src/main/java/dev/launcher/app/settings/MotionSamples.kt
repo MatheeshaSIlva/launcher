@@ -181,7 +181,6 @@ internal object MotionSamples {
         for (n in listOf("scroll.deceleration", "scroll.rubber-band")) add(n, Spec(Kind.MOVE, LIST, drive = m("scroll.overscroll-return")))
         // Control Center.
         pair("cc.open", "cc.close", Kind.SLIDE_DOWN, CC)
-        add("cc.close-style", Spec(Kind.FADE, CC, 1f, 0f, m("cc.open")))
         add("cc.settle", Spec(Kind.MOVE, CC))
         add("cc.stretch-back", Spec(Kind.MOVE, CC))
         pair("cc.press-in", "cc.press-out", Kind.PRESS, CONTROL)

@@ -433,13 +433,6 @@
    ],
    "src": "measured:iOS 27 (docs/IOS27_MOTION.md): Control Center closing takes ~0.18 s"
   },
-  "motion.cc.close-style": {
-   "spring": [
-    0.2,
-    1.0
-   ],
-   "src": "judged:Control Center's closing choreography blending in and out"
-  },
   "motion.cc.drop": {
    "spring": [
     0.34,

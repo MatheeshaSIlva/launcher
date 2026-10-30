@@ -424,7 +424,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 // Down: the controls are pulled below their place as when opening; up: the panel fades with the finger
                 // and the controls lift with it a little.
                 1 -> {
-                    cc.closing(dy < 0f)
                     if (dy > 0f) { progress.snapTo(dragFrom); ccOffset.snapTo(offsetFrom + ccPull(dy)); lastPullDy = dy }
                     else { progress.snapTo((dragFrom + dy / ccCloseTravel()).coerceIn(0f, 1f)); ccOffset.snapTo(offsetFrom + dy * 0.15f) }
                 }
@@ -441,14 +440,13 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         override fun pullBegins(caught: Boolean) {
             pullOffsetFrom = if (caught) ccOffset.value else 0f
             ccOffset.stop()
-            if (caught) cc.closing(false)
         }
         override fun followed(dy: Float) { lastPullDy = dy; ccOffset.snapTo(pullOffsetFrom + ccPull(dy)) }
         // The controls rise from where the finger held them, carrying its speed into the spring.
         override fun released(vy: Float) { ccOffset.animateTo(0f, CC_SETTLE, ccPullVelocity(lastPullDy, vy)) }
-        override fun opensFully() { cc.closing(false); ccOffset.animateTo(0f, CC_SETTLE) }
-        // iOS 27: the controls lift a few points as they fade; ours also fold back into the corner (ControlCenterView.closing).
-        override fun closes() { cc.closing(true); ccOffset.animateTo(-8f * u(), CC_CLOSE) }
+        override fun opensFully() { ccOffset.animateTo(0f, CC_SETTLE) }
+        // iOS 27: the controls lift a few points as they fade; ours also fold back into the corner (CcPanel.leaving).
+        override fun closes() { ccOffset.animateTo(-8f * u(), CC_CLOSE) }
         override fun goesUnder() { if (!(ccOffset.isAnimating && ccOffset.target < 0f)) closes() }
         override fun rests() { cc.prerecord() }
     }

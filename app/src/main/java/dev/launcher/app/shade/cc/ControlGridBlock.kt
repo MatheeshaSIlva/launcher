@@ -560,17 +560,14 @@ class ControlGridBlock(
         out.top = t
         out.w = w; out.h = h
         out.scale = (0.55f + 0.45f * min(appear, 1f)) * (1f + 0.035f * a.press.value) * (1f + 0.05f * a.lift.value)
-        var fade = k
-        val cs = panel.closingK.coerceIn(0f, 1f)
-        if (cs > 0.001f) {
-            val cx = out.left + w / 2f
-            val cy = t + h / 2f
-            val e = leaving(cx, cy) * cs
-            out.left += (panel.cornerX - cx) * CcClose.PULL * e
-            out.top += -cy * CcClose.PULL * e
-            out.scale *= 1f - CcClose.SHRINK * e
-            fade = k + ((1f - leaving(cx, cy)) - k) * cs
-        }
+        // Out of the corner Control Center is pulled from as it opens, back into it as it closes, the nearest first.
+        val cx = out.left + w / 2f
+        val cy = t + h / 2f
+        val e = leaving(cx, cy)
+        out.left += (panel.cornerX - cx) * CcClose.PULL * e
+        out.top += -cy * CcClose.PULL * e
+        out.scale *= 1f - CcClose.SHRINK * e
+        val fade = 1f - e
         out.alpha = fade * appear.coerceIn(0f, 1f) * (if (edit > 0f && a !== dragged) 1f - 0.08f * edit else 1f)
         // A module grown into its large form: it is that form while it stands in for it (CcExpanded starts and ends as the
         // module), and the others give way.

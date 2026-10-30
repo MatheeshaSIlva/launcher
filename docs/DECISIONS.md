@@ -476,3 +476,13 @@ not the lock screen) holds home's arrival's first frame under the cover, and onc
 `comp.nc.close.arrival-at` (0.3 of the screen, judged) home plays its unlock arrival (`HomeBridge.PanelArrival`) while the
 cover and its dim dissolve on `motion.nc.close-uncover`; a close taken back lets home go back to rest unseen; home busy (a
 menu, the App Library, a card) keeps the old fade. Over apps the stand-in stays until 2c3.
+
+### D-056: Control Center unfolds from its corner every time (2026-10-30) [owner]
+The owner: the pull "feels a bit weird: sometimes the elements just fade in and glide from the top but other times the proper
+animation, elements flowing from the top right, happens". Cause: the corner fold was a closing-only state (`closeK`, on
+`motion.cc.close-style`), cleared at once only when a close finished; a pull that caught a closing panel, or a drag that
+turned, opened with the fold still on (the corner flow), an ordinary pull without it (fade and glide). The owner calls the
+corner the proper motion: the controls now unfold out of the corner Control Center is pulled from as it opens and fold back
+into it as it closes, on the panel's own progress (the nearest first in, last out; the pull's glide stays), every time. The
+toggle and its role `motion.cc.close-style` ("Closing choreography", which no longer moved anything) are removed from the
+code, the presets, Moments and the samples.

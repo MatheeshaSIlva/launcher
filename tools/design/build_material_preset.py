@@ -101,7 +101,6 @@ ROLES = {
     # Control Center
     'motion.cc.open': ('spatial', 'slow'),
     'motion.cc.close': ('spatial', 'default'),
-    'motion.cc.close-style': ('effects', 'fast'),
     'motion.cc.settle': ('spatial', 'default'),
     'motion.cc.stretch-back': ('spatial', 'default'),
     'motion.cc.press-in': ('spatial', 'fast'),

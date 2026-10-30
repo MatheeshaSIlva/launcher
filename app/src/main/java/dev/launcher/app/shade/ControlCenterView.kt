@@ -91,7 +91,6 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
     override val view: View get() = this
     override val panelWidth: Int get() = width
     override val panelHeight: Int get() = height
-    override val closingK: Float get() = closeK.value
 
     override var u = 1f
         private set
@@ -233,17 +232,11 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
     override fun presence(): Float = kotlin.math.sqrt(progress.coerceIn(0f, 1f))
 
     /**
-     * Closing (0 not .. 1 closing, on a spring, so a panel grabbed back while it closes never jumps): the controls fold
-     * back into the corner Control Center is pulled from, the farthest first, each shrinking and drifting toward it as it
-     * fades (iOS 27 only lifts them a little and fades them; Matheesha found that cheap). Opening is left as it was.
+     * The controls unfold out of the corner Control Center is pulled from as it opens and fold back into it as it closes,
+     * on the panel's own progress (so they follow the finger, and a panel grabbed back never jumps): each shrinks and drifts
+     * toward the corner as it fades, the nearest first in, last out (iOS 27 only fades them in and lifts them a little;
+     * Matheesha found that cheap, and the corner the proper motion: it once played only after a close was caught).
      */
-    private val closeK = MotionValue(0f, 100f, inv)
-
-    fun closing(on: Boolean) {
-        val t = if (on) 1f else 0f
-        if (closeK.target != t) closeK.animateTo(t, CLOSE_STYLE)
-    }
-
     override val cornerX: Float get() = if (fromLeft) 0f else width.toFloat()
 
     /** How far a control centred at [cx], [cy] has left (0..1): the farther from the corner it folds into, the sooner. */
@@ -256,7 +249,6 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
 
     /** The panel finished closing: edit mode ends, presses end. */
     fun onClosed() {
-        closeK.snapTo(0f)
         grid.closed()
         buttons.cancel()
     }
@@ -297,9 +289,6 @@ class ControlCenterView(ctx: Context, override val host: Host) : View(ctx), CcPa
         return true
     }
 
-    private companion object {
-        val CLOSE_STYLE get() = dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.CC_CLOSE_STYLE)
-    }
 }
 
 /** Control Center's columns: the user's count (the shade layout's option) and the room for them. */

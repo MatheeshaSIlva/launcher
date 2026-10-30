@@ -411,7 +411,6 @@ SEED = {
     'motion.switcher.flick-speed': {'factor': 900, 'src': 'judged:faster than this (dp/s), or a third of its height'},
     'motion.switcher.reflow': {'spring': [0.38, 0.92], 'src': 'judged:the gap closing'},
     # The shade's, Control Center's, the status bar's and edit mode's springs (they were in code; same values).
-    'motion.cc.close-style': {'spring': [0.2, 1.0], 'src': "judged:Control Center's closing choreography blending in and out"},
     'motion.cc.press-in': {'spring': [0.22, 1.0], 'src': 'judged:a control pressed'},
     'motion.cc.press-out': {'spring': [0.38, 0.7], 'src': 'judged:a control let go (springing back)'},
     'motion.cc.toggle': {'spring': [0.32, 0.9], 'src': 'judged:a control turning on or off'},

@@ -45,24 +45,18 @@ class TopButtonsBlock(private val panel: CcPanel, private val onPlus: () -> Unit
         val mat = Design.material(CcTokens.BUTTON)
         val symbol = sf.pt(CcTokens.BUTTON_SYMBOL)
         val col = Design.color(CcTokens.BUTTON_SYMBOL_COLOR)
-        val cs = panel.closingK.coerceIn(0f, 1f)
-        val k0 = panel.presence()
         val corner = panel.cornerX
         for (i in 0..1) {
             var x = x(i)
             var y = y
             val p = if (i == 0) plusPress.value else powerPress.value
             var s = 1f + 0.08f * p
-            var k = k0
-            if (cs > 0.001f) {
-                // As the controls: back into the corner (see CcPanel.closingK).
-                val e = panel.leaving(x, y)
-                x += (corner - x) * CcClose.PULL * e * cs
-                y += -y * CcClose.PULL * e * cs
-                s *= 1f - CcClose.SHRINK * e * cs
-                k += ((1f - e) - k) * cs
-            }
-            k *= base
+            // As the controls: out of the corner and back into it (see CcPanel.leaving).
+            val e = panel.leaving(x, y)
+            x += (corner - x) * CcClose.PULL * e
+            y += -y * CcClose.PULL * e
+            s *= 1f - CcClose.SHRINK * e
+            val k = (1f - e) * base
             if (k <= 0.003f) continue
             val d = r * 2f
             c.save()

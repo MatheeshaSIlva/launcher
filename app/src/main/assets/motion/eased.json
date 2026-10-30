@@ -178,16 +178,6 @@
    "ms": 420,
    "src": "judged:test preset: iOS 27's spring (0.34 s, damping 1.0) as a bezier (emphasized decelerate, 420 ms)"
   },
-  "motion.cc.close-style": {
-   "bezier": [
-    0.05,
-    0.7,
-    0.1,
-    1
-   ],
-   "ms": 250,
-   "src": "judged:test preset: iOS 27's spring (0.2 s, damping 1.0) as a bezier (emphasized decelerate, 250 ms)"
-  },
   "motion.cc.drop": {
    "bezier": [
     0.3,

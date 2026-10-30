@@ -87,7 +87,7 @@ object Moments {
         ks("menu.open", "menu.close", "alert.open", "alert.close", "sheet", "widgets.row", "widgets.preview", "menu.blur", "widgets.row-stagger"))
 
     val CONTROL_CENTER = Moment("cc", MomentPart.SHADE, "Control Center", "Control Center coming down and going.",
-        ks("cc.open", "cc.settle", "cc.close", "cc.close-style", "cc.stretch-back"),
+        ks("cc.open", "cc.settle", "cc.close", "cc.stretch-back"),
         glue = ks("cc.backdrop-hold"))
     val CONTROLS = Moment("controls", MomentPart.SHADE, "Controls", "A control pressed and turning on, a slider following, a module expanding.",
         ks("cc.press-in", "cc.press-out", "cc.toggle", "cc.level", "cc.expanded.open", "cc.expanded.close", "cc.expanded.level"),

@@ -29,7 +29,7 @@ class MomentsTest {
         assertEquals(mapOf(MomentPart.APPS to 4, MomentPart.HOME to 6, MomentPart.LIBRARY to 2, MomentPart.SHADE to 7,
             MomentPart.STATUS_BAR to 3, MomentPart.EVERYWHERE to 2), perPart)
         // (Notification Center's 20: B-037 step 2 added nc.reveal-zoom, then nc.clock-lift.)
-        assertEquals(listOf(5, 4, 2, 9, 4, 2, 4, 12, 9, 4, 8, 9, 5, 7, 9, 20, 11, 4, 5, 5, 5, 4, 3, 4), Moments.ALL.map { it.roles.size })
+        assertEquals(listOf(5, 4, 2, 9, 4, 2, 4, 12, 9, 4, 8, 9, 4, 7, 9, 20, 11, 4, 5, 5, 5, 4, 3, 4), Moments.ALL.map { it.roles.size })
         // The glue: animations nobody sees on their own follow their moment, unlisted (2c1 added nc.date-out, nc.close-uncover).
         assertEquals(25, Moments.ALL.sumOf { it.glue.size })
         assertEquals("ids twice", Moments.ALL.size, Moments.ALL.map { it.id }.toSet().size)

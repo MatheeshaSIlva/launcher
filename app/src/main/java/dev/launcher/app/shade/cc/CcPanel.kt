@@ -23,19 +23,21 @@ interface CcPanel {
     val pullOffset: Float
     /** The controls' opacity for how present the panel is: quickly in, and they outlast the blur when it closes. */
     fun presence(): Float
-    /** Closing (0 not .. 1 closing, on a spring): everything folds back into the corner Control Center is pulled from. */
-    val closingK: Float
     /** That corner's x (px): the top right, or the top left where the layout's place pulls Control Center from the left. */
     val cornerX: Float
-    /** How far something centred at [cx], [cy] has left as the panel closes (0..1): the farther from the corner, the sooner. */
+    /**
+     * How far something centred at [cx], [cy] is from its place for how present the panel is (0 in place .. 1 in the corner):
+     * opening, everything unfolds out of the corner Control Center is pulled from, the nearest first; closing, it folds back.
+     */
     fun leaving(cx: Float, cy: Float): Float
     val host: ControlCenterView.Host
 }
 
 /**
- * How Control Center folds back into its corner as it closes (judged: iOS 27 only lifts the controls a little and fades
- * them; Matheesha found that cheap): how much of the close the nearest control waits, how far each drifts toward the corner
- * (of its distance), how much it shrinks.
+ * How Control Center unfolds out of its corner as it opens and folds back into it as it closes, the same way both ways
+ * (judged: iOS 27 fades the controls in at their size and only lifts them a little closing; Matheesha found that cheap and
+ * called the corner the proper motion, 2026-10-30): how much of the way the nearest control waits, how far each drifts
+ * toward the corner (of its distance), how much it shrinks.
  */
 object CcClose {
     const val STAGGER = 0.45f

@@ -127,7 +127,6 @@ object MotionRoles {
     val CONTROL_CENTER = MotionGroup("Control Center", "The controls panel.", listOf(
         r("cc.open", "Opening", "Control Center finishing its way in after a pull."),
         r("cc.close", "Closing", "Control Center going."),
-        r("cc.close-style", "Closing choreography", "The controls' closing blending in and out."),
         r("cc.settle", "Settling", "The controls settling as it opens."),
         r("cc.stretch-back", "Stretch back", "The panel stretched by an overpull going back."),
         r("cc.press-in", "Control pressed", "A control as it is pressed."),
