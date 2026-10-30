@@ -497,3 +497,16 @@ the sheet draws no wallpaper; its glass, glass clock and status-bar tone refract
 veiled as the panel's background (the picture Control Center's glass samples, made a `Wallpaper` off the UI threads,
 `Wallpaper.of`); the content comes in with the pull, the clock still drops at the commit and lifts at the close, and home's
 arrival after a close eases into its first frame (nothing covers home there).
+
+## D-058: Notification Center over a live blur keeps its glass sheet (2026-10-30)
+
+The owner, on D-057's build: "where's the sheet of glass for the notification panel? it should still be there with the
+blur". D-057 had dropped the sheet (no clear slab, edge, lens, reveal or drift; the content faded in over a blur growing
+with the pull). Now the live background changes only what the sheet shows: the same sheet as with the wallpaper (the clear
+slab a finger holds, its edge and lens, the commit's reveal, the close's drift, cover and home's arrival), showing what was
+behind at the pull, blurred and veiled as the panel's background, in place of the wallpaper. Once it has landed the live
+blur under the shade takes over from that picture (`ncLiveK`, in on `motion.nc.reveal`: the picture fades as the blur
+comes), so what is behind moves on; a close brings the picture back over it (`motion.nc.date-out`) and below the rising
+edge what is behind is sharp. With no picture ready at the commit, the blur comes in with the content instead (logged).
+The wallpaper below the edge (the lock screen's, the close's cover) stays the phone's own. Checked on the emulator: a held
+pull, landing, rest and a close mid-way.

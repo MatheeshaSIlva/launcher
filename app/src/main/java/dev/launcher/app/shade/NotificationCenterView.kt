@@ -260,8 +260,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     }
 
     private fun showContent() {
-        // Over a live blur the content comes in with the pull, as Control Center's controls (their presence: quickly in).
-        if (live) { alpha = kotlin.math.sqrt(progress.coerceIn(0f, 1f)); translationX = 0f; return }
         alpha = dev.launcher.app.shade.nc.NcGlassProfile.contentAlpha(progress, reveal, revealWhole)
         translationX = if (dev.launcher.app.shade.nc.NcGlassProfile.contentWaits(progress, reveal, revealWhole)) width.toFloat() else 0f
     }
@@ -305,16 +303,23 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
 
     /** The sheet does not slide: its content is still ([NcGlassProfile.contentStill]) and the outline moves; closed, it is parked above. */
     override fun sheetY(): Float =
-        if ((live && progress > 0.002f) || (!live && dev.launcher.app.shade.nc.NcGlassProfile.contentStill(progress))) 0f else -height.toFloat()
+        if (dev.launcher.app.shade.nc.NcGlassProfile.contentStill(progress)) 0f else -height.toFloat()
 
     /**
-     * Over a live blur (`comp.nc.background` "live", set by the shade at each opening): the sheet draws no wallpaper (the blur
-     * under the shade shows what is behind, blurred live, as under Control Center), its content is whole and comes in with
-     * the pull, and its glass, clock and tone refract [behind]: what was behind at the pull, blurred and veiled as the panel's
-     * background (the picture Control Center's glass samples). No clear slab, edge, lens, reveal picture, cover nor drift.
+     * Over a live blur (`comp.nc.background` "live", set by the shade at each opening): the sheet is the same glass sheet (the
+     * clear slab, its edge and lens, the reveal, the drift), but what it shows is [behind], what was behind at the pull blurred
+     * and veiled as the panel's background, in place of the wallpaper; its glass, clock and tone refract that. Once it has
+     * landed the live blur under the shade takes over from that picture ([liveK]).
      */
     var live = false
-        set(v) { if (field != v) { field = v; frosts.clear(); bgKey = Long.MIN_VALUE; updateEdge(); showContent(); invalidate() } }
+        set(v) { if (field != v) { field = v; frosts.clear(); bgKey = Long.MIN_VALUE; invalidate() } }
+
+    /**
+     * How far the live blur under the shade has taken over from the sheet's picture of what was behind (0..1, live only): the
+     * picture's node fades by it (a property, nothing recorded again).
+     */
+    var liveK = 0f
+        set(v) { if (field != v) { field = v; bgNode.setAlpha(1f - v.coerceIn(0f, 1f)); invalidate() } }
 
     /** What was behind at the pull as a wallpaper (live only), once made; the phone's wallpaper stands in until then. */
     var behind: Wallpaper? = null
@@ -355,14 +360,6 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         val h = height.toFloat()
         // (A whole pixel: the outline takes ints, and the edge, the wallpaper and the lens all draw at this same edge.)
         val y = Math.round(min(progress, 1f) * h).toFloat()
-        if (live) {
-            // (No outline: the content is whole; the edge is only where the pull is, for the shade's choices.)
-            if (drift != 0f) { drift = 0f; bgNode.setTranslationY(0f); drifted.clear() }
-            drifting = false
-            edgeY = y; edgeRadius = 0f; edgeChrome = 0f
-            if (clipToOutline) clipToOutline = false
-            return
-        }
         val tok = tokenCorner()
         if (displayR < 0f) displayR = displayCorner().also {
             val line = "[nc] display corner radius ${it.roundToInt()} px ($displaySource)"
@@ -421,6 +418,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
 
     fun onClosed() {
         behind = null
+        liveK = 0f
         closing = false
         drifting = false
         drift = 0f
@@ -531,8 +529,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         // The wallpaper with its overlay is a layer of its own once the overlay rests (not a full-screen pass every frame
         // of a scroll); while the overlay fades in or out it is drawn directly, one pass a frame.
         // (Drifting, it is the node: it moves as a property.)
-        if (live) Unit   // (the live blur under the shade is the background)
-        else if (list.dim.isAnimating && drift == 0f) drawWallpaper(c, under)
+        // (Over a live blur always the node: it fades as the blur takes over.)
+        if (!live && list.dim.isAnimating && drift == 0f) drawWallpaper(c, under)
         else {
             val bk = ((System.identityHashCode(wallpaper).toLong() shl 20) xor (Math.round(Appearance.dark * 255f).toLong() shl 8)) xor width.toLong() * 31 xor
                 height.toLong() xor (Math.round(list.dim.value * 255f).toLong() shl 48) xor (Design.version.toLong() shl 36)
