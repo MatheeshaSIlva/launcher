@@ -460,3 +460,10 @@ agent started by reading about 120 KB of roadmap and decision log. Removed: the 
 /progress and /kickoff commands (moved to .claude/_disabled/, so they can come back). Kept: scripts/check.sh and its Stop
 hook, tools/fidelity, "Whole elements, not checklists", and a plain-words update in the chat at each step.
 Supersedes D-037's tracks and D-044.
+
+### D-054: The Stop hook runs the fast check and skips while a check runs (2026-10-30) [owner]
+The Stop hook ran the full `scripts/check.sh` (now 16-47 min) after every turn that left code changed; its 600 s timeout
+ended the hook but not the check, so orphaned checks piled up beside each other and slowed every later one (five at once on
+2026-10-30). Now the hook runs `CHECK_FAST=1` (build, lint, unit tests: seconds when up to date, ~5 min after a change) and
+skips while another check runs (each check leaves its pid in `$TMPDIR/launcher-check.lock`, a dead one's file is cleared).
+The full check, with the shell tests, runs before every push.

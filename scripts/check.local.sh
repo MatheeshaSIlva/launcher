@@ -28,9 +28,21 @@ if ! is_jdk17 "$home"; then
 fi
 export JAVA_HOME="$home"
 
+# Every check running says so in the lock folder (one file per check, its pid): the Stop hook skips while one runs (owner,
+# 2026-10-30: hook checks that outlived the hook's timeout piled up beside each other).
+lockdir="${TMPDIR:-/tmp}/launcher-check.lock"
+mkdir -p "$lockdir" && : > "$lockdir/$$"
+trap 'rm -f "$lockdir/$$"' EXIT
+
 ./gradlew --continue --console=plain assembleDebug lintDebug testDebugUnitTest
 rc=$?
 [ "$rc" -eq 0 ] || echo "gradle exit $rc"
+
+# CHECK_FAST=1 (the Stop hook): build, lint and unit tests only; the shell tests (~40 min) run in the full check before a push.
+if [ "${CHECK_FAST:-0}" = "1" ]; then
+  if [ "$rc" -eq 0 ]; then echo "CHECK PASSED (fast: no shell tests)"; else echo "CHECK FAILED (fast: gradle)"; fi
+  exit "$rc"
+fi
 
 # Shell tests (D-025): every tools/tests/*_test.sh, in name order; each must exit 0.
 failed=""

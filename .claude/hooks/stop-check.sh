@@ -20,7 +20,16 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 changed=$(git status --porcelain | awk '{print $NF}' | grep -Ev '^(docs/|\.claude/)|\.md$' || true)
 [ -n "$changed" ] || exit 0
 
-out=$(scripts/check.sh 2>&1)
+# Skip while another check runs (scripts/check.local.sh leaves its pid in the lock folder): a second one beside it only slows
+# both. The hook runs the fast check (build, lint, unit tests); the full one, with the shell tests, runs before every push.
+lockdir="${TMPDIR:-/tmp}/launcher-check.lock"
+for f in "$lockdir"/*; do
+  [ -e "$f" ] || continue
+  if kill -0 "${f##*/}" 2>/dev/null; then echo "Stop hook: a check is already running (pid ${f##*/}); skipped." >&2; exit 0; fi
+  rm -f "$f"   # (a check that died without cleaning up)
+done
+
+out=$(CHECK_FAST=1 scripts/check.sh 2>&1)
 rc=$?
 if [ "$rc" -ne 0 ]; then
   {
