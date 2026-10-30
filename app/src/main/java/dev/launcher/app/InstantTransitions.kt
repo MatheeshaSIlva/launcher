@@ -210,6 +210,12 @@ class InstantTransitions(private val atm: Any) {
                 return "result ${fromRecents(task, options(noStartingWindow = true))} (home's task $task)"
             } catch (_: Throwable) { }   // gone in between: started as an activity below
         }
+        // With no task of its own (an update's install removes it), home is started by a home intent, not by its name: the
+        // task Android makes for a start by name is an ordinary one, and an ordinary home's task gets a snapshot starting
+        // window at every unlock (a flat grey frame over the lock screen's exit, then home faded in: S24, 2026-10-30, after
+        // an UPDATE). Made for a home intent, it is the home task.
+        val started = if (home) Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            .setPackage(intent.component!!.packageName).addFlags(intent.flags) else intent
         val m = atm.javaClass.methods.filter { it.name == "startActivityAsUser" || it.name == "startActivity" }
             .sortedByDescending { it.name == "startActivityAsUser" }
             .firstOrNull { m -> m.parameterTypes.any { it == Intent::class.java } && m.parameterTypes.any { it == Bundle::class.java } }
@@ -219,7 +225,7 @@ class InstantTransitions(private val atm: Any) {
         var ints = 0
         val args = m.parameterTypes.map { p ->
             when {
-                p == Intent::class.java -> intent
+                p == Intent::class.java -> started
                 p == Bundle::class.java -> bundle
                 p == String::class.java -> if (strings++ == 0) "com.android.shell" else null
                 // requestCode -1, flags 0, then the user (only startActivityAsUser has a third int)
