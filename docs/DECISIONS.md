@@ -452,3 +452,11 @@ of the rise: at most 2-3 edge points over ~100 pt), and computed with the shippe
 all the way (closest ~19 pt at ~240 ms; only the glass's shadow is clipped between ~200 and ~300 ms; the round-1 
 report of a cut at ~150 ms was an estimate). Alternatives: the whole content layer drifting as the plan first said (a gap at the top, the clock
 cut); the close's spring as a follow-up (a visible cut shipped).
+
+### D-053: Back to a single session (2026-10-30) [owner]
+The owner moved back to one Opus session talking directly with him. Measured over Oct 22-30 against Oct 3-21: product commits
+fell from about 16 a day to about 3, review rounds ran past the cap (B-034 five, B-037 slices three to four), and every
+agent started by reading about 120 KB of roadmap and decision log. Removed: the subagents and the /ship, /fix, /audit,
+/progress and /kickoff commands (moved to .claude/_disabled/, so they can come back). Kept: scripts/check.sh and its Stop
+hook, tools/fidelity, "Whole elements, not checklists", and a plain-words update in the chat at each step.
+Supersedes D-037's tracks and D-044.
