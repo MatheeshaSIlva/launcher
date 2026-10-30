@@ -576,7 +576,8 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
 
     override fun panelArrival(step: HomeBridge.PanelArrival) {
         when (step) {
-            HomeBridge.PanelArrival.HOLD -> if (resumed) screen.holdArrival(why = "a panel closes over home")
+            // (Eased into its first frame: over a live blur nothing covers home, and a jump would show through the blur.)
+            HomeBridge.PanelArrival.HOLD -> if (resumed) screen.holdArrival(animate = true, why = "a panel closes over home")
             HomeBridge.PanelArrival.PLAY -> if (!resumed || !screen.playArrival(cold = false)) screen.releaseArrival()
             HomeBridge.PanelArrival.RELEASE -> screen.releaseArrival()
         }

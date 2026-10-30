@@ -486,3 +486,14 @@ corner the proper motion: the controls now unfold out of the corner Control Cent
 into it as it closes, on the panel's own progress (the nearest first in, last out; the pull's glide stays), every time. The
 toggle and its role `motion.cc.close-style` ("Closing choreography", which no longer moved anything) are removed from the
 code, the presets, Moments and the samples.
+
+### D-057: Notification Center over a live blur (2026-10-30) [owner]
+The owner: the background behind Notification Center should be live, blurred as under Control Center (users' own
+backgrounds, with a transition, come later with the token editor). A theme chooses it: `comp.nc.background` "live" (iOS 27's
+default now) or "wallpaper" (iOS 27's lock-screen wallpaper with B-037's clear slab, lens, picture reveal and cover, kept
+whole); `comp.nc.background.material` aliases the shared panel material (Control Center's). Owner's answers: the blur grows
+with the pull as under Control Center (the clear slab goes in live mode), and live over the lock screen too. In live mode
+the sheet draws no wallpaper; its glass, glass clock and status-bar tone refract what was behind at the pull, blurred and
+veiled as the panel's background (the picture Control Center's glass samples, made a `Wallpaper` off the UI threads,
+`Wallpaper.of`); the content comes in with the pull, the clock still drops at the commit and lifts at the close, and home's
+arrival after a close eases into its first frame (nothing covers home there).

@@ -135,6 +135,18 @@ class Wallpaper private constructor(
                 ?.let { android.graphics.BitmapFactory.decodeFile(it.path) }?.also { AppLog.log("[wallpaper] test picture from files/wallpaper.png") }
             val d = if (over != null) null else WallpaperManager.getInstance(ctx).drawable as? BitmapDrawable
             val src = over ?: d?.bitmap ?: throw IllegalStateException("no bitmap wallpaper")
+            of(src, id, colours = true)
+        } catch (t: Throwable) {
+            AppLog.log("[wallpaper] not readable (${t.javaClass.simpleName}: ${t.message}); using the system wallpaper window, no glass")
+            null
+        }
+
+        /**
+         * A wallpaper made of [src] (any picture): the blurs and readings the glass needs. [colours]: its main colours too
+         * (Android's reading, slow: the phone's wallpaper only). Notification Center over a live blur takes what was behind it
+         * at the pull this way (its glass, clock and tone then refract that). Off the UI threads.
+         */
+        fun of(src: Bitmap, id: Int, colours: Boolean = false): Wallpaper {
             val bmp = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
             // What glass on home sees (dock, widgets, Search pill): half size, box radius 2 twice, about 1.5 iOS points of blur,
             // just enough to soften fine detail; clear glass keeps the wallpaper's shapes sharp (heavier blur read as frosted).
@@ -148,12 +160,12 @@ class Wallpaper private constructor(
             boxBlur(heavy, 3, 3)   // at 1/16 size: ≈ 60 px at full size, like iOS's background material
             val top = topLuminance(heavy)
             val mean = meanLuminance(heavy)
-            val colors = try {
+            val colors = if (!colours) emptyList() else try {
                 if (android.os.Build.VERSION.SDK_INT >= 27) android.app.WallpaperColors.fromBitmap(bmp)
                     .let { listOfNotNull(it.primaryColor, it.secondaryColor, it.tertiaryColor).map { c -> c.toArgb() } }
                 else emptyList()
             } catch (_: Throwable) { emptyList() }
-            AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}, colours " +
+            if (colours) AppLog.log("[wallpaper] loaded ${bmp.width}x${bmp.height}, colours " +
                 colors.joinToString(" ") { "#" + String.format("%06x", it and 0xFFFFFF) }.ifEmpty { "unknown" })
             // Kept on the GPU (hardware bitmaps): with ordinary bitmaps Android re-uploaded all three whenever home had been in
             // the background a while (it trims GPU memory then), which stalled the first frame of a home gesture's card (it
@@ -162,10 +174,7 @@ class Wallpaper private constructor(
                 val p = heavy.getPixel(i % heavy.width, i / heavy.width)
                 ((0.2126 * ((p shr 16) and 0xFF) + 0.7152 * ((p shr 8) and 0xFF) + 0.0722 * (p and 0xFF)) / 255.0).toFloat()
             }
-            Wallpaper(gpu(bmp), gpu(small), scale, id, gpu(heavy), heavyScale, top, mean, grid, colors)
-        } catch (t: Throwable) {
-            AppLog.log("[wallpaper] not readable (${t.javaClass.simpleName}: ${t.message}); using the system wallpaper window, no glass")
-            null
+            return Wallpaper(gpu(bmp), gpu(small), scale, id, gpu(heavy), heavyScale, top, mean, grid, colors)
         }
 
         private fun gpu(b: Bitmap): Bitmap = try { b.copy(Bitmap.Config.HARDWARE, false) ?: b } catch (_: Throwable) { b }

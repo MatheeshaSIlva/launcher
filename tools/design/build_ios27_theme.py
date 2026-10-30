@@ -763,6 +763,8 @@ SEED = {
     'comp.nc.clock.lift': {'pt': 250, 'src': "judged:from iOS 27 capture pass 11 test84 (closing, the numerals leave through the screen's top: at least their rest top plus their height, 110 + 96 pt, with the glass's shadow below them, ~40 pt)"},
     'comp.nc.close.drift': {'factor': 0.14, 'src': "measured:iOS 27 captures pass 5 test31 and pass 10 (closing, the sheet's wallpaper drifts down ~14 % of the edge's travel; frames from a simulator without a GPU)"},
     'comp.nc.close.arrival-at': {'factor': 0.3, 'src': "judged:B-037 step 2, slice 2c2 (iOS 27 passes 10, 11: home arrives as the cover sheet goes up, its icons zooming in as after an unlock); home starts arriving once the closing edge has risen past the top 30 % of the screen, the still wallpaper under it dissolving on motion.nc.close-uncover"},
+    'comp.nc.background': {'choice': 'live', 'src': "judged:the owner's choice (2026-10-30): what is behind Notification Center blurred live, as under Control Center; 'wallpaper' is iOS 27's lock-screen wallpaper"},
+    'comp.nc.background.material': {'ref': 'component.panel.material', 'src': "judged:the shared component style (component.panel.material), Control Center's background"},
     # Control Center (docs/tokens/ios27-kit.json "controlCenter"; geometry of the running system where it differs: docs/IOS27_KIT.md)
     'comp.cc.background.material': {'ref': 'ref.material.overlay.control-center', 'src': 'kit:2524:24518'},
     'comp.cc.background.samsung-strength': {'factor': 0.15, 'src': "judged:One UI's dim-to-blur strength (blur and dim come together there; 0.35 and 0.6 were too strong on the S24)"},

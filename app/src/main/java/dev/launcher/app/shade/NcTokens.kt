@@ -129,6 +129,13 @@ object NcTokens {
     val CLOSE_DRIFT = NumberKey("comp.nc.close.drift")
     /** Where a closing sheet's edge has risen to (a fraction of the screen's height) when home starts arriving under it (2c2). */
     val CLOSE_ARRIVAL_AT = NumberKey("comp.nc.close.arrival-at")
+    /**
+     * What lies behind the sheet's content: "live", what is behind it blurred live as under Control Center (the owner, 2026-10-30),
+     * or "wallpaper", iOS 27's lock-screen wallpaper with the clear slab, lens and picture reveal of B-037.
+     */
+    val BACKGROUND = ChoiceKey("comp.nc.background")
+    /** The live background's blur and veil (the shared panel material, as Control Center's). */
+    val BACKGROUND_MATERIAL = MaterialKey("comp.nc.background.material")
 
     val ALL = listOf(PLATTER, CORNER, SYMBOLS, PADDING, ICON, TEXT_X, TEXT_TOP, MIN_HEIGHT, TITLE, BODY, TIME, LABEL, TIME_COLOR, TIME_BLEND,
         MARGIN, GAP, OVERLAY, FADE_TOP, FADE_BOTTOM, FADE_LENGTH, LIST_TOP, LIST_BOTTOM, SHELF_HEIGHT, SHELF_SHOW, SHELF_INSET1, SHELF_INSET2, STACK_TEXT_TOP, STACK_MIN_HEIGHT,
@@ -138,5 +145,5 @@ object NcTokens {
         LAND_LIST_RIGHT, LAND_LIST_BOTTOM,
         GLASS_BAND, GLASS_MIRROR, GLASS_STRETCH_FROM, GLASS_MIRROR_FROM, GLASS_CORNER, GLASS_SIDE, GLASS_SIDE_FROM, GLASS_RIM_WIDTH,
         GLASS_RIM_COLOR, GLASS_RIM_FRINGE, GLASS_FRINGE_OUT, GLASS_FRINGE_IN, GLASS_DISPERSION, GLASS_DIM, GLASS_INTERIOR_DIM, GLASS_LENS_STRENGTH, GLASS_REVEAL_ZOOM,
-        CLOCK_DROP, CLOCK_LIFT, CLOSE_DRIFT, CLOSE_ARRIVAL_AT).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
+        CLOCK_DROP, CLOCK_LIFT, CLOSE_DRIFT, CLOSE_ARRIVAL_AT, BACKGROUND, BACKGROUND_MATERIAL).map { it.name } + dev.launcher.app.components.MenuSpec.NC.all
 }

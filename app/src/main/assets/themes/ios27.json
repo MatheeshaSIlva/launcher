@@ -2352,6 +2352,14 @@
    "ref": "component.card.material",
    "src": "judged:the shared component style (component.card.material)"
   },
+  "comp.nc.background": {
+   "choice": "live",
+   "src": "judged:the owner's choice (2026-10-30): what is behind Notification Center blurred live, as under Control Center; 'wallpaper' is iOS 27's lock-screen wallpaper"
+  },
+  "comp.nc.background.material": {
+   "ref": "component.panel.material",
+   "src": "judged:the shared component style (component.panel.material), Control Center's background"
+  },
   "comp.nc.button.bottom": {
    "pt": 50,
    "src": "kit:5592:29063 (874 - 766 - 58)"
