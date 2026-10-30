@@ -467,3 +467,12 @@ ended the hook but not the check, so orphaned checks piled up beside each other 
 2026-10-30). Now the hook runs `CHECK_FAST=1` (build, lint, unit tests: seconds when up to date, ~5 min after a change) and
 skips while another check runs (each check leaves its pid in `$TMPDIR/launcher-check.lock`, a dead one's file is cleared).
 The full check, with the shell tests, runs before every push.
+
+### D-055: Notification Center's close over home ends in home's arrival (2026-10-30) [owner: artistic freedom]
+The owner (S24): the close "works well but doesn't feel particularly good", and gave artistic freedom within the iOS look.
+The flat moment was 2c1's stand-in: the sheet lifted off a dimmed still wallpaper that then faded into a static home. On iOS
+the cover sheet going up is how home arrives (as after an unlock). Now a close over home (from a landed sheet, home at rest,
+not the lock screen) holds home's arrival's first frame under the cover, and once the edge has risen past
+`comp.nc.close.arrival-at` (0.3 of the screen, judged) home plays its unlock arrival (`HomeBridge.PanelArrival`) while the
+cover and its dim dissolve on `motion.nc.close-uncover`; a close taken back lets home go back to rest unseen; home busy (a
+menu, the App Library, a card) keeps the old fade. Over apps the stand-in stays until 2c3.

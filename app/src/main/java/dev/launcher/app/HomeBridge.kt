@@ -63,7 +63,19 @@ object HomeBridge {
         fun showsPage(): Boolean
         /** Nothing on home moves and no finger is on it (main thread). */
         fun isIdle(): Boolean
+        /** A panel closing over home: its arrival held, played or let go ([PanelArrival]). Main thread. */
+        fun panelArrival(step: PanelArrival)
     }
+
+    /**
+     * Notification Center closing over home (B-037 step 2, slice 2c2): home takes its arrival's first frame out of sight under
+     * the panel ([HOLD]), plays it as the panel leaves, as after an unlock ([PLAY]: iOS's cover sheet going up), or goes back to
+     * rest unseen when the close is taken back ([RELEASE]).
+     */
+    enum class PanelArrival { HOLD, PLAY, RELEASE }
+
+    /** [PanelArrival] from any thread (posted to home's). */
+    fun panelArrival(step: PanelArrival) { main.post { home?.panelArrival(step) } }
 
     @Volatile var home: Home? = null
 

@@ -840,10 +840,30 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (ncReveal.target < 1f) { ncFallBack(); return }
         ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         ncCover.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+        ncArrivalLetGo()
     }
 
     /** The close started over the lock screen (its dim follows the sheet out, no cover), kept for the close's whole way. */
     private var ncCloseLocked = false
+
+    /** The close started over home: home holds its arrival under the cover, and plays it as the sheet leaves (2c2). */
+    private var ncArrival = Arrival.NONE
+    private enum class Arrival { NONE, HELD, PLAYED }
+
+    /** Home arrives under the leaving sheet (its icons zoom in, as after an unlock) and the still wallpaper over it dissolves. */
+    private fun ncArrives() {
+        if (ncArrival != Arrival.HELD) return
+        ncArrival = Arrival.PLAYED
+        dev.launcher.app.HomeBridge.panelArrival(dev.launcher.app.HomeBridge.PanelArrival.PLAY)
+        ncCover.goTo(0f, MotionTokens.NC_CLOSE_UNCOVER)
+        ncDim.goTo(0f, MotionTokens.NC_CLOSE_UNCOVER)
+    }
+
+    /** A close over home that did not get as far as home's arrival: home goes back to rest, unseen under the panel. */
+    private fun ncArrivalLetGo() {
+        if (ncArrival == Arrival.HELD) dev.launcher.app.HomeBridge.panelArrival(dev.launcher.app.HomeBridge.PanelArrival.RELEASE)
+        ncArrival = Arrival.NONE
+    }
 
     /**
      * The arrived sheet starts to close (B-037 step 2, slice 2c1; iOS 27 passes 5, 10, 11): Back, a tap, a drag up from rest,
@@ -868,6 +888,13 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             if (!ncCloseLocked) ncCover.goTo(1f, MotionTokens.NC_PULL_DIM_HOME)
         }
         ncBar.goTo(0f, MotionTokens.NC_DATE_OUT)
+        // Over home (at rest, nothing being brought): home takes its arrival's first frame under the cover, which is whole only
+        // from a landed sheet (one still landing fades it in: home's change would show through).
+        if (!ncCloseLocked && nav.homeShown() && nav.bringing() == null &&
+            dev.launcher.app.shade.nc.NcGlassProfile.landed(nc.edgeY, root.height.toFloat())) {
+            ncArrival = Arrival.HELD
+            dev.launcher.app.HomeBridge.panelArrival(dev.launcher.app.HomeBridge.PanelArrival.HOLD)
+        }
     }
 
     /** A close taken back (a drag or a pull let go open): the clock comes down from where it is, the cover clears. */
@@ -875,6 +902,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         nc.closing = false
         nc.clockDrops()
         ncCover.goTo(0f, MotionTokens.NC_CLOSE_UNCOVER)
+        // (An arrival already playing finishes under the sheet coming back down.)
+        ncArrivalLetGo()
     }
 
     /** The picture has given way: it goes (its GPU image with it). */
@@ -900,6 +929,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * ([closed]) the cover and its dim give way on `motion.nc.close-uncover` (over the lock screen the dim left with the sheet).
      */
     private fun ncRest(closed: Boolean) {
+        // (Gone before the edge reached the arrival's place, a fast close: home arrives now.)
+        if (closed) ncArrives() else ncArrivalLetGo()
+        ncArrival = Arrival.NONE
         ncReveal.snapTo(0f)
         if (closed && ncCloseLocked) ncDim.snapTo(0f)
         else if (ncDim.target > 0f) ncDim.goTo(0f, if (closed) MotionTokens.NC_CLOSE_UNCOVER else MotionTokens.NC_PULL_UNDIM)
@@ -948,6 +980,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val ncDimNow = if (ncCloseLocked && nc.drifting) dev.launcher.app.shade.nc.NcClose.lockDim(ncDim.value, ncEdgeY, nc.driftFrom) else ncDim.value
         ncEdge.wallDark = if (ncReveal.target >= 1f) nc.wallDarkness() else dev.launcher.app.theme.Appearance.wallpaperDim
         ncEdge.set(ncEdgeY, ncDimNow, nc.edgeChrome, nc.edgeRadius, ncReveal.target >= 1f && !nc.closing, nc.drift)
+        // A close over home: once its edge has risen past the arrival's place, home arrives under it.
+        if (ncArrival == Arrival.HELD && nc.closing && ncP != null &&
+            ncEdgeY <= root.height * dev.launcher.app.design.Design.num(NcTokens.CLOSE_ARRIVAL_AT)) ncArrives()
         ncWall.set(ncEdgeY, nc.edgeRadius, if (ncReveal.value >= 1f) 0f else 1f, ncCover.value)
         ncPic.set(ncEdgeY, nc.edgeRadius, ncPicK.value, ncZoom, ncP != null && ncReveal.target >= 1f)
         // The dim below the edge holds from the commit until the sheet is down (where nothing below it shows), then clears.

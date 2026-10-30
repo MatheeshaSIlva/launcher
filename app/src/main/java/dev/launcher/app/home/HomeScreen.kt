@@ -1385,7 +1385,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
      * so whatever frame of home the unlock reveals first is already the arrival's. [animate]: eased in on `motion.arrival.hold` (the
      * screen is fading out: home zooms in as it goes instead of jumping); else at once.
      */
-    fun holdArrival(animate: Boolean = false) {
+    fun holdArrival(animate: Boolean = false, why: String? = null) {
         if (arrivalAnimating || arrivalHeld) return
         if (!prepareArrival(cold = false, log = false)) return
         arrivalHeld = true
@@ -1394,7 +1394,7 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
             holdTiming = dev.launcher.app.motion.CurveTiming(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.ARRIVAL_HOLD))
             Choreographer.getInstance().postFrameCallback(holdFrame)
         } else applyArrival(0.0)
-        AppLog.log("[home] arrival held until home is seen (${if (animate) "the screen is going off" else "screen off or lock screen up"})")
+        AppLog.log("[home] arrival held until home is seen (${why ?: if (animate) "the screen is going off" else "screen off or lock screen up"})")
     }
 
     private var holdStart = 0L
