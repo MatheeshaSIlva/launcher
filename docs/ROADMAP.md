@@ -12,8 +12,7 @@ Rules:
   criteria: emulator screenshots looked at, then the owner's S24 log or words)
 - `scripts/check.sh` is green
 - Anything that must match a reference passes `tools/fidelity/diff.py`; anything that moves shows no new missed refreshes in
-  the S24 frame stats; on the full track the reviewer verdict is APPROVE and the qa-tester verdict is PASS (or
-  PASS_WITH_MANUAL_CHECKS that the owner completed); the owner's S24 check comes last
+  the S24 frame stats; the owner's S24 check comes last (single session since 2026-10-30, no reviewer or QA agents)
 - The polish pass was run for anything that changes the screen
 - No known regressions; any open bugs are logged in the Bug backlog
 - `docs/DECISIONS.md` updated if a design choice was made
