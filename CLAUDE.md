@@ -503,8 +503,10 @@ copy it wholesale — port the working pieces cleanly. File map:
   `TEST_STATUS --es do charge-frames` (the real drawing into PNGs: an emulator recording shows ~5 frames a second, and our
   springs pause through slow frames). Never build a test that starts a screen capture behind the user's consent: the
   sharing path is checked with a share the user starts, the capsule's look with `TEST_STATUS`.
-- **Never screenshot or record Notification Center or banners on Matheesha's phone** (they show his messages). Measure them
-  with framestats only (`tools/scenario_shade.sh` never captures them; its test banner is our own text).
+- **Notification Center and banners on Matheesha's phone may be screenshot and recorded** (owner, 2026-10-31: allowed, to
+  check them on the S24 directly; before, they were measured with framestats only). Keep such captures in `tools/shots/`
+  (git-ignored), never commit or send them anywhere, and quote no notification's text in reports or docs. Private apps
+  and the lock screen stay out (below).
 - **"No animation" options (`makeCustomAnimation(0, 0)`, or any custom animation) are ignored for a cross-app start**:
   the system's transitions play their default open animation. Starts we make ourselves go through our own transition
   (`NoAnimStarts`, the shell); a notification's tap (it must come from our process) is sent with the system's transition
@@ -977,7 +979,7 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 - `tools/smoke_emulator.sh` (emulator only, exits non-zero on failure; 2 when its preconditions are not met): installs the local APK, checks "gesture strip on", opens and closes an app through Spotlight and opens and closes Control Center, Notification Center and Android's shade with real touchscreen pulls. Manual journeys: `docs/JOURNEYS.md`.
 - `PreviewActivity` (`am start -n dev.launcher.app/.PreviewActivity`) shows components on their own.
 - A panel at rest for a screenshot: `am broadcast -a dev.launcher.app.TEST_SHADE -p dev.launcher.app --es do open [--es
-  panel cc|nc]` (opened as a released pull opens it), `--es do close` (emulator; on the S24 never Notification Center).
+  panel cc|nc]` (opened as a released pull opens it), `--es do close` (emulator, and the S24 since 2026-10-31).
 - Notification Center held as a finger holds the pull (B-037, the clear slab; emulator only): `TEST_SHADE --es do pull --ef at
   0.5` holds it at that progress until `--es do release` (decided as a standstill release: opens from 62.5 %) or `--es do close`.
 - Android's shade's tile symbols (B-036): with the shade opened once, `am broadcast -a dev.launcher.app.TEST_SHADE -p

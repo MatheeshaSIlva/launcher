@@ -38,7 +38,8 @@ are the product.
 - Safety: everything that changes system state auto-restores (watchdog, Restore system) and can be recovered without
   Shizuku.
 - Layouts, themes and motion stay three separate layers: any combination is valid, and a theme never chooses a layout.
-- Privacy: never screenshot or record the owner's notifications or private apps.
+- Privacy: never screenshot or record the owner's private apps. Notification Center and banners may be captured on the S24
+  for checks (owner, 2026-10-31), kept local, never committed or quoted.
 - Builds: CI on every push to `main` and the in-app silent updater stay; local builds and checks run on the Windows dev machine (JDK 17, Git Bash).
 
 ## What "polished v1" means

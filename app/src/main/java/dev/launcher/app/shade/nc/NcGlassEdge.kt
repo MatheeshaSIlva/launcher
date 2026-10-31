@@ -109,7 +109,7 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
         val l = lens ?: return
         if (committed || NcGlassProfile.releasesPicture(chromeK, committed)) return
         val first = !l.has
-        if (!l.set(b, toScreen)) return
+        if (!l.setLive(b, toScreen)) return
         lensIsWall = false
         mixK.snapTo(1f)
         if (first) { lensK.snapTo(0f); lensK.animateTo(1f, Motion.role(MotionTokens.NC_LENS_IN)) }

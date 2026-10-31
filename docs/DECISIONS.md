@@ -538,3 +538,11 @@ frame added no missed refreshes to Control Center's opening (2 in 4 runs with, 2
 81 frames a second over the stopwatch; a held pull with it drew 90 frames in 0.9 s with 2 missed refreshes (to look into).
 Emulator: the bands follow the running stopwatch; the live sheet's fallback at rest, mid-close (the app below, dimmed, no
 wallpaper) and closed. Not seen: the One UI sheet blur itself (Notification Center is never captured on the S24).
+Follow-up (2026-10-31): handed to the bands as they came, every live capture stayed alive behind the shader that had sampled
+it until a garbage collection (Android does not count GPU images towards one): 3 GB of graphics after five held pulls on the
+S24, and lmkd killed the app. Each capture is now copied on the GPU into one of three buffers made once and let go at once;
+the bands keep a shader per buffer. Ten held pulls: graphics 154 -> 225 MB, 186 MB once settled. Checked on the S24 with
+recordings (the owner allows captures of Notification Center from today): over an app and over home, the clear slab, the
+blur coming in under the content, rest, and the close with what is behind sharp below the rising edge, no wallpaper; the
+sheet's brightness steady from rest through the close (77.8 -> 74 of 255), no step after the landing. Frame stats
+(`scenario_shade.sh`, 3 runs): Notification Center open missed 2, 1, 0 refreshes (GPU p90 ~10 ms), close 0, 0, 0.

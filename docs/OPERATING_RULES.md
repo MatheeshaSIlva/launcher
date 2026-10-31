@@ -36,7 +36,8 @@ The owner follows the work from the chat, in plain words and short. No jargon wi
 - **Smoothness**: frame stats and the scenario scripts on the S24 (what the screen showed), never our own frame log alone.
 - **Logic**: unit tests; a bug fix ships with a test that failed before it.
 - **Every change**: `scripts/check.sh` green. Never skip, delete or weaken a test, or loosen lint, to get there.
-- **The S24 is free to use** (owner, 2026-10-25): frame stats, scenario scripts and screenshots. Check which window has the
+- **The S24 is free to use** (owner, 2026-10-25): frame stats, scenario scripts and screenshots, and since 2026-10-31
+  screenshots and recordings of Notification Center and banners (kept in `tools/shots/`, never committed or quoted). Check which window has the
   focus right before every capture (the phone can lock between two steps); the owner says sensitive notifications show no
   previews.
 

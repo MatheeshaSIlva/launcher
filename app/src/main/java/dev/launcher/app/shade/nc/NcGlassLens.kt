@@ -52,8 +52,28 @@ class NcGlassLens {
         return true
     }
 
+    /** A shader for each of the live stream's buffers, made once ([setLive]). */
+    private val liveShaders = HashMap<Bitmap, BitmapShader>()
+
+    /**
+     * [b] is now what is behind, one of a few buffers a live stream copies into in turn ([NcLiveBehind]): no crossfade, and its
+     * shader is made once per buffer (a new shader at every frame kept every frame's image alive until a garbage collection).
+     */
+    fun setLive(b: Bitmap, toScreen: Matrix): Boolean {
+        if (b === cur) return false
+        val s = liveShaders.getOrPut(b) {
+            BitmapShader(b, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply { setLocalMatrix(toScreen); filterMode = BitmapShader.FILTER_MODE_LINEAR }
+        }
+        shader.setInputShader("pic", s)
+        shader.setInputShader("picOld", s)
+        oldM.set(toScreen)
+        cur = b
+        return true
+    }
+
     /** Lets go of the pictures (the GPU's images with them). */
     fun clear() {
+        liveShaders.clear()
         if (cur == null) return
         cur = null
         bind(null, null, Matrix())
