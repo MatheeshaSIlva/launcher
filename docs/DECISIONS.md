@@ -601,3 +601,17 @@ Decision:
   threads, and itself through them, behind. Not shut down: a GPU callback on its way must never be refused.
 - `ShellCapture.probe` uses the one cached set of reflected calls.
 Measured: unit tests (`BufferSetsTest`, `IdleWorkerTest`); emulator and S24 checks in the report of that day.
+
+## D-062: Panel transitions as Figma connections with keyframes, inside MS (2026-11-01) [owner]
+
+Context: the owner found Notification Center's live sheet fading in at the commit, where it had arrived whole as its edge
+landed: D-059 changed that for a technical reason that was logged but never put to him. He asked for the choice to be the
+user's, modelled on Figma: "home and notification screens are like 2 frames in figma and the user can decide the
+transition", and for every property to be keyed between states "kinda like using keyframes in a video editor".
+Decision (his answers): panels first (Notification Center, Control Center, Android's shade), then apps and the rest in the
+same model; following the finger or playing on release is the user's choice per transition; iOS 27's choreography is one
+set of keyframe tracks, not special code; look values a share of the theme's value by default, absolute by a switch per
+keyframe; Smart Animate in a later round; the work sits inside milestone MS. Plan: `docs/PLAN_PANEL_TRANSITIONS.md`.
+Also: a change to what the owner sees is asked first, never only logged (D-059's fade is what that cost).
+Consequences: every panel's hard-coded mapping from progress to look moves into tracks read from the motion preset; the
+first build step must reproduce today's frames exactly before anything new is offered.

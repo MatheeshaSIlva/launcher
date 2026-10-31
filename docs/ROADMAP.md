@@ -59,6 +59,10 @@ Acceptance criteria:
       a single frame.
 - [ ] On the S24 (frame stats, never a capture of notifications or banners): every shade scenario shows 0 missed refreshes
       warm, against the build before the milestone.
+- [ ] Panel transitions (owner, 2026-11-01, D-062; `docs/PLAN_PANEL_TRANSITIONS.md`): Notification Center, Control
+      Center and Android's shade open, release and close on Figma-style transitions (type, direction, follow the finger or
+      play on release) with keyframe tracks the user edits in the settings; iOS 27's own choreography is one set of tracks
+      and reproduces today's frames exactly; each checked on the S24.
 - [ ] The owner uses it on the S24 for a day and signs it off in his words; anything he finds is a row in the inventory.
 
 ### MF: Fidelity harness (Pixel first)
