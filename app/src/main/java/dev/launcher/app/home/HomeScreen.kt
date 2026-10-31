@@ -1379,6 +1379,8 @@ class HomeScreen(ctx: Context, private val listener: Listener) : FrameLayout(ctx
     private var arrivalWallpaper: Mover? = null
     private var arrivalCold = false
     private var arrivalHeld = false
+    /** Its arrival waits at its first frame ([holdArrival]) for a play or a release. */
+    val arrivalIsHeld get() = arrivalHeld
 
     /**
      * Puts home into the arrival's first frame (zoomed in) without playing it: from the moment the screen starts going off,

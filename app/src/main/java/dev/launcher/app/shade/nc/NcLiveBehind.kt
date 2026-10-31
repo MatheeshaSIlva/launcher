@@ -15,6 +15,7 @@ import android.os.SystemClock
 import dev.launcher.app.AppLog
 import dev.launcher.app.ShizukuLink
 import dev.launcher.app.design.Blur
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
@@ -51,9 +52,15 @@ class NcLiveBehind(private val ctx: Context, private val thread: Handler, privat
 
     /** The sheet's blur ([sigma], screen px) and veil ([veil], ARGB) as they are this frame (shade's thread). */
     fun look(sigma: Float, veil: Int) { sigmaPx = sigma; veilArgb = veil }
-    private var slots: Array<Slot>? = null
-    /** Where a copy's end is waited for (never the render thread, which every window of ours draws on). */
-    private val worker: Executor = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "nc-live-behind-fence") }
+    /** The buffers the bands are handed, and when each set goes ([BufferSets]: a stream of the same size takes them up again). */
+    private val sets = BufferSets<Array<Slot>> { closeLater(it) }
+    /** The buffer the next copy goes into. */
+    @Volatile private var nextFree = 0
+    /**
+     * Where a copy's end is waited for (never the render thread, which every window of ours draws on). It ends itself when
+     * idle: the shade is made anew at each restart of gesture nav's service, and a copy's callback must never be refused.
+     */
+    private val worker: Executor = dev.launcher.app.design.IdleWorker.create("nc-live-behind-fence")
 
     @TargetApi(34)
     private class Slot(w: Int, h: Int) {
@@ -65,8 +72,25 @@ class NcLiveBehind(private val ctx: Context, private val thread: Handler, privat
         val inner = RenderNode("nc-live-behind-look").apply { setPosition(0, 0, w, h) }
         var blurNow = 0f
         val bitmap: Bitmap = Bitmap.wrapHardwareBuffer(buffer, ColorSpace.get(ColorSpace.Named.SRGB))!!
+        /** The last copy's end (counted down by its callback): one its caller gave up waiting for may still be on the GPU. */
+        @Volatile var late: CountDownLatch? = null
+        /** Closed (under the slots' lock): a stream that still holds them stops at its next copy. */
+        var closed = false
         init { renderer.setContentRoot(root) }
-        fun close() { try { renderer.close() } catch (_: Throwable) { }; buffer.close() }
+        fun fits(w: Int, h: Int) = buffer.width == w && buffer.height == h
+        /**
+         * Its renderer and buffer go, once no copy is in flight (closing a renderer with a request on its way aborts the
+         * process, B-031): a copy that never ends leaves it open (a leak, not a crash). Under the slots' lock.
+         */
+        fun close() {
+            if (closed) return
+            val l = late
+            if (l != null && !l.await(5, TimeUnit.SECONDS)) { AppLog.log("[nc] live behind: a copy never finished, its buffer is left open"); return }
+            closed = true
+            try { renderer.close() } catch (_: Throwable) { }
+            bitmap.recycle()
+            buffer.close()
+        }
     }
 
     private var runningPkg: String? = null
@@ -90,10 +114,7 @@ class NcLiveBehind(private val ctx: Context, private val thread: Handler, privat
     /** The stream ends and its buffers go (call on the shade's thread, once the bands let go of the pictures). */
     fun stop() {
         pause()
-        val s = slots ?: return
-        slots = null
-        // (On the stream's own thread: it may still be copying into one; a buffer goes once that copy is done.)
-        Thread({ synchronized(s) { s.forEach { it.close(); it.bitmap.recycle() } } }, "nc-live-behind-end").start()
+        sets.stop()
     }
 
     @TargetApi(34)
@@ -104,7 +125,8 @@ class NcLiveBehind(private val ctx: Context, private val thread: Handler, privat
         val taken = Semaphore(1)
         val t0 = SystemClock.uptimeMillis()
         var frames = 0
-        var next = 0
+        // (Going on where the stream before left off: taking its buffers up, it never copies into the one the bands draw.)
+        var next = nextFree
         var why = "the pull ended"
         var mine: Array<Slot>? = null
         while (g == gen) {
@@ -117,14 +139,27 @@ class NcLiveBehind(private val ctx: Context, private val thread: Handler, privat
             if (shot == null) { why = "the buffer could not be read"; taken.release(); break }
             // (A picture of the other orientation is no picture of what shows.)
             if ((shot.width > shot.height) != (w > h)) { shot.recycle(); why = "turned"; taken.release(); break }
-            val all = mine ?: try {
-                Array(SLOTS) { Slot(shot.width, shot.height) }.also { made -> mine = made; thread.post { if (g == gen) slots = made else releaseLater(made) } }
+            // (The buffers of the stream before, if of this size: a stream paused at the commit comes back for the close.)
+            val all = mine ?: sets.current?.takeIf { it[0].fits(shot.width, shot.height) }?.also { mine = it } ?: try {
+                Array(SLOTS) { Slot(shot.width, shot.height) }.also { made -> mine = made; thread.post { if (g == gen) sets.adopt(made) else closeLater(made) } }
             } catch (t: Throwable) { shot.recycle(); why = "no buffers (${t.javaClass.simpleName})"; taken.release(); break }
             val slot = all[next]
             next = (next + 1) % SLOTS
+            nextFree = next
+            // (A copy into this buffer that its caller gave up on must end before the buffer is drawn into again.)
+            if (slot.late?.await(1, TimeUnit.SECONDS) == false) { shot.recycle(); why = "a copy never finished"; taken.release(); break }
             var fail = ""
+            // The capture and the recordings go once both the caller and the copy are done with them: the copy may outlive a
+            // caller that gave up waiting, and the GPU would sample a recycled capture.
+            val lease = dev.launcher.app.design.RenderLease {
+                slot.root.discardDisplayList()
+                slot.inner.discardDisplayList()
+                shot.recycle()
+            }
             val ok = synchronized(all) {
+                var issued = false
                 try {
+                    if (slot.closed) throw IllegalStateException("its buffers went")
                     val blur = Blur.renderRadius(sigmaPx * SCALE)
                     if (blur != slot.blurNow) {
                         slot.blurNow = blur
@@ -141,20 +176,24 @@ class NcLiveBehind(private val ctx: Context, private val thread: Handler, privat
                     val done = Semaphore(0)
                     var status = -1
                     val c0 = SystemClock.uptimeMillis()
+                    val flight = CountDownLatch(1)
+                    slot.late = flight
                     slot.renderer.obtainRenderRequest().setColorSpace(ColorSpace.get(ColorSpace.Named.SRGB)).draw(worker) { r ->
                         try { r.fence.use { if (it.isValid) it.awaitForever() } } catch (_: Throwable) { }
                         status = r.status
                         done.release()
+                        lease.completed()
+                        flight.countDown()
                     }
+                    issued = true
                     val came = done.tryAcquire(1000, TimeUnit.MILLISECONDS)
                     if (!came) fail = " (no answer in ${SystemClock.uptimeMillis() - c0} ms)"
                     else if (status != HardwareBufferRenderer.RenderResult.SUCCESS) fail = " (status $status)"
                     came && status == HardwareBufferRenderer.RenderResult.SUCCESS
                 } catch (t: Throwable) { fail = " (${t.javaClass.simpleName}: ${t.message})"; false } finally {
-                    // (Copied: the capture goes now, not at a garbage collection.)
-                    slot.root.discardDisplayList()
-                    slot.inner.discardDisplayList()
-                    shot.recycle()
+                    // (Copied: the capture goes now, not at a garbage collection. Never issued, no callback lets it go.)
+                    if (!issued) lease.completed()
+                    lease.issued()
                 }
             }
             if (!ok) { if (g == gen) why = "the copy failed$fail"; taken.release(); break }
@@ -170,7 +209,11 @@ class NcLiveBehind(private val ctx: Context, private val thread: Handler, privat
             }
             thread.post {
                 taken.release()
-                if (g == gen) deliver(slot.bitmap, toScreen)
+                if (g == gen) {
+                    deliver(slot.bitmap, toScreen)
+                    // (The bands draw this stream's buffers now: the ones it replaced can go.)
+                    sets.delivered()
+                }
             }
         }
         if (g == gen) running = false
@@ -180,9 +223,11 @@ class NcLiveBehind(private val ctx: Context, private val thread: Handler, privat
         }
     }
 
-    /** Buffers made for a stream that ended before they were handed over. */
+    /** Buffers go on a thread of their own: a stream may still be copying into one, and a copy in flight is waited for. */
     @TargetApi(34)
-    private fun releaseLater(made: Array<Slot>) = synchronized(made) { made.forEach { it.close(); it.bitmap.recycle() } }
+    private fun closeLater(made: Array<Slot>) {
+        Thread({ synchronized(made) { made.forEach { it.close() } } }, "nc-live-behind-end").start()
+    }
 
     private companion object {
         /** The capture's scale: the bands bend it, a few points of the screen at a time (half the screen's pixels: 8 ms on the S24, as at full size). */

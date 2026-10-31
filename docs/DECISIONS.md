@@ -573,3 +573,31 @@ copies a second changed nothing, 2, 0, 1 and 1, 1, 2, and was taken out). The pr
 (its shade window was not in gfxinfo after the reinstall), so there is no before/after over an app.
 Consequences / revisit when: the close's last frame and the release's first frames over an app still miss a refresh (to
 trace); over home the bands still bend the sheet's still picture (home cannot be captured without our own windows).
+
+## D-061: Code review of the live sheet: ten fixes (2026-11-01)
+
+Context: `/code-review` of `fix/nc-live-sheet` (D-057 to D-060) found ten problems; the owner said go for all of them.
+Decision:
+- **No GPU readback for what is behind**: `Wallpaper.of` turns a hardware picture (BlurBaker's) into pixels with
+  `ViewPicture.softCopy` (drawn into a CPU-readable buffer, its end waited for on the worker); `copy(ARGB_8888)` read it back
+  on the render thread every window of ours shares, at every live Notification Center opening, mid-pull.
+- **The live stream's buffers go exactly once** (`shade/nc/BufferSets`): a stream started again takes up the set it had if
+  it fits; a set of another size replaces it and the old one goes once the new stream's first frame is with the bands. A
+  stream started again used to make a new set and drop the old one unclosed (3 GPU buffers each time).
+- **A copy that outlives its caller's 1 s wait owns its capture** (`RenderLease`), and a buffer is closed only once its last
+  copy has ended (5 s, else left open: a leak, never the B-031 abort).
+- **A panel leaving under another leaves the live blur and the backdrop to it** (`Shade.blurTakenBy`, `backdropTakenBy`),
+  every panel alike: Notification Center's clean-up cleared them under an opening Control Center.
+- **What is behind, made after the commit, goes to the edge's bands too** (they bent the sharp picture against the blurred
+  sheet); made while the live blur still fades in, it waits for that fade's rest (the sheet's picture would come in part-way
+  at once), and it is dropped if the fade rests at 0 (a close).
+- **The live sheet without its picture draws no background** (the live blur under the shade is it): the phone's wallpaper
+  stood in and faded back in over an app at a close.
+- **Frosts made anew only for another picture**, and letting go of what was behind at a close takes nothing up (a frost and
+  numeral rebuild at every close and opening before).
+- **Home's arrival under a closing panel plays only if it was held**, held at once again (D-055; D-057's easing was for a
+  live sheet, which no longer holds it).
+- **Workers that end when idle** (`design/IdleWorker`) for the shade's two: a shade made anew at a service restart left its
+  threads, and itself through them, behind. Not shut down: a GPU callback on its way must never be refused.
+- `ShellCapture.probe` uses the one cached set of reflected calls.
+Measured: unit tests (`BufferSetsTest`, `IdleWorkerTest`); emulator and S24 checks in the report of that day.

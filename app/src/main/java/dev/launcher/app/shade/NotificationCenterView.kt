@@ -328,9 +328,13 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     var blurUnder = false
         set(v) { if (field != v) { field = v; invalidate() } }
 
-    /** What was behind at the pull as a wallpaper (live only), once made; the phone's wallpaper stands in until then. */
+    /**
+     * What was behind at the pull as a wallpaper (live only), once made; until then the phone's wallpaper stands in for the
+     * glass and the clock, and the sheet draws no background (the phone's wallpaper over an app was a seam: it faded back in
+     * at a close). Let go at a close without taking anything up (the next opening does: [prepare]).
+     */
     var behind: Wallpaper? = null
-        set(v) { if (field !== v) { field = v; if (live && width > 0) adoptWallpaper() } }
+        set(v) { if (field !== v) { field = v; if (v != null && live && width > 0) adoptWallpaper() } }
 
     /** The picture the sheet's glass and clock refract: what was behind (live) or the phone's wallpaper. */
     private fun source(): Wallpaper? = if (live) behind ?: Wallpaper.current else Wallpaper.current
@@ -400,8 +404,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         // Its own GPU layer again (let go while closed, see [onClosed]): the sheet slides as that layer.
         if (layerType != LAYER_TYPE_HARDWARE) setLayerType(LAYER_TYPE_HARDWARE, null)
         if (readStructure() && width > 0) fit(width, height)
-        wallpaper = source()
-        frosts.clear()
+        // (Frosts made anew only for another picture: kept across openings of the same wallpaper, as they were.)
+        val src = source()
+        if (src !== wallpaper) { wallpaper = src; frosts.clear() }
         warmFrost()
         list.prepare()
         if (hasClock) clock.refresh()
@@ -539,7 +544,8 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         // of a scroll); while the overlay fades in or out it is drawn directly, one pass a frame.
         // (Drifting, it is the node: it moves as a property.)
         // (Over a live blur always the node: it fades as the blur takes over; on One UI nothing: the blur is under the sheet.)
-        if (live && blurUnder) Unit
+        // (Nor while what was behind is not made yet: the live blur under the shade is the sheet's background then.)
+        if (live && (blurUnder || behind == null)) Unit
         else if (!live && list.dim.isAnimating && drift == 0f) drawWallpaper(c, under)
         else {
             val bk = ((System.identityHashCode(wallpaper).toLong() shl 20) xor (Math.round(Appearance.dark * 255f).toLong() shl 8)) xor width.toLong() * 31 xor

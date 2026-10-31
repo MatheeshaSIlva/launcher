@@ -147,7 +147,11 @@ class Wallpaper private constructor(
          * at the pull this way (its glass, clock and tone then refract that). Off the UI threads.
          */
         fun of(src: Bitmap, id: Int, colours: Boolean = false): Wallpaper {
-            val bmp = if (src.config == Bitmap.Config.HARDWARE) src.copy(Bitmap.Config.ARGB_8888, false) else src
+            // (A GPU picture, as Notification Center's blurred backdrop: drawn into a CPU-readable buffer, its end waited for on
+            // this thread. `copy` read it back on the render thread every window of ours draws on, mid-pull.)
+            val bmp = if (src.config == Bitmap.Config.HARDWARE)
+                dev.launcher.app.design.ViewPicture.softCopy(src) ?: src.copy(Bitmap.Config.ARGB_8888, false)
+            else src
             // What glass on home sees (dock, widgets, Search pill): half size, box radius 2 twice, about 1.5 iOS points of blur,
             // just enough to soften fine detail; clear glass keeps the wallpaper's shapes sharp (heavier blur read as frosted).
             val scale = 2

@@ -22,6 +22,9 @@ internal object ShellCapture {
         val builder: Class<*> = Class.forName("android.window.ScreenCaptureInternal\$CaptureArgs\$Builder")
         val setScale = builder.getMethod("setFrameScale", Float::class.javaPrimitiveType)
         val setUid = builder.getMethod("setUid", Long::class.javaPrimitiveType)
+        /** The probe's alone (null where gone: the live capture needs neither). */
+        val setCrop = runCatching { builder.getMethod("setSourceCrop", Rect::class.java) }.getOrNull()
+        val setExclude = runCatching { builder.getMethod("setExcludeLayers", Array<SurfaceControl>::class.java) }.getOrNull()
         val build = builder.getMethod("build")
         val create = Class.forName("android.window.ScreenCaptureInternal").getMethod("createSyncCaptureListener")
         val getBuffer = Class.forName("android.window.ScreenCaptureInternal\$SynchronousScreenCaptureListener").getMethod("getBuffer")
@@ -64,22 +67,15 @@ internal object ShellCapture {
         @Suppress("DEPRECATION") val crop = args.getParcelable<Rect>("crop")
         @Suppress("DEPRECATION") val exclude = args.getParcelableArray("exclude")?.mapNotNull { it as? SurfaceControl }?.toTypedArray() ?: emptyArray()
 
-        val binder = Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java).invoke(null, "window") as IBinder
-        val wm = Class.forName("android.view.IWindowManager\$Stub").getMethod("asInterface", IBinder::class.java).invoke(null, binder)!!
-        val argsCls = Class.forName("android.window.ScreenCaptureInternal\$CaptureArgs")
-        val bCls = Class.forName("android.window.ScreenCaptureInternal\$CaptureArgs\$Builder")
-        val b = bCls.getConstructor().newInstance()
-        bCls.getMethod("setFrameScale", Float::class.javaPrimitiveType).invoke(b, scale)
-        if (crop != null) bCls.getMethod("setSourceCrop", Rect::class.java).invoke(b, crop)
-        if (exclude.isNotEmpty()) bCls.getMethod("setExcludeLayers", Array<SurfaceControl>::class.java).invoke(b, exclude)
+        // (The same calls as [under], looked up once: one copy of the reflection to keep in step with Android.)
+        val c = calls
+        val b = c.builder.getConstructor().newInstance()
+        c.setScale.invoke(b, scale)
+        if (crop != null) (c.setCrop ?: error("no setSourceCrop")).invoke(b, crop)
+        if (exclude.isNotEmpty()) (c.setExclude ?: error("no setExcludeLayers")).invoke(b, exclude)
         val uid = args.getLong("uid", -1L)
-        if (uid >= 0) bCls.getMethod("setUid", Long::class.javaPrimitiveType).invoke(b, uid)
-        val captureArgs = bCls.getMethod("build").invoke(b)
-        val internal = Class.forName("android.window.ScreenCaptureInternal")
-        val listenerCls = Class.forName("android.window.ScreenCaptureInternal\$ScreenCaptureListener")
-        val create = internal.getMethod("createSyncCaptureListener")
-        val getBuffer = Class.forName("android.window.ScreenCaptureInternal\$SynchronousScreenCaptureListener").getMethod("getBuffer")
-        val capture = wm.javaClass.getMethod("captureDisplay", Int::class.javaPrimitiveType, argsCls, listenerCls)
+        if (uid >= 0) c.setUid.invoke(b, uid)
+        val captureArgs = c.build.invoke(b)
 
         val times = LongArray(n)
         var last: HardwareBuffer? = null
@@ -88,13 +84,13 @@ internal object ShellCapture {
         val start = System.nanoTime()
         for (i in 0 until n) {
             val t0 = System.nanoTime()
-            val l = create.invoke(null)
-            capture.invoke(wm, 0, captureArgs, l)
-            val shb = getBuffer.invoke(l)
+            val l = c.create.invoke(null)
+            c.capture.invoke(c.wm, 0, captureArgs, l)
+            val shb = c.getBuffer.invoke(l)
             times[i] = System.nanoTime() - t0
             if (shb == null) { nulls++; continue }
-            secure = secure || (shb.javaClass.getMethod("containsSecureLayers").invoke(shb) as Boolean)
-            val hb = shb.javaClass.getMethod("getHardwareBuffer").invoke(shb) as HardwareBuffer
+            secure = secure || (c.secure.invoke(shb) as Boolean)
+            val hb = c.buffer.invoke(shb) as HardwareBuffer
             if (i < n - 1) hb.close() else last = hb
             if (gap > 0) Thread.sleep(gap)
         }
