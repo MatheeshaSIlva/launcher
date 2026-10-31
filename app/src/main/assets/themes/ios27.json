@@ -4866,8 +4866,19 @@
    "src": "kit:VariableID:10442:65 (Dimensions/Margin, iPhone)"
   },
   "component.panel.material": {
-   "ref": "ref.material.overlay.control-center",
-   "src": "kit:2524:24518"
+   "material": {
+    "frost": 16,
+    "fills": [
+     [
+      "#000000",
+      0.5,
+      "NORMAL"
+     ]
+    ],
+    "innerShadows": [],
+    "shadows": []
+   },
+   "src": "judged:the owner (2026-10-31): Control Center's and Notification Center's blur at the liquid glass's frost (ref.material.liquid-glass.regular, 16 pt) over the kit's veil (kit:2524:24518, black 50 %); the kit's 24 pt was too strong"
   },
   "component.panel.samsung-strength": {
    "factor": 0.15,
@@ -5972,7 +5983,7 @@
   },
   "component.panel.material": {
    "material": {
-    "frost": 24,
+    "frost": 16,
     "fills": [
      [
       "#000000",

@@ -321,6 +321,13 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     var liveK = 0f
         set(v) { if (field != v) { field = v; bgNode.setAlpha(1f - v.coerceIn(0f, 1f)); invalidate() } }
 
+    /**
+     * Over a live blur on One UI: the blur and the veil are under the sheet, cut to its outline ([dev.launcher.app.shade.nc.NcSheetBlur]),
+     * and the sheet draws no background of its own (D-059).
+     */
+    var blurUnder = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+
     /** What was behind at the pull as a wallpaper (live only), once made; the phone's wallpaper stands in until then. */
     var behind: Wallpaper? = null
         set(v) { if (field !== v) { field = v; if (live && width > 0) adoptWallpaper() } }
@@ -529,8 +536,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         // The wallpaper with its overlay is a layer of its own once the overlay rests (not a full-screen pass every frame
         // of a scroll); while the overlay fades in or out it is drawn directly, one pass a frame.
         // (Drifting, it is the node: it moves as a property.)
-        // (Over a live blur always the node: it fades as the blur takes over.)
-        if (!live && list.dim.isAnimating && drift == 0f) drawWallpaper(c, under)
+        // (Over a live blur always the node: it fades as the blur takes over; on One UI nothing: the blur is under the sheet.)
+        if (live && blurUnder) Unit
+        else if (!live && list.dim.isAnimating && drift == 0f) drawWallpaper(c, under)
         else {
             val bk = ((System.identityHashCode(wallpaper).toLong() shl 20) xor (Math.round(Appearance.dark * 255f).toLong() shl 8)) xor width.toLong() * 31 xor
                 height.toLong() xor (Math.round(list.dim.value * 255f).toLong() shl 48) xor (Design.version.toLong() shl 36)

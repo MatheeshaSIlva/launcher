@@ -510,3 +510,31 @@ comes), so what is behind moves on; a close brings the picture back over it (`mo
 edge what is behind is sharp. With no picture ready at the commit, the blur comes in with the content instead (logged).
 The wallpaper below the edge (the lock screen's, the close's cover) stays the phone's own. Checked on the emulator: a held
 pull, landing, rest and a close mid-way.
+
+## D-059: Notification Center's live sheet: its own blur, live edges, the glass's frost (2026-10-31)
+
+The owner, on D-058's build: the blur too strong, a flicker as the pull ends (the sheet's picture handing over to the live
+blur), the edges static while the rest is live, and the wallpaper under a closing sheet ("doesn't fit at all"); find a way
+to refract the live blur, and match Control Center's and Notification Center's blur to the liquid glass.
+- **Blur strength**: the shared panel material (`component.panel.material`, Control Center's, Notification Center's and
+  Android's shade's in iOS 27) takes the liquid glass's frost, 16 pt (`ref.material.liquid-glass.regular`), over the kit's
+  black 50 % veil; the kit's 24 pt was too strong next to the glass.
+- **One blur, the sheet's own (One UI)**: Samsung's view blur on a view of the shade's own window under the sheet
+  (`shade/nc/NcSheetBlur`), cut to the sheet's outline and moved with its edge by translation in the same frame (one window,
+  one thread), with the panel's veil drawn there. It comes in with the content at the commit (`motion.nc.reveal`), rises
+  with the sheet as it closes, and goes at rest. No picture hands over to a blur (the flicker), no picture zooms or fades in
+  the sheet (`ncPic` is not used: two copies of what is behind would show), no wallpaper cover below a closing sheet and no
+  home arrival (home is under the sheet all along). Elsewhere (Android's blur behind the shade's window cannot be cut to a
+  moving outline) D-058's handover stays, without the cover.
+- **Live edges over apps**: while a finger holds the pull over an app, the edge's bands bend the app's screen live: the shell
+  captures the display with only that app's layers (`IWindowManager.captureDisplay`, `CaptureArgs.setUid`: none of our
+  windows nor the bars), half size, as often as the frames are taken up (`NcLiveBehind`, shell `captureUnder`). Secure
+  content ends the stream (the kept picture stays). Over home the bands bend home's exact picture (home is still under a
+  pull); after the commit and through the close they bend the sheet's picture, what was behind blurred and veiled.
+  Leaving our windows out by their layers is not possible from the app (`ViewRootImpl.getSurfaceControl` and its field are
+  blocked hidden APIs on Android 17), hence the uid route, which leaves home out.
+Measured: S24, a capture of the app alone 8 ms median (120 in 1.1 s, at 0.25, 0.5 or full size alike); captures every
+frame added no missed refreshes to Control Center's opening (2 in 4 runs with, 2 in 4 without, twice); the live stream ran
+81 frames a second over the stopwatch; a held pull with it drew 90 frames in 0.9 s with 2 missed refreshes (to look into).
+Emulator: the bands follow the running stopwatch; the live sheet's fallback at rest, mid-close (the app below, dimmed, no
+wallpaper) and closed. Not seen: the One UI sheet blur itself (Notification Center is never captured on the S24).

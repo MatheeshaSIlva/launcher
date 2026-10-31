@@ -74,3 +74,14 @@ v7 close animation, external-open watcher, watchdog, Samsung blur discovery → 
 - Shell-side `IWindowManager.mirrorDisplay(0, SurfaceControl)` handed to the app and reparented into an accessibility-overlay
   window: **crashed the whole system** (launcher and system restarted). Dead end; the probe and its AIDL codes (14, 15) are
   removed and must not be reused. Live card content needs another route (to research before any code).
+
+## Live capture of what is behind (launcher, 2026-10-31, D-059)
+- Android 17 has `IWindowManager.captureDisplay(displayId, ScreenCaptureInternal.CaptureArgs, ScreenCaptureListener)`
+  (READ_FRAME_BUFFER: the shell has it). `CaptureArgs.Builder`: `setFrameScale`, `setSourceCrop`, `setExcludeLayers`,
+  `setUid` (only that uid's layers), `setExclusionMask`. The result's `containsSecureLayers` tells redacted content.
+- S24: 13-15 ms a capture of the whole display, 8 ms of one app's layers (`setUid`), at any scale; captures back to back did
+  not add missed refreshes to Control Center's opening. Emulator: ~26 ms.
+- Our windows cannot be left out by layer from the app: `ViewRootImpl.getSurfaceControl()` and `mSurfaceControl` are
+  blocked hidden APIs (NoSuchMethod/NoSuchField); `WindowManagerGlobal.mRoots` is readable. Probe: `TEST_SHADE --es do
+  capture-probe [--ei n] [--ef scale] [--ei top --ei bottom] [--ei uid] [--ez exclude]` (`shade/CaptureProbe`), last capture
+  in `files/dev-out/capture.png` (never run it over the lock screen or private apps; delete such a capture unviewed).

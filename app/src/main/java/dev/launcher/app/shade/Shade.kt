@@ -169,6 +169,12 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val ncWall = dev.launcher.app.shade.nc.NcSlabWallpaper(ctx)
     /** What was behind the slab, drawn inside the sheet's outline as a pull commits, giving way (B-037 step 2, slice 2a2). */
     private val ncPic = dev.launcher.app.shade.nc.NcRevealPicture(ctx)
+    /** Over a live blur on One UI, the sheet's background: what is behind blurred live within its outline, and the veil (D-059). */
+    private val ncSheet = dev.launcher.app.shade.nc.NcSheetBlur(ctx)
+    /** Over an app, what is behind the clear slab live for its edge's bands while a finger holds the pull (D-059). */
+    private val ncBehindLive = dev.launcher.app.shade.nc.NcLiveBehind(ctx, handler) { b, m -> ncLiveFrames = true; ncEdge.setLive(b, m) }
+    /** A live frame has come this pull: a kept picture of the app arriving later is older. */
+    private var ncLiveFrames = false
     /** Android's shade (a layout's `shade` panel): Quick Settings over the notifications in one panel. */
     private val shadeView: ShadePanelView
     private val banner: BannerView
@@ -307,6 +313,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val mp = FrameLayout.LayoutParams.MATCH_PARENT
         root.addView(backdrop, FrameLayout.LayoutParams(mp, mp))
         root.addView(ncWall, FrameLayout.LayoutParams(mp, mp))
+        root.addView(ncSheet, FrameLayout.LayoutParams(mp, mp))
         root.addView(nc, FrameLayout.LayoutParams(mp, mp))
         root.addView(ncPic, FrameLayout.LayoutParams(mp, mp))
         root.addView(ncEdge, FrameLayout.LayoutParams(mp, mp))
@@ -355,10 +362,16 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             // Its background, chosen at each opening (a theme change between two pulls takes effect at the next).
             ncLive = dev.launcher.app.design.Design.choice(NcTokens.BACKGROUND) == "live"
             nc.live = ncLive
+            ncSheetBlur = ncLive && dev.launcher.app.design.SamsungBlur.available
+            nc.blurUnder = ncSheetBlur
             nc.prepare()
             if (ncReveal.target < 1f) nc.clockWaits()
             media.refresh()
             ncEdge.locked = locked; ncWall.locked = locked; ncWall.wallpaper = wallBelow(); prepareLens()
+            // Over an app (at rest, nothing being brought) its screen live for the edge's bands.
+            ncLiveFrames = false
+            if (!locked && android.os.Build.VERSION.SDK_INT >= 33 && ncReveal.target < 1f && nav.bringing() == null && !overHome())
+                nav.frontPackage()?.takeIf { it != ctx.packageName }?.let { ncBehindLive.start(it, root.width, root.height) }
             // (Over a live blur: the blurred picture of what is behind for the sheet, and the blur to take over once it lands.)
             if (ncLive) {
                 liveBlur.maxBlurPx = liveBlurMax(NcTokens.BACKGROUND_MATERIAL)
@@ -370,9 +383,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             nc.onClosed()
             ncRest(closed)
             ncEdge.clearPicture()
+            ncBehindLive.stop()
             lensHome = null
             revealEnds()
-            if (ncLive) { ncLiveK.snapTo(0f); liveBlur.set(0f, false); backdrop.source = null; behindGen++ }
+            if (ncLive) { ncLiveK.snapTo(0f); ncSheet.clear(); liveBlur.set(0f, false); backdrop.source = null; behindGen++ }
         }
         override fun gone() { nc.progress = 0f }
         override val openCurve get() = NC_OPEN
@@ -630,6 +644,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 }
                 if (i.getStringExtra("do") == "qs_collapse") handler.post { if (panel === shadePanel) shadeView.expandTo(false) }
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
+                if (i.getStringExtra("do") == "capture-probe") CaptureProbe.run(ctx, i)
                 // --es do open [--es panel cc|nc], --es do close: a panel opened as a released pull opens it, and closed (a
                 // script's pictures of a panel at rest, never caught mid-pull).
                 if (i.getStringExtra("do") == "open") handler.post {
@@ -819,14 +834,19 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * at once with no picture; else it fades in on `motion.nc.reveal`.
      */
     private fun ncCommit() {
+        // (The bands bend the sheet from here: the live stream of what was behind ends, its last frame stays until then.)
+        ncBehindLive.pause()
         if (nc.closing) ncReopens()
-        // (Over a live blur with no picture of what is behind yet: the blur comes in with the content instead.)
-        if (ncLive && nc.behind == null) {
+        // Over a live blur on One UI the sheet's own blur comes in with its content (D-059); elsewhere, with no picture of
+        // what is behind yet, the blur under the shade comes in with the content instead of once the sheet has landed.
+        if (ncSheetBlur) ncLiveK.goTo(1f, MotionTokens.NC_REVEAL)
+        else if (ncLive && nc.behind == null) {
             AppLog.log("[nc] commit: what is behind is not ready, the live blur comes in with the content")
             ncLiveK.goTo(1f, MotionTokens.NC_REVEAL)
         }
-        // The bands at the edge bend the sheet's own wallpaper from here (pass 10), not what was behind the slab.
-        nc.wallpaper?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true) }
+        // The bands at the edge bend the sheet's own wallpaper from here (pass 10), not what was behind the slab (over a live
+        // blur: what was behind blurred and veiled as the sheet shows it; until it is made, the sharp one they bent).
+        sheetPicture()?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true) }
         if (ncReveal.target < 1f) {
             nc.clockDrops()
             // Home's picture only while it is still what home shows (home drew since: the content fades in instead). Taken
@@ -861,6 +881,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * pull falls back; an arrived sheet's dim clears, and a close already under way gives its cover and dim up at once.
      */
     private fun ncGoesUnder() {
+        ncBehindLive.pause()
         if (ncReveal.target < 1f) { ncFallBack(); return }
         ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         ncCover.goTo(0f, MotionTokens.NC_PULL_UNDIM)
@@ -900,23 +921,25 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         ncCloseLocked = locked
         nc.closing = true
         applyProgress()   // (the edge learns it is closing before it takes its picture)
-        nc.wallpaper?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true, atOnce = true) }
-        // (Over a live blur the sheet's picture comes back over the blur, which goes: below the rising edge what is behind is sharp.)
-        if (ncLive) ncLiveK.goTo(0f, MotionTokens.NC_DATE_OUT)
+        sheetPicture()?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true, atOnce = true) }
+        // (Over a live blur: on One UI the sheet's blur rises with it; elsewhere the sheet's picture comes back over the blur
+        // under the shade, which goes. Either way below the rising edge what is behind is sharp, live, with no cover.)
+        if (ncLive && !ncSheetBlur) ncLiveK.goTo(0f, MotionTokens.NC_DATE_OUT)
         nc.clockLifts()
         // With the sheet down nothing below it shows yet: the cover and its dim are whole at once (faded in, the live dock
         // showed under the rising edge for their first frames); a close of a sheet still landing brings them in.
         if (dev.launcher.app.shade.nc.NcGlassProfile.landed(nc.edgeY, root.height.toFloat())) {
             ncDim.snapTo(1f)
-            if (!ncCloseLocked) ncCover.snapTo(1f)
+            if (!ncCloseLocked && !ncLive) ncCover.snapTo(1f)
         } else {
             ncDim.goTo(1f, MotionTokens.NC_PULL_DIM_HOME)
-            if (!ncCloseLocked) ncCover.goTo(1f, MotionTokens.NC_PULL_DIM_HOME)
+            if (!ncCloseLocked && !ncLive) ncCover.goTo(1f, MotionTokens.NC_PULL_DIM_HOME)
         }
         ncBar.goTo(0f, MotionTokens.NC_DATE_OUT)
         // Over home (at rest, nothing being brought): home takes its arrival's first frame under the cover, which is whole only
         // from a landed sheet (one still landing fades it in: home's change would show through).
-        if (!ncCloseLocked && nav.homeShown() && nav.bringing() == null &&
+        // (Over a live blur home is there under the sheet all along, blurred: nothing arrives.)
+        if (!ncCloseLocked && !ncLive && nav.homeShown() && nav.bringing() == null &&
             dev.launcher.app.shade.nc.NcGlassProfile.landed(nc.edgeY, root.height.toFloat())) {
             ncArrival = Arrival.HELD
             dev.launcher.app.HomeBridge.panelArrival(dev.launcher.app.HomeBridge.PanelArrival.HOLD)
@@ -973,7 +996,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (shP != null) shadeView.progress = shP
         // Control Center and Android's shade lie over the blurred screen, each with its own background.
         // (Notification Center over a live blur: its background as Control Center's.)
-        val ncLiveP = if (ncLive && ncP != null) ncLiveK.value else null
+        val ncLiveP = if (ncLive && !ncSheetBlur && ncP != null) ncLiveK.value else null
         val ccLike = ccP != null || ncLiveP != null
         val bgP = ccP ?: ncLiveP ?: shP
         val bgKey = if (ccP != null) CcTokens.BACKGROUND else if (ncLiveP != null) NcTokens.BACKGROUND_MATERIAL else QsTokens.BACKGROUND
@@ -1001,6 +1024,13 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             if (ccP != null) bar.setRowAlpha(1f - editK)
         }
         if (ncP != null) { nc.reveal = ncReveal.value; nc.progress = ncP; nc.liveK = ncLiveK.value; ncWall.wallpaper = wallBelow() }
+        // (One UI: the sheet's own blur and veil, at its edge in this same frame.)
+        if (ncSheetBlur) {
+            val k = if (ncP != null) ncLiveK.value.coerceIn(0f, 1f) else 0f
+            val v = veilOf(NcTokens.BACKGROUND_MATERIAL)
+            ncSheet.set(if (ncP != null) nc.edgeY else 0f, nc.edgeRadius, LiveBlur.radiusAt(k, liveBlur.maxBlurPx),
+                (Math.round(v.alpha * k * 255f).coerceIn(0, 255) shl 24) or v.rgb)
+        }
         // The sheet's content is still and its outline moves ([NotificationCenterView.progress]); the edge's rim, corners and
         // lens go on drawing at that outline until the sheet has landed, and its dim while it fades out after the panel is
         // closed. The lock screen's wallpaper (under the sheet) stays whole until the content is (the content fades in over it).
@@ -1008,7 +1038,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // (Over the lock screen a closing sheet's dim clears as it leaves; elsewhere the cover takes it out once it is gone.)
         // (Which way is the close's, decided at its start: an unlock on the way changes nothing in one frame.)
         val ncDimNow = if (ncCloseLocked && nc.drifting) dev.launcher.app.shade.nc.NcClose.lockDim(ncDim.value, ncEdgeY, nc.driftFrom) else ncDim.value
-        ncEdge.wallDark = if (ncReveal.target >= 1f) nc.wallDarkness() else dev.launcher.app.theme.Appearance.wallpaperDim
+        // (Over a live blur what the bands bend is veiled already.)
+        ncEdge.wallDark = if (ncLive) 0f else if (ncReveal.target >= 1f) nc.wallDarkness() else dev.launcher.app.theme.Appearance.wallpaperDim
         ncEdge.set(ncEdgeY, ncDimNow, nc.edgeChrome, nc.edgeRadius, ncReveal.target >= 1f && !nc.closing, nc.drift)
         // A close over home: once its edge has risen past the arrival's place, home arrives under it.
         if (ncArrival == Arrival.HELD && nc.closing && ncP != null &&
@@ -1019,7 +1050,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (ncP != null && ncReveal.target >= 1f && ncDim.target > 0f && !nc.closing &&
             dev.launcher.app.shade.nc.NcGlassProfile.landed(ncEdgeY, root.height.toFloat())) ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         // Over a live blur, the landed sheet hands its picture of what was behind over to the live blur (what is behind moves on).
-        if (ncLive && ncP != null && ncReveal.target >= 1f && !nc.closing && ncLiveK.target < 1f &&
+        if (ncLive && !ncSheetBlur && ncP != null && ncReveal.target >= 1f && !nc.closing && ncLiveK.target < 1f &&
             dev.launcher.app.shade.nc.NcGlassProfile.landed(ncEdgeY, root.height.toFloat())) ncLiveK.goTo(1f, MotionTokens.NC_REVEAL)
         bar.setClearSlab(ncP != null && ncReveal.value <= 0f)
         if (ccP == null && ncP == null && shP == null) {
@@ -1208,6 +1239,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private var ncLive = false
     /** How far the live blur has taken over from the landed sheet's picture of what was behind (0..1): in on `motion.nc.reveal`, out on `motion.nc.date-out`. */
     private val ncLiveK = MotionValue(0f, 1000f, { applyProgress() })
+    /** Over a live blur on One UI (Samsung's view blur): the blur is the sheet's own ([ncSheet]), not the window under the shade. */
+    private var ncSheetBlur = false
+
+    /** What the sheet shows, for the edge's bands once it has its content: its wallpaper, or over a live blur what was behind (once made). */
+    private fun sheetPicture(): dev.launcher.app.Wallpaper? = if (ncLive) nc.behind else nc.wallpaper
 
     /** The wallpaper below the sheet's edge (the lock screen's, the close's cover): the phone's own, also over a live blur. */
     private fun wallBelow(): dev.launcher.app.Wallpaper? = if (ncLive) dev.launcher.app.Wallpaper.current else nc.wallpaper
@@ -1242,16 +1278,17 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             when (src) {
                 // (A kept picture of an app whose screen changed since would show the old one, sharp, against the live content:
                 // the lens waits for the fresh picture, rim and dim only until then.)
-                is BackdropSource.App -> if (!src.stale) {
+                is BackdropSource.App -> if (!src.stale && !ncLiveFrames) {
                     ncEdge.setPicture(src.bitmap, android.graphics.Matrix().apply { setScale(root.width.toFloat() / src.bitmap.width, root.height.toFloat() / src.bitmap.height) })
-                    if (revealUsable(src.bitmap.width, src.bitmap.height)) { ncPic.setApp(src.bitmap); ncPicApp = src }
+                    // (Over a live blur nothing gives way inside the sheet: what is behind blurs in, live.)
+                    if (!ncLive && revealUsable(src.bitmap.width, src.bitmap.height)) { ncPic.setApp(src.bitmap); ncPicApp = src }
                 }
                 is BackdropSource.Wall -> ncEdge.setPicture(src.wallpaper.bitmap, src.wallpaper.matrix(root.width, root.height), wall = true)
                 is BackdropSource.Home -> {
                     // (Its content alone, over the sheet's wallpaper: with the system drawing the wallpaper the content is
                     // opaque black, and the content fades instead; nor one recorded mid-motion, which is not what shows.)
                     val content = src.picture.content
-                    if (src.picture.wallpaper != null && revealUsable(content.width, content.height) && dev.launcher.app.HomeBridge.shown.isExactly(content)) ncPic.setHome(content)
+                    if (!ncLive && src.picture.wallpaper != null && revealUsable(content.width, content.height) && dev.launcher.app.HomeBridge.shown.isExactly(content)) ncPic.setHome(content)
                     if (src.picture === lensHome) return@backdrop
                     lensHome = src.picture
                     BlurBaker.bake(src, root.width, root.height, 0.5f, 0f, 0, handler) { bmp, m ->

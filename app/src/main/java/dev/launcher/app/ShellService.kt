@@ -181,6 +181,14 @@ class ShellService : IShellService.Stub() {
         null
     }
 
+    override fun captureUnder(uid: Int, scale: Float): HardwareBuffer? = ShellCapture.under(uid, scale)?.also { sent.set(it) }
+
+    override fun probeCapture(args: android.os.Bundle): android.os.Bundle = try {
+        ShellCapture.probe(args) { sent.set(it) }
+    } catch (t: Throwable) {
+        android.os.Bundle().apply { putString("report", "ERROR: ${describe(t)}") }
+    }
+
     private var snapshotNotes = 0
 
     /** Why a snapshot failed, with the snapshot calls this Android has (a few times per service, for the log). */

@@ -160,4 +160,12 @@ interface IShellService {
     // One UI's cast chip shows, whatever the disable flags say, while its cast controller says "isCasting:T" (also for
     // Link to Windows, which is no screen capture): our bar's sharing capsule covers it then. "ok" or "ERROR: ...".
     String watchLog(String tag, String regex, in ILogWatch listener) = 42;
+
+    // Probe: the screen under our windows as GPU buffers, taken and timed by the shell (ShellCapture). "report" and the
+    // last "buffer".
+    Bundle probeCapture(in Bundle args) = 43;
+
+    // The screen as one app shows it ([uid]'s layers only: none of ours, nor the bars), scaled by [scale], as a GPU buffer;
+    // null when it holds secure content or the capture failed. Notification Center's edge bends it live over that app.
+    HardwareBuffer captureUnder(int uid, float scale) = 44;
 }

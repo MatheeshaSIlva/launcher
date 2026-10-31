@@ -942,6 +942,12 @@ copy it wholesale — port the working pieces cleanly. File map:
 - **After a crash while Android binds the notification listener, the system keeps the binding as made** ("is already
   bound") and never retries: our shade empty until a reboot. `LauncherApp.watchNotificationListener` switches the component
   off and on when it has not connected 8 s after a start (a rebind request alone is ignored for an enabled listener).
+- **What is behind our windows, live: capture one app's layers by uid** (`IWindowManager.captureDisplay` with
+  `CaptureArgs.setUid`, from the shell: 8 ms on the S24; `ShellCapture.under`, `shade/nc/NcLiveBehind`). Leaving our own
+  windows out by layer is not possible from the app (`ViewRootImpl.getSurfaceControl` is a blocked hidden API), so home, ours,
+  is never in such a capture; a capture holding secure content comes back redacted (`containsSecureLayers`). And a blur that
+  must follow a moving outline is Samsung's view blur on a view of the same window, moved by translation (`NcSheetBlur`): a
+  blur in another window moves a frame apart from it.
 
 ## Build, release, update pipeline (to recreate in this repo)
 
