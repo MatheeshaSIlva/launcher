@@ -645,6 +645,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (i.getStringExtra("do") == "qs_collapse") handler.post { if (panel === shadePanel) shadeView.expandTo(false) }
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
                 if (i.getStringExtra("do") == "capture-probe") CaptureProbe.run(ctx, i)
+                if (i.getStringExtra("do") == "live-dump") ncBehindLive.dumps = i.getIntExtra("n", 1)
                 // --es do open [--es panel cc|nc], --es do close: a panel opened as a released pull opens it, and closed (a
                 // script's pictures of a panel at rest, never caught mid-pull).
                 if (i.getStringExtra("do") == "open") handler.post {
@@ -834,8 +835,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * at once with no picture; else it fades in on `motion.nc.reveal`.
      */
     private fun ncCommit() {
-        // (The bands bend the sheet from here: the live stream of what was behind ends, its last frame stays until then.)
-        ncBehindLive.pause()
+        // (The bands bend the sheet from here. On One UI the live stream goes on, blurred and veiled as the sheet's own blur comes
+        // in, until the sheet has landed; elsewhere it ends, its last frame staying until then.)
+        if (!ncSheetBlur) ncBehindLive.pause()
         if (nc.closing) ncReopens()
         // Over a live blur on One UI the sheet's own blur comes in with its content (D-059); elsewhere, with no picture of
         // what is behind yet, the blur under the shade comes in with the content instead of once the sheet has landed.
@@ -846,7 +848,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         }
         // The bands at the edge bend the sheet's own wallpaper from here (pass 10), not what was behind the slab (over a live
         // blur: what was behind blurred and veiled as the sheet shows it; until it is made, the sharp one they bent).
-        sheetPicture()?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true) }
+        if (!(ncSheetBlur && ncBehindLive.running)) sheetPicture()?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true) }
         if (ncReveal.target < 1f) {
             nc.clockDrops()
             // Home's picture only while it is still what home shows (home drew since: the content fades in instead). Taken
@@ -925,6 +927,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // (Over a live blur: on One UI the sheet's blur rises with it; elsewhere the sheet's picture comes back over the blur
         // under the shade, which goes. Either way below the rising edge what is behind is sharp, live, with no cover.)
         if (ncLive && !ncSheetBlur) ncLiveK.goTo(0f, MotionTokens.NC_DATE_OUT)
+        // (On One UI over an app: the bands bend it live again, blurred and veiled as the sheet shows it, from the next frame.)
+        if (ncSheetBlur && !ncCloseLocked && android.os.Build.VERSION.SDK_INT >= 34 && nav.bringing() == null && !overHome())
+            nav.frontPackage()?.takeIf { it != ctx.packageName }?.let { ncBehindLive.start(it, root.width, root.height) }
         nc.clockLifts()
         // With the sheet down nothing below it shows yet: the cover and its dim are whole at once (faded in, the live dock
         // showed under the rising edge for their first frames); a close of a sheet still landing brings them in.
@@ -1028,8 +1033,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         if (ncSheetBlur) {
             val k = if (ncP != null) ncLiveK.value.coerceIn(0f, 1f) else 0f
             val v = veilOf(NcTokens.BACKGROUND_MATERIAL)
-            ncSheet.set(if (ncP != null) nc.edgeY else 0f, nc.edgeRadius, LiveBlur.radiusAt(k, liveBlur.maxBlurPx),
-                (Math.round(v.alpha * k * 255f).coerceIn(0, 255) shl 24) or v.rgb)
+            val radius = LiveBlur.radiusAt(k, liveBlur.maxBlurPx)
+            val veil = (Math.round(v.alpha * k * 255f).coerceIn(0, 255) shl 24) or v.rgb
+            ncSheet.set(if (ncP != null) nc.edgeY else 0f, nc.edgeRadius, radius, veil)
+            // (The bands' live picture as the sheet shows it: the same blur, in a Gaussian's terms, and the same veil.)
+            ncBehindLive.look(radius / dev.launcher.app.design.SamsungBlur.RADIUS_PER_SIGMA, veil)
         }
         // The sheet's content is still and its outline moves ([NotificationCenterView.progress]); the edge's rim, corners and
         // lens go on drawing at that outline until the sheet has landed, and its dim while it fades out after the panel is
@@ -1037,10 +1045,15 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val ncEdgeY = if (ncP != null) nc.edgeY else 0f
         // (Over the lock screen a closing sheet's dim clears as it leaves; elsewhere the cover takes it out once it is gone.)
         // (Which way is the close's, decided at its start: an unlock on the way changes nothing in one frame.)
-        val ncDimNow = if (ncCloseLocked && nc.drifting) dev.launcher.app.shade.nc.NcClose.lockDim(ncDim.value, ncEdgeY, nc.driftFrom) else ncDim.value
+        // (Over a live blur likewise: below the closing sheet is the app or home itself, live, and its dim leaves with the
+        // sheet, never held whole until the close ends.)
+        val ncDimNow = if ((ncCloseLocked || ncLive) && nc.drifting) dev.launcher.app.shade.nc.NcClose.lockDim(ncDim.value, ncEdgeY, nc.driftFrom) else ncDim.value
         // (Over a live blur what the bands bend is veiled already.)
         ncEdge.wallDark = if (ncLive) 0f else if (ncReveal.target >= 1f) nc.wallDarkness() else dev.launcher.app.theme.Appearance.wallpaperDim
         ncEdge.set(ncEdgeY, ncDimNow, nc.edgeChrome, nc.edgeRadius, ncReveal.target >= 1f && !nc.closing, nc.drift)
+        // (Landed: the bands have let go of the live picture, and the stream ends with its buffers.)
+        if (ncBehindLive.running && ncReveal.target >= 1f && !nc.closing &&
+            dev.launcher.app.shade.nc.NcGlassProfile.releasesPicture(nc.edgeChrome, true)) ncBehindLive.stop()
         // A close over home: once its edge has risen past the arrival's place, home arrives under it.
         if (ncArrival == Arrival.HELD && nc.closing && ncP != null &&
             nc.edgeY <= root.height * dev.launcher.app.design.Design.num(NcTokens.CLOSE_ARRIVAL_AT)) ncArrives()

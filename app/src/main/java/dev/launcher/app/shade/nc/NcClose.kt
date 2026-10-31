@@ -20,8 +20,8 @@ object NcClose {
     fun drifts(closing: Boolean, was: Boolean, landed: Boolean): Boolean = closing || (was && !landed)
 
     /**
-     * Over the lock screen, the dim [dim] below a closing sheet whose edge is at [edgeY], the close having taken it from
-     * [from]: whole at the close's start, clearing as the sheet leaves.
+     * Over the lock screen (and over a live blur, where below is the app or home itself), the dim [dim] below a closing sheet
+     * whose edge is at [edgeY], the close having taken it from [from]: whole at the close's start, clearing as the sheet leaves.
      */
     fun lockDim(dim: Float, edgeY: Float, from: Float): Float = if (from <= 0f) 0f else dim * (edgeY / from).coerceIn(0f, 1f)
 }

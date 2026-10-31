@@ -379,7 +379,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         val was = drifting
         drifting = dev.launcher.app.shade.nc.NcClose.drifts(closing, drifting, landed)
         if (drifting && !was) driftFrom = y
-        val d = if (drifting) dev.launcher.app.shade.nc.NcClose.drift(y, driftFrom, Design.num(NcTokens.CLOSE_DRIFT)) else 0f
+        // (Over a live blur under the sheet nothing drifts: what is behind stays where it is, and the edge's bands and the
+        // glass read it there; read where a wallpaper would have drifted to, the bands showed a dark strip above the edge.)
+        val d = if (drifting && !blurUnder) dev.launcher.app.shade.nc.NcClose.drift(y, driftFrom, Design.num(NcTokens.CLOSE_DRIFT)) else 0f
         val moved = d != drift
         if (moved) { drift = d; bgNode.setTranslationY(d); drifted.clear() }
         if (y == edgeY && r == edgeRadius && !moved) return

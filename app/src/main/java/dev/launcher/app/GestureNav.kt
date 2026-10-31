@@ -657,7 +657,7 @@ object GestureNav {
             }
             return
         }
-        val pkg = bringing ?: lastFrontPkg
+        val pkg = dev.launcher.app.shade.AppBehind.of(bringing, lastFrontPkg, frontNow, app.packageName)
         val kept = pkg?.let { images[it] }
         if (shadeLogs < 6) { shadeLogs++; AppLog.log("[shade] behind: $pkg, kept picture ${if (kept != null) "${SystemClock.uptimeMillis() - (imagesAt[pkg] ?: 0L)} ms old" else "none"}${if (pkg != null && keptIsStale(pkg)) " (stale)" else ""}") }
         if (kept != null && pkg != null) then(shadePicture(pkg, kept, imagesAt[pkg] ?: 0L, keptIsStale(pkg)))

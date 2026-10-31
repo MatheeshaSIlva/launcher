@@ -768,8 +768,8 @@ SEED = {
     # Control Center (docs/tokens/ios27-kit.json "controlCenter"; geometry of the running system where it differs: docs/IOS27_KIT.md)
     'comp.cc.background.material': {'ref': 'ref.material.overlay.control-center', 'src': 'kit:2524:24518'},
     # (The panels' blur as the liquid glass's own frost: the kit's 24 pt was too strong next to the glass on the S24.)
-    'component.panel.material': {'material': {'frost': 16, 'fills': [['#000000', 0.5, 'NORMAL']], 'innerShadows': [], 'shadows': []},
-                                 'src': "judged:the owner (2026-10-31): Control Center's and Notification Center's blur at the liquid glass's frost (ref.material.liquid-glass.regular, 16 pt) over the kit's veil (kit:2524:24518, black 50 %); the kit's 24 pt was too strong"},
+    'component.panel.material': {'material': {'frost': 6, 'fills': [['#000000', 0.5, 'NORMAL']], 'innerShadows': [], 'shadows': []},
+                                 'src': "judged:the owner (2026-11-01): Control Center's and Notification Center's blur at the frost of the glass on them (ref.material.liquid-glass.clear, 6 pt: the notifications and the controls) over the kit's veil (kit:2524:24518, black 50 %); the kit's 24 pt and then the regular glass's 16 pt were too strong"},
     'comp.cc.background.samsung-strength': {'factor': 0.15, 'src': "judged:One UI's dim-to-blur strength (blur and dim come together there; 0.35 and 0.6 were too strong on the S24)"},
     'comp.cc.module.material': {'ref': 'sys.material.glass.clear', 'src': 'kit:10486:21122'},
     'comp.cc.module.on-material': {'ref': 'ref.material.control-center.on', 'src': 'kit:10486:20857'},

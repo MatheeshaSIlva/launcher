@@ -4867,7 +4867,7 @@
   },
   "component.panel.material": {
    "material": {
-    "frost": 16,
+    "frost": 6,
     "fills": [
      [
       "#000000",
@@ -4878,7 +4878,7 @@
     "innerShadows": [],
     "shadows": []
    },
-   "src": "judged:the owner (2026-10-31): Control Center's and Notification Center's blur at the liquid glass's frost (ref.material.liquid-glass.regular, 16 pt) over the kit's veil (kit:2524:24518, black 50 %); the kit's 24 pt was too strong"
+   "src": "judged:the owner (2026-11-01): Control Center's and Notification Center's blur at the frost of the glass on them (ref.material.liquid-glass.clear, 6 pt: the notifications and the controls) over the kit's veil (kit:2524:24518, black 50 %); the kit's 24 pt and then the regular glass's 16 pt were too strong"
   },
   "component.panel.samsung-strength": {
    "factor": 0.15,
@@ -5983,7 +5983,7 @@
   },
   "component.panel.material": {
    "material": {
-    "frost": 16,
+    "frost": 6,
     "fills": [
      [
       "#000000",

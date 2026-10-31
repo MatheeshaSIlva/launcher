@@ -546,3 +546,30 @@ recordings (the owner allows captures of Notification Center from today): over a
 blur coming in under the content, rest, and the close with what is behind sharp below the rising edge, no wallpaper; the
 sheet's brightness steady from rest through the close (77.8 -> 74 of 255), no step after the landing. Frame stats
 (`scenario_shade.sh`, 3 runs): Notification Center open missed 2, 1, 0 refreshes (GPU p90 ~10 ms), close 0, 0, 0.
+
+## D-060: Notification Center's live sheet: one picture for the bands, the clear glass's blur, no held dim (2026-11-01)
+
+Context: the owner on the S24 (D-059's build): the refracted border stood out during the pull and the close, the blur had
+barely changed, the notifications sometimes showed the wallpaper over an app, the dim held until the close ended, and the
+stretch and squash could not be seen.
+Decision:
+- **The bands bend what the sheet shows (One UI)**: the live capture of the app goes on after the commit and comes back for
+  the close, each copy blurred (a Gaussian matched to Samsung's radius, `SamsungBlur.RADIUS_PER_SIGMA`) and veiled as the
+  sheet is at that frame (`NcLiveBehind.look`); it ends once the sheet has landed. Bending a sharp or a still picture against
+  a live blur, the band read as a strip of its own; now only the bend differs, and the stretch and the mirrored copy show.
+- **Nothing drifts over a live blur**: the close's wallpaper drift (iOS's, for a wallpaper sheet) is 0 when the blur is the
+  sheet's own: the bands read their picture where the wallpaper would have drifted to, a dark strip growing above the edge.
+- **The panel blur at the clear glass's frost**: `component.panel.material` frost 6 pt (`ref.material.liquid-glass.clear`,
+  the glass of the notifications and controls on it), Control Center's and Notification Center's alike; veil unchanged.
+- **The dim below a closing sheet leaves with it over a live blur** (`NcClose.lockDim`, as over the lock screen): below is the
+  app or home itself, never held dimmed until the close ends.
+- **The app behind is never SystemUI's window** (`shade/AppBehind`): the last window event was the status bar's, no task was
+  found, no picture made, and the notifications' glass fell back to the wallpaper.
+Measured (S24, over Clock, TEST_SHADE pull and release, an `input swipe` close): the band continues the interior with no
+step; frame stats over home (`scenario_shade.sh`, 3 runs) Notification Center open 0, 0, 0, close 0, 0, 0 missed refreshes;
+over Clock release 2, 1, 2 and close 1, 1, 1 (the close's miss is always its last frame: the shade's thread waits on the
+render thread all our windows share, a window's new surface and the gesture strip's frame; not the stream: capping it at 60
+copies a second changed nothing, 2, 0, 1 and 1, 1, 2, and was taken out). The previous build over Clock could not be read
+(its shade window was not in gfxinfo after the reinstall), so there is no before/after over an app.
+Consequences / revisit when: the close's last frame and the release's first frames over an app still miss a refresh (to
+trace); over home the bands still bend the sheet's still picture (home cannot be captured without our own windows).

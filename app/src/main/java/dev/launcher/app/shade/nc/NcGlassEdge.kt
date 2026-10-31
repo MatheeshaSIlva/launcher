@@ -102,12 +102,12 @@ class NcGlassEdge(ctx: Context) : View(ctx) {
     }
 
     /**
-     * A live frame of what is behind ([NcLiveBehind], the newest capture): it replaces the picture at once (the same content,
-     * newer); the first one makes the lens grow in, as a first picture does. Not after the commit (the bands bend the sheet then).
+     * A live frame of what is behind ([NcLiveBehind], the newest capture, already as the sheet shows it at this moment): it
+     * replaces the picture at once (the same content, newer); the first one makes the lens grow in, as a first picture does.
      */
     fun setLive(b: Bitmap, toScreen: Matrix) {
         val l = lens ?: return
-        if (committed || NcGlassProfile.releasesPicture(chromeK, committed)) return
+        if (NcGlassProfile.releasesPicture(chromeK, committed)) return
         val first = !l.has
         if (!l.setLive(b, toScreen)) return
         lensIsWall = false
