@@ -615,3 +615,24 @@ keyframe; Smart Animate in a later round; the work sits inside milestone MS. Pla
 Also: a change to what the owner sees is asked first, never only logged (D-059's fade is what that cost).
 Consequences: every panel's hard-coded mapping from progress to look moves into tracks read from the motion preset; the
 first build step must reproduce today's frames exactly before anything new is offered.
+
+## D-063: Panel transitions, step 1: the engine's choices (2026-11-01)
+
+Context: step 1 of `docs/PLAN_PANEL_TRANSITIONS.md` (D-062): the engine, pure Kotlin, nothing on screen yet.
+Decision:
+- **Direction is Figma's arrow** (which way things travel): Move in DOWN comes from the top moving down, Move out DOWN sends
+  what is behind down, Push DOWN moves both down. One meaning for every type.
+- **A Figma type's tracks are linear in t**; the easing is the motion role's (the finger, or the role's spring or curve after
+  a release), as Figma puts the easing on the transition as a whole. Keyframes of one's own carry their own easing to the
+  next keyframe: linear, hold (cut at the end), jump (cut at the start), the CSS beziers Figma names (ease in/out/in-out and
+  their "back" forms) or one's own, and a power (exact square roots and quadratics, which today's code uses).
+- **Slide in and out move the frame that makes way by 30 % of the screen** (`TransitionTypes.SLIDE_PARALLAX`, judged:
+  Figma does not publish its number).
+- **Beyond 0 or 1** (a spring overshooting) the end segment goes on evenly, so a panel's bounce shows; every property has
+  bounds (opacity 0..1), an overshoot included.
+- **Out-types draw what is behind over the panel** (`Transition.behindOver`), kept by a custom copy of them.
+- **The default close is the opening reversed** (the way it came, with each easing mirrored); Instant stays instant.
+- **File format**: `{"transition": {...}}` in a preset (`TransitionJson`): a Figma type by name alone, a custom one with its
+  tracks, `{"reverse": true}` for a close that reverses the opening. A look's keyframe is a share of the theme's value
+  unless `"abs": true`.
+Measured: 28 unit tests (`motion/transition/`), two of which fail when the reversal's mirroring is removed.

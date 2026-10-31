@@ -27,6 +27,12 @@ class NumberKey(name: String) : Key<Float>(name)
 /** How a motion role moves: a spring or a bezier curve ([Curve]); the animation preset's (`motion.*`), not the theme's. */
 class CurveKey(name: String) : Key<Curve>(name)
 
+/**
+ * How a panel goes from one state to another (docs/PLAN_PANEL_TRANSITIONS.md): a Figma-style transition with keyframe tracks,
+ * or the opening reversed ([dev.launcher.app.motion.transition.TransitionSpec]); the animation preset's, not the theme's.
+ */
+class TransitionKey(name: String) : Key<dev.launcher.app.motion.transition.TransitionSpec>(name)
+
 /** One of a set of named options (which layout, which component set, which scaling policy). */
 class ChoiceKey(name: String) : Key<String>(name)
 

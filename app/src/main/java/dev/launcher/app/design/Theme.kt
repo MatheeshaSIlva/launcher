@@ -18,6 +18,8 @@ sealed class Value {
     data class Choice(val option: String) : Value()
     data class Text(val style: TextStyle) : Value()
     data class Mat(val material: Material) : Value()
+    /** A panel's transition (animation presets only): `{"transition": {...}}`, [dev.launcher.app.motion.transition.TransitionJson]. */
+    data class Trans(val spec: dev.launcher.app.motion.transition.TransitionSpec) : Value()
     /** Another token's value (Figma's variable alias): `{"ref": "sys.color.label.primary"}`. */
     data class Alias(val key: String) : Value()
 }
@@ -121,6 +123,8 @@ class Theme(
                     it.getDouble("line").toFloat(), it.optDouble("tracking", 0.0).toFloat()))
             }
             t.has("material") -> Value.Mat(material(t.getJSONObject("material")))
+            t.has("transition") -> try { Value.Trans(dev.launcher.app.motion.transition.TransitionJson.parse(t.getJSONObject("transition"))) }
+                catch (e: IllegalArgumentException) { throw IllegalArgumentException("token $key: ${e.message}", e) }
             else -> throw IllegalArgumentException("token $key: no value")
         }
 
@@ -253,6 +257,7 @@ class Theme(
                 is Value.Text -> o.put("text", JSONObject().put("family", v.style.family).put("weight", v.style.weight)
                     .put("size", v.style.sizePt.toDouble()).put("line", v.style.lineHeightPt.toDouble()).put("tracking", v.style.trackingPt.toDouble()))
                 is Value.Mat -> o.put("material", writeMaterial(v.material))
+                is Value.Trans -> o.put("transition", dev.launcher.app.motion.transition.TransitionJson.write(v.spec))
             }
             o.put("src", e.src.encode())
             e.note?.let { o.put("note", it) }

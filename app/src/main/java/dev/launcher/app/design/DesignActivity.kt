@@ -222,6 +222,11 @@ class DesignActivity : Activity() {
         is Value.Choice -> v.option
         is Value.Text -> "${v.style.family} ${v.style.weight}, ${fmt(v.style.sizePt)}/${fmt(v.style.lineHeightPt)} pt, ${fmt(v.style.trackingPt)}"
         is Value.Mat -> "frost ${fmt(v.material.frostPt)}" + (v.material.lens?.let { ", lens ${fmt(it.refraction)}/${fmt(it.depthPt)}" } ?: "") + ", ${v.material.fills.size} fills"
+        is Value.Trans -> when (val t = v.spec) {
+            dev.launcher.app.motion.transition.TransitionSpec.ReverseOfOpening -> "the opening, reversed"
+            is dev.launcher.app.motion.transition.TransitionSpec.Own ->
+                "${t.transition.type.label} ${t.transition.direction.id}, ${t.transition.drive.id}, ${t.transition.tracks.size} tracks"
+        }
         is Value.Alias -> "→ ${v.key}"
     }
 
@@ -293,6 +298,8 @@ class DesignActivity : Activity() {
             { Value.Text(TextStyle(fam.text.toString().trim(), w().roundToInt(), s(), l(), t())) }
         }
         is Value.Mat -> materialEditor(box, v.material)
+        // (Transitions are edited in the settings, on a panel's moment: its timeline. Here as they are.)
+        is Value.Trans -> { { v } }
         is Value.Alias -> { { v } }
     }
 

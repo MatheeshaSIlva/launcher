@@ -80,6 +80,8 @@ are three tabs over the timeline. Search finds each property.
 
 1. **Engine** (pure Kotlin, unit-tested): tracks, keyframes, easing, evaluation at t; the preset file format
    (`motion.transition.<panel>.<connection>`); the Figma types as generators of tracks.
+   **Done 2026-11-01** (D-063): `motion/transition/` (`Transition`, `TransitionTypes`, `TransitionJson`), the `transition`
+   value kind (`Value.Trans`, `TransitionKey`, `Design.transition`); 28 unit tests. Nothing reads it yet.
 2. **Notification Center on tracks**: its hard-coded mappings replaced by the iOS 27 tracks; today's look and motion
    unchanged, frame for frame (the checkpoint before anything new).
 3. **Notification Center's types**: Instant, Dissolve, Move In/Out, Push, Slide In/Out with directions; follow the finger or
