@@ -1568,7 +1568,7 @@
       "keys": [
        {
         "at": 0,
-        "v": 1
+        "v": "current"
        },
        {
         "at": 1,
@@ -1594,7 +1594,7 @@
      }
     }
    },
-   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); after the sheet has gone the bar comes back and the dim gives way (from whole: as the shade drew it, to be fixed, D-065)"
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); after the sheet has gone the bar comes back and the dim gives way from where it is (whole after the still wallpaper's cover; over a live blur it has cleared with the edge, where the shade before step 2b brought it back whole for a moment: D-067)"
   },
   "motion.transition.nc.after-close.lock": {
    "transition": {

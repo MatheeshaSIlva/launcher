@@ -64,6 +64,42 @@ class IosNcTracksTest {
         assertEquals(1f, out[Prop.BAR_OPACITY.ordinal], eps)
     }
 
+    /** Over a live blur the dim has cleared with the edge when the sheet goes: after the close it stays clear (no flash). */
+    @Test fun afterTheCloseTheDimDoesNotComeBack() {
+        for (place in listOf("home", "app")) {
+            player.begin(motion(place))
+            player.pull(0)
+            for (t in 0L..200L step 17) at(0.7f, t)
+            player.release(200)
+            for (t in 200L..500L step 17) at(1f, t)
+            player.landed(500)
+            for (t in 500L..1000L step 17) at(1f, t)
+            player.close(1000)
+            for (i in 0..30) at(1f - i / 30f, 1000L + i * 17L)
+            player.ended(1510)
+            for (t in 1510L..1900L step 17)
+                assertEquals("$place: the dim at ${t - 1510} ms after the close", 0f, at(0f, t)[Prop.DIM_BELOW.ordinal], 1e-3f)
+        }
+    }
+
+    /** Over the still wallpaper the dim stays whole under the closing sheet, then gives way once it has gone. */
+    @Test fun overTheWallpaperTheDimGivesWayAfterTheClose() {
+        player.begin(motion("home", "wallpaper"))
+        player.pull(0)
+        for (t in 0L..200L step 17) at(0.7f, t)
+        player.release(200)
+        for (t in 200L..500L step 17) at(1f, t)
+        player.landed(500)
+        for (t in 500L..1000L step 17) at(1f, t)
+        player.close(1000)
+        for (i in 0..30) at(1f - i / 30f, 1000L + i * 17L)
+        assertEquals(1f, out[Prop.DIM_BELOW.ordinal], eps)
+        player.ended(1510)
+        assertEquals("whole as the sheet goes", 1f, at(0f, 1510)[Prop.DIM_BELOW.ordinal], eps)
+        assertEquals("halfway", 0.5f, at(0f, 1560)[Prop.DIM_BELOW.ordinal], 1e-3f)
+        assertEquals("gone", 0f, at(0f, 1610)[Prop.DIM_BELOW.ordinal], eps)
+    }
+
     @Test fun overAnAppTheBarStays() {
         player.begin(motion("app"))
         player.pull(0)

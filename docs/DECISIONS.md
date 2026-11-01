@@ -699,3 +699,12 @@ wallpaper's close, and its dim rose as the sheet left).
 Known: on the wallpaper sheet over home, home's arrival starts what follows the close, so the bar comes back from there
 rather than at the close's very end. Unit tests: 52 in `motion/transition/` (iOS 27's tracks from the preset over home and
 over an app included).
+
+## D-067: Notification Center: the dim gives way after a close from where it is (2026-11-01) [owner]
+Found while proving step 2b (D-065): after a close over a live blur the dim below the edge had cleared with the sheet, then
+came back whole the moment the sheet was gone and faded over `motion.nc.close-uncover` (~250 ms): the whole screen darkened
+briefly after the close. Step 2b reproduced it on purpose. With the owner's go, iOS 27's `motion.transition.nc.after-close`
+starts its dim from what shows (`"v": "current"`): over a live blur it stays clear; after the still wallpaper's cover (dim
+whole under the closing sheet) it gives way from whole as before; over the lock screen it was already 0. Measured on the
+emulator (traces of every scenario over home and over an app against step 2b's): the dim after the close is the only value
+that changed (0.989 at its first frame before, 0 now); `IosNcTracksTest` checks both cases (failed before the change).
