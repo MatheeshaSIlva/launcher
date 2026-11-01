@@ -648,6 +648,13 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
                 if (i.getStringExtra("do") == "capture-probe") CaptureProbe.run(ctx, i)
                 if (i.getStringExtra("do") == "live-dump") ncBehindLive.dumps = i.getIntExtra("n", 1)
+                // --es do nc-trace --ez on true|false: Notification Center's choreography frame by frame, to files/dev-out/nc-trace.csv.
+                if (i.getStringExtra("do") == "nc-trace") handler.post {
+                    if (i.getBooleanExtra("on", true)) ncTrace.start()
+                    else java.io.File(ctx.getExternalFilesDir(null), "dev-out/nc-trace.csv").let { f ->
+                        ncTrace.stop(f); java.io.File(f.parentFile, "nc-trace.done").writeText("1\n"); AppLog.log("[shade] test: nc trace in ${f.path}")
+                    }
+                }
                 // --es do open [--es panel cc|nc], --es do close: a panel opened as a released pull opens it, and closed (a
                 // script's pictures of a panel at rest, never caught mid-pull).
                 if (i.getStringExtra("do") == "open") handler.post {
@@ -658,17 +665,23 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 if (i.getStringExtra("do") == "close") handler.post { close(0f); testHeld = false }
                 // --es do pull [--ef at 0.5], then --es do release | close: Notification Center held at that progress as a finger
                 // holds it (the clear slab), until released (as a standstill release decides) or closed.
-                if (i.getStringExtra("do") == "pull") handler.post {
-                    if (!uses(ncPanel.kind)) { AppLog.log("[shade] test: the layout's place has no ${ncPanel.name}"); return@post }
-                    ncPanel.pullBegins(panel === ncPanel)
-                    begin(ncPanel)
-                    progress.stop()
-                    pullFrom = -1f
-                    lastFollowDy = i.getFloatExtra("at", 0.5f) * root.height
-                    progress.snapTo(i.getFloatExtra("at", 0.5f))
-                    testHeld = true
+                if (i.getStringExtra("do") == "pull") handler.post { testPull(i.getFloatExtra("at", 0.5f)) }
+                // --es do nc-scenario --es name open-close|fallback|interrupt: a scripted pull run in the app on frame counts and
+                // traced (nc-trace), to files/dev-out/nc-trace.csv (nc-trace.done when written): the same in every run, however
+                // fast the device draws (step 2b's reference; tools/nc_trace.sh).
+                if (i.getStringExtra("do") == "nc-scenario") handler.post { ncScenario(i.getStringExtra("name") ?: "open-close") }
+                // (--ei close-frames K: closed K frames after the release, exactly: an interrupted reveal the same in every run.)
+                if (i.getStringExtra("do") == "release") handler.post {
+                    if (testHeld && panel != null) {
+                        testHeld = false
+                        release(0f)
+                        val k = i.getIntExtra("close-frames", 0)
+                        if (k > 0) android.view.Choreographer.getInstance().postFrameCallback(object : android.view.Choreographer.FrameCallback {
+                            var left = k
+                            override fun doFrame(t: Long) { if (--left > 0) android.view.Choreographer.getInstance().postFrameCallback(this) else close(0f) }
+                        })
+                    }
                 }
-                if (i.getStringExtra("do") == "release") handler.post { if (testHeld && panel != null) { testHeld = false; release(0f) } }
                 // --es do cc_expand_frames --es control CONNECTIVITY [--ei fps 60] [--ei hold 200]: a module of Control Center
                 // (open first) grown into its large form and back at exact times, Control Center drawn into PNGs in
                 // files/dev-out/expand/ (adb pull; ends with .done): the choreography frame by frame.
@@ -814,6 +827,57 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private fun MotionValue.goTo(to: Float, role: CurveKey) { if (target != to) animateTo(to, Motion.role(role)) }
 
+    /** The test hook's pull: Notification Center held at [at] as a finger holds it, until released or closed. */
+    private fun testPull(at: Float) {
+        if (!uses(ncPanel.kind)) { AppLog.log("[shade] test: the layout's place has no ${ncPanel.name}"); return }
+        ncPanel.pullBegins(panel === ncPanel)
+        begin(ncPanel)
+        progress.stop()
+        pullFrom = -1f
+        lastFollowDy = at * root.height
+        progress.snapTo(at)
+        testHeld = true
+    }
+
+    /**
+     * A scripted pull ([name]) on frame counts, traced: each step waits its frames after the one before (60 frames: one
+     * second of the trace's fixed step), then the trace is written.
+     */
+    private fun ncScenario(name: String) {
+        val release: () -> Unit = { if (testHeld && panel != null) { testHeld = false; release(0f) } }
+        val steps: List<Pair<Int, () -> Unit>> = when (name) {
+            "open-close" -> listOf(10 to { testPull(0.7f) }, 60 to release, 120 to { close(0f) }, 150 to {})
+            "fallback" -> listOf(10 to { testPull(0.3f) }, 60 to release, 150 to {})
+            "interrupt" -> listOf(10 to { testPull(0.7f) }, 60 to release, 6 to { close(0f) }, 150 to {})
+            else -> { AppLog.log("[shade] test: no scenario $name"); return }
+        }
+        ncTrace.start()
+        android.view.Choreographer.getInstance().postFrameCallback(object : android.view.Choreographer.FrameCallback {
+            var step = 0
+            var left = steps[0].first
+            override fun doFrame(t: Long) {
+                if (--left > 0) { android.view.Choreographer.getInstance().postFrameCallback(this); return }
+                steps[step].second()
+                step++
+                if (step < steps.size) { left = steps[step].first; android.view.Choreographer.getInstance().postFrameCallback(this); return }
+                java.io.File(ctx.getExternalFilesDir(null), "dev-out/nc-trace.csv").let { f ->
+                    ncTrace.stop(f); java.io.File(f.parentFile, "nc-trace.done").writeText("1\n"); AppLog.log("[shade] test: nc scenario $name traced in ${f.path}")
+                }
+            }
+        })
+    }
+
+    /** The test hook's frame-by-frame record of the choreography (step 2b's reference), and what it samples. */
+    private val ncTrace = dev.launcher.app.shade.nc.NcTrace {
+        val h = root.height.coerceAtLeast(1).toFloat()
+        floatArrayOf(shownProgress(ncPanel) ?: 0f, nc.edgeY / h, nc.alpha, if (nc.translationX != 0f) 1f else 0f, ncDimShown,
+            ncCover.value, ncPicK.value, ncZoom, ncBar.value, ncLiveK.value, nc.clockDy() / h, nc.dateAlpha())
+    }
+    /** The dim below the edge as [applyProgress] last drew it. */
+    private var ncDimShown = 0f
+    /** The landing was marked in the trace for this commit. */
+    private var ncLandedMarked = false
+
     /** Home is what the shade lies over (not the lock screen, not an app). */
     private fun overHome(): Boolean = !locked && (nav.closingHome() ||
         (nav.bringing() == null && (nav.homeShown() || (nav.frontPackage() == ctx.packageName && nav.frontClass()?.endsWith(".HomeActivity") == true))))
@@ -824,6 +888,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * has arrived is only moved on.
      */
     private fun ncPullBegins() {
+        ncTrace.mark("pull")
         if (ncReveal.target >= 1f) return
         val home = overHome()
         ncDim.goTo(1f, if (home || locked) MotionTokens.NC_PULL_DIM_HOME else MotionTokens.NC_PULL_DIM_APP)
@@ -837,6 +902,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * at once with no picture; else it fades in on `motion.nc.reveal`.
      */
     private fun ncCommit() {
+        ncTrace.mark("commit")
+        ncLandedMarked = false
         // (The bands bend the sheet from here. On One UI the live stream goes on, blurred and veiled as the sheet's own blur comes
         // in, until the sheet has landed; elsewhere it ends, its last frame staying until then.)
         if (!ncSheetBlur) ncBehindLive.pause()
@@ -922,6 +989,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private fun ncCloseBegins() {
         if (nc.closing) return
+        ncTrace.mark("close")
         ncCloseLocked = locked
         nc.closing = true
         applyProgress()   // (the edge learns it is closing before it takes its picture)
@@ -976,6 +1044,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     /** The pull falls back (or the panel goes under another): the dim clears and the bar comes back. */
     private fun ncFallBack() {
         if (ncReveal.target >= 1f) return
+        ncTrace.mark("fallback")
         ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
     }
@@ -985,6 +1054,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      * ([closed]) the cover and its dim give way on `motion.nc.close-uncover` (over the lock screen the dim left with the sheet).
      */
     private fun ncRest(closed: Boolean) {
+        ncTrace.mark(if (closed) "closed" else "rested")
         // (Gone before the edge reached the arrival's place, a fast close: home arrives now.)
         if (closed) ncArrives() else ncArrivalLetGo()
         ncArrival = Arrival.NONE
@@ -1050,6 +1120,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // (Over a live blur likewise: below the closing sheet is the app or home itself, live, and its dim leaves with the
         // sheet, never held whole until the close ends.)
         val ncDimNow = if ((ncCloseLocked || ncLive) && nc.drifting) dev.launcher.app.shade.nc.NcClose.lockDim(ncDim.value, ncEdgeY, nc.driftFrom) else ncDim.value
+        ncDimShown = ncDimNow
+        if (ncP != null && !ncLandedMarked && ncReveal.target >= 1f && !nc.closing &&
+            dev.launcher.app.shade.nc.NcGlassProfile.landed(ncEdgeY, root.height.toFloat())) { ncLandedMarked = true; ncTrace.mark("landed") }
         // (Over a live blur what the bands bend is veiled already.)
         ncEdge.wallDark = if (ncLive) 0f else if (ncReveal.target >= 1f) nc.wallDarkness() else dev.launcher.app.theme.Appearance.wallpaperDim
         ncEdge.set(ncEdgeY, ncDimNow, nc.edgeChrome, nc.edgeRadius, ncReveal.target >= 1f && !nc.closing, nc.drift)

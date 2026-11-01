@@ -427,6 +427,10 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     /** The sheet closes: the numerals lift off the screen's top (`motion.nc.clock-lift`) and the date fades out. */
     fun clockLifts() = clock.lifts()
 
+    /** The clock's offset (px) and the date's opacity now, for the choreography's trace (0 and 1 without a clock). */
+    fun clockDy(): Float = if (hasClock) clock.dyNow() else 0f
+    fun dateAlpha(): Float = if (hasClock) clock.dateNow() else 1f
+
     /** Fans the collapsed stack out into the list, and every app's stack too (the adb test hook). */
     fun expandList() = list.expandList()
 

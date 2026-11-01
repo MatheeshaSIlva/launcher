@@ -291,6 +291,10 @@ class LockClockBlock(private val panel: NcPanel) {
         dateNode.setAlpha(ClockDrop.dateAlpha(dateIn.value, presence))
     }
 
+    /** The numerals' offset from their place now (px) and the date's opacity: the choreography's trace (step 2b). */
+    fun dyNow(): Float = ClockDrop.offset(enter.value, Design.pt(NcTokens.CLOCK_DROP, u)) + ClockDrop.lifted(lift.value, Design.pt(NcTokens.CLOCK_LIFT, u))
+    fun dateNow(): Float = ClockDrop.dateAlpha(dateIn.value, presence)
+
     /** Draws it at [k] of its presence (a long list scrolled up over it fades it). */
     fun draw(c: Canvas, k: Float) {
         if (k <= 0.003f) return

@@ -87,7 +87,19 @@ are three tabs over the timeline. Search finds each property.
      start or the landing), tracks for the parts (dim below the edge, the picture of what was behind, clock, date, status
      bar), and `PanelPlayer` (open, release over it, close; the handover without a jump). 38 unit tests.
    - **2b**: its hard-coded mappings replaced by the iOS 27 tracks; today's look and motion unchanged, frame for frame (the
-     checkpoint before anything new).
+     checkpoint before anything new). In three parts:
+     1. **The reference** (done 2026-11-01): `NcTrace` records what is drawn at every frame (edge, content and whether it
+        waits, dim below the edge, cover, picture, zoom, bar, live blur, clock offset, date); `TEST_SHADE nc-scenario` runs
+        open-close, fallback and interrupt in the app on frame counts, with motion on a fixed step a frame (`MotionClock`,
+        only on the thread under test); `tools/nc_trace.sh`, `tools/nc_trace_compare.py`. Two runs of one build read the
+        same to 0.0000 in all six scenarios (over home and over an app): today's traces are the reference.
+     2. **The switch**: what the reading of today's code showed the engine still needs: a keyframe that starts from the
+        value showing (`from: current`, as today's animations start from where they are), a clock not started yet leaving
+        the value below it, a fallback laid over open as the release is, a cue for the panel having closed (the bar and the
+        dim finish after it), and variants of a transition by place (over home, over an app, on the lock screen: today's
+        dim is quick over home and slow over an app, the bar fades over home only). Then the iOS 27 tracks in `ios27.json`
+        and Notification Center on `PanelPlayer`.
+     3. **The proof**: the six scenarios again, compared with the reference at 0.001.
 3. **Notification Center's types**: Instant, Dissolve, Move In/Out, Push, Slide In/Out with directions; follow the finger or
    play on release; the source frame's live picture.
 4. **Control Center, then Android's shade**, the same way (2, then 3 for each).

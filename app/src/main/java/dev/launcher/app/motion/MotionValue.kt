@@ -46,7 +46,7 @@ class MotionValue(
         target = to
         spring = spec.mover().apply { start(value * scale, velocity * scale, to * scale) }
         elapsedNs = 0L
-        lastNs = System.nanoTime()
+        lastNs = MotionClock.now()
         isAnimating = true
         if (!posted) { posted = true; Choreographer.getInstance().postFrameCallback(frame) }
     }
@@ -54,9 +54,11 @@ class MotionValue(
     fun stop() { isAnimating = false }
 
     private val frame = object : Choreographer.FrameCallback {
-        override fun doFrame(now: Long) {
+        override fun doFrame(frameTimeNanos: Long) {
             posted = false
             if (!isAnimating) return
+            // (Real time but in a test's trace: MotionClock's fixed step.)
+            val now = MotionClock.frame(frameTimeNanos)
             val s = spring ?: return
             elapsedNs += (now - lastNs).coerceIn(0L, MAX_STEP_NS)
             lastNs = maxOf(lastNs, now)
