@@ -36,8 +36,9 @@ for s in $scenarios; do
   a shell rm -f $DIR/nc-trace.done
   a shell am broadcast -a $PKG.TEST_SHADE -p $PKG --es do nc-scenario --es name "$s" >/dev/null
   ok=0
-  for _ in $(seq 1 120); do a shell test -f $DIR/nc-trace.done && { ok=1; break; }; sleep 1; done
-  [ $ok = 1 ] || { echo "$s: no trace after 120 s"; continue; }
+  for _ in $(seq 1 300); do a shell test -f $DIR/nc-trace.done && { ok=1; break; }; sleep 1; done
+  # (A scenario still running when the next starts would mix the two: stop it, and say so.)
+  [ $ok = 1 ] || { echo "$s: no trace after 300 s (stopped)"; a shell am broadcast -a $PKG.TEST_SHADE -p $PKG --es do nc-trace --ez on false >/dev/null; sleep 5; continue; }
   out="tools/shots/nc-trace-$name-$over-$s.csv"
   a pull $DIR/nc-trace.csv "$out" >/dev/null && echo "$out ($(wc -l < "$out") lines)"
 done

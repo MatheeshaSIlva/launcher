@@ -1,5 +1,6 @@
 package dev.launcher.app.shade
 
+import dev.launcher.app.motion.mover
 import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Context
@@ -365,12 +366,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             ncSheetBlur = ncLive && dev.launcher.app.design.SamsungBlur.available
             nc.blurUnder = ncSheetBlur
             nc.prepare()
-            if (ncReveal.target < 1f) nc.clockWaits()
             media.refresh()
             ncEdge.locked = locked; ncWall.locked = locked; ncWall.wallpaper = wallBelow(); prepareLens()
             // Over an app (at rest, nothing being brought) its screen live for the edge's bands.
             ncLiveFrames = false
-            if (!locked && android.os.Build.VERSION.SDK_INT >= 33 && ncReveal.target < 1f && nav.bringing() == null && !overHome())
+            if (!locked && android.os.Build.VERSION.SDK_INT >= 33 && !ncCommitted && nav.bringing() == null && !overHome())
                 nav.frontPackage()?.takeIf { it != ctx.packageName }?.let { ncBehindLive.start(it, root.width, root.height) }
             // (Over a live blur: the blurred picture of what is behind for the sheet, and the blur to take over once it lands.)
             if (ncLive) {
@@ -408,7 +408,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                     val raw = dragFrom + dy / travel()
                     // A drag up starts the close (its release may still open it again: [ncCommit]); a drag down never does.
                     // Before the sheet moves: whether it was down is where the drag took it from.
-                    if (raw < dragFrom && ncReveal.target >= 1f) ncCloseBegins()
+                    if (raw < dragFrom && ncCommitted) ncCloseBegins()
                     progress.snapTo(if (raw > 1f) 1f + Motion.rubberBand((raw - 1f) * travel(), root.height.toFloat()) / travel() else raw.coerceAtLeast(0f))
                 }
                 2 -> dragEnds(vy / travel(), vy)
@@ -808,12 +808,68 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     // ---- Notification Center's clear slab (B-037, D-035)
 
-    /** How far its own content has arrived (0: the clear slab a finger holds, 1: the sheet), on `motion.nc.reveal`. */
-    private val ncReveal = MotionValue(0f, 1000f, { applyProgress() })
-    /** The dim below the slab's edge (0..1), on the pull-dim roles in, `motion.nc.pull-undim` out. */
-    private val ncDim = MotionValue(0f, 1000f, { applyProgress() })
-    /** The status bar over home while the slab is pulled (1 shown), on `motion.nc.bar-fade`. */
-    private val ncBar = MotionValue(1f, 1000f, { bar.setFade(it) })
+    /**
+     * Its choreography as keyframe tracks (docs/PLAN_PANEL_TRANSITIONS.md, step 2b): the content's reveal (0: the clear slab a
+     * finger holds, 1: the sheet), the dim below the slab's edge, the status bar over home, the clock's drop and lift and the
+     * date, each on the tracks of the preset's transitions (`motion.transition.nc.*`, by place: [ncMotion]).
+     */
+    private val ncPlayer = dev.launcher.app.motion.transition.PanelPlayer(unitsPerMs = 1_000_000L) { role -> roleClock(role) }
+    private val ncOut = FloatArray(dev.launcher.app.motion.transition.Prop.entries.size)
+    /** The theme's value of each look as the tracks see it: shares, each view applying its own token (step 2b). */
+    private val ncTheme = FloatArray(dev.launcher.app.motion.transition.Prop.entries.size) { 1f }
+    /** The pull opened it (its content arrived or arrives), until it is closed again. */
+    private var ncCommitted = false
+    /** The status bar's fade as last given to it. */
+    private var ncBarGiven = 1f
+    private var ncFramePosted = false
+    private val ncFrame = android.view.Choreographer.FrameCallback { t ->
+        ncFramePosted = false
+        dev.launcher.app.motion.MotionClock.frame(t)   // (this frame's time first: a test's fixed step moves on here too)
+        applyProgress()
+    }
+
+    private fun roleClock(role: String): dev.launcher.app.motion.transition.RoleClock {
+        val curve = Motion.role(CurveKey(role))
+        val t = dev.launcher.app.motion.CurveTiming(curve)
+        // (A speed's run-out on this role: its mover started at 1 unit/s with nowhere to go, as MotionValue keeps a speed.)
+        val run = curve.mover().apply { start(0f, 1f, 0f) }
+        return object : dev.launcher.app.motion.transition.RoleClock {
+            override fun at(elapsedMs: Float) = t.atMs(elapsedMs)
+            override val durationMs = t.durationMs.toFloat()
+            override fun carry(elapsedMs: Float) = run.value(elapsedMs / 1000.0)
+        }
+    }
+
+    /** The players' time (ns): the motion clock's, a test's fixed step while it traces. */
+    private fun nowMs(): Long = dev.launcher.app.motion.MotionClock.now()
+
+    /** The preset's transitions for this opening, the most specific of each that it has: by place (over home, over an app, the lock screen) and background. */
+    private fun ncMotion(): dev.launcher.app.motion.transition.PanelMotion {
+        val place = if (locked) "lock" else if (overHome()) "home" else "app"
+        // (Read here, not from [ncLive]: the pull begins before the panel's opening has read it for this opening.)
+        val bg = if (dev.launcher.app.design.Design.choice(NcTokens.BACKGROUND) == "live") "live" else "wallpaper"
+        val chosen = StringBuilder()
+        fun spec(conn: String): dev.launcher.app.motion.transition.TransitionSpec? {
+            for (k in listOf("$conn.$place.$bg", "$conn.$place", "$conn.$bg", conn)) {
+                val key = dev.launcher.app.design.TransitionKey("motion.transition.nc.$k")
+                if (dev.launcher.app.design.Design.has(key.name)) { chosen.append(' ').append(k); return dev.launcher.app.design.Design.transition(key) }
+            }
+            return null
+        }
+        fun own(conn: String) = (spec(conn) as? dev.launcher.app.motion.transition.TransitionSpec.Own)?.transition
+        val open = own("open") ?: dev.launcher.app.motion.transition.TransitionTypes.opening(dev.launcher.app.motion.transition.TransitionType.DISSOLVE, dev.launcher.app.motion.transition.Direction.DOWN)
+        return dev.launcher.app.motion.transition.PanelMotion(open, own("release"),
+            spec("close") ?: dev.launcher.app.motion.transition.TransitionSpec.ReverseOfOpening,
+            MotionTokens.NC_OPEN.name, MotionTokens.NC_CLOSE.name, own("fallback"), own("after-close"))
+            .also { if (ncMotionLogs < 6) { ncMotionLogs++; AppLog.log("[nc] transitions ($place, $bg):$chosen") } }
+    }
+
+    private var ncMotionLogs = 0
+
+    /** A new opening's transitions, unless the last ones are still finishing (a pull during the fade after a close goes on from it). */
+    private fun ncPlayerReady() {
+        if (ncPlayer.phase == dev.launcher.app.motion.transition.PanelPlayer.Phase.CLOSED) ncPlayer.begin(ncMotion())
+    }
     /**
      * Below a closing sheet's edge over home or an app (slice 2c1), the still wallpaper (0..1): in on `motion.nc.pull-dim-home`,
      * out on `motion.nc.close-uncover` once the sheet is gone (a stand-in for home's and the app's own arrivals, 2c2, 2c3).
@@ -871,7 +927,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     private val ncTrace = dev.launcher.app.shade.nc.NcTrace {
         val h = root.height.coerceAtLeast(1).toFloat()
         floatArrayOf(shownProgress(ncPanel) ?: 0f, nc.edgeY / h, nc.alpha, if (nc.translationX != 0f) 1f else 0f, ncDimShown,
-            ncCover.value, ncPicK.value, ncZoom, ncBar.value, ncLiveK.value, nc.clockDy() / h, nc.dateAlpha())
+            ncCover.value, ncPicK.value, ncZoom, ncBarGiven, ncLiveK.value, nc.clockDy() / h, nc.dateAlpha())
     }
     /** The dim below the edge as [applyProgress] last drew it. */
     private var ncDimShown = 0f
@@ -889,10 +945,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private fun ncPullBegins() {
         ncTrace.mark("pull")
-        if (ncReveal.target >= 1f) return
-        val home = overHome()
-        ncDim.goTo(1f, if (home || locked) MotionTokens.NC_PULL_DIM_HOME else MotionTokens.NC_PULL_DIM_APP)
-        if (home) ncBar.goTo(0f, MotionTokens.NC_BAR_FADE)
+        if (ncCommitted) return
+        ncPlayerReady()
+        ncPlayer.pull(nowMs())
+        applyProgress()
     }
 
     /**
@@ -918,8 +974,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // The bands at the edge bend the sheet's own wallpaper from here (pass 10), not what was behind the slab (over a live
         // blur: what was behind blurred and veiled as the sheet shows it; until it is made, the sharp one they bent).
         if (!(ncSheetBlur && ncBehindLive.running)) sheetPicture()?.let { ncEdge.setPicture(it.bitmap, it.matrix(root.width, root.height), wall = true) }
-        if (ncReveal.target < 1f) {
-            nc.clockDrops()
+        if (!ncCommitted) {
             // Home's picture only while it is still what home shows (home drew since: the content fades in instead). Taken
             // mid-way through a new look's reveal it had no clock where the held frame showed one (QA, round 3).
             val homeMoved = ncPic.zooms && !dev.launcher.app.HomeBridge.shown.isExactly(ncPic.held as? android.graphics.Picture)
@@ -938,13 +993,16 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 ncPicK.goTo(1f, if (ncPic.zooms) MotionTokens.NC_REVEAL_ZOOM else MotionTokens.NC_REVEAL)
             }
         }
-        ncReveal.goTo(1f, MotionTokens.NC_REVEAL)
-        ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
+        // (The content's reveal, the bar, the clock's drop and the date: the release's tracks; the dim clears once it has landed.)
+        ncCommitted = true
+        ncPlayerReady()
+        ncPlayer.release(nowMs())
+        applyProgress()
     }
 
     /** It starts closing (or goes under the other panel): a pull falls back; a sheet that arrived closes ([ncCloseBegins]). */
     private fun ncCloses() {
-        if (ncReveal.target < 1f) ncFallBack() else ncCloseBegins()
+        if (!ncCommitted) ncFallBack() else ncCloseBegins()
     }
 
     /**
@@ -953,8 +1011,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private fun ncGoesUnder() {
         ncBehindLive.pause()
-        if (ncReveal.target < 1f) { ncFallBack(); return }
-        ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+        if (!ncCommitted) { ncFallBack(); return }
+        // (The dim clears as after a landing; under way, a close gives it up as after the panel is gone.)
+        if (nc.closing) ncPlayer.ended(nowMs()) else ncPlayer.landed(nowMs())
+        applyProgress()
         ncCover.goTo(0f, MotionTokens.NC_PULL_UNDIM)
         ncArrivalLetGo()
     }
@@ -972,7 +1032,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         ncArrival = Arrival.PLAYED
         dev.launcher.app.HomeBridge.panelArrival(dev.launcher.app.HomeBridge.PanelArrival.PLAY)
         ncCover.goTo(0f, MotionTokens.NC_CLOSE_UNCOVER)
-        ncDim.goTo(0f, MotionTokens.NC_CLOSE_UNCOVER)
+        // (The dim gives way with it: what follows the close starts here, not at its very end.)
+        ncPlayer.ended(nowMs())
+        applyProgress()
     }
 
     /** A close over home that did not get as far as home's arrival: home goes back to rest, unseen under the panel. */
@@ -1000,17 +1062,16 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // (On One UI over an app: the bands bend it live again, blurred and veiled as the sheet shows it, from the next frame.)
         if (ncSheetBlur && !ncCloseLocked && android.os.Build.VERSION.SDK_INT >= 34 && nav.bringing() == null && !overHome())
             nav.frontPackage()?.takeIf { it != ctx.packageName }?.let { ncBehindLive.start(it, root.width, root.height) }
-        nc.clockLifts()
-        // With the sheet down nothing below it shows yet: the cover and its dim are whole at once (faded in, the live dock
-        // showed under the rising edge for their first frames); a close of a sheet still landing brings them in.
+        // (The numerals' lift, the date and the bar fading, the dim below the edge: the close's tracks.)
+        ncPlayer.close(nowMs())
+        // With the sheet down nothing below it shows yet: the cover is whole at once (faded in, the live dock showed under the
+        // rising edge for its first frames); a close of a sheet still landing brings it in.
         if (dev.launcher.app.shade.nc.NcGlassProfile.landed(nc.edgeY, root.height.toFloat())) {
-            ncDim.snapTo(1f)
             if (!ncCloseLocked && !ncLive) ncCover.snapTo(1f)
         } else {
-            ncDim.goTo(1f, MotionTokens.NC_PULL_DIM_HOME)
             if (!ncCloseLocked && !ncLive) ncCover.goTo(1f, MotionTokens.NC_PULL_DIM_HOME)
         }
-        ncBar.goTo(0f, MotionTokens.NC_DATE_OUT)
+        applyProgress()
         // Over home (at rest, nothing being brought): home takes its arrival's first frame under the cover, which is whole only
         // from a landed sheet (one still landing fades it in: home's change would show through).
         // (Over a live blur home is there under the sheet all along, blurred: nothing arrives.)
@@ -1024,7 +1085,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
     /** A close taken back (a drag or a pull let go open): the clock comes down from where it is, the cover clears. */
     private fun ncReopens() {
         nc.closing = false
-        nc.clockDrops()
         ncCover.goTo(0f, MotionTokens.NC_CLOSE_UNCOVER)
         // (An arrival already playing finishes under the sheet coming back down.)
         ncArrivalLetGo()
@@ -1043,10 +1103,10 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     /** The pull falls back (or the panel goes under another): the dim clears and the bar comes back. */
     private fun ncFallBack() {
-        if (ncReveal.target >= 1f) return
+        if (ncCommitted) return
         ncTrace.mark("fallback")
-        ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
-        ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
+        ncPlayer.fallBack(nowMs())
+        applyProgress()
     }
 
     /**
@@ -1058,11 +1118,11 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // (Gone before the edge reached the arrival's place, a fast close: home arrives now.)
         if (closed) ncArrives() else ncArrivalLetGo()
         ncArrival = Arrival.NONE
-        ncReveal.snapTo(0f)
-        if (closed && ncCloseLocked) ncDim.snapTo(0f)
-        else if (ncDim.target > 0f) ncDim.goTo(0f, if (closed) MotionTokens.NC_CLOSE_UNCOVER else MotionTokens.NC_PULL_UNDIM)
+        ncCommitted = false
         ncCover.goTo(0f, MotionTokens.NC_CLOSE_UNCOVER)
-        ncBar.goTo(1f, MotionTokens.NC_BAR_FADE)
+        // (What finishes after the panel: the close's layer after it, as the preset has it: the bar back, the dim clearing.)
+        ncPlayer.ended(nowMs())
+        applyProgress()
     }
 
     private fun applyProgress() {
@@ -1100,7 +1160,18 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             backdrop.set(pictureBlur, veil.rgb, veil.alpha * bk, (bgP / 0.12f).coerceIn(0f, 1f))
             if (ccP != null) bar.setRowAlpha(1f - editK)
         }
-        if (ncP != null) { nc.reveal = ncReveal.value; nc.progress = ncP; nc.liveK = ncLiveK.value; ncWall.wallpaper = wallBelow() }
+        // Its choreography's tracks at this frame (the panel's progress, the time), also while what follows a close finishes.
+        val ncPlays = ncP != null || ncPlayer.phase != dev.launcher.app.motion.transition.PanelPlayer.Phase.CLOSED
+        val ncNow = nowMs()
+        if (ncPlays) ncPlayer.evaluate(ncP ?: 0f, ncNow, ncTheme, ncOut)
+        val ncRevealK = if (ncPlays) ncOut[dev.launcher.app.motion.transition.Prop.CONTENT_OPACITY.ordinal] else 0f
+        if (ncPlays) {
+            val b = ncOut[dev.launcher.app.motion.transition.Prop.BAR_OPACITY.ordinal]
+            if (b != ncBarGiven) { ncBarGiven = b; bar.setFade(b) }
+            nc.clockMotion(ncOut[dev.launcher.app.motion.transition.Prop.CLOCK_DROP.ordinal], ncOut[dev.launcher.app.motion.transition.Prop.CLOCK_LIFT.ordinal],
+                ncOut[dev.launcher.app.motion.transition.Prop.DATE_OPACITY.ordinal])
+        }
+        if (ncP != null) { nc.reveal = ncRevealK; nc.progress = ncP; nc.liveK = ncLiveK.value; ncWall.wallpaper = wallBelow() }
         // (One UI: the sheet's own blur and veil, at its edge in this same frame.)
         if (ncSheetBlur) {
             val k = if (ncP != null) ncLiveK.value.coerceIn(0f, 1f) else 0f
@@ -1119,28 +1190,38 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // (Which way is the close's, decided at its start: an unlock on the way changes nothing in one frame.)
         // (Over a live blur likewise: below the closing sheet is the app or home itself, live, and its dim leaves with the
         // sheet, never held whole until the close ends.)
-        val ncDimNow = if ((ncCloseLocked || ncLive) && nc.drifting) dev.launcher.app.shade.nc.NcClose.lockDim(ncDim.value, ncEdgeY, nc.driftFrom) else ncDim.value
+        // (The dim below the edge: the tracks', whole at a close's start and clearing with the edge from where it was.)
+        val ncDimNow = if (ncPlays) ncOut[dev.launcher.app.motion.transition.Prop.DIM_BELOW.ordinal] else 0f
         ncDimShown = ncDimNow
-        if (ncP != null && !ncLandedMarked && ncReveal.target >= 1f && !nc.closing &&
-            dev.launcher.app.shade.nc.NcGlassProfile.landed(ncEdgeY, root.height.toFloat())) { ncLandedMarked = true; ncTrace.mark("landed") }
+        if (ncP != null && !ncLandedMarked && ncCommitted && !nc.closing &&
+            dev.launcher.app.shade.nc.NcGlassProfile.landed(ncEdgeY, root.height.toFloat())) {
+            ncLandedMarked = true
+            ncTrace.mark("landed")
+            ncPlayer.landed(ncNow)
+        }
+        // Frames while a track's clock runs (the panel's own spring may be at rest: a reveal after the landing, a fade after the
+        // close); when nothing more plays after the panel is gone, its transitions are done.
+        if (ncPlays) {
+            if (ncPlayer.busy(ncNow)) {
+                if (!ncFramePosted) { ncFramePosted = true; android.view.Choreographer.getInstance().postFrameCallback(ncFrame) }
+            } else if (ncP == null && panel !== ncPanel && leavingPanel !== ncPanel && ncPlayer.isEnded) ncPlayer.closed()
+        }
         // (Over a live blur what the bands bend is veiled already.)
-        ncEdge.wallDark = if (ncLive) 0f else if (ncReveal.target >= 1f) nc.wallDarkness() else dev.launcher.app.theme.Appearance.wallpaperDim
-        ncEdge.set(ncEdgeY, ncDimNow, nc.edgeChrome, nc.edgeRadius, ncReveal.target >= 1f && !nc.closing, nc.drift)
+        ncEdge.wallDark = if (ncLive) 0f else if (ncCommitted) nc.wallDarkness() else dev.launcher.app.theme.Appearance.wallpaperDim
+        ncEdge.set(ncEdgeY, ncDimNow, nc.edgeChrome, nc.edgeRadius, ncCommitted && !nc.closing, nc.drift)
         // (Landed: the bands have let go of the live picture, and the stream ends with its buffers.)
-        if (ncBehindLive.running && ncReveal.target >= 1f && !nc.closing &&
+        if (ncBehindLive.running && ncCommitted && !nc.closing &&
             dev.launcher.app.shade.nc.NcGlassProfile.releasesPicture(nc.edgeChrome, true)) ncBehindLive.stop()
         // A close over home: once its edge has risen past the arrival's place, home arrives under it.
         if (ncArrival == Arrival.HELD && nc.closing && ncP != null &&
             nc.edgeY <= root.height * dev.launcher.app.design.Design.num(NcTokens.CLOSE_ARRIVAL_AT)) ncArrives()
-        ncWall.set(ncEdgeY, nc.edgeRadius, if (ncReveal.value >= 1f) 0f else 1f, ncCover.value)
-        ncPic.set(ncEdgeY, nc.edgeRadius, ncPicK.value, ncZoom, ncP != null && ncReveal.target >= 1f)
-        // The dim below the edge holds from the commit until the sheet is down (where nothing below it shows), then clears.
-        if (ncP != null && ncReveal.target >= 1f && ncDim.target > 0f && !nc.closing &&
-            dev.launcher.app.shade.nc.NcGlassProfile.landed(ncEdgeY, root.height.toFloat())) ncDim.goTo(0f, MotionTokens.NC_PULL_UNDIM)
+        ncWall.set(ncEdgeY, nc.edgeRadius, if (ncRevealK >= 1f) 0f else 1f, ncCover.value)
+        ncPic.set(ncEdgeY, nc.edgeRadius, ncPicK.value, ncZoom, ncP != null && ncCommitted)
+        // (The dim below the edge holds from the commit until the sheet is down, then clears: the release's track on the landing.)
         // Over a live blur, the landed sheet hands its picture of what was behind over to the live blur (what is behind moves on).
-        if (ncLive && !ncSheetBlur && ncP != null && ncReveal.target >= 1f && !nc.closing && ncLiveK.target < 1f &&
+        if (ncLive && !ncSheetBlur && ncP != null && ncCommitted && !nc.closing && ncLiveK.target < 1f &&
             dev.launcher.app.shade.nc.NcGlassProfile.landed(ncEdgeY, root.height.toFloat())) ncLiveK.goTo(1f, MotionTokens.NC_REVEAL)
-        bar.setClearSlab(ncP != null && ncReveal.value <= 0f)
+        bar.setClearSlab(ncP != null && ncRevealK <= 0f)
         if (ccP == null && ncP == null && shP == null) {
             cc.progress = 0f
             nc.progress = 0f
@@ -1152,7 +1233,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         // the shade's large clock as Quick Settings expand, and the date comes beside it.
         bar.setPanel(
             // (Notification Center counts for the bar once its content arrives: over the clear slab the bar is as it was.)
-            (bgP ?: 0f).coerceIn(0f, 1f) * l, (ncP ?: 0f).coerceIn(0f, 1f) * l * ncReveal.value,
+            (bgP ?: 0f).coerceIn(0f, 1f) * l, (ncP ?: 0f).coerceIn(0f, 1f) * l * ncRevealK,
             if (ncP != null) nc.wantsDarkContent() else 0f,
             if (ccP != null) cc.statusRowY else 0f, if (ccP != null) cc.statusRowInset else 0f,
             if (bgP != null) veilOf(bgKey).darkContent else 0f,
@@ -1379,7 +1460,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         nc.behind = w
         // (Made after the commit: the bands bent the sharp picture until now, against the blurred sheet; from here they bend
         // what the sheet shows, as [ncCommit] hands them. Not while One UI's stream feeds them.)
-        if (ncReveal.target >= 1f && !(ncSheetBlur && ncBehindLive.running))
+        if (ncCommitted && !(ncSheetBlur && ncBehindLive.running))
             ncEdge.setPicture(w.bitmap, w.matrix(root.width, root.height), wall = true)
     }
 
@@ -1396,7 +1477,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         val opening = panel
         nav.backdrop { src ->
             // (Once the pull has committed the bands bend the sheet's wallpaper: a picture arriving late is not theirs.)
-            if (panel !== opening || src == null || ncReveal.target >= 1f) return@backdrop
+            if (panel !== opening || src == null || ncCommitted) return@backdrop
             when (src) {
                 // (A kept picture of an app whose screen changed since would show the old one, sharp, against the live content:
                 // the lens waits for the fresh picture, rim and dim only until then.)
@@ -1414,7 +1495,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                     if (src.picture === lensHome) return@backdrop
                     lensHome = src.picture
                     BlurBaker.bake(src, root.width, root.height, 0.5f, 0f, 0, handler) { bmp, m ->
-                        if (panel === opening && bmp != null && ncReveal.target < 1f) ncEdge.setPicture(bmp, m)
+                        if (panel === opening && bmp != null && !ncCommitted) ncEdge.setPicture(bmp, m)
                     }
                 }
             }

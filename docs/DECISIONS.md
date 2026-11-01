@@ -677,3 +677,25 @@ Decision:
 - **Found in the reference**: a close over a live blur ends with the dim below the edge snapping from ~0 to whole and fading
   over 250 ms (the whole app darkens a moment after the sheet has gone; D-060 meant it to leave with the sheet). Reproduced
   as it is in 2b, to be fixed after it as its own change (in the tracks: start that fade from the value showing).
+
+## D-066: Panel transitions, step 2b: Notification Center on keyframe tracks (2026-11-01)
+
+Decision: Notification Center's content reveal, dim below the edge, status bar, clock drop and lift, and date run on
+`PanelPlayer` with iOS 27's tracks written into `assets/motion/ios27.json` (`motion.transition.nc.*`: open by place, release,
+fallback, close by background and place, after-close by place; named in `MotionRoles.TRANSITIONS`). The shade picks the most
+specific variant the preset has at each opening (logged once: "[nc] transitions (place, background): ..."). Their six
+MotionValues and the clock's three are gone; "has it arrived" is a flag (`ncCommitted`). The player's time is the motion
+clock's in nanoseconds (whole milliseconds put a 60 ms fade a third of a millisecond out).
+Measured (emulator, `tools/nc_trace.sh` against today's reference, tolerance 0.001): over an app, open-close 0.0002 and
+fallback 0.0002; over home, fallback 0.0009 and open-close identical in every moved channel. The close that interrupts the
+reveal 6 frames after the release differs for ~100 ms (content up to 0.039, date 0.003): today's reveal went on on its own
+curve, the tracks start again from where it is at the speed it had (the speed is the clock's own, exact; estimated from the
+frames it was 0.068). The live blur over home differed between the reference run and this one: it is not moved (step 3) and
+takes one branch or the other by whether the blurred picture of what is behind was ready at the commit.
+Fixed on the way, both found by the comparison: before its first frame nothing had shown, and a track starting from what
+shows read an empty value (the bar dropped to 0 in one frame at the first pull over home after a start: now everything is
+at rest then); the background was read before the panel's opening had read it for this opening (the first pull chose the
+wallpaper's close, and its dim rose as the sheet left).
+Known: on the wallpaper sheet over home, home's arrival starts what follows the close, so the bar comes back from there
+rather than at the close's very end. Unit tests: 52 in `motion/transition/` (iOS 27's tracks from the preset over home and
+over an app included).

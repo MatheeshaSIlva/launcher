@@ -5,11 +5,19 @@ interface RoleClock {
     fun at(elapsedMs: Float): Float
     val durationMs: Float
 
+    /**
+     * Where a start at 1 unit/s with nowhere to go has taken the value [elapsedMs] after it (the role's own way of letting a
+     * speed run out): what a value already moving when its clock starts adds to its way, as an animation started from
+     * where it is keeps its speed.
+     */
+    fun carry(elapsedMs: Float): Float = 0f
+
     companion object {
-        /** A straight line over [ms] (tests, and anything that wants an even clock). */
-        fun linear(ms: Float): RoleClock = object : RoleClock {
+        /** A straight line over [ms] (tests, and anything that wants an even clock); [carryOf]: a speed's run-out, if any. */
+        fun linear(ms: Float, carryOf: ((Float) -> Float)? = null): RoleClock = object : RoleClock {
             override fun at(elapsedMs: Float) = (elapsedMs / ms).coerceIn(0f, 1f)
             override val durationMs = ms
+            override fun carry(elapsedMs: Float) = carryOf?.invoke(elapsedMs) ?: 0f
         }
     }
 }
@@ -53,7 +61,10 @@ class PanelMotion(
  * screen: compared with the one before at the same moment, each property keeps the difference and lets it go as its own
  * progress there goes from where it was to its end, so nothing jumps and everything ends where the new transition ends.
  */
-class PanelPlayer(private val clockOf: (String) -> RoleClock) {
+class PanelPlayer(private val unitsPerMs: Long = 1L, private val clockOf: (String) -> RoleClock) {
+    /** A span of the caller's time units in milliseconds (the shade gives nanoseconds: whole milliseconds put a 60 ms fade a third of a millisecond out). */
+    private fun ms(d: Long): Float = d.toFloat() / unitsPerMs
+
     enum class Phase { CLOSED, PULLED, RELEASED, FALLING, CLOSING }
 
     var phase = Phase.CLOSED
@@ -87,6 +98,16 @@ class PanelPlayer(private val clockOf: (String) -> RoleClock) {
     /** Where each property's started clock took it from ([Keyframe.fromCurrent]), by connection layer: 0 under, 1 over. */
     private val from = Array(2) { FloatArray(n) }
     private val fromSet = Array(2) { BooleanArray(n) }
+    /** The speed (units/s) each such property had then, carried into its clock ([RoleClock.carry]). */
+    private val fromV = Array(2) { FloatArray(n) }
+    // The two frames before the last (values and times): a value's speed at the last frame, from three of them.
+    private val prev = FloatArray(n)
+    private val prev2 = FloatArray(n)
+    /** Each value's speed (units/s) where its clock gives it exactly (NaN: from the frames), now and at the last frame. */
+    private val vel = FloatArray(n)
+    private val velLast = FloatArray(n) { Float.NaN }
+    private var prevNow = NONE
+    private var prev2Now = NONE
     /** Not while comparing the new connection with the old one: nothing is taken from what shows then. */
     private var capturing = true
 
@@ -96,9 +117,11 @@ class PanelPlayer(private val clockOf: (String) -> RoleClock) {
         phase = Phase.CLOSED
         pulledAt = NONE; overAt = NONE; closedAt = NONE; landedAt = NONE; endedAt = NONE
         hasLast = false
+        restSet = false
         handover = false
         offset.fill(0f)
         clearFrom()
+        prevNow = NONE; prev2Now = NONE
         clocks(m.open, openClocks)
         clocks(m.release, releaseClocks)
         clocks(m.fallback, fallbackClocks)
@@ -168,6 +191,9 @@ class PanelPlayer(private val clockOf: (String) -> RoleClock) {
         startSet[1] = false
     }
 
+    /** The panel's end was told ([ended]): once nothing is [busy], it may be [closed]. */
+    val isEnded: Boolean get() = endedAt != NONE
+
     /** Nothing more to play: back to closed (a new pull starts from nothing). */
     fun closed() {
         phase = Phase.CLOSED
@@ -201,14 +227,14 @@ class PanelPlayer(private val clockOf: (String) -> RoleClock) {
                 val c = tr.timing as? TrackTiming.Clock ?: continue
                 val at = cueAt(c.cue, startedAt)
                 if (at == NONE) continue
-                val since = (nowMs - at).toFloat() - c.delayMs
+                val since = ms(nowMs - at) - c.delayMs
                 if (since < (clocks[tr.prop.ordinal]?.durationMs ?: 0f)) return true
             }
             return false
         }
         val roleRunning = when (phase) {
-            Phase.RELEASED -> m.open.drive == Drive.RELEASE && overAt != NONE && (nowMs - overAt) < (openRole?.durationMs ?: 0f)
-            Phase.CLOSING -> m.close.drive == Drive.RELEASE && (nowMs - closedAt) < (closeRole?.durationMs ?: 0f)
+            Phase.RELEASED -> m.open.drive == Drive.RELEASE && overAt != NONE && ms(nowMs - overAt) < (openRole?.durationMs ?: 0f)
+            Phase.CLOSING -> m.close.drive == Drive.RELEASE && ms(nowMs - closedAt) < (closeRole?.durationMs ?: 0f)
             else -> false
         }
         return roleRunning || when (phase) {
@@ -235,6 +261,17 @@ class PanelPlayer(private val clockOf: (String) -> RoleClock) {
         if (m == null) {
             for (prop in Prop.entries) out[prop.ordinal] = if (prop.look) prop.rest * theme[prop.ordinal] else prop.rest
             return
+        }
+        // (Before its first frame nothing of it has shown: what shows is everything at rest, the bar there, no dim.)
+        if (!hasLast && !restSet) {
+            for (prop in Prop.entries) last[prop.ordinal] = if (prop.look) prop.rest * theme[prop.ordinal] else prop.rest
+            velLast.fill(0f)
+            restSet = true
+        }
+        // (A new frame: the last two move back, for the speed of what starts from where it is.)
+        if (hasLast && nowMs != lastNow) {
+            System.arraycopy(prev, 0, prev2, 0, n); prev2Now = prevNow
+            System.arraycopy(last, 0, prev, 0, n); prevNow = lastNow
         }
         if (handover) {
             handover = false
@@ -263,6 +300,7 @@ class PanelPlayer(private val clockOf: (String) -> RoleClock) {
             v = v.coerceIn(prop.min, prop.max)
             out[i] = v
             last[i] = v
+            velLast[i] = vel[i]
         }
         hasLast = true
         lastP = p
@@ -271,6 +309,7 @@ class PanelPlayer(private val clockOf: (String) -> RoleClock) {
 
     private var lastP = 0f
     private var lastNow = 0L
+    private var restSet = false
 
     /** The phase's connections at [p] and [nowMs] into [raw] and [u]. */
     private fun compute(m: PanelMotion, p: Float, nowMs: Long, theme: FloatArray) {
@@ -297,13 +336,13 @@ class PanelPlayer(private val clockOf: (String) -> RoleClock) {
 
     /** A release driven on release: on the panel's opening spring from the release on (before it: at its start). */
     private fun overT(nowMs: Long, p: Float): Float =
-        if (overAt == NONE || nowMs < overAt) 0f else openRole?.at((nowMs - overAt).toFloat()) ?: p
+        if (overAt == NONE || nowMs < overAt) 0f else openRole?.at(ms(nowMs - overAt)) ?: p
 
     /** The close's: 1 - p as the panel goes, or, driven on release, its own spring from the close's start. */
     private fun closeT(m: PanelMotion, p: Float, nowMs: Long): Float =
         if (m.close.drive == Drive.FINGER) 1f - p
         else if (nowMs < closedAt) 0f
-        else closeRole?.at((nowMs - closedAt).toFloat()) ?: (1f - p)
+        else closeRole?.at(ms(nowMs - closedAt)) ?: (1f - p)
 
     /**
      * [t]'s values into [raw] and each property's own progress into [u] at [progress]: every property under ([layer] 0:
@@ -320,37 +359,65 @@ class PanelPlayer(private val clockOf: (String) -> RoleClock) {
             val i = prop.ordinal
             val tr = t.track(prop)
             if (tr == null) {
-                if (!over) { raw[i] = if (prop.look) prop.rest * theme[i] else prop.rest; u[i] = progress; ownStart[i] = false }
+                if (!over) { raw[i] = if (prop.look) prop.rest * theme[i] else prop.rest; u[i] = progress; ownStart[i] = false; vel[i] = 0f }
                 continue
             }
             var start = Float.NaN
+            var carried = 0f
             val own = when (val tm = tr.timing) {
                 TrackTiming.Progress -> progress
                 TrackTiming.Relative -> if (t0 >= 1f) 1f else (progress - t0) / (1f - t0)
                 is TrackTiming.Clock -> {
                     val cueAt = cueAt(tm.cue, startedAt)
-                    val since = if (cueAt == NONE) -1f else (nowMs - cueAt).toFloat() - tm.delayMs
+                    val since = if (cueAt == NONE) -1f else ms(nowMs - cueAt) - tm.delayMs
                     // (Over another, a track counts from its clock's start: until then what is under it shows.)
                     if (since < 0f && over) continue
                     if (tr.fromCurrent) {
                         start = when {
                             since >= 0f && fromSet[layer][i] -> from[layer][i]
-                            // Its clock starts: from what showed (as an animation starts from where it is).
-                            since >= 0f && capturing -> (if (hasLast) last[i] else raw[i]).also { from[layer][i] = it; fromSet[layer][i] = true }
+                            // Its clock starts: from what showed and at the speed it had (as an animation starts from where it is).
+                            since >= 0f && capturing -> last[i].also {
+                                from[layer][i] = it; fromSet[layer][i] = true; fromV[layer][i] = speedAtLast(i)
+                            }
                             // Not started (or the comparison of a handover): it holds what shows.
-                            else -> if (hasLast) last[i] else raw[i]
+                            else -> last[i]
                         }
+                        if (since > 0f && fromSet[layer][i]) carried = fromV[layer][i] * (clocks[i]?.carry(since) ?: 0f)
                     }
                     if (since <= 0f) 0f else clocks[i]?.at(since) ?: 0f
                 }
             }
-            raw[i] = tr.valueAt(own, theme[i], start)
+            raw[i] = tr.valueAt(own, theme[i], start) + carried
             u[i] = own
+            vel[i] = Float.NaN
+            val tm = tr.timing
+            if (tm is TrackTiming.Clock) {
+                val c = clocks[i]
+                val cueAt = cueAt(tm.cue, startedAt)
+                val since = if (cueAt == NONE) -1f else ms(nowMs - cueAt) - tm.delayMs
+                if (c != null && since > SPEED_MS) {
+                    val before = since - SPEED_MS
+                    val carriedBefore = if (tr.fromCurrent && fromSet[layer][i]) fromV[layer][i] * c.carry(before) else 0f
+                    vel[i] = (raw[i] - (tr.valueAt(c.at(before), theme[i], start) + carriedBefore)) / (SPEED_MS / 1000f)
+                } else if (since <= 0f) vel[i] = 0f
+            }
             ownStart[i] = tr.timing == TrackTiming.Relative
         }
     }
 
+    /** Property [i]'s speed (units/s) at the last frame: from the last three frames (a second-order backward difference), else two. */
+    private fun speedAtLast(i: Int): Float {
+        // (Exactly, where the last frame's value came from a clock: as an animation knows its own speed.)
+        if (!velLast[i].isNaN()) return velLast[i]
+        if (!hasLast || prevNow == NONE || lastNow == prevNow) return 0f
+        val dt = ms(lastNow - prevNow) / 1000f
+        if (prev2Now == NONE || prevNow == prev2Now || kotlin.math.abs(ms(prevNow - prev2Now) / 1000f - dt) > 1e-3f) return (last[i] - prev[i]) / dt
+        return (3f * last[i] - 4f * prev[i] + prev2[i]) / (2f * dt)
+    }
+
     private companion object {
         const val NONE = Long.MIN_VALUE
+        /** The step a clock-driven value's speed is measured over (ms). */
+        const val SPEED_MS = 0.5f
     }
 }

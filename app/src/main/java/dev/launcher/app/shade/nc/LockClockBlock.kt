@@ -249,31 +249,21 @@ class LockClockBlock(private val panel: NcPanel) {
 
     // ---- the drop on a commit (B-037 step 2, slice 2b)
 
-    /** 1: the numerals are [NcTokens.CLOCK_DROP] above their place (just entering); 0: in place. */
-    private val enter = MotionValue(0f, 1000f, { moved() })
-    /** The date's arrival, 0..1, on `motion.nc.date-in` (it stays under 0.1 for the drop's first ~90 ms). */
-    private val dateIn = MotionValue(1f, 1000f, { moved() })
-
-    /** 1: lifted [NcTokens.CLOCK_LIFT] above its place, off the screen's top (the sheet closing, slice 2c1); 0: in place. */
-    private val lift = MotionValue(0f, 1000f, { moved() })
-
-    /** A pull begins: the sheet's content waits (clear), the clock above its place with no date, ready to drop. */
-    fun waits() { enter.snapTo(1f); lift.snapTo(0f); dateIn.snapTo(0f) }
-
     /**
-     * The pull opened it: the numerals drop into place and the date comes in. A drop on its way goes on from where it is,
-     * and so does a lift a reversed close leaves (the clock comes back down from where it is).
+     * How far above its place the clock is and how far the date has arrived, as the panel's tracks give them (step 2b,
+     * docs/PLAN_PANEL_TRANSITIONS.md): [enter] a share of [NcTokens.CLOCK_DROP] (1: waiting to drop in), [lift] of
+     * [NcTokens.CLOCK_LIFT] (1: lifted off the screen's top), [dateIn] 0..1. iOS 27's: it waits while a finger holds the
+     * pull, drops on `motion.nc.clock-drop` as the date comes in, lifts on `motion.nc.clock-lift` as the date fades.
      */
-    fun drops() {
-        enter.animateTo(0f, Motion.role(MotionTokens.NC_CLOCK_DROP))
-        if (lift.target != 0f) lift.animateTo(0f, Motion.role(MotionTokens.NC_CLOCK_DROP))
-        dateIn.animateTo(1f, Motion.role(MotionTokens.NC_DATE_IN))
-    }
+    private var enter = 0f
+    private var dateIn = 1f
+    private var lift = 0f
 
-    /** The sheet closes: the numerals lift off the screen's top (`motion.nc.clock-lift`) and the date fades (`motion.nc.date-out`). */
-    fun lifts() {
-        lift.animateTo(1f, Motion.role(MotionTokens.NC_CLOCK_LIFT))
-        dateIn.animateTo(0f, Motion.role(MotionTokens.NC_DATE_OUT))
+    /** The tracks' values this frame (moved only when one changed: the nodes' properties, nothing recorded). */
+    fun motion(enter: Float, lift: Float, dateIn: Float) {
+        if (enter == this.enter && lift == this.lift && dateIn == this.dateIn) return
+        this.enter = enter; this.lift = lift; this.dateIn = dateIn
+        moved()
     }
 
     private fun moved() {
@@ -284,16 +274,16 @@ class LockClockBlock(private val panel: NcPanel) {
     }
 
     private fun applyProps() {
-        val dy = ClockDrop.offset(enter.value, Design.pt(NcTokens.CLOCK_DROP, u)) + ClockDrop.lifted(lift.value, Design.pt(NcTokens.CLOCK_LIFT, u))
+        val dy = dyNow()
         node.setTranslationY(dy)
         dateNode.setTranslationY(dy)
         node.setAlpha(presence)
-        dateNode.setAlpha(ClockDrop.dateAlpha(dateIn.value, presence))
+        dateNode.setAlpha(dateNow())
     }
 
     /** The numerals' offset from their place now (px) and the date's opacity: the choreography's trace (step 2b). */
-    fun dyNow(): Float = ClockDrop.offset(enter.value, Design.pt(NcTokens.CLOCK_DROP, u)) + ClockDrop.lifted(lift.value, Design.pt(NcTokens.CLOCK_LIFT, u))
-    fun dateNow(): Float = ClockDrop.dateAlpha(dateIn.value, presence)
+    fun dyNow(): Float = ClockDrop.offset(enter, Design.pt(NcTokens.CLOCK_DROP, u)) + ClockDrop.lifted(lift, Design.pt(NcTokens.CLOCK_LIFT, u))
+    fun dateNow(): Float = ClockDrop.dateAlpha(dateIn, presence)
 
     /** Draws it at [k] of its presence (a long list scrolled up over it fades it). */
     fun draw(c: Canvas, k: Float) {

@@ -1554,6 +1554,696 @@
    ],
    "src": "judged:scrolling to rest on a card"
   },
+  "motion.transition.nc.after-close": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "dim.below": {
+      "clock": {
+       "role": "motion.nc.close-uncover",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": 1
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "bar.opacity": {
+      "clock": {
+       "role": "motion.nc.bar-fade",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); after the sheet has gone the bar comes back and the dim gives way (from whole: as the shade drew it, to be fixed, D-065)"
+  },
+  "motion.transition.nc.after-close.lock": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "dim.below": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "bar.opacity": {
+      "clock": {
+       "role": "motion.nc.bar-fade",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the lock screen the dim left with the sheet"
+  },
+  "motion.transition.nc.close": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "content.opacity": {
+      "clock": {
+       "role": "motion.nc.reveal",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "dim.below": {
+      "progress": "relative",
+      "keys": [
+       {
+        "at": 0,
+        "v": 1
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "bar.opacity": {
+      "clock": {
+       "role": "motion.nc.date-out",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "clock.drop": {
+      "clock": {
+       "role": "motion.nc.clock-drop",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "clock.lift": {
+      "clock": {
+       "role": "motion.nc.clock-lift",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "date.opacity": {
+      "clock": {
+       "role": "motion.nc.date-out",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); the numerals lift off the top, the date and the bar fade; over a live blur or the lock screen the dim below the edge is whole at the start and clears with the edge from where the close began (D-060)"
+  },
+  "motion.transition.nc.close.lock.wallpaper": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "content.opacity": {
+      "clock": {
+       "role": "motion.nc.reveal",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "dim.below": {
+      "progress": "relative",
+      "keys": [
+       {
+        "at": 0,
+        "v": 1
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "bar.opacity": {
+      "clock": {
+       "role": "motion.nc.date-out",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "clock.drop": {
+      "clock": {
+       "role": "motion.nc.clock-drop",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "clock.lift": {
+      "clock": {
+       "role": "motion.nc.clock-lift",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "date.opacity": {
+      "clock": {
+       "role": "motion.nc.date-out",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the lock screen the dim follows the sheet out whatever the sheet's background"
+  },
+  "motion.transition.nc.close.wallpaper": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "content.opacity": {
+      "clock": {
+       "role": "motion.nc.reveal",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "dim.below": [
+      {
+       "at": 0,
+       "v": 1
+      }
+     ],
+     "bar.opacity": {
+      "clock": {
+       "role": "motion.nc.date-out",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "clock.drop": {
+      "clock": {
+       "role": "motion.nc.clock-drop",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "clock.lift": {
+      "clock": {
+       "role": "motion.nc.clock-lift",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "date.opacity": {
+      "clock": {
+       "role": "motion.nc.date-out",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the still wallpaper below a closing sheet (the cover) the dim stays whole until the sheet has gone"
+  },
+  "motion.transition.nc.fallback": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "dim.below": {
+      "clock": {
+       "role": "motion.nc.pull-undim",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "bar.opacity": {
+      "clock": {
+       "role": "motion.nc.bar-fade",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); a pull let go below the threshold: the dim clears and the bar comes back"
+  },
+  "motion.transition.nc.open": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "content.opacity": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "clock.drop": [
+      {
+       "at": 0,
+       "v": 1
+      }
+     ],
+     "clock.lift": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "date.opacity": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "dim.below": {
+      "clock": {
+       "role": "motion.nc.pull-dim-app",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); the clear slab while held: no content, the clock waiting above its place with no date; over an app the dim comes in over ~0.4 s (pass 10)"
+  },
+  "motion.transition.nc.open.home": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "content.opacity": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "clock.drop": [
+      {
+       "at": 0,
+       "v": 1
+      }
+     ],
+     "clock.lift": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "date.opacity": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "dim.below": {
+      "clock": {
+       "role": "motion.nc.pull-dim-home",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "bar.opacity": {
+      "clock": {
+       "role": "motion.nc.bar-fade",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over home the dim comes in quickly and the status bar fades out"
+  },
+  "motion.transition.nc.open.lock": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "content.opacity": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "clock.drop": [
+      {
+       "at": 0,
+       "v": 1
+      }
+     ],
+     "clock.lift": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "date.opacity": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "dim.below": {
+      "clock": {
+       "role": "motion.nc.pull-dim-home",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the lock screen the dim comes in quickly"
+  },
+  "motion.transition.nc.release": {
+   "transition": {
+    "type": "custom",
+    "direction": "down",
+    "drive": "finger",
+    "tracks": {
+     "content.opacity": {
+      "clock": {
+       "role": "motion.nc.reveal",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "dim.below": {
+      "clock": {
+       "role": "motion.nc.pull-undim",
+       "cue": "landed"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "bar.opacity": {
+      "clock": {
+       "role": "motion.nc.bar-fade",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "clock.drop": {
+      "clock": {
+       "role": "motion.nc.clock-drop",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "clock.lift": {
+      "clock": {
+       "role": "motion.nc.clock-drop",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 0
+       }
+      ]
+     },
+     "date.opacity": {
+      "clock": {
+       "role": "motion.nc.date-in",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     }
+    }
+   },
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); the content arrives, the bar comes back, the numerals drop as the date comes in; the dim holds until the sheet has landed"
+  },
   "motion.wallpaper.appear": {
    "bezier": [
     0.365,

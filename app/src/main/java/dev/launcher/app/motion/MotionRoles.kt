@@ -260,7 +260,25 @@ object MotionRoles {
         r("style.closing", "Going home: style", "How an app goes back into its icon."),
     ))
 
-    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, QUICK_SETTINGS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE, MOMENTS, STYLES)
+    /**
+     * How the panels go from one state to another (docs/PLAN_PANEL_TRANSITIONS.md): transitions with keyframe tracks, not
+     * animations; their tracks run on the roles above. Each has variants by place and background (`.home`, `.app`, `.lock`,
+     * `.live`, `.wallpaper`), the most specific one the preset has winning. The settings edit them on a panel's page (step 5).
+     */
+    val TRANSITIONS = MotionGroup("Transitions", "How the panels open, close and come back.", listOf(
+        r("transition.nc.open", "Notification Center: pulled", "What a finger holding the pull shows (over an app)."),
+        r("transition.nc.open.home", "Notification Center: pulled over home", "What a finger holding the pull shows over home."),
+        r("transition.nc.open.lock", "Notification Center: pulled on the lock screen", "What a finger holding the pull shows over the lock screen."),
+        r("transition.nc.release", "Notification Center: let go open", "How the sheet arrives once the pull is let go."),
+        r("transition.nc.fallback", "Notification Center: let go back", "A pull let go before it opened."),
+        r("transition.nc.close", "Notification Center: closing", "The sheet leaving."),
+        r("transition.nc.close.wallpaper", "Notification Center: closing (wallpaper)", "The sheet leaving, with its wallpaper as its background."),
+        r("transition.nc.close.lock.wallpaper", "Notification Center: closing on the lock screen", "The sheet leaving the lock screen, with its wallpaper as its background."),
+        r("transition.nc.after-close", "Notification Center: after closing", "What finishes once the sheet has gone."),
+        r("transition.nc.after-close.lock", "Notification Center: after closing on the lock screen", "What finishes once the sheet has left the lock screen."),
+    ))
+
+    val ALL = listOf(APPS, SWITCHER, HOME, EDIT, SHEETS, SCROLL, CONTROL_CENTER, NOTIFICATIONS, QUICK_SETTINGS, BANNERS, BARS, APPEARANCE, TESTING, FINE_TUNE, MOMENTS, STYLES, TRANSITIONS)
 
     /**
      * What the settings' Motion lets a person retime, by group (docs/PLAN_MOTION.md): every animation but the App Switcher's

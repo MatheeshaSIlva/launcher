@@ -418,14 +418,9 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         invalidate()
     }
 
-    /** A pull begins: the glass clock waits above its place, to drop when the pull opens it ([clockDrops]). */
-    fun clockWaits() = clock.waits()
 
-    /** The pull opened it: the glass numerals drop into place (`motion.nc.clock-drop`) and the date comes in. */
-    fun clockDrops() = clock.drops()
-
-    /** The sheet closes: the numerals lift off the screen's top (`motion.nc.clock-lift`) and the date fades out. */
-    fun clockLifts() = clock.lifts()
+    /** The clock's motion this frame, from the panel's tracks: [drop] and [lift] shares of their distances, [date] 0..1. */
+    fun clockMotion(drop: Float, lift: Float, date: Float) { if (hasClock) clock.motion(drop, lift, date) }
 
     /** The clock's offset (px) and the date's opacity now, for the choreography's trace (0 and 1 without a clock). */
     fun clockDy(): Float = if (hasClock) clock.dyNow() else 0f

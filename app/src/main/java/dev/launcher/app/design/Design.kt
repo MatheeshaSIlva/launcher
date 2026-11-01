@@ -941,6 +941,9 @@ object Design {
     /** The app's context, for what the design system reads of the phone (its font size). */
     internal val context: Context get() = appCtx
     fun material(k: MaterialKey): Material = (value(k.name) as? Value.Mat ?: throw IllegalStateException("token $k is not a material")).material
+    /** The theme, the preset or the user's edits have [key] (a token a layout may leave out: a transition's variant by place). */
+    fun has(key: String): Boolean = try { value(key); true } catch (_: Throwable) { false }
+
     /** [k]'s transition as the preset (and the user) give it: its own, or the opening reversed (docs/PLAN_PANEL_TRANSITIONS.md). */
     fun transition(k: TransitionKey): dev.launcher.app.motion.transition.TransitionSpec =
         (value(k.name) as? Value.Trans ?: throw IllegalStateException("token $k is not a transition")).spec

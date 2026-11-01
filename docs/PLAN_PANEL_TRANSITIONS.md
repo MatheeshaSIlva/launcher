@@ -99,7 +99,9 @@ are three tabs over the timeline. Search finds each property.
         dim finish after it), and variants of a transition by place (over home, over an app, on the lock screen: today's
         dim is quick over home and slow over an app, the bar fades over home only). Then the iOS 27 tracks in `ios27.json`
         and Notification Center on `PanelPlayer`.
-     3. **The proof**: the six scenarios again, compared with the reference at 0.001.
+     3. **The proof**: the six scenarios again, compared with the reference at 0.001. **Done 2026-11-01** (D-066): parts 2
+        and 3: identical but for a close interrupting the reveal (~100 ms, content up to 0.039) and the live blur (not moved:
+        step 3).
 3. **Notification Center's types**: Instant, Dissolve, Move In/Out, Push, Slide In/Out with directions; follow the finger or
    play on release; the source frame's live picture.
 4. **Control Center, then Android's shade**, the same way (2, then 3 for each).
