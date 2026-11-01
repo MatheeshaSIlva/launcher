@@ -41,6 +41,12 @@ class PanelMotion(
         is TransitionSpec.Own -> close.transition
         TransitionSpec.ReverseOfOpening -> TransitionTypes.closingFor(open)
     }
+
+    /**
+     * The panel opens as a sheet whose edge moves ([Prop.PANEL_EDGE]: iOS's, with its clear slab, its cover and what gives
+     * way inside it), not as a frame that moves, scales or fades whole (Figma's types).
+     */
+    val sheetEdge: Boolean = open.tracks.any { it.prop == Prop.PANEL_EDGE }
 }
 
 /**
@@ -69,7 +75,9 @@ class PanelPlayer(private val unitsPerMs: Long = 1L, private val clockOf: (Strin
 
     var phase = Phase.CLOSED
         private set
-    private var motion: PanelMotion? = null
+    /** What it plays since the last [begin] (null before the first). */
+    var motion: PanelMotion? = null
+        private set
 
     private var pulledAt = NONE
     private var overAt = NONE     // the release's or the fallback's start

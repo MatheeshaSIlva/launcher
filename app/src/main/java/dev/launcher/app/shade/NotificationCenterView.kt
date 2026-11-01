@@ -260,9 +260,44 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     }
 
     private fun showContent() {
-        alpha = dev.launcher.app.shade.nc.NcGlassProfile.contentAlpha(progress, reveal, revealWhole)
-        translationX = if (dev.launcher.app.shade.nc.NcGlassProfile.contentWaits(progress, reveal, revealWhole)) width.toFloat() else 0f
+        alpha = dev.launcher.app.shade.nc.NcGlassProfile.contentAlpha(progress, reveal, revealWhole) * frameOpacity
+        translationX = (if (dev.launcher.app.shade.nc.NcGlassProfile.contentWaits(progress, reveal, revealWhole)) width.toFloat() else 0f) + frameX * width
     }
+
+    /**
+     * How far the sheet's edge has come (a share of the height, from the panel's `panel.edge` track): iOS's moving edge follows
+     * the pull; a transition that moves the frame instead leaves it whole (1).
+     */
+    var edge = 0f
+        set(v) { if (field != v) { field = v; updateEdge() } }
+
+    // The frame as a whole (the panel's `panel.x`, `.y`, `.scale`, `.opacity` and `.corner` tracks: Figma's types move,
+    // scale or fade the destination frame): properties of the view's node, nothing recorded again.
+    private var frameX = 0f
+    private var frameY = 0f
+    private var frameScale = 1f
+    private var frameOpacity = 1f
+    private var frameCorner = 1f
+    /** The frame is somewhere other than its place: its outline cuts it (its corners the display's) wherever its edge is. */
+    val frameMoves: Boolean get() = frameX != 0f || frameY != 0f || frameScale != 1f
+
+    /** The frame's offset ([x], [y]: shares of the width and height), [scale], [opacity] and [corner] (a share of its radius). */
+    fun frame(x: Float, y: Float, scale: Float, opacity: Float, corner: Float) {
+        if (x == frameX && y == frameY && scale == frameScale && opacity == frameOpacity && corner == frameCorner) return
+        val cut = frameMoves
+        val cornerMoved = corner != frameCorner
+        frameX = x; frameY = y; frameScale = scale; frameOpacity = opacity; frameCorner = corner
+        translationY = sheetY()
+        if (scaleX != scale) { scaleX = scale; scaleY = scale }
+        showContent()
+        // (The outline only when it changes: cut or not, or its corners. Moving it is free.)
+        if (cut != frameMoves || cornerMoved) { edgeRadius = -1f; updateEdge() }
+    }
+
+    /** Where the frame is drawn now (px): its offset, for what draws with it in other views (the sheet's blur). */
+    val frameDx: Float get() = frameX * width
+    val frameDy: Float get() = frameY * height
+    val frameK: Float get() = frameScale
 
     init {
         alpha = 0f   // closed until the first pull (the setter is not run for the first value); its layer comes with it
@@ -303,7 +338,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
 
     /** The sheet does not slide: its content is still ([NcGlassProfile.contentStill]) and the outline moves; closed, it is parked above. */
     override fun sheetY(): Float =
-        if (dev.launcher.app.shade.nc.NcGlassProfile.contentStill(progress)) 0f else -height.toFloat()
+        (if (dev.launcher.app.shade.nc.NcGlassProfile.contentStill(progress)) 0f else -height.toFloat()) + frameY * height
 
     /**
      * Over a live blur (`comp.nc.background` "live", set by the shade at each opening): the sheet is the same glass sheet (the
@@ -370,13 +405,13 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         if (width == 0) return
         val h = height.toFloat()
         // (A whole pixel: the outline takes ints, and the edge, the wallpaper and the lens all draw at this same edge.)
-        val y = Math.round(min(progress, 1f) * h).toFloat()
+        val y = Math.round(min(edge, 1f) * h).toFloat()
         val tok = tokenCorner()
         if (displayR < 0f) displayR = displayCorner().also {
             val line = "[nc] display corner radius ${it.roundToInt()} px ($displaySource)"
             if (line != displayLogged) { displayLogged = line; AppLog.log(line) }
         }
-        val r = dev.launcher.app.shade.nc.NcGlassProfile.outlineRadius(y, h, tok, displayR)
+        val r = dev.launcher.app.shade.nc.NcGlassProfile.outlineRadius(y, h, tok, displayR) * frameCorner
         edgeChrome = dev.launcher.app.shade.nc.NcGlassProfile.chrome(y, h, tok)
         val landed = dev.launcher.app.shade.nc.NcGlassProfile.landed(y, h)
         // Closing, the wallpaper drifts down by a share of the edge's travel (pass 5, 10): its node moves, nothing is recorded.
@@ -391,7 +426,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
         if (y == edgeY && r == edgeRadius && !moved) return
         edgeY = y
         edgeRadius = r
-        val clip = !landed
+        val clip = !landed || frameMoves
         if (clipToOutline != clip) clipToOutline = clip
         // The outline and the wallpaper's node are properties (a frame, no recording); the surfaces' glass samples the
         // wallpaper where it has drifted to, which is recorded with each draw: the sheet is recorded again then.
@@ -430,6 +465,7 @@ class NotificationCenterView(ctx: Context, private val host: Host) : View(ctx), 
     fun expandList() = list.expandList()
 
     fun onClosed() {
+        frame(0f, 0f, 1f, 1f, 1f)
         behind = null
         liveK = 0f
         closing = false

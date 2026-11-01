@@ -103,7 +103,15 @@ are three tabs over the timeline. Search finds each property.
         and 3: identical but for a close interrupting the reveal (~100 ms, content up to 0.039) and the live blur (not moved:
         step 3).
 3. **Notification Center's types**: Instant, Dissolve, Move In/Out, Push, Slide In/Out with directions; follow the finger or
-   play on release; the source frame's live picture.
+   play on release; the source frame's live picture. In four parts (D-068):
+   - **3b** (part 1 done 2026-11-01, D-068): the frame drawn from its tracks (edge, offset, scale, opacity, corner; One UI's
+     sheet blur from `bg.blur`/`bg.veil`, following the frame), the user's choice over the preset's variants
+     (`PanelChoice`), play on release. Instant, Dissolve, Move In and Slide In's own half work. Part 2: the owner's D-058
+     slide (the blurred sheet and the notifications whole inside the edge from the commit) as a choice.
+   - **3c**: Push, Move Out, Slide Out: what is behind moved (the app's live picture, home's picture).
+   - **3d**: a chooser in the token editor (developer tools) until step 5's cards.
+   - **3a**: the live blur's handover off One UI, the cover and the picture giving way as tracks (needs conditions a
+     place/background variant cannot say: a picture ready at the commit, home drawn since).
 4. **Control Center, then Android's shade**, the same way (2, then 3 for each).
 5. **Settings, part 1**: type cards, direction, drive, on the playing stage.
 6. **Settings, part 2**: the timeline editor.

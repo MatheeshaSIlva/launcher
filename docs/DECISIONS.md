@@ -708,3 +708,32 @@ starts its dim from what shows (`"v": "current"`): over a live blur it stays cle
 whole under the closing sheet) it gives way from whole as before; over the lock screen it was already 0. Measured on the
 emulator (traces of every scenario over home and over an app against step 2b's): the dim after the close is the only value
 that changed (0.989 at its first frame before, 0 now); `IosNcTracksTest` checks both cases (failed before the change).
+
+## D-068: Panel transitions, step 3b part 1: Notification Center draws its frame from the tracks (2026-11-01)
+Step 3 split (owner's go, 2026-11-01): 3a (the live blur's picture handover, the cover and the picture giving way at the
+commit as tracks) waits: today's code branches on facts a place/background variant cannot say (was a picture of what is
+behind ready at the commit, did home draw since), so it needs a design of its own and changes nothing visible; 3b (the
+types you see) goes first, then 3c (types that move what is behind: Push, Move Out, Slide Out), then 3d (a chooser).
+- **One renderer, no mode.** The sheet's edge is the `panel.edge` track (iOS 27's open and close variants key it to the
+  pull; the view no longer reads it from the progress) and the frame as a whole takes `panel.x`, `.y`, `.scale`,
+  `.opacity`, `.corner` (properties of its node: nothing recorded again; the outline cuts it while it is off its place).
+  A transition whose opening has no edge track is a frame that moves whole (`PanelMotion.sheetEdge`): iOS's machinery
+  that belongs to its sheet (the picture giving way, the cover, home's arrival held under it, the live blur's handover,
+  the bands' live stream at a close) is left out for it; landing is the panel at its place.
+- **Blur.** On One UI the sheet's own blur (`NcSheetBlur`) reads `bg.blur` and `bg.veil` (faded with `panel.opacity`:
+  Samsung's blur ignores a view's alpha) and follows the frame's offset and scale; iOS 27 keys them as the old code ran
+  them (none under the slab, in on `motion.nc.reveal` at the commit, held through the close). Elsewhere a frame lies over
+  the screen-wide blur behind the window at its tracks' strength times the share of the screen the frame covers (it
+  cannot move with the frame; without that, Move In blurred everything before the sheet had come). iOS 27's sheet off One
+  UI keeps its picture and handover (3a).
+- **The user's choice wins** over the preset's variants by place and background (`Design.userEntry` first, at every level,
+  then the preset's most specific). `PanelChoice.choose`: the opening as the type, the close its reverse, nothing over
+  either (an empty transition for release, fallback, after-close). Test hook: `TEST_SHADE --es do nc-transition --es type
+  move-in|dissolve|... [--es dir down] [--es drive finger|release]`, `--es type preset` undoes.
+- **Played on release** shows nothing while pulled; any release but a fling back up opens it (judged: the finger has
+  nothing to judge 62.5 % by).
+Measured on the emulator: iOS 27's six traces against D-067's build, largest difference 0.0000 (the edge from its track is
+the old edge exactly); Move In held at 0.5 (the sheet's lower half over the screen's upper half, the blur at half
+strength), released from 0.7 (open at rest, closed back to a clean home), Dissolve at 0.4, Slide In open and closed
+(its "what is behind makes way" half is 3c), Move In played on release (nothing while held at 0.3; released, it opens).
+Not seen: One UI's sheet blur following a moving frame (S24 only).

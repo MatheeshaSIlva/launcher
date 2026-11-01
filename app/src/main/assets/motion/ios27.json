@@ -1726,10 +1726,52 @@
         "v": 0
        }
       ]
+     },
+     "panel.edge": [
+      {
+       "at": 0,
+       "v": 1
+      },
+      {
+       "at": 1,
+       "v": 0
+      }
+     ],
+     "bg.blur": {
+      "clock": {
+       "role": "motion.nc.reveal",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "bg.veil": {
+      "clock": {
+       "role": "motion.nc.reveal",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
      }
     }
    },
-   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); the numerals lift off the top, the date and the bar fade; over a live blur or the lock screen the dim below the edge is whole at the start and clears with the edge from where the close began (D-060)"
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); the numerals lift off the top, the date and the bar fade; over a live blur or the lock screen the dim below the edge is whole at the start and clears with the edge from where the close began (D-060); the sheet's edge rises with the panel; the sheet's own blur (One UI) stays as it rises (one still coming in goes on coming)"
   },
   "motion.transition.nc.close.lock.wallpaper": {
    "transition": {
@@ -1829,10 +1871,20 @@
         "v": 0
        }
       ]
-     }
+     },
+     "panel.edge": [
+      {
+       "at": 0,
+       "v": 1
+      },
+      {
+       "at": 1,
+       "v": 0
+      }
+     ]
     }
    },
-   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the lock screen the dim follows the sheet out whatever the sheet's background"
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the lock screen the dim follows the sheet out whatever the sheet's background; the sheet's edge rises with the panel"
   },
   "motion.transition.nc.close.wallpaper": {
    "transition": {
@@ -1925,10 +1977,20 @@
         "v": 0
        }
       ]
-     }
+     },
+     "panel.edge": [
+      {
+       "at": 0,
+       "v": 1
+      },
+      {
+       "at": 1,
+       "v": 0
+      }
+     ]
     }
    },
-   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the still wallpaper below a closing sheet (the cover) the dim stays whole until the sheet has gone"
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the still wallpaper below a closing sheet (the cover) the dim stays whole until the sheet has gone; the sheet's edge rises with the panel"
   },
   "motion.transition.nc.fallback": {
    "transition": {
@@ -2017,10 +2079,32 @@
         "v": 1
        }
       ]
-     }
+     },
+     "panel.edge": [
+      {
+       "at": 0,
+       "v": 0
+      },
+      {
+       "at": 1,
+       "v": 1
+      }
+     ],
+     "bg.blur": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "bg.veil": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ]
     }
    },
-   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); the clear slab while held: no content, the clock waiting above its place with no date; over an app the dim comes in over ~0.4 s (pass 10)"
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); the clear slab while held: no content, the clock waiting above its place with no date; over an app the dim comes in over ~0.4 s (pass 10); the sheet's edge follows the pull (a share of the screen's height); no blur under the clear slab"
   },
   "motion.transition.nc.open.home": {
    "transition": {
@@ -2083,10 +2167,32 @@
         "v": 0
        }
       ]
-     }
+     },
+     "panel.edge": [
+      {
+       "at": 0,
+       "v": 0
+      },
+      {
+       "at": 1,
+       "v": 1
+      }
+     ],
+     "bg.blur": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "bg.veil": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ]
     }
    },
-   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over home the dim comes in quickly and the status bar fades out"
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over home the dim comes in quickly and the status bar fades out; the sheet's edge follows the pull (a share of the screen's height); no blur under the clear slab"
   },
   "motion.transition.nc.open.lock": {
    "transition": {
@@ -2133,10 +2239,32 @@
         "v": 1
        }
       ]
-     }
+     },
+     "panel.edge": [
+      {
+       "at": 0,
+       "v": 0
+      },
+      {
+       "at": 1,
+       "v": 1
+      }
+     ],
+     "bg.blur": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ],
+     "bg.veil": [
+      {
+       "at": 0,
+       "v": 0
+      }
+     ]
     }
    },
-   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the lock screen the dim comes in quickly"
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); over the lock screen the dim comes in quickly; the sheet's edge follows the pull (a share of the screen's height); no blur under the clear slab"
   },
   "motion.transition.nc.release": {
    "transition": {
@@ -2239,10 +2367,42 @@
         "v": 1
        }
       ]
+     },
+     "bg.blur": {
+      "clock": {
+       "role": "motion.nc.reveal",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
+     },
+     "bg.veil": {
+      "clock": {
+       "role": "motion.nc.reveal",
+       "cue": "start"
+      },
+      "keys": [
+       {
+        "at": 0,
+        "v": "current"
+       },
+       {
+        "at": 1,
+        "v": 1
+       }
+      ]
      }
     }
    },
-   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); the content arrives, the bar comes back, the numerals drop as the date comes in; the dim holds until the sheet has landed"
+   "src": "measured:iOS 27's Notification Center as the shade drew it before step 2b (B-037, D-035, D-048 to D-060), reproduced frame for frame (tools/nc_trace.sh); the content arrives, the bar comes back, the numerals drop as the date comes in; the dim holds until the sheet has landed; the sheet's own blur and veil (One UI) come in with the content"
   },
   "motion.wallpaper.appear": {
    "bezier": [

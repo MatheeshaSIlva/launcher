@@ -31,12 +31,15 @@ class NcSheetBlur(ctx: Context) : View(ctx) {
 
     /**
      * The sheet's edge at [edgeY] (px) with corners [corner] (px); the blur at [radius] (Samsung's, 0: none) and the veil
-     * [veilArgb] (already at this frame's strength).
+     * [veilArgb] (already at this frame's strength). [dx], [dy], [scale]: the sheet's frame moved and scaled as a whole (the
+     * panel's transition), followed here in the same frame (Samsung's blur follows a view's translation and scale).
      */
-    fun set(edgeY: Float, corner: Float, radius: Int, veilArgb: Int) {
+    fun set(edgeY: Float, corner: Float, radius: Int, veilArgb: Int, dx: Float = 0f, dy: Float = 0f, scale: Float = 1f) {
         val h = height.toFloat()
         if (h <= 0f) return
-        translationY = edgeY - h
+        translationY = edgeY - h + dy
+        translationX = dx
+        if (scaleX != scale) { scaleX = scale; scaleY = scale }
         val cornerMoved = corner != cornerNow
         cornerNow = corner
         if (radius <= 0) {
@@ -49,6 +52,8 @@ class NcSheetBlur(ctx: Context) : View(ctx) {
 
     /** Closed: no blur, no veil. */
     fun clear() {
+        translationX = 0f
+        scaleX = 1f; scaleY = 1f
         if (radiusNow > 0) SamsungBlur.clear(this)
         radiusNow = 0
         cornerNow = -1f
