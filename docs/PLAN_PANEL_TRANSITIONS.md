@@ -82,8 +82,12 @@ are three tabs over the timeline. Search finds each property.
    (`motion.transition.<panel>.<connection>`); the Figma types as generators of tracks.
    **Done 2026-11-01** (D-063): `motion/transition/` (`Transition`, `TransitionTypes`, `TransitionJson`), the `transition`
    value kind (`Value.Trans`, `TransitionKey`, `Design.transition`); 28 unit tests. Nothing reads it yet.
-2. **Notification Center on tracks**: its hard-coded mappings replaced by the iOS 27 tracks; today's look and motion
-   unchanged, frame for frame (the checkpoint before anything new).
+2. **Notification Center on tracks**, in two parts (owner, 2026-11-01, D-064):
+   - **2a, the engine for it** (done 2026-11-01): tracks on clocks of their own (a role, a delay, a cue: the connection's
+     start or the landing), tracks for the parts (dim below the edge, the picture of what was behind, clock, date, status
+     bar), and `PanelPlayer` (open, release over it, close; the handover without a jump). 38 unit tests.
+   - **2b**: its hard-coded mappings replaced by the iOS 27 tracks; today's look and motion unchanged, frame for frame (the
+     checkpoint before anything new).
 3. **Notification Center's types**: Instant, Dissolve, Move In/Out, Push, Slide In/Out with directions; follow the finger or
    play on release; the source frame's live picture.
 4. **Control Center, then Android's shade**, the same way (2, then 3 for each).

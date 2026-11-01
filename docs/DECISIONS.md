@@ -636,3 +636,22 @@ Decision:
   tracks, `{"reverse": true}` for a close that reverses the opening. A look's keyframe is a share of the theme's value
   unless `"abs": true`.
 Measured: 28 unit tests (`motion/transition/`), two of which fail when the reversal's mirroring is removed.
+
+## D-064: Panel transitions, step 2a: tracks with clocks of their own, a player per panel (2026-11-01) [owner]
+
+Context: step 2 (Notification Center on tracks, frame for frame as today) found that iOS 27's release starts several motions
+on separate clocks at once (the edge's spring from the finger, the content's 200 ms fade, home's icons' 90 ms zoom, the
+clock's own spring, the bar's 200 ms fade, the dim that clears 180 ms after the landing): one timeline per transition cannot
+reproduce it. The owner chose to extend the engine ("as in a video editor") over swapping the steps or an approximation.
+Decision:
+- **A track runs on the connection's progress or on a clock of its own** (`TrackTiming.Clock`: a motion role, a delay, a cue:
+  the connection's start or the panel's landing). The role keeps the moment's Speed and Bounce.
+- **Tracks for the parts that move on their own**: the dim below the edge, the still picture of what was behind (opacity,
+  zoom), the clock (position, opacity), the date, the status bar. A layout without a part ignores its tracks.
+- **`PanelPlayer`**: open while pulled, release laid over open once let go open (the edge goes on landing on the panel's
+  progress), close at 1 - p; a transition driven on release runs on the panel's own spring from the release.
+- **Handover without a jump**: a connection taking over mid-way compares itself with the one before at the same moment (the
+  last frame's progress and time), keeps the difference per property and lets it go as its own progress there reaches its
+  end. Identical to today's motion on uninterrupted paths; interrupted ones start from what showed (their speed may differ
+  from today's, where each value kept its velocity).
+Measured: 38 unit tests in `motion/transition/` (10 for the player); removing the handover fails two of them.

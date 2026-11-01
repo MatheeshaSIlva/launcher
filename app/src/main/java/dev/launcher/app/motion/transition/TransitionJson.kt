@@ -14,6 +14,8 @@ import org.json.JSONObject
  *                                             "content.opacity": [{"at": 0.4, "v": 0, "ease": {"bezier": [0.2, 0, 0, 1]}},
  *                                                                 {"at": 1, "v": 1}]}}}
  * ```
+ * A track on a clock of its own: `"clock.y": {"clock": {"role": "motion.nc.clock-drop", "cue": "start", "delay": 0},
+ * "keys": [...]}` (cues: start, landed).
  * A Figma type is written as its name alone (its tracks are made from it); a custom one with its tracks. A look's keyframe
  * is a share of the theme's value unless `"abs": true`. Eases: linear, hold, jump, ease-in, ease-out, ease-in-out,
  * ease-in-back, ease-out-back, ease-in-out-back, `{"bezier": [x1, y1, x2, y2]}`, `{"power": p, "out": true}`.
@@ -46,8 +48,13 @@ object TransitionJson {
         val t = o.optJSONObject("tracks") ?: JSONObject()
         for (id in t.keys()) {
             val prop = Prop.of(id)
-            val arr = t.getJSONArray(id)
-            tracks += Track(prop, List(arr.length()) { keyframe(prop, arr.getJSONObject(it)) })
+            // A list of keyframes follows the connection's progress; an object has a clock of its own and its keyframes.
+            val v = t.get(id)
+            val clock = (v as? JSONObject)?.let { it.optJSONObject("clock") ?: throw IllegalArgumentException("track $id: a track written as an object has a clock") }?.let { c ->
+                TrackTiming.Clock(c.getString("role"), Cue.of(c.optString("cue", Cue.START.id)), c.optDouble("delay", 0.0).toFloat())
+            }
+            val arr = if (v is JSONObject) v.getJSONArray("keys") else t.getJSONArray(id)
+            tracks += Track(prop, List(arr.length()) { keyframe(prop, arr.getJSONObject(it)) }, clock ?: TrackTiming.Progress)
         }
         return TransitionSpec.Own(Transition(TransitionType.CUSTOM, direction, drive, tracks.sortedBy { it.prop.ordinal }, from))
     }
@@ -82,12 +89,19 @@ object TransitionJson {
             if (t.type == TransitionType.CUSTOM) {
                 t.from?.let { o.put("from", it.id) }
                 val tracks = JSONObject()
-                for (tr in t.tracks) tracks.put(tr.prop.id, JSONArray().apply {
-                    for (k in tr.keys) put(JSONObject().put("at", k.at.toDouble()).put("v", k.value.toDouble()).apply {
-                        if (k.absolute) put("abs", true)
-                        if (k.ease != Easing.Linear) put("ease", writeEase(k.ease))
-                    })
-                })
+                for (tr in t.tracks) {
+                    val keys = JSONArray().apply {
+                        for (k in tr.keys) put(JSONObject().put("at", k.at.toDouble()).put("v", k.value.toDouble()).apply {
+                            if (k.absolute) put("abs", true)
+                            if (k.ease != Easing.Linear) put("ease", writeEase(k.ease))
+                        })
+                    }
+                    when (val c = tr.timing) {
+                        TrackTiming.Progress -> tracks.put(tr.prop.id, keys)
+                        is TrackTiming.Clock -> tracks.put(tr.prop.id, JSONObject().put("keys", keys).put("clock", JSONObject()
+                            .put("role", c.role).put("cue", c.cue.id).apply { if (c.delayMs != 0f) put("delay", c.delayMs.toDouble()) }))
+                    }
+                }
                 o.put("tracks", tracks)
             }
             o

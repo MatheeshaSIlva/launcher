@@ -140,10 +140,55 @@ enum class Prop(val id: String, val rest: Float, val look: Boolean, val min: Flo
     BEHIND_Y("behind.y", 0f, false, -2f, 2f),
     BEHIND_SCALE("behind.scale", 1f, false, 0f, 4f),
     BEHIND_OPACITY("behind.opacity", 1f, false, 0f, 1f),
-    BEHIND_DIM("behind.dim", 0f, true, 0f, 1f);
+    BEHIND_DIM("behind.dim", 0f, true, 0f, 1f),
+    /**
+     * The dim below the panel's moving edge, over what still shows there (iOS's clear slab: a share of the layout's dim
+     * token, `comp.nc.glass.dim`).
+     */
+    DIM_BELOW("dim.below", 0f, true, 0f, 1f),
+    /** A still picture of what was behind, inside the panel, giving way to it (iOS: home's icons zooming, an app fading). */
+    SNAPSHOT_OPACITY("snapshot.opacity", 0f, false, 0f, 1f),
+    SNAPSHOT_SCALE("snapshot.scale", 1f, false, 0f, 4f),
+    /** The panel's parts that move on their own (a layout without one ignores its tracks). */
+    CLOCK_Y("clock.y", 0f, false, -2f, 2f),
+    CLOCK_OPACITY("clock.opacity", 1f, false, 0f, 1f),
+    DATE_OPACITY("date.opacity", 1f, false, 0f, 1f),
+    /** The status bar over the panel. */
+    BAR_OPACITY("bar.opacity", 1f, false, 0f, 1f);
 
     companion object {
         fun of(id: String): Prop = entries.firstOrNull { it.id == id } ?: throw IllegalArgumentException("no property '$id'")
+    }
+}
+
+/**
+ * What a track's own progress (its keyframes' 0..1) follows: the connection's ([Progress]: the finger and the panel's spring,
+ * or a drive-on-release transition's clock), or a clock of its own ([Clock]) as a video editor's layer has its own timing.
+ */
+sealed class TrackTiming {
+    object Progress : TrackTiming() { override fun toString() = "Progress" }
+
+    /**
+     * [role]'s curve (a motion role: a spring or a bezier, with the moment's Speed and Bounce), started [delayMs] after
+     * [cue]; 0 until then.
+     */
+    data class Clock(val role: String, val cue: Cue, val delayMs: Float = 0f) : TrackTiming() {
+        init {
+            require(role.startsWith("motion.")) { "a clock runs on a motion role (motion.*), not '$role'" }
+            require(delayMs in 0f..10_000f) { "a clock's delay is 0 to 10000 ms" }
+        }
+    }
+}
+
+/** What starts a track's own clock. */
+enum class Cue(val id: String) {
+    /** Its connection begins: the pull (open), the release (release), the close (close). */
+    START("start"),
+    /** The panel has landed (its moving edge at rest at the end: the layout says when). */
+    LANDED("landed");
+
+    companion object {
+        fun of(id: String): Cue = entries.firstOrNull { it.id == id } ?: throw IllegalArgumentException("no cue '$id'")
     }
 }
 
@@ -196,8 +241,11 @@ sealed class Easing {
  */
 data class Keyframe(val at: Float, val value: Float, val absolute: Boolean = false, val ease: Easing = Easing.Linear)
 
-/** One property's keyframes, in order of [Keyframe.at] (at least one, at most [Transition.MAX_KEYS], none at the same point). */
-class Track(val prop: Prop, keys: List<Keyframe>) {
+/**
+ * One property's keyframes, in order of [Keyframe.at] (at least one, at most [Transition.MAX_KEYS], none at the same point),
+ * on its [timing]: the connection's progress, or a clock of its own.
+ */
+class Track(val prop: Prop, keys: List<Keyframe>, val timing: TrackTiming = TrackTiming.Progress) {
     val keys: List<Keyframe> = keys.toList()
     private val at = FloatArray(keys.size) { keys[it].at }
 
@@ -252,7 +300,7 @@ class Track(val prop: Prop, keys: List<Keyframe>) {
     /** The same keyframes backwards in time (each easing turned around, so the way back is the mirror of the way there). */
     fun reversed(): Track {
         val n = keys.size
-        return Track(prop, List(n) { i ->
+        return Track(prop, timing = timing, keys = List(n) { i ->
             val k = keys[n - 1 - i]
             // The easing out of a keyframe on the way back is the one into it on the way there, mirrored.
             val into = if (i < n - 1) keys[n - 2 - i].ease.mirrored() else Easing.Linear
@@ -260,9 +308,9 @@ class Track(val prop: Prop, keys: List<Keyframe>) {
         })
     }
 
-    override fun equals(other: Any?) = other is Track && other.prop == prop && other.keys == keys
-    override fun hashCode() = prop.hashCode() * 31 + keys.hashCode()
-    override fun toString() = "Track(${prop.id}, $keys)"
+    override fun equals(other: Any?) = other is Track && other.prop == prop && other.keys == keys && other.timing == timing
+    override fun hashCode() = (prop.hashCode() * 31 + keys.hashCode()) * 31 + timing.hashCode()
+    override fun toString() = "Track(${prop.id}, $timing, $keys)"
 }
 
 /** The easing that plays this one backwards: f'(u) = 1 - f(1 - u). */
