@@ -150,7 +150,12 @@ enum class Prop(val id: String, val rest: Float, val look: Boolean, val min: Flo
     SNAPSHOT_OPACITY("snapshot.opacity", 0f, false, 0f, 1f),
     SNAPSHOT_SCALE("snapshot.scale", 1f, false, 0f, 4f),
     /** The panel's parts that move on their own (a layout without one ignores its tracks). */
-    CLOCK_Y("clock.y", 0f, false, -2f, 2f),
+    /**
+     * How far above its place the clock is: [CLOCK_DROP] as a share of the layout's drop distance (`comp.nc.clock.drop`:
+     * where it waits to drop in from), [CLOCK_LIFT] of its lift distance (`comp.nc.clock.lift`: where it lifts off to).
+     */
+    CLOCK_DROP("clock.drop", 0f, true, -400f, 4000f),
+    CLOCK_LIFT("clock.lift", 0f, true, -400f, 4000f),
     CLOCK_OPACITY("clock.opacity", 1f, false, 0f, 1f),
     DATE_OPACITY("date.opacity", 1f, false, 0f, 1f),
     /** The status bar over the panel. */
@@ -169,6 +174,13 @@ sealed class TrackTiming {
     object Progress : TrackTiming() { override fun toString() = "Progress" }
 
     /**
+     * The connection's progress counted from where the connection started (0 there, 1 at its end): a close that begins
+     * before the panel has landed still takes the track's whole way (iOS: the dim below a closing sheet, whole at the
+     * close's start and clearing in step with the edge from where it was).
+     */
+    object Relative : TrackTiming() { override fun toString() = "Relative" }
+
+    /**
      * [role]'s curve (a motion role: a spring or a bezier, with the moment's Speed and Bounce), started [delayMs] after
      * [cue]; 0 until then.
      */
@@ -185,7 +197,9 @@ enum class Cue(val id: String) {
     /** Its connection begins: the pull (open), the release (release), the close (close). */
     START("start"),
     /** The panel has landed (its moving edge at rest at the end: the layout says when). */
-    LANDED("landed");
+    LANDED("landed"),
+    /** The panel is out of sight (closed, or fallen back): what finishes after it (iOS: the bar coming back, the dim clearing). */
+    END("end");
 
     companion object {
         fun of(id: String): Cue = entries.firstOrNull { it.id == id } ?: throw IllegalArgumentException("no cue '$id'")
@@ -239,7 +253,12 @@ sealed class Easing {
  * A value at [at] (0..1 along the transition): a share of the theme's value for a [Prop.look] property unless [absolute]
  * (then in the property's own unit: blur and corners in points, veil and dim 0..1). [ease]: how it goes on to the next one.
  */
-data class Keyframe(val at: Float, val value: Float, val absolute: Boolean = false, val ease: Easing = Easing.Linear)
+data class Keyframe(val at: Float, val value: Float, val absolute: Boolean = false, val ease: Easing = Easing.Linear,
+                    /**
+                     * The first keyframe of a clock's track only: it starts from the value showing when its clock starts
+                     * (as an animation starts from where it is), not from [value].
+                     */
+                    val fromCurrent: Boolean = false)
 
 /**
  * One property's keyframes, in order of [Keyframe.at] (at least one, at most [Transition.MAX_KEYS], none at the same point),
@@ -256,45 +275,50 @@ class Track(val prop: Prop, keys: List<Keyframe>, val timing: TrackTiming = Trac
             require(keys[i].at in 0f..1f) { "track ${prop.id}: a keyframe at ${keys[i].at}, outside 0..1" }
             require(i == 0 || keys[i].at > keys[i - 1].at) { "track ${prop.id}: keyframes out of order or at the same point" }
             require(!keys[i].absolute || prop.look) { "track ${prop.id}: only a look can be absolute" }
+            require(!keys[i].fromCurrent || (i == 0 && timing is TrackTiming.Clock)) { "track ${prop.id}: only a clock's first keyframe starts from the value showing" }
         }
     }
 
+    /** Its first keyframe starts from the value showing when its clock starts. */
+    val fromCurrent: Boolean get() = keys[0].fromCurrent
+
     /** Keyframe [k]'s value in real units, with the theme's value for this property [theme]. */
-    private fun real(k: Keyframe, theme: Float) = if (prop.look && !k.absolute) k.value * theme else k.value
+    private fun real(k: Keyframe, theme: Float, from: Float) =
+        if (k.fromCurrent && !from.isNaN()) from else if (prop.look && !k.absolute) k.value * theme else k.value
 
     /**
      * The value at [t] with the theme's value [theme]. Before the first keyframe and after the last it holds them; beyond
      * 0 or 1 (a spring overshooting) the end segment goes on evenly, so a panel's bounce shows; always within the bounds.
      */
-    fun valueAt(t: Float, theme: Float): Float {
+    fun valueAt(t: Float, theme: Float, from: Float = Float.NaN): Float {
         val n = at.size
         val v = when {
-            n == 1 -> real(keys[0], theme)
-            t > 1f && at[n - 1] >= 1f -> extrapolate(n - 2, n - 1, t, theme)
-            t < 0f && at[0] <= 0f -> extrapolate(0, 1, t, theme)
-            t <= at[0] -> real(keys[0], theme)
-            t >= at[n - 1] -> real(keys[n - 1], theme)
+            n == 1 -> real(keys[0], theme, from)
+            t > 1f && at[n - 1] >= 1f -> extrapolate(n - 2, n - 1, t, theme, from)
+            t < 0f && at[0] <= 0f -> extrapolate(0, 1, t, theme, from)
+            t <= at[0] -> real(keys[0], theme, from)
+            t >= at[n - 1] -> real(keys[n - 1], theme, from)
             else -> {
                 var i = 0
                 while (at[i + 1] < t) i++
                 val a = keys[i]
                 val b = keys[i + 1]
                 val u = (t - a.at) / (b.at - a.at)
-                val va = real(a, theme)
-                va + (real(b, theme) - va) * a.ease.at(u)
+                val va = real(a, theme, from)
+                va + (real(b, theme, from) - va) * a.ease.at(u)
             }
         }
         return v.coerceIn(prop.min, prop.max)
     }
 
     /** Beyond an end: on along the line through keyframes [i] and [j] (a hold does not move on). */
-    private fun extrapolate(i: Int, j: Int, t: Float, theme: Float): Float {
+    private fun extrapolate(i: Int, j: Int, t: Float, theme: Float, from: Float): Float {
         val a = keys[i]
         val b = keys[j]
         val end = if (t > 1f) b else a
-        if (a.ease == Easing.Hold || a.ease == Easing.Jump) return real(end, theme)
-        val slope = (real(b, theme) - real(a, theme)) / (b.at - a.at)
-        return real(end, theme) + slope * (t - end.at)
+        if (a.ease == Easing.Hold || a.ease == Easing.Jump) return real(end, theme, from)
+        val slope = (real(b, theme, from) - real(a, theme, from)) / (b.at - a.at)
+        return real(end, theme, from) + slope * (t - end.at)
     }
 
     /** The same keyframes backwards in time (each easing turned around, so the way back is the mirror of the way there). */
@@ -304,7 +328,8 @@ class Track(val prop: Prop, keys: List<Keyframe>, val timing: TrackTiming = Trac
             val k = keys[n - 1 - i]
             // The easing out of a keyframe on the way back is the one into it on the way there, mirrored.
             val into = if (i < n - 1) keys[n - 2 - i].ease.mirrored() else Easing.Linear
-            k.copy(at = 1f - k.at, ease = into)
+            // (A start from the value showing has no meaning at the other end: reversed, every keyframe has its own value.)
+            k.copy(at = 1f - k.at, ease = into, fromCurrent = false)
         })
     }
 

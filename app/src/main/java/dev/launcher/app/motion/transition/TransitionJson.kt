@@ -15,7 +15,8 @@ import org.json.JSONObject
  *                                                                 {"at": 1, "v": 1}]}}}
  * ```
  * A track on a clock of its own: `"clock.y": {"clock": {"role": "motion.nc.clock-drop", "cue": "start", "delay": 0},
- * "keys": [...]}` (cues: start, landed).
+ * "keys": [...]}` (cues: start, landed, end); its first keyframe may start from the value showing then: `{"at": 0, "v": "current"}`.
+ * A track on the connection's progress counted from where it started: `{"progress": "relative", "keys": [...]}`.
  * A Figma type is written as its name alone (its tracks are made from it); a custom one with its tracks. A look's keyframe
  * is a share of the theme's value unless `"abs": true`. Eases: linear, hold, jump, ease-in, ease-out, ease-in-out,
  * ease-in-back, ease-out-back, ease-in-out-back, `{"bezier": [x1, y1, x2, y2]}`, `{"power": p, "out": true}`.
@@ -50,20 +51,24 @@ object TransitionJson {
             val prop = Prop.of(id)
             // A list of keyframes follows the connection's progress; an object has a clock of its own and its keyframes.
             val v = t.get(id)
-            val clock = (v as? JSONObject)?.let { it.optJSONObject("clock") ?: throw IllegalArgumentException("track $id: a track written as an object has a clock") }?.let { c ->
-                TrackTiming.Clock(c.getString("role"), Cue.of(c.optString("cue", Cue.START.id)), c.optDouble("delay", 0.0).toFloat())
-            }
+            val timing: TrackTiming = if (v !is JSONObject) TrackTiming.Progress
+                else if (v.optString("progress") == "relative") TrackTiming.Relative
+                else (v.optJSONObject("clock") ?: throw IllegalArgumentException("track $id: a track written as an object has a clock or \"progress\": \"relative\"")).let { c ->
+                    TrackTiming.Clock(c.getString("role"), Cue.of(c.optString("cue", Cue.START.id)), c.optDouble("delay", 0.0).toFloat())
+                }
             val arr = if (v is JSONObject) v.getJSONArray("keys") else t.getJSONArray(id)
-            tracks += Track(prop, List(arr.length()) { keyframe(prop, arr.getJSONObject(it)) }, clock ?: TrackTiming.Progress)
+            tracks += Track(prop, List(arr.length()) { keyframe(prop, arr.getJSONObject(it)) }, timing)
         }
         return TransitionSpec.Own(Transition(TransitionType.CUSTOM, direction, drive, tracks.sortedBy { it.prop.ordinal }, from))
     }
 
     private fun keyframe(p: Prop, k: JSONObject): Keyframe {
         val at = k.getDouble("at").toFloat()
-        val v = k.getDouble("v").toFloat()
+        // ("v": "current": from the value showing when its clock starts.)
+        val current = k.opt("v") == "current"
+        val v = if (current) 0f else k.getDouble("v").toFloat()
         require(v.isFinite()) { "track ${p.id}: a value that is no number" }
-        return Keyframe(at, v, k.optBoolean("abs", false), ease(p, k.opt("ease")))
+        return Keyframe(at, v, k.optBoolean("abs", false), ease(p, k.opt("ease")), fromCurrent = current)
     }
 
     private fun ease(p: Prop, e: Any?): Easing = when (e) {
@@ -91,13 +96,14 @@ object TransitionJson {
                 val tracks = JSONObject()
                 for (tr in t.tracks) {
                     val keys = JSONArray().apply {
-                        for (k in tr.keys) put(JSONObject().put("at", k.at.toDouble()).put("v", k.value.toDouble()).apply {
+                        for (k in tr.keys) put(JSONObject().put("at", k.at.toDouble()).put("v", if (k.fromCurrent) "current" else k.value.toDouble()).apply {
                             if (k.absolute) put("abs", true)
                             if (k.ease != Easing.Linear) put("ease", writeEase(k.ease))
                         })
                     }
                     when (val c = tr.timing) {
                         TrackTiming.Progress -> tracks.put(tr.prop.id, keys)
+                        TrackTiming.Relative -> tracks.put(tr.prop.id, JSONObject().put("keys", keys).put("progress", "relative"))
                         is TrackTiming.Clock -> tracks.put(tr.prop.id, JSONObject().put("keys", keys).put("clock", JSONObject()
                             .put("role", c.role).put("cue", c.cue.id).apply { if (c.delayMs != 0f) put("delay", c.delayMs.toDouble()) }))
                     }

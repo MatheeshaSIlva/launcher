@@ -655,3 +655,25 @@ Decision:
   end. Identical to today's motion on uninterrupted paths; interrupted ones start from what showed (their speed may differ
   from today's, where each value kept its velocity).
 Measured: 38 unit tests in `motion/transition/` (10 for the player); removing the handover fails two of them.
+
+## D-065: Panel transitions, step 2b: what iOS 27's Notification Center needs of the engine, and the reference (2026-11-01)
+
+Context: reading today's Notification Center channel by channel (step 2b) before moving it onto tracks.
+Decision:
+- **An exact reference before the switch**: `NcTrace` (what is drawn at every frame), in-app scenarios on frame counts
+  (`TEST_SHADE nc-scenario`), motion on a fixed step a frame while tracing (`MotionClock`, the thread under test only; real
+  time otherwise). Two runs read the same to 0.0000; noise came from three places, each fixed: wall-clock starts and held
+  slow frames (the fixed step), other threads' frames moving the clock (the owner thread), and sampling order within a
+  frame (sampled in the commit phase, after the animations).
+- **The engine gains** what today's motion does: a clock's first keyframe can start from the value showing
+  (`"v": "current"`, as an animation starts from where it is); a track laid over another counts from its clock's start; a
+  fallback laid over the opening; a layer after the close (`afterClose`, started when the panel is gone: the bar comes
+  back); a cue for the panel's end; `busy` (frames are asked for while a clock runs); relative progress (the close's dim:
+  whole at its start, clearing with the edge from where the close began; exempt from the handover, it starts where it
+  says). The clock's position is two tracks, a share of each theme distance (`clock.drop`, `clock.lift`).
+- **2b moves five channels**: the content's reveal, the dim below the edge, the status bar, the clock's drop and lift, the
+  date. The live blur's handover, the wallpaper cover and the picture giving way stay as they are until step 3: they
+  depend on whether a picture of what is behind exists yet and on the theme's background, and step 3 builds their renderer.
+- **Found in the reference**: a close over a live blur ends with the dim below the edge snapping from ~0 to whole and fading
+  over 250 ms (the whole app darkens a moment after the sheet has gone; D-060 meant it to leave with the sheet). Reproduced
+  as it is in 2b, to be fixed after it as its own change (in the tracks: start that fade from the value showing).
