@@ -739,3 +739,23 @@ Pro surfaces either way. Security and battery budgets are exit tests (spec, "Exi
 decisions"). Ten additions from the tool survey (expression bindings, fixtures, state-keeping reload, rules, hero
 transitions, token modes, snippets, lockfile and doctor, export/import, history) are in the spec with their steps.
 This removes from the plan: the payout ledger, the 70/15/15 split, holds, withdrawals, payout provider, entity question.
+
+## D-069: Step 0 measured: LuaJ, our own KDL parser, desktop glass yes, Compose deck only from 1.11 (2026-11-04)
+
+The four questions D-067 left "to be settled by measurement before step 2", measured on the S24 and the desktop
+(`docs/BENCH_STEP0.md`, harness in `bench/`, `bench-desktop/`, `bench-shared/`, built only with `-Pbench`).
+Proposed, for the owner to confirm:
+- **Lua: LuaJ 3.0.1**, behind a one-adapter VM interface. Rembulan cannot run on ART (it defines JVM classes at run time);
+  Luak (Kotlin port of LuaJ, alpha) measures the same as LuaJ. An event costs 0.8 µs; a VM ~65 KB.
+- **KDL: our own parser**, spans on every node. kdl4j is fast enough (a 4644-line layout in 15 ms on the S24) but keeps no
+  positions on nodes, its hybrid parser returned one node for an invalid file without an error, and its v2 parser accepts a
+  stray `}`.
+- **Glass on the desktop: yes.** The launcher's six shaders compile unchanged in Skiko 0.150.2 (Compose Multiplatform
+  1.12.2) and draw as on the S24 (PSNR 55-65 dB; a few edge pixels differ). CPU raster only; the GPU backend unchecked.
+- **Compose deck on the nav thread: possible from Compose 1.11.4**, not on the launcher's 1.7.5 (its accessibility check
+  measures the view from the main looper while an accessibility service is on: a crash every run). With 1.11.4 no vsync
+  was skipped, a blocked main thread did not matter, Compose layers cost ~1 ms a frame more than Views and engine-owned
+  RenderNodes inside Compose cost the same as Views; the first composition in a process took 151 ms against 42 (warm it
+  ahead). Moving the launcher's Compose (and likely Kotlin) is the owner's call.
+Found on the way: the spec's `battery-ring` example is not valid KDL (Lua as children, `false` for `#false`).
+Not measured: the Redmi (not connected), the screen's present times for the deck (step 5).

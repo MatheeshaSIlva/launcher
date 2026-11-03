@@ -14,3 +14,7 @@ dd/
 # Python bytecode (tools/)
 __pycache__/
 *.pyc
+
+# Step-0 benchmarks: shaders extracted from the app (tools/bench/extract_shaders.py), results pulled from the phone
+bench/src/main/assets/shaders/
+bench-desktop/out/
