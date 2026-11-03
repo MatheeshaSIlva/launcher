@@ -1,4 +1,28 @@
-# CLAUDE.md — Launcher (working name)
+# CLAUDE.md — Not a Launcher (engine branch)
+
+> **Direction change, 2026-11-03 (owner).** The launcher is becoming the reference implementation for **Not a Launcher**: a
+> component engine where home, drawer, shade, recents and status bar are KDL components over engine primitives, with themes,
+> a creator store and a desktop editor. Read, in this order:
+> 1. `docs/ENGINE_SPEC.md` — what we are building. Supersedes `docs/SPEC.md` on this branch.
+> 2. `docs/LAUNCHER_AUDIT.md` — per-file verdicts on this codebase (port / extract / rewrite as component / drop), the
+>    device-proven facts the engine must respect, and the build order.
+> 3. The rest of this file and `docs/` — how the launcher as built works. It stays accurate for the code until each piece
+>    is ported; treat it as the manual for the reference implementation, not as the plan.
+>
+> **The plan, in five lines.** Build order is shade-first (audit, "Revised build order"): (1) lift the platform layer into an
+> engine module with no behaviour change, (2) KDL loader + interpreter core with twelve primitives, exit = a KDL status bar
+> pixel-matched against `StatusBarView` inside the frame budget, (3) the shade from KDL, (4) home and drawer, (5) switcher,
+> then scripting, themes, packages, editor, store. **Compose owns the tree; the engine owns the pixels** (primitives draw
+> into RenderNodes it controls; gesture motion bypasses Compose state). **Frame budget** is a bound, not zero: ≤1 dropped
+> frame per 100 on a pull at 120 Hz, idle < 1 ms/frame (owner, 2026-11-03: "minor performance cost is fine if it allows
+> better versatility"). Nothing proven in `docs/PROBE_FINDINGS.md` or the audit's "Facts" section is open for redesign.
+>
+> **Branches.** `main` is frozen as the last working launcher (CI and the in-app updater keep shipping from it). All engine
+> work happens on `engine`. The hand-drawn views are deleted only after their KDL replacement passes that surface's
+> inventory; the unit tests (`GridTest`, `MotionTest`, the 52 transition tests, `LayoutFilesTest`) keep running throughout.
+>
+> Everything below `## What this project is` describes the launcher as it stood at `7137eb7`.
+
 
 @docs/OPERATING_RULES.md
 

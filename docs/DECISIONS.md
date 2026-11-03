@@ -699,3 +699,25 @@ wallpaper's close, and its dim rose as the sheet left).
 Known: on the wallpaper sheet over home, home's arrival starts what follows the close, so the bar comes back from there
 rather than at the close's very end. Unit tests: 52 in `motion/transition/` (iOS 27's tracks from the preset over home and
 over an app included).
+
+## D-067: Direction change to the Not a Launcher engine (2026-11-03, owner)
+
+Decision: the launcher becomes the reference implementation for a component engine ("Not a Launcher"): KDL components over
+~40 engine primitives, data as subscribed streams behind capabilities, surfaces as mixable slots, three-tier tokens, the
+existing keyframe transition engine, Lua workers for scripts, a creator store and a Compose Multiplatform editor. Spec:
+`docs/ENGINE_SPEC.md`. Audit of this codebase against it: `docs/LAUNCHER_AUDIT.md`.
+Consequences, owner-approved:
+- Compose owns the tree (parse, hierarchy, layout, props, state); the engine owns the pixels (primitives draw into
+  RenderNodes it controls; gesture-driven motion bypasses Compose state). Reason: the audit found every surface is
+  hand-drawn and that per-frame Compose drawing cost frames in four measured ways.
+- The frame budget is a bound, not zero: ≤1 dropped frame per 100 on a pull at 120 Hz on the reference device, idle
+  < 1 ms/frame; store components < 2 ms render, < 16 MB. Owner: "minor performance cost is fine if it allows better
+  versatility". This relaxes rule 1 ("not a single stutter") for the engine; the launcher on `main` keeps the old rule.
+- Build order is shade-first. ~11k lines port whole (Shizuku service, safety, window plumbing, motion, transitions, tokens,
+  glass renderer, data models), ~5.5k of logic is extracted from views, ~26k of views are rewritten as KDL components,
+  ~2.9k dropped. The hand-drawn views are the acceptance tests for the primitives and are deleted only after parity.
+- `main` is frozen as the last working launcher; all engine work is on `engine`. `docs/SPEC.md` is superseded on `engine`.
+- The glass tiers are the proven four (in-app AGSL; `captureDisplay`+`setUid` live; Samsung/`FLAG_BLUR_BEHIND` window blur;
+  static snapshot; opaque floor). The virtual-display mirror is a dead end (D-057-era probe: system crash).
+Open, to be settled by measurement before step 2: Lua VM (LuaJ vs Luak/Rembulan), own KDL parser, Compose Multiplatform
+glass on desktop, whether the Compose `deck` can render on gesture-nav's `HandlerThread`.

@@ -1,6 +1,9 @@
 # Product spec
 
-> **Status: LOCKED (approved by the owner 2026-10-22).**
+> **Status: SUPERSEDED on the `engine` branch (owner, 2026-11-03) by `docs/ENGINE_SPEC.md`.** This page still describes
+> the launcher on `main`, which the engine treats as its reference implementation. Kept unchanged below.
+>
+> **Previous status: LOCKED (approved by the owner 2026-10-22).**
 > Keep this to one page. Agents must not edit this file; they propose changes in `docs/QUESTIONS.md`.
 
 ## What it is
