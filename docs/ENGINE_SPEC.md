@@ -352,11 +352,11 @@ Glass is a surface-level material, not a modifier: the live paths rely on Render
 
 Open:
 
-- [ ] Lua VM: which pure-JVM implementation (LuaJ is old but proven; Luak and Rembulan are newer). Benchmark on the Redmi.
-- [ ] KDL parser: existing JVM libraries are thin; decide whether to write our own (small grammar, and we want precise error messages).
-- [ ] Compose Multiplatform for the desktop editor: confirm RenderEffect and AGSL equivalents on desktop so the glass preview matches.
+- [x] Lua VM: which pure-JVM implementation (LuaJ is old but proven; Luak and Rembulan are newer). Benchmark on the Redmi. **LuaJ 3.0.1** behind a one-adapter interface (D-069, `docs/BENCH_STEP0.md`; measured on the S24, the Redmi run still owed).
+- [x] KDL parser: existing JVM libraries are thin; decide whether to write our own (small grammar, and we want precise error messages). **Our own**, spans on every node (D-069).
+- [x] Compose Multiplatform for the desktop editor: confirm RenderEffect and AGSL equivalents on desktop so the glass preview matches. **Confirmed**: the launcher's shaders compile unchanged in Skiko and match the S24 (D-069; CPU raster, the GPU backend unchecked).
 
-  The switcher's thread: the launcher's deck renders on gesture-nav's own `HandlerThread` with a spare `SurfaceControlViewHost` kept warm there, which is what makes the first frame of a swipe instant. A Compose `deck` either renders on that thread too or accepts a first-frame stall. Measure before choosing; budget a week.
+  The switcher's thread: the launcher's deck renders on gesture-nav's own `HandlerThread` with a spare `SurfaceControlViewHost` kept warm there, which is what makes the first frame of a swipe instant. A Compose `deck` either renders on that thread too or accepts a first-frame stall. Measure before choosing; budget a week. **Measured (D-069):** possible from Compose 1.11.4 (1.7.5 crashes while an accessibility service is on), no skipped vsyncs, the first composition warmed ahead (151 ms cold); which Compose the engine moves to is still open.
 - [ ] Whether `widgets.host` (AppWidget) components can live inside a scripted component or only as leaf nodes.
 - [ ] The reference device for performance validation (Redmi Note 10 Pro is the floor candidate).
 - [ ] Does `http` allow POST at launch, or GET only.

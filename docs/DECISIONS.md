@@ -744,7 +744,8 @@ This removes from the plan: the payout ledger, the 70/15/15 split, holds, withdr
 
 The four questions D-067 left "to be settled by measurement before step 2", measured on the S24 and the desktop
 (`docs/BENCH_STEP0.md`, harness in `bench/`, `bench-desktop/`, `bench-shared/`, built only with `-Pbench`).
-Proposed, for the owner to confirm:
+Accepted by the owner (2026-11-04, "Accept all four"); the Compose (and Kotlin) version move and the spec example's fix
+remain open:
 - **Lua: LuaJ 3.0.1**, behind a one-adapter VM interface. Rembulan cannot run on ART (it defines JVM classes at run time);
   Luak (Kotlin port of LuaJ, alpha) measures the same as LuaJ. An event costs 0.8 µs; a VM ~65 KB.
 - **KDL: our own parser**, spans on every node. kdl4j is fast enough (a 4644-line layout in 15 ms on the S24) but keeps no
