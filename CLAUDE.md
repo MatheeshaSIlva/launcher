@@ -21,6 +21,12 @@
 > work happens on `engine`. The hand-drawn views are deleted only after their KDL replacement passes that surface's
 > inventory; the unit tests (`GridTest`, `MotionTest`, the 52 transition tests, `LayoutFilesTest`) keep running throughout.
 >
+> **Also decided 2026-11-03** (spec, "Decisions"): open source under FSL for app and engine, MIT for format and tooling, on
+> the condition of trademarks, host-certificate checks in paid packages and tier enforced only in the engine; public alpha
+> after step 4 as text packages with a VS Code extension and an AI skill, editor later; Free + Pro only, Pro as a
+> subscription or lifetime licence; creators sell their own data-only APKs on Play and we take nothing; security and
+> battery are exit tests, not intentions; Shizuku is not forked.
+>
 > Everything below `## What this project is` describes the launcher as it stood at `7137eb7`.
 
 

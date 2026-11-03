@@ -721,3 +721,19 @@ Consequences, owner-approved:
   static snapshot; opaque floor). The virtual-display mirror is a dead end (D-057-era probe: system crash).
 Open, to be settled by measurement before step 2: Lua VM (LuaJ vs Luak/Rembulan), own KDL parser, Compose Multiplatform
 glass on desktop, whether the Compose `deck` can render on gesture-nav's `HandlerThread`.
+
+## D-068: Store model, tiers, licence, alpha gate, security and battery budgets (2026-11-03, owner)
+
+Decision: the KWGT model is permanent, not a launch phase. Users buy one tier, Pro, as a subscription or a lifetime
+licence through Play Billing; creators publish paid packages as their own data-only APKs on Play and are paid by Google;
+the platform takes nothing from creator sales; our store page is a front that deep-links to Play. A package's tier is
+computed from its `uses` block (free = no Shizuku, no overlay; Pro = anything touching system state or over other apps);
+`optional` capabilities and `env.caps.<name>` let a package degrade. Paid packages are Play-only and verify the installer
+and, once open source, the host's signing certificate.
+Open source: FSL-1.1-Apache-2.0 for app and engine, MIT for format spec, CLI, validator, fixtures, VS Code extension and
+AI skill; trademarks filed before the alpha. Public alpha after step 4 (text packages, no editor, no store), labelled 0.x.
+Shizuku is not forked (nothing in userspace can restart a shell-uid process after reboot); a one-tap re-pair flow and a
+paused state for Pro surfaces instead. Security and battery budgets are exit tests (spec, "Exit tests added by these
+decisions"). Ten additions from the tool survey (expression bindings, fixtures, state-keeping reload, rules, hero
+transitions, token modes, snippets, lockfile and doctor, export/import, history) are in the spec with their steps.
+This removes from the plan: the payout ledger, the 70/15/15 split, holds, withdrawals, payout provider, entity question.

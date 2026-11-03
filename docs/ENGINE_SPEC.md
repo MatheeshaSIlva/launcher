@@ -45,7 +45,7 @@ A component declares the sources it reads and the actions it calls in its manife
 | `http` | GET and POST to allow-listed hosts, JSON or text, with cache and rate limit | `net.http` with hosts listed | engine-side client; no raw sockets |
 | `file` | read a file inside the component's own package or its sandbox dir | none | package assets |
 | `kv` | the component's own key-value store, persisted | none | engine store |
-| `env` | theme tokens, active surface, locale, reduced motion, which other components are present | none | engine |
+| `env` | theme tokens, active surface, locale, reduced motion, which other components are present, caps.\<name> for every optional capability (granted or not) | none | engine |
 
 ### Actions
 
@@ -226,10 +226,12 @@ Rules:
 - `kind` is `layout`, `theme`, or `component`. A component package may hold several components; a layout package may bundle components and a theme. The store lists all three kinds; a layout's listing shows which components it pulls from other packages.
 - Dependencies are by package name and semver: `use "koji/glass-shade" ">=1.3"`. The engine installs them from the store with the user's consent, showing their capabilities together.
 - Capabilities are never hand-written; the engine derives them from every `uses` block in the package and refuses a package whose listing claims fewer. The install prompt shows the union.
+
+  Tier is derived the same way (decided 2026-11-03: one paid tier, **Pro**, sold as a subscription or a lifetime licence through Play Billing). A capability is either free or Pro; a package's tier is the highest its `uses` need. Free: every source and action that needs no Shizuku, the home, drawer, folder and search surfaces, themes, snippets and expression bindings. Pro: anything that touches system state or runs over other apps: the Shizuku-backed sources and actions, the shade, status and recents surfaces, overlay surfaces, all four glass tiers, scripts, rules, `background`, providers and remote components. The engine refuses to mount a Pro package on a free install and names the capability that needs Pro; the store badge comes from the same computation. A `uses` entry may be marked `optional`: the package then mounts without it and reads `env.caps.<name>` (false when the user lacks the tier, the device lacks the feature, or the user denied it) to degrade.
 - **Versioning:** the engine version is `major.minor`. A package declares a range. The engine keeps every `1.x` package working; a `2.0` engine may break `1.x` packages and the store flags them. Primitives and sources are only ever added within a major.
 - **Licence** is required and is one of CC0, CC-BY-4.0, CC-BY-SA-4.0, MIT, or `personal` (paid, no redistribution). The store shows it; forks must keep attribution, and the engine keeps the author chain in `package.kdl` under `derivedFrom`.
 - **Hand-written and editor-written files are the same files.** The editor writes stable, diffable KDL with sorted attributes and no generated ids, so a git diff of an editor change is readable.
-- Distribution: the store, a git URL (`install https://github.com/mira/paper`), a local directory (sideload with the app's file picker), and the KWGT-style data APK wrapper for the launch phase. All four install the same directory.
+- Distribution: a data-only APK on Play (`nal pack --play` emits the project: a manifest with no activity, the package directory as assets, icon, listing text and screenshots rendered from `fixtures/`; the engine discovers installed packages through PackageManager the way launchers find icon packs), a git URL (`install https://github.com/mira/paper`), or a local directory (sideload with the app's file picker). All three install the same directory. Paid packages are Play only: the creator sets the price, Google pays the creator, and the engine checks `getInstallSourceInfo` is Play before mounting any package whose manifest says `paid`. Free packages may use any of the three. The platform takes nothing from creator sales; its revenue is Pro.
 - Validation: `nal check .` in the CLI (and the editor) parses, resolves tokens, lints capabilities, renders every component at three sizes, and reports contrast and performance budget before publish.
 
 ## Porting dotfiles
@@ -373,3 +375,47 @@ Build order, each step usable on its own:
 10. **Store**, once two complete themes exist to sell.
 
 The order starts from the shade rather than home because the shade touches every subsystem (sources, surfaces, glass, transitions, tokens) and already works on the S24, so it is the acceptance test. The launcher audit that produced this order, with the per-file verdicts and the device-proven facts behind it, is its own document: *Not a Launcher — Launcher Audit*.
+
+## Additions, 2026-11-03
+
+Taken from a survey of Rainmeter, Übersicht, KWGT/KLWP, Nova, Tasker, QML, SwiftUI, Slint, Figma, Framer, Origami, lazy.nvim, VS Code's marketplace and Obsidian's community store. Everything those do well that the spec lacked, with the step each lands in.
+
+| Addition | What it is | Step |
+| --- | --- | --- |
+| Expression bindings | Any attribute may hold `{expr}` over props, state, sources and tokens: `width="{battery.level * 2}dp"`, `opacity="{shade.progress > 0.5 ? 1 : 0}"`. Arithmetic, comparison, ternary, string concat, the formatter functions. Compiled once, evaluated on the engine side per change, no Lua round-trip. Most of KWGT's presets are nothing but these. | 2 |
+| Fixtures | `fixtures/` per package: sample notifications, tasks, media, battery states, long and empty names, 40 notifications, no SIM. The editor renders against them; `nal check` and the store validator render every component against the standard set and the package's own. The worst-case data lives here. | 2 |
+| Hot reload keeps state | On `nal dev` reload, `state`, scroll positions and open folds survive when the schema did not change. | 2 |
+| Rules | A layout-level block: `when battery < 15 { theme "dim" }`, `when app "com.spotify.music" { fill "shade" "koji/music-shade" }`, `when time "22:00-07:00" { variant "night" }`. Conditions over existing sources; effects limited to theme, mode, variant, fill and props. No scripts, so it is safe and the editor can show it. Pro. | 3 |
+| Hero transitions | `hero="app:com.x"` on a node in one surface and on a node in the next; the engine morphs one into the other across surfaces, whoever wrote each, on the keyframe tracks. | 5 |
+| Token modes | A theme defines any number of modes (light, dark, high-contrast, amoled, compact, large-text); the resolver already blends between two, so it generalises. Rules and the system switch modes. | 7 |
+| Snippets | A package kind that overrides tokens or a few props of another package without forking it. Shareable, stackable, tiny; the store's cheap second tier of content. | 8 |
+| `nal.lock` and `nal doctor` | The lockfile pins dependency versions so a layout renders the same next year. `doctor` checks Shizuku, the accessibility service, disable flags and OEM quirks and says what is wrong in plain words; it is the safety net's knowledge, surfaced. | 8 |
+| Whole-setup export and import | One `.nal` archive: layout, fills, overrides, theme, rules, each package's `kv`. Restore in one tap. Importers for Nova and Lawnchair home grids. | 8 |
+| History with visual diff | Layouts are git repos; the editor shows commits as a timeline with before/after renders and one-click revert. | 9 |
+
+Deliberately not taken: native plugins (Rainmeter) and arbitrary JS on the canvas (Framer).
+
+## Decisions, 2026-11-03
+
+**Licence and openness.** Open source, on four conditions that together make a paywall-stripping fork pointless rather than impossible: (1) the name and the mark are registered trademarks (US and EU, before the alpha), so a fork must rebrand; (2) a paid package verifies the signing certificate of the host that mounts it, so forks lose the creator ecosystem; (3) Play is the distribution, forks are sideloads; (4) tier is enforced only in the engine (`env.caps`, mount refusal) from Play Billing's signed purchase state, never in UI code. Licences: Functional Source License (FSL-1.1-Apache-2.0) for the app and engine; MIT for the format spec, `nal` CLI, validator, fixtures, VS Code extension and the AI skill.
+
+**Public alpha gate: after step 4.** Shades (iOS and Pixel), home, drawer and switcher as text packages; onboarding without adb; zero P0 bugs; the three rules held on the S24 for every shipped package. Labelled 0.x, format unstable, said plainly. Ships with the VS Code extension (KDL grammar, `nal check` as a language server, snippets, fixture preview) and the AI skill (spec, primitive reference, fixtures, a lint loop). The desktop editor and the store come after.
+
+**Shizuku after reboot.** Not solved by a fork: after a reboot only adb or root can start a shell-uid process, so no app, fork included, can respawn it. Shizuku's own start-on-boot works where the OEM keeps wireless debugging enabled across reboots. We measure which test devices do; ship a one-tap re-pair flow (a persistent "Pro paused" notification into pairing); and every Pro surface has a clean paused state. We do not fork Shizuku.
+
+**Play merchant.** Sri Lanka is supported for developer and merchant registration (Google's list, checked 2026-11-03). Closed.
+
+**Legal, before any public build.** Privacy policy and Play Data Safety form; the accessibility-service declaration with a prominent in-app disclosure; the rule that captured frames of other apps never leave the GPU and never persist; zero telemetry by default and no accounts; a Pro EULA; creator terms and a DMCA takedown flow; a lawyer reads the set once before the Play listing. The disclosure page names every permission and what it is used for.
+
+**Security, made mechanical.** A threat-model document; the Lua sandbox stripped of `load`, `loadstring`, `string.dump`, `os`, `io`, `debug`, `require` and the Java bridge; static analysis in `scripts/check.sh` (detekt, plus semgrep rules for the capability bridge, the service and the parser); a review checklist for any PR touching those three; `SECURITY.md` with a disclosure address; an outside review of the sandbox and the Shizuku service before the store opens.
+
+**Battery is a budget.** Measured: an hour of normal use with Pro on versus off; idle overlay under 1 %/h; live glass costed per minute of shade-open time, on the S24 and the Redmi. Shown: the validator computes a cost class per package from the capabilities it uses (live glass, `background`, sensors, http polling) and the store and the install prompt display it.
+
+### Exit tests added by these decisions
+
+- Step 2: expression bindings and fixtures exist; a reload keeps state.
+- Step 3: the accessibility-overlay route is confirmed against Play's current policy, or replaced by an application overlay plus the raw touch stream, before the shade ships; the battery numbers above are measured.
+- Step 4 (alpha): a second person on a non-Samsung phone has run a build; the legal set above exists; trademarks are filed.
+- Step 6: the stripped Lua sandbox passes a written escape test suite; static analysis runs in `check.sh`.
+- Step 8: `nal.lock`, `doctor`, export/import and snippets; paid packages verify the host certificate.
+- Before the store opens: the outside security review.
