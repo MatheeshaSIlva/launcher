@@ -732,8 +732,10 @@ computed from its `uses` block (free = no Shizuku, no overlay; Pro = anything to
 and, once open source, the host's signing certificate.
 Open source: FSL-1.1-Apache-2.0 for app and engine, MIT for format spec, CLI, validator, fixtures, VS Code extension and
 AI skill; trademarks filed before the alpha. Public alpha after step 4 (text packages, no editor, no store), labelled 0.x.
-Shizuku is not forked (nothing in userspace can restart a shell-uid process after reboot); a one-tap re-pair flow and a
-paused state for Pro surfaces instead. Security and battery budgets are exit tests (spec, "Exit tests added by these
+Shizuku is not forked under its name. The thedjchi fork was reviewed 2026-11-03 and is recommended for the alpha (it
+re-enables wireless debugging at boot with the WRITE_SECURE_SETTINGS grant, reconnects and starts the service); for 1.0
+the same sequence is built into our app on Shizuku's Apache-2.0 ADB client. A one-tap re-pair flow and a paused state for
+Pro surfaces either way. Security and battery budgets are exit tests (spec, "Exit tests added by these
 decisions"). Ten additions from the tool survey (expression bindings, fixtures, state-keeping reload, rules, hero
 transitions, token modes, snippets, lockfile and doctor, export/import, history) are in the spec with their steps.
 This removes from the plan: the payout ledger, the 70/15/15 split, holds, withdrawals, payout provider, entity question.

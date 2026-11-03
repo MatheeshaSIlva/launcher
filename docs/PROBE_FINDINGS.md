@@ -63,7 +63,7 @@ https://github.com/MatheeshaSIlva/requirementchecks (public). Numbers are from h
 - Early failures: wrong "already newest" check (stamp saved before install), and the shell could not read the app's external folder.
 
 ## Shizuku
-- Matheesha runs the **thedjchi/Shizuku** fork (Apache-2.0, v13.7.0): starts at boot and after crashes. Recommend it in onboarding after reviewing its code.
+- Matheesha runs the **thedjchi/Shizuku** fork (Apache-2.0, v13.7.0): starts at boot and after crashes. Reviewed against upstream 2026-11-03 (findings in `docs/ENGINE_SPEC.md`, "Shizuku after reboot"): it uses the `WRITE_SECURE_SETTINGS` grant to turn wireless debugging on at boot, reconnect over mDNS with the stored pairing key, start the service and turn it off again; the privileged server differs only by Android 17 shims. Recommend it in onboarding with auto-update, stealth and TCP mode off; for 1.0 build the same boot sequence into our app.
 - Hidden-API exemption via `VMRuntime` fails on Android 16. Fallback exists (`settings put global hidden_api_policy 1` + app restart) but wasn't needed for the Samsung sem* calls.
 
 ## Probe version history (condensed)

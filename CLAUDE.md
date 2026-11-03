@@ -25,7 +25,8 @@
 > the condition of trademarks, host-certificate checks in paid packages and tier enforced only in the engine; public alpha
 > after step 4 as text packages with a VS Code extension and an AI skill, editor later; Free + Pro only, Pro as a
 > subscription or lifetime licence; creators sell their own data-only APKs on Play and we take nothing; security and
-> battery are exit tests, not intentions; Shizuku is not forked.
+> battery are exit tests, not intentions; Shizuku is not forked (the thedjchi fork is recommended for the alpha, its boot
+> trick is rebuilt into our app for 1.0).
 >
 > Everything below `## What this project is` describes the launcher as it stood at `7137eb7`.
 
@@ -1115,7 +1116,7 @@ Phase 2 decides whether the whole idea works.
   seconds), under our bar as One UI's does: our charging moment plays on Samsung only, and its capsule (57 px tall in the
   emulator's 63 px bar) would not cover a full-height chip. On One UI see the pitfall "One UI's status bar shows parts of
   itself that no disable flag hides". Our bar has no call capsule yet (iOS's green).
-- Review the thedjchi Shizuku fork's code before recommending it in onboarding.
+- thedjchi Shizuku fork reviewed 2026-11-03 (see `docs/PROBE_FINDINGS.md`); recommend in onboarding with auto-update, stealth and TCP mode off.
 - Accessibility requirements need writing. Theme gallery/sharing plan, app name: undecided (placeholder "Launcher").
 - A licences page before release: Inter (OFL), AOSP's Quick Settings icons (Apache-2.0: `assets/icons/pixel.json`, each
   symbol with its source), Material Symbols (Apache-2.0: the app's own `sym_*`).
