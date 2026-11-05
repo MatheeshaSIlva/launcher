@@ -1,0 +1,13 @@
+# The E1 state: everything the edit slices S0-S2 declared (tools/dexlist/S2.expect), against which every pure-move slice
+# (M1-M6) must show nothing more. Kept in step with the last edit slice.
++ Ldev/launcher/engine/R; 1 0
++ Ldev/launcher/app/EngineHost$Companion; 2 2
++ Ldev/launcher/app/NavHost; 0 10
+- Ldev/launcher/app/GestureNav; 761 18
++ Ldev/launcher/app/GestureNav; 760 18
++ Ldev/launcher/app/EngineHost; 1 5
+- Ldev/launcher/app/LauncherApp; 6 2
++ Ldev/launcher/app/LauncherApp; 6 6
+- Ldev/launcher/app/HomeBridge$Home; 0 10
++ Ldev/launcher/app/HomeBridge$Home; 0 13
++ Ldev/launcher/engine/R$id; 1 0

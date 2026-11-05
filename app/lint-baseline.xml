@@ -353,27 +353,7 @@
             column="73"/>
     </issue>
 
-    <issue
-        id="InlinedApi"
-        message="Field requires API level 31 (current min is 29): `android.R.attr#windowSplashScreenBackground`"
-        errorLine1="        val wanted = intArrayOf(android.R.attr.windowSplashScreenBackground, android.R.attr.windowBackground, android.R.attr.colorBackground)"
-        errorLine2="                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/apps/SplashColors.kt"
-            line="43"
-            column="33"/>
-    </issue>
 
-    <issue
-        id="InlinedApi"
-        message="Field requires API level 31 (current min is 29): `android.R.attr#windowSplashScreenBackground`"
-        errorLine1="        val c = colorAt(android.R.attr.windowSplashScreenBackground) ?: colorAt(android.R.attr.windowBackground) ?: colorAt(android.R.attr.colorBackground)"
-        errorLine2="                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/apps/SplashColors.kt"
-            line="54"
-            column="25"/>
-    </issue>
 
     <issue
         id="InlinedApi"
@@ -925,16 +905,6 @@
             column="23"/>
     </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 33 (current min is 29): `android.graphics.RuntimeShader()`"
-        errorLine1="        try { return RuntimeShader(sksl) } finally { android.os.Trace.endSection() }"
-        errorLine2="                     ~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/design/Shaders.kt"
-            line="10"
-            column="22"/>
-    </issue>
 
     <issue
         id="NewApi"
@@ -1398,16 +1368,6 @@
             column="116"/>
     </issue>
 
-    <issue
-        id="UnspecifiedRegisterReceiverFlag"
-        message="`r` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.TEST_WALLPAPER"
-        errorLine1="            else ctx.registerReceiver(r, filter, android.Manifest.permission.DUMP, null)"
-        errorLine2="                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/Wallpaper.kt"
-            line="121"
-            column="18"/>
-    </issue>
 
     <issue
         id="GradleDependency"
@@ -1453,16 +1413,6 @@
             column="13"/>
     </issue>
 
-    <issue
-        id="SwitchIntDef"
-        message="Switch statement on an `int` with known associated constant missing case `ApplicationInfo.CATEGORY_UNDEFINED`"
-        errorLine1="                when (info.category) {"
-        errorLine2="                ~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/apps/AppCategory.kt"
-            line="103"
-            column="17"/>
-    </issue>
 
     <issue
         id="DiscouragedApi"
@@ -1783,16 +1733,6 @@
             column="26"/>
     </issue>
 
-    <issue
-        id="ObsoleteSdkInt"
-        message="Unnecessary; SDK_INT is always >= 29"
-        errorLine1="                if (android.os.Build.VERSION.SDK_INT >= 27) android.app.WallpaperColors.fromBitmap(bmp)"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/Wallpaper.kt"
-            line="152"
-            column="21"/>
-    </issue>
 
     <issue
         id="ObsoleteSdkInt"

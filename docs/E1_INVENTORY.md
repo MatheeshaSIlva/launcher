@@ -226,6 +226,8 @@ after M1; (d) the engine's own lint baseline, carried per slice; (e) on the S24,
    files, among them `NewApi` 17 and `UnspecifiedRegisterReceiverFlag` 4 (errors). The engine needs those entries carried
    into `engine/lint-baseline.xml` with paths rewritten, in the slice that moves each file; the app's stale entries are
    then pruned. Whether library lint reports anything new is unknown until S0 runs.
+   Found in M1: library lint reports `MissingPermission` the app's did not (`Wallpaper.kt`: `SET_WALLPAPER`, now declared in
+   the engine's manifest; `getDrawable`, baselined in the engine with a comment to revisit).
 5. **ProGuard/R8:** off. `app/build.gradle.kts` defines only `debug` (`isDebuggable = false`), no `isMinifyEnabled`, no
    release type; no keep rules needed. Revisit at the store build (reflection in `ShellService`, Shizuku's
    `UserServiceArgs` by class name).

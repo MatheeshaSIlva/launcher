@@ -789,3 +789,20 @@ Pending the owner: declaring `compose.ui:ui-graphics` and `kotlinx-coroutines` i
 the APK transitively at the same versions; the dex diff is the evidence).
 Seen on the way (S0): `./gradlew check` builds the release variant, which is not in the gate, and its Kotlin compile of
 `GestureNav` ran out of memory ("GC overhead limit exceeded"); not checked on 9984034, and CI builds the debug variant only.
+
+## D-071: The engine module compiles with the Compose compiler plugin (2026-11-05)
+
+Found by `tools/dexlist.sh` in E1's first move slice (M1): the app's Compose compiler plugin stamps every class it
+compiles with a `$stable` field and `@StabilityInferred`, which the settings' composables read to decide when to
+recompose. A class moved into `:engine` (no plugin) lost them: eight moved classes lost their `<clinit>`, all lost the
+field, and after M3 `Design`, `Theme`, `Token`, `Curve` and the motion types would have counted as unstable in every
+settings composable (with Kotlin 2.0.20's strong skipping, compared by identity: a recomposition change CLAUDE.md
+records as costly). Decision: `:engine` applies `org.jetbrains.kotlin.plugin.compose` (already declared at the root)
+with `compose.runtime` as `compileOnly` from the app's BOM, so the moved classes carry the same metadata as before and
+the APK is unchanged (the dex diff must read empty for M1). Nothing new reaches the phone; the owner is told. Step 2
+wants Compose in the engine anyway ("Compose owns the tree").
+Also in M1: library lint checks permissions against the library's own manifest, so the engine manifest declares
+`SET_WALLPAPER` (the app already does; the merged manifest, now diffed on every `dexlist.sh` run, is identical) and
+baselines a `getDrawable` finding the app's lint never raised. `GoogleFonts` becomes public (it was `internal`) so it can
+move with `GoogleFontCatalog` in M1b; `ui-graphics` and `kotlinx-coroutines-android` 1.7.3 are declared in `:engine`
+(owner, 2026-11-05: "Yes, declare them").

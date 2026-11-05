@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Empty on purpose: every component of the engine stays declared in the app's manifest during E1 (same class names,
-     same resources), and the engine sets no <application> attributes (the app's <profileable> must stay the only one). -->
-<manifest />
+<!-- No <application> element, ever: every component of the engine stays declared in the app's manifest during E1 (same
+     class names, same resources), and the engine sets no <application> attributes (the app's <profileable> must stay the
+     only one). A <uses-permission> the engine's own code needs is declared here, since manifests merge (the app declares
+     each as well, so the merged manifest does not change: tools/dexlist.sh checks it). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Wallpaper.kt: the adb test hook sets and clears the wallpaper (Wallpaper.testHook). -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+</manifest>
