@@ -14,7 +14,7 @@ import java.io.FileInputStream
  * FontsContractCompat does, since the platform's FontsContract is deprecated) and kept in files/fonts/google/, so from
  * then on it loads at once, offline too. Without Play services nothing is downloaded and the caller keeps its fallback.
  */
-internal object GoogleFonts {
+object GoogleFonts {
     private const val AUTHORITY = "com.google.android.gms.fonts"
     private const val PACKAGE = "com.google.android.gms"
 
