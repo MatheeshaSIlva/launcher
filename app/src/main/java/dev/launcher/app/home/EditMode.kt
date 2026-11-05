@@ -746,7 +746,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             item
         }
         d.base = snapshot()
-        v.setTag(dev.launcher.app.R.id.drag_held, true)
+        v.setTag(dev.launcher.engine.R.id.drag_held, true)
         v.animate().cancel()
         v.alpha = 0f
         d.extras += joined
@@ -820,7 +820,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         val d = drag ?: return
         draggedView(d)?.let { v ->
             // Tagged so that its arrival (a new view where it now is) does not fade it in under the copy.
-            v.setTag(dev.launcher.app.R.id.drag_held, true)
+            v.setTag(dev.launcher.engine.R.id.drag_held, true)
             v.animate().cancel()
             v.alpha = 0f
         }
@@ -877,17 +877,17 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
         placeExtras(d)
         val target = draggedView(d)
         // The apps carried with it, each hidden where it went until its copy is there.
-        val extraViews = d.extras.map { e -> viewOf(e)?.also { v -> v.setTag(dev.launcher.app.R.id.drag_held, true); v.animate().cancel(); v.alpha = 0f } }
+        val extraViews = d.extras.map { e -> viewOf(e)?.also { v -> v.setTag(dev.launcher.engine.R.id.drag_held, true); v.animate().cancel(); v.alpha = 0f } }
         val copies = ghost.stack()
         drag = null
         // Views the drag held on its way (where it was for a moment) are no longer held; the one it lands on shows when the
         // copy is there.
         for (v in host.pageViews.flatMap { it.itemViews() } + (host.dockView?.icons() ?: emptyList())) {
-            if (v !== target && v !in extraViews && v.getTag(dev.launcher.app.R.id.drag_held) == true) v.setTag(dev.launcher.app.R.id.drag_held, null)
+            if (v !== target && v !in extraViews && v.getTag(dev.launcher.engine.R.id.drag_held) == true) v.setTag(dev.launcher.engine.R.id.drag_held, null)
         }
         for ((i, copy) in copies.withIndex()) {
             val ev = extraViews.getOrNull(i)
-            val shown = { if (ev != null) { ev.setTag(dev.launcher.app.R.id.drag_held, null); ev.alpha = 1f; (ev as? IconView)?.growEditBadge() } }
+            val shown = { if (ev != null) { ev.setTag(dev.launcher.engine.R.id.drag_held, null); ev.alpha = 1f; (ev as? IconView)?.growEditBadge() } }
             if (ev == null) { ghost.land(copy, null, shown); continue }
             ev.post {
                 val o = screenOrigin(ev)
@@ -902,7 +902,7 @@ internal class EditMode(private val home: HomeScreen, private val host: Host) {
             val o = screenOrigin(target)
             val pv = pivotOf(target)
             ghost.settle(o[0] - target.translationX + pv[0], o[1] - target.translationY + pv[1]) {
-                target.setTag(dev.launcher.app.R.id.drag_held, null)
+                target.setTag(dev.launcher.engine.R.id.drag_held, null)
                 target.alpha = 1f
                 // The copy carries no remove badge: the item's grows back in (it appeared at once).
                 (target as? IconView)?.growEditBadge()

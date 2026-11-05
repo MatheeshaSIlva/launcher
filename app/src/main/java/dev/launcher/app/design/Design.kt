@@ -144,7 +144,7 @@ object Design {
                 // --ez palette true: logs the system's colours (Material roles and tonal palettes), for theme work.
                 if (i.getBooleanExtra("palette", false)) { logPalette(); return }
                 // --es files import|export|remove [--es path P]: the app's files in and out without run-as (DevFiles).
-                i.getStringExtra("files")?.let { DevFiles.run(appCtx, it, i.getStringExtra("path")) { reload() }; return }
+                i.getStringExtra("files")?.let { dev.launcher.app.EngineHost.current("devFiles").devFiles(appCtx, it, i.getStringExtra("path")) { reload() }; return }
                 // --es colors wallpaper|theme: the theme's colours from the wallpaper (Material You) or its own.
                 i.getStringExtra("colors")?.let { setColorSource(it); return }
                 val id = i.getStringExtra("theme")

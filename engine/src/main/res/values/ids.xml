@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- View tags read by the engine's motion (motion/MotionValue.kt), so they are the engine's, never a second copy in the
+         app (docs/E1_INVENTORY.md risk 3): the view's SpringTranslate, and an icon held by home's edit mode (home/EditMode.kt
+         sets it, MotionValue.grow reads it). -->
+    <item name="spring_translate" type="id" />
+    <item name="drag_held" type="id" />
+</resources>

@@ -1,0 +1,21 @@
+# S2 (docs/E1_INVENTORY.md cuts 3 to 6), cumulative against 9984034 as every expectation is.
+# S0: the engine's R class.
++ Ldev/launcher/engine/R; 1 0
+# S1, as declared there, with S2's changes to EngineHost and LauncherApp folded in:
++ Ldev/launcher/app/EngineHost$Companion; 2 2
++ Ldev/launcher/app/NavHost; 0 10
+- Ldev/launcher/app/GestureNav; 761 18
++ Ldev/launcher/app/GestureNav; 760 18
+# EngineHost: S1's 4 abstract members + devFiles (cut 4: Design's DESIGN_RELOAD --es files hands over to DevFiles, which stays).
++ Ldev/launcher/app/EngineHost; 1 5
+# LauncherApp: S1's getNav, listenerComponent, homeComponent + devFiles.
+- Ldev/launcher/app/LauncherApp; 6 2
++ Ldev/launcher/app/LauncherApp; 6 6
+# Cut 3: HomeBridge.Home gains onHomeSwipeUp, hasOnTop, forwardTouch (HomeActivity's own methods, now overrides: its
+# counts do not change).
+- Ldev/launcher/app/HomeBridge$Home; 0 10
++ Ldev/launcher/app/HomeBridge$Home; 0 13
+# Cut 6: the engine's R$id (spring_translate, drag_held). The app's R$id loses those two fields and keeps its class (glass_root
+# stays): fields are not in this listing, so the dexdump check of both R$id classes in the hand-back stands for them.
++ Ldev/launcher/engine/R$id; 1 0
+# Cut 5 (Element to layout/Element.kt) changes no class: Element is a class of its own, wherever its file is.

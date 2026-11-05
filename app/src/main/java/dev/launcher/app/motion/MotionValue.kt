@@ -97,8 +97,8 @@ class SpringTranslate(private val view: View) {
     }
 
     companion object {
-        fun of(v: View): SpringTranslate = (v.getTag(dev.launcher.app.R.id.spring_translate) as? SpringTranslate)
-            ?: SpringTranslate(v).also { v.setTag(dev.launcher.app.R.id.spring_translate, it) }
+        fun of(v: View): SpringTranslate = (v.getTag(dev.launcher.engine.R.id.spring_translate) as? SpringTranslate)
+            ?: SpringTranslate(v).also { v.setTag(dev.launcher.engine.R.id.spring_translate, it) }
     }
 }
 
@@ -109,7 +109,7 @@ object Appear {
      * dragged item's new view, tagged `drag_held`): the dragged copy lands on it and shows it (it faded in under the copy).
      */
     fun grow(v: View, spec: Curve = Motion.profile.appear, from: Float = 0.7f, fade: Curve = Motion.profile.appearFade) {
-        if (v.getTag(dev.launcher.app.R.id.drag_held) == true) { v.animate().cancel(); v.alpha = 0f; v.scaleX = 1f; v.scaleY = 1f; return }
+        if (v.getTag(dev.launcher.engine.R.id.drag_held) == true) { v.animate().cancel(); v.alpha = 0f; v.scaleX = 1f; v.scaleY = 1f; return }
         v.scaleX = from; v.scaleY = from
         v.alpha = 0f
         MotionValue(from, 100f, { k -> v.scaleX = k; v.scaleY = k }).animateTo(1f, spec)

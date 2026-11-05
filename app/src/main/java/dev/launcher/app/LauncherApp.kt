@@ -95,6 +95,8 @@ class LauncherApp : Application(), EngineHost {
     } catch (_: Throwable) { }
 
     override val nav: NavHost get() = GestureNav
+    override fun devFiles(ctx: android.content.Context, what: String, path: String?, reload: () -> Unit) =
+        dev.launcher.app.design.DevFiles.run(ctx, what, path, reload)
     override fun listenerComponent() = android.content.ComponentName(this, BadgeListener::class.java)
     override fun homeComponent() = android.content.ComponentName(this, HomeActivity::class.java)
 

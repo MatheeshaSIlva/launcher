@@ -544,13 +544,13 @@ class HomeActivity : Activity(), HomeBridge.Home, HomeScreen.Listener {
         AppLog.log("[home] built again behind: " + if (HomeBridge.preview !== before) "its picture recorded" else "its picture NOT recorded (home busy): recorded when it settles")
     }
 
-    fun onHomeSwipeUp() = screen.onHomeSwipeUp()
-    fun hasOnTop(): Boolean = screen.hasOnTop()
+    override fun onHomeSwipeUp() = screen.onHomeSwipeUp()
+    override fun hasOnTop(): Boolean = screen.hasOnTop()
 
     private val decorOnScreen = IntArray(2)
 
     /** A touch caught by gesture nav's card window during a close (screen coordinates): handled as if home had it. */
-    fun forwardTouch(e: MotionEvent) {
+    override fun forwardTouch(e: MotionEvent) {
         val d = window.decorView
         d.getLocationOnScreen(decorOnScreen)
         e.setLocation(e.rawX - decorOnScreen[0], e.rawY - decorOnScreen[1])

@@ -20,6 +20,9 @@ interface EngineHost {
     /** Gesture navigation. */
     val nav: NavHost
 
+    /** `DESIGN_RELOAD --es files import|export|remove [--es path P]`: the app's files in and out without run-as (DevFiles). */
+    fun devFiles(ctx: android.content.Context, what: String, path: String?, reload: () -> Unit)
+
     companion object {
         @Volatile private var host: EngineHost? = null
 

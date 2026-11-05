@@ -65,6 +65,12 @@ object HomeBridge {
         fun isIdle(): Boolean
         /** A panel closing over home: its arrival held, played or let go ([PanelArrival]). Main thread. */
         fun panelArrival(step: PanelArrival)
+        /** A swipe up on the gesture bar while home is in front (leave edit mode, close Spotlight). Main thread. */
+        fun onHomeSwipeUp()
+        /** Something is open on top of home (a menu, the widget gallery, edit mode, Spotlight). Any thread. */
+        fun hasOnTop(): Boolean
+        /** A touch caught by gesture nav's card window during a close (screen coordinates), handled as home's own. Main thread. */
+        fun forwardTouch(e: MotionEvent)
     }
 
     /**
@@ -274,19 +280,19 @@ object HomeBridge {
     @Volatile var onPreviewChanged: ((HomePicture) -> Unit)? = null
 
     /** A swipe up on the gesture bar while home is in front (leave edit mode, close Spotlight). Any thread. */
-    fun homeSwipeUp() = main.post { (home as? HomeActivity)?.onHomeSwipeUp() }
+    fun homeSwipeUp() = main.post { home?.onHomeSwipeUp() }
 
     /**
      * Something is open on top of home (a menu, the widget gallery, edit mode, Spotlight): a swipe up on the bar closes it
      * (iOS) instead of making home recede. Any thread (a few flags of home's, read as they are).
      */
-    fun hasOnTop(): Boolean = (home as? HomeActivity)?.hasOnTop() == true
+    fun hasOnTop(): Boolean = home?.hasOnTop() == true
 
     /** A touch the card window caught during a close: home handles it as its own (any thread; a copy is posted). */
     fun forwardTouch(e: MotionEvent) {
         val ev = MotionEvent.obtain(e)
         main.post {
-            (home as? HomeActivity)?.forwardTouch(ev)
+            home?.forwardTouch(ev)
             ev.recycle()
         }
     }
