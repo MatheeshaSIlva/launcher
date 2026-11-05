@@ -1,5 +1,6 @@
 package dev.launcher.app.shade.qs
 
+import dev.launcher.app.SourceRoots
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -15,7 +16,8 @@ import java.io.File
  */
 class CardPressSourceTest {
 
-    private val file = File("src/main/java/dev/launcher/app/shade/qs/CardsBlock.kt")
+    // In whichever module holds it (SourceRoots: the engine may, after E1's moves).
+    private val file: File by lazy { SourceRoots.file("shade/qs/CardsBlock.kt") }
 
     /** The file's code lines (comments and KDoc dropped), with their 1-based numbers. */
     private fun code(): List<Pair<Int, String>> {

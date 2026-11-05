@@ -1,8 +1,8 @@
 package dev.launcher.app.shade
 
+import dev.launcher.app.SourceRoots
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 /**
  * B-041: what the shade shows of a notification must come from its [Notifs.Item], which `Item.redacted()` rewrites on a
@@ -36,15 +36,14 @@ class RedactionSourceTest {
     private val otherOwners = Regex("(?:Intent|Settings|AlarmClock|BatteryManager|Control)\\.EXTRA_")
 
     @Test fun onlyNotifsReadsANotificationsContentExtras() {
-        val dir = File("src/main/java/dev/launcher/app/shade")
-        assertTrue("shade sources not found from ${File(".").absolutePath}", dir.isDirectory)
+        // Both modules: a shade file may have moved into the engine (SourceRoots, which also fails on a missing root).
         val offenders = mutableListOf<String>()
-        dir.walkTopDown().filter { it.isFile && it.extension == "kt" && it.name != "Notifs.kt" }.forEach { f ->
+        SourceRoots.files("shade").filter { it.name != "Notifs.kt" }.forEach { f ->
             f.readLines().forEachIndexed { i, raw ->
                 val line = raw.substringBefore("//").replace(otherOwners, "X.OTHER_")
                 if (line.trimStart().startsWith("*") || line.trimStart().startsWith("/*")) return@forEachIndexed
                 val m = contentRead.find(line) ?: return@forEachIndexed
-                offenders += "${f.relativeTo(dir).path.replace('\\', '/')}:${i + 1}: reads '${m.value.trim()}': ${raw.trim()}"
+                offenders += "${SourceRoots.relative(f)}:${i + 1}: reads '${m.value.trim()}': ${raw.trim()}"
             }
         }
         assertTrue(

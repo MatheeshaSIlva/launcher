@@ -760,3 +760,32 @@ remain open:
   ahead). Moving the launcher's Compose (and likely Kotlin) is the owner's call.
 Found on the way: the spec's `battery-ring` example is not valid KDL (Lua as children, `false` for `#false`).
 Not measured: the Redmi (not connected), the screen's present times for the deck (step 5).
+
+## D-070: E1 starts; two-agent mode; the capability registry leaves step 1 (2026-11-05)
+
+Owner's instruction (2026-11-05): E1 is worked in a two-agent mode, this session deciding and reviewing, an Opus agent
+carrying out each step, discussed until both are satisfied. This overrides OPERATING_RULES' "no subagents" for the engine
+work; every slice is still reviewed and committed by the deciding session after `scripts/check.sh`.
+E1's plan is `docs/E1_INVENTORY.md` (read-only inventory, then the ten decisions recorded there). The ones that change
+the build order or the audit:
+- **The capability registry and the callback-to-flow adapters are out of E1.** The audit's "the only new code is the
+  capability registry around the AIDL" and the spec's step 1 wording are corrected: unused code added for "no behaviour
+  change" is dead code with an untested shape. They are written at the start of step 2, where the KDL status bar's
+  sources are their first consumer, so use drives the API.
+- **No package rename in E1.** Files move into `:engine` under their `dev.launcher.app.*` packages (namespace
+  `dev.launcher.engine`). A rename would switch the accessibility service off on the phone after the update (Android
+  stores it by class name) and drop the baseline profile's coverage of the moved code. The rename is its own later step
+  with the stored-component migration.
+- **`Design` and its companions move in E1** (the audit filed `Design` under Extract): nothing in motion, glass, tokens or
+  fonts compiles without them; the parser/store split is step 2's design.
+- **Home's model, `layout/`, widgets and the clock numerals wait for step 4**; notifications, controls and media for
+  step 3, where their projection and the `Control` split are designed. `FocusHolder` and `LiveBlur` join E1.
+- **Pure `git mv` slices are cluster-sized**; the ~200-line rule applies to every slice that edits.
+- **E1's exit**: the APK's dex class list and per-class method counts identical to 9984034's except what each slice
+  declares (`tools/dexlist.sh`, run after every slice), `smoke_emulator.sh`, the ART profile still covering moved code,
+  `:engine` with its own lint baseline carried per slice, and on the S24 interleaved `scenario_switch.sh` /
+  `scenario_shade.sh` against a 9984034 build, both installed with `tools/device.sh install`.
+Pending the owner: declaring `compose.ui:ui-graphics` and `kotlinx-coroutines` in `:engine` for slice M1 (both already in
+the APK transitively at the same versions; the dex diff is the evidence).
+Seen on the way (S0): `./gradlew check` builds the release variant, which is not in the gate, and its Kotlin compile of
+`GestureNav` ran out of memory ("GC overhead limit exceeded"); not checked on 9984034, and CI builds the debug variant only.

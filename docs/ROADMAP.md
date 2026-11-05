@@ -25,6 +25,8 @@ milestone there is **E1: platform layer lifted into an engine module, launcher s
 KDL status bar pixel-matched against `StatusBarView` inside the frame budget**, which decides whether the Compose split
 holds. MS and the rest continue on `main` only if the owner says so.
 
+E1 started 2026-11-05: plan and slices in `docs/E1_INVENTORY.md` (D-070); S0 (the `:engine` scaffold) done the same day.
+
 ## Milestones
 
 | ID | Name | Status | Started | Finished |

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Empty on purpose: every component of the engine stays declared in the app's manifest during E1 (same class names,
+     same resources), and the engine sets no <application> attributes (the app's <profileable> must stay the only one). -->
+<manifest />

@@ -57,6 +57,8 @@ android {
 }
 
 dependencies {
+    // The engine: the platform layer the launcher runs on (docs/E1_INVENTORY.md). Same Kotlin packages as before.
+    implementation(project(":engine"))
     val shizuku = "13.1.5"
     implementation("dev.rikka.shizuku:api:$shizuku")
     implementation("dev.rikka.shizuku:provider:$shizuku")

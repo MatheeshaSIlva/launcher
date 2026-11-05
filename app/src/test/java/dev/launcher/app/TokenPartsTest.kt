@@ -48,8 +48,8 @@ class TokenPartsTest {
     @Test fun elementCodeReadsOnlyItsNamespaces() {
         val shared = Regex("""(?:Color|Number|Text|Material|Choice)Key\("((?:sys|component|ref)\.[a-z0-9.-]+)"""")
         for (pkg in listOf("statusbar", "shade", "switcher", "drawer", "home")) {
-            val dir = File("src/main/java/dev/launcher/app/$pkg")
-            val reads = dir.walk().filter { it.extension == "kt" }.flatMap { f -> shared.findAll(f.readText()).map { "${f.name}: ${it.groupValues[1]}" } }.toList()
+            // Both modules: an element's files may have moved into the engine (SourceRoots).
+            val reads = SourceRoots.files(pkg).flatMap { f -> shared.findAll(f.readText()).map { "${f.name}: ${it.groupValues[1]}" } }
             assertTrue("$pkg reads shared tokens directly: $reads", reads.isEmpty())
         }
     }

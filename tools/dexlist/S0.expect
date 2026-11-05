@@ -1,0 +1,3 @@
+# S0 (docs/E1_INVENTORY.md): the :engine scaffold, no sources yet. AGP generates the library's R class even with no
+# resources (namespace dev.launcher.engine; minify off, so it stays in the dex): its constructor only, no inner R$ classes.
++ Ldev/launcher/engine/R; 1 0
