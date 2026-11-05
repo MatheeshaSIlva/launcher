@@ -21,12 +21,12 @@ object Updater {
     private const val INSTALL_LOG = "/data/local/tmp/launcher-update.log"
     private val io = Executors.newSingleThreadExecutor()
 
-    fun update(app: LauncherApp, force: Boolean) {
+    fun update(app: android.content.Context, force: Boolean) {
         val s = ShizukuLink.service
             ?: run { AppLog.log("[update] Shizuku service not connected; tap Connect first (silent install needs it)"); return }
         io.execute {
             try {
-                val installed = app.buildStamp()
+                val installed = EngineHost.current("buildStamp").buildStamp()
                 AppLog.log("[update] checking GitHub (installed: $installed)")
                 val c = URL("https://api.github.com/repos/$REPO/releases/tags/latest").openConnection() as HttpURLConnection
                 c.connectTimeout = 15000

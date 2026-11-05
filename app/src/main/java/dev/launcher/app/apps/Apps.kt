@@ -14,7 +14,7 @@ import android.os.Looper
 import android.os.UserHandle
 import android.os.UserManager
 import dev.launcher.app.AppLog
-import dev.launcher.app.HomeActivity
+import dev.launcher.app.EngineHost
 import java.text.Collator
 import java.util.concurrent.Executors
 
@@ -141,7 +141,7 @@ object Apps {
     private fun load(): List<AppEntry> {
         val pm = ctx.packageManager
         val out = ArrayList<AppEntry>()
-        val home = ComponentName(ctx, HomeActivity::class.java)
+        val home = EngineHost.current("homeComponent").homeComponent()
         for (user in users.userProfiles) {
             val infos = try { launcherApps.getActivityList(null, user) } catch (_: Throwable) { emptyList() }
             for (info in infos) {

@@ -151,16 +151,16 @@ object SystemRestore {
     fun applyFlags(ctx: Context, s: IShellService): String {
         // Hide the stock clock and icons, and block the stock shade, only while our own status bar (with our shade) is really
         // on screen: never no clock at all, never no shade at all.
-        val bar = statusBarWanted(ctx) && GestureNav.statusBarShown
+        val bar = statusBarWanted(ctx) && EngineHost.current("nav.statusBarShown").nav.statusBarShown
         // Never block stock gestures unless our strip can actually be shown.
-        val gestures = gesturesWanted(ctx) && GestureNav.ready
+        val gestures = gesturesWanted(ctx) && EngineHost.current("nav.ready").nav.ready
         val what1 = (if (bar) DISABLE_CLOCK or DISABLE_NOTIFICATION_ICONS or DISABLE_EXPAND or DISABLE_ONGOING_CALL_CHIP else 0) or (if (gestures) DISABLE_HOME or DISABLE_RECENT else 0)
         val what2 = if (bar) DISABLE2_SYSTEM_ICONS or DISABLE2_QUICK_SETTINGS or DISABLE2_NOTIFICATION_SHADE else 0
         val r = try { s.setDisableFlags(what1, what2, ShizukuLink.clientToken) } catch (t: Throwable) { "ERROR: ${t.javaClass.simpleName}: ${t.message}" }
         gestureFlagsActive = gestures && !r.contains("ERROR")
-        val why = if (gesturesWanted(ctx) && !GestureNav.ready) " (gesture nav waits for the accessibility service)" else ""
+        val why = if (gesturesWanted(ctx) && !EngineHost.current("nav.ready").nav.ready) " (gesture nav waits for the accessibility service)" else ""
         AppLog.log("[flags] status bar and shade ${if (bar) "ours" else "stock"}, stock gestures ${if (gestures) "blocked" else "on"}$why: $r")
-        GestureNav.update()
+        EngineHost.current("nav.update").nav.update()
         // Our shade has taken over: One UI's Brief pop-ups would still show beside our banners.
         if (bar && !r.contains("ERROR")) PopupStyle.check(ctx, s)
         // And the parts of One UI's bar that no flag hides (while the screen is shared, live notification chips).
@@ -172,7 +172,7 @@ object SystemRestore {
     /** The service is gone, so the system has dropped every flag it held. */
     fun onServiceLost() {
         gestureFlagsActive = false
-        GestureNav.update()
+        EngineHost.current("nav.update").nav.update()
     }
 
     /**

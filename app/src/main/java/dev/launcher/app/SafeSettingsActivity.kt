@@ -72,7 +72,7 @@ class SafeSettingsActivity : Activity() {
         v.viewTreeObserver.addOnDrawListener(object : android.view.ViewTreeObserver.OnDrawListener {
             override fun onDraw() {
                 v.post { v.viewTreeObserver.removeOnDrawListener(this) }
-                android.view.Choreographer.getInstance().postFrameCallback { GestureNav.ownScreenDrawn() }
+                android.view.Choreographer.getInstance().postFrameCallback { EngineHost.current("nav.ownScreenDrawn").nav.ownScreenDrawn() }
             }
         })
         v.invalidate()

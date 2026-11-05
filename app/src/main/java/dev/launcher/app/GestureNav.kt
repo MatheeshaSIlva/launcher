@@ -71,7 +71,7 @@ import dev.launcher.app.motion.timed
  * shell service. All of this runs on its own UI thread ([nav]); binder work runs on two worker threads (task list and
  * snapshots separately, so a slow snapshot never delays the next gesture's task lookup).
  */
-object GestureNav {
+object GestureNav : NavHost {
     private lateinit var app: LauncherApp
     private val navThread = HandlerThread("nav-ui", Process.THREAD_PRIORITY_DISPLAY).apply { start() }
     private val nav = Handler(navThread.looper)
@@ -87,12 +87,12 @@ object GestureNav {
     private var wm: WindowManager? = null
 
     /** Our windows can be shown (accessibility service connected). Gesture flags are only set while this is true. */
-    @Volatile var ready = false
+    @Volatile override var ready = false
         private set
     @Volatile private var locked = false
 
     /** Set by HomeActivity (resumed = in front). */
-    @Volatile var homeVisible = false
+    @Volatile override var homeVisible = false
     /**
      * The app a card is bringing up now (a launch, a quick switch) until its window comes to the front, and a close into home
      * committed until home shows: what is behind the banners and the status bar changes with the card, not seconds later
@@ -129,7 +129,7 @@ object GestureNav {
     private var anim = Anim.NONE
 
     /** No gesture and no card moving (read from any thread: a hint for work that would cost a frame, not a lock). */
-    val idle: Boolean get() = phase == Phase.IDLE && anim == Anim.NONE
+    override val idle: Boolean get() = phase == Phase.IDLE && anim == Anim.NONE
     /** Bumped on every hand-over; callbacks from an earlier phase compare it and do nothing. */
     private var gen = 0
     private var cardPkg: String? = null          // the app the current card shows
@@ -200,7 +200,7 @@ object GestureNav {
         dev.launcher.app.shade.BackdropSource.App(b, stale) { !dev.launcher.app.shade.BackdropSource.App.outdated(contentChangedAt[pkg], takenAt) }
 
     /** From NavAccessibilityService: the window of [pkg] changed its content or scrolled. */
-    fun onContentChanged(pkg: String?) {
+    override fun onContentChanged(pkg: String?) {
         if (pkg == null || pkg != lastFrontPkg) return   // only the app in front (not our windows, not the keyboard)
         contentChangedAt[pkg] = SystemClock.uptimeMillis()
         nav.post { if (phase == Phase.SWITCHER) refreshSwitcherCard() else refreshSoon() }
@@ -390,7 +390,7 @@ object GestureNav {
     // ================================================================== public entry points (any thread)
 
     /** Shows or removes our windows to match the current state. */
-    fun update() {
+    override fun update() {
         if (Looper.myLooper() != navThread.looper) { nav.post { update() }; return }
         val base = ready && SystemRestore.gestureFlagsActive && ShizukuLink.service != null
         // Gestures (the strip, the cards): not on the lock screen (it has its own swipe up to unlock).
@@ -423,7 +423,7 @@ object GestureNav {
      * (SystemRestore.applyFlags). The bar lives in the shade's window (shade/Shade.kt) with Notification Center and
      * Control Center.
      */
-    @Volatile var statusBarShown = false
+    @Volatile override var statusBarShown = false
         private set
     private var shade: dev.launcher.app.shade.Shade? = null
     private var shadeService: Any? = null
@@ -747,7 +747,7 @@ object GestureNav {
     }
 
     /** NavAccessibilityService connected: windows can be added. Re-applies flags, which then shows the strip. */
-    fun attach(service: NavAccessibilityService) {
+    override fun attach(service: NavAccessibilityService) {
         nav.post {
             if (a11y === service) return@post
             // Unbound before this ran (connected and unbound at once, seen on the S24 after an install): never attach it.
@@ -768,7 +768,7 @@ object GestureNav {
     }
 
     /** Service gone: our windows are invalid and stock gestures must come back at once. */
-    fun detach(service: NavAccessibilityService) {
+    override fun detach(service: NavAccessibilityService) {
         if (a11y !== service && a11y != null) return
         unboundService = service
         ready = false
@@ -966,7 +966,7 @@ object GestureNav {
     }
 
     /** From NavAccessibilityService: a window of [pkg] came to the front. */
-    fun onWindowStateChanged(pkg: String?, className: String? = null) {
+    override fun onWindowStateChanged(pkg: String?, className: String?) {
         if (pkg == null) return
         // The App Switcher's own window (under a mini player): the switcher, not an app in front.
         if (className == dev.launcher.app.switcher.SwitcherActivity::class.java.name) return
@@ -4302,7 +4302,7 @@ object GestureNav {
      * One of our own screens (developer panel, safe settings) has drawn its first frame: a launch card waiting for it can
      * go (accessibility events of our own package are not "an app in front"). Any thread.
      */
-    fun ownScreenDrawn() = nav.post {
+    override fun ownScreenDrawn() = nav.post {
         val w = waitingFor ?: return@post
         if (w.first != app.packageName) return@post
         waitingFor = null

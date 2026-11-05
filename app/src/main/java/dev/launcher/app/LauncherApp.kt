@@ -2,8 +2,10 @@ package dev.launcher.app
 
 import android.app.Application
 
-class LauncherApp : Application() {
+class LauncherApp : Application(), EngineHost {
     override fun onCreate() {
+        // Before anything else: the engine's code reads the launcher through it, and fails loudly if it is not set.
+        EngineHost.install(this)
         super.onCreate()
         // Must stay the first log line: tests are only trusted when this matches the commit under test.
         AppLog.log("BUILD ${buildStamp()}")
@@ -92,7 +94,11 @@ class LauncherApp : Application() {
             String.format(" (configChanges 0x%08x)", c))
     } catch (_: Throwable) { }
 
-    fun buildStamp(): String =
+    override val nav: NavHost get() = GestureNav
+    override fun listenerComponent() = android.content.ComponentName(this, BadgeListener::class.java)
+    override fun homeComponent() = android.content.ComponentName(this, HomeActivity::class.java)
+
+    override fun buildStamp(): String =
         try { packageManager.getPackageInfo(packageName, 0).versionName ?: "?" } catch (_: Throwable) { "?" }
 
     private companion object {

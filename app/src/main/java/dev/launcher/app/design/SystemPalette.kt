@@ -134,10 +134,10 @@ object SystemPalette {
      * changes itself is made anew).
      */
     private fun quietIn(c: Context): Long {
-        if (!dev.launcher.app.GestureNav.idle) return QUIET_RETRY_MS
+        if (!dev.launcher.app.EngineHost.current("nav.idle").nav.idle) return QUIET_RETRY_MS
         val interactive = (c.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager)?.isInteractive ?: true
         if (!interactive) return 0L
-        if (!dev.launcher.app.GestureNav.homeVisible) return AWAY_RETRY_MS
+        if (!dev.launcher.app.EngineHost.current("nav.homeVisible").nav.homeVisible) return AWAY_RETRY_MS
         if (dev.launcher.app.HomeBridge.touching || dev.launcher.app.HomeBridge.home?.isIdle() == false) return QUIET_RETRY_MS
         val untouched = android.os.SystemClock.uptimeMillis() - dev.launcher.app.HomeBridge.lastTouchAt
         return if (untouched >= UNTOUCHED_MS) 0L else maxOf(UNTOUCHED_MS - untouched, QUIET_RETRY_MS / 2)

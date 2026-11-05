@@ -1,0 +1,16 @@
+# S1 (docs/E1_INVENTORY.md cuts 1 and 2): the engine-bound code reads the launcher through EngineHost / NavHost.
+# Everything S0 declared stays:
++ Ldev/launcher/engine/R; 1 0
+# The two new interfaces (no default methods, so no $DefaultImpls): EngineHost's 4 abstract members and its static
+# initialiser (the Companion field), the Companion (constructor + synthetic constructor; install, current), NavHost's
+# 10 abstract members (4 property getters, 6 functions).
++ Ldev/launcher/app/EngineHost; 1 4
++ Ldev/launcher/app/EngineHost$Companion; 2 2
++ Ldev/launcher/app/NavHost; 0 10
+# GestureNav implements NavHost: onWindowStateChanged's unused default (className = null; its one caller passes both) is
+# gone, an override may not declare one, and with it the static onWindowStateChanged$default.
+- Ldev/launcher/app/GestureNav; 761 18
++ Ldev/launcher/app/GestureNav; 760 18
+# LauncherApp implements EngineHost: getNav, listenerComponent, homeComponent (buildStamp was already there).
+- Ldev/launcher/app/LauncherApp; 6 2
++ Ldev/launcher/app/LauncherApp; 6 5

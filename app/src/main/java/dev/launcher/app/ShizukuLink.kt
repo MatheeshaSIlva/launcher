@@ -30,7 +30,7 @@ object ShizukuLink {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val listeners = mutableListOf<() -> Unit>()
-    private lateinit var app: LauncherApp
+    private lateinit var app: android.app.Application
     private var binding = false
 
     private val args by lazy {
@@ -39,7 +39,7 @@ object ShizukuLink {
             .daemon(false)
             .tag("launcher-shell")
             // A new build must replace a still-running service from the old build.
-            .version(app.buildStamp().hashCode())
+            .version(EngineHost.current("buildStamp").buildStamp().hashCode())
     }
 
     private val conn = object : ServiceConnection {
@@ -51,7 +51,7 @@ object ShizukuLink {
                 io.execute {
                     grantSelf(s)
                     Watchdog.sync(app, s)
-                    if (SystemRestore.gesturesWanted(app) && !GestureNav.ready) {
+                    if (SystemRestore.gesturesWanted(app) && !EngineHost.current("nav.ready").nav.ready) {
                         AppLog.log("[nav] accessibility service: ${NavAccessibilityService.enable(app)}")
                     }
                     // A fresh service holds no flags: put back what we want (stock bar/gestures show until this runs).
@@ -78,7 +78,7 @@ object ShizukuLink {
         }
     }
 
-    fun init(app: LauncherApp) {
+    fun init(app: android.app.Application) {
         this.app = app
         Shizuku.addBinderReceivedListenerSticky {
             AppLog.log("[shizuku] binder received")
@@ -140,7 +140,7 @@ object ShizukuLink {
         try {
             // Notification access for the icon badges.
             val nm = app.getSystemService(android.app.NotificationManager::class.java)
-            val comp = Badges.component(app)
+            val comp = EngineHost.current("listenerComponent").listenerComponent()
             if (!nm.isNotificationListenerAccessGranted(comp))
                 AppLog.log("[shizuku] badge access: ${s.runShell("cmd notification allow_listener ${comp.flattenToString()}").trim()}")
         } catch (t: Throwable) { AppLog.log("[shizuku] badge access failed: ${t.message}") }

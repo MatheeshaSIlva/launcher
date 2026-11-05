@@ -15,26 +15,26 @@ import android.view.accessibility.AccessibilityEvent
 class NavAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         AppLog.log("[a11y] service connected")
-        GestureNav.attach(this)
+        EngineHost.current("nav.attach").nav.attach(this)
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
         AppLog.log("[a11y] service unbound")
-        GestureNav.detach(this)
+        EngineHost.current("nav.detach").nav.detach(this)
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
-        GestureNav.detach(this)
+        EngineHost.current("nav.detach").nav.detach(this)
         super.onDestroy()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         // Tells gesture navigation when a switched-to app is really in front, so its card can go without a gap.
         when (event?.eventType) {
-            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> GestureNav.onWindowStateChanged(event.packageName?.toString(), event.className?.toString())
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> EngineHost.current("nav.onWindowStateChanged").nav.onWindowStateChanged(event.packageName?.toString(), event.className?.toString())
             // The app in front changed what it shows: our picture of it (cards, App Switcher) is taken again once it settles.
-            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_VIEW_SCROLLED -> GestureNav.onContentChanged(event.packageName?.toString())
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_VIEW_SCROLLED -> EngineHost.current("nav.onContentChanged").nav.onContentChanged(event.packageName?.toString())
             else -> {}
         }
     }
