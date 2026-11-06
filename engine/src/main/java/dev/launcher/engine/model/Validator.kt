@@ -1,5 +1,8 @@
 package dev.launcher.engine.model
 
+import dev.launcher.engine.expr.Deps
+import dev.launcher.engine.expr.ExprException
+import dev.launcher.engine.expr.ExprParser
 import dev.launcher.engine.kdl.KdlDocument
 import dev.launcher.engine.kdl.KdlValue
 import dev.launcher.engine.kdl.Span
@@ -12,16 +15,12 @@ fun interface TokenCheck {
 /**
  * Checks what a [ComponentDef]'s view means against the primitives' schemas ([Primitives]): every primitive and attribute
  * known, literals of the attribute's type, `$state` declared, `@name` a prop or a token, the sources an expression reads
- * in `uses`, no prop named like a token, each primitive in a parent that may hold it. Expressions are not parsed yet (E2
- * slice 4): their `$state`, `@name` and `source.path` references are found by a scan, and their findings point at the
- * whole value. Every finding is a [Diagnostic]; nothing throws.
+ * in `uses`, no prop named like a token, each primitive in a parent that may hold it. Expressions are parsed
+ * ([ExprParser]) and their references come from their dependency sets ([Deps]); a finding inside one points at its place
+ * in the file where the value is a plain quoted string on one line, else at the whole value. Every finding is a
+ * [Diagnostic]; nothing throws.
  */
 class Validator(private val tokens: TokenCheck) {
-    private companion object {
-        val BRACES = Regex("\\{([^}]*)}")
-        val NAMES = Regex("'[^']*'|\"[^\"]*\"|([\$@]?)([A-Za-z_][\\w-]*(?:\\.[A-Za-z_][\\w-]*)*)")
-    }
-
     /** Reads and checks: the component when both find nothing, else every finding of either. */
     fun load(doc: KdlDocument): ReadResult = when (val r = ComponentReader.read(doc)) {
         is ReadResult.Invalid -> r
@@ -39,7 +38,7 @@ class Validator(private val tokens: TokenCheck) {
 
     private inner class Run(val c: ComponentDef) {
         val d = ArrayList<Diagnostic>()
-        val props = c.props.map { it.name }
+        val props = c.props.map { it.name }.toSet()
         val states = c.state.map { it.name }
         val sources = c.uses.sources.map { it.name }
 
@@ -75,9 +74,7 @@ class Validator(private val tokens: TokenCheck) {
                 is AttrValue.Literal -> literal(ad, v.value)
                 is AttrValue.State -> state(v.name, v.span, scope)
                 is AttrValue.Ref -> ref(v.name, v.span)
-                is AttrValue.Expr -> BRACES.findAll(v.text).forEach { b ->
-                    NAMES.findAll(b.groupValues[1]).forEach { m -> reference(m.groupValues[1], m.groupValues[2], v.span, scope) }
-                }
+                is AttrValue.Expr -> expression(v, scope)
             }
         }
 
@@ -90,15 +87,24 @@ class Validator(private val tokens: TokenCheck) {
                 d += Diagnostic(v.span, "wrong-type", "'${ad.name}' takes ${ad.type.name}, found ${shown(v)}", ad.default?.let { "for example ${ad.name}=${if (it is Boolean) "#$it" else it}" })
         }
 
-        fun reference(prefix: String, name: String, span: Span, scope: Set<String>) = when {
-            name.isEmpty() -> {}
-            prefix == "$" -> state(name.substringBefore('.'), span, scope)
-            prefix == "@" -> ref(name, span)
-            '.' in name && name.substringBefore('.') !in scope && name.substringBefore('.') !in sources -> {
-                val source = name.substringBefore('.')
-                d += Diagnostic(span, "source-not-in-uses", "'$name' reads the source '$source', which uses does not declare", "uses { source $source }")
+        fun expression(v: AttrValue.Expr, scope: Set<String>) {
+            val t = try { ExprParser.template(v.text) } catch (e: ExprException) {
+                return run { d += Diagnostic(inside(v, e.at), "bad-expression", e.message!!, e.hint) }
             }
-            else -> {}
+            val deps = Deps.of(t, props)
+            deps.states.forEach { (name, at) -> state(name, inside(v, at), scope) }
+            deps.tokens.forEach { (name, at) -> ref(name, inside(v, at)) }
+            for ((path, at) in deps.sources) {
+                val source = path.substringBefore('.')
+                if (source !in scope && source !in sources) d += Diagnostic(inside(v, at), "source-not-in-uses",
+                    "'$path' reads the source '$source', which uses does not declare", "uses { source $source }")
+            }
+        }
+
+        /** Where offset [at] of an expression's text is in the file: exact for a plain quoted string on one line. */
+        fun inside(v: AttrValue.Expr, at: Int): Span = v.span.let {
+            if (it.end - it.start != v.text.length + 2 || '\n' in v.text) it
+            else Span(it.start + 1 + at, it.start + 2 + at, it.line, it.col + 1 + at)
         }
 
         fun state(name: String, span: Span, scope: Set<String>) {
