@@ -78,7 +78,7 @@ install_build() {   # $1 = ref | new
   ready "installing $b ($sha)"
   say "install $b: $APKS/$b/app-debug.apk + .dm ($(du -k "$APKS/$b/app-debug.apk" | cut -f1) KB)"
   # The required install route (AGENTS.md): tools/device.sh install, given the staged APK and .dm.
-  tools/device.sh install "$APKS/$b/app-debug.apk" "$APKS/$b/app-debug.dm" 2>&1 | tail -1 | tee -a "$RUN/run.log" \
+  tools/device.sh install "$APKS/$b/app-debug.apk" "$APKS/$b/app-debug.dm" 2>&1 | tee -a "$RUN/run.log" \
     | grep -q Success || stop "the install of $b failed"
   a shell am start -a android.intent.action.MAIN -c android.intent.category.HOME -p $PKG >/dev/null
   [ "$(installed)" = "$sha" ] || stop "after installing $b: the phone reports BUILD $(installed), not $sha"
