@@ -64,7 +64,10 @@ object SystemSources {
     fun all(context: Context, handler: Handler): Sources {
         val r = AndroidReceivers(context, handler)
         val power = context.getSystemService(PowerManager::class.java)
-        return Sources(listOf(time(r), battery(r) { try { power.isPowerSaveMode } catch (_: Throwable) { false } }))
+        val nm = context.getSystemService(android.app.NotificationManager::class.java)
+        return Sources(listOf(time(r), battery(r) { try { power.isPowerSaveMode } catch (_: Throwable) { false } },
+            NetworkSources.network(r, AndroidNetwork(context, handler)),
+            NetworkSources.dnd(r) { try { nm.currentInterruptionFilter } catch (_: Throwable) { android.app.NotificationManager.INTERRUPTION_FILTER_ALL } }))
     }
 }
 

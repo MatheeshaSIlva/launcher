@@ -7,4 +7,6 @@
 
     <!-- Wallpaper.kt: the adb test hook sets and clears the wallpaper (Wallpaper.testHook). -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
+    <!-- source/NetworkSources.kt: the Wi-Fi and VPN callbacks, as StatusBarView's (E2 slice 11). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 </manifest>
