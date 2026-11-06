@@ -141,54 +141,5 @@ done
 say "done: the phone is on BUILD $(installed)"
 
 # ------------------------------------------------------------------------------------------------- summary
-python - "$RUN" "$ORDER" <<'PY' | tee "$RUN/summary.txt"
-import os, re, subprocess, sys
-run, order = sys.argv[1], sys.argv[2].split()
-labels = [f"{i + 1}-{b}" for i, b in enumerate(order)]
-def window(name):
-    return "LauncherCards" if name.startswith("switch") else "SettingsActivity" if name.startswith("set_") else "LauncherStatusBar"
-def stats(path, w):
-    t = subprocess.run([sys.executable, "tools/framestats.py", path, w], capture_output=True, text=True).stdout
-    n = re.search(r"shown: (\d+) frames.*?missed refreshes ~(\d+)", t, re.S)
-    g = re.search(r"GPU ms: median ([\d.]+)\s+p90 ([\d.]+)", t)
-    c = re.search(r"CPU ms: median ([\d.]+)\s+p90 ([\d.]+)", t)
-    if not n or not g or not c: return None
-    return (int(n.group(2)), float(g.group(2)), float(c.group(2)))
-steps = {}
-gaps = []
-for lab in labels:
-    d = os.path.join(run, lab)
-    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
-        if not f.startswith("fs_"): continue
-        step = f[3:-4].split("@")[0]
-        s = stats(os.path.join(d, f), window(step))
-        steps.setdefault(step, {}).setdefault(lab, [])
-        if s: steps[step][lab].append(s)
-        else: gaps.append(f"{lab}: {f} (no frames, or no GPU/CPU values, for {window(step)})")
-print("missed refreshes (summed over passes) / worst GPU p90 ms / worst CPU p90 ms per animation, from framestats")
-print("runs: " + ", ".join(labels))
-print(f"{'animation':24s}" + "".join(f"{l:>20s}" for l in labels) + f"{'ref miss/pass':>15s}{'new miss/pass':>15s}")
-def cell(v): return "-" if not v else f"{sum(x[0] for x in v)} / {max(x[1] for x in v):.1f} / {max(x[2] for x in v):.1f}"
-def mean(row, b):
-    v = [x[0] for l in labels if l.endswith(b) for x in row.get(l, [])]
-    return f"{sum(v) / len(v):.2f}" if v else "-"
-tot = {"ref": [0, 0], "new": [0, 0]}
-for step in sorted(steps):
-    row = steps[step]
-    for l in labels:
-        b = l.split("-")[1]; tot[b][0] += sum(x[0] for x in row.get(l, [])); tot[b][1] += len(row.get(l, []))
-    print(f"{step:24s}" + "".join(f"{cell(row.get(l)):>20s}" for l in labels) + f"{mean(row, 'ref'):>15s}{mean(row, 'new'):>15s}")
-for b in ("ref", "new"):
-    print(f"total {b}: {tot[b][0]} missed over {tot[b][1]} measured animations")
-want = {step: max(len(v) for v in row.values()) for step, row in steps.items()}
-for step, row in steps.items():
-    for l in labels:
-        if len(row.get(l, [])) < want[step]:
-            gaps.append(f"{l}: {step} measured {len(row.get(l, []))} of {want[step]} passes")
-if gaps:
-    print("INCOMPLETE: these measurements are missing, so the totals above do not compare like with like:")
-    for g in sorted(set(gaps)): print("  " + g)
-    sys.exit(3)
-print("complete: every animation measured in every pass of every run")
-PY
+python tools/compare_summary.py "$RUN" "$ORDER" "$SCENARIOS" "$PASSES" | tee "$RUN/summary.txt"
 exit ${PIPESTATUS[0]}
