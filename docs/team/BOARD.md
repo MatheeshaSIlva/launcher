@@ -1,8 +1,8 @@
 # Board
 
-**Now:** E2 is under way: the interpreter's core is built and tested (KDL parser, model, validator, expressions, layout,
-Compose host, tokens, the time/battery/network/dnd sources). Claude is upgrading Compose to 1.11.4 and Kotlin to 2.2
-(T-002), which the first visible slice needs; T-001's first slice (our own ADB client) is offered to Codex alongside.
+**Now:** E2 is under way: the interpreter's core is built and tested. Claude is moving AGP to 8.13 (T-003, the owner's
+call after T-002's lint hit his stop rule), then lands the Compose 1.11.4 + Kotlin 2.2 upgrade (T-002) on it. Codex is
+building T-001 slice 1a (the ADB message codec) alongside.
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
 **Device:** claude (lead)
@@ -34,8 +34,9 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
-| T-001 | Our own shell host replacing Shizuku, alongside E2; slice 1 (the ADB client) offered to Codex | `threads/T-001-no-shizuku.md` | claude (lead), codex (slice 1, offered) | `team/codex/t001-adb` | DISCUSSING |
-| T-002 | E2.0a: Compose 1.11.4 and Kotlin 2.2, measured before and after | `threads/T-002-compose-kotlin-upgrade.md` | claude; codex cross-checks | `engine` | DISCUSSING |
+| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS |
+| T-003 | E2.0: AGP 8.13.2 and Gradle 8.13; three Android 11 guards lint 8.13 found | `threads/T-003-agp-8-13.md` | claude; codex cross-checks | `team/claude/t003-agp` | IN PROGRESS |
+| T-002 | E2.0a: Compose 1.11.4 and Kotlin 2.2, measured before and after | `threads/T-002-compose-kotlin-upgrade.md` | claude; codex cross-checks | `team/claude/t002-compose` | BLOCKED (on T-003) |
 
 ## Parking lot
 

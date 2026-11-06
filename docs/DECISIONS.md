@@ -875,3 +875,18 @@ shade and the App Switcher on the S24 before and after, the class-list diff decl
 the compile SDK has to move**. T-001 runs **alongside E2**, not before it; its first slice (the vendored ADB client and
 its tests) is offered to Codex while the lead does the upgrade. Still open with the owner: one expression syntax
 (`{expr}` with pipes; a spec edit with the invalid example's fix) and the bar's place in the spec (a `shade` component).
+
+## D-075: AGP moves to 8.13 before the Compose upgrade; T-001's native pairing approved, Android 12+ only (2026-11-06, owner)
+
+T-002 (Compose 1.11.4, Kotlin 2.2.21) built with no source change and passed every unit test (app 421, engine 73), and
+its dex diff was fully explained by the declared categories plus Kotlin 2.2's code generation; but AGP 8.7.3's lint
+crashed on the lint checks Compose 1.11.4's libraries ship (`IncompatibleClassChangeError` in lifecycle 2.9.4's
+`NonNullableMutableLiveDataDetector`; with that check off, in Compose's own `ComposableFlowOperatorDetector`, which
+applies to us). The owner's stop rule applied. Tested before asking: lint 8.13.2 under AGP 8.7.3 runs clean of crashes
+and reports three real old bugs (`setSystemBarsBehavior`, Android 11 API, unguarded with minSdk 29). Owner, asked between
+that, moving AGP, or pausing: **move AGP to 8.13**, its own slice before T-002 (T-003: AGP 8.13.2, Gradle 8.13, the three
+guards). T-001 slice 1b, asked after Codex read upstream Shizuku v13.6.0: **the native route is approved** (upstream's JNI
+bridge to BoringSSL's SPAKE2, with BoringSSL via prefab, libc++ and `bcpkix-jdk15on` 1.70; NDK/CMake in `:engine`), and
+**our own pairing supports Android 12+ only** (the public `SSLSockets.exportKeyingMaterial`; no hidden or bundled
+Conscrypt; Android 11 keeps Shizuku). Codex's other findings shape slices 1-2: bounded framing (4,096 and 16,384 bytes),
+no key or payload logging, a one-time capability on the binder handover.
