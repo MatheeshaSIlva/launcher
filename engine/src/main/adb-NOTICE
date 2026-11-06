@@ -1,0 +1,41 @@
+ADB protocol source notice
+==========================
+
+Parts of dev.launcher.engine.adb are adapted from Shizuku, Copyright (C) 2019-2025
+RikkaApps and Shizuku contributors, licensed under the Apache License, Version 2.0.
+
+Upstream snapshot:
+  Project: https://github.com/RikkaApps/Shizuku
+  Tag: v13.6.0
+  Commit: 2650830c5b099ae0dd34fedf614d4f592ca05d65
+  Sources consulted:
+    manager/src/main/java/moe/shizuku/manager/adb/AdbMessage.kt
+    manager/src/main/java/moe/shizuku/manager/adb/AdbProtocol.kt
+      - ADB message framing, checksum, command magic, and A_MAXDATA
+    manager/src/main/java/moe/shizuku/manager/adb/AdbPairingClient.kt
+      - pairing packet header, supported values, and payload bound
+
+Checksum negotiation checked against Android Open Source Project:
+  Project: https://android.googlesource.com/platform/packages/modules/adb
+  Revision: dac5ffe21f8e7bccc60041154c27c4198162c6af
+  Sources consulted: transport.cpp (send_packet, check_header), adb.h
+    - zero outbound checksum and ignored inbound checksum from version 0x01000001
+  Copyright (C) 2007 The Android Open Source Project; Apache License, Version 2.0.
+
+Android 17 resolved-host fix:
+  Project: https://github.com/thedjchi/Shizuku
+  Commit: 3b1735223d4b83a8c5531832553cc059643d447d
+  Included in: v13.7.0-thedjchi (608fcf0e49d9cffc53427189cf7e0d5b3a6a23e4)
+  Source consulted:
+    manager/src/main/java/moe/shizuku/manager/adb/AdbMdns.kt
+      - carry the mDNS-resolved address instead of assuming loopback
+
+The source above is available under the Apache License, Version 2.0. You may
+obtain a copy of the license at:
+
+  https://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
