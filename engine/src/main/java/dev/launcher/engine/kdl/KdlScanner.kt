@@ -2,8 +2,8 @@ package dev.launcher.engine.kdl
 
 /**
  * KDL 2.0's characters (kdl-org/kdl's draft-marchan-kdl2.md) for [KdlParser]'s grammar: positions and errors, whitespace,
- * newlines, comments and strings. One pass over the text, no regex; an error says what and where ("... at LINE:COL").
- * Raw and multi-line strings and line continuations come in E2 slice 2: until then they are refused with an error naming them.
+ * newlines, line continuations, comments and every kind of string (identifier, quoted, raw, multi-line with its dedent).
+ * One pass over the text, no regex; an error says what and where ("... at LINE:COL").
  */
 open class KdlScanner(protected val s: String) {
     private companion object {
@@ -27,6 +27,16 @@ open class KdlScanner(protected val s: String) {
     internal fun fail(message: String, at: Int = i): Nothing =
         lineCol(at).let { (l, c) -> throw KdlException("$message at $l:$c", l, c) }
 
+    /** A disallowed code point anywhere from [i] on (comments included) is an error; a BOM is allowed only first. */
+    internal fun checkLiterals() {
+        for (k in i until s.length) {
+            val c = s[k]
+            val lone = c.isHighSurrogate() && s.getOrNull(k + 1)?.isLowSurrogate() != true ||
+                c.isLowSurrogate() && s.getOrNull(k - 1)?.isHighSurrogate() != true
+            if (disallowed(c) || lone) fail("Character U+%04X is not allowed in a KDL document".format(c.code), k)
+        }
+    }
+
     // ------------------------------------------------------------------------------------------------- characters
     internal fun ch(k: Int = 0): Char? = s.getOrNull(i + k)
     internal fun at(text: String) = s.startsWith(text, i)
@@ -49,13 +59,13 @@ open class KdlScanner(protected val s: String) {
     }
 
     // ------------------------------------------------------------------------------------------------- space, comments
-    /** Whitespace and block comments inside a node; true if any. */
+    /** Whitespace, block comments and line continuations inside a node; true if any. */
     internal fun nodeSpace(): Boolean {
         val from = i
         while (true) when {
             isSpace(ch()) -> i++
             at("/*") -> blockComment()
-            at("\\") -> fail("Line continuations are not supported yet (E2 slice 2)")
+            at("\\") -> lineContinuation()
             else -> return i > from
         }
     }
@@ -70,6 +80,20 @@ open class KdlScanner(protected val s: String) {
             else -> i++
         }
     }
+    /** `\`, whitespace and block comments, then a line comment, a newline or the end of the text. */
+    private fun lineContinuation() {
+        i++
+        while (true) when {
+            isSpace(ch()) -> i++
+            at("/*") -> blockComment()
+            else -> break
+        }
+        when {
+            at("//") -> lineComment()
+            newlineAt(i) > 0 -> i += newlineAt(i)
+            i < s.length -> fail("A line continuation '\\' must end its line, found ${describe()}")
+        }
+    }
     internal fun lineComment() { while (i < s.length && newlineAt(i) == 0) i++; i += newlineAt(i) }
     /** Whitespace, newlines and both kinds of comment, between nodes. */
     internal fun lineSpace() {
@@ -82,12 +106,15 @@ open class KdlScanner(protected val s: String) {
     }
 
     // ------------------------------------------------------------------------------------------------- strings
-    /** An identifier or a quoted string, or null when neither starts here. */
-    internal fun string(): String? = when {
-        at("\"\"\"") -> fail("Multi-line strings are not supported yet (E2 slice 2)")
-        ch() == '"' -> quoted()
-        ch() == '#' && (ch(1) == '"' || ch(1) == '#') -> fail("Raw strings are not supported yet (E2 slice 2)")
-        else -> identifier()
+    /** An identifier, a quoted or a raw string (single- or multi-line), or null when none starts here. */
+    internal fun string(): String? {
+        var hashes = 0
+        while (ch(hashes) == '#') hashes++
+        return when {
+            ch(hashes) != '"' -> if (hashes > 0) null else identifier()
+            s.startsWith("\"\"\"", i + hashes) -> multiLine(hashes)
+            else -> quoted(hashes)
+        }
     }
 
     private fun identifier(): String? {
@@ -95,28 +122,71 @@ open class KdlScanner(protected val s: String) {
         while (isIdentChar(ch())) i++
         if (i == start) return null
         val word = s.substring(start, i)
-        val (first, second) = word[0] to word.getOrNull(1)
-        if (first.isDigit() || first == '.' && second?.isDigit() == true ||
-            (first == '+' || first == '-') && (second?.isDigit() == true || second == '.' && word.getOrNull(2)?.isDigit() == true))
+        fun digit(k: Int) = word.getOrNull(k).let { it != null && it in '0'..'9' }
+        val first = word[0]
+        if (digit(0) || first == '.' && digit(1) || (first == '+' || first == '-') && (digit(1) || word.getOrNull(1) == '.' && digit(2)))
             fail("Invalid identifier '$word': it cannot start like a number", start)
         if (word in KEYWORDS) fail("Bare '$word' is not a value in KDL 2: write #$word", start)
         return word
     }
 
-    private fun quoted(): String {
+    /** Whether the quotes at [i] + [quotes] are followed by [hashes] `#`: a raw string's close. */
+    private fun closes(quotes: Int, hashes: Int) = (0 until hashes).all { ch(quotes + it) == '#' }
+
+    /** `"..."`, or raw with [hashes] `#` around it (no escapes). */
+    private fun quoted(hashes: Int): String {
         val start = i
-        i++
+        i += hashes + 1
         val out = StringBuilder()
         while (true) {
             val c = ch() ?: fail("Unclosed string", start)
             when {
-                c == '"' -> { i++; return out.toString() }
+                c == '"' && closes(1, hashes) -> { i += 1 + hashes; return out.toString() }
                 newlineAt(i) > 0 -> fail("A quoted string cannot hold a newline: write \\n, or use a multi-line string")
-                c == '\\' -> escape(out)
-                disallowed(c) -> fail("Character U+%04X is not allowed in a string".format(c.code))
+                c == '\\' && hashes == 0 -> escape(out)
                 else -> { out.append(c); i++ }
             }
         }
+    }
+
+    /**
+     * `"""` and a newline, lines, then a last line of whitespace only and `"""` (raw with [hashes] `#`). Escapes are read
+     * first (whitespace escapes vanish); the characters an escape made are marked, so that they never count as a line
+     * break or as indentation when the lines are dedented by the last line's whitespace.
+     */
+    private fun multiLine(hashes: Int): String {
+        val start = i
+        i += hashes + 3
+        if (newlineAt(i) == 0) fail("A multi-line string must start with a newline right after its opening quotes", start)
+        i += newlineAt(i)
+        val text = StringBuilder()
+        val escaped = java.util.BitSet()
+        while (true) {
+            val c = ch() ?: fail("Unclosed multi-line string", start)
+            when {
+                at("\"\"\"") && closes(3, hashes) -> { i += 3 + hashes; break }
+                newlineAt(i) > 0 -> { text.append('\n'); i += newlineAt(i) }
+                c == '\\' && hashes == 0 -> text.length.let { from -> escape(text); escaped.set(from, text.length) }
+                else -> { text.append(c); i++ }
+            }
+        }
+        fun blank(from: Int, to: Int) = (from until to).all { !escaped[it] && isSpace(text[it]) }
+        val breaks = text.indices.filter { text[it] == '\n' && !escaped[it] }
+        val last = (breaks.lastOrNull() ?: -1) + 1
+        if (!blank(last, text.length)) fail("A multi-line string's closing quotes must be alone on their line", start)
+        val indent = text.substring(last)
+        val out = StringBuilder()
+        var from = 0
+        for ((n, to) in breaks.withIndex()) {
+            if (n > 0) out.append('\n')
+            if (!blank(from, to)) {
+                if (!text.startsWith(indent, from) || (from until from + indent.length).any { escaped[it] })
+                    fail("Every line of a multi-line string must start with its closing line's whitespace", start)
+                out.append(text, from + indent.length, to)
+            }
+            from = to + 1
+        }
+        return out.toString()
     }
 
     private fun escape(out: StringBuilder) {

@@ -20,7 +20,7 @@ class KdlScannerTest {
         assertEquals("--this", str("--this"))
         assertEquals(".md", str(".md"))
         assertEquals("-", str("-"))
-        assertEquals("日本", str("日本 x"))
+        assertEquals("\u65E5\u672C", str("\u65E5\u672C x"))
         assertEquals("a", str("a=1"))
         assertNull(str("{"))
     }
@@ -36,7 +36,7 @@ class KdlScannerTest {
     @Test fun quotedStringsAndEscapes() {
         assertEquals("a b", str("\"a b\""))
         assertEquals("line\nnext\ttab\\\"q\" \u0008\u000C", str("\"line\\nnext\\ttab\\\\\\\"q\\\"\\s\\b\\f\""))
-        assertEquals("é😀", str("\"\\u{e9}\\u{1F600}\""))
+        assertEquals("\u00E9\uD83D\uDE00", str("\"\\u{e9}\\u{1F600}\""))
         assertEquals("Hello World", str("\"Hello \\    World\""))
         assertEquals("Hello\nWorld", str("\"Hello\\n\\\n    World\""))
         assertEquals("", str("\"\""))
@@ -51,10 +51,37 @@ class KdlScannerTest {
         assertTrue(error { str("\"\\u41\"") }.message!!.startsWith("Invalid unicode escape"))
     }
 
-    @Test fun slice2SyntaxIsRefusedByName() {
-        assertTrue(error { str("#\"raw\"#") }.message!!.startsWith("Raw strings"))
-        assertTrue(error { str("\"\"\"\nx\n\"\"\"") }.message!!.startsWith("Multi-line strings"))
-        assertTrue(error { Scan("  \\\n").nodeSpace() }.message!!.startsWith("Line continuations"))
+    @Test fun rawStrings() {
+        assertEquals("\\n stays", str("#\"\\n stays\"#"))
+        assertEquals("hello\\n\\r\\asd\"#world", str("##\"hello\\n\\r\\asd\"#world\"##"))
+        assertEquals("", str("#\"\"#"))
+        assertNull(str("#true"))
+        assertEquals("Unclosed string at 1:1", error { str("#\"never\"") }.message)
+    }
+
+    @Test fun multiLineStringsDedentByTheirLastLine() {
+        assertEquals("    foo\nThis is the base indentation\n        bar",
+            str("\"\"\"\n        foo\n    This is the base indentation\n            bar\n    \"\"\""))
+        assertEquals("Indented a bit\n\nA second paragraph.", str("\"\"\"\n    Indented a bit\n  \n    A second paragraph.\n    \"\"\""))
+        assertEquals("", str("\"\"\"\n\"\"\""))
+        assertEquals("a\nb", str("\"\"\"\r\n  a\r\n  b\r\n  \"\"\""))                       // literal newlines become LF
+        assertEquals("\r\n\nfoo", str("\"\"\"\n    \\r\\n\n    foo\n    \"\"\""))              // escaped ones stay
+        assertEquals("foo bar\nbaz", str("\"\"\"\n  foo \\\nbar\n  baz\n  \\   \"\"\""))     // whitespace escapes first
+        assertEquals("Here's a \"\"\"\n    inner\n    \"\"\"\nraw.",
+            str("#\"\"\"\n    Here's a \"\"\"\n        inner\n        \"\"\"\n    raw.\n    \"\"\"#"))
+        assertTrue(error { str("\"\"\"one line\"\"\"") }.message!!.startsWith("A multi-line string must start with a newline"))
+        assertTrue(error { str("\"\"\"\n  text\"\"\"") }.message!!.startsWith("A multi-line string's closing quotes must be alone"))
+        assertTrue(error { str("\"\"\"\n\ta\n  b\n \t\n\t\"\"\"") }.message!!.startsWith("Every line of a multi-line string"))
+        assertTrue(error { str("\"\"\"\n  foo\n  bar\\\n  \"\"\"") }.message!!.startsWith("A multi-line string's closing quotes"))
+        assertEquals("\tx", str("\"\"\"\n  \\tx\n  \"\"\""))                                  // an escaped tab is text, not indentation
+    }
+
+    @Test fun lineContinuations() {
+        val s = Scan("  \\  /* c */ // comment\n  next")
+        assertTrue(s.nodeSpace())
+        assertEquals('n', s.ch())
+        assertTrue(Scan("\\").nodeSpace())
+        assertEquals("A line continuation '\\' must end its line, found 'x' at 1:3", error { Scan("\\ x").nodeSpace() }.message)
     }
 
     @Test fun commentsAndSpace() {
@@ -81,7 +108,10 @@ class KdlScannerTest {
     }
 
     @Test fun disallowedCharactersAreRefused() {
-        assertTrue(error { str("\"a\u0001b\"") }.message!!.startsWith("Character U+0001 is not allowed"))
+        assertEquals("Character U+0001 is not allowed in a KDL document at 1:3", error { Scan("\"a\u0001b\"").checkLiterals() }.message)
+        assertEquals("Character U+200F is not allowed in a KDL document at 1:6", error { Scan("// a \u200F").checkLiterals() }.message)
+        assertTrue(error { Scan("x\uD800y").checkLiterals() }.message!!.startsWith("Character U+D800"))
+        Scan("emoji \uD83D\uDE00 in a comment").checkLiterals()
         assertEquals("a", str("a\u200Eb"))   // a direction mark ends an identifier
     }
 }

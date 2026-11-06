@@ -96,8 +96,34 @@ class KdlParserTest {
         assertEquals("A node can have only one children list at 1:6", error("n {} {}"))
         assertTrue(error("n = 1").startsWith("Expected a value, found '='"))
         assertTrue(error("= x").startsWith("Expected a node name, found '='"))
-        assertTrue(error("(dp)n").startsWith("Type annotations are not supported yet"))
-        assertTrue(error("n (dp)4").startsWith("Type annotations are not supported yet"))
+        assertEquals("Expected a type name, found ')' at 1:2", error("()n"))
+        assertEquals("Expected ')' after the type name, found 'b' at 1:4", error("(a b)n"))
+        assertTrue(error("n (t)k=1").startsWith("Expected whitespace before an argument or property, found '='"))
+        assertTrue(error("a\n\uFEFFb").startsWith("Character U+FEFF is not allowed"))
+    }
+
+    @Test fun typeAnnotationsOnNodesAndValues() {
+        val n = parse("(published) date ( dp )48 k=(\"my type\")#true (t)\"s\"").single()
+        assertEquals("published", n.type)
+        assertEquals(Span(1, 10, 1, 2), n.typeSpan)
+        assertEquals(Span(0, 51, 1, 1), n.span)
+        assertEquals("dp", n.args[0].type)
+        assertEquals(Span(19, 21, 1, 20), n.args[0].typeSpan)
+        assertEquals(48L, num(n.args[0]).long)
+        assertEquals("my type", n.props.getValue("k").value.type)
+        assertEquals("t", n.args[1].type)
+        assertEquals(null, parse("n 1").single().args[0].type)
+    }
+
+    @Test fun lineContinuationsBomAndTheVersionMarker() {
+        val n = parse("\uFEFF/- kdl-version 2\nnode 1 \\ // more below\n   2 \\\n   k=v\nnext").first()
+        assertEquals(listOf(1L, 2L), n.args.map { num(it).long })
+        assertEquals("v", str(n.props.getValue("k").value))
+        assertEquals(2, KdlParser.parse("/- kdl-version 2\nn").version)
+        assertEquals(1, KdlParser.parse("/-kdl-version   1 \r\n").version)
+        assertEquals(null, KdlParser.parse("/- kdl-version 3\nn").version)
+        assertEquals(null, KdlParser.parse("n").version)
+        assertEquals("n", parse("/- kdl-version 2\nn").single().name)
     }
 
     @Test fun theSpecsComponentExampleAsStep0CorrectedItParsesUpToItsScript() {
