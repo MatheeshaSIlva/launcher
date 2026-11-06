@@ -335,7 +335,7 @@ class DesignActivity : Activity() {
             }
             box.addView(blend);
             val color = if (f.color is ColorValue.Literal) {
-                val c = f.color
+                val c = f.color as ColorValue.Literal
                 val cl = colorEditor(box, "colour (light)", c.light)
                 val cd = colorEditor(box, "colour (dark)", c.dark);
                 { ColorValue.Literal(cl(), cd()) as ColorValue }

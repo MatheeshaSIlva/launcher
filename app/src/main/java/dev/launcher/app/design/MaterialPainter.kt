@@ -39,8 +39,8 @@ fun Material.materialized(k: Float): Material {
         is ColorValue.Literal -> s.copy(color = ColorValue.Literal(alphaTimes(c.light, kk), alphaTimes(c.dark, kk)))
         else -> s
     }
-    return copy(frostPt = grow(frostPt), frostDarkPt = grow(frostDarkPt), lens = lens?.copy(refraction = lens.refraction * kk, dispersion = lens.dispersion * kk,
-        light = lens.light * kk), fills = fills.map { it.scaled(kk) }, innerShadows = innerShadows.map { shadow(it) },
+    return copy(frostPt = grow(frostPt), frostDarkPt = grow(frostDarkPt), lens = lens?.let { l -> l.copy(refraction = l.refraction * kk, dispersion = l.dispersion * kk,
+        light = l.light * kk) }, fills = fills.map { it.scaled(kk) }, innerShadows = innerShadows.map { shadow(it) },
         shadows = shadows.map { shadow(it) }, strokes = strokes.map { it.copy(opacity = it.opacity * kk, opacityDark = it.opacityDark * kk) })
 }
 

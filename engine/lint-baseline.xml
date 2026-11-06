@@ -274,5 +274,315 @@
             line="59"
             column="13"/>
     </issue>
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        e.commit()"
+        errorLine2="          ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/StockBarSettings.kt"
+            line="46"
+            column="11"/>
+    </issue>
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="            p.edit().clear().commit()"
+        errorLine2="                             ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/StockBarSettings.kt"
+            line="69"
+            column="30"/>
+    </issue>
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        prefs(ctx).edit().clear().commit()"
+        errorLine2="                                  ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/StockBarSettings.kt"
+            line="80"
+            column="35"/>
+    </issue>
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        if (!p.contains(ORIGINAL)) p.edit().putString(ORIGINAL, current ?: UNSET).commit()"
+        errorLine2="                                                                                  ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="181"
+            column="83"/>
+    </issue>
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="            p.edit().putString(PUSHED, json).commit()"
+        errorLine2="                                             ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="191"
+            column="46"/>
+    </issue>
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        if (pushed == null) { if (original != null) p.edit().remove(ORIGINAL).commit(); return null }"
+        errorLine2="                                                                              ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="201"
+            column="79"/>
+    </issue>
+    <issue
+        id="ApplySharedPref"
+        message="Consider using `apply()` instead; `commit` writes its data to persistent storage immediately, whereas `apply` will handle it in the background"
+        errorLine1="        p.edit().remove(PUSHED).remove(ORIGINAL).commit()"
+        errorLine2="                                                 ~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="207"
+            column="50"/>
+    </issue>
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 33 (current min is 29): `android.Manifest.permission#POST_NOTIFICATIONS`"
+        errorLine1="        val missing = listOf(Manifest.permission.WRITE_SECURE_SETTINGS, Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.READ_PHONE_STATE)"
+        errorLine2="                                                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/ShizukuLink.kt"
+            line="147"
+            column="73"/>
+    </issue>
+    <issue
+        id="UnspecifiedRegisterReceiverFlag"
+        message="`r` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.DESIGN_RELOAD"
+        errorLine1="        else appCtx.registerReceiver(r, f, android.Manifest.permission.DUMP, null)"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/Design.kt"
+            line="165"
+            column="14"/>
+    </issue>
+    <issue
+        id="ObsoleteSdkInt"
+        message="Unnecessary; SDK_INT is always >= 29"
+        errorLine1="            if (android.os.Build.VERSION.SDK_INT >= 27)"
+        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/Design.kt"
+            line="721"
+            column="17"/>
+    </issue>
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `Design` which has field `appCtx` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/design/Design.kt"
+            line="10"
+            column="1"/>
+    </issue>
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private lateinit var appCtx: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/Design.kt"
+            line="56"
+            column="5"/>
+    </issue>
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `Fonts` which has field `ctx` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/theme/Fonts.kt"
+            line="12"
+            column="1"/>
+    </issue>
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private lateinit var ctx: Context"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/theme/Fonts.kt"
+            line="26"
+            column="5"/>
+    </issue>
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields (static reference to `SystemPalette` which has field `app` pointing to `Context`); this is a memory leak"
+        errorLine1="/**"
+        errorLine2="^">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="12"
+            column="1"/>
+    </issue>
+    <issue
+        id="StaticFieldLeak"
+        message="Do not place Android context classes in static fields; this is a memory leak"
+        errorLine1="    private var app: Context? = null"
+        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SystemPalette.kt"
+            line="53"
+            column="5"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ^">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ^">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ^">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                     ^">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="22"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        state.text = &quot;Shizuku: ${ShizukuLink.state().name.lowercase().replace(&apos;_&apos;, &apos; &apos;)}\n&quot; +"
+        errorLine2="                      ~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="88"
+            column="23"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            &quot;Status bar: ${if (SystemRestore.statusBarHidden(this)) &quot;hidden by the launcher (comes back by itself if the launcher or Shizuku stops)&quot; else &quot;normal&quot;}\n&quot; +"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="89"
+            column="13"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            &quot;Status bar: ${if (SystemRestore.statusBarHidden(this)) &quot;hidden by the launcher (comes back by itself if the launcher or Shizuku stops)&quot; else &quot;normal&quot;}\n&quot; +"
+        errorLine2="             ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="89"
+            column="14"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            &quot;Animation scales now: ${SystemRestore.currentScales(this)}\n&quot; +"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="90"
+            column="13"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            &quot;Animation scales now: ${SystemRestore.currentScales(this)}\n&quot; +"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="90"
+            column="14"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            &quot;Restore animations without Shizuku: ${if (SystemRestore.canWriteSecureSettings(this)) &quot;yes&quot; else &quot;not set up (connect Shizuku once)&quot;}\n&quot; +"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="91"
+            column="13"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            &quot;Restore animations without Shizuku: ${if (SystemRestore.canWriteSecureSettings(this)) &quot;yes&quot; else &quot;not set up (connect Shizuku once)&quot;}\n&quot; +"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="91"
+            column="14"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders."
+        errorLine1="            &quot;Safety notification: ${if (SafetyNotification.canPost(this)) &quot;allowed&quot; else &quot;blocked&quot;}&quot;"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="92"
+            column="13"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="            &quot;Safety notification: ${if (SafetyNotification.canPost(this)) &quot;allowed&quot; else &quot;blocked&quot;}&quot;"
+        errorLine2="             ~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="92"
+            column="14"/>
+    </issue>
+    <issue
+        id="SetTextI18n"
+        message="String literal in `setText` can not be translated. Use Android resources instead."
+        errorLine1="        result.text = &quot;Restoring...&quot;"
+        errorLine2="                       ~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/SafeSettingsActivity.kt"
+            line="96"
+            column="24"/>
+    </issue>
 
 </issues>

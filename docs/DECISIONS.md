@@ -805,4 +805,6 @@ Also in M1: library lint checks permissions against the library's own manifest, 
 `SET_WALLPAPER` (the app already does; the merged manifest, now diffed on every `dexlist.sh` run, is identical) and
 baselines a `getDrawable` finding the app's lint never raised. `GoogleFonts` becomes public (it was `internal`) so it can
 move with `GoogleFontCatalog` in M1b; `ui-graphics` and `kotlinx-coroutines-android` 1.7.3 are declared in `:engine`
-(owner, 2026-11-05: "Yes, declare them").
+(owner, 2026-11-05: "Yes, declare them"). In M3 `dev.rikka.shizuku:api` 13.1.5 joins them on the same grounds (`ShizukuLink`
+imports it; the APK already ships it at that version; the inventory's §4 had named it): decided by the reviewing session,
+owner told.

@@ -1,0 +1,15 @@
+# M3: the 27-file knot and EngineHost.kt move (pure git mv), plus two app-side smart-cast rewrites (DesignActivity, MaterialPainter)
+# and the Shizuku api dependency in :engine. No class or method count changes beyond the E1 state:
++ Ldev/launcher/engine/R; 1 0
++ Ldev/launcher/app/EngineHost$Companion; 2 2
++ Ldev/launcher/app/NavHost; 0 10
+- Ldev/launcher/app/GestureNav; 761 18
++ Ldev/launcher/app/GestureNav; 760 18
++ Ldev/launcher/app/EngineHost; 1 5
+- Ldev/launcher/app/LauncherApp; 6 2
++ Ldev/launcher/app/LauncherApp; 6 6
+- Ldev/launcher/app/HomeBridge$Home; 0 10
++ Ldev/launcher/app/HomeBridge$Home; 0 13
++ Ldev/launcher/engine/R$id; 1 0
+# Renames this listing cannot see (counts only), checked with dexdump against M2's APK: Design.getContext$app_debug became
+# Design.getContext$engine_debug (internal; its only caller is Scale, in the same file).

@@ -50,4 +50,7 @@ dependencies {
     // GoogleFontCatalog's previews and HomeBridge's suspend calls: pinned to the version :app:dependencies showed the APK
     // resolving before it was declared here (1.7.3).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // ShizukuLink (binding the shell service) imports Shizuku's API: already in the APK at this version, through the app,
+    // which keeps api and provider (its manifest's ShizukuProvider) (E1 slice M3, D-071).
+    implementation("dev.rikka.shizuku:api:13.1.5")
 }

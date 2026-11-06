@@ -243,6 +243,15 @@ after M1; (d) the engine's own lint baseline, carried per slice; (e) on the S24,
 9. **Initialization order (S1):** `NavHost`/`EngineHost` must be set before any service, receiver or activity runs; only
     `Application.onCreate` guarantees that. The shell process (`ShellService`) never touches them.
 
+10. **The watchdog kill test cannot be run with a force-stop on the emulator** (found in M3): Android restarts the app
+    within ~0.6 s (bound accessibility and listener services), and the restarted app restores the scales itself ~1.9 s
+    after the kill, so the shell loop never sees 4 missed heartbeats. What tests the loop: make its heartbeat file
+    read-only (`chmod 444 /data/local/tmp/launcher-wd/hb`), so the service's writes fail; the loop then fired 3.98 s
+    after the heartbeat froze (M3 build). Re-arm with Developer's "Test: stop the shell service" afterwards.
+11. **App-side smart casts on a moved class's property stop compiling** (Kotlin forbids them across modules): each is
+    rewritten to its smallest equivalent (an explicit cast under the guarding `is`, a `let`), quoted in the slice's
+    hand-back and counted as a code edit. M3: DesignActivity l.338, MaterialPainter l.42-43.
+
 ## Questions for the reviewer
 
 1. **Which list is E1?** The Ports table (home model, switcher, widgets) and build-order step 1 (adds notifications,
