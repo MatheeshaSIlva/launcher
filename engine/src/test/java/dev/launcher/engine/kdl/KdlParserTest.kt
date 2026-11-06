@@ -120,8 +120,10 @@ class KdlParserTest {
         assertEquals(listOf(1L, 2L), n.args.map { num(it).long })
         assertEquals("v", str(n.props.getValue("k").value))
         assertEquals(2, KdlParser.parse("/- kdl-version 2\nn").version)
-        assertEquals(1, KdlParser.parse("/-kdl-version   1 \r\n").version)
-        assertEquals(null, KdlParser.parse("/- kdl-version 3\nn").version)
+        assertEquals(2, KdlParser.parse("/-kdl-version   2 \r\n").version)
+        assertEquals("This file says KDL 1; the engine reads KDL 2 at 1:1", error("/- kdl-version 1\nn"))
+        assertEquals("This file says KDL 3; the engine reads KDL 2 at 1:2", error("\uFEFF/- kdl-version 3\nn"))
+        assertEquals(null, KdlParser.parse("/- kdl-version two\nn").version)
         assertEquals(null, KdlParser.parse("n").version)
         assertEquals("n", parse("/- kdl-version 2\nn").single().name)
     }

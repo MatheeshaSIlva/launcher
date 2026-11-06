@@ -12,11 +12,12 @@ class KdlParser private constructor(text: String) : KdlScanner(text) {
             if (ch() == '\uFEFF') i++
             checkLiterals()
             val version = version()
+            if (version != null && version != 2) fail("This file says KDL $version; the engine reads KDL 2")
             KdlDocument(nodes(top = true), version)
         }
     }
 
-    /** `/- kdl-version 1|2` and a newline at the start: the version it names (the marker is a slashdashed node too). */
+    /** `/- kdl-version N` and a newline at the start: the version it names (the marker is a slashdashed node too). */
     private fun version(): Int? {
         if (!at("/-")) return null
         var k = i + 2
@@ -25,10 +26,11 @@ class KdlParser private constructor(text: String) : KdlScanner(text) {
         if (!s.startsWith("kdl-version", k)) return null
         k += "kdl-version".length
         if (!spaces()) return null
-        val v = s.getOrNull(k)?.takeIf { it == '1' || it == '2' } ?: return null
-        k++
+        val digits = k
+        while (s.getOrNull(k).let { it != null && it in '0'..'9' }) k++
+        val version = s.substring(digits, k).toIntOrNull() ?: return null
         spaces()
-        return if (newlineAt(k) > 0) v - '0' else null
+        return if (newlineAt(k) > 0) version else null
     }
 
     private fun nodes(top: Boolean): List<KdlNode> {
