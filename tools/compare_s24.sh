@@ -16,7 +16,8 @@
 #   - nobody is using it: the last user activity is >= 120 s ago, or it is our own last scripted touch: a touch of the
 #     owner's after that stops the run;
 #   - the focused window is dev.launcher.app's.
-# Each install: install-multiple -r -d with the .dm, our home set as the default, the HOME intent; never a force-stop.
+# Each install: tools/device.sh install with the staged APK and .dm (our home set as the default), then the HOME intent;
+# never a force-stop.
 # Then it waits for "BUILD <sha7>", Shizuku connected and the gesture strip, and checks speed-profile from install-dm.
 # Temperatures and CPU limits are logged before each run. Output: tools/shots/<NAME>/run-<time>/ (run.log, each
 # scenario's output and framestats files, summary.txt: per animation and run the missed refreshes summed over its passes
@@ -73,9 +74,9 @@ install_build() {   # $1 = ref | new
   sha=$(sha_of "$b")
   ready "installing $b ($sha)"
   say "install $b: $APKS/$b/app-debug.apk + .dm ($(du -k "$APKS/$b/app-debug.apk" | cut -f1) KB)"
-  a install-multiple -r -d "$APKS/$b/app-debug.apk" "$APKS/$b/app-debug.dm" 2>&1 | tail -1 | tee -a "$RUN/run.log" | grep -q Success \
-    || stop "the install of $b failed"
-  a shell cmd package set-home-activity $PKG/.HomeActivity >/dev/null
+  # The required install route (AGENTS.md): tools/device.sh install, given the staged APK and .dm.
+  tools/device.sh install "$APKS/$b/app-debug.apk" "$APKS/$b/app-debug.dm" 2>&1 | tail -1 | tee -a "$RUN/run.log" \
+    | grep -q Success || stop "the install of $b failed"
   a shell am start -a android.intent.action.MAIN -c android.intent.category.HOME -p $PKG >/dev/null
   [ "$(installed)" = "$sha" ] || stop "after installing $b: the phone reports BUILD $(installed), not $sha"
   for i in $(seq 1 90); do
@@ -148,15 +149,19 @@ def stats(path, w):
     n = re.search(r"shown: (\d+) frames.*?missed refreshes ~(\d+)", t, re.S)
     g = re.search(r"GPU ms: median ([\d.]+)\s+p90 ([\d.]+)", t)
     c = re.search(r"CPU ms: median ([\d.]+)\s+p90 ([\d.]+)", t)
-    return (int(n.group(2)), float(g.group(2)) if g else 0.0, float(c.group(2)) if c else 0.0) if n else None
+    if not n or not g or not c: return None
+    return (int(n.group(2)), float(g.group(2)), float(c.group(2)))
 steps = {}
+gaps = []
 for lab in labels:
     d = os.path.join(run, lab)
     for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
         if not f.startswith("fs_"): continue
         step = f[3:-4].split("@")[0]
         s = stats(os.path.join(d, f), window(step))
-        if s: steps.setdefault(step, {}).setdefault(lab, []).append(s)
+        steps.setdefault(step, {}).setdefault(lab, [])
+        if s: steps[step][lab].append(s)
+        else: gaps.append(f"{lab}: {f} (no frames, or no GPU/CPU values, for {window(step)})")
 print("missed refreshes (summed over passes) / worst GPU p90 ms / worst CPU p90 ms per animation, from framestats")
 print("runs: " + ", ".join(labels))
 print(f"{'animation':24s}" + "".join(f"{l:>20s}" for l in labels) + f"{'ref miss/pass':>15s}{'new miss/pass':>15s}")
@@ -172,4 +177,15 @@ for step in sorted(steps):
     print(f"{step:24s}" + "".join(f"{cell(row.get(l)):>20s}" for l in labels) + f"{mean(row, 'ref'):>15s}{mean(row, 'new'):>15s}")
 for b in ("ref", "new"):
     print(f"total {b}: {tot[b][0]} missed over {tot[b][1]} measured animations")
+want = {step: max(len(v) for v in row.values()) for step, row in steps.items()}
+for step, row in steps.items():
+    for l in labels:
+        if len(row.get(l, [])) < want[step]:
+            gaps.append(f"{l}: {step} measured {len(row.get(l, []))} of {want[step]} passes")
+if gaps:
+    print("INCOMPLETE: these measurements are missing, so the totals above do not compare like with like:")
+    for g in sorted(set(gaps)): print("  " + g)
+    sys.exit(3)
+print("complete: every animation measured in every pass of every run")
 PY
+exit ${PIPESTATUS[0]}

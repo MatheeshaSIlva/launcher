@@ -20,8 +20,9 @@ case "$cmd" in
   install)
     # With the baseline profile's dex metadata when the build made one (not debuggable: Android compiles the profiled
     # code at install, so the first start is not interpreted). adb pairs app-debug.dm with app-debug.apk by name.
-    apk="$here/../app/build/outputs/apk/debug/app-debug.apk"
-    dm="$here/../app/build/outputs/apk/debug/baselineProfiles/0/app-debug.dm"
+    # An APK and its .dm can be given (a staged build: tools/compare_s24.sh); default: this tree's own debug build.
+    apk="${1:-$here/../app/build/outputs/apk/debug/app-debug.apk}"
+    dm="${2:-$here/../app/build/outputs/apk/debug/baselineProfiles/0/app-debug.dm}"
     if [ -f "$dm" ]; then "$ADB" "${DEV[@]}" install-multiple -r -d "$apk" "$dm" | tail -1
     else "$ADB" "${DEV[@]}" install -r -d "$apk" | tail -1; fi
     "$ADB" "${DEV[@]}" shell cmd package set-home-activity $PKG/.HomeActivity >/dev/null
