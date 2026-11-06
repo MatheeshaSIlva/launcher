@@ -1,5 +1,10 @@
 # CLAUDE.md — Not a Launcher (engine branch)
 
+@AGENTS.md
+
+> **Team (2026-11-06, D-073):** you lead a two-agent team with Codex. `AGENTS.md` above is the brief you share with it;
+> `docs/team/PROTOCOL.md` is how you work together; use the `team-lead` skill for every engine task.
+
 > **Direction change, 2026-11-03 (owner).** The launcher is becoming the reference implementation for **Not a Launcher**: a
 > component engine where home, drawer, shade, recents and status bar are KDL components over engine primitives, with themes,
 > a creator store and a desktop editor. Read, in this order:

@@ -4,12 +4,17 @@
 
 The spec above is the locked direction of this project. Everything below is how work gets done here.
 
-## How we work (single session, owner 2026-10-30)
+## How we work (two agents, owner 2026-11-06)
 
-One session does the work, in conversation with the owner: plan briefly, build, verify, report. No subagents and no
-`/ship` pipeline: do not delegate to `.claude/agents` and do not run `/ship`, `/fix`, `/audit`, `/progress` or `/kickoff`
-(they are kept in `.claude/_disabled/`). A fresh-eyes review by a subagent only if the owner asks for one (for example on
-a crash, privacy or threading change). The main session runs on Opus.
+On `engine`, every task is worked by a two-agent team: Claude Code leads, Codex is its teammate (D-073). They discuss an
+approach, split the work, cross-check each other and both sign off before anything is marked done; at each milestone
+they review the work blind and reconcile. The procedure is `docs/team/PROTOCOL.md`; the shared brief is `AGENTS.md`;
+Claude Code follows the `team-lead` skill. The lead integrates and commits to `engine` after `scripts/check.sh`. The
+owner keeps every call this file reserves for him (the Ask list below), and signs off on-screen work on the S24.
+The `/ship` pipeline and `.claude/agents` stay disabled (`.claude/_disabled/`). On `main`, the single-session rule of
+2026-10-30 still applies.
+
+The steps below apply to each agent's share of a task.
 
 1. Read what the task touches: SPEC, the active milestone in ROADMAP, the relevant D-entries, and the code. Read only what
    the task needs. If the request conflicts with the spec or a decision, say so first.

@@ -28,6 +28,9 @@ holds. MS and the rest continue on `main` only if the owner says so.
 E1 started 2026-11-05 and finished 2026-11-06 (D-070 to D-072): plan, slices and exit in `docs/E1_INVENTORY.md`; the
 launcher runs on `:engine` with the APK unchanged beyond the host interfaces, checked on the emulator and the S24. E2 is next.
 
+From 2026-11-06 the work runs as a two-agent team (D-073); the live state is `docs/team/BOARD.md`. Proposed before E2:
+**E1b, our own shell host replacing Shizuku** (thread T-001), for the owner to approve.
+
 ## Milestones
 
 | ID | Name | Status | Started | Finished |

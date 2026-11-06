@@ -835,3 +835,24 @@ not force-stop), the cross-module smart-cast rule, and what a counts-only dex ch
 D8's renumbered synthetic lambdas). The phone is left on BUILD 3d8bc67 (its UPDATE replaces it).
 Next: E2 (step 2: the KDL loader and interpreter core; the capability registry and flow adapters first, now that their
 consumer exists), and the two probes' removal (`LiveTransitionProbe`, AIDL methods 17 and 43) as its own change.
+
+## D-073: Two-agent team, Claude Code leading and Codex as teammate (2026-11-06, owner)
+
+Owner's instruction (2026-11-06): engine work is done by Claude Code (lead) and Codex (teammate) "like teammates":
+they discuss each step's approach, add insight or correct each other, split the work, report to each other, and both
+agree before a task is complete; at milestones they review the work so far before moving on. This replaces D-070's
+"this session plus an Opus agent" and OPERATING_RULES' single-session rule on `engine`.
+How it works (`docs/team/`): `AGENTS.md` is the brief both agents load (Codex natively, Claude Code by import from
+`CLAUDE.md`); `PROTOCOL.md` is the ten-phase loop (propose, discuss, agree, split, work, report, cross-check, fix,
+sign-off, integrate), escalation (three rounds, then the lead decides with dissent recorded, or the owner for anything
+the Ask list reserves), blind milestone reviews, a security checklist for the attack surface, and what happens when
+Codex is unavailable (record it, wait, never sign for it). `BOARD.md` holds the state; one thread per task is the full
+record, so neither agent depends on chat memory. `scripts/team/codex.sh` runs Codex non-interactively in its own
+worktree (`scripts/team/worktree.sh`, branch `team/codex/<slug>`), read-only for discussion and review, write access in
+its worktree for work, and files its answer into the right section of the thread. The lead writes the thread, the board
+and DECISIONS; every file in a split has one owner; integration is rebase plus fast-forward with both agents in the
+trailers. One agent holds the phone at a time.
+Also in this change: `docs/ENGINE_SPEC.md` becomes canonical in the repo (Codex cannot read the Claude Doc); the Doc's
+newer sections (the budget, "no Shizuku", step 1's exit) are merged with the repo's step-0 answers. Found while setting
+up: E1 moved `ShizukuLink` as it was, so the no-Shizuku host is not yet scheduled; it is the first team thread (T-001),
+proposed as E1b before E2.
