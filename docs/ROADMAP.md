@@ -25,7 +25,8 @@ milestone there is **E1: platform layer lifted into an engine module, launcher s
 KDL status bar pixel-matched against `StatusBarView` inside the frame budget**, which decides whether the Compose split
 holds. MS and the rest continue on `main` only if the owner says so.
 
-E1 started 2026-11-05: plan and slices in `docs/E1_INVENTORY.md` (D-070); S0 (the `:engine` scaffold) done the same day.
+E1 started 2026-11-05 and finished 2026-11-06 (D-070 to D-072): plan, slices and exit in `docs/E1_INVENTORY.md`; the
+launcher runs on `:engine` with the APK unchanged beyond the host interfaces, checked on the emulator and the S24. E2 is next.
 
 ## Milestones
 

@@ -808,3 +808,30 @@ move with `GoogleFontCatalog` in M1b; `ui-graphics` and `kotlinx-coroutines-andr
 (owner, 2026-11-05: "Yes, declare them"). In M3 `dev.rikka.shizuku:api` 13.1.5 joins them on the same grounds (`ShizukuLink`
 imports it; the APK already ships it at that version; the inventory's §4 had named it): decided by the reviewing session,
 owner told.
+
+## D-072: E1 done: the launcher runs on the engine module (2026-11-06)
+
+Ten slices on `engine` (7d945d7..3d8bc67): `:engine` holds 81 Kotlin files (13,761 lines), the six Shizuku AIDL
+interfaces and one resource file; the app keeps 137 files. Measured exit, per `docs/E1_INVENTORY.md`:
+- The APK's class list and per-class method counts equal the pre-E1 build's except the two host interfaces S1 and S2
+  declared; the merged manifest is identical (`tools/dexlist.sh E1`, run after every slice). Four code edits in all,
+  each quoted in its commit: the host interfaces and two smart-cast rewrites Kotlin forces across modules.
+- `scripts/check.sh` on every slice (421 unit tests, 4 shell tests); the ART profile still compiles the moved code
+  (`speed-profile`, `reason=install-dm`, emulator and S24).
+- Emulator, on each slice's build: smoke, Restore system, the gesture toggle, the watchdog loop (3.98 s from a frozen
+  heartbeat to the restore plan), instant starts, a raw-touch pull over an app, Control Center's live blur, Notification
+  Center, the App Switcher with and without a mini player, a close from a landscape app; the Pixel shade pixel-identical
+  before and after the painter moved.
+- S24 (`tools/e1_s24.sh`, 2026-11-06 07:10-07:22, builds stamped 9984034 and 3d8bc67, interleaved ref, E1, ref, E1,
+  installed with their .dm): missed refreshes over 56 animations per build, ref 17, E1 21 (shade 16 vs 15; switch 1 vs
+  6, single 17-25 ms frames on four switches a run), with the S24's thermal cap falling through the run (big cores
+  3207 MHz at run 1, 1824 MHz at run 4, an E1 run): any bias is against E1. Within the noise of two rounds; the switch
+  difference is the one to rerun with more rounds on a cool phone if anyone wants certainty. The pre-E1 build's own
+  misses (nc_open up to 6 in one pass) are the launcher's standing state, not E1's.
+- Known flaw in `tools/e1_s24.sh`'s summary: the shade rows show only the last of the three passes (the scenario
+  overwrites its framestats file per pass); the per-pass totals above come from the scenario's own output.
+Found on the way, recorded in the inventory's risks 10-12: the watchdog's real kill test (freeze the heartbeat file,
+not force-stop), the cross-module smart-cast rule, and what a counts-only dex check cannot see (mangled internal names,
+D8's renumbered synthetic lambdas). The phone is left on BUILD 3d8bc67 (its UPDATE replaces it).
+Next: E2 (step 2: the KDL loader and interpreter core; the capability registry and flow adapters first, now that their
+consumer exists), and the two probes' removal (`LiveTransitionProbe`, AIDL methods 17 and 43) as its own change.
