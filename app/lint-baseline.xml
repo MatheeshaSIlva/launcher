@@ -270,181 +270,21 @@
 
 
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.Window#setDecorFitsSystemWindows`"
-        errorLine1="        window.setDecorFitsSystemWindows(false)"
-        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="40"
-            column="16"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets#isVisible`"
-        errorLine1="            AppLog.log(&quot;[barstest] own insets: status ${if (insets.isVisible(WindowInsets.Type.statusBars())) &quot;visible&quot; else &quot;hidden&quot;}, &quot; +"
-        errorLine2="                                                                   ~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="66"
-            column="68"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#statusBars`"
-        errorLine1="            AppLog.log(&quot;[barstest] own insets: status ${if (insets.isVisible(WindowInsets.Type.statusBars())) &quot;visible&quot; else &quot;hidden&quot;}, &quot; +"
-        errorLine2="                                                                                               ~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="66"
-            column="96"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets#getInsetsIgnoringVisibility`"
-        errorLine1="                &quot;top ${insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top}px, cut-out ${insets.displayCutout?.boundingRects}&quot;)"
-        errorLine2="                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="67"
-            column="31"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#statusBars`"
-        errorLine1="                &quot;top ${insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top}px, cut-out ${insets.displayCutout?.boundingRects}&quot;)"
-        errorLine2="                                                                            ~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="67"
-            column="77"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.Window#getInsetsController`"
-        errorLine1="        val c = window.insetsController ?: return"
-        errorLine2="                       ~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="92"
-            column="24"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#setSystemBarsBehavior`"
-        errorLine1="        c.systemBarsBehavior = if (behavior == &quot;swipe&quot;) WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else WindowInsetsController.BEHAVIOR_DEFAULT"
-        errorLine2="          ~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="93"
-            column="11"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#navigationBars`"
-        errorLine1="            &quot;status&quot; -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }"
-        errorLine2="                                                   ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="95"
-            column="52"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#statusBars`"
-        errorLine1="            &quot;status&quot; -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }"
-        errorLine2="                                                                                               ~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="95"
-            column="96"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#hide`"
-        errorLine1="            &quot;status&quot; -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }"
-        errorLine2="                                                                        ~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="95"
-            column="73"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#show`"
-        errorLine1="            &quot;status&quot; -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }"
-        errorLine2="                            ~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="95"
-            column="29"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#systemBars`"
-        errorLine1="            &quot;all&quot; -> c.hide(WindowInsets.Type.systemBars())"
-        errorLine2="                                              ~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="96"
-            column="47"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#hide`"
-        errorLine1="            &quot;all&quot; -> c.hide(WindowInsets.Type.systemBars())"
-        errorLine2="                       ~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="96"
-            column="24"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#systemBars`"
-        errorLine1="            else -> c.show(WindowInsets.Type.systemBars())"
-        errorLine2="                                             ~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="97"
-            column="46"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#show`"
-        errorLine1="            else -> c.show(WindowInsets.Type.systemBars())"
-        errorLine2="                      ~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="97"
-            column="23"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#setSystemBarsAppearance`"
-        errorLine1="        c.setSystemBarsAppearance(if (light) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)"
-        errorLine2="          ~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/BarsTestActivity.kt"
-            line="100"
-            column="11"/>
-    </issue>
 
 
 
@@ -572,27 +412,7 @@
             column="41"/>
     </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets#getInsetsIgnoringVisibility`"
-        errorLine1="        navInset = panel.view.rootWindowInsets?.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars())?.bottom?.toFloat() ?: 0f"
-        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/shade/qs/QsEditPage.kt"
-            line="136"
-            column="49"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#navigationBars`"
-        errorLine1="        navInset = panel.view.rootWindowInsets?.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars())?.bottom?.toFloat() ?: 0f"
-        errorLine2="                                                                                                           ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/shade/qs/QsEditPage.kt"
-            line="136"
-            column="108"/>
-    </issue>
 
     <issue
         id="NewApi"

@@ -39,6 +39,8 @@ class TurnCover : Activity() {
         }
     }
 
+    /** Android 11 API throughout: onCreate finishes below it first. */
+    @androidx.annotation.RequiresApi(30)
     private fun setUp() {
         window.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
         window.attributes = window.attributes.apply {
@@ -65,8 +67,7 @@ class TurnCover : Activity() {
         // The system bars as the app had them (shown or hidden), so nothing about them changes under the card. Through the
         // decor view, which makes it (the window's own controller is null until then: asked first, it crashed the launcher
         // on every close from a full-screen video).
-        // The controller and its bar behaviour are Android 11 API (minSdk 29): on Android 10 the bars stay as they are.
-        if (intent.getBooleanExtra(EXTRA_HIDE_BARS, false) && android.os.Build.VERSION.SDK_INT >= 30) try {
+        if (intent.getBooleanExtra(EXTRA_HIDE_BARS, false)) try {
             window.decorView.windowInsetsController?.let {
                 it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 it.hide(WindowInsets.Type.systemBars())

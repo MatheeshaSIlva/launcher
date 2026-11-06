@@ -133,7 +133,12 @@ internal class QsEditPage(
         cellW = (pageR - pageL - 2f * pad - (cols - 1) * gap) / cols
         gridTop = panel.barHeight + Design.pt(QsTokens.EDIT_GRID_TOP, u)
         // (The shade's window hides the navigation bar: its size, as the page keeps clear of it.)
-        navInset = panel.view.rootWindowInsets?.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars())?.bottom?.toFloat() ?: 0f
+        // (getInsetsIgnoringVisibility is Android 11 API, minSdk 29: before it the stable inset is the same size; this runs
+        // at every layout of Android's shade, edit page open or not.)
+        navInset = panel.view.rootWindowInsets?.let { wi ->
+            if (android.os.Build.VERSION.SDK_INT >= 30) wi.getInsetsIgnoringVisibility(android.view.WindowInsets.Type.navigationBars()).bottom
+            else @Suppress("DEPRECATION") wi.stableInsetBottom
+        }?.toFloat() ?: 0f
         labels.clear()
         if (open) { reflow(animate = false); bounds() }
     }

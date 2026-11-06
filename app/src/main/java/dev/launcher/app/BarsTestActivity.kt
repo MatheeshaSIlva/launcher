@@ -37,7 +37,7 @@ class BarsTestActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         read(intent)
-        window.setDecorFitsSystemWindows(false)
+        if (Build.VERSION.SDK_INT >= 30) window.setDecorFitsSystemWindows(false)   // Android 11 API (minSdk 29)
         state = TextView(this).apply { setTextColor(Color.WHITE); textSize = 15f; setPadding(0, 0, 0, 24) }
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -63,7 +63,7 @@ class BarsTestActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(list) })
         // What this app itself is told of its bars (the window manager's own view, to compare ours with).
         window.decorView.setOnApplyWindowInsetsListener { v, insets ->
-            AppLog.log("[barstest] own insets: status ${if (insets.isVisible(WindowInsets.Type.statusBars())) "visible" else "hidden"}, " +
+            if (Build.VERSION.SDK_INT >= 30) AppLog.log("[barstest] own insets: status ${if (insets.isVisible(WindowInsets.Type.statusBars())) "visible" else "hidden"}, " +
                 "top ${insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top}px, cut-out ${insets.displayCutout?.boundingRects}")
             v.onApplyWindowInsets(insets)
         }
@@ -89,16 +89,18 @@ class BarsTestActivity : Activity() {
     @Suppress("DEPRECATION")
     private fun apply() {
         window.decorView.setBackgroundColor(bg)
-        if (android.os.Build.VERSION.SDK_INT < 30) return   // the insets controller is Android 11 API (minSdk 29)
-        val c = window.insetsController ?: return
-        c.systemBarsBehavior = if (behavior == "swipe") WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else WindowInsetsController.BEHAVIOR_DEFAULT
-        when (bars) {
-            "status" -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }
-            "all" -> c.hide(WindowInsets.Type.systemBars())
-            else -> c.show(WindowInsets.Type.systemBars())
+        // The insets controller is Android 11 API (minSdk 29): before it only the rest below applies.
+        if (Build.VERSION.SDK_INT >= 30) window.insetsController?.let { c ->
+            c.systemBarsBehavior = if (behavior == "swipe") WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else WindowInsetsController.BEHAVIOR_DEFAULT
+            when (bars) {
+                "status" -> { c.show(WindowInsets.Type.navigationBars()); c.hide(WindowInsets.Type.statusBars()) }
+                "all" -> c.hide(WindowInsets.Type.systemBars())
+                else -> c.show(WindowInsets.Type.systemBars())
+            }
         }
         if (legacy) window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN) else window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-        c.setSystemBarsAppearance(if (light) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
+        if (Build.VERSION.SDK_INT >= 30) window.insetsController?.setSystemBarsAppearance(
+            if (light) WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS else 0, WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS)
         requestedOrientation = when (orient) {
             "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
             "landscape" -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
