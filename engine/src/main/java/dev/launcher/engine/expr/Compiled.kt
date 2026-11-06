@@ -18,6 +18,8 @@ sealed class Value {
             fun of(b: Boolean) = if (b) TRUE else FALSE
         }
     }
+    /** A colour as ARGB, as the launcher's design system gives it (a token at the current light/dark blend). */
+    data class Color(val argb: Int) : Value()
     object Null : Value()
 }
 
@@ -62,6 +64,7 @@ internal fun show(v: Value): String = when (v) {
     is Value.Num -> if (v.value % 1.0 == 0.0 && Math.abs(v.value) < 1e15) v.value.toLong().toString() else v.value.toString()
     is Value.Str -> v.value
     is Value.Bool -> v.value.toString()
+    is Value.Color -> "#%08X".format(v.argb)
     Value.Null -> ""
 }
 
@@ -69,6 +72,7 @@ internal fun truthy(v: Value): Boolean = when (v) {
     is Value.Num -> v.value != 0.0 && !v.value.isNaN()
     is Value.Str -> v.value.isNotEmpty()
     is Value.Bool -> v.value
+    is Value.Color -> true
     Value.Null -> false
 }
 
@@ -77,6 +81,8 @@ internal abstract class Fn(val numeric: Boolean = false, val unit: String? = nul
     abstract fun value(env: Env): Value
     open fun num(env: Env): Double = (value(env) as? Value.Num)?.value ?: Double.NaN
     open fun bool(env: Env): Boolean = truthy(value(env))
+    /** The unit of what it makes: a literal's, else the value's (a prop or a token in dp or pt) when [value] is asked. */
+    open fun unitAt(env: Env): String? = unit ?: (value(env) as? Value.Num)?.unit
 }
 
 private class Const(val v: Value) : Fn(v is Value.Num, (v as? Value.Num)?.unit) {
@@ -89,9 +95,10 @@ private class Const(val v: Value) : Fn(v is Value.Num, (v as? Value.Num)?.unit) 
 
 private class Read(val read: (Env) -> Value) : Fn() { override fun value(env: Env) = read(env) }
 
-/** A number computed from numbers: [num] is the work, [value] wraps it. */
-private abstract class NumFn(unit: String?) : Fn(true, unit) {
-    override fun value(env: Env): Value = Value.Num(num(env), unit)
+/** A number computed from numbers: [num] is the work, [value] wraps it, in the unit of the first of [parts] that has one. */
+private abstract class NumFn(unit: String?, private vararg val parts: Fn) : Fn(true, unit) {
+    override fun unitAt(env: Env): String? = unit ?: parts.firstNotNullOfOrNull { it.unitAt(env) }
+    override fun value(env: Env): Value = Value.Num(num(env), unitAt(env))
     override fun bool(env: Env) = num(env).let { it != 0.0 && !it.isNaN() }
 }
 
@@ -109,7 +116,7 @@ private fun fn(n: Node, props: Set<String>): Fn = when (n) {
         else Read { it.source(n.path) }
     is Node.Unary -> fn(n.operand, props).let { a ->
         if (n.op == "!") object : BoolFn() { override fun bool(env: Env) = !a.bool(env) }
-        else object : NumFn(a.unit) { override fun num(env: Env) = -a.num(env) }
+        else object : NumFn(a.unit, a) { override fun num(env: Env) = -a.num(env) }
     }
     is Node.Binary -> {
         val a = fn(n.left, props)
@@ -142,7 +149,7 @@ private fun binary(op: String, a: Fn, b: Fn): Fn = when (op) {
     "<=" -> object : BoolFn() { override fun bool(env: Env) = a.num(env) <= b.num(env) }
     ">" -> object : BoolFn() { override fun bool(env: Env) = a.num(env) > b.num(env) }
     ">=" -> object : BoolFn() { override fun bool(env: Env) = a.num(env) >= b.num(env) }
-    else -> object : NumFn(a.unit ?: b.unit) {
+    else -> object : NumFn(a.unit ?: b.unit, a, b) {
         val code = op[0]
         override fun num(env: Env): Double {
             val x = a.num(env)

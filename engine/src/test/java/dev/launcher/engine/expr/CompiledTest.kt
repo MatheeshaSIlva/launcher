@@ -18,7 +18,7 @@ class CompiledTest {
         var recording = true
         private inline fun read(what: () -> String) { if (recording) reads += what() }
         override fun state(name: String) = (states[name] ?: Value.Null).also { read { "state $name" } }
-        override fun prop(name: String) = (if (name == "warn") Value.Num(20.0) else Value.Null).also { read { "prop $name" } }
+        override fun prop(name: String) = (when (name) { "warn" -> WARN; "inset" -> INSET; else -> Value.Null }).also { read { "prop $name" } }
         override fun token(key: String) = Value.Str("token:$key").also { read { "token $key" } }
         override fun source(path: String) = (sources[path] ?: Value.Null).also { read { path } }
         override fun now() = 1_700_000_000_000L   // 2023-11-14 22:13:20 UTC, a Tuesday
@@ -41,6 +41,15 @@ class CompiledTest {
         assertSame(Value.Bool.TRUE, eval("{\$missing == #null}"))
         assertEquals(Value.Str("token:comp.signal"), eval("{\$level <= @warn ? @comp.signal : @ink}"))
         assertEquals(Value.Num(87.0), eval("{\$on ? battery.level : 0}"))
+        // A prop's (or a token's) unit is the value's: arithmetic over it keeps it (slice 8).
+        assertEquals(Value.Num(8.0, "dp"), Compiled.of("{@inset * 2}", setOf("inset")).value(env))
+        assertEquals(Value.Num(-4.0, "dp"), Compiled.of("{-@inset}", setOf("inset")).value(env))
+        assertEquals(Value.Num(6.0, "pt"), Compiled.of("{@inset + 2pt}", setOf("inset")).value(env))   // a literal's wins
+    }
+
+    private companion object {
+        val WARN = Value.Num(20.0)
+        val INSET = Value.Num(4.0, "dp")
     }
 
     @Test fun textAndWholeValues() {
