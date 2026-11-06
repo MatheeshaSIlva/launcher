@@ -111,11 +111,13 @@ source file needed a change for the new compilers. compileSdk 35 and AGP stay (t
   sign-off review): the per-animation worst values are **not** all within the spread. `s_cc_close_bar` reads ref 5.0 /
   4.0, new 8.2 / 8.5 ms, and new `s_nc_open` 16.4 ms in run 4. Per pass, the S24's shade passes fall into two modes
   whatever the build: GPU median ~2–4 ms, or ~7.5–9 ms through the whole pass (framestats' GPU time counts buffer waits:
-  CLAUDE.md's pitfall), with no missed refreshes from it. Counted over every shade pass (median > 6 ms): **ref 23 of 48,
+  CLAUDE.md's pitfall; their cause here is not resolved). Counted over every shade pass (median > 6 ms): **ref 23 of 48,
   new 23 of 48** (runs 10, 16, 13, 7 of 24). `s_cc_close_bar`'s new passes 2-new@1, @3 and 4-new@3 are in the slow mode
   (medians 7.4–7.6 ms), its other three at the ref's ~2.1 ms; the same split falls the other way elsewhere (`s_cc_close_tap`:
-  ref 4 of 6 passes slow, new 1). So the difference is which passes landed in the slow mode, not the build (judged from
-  these counts; a trace would say what the GPU waits on, not needed for this slice). CPU p90 within the spread. Caveat: runs 1–3 ran with the CPUs capped by heat (1.6–1.8
+  ref 3 of 6 passes slow, new 1). What this shows, and no more (Codex's second sign-off review): both builds land in the
+  slow mode equally often (23 of 48), the three slow new `s_cc_close_bar` passes missed no refresh, and the slow passes
+  hold 10 of the ref's misses and 9 of the new build's. It does not show the slow mode is unrelated to the build or to
+  misses; a trace would say what the GPU waits on. CPU p90 within the spread. Caveat: runs 1–3 ran with the CPUs capped by heat (1.6–1.8
   GHz), run 4 uncapped (3.2 GHz); the interleaving is what keeps the comparison fair. Earlier run `run-20261107-040224`
   is discarded (wrong settings tap targets, two shade gaps from the PC's adb server dropping).
 
@@ -180,8 +182,9 @@ Both accepted.
   On the real run it prints "complete: all 35 expected measurements in each of the 4 runs", same totals 15 / 14.
 - **GPU p90 overstated:** right, `s_cc_close_bar` is outside the spread; the sentence was wrong. Investigated per pass:
   the shade's passes are in one of two GPU modes for the whole pass, the slow one in 23 of 48 passes for each build, and
-  this animation's three slow passes all fell on the new build. §5 corrected with the counts; the claim is now "the same
-  share of slow passes, no missed refreshes from them", judged, not "within the spread".
+  this animation's three slow passes all fell on the new build. §5 corrected with the counts; the claim is now limited to
+  "both builds slow equally often (23 of 48), no misses in the three slow new `s_cc_close_bar` passes" (after Codex's
+  second review: the slow passes hold 10 ref and 9 new misses, so "no misses from them" and "not the build" were too much).
 
 ## 7. Sign-off
 
@@ -195,3 +198,13 @@ codex: OBJECT — fix 5 remains incomplete, and §5 overstates the timing eviden
 - **Checked:** settings focus/template/outcome guards and helper-based installation address fixes 1, 2 and 4; dex counts confirm fix 6: **494 + 22 + 14 = 530** changed lines, with `$DefaultImpls` retained.
 - **Measured, offline:** reparsed all **140** saved framestats files; summary matches exactly: ref **15/70**, new **14/70**. `dexdiff.txt` has **18,844** lines; `git diff --check` passes.
 - No files changed, builds rerun or phone accessed. Gate/bench results remain lead-reported; Look, text/focus/semantics coverage and owner S24 approval remain outstanding.
+
+### codex — signoff, 2026-11-06T23:26Z
+
+codex: OBJECT — the summary fix passes; §5’s GPU account still needs correction.
+
+- **Measured, offline at `4f7f55f`:** all 11 regression cases pass; explicit expectations match the scenarios. Reparsed 140 saved measurements: ref **15/70**, new **14/70** misses.
+- **Measured:** GPU median >6 ms counts are **10/16/13/7**, confirming **23/48 per build**. The three slow new `s_cc_close_bar` measurements have zero misses.
+- **Fix — §5:117:** `s_cc_close_tap` has **3/6** slow ref measurements, not 4/6; `3-ref@2` has median **4.10 ms**.
+- **Fix — §5:113–118 and §6’s answer:** equal aggregate counts do not establish “not the build” or exclude GPU-related misses. Slow measurements contain **10 ref / 9 new** misses; their cause is unresolved. Limit the conclusion to equal observed slow-mode frequency and no misses in the three slow new `s_cc_close_bar` measurements.
+- No files changed, builds run or phone accessed. Full-gate results remain lead-reported; owner S24 approval remains outstanding.
