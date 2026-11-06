@@ -65,7 +65,8 @@ class TurnCover : Activity() {
         // The system bars as the app had them (shown or hidden), so nothing about them changes under the card. Through the
         // decor view, which makes it (the window's own controller is null until then: asked first, it crashed the launcher
         // on every close from a full-screen video).
-        if (intent.getBooleanExtra(EXTRA_HIDE_BARS, false)) try {
+        // The controller and its bar behaviour are Android 11 API (minSdk 29): on Android 10 the bars stay as they are.
+        if (intent.getBooleanExtra(EXTRA_HIDE_BARS, false) && android.os.Build.VERSION.SDK_INT >= 30) try {
             window.decorView.windowInsetsController?.let {
                 it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                 it.hide(WindowInsets.Type.systemBars())

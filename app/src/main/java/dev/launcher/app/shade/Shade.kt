@@ -344,7 +344,8 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 // A window that asks for the navigation bar hidden, shown by a swipe, may keep Android's back gesture off
                 // as much of the side edges as it needs (others get 200 dp of each): see updateExclusion. Only the window
                 // with the focus controls the bars, and this one never takes it (FocusHolder does), so nothing is hidden.
-                v.windowInsetsController?.let {
+                // Android 11 API (minSdk 29): on Android 10 the window keeps the default bars and 200 dp of exclusion per edge.
+                if (android.os.Build.VERSION.SDK_INT >= 30) v.windowInsetsController?.let {
                     it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                     it.hide(android.view.WindowInsets.Type.navigationBars())
                 }

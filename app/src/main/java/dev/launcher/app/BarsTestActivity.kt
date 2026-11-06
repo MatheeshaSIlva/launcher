@@ -89,6 +89,7 @@ class BarsTestActivity : Activity() {
     @Suppress("DEPRECATION")
     private fun apply() {
         window.decorView.setBackgroundColor(bg)
+        if (android.os.Build.VERSION.SDK_INT < 30) return   // the insets controller is Android 11 API (minSdk 29)
         val c = window.insetsController ?: return
         c.systemBarsBehavior = if (behavior == "swipe") WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE else WindowInsetsController.BEHAVIOR_DEFAULT
         when (bars) {
