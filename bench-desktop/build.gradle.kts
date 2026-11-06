@@ -9,8 +9,6 @@ plugins {
 kotlin {
     jvmToolchain(17)
     compilerOptions {
-        // Skiko is built with a newer Kotlin than the project's 2.0.21.
-        freeCompilerArgs.add("-Xskip-metadata-version-check")
     }
 }
 

@@ -51,8 +51,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+}
+
+// Kotlin 2.2 refuses kotlinOptions {} (T-002).
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
@@ -64,7 +68,7 @@ dependencies {
     implementation("dev.rikka.shizuku:provider:$shizuku")
     // The settings app (docs/PLAN_SETTINGS.md): Compose's layout, state, text and animation; no Material components (every
     // surface is drawn by our renderer from the theme's tokens).
-    implementation(platform("androidx.compose:compose-bom:2024.10.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.animation:animation")

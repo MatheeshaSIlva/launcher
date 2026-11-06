@@ -33,25 +33,29 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+}
+
+// Kotlin 2.2 refuses kotlinOptions {} (T-002).
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 
 dependencies {
     // For the Compose compiler only (see plugins): compile-time, so nothing new reaches the APK, whose Compose comes from
     // the app's own declarations of the same BOM.
-    compileOnly(platform("androidx.compose:compose-bom:2024.10.01"))
+    compileOnly(platform("androidx.compose:compose-bom:2026.06.01"))
     compileOnly("androidx.compose.runtime:runtime")
     // Already in the APK through the app's Compose (owner, 2026-11-05: declared here once the engine's own code needs
     // them, at the versions the APK ships). IconSets parses symbol paths with Compose's PathParser.
-    implementation(platform("androidx.compose:compose-bom:2024.10.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.06.01"))
     implementation("androidx.compose.ui:ui-graphics")
     // The engine's Compose host (E2 slice 5b: Layout, draw nodes, semantics), the same artifact the app ships.
     implementation("androidx.compose.ui:ui")
-    // GoogleFontCatalog's previews and HomeBridge's suspend calls: pinned to the version :app:dependencies showed the APK
-    // resolving before it was declared here (1.7.3).
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    // GoogleFontCatalog's previews and HomeBridge's suspend calls: the version the APK resolves (1.7.3 until T-002; Compose
+    // 1.11.4's ui asks 1.9.0, so 1.9.0 since).
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     // ShizukuLink (binding the shell service) imports Shizuku's API: already in the APK at this version, through the app,
     // which keeps api and provider (its manifest's ShizukuProvider) (E1 slice M3, D-071).
     implementation("dev.rikka.shizuku:api:13.1.5")
@@ -59,6 +63,6 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     // The Compose compiler plugin (above) refuses to compile without the runtime on the class path, tests included:
     // the same compile-only runtime, never on the test run nor in the APK.
-    testCompileOnly(platform("androidx.compose:compose-bom:2024.10.01"))
+    testCompileOnly(platform("androidx.compose:compose-bom:2026.06.01"))
     testCompileOnly("androidx.compose.runtime:runtime")
 }

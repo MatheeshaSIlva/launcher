@@ -59,11 +59,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-        // Compose 1.11 is built with a newer Kotlin than the project's 2.0.21.
-        freeCompilerArgs += "-Xskip-metadata-version-check"
-    }
 
     packaging {
         resources.excludes += listOf("META-INF/*.kotlin_module", "META-INF/versions/**", "META-INF/LICENSE*", "META-INF/NOTICE*")
@@ -87,4 +82,10 @@ dependencies {
     "luajImplementation"("com.jukusoft:rembulan-compiler:1.0.3")
     "luajImplementation"("com.jukusoft:rembulan-stdlib:1.0.3")
     "luakImplementation"("com.soywiz.korlibs.luak:luak-android:4.0.0-alpha-2")
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
 }
