@@ -30,5 +30,9 @@ data class Template(val texts: List<String>, val holes: List<Node>) {
     val whole: Node? get() = holes.singleOrNull()?.takeIf { texts.all { it.isEmpty() } }
 }
 
-/** A syntax error at offset [at] of the attribute's text, with what to write instead when there is a better word. */
-class ExprException(message: String, val at: Int, val hint: String? = null) : Exception(message)
+/**
+ * An error at offset [at] of the attribute's text, with what to write instead when there is a better word. [code] is the
+ * validator's: "bad-expression" for syntax, "unit-mismatch" for a sum or comparison of two different units.
+ */
+class ExprException(message: String, val at: Int, val hint: String? = null, val code: String = "bad-expression") :
+    Exception(message)

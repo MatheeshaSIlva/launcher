@@ -111,7 +111,13 @@ private fun fn(n: Node, props: Set<String>): Fn = when (n) {
         if (n.op == "!") object : BoolFn() { override fun bool(env: Env) = !a.bool(env) }
         else object : NumFn(a.unit) { override fun num(env: Env) = -a.num(env) }
     }
-    is Node.Binary -> binary(n.op, fn(n.left, props), fn(n.right, props))
+    is Node.Binary -> {
+        val a = fn(n.left, props)
+        val b = fn(n.right, props)
+        if (n.op in SAME_UNITS && a.unit != null && b.unit != null && a.unit != b.unit)
+            throw ExprException("Mixed units: ${a.unit} ${n.op} ${b.unit}", n.at, "write both in one unit", "unit-mismatch")
+        binary(n.op, a, b)
+    }
     is Node.Cond -> Triple(fn(n.test, props), fn(n.then, props), fn(n.otherwise, props)).let { (t, a, b) ->
         object : Fn(a.numeric && b.numeric, a.unit ?: b.unit) {
             override fun value(env: Env) = if (t.bool(env)) a.value(env) else b.value(env)
@@ -121,6 +127,9 @@ private fun fn(n: Node, props: Set<String>): Fn = when (n) {
     }
     is Node.Pipe -> Formatter(fn(n.value, props), n.formatter, n.arg)
 }
+
+/** Where both sides must be in one unit when both have one (a number without a unit combines with anything). */
+private val SAME_UNITS = setOf("+", "-", "<", "<=", ">", ">=", "==", "!=")
 
 private fun binary(op: String, a: Fn, b: Fn): Fn = when (op) {
     "&&" -> object : BoolFn() { override fun bool(env: Env) = a.bool(env) && b.bool(env) }

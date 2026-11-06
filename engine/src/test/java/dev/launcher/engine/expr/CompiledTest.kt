@@ -51,6 +51,17 @@ class CompiledTest {
         assertTrue(Compiled.of("{battery.level > 50}", emptySet()).bool(env))
     }
 
+    @Test fun mixedUnitsAreRefusedWhereBothAreKnown() {
+        fun refused(text: String) = try { Compiled.of(text, emptySet()); null } catch (e: ExprException) { e }!!
+        assertEquals(listOf("Mixed units: pt + dp", "5", "unit-mismatch", "write both in one unit"),
+            refused("{1pt + 1dp}").let { listOf(it.message, it.at.toString(), it.code, it.hint) })
+        assertEquals("Mixed units: pt < px", refused("{2pt < 3px}").message)
+        assertEquals("Mixed units: pt - dp", refused("{battery.level * 1pt - 2dp}").message)
+        assertEquals(Value.Num(3.0, "pt"), Compiled.of("{1pt + 2}", emptySet()).value(env))   // a plain number fits any unit
+        assertEquals(Value.Num(88.0), Compiled.of("{battery.level + 1}", emptySet()).value(env))
+        assertSame(Value.Bool.TRUE, Compiled.of("{battery.level > 2dp}", emptySet()).value(env))   // a source's unit is unknown
+    }
+
     @Test fun formatters() {
         assertEquals(Value.Str("22:13"), eval("{now | date:'HH:mm'}"))
         assertEquals(Value.Str("Tue 14 Nov"), eval("{now | date:'EEE d MMM'}"))

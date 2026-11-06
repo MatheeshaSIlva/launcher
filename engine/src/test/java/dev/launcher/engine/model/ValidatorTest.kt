@@ -92,6 +92,8 @@ class ValidatorTest {
         only(findings(fixed), "not-bindable", fixed, "\"^level\"")
         val source = view("text \"{network.wifi.level}\"")
         only(findings(source), "source-not-in-uses", source, "network", "uses { source network }")
+        val units = view("box width=\"{4pt + 2dp}\"")
+        assertEquals("Mixed units: pt + dp", only(findings(units), "unit-mismatch", units, "+", "write both in one unit").message)
         val bad = view("text \"{battery.level | percnt}\"")
         assertEquals("Unknown formatter 'percnt'", only(findings(bad), "bad-expression", bad, "percnt", "did you mean 'percent'?").message)
         val escaped = view("text \"\\\"{1 +}\"")   // an escape before it: the finding points at the whole value

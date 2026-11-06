@@ -1,5 +1,6 @@
 package dev.launcher.engine.model
 
+import dev.launcher.engine.expr.Compiled
 import dev.launcher.engine.expr.Deps
 import dev.launcher.engine.expr.ExprException
 import dev.launcher.engine.expr.ExprParser
@@ -88,8 +89,8 @@ class Validator(private val tokens: TokenCheck) {
         }
 
         fun expression(v: AttrValue.Expr, scope: Set<String>) {
-            val t = try { ExprParser.template(v.text) } catch (e: ExprException) {
-                return run { d += Diagnostic(inside(v, e.at), "bad-expression", e.message!!, e.hint) }
+            val t = try { ExprParser.template(v.text).also { Compiled.of(it, props) } } catch (e: ExprException) {
+                return run { d += Diagnostic(inside(v, e.at), e.code, e.message!!, e.hint) }
             }
             val deps = Deps.of(t, props)
             deps.states.forEach { (name, at) -> state(name, inside(v, at), scope) }
