@@ -856,3 +856,22 @@ Also in this change: `docs/ENGINE_SPEC.md` becomes canonical in the repo (Codex 
 newer sections (the budget, "no Shizuku", step 1's exit) are merged with the repo's step-0 answers. Found while setting
 up: E1 moved `ShizukuLink` as it was, so the no-Shizuku host is not yet scheduled; it is the first team thread (T-001),
 proposed as E1b before E2.
+
+## D-074: E2's plan and its decisions; the owner's answers on the upgrade and on T-001 (2026-11-06)
+
+E2's plan is `docs/E2_PLAN.md` (written by the Opus agent read-only, reviewed here, D-070's mode). Decided by the
+reviewing session (recorded in the plan's last section, logged here as the plan said they would be): StatusBarView stays
+the default behind a dev switch until E2's exit run; the capability registry gets its shape and the app-side sources in
+E2 and its AIDL entries with their first consumer (E3); full KDL 2 against kdl-org's suite (vendored under its own
+CC BY-SA 4.0 folder, never mixed with our sources); tokens for what a theme restyles, props for structure; pixel-identical
+where both bars draw the same glyph with the same Paint, diff.py's defaults where a path replaces a Canvas arc; the
+charging moment, sharing capsule, lock fade and Pixel header deferred to E3; the bar stays on `nav-ui`; **step 2's
+"first twelve primitives" read as the six the bar uses, the other six with their first consumer** (a reading of the
+build order's wording); new code in `dev.launcher.engine.*`. Taken while building slices 1-11, each in its commit:
+`Value.Color` is a kind of its own; a unit comes from the first operand that has one; mixed known units are refused at
+compile time; `ACCESS_NETWORK_STATE` declared in the engine's manifest for library lint (the app already declares it).
+Owner, 2026-11-06: **yes** to Compose 1.11.4 with Kotlin 2.2 as its own slice (T-002), measured on the settings, the
+shade and the App Switcher on the S24 before and after, the class-list diff declared first, and **stop and ask if AGP or
+the compile SDK has to move**. T-001 runs **alongside E2**, not before it; its first slice (the vendored ADB client and
+its tests) is offered to Codex while the lead does the upgrade. Still open with the owner: one expression syntax
+(`{expr}` with pipes; a spec edit with the invalid example's fix) and the bar's place in the spec (a `shade` component).

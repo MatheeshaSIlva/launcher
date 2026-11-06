@@ -1,6 +1,6 @@
 # T-001: Replace Shizuku with our own shell host
 
-- **Step:** E1b (proposed) · **Lead:** claude · **Opened:** 2026-11-06 · **Status:** PROPOSED
+- **Step:** alongside E2 (owner, 2026-11-06; was proposed as E1b) · **Lead:** claude · **Opened:** 2026-11-06 · **Status:** DISCUSSING
 - **Read first:** `docs/ENGINE_SPEC.md` → Decisions, 2026-11-03 → "Shizuku after reboot" (the 2026-11-06 "no Shizuku"
   decision and the fork review); build order step 1; `docs/E1_INVENTORY.md` rows for `ShizukuLink`, `ShellService`,
   `SystemRestore`, the watchdog; D-070 (no package rename; the accessibility service is stored by class name); D-071
@@ -14,9 +14,20 @@
 own shell-uid process hosting `ShellService`, gets the binder back, and comes back by itself after a reboot. This closes
 step 1's exit test as the spec now states it.
 
-**Where it goes.** A separate E1b before E2, not inside E2. Reasons: E2 starts by writing the capability registry around
-the AIDL (D-070), and it should wrap the host we will keep, not one we are about to remove; the spec's step-1 exit
-already requires it; and it is self-contained work that does not depend on any KDL decision.
+**Where it goes.** ~~A separate E1b before E2.~~ **Alongside E2** (owner, 2026-11-06: "rework T-001 so it runs alongside
+E2 instead of before it"). The reason given for "before" no longer holds: E2's plan (`docs/E2_PLAN.md`, decision on its
+question 3, D-074) builds only the registry's shape and its app-side sources; the AIDL-backed entries come with their
+first consumer in E3. So no E2 slice wraps `ShizukuLink` or the AIDL, and the two run on disjoint files:
+
+| Runs now | Owner | Files it touches |
+| --- | --- | --- |
+| E2.0a, the Compose 1.11.4 + Kotlin 2.2 upgrade (T-002) | claude | every `build.gradle.kts`, `gradle.properties`, Kotlin sources the new compiler refuses |
+| T-001 slice 1, the vendored ADB client and its tests | codex (offered) | new files only, under `engine/src/main/java/dev/launcher/engine/adb/` and its tests, plus `engine/src/main/adb-NOTICE` |
+
+Ordering constraints, so neither waits on the other by surprise: T-001 slice 1 adds no dependency and edits no Gradle
+file while T-002 is open (any library it needs is a *question* in §2, and goes to the owner, protocol §5.3); T-001 slices
+2-5 touch `ShellService`, `ShizukuLink`, `SystemRestore` and the watchdog, which no E2 slice touches; T-001 slice 5
+(flip and remove) waits for E2's exit run on the S24 so the two measurements are never mixed.
 
 **Approach, as slices** (each ~200 changed lines or a pure vendor import):
 
@@ -52,7 +63,7 @@ E1's risk 10 (freeze the heartbeat file) on our host. Security checklist (protoc
   precedent; the disclosure page names it.
 - **Two shell processes** for users who also run Shizuku for other apps: they should coexist; to be tested, not assumed.
 
-**Proposed split** (to be agreed in §4): Codex owns slice 1 (the vendored client and its tests: self-contained,
+**Proposed split** (to be agreed in §4; slice 1 offered to Codex now, 2026-11-06): Codex owns slice 1 (the vendored client and its tests: self-contained,
 well-specified) and the security checklist's first pass on slice 2; the lead owns slices 2–5 (they touch `ShellService`,
 the watchdog and the phone) and holds the device.
 
