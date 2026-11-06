@@ -646,7 +646,6 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
                 }
                 if (i.getStringExtra("do") == "qs_collapse") handler.post { if (panel === shadePanel) shadeView.expandTo(false) }
                 if (i.getStringExtra("do") == "semblur") handler.post { semBlurProbe.run(i) }
-                if (i.getStringExtra("do") == "capture-probe") CaptureProbe.run(ctx, i)
                 if (i.getStringExtra("do") == "live-dump") ncBehindLive.dumps = i.getIntExtra("n", 1)
                 // --es do nc-trace --ez on true|false: Notification Center's choreography frame by frame, to files/dev-out/nc-trace.csv.
                 if (i.getStringExtra("do") == "nc-trace") handler.post {

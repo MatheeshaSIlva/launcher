@@ -95,16 +95,6 @@
             column="35"/>
     </issue>
     <issue
-        id="NewApi"
-        message="Field requires API level 30 (current min is 29): `android.view.SurfaceControl.Transaction#CREATOR`"
-        errorLine1="                        val t = data.readTypedObject(SurfaceControl.Transaction.CREATOR)"
-        errorLine2="                                                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
-            line="120"
-            column="54"/>
-    </issue>
-    <issue
         id="PrivateApi"
         message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
         errorLine1="                        val info = data.readTypedObject(Class.forName(&quot;android.window.TransitionInfo&quot;).getField(&quot;CREATOR&quot;).get(null) as Parcelable.Creator&lt;Any>)"
@@ -163,66 +153,6 @@
             file="src/main/java/dev/launcher/app/InstantTransitions.kt"
             line="185"
             column="23"/>
-    </issue>
-    <issue
-        id="PrivateApi"
-        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
-        errorLine1="            log(&quot;RemoteTransition constructors: &quot; + Class.forName(&quot;android.window.RemoteTransition&quot;).constructors.joinToString { c -> c.parameterTypes.joinToString(&quot;,&quot;, &quot;(&quot;, &quot;)&quot;) { it.simpleName } })"
-        errorLine2="                                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
-            line="46"
-            column="53"/>
-    </issue>
-    <issue
-        id="PrivateApi"
-        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
-        errorLine1="        val iface = Class.forName(&quot;android.window.IRemoteTransition\$Stub&quot;).getMethod(&quot;asInterface&quot;, IBinder::class.java).invoke(null, runner)"
-        errorLine2="                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
-            line="62"
-            column="21"/>
-    </issue>
-    <issue
-        id="PrivateApi"
-        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
-        errorLine1="        val rtClass = Class.forName(&quot;android.window.RemoteTransition&quot;)"
-        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
-            line="63"
-            column="23"/>
-    </issue>
-    <issue
-        id="PrivateApi"
-        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
-        errorLine1="        val ifaceClass = Class.forName(&quot;android.window.IRemoteTransition&quot;)"
-        errorLine2="                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
-            line="64"
-            column="26"/>
-    </issue>
-    <issue
-        id="PrivateApi"
-        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
-        errorLine1="                        val creator = Class.forName(&quot;android.window.TransitionInfo&quot;).getField(&quot;CREATOR&quot;).get(null) as Parcelable.Creator&lt;Any>"
-        errorLine2="                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
-            line="118"
-            column="39"/>
-    </issue>
-    <issue
-        id="PrivateApi"
-        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
-        errorLine1="                val iface = Class.forName(&quot;android.window.IRemoteTransitionFinishedCallback\$Stub&quot;).getMethod(&quot;asInterface&quot;, IBinder::class.java).invoke(null, cb)"
-        errorLine2="                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/LiveTransitionProbe.kt"
-            line="204"
-            column="29"/>
     </issue>
     <issue
         id="PrivateApi"

@@ -183,11 +183,6 @@ class ShellService : IShellService.Stub() {
 
     override fun captureUnder(uid: Int, scale: Float): HardwareBuffer? = ShellCapture.under(uid, scale)?.also { sent.set(it) }
 
-    override fun probeCapture(args: android.os.Bundle): android.os.Bundle = try {
-        ShellCapture.probe(args) { sent.set(it) }
-    } catch (t: Throwable) {
-        android.os.Bundle().apply { putString("report", "ERROR: ${describe(t)}") }
-    }
 
     private var snapshotNotes = 0
 
@@ -345,11 +340,6 @@ class ShellService : IShellService.Stub() {
     override fun injectTouch(action: Int, x: Float, y: Float, downTime: Long, eventTime: Long, deviceId: Int, targetUid: Int, waitForResult: Boolean): Boolean =
         TouchInjector.inject(action, x, y, downTime, eventTime, deviceId, targetUid, waitForResult)
 
-    override fun probeLiveTransition(component: String, homeComponent: String): String = try {
-        LiveTransitionProbe(systemService("activity_task", ATM_STUB)).run(component, homeComponent)
-    } catch (t: Throwable) {
-        "ERROR: ${describe(t)}"
-    }
 
     override fun floatingWindows(): Array<String> = try {
         val atm = systemService("activity_task", ATM_STUB)

@@ -97,35 +97,6 @@ object DevTools {
         }
     }
 
-    /**
-     * Can cards show the live app? Opens Settings through a remote transition (its real window grows from a card), then
-     * goes home the same way (the window shrinks away slowly: try swiping home pages meanwhile). Also checks whether this
-     * app may call the hidden SurfaceControl corner-radius call (needed if the animation runs here rather than in the shell).
-     */
-    fun probeLiveCards(ctx: Context) {
-        val s = shell("probe") ?: return
-        val settings = ctx.packageManager.getLaunchIntentForPackage("com.android.settings")?.component?.flattenToString() ?: "com.android.settings/.Settings"
-        val home = android.content.ComponentName(ctx, HomeActivity::class.java).flattenToString()
-        AppLog.log("[probe] live cards: in-app hidden API -> ${hiddenCornerRadiusCheck()}")
-        AppLog.log("[probe] live cards: starting (Settings opens, then home)")
-        io.execute {
-            val r = try { s.probeLiveTransition(settings, home) } catch (t: Throwable) { "ERROR: ${t.javaClass.simpleName}: ${t.message}" }
-            AppLog.log("[probe] live cards report:\n$r")
-        }
-    }
-
-    private fun hiddenCornerRadiusCheck(): String = try {
-        val sc = android.view.SurfaceControl.Builder().setName("launcher-probe").setBufferSize(1, 1).build()
-        val t = android.view.SurfaceControl.Transaction()
-        t.javaClass.getMethod("setCornerRadius", android.view.SurfaceControl::class.java, Float::class.javaPrimitiveType).invoke(t, sc, 8f)
-        t.apply()
-        sc.release()
-        "setCornerRadius usable"
-    } catch (t: Throwable) {
-        val c = if (t is java.lang.reflect.InvocationTargetException) t.targetException ?: t else t
-        "setCornerRadius NOT usable (${c.javaClass.simpleName}: ${c.message})"
-    }
-
     /** Forgets home's layout and restarts the app (a new layout is made when home starts). */
     fun resetHomeLayout(ctx: Context) {
         dev.launcher.app.home.HomeModel.reset(ctx)

@@ -1,0 +1,46 @@
+# P1 (E2's first slice): the probes go. LiveTransitionProbe (the live-cards probe, AIDL 17) and CaptureProbe with ShellCapture's
+# probe (AIDL 43), their ShellService methods, DevTools' probeLiveCards and its Developer-page row, Shade's TEST_SHADE capture-probe
+# branch. Cumulative against 9984034: the E1 state, then this slice's changes.
++ Ldev/launcher/engine/R; 1 0
++ Ldev/launcher/app/EngineHost$Companion; 2 2
++ Ldev/launcher/app/NavHost; 0 10
+- Ldev/launcher/app/GestureNav; 761 18
++ Ldev/launcher/app/GestureNav; 760 18
++ Ldev/launcher/app/EngineHost; 1 5
+- Ldev/launcher/app/LauncherApp; 6 2
++ Ldev/launcher/app/LauncherApp; 6 6
+- Ldev/launcher/app/HomeBridge$Home; 0 10
++ Ldev/launcher/app/HomeBridge$Home; 0 13
++ Ldev/launcher/engine/R$id; 1 0
+# Gone with the probes (classes and their synthetic lambdas):
+- Ldev/launcher/app/LiveTransitionProbe$$ExternalSyntheticLambda0; 1 1
+- Ldev/launcher/app/LiveTransitionProbe$$ExternalSyntheticLambda1; 1 1
+- Ldev/launcher/app/LiveTransitionProbe$Companion; 2 1
+- Ldev/launcher/app/LiveTransitionProbe$Runner$$ExternalSyntheticLambda0; 1 1
+- Ldev/launcher/app/LiveTransitionProbe$Runner$animate$1; 1 1
+- Ldev/launcher/app/LiveTransitionProbe$Runner; 10 5
+- Ldev/launcher/app/LiveTransitionProbe; 21 1
+- Ldev/launcher/app/shade/CaptureProbe$$ExternalSyntheticLambda0; 1 1
+- Ldev/launcher/app/shade/CaptureProbe; 4 2
+# Two AIDL methods fewer: the interface, its Default and its Proxy (the Stub's onTransact dispatch keeps its method count):
++ Ldev/launcher/app/IShellService$Default; 1 42
++ Ldev/launcher/app/IShellService$Stub$Proxy; 1 43
++ Ldev/launcher/app/IShellService; 0 41
+- Ldev/launcher/app/IShellService$Default; 1 44
+- Ldev/launcher/app/IShellService$Stub$Proxy; 1 45
+- Ldev/launcher/app/IShellService; 0 43
+# ShellService: the two overrides and a synthetic lambda; ShellCapture: probe() and Calls' setCrop/setExclude getters:
++ Ldev/launcher/app/ShellCapture$Calls; 1 11
++ Ldev/launcher/app/ShellCapture; 5 1
++ Ldev/launcher/app/ShellService; 46 42
+- Ldev/launcher/app/ShellCapture$Calls; 1 13
+- Ldev/launcher/app/ShellCapture; 6 2
+- Ldev/launcher/app/ShellService$$ExternalSyntheticLambda10; 1 1
+- Ldev/launcher/app/ShellService; 48 44
+# DevTools: probeLiveCards, hiddenCornerRadiusCheck and a lambda; the Developer page: its row's lambda:
++ Ldev/launcher/app/DevTools; 27 11
++ Ldev/launcher/app/settings/PagesKt$DeveloperPage$2; 33 2
+- Ldev/launcher/app/DevTools$$ExternalSyntheticLambda12; 1 1
+- Ldev/launcher/app/DevTools; 30 12
+- Ldev/launcher/app/settings/PagesKt$DeveloperPage$2$$ExternalSyntheticLambda14; 1 1
+- Ldev/launcher/app/settings/PagesKt$DeveloperPage$2; 35 2

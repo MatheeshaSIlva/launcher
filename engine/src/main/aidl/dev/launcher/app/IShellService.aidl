@@ -62,10 +62,7 @@ interface IShellService {
     // Like switchToTask, with ActivityOptions (e.g. "no animation": our own card animates instead).
     String switchToTaskWithOptions(int taskId, in Bundle options) = 16;
 
-    // Probe (blocking, a few seconds): can the shell animate real app windows through a remote transition? Opens
-    // [component] with its window growing from a small card, then starts [homeComponent] with the app's window shrinking
-    // away slowly. Returns a report of what the system handed over and how the frames went.
-    String probeLiveTransition(String component, String homeComponent) = 17;
+    // 17: retired (probeLiveTransition, the live-cards probe; its findings are in docs/PROBE_FINDINGS.md). Do not reuse.
 
     // Starts / switches with a remote transition of ours that ends at once, so the system plays no animation of its own
     // (our cards are the animation) without touching the system animation scales. Returns "result <code>" or "ERROR: ...".
@@ -161,9 +158,7 @@ interface IShellService {
     // Link to Windows, which is no screen capture): our bar's sharing capsule covers it then. "ok" or "ERROR: ...".
     String watchLog(String tag, String regex, in ILogWatch listener) = 42;
 
-    // Probe: the screen under our windows as GPU buffers, taken and timed by the shell (ShellCapture). "report" and the
-    // last "buffer".
-    Bundle probeCapture(in Bundle args) = 43;
+    // 43: retired (probeCapture, the capture probe; captureUnder below is what it found). Do not reuse.
 
     // The screen as one app shows it ([uid]'s layers only: none of ours, nor the bars), scaled by [scale], as a GPU buffer;
     // null when it holds secure content or the capture failed. Notification Center's edge bends it live over that app.

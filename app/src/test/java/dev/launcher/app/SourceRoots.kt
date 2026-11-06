@@ -20,7 +20,8 @@ object SourceRoots {
      * that finds fewer has lost a root or a folder, not a file. Lower a number only together with the deletion that
      * lowers it.
      */
-    val MINIMUM = mapOf("statusbar" to 4, "shade" to 59, "switcher" to 5, "drawer" to 8, "home" to 21)
+    // shade 59 -> 58 (E2 slice P1): shade/CaptureProbe.kt deleted with the probes.
+    val MINIMUM = mapOf("statusbar" to 4, "shade" to 58, "switcher" to 5, "drawer" to 8, "home" to 21)
 
     /** Package [pkg]'s folders (a path under dev/launcher/app/), in whichever modules have one. */
     fun dirs(pkg: String): List<File> = roots.map { File(it, "$BASE/$pkg") }.filter { it.isDirectory }

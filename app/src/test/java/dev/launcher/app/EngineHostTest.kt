@@ -20,7 +20,7 @@ class EngineHostTest {
     /** The Shizuku service's files: they run in the shell process, where no LauncherApp ever sets the host. */
     private val shell = listOf(
         "ShellService.kt", "ShellCapture.kt", "TouchStream.kt", "WindowWatch.kt", "InstantTransitions.kt",
-        "TouchInjector.kt", "LiveTransitionProbe.kt",
+        "TouchInjector.kt",
     )
 
     private val appClasses = Regex("""\b(GestureNav|LauncherApp|HomeActivity|Badges)\b""")

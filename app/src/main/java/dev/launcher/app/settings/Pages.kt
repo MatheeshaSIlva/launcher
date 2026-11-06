@@ -3034,7 +3034,6 @@ private fun DeveloperPage(tick: androidx.compose.runtime.MutableIntState, feed: 
         ActionRow("Watchdog status", null) { dev.launcher.app.DevTools.watchdogStatus() }
         ActionRow("Shell identity", null) { dev.launcher.app.DevTools.identity() }
         ActionRow("Diagnose Shizuku restarts", "The system's log around them") { dev.launcher.app.DevTools.diagnoseRestarts() }
-        ActionRow("Probe: live cards", "Opens Settings and goes home through our transition") { dev.launcher.app.DevTools.probeLiveCards(ctx) }
         ActionRow("Test: break the system", "Hides the phone's status bar and turns animations off, until Restore system") { dev.launcher.app.DevTools.breakSystem(ctx) }
         ActionRow("Test: stop the shell service", "The phone's status bar should come back at once") { dev.launcher.app.DevTools.killService() }
         ConfirmRow("Reset home layout", "Forgets your home pages; the launcher restarts", "Tap again to reset home") { dev.launcher.app.DevTools.resetHomeLayout(ctx) }

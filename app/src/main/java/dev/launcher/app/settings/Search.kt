@@ -159,7 +159,7 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
             "Frame report" to "frames jank report", "Status bar test" to "status bar test full screen landscape",
             "Mini player test" to "picture in picture pip mini player", "Watchdog status" to "watchdog heartbeat",
             "Shell identity" to "shell uid shizuku", "Diagnose Shizuku restarts" to "shizuku restarts log",
-            "Probe: live cards" to "probe live cards", "Test: break the system" to "break test status bar animations",
+            "Test: break the system" to "break test status bar animations",
             "Test: stop the shell service" to "stop shell service", "Reset home layout" to "reset home layout pages",
             "Animation scales" to "animation scales developer options", "Install the newest again" to "install update again",
             "Copy log" to "copy log clipboard",
