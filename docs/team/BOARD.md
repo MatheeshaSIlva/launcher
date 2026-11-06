@@ -1,8 +1,8 @@
 # Board
 
-**Now:** E2 is under way: the interpreter's core is built and tested. Claude is moving AGP to 8.13 (T-003, the owner's
-call after T-002's lint hit his stop rule), then lands the Compose 1.11.4 + Kotlin 2.2 upgrade (T-002) on it. Codex is
-building T-001 slice 1a (the ADB message codec) alongside.
+**Now:** E2 is under way: the interpreter's core is built and tested, and the toolchain is upgraded (AGP 8.13.2, T-003;
+Kotlin 2.2.21 and Compose 1.11.4, T-002, measured on the S24: ref 15 / new 14 missed refreshes over 70 animations). Next:
+E2 slice 6 (the first visible bar in the shade window, claude) and T-001 slice 1b (native pairing, codex) alongside.
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
 **Device:** claude (lead)
@@ -24,7 +24,9 @@ existed (D-070's mode: this session reviewing, an Opus agent building), each gat
 | 7, 8, 11 | sources (time, battery, network, dnd) and the binder; tokens from the launcher's resolver | `aa44a81`, `af29b91`, `6ec3433` |
 | P1 | the probes removed (LiveTransitionProbe, CaptureProbe, AIDL 17 and 43) | `d130011` |
 
-Next, in order: 0a/0b (T-002, the upgrade), 6 (the first visible bar in the shade window), 9, 10, 12-17. 73 engine unit
+0, 0a: AGP 8.13.2 (T-003) and Compose 1.11.4 + Kotlin 2.2 (T-002), both signed by both agents.
+
+Next, in order: 6 (the first visible bar in the shade window), 9, 10, 12-17. 73 engine unit
 tests. Owner questions still open from the plan: 5 (one expression syntax, `{expr}` with pipes: a spec change) and 6
 (the bar as a component of the `shade` surface: spec wording); the code already does both.
 
@@ -34,15 +36,18 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
-| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a DONE; 1b after T-002) |
+| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a DONE; 1b next, unblocked) |
 | T-003 | E2.0: AGP 8.13.2 and Gradle 8.13; every Android 11 call lint 8.13 found guarded (5 sites) | `threads/T-003-agp-8-13.md` | claude; codex cross-checked | `team/claude/t003-agp` | DONE |
-| T-002 | E2.0a: Compose 1.11.4 and Kotlin 2.2, measured before and after | `threads/T-002-compose-kotlin-upgrade.md` | claude; codex cross-checks | `team/claude/t002-compose` | REPORTED (gate green on AGP 8.13; S24 comparison next) |
+| T-002 | E2.0a: Compose 1.11.4 and Kotlin 2.2, measured before and after | `threads/T-002-compose-kotlin-upgrade.md` | claude; codex cross-checks | `team/claude/t002-compose` | DONE (the owner's eye on the settings remains) |
 
 ## Parking lot
 
 Things noticed that are not the current task. Each says who noticed it and where it came from.
 
-- `tools/e1_s24.sh` summary shows only the last of three shade passes (D-072, claude); T-002's comparison script fixes it.
+- `tools/e1_s24.sh` summary shows only the last of three shade passes (D-072, claude); `tools/compare_s24.sh` (T-002)
+  replaces it for comparisons.
+- The S24's shade passes run in one of two GPU modes for a whole pass (GPU median ~2-4 ms or ~7.5-9 ms; about half the
+  passes, both builds alike); cause not traced (T-002, claude and codex).
 - The spec's `battery-ring` example is not valid KDL (D-069); its corrected text is `KdlBench.SPEC_EXAMPLE_V2` and
   the E2 plan's model tests. Spec edit, the owner's (E2 question 5).
 - `./gradlew check` on the release variant runs out of memory compiling `GestureNav` (D-070); CI builds debug only.
@@ -55,4 +60,3 @@ Things noticed that are not the current task. Each says who noticed it and where
 
 - Step 2's gate: if the Compose-tree / engine-pixels split misses the frame budget, the interpreter is redone on Views.
 - Codex usage limits on the owner's plan: §8 of the protocol says what happens when Codex is unavailable.
-- T-002 touches every Compose screen at once: the settings are measured on the S24 before and after, interleaved.

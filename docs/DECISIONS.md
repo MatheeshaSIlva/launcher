@@ -901,3 +901,17 @@ separate Kotlin daemon per worktree) and lets an idle Gradle daemon exit after 1
 owner's request; the owner confirmed it to the lead in chat ("Yes, commit and log it"). Nothing verified changes. Watched:
 an in-process compile shares Gradle's 2 GB heap (`org.gradle.jvmargs=-Xmx2g`), and compiling `GestureNav` has run out of
 memory before in the release variant (D-070); the first gates after this are checked for "GC overhead".
+
+## D-077: Compose 1.11.4 and Kotlin 2.2.21 landed (T-002, 2026-11-07, lead with Codex)
+
+The owner's go (2026-11-06) was "Compose 1.11.4 and Kotlin 2.2 as its own slice". It landed on AGP 8.13.2 (T-003) with
+compileSdk 35 unchanged, so the stop rule never triggered. Choices made without the owner:
+- the Compose BOM 2026.06.01 rather than pinned artefacts, because it maps ui, foundation and runtime to 1.11.4;
+- `:engine` pins kotlinx-coroutines 1.9.0, the version Compose 1.11.4's ui resolves in the APK (1.7.3 before);
+- the APK grows from 19.8 MB to 23.7 MB, all of it the libraries;
+- the settings scenario covers two tiles' pages and not Look's page, which is below the fold.
+S24 comparison, interleaved ref, new, ref, new: 15 against 14 missed refreshes over 70 animations. The GPU account is
+limited as Codex required: both builds hit the slow GPU mode equally often, and its cause is not traced (parking lot).
+Codex's dissent on the idle check stands as a recorded limit: injected input cannot be told apart from the owner's
+without root, so focus checks guard each gesture instead. Not verified: text editing, focus and semantics beyond the
+scenarios. The owner's look at the settings is the remaining check.
