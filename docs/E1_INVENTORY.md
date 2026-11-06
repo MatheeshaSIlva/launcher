@@ -251,6 +251,10 @@ after M1; (d) the engine's own lint baseline, carried per slice; (e) on the S24,
 11. **App-side smart casts on a moved class's property stop compiling** (Kotlin forbids them across modules): each is
     rewritten to its smallest equivalent (an explicit cast under the guarding `is`, a `let`), quoted in the slice's
     hand-back and counted as a code edit. M3: DesignActivity l.338, MaterialPainter l.42-43.
+12. **What the counts-only dex check cannot see** (M6): Kotlin's `internal` members change their mangled name
+    (`$app_debug` to `$engine_debug`) and D8 renumbers a moved file's synthetic lambda classes
+    (`SwitcherHost$$ExternalSyntheticLambda6` to `...2`); both harmless, both listed per slice from a dexdump of
+    member names against the previous slice's APK, which every move slice ran alongside the counts.
 
 ## Questions for the reviewer
 

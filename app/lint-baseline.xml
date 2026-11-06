@@ -265,60 +265,10 @@
 
 
 
-    <issue
-        id="InlinedApi"
-        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
-        errorLine1="                    layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
-        errorLine2="                                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/switcher/SwitcherInput.kt"
-            line="73"
-            column="49"/>
-    </issue>
 
-    <issue
-        id="InlinedApi"
-        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
-        errorLine1="            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
-        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="45"
-            column="41"/>
-    </issue>
 
-    <issue
-        id="InlinedApi"
-        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
-        errorLine1="            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
-        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="45"
-            column="41"/>
-    </issue>
 
-    <issue
-        id="InlinedApi"
-        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`"
-        errorLine1="                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
-        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="70"
-            column="41"/>
-    </issue>
 
-    <issue
-        id="InlinedApi"
-        message="Field requires API level 30 (current min is 29): `android.view.WindowInsetsController#BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE`"
-        errorLine1="                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
-        errorLine2="                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="70"
-            column="41"/>
-    </issue>
 
     <issue
         id="NewApi"
@@ -766,137 +716,17 @@
     </issue>
 
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.SurfaceControlViewHost#getSurfacePackage`"
-        errorLine1="        val pkg = try { sp.surfacePackage } catch (_: Throwable) { null } ?: return false"
-        errorLine2="                           ~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
-            line="97"
-            column="28"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.SurfaceControlViewHost#release`"
-        errorLine1="        thread?.postDelayed({ try { l?.release() } catch (_: Throwable) { } }, RELEASE_AFTER_MS)"
-        errorLine2="                                       ~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
-            line="117"
-            column="40"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#setFitInsetsTypes`"
-        errorLine1="            setFitInsetsTypes(0)"
-        errorLine2="            ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="47"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#setFitInsetsTypes`"
-        errorLine1="            setFitInsetsTypes(0)"
-        errorLine2="            ~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="47"
-            column="13"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.Window#setDecorFitsSystemWindows`"
-        errorLine1="        window.setDecorFitsSystemWindows(false)"
-        errorLine2="               ~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="49"
-            column="16"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.View#getWindowInsetsController`"
-        errorLine1="            window.decorView.windowInsetsController?.let {"
-        errorLine2="                             ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="69"
-            column="30"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#setSystemBarsBehavior`"
-        errorLine1="                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE"
-        errorLine2="                   ~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="70"
-            column="20"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsets.Type#systemBars`"
-        errorLine1="                it.hide(WindowInsets.Type.systemBars())"
-        errorLine2="                                          ~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="71"
-            column="43"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowInsetsController#hide`"
-        errorLine1="                it.hide(WindowInsets.Type.systemBars())"
-        errorLine2="                   ~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="71"
-            column="20"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowManager#getMaximumWindowMetrics`"
-        errorLine1="            val b = activity.windowManager.maximumWindowMetrics.bounds"
-        errorLine2="                                           ~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="99"
-            column="44"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.view.WindowMetrics#getBounds`"
-        errorLine1="            val b = activity.windowManager.maximumWindowMetrics.bounds"
-        errorLine2="                                                                ~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="99"
-            column="65"/>
-    </issue>
 
-    <issue
-        id="NewApi"
-        message="Call requires API level 30 (current min is 29): `android.content.ContextWrapper#getDisplay`"
-        errorLine1="            val turn = when (activity.display?.rotation) {"
-        errorLine2="                                      ~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/TurnCover.kt"
-            line="102"
-            column="39"/>
-    </issue>
 
     <issue
         id="OldTargetApi"
@@ -1017,16 +847,6 @@
             column="22"/>
     </issue>
 
-    <issue
-        id="UnspecifiedRegisterReceiverFlag"
-        message="`probe` is missing `RECEIVER_EXPORTED` or `RECEIVER_NOT_EXPORTED` flag for unprotected broadcasts registered for dev.launcher.app.CALM_PROBE"
-        errorLine1="            if (Build.VERSION.SDK_INT >= 33) c.registerReceiver(probe, filter, Context.RECEIVER_NOT_EXPORTED) else c.registerReceiver(probe, filter)"
-        errorLine2="                                                                                                                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/SystemCalm.kt"
-            line="51"
-            column="116"/>
-    </issue>
 
 
     <issue
@@ -1381,27 +1201,7 @@
             file="src/main/res/mipmap-anydpi-v26"/>
     </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields (static reference to `Apps` which has field `ctx` pointing to `Context`); this is a memory leak"
-        errorLine1="/**"
-        errorLine2="^">
-        <location
-            file="src/main/java/dev/launcher/app/apps/Apps.kt"
-            line="56"
-            column="1"/>
-    </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields; this is a memory leak"
-        errorLine1="    private lateinit var ctx: Context"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/apps/Apps.kt"
-            line="61"
-            column="5"/>
-    </issue>
 
 
 
@@ -1506,49 +1306,9 @@
             column="5"/>
     </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields (static reference to `Icons` which has field `ctx` pointing to `Context`); this is a memory leak"
-        errorLine1="/**"
-        errorLine2="^">
-        <location
-            file="src/main/java/dev/launcher/app/apps/Icons.kt"
-            line="96"
-            column="1"/>
-    </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields; this is a memory leak"
-        errorLine1="    private lateinit var ctx: Context"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/apps/Icons.kt"
-            line="101"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields (static reference to `LaunchStats` which has field `ctx` pointing to `Context`); this is a memory leak"
-        errorLine1="/**"
-        errorLine2="^">
-        <location
-            file="src/main/java/dev/launcher/app/apps/LaunchStats.kt"
-            line="7"
-            column="1"/>
-    </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields; this is a memory leak"
-        errorLine1="    private lateinit var ctx: Context"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/apps/LaunchStats.kt"
-            line="13"
-            column="5"/>
-    </issue>
 
     <issue
         id="StaticFieldLeak"
@@ -1616,49 +1376,9 @@
             column="5"/>
     </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields (static reference to `SwitcherHost` which has field `root` pointing to `View`); this is a memory leak"
-        errorLine1="/**"
-        errorLine2="^">
-        <location
-            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
-            line="15"
-            column="1"/>
-    </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields; this is a memory leak"
-        errorLine1="    private var root: View? = null"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
-            line="49"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields; this is a memory leak"
-        errorLine1="    private var ctx: Context? = null"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
-            line="50"
-            column="5"/>
-    </issue>
 
-    <issue
-        id="StaticFieldLeak"
-        message="Do not place Android context classes in static fields (static reference to `SwitcherActivity` which has field `surface` pointing to `SurfaceView`); this is a memory leak"
-        errorLine1="    @Volatile private var current: SwitcherActivity? = null"
-        errorLine2="    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
-            line="127"
-            column="5"/>
-    </issue>
 
 
 
@@ -2168,27 +1888,7 @@
             column="18"/>
     </issue>
 
-    <issue
-        id="ClickableViewAccessibility"
-        message="`onTouch` lambda should call `View#performClick` when a click is detected"
-        errorLine1="            r.setOnTouchListener { _, e -> listener?.onWindowTouch(MotionEvent.obtain(e)); true }"
-        errorLine2="                                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="src/main/java/dev/launcher/app/switcher/SwitcherHost.kt"
-            line="87"
-            column="34"/>
-    </issue>
 
-    <issue
-        id="ClickableViewAccessibility"
-        message="`onTouch` lambda should call `View#performClick` when a click is detected"
-        errorLine1="                    setOnTouchListener { _, e ->"
-        errorLine2="                                       ^">
-        <location
-            file="src/main/java/dev/launcher/app/switcher/SwitcherInput.kt"
-            line="54"
-            column="40"/>
-    </issue>
 
     <issue
         id="SetTextI18n"
