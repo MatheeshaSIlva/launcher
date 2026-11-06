@@ -53,4 +53,10 @@ dependencies {
     // ShizukuLink (binding the shell service) imports Shizuku's API: already in the APK at this version, through the app,
     // which keeps api and provider (its manifest's ShizukuProvider) (E1 slice M3, D-071).
     implementation("dev.rikka.shizuku:api:13.1.5")
+    // The engine's own logic tests (the KDL parser first: E2), run by `testDebugUnitTest` with the app's.
+    testImplementation("junit:junit:4.13.2")
+    // The Compose compiler plugin (above) refuses to compile without the runtime on the class path, tests included:
+    // the same compile-only runtime, never on the test run nor in the APK.
+    testCompileOnly(platform("androidx.compose:compose-bom:2024.10.01"))
+    testCompileOnly("androidx.compose.runtime:runtime")
 }
