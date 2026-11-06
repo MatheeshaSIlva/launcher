@@ -19,6 +19,9 @@
 # Each install: tools/device.sh install with the staged APK and .dm (our home set as the default), then the HOME intent;
 # never a force-stop.
 # Then it waits for "BUILD <sha7>", Shizuku connected and the gesture strip, and checks speed-profile from install-dm.
+# Known limit (T-002, Codex's cross-check): without root an `adb shell input` counts as user activity like a person's touch,
+# so a touch of the owner's during a scenario cannot be told from ours by the idle check; the focus check before every
+# gesture is what stops a scenario when someone takes the phone. Run it only with the owner's go and while he is away.
 # Temperatures and CPU limits are logged before each run. Output: tools/shots/<NAME>/run-<time>/ (run.log, each
 # scenario's output and framestats files, summary.txt: per animation and run the missed refreshes summed over its passes
 # and the worst GPU/CPU p90 of its passes, and each build's mean). No screenshot or recording is taken.
