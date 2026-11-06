@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The settings app's own motion, from what the screen showed (framestats of the window SettingsActivity): opened, a tile's
 # page grown out of its card and closed again (twice, two tiles), the tile list scrolled down and back, closed into home
-# with the home gesture. Written for T-002 (the Compose upgrade), run by tools/compare_s24.sh.
+# with the home gesture; pages closed with their back button. Written for T-002 (the Compose upgrade), run by tools/compare_s24.sh.
 #   DEVICE=<serial> tools/scenario_settings.sh
 # Our own screens only, nothing captured. The only taps are on two tiles (Home at y 1350, App Library at y 1674: measured
 # on a 1080-wide screen, 2026-11-06; the settings are laid out in points, 402 across, so the same on the S24): the chips
@@ -19,7 +19,9 @@ measure() {   # $1 = step name
 }
 tap() { "$ADB" "${D[@]}" shell input tap "$1" "$2"; }
 swipe() { "$ADB" "${D[@]}" shell input swipe "$@"; }
-back() { swipe 3 1300 500 1300 180; }
+# The page's own back button (top left, 100,135; on the tile list that spot is the empty side of the title). A swipe from
+# the left edge closed the whole settings into home on the S24 (2026-11-07), not the page.
+back() { tap 100 135; }
 
 need HomeActivity "start (home must be in front)"
 reset; "$ADB" "${D[@]}" shell am start -n dev.launcher.app/.settings.SettingsActivity >/dev/null; sleep 2.5
