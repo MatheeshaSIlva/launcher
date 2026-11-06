@@ -83,6 +83,19 @@ lead. Install builds only with `tools/device.sh install`. Check which window has
 lines or fewer: what changed, how we know (numbers), what the owner must check on the phone (exact steps), decisions,
 what is next. Never claim something works until a log, a test or the owner's words confirm it.
 
+## Resource use (owner, 2026-11-07)
+
+The owner's machine runs both agents, one emulator and the builds of every worktree at once. Keep the load down without
+skipping any check:
+- **One full gate at a time.** Before a full `scripts/check.sh`, check no other one is running (`tasklist | grep java`
+  shows Gradle at work, or ask on the thread); iterate with `CHECK_FAST=1`, run the full gate once before reporting.
+- **Stop your daemons when a task ends:** `./gradlew --stop` in your worktree. `gradle.properties` runs the Kotlin
+  compiler inside Gradle (no separate Kotlin daemon) and lets an idle daemon exit after 10 minutes.
+- **Remove a worktree once its branch has landed** (`git worktree remove <path>`; the lead does this at integration).
+- **One shared emulator,** started only when a check needs it, named on the board with the device (`Device:`), and shut
+  down (`adb -s emulator-5554 emu kill`) by its holder when done. Never start a second one.
+- None of this changes what is verified: same gate, same tests, same device checks.
+
 ## Environment
 
 Owner's dev machine is Windows (JDK 17, Git Bash); Gradle 8.9, AGP 8.7.3, Kotlin 2.0.21, Compose BOM as pinned. Test

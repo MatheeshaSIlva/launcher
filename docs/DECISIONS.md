@@ -890,3 +890,14 @@ bridge to BoringSSL's SPAKE2, with BoringSSL via prefab, libc++ and `bcpkix-jdk1
 **our own pairing supports Android 12+ only** (the public `SSLSockets.exportKeyingMaterial`; no hidden or bundled
 Conscrypt; Android 11 keeps Shizuku). Codex's other findings shape slices 1-2: bounded framing (4,096 and 16,384 bytes),
 no key or payload logging, a one-time capability on the binder handover.
+
+## D-076: Resource use on the owner's machine (2026-11-07, owner)
+
+The owner's machine runs both agents, one emulator and every worktree's builds at once. AGENTS.md gains "Resource use":
+one full `scripts/check.sh` at a time (iterate with `CHECK_FAST=1`), `./gradlew --stop` when a task ends, a worktree
+removed once its branch lands, one shared emulator started only when needed, named on the board and shut down by its
+holder. `gradle.properties` runs the Kotlin compiler inside Gradle (`kotlin.compiler.execution.strategy=in-process`, no
+separate Kotlin daemon per worktree) and lets an idle Gradle daemon exit after 10 minutes. Written by a peer session at the
+owner's request; the owner confirmed it to the lead in chat ("Yes, commit and log it"). Nothing verified changes. Watched:
+an in-process compile shares Gradle's 2 GB heap (`org.gradle.jvmargs=-Xmx2g`), and compiling `GestureNav` has run out of
+memory before in the release variant (D-070); the first gates after this are checked for "GC overhead".
