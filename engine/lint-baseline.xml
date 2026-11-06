@@ -584,5 +584,65 @@
             line="96"
             column="24"/>
     </issue>
+    <issue
+        id="InlinedApi"
+        message="Field requires API level 30 (current min is 29): `android.view.WindowManager.LayoutParams#LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS`"
+        errorLine1="        layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS"
+        errorLine2="                                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/LiveBlur.kt"
+            line="55"
+            column="37"/>
+    </issue>
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.graphics.RenderEffect#createBlurEffect`"
+        errorLine1="            if (r > 0f) content.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP))"
+        errorLine2="                                                             ~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/FrostCache.kt"
+            line="82"
+            column="62"/>
+    </issue>
+    <issue
+        id="NewApi"
+        message="Call requires API level 31 (current min is 29): `android.graphics.RenderNode#setRenderEffect`"
+        errorLine1="            if (r > 0f) content.setRenderEffect(RenderEffect.createBlurEffect(r, r, Shader.TileMode.CLAMP))"
+        errorLine2="                                ~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/FrostCache.kt"
+            line="82"
+            column="33"/>
+    </issue>
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="        val get = Class.forName(&quot;android.os.SystemProperties&quot;).getMethod(&quot;getBoolean&quot;, String::class.java, Boolean::class.javaPrimitiveType)"
+        errorLine2="                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/shade/LiveBlur.kt"
+            line="351"
+            column="19"/>
+    </issue>
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="            val info = Class.forName(&quot;android.view.SemBlurInfo&quot;)"
+        errorLine2="                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SamsungBlur.kt"
+            line="44"
+            column="24"/>
+    </issue>
+    <issue
+        id="PrivateApi"
+        message="Accessing internal APIs via reflection is not supported and may not work on all devices or in the future"
+        errorLine1="            builder = Class.forName(&quot;android.view.SemBlurInfo\$Builder&quot;)"
+        errorLine2="                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/dev/launcher/app/design/SamsungBlur.kt"
+            line="45"
+            column="23"/>
+    </issue>
 
 </issues>
