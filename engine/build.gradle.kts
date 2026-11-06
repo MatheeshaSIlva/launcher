@@ -47,6 +47,8 @@ dependencies {
     // them, at the versions the APK ships). IconSets parses symbol paths with Compose's PathParser.
     implementation(platform("androidx.compose:compose-bom:2024.10.01"))
     implementation("androidx.compose.ui:ui-graphics")
+    // The engine's Compose host (E2 slice 5b: Layout, draw nodes, semantics), the same artifact the app ships.
+    implementation("androidx.compose.ui:ui")
     // GoogleFontCatalog's previews and HomeBridge's suspend calls: pinned to the version :app:dependencies showed the APK
     // resolving before it was declared here (1.7.3).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
