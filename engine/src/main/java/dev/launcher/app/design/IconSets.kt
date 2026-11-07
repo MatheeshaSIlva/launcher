@@ -68,7 +68,7 @@ object IconSets {
         }
     }
 
-    class IconSet(val id: String, val name: String, private val icons: JSONObject) {
+    class IconSet(val id: String, val name: String, private val icons: JSONObject, val listed: Boolean = true) {
         private val glyphs = HashMap<String, Glyph?>()
 
         /** Symbol [name] (an app symbol's name without `sym_`, maybe with `.off`), or null if the set leaves it out. */
@@ -136,12 +136,14 @@ object IconSets {
      * instance is ever published for an id (a drawing thread asking while [preparePlays]' worker reads waits for it rather
      * than reading the file again, and its plays are those of the instance it gets).
      */
-    fun get(ctx: Context, id: String?): IconSet? {
+    fun get(ctx: Context, id: String?): IconSet? = get(id) { read(ctx, it) }
+
+    private fun get(id: String?, load: (String) -> IconSet?): IconSet? {
         if (id == null || id == OWN || id in missing) return null
         sets[id]?.let { return it }
         synchronized(readLock) {
             sets[id]?.let { return it }
-            val set = read(ctx, id)
+            val set = load(id)
             if (set == null) { missing += id; AppLog.log("[icons] no set '$id': the app's own symbols"); return null }
             return sets.putIfAbsent(id, set) ?: set
         }
@@ -149,15 +151,19 @@ object IconSets {
 
     @Volatile private var listed: List<Pair<String, String>>? = null
 
-    /** The sets there are (id to name), the app's own first; read once (the settings ask in composition), again after [clear]. */
+    /** Listed sets (id to name), the app's own first; hidden sets remain available through [get]. Cached until [clear]. */
     fun list(ctx: Context): List<Pair<String, String>> = listed ?: readList(ctx).also { listed = it }
 
     private fun readList(ctx: Context): List<Pair<String, String>> {
-        val out = LinkedHashMap<String, String>()
-        out[OWN] = "Launcher"
         val ids = (try { ctx.assets.list(DIR)?.toList() } catch (_: Throwable) { null }.orEmpty() +
             File(ctx.filesDir, DIR).listFiles()?.map { it.name }.orEmpty()).filter { it.endsWith(".json") }.map { it.removeSuffix(".json") }
-        for (id in ids.distinct()) get(ctx, id)?.let { out[id] = it.name }
+        return readList(ids) { get(ctx, it) }
+    }
+
+    private fun readList(ids: List<String>, load: (String) -> IconSet?): List<Pair<String, String>> {
+        val out = LinkedHashMap<String, String>()
+        out[OWN] = "Launcher"
+        for (id in ids.distinct()) load(id)?.takeIf { it.listed }?.let { out[id] = it.name }
         return out.toList()
     }
 
@@ -167,11 +173,18 @@ object IconSets {
     private fun read(ctx: Context, id: String): IconSet? = try {
         val t0 = System.nanoTime()
         val f = File(File(ctx.filesDir, DIR), "$id.json")
-        val text = if (f.exists()) f.readText() else ctx.assets.open("$DIR/$id.json").bufferedReader().use { it.readText() }
-        val o = JSONObject(text)
+        val text = readText(f) { ctx.assets.open("$DIR/$id.json").bufferedReader().use { it.readText() } }
+        val set = decode(id, text)
         AppLog.log("[icons] $id: ${text.length / 1024} KB read and parsed in ${(System.nanoTime() - t0) / 1_000_000} ms on ${Thread.currentThread().name}")
-        IconSet(id, o.optString("name", id), o.getJSONObject("icons"))
+        set
     } catch (_: Throwable) { null }
+
+    private fun readText(file: File, asset: () -> String): String = if (file.exists()) file.readText() else asset()
+
+    private fun decode(id: String, text: String): IconSet {
+        val o = JSONObject(text)
+        return IconSet(id, o.optString("name", id), o.getJSONObject("icons"), o.optBoolean("listed", true))
+    }
 
     private fun parse(o: JSONObject, what: String): Glyph {
         val b = o.getJSONArray("box")
