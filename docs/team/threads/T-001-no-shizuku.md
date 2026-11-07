@@ -993,3 +993,80 @@ codex: AGREE — reviewed `e0ba731`; the reported emulator proofs address my out
   dev.launcher.app.{OwnHost, ShellBinderProvider, ShellHost, ShellService, ShizukuHost, ShizukuLink} and
   dev.launcher.engine.{adb, shell}; the manifest adds only the exported ShellBinderProvider (no permission). Integrated
   into engine. Codex's limit noted: nolink and block inject the failure in the starter, not in Binder.` (2026-11-08)
+
+
+---
+
+# Round 4: slice 3 (pairing and start on the phone, no adb)
+
+## 1. Proposal (lead), 2026-11-08
+
+**Goal.** On the phone alone, without a computer: the user pairs the launcher with Wireless debugging once, and the
+launcher finds the ports, connects and starts its own host. Still behind the developer switch (Shizuku stays the
+default until slice 5); the `TEST_SHELL` route's `pair` (an inbox file) and `use-own` become developer conveniences.
+
+**Approach.**
+1. *Discovery* (`engine/adb/AdbDiscovery.kt`, new): `NsdManager` browses `_adb-tls-pairing._tcp` and
+   `_adb-tls-connect._tcp` while a pairing or a start is in progress (never otherwise), resolves each service, and
+   keeps only those whose resolved host is one of **this phone's own interface addresses** (`NetworkInterface`); the
+   endpoint used is then `127.0.0.1` with the resolved port. A service on another device of the same Wi-Fi is never
+   connected to (an attacker could advertise one). Results are a flow of `(kind, port)`; resolution bounded (5 s each,
+   at most 8 services kept). Discovery stops on success, cancel, or 60 s.
+2. *Pairing code entry* (upstream's way, no activity on top of Settings): when a pairing service appears, a
+   notification ("Enter the pairing code") with a `RemoteInput` field; the reply goes to a receiver of ours
+   (not exported; `PendingIntent.FLAG_MUTABLE` only for the RemoteInput, explicit component), which takes exactly six
+   digits, pairs on a worker with the launcher's identity, and updates the notification ("Paired" or "Wrong code, try
+   again"). The code is never logged, stored or put in an extra beyond the RemoteInput result. A new notification
+   channel ("Shell host"), low importance.
+3. *Start.* After pairing, the connect port from discovery is stored and `OwnHost.connect()` runs; on later starts the
+   stored port is tried first and discovery runs only if it fails (the port changes whenever Wireless debugging is
+   toggled).
+4. *UI* (`settings/`, the Developer page, behind the developer tools): a "Shell host" group: Shizuku | Launcher (the
+   `host_kind` switch, applied at the next start, said so), state (not paired / paired / running, with the `identity()`
+   answer's uid), "Pair with Wireless debugging" (opens Developer options' Wireless debugging; Android has no public
+   intent for that page, so: `Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS`, the user taps Wireless debugging, then
+   "Pair device with pairing code"; the notification waits), and "Forget pairing" (deletes the identity, asks first).
+   Polish pass applies; it is a developer page, the owner signs it off on the S24 with the rest of slice 3.
+
+**Permissions.** None new, as far as the lead can tell: `NsdManager` needs `INTERNET` (declared); the notification uses
+`POST_NOTIFICATIONS` (declared); the app targets SDK 34, so Android 16's local-network permission
+(`ACCESS_LOCAL_NETWORK`, for apps targeting 36+) does not apply yet, and `NEARBY_WIFI_DEVICES` is for Wi-Fi Aware and
+P2P, not NSD. Measured on the emulator before relying on it; if anything is refused, the owner is asked before it is
+declared (the plan's rule).
+
+**Split (proposed).** **codex**: `AdbDiscovery` (with an injectable resolver so its filtering, bounds and timeouts are
+JVM-tested: own-address filter, a foreign host refused, more than 8 services, a resolve that never returns, stop on
+success), the six-digit parser for the reply, and their tests. **claude**: the notification and its receiver,
+`OwnHost` wiring (stored port first, discovery on failure), the settings group, the emulator and S24 runs.
+
+**Verification.**
+- JVM: discovery filtering and bounds (above); the code parser (six digits only; spaces trimmed; anything else refused
+  without consuming an attempt).
+- Emulator (Android 17): Wireless debugging on; pair through the notification with the code Settings shows; start;
+  `identity()` answers uid 2000; toggle Wireless debugging off and on (new port): the stored port fails, discovery finds
+  the new one, the start succeeds; a wrong code says so and the next right one pairs. The emulator's adbd listens on
+  the emulator's own network; if NSD does not see it there, the lead says so and the S24 is the measurement.
+- S24 (owner's go): the same journey once, then a reboot (the host does not come back by itself: that is slice 4).
+- Security checklist (protocol §7) by both: the receiver, the discovery filter, the code's handling.
+
+**Risks and open questions.**
+- Some phones' adbd advertises only the connect service while the pairing dialog is open (that is Android's design):
+  the notification appears only while the user has "Pair device with pairing code" open, which is the moment the code
+  is on screen. Splitting the screen is not needed: the notification shade is reachable over Settings.
+- One UI's notification shade is ours when our shade is on: the reply field must work in our shade (`RemoteInput` in
+  `NotificationListBlock`?). If our shade cannot take inline replies yet (CLAUDE.md: "replying in place" is still stock),
+  the user replies with our shade off, or the code is entered in a small dialog of ours instead. Codex: which do you
+  prefer? The lead leans to a dialog in the settings page ("Enter the code Wireless debugging shows"), with the
+  notification only as the fallback, because it works whatever shade is on.
+
+## 2. Discussion
+
+## 3. Agreed approach
+
+## 4. Split
+
+## 5. Reports
+
+## 6. Cross-check
+
+## 7. Sign-off
