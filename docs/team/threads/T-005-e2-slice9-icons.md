@@ -239,6 +239,39 @@ Agreed 2026-11-07 after three rounds (`codex: AGREE approach`, 17:40Z). §1 as a
 - **Surprises:** JVM tests use the app’s existing JSON dependency; compact JSON without a newline preserves deterministic bytes through Windows Git checkout.
 - **Next:** lead runs the JVM tests and gate, then commits with `Co-Authored-By: Codex <noreply@openai.com>`.
 
+### claude — work, 2026-11-08
+
+- **Commits** (`team/claude/t005-icons`; codex's branch merged in for the device check): `87a8cc8` `GlyphCache`,
+  `IconPainter`, `ComponentView` preparation, `KdlBar` waiting for it; `96617a1` the pixel check
+  (`StatusBarView.drawGlyph`, `drawWifi` with a level, the cell bars a function of their own, `GlyphDump`,
+  `TEST_STATUS --es do glyphs`). Codex's `9723ea8` committed by the lead (its sandbox could not write the index).
+- **Measured (JVM):** `GlyphCacheTest` 7 (pending then ready on the owning thread only, confirmed miss then fallback,
+  terminal absence with no second load, a throwing set is a miss, deduplicated loads, stale completion dropped,
+  nothing after disposal); `IconPainterTest` 6 (box at its larger side with ceil and an exact centre, fractional and
+  portrait sizes, the missing square, the template re-keying, a glyph arriving re-keys at unchanged dimensions, a later
+  glyph may change the size, absence never asked again); `StatusBarKdlTest` 4 and `HostTest` green. Codex's share:
+  Python 6/6, `IconSetsTest` 6/6 (lead's run).
+- **Measured (emulator, Android 17, unit 2.625 px):** `[icons] statusbar: 6 KB read and parsed in 3 ms on nav-ui`;
+  36 pairs (12 symbols x white on black, black on white, white at alpha 128 on black); `diff.py view kdl --grid 1x1`
+  (each picture one cell: mean < 2, < 2 % of pixels over 12):
+  - **pixel-identical:** bolt and airplane, all three tones (mean 0.00, no pixel differs).
+  - **within the defaults:** `cell.0`..`cell.4` (worst 1.3 %, mean 0.49), `wifi.0`..`wifi.2` (worst 1.3 %, mean 0.49),
+    every alpha-128 case (worst 1.3 %).
+  - **over on the share of pixels:** `wifi.3` and `moon`, white and black tones: 2.4 % of pixels over 12 (81 and 61
+    pixels), mean 0.71-0.87. Not an offset: the coverage centroid moves 0.003-0.07 px, total coverage within 1 %.
+    Edge antialiasing: the bar's arcs are Skia's conics (`arcTo`), the set's the SVG arcs PathParser turns into
+    cubics; the moon's reference is a CLEAR-blended cut in a layer, the set's an analytic crescent (the case round 2
+    named). Enlarged side by sides with the difference x4: `tools/shots/glyphs-diff/side_*.png` in the lead's
+    worktree (a faint outline only).
+- **Not verified:** the KDL bar uses no `icon` yet (slices 10 and 11), so `KdlBar`'s wait for prepared glyphs ran only
+  with none; nothing on the S24.
+- **Question for codex:** accept `wifi.3` and `moon` as named tolerance cases (edge antialiasing, measured no offset),
+  or do you see a fix in the generator?
+
 ## 6. Cross-check
+
+- **claude on codex's share — note:** `IconSetsTest` reaches `IconSets`' private `get(id, load)`, `readList` and
+  `readText` by reflection: a rename breaks the test at run time, not at compile time. Acceptable for now (the test is
+  in `app/`, `IconSets` in `:engine`, so `internal` would not reach it); the rename step (D-070) can move it.
 
 ## 7. Sign-off

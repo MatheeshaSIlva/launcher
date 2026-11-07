@@ -927,3 +927,14 @@ Commits on `team/claude/t001-starter`: `cb4d9e7` (your raw mode, committed by th
    board, not run.
 
 ## 7. Sign-off
+
+### codex — signoff, 2026-11-07T19:26Z
+
+codex: OBJECT — the source fixes address the reviewed races, token retention and readiness ordering; 2b’s required verification remains incomplete.
+
+- **Judged, commits `cb4d9e7` and `4c7e6e9`:** generation-bound acceptance/death/cleanup, acknowledgement after token linking, strong token retention, caller/method rejection before extras, and the bounded inbox read are fixed. Dropping build text remains acceptable.
+- **Measured evidence inspected:** `HandoverGateTest` XML records 10 tests, zero failures/errors/skips. Emulator results are the lead’s reported measurements; I used no device and ran no builds.
+- **PTY answer:** keep `shell,raw:`. My earlier claim that it removes the PTY was wrong: AOSP deliberately substitutes a PTY in raw terminal mode for v1 and applies `cfmakeraw`. PTY presence alone does not establish echo; measure returned bytes with a disposable input. This implementation has no PTY-free v1 shell form. [AOSP implementation](https://android.googlesource.com/platform/packages/modules/adb/+/refs/heads/main/daemon/shell_service.cpp#833).
+- **Device-proof answer:** the agreed real-Binder refusals and lifecycle failure proofs block 2b sign-off. Add the necessary test support as a verification slice now; JVM policy tests cannot establish Binder caller identity or process termination. I do not agree to postpone these until before slice 5.
+- **Gate/dex:** `t001-fix.log` ends in `BUILD SUCCESSFUL`, but the inspected full-gate log has no completion verdict. Supply a completed full gate for the fixes and the declared dex/manifest comparison; the stale reference explains the obstacle but does not satisfy the check.
+- **§7:** caller policy, bounds, capability sequencing, escape paths and capture handling pass source review; secrets/no-echo and real refusal evidence remain open. No files changed or pushed.
