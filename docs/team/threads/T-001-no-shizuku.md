@@ -1185,6 +1185,37 @@ Agreed 2026-11-08 (`codex: AGREE approach`, round 2): the lead's two entries as 
 
 ## 5. Reports
 
+### codex — work, 2026-11-07T22:21Z
+
+- **Commits:** none; staging denied at `D:/Launcher/.git/worktrees/launcher-codex/index.lock`. Only the four assigned files are uncommitted.
+- **Changed:** `AdbDiscovery.kt`, `AdbDiscoveryTest.kt`, `PairingCode.kt`, `PairingCodeTest.kt`. Discovery exposes `start()`, `snapshot()`, `close()`, with injectable NSD/clock adapters.
+- **Verified — measured:** Kotlin 2.2.21 compilation against API 35; **18/18 JVM tests passed**.
+- **Coverage — measured:** 5 s resolution, 60/20 s sessions, eight pending identities/results, flooding, generations, loss, cancellation, host/port refusals and bounded ASCII parsing.
+- **Security §7 — judged:** no exported caller entry point; inputs bounded; no new shell/reflection path; capability derivation unchanged; no capture path; codes remain in memory without logging; refusal tests pass.
+- **Not verified:** Android NSD behavior, integration, lint, dex/manifest comparison or device checks. No phone use; full gate deliberately not run.
+- **Surprises:** fast gate and `gradlew --stop` failed before execution because the sandbox denied the `C:\.gradle` wrapper lock. No Gradle daemon started.
+- **Platform limit:** below API 34, framework resolution cannot be cancelled; obsolete callbacks are discarded. Lead must run the integration checks.
+
+### claude — the overlay gate failed, 2026-11-08
+
+**Measured on the emulator (Android 17):** our card as a focusable `TYPE_APPLICATION_OVERLAY` window over Settings'
+"Pair with device" dialog: Settings stayed resumed and the pairing port kept listening, but the card **never showed**:
+`dumpsys window` gives `mIsForceHiddenNonSystemOverlayWindow=true`, `mPolicyVisibility=false`, `isVisible=false`, and
+the dialog kept the focus. Settings' pairing screen hides every non-system overlay (Android's protection of
+security-sensitive screens, the hide-non-system-overlays flag); the stock shade showed because it is SystemUI's. So an
+ordinary app overlay cannot be the code entry, and the gate stops here for the owner (the plan's rule). Options:
+1. **Our own shade gets inline reply** (the pairing prompt is a notification in our Notification Center with a reply
+   field; our shade's window is an accessibility overlay, which that flag does not hide): one shade, works for every
+   notification later (still a gap: "replying in place" is stock). Larger; touches the shade (E3's code) and its focus
+   rules (a focus window for the keyboard, as `FocusHolder` does for Back).
+2. **During pairing only, let Android's own shade through** so its notification reply works (upstream Shizuku's
+   path): smallest; breaks "one shade" for the minute pairing takes.
+3. **Split screen**, Settings and our page side by side (both resumed): no shade change; awkward on a phone.
+4. Our card as an **accessibility overlay** (also not hidden by that flag): would put our window over a screen
+   Android deliberately protects from overlays. The lead advises against it (it defeats a platform safeguard, and
+   uses the accessibility service for something that is not accessibility: Play policy risk).
+Codex's discovery and parser (`AdbDiscovery`, `PairingCode`, 18 JVM tests) do not depend on this choice.
+
 ## 6. Cross-check
 
 ## 7. Sign-off
