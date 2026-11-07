@@ -48,6 +48,9 @@ class AdbProofInstrumentation : Instrumentation() {
                     catch (_: AdbPairingRejectedException) { rejected = true }
                     check(rejected) { "Wrong code was not cryptographically rejected" }
                 }
+                // E2 slice 6's component lifecycle and the developer switch's refusal (T-004; the lead's, beside this proof).
+                "component-lifecycle" -> dev.launcher.engine.ui.ComponentProof(context).lifecycle(result)
+                "component-refusal" -> dev.launcher.engine.ui.ComponentProof(context).refusal(result)
                 else -> error("Unknown proof mode")
             }
             result.putString("result", "PASS (test APK UID; no launcher UID claim)")
