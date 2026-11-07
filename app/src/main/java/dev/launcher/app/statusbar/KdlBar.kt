@@ -67,13 +67,21 @@ object KdlBar {
                 if (committing) return
                 committing = true
                 // Seen once its first frame is on screen (not counted from before it: CLAUDE.md, first frames).
+                fun reveal() {
+                    if (view.isDisposed) return
+                    AppLog.log("[kdl] warm: ${view.counters()}")
+                    // StatusBarView gives way in the same frame the KDL bar shows (its colour from then on).
+                    bar.kdlInPlace = { c -> view.setProp("color", Value.Color(c)) }
+                    view.show(true)
+                }
                 v.viewTreeObserver.registerFrameCommitCallback {
                     handler.post {
                         if (view.isDisposed) return@post
-                        AppLog.log("[kdl] warm: ${view.counters()}")
-                        // StatusBarView gives way in the same frame the KDL bar shows (its colour from then on).
-                        bar.kdlInPlace = { c -> view.setProp("color", Value.Color(c)) }
-                        view.show(true)
+                        // Its icons' glyphs loaded first; if they came after that frame, one more frame draws them.
+                        view.whenPrepared { late ->
+                            if (!late) reveal()
+                            else { v.viewTreeObserver.registerFrameCommitCallback { handler.post { reveal() } }; v.invalidate() }
+                        }
                     }
                 }
             }

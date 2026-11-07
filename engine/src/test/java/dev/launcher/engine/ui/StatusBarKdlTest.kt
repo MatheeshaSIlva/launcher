@@ -15,6 +15,7 @@ import org.junit.Test
 
 /** E2 slice 6: the built-in `status-bar.kdl` is valid and shows the time as StatusBarView does (H:mm or h:mm, no AM/PM). */
 class StatusBarKdlTest {
+    private val noGlyphs = GlyphCache<Symbol>({ _, _ -> null }, { it.run() }, { it.run() })
     private val file = File("src/main/assets/kdl/components/status-bar.kdl")
     private val noTokens = object : TokenCheck { override fun exists(key: String) = false }
 
@@ -31,7 +32,7 @@ class StatusBarKdlTest {
     }
 
     private fun time(hour24: Boolean): Value {
-        val host = ComponentHost(component(), env(hour24), Units(1f, 1f), { ComponentView.defaultPainter(it, FakeTokens) })
+        val host = ComponentHost(component(), env(hour24), Units(1f, 1f), { ComponentView.defaultPainter(it, FakeTokens, noGlyphs) })
         return host.root.children.single().value("content")
     }
 
@@ -47,18 +48,18 @@ class StatusBarKdlTest {
     }
 
     @Test fun theTextIsStatusBarViewsAndItsCentreLineIsTheCapitalsMiddle() {
-        val text = ComponentHost(component(), env(true), Units(3f, 3f), { ComponentView.defaultPainter(it, FakeTokens) }).root.children.single()
+        val text = ComponentHost(component(), env(true), Units(3f, 3f), { ComponentView.defaultPainter(it, FakeTokens, noGlyphs) }).root.children.single()
         assertEquals(45f, text.length("size"))   // 15 pt at 3 px a point
         assertEquals(600f, text.number("weight"))
         assertEquals(Value.Bool.TRUE, text.value("tnum"))
-        assertEquals(34f * 3, ComponentHost(component(), env(true), Units(3f, 3f), { ComponentView.defaultPainter(it, FakeTokens) }).root.length("padding-start"))
+        assertEquals(34f * 3, ComponentHost(component(), env(true), Units(3f, 3f), { ComponentView.defaultPainter(it, FakeTokens, noGlyphs) }).root.length("padding-start"))
         // StatusBarView: baseline = centre + 0.727 x size / 2, so the centre is the baseline less that.
         assertEquals(40f - 0.727f * 45f / 2f, TextPainter.centreLine(40f, 45f), 1e-4f)
     }
 
     @Test fun aNewUnitConvertsLengthsAgain() {   // a turn: the launcher's unit follows the display's short side (the re-measure: emulator)
         val units = Units(3f, 3f)
-        val text = ComponentHost(component(), env(true), units, { ComponentView.defaultPainter(it, FakeTokens) }).root.children.single()
+        val text = ComponentHost(component(), env(true), units, { ComponentView.defaultPainter(it, FakeTokens, noGlyphs) }).root.children.single()
         units.unitPx = 2.5f
         assertEquals(37.5f, text.length("size"))
     }

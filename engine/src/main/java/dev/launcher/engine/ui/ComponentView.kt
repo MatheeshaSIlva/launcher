@@ -44,7 +44,9 @@ class ComponentView(
     private val tokens: Tokens,
     private val sources: Sources,
     private val units: Units,
-    painters: (ViewNode, Tokens) -> Painter = ::defaultPainter,
+    painters: (ViewNode, Tokens, GlyphCache<Symbol>) -> Painter = ::defaultPainter,
+    /** On a worker: a symbol of a set, or null (no such set or symbol). Default: the app's icon sets ([loadSymbol]). */
+    symbols: (set: String, symbol: String) -> Symbol? = { set, symbol -> loadSymbol(context, set, symbol) },
 ) {
     private val handler = Handler(Looper.myLooper() ?: error("ComponentView needs a Looper thread"))
     private val owner = ThreadOwner()
@@ -59,6 +61,11 @@ class ComponentView(
     private val centre = mutableFloatStateOf(0f)
     private var disposed = false
     private val textPainters = ArrayList<TextPainter>()
+    /** Its icons' glyphs, prepared on [GLYPHS]' worker and published to this thread ([GlyphCache]). */
+    private val glyphs = GlyphCache(symbols, { r -> GLYPHS.execute(r) }, { r -> handler.post(r) })
+    private var prepared = false
+    private var preparedLate = false
+    private val whenPrepared = ArrayList<(Boolean) -> Unit>()
 
     private val base = object : Env {
         private val states = def.state.associate { it.name to literal(it.initial) }
@@ -80,8 +87,9 @@ class ComponentView(
         val env = binder.env(base)
         var built: ComponentHost? = null
         binder.start(def.uses.sources.map { it.name }) { reads -> built?.let { it.refresh(reads); applied() } }
-        host = ComponentHost(def, env, units, { v -> painters(v, tokens).also { if (it is TextPainter) textPainters += it } }, { view.invalidate() })
+        host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it } }, { view.invalidate() })
         built = host
+        prepareGlyphs()
         tokens.onChange(tokensChanged)
         owner.start()
         recomposeScope.launch(start = CoroutineStart.UNDISPATCHED) { recomposer.runRecomposeAndApplyChanges() }
@@ -125,6 +133,28 @@ class ComponentView(
         applied()
     }
 
+    /**
+     * Every glyph its icons name now (literal or bound, as resolved at construction) is loaded off this thread before the
+     * component is first shown: [f] runs on this thread once they are, with true when that came after construction
+     * returned (a frame drawn before then showed placeholders: the caller waits one more frame). At once if already.
+     */
+    fun whenPrepared(f: (late: Boolean) -> Unit) { if (disposed) return; if (prepared) f(preparedLate) else whenPrepared += f }
+
+    private fun prepareGlyphs() {
+        val keys = generateSequence(listOf(host.root)) { level -> level.flatMap { it.children }.takeIf { it.isNotEmpty() } }
+            .flatten().filter { it.view.primitive == "icon" }.map { GlyphCache.Key(IconPainter.set(it), IconPainter.symbol(it)) }.toSet()
+        var constructing = true
+        glyphs.prepare(keys, wanted = { !disposed }) {
+            prepared = true
+            preparedLate = !constructing
+            if (preparedLate) host.invalidateAll()
+            whenPrepared.forEach { it(preparedLate) }
+            whenPrepared.clear()
+            applied()
+        }
+        constructing = false
+    }
+
     /** Seen or not (the view's alpha: composed and drawn either way; never the window's parameters). */
     fun show(on: Boolean) { if (!disposed) view.alpha = if (on) 1f else 0f }
 
@@ -148,6 +178,8 @@ class ComponentView(
         onDispose.forEach { it() }
         onDispose.clear()
         tokens.removeOnChange(tokensChanged)
+        glyphs.dispose()
+        whenPrepared.clear()
         binder.stop()
         owner.stop()
         recomposer.cancel()
@@ -158,12 +190,24 @@ class ComponentView(
     private fun applied() = Snapshot.sendApplyNotifications()
 
     companion object {
-        fun defaultPainter(v: ViewNode, tokens: Tokens): Painter = when (v.primitive) {
+        fun defaultPainter(v: ViewNode, tokens: Tokens, glyphs: GlyphCache<Symbol>): Painter = when (v.primitive) {
             "text" -> TextPainter(tokens)
+            "icon" -> IconPainter(tokens, glyphs)
             else -> Nothing
         }
 
-        /** Containers draw nothing of their own yet (`box`'s fill and `icon` come in E2 slices 9 and 10). */
+        /** Every component's glyph loads, one after another, on one thread of their own (never a drawing thread). */
+        private val GLYPHS = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "kdl-glyphs").apply { isDaemon = true } }
+        private val missed = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+        /** A symbol from the app's icon sets ([IconSets]: assets or the inbox's files), its miss logged once a process. */
+        fun loadSymbol(context: Context, set: String, symbol: String): Symbol? {
+            val g = dev.launcher.app.design.IconSets.get(context.applicationContext, set)?.glyph(symbol)
+            if (g == null) { if (missed.add("$set/$symbol")) dev.launcher.app.AppLog.log("[kdl] icon: no '$symbol' in set '$set'"); return null }
+            return Symbol(g.box.width(), g.box.height()) { c, cx, cy, size, color, paint -> g.draw(c, cx, cy, size, color, paint) }
+        }
+
+        /** Containers draw nothing of their own yet (`box`'s fill comes in E2 slice 10). */
         private object Nothing : Painter {
             override fun key(node: HostNode) = null
             override fun paint(canvas: android.graphics.Canvas, node: HostNode, width: Int, height: Int) {}
