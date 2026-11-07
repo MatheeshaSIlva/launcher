@@ -64,7 +64,7 @@ object AdbMessageCodec {
         }.array()
     }
 
-    fun decode(input: InputStream, negotiatedVersion: Int): AdbMessage {
+    fun decode(input: InputStream, negotiatedVersion: Int, negotiateConnection: Boolean = false): AdbMessage {
         val header = ByteBuffer.wrap(readExactly(input, HEADER_BYTES, "ADB message header"))
             .order(ByteOrder.LITTLE_ENDIAN)
         val command = header.int
@@ -81,7 +81,8 @@ object AdbMessageCodec {
         if (magic != command xor -1) throw AdbProtocolException("Invalid ADB command magic")
 
         val payload = readExactly(input, payloadLength, "ADB message payload")
-        if (negotiatedVersion < VERSION_SKIP_CHECKSUM && checksum(payload) != expectedChecksum) {
+        val checksumVersion = if (negotiateConnection && command == AdbCommands.CNXN) arg0 else negotiatedVersion
+        if (checksumVersion < VERSION_SKIP_CHECKSUM && checksum(payload) != expectedChecksum) {
             throw AdbProtocolException("Invalid ADB payload checksum")
         }
         return AdbMessage(command, arg0, arg1, payload)

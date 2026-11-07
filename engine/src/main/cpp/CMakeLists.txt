@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(launcher_adb LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+find_package(boringssl REQUIRED CONFIG)
+find_package(cxx REQUIRED CONFIG)
+add_library(launcher_adb SHARED adb_pairing.cpp)
+target_compile_options(launcher_adb PRIVATE -Wall -Wextra -Werror -Wno-unused-parameter
+        -fvisibility=hidden -fno-exceptions -fno-rtti)
+target_link_libraries(launcher_adb boringssl::crypto_static cxx::cxx)
+target_link_options(launcher_adb PRIVATE -Wl,-z,max-page-size=16384)

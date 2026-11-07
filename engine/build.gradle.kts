@@ -14,9 +14,14 @@ plugins {
 android {
     namespace = "dev.launcher.engine"
     compileSdk = 35
+    ndkVersion = "29.0.14206865"
 
     defaultConfig {
         minSdk = 29
+        testInstrumentationRunner = "dev.launcher.engine.adb.AdbProofInstrumentation"
+        externalNativeBuild {
+            cmake { arguments += "-DANDROID_STL=none" }
+        }
     }
 
     lint {
@@ -27,6 +32,18 @@ android {
     buildFeatures {
         // The Shizuku service's interfaces move here in E1 (slice M2).
         aidl = true
+        prefab = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    packaging {
+        resources.excludes += setOf("META-INF/versions/9/OSGI-INF/MANIFEST.MF")
     }
 
     compileOptions {
@@ -43,6 +60,10 @@ kotlin {
 }
 
 dependencies {
+    // T-001 / D-075: native SPAKE2 and the self-signed certificate builder. All prefab ABIs retained.
+    implementation("io.github.vvb2060.ndk:boringssl:20250114")
+    implementation("org.lsposed.libcxx:libcxx:27.0.12077973")
+    implementation("org.bouncycastle:bcpkix-jdk15on:1.70")
     // For the Compose compiler only (see plugins): compile-time, so nothing new reaches the APK, whose Compose comes from
     // the app's own declarations of the same BOM.
     compileOnly(platform("androidx.compose:compose-bom:2026.06.01"))
