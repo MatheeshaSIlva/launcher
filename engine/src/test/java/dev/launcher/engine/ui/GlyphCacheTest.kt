@@ -115,6 +115,19 @@ class GlyphCacheTest {
         assertEquals(GlyphCache.MAX_KEYS, cache.loads)                  // never prepared again
     }
 
+    @Test fun aNameFlippingWhileItsLoadsAreHeldLeavesOneWaiter() {
+        var current = Key("statusbar", "a")
+        repeat(1_000) { i ->
+            val k = Key("statusbar", if (i % 2 == 0) "a" else "b")
+            current = k
+            cache.prepare(listOf(k), wanted = { current == k }) {}
+        }
+        assertEquals(1, cache.waiters)                                 // the stale ones were dropped
+        assertEquals(2, cache.loads)                                   // and nothing loaded twice
+        repeat(500) { i -> cache.prepare(listOf(Key("statusbar", "k$i"))) {} }
+        assertTrue(cache.waiters <= GlyphCache.MAX_WAITERS)            // requesters that all still want it: bounded too
+    }
+
     @Test fun nothingCompletesAfterDisposal() {
         var done = 0
         cache.prepare(listOf(Key("statusbar", "moon"))) { done++ }

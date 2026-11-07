@@ -65,6 +65,8 @@ class ComponentView(
     private val glyphs = GlyphCache(symbols, { r -> GLYPHS.execute(r) }, { r -> handler.post(r) })
     private var prepared = false
     private var preparedLate = false
+    /** True until the constructor returns: preparation that completes after it is "late" (one more frame to draw it). */
+    private var constructing = true
     private val whenPrepared = ArrayList<(Boolean) -> Unit>()
 
     private val base = object : Env {
@@ -90,6 +92,7 @@ class ComponentView(
         host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it } }, { view.invalidate() })
         built = host
         prepareGlyphs()
+        constructing = false
         tokens.onChange(tokensChanged)
         owner.start()
         recomposeScope.launch(start = CoroutineStart.UNDISPATCHED) { recomposer.runRecomposeAndApplyChanges() }
@@ -140,11 +143,22 @@ class ComponentView(
      */
     fun whenPrepared(f: (late: Boolean) -> Unit) { if (disposed) return; if (prepared) f(preparedLate) else whenPrepared += f }
 
-    private fun prepareGlyphs() {
-        val keys = generateSequence(listOf(host.root)) { level -> level.flatMap { it.children }.takeIf { it.isNotEmpty() } }
+    /** The glyphs its icons name now (their bindings' current values). */
+    private fun iconKeys(): Set<GlyphCache.Key> =
+        generateSequence(listOf(host.root)) { level -> level.flatMap { it.children }.takeIf { it.isNotEmpty() } }
             .flatten().filter { it.view.primitive == "icon" }.map { GlyphCache.Key(IconPainter.set(it), IconPainter.symbol(it)) }.toSet()
-        var constructing = true
-        glyphs.prepare(keys, wanted = { !disposed }) {
+
+    /** Every glyph its icons name now is loaded, found or absent for good (none still pending). This thread. */
+    fun glyphsReady(): Boolean = iconKeys().none { glyphs.resolve(it) == GlyphCache.Pending }
+
+
+    /**
+     * Loads what its icons name; when that is done, looks again at what they name *then* (a prop or source may have
+     * changed a name meanwhile) and loads that too, until nothing is pending: only then is it prepared.
+     */
+    private fun prepareGlyphs() {
+        glyphs.prepare(iconKeys(), wanted = { !disposed }) {
+            if (!glyphsReady()) return@prepare prepareGlyphs()
             prepared = true
             preparedLate = !constructing
             if (preparedLate) host.invalidateAll()
@@ -152,7 +166,6 @@ class ComponentView(
             whenPrepared.clear()
             applied()
         }
-        constructing = false
     }
 
     /** Seen or not (the view's alpha: composed and drawn either way; never the window's parameters). */

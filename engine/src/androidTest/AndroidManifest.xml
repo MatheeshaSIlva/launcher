@@ -4,4 +4,8 @@
     <queries>
         <provider android:authorities="dev.launcher.app.shell" />
     </queries>
+    <application>
+        <!-- T-005's attached icon reveal (IconRevealProof): an empty window of the test APK's own. -->
+        <activity android:name="dev.launcher.engine.ui.ProofActivity" android:exported="false" />
+    </application>
 </manifest>

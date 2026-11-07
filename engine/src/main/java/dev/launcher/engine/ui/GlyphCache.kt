@@ -38,6 +38,8 @@ class GlyphCache<G : Any>(
     @Volatile private var inFlight: Set<Key> = emptySet()
     private val waiting = ArrayList<Waiter>()
     private var disposed = false
+    /** Requesters waiting now (the waiters' bound's test). */
+    val waiters: Int get() = waiting.size
     /** Loads started (each key at most once while the cache lives): the test's measure of "never prepared again". */
     @Volatile var loads = 0; private set
 
@@ -75,7 +77,6 @@ class GlyphCache<G : Any>(
         if (disposed) return false
         val all = keys.flatMapTo(LinkedHashSet()) { k -> if (k.set == FALLBACK) listOf(k) else listOf(k, Key(FALLBACK, k.symbol)) }
         if (keys.none { resolve(it) == Pending }) { done(); return true }
-        waiting += Waiter(keys.toSet(), wanted, done)
         for (k in all) if (valid(k) && snapshot[k] == null && !inFlight.contains(k)) {
             if (snapshot.size + inFlight.size >= MAX_KEYS) { full = true; break }
             inFlight += k
@@ -87,6 +88,13 @@ class GlyphCache<G : Any>(
             })
         }
         if (full) settle()   // what could not be loaded is absent now: its waiters hear at once
+        // The cache just filled: what this requester asked for is absent for good, so it hears now and never waits.
+        if (keys.none { resolve(it) == Pending }) { done(); return true }
+        // A requester that moved on no longer waits (a name flipping while its loads are held adds nothing), and the
+        // waiters stay bounded: past MAX_WAITERS the oldest is dropped untold (it draws when anything redraws it).
+        waiting.removeAll { !it.wanted() }
+        while (waiting.size >= MAX_WAITERS) waiting.removeAt(0)
+        waiting += Waiter(keys.toSet(), wanted, done)
         return false
     }
 
@@ -107,6 +115,8 @@ class GlyphCache<G : Any>(
         const val FALLBACK = "statusbar"
         /** How many glyphs (found, missing or loading) one component may ever ask for: its icons' names come from data. */
         const val MAX_KEYS = 256
+        /** Requesters that may wait at once (a component's icons and its preparation). */
+        const val MAX_WAITERS = 256
         /** An icon set's id (a file name under `icons/`, no separator, no dot) and a symbol's name (`wifi.3`, `cell.off`). */
         private val SET = Regex("[a-z0-9][a-z0-9_-]{0,63}")
         private val SYMBOL = Regex("[a-z0-9][a-z0-9._-]{0,63}")
