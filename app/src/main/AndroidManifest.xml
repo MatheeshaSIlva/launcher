@@ -236,6 +236,13 @@
                 android:value="Safety watchdog heartbeat: restores the system status bar and animations if the launcher stops." />
         </service>
 
+        <!-- Our own shell process hands its binder back here (T-001 slice 2b). Exported with no permission on purpose: it
+             answers one method, only to uid 2000 holding the live start attempt's capability; everything else refuses. -->
+        <provider
+            android:name="dev.launcher.app.ShellBinderProvider"
+            android:authorities="${applicationId}.shell"
+            android:exported="true"
+            android:multiprocess="false" />
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"

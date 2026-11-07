@@ -1,0 +1,131 @@
+package dev.launcher.engine.shell
+
+import android.content.AttributionSource
+import android.os.Binder
+import android.os.Bundle
+import android.os.IBinder
+import android.os.Looper
+import android.os.SystemClock
+import android.system.Os
+import android.system.OsConstants
+import android.system.StructPollfd
+import android.util.Log
+import dev.launcher.app.ShellService
+import java.io.FileDescriptor
+import java.io.File
+import kotlin.system.exitProcess
+
+/**
+ * The launcher's own shell process (T-001 slice 2b): `app_process` runs [main] as uid 2000 from an ADB `shell:` stream
+ * (`exec app_process -Djava.class.path='<APK>' /system/bin --nice-name=launcher-shell dev.launcher.engine.shell.Starter`).
+ * It reads the start attempt's capability from stdin (one line, never argv or the environment), detaches from the
+ * stream, makes a [ShellService] and hands its binder to the launcher's provider ([AUTHORITY], [METHOD]); the reply holds
+ * the launcher's token, and the process exits when the launcher dies (Shizuku's `daemon(false)`). One deadline,
+ * [DEADLINE_MS] from start, enforced by its own thread whatever the main thread is blocked in.
+ */
+object Starter {
+    private const val TAG = "LauncherShell"
+    /** The launcher's package (fixed: the starter never takes it from the stream). No rename until D-070's step. */
+    const val PACKAGE = "dev.launcher.app"
+    const val AUTHORITY = "$PACKAGE.shell"
+    const val METHOD = "shell-binder"
+    const val DEADLINE_MS = 20_000L
+    const val READ_MS = 5_000L
+    /** The capability's line: 64 hex digits and LF (the parser is CapabilityReader's, slice 2a). */
+    private const val MAX_LINE = 128
+
+    @Volatile private var ready = false
+
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val started = SystemClock.elapsedRealtime()
+        watchdog(started)
+        val line = try { readLine(started + READ_MS) } catch (t: Throwable) { fail("stdin: ${t.javaClass.simpleName}") }
+        val before = fds()
+        detach()
+        Log.i(TAG, "detached; fds before ${before.joinToString()} after ${fds().joinToString()}")
+        Looper.prepareMainLooper()
+        val service = ShellService()
+        val reply = try { handOver(service, line) } catch (t: Throwable) { fail("handover: ${t.javaClass.simpleName}: ${t.message}") }
+        val token = reply?.getBinder("token") ?: fail("handover refused")
+        try { token.linkToDeath({ Log.i(TAG, "launcher gone: exiting"); exitProcess(0) }, 0) } catch (t: Throwable) { fail("link") }
+        ready = true
+        Log.i(TAG, "ready in ${SystemClock.elapsedRealtime() - started} ms")
+        Looper.loop()
+    }
+
+    private fun fail(why: String): Nothing {
+        Log.w(TAG, "start failed: $why")
+        exitProcess(1)
+    }
+
+    private fun watchdog(started: Long) = Thread({
+        val left = started + DEADLINE_MS - SystemClock.elapsedRealtime()
+        if (left > 0) try { Thread.sleep(left) } catch (_: InterruptedException) { }
+        if (!ready) { Log.w(TAG, "start failed: deadline"); exitProcess(2) }
+    }, "starter-deadline").apply { isDaemon = true; start() }
+
+    /** One line from fd 0, at most [MAX_LINE] bytes, by [until] (elapsed realtime): polled, never a blocking read. */
+    private fun readLine(until: Long): String {
+        val buf = ByteArray(MAX_LINE)
+        var n = 0
+        while (true) {
+            val left = until - SystemClock.elapsedRealtime()
+            if (left <= 0) throw IllegalStateException("timeout")
+            val pfd = StructPollfd().apply { fd = FileDescriptor.`in`; events = OsConstants.POLLIN.toShort() }
+            if (Os.poll(arrayOf(pfd), left.toInt()) == 0) continue
+            val got = Os.read(FileDescriptor.`in`, buf, n, buf.size - n)
+            if (got <= 0) throw IllegalStateException("eof")
+            n += got
+            val lf = (0 until n).firstOrNull { buf[it] == '\n'.code.toByte() }
+            if (lf != null) return String(buf, 0, lf, Charsets.US_ASCII)
+            if (n == buf.size) throw IllegalStateException("too long")
+        }
+    }
+
+    /** A session of its own; 0, 1 and 2 onto /dev/null, so the stream sees its end. Nothing the runtime opened is touched. */
+    private fun detach() {
+        try { Os.setsid() } catch (t: Throwable) { Log.i(TAG, "setsid: ${t.message}") }
+        val nul = Os.open("/dev/null", OsConstants.O_RDWR, 0)
+        for (fd in 0..2) Os.dup2(nul, fd)
+        Os.close(nul)
+    }
+
+    private fun fds(): List<String> = File("/proc/self/fd").list().orEmpty().map { it.toInt() }.sorted().map { fd ->
+        "$fd=" + try { Os.readlink("/proc/self/fd/$fd") } catch (_: Throwable) { "?" }
+    }
+
+    @androidx.annotation.RequiresApi(31)
+    private fun attribution(): AttributionSource = AttributionSource.Builder(Os.getuid()).setPackageName("com.android.shell").build()
+
+    /** The provider's `call` with the binder and the capability, through the two adapters (Android 10+, 12+). */
+    private fun handOver(service: IBinder, capability: String): Bundle? {
+        val am = Class.forName("android.app.IActivityManager\$Stub").getMethod("asInterface", IBinder::class.java)
+            .invoke(null, Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java)
+                .invoke(null, "activity") as IBinder)!!
+        val token = Binder()
+        val get = am.javaClass.methods.first { it.name == "getContentProviderExternal" && it.parameterTypes.size == 4 }
+        Log.i(TAG, "adapter: ${get.name}${get.parameterTypes.joinToString(",", "(", ")") { it.simpleName }}")
+        val holder = get.invoke(am, AUTHORITY, 0, token, "launcher-shell") ?: throw IllegalStateException("no provider")
+        try {
+            val provider = holder.javaClass.getField("provider").get(holder)!!
+            val extras = Bundle().apply { putBinder("binder", service); putString("capability", capability) }
+            val call = if (android.os.Build.VERSION.SDK_INT < 31) null else provider.javaClass.methods.firstOrNull {
+                it.name == "call" && it.parameterTypes.size == 5 && it.parameterTypes[0].name == "android.content.AttributionSource"
+            }
+            Log.i(TAG, "adapter: call${call?.parameterTypes?.joinToString(",", "(", ")") { it.simpleName }}; all: " +
+                provider.javaClass.methods.filter { it.name == "call" }.joinToString { m -> m.parameterTypes.joinToString(",", "(", ")") { it.simpleName } })
+            return if (call != null) {
+                call.invoke(provider, attribution(), AUTHORITY, METHOD, null, extras) as Bundle?
+            } else {
+                provider.javaClass.methods.first { it.name == "call" && it.parameterTypes.size == 6 }
+                    .invoke(provider, "com.android.shell", null, AUTHORITY, METHOD, null, extras) as Bundle?
+            }
+        } finally {
+            try {
+                am.javaClass.methods.first { it.name == "removeContentProviderExternal" && it.parameterTypes.size == 2 }
+                    .invoke(am, AUTHORITY, token)
+            } catch (t: Throwable) { Log.w(TAG, "release: ${t.javaClass.simpleName}") }
+        }
+    }
+}

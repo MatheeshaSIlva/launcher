@@ -772,6 +772,28 @@ both claude entries above. In short:
 
 ## 5. Reports
 
+### claude — 2b gate measurements, 2026-11-07 (emulator, Android 17 sdk 37, x86_64; host adb `shell -T`, not yet our client)
+
+Measured with a measurement build on `team/claude/t001-starter` (the provider accepting any uid-2000 call; never to
+`engine` in that form):
+- **Adapters pass.** `getContentProviderExternal(String,int,IBinder,String)` exists and returned our provider; its
+  `call` overloads are `(String,String,String,Bundle)` and `(AttributionSource,String,String,String,Bundle)`; the
+  latter with `AttributionSource.Builder(2000).setPackageName("com.android.shell")` delivered the binder: the launcher
+  logged `identity()` as `uid=2000 ... android=17 sdk=37`. Start to ready: **61 ms**. Hidden-API reflection from
+  `app_process` as shell was not blocked.
+- **`setsid` is refused (EPERM) and not needed**: adbd already makes its child a session leader before the `exec`.
+  Kept as a best-effort call, logged; the plan's "then setsid" is corrected to this.
+- **The stream does not end at stdout's EOF.** adbd waits for its child, so the stream stays open while the starter
+  lives. It ends when the client closes it: with the host's adb client killed, the starter **survived** (alive, parent
+  adbd, no exit logged). So the app closes the stream itself once the handover is accepted (before the attempt's 15 s,
+  inside the 30 s transport bound). To repeat with our own v1 `shell:` client in the proof.
+- **Descriptors.** Before cleanup: 0 and 1 = one socket, 2 = another (adbd's), 3 = a unix datagram socket (the log's
+  writer: not in adbd's table), 5/6 = a pipe (not adbd's), the runtime's jars, binder (59). After `dup2` of
+  `/dev/null` onto 0-2: no descriptor shared with adbd remains, binder untouched. So "close only measured ADB
+  descriptors" is: none beyond 0-2 on Android 17.
+- Not yet measured: a working service call after the stream's close (the provider kept the binder; the call comes with
+  the `TEST_SHELL` route), our own client, the S24.
+
 ## 6. Cross-check
 
 ## 7. Sign-off
