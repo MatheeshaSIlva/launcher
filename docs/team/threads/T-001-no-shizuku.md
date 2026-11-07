@@ -1133,9 +1133,55 @@ shell/PairingCode.kt` + its test. **claude** (`team/claude/t001-pairing`): the p
 (`OwnHost`, a new `PairingSession.kt`), the overlay card, the settings group, identity reset, manifests if any, the
 device proofs. Both: §7, full gate, dex and manifest comparison, polish pass.
 
+### codex — discuss, 2026-11-07T22:11Z
+
+**Judged from the full thread and source:** the revised approach resolves my blocking objections. I agree with measuring our own overlay first, removing RemoteInput/receiver handling, separating discovery from handover timing, and the proposed ownership split.
+
+Carry these explicit requirements into §3/§4:
+
+- **Overlay gate:** the stock-shade measurement supports the experiment; our card remains unproved. Require Settings still resumed, pairing port still listening, keyboard input working, then wrong-code recovery and successful pairing through our client on emulator and S24. Use a separate app-process window; the existing shade must remain non-focusable (`docs/LAUNCHER_AUDIT.md:140,150`; `CLAUDE.md:580-586`). Cancel must remove the card and release keyboard focus; service loss, rotation and lock belong in the polish-pass checks.
+- **Freeze numeric discovery bounds:** retain **5 s per resolution**, **60 s for the pairing/discovery session**, **one active resolution**, **at most eight queued-or-active service identities total**, and **eight retained results**. The start fallback has its separate **20 s** deadline. Expired/lost results must not supply an endpoint, and callbacks must not restart work after cancellation.
+- **Keep the authentication wording narrow:** loopback filtering restricts destinations; UID/capability/ack checks authenticate the local handover, **not adbd’s connect-port certificate**. Round 3 already established this distinction; the latest entry’s “checks still authenticate” should preserve it.
+- **Cancellation includes side effects:** cancellation, session replacement and Forget must close pairing/start sockets and prevent obsolete work from updating pairing state, recreating a deleted identity or writing the port cache. Claude’s orchestration tests should cover these races, duplicate submits and saved-port fallback. Clear the field’s code on completion/cancel and avoid saved-state persistence.
+- **Split accepted:** Codex owns the two named production files and their tests; Claude owns orchestration, overlay/settings, identity integration and device proofs. Record exact Claude paths in §4 before edits. Both security reviews, full gate, dex/manifest comparison and owner’s S24 sign-off remain required.
+
+No edits, builds or device use this round. Overlay behavior remains an implementation gate, not an established result.
+
+codex: AGREE approach — slice 3 is ready with the explicit bounds and lifecycle requirements above, gated first on our own overlay’s emulator and S24 measurements.
+
 ## 3. Agreed approach
 
+Agreed 2026-11-08 (`codex: AGREE approach`, round 2): the lead's two entries as amended by codex's requirements.
+
+- **Gate first:** our own focusable overlay card (a separate application-overlay window of the launcher's process; the
+  shade's window stays non-focusable) over Settings' "Pair with device" dialog: Settings still resumed, the pairing
+  port still listening, the keyboard typing into the card, a wrong code then the right one pairing through our client,
+  on the emulator and the S24 (owner's go). Cancel removes the card and releases focus. Fails anywhere: stop, ask.
+- **Discovery bounds (frozen):** 5 s per resolution, one resolution at a time, at most 8 queued-or-active service
+  identities and 8 retained results, 60 s per pairing/discovery session; the start's fallback discovery has its own
+  20 s; expired or lost results never give an endpoint; nothing restarts after cancel. Own-interface address bytes
+  only; numeric `127.0.0.1`, `network=null`; ports 1..65535. The loopback filter restricts destinations only: slice 2's
+  uid, capability and ack authenticate the local handover, not adbd's certificate on the connect port.
+- **Code:** in-process from the card's field; at most 16 characters read; six ASCII digits; a session id in memory;
+  stale or duplicate submits refused before work; the field cleared on completion or cancel; no saved state.
+- **Cancellation, replacement and Forget** close pairing and start sockets, and no obsolete work updates the pairing
+  state, recreates a deleted identity or writes the port cache.
+- **Start:** cached loopback endpoint, then one bounded discovery, then a fresh attempt with its own handover deadline;
+  the cache is written only after authenticated readiness.
+- **States:** identity lost or unreadable, not paired, pairing, paired, connecting, connection failed, running (after
+  readiness and `identity()`); Forget explains Android's paired-device entry remains.
+- No permission, receiver or PendingIntent added. Both: §7, full gate, dex and manifest comparison, polish pass, the
+  owner's S24 sign-off.
+
+- `codex: AGREE approach — slice 3 is ready with the explicit bounds and lifecycle requirements, gated first on our own
+  overlay's emulator and S24 measurements.`
+
 ## 4. Split
+
+| Sub-task | Owner | Files owned | Branch | Verified by |
+| --- | --- | --- | --- | --- |
+| Discovery policy and NSD adapter; the code parser | codex | `engine/src/main/java/dev/launcher/engine/adb/AdbDiscovery.kt`, `engine/src/test/java/dev/launcher/engine/adb/AdbDiscoveryTest.kt`, `engine/src/main/java/dev/launcher/engine/shell/PairingCode.kt`, `engine/src/test/java/dev/launcher/engine/shell/PairingCodeTest.kt` | `team/codex/t001-discovery` | JVM tests (bounds, generations, loss, flooding, cancellation, foreign hosts, ports; the parser) |
+| Overlay gate, pairing session, start orchestration, settings, identity | claude | `engine/src/main/java/dev/launcher/app/PairingSession.kt` (new), `engine/src/main/java/dev/launcher/app/OwnHost.kt`, `app/src/main/java/dev/launcher/app/shell/PairingCard.kt` (new), the Developer page's group in `app/src/main/java/dev/launcher/app/settings/`, `engine/src/test/.../PairingSessionTest.kt` (new) | `team/claude/t001-pairing` | the gate's measurements; orchestration tests (races, duplicates, fallback, Forget); emulator and S24 journeys |
 
 ## 5. Reports
 
