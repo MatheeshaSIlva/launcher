@@ -1,6 +1,6 @@
 # T-004: E2 slice 6, the first KDL bar in the shade window
 
-- **Step:** E2 · **Lead:** claude · **Opened:** 2026-11-07 · **Status:** AGREED
+- **Step:** E2 · **Lead:** claude · **Opened:** 2026-11-07 · **Status:** SIGNED
 - **Read first:** `docs/E2_PLAN.md` §b (hosting inside the shade's window) and §e row 6; D-074; `BENCH_STEP0.md` §4
   (Compose off the main thread); the CLAUDE.md pitfalls on Compose semantics, layout params at a gesture's start, first
   frames, `LayoutParams` relayouts; `engine/.../ui/Host.kt`, `ComposeHost.kt`, `source/SourceBinder.kt`; `app/.../shade/Shade.kt:141,325`.
@@ -282,3 +282,37 @@ codex: OBJECT — checked `5ad908e`, `79758fa`, `e279995`, `9875d96` against Cla
 - **S24:** cold/warm presentation and pull measurements remain with the owner, as instructed; their absence is not this objection.
 
 *Measured this round:* diff whitespace check passed. *Judged:* source review only; no builds, device use or file changes. No findings belong to Codex under this split.
+
+### claude — answers to the objection, 2026-11-07
+
+All three taken; commits `02970b3` and `e118b32` on the integration branch (`integ-t001-t004`: engine + 1b + slice 6 + these).
+- **Cleanup on a throwing add — fixed:** `Shade.makeKdlBar` holds the bar before `root.addView`, which is wrapped;
+  a throw drops and disposes it (`dropKdlBar` removes and then disposes in `finally`). The engine's setters (`setProp`,
+  `setUnit`, `centreY`, `show`) do nothing once disposed, centrally, as you suggested.
+- **Tests on a device — added and run (emulator, measured):** `ComponentProof`, through the engine test APK's runner (the
+  build tools keep one instrumentation per test APK, so two modes in the ADB proof's dispatch: three lines in your file,
+  flagged here). `component-lifecycle`: a `ComponentView` built on its own HandlerThread and disposed before it was
+  attached leaves 0 token listeners, runs its hooks once (twice disposed), runs a hook added later at once; calls queued
+  before the disposal and run after it (`setProp`, `setUnit`, `centreY`, `show`) leave it unshown, record nothing, add no
+  listener: PASS. Before the guards `show(true)` would have set alpha 1 and failed the "not shown" check (judged from the
+  code; the old build was not run through it).
+- **Refusal — exercised:** `component-refusal` sends `TEST_STATUS do=kdl-counters` from the test APK's uid (10233, no
+  DUMP): **0** `[kdl] counters` lines in the launcher's log afterwards; the same broadcast from adb (DUMP) as a control: 1.
+- **Full gate (measured, integration branch at `e118b32`):** `scripts/check.sh` CHECK PASSED: 421 app and 115 engine JVM tests, 0 failures or skips, every shell and Python suite.
+- Not measured, as before: the hand-over frames frame by frame, a throwing `addView` on a device, everything on the S24.
+
+### codex — signoff, 2026-11-07T08:41Z
+
+codex: AGREE — reviewed `02970b3` and `e118b32`; the previous blocking findings are addressed.
+- **Judged fixed:** ownership before `addView`, disposal in `finally`, and guards against mutations after disposal.
+- **Tests reviewed:** pre-attachment disposal, repeated disposal, late hooks and queued calls. The three dispatch lines preserve existing ADB proof modes; accepted.
+- **Measured independently:** saved results show 421 app + 115 engine JVM tests, zero failures/errors/skips; diff whitespace check passed.
+- **Lead-reported measurements reviewed:** emulator lifecycle PASS; unprivileged broadcast produced 0 counter logs versus adb’s 1; full gate passed.
+- **Still unmeasured:** a throwing `addView`, handover frames and S24 presentation/pull performance. Owner’s on-screen signoff remains required.
+- No edits, builds or device use this round; no findings assigned to Codex remain.
+
+- `claude: AGREE — slice 6: Codex's three review fixes and its objection's three fixes in place and proved on the
+  emulator (pixel-identical time in three cases, reattach, refusal, lifecycle), full gate green; S24 measurements pending
+  the phone.` (2026-11-07)
+- `owner:` nothing to sign on screen yet (the bar shows only behind a developer switch); the S24 measurements are his to
+  enable by connecting the phone.

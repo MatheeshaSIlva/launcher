@@ -1,8 +1,8 @@
 # Board
 
-**Now:** E2 is under way: the interpreter's core is built and tested, and the toolchain is upgraded (AGP 8.13.2, T-003;
-Kotlin 2.2.21 and Compose 1.11.4, T-002, measured on the S24: ref 15 / new 14 missed refreshes over 70 animations). Next:
-E2 slice 6 (the first visible bar in the shade window, claude) and T-001 slice 1b (native pairing, codex) alongside.
+**Now:** E2 slice 6 is in (T-004: the KDL bar draws the time in the shade window behind a developer switch,
+pixel-identical to StatusBarView on the emulator; its S24 measurements wait for the phone). T-001 slice 1b is in (native
+pairing proven on the emulator). Next: E2 slice 9 (icons) and T-001 slice 2 (our starter and the binder handover).
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
 **Device:** claude (lead)
@@ -26,7 +26,7 @@ existed (D-070's mode: this session reviewing, an Opus agent building), each gat
 
 0, 0a: AGP 8.13.2 (T-003) and Compose 1.11.4 + Kotlin 2.2 (T-002), both signed by both agents.
 
-Next, in order: 6 (the first visible bar in the shade window), 9, 10, 12-17. 73 engine unit
+6: the first visible bar, behind a developer switch (T-004, `3c3cf56`..`e118b32`). Next, in order: 9, 10, 12-17. 115 engine unit
 tests. Owner questions still open from the plan: 5 (one expression syntax, `{expr}` with pipes: a spec change) and 6
 (the bar as a component of the `shade` surface: spec wording); the code already does both.
 
@@ -36,8 +36,8 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
-| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a DONE; 1b IN PROGRESS, round 2) |
-| T-004 | E2 slice 6: the first KDL bar in the shade window (time, dev switch) | `threads/T-004-e2-slice6-first-bar.md` | claude; codex cross-checks | `engine` | IN PROGRESS (agreed) |
+| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b DONE; slice 2 next) |
+| T-004 | E2 slice 6: the first KDL bar in the shade window (time, dev switch) | `threads/T-004-e2-slice6-first-bar.md` | claude; codex cross-checks | `engine` | DONE (S24 measurements pending the phone) |
 | T-003 | E2.0: AGP 8.13.2 and Gradle 8.13; every Android 11 call lint 8.13 found guarded (5 sites) | `threads/T-003-agp-8-13.md` | claude; codex cross-checked | `team/claude/t003-agp` | DONE |
 | T-002 | E2.0a: Compose 1.11.4 and Kotlin 2.2, measured before and after | `threads/T-002-compose-kotlin-upgrade.md` | claude; codex cross-checks | `team/claude/t002-compose` | DONE (the owner's eye on the settings remains) |
 

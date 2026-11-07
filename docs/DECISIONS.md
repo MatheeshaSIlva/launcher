@@ -915,3 +915,35 @@ limited as Codex required: both builds hit the slow GPU mode equally often, and 
 Codex's dissent on the idle check stands as a recorded limit: injected input cannot be told apart from the owner's
 without root, so focus checks guard each gesture instead. Not verified: text editing, focus and semantics beyond the
 scenarios. The owner's look at the settings is the remaining check.
+
+## D-078: T-001 slice 1b landed: native ADB pairing, Android 12+ (2026-11-07, Codex with the lead)
+
+Within the owner's yes of 2026-11-06 (native route, BoringSSL via prefab, libc++, bcpkix-jdk15on 1.70, Android 12+ only).
+Choices made without the owner:
+- NDK **29.0.14206865 (r29 stable)** rather than upstream's 29.0.13113456, which Google's repository lists as r29-beta1;
+  CMake 3.22.1; both installed from Google's repository on the owner's machine, SHA-1 checked;
+- all four production ABIs kept (Codex: dropping 32-bit would be scope the owner's yes did not cover);
+- the adb identity is a software RSA-2048 key wrapped by an Android Keystore AES-256-GCM key in an atomic file under
+  `noBackupFilesDir`, with an explicit "identity lost, pair again" result instead of upstream's silent regeneration;
+- only the TLS (STLS) connection, no plaintext AUTH; every connect, handshake, read and operation is bounded (30 s per
+  operation).
+Measured: emulator (test APK uid) pairs, runs `shell:id` as uid 2000, reloads the key in a fresh process, refuses a wrong
+code; our process logs no code (Android's system server logs every code it shows). APK 23.7 to 32.0 MB universal
+(+5.1 to 5.5 MB per single-ABI install). Open for slice 2: nothing authenticates adbd on the connect port, so the
+binder handover's one-time capability carries that weight; the launcher's uid and the S24 are not yet tried.
+
+## D-079: E2 slice 6 landed: the first KDL bar, behind a developer switch (T-004, 2026-11-07, lead with Codex)
+
+The engine draws the time in the shade window in StatusBarView's place while `TEST_STATUS --es do kdl --ez on true`
+is set (adb, DUMP senders; StatusBarView stays everyone's bar). Choices made without the owner:
+- a component in a window it does not own gets **its own Recomposer** on the window's thread (Compose's window recomposer
+  reads the root's lifecycle owner, and the shade's root has none);
+- a component is disposed **only by its owner**, never on a view detach: Android tears a removed window down only when
+  the next is added, and a view added in between was detached with the dying window;
+- `Layout.row` with `centre-line` reports the line its highest child really sits on (whole pixels of slack), and the
+  fraction left by whole-pixel placement moves by the root node's translation;
+- the slice landed as four commits (about 35, 296, 17 and 145 production lines);
+- the component's device checks run through the engine test APK's one runner (three lines in the ADB proof's dispatch).
+Measured on the emulator: the KDL time is pixel-identical to StatusBarView's (max channel difference 0) in iOS 27's
+Inter, Pixel's Google Sans Flex and landscape; 0 frames at rest; one repaint per minute; the switch's broadcast from a uid
+without DUMP is not delivered. Not measured: anything on the S24 (pull frame stats, cold and warm first presentation).
