@@ -51,8 +51,10 @@ object ShizukuLink {
 
     fun init(app: android.app.Application) {
         this.app = app
-        host = ShizukuHost()
+        host = if (OwnHost.selected(app)) OwnHost() else ShizukuHost()
+        AppLog.log("[shell] host: ${host.javaClass.simpleName}")
         host.init(app, sink, ++generation)
+        OwnHost.registerTestRoute(app)
     }
 
     /** What runs once a host has given us a service, the same for every host. */

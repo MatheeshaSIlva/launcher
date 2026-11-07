@@ -28,24 +28,22 @@ object Starter {
     /** The launcher's package (fixed: the starter never takes it from the stream). No rename until D-070's step. */
     const val PACKAGE = "dev.launcher.app"
     const val AUTHORITY = "$PACKAGE.shell"
-    const val METHOD = "shell-binder"
+    const val METHOD = StartAttempt.HANDOVER_METHOD
     const val DEADLINE_MS = 20_000L
     const val READ_MS = 5_000L
-    /** The capability's line: 64 hex digits and LF (the parser is CapabilityReader's, slice 2a). */
-    private const val MAX_LINE = 128
-
     @Volatile private var ready = false
 
     @JvmStatic
     fun main(args: Array<String>) {
         val started = SystemClock.elapsedRealtime()
         watchdog(started)
-        val line = try { readLine(started + READ_MS) } catch (t: Throwable) { fail("stdin: ${t.javaClass.simpleName}") }
+        val line = try { CapabilityReader.read(PolledInput(started + READ_MS)) } catch (t: Throwable) { fail("stdin: ${t.javaClass.simpleName}") }
         val before = fds()
         detach()
         Log.i(TAG, "detached; fds before ${before.joinToString()} after ${fds().joinToString()}")
         Looper.prepareMainLooper()
         val service = ShellService()
+        service.onlyUid = try { launcherUid() } catch (t: Throwable) { fail("launcher uid: ${t.javaClass.simpleName}") }
         val reply = try { handOver(service, line) } catch (t: Throwable) { fail("handover: ${t.javaClass.simpleName}: ${t.message}") }
         val token = reply?.getBinder("token") ?: fail("handover refused")
         try { token.linkToDeath({ Log.i(TAG, "launcher gone: exiting"); exitProcess(0) }, 0) } catch (t: Throwable) { fail("link") }
@@ -65,22 +63,30 @@ object Starter {
         if (!ready) { Log.w(TAG, "start failed: deadline"); exitProcess(2) }
     }, "starter-deadline").apply { isDaemon = true; start() }
 
-    /** One line from fd 0, at most [MAX_LINE] bytes, by [until] (elapsed realtime): polled, never a blocking read. */
-    private fun readLine(until: Long): String {
-        val buf = ByteArray(MAX_LINE)
-        var n = 0
-        while (true) {
-            val left = until - SystemClock.elapsedRealtime()
-            if (left <= 0) throw IllegalStateException("timeout")
-            val pfd = StructPollfd().apply { fd = FileDescriptor.`in`; events = OsConstants.POLLIN.toShort() }
-            if (Os.poll(arrayOf(pfd), left.toInt()) == 0) continue
-            val got = Os.read(FileDescriptor.`in`, buf, n, buf.size - n)
-            if (got <= 0) throw IllegalStateException("eof")
-            n += got
-            val lf = (0 until n).firstOrNull { buf[it] == '\n'.code.toByte() }
-            if (lf != null) return String(buf, 0, lf, Charsets.US_ASCII)
-            if (n == buf.size) throw IllegalStateException("too long")
+    /** fd 0 as a stream whose every read waits at most until [until] (elapsed realtime): polled, never blocking past it. */
+    private class PolledInput(private val until: Long) : java.io.InputStream() {
+        private val one = ByteArray(1)
+        override fun read(): Int {
+            while (true) {
+                val left = until - SystemClock.elapsedRealtime()
+                if (left <= 0) throw java.io.IOException("timeout")
+                val pfd = StructPollfd().apply { fd = FileDescriptor.`in`; events = OsConstants.POLLIN.toShort() }
+                if (Os.poll(arrayOf(pfd), left.toInt()) == 0) continue
+                return if (Os.read(FileDescriptor.`in`, one, 0, 1) <= 0) -1 else one[0].toInt() and 0xFF
+            }
         }
+    }
+
+    /** The launcher's uid from the package manager, by the fixed [PACKAGE] (never from the stream). */
+    private fun launcherUid(): Int {
+        val pm = Class.forName("android.content.pm.IPackageManager\$Stub").getMethod("asInterface", IBinder::class.java)
+            .invoke(null, Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java)
+                .invoke(null, "package") as IBinder)!!
+        val get = pm.javaClass.methods.first { it.name == "getPackageUid" && it.parameterTypes.size == 3 }
+        val flags: Any = if (get.parameterTypes[1] == java.lang.Long.TYPE) 0L else 0
+        val uid = get.invoke(pm, PACKAGE, flags, 0) as Int
+        check(uid >= 10000) { "no launcher" }
+        return uid
     }
 
     /** A session of its own; 0, 1 and 2 onto /dev/null, so the stream sees its end. Nothing the runtime opened is touched. */

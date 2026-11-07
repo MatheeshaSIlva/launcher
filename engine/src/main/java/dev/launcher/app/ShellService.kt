@@ -18,6 +18,12 @@ import kotlin.system.exitProcess
  */
 class ShellService : IShellService.Stub() {
 
+    /**
+     * Our own host's process (T-001 slice 2b) serves only the launcher's uid, set by its starter from the launcher's
+     * fixed package; -1 under Shizuku, whose user service keeps its behaviour.
+     */
+    @Volatile var onlyUid: Int = -1
+
     override fun destroy() {
         exitProcess(0)
     }
@@ -167,6 +173,9 @@ class ShellService : IShellService.Stub() {
     private val sent = ThreadLocal<HardwareBuffer?>()
 
     override fun onTransact(code: Int, data: android.os.Parcel, reply: android.os.Parcel?, flags: Int): Boolean {
+        val only = onlyUid
+        if (only >= 0 && code in FIRST_CALL_TRANSACTION..LAST_CALL_TRANSACTION && Binder.getCallingUid() != only)
+            throw SecurityException("not the launcher")
         try {
             return super.onTransact(code, data, reply, flags)
         } finally {
