@@ -504,3 +504,82 @@ codex: AGREE — reviewed `8293b8e`, round 2’s device proof and §6 cross-chec
 - **Measured evidence reviewed:** saved full gate and declared dex check passed; manifest hashes match. Lead reports emulator selftest, pair, fresh-process reload and wrong-code rejection passed under the test APK UID.
 - **Slice 2 requirements retained:** connect-port TLS does not authenticate the server; binder handover needs its one-time capability. Starter execution must respect the 30-second bound. Test-process logs were clean; system logs exposed the adb-supplied codes.
 - No edits or device use this round. Launcher-UID and S24 behavior remain unverified.
+
+# Round 3: slice 2 (our starter and the binder handover)
+
+## 1. Proposal (lead), 2026-11-07
+
+**Goal.** With wireless debugging paired (1b), the launcher starts its own shell-uid process hosting `ShellService` and
+gets its binder back, with no Shizuku involved, behind a developer switch. Shizuku stays the default host until slice 5.
+The owner (2026-11-07): carry on with slice 2.
+
+**Approach.**
+
+1. *`ShellHost`* (`dev.launcher.app`, beside `ShizukuLink`): the interface the rest of the app sees today through
+   `ShizukuLink` (`service`, `state()`, `connect()`, `awaitService`, listeners, `clientToken`). `ShizukuLink` keeps its
+   name and its 74 call sites; inside, it holds the active host: `ShizukuHost` (today's code, moved, unchanged) or
+   `OwnHost` (new). The choice is a developer switch (adb broadcast with the DUMP sender check, as T-004's), read at start;
+   default Shizuku. Everything that runs on connect (`grantSelf`, `Watchdog.sync`, flags) runs the same for both.
+2. *The starter* (`dev.launcher.engine.shell.Starter`, a `main()` run by `app_process` as uid 2000): prepares a main
+   looper, makes a `ShellService`, hands its binder to the app (step 3), links to the death of the app's token and exits
+   when the app dies (Shizuku's `daemon(false)` behaviour, so no orphan; boot restart is slice 4), then loops. A new
+   build replaces an old process (the build stamp is in the handover; the app destroys a service of another build).
+3. *The handover.* The app starts an attempt: a 32-byte random capability from `SecureRandom`, kept in memory with a
+   15 s expiry, one use. It opens an ADB `shell:` stream (1b's client) running
+   `CLASSPATH=<our APK's sourceDir> setsid app_process /system/bin --nice-name=launcher-shell
+   dev.launcher.engine.shell.Starter &` and **writes the capability to the stream's stdin** (never in argv or the
+   environment, which any uid-2000 process can read in `/proc`); the starter reads one line, closes stdin, detaches.
+   The starter calls our package's provider (`IActivityManager.getContentProviderExternal`, as upstream's
+   `ServiceStarter`) with `call("shell-binder", extras = {binder, capability, build})`. The provider
+   (`ShellBinderProvider`, exported, no permission, every other method refuses) accepts only when the calling uid is
+   2000, the capability matches the live attempt in constant time and has not expired; the attempt is consumed whatever
+   the result. A refused call is logged by reason, never with the capability.
+4. *Bounds.* The whole start fits in 1b's 30 s transport bound: the stream closes once the starter has detached; the
+   app waits at most 15 s for the handover, then reports "start timed out" and clears the attempt.
+
+**Why this answers 1b's two notes.** The connect port does not authenticate adbd, so a host answering there gets our
+start command: it learns the capability but cannot use it, since only a uid-2000 process **on this phone** can call our
+provider with it, and the attempt expires and is single-use. The 30 s bound: step 4.
+
+**Verification.**
+- Unit: the attempt (capability length, expiry, single use, constant-time compare, consumed on refusal); the provider's
+  refusals (wrong uid, no attempt, wrong capability, expired, used twice, wrong method), all with fakes, no Android
+  binder; `ShellHost` selection; the starter's stdin read (one line, bounded at 128 bytes, refuses more).
+- Emulator (measured, Android 17, the launcher's own uid this time, not the test APK's): switch on, pair once through the
+  1b proof's runner, start: `identity()` answers `uid=2000`; D-072's emulator list on our host (status bar flags set and
+  dropped with the app's token, animation scales, `runShell`, the watchdog's heartbeat); a second start with the
+  capability replayed is refused; `adb shell` handing a binder with no attempt is refused; force the app's death: the
+  starter exits within 1 s. Then switch off: Shizuku again, nothing else changed (the smoke script).
+- `tools/dexlist.sh` (ShizukuLink's body moves into ShizukuHost; new classes), `scripts/check.sh` full; security
+  checklist (protocol §7) by both.
+- S24: the same start once with the owner's go (Wireless debugging is his phone's setting); reported unverified until then.
+
+**Risks and open questions.**
+- *Manifest:* the provider is a new exported component. No new permission. It is attack surface, so it is in the
+  checklist; any app can call it, and it refuses everything but uid 2000 with a live capability.
+- *adbd's cgroup:* CLAUDE.md's pitfall (adbd restarts SIGKILL what was started through it) applies to our process as it
+  did to Shizuku's; `setsid` does not escape the cgroup. Same answer as before (USB "No data transfer"); slice 4's boot
+  restart covers the rest. Codex: does upstream's starter do anything more here?
+- *`getContentProviderExternal`* is hidden API from the shell's side, as upstream uses it; the shell uid is not subject
+  to our app's hidden-API policy. Codex: check upstream v13.6.0's `ServiceStarter` for the exact call per API level
+  (Android 12 to 17).
+- *stdin over the ADB stream:* 1b's `AdbSession.shell` is one-shot (open, read to close). It needs a write of one line
+  after `OPEN`/`OKAY`; Codex owns `adb/` and is best placed to add `shell(command, stdin)`.
+- *Proposed split:* **codex**: `AdbSession`'s stdin write and its tests; the attempt/capability class and its tests;
+  the starter's stdin reader; the §7 checklist first pass. **claude**: `ShellHost`/`ShizukuHost`/`OwnHost`, the provider,
+  the starter's binder and lifecycle, the manifest entry, the switch, every device check.
+
+## 2. Discussion
+
+## 3. Agreed approach
+
+## 4. Split
+
+| Sub-task | Owner | Files owned | Branch | Verified by |
+| --- | --- | --- | --- | --- |
+
+## 5. Reports
+
+## 6. Cross-check
+
+## 7. Sign-off
