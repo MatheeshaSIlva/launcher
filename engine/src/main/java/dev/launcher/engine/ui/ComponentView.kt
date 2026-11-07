@@ -157,7 +157,7 @@ class ComponentView(
      * changed a name meanwhile) and loads that too, until nothing is pending: only then is it prepared.
      */
     private fun prepareGlyphs() {
-        glyphs.prepare(iconKeys(), wanted = { !disposed }) {
+        glyphs.prepare(iconKeys(), wanted = { !disposed }, by = this) {
             if (!glyphsReady()) return@prepare prepareGlyphs()
             prepared = true
             preparedLate = !constructing

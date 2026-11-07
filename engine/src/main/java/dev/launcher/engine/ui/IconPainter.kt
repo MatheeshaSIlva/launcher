@@ -67,7 +67,7 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
             GlyphCache.Pending -> {
                 if (asked != k) {
                     asked = k
-                    glyphs.prepare(listOf(k), wanted = { current == k }) { arrivals++; arrived.intValue++; Snapshot.sendApplyNotifications() }
+                    glyphs.prepare(listOf(k), wanted = { current == k }, by = this) { arrivals++; arrived.intValue++; Snapshot.sendApplyNotifications() }
                 }
                 null
             }

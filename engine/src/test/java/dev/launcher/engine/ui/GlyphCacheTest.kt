@@ -116,16 +116,30 @@ class GlyphCacheTest {
     }
 
     @Test fun aNameFlippingWhileItsLoadsAreHeldLeavesOneWaiter() {
+        val painter = Any()
         var current = Key("statusbar", "a")
         repeat(1_000) { i ->
             val k = Key("statusbar", if (i % 2 == 0) "a" else "b")
             current = k
-            cache.prepare(listOf(k), wanted = { current == k }) {}
+            cache.prepare(listOf(k), wanted = { current == k }, by = painter) {}
         }
         assertEquals(1, cache.waiters)                                 // the stale ones were dropped
         assertEquals(2, cache.loads)                                   // and nothing loaded twice
-        repeat(500) { i -> cache.prepare(listOf(Key("statusbar", "k$i"))) {} }
-        assertTrue(cache.waiters <= GlyphCache.MAX_WAITERS)            // requesters that all still want it: bounded too
+        repeat(500) { i -> cache.prepare(listOf(Key("statusbar", "k$i")), by = painter) {} }
+        assertEquals(1, cache.waiters)                                 // one requester, one waiter, whatever it asks
+    }
+
+    @Test fun manyIconsWaitingOnOneGlyphNeverPushOutThePreparation() {
+        val k = Key("statusbar", "moon")
+        var prepared = 0
+        var heard = 0
+        cache.prepare(listOf(k), by = "the component") { prepared++ }
+        repeat(300) { cache.prepare(listOf(k), by = Any()) { heard++ } }   // 300 icons on the held glyph
+        assertEquals(301, cache.waiters)
+        all()
+        assertEquals(1, prepared)
+        assertEquals(300, heard)
+        assertEquals(1, cache.loads)
     }
 
     @Test fun nothingCompletesAfterDisposal() {

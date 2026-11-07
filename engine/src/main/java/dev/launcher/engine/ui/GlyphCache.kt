@@ -36,7 +36,11 @@ class GlyphCache<G : Any>(
     /** Owning thread only. */
     /** Loads under way: written by the owning thread only, read by any (an in-flight key stays [Pending] when [full]). */
     @Volatile private var inFlight: Set<Key> = emptySet()
-    private val waiting = ArrayList<Waiter>()
+    /**
+     * At most one waiter per requester ([prepare]'s `by`): a new request replaces its last. So the waiters are bounded by
+     * the requesters, a component's icon painters and its own preparation, and none is ever pushed out by another.
+     */
+    private val waiting = LinkedHashMap<Any, Waiter>()
     private var disposed = false
     /** Requesters waiting now (the waiters' bound's test). */
     val waiters: Int get() = waiting.size
@@ -73,7 +77,7 @@ class GlyphCache<G : Any>(
      * thread once all of them resolve to something other than [Pending], at once if they already do, never after [dispose]
      * or once [wanted] says false. Returns whether [done] already ran.
      */
-    fun prepare(keys: Collection<Key>, wanted: () -> Boolean = { true }, done: () -> Unit): Boolean {
+    fun prepare(keys: Collection<Key>, wanted: () -> Boolean = { true }, by: Any = Any(), done: () -> Unit): Boolean {
         if (disposed) return false
         val all = keys.flatMapTo(LinkedHashSet()) { k -> if (k.set == FALLBACK) listOf(k) else listOf(k, Key(FALLBACK, k.symbol)) }
         if (keys.none { resolve(it) == Pending }) { done(); return true }
@@ -90,11 +94,10 @@ class GlyphCache<G : Any>(
         if (full) settle()   // what could not be loaded is absent now: its waiters hear at once
         // The cache just filled: what this requester asked for is absent for good, so it hears now and never waits.
         if (keys.none { resolve(it) == Pending }) { done(); return true }
-        // A requester that moved on no longer waits (a name flipping while its loads are held adds nothing), and the
-        // waiters stay bounded: past MAX_WAITERS the oldest is dropped untold (it draws when anything redraws it).
-        waiting.removeAll { !it.wanted() }
-        while (waiting.size >= MAX_WAITERS) waiting.removeAt(0)
-        waiting += Waiter(keys.toSet(), wanted, done)
+        // A requester that moved on no longer waits; one that asks again replaces its last request.
+        waiting.values.removeAll { !it.wanted() }
+        waiting.remove(by)
+        waiting[by] = Waiter(keys.toSet(), wanted, done)
         return false
     }
 
@@ -105,9 +108,9 @@ class GlyphCache<G : Any>(
 
     private fun settle() {
         if (disposed) return
-        val ready = waiting.filter { w -> w.keys.none { resolve(it) == Pending } }
-        waiting -= ready.toSet()
-        for (w in ready) if (w.wanted()) w.done()
+        val ready = waiting.entries.filter { (_, w) -> w.keys.none { resolve(it) == Pending } }
+        for (e in ready) waiting.remove(e.key)
+        for ((_, w) in ready) if (w.wanted()) w.done()
     }
 
     companion object {
@@ -115,8 +118,6 @@ class GlyphCache<G : Any>(
         const val FALLBACK = "statusbar"
         /** How many glyphs (found, missing or loading) one component may ever ask for: its icons' names come from data. */
         const val MAX_KEYS = 256
-        /** Requesters that may wait at once (a component's icons and its preparation). */
-        const val MAX_WAITERS = 256
         /** An icon set's id (a file name under `icons/`, no separator, no dot) and a symbol's name (`wifi.3`, `cell.off`). */
         private val SET = Regex("[a-z0-9][a-z0-9_-]{0,63}")
         private val SYMBOL = Regex("[a-z0-9][a-z0-9._-]{0,63}")
