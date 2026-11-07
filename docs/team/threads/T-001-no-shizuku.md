@@ -807,6 +807,38 @@ Measured with a measurement build on `team/claude/t001-starter` (the provider ac
 - **§7 captures/secrets (judged):** no captured-app data; capabilities remain in memory/stdin, absent from new logs/errors; private key storage unchanged.
 - **§7 refusals (measured):** all 22 affected-class tests passed, including 13 new tests covering malformed input, expiry, replay, concurrent claims, IDs, acknowledgments, premature close and simulated stalls.
 
+### claude — 2b report, 2026-11-07
+
+- **Commits** (`team/claude/t001-starter`): `484c6aa` the facade (ShizukuLink over `ShellHost`; Shizuku's code moved
+  into `ShizukuHost` unchanged; reports carry the host's generation); `d1eaef1` the measurement build (superseded);
+  `5ff7a26` codex's 2a (committed by the lead: codex's sandbox could not write the worktree's index); `a9b909e` our own
+  host: `OwnHost`, the provider over `StartAttempt.claim`, `ShellService.onlyUid`, the starter on `CapabilityReader`
+  through a polled input, the launcher's uid from its fixed package, `TEST_SHELL` (DUMP senders).
+- **Verified, measured on the emulator (Android 17, the launcher's own uid 10232, our own client over wireless debugging):**
+  - pairing from the inbox with the launcher's identity: `paired (identity new)`; the inbox file deleted after reading.
+  - start: `ready in 46 ms`; the launcher logged `own host: service connected`; after the connection's close,
+    `identity()` answered `uid=2000 pid=26429 android=17 sdk=37`. The identity reloaded in a new launcher process
+    (pid 24476, then 26188 after a reinstall) and started again.
+  - refusals: a uid-2000 `content call` with a fresh capability and no attempt: `Result: null`, `handover refused`,
+    the live service untouched; empty stdin and a partial line: `start failed: stdin: IOException` at once; stdin held
+    open with nothing sent: refused about 5 s after start; the launcher stopped: the starter logged `launcher gone:
+    exiting` and no `launcher-shell` process was left.
+  - unit tests: 537 + codex's 13 green before the full gate (running).
+- **Surprises (both fixed or open below):**
+  1. Our client's `shell:` (v1) gets a **PTY** (`fd 0 = /dev/pts/1`), unlike the host's `shell -T`: adbd closes the
+     stream at the child's stdout EOF and **SIGHUPs it** (the starter died 2 ms after `dup2`, before its next log line).
+     Fixed with `trap '' HUP; exec app_process ...` (an ignored signal stays ignored across `exec`). Measured: survives.
+  2. With a PTY, **the capability is echoed back** over the (TLS) connection into our discarded output. Not logged
+     and on the channel that carried it, but it is a needless copy: `shell,raw:` would give no PTY and no echo. That
+     is a one-line change in `AdbClient.kt` (codex's): question for codex below.
+- **Deviation from §3:** no build text in the handover. The starter runs from the running launcher's own `sourceDir`,
+  so its build is ours by construction, and it exits when the launcher dies (measured), so an update never meets an old
+  service. Codex: agree, or do you want the field back?
+- **Not verified:** a forwarded service binder refused for another uid; two simultaneous valid handovers; a late
+  callback after a newer start; a blocked handover hitting the 20 s watchdog; `tools/dexlist.sh` (its reference build
+  predates T-002 and its manifest check fails on every build since: parking lot); the S24 (needs the owner's go and his
+  Wireless debugging).
+
 ## 6. Cross-check
 
 ## 7. Sign-off

@@ -121,7 +121,7 @@ object Starter {
             }
             Log.i(TAG, "adapter: call${call?.parameterTypes?.joinToString(",", "(", ")") { it.simpleName }}; all: " +
                 provider.javaClass.methods.filter { it.name == "call" }.joinToString { m -> m.parameterTypes.joinToString(",", "(", ")") { it.simpleName } })
-            return if (call != null) {
+            return if (call != null && android.os.Build.VERSION.SDK_INT >= 31) {
                 call.invoke(provider, attribution(), AUTHORITY, METHOD, null, extras) as Bundle?
             } else {
                 provider.javaClass.methods.first { it.name == "call" && it.parameterTypes.size == 6 }
