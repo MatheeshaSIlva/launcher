@@ -991,3 +991,14 @@ shade fill supplies a bar or inherits the engine default; a bar-only package fil
 is refused with that hint. Also updated: the scope line, the tier line (the shade, its bar included, is Pro), the porting
 gaps (two now: no lock screen, no arbitrary processes) and the Quickshell/AGS/EWW row. How the slot is written in a
 layout file is left to the step that builds layouts (E4).
+
+## D-083: Full Wi-Fi glyph within 3 % of the bar's pixels (2026-11-08, owner) [owner]
+
+T-005 (E2 slice 9). The agreed pixel target for the `statusbar` set against StatusBarView's own drawing was
+`tools/fidelity/diff.py`'s defaults (mean < 2, < 2 % of pixels over 12) per glyph. After the review's fixes 34 of 36
+pairs pass (bolt and airplane pixel-identical, the moon at 1.9 % with arcs as cubics of 15 degrees or less);
+`wifi.3` on white and on black stays at 2.7 % (mean 1.05): a sub-pixel disagreement along one band's edges, no offset
+(coverage centroid within 0.02 px, total coverage within 1 %), invisible side by side. Two attempts did not bring it
+under 2 % (Codex's finer arcs moved it from 2.4 to 2.7 %). The owner: "Accept up to 3%". `wifi.3` is a named exception
+at up to 3 % of pixels over 12; every other glyph keeps the defaults. The owner still signs the bar off on the S24 once
+it draws these glyphs (slices 10 and 11).

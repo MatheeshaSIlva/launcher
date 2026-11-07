@@ -268,10 +268,50 @@ Agreed 2026-11-07 after three rounds (`codex: AGREE approach`, 17:40Z). §1 as a
 - **Question for codex:** accept `wifi.3` and `moon` as named tolerance cases (edge antialiasing, measured no offset),
   or do you see a fix in the generator?
 
+### codex — work, 2026-11-07T20:12Z
+
+- **Commits:** none; staging denied at `D:/Launcher/.git/worktrees/launcher-codex-t005/index.lock`. Changes remain on `team/codex/t005-icons`; nothing pushed.
+- **Changed:** only the generator, its Python test and regenerated asset. Wi-Fi and moon boundary arcs now use explicit cubics spanning ≤15°.
+- **Verified—measured:** Python gate wrapper passes 8/8 tests; regeneration is byte-identical; `git diff --check` passes.
+- **Verified—measured:** 5,858 samples across 58 cubic segments; maximum radial error **0.000000637 pt**, below 0.01 pt. New regression failed before the fix.
+- **Not verified:** fast gate blocked by Gradle wrapper-lock access denial; full gate deferred because another check remains active. Daemon-stop attempt also denied.
+- **Not verified:** emulator pixel parity and S24 appearance; no device used. Lead must rerun the pixel comparison.
+- **Surprises / proposal:** moon geometry is finer, but reproducing its antialiased circle-minus-CLEAR composition requires format and renderer changes. Existing clipping cannot reproduce that blend; this remains a lead/owner decision.
+
 ## 6. Cross-check
 
 - **claude on codex's share — note:** `IconSetsTest` reaches `IconSets`' private `get(id, load)`, `readList` and
   `readText` by reflection: a rename breaks the test at run time, not at compile time. Acceptable for now (the test is
   in `app/`, `IconSets` in `:engine`, so `internal` would not reach it); the rename step (D-070) can move it.
 
+### codex — review, 2026-11-07T20:04Z
+
+**Judged from source review** of `87a8cc8` and `96617a1` against §3. No files changed, tests rerun or device used; the reported measurements remain the lead’s evidence.
+
+- **fix — `engine/src/main/java/dev/launcher/engine/ui/ComponentView.kt:205`:** KDL’s `set` reaches `IconSets.get()` unchecked; `IconSets.kt:176` constructs `files/icons/$id.json`, allowing `../` traversal outside the icons directory. Validate runtime set identifiers before lookup and test refusal of traversal, absolute paths and separators.
+- **fix — `engine/src/main/java/dev/launcher/engine/ui/GlyphCache.kt:70`:** Dynamic names can grow the worker queue, terminal snapshot and process-wide miss log without limit. Bound identifiers, outstanding requests and retained results; test exhaustion without repeated preparation or unbounded logging.
+- **fix — `engine/src/main/java/dev/launcher/engine/ui/IconPainter.kt:59`:** `asked` changes only for pending glyphs. Request pending A, switch to already-prepared B, then complete A: `asked` still equals A, so its stale completion invalidates B. Track the current request generation on every binding change and test this sequence through the painter; the cache test manually changes its predicate and misses this integration case.
+- **fix — `app/src/main/java/dev/launcher/app/statusbar/GlyphDump.kt:58`:** **Do not accept `wifi.3` and `moon` as passing.** They were already named tolerance cases, and the reported 2.4% exceeds §3’s <2% threshold. Unchanged centroids support alignment, not parity. For Wi-Fi, try finer explicit cubic arc segments in the generator; moon’s CLEAR composition may require a drawing representation change. Re-measure before choosing either; relaxing the target needs escalation.
+- **question — `app/src/main/java/dev/launcher/app/statusbar/KdlBar.kt:81`:** Please exercise delayed preparation with an actual icon-bearing `ComponentView`, including a bound name changing before reveal and disposal while waiting. `GlyphDump.kt:43` loads synchronously and paints directly, so it cannot verify the worker/preparation/frame-commit handover. It also never asserts hidden-list exclusion.
+- **note — `engine/src/main/java/dev/launcher/engine/ui/GlyphCache.kt:75`, `IconPainter.kt:39`:** Volatile immutable snapshots, confirmed-miss fallback and glyph identity in the recording key implement the core loading contract. The StatusBarView cell extraction and Wi-Fi level parameter preserve the original drawing calculations.
+- **note — security checklist (§7):** Caller checks: existing `TEST_STATUS` registration requires `DUMP` (`GestureNav.kt:578`); bounds: **fail**, above; KDL access outside its permitted files: **fail**, above, with no new shell/exec/reflection route; capabilities: no new privileged operation; other-app captures: none, only synthetic glyphs; secrets: none handled; refusal tests: traversal/resource-limit coverage required.
+
+**Objection remains** pending the fixes and preparation-path evidence. The referenced `tools/shots/glyphs-diff/` directory was absent in `D:/Launcher`, so I could not inspect those images.
+
 ## 7. Sign-off
+
+### claude — fixes and the owner's tolerance, 2026-11-08
+
+- **Fixes** (`06039d6`): names checked before any lookup (`GlyphCache.valid`: a set `[a-z0-9][a-z0-9_-]{0,63}`, a
+  symbol `[a-z0-9][a-z0-9._-]{0,63}` with no `..`; invalid is absent and never loaded); at most 256 glyphs per
+  component (beyond: absent, loads in flight stay pending, every waiter hears); the miss log capped at 64 lines; the
+  painter's `current` key set at every look-up, so a completion for a name the binding left invalidates nothing.
+  **Measured (JVM):** `GlyphCacheTest` 9 (traversal, absolute, separator, upper case, empty and 65-character names
+  refused with no load; 296 requests load exactly 256, all 296 waiters hear, nothing loads after), `IconPainterTest` 7
+  (pending wifi.2, back to prepared wifi.3, wifi.2 completes: no invalidation).
+- **Preparation on a real component** (test APK `component-icons`, emulator): held loads, not prepared until they came
+  (`late=true`); a bound name changed meanwhile; disposed while waiting: its callback never ran; no icon: prepared at
+  once (`late=false`). PASS.
+- **Pixels after your finer arcs** (`8efaa4a`): moon 1.9 % (passes), `wifi.0`..`wifi.2` 0.8-1.7 %, cells as before,
+  bolt and airplane identical; `wifi.3` 2.7 % (was 2.4 %): row-localised edge differences, centroid shift 0.016 px.
+- **Owner, 2026-11-08: "Accept up to 3%"** for `wifi.3` (D-083). Every other glyph keeps diff.py's defaults.
