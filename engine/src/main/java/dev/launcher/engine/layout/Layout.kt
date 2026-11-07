@@ -1,6 +1,7 @@
 package dev.launcher.engine.layout
 
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -35,8 +36,14 @@ fun interface Measurer {
     fun measure(maxWidth: Int, maxHeight: Int): Measured
 }
 
-/** Lengths to pixels: `pt` (the default) by the engine's unit (`Scale.unitPx`), `dp` by the density, `px` as they are. */
-class Units(private val unitPx: Float, private val density: Float) {
+/**
+ * Lengths to pixels: `pt` (the default) by the engine's unit (`Scale.unitPx`), `dp` by the density, `px` as they are.
+ * [unitPx] changes with the display (the launcher's unit follows its short side, smaller in landscape) and the settings'
+ * size: the host sets it and measures again.
+ */
+class Units(unitPx: Float, private val density: Float) {
+    var unitPx: Float = unitPx
+        internal set
     fun px(value: Double, unit: String?): Float = when (unit) {
         null, "pt" -> value * unitPx
         "dp" -> value * density
@@ -130,7 +137,9 @@ object Layout {
         val tallest = ms.maxOfOrNull { it.size.height } ?: 0
         val natural = if (align == Align.CENTRE_LINE) ceil(above + below).toInt() else tallest
         val height = natural.coerceIn(inner.minHeight, inner.maxHeight)
-        val line = above + (height - (above + below)) / 2
+        // Whole pixels of slack above, so the line reported is where the child reaching highest really sits (children
+        // are placed at whole pixels; half a pixel of slack moved a baseline by one: E2 slice 6).
+        val line = above + floor((height - (above + below)) / 2)
         val ys = ms.map { m ->
             when (align) {
                 Align.TOP -> 0

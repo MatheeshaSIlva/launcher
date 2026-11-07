@@ -30,6 +30,8 @@ interface Tokens : TokenCheck {
     val version: Int
     /** Called (on the main thread) after every change; once per [version]. */
     fun onChange(l: () -> Unit)
+    /** [l] no longer called (a host that detached: the tokens live as long as the process). */
+    fun removeOnChange(l: () -> Unit)
 }
 
 /** What [DesignTokens] reads of the launcher's design system: [LauncherDesign] in the app, a fake in tests. */
@@ -66,6 +68,7 @@ class DesignTokens(private val design: DesignSource = LauncherDesign) : Tokens {
 
     override fun exists(key: String) = design.resolved(key) != null
     override fun onChange(l: () -> Unit) { listeners += l }
+    override fun removeOnChange(l: () -> Unit) { listeners -= l }
 
     override fun kind(key: String): TokenKind? = when (val v = design.resolved(key)) {
         null -> null

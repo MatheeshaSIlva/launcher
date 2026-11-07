@@ -27,7 +27,7 @@ import androidx.compose.ui.unit.Constraints as ComposeConstraints
 import dev.launcher.engine.layout.Constraints as EngineConstraints
 
 /** A primitive's centre line (text: its capitals' middle), so a parent row can align children on it. */
-private val CentreLine = HorizontalAlignmentLine(::minOf)
+internal val CentreLine = HorizontalAlignmentLine(::minOf)
 
 /**
  * The component's tree as Compose layout nodes, one per primitive, with the accessibility tree cleared to one label
@@ -47,6 +47,7 @@ private fun Primitive(n: HostNode, modifier: Modifier = Modifier) {
 /** Measures through 5a's maths; the bound values it reads make Compose measure again, never compose. */
 private class Policy(val n: HostNode) : MeasurePolicy {
     override fun MeasureScope.measure(measurables: List<Measurable>, constraints: ComposeConstraints): MeasureResult {
+        n.epoch.intValue
         val placeables = arrayOfNulls<Placeable>(measurables.size)
         val kids = measurables.mapIndexed { k, m ->
             object : Child {
@@ -60,6 +61,7 @@ private class Policy(val n: HostNode) : MeasurePolicy {
         }
         val c = constraints
         val a = n.arrange(EngineConstraints(c.minWidth, c.maxWidth, c.minHeight, c.maxHeight), kids)
+        n.centre = a.measured.centre
         return layout(a.measured.size.width, a.measured.size.height, mapOf(CentreLine to a.measured.centre.roundToInt())) {
             a.placements.forEachIndexed { k, p -> placeables[k]?.place(p.x, p.y) }
         }
@@ -80,6 +82,7 @@ private class DrawElement(val n: HostNode) : ModifierNodeElement<DrawNode>() {
  */
 private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
     override fun ContentDrawScope.draw() {
+        n.epoch.intValue
         val w = size.width.roundToInt()
         val h = size.height.roundToInt()
         val key = n.painter.key(n)
@@ -93,11 +96,13 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
             own.setPosition(0, 0, w, h)
             n.painter.paint(own.beginRecording(), n, w, h)
             own.endRecording()
+            n.ownRecords++
             n.ownKey = key
         }
         val frame = n.frame
         frame.setPosition(0, 0, w, h)
         val recording = frame.beginRecording()
+        n.frameRecords++
         try {
             recording.drawRenderNode(own)
             drawContext.canvas = ComposeCanvas(recording)

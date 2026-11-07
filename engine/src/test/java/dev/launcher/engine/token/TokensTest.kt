@@ -81,6 +81,18 @@ class TokensTest {
         assertEquals(2, tokens.version)
     }
 
+    @Test fun aRemovedListenerHearsNothing() {   // a detached host's (E2 slice 6: the tokens live as long as the process)
+        var current = 0; var gone = 0
+        val goneListener: () -> Unit = { gone++ }
+        tokens.onChange(goneListener)
+        tokens.onChange { current += 1 }
+        design.changed()
+        tokens.removeOnChange(goneListener)
+        design.changed()
+        assertEquals(2, current)
+        assertEquals(1, gone)
+    }
+
     @Test fun theValidatorsTokenCheckAndAnExpression() {
         val kdl = "component \"c\" {\n  view { text x color=\"@comp.statusbar.battery-low-color\" size=\"@comp.statusbar.size\" }\n}"
         val r = Validator(tokens).load(KdlParser.parse(kdl)) as ReadResult.Invalid

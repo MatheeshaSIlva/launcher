@@ -2,7 +2,9 @@ package dev.launcher.engine.ui
 
 import android.graphics.Canvas
 import android.graphics.RenderNode
+import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import dev.launcher.engine.expr.Compiled
 import dev.launcher.engine.expr.Deps
@@ -61,12 +63,19 @@ class HostNode internal constructor(
     val painter: Painter,
     private val units: Units,
     requestFrame: () -> Unit,
+    /** Read in measuring and drawing: bumped when what no binding holds changed (the tokens: a font, a theme). */
+    internal val epoch: MutableIntState,
 ) {
     /** The painter's recording, kept until its key changes. */
     internal val own by lazy { RenderNode("${view.primitive}-own") }
     /** The primitive with its children: what [motion] moves. */
     internal val frame by lazy { RenderNode(view.primitive) }
     internal var ownKey: Any? = Unrecorded
+    /** How often the painter's content and the frame were recorded (E2 slice 6's measure of the draw node's cost). */
+    var ownRecords = 0; internal set
+    /** Its centre line at its last measure, in px from its top, unrounded (layout's alignment lines are whole pixels). */
+    var centre = 0f; internal set
+    var frameRecords = 0; internal set
     val motion = Motion({ frame }, requestFrame)
 
     /** An attribute's current value (an argument under its schema name: text's `content`, icon's `symbol`). */
@@ -110,7 +119,11 @@ class ComponentHost(
 ) {
     private val props = def.props.map { it.name }.toSet()
     private val all = ArrayList<Binding>()
+    private val epoch = mutableIntStateOf(0)
     val root: HostNode = build(def.view)
+
+    /** Every primitive measured and drawn again (the tokens changed under them: a font, a theme, light or dark). */
+    fun invalidateAll() { epoch.intValue++ }
 
     /** Bindings whose dependencies [reads] picks are evaluated again; a state is written only when its value changed. */
     fun refresh(reads: (Deps) -> Boolean = { true }) {
@@ -121,7 +134,7 @@ class ComponentHost(
         val arg = dev.launcher.engine.model.Primitives.ALL[v.primitive]?.arg?.name
         val named = v.attrs.mapValues { it.value.value } + listOfNotNull(arg?.let { a -> v.args.firstOrNull()?.let { a to it } })
         val bindings = named.mapValues { (_, a) -> bind(a).also { all += it } }
-        return HostNode(v, bindings, v.children.map(::build), painters(v), units, requestFrame)
+        return HostNode(v, bindings, v.children.map(::build), painters(v), units, requestFrame, epoch)
     }
 
     private fun bind(a: AttrValue): Binding = when (a) {

@@ -68,6 +68,14 @@ class LayoutTest {
         assertEquals(listOf(5, 10), ys(tall))   // the group centred in the taller row
     }
 
+    @Test fun aCentreLineRowReportsTheLineItsChildSitsOn() {   // E2 slice 6: text whose line is not on a whole pixel
+        // 12.6 above the line from the first, 20 below from the second: 32.6 rounds up to 33, 0.4 px of slack.
+        val a = Layout.row(none, wide, 0f, Justify.START, Align.CENTRE_LINE, listOf(Fixed(30, 20, 12.6f), Fixed(10, 30, 10f)))
+        assertEquals(33, a.measured.size.height)
+        assertEquals(0, ys(a)[0])
+        assertEquals(12.6f, a.measured.centre, 1e-4f)   // where the first child's line is; was 12.8 (half the slack)
+    }
+
     @Test fun stackHasNineAlignments() {
         val kids = { listOf(Fixed(40, 20), Fixed(10, 10)) }
         fun at(name: String) = Layout.stackAlign(name).let { (x, y) -> Layout.stack(none, wide, x, y, kids()).placements[1] }
