@@ -33,7 +33,7 @@ class AdbSessionTest {
         assertEquals("host::\u0000", connect.payload.toString(Charsets.UTF_8))
         assertEquals(AdbCommands.STLS, AdbMessageCodec.decode(out, old).command)
         val open = AdbMessageCodec.decode(out, modern)
-        assertEquals("shell:id\u0000", open.payload.toString(Charsets.UTF_8))
+        assertEquals("shell,raw:id\u0000", open.payload.toString(Charsets.UTF_8))
         assertEquals(1, open.arg0)
         assertEquals(AdbMessage(AdbCommands.OKAY, 1, 42), AdbMessageCodec.decode(out, modern))
         assertEquals(AdbMessage(AdbCommands.CLSE, 1, 42), AdbMessageCodec.decode(out, modern))
@@ -107,7 +107,7 @@ class AdbSessionTest {
     }
 
     @Test fun stdinChunksWaitForAcknowledgementsWhileOutputIsInterleaved() {
-        val incoming = listOf(stls(), hello(10), msg(AdbCommands.OKAY, 42, 1),
+        val incoming = listOf(stls(), hello(13), msg(AdbCommands.OKAY, 42, 1),
             msg(AdbCommands.WRTE, 42, 1, "out"), msg(AdbCommands.OKAY, 42, 1),
             msg(AdbCommands.OKAY, 42, 1), msg(AdbCommands.OKAY, 42, 1), msg(AdbCommands.CLSE, 42, 1))
         val output = ByteArrayOutputStream()
@@ -127,36 +127,36 @@ class AdbSessionTest {
             AdbMessageCodec.encode(incoming[packet], if (packet++ == 0) old else modern).inputStream()
         }, { output }) { }
         session.connect()
-        assertEquals("out", session.shell("id", "abcdefghijklmnopqrstu\n".toByteArray()).toString(Charsets.UTF_8))
+        assertEquals("out", session.shell("id", "abcdefghijklmnopqrstuvwxyz\n".toByteArray()).toString(Charsets.UTF_8))
         val writes = sent.filter { it.command == AdbCommands.WRTE }
-        assertEquals(listOf("abcdefghij", "klmnopqrst", "u\n"), writes.map { it.payload.toString(Charsets.UTF_8) })
+        assertEquals(listOf("abcdefghijklm", "nopqrstuvwxyz", "\n"), writes.map { it.payload.toString(Charsets.UTF_8) })
         assertTrue(writes.all { it.arg0 == 1 && it.arg1 == 42 })
     }
 
     @Test fun refusesPrematureCloseBadAckAndChangedIdsDuringStdin() {
         for (packet in listOf(msg(AdbCommands.CLSE, 42, 1), msg(AdbCommands.OKAY, 43, 1),
             msg(AdbCommands.OKAY, 42, 2), msg(AdbCommands.OKAY, 42, 1, "bad"), msg(AdbCommands.CLSE, 42, 1, "bad"))) {
-            val t = transcript(stls(), hello(10), msg(AdbCommands.OKAY, 42, 1), packet)
+            val t = transcript(stls(), hello(13), msg(AdbCommands.OKAY, 42, 1), packet)
             t.session.connect()
-            assertThrows(AdbProtocolException::class.java) { t.session.shell("id", ByteArray(11)) }
+            assertThrows(AdbProtocolException::class.java) { t.session.shell("id", ByteArray(14)) }
         }
     }
 
     @Test fun acknowledgementStallPropagatesWithoutSendingAnotherChunk() {
         val output = ByteArrayOutputStream()
-        val bytes = (AdbMessageCodec.encode(stls(), old) + AdbMessageCodec.encode(hello(10), modern) +
+        val bytes = (AdbMessageCodec.encode(stls(), old) + AdbMessageCodec.encode(hello(13), modern) +
             AdbMessageCodec.encode(msg(AdbCommands.OKAY, 42, 1), modern)).inputStream()
         val stalled = object : java.io.InputStream() {
             override fun read(): Int = if (bytes.available() > 0) bytes.read() else throw java.net.SocketTimeoutException("test stall")
         }
         val session = AdbSession({ stalled }, { output }) { }
         session.connect()
-        assertThrows(java.net.SocketTimeoutException::class.java) { session.shell("id", ByteArray(11)) }
+        assertThrows(java.net.SocketTimeoutException::class.java) { session.shell("id", ByteArray(14)) }
         val out = output.toByteArray().inputStream()
         val sent = mutableListOf<AdbMessage>()
         repeat(4) { sent += AdbMessageCodec.decode(out, if (it < 2) old else modern) }
         assertEquals(listOf(AdbCommands.CNXN, AdbCommands.STLS, AdbCommands.OPEN, AdbCommands.WRTE), sent.map { it.command })
-        assertEquals(10, sent.last().payload.size)
+        assertEquals(13, sent.last().payload.size)
         assertEquals(0, out.available())
     }
 

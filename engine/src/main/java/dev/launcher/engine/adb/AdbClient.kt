@@ -66,7 +66,7 @@ internal class AdbSession(
         used = true
         require(command.length <= AdbMessageCodec.MAX_PAYLOAD_BYTES) { "Shell service exceeds limit" }
         require(stdin.size <= AdbMessageCodec.MAX_PAYLOAD_BYTES) { "Shell stdin exceeds limit" }
-        val service = nul("shell:$command")
+        val service = nul("shell,raw:$command")
         if (service.size > peerMax) throw AdbProtocolException("Shell service exceeds peer maxdata")
         val local = 1
         send(AdbCommands.OPEN, local, 0, service)
