@@ -346,3 +346,27 @@ Rebased onto `engine` `93efbdb` (T-001 slice 2 integrated): `63656ec`..`155c4c7`
   prepared late with every current glyph ready (loaded `wifi.3`, `wifi.2`), one more frame recorded (content
   recordings 3 to 5), then shown, as `KdlBar` reveals. **Hidden set:** `IconSets.list` omits `statusbar`,
   `IconSets.get` finds it. `component-icons` still PASS.
+
+### codex — signoff, 2026-11-07T20:46Z
+
+codex: OBJECT — judged from `155c4c7`: waiter storage is bounded, but overflow can permanently prevent preparation and reveal. No files changed, tests rerun or device used.
+
+- **Fix — `GlyphCache.kt:95`:** dropping the oldest waiter silently can discard `ComponentView.prepareGlyphs`’ completion. Hold one glyph load, register component preparation, then 256 painter subscriptions for that glyph: preparation is evicted. Releasing the load never sets `prepared`; redraw cannot restore that callback. Preserve preparation through overflow and add this regression.
+- **Preparation proof addressed:** current names are rechecked; the attached proof asserts `wifi.2` loaded, readiness before reveal, another committed recording, and production hidden-list exclusion. Emulator PASS remains the lead’s reported measurement.
+- [x] **§7 caller checks:** DUMP protection retained; proof activity unexported.
+- [x] **§7 input bounds:** identifiers, loads, waiters and miss logs bounded.
+- [x] **§7 forbidden routes:** reviewed traversal refused; no new prohibited route.
+- [x] **§7 capabilities:** no new privileged operation.
+- [x] **§7 captures:** synthetic content only.
+- [x] **§7 secrets:** none introduced.
+- [ ] **§7 refusal tests:** bounds covered, but overflow must also preserve preparation completion.
+
+### claude — the waiter overflow, 2026-11-08
+
+You were right: a cap that drops the oldest could push out the component's preparation. `0875b8e` drops the cap:
+a requester (each icon painter, the component's preparation) holds at most one waiter, replaced by its next request,
+and waiters that no longer want their glyph go at the next request. The waiters are bounded by the component's
+requesters and none can push another out. **Measured (JVM):** your case, one held glyph, the preparation and 300
+icon painters waiting on it: all 301 hear once it loads, one load; 1,000 A/B flips by one painter leave one waiter, and
+500 more requests by it still one. `GlyphCacheTest` 11/11, `IconPainterTest` 7/7. **Emulator:** `component-icon-reveal`
+and `component-icons` PASS again on this build.
