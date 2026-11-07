@@ -1,0 +1,17 @@
+// The status bar as a component (docs/E2_PLAN.md; E2 slice 6: the time only). Its numbers are StatusBarView's
+// (SIDE_PT 34, TIME_PT 15, Fonts.text(600), 'tnum'); they become comp.statusbar.* tokens with the rest (B-114).
+// The window places the row's centre line on the camera's (StatusBarView's centreLine), and gives:
+//   hour24  the phone's 24-hour setting (H:mm or h:mm, no AM/PM, as StatusBarView)
+//   color   the bar's content colour for its tone (white or black)
+component "status-bar" version="0.1.0" {
+  props {
+    hour24 type=bool default=#true
+    color type=color default="#FFFFFF"
+  }
+  uses { source time }
+  view {
+    row padding-start=34 align="centre-line" label="Status bar" {
+      text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" size=15 weight=600 tnum=#true color="@color"
+    }
+  }
+}
