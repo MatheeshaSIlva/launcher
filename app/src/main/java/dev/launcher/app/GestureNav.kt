@@ -569,7 +569,14 @@ object GestureNav : NavHost {
                             addStatusBar()
                         }
                         "kdl-counters" -> AppLog.log("[kdl] counters: ${shade?.kdlCounters() ?: "no KDL bar"}")
-                        else -> AppLog.log("[statusbar] test: do charge|charge-frames|share|cover|kdl|kdl-counters")
+                        // T-005: every statusbar glyph drawn by the bar and by an icon node, in files/dev-out/glyphs/ (.done).
+                        "glyphs" -> {
+                            val dir = java.io.File(app.getExternalFilesDir(null), "dev-out/glyphs")
+                            val n = dev.launcher.app.statusbar.GlyphDump.render(app, bar, dir)
+                            java.io.File(dir, ".done").writeText("$n" + "\n")
+                            AppLog.log("[statusbar] test: $n glyph pairs in ${dir.path}")
+                        }
+                        else -> AppLog.log("[statusbar] test: do charge|charge-frames|share|cover|kdl|kdl-counters|glyphs")
                     }
                 }
             }

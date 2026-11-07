@@ -1338,20 +1338,40 @@ class StatusBarView(ctx: Context) : View(ctx) {
             airplane -> drawPlane(c, left + 8.4f * u, cy, 8.4f * u, content)
             simAbsent -> { label.color = content; label.textSize = 13.5f * u; c.drawText("No SIM", left, cy + 0.727f * label.textSize / 2f, label) }
             !inService -> { label.color = content; label.textSize = 13.5f * u; c.drawText("No Service", left, cy + 0.727f * label.textSize / 2f, label) }
-            else -> {
-                val barW = 3f * u
-                val gap = 2.2f * u
-                val heights = floatArrayOf(4.4f, 6.8f, 9.2f, 11.7f)
-                val bottom = cy + 5.85f * u
-                var x = left
-                for (i in 0 until 4) {
-                    // A bar fills as the level glides past it.
-                    fill.color = blend(faint, content, (cellAnim.value - i).coerceIn(0f, 1f))
-                    val h = heights[i] * u
-                    c.drawRoundRect(x, bottom - h, x + barW, bottom, 1f * u, 1f * u, fill)
-                    x += barW + gap
-                }
-            }
+            else -> drawCellBars(c, left, cy, content, faint, cellAnim.value)
+        }
+    }
+
+    /** The four signal bars from [left], lit up to [level] (a bar fills as the level glides past it). */
+    private fun drawCellBars(c: Canvas, left: Float, cy: Float, content: Int, faint: Int, level: Float) {
+        val u = u
+        val barW = 3f * u
+        val gap = 2.2f * u
+        val heights = floatArrayOf(4.4f, 6.8f, 9.2f, 11.7f)
+        val bottom = cy + 5.85f * u
+        var x = left
+        for (i in 0 until 4) {
+            fill.color = blend(faint, content, (level - i).coerceIn(0f, 1f))
+            val h = heights[i] * u
+            c.drawRoundRect(x, bottom - h, x + barW, bottom, 1f * u, 1f * u, fill)
+            x += barW + gap
+        }
+    }
+
+    /**
+     * T-005's pixel check (`TEST_STATUS --es do glyphs`): glyph [name], as the `statusbar` icon set names it, drawn as this
+     * bar draws it in its slot from [left] on the centre line [cy], at a resting level (no glide).
+     */
+    internal fun drawGlyph(c: Canvas, name: String, left: Float, cy: Float, color: Int) {
+        val u = u
+        val a = (color ushr 24) and 0xFF
+        val faint = Color.argb(77 * a / 255, Color.red(color), Color.green(color), Color.blue(color))
+        when {
+            name.startsWith("wifi.") -> drawWifi(c, left + 8.5f * u, cy + 5.6f * u, color, name.removePrefix("wifi.").toFloat())
+            name.startsWith("cell.") -> drawCellBars(c, left, cy, color, faint, name.removePrefix("cell.").toFloat())
+            name == "moon" -> drawMoon(c, left + 6.2f * u, cy, 6.2f * u, color)
+            name == "bolt" -> drawBolt(c, left + 3.6f * u, cy, 9f * u, color)
+            name == "airplane" -> drawPlane(c, left + 8.4f * u, cy, 8.4f * u, color)
         }
     }
 
@@ -1417,7 +1437,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     /** iOS Wi-Fi glyph: three bands of a fan opening upwards from (cx, bottom); bands fill as the level glides past them. */
-    private fun drawWifi(c: Canvas, cx: Float, bottom: Float, on: Int) {
+    private fun drawWifi(c: Canvas, cx: Float, bottom: Float, on: Int, level: Float = wifiAnim.value) {
         val u = u
         val a = (on ushr 24) and 0xFF
         val off = Color.argb(77 * a / 255, Color.red(on), Color.green(on), Color.blue(on))
@@ -1430,7 +1450,7 @@ class StatusBarView(ctx: Context) : View(ctx) {
             path.arcTo(cx - ro, bottom - ro, cx + ro, bottom + ro, 225f, 90f, true)
             if (ri > 0.5f) path.arcTo(cx - ri, bottom - ri, cx + ri, bottom + ri, 315f, -90f, false) else path.lineTo(cx, bottom)
             path.close()
-            fill.color = blend(off, on, (wifiAnim.value - i).coerceIn(0f, 1f))
+            fill.color = blend(off, on, (level - i).coerceIn(0f, 1f))
             c.drawPath(path, fill)
         }
     }
