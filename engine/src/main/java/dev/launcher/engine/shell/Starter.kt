@@ -29,9 +29,15 @@ object Starter {
     const val PACKAGE = "dev.launcher.app"
     const val AUTHORITY = "$PACKAGE.shell"
     const val METHOD = StartAttempt.HANDOVER_METHOD
+    const val READY_METHOD = HandoverGate.READY_METHOD
     const val DEADLINE_MS = 20_000L
     const val READ_MS = 5_000L
     @Volatile private var ready = false
+    /**
+     * The launcher's token, held for the process's life: a death link on a proxy nobody holds may never fire (AOSP's
+     * Binder JNI drops the subscription with the last reference: Codex's review).
+     */
+    @Volatile private var launcher: IBinder? = null
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -44,11 +50,14 @@ object Starter {
         Looper.prepareMainLooper()
         val service = ShellService()
         service.onlyUid = try { launcherUid() } catch (t: Throwable) { fail("launcher uid: ${t.javaClass.simpleName}") }
-        val reply = try { handOver(service, line) } catch (t: Throwable) { fail("handover: ${t.javaClass.simpleName}: ${t.message}") }
-        val token = reply?.getBinder("token") ?: fail("handover refused")
-        try { token.linkToDeath({ Log.i(TAG, "launcher gone: exiting"); exitProcess(0) }, 0) } catch (t: Throwable) { fail("link") }
+        // Ready only once the launcher's token is linked and the launcher took our acknowledgement (it publishes the
+        // service then, never before): a failed link or a refused ack exits, and the deadline covers a blocked call.
+        val acked = try { handOver(service, line) } catch (t: Throwable) { fail("handover: ${t.javaClass.simpleName}: ${t.message}") }
+        if (!acked) fail("handover refused")
         ready = true
         Log.i(TAG, "ready in ${SystemClock.elapsedRealtime() - started} ms")
+        // A collection right away, every start: the launcher's death must still reach us with only [launcher] holding it.
+        System.gc(); System.runFinalization()
         Looper.loop()
     }
 
@@ -104,8 +113,11 @@ object Starter {
     @androidx.annotation.RequiresApi(31)
     private fun attribution(): AttributionSource = AttributionSource.Builder(Os.getuid()).setPackageName("com.android.shell").build()
 
-    /** The provider's `call` with the binder and the capability, through the two adapters (Android 10+, 12+). */
-    private fun handOver(service: IBinder, capability: String): Bundle? {
+    /**
+     * The provider's `call` with the binder and the capability; the reply's token linked and kept; then `shell-ready`
+     * with the reply's ack. Through the two adapters (Android 10+, 12+). True when the launcher took the acknowledgement.
+     */
+    private fun handOver(service: IBinder, capability: String): Boolean {
         val am = Class.forName("android.app.IActivityManager\$Stub").getMethod("asInterface", IBinder::class.java)
             .invoke(null, Class.forName("android.os.ServiceManager").getMethod("getService", String::class.java)
                 .invoke(null, "activity") as IBinder)!!
@@ -121,12 +133,18 @@ object Starter {
             }
             Log.i(TAG, "adapter: call${call?.parameterTypes?.joinToString(",", "(", ")") { it.simpleName }}; all: " +
                 provider.javaClass.methods.filter { it.name == "call" }.joinToString { m -> m.parameterTypes.joinToString(",", "(", ")") { it.simpleName } })
-            return if (call != null && android.os.Build.VERSION.SDK_INT >= 31) {
-                call.invoke(provider, attribution(), AUTHORITY, METHOD, null, extras) as Bundle?
+            fun send(method: String, extras: Bundle): Bundle? = if (call != null && android.os.Build.VERSION.SDK_INT >= 31) {
+                call.invoke(provider, attribution(), AUTHORITY, method, null, extras) as Bundle?
             } else {
                 provider.javaClass.methods.first { it.name == "call" && it.parameterTypes.size == 6 }
-                    .invoke(provider, "com.android.shell", null, AUTHORITY, METHOD, null, extras) as Bundle?
+                    .invoke(provider, "com.android.shell", null, AUTHORITY, method, null, extras) as Bundle?
             }
+            val reply = send(METHOD, extras) ?: return false
+            val token = reply.getBinder("token") ?: return false
+            val ack = reply.getString("ack") ?: return false
+            launcher = token
+            try { token.linkToDeath({ Log.i(TAG, "launcher gone: exiting"); exitProcess(0) }, 0) } catch (t: Throwable) { fail("link") }
+            return send(READY_METHOD, Bundle().apply { putString("ack", ack) }) != null
         } finally {
             try {
                 am.javaClass.methods.first { it.name == "removeContentProviderExternal" && it.parameterTypes.size == 2 }

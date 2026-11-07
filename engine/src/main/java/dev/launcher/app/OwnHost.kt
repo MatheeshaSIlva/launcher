@@ -15,10 +15,12 @@ import dev.launcher.engine.adb.AdbEndpoint
 import dev.launcher.engine.adb.AdbIdentityResult
 import dev.launcher.engine.adb.AdbPairingClient
 import dev.launcher.engine.adb.AndroidAdbIdentity
+import dev.launcher.engine.shell.HandoverGate
 import dev.launcher.engine.shell.StartAttempt
 import dev.launcher.engine.shell.Starter
 import java.io.File
 import java.net.InetAddress
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 
 /**
@@ -32,14 +34,15 @@ import java.util.concurrent.Executors
 class OwnHost : ShellHost {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor { r -> Thread(r, "own-shell-host").apply { isDaemon = true } }
-    private val attempt = StartAttempt({ SystemClock.elapsedRealtime() })
+    /** Every step's decision, by attempt generation ([HandoverGate]): only a still-current, acknowledged start publishes. */
+    private val gate = HandoverGate({ SystemClock.elapsedRealtime() })
     private lateinit var app: android.app.Application
     private lateinit var sink: ShellHost.Sink
     private var generation = 0
-    /** The start in flight: its attempt's generation and connection (main thread). */
-    private var starting: Long = 0
-    @Volatile private var client: AdbClient? = null
-    @Volatile private var bound = false
+    /** Each attempt's own connection, closed only by that attempt's end (a newer start never loses its own). */
+    private val clients = ConcurrentHashMap<Long, AdbClient>()
+    /** A claimed handover's service, published only when its acknowledgement comes ([ready]). */
+    private val claimed = ConcurrentHashMap<Long, IBinder>()
 
     override fun init(app: android.app.Application, sink: ShellHost.Sink, generation: Int) {
         this.app = app
@@ -48,62 +51,92 @@ class OwnHost : ShellHost {
         current = this
     }
 
-    override fun state(): ShizukuLink.State = if (starting != 0L) ShizukuLink.State.CONNECTING else ShizukuLink.State.NOT_RUNNING
+    override fun state(): ShizukuLink.State = if (gate.isStarting) ShizukuLink.State.CONNECTING else ShizukuLink.State.NOT_RUNNING
 
     override fun connect() {
-        if (bound || starting != 0L) return
+        if (gate.connectedGeneration != 0L || gate.isStarting) return
         val endpoint = endpoint() ?: return AppLog.log("[shell] own host: no connect endpoint (pair first)")
-        val ticket = attempt.begin()
-        starting = ticket.generation
+        val ticket = gate.begin()
+        val gen = ticket.generation
         sink.changed()
-        main.postDelayed({ if (starting == ticket.generation) end(ticket.generation, "start timed out") }, StartAttempt.TIMEOUT_MS)
+        main.postDelayed({ if (gate.expire(gen)) end(gen, "start timed out") }, StartAttempt.TIMEOUT_MS)
         val apk = app.applicationInfo.sourceDir
         io.execute {
             val identity = AndroidAdbIdentity.store(app).load()
             val key = (identity as? AdbIdentityResult.Ready)?.key
-            if (key == null) { main.post { end(ticket.generation, "identity: ${identity.javaClass.simpleName}") }; return@execute }
+            if (key == null) { main.post { if (gate.expire(gen)) end(gen, "identity: ${identity.javaClass.simpleName}") }; return@execute }
             val c = AdbClient(endpoint, key)
-            client = c
+            clients[gen] = c
             try {
                 c.connect()
                 c.shell("trap '' HUP; exec app_process -Djava.class.path=${quoted(apk)} /system/bin --nice-name=launcher-shell ${Starter::class.java.name}",
                     (ticket.capability + "\n").toByteArray(Charsets.US_ASCII))
             } catch (t: Throwable) {
-                // Closed by us once the handover is accepted; anything else ends the attempt.
-                if (!bound) main.post { end(ticket.generation, "stream: ${t.javaClass.simpleName}") }
+                // Closed by us once the start is acknowledged; anything else ends this attempt (and only this one).
+                main.post { if (gate.expire(gen)) end(gen, "stream: ${t.javaClass.simpleName}") }
             } finally {
                 c.close()
-                if (client === c) client = null
+                clients.remove(gen, c)
             }
         }
     }
 
     override fun bindQuietly() = connect()
 
-    /** [ShellBinderProvider]'s call, on a binder thread: the reply holds our token, or null for any refusal. */
+    /**
+     * [ShellBinderProvider]'s call, on a binder thread: the caller and method are checked before the extras are read.
+     * `shell-binder` takes the starter's service and answers with our token and an ack; `shell-ready` (the starter has
+     * linked the token) publishes it. Null for any refusal.
+     */
     fun handover(callingUid: Int, method: String, extras: Bundle?): Bundle? {
-        val capability = try { extras?.getString("capability") } catch (_: Throwable) { null }
-        val ticket = attempt.claim(callingUid, method, capability) ?: return null.also { AppLog.log("[shell] handover refused") }
-        val binder: IBinder = try { extras?.getBinder("binder") } catch (_: Throwable) { null }
-            ?: return null.also { main.post { end(ticket.generation, "handover without a binder") } }
-        val service = IShellService.Stub.asInterface(binder)
-        try { binder.linkToDeath({ main.post { bound = false; sink.lost(generation) } }, 0) }
-        catch (_: Throwable) { main.post { end(ticket.generation, "the service died at once") }; return null }
-        bound = true
-        main.post {
-            if (starting == ticket.generation) starting = 0
-            client?.close()
-            AppLog.log("[shell] own host: service connected")
-            sink.connected(generation, service)
+        if (callingUid != StartAttempt.SHELL_UID) return refused()
+        return when (method) {
+            StartAttempt.HANDOVER_METHOD -> claim(callingUid, method, extras)
+            HandoverGate.READY_METHOD -> ready(callingUid, method, extras)
+            else -> refused()
         }
-        return Bundle().apply { putBinder("token", ShizukuLink.clientToken) }
     }
 
-    private fun end(generation: Long, why: String) {
-        if (starting != generation) return
-        starting = 0
-        attempt.clear(generation)
-        client?.close()
+    private fun claim(uid: Int, method: String, extras: Bundle?): Bundle? {
+        val capability = try { extras?.getString("capability") } catch (_: Throwable) { null }
+        val binder = try { extras?.getBinder("binder") } catch (_: Throwable) { null } ?: return refused()
+        val accepted = gate.claim(uid, method, capability) ?: return refused()
+        val gen = accepted.generation
+        try { binder.linkToDeath({ main.post { died(gen) } }, 0) }
+        catch (_: Throwable) { main.post { if (gate.expire(gen)) end(gen, "the service died at once") }; return null }
+        claimed[gen] = binder
+        return Bundle().apply { putBinder("token", ShizukuLink.clientToken); putString("ack", accepted.ack) }
+    }
+
+    private fun ready(uid: Int, method: String, extras: Bundle?): Bundle? {
+        val ack = try { extras?.getString("ack") } catch (_: Throwable) { null }
+        val gen = gate.ready(uid, method, ack) ?: return refused()
+        val binder = claimed.remove(gen) ?: return refused()
+        main.post {
+            // Its death may have been handled first (both posted from binder threads): publish only what is still live.
+            if (!gate.isConnected(gen)) return@post
+            clients.remove(gen)?.close()
+            AppLog.log("[shell] own host: service connected")
+            sink.connected(generation, IShellService.Stub.asInterface(binder))
+        }
+        return Bundle()
+    }
+
+    private fun died(gen: Long) {
+        claimed.remove(gen)
+        when (gate.lost(gen)) {
+            HandoverGate.Ended.CONNECTION -> { AppLog.log("[shell] own host: service died"); sink.lost(generation) }
+            HandoverGate.Ended.START -> end(gen, "the service died before it was ready")
+            HandoverGate.Ended.NOTHING -> {}
+        }
+    }
+
+    private fun refused(): Bundle? = null.also { AppLog.log("[shell] handover refused") }
+
+    /** [gen]'s start is over (the gate already said so): its connection closed, nobody else's. */
+    private fun end(gen: Long, why: String) {
+        claimed.remove(gen)
+        clients.remove(gen)?.close()
         AppLog.log("[shell] own host: $why")
         sink.changed()
     }
@@ -141,7 +174,7 @@ class OwnHost : ShellHost {
                             prefs.edit().putString("host_kind", i.getStringExtra("do")!!.removePrefix("use-")).apply()
                             AppLog.log("[shell] host at next start: ${prefs.getString("host_kind", "?")}")
                         }
-                        "start" -> ShizukuLink.connect()
+                        "start" -> { AppLog.log("[shell] test start: ${ShizukuLink.state()}, starting ${current?.gate?.isStarting}, connected ${current?.gate?.connectedGeneration}"); ShizukuLink.connect() }
                         "identity" -> Thread({ AppLog.log("[shell] identity: ${try { ShizukuLink.service?.identity() } catch (t: Throwable) { t.javaClass.simpleName }}") }).start()
                         else -> AppLog.log("[shell] test: do pair|use-own|use-shizuku|start|identity")
                     }
@@ -155,8 +188,13 @@ class OwnHost : ShellHost {
         private fun pair(app: android.app.Application): String {
             val f = File(app.getExternalFilesDir(null), "dev-in/adb-pair.txt")
             val text = try {
-                if (!f.isFile || f.length() > 256) return "no pairing file (or over 256 bytes)"
-                f.readText(Charsets.US_ASCII)
+                if (!f.isFile) return "no pairing file"
+                // Bounded whatever the file does meanwhile: at most 257 bytes are read, and 257 is refused.
+                val bytes = f.inputStream().use { input -> ByteArray(257).let { buf -> var n = 0
+                    while (n < buf.size) { val r = input.read(buf, n, buf.size - n); if (r < 0) break; n += r }
+                    buf.copyOf(n) } }
+                if (bytes.size > 256) return "pairing file over 256 bytes"
+                String(bytes, Charsets.US_ASCII)
             } finally { f.delete() }
             val v = text.lines().mapNotNull { l -> l.split('=', limit = 2).takeIf { it.size == 2 }?.let { it[0].trim() to it[1].trim() } }.toMap()
             val host = v["host"] ?: return "no host"
