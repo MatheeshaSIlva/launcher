@@ -1,5 +1,9 @@
 # Launcher: Requirements Specification
 
+> **History on the `engine` branch (2026-11-07).** This was the launcher's plan before the direction change of 2026-11-03.
+> It still explains how the code it describes works; it is not the plan. The plan is `docs/ENGINE_SPEC.md` and
+> `docs/team/BOARD.md`.
+
 Status: draft v1, 2026-10-02. Written from the design decisions and probe results of the feasibility phase.
 The build order, the "validated vs unsupported" table and the risks list are proposals; the accessibility details are still unwritten.
 

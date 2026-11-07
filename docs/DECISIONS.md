@@ -947,3 +947,22 @@ is set (adb, DUMP senders; StatusBarView stays everyone's bar). Choices made wit
 Measured on the emulator: the KDL time is pixel-identical to StatusBarView's (max channel difference 0) in iOS 27's
 Inter, Pixel's Google Sans Flex and landscape; 0 frames at rest; one repaint per minute; the switch's broadcast from a uid
 without DUMP is not delivered. Not measured: anything on the S24 (pull frame stats, cold and warm first presentation).
+
+## D-080: The instruction files say one direction (2026-11-07, owner)
+
+The owner saw the lead session still reasoning partly from the launcher's pre-2026-11-03 direction. Cause: what Claude
+Code loads at start still carried it. `docs/OPERATING_RULES.md` (imported by `CLAUDE.md`) imported `docs/SPEC.md` as
+"the locked direction" and named it the source of truth; `CLAUDE.md` below its banner sent readers to
+`docs/REQUIREMENTS.md` as "what we are building" and kept an "Architecture (target)", a "Current plan (2026-10-10)" with
+first tasks, open items that are decided, and build versions two upgrades old; the banner still said the Shizuku fork
+was the alpha's answer; `docs/ROADMAP.md` showed MS as ACTIVE and "single session, no reviewer" in its definition of
+done; `AGENTS.md` gave Codex the old versions.
+Fixed: `OPERATING_RULES.md` no longer imports `SPEC.md` and names `ENGINE_SPEC.md` and the board as sources of truth;
+`CLAUDE.md` Part 1 gains an explicit precedence order (owner's latest word, DECISIONS newest first, ENGINE_SPEC, the
+audit, the board and thread, the step's plan; below them and never direction: Part 2, SPEC, REQUIREMENTS, PLAN_*, the
+roadmap's table), and Part 2 is headed as the reference manual for the launcher as built; the plan section points to the
+build order; decided open items are removed; versions are current; the banner says no Shizuku (T-001). ROADMAP marks MS
+as active on `main` only. `REQUIREMENTS.md` and every `PLAN_*.md` carry a history banner. `polish-pass` frames the
+bar for the engine. No code changed.
+A session reads these files when it starts, so a session open before this commit still has the old text in context:
+start a new one after pulling.

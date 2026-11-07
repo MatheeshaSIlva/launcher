@@ -1,5 +1,9 @@
 # Layouts, themes and animations: the plan
 
+> **History on the `engine` branch (2026-11-07).** This was the launcher's plan before the direction change of 2026-11-03.
+> It still explains how the code it describes works; it is not the plan. The plan is `docs/ENGINE_SPEC.md` and
+> `docs/team/BOARD.md`.
+
 Status: **agreed 2026-10-10** (phase A done: `main` back to the S24-checked build). Replaces the "theme switches
 everything" approach of `docs/PIXEL_PROFILE.md` (the Pixel profile, parts 1-8, was a first run: on the S24 the Pixel app
 drawer's blur stopped working after a moment, the widget gallery stayed iOS, the shade's pull and Quick Settings'

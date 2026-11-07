@@ -30,18 +30,29 @@
 > the condition of trademarks, host-certificate checks in paid packages and tier enforced only in the engine; public alpha
 > after step 4 as text packages with a VS Code extension and an AI skill, editor later; Free + Pro only, Pro as a
 > subscription or lifetime licence; creators sell their own data-only APKs on Play and we take nothing; security and
-> battery are exit tests, not intentions; Shizuku is not forked (the thedjchi fork is recommended for the alpha, its boot
-> trick is rebuilt into our app for 1.0).
+> battery are exit tests, not intentions. **No Shizuku** (owner, 2026-11-06): the app hosts its own shell process, paired
+> over wireless debugging and restarted on boot; this is T-001, running alongside E2. Shizuku stays in the code below until
+> T-001's last slice removes it.
 >
-> Everything below `## What this project is` describes the launcher as it stood at `7137eb7`.
+> **When two files disagree, this order wins:** the owner's latest word in the chat; `docs/DECISIONS.md` (newest entry
+> first); `docs/ENGINE_SPEC.md`; `docs/LAUNCHER_AUDIT.md`; `docs/team/BOARD.md` and the task's thread; the step's plan
+> (`docs/E2_PLAN.md` …). Below those, and **never a source of direction on `engine`**: Part 2 of this file, `docs/SPEC.md`,
+> `docs/REQUIREMENTS.md`, `docs/PLAN_*.md` and `docs/ROADMAP.md`'s milestone table. They describe the launcher as built
+> and the plan before 2026-11-03: use them for how the code works, never for what to build next. If you notice yourself
+> reasoning from them about scope, priorities, the device list, the store, Play, Shizuku or "what v1 means", stop and
+> re-read the files above.
 
 
 @docs/OPERATING_RULES.md
 
-Read this first. It is the briefing for everything built so far and everything planned. Deeper detail lives in
-`docs/REQUIREMENTS.md` (what we are building) and `docs/PROBE_FINDINGS.md` (what the feasibility probes proved, with numbers).
+# Part 2 — Reference manual: the launcher as built
 
-## What this project is
+Everything from here to the end describes the launcher as it stood at `7137eb7` (and the platform layer E1 moved into
+`:engine` unchanged): how it works, what was measured, and the pitfalls already paid for. It is accurate for the code and
+indispensable when porting it. It is **not** the plan: where it talks about targets, plans, what v1 means, which phones,
+Play or Shizuku, Part 1 and the files it names win. `docs/PROBE_FINDINGS.md` holds the measured platform facts.
+
+## What the launcher is (as built)
 
 An Android launcher that merges the **home screen, recents and the notification / quick-settings shade** into one
 themeable interface, with a theme engine and theme builder ("Hyprland-level" control over looks and motion).
@@ -50,9 +61,10 @@ debugging). The app also works without Shizuku as a plain launcher; Shizuku unlo
 
 Owner: Matheesha (CS student, strong Linux/sysadmin background). Test device: **Galaxy S24, Android 16, One UI**.
 
-## Why it exists (what we sell)
+## The bar it sets (still the bar)
 
-Not another app: it gives people back control of their own device, and it must feel like a part of the system itself,
+What we sell is now the engine and its Pro tier (`docs/ENGINE_SPEC.md`), but the feel the launcher set is still the bar
+every component must clear. Not another app: it gives people back control of their own device, and it must feel like a part of the system itself,
 premium, alive, well thought out and detailed, as iOS does. Matheesha: "that's what we will sell to the customers". Every
 change, however small, is judged by that: a seam where a stock part shows through, a look or a motion the user cannot
 change, a dropped frame or a state that pops each breaks the promise. Before calling anything done, run the polish pass
@@ -61,7 +73,8 @@ change, a dropped frame or a state that pops each breaks the promise. Before cal
 ## The three rules that outrank every feature
 
 1. **Perfectly smooth.** Open, close, swipe and panel pulls follow the finger and hold the display's refresh rate
-   (120 Hz). Matheesha's words: "not a single stutter". Measure it (frame logs), do not eyeball it.
+   (120 Hz). Matheesha's words: "not a single stutter". Measure it (frame logs), do not eyeball it. On `engine` the bound is
+   D-067's: at most 1 dropped frame per 100 on a pull at 120 Hz, idle under 1 ms a frame.
 2. **Fully consistent.** One shade, one status bar, one gesture set, everywhere. No stock panel may appear next to ours.
    Showing our status bar "on the home screen only" was explicitly rejected.
 3. **Attention to detail, always.** Every single change on screen is animated, fluidly and cleverly: nothing pops, snaps,
@@ -83,7 +96,7 @@ change, a dropped frame or a state that pops each breaks the promise. Before cal
   through Shizuku. The first line of the app log shows `BUILD <sha7>` — check it matches the commit before trusting a test.
 - Write results and decisions into `docs/` as we go; the spec is a living document.
 
-## Architecture (target)
+## Architecture (as built; the engine's target is `docs/ENGINE_SPEC.md`)
 
 - **Launcher app** (our process): home canvas, drawer, recents, shade, status bar, theme engine, builder — all our own views/windows.
 - **Shizuku user service** (shell uid): calls hidden framework APIs by reflection (task snapshots, task switching, statusbar
@@ -987,7 +1000,7 @@ copy it wholesale — port the working pieces cleanly. File map:
   must follow a moving outline is Samsung's view blur on a view of the same window, moved by translation (`NcSheetBlur`): a
   blur in another window moves a frame apart from it.
 
-## Build, release, update pipeline (to recreate in this repo)
+## Build, release, update pipeline (on `main`)
 
 1. GitHub Actions on push to `main`: `./gradlew assembleDebug -PbuildSha=${GITHUB_SHA}`; `versionName` = first 7 chars of the sha.
 2. Publish a rolling prerelease tagged `latest` with the APK (`Launcher.apk`) and its baseline profile's dex metadata
@@ -1084,32 +1097,23 @@ Every change is checked on the emulator before it is pushed, with screenshots lo
 ## Local build (Windows dev machine)
 
 - Package / applicationId: `dev.launcher.app` (placeholder, like the name). Source in `app/src/main/java/dev/launcher/app/`.
-- Gradle 8.9 + AGP 8.7.3 + Kotlin 2.0.21 (same as the probe, proven on CI). Gradle 8.9 cannot run on JDK 25 (Android Studio's JBR), so build with JDK 17:
+- On `engine`: Gradle 8.13, AGP 8.13.2, Kotlin 2.2.21, Compose BOM 2026.06.01 (D-075, D-077). On `main`: Gradle 8.9, AGP 8.7.3,
+  Kotlin 2.0.21. Build with JDK 17 (Android Studio's JBR is JDK 25):
   `$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot"; .\gradlew.bat assembleDebug`
 - Keystore: `launcher-debug.keystore` (alias `launcher`, password `android`), committed on purpose. Local and CI builds install over each other.
 - `local.properties` (SDK path) is git-ignored; local builds are stamped `BUILD local`, so UPDATE always replaces them with the CI build.
 
 ## Plan
 
-**Current plan (2026-10-10): `docs/PLAN_LAYOUTS_THEMES.md`.** Layouts (per element, with placement and options), themes
-(the look only, Figma-equivalent properties, Material You on any theme) and animations are three separate layers, any
-combination valid; a Compose settings app themed by the active theme; elements one per round (status bar, shade, recents,
-drawer, home, context menu), each checked on the S24 before the next. A theme file never chooses a layout. The first
-Pixel attempt (a theme that switched layouts) is on branch `pixel-v1`, notes in `docs/PIXEL_PROFILE.md`.
+Not here. The plan is `docs/ENGINE_SPEC.md`'s build order, the step's plan (`docs/E2_PLAN.md`), and the live state in
+`docs/team/BOARD.md`. The launcher's own plan before 2026-11-03 (`docs/PLAN_LAYOUTS_THEMES.md`, `docs/REQUIREMENTS.md`'s
+phases, the first-tasks list) is history.
 
-Original build order (details and gates in `docs/REQUIREMENTS.md`): 1 Foundation → **2 Smooth core** → 3 Home and drawer → 4 Shade → 5 Themes and builder → 6 Glass and polish → 7 Release.
-Phase 2 decides whether the whole idea works.
+## Open technical items from the launcher (as of 2026-11-03)
 
-**First tasks, in order**
-1. Project skeleton: Gradle, CI + keystore + rolling release + updater, `BUILD` stamp, Shizuku link, `HOME` launcher intent filter.
-2. Safe-settings screen + notification "Restore system" action (no Shizuku needed).
-3. Watchdog with heartbeat from a **foreground service**; kill-test it (force-stop the app, expect restore in ≈4 s).
-4. Phase 2 slice: gesture strip, launch and close cards, recents carousel from cached snapshots, own status bar.
-5. Frame-log test screen: a scripted open/close/gesture run that prints dropped frames, so "no visible stutter" is a number.
+The product questions that used to be here (Play policy, billing, the name, theme sharing, Shizuku) are decided in
+`docs/ENGINE_SPEC.md` and DECISIONS. What remains are facts about the code as built:
 
-## Open items (not decided or not verified)
-
-- Play Store policy: downloaded/interpreted theme scripts; Play Billing for the paywall; review risk of self-granting permissions via Shizuku; whether the silent updater may ship in the store build.
 - Longer stress test of Samsung dim-blur (one run dropped to 60 Hz at the strongest level; first use had a 125 ms hitch → pre-warm a zero-dim blur window).
 - Our shade replaces the stock one (and its heads-up, by our banners). Still stock: in-app links' animations; launching from a
   notification uses the app's own transition (no card from the platter yet); replying in place (the keyboard sits under our
@@ -1121,8 +1125,9 @@ Phase 2 decides whether the whole idea works.
   seconds), under our bar as One UI's does: our charging moment plays on Samsung only, and its capsule (57 px tall in the
   emulator's 63 px bar) would not cover a full-height chip. On One UI see the pitfall "One UI's status bar shows parts of
   itself that no disable flag hides". Our bar has no call capsule yet (iOS's green).
-- thedjchi Shizuku fork reviewed 2026-11-03 (see `docs/PROBE_FINDINGS.md`); recommend in onboarding with auto-update, stealth and TCP mode off.
-- Accessibility requirements need writing. Theme gallery/sharing plan, app name: undecided (placeholder "Launcher").
+- Accessibility requirements need writing. The package id `dev.launcher.app` is still a placeholder (the name is Not a
+  Launcher; no rename until its own step, D-070).
 - A licences page before release: Inter (OFL), AOSP's Quick Settings icons (Apache-2.0: `assets/icons/pixel.json`, each
   symbol with its source), Material Symbols (Apache-2.0: the app's own `sym_*`).
-- Everything was probed on one S24; re-run the key probes on other devices after phase 2.
+- Everything was probed on one S24 (and the Redmi for E2's benchmarks); the engine targets more phones, so re-run the key
+  probes on each new test device.

@@ -1,5 +1,9 @@
 # The settings app: the plan (phase C)
 
+> **History on the `engine` branch (2026-11-07).** This was the launcher's plan before the direction change of 2026-11-03.
+> It still explains how the code it describes works; it is not the plan. The plan is `docs/ENGINE_SPEC.md` and
+> `docs/team/BOARD.md`.
+
 Status: **agreed 2026-10-10** (answers below, under "Decided"). Phase C of `docs/PLAN_LAYOUTS_THEMES.md`; builds on phase B (layouts,
 themes, animations and switching between them). A second structure (the whole phone and its parts, three depths on
 every page, Motion as moments) is proposed in `docs/PLAN_SETTINGS_V2.md` (2026-10-14, not yet agreed).

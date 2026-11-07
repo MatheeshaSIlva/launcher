@@ -1,5 +1,9 @@
 # The Motion page: the plan (step C4)
 
+> **History on the `engine` branch (2026-11-07).** This was the launcher's plan before the direction change of 2026-11-03.
+> It still explains how the code it describes works; it is not the plan. The plan is `docs/ENGINE_SPEC.md` and
+> `docs/team/BOARD.md`.
+
 Status: **agreed 2026-10-14** (Matheesha: "per preset, material yes, groups as pages"). Step C4 of
 `docs/PLAN_SETTINGS.md` ("Motion: preset gallery with demos, the curve editor, roles by group"). After C4b Matheesha found
 Motion cluttered: moments instead of groups, and transition styles per moment, are proposed in `docs/PLAN_SETTINGS_V2.md`

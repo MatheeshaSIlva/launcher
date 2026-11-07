@@ -1,5 +1,9 @@
 # Plan: panel transitions as Figma connections with keyframes (proposal, 2026-11-01)
 
+> **History on the `engine` branch (2026-11-07).** This was the launcher's plan before the direction change of 2026-11-03.
+> It still explains how the code it describes works; it is not the plan. The plan is `docs/ENGINE_SPEC.md` and
+> `docs/team/BOARD.md`.
+
 Status: **approved by the owner 2026-11-01** (D-062), part of milestone MS. Nothing here is built yet.
 
 ## What the owner asked for (2026-11-01)

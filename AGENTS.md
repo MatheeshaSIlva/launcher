@@ -37,8 +37,9 @@ Branches: `main` is frozen as the last working launcher (CI and the in-app updat
 5. `docs/DECISIONS.md` — append-only log; read every entry from D-067 on, and any older entry the task touches.
 6. The step's inventory if it has one (`docs/E1_INVENTORY.md` is the model: read-only inventory first, then decisions).
 7. `docs/OPERATING_RULES.md` — how work gets done and verified here. Its two-agent section is this team.
-8. `CLAUDE.md` below its direction banner — the manual for the launcher as built (123 KB). Do not read it whole; search
-   it for the files and subsystems the task touches. `docs/PROBE_FINDINGS.md` holds the measured platform facts.
+8. `CLAUDE.md` Part 2 — the manual for the launcher as built (about 120 KB). Do not read it whole; search it for the
+   files and subsystems the task touches. It is never a source of direction: Part 1 of `CLAUDE.md` says which file wins
+   when two disagree, and `docs/SPEC.md`, `docs/REQUIREMENTS.md` and `docs/PLAN_*.md` are history on `engine`. `docs/PROBE_FINDINGS.md` holds the measured platform facts.
 
 ## Where things are
 
@@ -98,7 +99,8 @@ skipping any check:
 
 ## Environment
 
-Owner's dev machine is Windows (JDK 17, Git Bash); Gradle 8.9, AGP 8.7.3, Kotlin 2.0.21, Compose BOM as pinned. Test
+Owner's dev machine is Windows (JDK 17, Git Bash); on `engine` Gradle 8.13, AGP 8.13.2, Kotlin 2.2.21, Compose BOM
+2026.06.01 (ui 1.11.4) (D-075, D-077); `main` stays on Gradle 8.9, AGP 8.7.3, Kotlin 2.0.21. Test
 device: Galaxy S24 (One UI, Android 17), the Android 17 emulator for checks before the phone, a Redmi Note 10 Pro when
 connected. CI builds the debug variant on every push to `main` only.
 

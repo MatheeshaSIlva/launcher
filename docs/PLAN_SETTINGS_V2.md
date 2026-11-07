@@ -1,5 +1,9 @@
 # The settings, second structure: less on screen, everything in reach (proposal, 2026-10-14)
 
+> **History on the `engine` branch (2026-11-07).** This was the launcher's plan before the direction change of 2026-11-03.
+> It still explains how the code it describes works; it is not the plan. The plan is `docs/ENGINE_SPEC.md` and
+> `docs/team/BOARD.md`.
+
 Status: **agreed 2026-10-15** (Matheesha's answers below, under "Decided"). Matheesha (2026-10-14): "the current motion
 settings looks a bit cluttered with lots of lines of settings. is there any way we make it less cluttered and reduce
 cognitive load, and make every setting understandable to the user? We should rethink the settings ui and ux to make it

@@ -1,8 +1,8 @@
 # Project operating rules
 
-@SPEC.md
-
-The spec above is the locked direction of this project. Everything below is how work gets done here.
+The direction on `engine` is `docs/ENGINE_SPEC.md` with the decisions after it (`CLAUDE.md`'s Part 1 says which file wins
+when two disagree). `docs/SPEC.md` is the launcher's spec on `main` and history on `engine`; do not plan from it.
+Everything below is how work gets done here.
 
 ## How we work (two agents, owner 2026-11-06)
 
@@ -16,12 +16,13 @@ The `/ship` pipeline and `.claude/agents` stay disabled (`.claude/_disabled/`). 
 
 The steps below apply to each agent's share of a task.
 
-1. Read what the task touches: SPEC, the active milestone in ROADMAP, the relevant D-entries, and the code. Read only what
+1. Read what the task touches: `docs/ENGINE_SPEC.md`, the board and the task's thread, the step's plan, the relevant
+   D-entries, and the code. Read only what
    the task needs. If the request conflicts with the spec or a decision, say so first.
 2. Say the plan in a few lines before a large change. Ask the owner only where the Ask list below says so.
 3. Build in small steps: one concern per branch, roughly 200 changed lines.
 4. Verify with the tool that fits the claim (next section), never by feel.
-5. Update ROADMAP and DECISIONS, commit, report.
+5. Update the board, the thread and DECISIONS, commit, report.
 
 ## Keep the owner in the loop
 
@@ -60,9 +61,12 @@ Passing a task's checklist is not "done". Work is judged by whether the whole el
 
 ## Source of truth
 
-- `docs/SPEC.md`: the owner's direction. **Never edit it without the owner's approval.**
-- `docs/ROADMAP.md`: milestones, acceptance criteria, bug backlog. Update status, dates and checkboxes (only for criteria
-  that are verified). Only the owner adds, removes or reorders milestones.
+- `docs/ENGINE_SPEC.md`: the owner's direction on `engine`. Spec changes are the owner's: propose them (the board's open
+  owner questions, or `docs/QUESTIONS.md`), never make them on your own.
+- `docs/team/BOARD.md`: the live state of the work: step, tasks, owners, parking lot. The lead keeps it current.
+- `docs/SPEC.md`: the launcher's spec, for `main`. **Never edit it without the owner's approval.**
+- `docs/ROADMAP.md`: on `engine`, its "Engine branch" section points to the build order; the milestone table and the bug
+  backlog are the launcher's (`main`). Only the owner adds, removes or reorders milestones or build steps.
 - `docs/DECISIONS.md`: append-only log. Log every architectural or trade-off choice made without the owner.
 - `docs/QUESTIONS.md`: questions for the owner when they are away.
 
@@ -84,7 +88,9 @@ irreversible. **Decide and log in DECISIONS.md** for everything smaller. If the 
 
 ## Limits
 
-- One active milestone at a time. New ideas go to the Parking lot in `docs/ROADMAP.md`.
+- One build step at a time on `engine` (T-001 runs alongside E2 by the owner's choice, D-074). New ideas go to the
+  board's parking lot.
 - If the same fix fails twice, stop and report what keeps failing before a third try.
-- Every 3 to 5 tasks, or when the owner asks, compare the work with SPEC and ROADMAP and say whether it is still on
-  direction (unrequested features, spec rot).
+- Every 3 to 5 tasks, or when the owner asks, compare the work with `docs/ENGINE_SPEC.md` and the board and say whether
+  it is still on direction (unrequested features, spec rot). The team's milestone reviews (`docs/team/PROTOCOL.md` §6) do
+  this formally.

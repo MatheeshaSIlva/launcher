@@ -5,7 +5,7 @@ description: The launcher's bar for "done", the premium, system-level, iOS-grade
 
 # Polish pass
 
-Matheesha sells this launcher on a feeling: it is part of the phone itself, not an app on top of it. It gives people back
+Matheesha sells this on a feeling (the launcher first, now the engine and every component built on it): it is part of the phone itself, not an app on top of it. It gives people back
 control of their own device, and it moves like iOS does. People notice when that promise breaks, even if they can't name
 what broke: a stock panel showing for one frame, a number that jumps, an animation that ignores the finger, a look they
 can't change. This pass is how a change gets checked against that promise before Matheesha sees it. He reviews at this
@@ -52,7 +52,7 @@ The list is the work. A state that isn't on it never gets designed, so it ends u
   animations on cross-app starts, Edge lighting pop-ups.)
 - Is it consistent everywhere: one shade, one status bar, one gesture set, over apps, home, the lock screen and the
   settings, upright and turned?
-- If the change alters system state, does it restore itself (watchdog, Restore system) and recover without Shizuku?
+- If the change alters system state, does it restore itself (watchdog, Restore system) and recover without the shell process?
 
 ## 4. The user's control is real
 

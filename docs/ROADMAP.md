@@ -12,7 +12,7 @@ Rules:
   criteria: emulator screenshots looked at, then the owner's S24 log or words)
 - `scripts/check.sh` is green
 - Anything that must match a reference passes `tools/fidelity/diff.py`; anything that moves shows no new missed refreshes in
-  the S24 frame stats; the owner's S24 check comes last (single session since 2026-10-30, no reviewer or QA agents)
+  the S24 frame stats; the owner's S24 check comes last (on `engine`: both agents signed off first, `docs/team/PROTOCOL.md`)
 - The polish pass was run for anything that changes the screen
 - No known regressions; any open bugs are logged in the Bug backlog
 - `docs/DECISIONS.md` updated if a design choice was made
@@ -28,15 +28,18 @@ holds. MS and the rest continue on `main` only if the owner says so.
 E1 started 2026-11-05 and finished 2026-11-06 (D-070 to D-072): plan, slices and exit in `docs/E1_INVENTORY.md`; the
 launcher runs on `:engine` with the APK unchanged beyond the host interfaces, checked on the emulator and the S24. E2 is next.
 
-From 2026-11-06 the work runs as a two-agent team (D-073); the live state is `docs/team/BOARD.md`. Proposed before E2:
-**E1b, our own shell host replacing Shizuku** (thread T-001), for the owner to approve.
+From 2026-11-06 the work runs as a two-agent team (D-073); **the live state is `docs/team/BOARD.md`**. Active on `engine`:
+**E2** (plan `docs/E2_PLAN.md`), with **T-001, our own shell host replacing Shizuku**, alongside it (D-074).
+
+The milestone table below is the launcher's on `main`. On `engine` none of it is active: MS and MF are paused, and their
+unfinished parts come back as components of the build steps (the audit's "Unfinished in the launcher" list).
 
 ## Milestones
 
 | ID | Name | Status | Started | Finished |
 |----|------|--------|---------|----------|
 | M0 | Safety net | DONE | 2026-10-22 | 2026-10-22 |
-| MS | iOS 27 shade finished (status bar, Notification Center, Control Center, banners) | ACTIVE | 2026-10-30 | |
+| MS | iOS 27 shade finished (status bar, Notification Center, Control Center, banners) | ACTIVE on `main` only; paused on `engine` | 2026-10-30 | |
 | MF | Fidelity harness (Pixel first) | BLOCKED (paused for MS, owner 2026-10-30) | 2026-10-25 | |
 | M1 | Regression and smoothness baseline | BLOCKED | 2026-10-22 | |
 | M2 | Pixel shade layout signed off | TODO | | |
