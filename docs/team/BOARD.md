@@ -36,8 +36,8 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
-| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a DONE; 1b AGREED, round 2) |
-| T-004 | E2 slice 6: the first KDL bar in the shade window (time, dev switch) | `threads/T-004-e2-slice6-first-bar.md` | claude; codex cross-checks | `engine` | DISCUSSING |
+| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a DONE; 1b IN PROGRESS, round 2) |
+| T-004 | E2 slice 6: the first KDL bar in the shade window (time, dev switch) | `threads/T-004-e2-slice6-first-bar.md` | claude; codex cross-checks | `engine` | IN PROGRESS (agreed) |
 | T-003 | E2.0: AGP 8.13.2 and Gradle 8.13; every Android 11 call lint 8.13 found guarded (5 sites) | `threads/T-003-agp-8-13.md` | claude; codex cross-checked | `team/claude/t003-agp` | DONE |
 | T-002 | E2.0a: Compose 1.11.4 and Kotlin 2.2, measured before and after | `threads/T-002-compose-kotlin-upgrade.md` | claude; codex cross-checks | `team/claude/t002-compose` | DONE (the owner's eye on the settings remains) |
 
