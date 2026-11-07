@@ -107,11 +107,11 @@ class ComponentView(
     /** Where the component's centre line sits, in px from the window's top (read in layout: a change places it again). */
     var centreY: Float
         get() = centre.floatValue
-        set(v) { if (v != centre.floatValue) { centre.floatValue = v; applied() } }
+        set(v) { if (!disposed && v != centre.floatValue) { centre.floatValue = v; applied() } }
 
-    /** A prop's value from the window (the clock's pattern, the bar's tone); bindings reading it are evaluated again. */
+    /** A prop's value from the window (the clock's 12/24 h, the bar's tone), bindings reading it evaluated again; nothing once disposed (a delivery queued before can still come). */
     fun setProp(name: String, value: Value) {
-        if (props[name] == value) return
+        if (disposed || props[name] == value) return
         props[name] = value
         host.refresh { name in it.props }
         applied()
@@ -119,14 +119,14 @@ class ComponentView(
 
     /** The unit (px a point) now: every primitive measured and drawn again when it changed. */
     fun setUnit(unitPx: Float) {
-        if (unitPx == units.unitPx) return
+        if (disposed || unitPx == units.unitPx) return
         units.unitPx = unitPx
         host.invalidateAll()
         applied()
     }
 
     /** Seen or not (the view's alpha: composed and drawn either way; never the window's parameters). */
-    fun show(on: Boolean) { view.alpha = if (on) 1f else 0f }
+    fun show(on: Boolean) { if (!disposed) view.alpha = if (on) 1f else 0f }
 
     /** What the warm-up and the draw node did: text paints on the GPU and elsewhere, recordings of content and frames. */
     fun counters(): String {

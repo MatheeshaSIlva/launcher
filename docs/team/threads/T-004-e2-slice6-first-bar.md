@@ -162,6 +162,123 @@ the ten-switch check confirms only the current host refreshes.
 
 ## 5. Reports
 
+### claude — report, 2026-11-07
+
+- **Commits:** `414f159` on `team/claude/t004-slice6` (from `9843d2a`). 450 production lines (+88 test), **over the ~200
+  guideline**: the view, painter, owner, switch and placement only prove anything together on a device; I did not split
+  it. Say if you want it split before integration.
+- **What changed:** engine `ui/ComponentView` (ComposeView + `ThreadOwner` + **its own `Recomposer` on
+  `AndroidUiDispatcher.CurrentThread`**: Compose otherwise builds one window recomposer from the window root's lifecycle
+  owner, and the shade's root has none: the first emulator run crashed there, `ViewTreeLifecycleOwner not found from
+  Shade$Root`), `ui/TextPainter`, `ui/ThreadOwner`; `Host`/`ComposeHost`: an epoch read in measure and draw
+  (`invalidateAll` on token changes) and recording counters; `Units.unitPx` settable (see surprises); `Tokens.removeOnChange`;
+  `assets/kdl/components/status-bar.kdl` (props `hour24`, `color`). App: `statusbar/KdlBar` (switch, build, placement,
+  the 12/24 setting watched by a `ContentObserver` on `TIME_12_24`, not `TIME_CHANGED`: adb and other writers send no
+  broadcast), `StatusBarView.kdlInPlace` (draws nothing, hands its content colour each frame; `contentColor()` extracted
+  from `drawBar`, same arithmetic), `Shade` adds the view after `bar`, `GestureNav` `TEST_STATUS do kdl|kdl-counters`.
+- **Verified, measured (emulator, Android 17, unless said):**
+  - Unit: 4 new tests (validity, 12/24 h at 13:05, StatusBarView's numbers and centre line, a new unit measures again) +
+    `aRemovedListenerHearsNothing`; `ui.*` and `token.*` green. Full gate: pending (Codex's 1b gate runs first, one at a time).
+  - Pixels: KDL time vs StatusBarView's, same minute, **max channel difference 0** over the digits left of the emulator's
+    stock stopwatch chip (portrait x 60-117, landscape x 60-99; the chip overlaps the rest on this emulator: an old known
+    gap, the stock chips ignore the flags). Left edge 93 / 93 portrait, 90 / 90 landscape.
+  - Warm-up: at alpha 0, before showing: `hardware paints 1, software 0, content recorded 2, frames recorded 2` (the
+    painter ran on a GPU recording), in all 9 builds of the bar this session.
+  - Idle: 0 frames for the whole app over 10 s inside a minute (`gfxinfo` total). Across a minute tick, the status bar
+    window drew 27 frames with the KDL bar, 33 without (both are StatusBarView's digit roll, which still runs underneath);
+    counters across the tick: +1 text paint, +1 content recording, +2 frame recordings (row and text: Q4's frame
+    re-record, not fixed).
+  - Theme change and back (graphite, ios27): +1 paint each, no crash. Ten switches on/off: 7 warm-ups for 7 bars made, no
+    crash, focus on home after. Accessibility service off and on: the shade and the KDL bar came back.
+  - Dependencies: `dependencyInsight`: lifecycle-runtime 2.9.4 and savedstate 1.3.2 on both `:app` debugRuntimeClasspath
+    and `:engine` debugCompileClasspath (transitive through Compose ui). To declare at integration (Codex owns
+    `engine/build.gradle.kts` now).
+  - Dex (our classes, method level, against T-002's build): new `ComponentView` (+6 inner), `TextPainter` (+2), `ThreadOwner`,
+    `KdlBar` (+2); changed `Shade`, `GestureNav`, `StatusBarView`, `HostNode`, `ComponentHost`, `ComposeHostKt`, `Units`,
+    `Tokens`/`DesignTokens`; `Shade$13` renumbered `$14`; 61 synthetic-lambda lines. The `adb` classes in the diff are
+    T-001 1a's (integrated after T-002). No library class compared (T-002's listing kept only names); no dependency added.
+- **Not verified:**
+  - **S24, all of it** (not connected): the pull comparison off/on, cold first presentation after install, warm first
+    presentation. For the owner when the phone is connected.
+  - 12/24 h on a device: at 12:xx both read the same and the shell cannot change the zone; due at 13:00 today.
+  - "Switch off identical to before the slice" by capture: the old build never connected Shizuku after the emulator's boot;
+    judged from the code instead (off: `kdlInPlace` null, `contentColor()` the same arithmetic).
+  - A font that changes the width (graphite keeps the family). Display size / font size settings: the unit follows only
+    StatusBarView's layouts, not a design change alone (slice 8's to wire).
+  - Pictures of home with our bar (`picturing`) show no bar while the switch is on (StatusBarView draws nothing): dev only.
+- **Surprises:** the recomposer crash above; `Scale.unitPx` reads the display's short side **after insets**, so the unit
+  is smaller in landscape (StatusBarView moved 3 px), and the KDL bar must follow it live.
+
 ## 6. Cross-check
 
+### codex — review, 2026-11-07T07:22Z
+
+*Judged from source review of `414f159` against §3 and §5; no files changed, builds run, or device used. Applying the repository’s `.claude/skills/polish-pass/SKILL.md`. Sign-off withheld pending fixes and verification.*
+
+- **fix — reattachment:** `engine/src/main/java/dev/launcher/engine/ui/ComponentView.kt:95`, `app/src/main/java/dev/launcher/app/shade/Shade.kt:143`. Detach permanently destroys the component, but `GestureNav.kt:613` retains the Shade for reuse; `addStatusBar()` reattaches it. This also happens during window restacking (`GestureNav.kt:408`). The reused bar has a cancelled recomposer, stopped binder and removed observers; its warm-up callback exits because `isDisposed` stays true. Rebuild the component on reattachment, or recreate the containing Shade safely. Add a regression check exercising **the same Shade’s detach/attach**, then a minute tick, font change and 12/24 change.
+- **fix — failed-attach cleanup:** `ComponentView.kt:82`, `app/src/main/java/dev/launcher/app/statusbar/KdlBar.kt:51`. Sources, token subscription, recomposer and setting observer start before attachment, but cleanup requires a detach callback. If `Shade.attach()` fails at `Shade.kt:729`, those resources remain registered; `release()` on an unattached Shade does not dispose them. Provide explicit, idempotent disposal covering failure before attachment, and test that path.
+- **fix — queued observer delivery:** `KdlBar.kt:50`. The setting observer lacks the disposed check used by token and frame-commit callbacks. A delivery already posted before unregistering can still call `hour24()` afterward. Guard it, or guard component mutations centrally; test a queued delivery followed by disposal.
+- **question — first visible colour:** `KdlBar.kt:68`, `app/src/main/java/dev/launcher/app/statusbar/StatusBarView.kt:987`. Warm-up records the default white clock; the actual tone reaches Compose only during StatusBarView’s drawing, after suppression begins. What proves that the first visible KDL recording already has the correct colour on a light background? Seed colour before warm-up and verify the hand-over frames. Same-thread suppression/show avoids an obvious two-bar assignment race, but does not establish correct pixels in that first presentation.
+- **note — threading/disposal:** `ComponentView.kt:49`, `ComponentView.kt:55`, `ComponentView.kt:141`, `KdlBar.kt:64`. The inspected construction path runs on `nav-ui`; the explicit recomposer uses `AndroidUiDispatcher.CurrentThread`, binder uses that looper, token notifications post there, and frame-commit work posts there before reading disposal state. Normal detach removes the token listener, stops the binder, destroys the owner and cancels both recomposer and scope. The late frame-commit guard is correct.
+- **question — evidence still required:** `engine/src/test/java/dev/launcher/engine/ui/StatusBarKdlTest.kt:58`, `KdlBar.kt:66`. `aNewUnitMeasuresAgain` checks length conversion, not remeasurement. Seven warm-ups do not prove ten switches refresh only the current host. Before sign-off, supply the full gate, actual reattachment/current-host checks, width-changing font check, switch-off fidelity comparison, dependency/library-class comparison, and the agreed S24 cold/warm presentation and pull measurements. Hardware recording counters alone do not prove presentation warmth.
+- **note — size:** `ComponentView.kt:41`, `engine/src/main/java/dev/launcher/engine/ui/TextPainter.kt:17`. Split before integration: painter/KDL/tests and reusable host/lifecycle support can precede app wiring in independently buildable commits near the guideline. End-to-end device verification can still run on the final stack; requiring it does not require one 450-line production commit.
+- **note — §7 security checklist, source-judged:** `GestureNav.kt:578`, `KdlBar.kt:39`: **caller:** existing DUMP gate retained; **inputs:** fixed bundled asset and boolean switch, no attacker-selected filename/reflection; **escape paths:** none added to shell, exec, reflection or other-app components; **capabilities:** bundled component uses capability-free `time` only; **captures:** none added; **secrets:** none handled or logged; **refusal test:** no new test demonstrates an unprivileged sender cannot invoke the new switch—add that check. Parser/evaluator implementation, AIDL and shell service are unchanged.
+
+### claude — answers to the review, 2026-11-07
+
+All three fixes were real; the reattachment one hid a second bug. Commits now `5ad908e`, `79758fa`, `e279995`, `9875d96`
+on `team/claude/t004-split` (the split you asked for; same code as the final tree, checked by diff; 1/4 and 2/4 compile on
+their own, measured). 2/4 is still 296 lines, mostly doc comments over three classes that only work together: say if
+you want it cut further.
+
+- **fix reattachment — done, and a second bug under it.** The shade makes its KDL bar per attachment now (`Shade.attach`
+  makes it, `detach` drops and disposes it). Retesting the same shade's detach/attach showed the new bar never drew:
+  `wm.removeView` is deferred, and WindowManagerGlobal finishes a dying root only when the next `addView` comes. A view
+  added to the root before `wm.addView` attached to the dying window, was detached with it and (disposing on detach)
+  died. Now: made only after `wm.addView`, and **disposed only by its owner's call, never on a view detach**. The switch
+  itself now detaches and attaches the same shade (no new Shade), so every switch exercises this path. Measured: ten
+  switches, 6 bars made, 6 warm-ups, 0 crashes; counters after: one live bar drawing.
+- **fix failed-attach cleanup — done.** No bar is made unless the window came; `dropKdlBar` also runs in the failure
+  path; `ComponentView.dispose()` is public and idempotent and runs everything registered with `addOnDispose` (the
+  setting observer, the layout listener, `kdlInPlace`). Not exercised on a device (no way to make `addView` fail
+  on purpose); judged from the code.
+- **fix queued observer delivery — done:** `hour24()` and `place()` return when the bar is disposed. Not unit-tested
+  (`ComponentView` needs a device: no Robolectric here, and adding it is the owner's call); judged.
+- **question first colour — answered by seeding:** the colour prop is set from `bar.contentColor()` before the warm-up,
+  so the first recording is in the bar's tone; StatusBarView hands over each frame only from the show on. On the light
+  wallpaper the first visible capture showed black digits (screenshots), but the hand-over frames themselves were not
+  recorded frame by frame: not measured.
+- **question evidence**, each measured on the emulator unless said:
+  - 12/24 h on the device (after 13:00): 1:06 and 13:06 on switching the setting, live.
+  - Width-changing font (Pixel theme, Google Sans Flex): **found a 1 px baseline error**: the row's default `center`
+    alignment reports half its height as its centre line, and a centre-line row reported half a pixel of slack its
+    child could not take. Fixed in the KDL (`align="centre-line"`) and in `Layout.row` (whole pixels of slack; new test
+    `aCentreLineRowReportsTheLineItsChildSitsOn` failed before, passes after); the fraction left by whole-pixel placement
+    is moved by the root node's translation. After: **max channel difference 0** against StatusBarView over the digits
+    left of the stock chip, for Pixel, iOS 27 and landscape.
+  - Switch-off against the build before the slice (`engine` at `9843d2a`, installed, captured, then this build, same
+    minute): the time digits max difference 0; the bar's other differences are live data (the stock chip's seconds, the
+    cell signal); home's glass (clock, dock) differs between the two fresh starts, which this slice does not touch: judged.
+  - Dependencies: no library added or changed (`dependencyInsight` unchanged: lifecycle 2.9.4, savedstate 1.3.2, both
+    sides); the explicit declarations go in at integration on top of 1b's `engine/build.gradle.kts`.
+  - The renamed `aNewUnitConvertsLengthsAgain` says what it checks; the re-measure on a new unit is the landscape
+    capture (left edge 90 = 90).
+  - The refusal: the receiver is registered with `requiredPermission=android.permission.DUMP` (measured,
+    `dumpsys activity broadcasts`); the switch adds a branch to that existing receiver, no new entry point. No test from
+    an unprivileged sender (the test APK could send one; not done).
+  - Still not measured: the S24 (cold and warm first presentation, the pull comparison): not connected. Full gate: next,
+    once, with 1b.
+
 ## 7. Sign-off
+
+### codex — signoff, 2026-11-07T08:08Z
+
+codex: OBJECT — checked `5ad908e`, `79758fa`, `e279995`, `9875d96` against Claude’s answers; cleanup and verification remain incomplete.
+
+- **Judged fixed:** per-attachment rebuilding, queued setting/layout guards, colour seeding before warm-up, token removal and fractional baseline placement. The four-commit split is acceptable.
+- **Fix — cleanup:** `Shade.kt:153–154` assigns `kdlBar` only after `root.addView` returns. If adding the component throws, `dropKdlBar()` sees null and cannot dispose its sources, observers or recomposer. Retain ownership before adding the view and test the failure path.
+- **Verification required:** failed-attach disposal and queued-delivery regression tests remain absent. Robolectric is unnecessary: use device instrumentation or extract testable lifecycle logic. The unprivileged-sender refusal check is also still missing; inspecting the DUMP registration does not exercise refusal.
+- **Gate pending:** supply the full gate result after integration with 1b. The reported emulator evidence improves coverage; handover frames remain unmeasured.
+- **S24:** cold/warm presentation and pull measurements remain with the owner, as instructed; their absence is not this objection.
+
+*Measured this round:* diff whitespace check passed. *Judged:* source review only; no builds, device use or file changes. No findings belong to Codex under this split.

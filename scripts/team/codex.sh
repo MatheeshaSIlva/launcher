@@ -81,10 +81,11 @@ fi
 case "$mode" in
   discuss) hdr='## 2.' ;; work) hdr='## 5.' ;; review) hdr='## 6.' ;; signoff) hdr='## 7.' ;; milestone) hdr='## codex' ;;
 esac
-awk -v hdr="$hdr" -v ef="$entry" '
+# The LAST such heading: a thread with rounds (# Round 2) repeats the sections, and the open round is the last one.
+last=$(grep -n "^$hdr" "$file" | tail -1 | cut -d: -f1)
+awk -v start="${last:-0}" -v ef="$entry" '
   BEGIN { while ((getline l < ef) > 0) e = e l "\n" }
-  insec && /^## / && !done { printf "%s\n", e; done = 1; insec = 0 }
-  !done && index($0, hdr) == 1 { insec = 1 }
+  start > 0 && NR > start && /^#{1,2} / && !done { printf "%s\n", e; done = 1 }
   { print }
   END { if (!done) printf "\n%s", e }
 ' "$file" >"$file.tmp" && mv "$file.tmp" "$file"

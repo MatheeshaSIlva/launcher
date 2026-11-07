@@ -150,16 +150,21 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private fun makeKdlBar() {
         if (!dev.launcher.app.statusbar.KdlBar.on(ctx)) return
-        kdlBar = dev.launcher.app.statusbar.KdlBar.make(ctx, handler, bar)?.also {
-            root.addView(it.view, root.indexOfChild(bar) + 1, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        // Held before it is added: if adding throws, dropKdlBar still disposes what it started.
+        val k = dev.launcher.app.statusbar.KdlBar.make(ctx, handler, bar) ?: return
+        kdlBar = k
+        try {
+            root.addView(k.view, root.indexOfChild(bar) + 1, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        } catch (t: Throwable) {
+            AppLog.log("[kdl] not added: ${t.javaClass.simpleName}")
+            dropKdlBar()
         }
     }
 
     private fun dropKdlBar() {
         val k = kdlBar ?: return
         kdlBar = null
-        root.removeView(k.view)
-        k.dispose()
+        try { root.removeView(k.view) } finally { k.dispose() }
     }
     private val backdrop = BackdropView(ctx)
     /** Control Center's live background where the system can blur what is behind a window (see [LiveBlur]). */

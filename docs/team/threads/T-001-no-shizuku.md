@@ -439,3 +439,68 @@ manifest shown unchanged), UI, mDNS, boot work or root start. Production ABIs al
 
 Note: T-004 (slice 6) edits `engine/build.gradle.kts` too if `:engine` needs lifecycle declared. If so, the lead takes
 that one line at integration and rebases; Codex owns the file meanwhile.
+
+## 5. Reports
+
+### codex — work, 2026-11-07T07:28Z
+
+- **Commits:** Left uncommitted on `team/codex/t001-adb`. Proposed messages: `Vendor SPAKE2 bridge and pin native toolchain`; `Add RSA identities and TLS certificates`; `Persist wrapped identities with explicit loss results`; `Add bounded STLS shell transport`; `Test hostile transcripts and stalled peers`; `Add public-exporter ADB pairing`; `Add framework Android pairing proof`. Each gets `Co-Authored-By: Codex <noreply@openai.com>`.
+- **What changed:** Native pairing, encrypted atomic identity storage, bounded connection/pairing clients, tests and notices. NDK pinned to `29.0.14206865`; all four production ABIs retained.
+- **Verified — measured:** Full `scripts/check.sh` passed: 421 app + 109 engine JVM tests, 58 Python tests, all five shell suites. Capture suite: 74 scenarios, 746 checks, zero failures. Instrumentation APK built; Gradle daemon stopped.
+- **APK growth — measured:** Universal: **23,683,143 → 31,979,509 bytes (+8,296,366)**. Aligned, signed single-ABI repacks: arm64 **+5,448,111**; armv7 **+5,104,049**; x86 **+5,464,489**; x86_64 **+5,525,932 bytes**.
+- **Dex/manifest — measured:** Slice-baseline `dexlist.sh` check passed: **4,719 new classes**—4,681 Bouncy Castle, 36 ADB, two prefab resource classes—and one changed codec method count. Production merged manifest identical. Declaration: `.gradle/T001-1b.delta.expect`. New native libraries pass 16 KB ELF and APK alignment checks.
+- **Security — judged:** No external production entry or component-to-shell route; bounded inputs/time; capability plumbing untouched; no captures; keys private and unlogged. Refusal tests passed. ADB-only self-signed TLS trust is documented.
+- **Not verified:** Android JNI loading, real pairing, Keystore persistence/loss and wrong-code interoperability. Lead runs instrumentation modes `selftest`, `pair`, fresh-process `reload`, then `wrong-code`. Phone/emulator untouched.
+- **Surprises:** The repository’s historical dex reference already differs before this slice; validation therefore used a private slice-baseline harness. No tracked allowance or lint-baseline file changed.
+
+Automatic approval review blocked deleting generated `engine/.cxx` (“blocked by policy”); it remains untracked and must be excluded from commits.
+
+### claude — device proof, 2026-11-07 (emulator, Android 17, x86_64; test APK uid, not the launcher's)
+
+Built `:engine:assembleDebugAndroidTest` from `8293b8e` (Codex's work, committed by the lead on `team/codex/t001-adb`
+with Codex as author, as one commit listing its seven steps). Measured, `am instrument` results:
+- `selftest`: PASS (the JNI library loads; native SPAKE2/HKDF/AES-GCM exchanges and storage tests in an app process).
+- `pair` (Wireless debugging's pairing-code dialog, host 10.0.2.16, its pairing port and the connect port): PASS, and
+  `shell:id` contained `uid=2000(shell)`; Settings then listed the pairing as "not-a-launcher".
+- `reload` (a fresh process, no code): PASS: the wrapped identity reloaded and `shell:id` again `uid=2000(shell)`.
+- `wrong-code` (a new dialog, a code that was not its): PASS: refused as `AdbPairingRejectedException`.
+- Log check: **no line from our test process** carries either code. Three system lines do: `AdbDebuggingManager:
+  updateUIPairCode` (system_server logs every code it shows, Android's own) and adbd's log of my `adb shell am instrument
+  ... -e code` command line (the test method; production never passes a code through adb).
+
+## 6. Cross-check
+
+### claude — cross-check of 1b, 2026-11-07
+
+Read `AdbPairingClient`, `AdbTransport`, the trust manager in `AdbKey`, the report; grepped every new Kotlin and C++ file
+for logging (none). Ownership kept to §4's files (plus `.gitignore`'s `.cxx/`, the lead's).
+- **note (slice 2's checklist):** `AdbKey.kt:82` trusts any server certificate (adb's own model, upstream's too). On the
+  pairing port SPAKE2 over the exporter authenticates the peer; on the **connect port nothing does**: a host on the same
+  network answering there would get our `shell:` commands. Slice 2's one-time capability is what keeps that from
+  mattering (an impostor cannot hand a binder our app accepts); say so explicitly in slice 2's checklist, or pin adbd's
+  certificate from pairing if that proves possible.
+- **note (slice 2):** `AdbTransport.kt` closes every transport at 30 s (`OPERATION_MS`): right for one-shot commands;
+  slice 2's starter must fit inside it or use its own bound.
+- **note (owner):** APK +8.3 MB universal (23.7 to 32.0 MB), ~5.1-5.5 MB per single-ABI install: reported to the owner as
+  measured, no action asked.
+- **process:** `codex.sh` placed the report under round 1's §5 (the first `## 5.` heading); moved by the lead. The script
+  should take the last heading of that number; the lead's to fix (not in this slice).
+
+Security checklist (lead's pass): caller: no production caller, no component, manifest unchanged (Codex measured); inputs:
+code validated as six ASCII digits, every packet bounded (type, size), peer info exactly 8,192 bytes; escape paths: none
+(the client issues only what its caller asks; no caller yet); capabilities: none; captures: none; secrets: key wrapped
+by the Keystore, code and exporter zeroed after use, nothing logged by us (device grep above); refusal tests: wrong code
+refused on the device, hostile transcripts and stalled peers in the unit tests.
+
+## 7. Sign-off
+
+- `claude: AGREE — slice 1b: device proof (selftest, pair, reload, wrong code) on the emulator, no code in our logs,
+  bounds and timeouts read, security checklist above; three notes for slice 2 and the owner, none blocking.` (2026-11-07)
+
+### codex — signoff, 2026-11-07T08:09Z
+
+codex: AGREE — reviewed `8293b8e`, round 2’s device proof and §6 cross-check; no blocking fixes were requested.
+- **Judged (source):** all seven security checklist items covered: no production entry point or caller; bounded inputs and time; no component-to-shell route; capability wiring unchanged; no captures; private wrapped keys without logging; refusal tests present.
+- **Measured evidence reviewed:** saved full gate and declared dex check passed; manifest hashes match. Lead reports emulator selftest, pair, fresh-process reload and wrong-code rejection passed under the test APK UID.
+- **Slice 2 requirements retained:** connect-port TLS does not authenticate the server; binder handover needs its one-time capability. Starter execution must respect the 30-second bound. Test-process logs were clean; system logs exposed the adb-supplied codes.
+- No edits or device use this round. Launcher-UID and S24 behavior remain unverified.
