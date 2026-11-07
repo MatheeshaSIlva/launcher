@@ -53,7 +53,10 @@ class OwnHost : ShellHost {
 
     override fun state(): ShizukuLink.State = if (gate.isStarting) ShizukuLink.State.CONNECTING else ShizukuLink.State.NOT_RUNNING
 
-    override fun connect() {
+    override fun connect() = start(null)
+
+    /** [test]: a refusal proof's mode for the starter (only from the DUMP-gated route), else null. */
+    private fun start(test: String?) {
         if (gate.connectedGeneration != 0L || gate.isStarting) return
         val endpoint = endpoint() ?: return AppLog.log("[shell] own host: no connect endpoint (pair first)")
         val ticket = gate.begin()
@@ -69,7 +72,7 @@ class OwnHost : ShellHost {
             clients[gen] = c
             try {
                 c.connect()
-                c.shell("trap '' HUP; exec app_process -Djava.class.path=${quoted(apk)} /system/bin --nice-name=launcher-shell ${Starter::class.java.name}",
+                c.shell("trap '' HUP; exec app_process -Djava.class.path=${quoted(apk)} /system/bin --nice-name=launcher-shell ${Starter::class.java.name}" + (test?.let { " --test=$it" } ?: ""),
                     (ticket.capability + "\n").toByteArray(Charsets.US_ASCII))
             } catch (t: Throwable) {
                 // Closed by us once the start is acknowledged; anything else ends this attempt (and only this one).
@@ -89,6 +92,7 @@ class OwnHost : ShellHost {
      * linked the token) publishes it. Null for any refusal.
      */
     fun handover(callingUid: Int, method: String, extras: Bundle?): Bundle? {
+        if (method == LEND_METHOD) return lend(callingUid)
         if (callingUid != StartAttempt.SHELL_UID) return refused()
         return when (method) {
             StartAttempt.HANDOVER_METHOD -> claim(callingUid, method, extras)
@@ -117,6 +121,7 @@ class OwnHost : ShellHost {
             if (!gate.isConnected(gen)) return@post
             clients.remove(gen)?.close()
             AppLog.log("[shell] own host: service connected")
+            published = binder
             sink.connected(generation, IShellService.Stub.asInterface(binder))
         }
         return Bundle()
@@ -129,6 +134,41 @@ class OwnHost : ShellHost {
             HandoverGate.Ended.START -> end(gen, "the service died before it was ready")
             HandoverGate.Ended.NOTHING -> {}
         }
+    }
+
+    /** The published service's binder, for [lend] only. */
+    @Volatile private var published: IBinder? = null
+    /** Until when (elapsed realtime) one [LEND_METHOD] call is answered: armed only by the DUMP-gated route. */
+    @Volatile private var lendUntil = 0L
+
+    /**
+     * The forwarded-binder proof: once, within 10 s of the route arming it, any caller gets the service's binder, which
+     * must then refuse that caller (`ShellService.onlyUid`). Logged with the caller's uid.
+     */
+    private fun lend(uid: Int): Bundle? = synchronized(this) {
+        val b = published
+        if (b == null || SystemClock.elapsedRealtime() >= lendUntil) return refused()
+        lendUntil = 0
+        AppLog.log("[shell] test: service binder lent to uid $uid")
+        Bundle().apply { putBinder("binder", b) }
+    }
+
+    /**
+     * Whether the stream's PTY echoes what we write (Codex's review): a disposable 64-hex line on stdin, a shell that
+     * reads it and prints a marker; reported is only whether the output holds the line, and its length (never the output).
+     */
+    private fun echoCheck(): String {
+        val endpoint = endpoint() ?: return "no endpoint"
+        val key = (AndroidAdbIdentity.store(app).load() as? AdbIdentityResult.Ready)?.key ?: return "no identity"
+        val r = java.security.SecureRandom()
+        val probe = buildString { repeat(64) { append("0123456789abcdef"[r.nextInt(16)]) } }
+        return try {
+            AdbClient(endpoint, key).use { c ->
+                c.connect()
+                val out = c.shell("head -c 65 >/dev/null; echo echo-check-end", (probe + "\n").toByteArray(Charsets.US_ASCII)).toString(Charsets.US_ASCII)
+                "output ${out.length} chars, marker ${out.contains("echo-check-end")}, disposable line echoed ${out.contains(probe)}"
+            }
+        } catch (t: Throwable) { "failed: ${t.javaClass.simpleName}" }
     }
 
     private fun refused(): Bundle? = null.also { AppLog.log("[shell] handover refused") }
@@ -152,6 +192,8 @@ class OwnHost : ShellHost {
 
     companion object {
         private const val PREFS = "shell_host"
+        const val LEND_METHOD = "test-lend"
+        private val TEST_MODES = setOf("hold", "block", "late", "nolink", "double", "replay")
         @Volatile var current: OwnHost? = null; private set
 
         /** Which host [ShizukuLink] selects at start: our own only when the developer switch says so. */
@@ -174,9 +216,16 @@ class OwnHost : ShellHost {
                             prefs.edit().putString("host_kind", i.getStringExtra("do")!!.removePrefix("use-")).apply()
                             AppLog.log("[shell] host at next start: ${prefs.getString("host_kind", "?")}")
                         }
-                        "start" -> { AppLog.log("[shell] test start: ${ShizukuLink.state()}, starting ${current?.gate?.isStarting}, connected ${current?.gate?.connectedGeneration}"); ShizukuLink.connect() }
+                        "start" -> {
+                            val test = i.getStringExtra("test")?.takeIf { it in TEST_MODES }
+                            AppLog.log("[shell] test start${test?.let { " ($it)" } ?: ""}: ${ShizukuLink.state()}")
+                            if (ShizukuLink.service == null) current?.start(test)
+                        }
+                        "stop" -> Thread({ AppLog.log("[shell] test stop: ${try { ShizukuLink.service?.destroy(); "sent" } catch (t: Throwable) { t.javaClass.simpleName }}") }).start()
+                        "lend" -> current?.let { it.lendUntil = SystemClock.elapsedRealtime() + 10_000; AppLog.log("[shell] test: lend armed for 10 s") }
+                        "echo-check" -> Thread({ AppLog.log("[shell] echo-check: ${current?.echoCheck()}") }, "own-shell-echo").start()
                         "identity" -> Thread({ AppLog.log("[shell] identity: ${try { ShizukuLink.service?.identity() } catch (t: Throwable) { t.javaClass.simpleName }}") }).start()
-                        else -> AppLog.log("[shell] test: do pair|use-own|use-shizuku|start|identity")
+                        else -> AppLog.log("[shell] test: do pair|use-own|use-shizuku|start [test MODE]|stop|lend|echo-check|identity")
                     }
                 }
             }

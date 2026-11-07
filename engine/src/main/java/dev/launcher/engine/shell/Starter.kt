@@ -39,14 +39,25 @@ object Starter {
      */
     @Volatile private var launcher: IBinder? = null
 
+    /**
+     * A refusal proof's misbehaviour (T-001 2b, the lead's device checks; never set by a normal start): `hold` and
+     * `block` wait 6 s and 30 s before the handover, `late` 16 s (past the attempt's 15 s), `nolink` exits instead of
+     * linking the token, `double` hands over twice at once, `replay` hands over again once ready. Each only makes this
+     * process fail or be refused; it changes nothing the launcher accepts.
+     */
+    private var test: String? = null
+
     @JvmStatic
     fun main(args: Array<String>) {
         val started = SystemClock.elapsedRealtime()
+        test = args.firstOrNull { it.startsWith("--test=") }?.removePrefix("--test=")
         watchdog(started)
         val line = try { CapabilityReader.read(PolledInput(started + READ_MS)) } catch (t: Throwable) { fail("stdin: ${t.javaClass.simpleName}") }
         val before = fds()
         detach()
         Log.i(TAG, "detached; fds before ${before.joinToString()} after ${fds().joinToString()}")
+        if (test != null) Log.i(TAG, "test mode: $test")
+        when (test) { "hold" -> Thread.sleep(6_000); "block" -> Thread.sleep(30_000); "late" -> Thread.sleep(16_000) }
         Looper.prepareMainLooper()
         val service = ShellService()
         service.onlyUid = try { launcherUid() } catch (t: Throwable) { fail("launcher uid: ${t.javaClass.simpleName}") }
@@ -110,6 +121,15 @@ object Starter {
         "$fd=" + try { Os.readlink("/proc/self/fd/$fd") } catch (_: Throwable) { "?" }
     }
 
+    /** [call] from two threads at once: a reply that came back (how many did is logged). */
+    private fun twice(call: () -> Bundle?): Bundle? {
+        val replies = arrayOfNulls<Bundle>(2)
+        val threads = (0..1).map { i -> Thread { replies[i] = try { call() } catch (_: Throwable) { null } }.apply { start() } }
+        threads.forEach { it.join() }
+        Log.i(TAG, "test double: ${replies.count { it != null }} of 2 accepted")
+        return replies.firstOrNull { it != null }
+    }
+
     @androidx.annotation.RequiresApi(31)
     private fun attribution(): AttributionSource = AttributionSource.Builder(Os.getuid()).setPackageName("com.android.shell").build()
 
@@ -139,12 +159,19 @@ object Starter {
                 provider.javaClass.methods.first { it.name == "call" && it.parameterTypes.size == 6 }
                     .invoke(provider, "com.android.shell", null, AUTHORITY, method, null, extras) as Bundle?
             }
-            val reply = send(METHOD, extras) ?: return false
+            val reply = (if (test == "double") twice { send(METHOD, extras) } else send(METHOD, extras)) ?: return false
             val token = reply.getBinder("token") ?: return false
             val ack = reply.getString("ack") ?: return false
+            if (test == "nolink") fail("link (test: nolink)")
             launcher = token
             try { token.linkToDeath({ Log.i(TAG, "launcher gone: exiting"); exitProcess(0) }, 0) } catch (t: Throwable) { fail("link") }
-            return send(READY_METHOD, Bundle().apply { putString("ack", ack) }) != null
+            val acked = send(READY_METHOD, Bundle().apply { putString("ack", ack) }) != null
+            if (acked && test == "replay") {
+                val again = send(METHOD, extras) == null
+                val ackAgain = send(READY_METHOD, Bundle().apply { putString("ack", ack) }) == null
+                Log.i(TAG, "test replay: handover ${if (again) "refused" else "ACCEPTED"}, ack ${if (ackAgain) "refused" else "ACCEPTED"}")
+            }
+            return acked
         } finally {
             try {
                 am.javaClass.methods.first { it.name == "removeContentProviderExternal" && it.parameterTypes.size == 2 }

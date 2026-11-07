@@ -51,6 +51,9 @@ class AdbProofInstrumentation : Instrumentation() {
                 // E2 slice 6's component lifecycle and the developer switch's refusal (T-004; the lead's, beside this proof).
                 "component-lifecycle" -> dev.launcher.engine.ui.ComponentProof(context).lifecycle(result)
                 "component-refusal" -> dev.launcher.engine.ui.ComponentProof(context).refusal(result)
+                // T-001 2b's real-binder refusals from this APK's uid (the lead's device checks).
+                "shell-wrong-uid" -> dev.launcher.engine.shell.ShellProof(this).wrongUid(result)
+                "shell-forwarded" -> dev.launcher.engine.shell.ShellProof(this).forwarded(result)
                 else -> error("Unknown proof mode")
             }
             result.putString("result", "PASS (test APK UID; no launcher UID claim)")
