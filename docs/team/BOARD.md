@@ -27,8 +27,7 @@ existed (D-070's mode: this session reviewing, an Opus agent building), each gat
 0, 0a: AGP 8.13.2 (T-003) and Compose 1.11.4 + Kotlin 2.2 (T-002), both signed by both agents.
 
 6: the first visible bar, behind a developer switch (T-004, `3c3cf56`..`e118b32`). Next, in order: 9, 10, 12-17. 115 engine unit
-tests. Owner questions still open from the plan: 5 (one expression syntax, `{expr}` with pipes: a spec change) and 6
-(the bar as a component of the `shade` surface: spec wording); the code already does both.
+tests. The plan's owner questions are all answered: 5 and 6 on 2026-11-07 (D-081, D-082, the spec updated).
 
 ## Tasks
 
@@ -49,8 +48,6 @@ Things noticed that are not the current task. Each says who noticed it and where
   replaces it for comparisons.
 - The S24's shade passes run in one of two GPU modes for a whole pass (GPU median ~2-4 ms or ~7.5-9 ms; about half the
   passes, both builds alike); cause not traced (T-002, claude and codex).
-- The spec's `battery-ring` example is not valid KDL (D-069); its corrected text is `KdlBench.SPEC_EXAMPLE_V2` and
-  the E2 plan's model tests. Spec edit, the owner's (E2 question 5).
 - `./gradlew check` on the release variant runs out of memory compiling `GestureNav` (D-070); CI builds debug only.
 - `{@inset + 2pt}` mixes units at run time without a finding: the unit check is static (E2 slice 8, claude).
 - No way yet to write a literal `{` in an expression-bearing string (E2 slice 4, claude).

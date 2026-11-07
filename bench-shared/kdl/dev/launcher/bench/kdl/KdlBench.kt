@@ -62,7 +62,7 @@ object KdlBench {
 
   view {
     ring size="@size" thickness="@thickness" value="${'$'}level" color="${'$'}color" {
-      text "${'$'}level%" font=mono size="@thickness*3"
+      text "{${'$'}level}%" font=mono size="{@thickness * 3}"
       icon bolt visible="${'$'}charging"
     }
   }

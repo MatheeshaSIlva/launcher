@@ -966,3 +966,28 @@ as active on `main` only. `REQUIREMENTS.md` and every `PLAN_*.md` carry a histor
 bar for the engine. No code changed.
 A session reads these files when it starts, so a session open before this commit still has the old text in context:
 start a new one after pulling.
+
+## D-081: One expression syntax, `{expr}` with pipes (2026-11-07, owner) [owner]
+
+E2 plan question 5. The owner: "Yes to 5: one expression syntax, {expr} with pipes for formatting. Update the spec,
+including the battery-ring example." A reference alone is a whole attribute value (`$name`, `@name`); anything more goes
+in braces: text around it (`"{$level}%"`), arithmetic (`"{@thickness * 3}"`), conditions, and formatters as pipes
+(`"{$t | date:'EEE d MMM'}"`), pipes binding loosest and chaining left to right. The spec's `{{…}}` formatter form and
+bare arithmetic after a reference (`@thickness*3`) are gone. `docs/ENGINE_SPEC.md`: a new **expressions** item under the
+component model, the formatter line rewritten, and the battery-ring example as valid KDL 2 (`#false`, `type=dp`, the
+script as a raw multi-line string; step 0's correction, D-069) in the braced syntax. The engine already did this since
+slice 4 (the validator refuses the unbraced form with a hint); its test copy of the example now follows the spec
+(`ModelTexts.BATTERY_RING`: only `ring`, not yet a primitive, is refused) and the old form keeps its own test.
+
+## D-082: The status bar is a component of the shade surface (2026-11-07, owner) [owner]
+
+E2 plan question 6. The owner: "Yes to 6: the status bar is a component of the shade surface; fix the spec's wording."
+The spec had `status` as a surface "not available as a replacement" and the status bar out of the engine's scope, while
+step 2's exit is a KDL status bar (and the launcher has drawn its own since M2). `docs/ENGINE_SPEC.md` now says: the
+status bar's window stays Android's, the engine hides the stock bar's content and draws its own bar as a component of the
+`shade` surface, in the shade's window over every app and home. Wording chosen by the lead without the owner, in line
+with the spec's existing banner rule and its "install a bar-only port" promise: the shade exposes a `status` slot; a
+shade fill supplies a bar or inherits the engine default; a bar-only package fills that slot alone; a fill for "status"
+is refused with that hint. Also updated: the scope line, the tier line (the shade, its bar included, is Pro), the porting
+gaps (two now: no lock screen, no arbitrary processes) and the Quickshell/AGS/EWW row. How the slot is written in a
+layout file is left to the step that builds layouts (E4).

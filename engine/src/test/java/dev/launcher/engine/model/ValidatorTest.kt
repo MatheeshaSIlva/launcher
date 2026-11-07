@@ -24,11 +24,15 @@ class ValidatorTest {
           }
         }"""
 
-    @Test fun theBatteryRingStillNeedsARingPrimitiveAndBraces() {
-        // Under E2's six primitives and one expression syntax (question 5): ring is not one of them yet, and "^level%"
-        // and "@thickness*3" are expressions written without braces.
+    @Test fun theSpecsBatteryRingNeedsOnlyARingPrimitive() {
+        // The spec's example since D-081 (one expression syntax): ring is not one of E2's six primitives yet.
+        assertEquals(listOf("unknown-primitive"), findings(ModelTexts.BATTERY_RING).map { it.code })
+    }
+
+    @Test fun theBatteryRingWithoutBracesIsRefused() {
+        // The example before D-081: "^level%" and "@thickness*3" are expressions written without braces.
         assertEquals(listOf("unknown-primitive", "expression-syntax", "expression-syntax"),
-            findings(ModelTexts.BATTERY_RING).map { it.code })
+            findings(ModelTexts.BATTERY_RING_UNBRACED).map { it.code })
     }
 
     @Test fun aComponentWrittenAsTheBarWillBeHasNoFindings() {

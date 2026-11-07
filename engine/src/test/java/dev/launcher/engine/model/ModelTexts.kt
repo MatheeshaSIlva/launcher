@@ -8,7 +8,7 @@ import org.junit.Assert.assertEquals
  * template).
  */
 internal object ModelTexts {
-    /** The spec's battery-ring as BENCH_STEP0 corrected it (`#false`, the script as a raw multi-line string). */
+    /** The spec's battery-ring as the spec writes it since D-081 (KDL 2, one expression syntax); its script shortened. */
     val BATTERY_RING = """
             component "battery-ring" version="1.2.0" {
               props {
@@ -26,7 +26,7 @@ internal object ModelTexts {
 
               view {
                 ring size="@size" thickness="@thickness" value="^level" color="^color" {
-                  text "^level%" font=mono size="@thickness*3"
+                  text "{^level}%" font=mono size="{@thickness * 3}"
                   icon bolt visible="^charging"
                 }
               }
@@ -37,6 +37,9 @@ internal object ModelTexts {
                 end)
                 ""${'"'}#
             }"""
+
+    /** The same before D-081: expressions without braces, as BENCH_STEP0 corrected it. */
+    val BATTERY_RING_UNBRACED = BATTERY_RING.replace("\"{^level}%\"", "\"^level%\"").replace("\"{@thickness * 3}\"", "\"@thickness*3\"")
 
     fun text(kdl: String) = kdl.trimIndent().replace('^', '$')
     fun read(kdl: String) = ComponentReader.read(KdlParser.parse(text(kdl)))

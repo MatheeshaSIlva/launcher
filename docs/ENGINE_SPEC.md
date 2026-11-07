@@ -14,7 +14,7 @@ Five rules everything else obeys:
 4. The engine is Compose for the tree and its own layers for the pixels, on phone and in the desktop editor, running the same interpreter. Compose owns parsing, hierarchy, layout, props, state and recomposition when data changes. Each primitive draws into a RenderNode the engine owns, and gesture-driven motion (a shade pull, a card fling) drives those nodes from the transition engine without passing through Compose state. The launcher audit showed why: per-frame Compose drawing cost frames in four measured ways (accessibility re-reads on recomposition, `SnapshotStateMap` churn, an alpha layer per item, seeking a spring through state), and the hand-drawn views that replaced it hold 120 Hz. The editor's preview is what ships. Decision: a small, bounded frame cost is accepted in exchange for versatility; see *Frame budget* for the numbers.
 5. Mixing is first-class. A surface is a slot; any component that satisfies the slot's contract can fill it, whoever wrote it. A layout is a named set of fills for the slots, and a user can override any one of them.
 
-Out of scope for the engine, by Android's rules: the status bar, lock screen, always-on display, system navigation, the keyboard, and other apps' windows. The engine draws its own surfaces and overlays and controls the system through a fixed allowlist over Shizuku.
+Out of scope for the engine, by Android's rules: the lock screen, always-on display, system navigation, the keyboard, and other apps' windows. The status bar's window stays Android's, but what it shows is ours: the engine hides the stock bar's content and draws its own bar as a component of the `shade` surface (see *Surfaces*). The engine draws its own surfaces and overlays and controls the system through a fixed allowlist over Shizuku.
 
 ## Data API and capabilities
 
@@ -77,41 +77,45 @@ A component is one KDL file: a header with props and capabilities, a view tree, 
 ```kdl
 component "battery-ring" version="1.2.0" {
   props {
-    size      type="dp"    default=48
-    thickness type="dp"    default=4
-    warn      type="int"   default=20
+    size      type=dp    default=48
+    thickness type=dp    default=4
+    warn      type=int   default=20
   }
-  uses { source "battery" }
+  uses { source battery }
 
   state {
     level 100
-    charging false
+    charging #false
     color "@ink"
   }
 
   view {
     ring size="@size" thickness="@thickness" value="$level" color="$color" {
-      text "$level%" font="mono" size="@thickness*3"
-      icon "bolt" visible="$charging"
+      text "{$level}%" font=mono size="{@thickness * 3}"
+      icon bolt visible="$charging"
     }
   }
 
-  script lang="lua" {
+  script lang=lua #"""
     on("battery", function(b)
       state.level = b.level
       state.charging = b.charging
       state.color = (b.level <= props.warn and not b.charging) and "@signal" or "@ink"
     end)
     on("tap", function() act.intent("android.intent.action.POWER_USAGE_SUMMARY") end)
-  }
+    """#
 }
 ```
+
+The file is KDL 2: booleans are `#true` and `#false`, and the script is a raw multi-line string (`#"""…"""#`), so its
+quotes and braces are Lua's, not KDL's.
 
 The parts:
 
 - **props** are the public knobs, typed. The editor shows them as controls; a layout sets them; a theme can override the ones that are tokens. `@name` reads a prop or a token.
 - **uses** declares sources and actions. The manifest capability list is derived from this, not written twice.
 - **state** is the component's own mutable values. `$name` binds a view attribute to state. Changing state marks the component dirty; the engine re-renders it on the next frame.
+- **expressions** have one syntax (decided 2026-11-07). A reference alone is a whole attribute value, `$name` or `@name`. Anything more goes in braces, `{expr}`: text around a value (`"{$level}%"`), arithmetic (`"{@thickness * 3}"`), a condition (`"{shade.progress > 0.5 ? 1 : 0}"`), and formatters as pipes (`"{$t | date:'EEE d MMM'}"`). The validator refuses a bare reference with anything after it (`"$level%"`, `"@thickness*3"`) and shows the braced form.
 - **view** is the tree. Primitives are the engine's: `box`, `row`, `column`, `stack`, `grid`, `scroll`, `text`, `icon`, `image`, `ring`, `bar`, `sparkline`, `glass`, `spacer`, `button`, `slider`, `switch`, `list` with an item template, `appicon`, `widget` (an AppWidget host), `surface-slot`. Every primitive takes layout, padding, radius, background, opacity, transform and the animation attributes. Conditionals and loops are attributes, not script: `visible="$charging"`, `each="$items" as="n"`.
 - **script** runs in a Lua worker. It gets `props`, `state`, `on(event, fn)`, `act.*`, `env`, `kv`, `timer.every(ms, fn)`, `timer.after(ms, fn)`, `http.get(url, fn)`. Events: every subscribed source by name, `tap`, `longpress`, `swipe(dir)`, `drag(x, y, phase)`, `appear`, `disappear`, `focus`, `theme`, `mounted`, `unmounted`. Handlers must return quickly; a handler over 8 ms is logged, over 50 ms is killed and the component shows its error state.
 - **animations** are declared on the view, never scripted: `transition="value 200ms ease-out"`, `enter="fade-up 240ms"`, `exit="fade 120ms"`, `spring="stiff"`. The engine runs them on the UI thread at frame rate; the script only changes values.
@@ -135,7 +139,7 @@ A surface is a slot the engine owns: a place on the phone, the gesture that summ
 | `folder` | popover on home | tap on a folder | its app list, its name | rename, drag out, dismiss |
 | `search` | over home or drawer | a component calling it, or swipe down on home | `apps`, `shortcuts`, `contacts` if granted, a web hand-off action | query, results list, dismiss |
 | `lock` | not available | — | — | Android keeps the lock screen. The slot exists in the file format so a layout can say so honestly and the store can show it greyed. |
-| `status` | not available as a replacement | — | — | A component can draw its own status row inside its surface. The real bar stays. |
+| `status` | not a surface of its own: the status bar is a component of the `shade` surface | — | — | The bar is the row the shade draws along the top of the display, in the shade's window, over every app and home. The shade hides the stock bar's content (disable flags on a binder token, restored by the watchdog) and exposes a `status` slot for the bar: a shade fill supplies a bar or inherits the engine default, and a bar-only package fills that slot and leaves the rest of the shade as it is. Any other component may still draw its own status row inside its own surface. |
 
 Mixing:
 
@@ -145,7 +149,7 @@ Mixing:
 - Transitions between surfaces are engine-owned so mixed fills still feel like one phone: the shade's pull, the drawer's rise, recents' zoom. The model is the launcher's `motion/transition` engine, ported verbatim: a transition is a set of keyframe tracks over 25 properties (position, scale, alpha, radius, blur, tint, depth and the rest), each keyframe with its own easing, tracks running on per-role clocks, and hand-over mid-gesture that never jumps (a transition in flight is retargeted, not restarted). A surface component declares `motion="inherit"` (default) or supplies its own `enter` and `exit` tracks in KDL, which the engine runs against the same gesture progress. Fifty-two unit tests cover the track maths and come along with it.
 - A fill that is missing or broken falls back to the engine default for that slot, never to nothing.
 
-What a component cannot be: a surface that Android owns. The engine refuses fills for "lock" and "status" at validation time and says why.
+What a component cannot be: a surface that Android owns. The engine refuses a fill for "lock" at validation time and says why; a fill for "status" is refused with the hint that the bar fills the shade's `status` slot.
 
 ### Surface presentation
 
@@ -227,7 +231,7 @@ Rules:
 - Dependencies are by package name and semver: `use "koji/glass-shade" ">=1.3"`. The engine installs them from the store with the user's consent, showing their capabilities together.
 - Capabilities are never hand-written; the engine derives them from every `uses` block in the package and refuses a package whose listing claims fewer. The install prompt shows the union.
 
-  Tier is derived the same way (decided 2026-11-03: one paid tier, **Pro**, sold as a subscription or a lifetime licence through Play Billing). A capability is either free or Pro; a package's tier is the highest its `uses` need. Free: every source and action that needs no Shizuku, the home, drawer, folder and search surfaces, themes, snippets and expression bindings. Pro: anything that touches system state or runs over other apps: the Shizuku-backed sources and actions, the shade, status and recents surfaces, overlay surfaces, all four glass tiers, scripts, rules, `background`, providers and remote components. The engine refuses to mount a Pro package on a free install and names the capability that needs Pro; the store badge comes from the same computation. A `uses` entry may be marked `optional`: the package then mounts without it and reads `env.caps.<name>` (false when the user lacks the tier, the device lacks the feature, or the user denied it) to degrade.
+  Tier is derived the same way (decided 2026-11-03: one paid tier, **Pro**, sold as a subscription or a lifetime licence through Play Billing). A capability is either free or Pro; a package's tier is the highest its `uses` need. Free: every source and action that needs no Shizuku, the home, drawer, folder and search surfaces, themes, snippets and expression bindings. Pro: anything that touches system state or runs over other apps: the Shizuku-backed sources and actions, the shade surface (its status bar included) and the recents surface, overlay surfaces, all four glass tiers, scripts, rules, `background`, providers and remote components. The engine refuses to mount a Pro package on a free install and names the capability that needs Pro; the store badge comes from the same computation. A `uses` entry may be marked `optional`: the package then mounts without it and reads `env.caps.<name>` (false when the user lacks the tier, the device lacks the feature, or the user denied it) to degrade.
 - **Versioning:** the engine version is `major.minor`. A package declares a range. The engine keeps every `1.x` package working; a `2.0` engine may break `1.x` packages and the store flags them. Primitives and sources are only ever added within a major.
 - **Licence** is required and is one of CC0, CC-BY-4.0, CC-BY-SA-4.0, MIT, or `personal` (paid, no redistribution). The store shows it; forks must keep attribution, and the engine keeps the author chain in `package.kdl` under `derivedFrom`.
 - **Hand-written and editor-written files are the same files.** The editor writes stable, diffable KDL with sorted attributes and no generated ids, so a git diff of an editor change is readable.
@@ -241,7 +245,7 @@ A desktop rice is a set of programs, each with its own config. On the phone they
 | Desktop piece | Becomes | What carries over | What changes |
 | --- | --- | --- | --- |
 | Hyprland `hyprland.conf` colours, gaps, rounding, blur, animations | `theme.kdl` | `col.active_border` → `signal`, `gaps_in/out` → `space.gap`, `rounding` → `radius`, `blur` size and passes → `glass.blur`, `bezier` curves → `motion.ease` by name | Window rules and workspaces have no phone equivalent; the home's pages are the closest thing and a layout can set their count |
-| Quickshell / AGS / EWW bar | a `bar` component with slots, filling `shade` (pull-down) or sitting at the top of `home` | the module list and order become `slot` fills; each module's QML or JS logic becomes a Lua block over the same data (`time`, `battery`, `network`, `audio`, `media`, `notifications`) | no workspaces module; a `tasks` module is the analogue. D-Bus calls become `act.*` calls or feature requests |
+| Quickshell / AGS / EWW bar | a `bar` component with slots, filling the shade's `status` slot (the bar over every app and home), the pull-down, or sitting at the top of `home` | the module list and order become `slot` fills; each module's QML or JS logic becomes a Lua block over the same data (`time`, `battery`, `network`, `audio`, `media`, `notifications`) | no workspaces module; a `tasks` module is the analogue. D-Bus calls become `act.*` calls or feature requests |
 | Quickshell / AGS launcher, Rofi, Wofi, Fuzzel | fills `drawer` or `search` | the list style, the prompt line, the fuzzy match (engine provides `apps` search), the theme | no run-command mode; `shortcuts` and `intent` cover what Rofi modes did |
 | Dunst, Mako, SwayNC | the notifications part of a `shade` fill, or a `toast` component | the card style, timeouts, grouping, urgency colours (`ok/warn/danger`) | the engine delivers notifications; the component only draws and acts on them |
 | Waybar `style.css` | `theme.kdl` colours and a `bar` component's view | `@define-color` lines import directly; module padding and fonts map to tokens | CSS selectors become component props; no arbitrary CSS |
@@ -255,7 +259,7 @@ A desktop rice is a set of programs, each with its own config. On the phone they
 
 What the import wizard does with a repo URL: clones it, finds the files above by name, offers the palette, proposes a package with one component per recognised program, writes the manifest, and leaves the Lua blocks as stubs with the right `uses` and `on` handlers for the creator to fill. It never claims to port logic automatically; it ports structure and colour and hands over the rest.
 
-The three honest gaps, said on the listing when a port hits them: no lock screen, no status bar replacement, no arbitrary processes. Everything else in a typical rice has a home.
+The two honest gaps, said on the listing when a port hits them: no lock screen, no arbitrary processes. Everything else in a typical rice has a home.
 
 ## Versatility: what else the runtime must allow
 
@@ -293,7 +297,7 @@ About forty nodes plus formatters, the size of QtQuick Controls' useful subset. 
 | Media | `web`, `video`, `map`, `lottie` |
 | Remote | `remote` (a companion app's view via SurfaceControlViewHost) |
 
-Formatters are attribute functions, not nodes, so the common twenty lines of Lua never get written: `{{$t | date:'EEE d MMM'}}`, `{{$n | number:1}}`, `{{$b | bytes}}`, `{{$s | duration}}`, `{{$p | percent}}`, `{{$x | upper}}`, `{{$x | pad:3}}`. Locale-aware by default.
+Formatters are pipes inside an expression, not nodes, so the common twenty lines of Lua never get written: `{$t | date:'EEE d MMM'}`, `{$n | number:1}`, `{$b | bytes}`, `{$s | duration}`, `{$p | percent}`, `{$x | upper}`, `{$x | pad:3}`. Pipes chain left to right and bind looser than everything else in the expression (`{$a + $b | number:1}` formats the sum). Locale-aware by default.
 
 Left out on purpose: `camera` (privacy and power; no rice needs it), a general `chart` node (canvas plus a Lua chart helper library covers it, and a chart primitive is an API that never finishes), and form controls beyond the four above (this is a shell, not an app framework).
 

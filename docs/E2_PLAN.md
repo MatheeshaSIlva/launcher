@@ -261,3 +261,5 @@ Order: slices 1-5 start now (no Compose in them); 0a-0b wait for the owner's ans
 For the owner: **1** (Compose 1.11.4 with Kotlin 2.2.x, or the skip flag as a stopgap; recommended (a), measured on the
 settings before and after), **5** (one expression syntax, `{expr}` with pipes: a spec change, together with the
 example's fix from step 0) and **6** (the bar as a component of the shade surface: spec wording).
+Owner, 2026-11-07: **1** (a), done as T-002; **5** yes, the spec updated with the example (D-081); **6** yes, the spec's
+wording fixed (D-082).
