@@ -1,24 +1,20 @@
 package dev.launcher.app
 
 import android.Manifest
-import android.content.ComponentName
-import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Binder
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.provider.Settings
-import rikka.shizuku.Shizuku
 import java.util.concurrent.Executors
 
 /**
- * App-wide connection to Shizuku and our shell-uid user service.
- * The launcher works without it; [service] is null whenever Shizuku is missing, denied or not yet bound.
+ * App-wide connection to our shell-uid service, through the selected [ShellHost] (Shizuku's user service, or our own
+ * process from T-001 slice 2). The launcher works without it; [service] is null whenever the host is missing, denied or
+ * not yet bound. Every caller goes through this object; the host only finds the service.
  */
 object ShizukuLink {
-    private const val PERMISSION_REQUEST = 1001
-
     enum class State { NOT_RUNNING, NO_PERMISSION, CONNECTING, CONNECTED }
 
     @Volatile var service: IShellService? = null
@@ -31,93 +27,57 @@ object ShizukuLink {
     private val io = Executors.newSingleThreadExecutor()
     private val listeners = mutableListOf<() -> Unit>()
     private lateinit var app: android.app.Application
-    private var binding = false
+    private lateinit var host: ShellHost
+    /** The selected host's generation: a report from an earlier host (or an earlier selection) is ignored. */
+    private var generation = 0
 
-    private val args by lazy {
-        Shizuku.UserServiceArgs(ComponentName(app.packageName, ShellService::class.java.name))
-            .processNameSuffix("shell")
-            .daemon(false)
-            .tag("launcher-shell")
-            // A new build must replace a still-running service from the old build.
-            .version(EngineHost.current("buildStamp").buildStamp().hashCode())
-    }
-
-    private val conn = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            service = if (binder != null && binder.pingBinder()) IShellService.Stub.asInterface(binder) else null
-            binding = false
-            AppLog.log("[shizuku] service connected: ${service != null}")
-            service?.let { s ->
-                io.execute {
-                    grantSelf(s)
-                    Watchdog.sync(app, s)
-                    if (SystemRestore.gesturesWanted(app) && !EngineHost.current("nav.ready").nav.ready) {
-                        AppLog.log("[nav] accessibility service: ${NavAccessibilityService.enable(app)}")
-                    }
-                    // A fresh service holds no flags: put back what we want (stock bar/gestures show until this runs).
-                    // Older builds zeroed the system animation scales while gesture nav was on; give them back.
-                    if (SystemRestore.gesturesWanted(app)) {
-                        SystemRestore.restoreScalesIfChanged(app, s)
-                        SystemRestore.ensureScalesOn(app, s)
-                        SystemRestore.enableOwnStatusBarOnce(app)
-                    }
-                    SystemRestore.applyFlags(app, s)
-                }
-            }
+    private val sink = object : ShellHost.Sink {
+        override fun connected(generation: Int, service: IShellService) {
+            if (generation != this@ShizukuLink.generation) return
+            this@ShizukuLink.service = service
+            onConnected(service)
             changed()
         }
 
-        override fun onServiceDisconnected(name: ComponentName?) {
+        override fun lost(generation: Int) {
+            if (generation != this@ShizukuLink.generation) return
             service = null
-            binding = false
-            AppLog.log("[shizuku] service disconnected")
             SystemRestore.onServiceLost()
-            // If only our service died (Shizuku still up), bring it back. If Shizuku died, binder-received rebinds later.
-            main.postDelayed({ if (service == null && hasPermission()) bind() }, 500)
             changed()
         }
+
+        override fun changed() { this@ShizukuLink.changed() }
     }
 
     fun init(app: android.app.Application) {
         this.app = app
-        Shizuku.addBinderReceivedListenerSticky {
-            AppLog.log("[shizuku] binder received")
-            if (hasPermission()) bind()
-            changed()
-        }
-        Shizuku.addBinderDeadListener {
-            service = null
-            binding = false
-            AppLog.log("[shizuku] binder dead (Shizuku stopped)")
-            SystemRestore.onServiceLost()
-            changed()
-        }
-        Shizuku.addRequestPermissionResultListener { _, result ->
-            val granted = result == PackageManager.PERMISSION_GRANTED
-            AppLog.log("[shizuku] permission ${if (granted) "granted" else "denied"}")
-            if (granted) bind()
-            changed()
+        host = ShizukuHost()
+        host.init(app, sink, ++generation)
+    }
+
+    /** What runs once a host has given us a service, the same for every host. */
+    private fun onConnected(s: IShellService) {
+        io.execute {
+            grantSelf(s)
+            Watchdog.sync(app, s)
+            if (SystemRestore.gesturesWanted(app) && !EngineHost.current("nav.ready").nav.ready) {
+                AppLog.log("[nav] accessibility service: ${NavAccessibilityService.enable(app)}")
+            }
+            // A fresh service holds no flags: put back what we want (stock bar/gestures show until this runs).
+            // Older builds zeroed the system animation scales while gesture nav was on; give them back.
+            if (SystemRestore.gesturesWanted(app)) {
+                SystemRestore.restoreScalesIfChanged(app, s)
+                SystemRestore.ensureScalesOn(app, s)
+                SystemRestore.enableOwnStatusBarOnce(app)
+            }
+            SystemRestore.applyFlags(app, s)
         }
     }
 
-    fun state(): State = when {
-        service != null -> State.CONNECTED
-        !running() -> State.NOT_RUNNING
-        !hasPermission() -> State.NO_PERMISSION
-        else -> State.CONNECTING
-    }
+    fun state(): State = if (service != null) State.CONNECTED else host.state()
 
     /** Asks for permission if needed, then binds. Safe to call repeatedly. */
-    fun connect() {
-        when {
-            !running() -> AppLog.log("[shizuku] not running. Start Shizuku (wireless debugging), then tap Connect again.")
-            !hasPermission() -> {
-                AppLog.log("[shizuku] requesting permission; approve the dialog")
-                Shizuku.requestPermission(PERMISSION_REQUEST)
-            }
-            service == null -> bind()
-        }
-    }
+    fun connect() { if (service == null) host.connect() }
 
     /**
      * Grants the permissions that keep the safety path working without Shizuku: WRITE_SECURE_SETTINGS (animation scales)
@@ -160,7 +120,7 @@ object ShizukuLink {
     fun awaitService(timeoutMs: Long): IShellService? {
         service?.let { return it }
         if (Looper.myLooper() == Looper.getMainLooper()) return null
-        main.post { if (hasPermission()) bind() }
+        main.post { host.bindQuietly() }
         val end = System.currentTimeMillis() + timeoutMs
         while (System.currentTimeMillis() < end) {
             service?.let { return it }
@@ -168,21 +128,6 @@ object ShizukuLink {
         }
         return service
     }
-
-    private fun bind() {
-        if (service != null || binding) return
-        binding = true
-        try {
-            Shizuku.bindUserService(args, conn)
-        } catch (t: Throwable) {
-            binding = false
-            AppLog.log("[shizuku] bind failed: ${t.javaClass.simpleName}: ${t.message}")
-        }
-        changed()
-    }
-
-    private fun running() = Shizuku.pingBinder() && !Shizuku.isPreV11()
-    private fun hasPermission() = running() && Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED
 
     /** Main thread only. */
     fun addListener(l: () -> Unit) { listeners += l }
