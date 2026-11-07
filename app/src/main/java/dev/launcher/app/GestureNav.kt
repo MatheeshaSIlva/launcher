@@ -532,6 +532,8 @@ object GestureNav : NavHost {
         //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do charge-frames [--ei ms 600] [--ei fps 120] [--es bg '#E6E8EE']
         // And One UI's charging chip on its own, to see how it comes (our cover off until on again or the bar is made again):
         //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do cover --ez on false|true
+        // And the engine's KDL bar in place of ours (a developer switch, kept): --es do kdl --ez on true|false
+        //   adb shell am broadcast -a dev.launcher.app.TEST_STATUS -p dev.launcher.app --es do kdl --ez on true
         val r = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) {
                 val what = i.getStringExtra("do")
@@ -558,7 +560,16 @@ object GestureNav : NavHost {
                             bar.chargeMomentWanted = on && Build.MANUFACTURER.equals("samsung", ignoreCase = true)
                             AppLog.log("[statusbar] test: charging cover ${if (bar.chargeMomentWanted) "on" else "off"}")
                         }
-                        else -> AppLog.log("[statusbar] test: do charge|charge-frames|share|cover")
+                        // The engine's KDL bar in place of StatusBarView (E2 slice 6), kept across starts; the same shade is
+                        // detached and attached again for it (each attachment makes its own KDL bar).
+                        "kdl" -> {
+                            dev.launcher.app.statusbar.KdlBar.set(app, on)
+                            AppLog.log("[statusbar] test: KDL bar ${if (on) "on" else "off"}")
+                            removeStatusBar()
+                            addStatusBar()
+                        }
+                        "kdl-counters" -> AppLog.log("[kdl] counters: ${shade?.kdlCounters() ?: "no KDL bar"}")
+                        else -> AppLog.log("[statusbar] test: do charge|charge-frames|share|cover|kdl|kdl-counters")
                     }
                 }
             }

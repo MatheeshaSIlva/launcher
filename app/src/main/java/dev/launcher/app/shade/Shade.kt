@@ -139,6 +139,28 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
 
     private val root = Root(ctx)
     val bar = StatusBarView(ctx)
+    /** What the KDL bar's painters and nodes recorded so far (E2 slice 6's measure), or null without it. */
+    fun kdlCounters(): String? = kdlBar?.counters()
+    /**
+     * The engine's bar in [bar]'s place while its developer switch is on (E2 slice 6, [dev.launcher.app.statusbar.KdlBar]):
+     * one per attachment of the window, made in [attach] once the window is added, disposed in [detach] (or if [attach]
+     * fails after making it).
+     */
+    private var kdlBar: dev.launcher.engine.ui.ComponentView? = null
+
+    private fun makeKdlBar() {
+        if (!dev.launcher.app.statusbar.KdlBar.on(ctx)) return
+        kdlBar = dev.launcher.app.statusbar.KdlBar.make(ctx, handler, bar)?.also {
+            root.addView(it.view, root.indexOfChild(bar) + 1, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
+        }
+    }
+
+    private fun dropKdlBar() {
+        val k = kdlBar ?: return
+        kdlBar = null
+        root.removeView(k.view)
+        k.dispose()
+    }
     private val backdrop = BackdropView(ctx)
     /** Control Center's live background where the system can blur what is behind a window (see [LiveBlur]). */
     private val liveBlur = LiveBlur(ctx, wm)
@@ -715,6 +737,9 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         return try {
             wm.addView(root, lp)
             attached = true
+            // After the window: a removed one is torn down only now (WindowManagerGlobal finishes a dying root when the
+            // next comes), and a view added before would attach to it first and be detached with it.
+            makeKdlBar()
             state.start()
             media.start()
             showRinging("shade shown")
@@ -724,6 +749,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
             true
         } catch (t: Throwable) {
             AppLog.log("[shade] addView FAILED: ${t.javaClass.simpleName}: ${t.message}")
+            dropKdlBar()   // none made unless the window came; kept for a failure after it
             false
         }
     }
@@ -753,6 +779,7 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
         closeNow()
         banner.clear()
         try { wm.removeView(root) } catch (_: Throwable) { }
+        dropKdlBar()
         liveBlur.detach()
         attached = false
         state.stop()

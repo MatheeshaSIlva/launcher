@@ -975,8 +975,16 @@ class StatusBarView(ctx: Context) : View(ctx) {
         invalidate()
     }
 
+    /**
+     * The engine's KDL bar shows in this one's place (E2 slice 6, a developer switch): this view draws nothing, its state
+     * and control calls run as before, and each frame it would draw hands the KDL bar its content colour.
+     */
+    var kdlInPlace: ((content: Int) -> Unit)? = null
+        set(v) { field = v; invalidate() }
+
     override fun onDraw(c: Canvas) {
         if (width == 0) return
+        kdlInPlace?.let { it(contentColor()); return }
         val f = fadeK
         if (picturing || f >= 0.999f) { drawBar(c); return }
         if (f <= 0.003f) return
@@ -986,14 +994,19 @@ class StatusBarView(ctx: Context) : View(ctx) {
         c.restoreToCount(n)
     }
 
+    /** The time's and icons' colour now: Control Center's veil's choice, the wallpaper's over Notification Center, else the app's or home's. */
+    fun contentColor(): Int {
+        val base = dark * (1f - ccOpen) * (1f - nc) + ncDark * nc * (1f - ccOpen) + ccDark * ccOpen
+        val k = (255 * (1f - base)).toInt()
+        return Color.rgb(k, k, k)
+    }
+
     private fun drawBar(c: Canvas) {
         val u = u
         val cy = centreLine()
         // Control Center's veil's choice over it (white over iOS's), the wallpaper's over Notification Center, else the app's
         // or home's.
-        val base = dark * (1f - ccOpen) * (1f - nc) + ncDark * nc * (1f - ccOpen) + ccDark * ccOpen
-        val k = (255 * (1f - base)).toInt()
-        val content = Color.rgb(k, k, k)
+        val content = contentColor()
 
         // Left group: fades as either panel opens (the time: Notification Center's clock shows it; Control Center has none).
         val leftK = (1f - cc) * (1f - nc) * (1f - lockK)
