@@ -203,7 +203,10 @@ class ComponentView(
         /** A symbol from the app's icon sets ([IconSets]: assets or the inbox's files), its miss logged once a process. */
         fun loadSymbol(context: Context, set: String, symbol: String): Symbol? {
             val g = dev.launcher.app.design.IconSets.get(context.applicationContext, set)?.glyph(symbol)
-            if (g == null) { if (missed.add("$set/$symbol")) dev.launcher.app.AppLog.log("[kdl] icon: no '$symbol' in set '$set'"); return null }
+            if (g == null) {
+                if (missed.size < 64 && missed.add("$set/$symbol")) dev.launcher.app.AppLog.log("[kdl] icon: no '$symbol' in set '$set'")
+                return null
+            }
             return Symbol(g.box.width(), g.box.height()) { c, cx, cy, size, color, paint -> g.draw(c, cx, cy, size, color, paint) }
         }
 

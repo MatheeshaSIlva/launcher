@@ -30,7 +30,11 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
     private var paint: Paint? = null
     /** Bumped when a requested glyph arrives: read in [key] and [measure], so both run again (the content's key moves too). */
     private val arrived = mutableIntStateOf(0)
-    /** The key this painter last asked the cache for (owning thread): a completion for another is stale. */
+    /** The key the binding names now (set at every look-up, owning thread): a completion for another is stale. */
+    private var current: GlyphCache.Key? = null
+    /** Completions that invalidated this icon (the stale-completion test's measure). */
+    internal var arrivals = 0; private set
+    /** The pending key already asked for, so a frame asks once. */
     private var asked: GlyphCache.Key? = null
 
     override fun key(node: HostNode): Any {
@@ -56,13 +60,14 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
     /** The glyph to draw now; asks the cache once per new key while it is pending. */
     private fun found(node: HostNode): Symbol? {
         val k = cacheKey(node)
+        current = k
         return when (val r = glyphs.resolve(k)) {
             is GlyphCache.Found -> r.glyph
             GlyphCache.Absent -> null
             GlyphCache.Pending -> {
                 if (asked != k) {
                     asked = k
-                    glyphs.prepare(listOf(k), wanted = { asked == k }) { arrived.intValue++; Snapshot.sendApplyNotifications() }
+                    glyphs.prepare(listOf(k), wanted = { current == k }) { arrivals++; arrived.intValue++; Snapshot.sendApplyNotifications() }
                 }
                 null
             }

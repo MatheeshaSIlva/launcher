@@ -54,6 +54,8 @@ class AdbProofInstrumentation : Instrumentation() {
                 // T-001 2b's real-binder refusals from this APK's uid (the lead's device checks).
                 "shell-wrong-uid" -> dev.launcher.engine.shell.ShellProof(this).wrongUid(result)
                 "shell-forwarded" -> dev.launcher.engine.shell.ShellProof(this).forwarded(result)
+                // T-005: glyph preparation on a real icon-bearing component (Codex's review).
+                "component-icons" -> dev.launcher.engine.ui.ComponentProof(context).preparation(result)
                 else -> error("Unknown proof mode")
             }
             result.putString("result", "PASS (test APK UID; no launcher UID claim)")

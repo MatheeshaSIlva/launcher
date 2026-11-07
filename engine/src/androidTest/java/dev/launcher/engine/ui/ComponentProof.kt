@@ -84,6 +84,71 @@ class ComponentProof(private val context: Context) {
         }
     }
 
+    /**
+     * T-005 (Codex's review): an icon-bearing [ComponentView] on a thread of its own, its glyph loads held on the
+     * worker. [ComponentView.whenPrepared] waits for them (late = true once they come after construction); a bound name
+     * changed meanwhile and a disposal while waiting are both handled; a component with no icon is prepared at once.
+     */
+    fun preparation(result: Bundle) {
+        val thread = HandlerThread("component-proof-icons").apply { start() }
+        val handler = Handler(thread.looper)
+        val release = CountDownLatch(1)
+        val loaded = java.util.Collections.synchronizedList(ArrayList<String>())
+        val slow: (String, String) -> Symbol? = { set, symbol ->
+            release.await(10, TimeUnit.SECONDS)
+            loaded += "$set/$symbol"
+            if (symbol.startsWith("wifi.")) Symbol(17f, 11.2f) { _, _, _, _, _, _ -> } else null
+        }
+        try {
+            val iconDef = (Validator(TokenCheck { false }).load(KdlParser.parse("""
+                component "icons" {
+                  props { name type=string default="wifi.3" }
+                  view { row { icon "{@name}" size=(px)40 } }
+                }""".trimIndent())) as ReadResult.Ok).component
+            val tokens = CountingTokens()
+            val sources = Sources.fixture(emptyMap())
+            // 1. Held loads: not prepared until they come; a bound name changed meanwhile; then prepared, late.
+            val prepared = CountDownLatch(1)
+            var late: Boolean? = null
+            val a = onThread(handler) {
+                ComponentView(context, iconDef, tokens, sources, Units(3f, 3f), symbols = slow).also { v ->
+                    v.whenPrepared { l -> late = l; prepared.countDown() }
+                }
+            }
+            check(prepared.count == 1L) { "prepared before its glyph loaded" }
+            onThread(handler) { a.setProp("name", Value.Str("wifi.2")) }
+            // 2. Disposed while waiting: its callback never runs.
+            var disposedCalled = false
+            val b = onThread(handler) { ComponentView(context, iconDef, tokens, sources, Units(3f, 3f), symbols = slow) }
+            onThread(handler) { b.whenPrepared { disposedCalled = true }; b.dispose() }
+            release.countDown()
+            check(prepared.await(10, TimeUnit.SECONDS)) { "never prepared" }
+            check(late == true) { "prepared late but told $late" }
+            check("statusbar/wifi.3" in loaded) { "the initial glyph was not loaded: $loaded" }
+            Thread.sleep(500)
+            onThread(handler) { }
+            check(!disposedCalled) { "a disposed component's callback ran" }
+            result.putString("heldLoads", "prepared only after its glyph loaded, late=true; loaded $loaded")
+            result.putString("disposedWhileWaiting", "its callback never ran")
+            onThread(handler) { a.dispose() }
+            // 3. No icon: prepared at once, not late.
+            val barDef = context.assets.open("kdl/components/status-bar.kdl").bufferedReader().use { r ->
+                (Validator(TokenCheck { false }).load(KdlParser.parse(r.readText())) as ReadResult.Ok).component
+            }
+            val noIcon = onThread(handler) {
+                var at: Boolean? = null
+                ComponentView(context, barDef, tokens, Sources.fixture(mapOf("time" to Time(0L, "UTC"))), Units(3f, 3f))
+                    .also { it.whenPrepared { l -> at = l }; it.dispose() }
+                at
+            }
+            check(noIcon == false) { "a component with no icon was told $noIcon" }
+            result.putString("noIcon", "prepared at once, late=false")
+        } finally {
+            release.countDown()
+            thread.quitSafely()
+        }
+    }
+
     private fun <T> onThread(handler: Handler, block: () -> T): T {
         val done = CountDownLatch(1)
         var out: Result<T>? = null

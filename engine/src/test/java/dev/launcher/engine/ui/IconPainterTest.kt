@@ -91,6 +91,21 @@ class IconPainterTest {
         assertEquals(Size(19, 12), n.painter.measure(n, 100, 100)!!.size)
     }
 
+    @Test fun aCompletionForANameTheBindingLeftDoesNotInvalidateTheNewOne() {
+        val h = host("""icon "wifi.{${'$'}level}" size=(px)17""")
+        val n = h.root
+        val painter = n.painter as IconPainter
+        level = 3
+        h.refresh(); n.painter.measure(n, 100, 100); loadAll()                      // wifi.3 prepared
+        level = 2
+        h.refresh(); n.painter.measure(n, 100, 100)                                 // wifi.2 asked for, pending
+        val before = painter.arrivals
+        level = 3
+        h.refresh(); n.painter.measure(n, 100, 100)                                 // back on the prepared wifi.3
+        loadAll()                                                                   // wifi.2's load completes now
+        assertEquals(before, painter.arrivals)
+    }
+
     @Test fun aSymbolNowhereStaysASquareAndIsNotAskedForAgain() {
         val n = host("""icon "nope" size=(px)10""").root
         n.painter.measure(n, 100, 100); loadAll()

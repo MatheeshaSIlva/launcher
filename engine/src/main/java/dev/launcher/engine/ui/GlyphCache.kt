@@ -34,7 +34,8 @@ class GlyphCache<G : Any>(
     @Volatile private var snapshot: Map<Key, Result<G>> = emptyMap()
     private val publish = Any()
     /** Owning thread only. */
-    private val inFlight = HashSet<Key>()
+    /** Loads under way: written by the owning thread only, read by any (an in-flight key stays [Pending] when [full]). */
+    @Volatile private var inFlight: Set<Key> = emptySet()
     private val waiting = ArrayList<Waiter>()
     private var disposed = false
     /** Loads started (each key at most once while the cache lives): the test's measure of "never prepared again". */
@@ -44,16 +45,23 @@ class GlyphCache<G : Any>(
 
     fun result(key: Key): Result<G>? = snapshot[key]
 
-    /** Lock-free: [key]'s glyph, else [FALLBACK]'s after a confirmed miss, else [Absent] or [Pending]. Any thread. */
+    /** No new key is loaded once [MAX_KEYS] are known or in flight: an unknown one then resolves [Absent] for good. */
+    @Volatile private var full = false
+
+    /**
+     * Lock-free: [key]'s glyph, else [FALLBACK]'s after a confirmed miss, else [Absent] or [Pending]. Any thread. A key
+     * that is not a valid name ([valid]) is [Absent] and never loaded (a KDL value never reaches a file path unchecked).
+     */
     fun resolve(key: Key): Resolved<G> {
+        if (!valid(key)) return Absent
         val s = snapshot
         return when (val own = s[key]) {
             is Ready -> Found(own.glyph)
-            null -> Pending
+            null -> if (full && key !in inFlight) Absent else Pending
             Missing -> if (key.set == FALLBACK) Absent else when (val fb = s[Key(FALLBACK, key.symbol)]) {
                 is Ready -> Found(fb.glyph)
                 Missing -> Absent
-                null -> Pending
+                null -> if (full && Key(FALLBACK, key.symbol) !in inFlight) Absent else Pending
             }
         }
     }
@@ -68,7 +76,9 @@ class GlyphCache<G : Any>(
         val all = keys.flatMapTo(LinkedHashSet()) { k -> if (k.set == FALLBACK) listOf(k) else listOf(k, Key(FALLBACK, k.symbol)) }
         if (keys.none { resolve(it) == Pending }) { done(); return true }
         waiting += Waiter(keys.toSet(), wanted, done)
-        for (k in all) if (snapshot[k] == null && inFlight.add(k)) {
+        for (k in all) if (valid(k) && snapshot[k] == null && !inFlight.contains(k)) {
+            if (snapshot.size + inFlight.size >= MAX_KEYS) { full = true; break }
+            inFlight += k
             loads++
             worker(Runnable {
                 val r: Result<G> = try { load(k.set, k.symbol)?.let { Ready(it) } ?: Missing } catch (_: Throwable) { Missing }
@@ -76,11 +86,14 @@ class GlyphCache<G : Any>(
                 owner(Runnable { inFlight -= k; settle() })
             })
         }
+        if (full) settle()   // what could not be loaded is absent now: its waiters hear at once
         return false
     }
 
     /** Completions after this run nothing; loads already started still publish (harmless, the cache is dropped). */
     fun dispose() { disposed = true; waiting.clear() }
+
+    private fun valid(k: Key) = SET.matches(k.set) && SYMBOL.matches(k.symbol) && ".." !in k.symbol
 
     private fun settle() {
         if (disposed) return
@@ -92,5 +105,10 @@ class GlyphCache<G : Any>(
     companion object {
         /** The engine's own status-bar set: the default `set`, and where a symbol missing from another set is looked for. */
         const val FALLBACK = "statusbar"
+        /** How many glyphs (found, missing or loading) one component may ever ask for: its icons' names come from data. */
+        const val MAX_KEYS = 256
+        /** An icon set's id (a file name under `icons/`, no separator, no dot) and a symbol's name (`wifi.3`, `cell.off`). */
+        private val SET = Regex("[a-z0-9][a-z0-9_-]{0,63}")
+        private val SYMBOL = Regex("[a-z0-9][a-z0-9._-]{0,63}")
     }
 }
