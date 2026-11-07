@@ -35,7 +35,7 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
-| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b DONE; slice 2 AGREED: 2a codex, 2b claude on `team/claude/t001-starter`) |
+| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b, 2 DONE: our own host behind a developer switch, integrated 2026-11-08; slice 3 next) |
 | T-005 | E2 slice 9: the `icon` primitive and the `statusbar` symbol set | `threads/T-005-e2-slice9-icons.md` | claude (painter, cache, harness), codex (generator, set, listing) | `team/claude/t005-icons`, `team/codex/t005-icons` | AGREED, in work |
 | T-004 | E2 slice 6: the first KDL bar in the shade window (time, dev switch) | `threads/T-004-e2-slice6-first-bar.md` | claude; codex cross-checks | `engine` | DONE (S24 measurements pending the phone) |
 | T-003 | E2.0: AGP 8.13.2 and Gradle 8.13; every Android 11 call lint 8.13 found guarded (5 sites) | `threads/T-003-agp-8-13.md` | claude; codex cross-checked | `team/claude/t003-agp` | DONE |
@@ -54,6 +54,9 @@ Things noticed that are not the current task. Each says who noticed it and where
 - No way yet to write a literal `{` in an expression-bearing string (E2 slice 4, claude).
 - The draw node allocates a Compose canvas wrapper per primitive per frame and re-records each frame node: measure in
   slice 6 (E2 slice 5, claude).
+- `tools/dexlist.sh` compares against the pre-engine reference `9984034` and its manifest check now fails on every
+  build: give it a reference per integration (T-001 2b compared against engine's tip by hand; claude).
+- The own host's `nolink` and `block` proofs inject the failure in the starter, not inside Binder (T-001 2b, codex).
 
 ## Risks being watched
 

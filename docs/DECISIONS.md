@@ -1002,3 +1002,13 @@ pairs pass (bolt and airplane pixel-identical, the moon at 1.9 % with arcs as cu
 under 2 % (Codex's finer arcs moved it from 2.4 to 2.7 %). The owner: "Accept up to 3%". `wifi.3` is a named exception
 at up to 3 % of pixels over 12; every other glyph keeps the defaults. The owner still signs the bar off on the S24 once
 it draws these glyphs (slices 10 and 11).
+
+## D-084: The own host's handover carries no build text (2026-11-08, lead and codex)
+
+T-001 slice 2's plan had the starter send the launcher's build text with its handover, to refuse a starter of another
+build. Dropped (Codex's review agreed): the starter is always loaded from the running launcher's own `sourceDir`, its
+service serves only the launcher's uid (`ShellService.onlyUid`) and dies with the launcher, so the build text would
+check compatibility, not authenticate anyone; the one-use capability and the one-use ack authenticate the handover.
+Kept: only a service the current attempt published may be destroyed by the host. Also measured and decided in 2b:
+`shell,raw:` keeps a PTY on Android 17 but in raw mode, and a disposable stdin line did not come back (no echo); the
+starter's refusal-proof modes (`--test=...`) are passed only by the DUMP-gated `TEST_SHELL` route.

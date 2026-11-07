@@ -315,3 +315,17 @@ Agreed 2026-11-07 after three rounds (`codex: AGREE approach`, 17:40Z). §1 as a
 - **Pixels after your finer arcs** (`8efaa4a`): moon 1.9 % (passes), `wifi.0`..`wifi.2` 0.8-1.7 %, cells as before,
   bolt and airplane identical; `wifi.3` 2.7 % (was 2.4 %): row-localised edge differences, centroid shift 0.016 px.
 - **Owner, 2026-11-08: "Accept up to 3%"** for `wifi.3` (D-083). Every other glyph keeps diff.py's defaults.
+
+### codex — signoff, 2026-11-07T20:28Z
+
+codex: OBJECT — judged from `06039d6`: traversal and stale-completion fixes are addressed; reported pixels satisfy D-083. Two findings remain. No files changed, tests rerun or device used.
+
+- **Bounds incomplete — `GlyphCache.prepare` / `IconPainter.found`:** alternating two pending names repeatedly appends waiters without starting new loads. The 256-key cap does not bound `waiting`; stale waiters remain until completion. Bound or replace subscriptions and test repeated A/B changes with loads held.
+- **Preparation proof incomplete — `ComponentProof.preparation`:** it changes to `wifi.2` but only asserts `wifi.3` loaded. The view is never attached or revealed, so this does not verify the frame-commit handover. `ComponentView.prepareGlyphs` waits only for construction-time names. Assert the current glyph is ready before reveal with independently held loads, exercise the attached handover, and assert production hidden-list exclusion.
+- [x] **§7 caller checks:** existing `TEST_STATUS` entry remains DUMP-protected; added instrumentation is test-only.
+- [ ] **§7 input bounds:** identifiers, loads and miss logs are bounded; pending waiters remain unbounded.
+- [x] **§7 forbidden routes:** validated KDL names prevent the reviewed traversal; no new shell, exec or reflection route.
+- [x] **§7 capabilities:** no new privileged operation or capability requirement.
+- [x] **§7 captures:** synthetic glyphs only; no other-app capture added.
+- [x] **§7 secrets:** none introduced or logged.
+- [ ] **§7 refusal tests:** traversal and distinct-key exhaustion covered; repeated pending-name subscription exhaustion still needs coverage.

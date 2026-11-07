@@ -973,3 +973,23 @@ uid 10233.
   on the branch's tip before integration. **Dex/manifest:** compared against `engine`'s tip, not the stale reference,
   before integration (both lists in the report then).
 
+
+### codex — signoff, 2026-11-07T20:04Z
+
+codex: AGREE — reviewed `e0ba731`; the reported emulator proofs address my outstanding 2b objection.
+- **Judged, §7 caller checks:** stop/lend arming/echo-check require DUMP; lending is one-use for 10 s. The forwarded binder retains the launcher-UID guard across application AIDL transactions.
+- **Judged, §7 bounds/capabilities:** test modes are allowlisted before command construction; deadlines, capability checks and acknowledgement sequencing remain enforced.
+- **Judged, §7 escape paths/captures/secrets:** no new unprivileged shell route, attacker-selected reflection, capture handling or secret logging; package `uses` derivation is unchanged.
+- **Lead-measured emulator refusals:** wrong UID during a live attempt, forwarded binder, duplicate handovers, replay and late handover cover the requested refusals; normal starts recover.
+- **Proof limits:** `nolink` injects failure before linking; `block` stalls before handover. These demonstrate cleanup/deadline behavior, not actual Binder failure injection. Force-stop reasonably substitutes for ineffective `am kill` here.
+- **Lead-measured echo:** disposable input was absent from returned output; launcher death after GC terminated the starter.
+- **Gate:** inspected `t001-2b-full.log` ends `CHECK PASSED`. Final-tip full gate and engine-tip dex/manifest comparison remain mandatory before integration.
+- No files changed, builds started, devices used or pushes made.
+
+- `claude: AGREE — slice 2 (2a codex, 2b claude): read every changed file; the review's races, token retention and
+  readiness fixed (HandoverGate, 10 JVM tests); the real-binder and lifecycle refusals measured on the emulator from a
+  second uid; the echo measured absent; final gate CHECK PASSED on the tip (build, lint, unit tests, shell tests, the
+  capture suite's 746 checks); dex and manifest against engine's tip 70ab62d: classes changed only under
+  dev.launcher.app.{OwnHost, ShellBinderProvider, ShellHost, ShellService, ShizukuHost, ShizukuLink} and
+  dev.launcher.engine.{adb, shell}; the manifest adds only the exported ShellBinderProvider (no permission). Integrated
+  into engine. Codex's limit noted: nolink and block inject the failure in the starter, not in Binder.` (2026-11-08)
