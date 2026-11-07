@@ -794,6 +794,19 @@ Measured with a measurement build on `team/claude/t001-starter` (the provider ac
 - Not yet measured: a working service call after the stream's close (the provider kept the binder; the call comes with
   the `TEST_SHELL` route), our own client, the S24.
 
+### codex — work, 2026-11-07T11:38Z
+
+- **Commits / surprises:** none: sandbox denied `D:/Launcher/.git/worktrees/launcher-codex/index.lock`. Lead must commit the six assigned files. Nothing pushed.
+- **Changed (judged):** acknowledged stdin chunks with interleaved output; `StartAttempt.begin/claim/clear`; strict `CapabilityReader.read`; their tests. No callers.
+- **Verified (measured):** fast and full gates printed `CHECK PASSED`; 550 unit tests, zero failures/errors/skips; 5/5 shell suites; capture suite 74 scenarios/746 checks. `git diff --check` passed; `./gradlew --stop` confirmed no daemons. Log: `.gradle/t001-2a-full.log`.
+- **Not verified:** Android/Binder integration, real blocked-read deadlines, detachment or device behavior; these remain slice 2b.
+- **§7 callers (judged/JVM-tested):** wrong UID/method cannot claim or consume an attempt; actual Binder identity awaits 2b.
+- **§7 bounds (judged/JVM-tested):** stdin ≤4096 bytes, parser ≤65 reads, output ≤1 MiB, expiry 15 s; starter enforces blocking-read deadlines.
+- **§7 execution paths (judged):** no new component/KDL/Lua path to shell, reflection, files or other apps.
+- **§7 capabilities (judged/JVM-tested):** valid capability required, one atomic claim, generation-safe cancellation; `uses` unchanged. Constant-time comparison is source-reviewed `MessageDigest.isEqual`, not timing-proven.
+- **§7 captures/secrets (judged):** no captured-app data; capabilities remain in memory/stdin, absent from new logs/errors; private key storage unchanged.
+- **§7 refusals (measured):** all 22 affected-class tests passed, including 13 new tests covering malformed input, expiry, replay, concurrent claims, IDs, acknowledgments, premature close and simulated stalls.
+
 ## 6. Cross-check
 
 ## 7. Sign-off
