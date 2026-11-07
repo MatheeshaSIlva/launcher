@@ -16,7 +16,9 @@ class AdbClient(private val endpoint: AdbEndpoint, private val key: AdbKey) : Cl
         catch (error: Exception) { close(); throw error }
     }
 
-    fun shell(command: String): ByteArray = try { session.shell(command) } finally { close() }
+    /** Bounded stdin (4096 bytes), acknowledged in peer-sized chunks; no stdin half-close. */
+    fun shell(command: String, stdin: ByteArray = ByteArray(0)): ByteArray =
+        try { session.shell(command, stdin) } finally { close() }
     override fun close() = transport.close()
 }
 
@@ -59,10 +61,11 @@ internal class AdbSession(
         connected = true
     }
 
-    fun shell(command: String): ByteArray {
+    fun shell(command: String, stdin: ByteArray = ByteArray(0)): ByteArray {
         check(connected && !used)
         used = true
         require(command.length <= AdbMessageCodec.MAX_PAYLOAD_BYTES) { "Shell service exceeds limit" }
+        require(stdin.size <= AdbMessageCodec.MAX_PAYLOAD_BYTES) { "Shell stdin exceeds limit" }
         val service = nul("shell:$command")
         if (service.size > peerMax) throw AdbProtocolException("Shell service exceeds peer maxdata")
         val local = 1
@@ -73,10 +76,23 @@ internal class AdbSession(
         }
         val remote = opened.arg0
         val result = java.io.ByteArrayOutputStream()
+        var sent = 0
+        var awaitingAck = false
         while (true) {
+            // At most one outgoing WRTE is in flight. Output may arrive before its OKAY.
+            if (!awaitingAck && sent < stdin.size) {
+                val end = minOf(sent + peerMax, stdin.size)
+                send(AdbCommands.WRTE, local, remote, stdin.copyOfRange(sent, end))
+                sent = end
+                awaitingAck = true
+            }
             val message = receive()
             if (message.arg0 != remote || message.arg1 != local) throw AdbProtocolException("ADB stream ID mismatch")
             when (message.command) {
+                AdbCommands.OKAY -> {
+                    if (!awaitingAck || message.payload.isNotEmpty()) throw AdbProtocolException("Unexpected ADB acknowledgement")
+                    awaitingAck = false
+                }
                 AdbCommands.WRTE -> {
                     val bytes = message.payload
                     if (result.size() + bytes.size > MAX_SHELL_OUTPUT) throw AdbProtocolException("Shell output exceeds limit")
@@ -86,6 +102,7 @@ internal class AdbSession(
                 AdbCommands.CLSE -> {
                     if (message.payload.isNotEmpty()) throw AdbProtocolException("Invalid ADB close")
                     send(AdbCommands.CLSE, local, remote)
+                    if (awaitingAck || sent < stdin.size) throw AdbProtocolException("ADB closed before stdin acknowledgement")
                     return result.toByteArray()
                 }
                 else -> throw AdbProtocolException("Unexpected ADB stream packet")

@@ -105,4 +105,66 @@ class AdbSessionTest {
         nul.session.connect()
         assertThrows(IllegalArgumentException::class.java) { nul.session.shell("id\u0000ignored") }
     }
+
+    @Test fun stdinChunksWaitForAcknowledgementsWhileOutputIsInterleaved() {
+        val incoming = listOf(stls(), hello(10), msg(AdbCommands.OKAY, 42, 1),
+            msg(AdbCommands.WRTE, 42, 1, "out"), msg(AdbCommands.OKAY, 42, 1),
+            msg(AdbCommands.OKAY, 42, 1), msg(AdbCommands.OKAY, 42, 1), msg(AdbCommands.CLSE, 42, 1))
+        val output = ByteArrayOutputStream()
+        val sent = mutableListOf<AdbMessage>()
+        var readOffset = 0
+        var packet = 0
+        val session = AdbSession({
+            val bytes = output.toByteArray()
+            val unread = bytes.copyOfRange(readOffset, bytes.size).inputStream()
+            while (unread.available() > 0) sent += AdbMessageCodec.decode(unread, if (packet < 2) old else modern)
+            readOffset = bytes.size
+            // A second chunk must not be sent while the first one's ACK is pending.
+            if (packet == 3 || packet == 4) assertEquals(1, sent.count { it.command == AdbCommands.WRTE })
+            if (packet == 5) {
+                assertEquals(listOf(AdbCommands.WRTE, AdbCommands.OKAY, AdbCommands.WRTE), sent.takeLast(3).map { it.command })
+            }
+            AdbMessageCodec.encode(incoming[packet], if (packet++ == 0) old else modern).inputStream()
+        }, { output }) { }
+        session.connect()
+        assertEquals("out", session.shell("id", "abcdefghijklmnopqrstu\n".toByteArray()).toString(Charsets.UTF_8))
+        val writes = sent.filter { it.command == AdbCommands.WRTE }
+        assertEquals(listOf("abcdefghij", "klmnopqrst", "u\n"), writes.map { it.payload.toString(Charsets.UTF_8) })
+        assertTrue(writes.all { it.arg0 == 1 && it.arg1 == 42 })
+    }
+
+    @Test fun refusesPrematureCloseBadAckAndChangedIdsDuringStdin() {
+        for (packet in listOf(msg(AdbCommands.CLSE, 42, 1), msg(AdbCommands.OKAY, 43, 1),
+            msg(AdbCommands.OKAY, 42, 2), msg(AdbCommands.OKAY, 42, 1, "bad"), msg(AdbCommands.CLSE, 42, 1, "bad"))) {
+            val t = transcript(stls(), hello(10), msg(AdbCommands.OKAY, 42, 1), packet)
+            t.session.connect()
+            assertThrows(AdbProtocolException::class.java) { t.session.shell("id", ByteArray(11)) }
+        }
+    }
+
+    @Test fun acknowledgementStallPropagatesWithoutSendingAnotherChunk() {
+        val output = ByteArrayOutputStream()
+        val bytes = (AdbMessageCodec.encode(stls(), old) + AdbMessageCodec.encode(hello(10), modern) +
+            AdbMessageCodec.encode(msg(AdbCommands.OKAY, 42, 1), modern)).inputStream()
+        val stalled = object : java.io.InputStream() {
+            override fun read(): Int = if (bytes.available() > 0) bytes.read() else throw java.net.SocketTimeoutException("test stall")
+        }
+        val session = AdbSession({ stalled }, { output }) { }
+        session.connect()
+        assertThrows(java.net.SocketTimeoutException::class.java) { session.shell("id", ByteArray(11)) }
+        val out = output.toByteArray().inputStream()
+        val sent = mutableListOf<AdbMessage>()
+        repeat(4) { sent += AdbMessageCodec.decode(out, if (it < 2) old else modern) }
+        assertEquals(listOf(AdbCommands.CNXN, AdbCommands.STLS, AdbCommands.OPEN, AdbCommands.WRTE), sent.map { it.command })
+        assertEquals(10, sent.last().payload.size)
+        assertEquals(0, out.available())
+    }
+
+    @Test fun stdinLimitIsCheckedBeforeOpen() {
+        val t = transcript(stls(), hello())
+        t.session.connect()
+        val before = t.output.size()
+        assertThrows(IllegalArgumentException::class.java) { t.session.shell("id", ByteArray(4097)) }
+        assertEquals(before, t.output.size())
+    }
 }
