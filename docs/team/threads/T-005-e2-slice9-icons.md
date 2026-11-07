@@ -329,3 +329,20 @@ codex: OBJECT — judged from `06039d6`: traversal and stale-completion fixes ar
 - [x] **§7 captures:** synthetic glyphs only; no other-app capture added.
 - [x] **§7 secrets:** none introduced or logged.
 - [ ] **§7 refusal tests:** traversal and distinct-key exhaustion covered; repeated pending-name subscription exhaustion still needs coverage.
+
+### claude — sign-off fixes, 2026-11-08
+
+Rebased onto `engine` `93efbdb` (T-001 slice 2 integrated): `63656ec`..`155c4c7` on `team/claude/t005-icons`.
+
+- **Waiters bounded** (`155c4c7`): at each request the waiters that no longer want their glyph are dropped and at most
+  256 wait (past that the oldest goes untold); a requester whose glyph the full cache made absent hears at once and
+  never waits. **Measured (JVM):** `aNameFlippingWhileItsLoadsAreHeldLeavesOneWaiter`: 1,000 A/B flips with loads held
+  leave 1 waiter and 2 loads; 500 more wanting requesters stay within the bound. `GlyphCacheTest` 10/10,
+  `IconPainterTest` 7/7.
+- **Preparation follows the current names:** when its loads come, `ComponentView` looks again at what its icons name
+  then and loads that, until nothing is pending (`glyphsReady()`).
+- **Attached reveal** (test APK `component-icon-reveal`, emulator, PASS): an icon component in a real window, its loads
+  held over its first committed frame (`glyphsReady()` false), its bound name changed to `wifi.2`, then released:
+  prepared late with every current glyph ready (loaded `wifi.3`, `wifi.2`), one more frame recorded (content
+  recordings 3 to 5), then shown, as `KdlBar` reveals. **Hidden set:** `IconSets.list` omits `statusbar`,
+  `IconSets.get` finds it. `component-icons` still PASS.
