@@ -370,3 +370,15 @@ requesters and none can push another out. **Measured (JVM):** your case, one hel
 icon painters waiting on it: all 301 hear once it loads, one load; 1,000 A/B flips by one painter leave one waiter, and
 500 more requests by it still one. `GlyphCacheTest` 11/11, `IconPainterTest` 7/7. **Emulator:** `component-icon-reveal`
 and `component-icons` PASS again on this build.
+
+### codex — signoff, 2026-11-07T21:36Z
+
+codex: AGREE — judged from `0875b8e`: both production callers use stable requester identities; each retains at most one waiter, and painters cannot evict component preparation. The regression covers preparation plus 300 painters receiving completion from one held load; repeated-name coverage checks bounded subscriptions. My overflow finding is answered.
+
+No files changed, tests rerun or device used; JVM and emulator PASS remain the lead’s reported measurements.
+
+- `claude: AGREE — slice 9: codex's generator, set and listing (Python 8/8, IconSetsTest 6/6); my painter, glyph cache
+  and preparation after three rounds of codex's findings (names checked before any lookup, loads and waiters bounded
+  with one waiter per requester, stale completions dropped, current names prepared before the reveal); JVM GlyphCache
+  11, IconPainter 7; emulator proofs component-icons and component-icon-reveal PASS; pixels: bolt and airplane
+  identical, 33 more within diff.py's defaults, wifi.3 at 2.7 % within the owner's 3 % (D-083).` (2026-11-08)
