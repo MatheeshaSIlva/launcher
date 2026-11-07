@@ -31,6 +31,22 @@ def arc(radius, large, sweep, end):
     return f"A{number(radius)} {number(radius)} 0 {large} {sweep} {point(*end)}"
 
 
+def cubic_arc(cx, cy, radius, start, sweep):
+    """Explicit tangent cubics, at most 15 degrees each; bypass SVG arc conversion."""
+    count = math.ceil(abs(sweep) / math.radians(15))
+    step = sweep / count
+    pieces = []
+    for i in range(count):
+        a, b = start + i * step, start + (i + 1) * step
+        x0, y0 = polar(cx, cy, radius, a)
+        x3, y3 = polar(cx, cy, radius, b)
+        tangent = 4 / 3 * math.tan(step / 4) * radius
+        pieces.append("C" + point(x0 - tangent * math.sin(a), y0 + tangent * math.cos(a)) +
+                      " " + point(x3 + tangent * math.sin(b), y3 - tangent * math.cos(b)) +
+                      " " + point(x3, y3))
+    return "".join(pieces)
+
+
 def polygon(points):
     return "M" + "L".join(point(x, y) for x, y in points) + "Z"
 
@@ -49,10 +65,10 @@ def fan(outer, band):
     start, end = math.radians(225), math.radians(315)
     inner = outer - band
     path = "M" + point(*polar(8.5, 5.6, outer, start))
-    path += arc(outer, 0, 1, polar(8.5, 5.6, outer, end))
+    path += cubic_arc(8.5, 5.6, outer, start, end - start)
     if inner > 0.5:
         path += "L" + point(*polar(8.5, 5.6, inner, end))
-        path += arc(inner, 0, 0, polar(8.5, 5.6, inner, start))
+        path += cubic_arc(8.5, 5.6, inner, end, start - end)
     else:
         path += "L8.5 5.6"
     return path + "Z"
@@ -73,9 +89,16 @@ def moon_geometry():
 
 
 def moon():
-    radius, (_, _, cut_radius), start, end = moon_geometry()
+    radius, (cx, cy, cut_radius), start, end = moon_geometry()
     # Long clockwise outer arc; short counterclockwise cut arc, inside the original circle.
-    return "M" + point(*start) + arc(radius, 1, 1, end) + arc(cut_radius, 0, 0, start) + "Z"
+    outer_start = math.atan2(start[1], start[0])
+    outer_sweep = (math.atan2(end[1], end[0]) - outer_start) % math.tau
+    cut_start = math.atan2(end[1] - cy, end[0] - cx)
+    cut_sweep = -((cut_start - math.atan2(start[1] - cy, start[0] - cx)) % math.tau)
+    # A closer circle boundary, but still one filled contour: the set has no layer/CLEAR
+    # blend operation. Clipping is not an antialiased circle-minus-cut replacement.
+    return ("M" + point(*start) + cubic_arc(0, 0, radius, outer_start, outer_sweep) +
+            cubic_arc(cx, cy, cut_radius, cut_start, cut_sweep) + "Z")
 
 
 def glyph(box, paths, source, level=None):

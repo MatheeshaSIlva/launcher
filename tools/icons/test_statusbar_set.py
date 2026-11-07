@@ -11,33 +11,33 @@ import unittest
 import build_statusbar_set as builder
 
 
-def moon_contour(path):
-    """Independent SVG circular-arc endpoint decoder, sampling the emitted flags and coordinates."""
-    tokens = re.findall(r"[MAZ]|-?\d+(?:\.\d+)?", path)
+def cubic_segments(path):
+    """Decode serialized M/L/C/Z independently of the generator's circle maths."""
+    tokens = re.findall(r"[MLCZ]|-?\d+(?:\.\d+)?", path)
     assert tokens.pop(0) == "M"
     current = (float(tokens.pop(0)), float(tokens.pop(0)))
-    points = [current]
-    while tokens[0] == "A":
-        tokens.pop(0)
-        rx, ry, rotation, large, sweep, x, y = [float(tokens.pop(0)) for _ in range(7)]
-        assert rx == ry and rotation == 0
-        dx, dy = (current[0] - x) / 2, (current[1] - y) / 2
-        length2 = dx*dx + dy*dy
-        factor = math.sqrt(max(0, (rx*rx - length2) / length2))
-        if large == sweep:
-            factor = -factor
-        cx = (current[0] + x) / 2 + factor * dy
-        cy = (current[1] + y) / 2 - factor * dx
-        start = math.atan2(current[1] - cy, current[0] - cx)
-        end = math.atan2(y - cy, x - cx)
-        delta = (end - start) % (2*math.pi)
-        if not sweep:
-            delta -= 2*math.pi
-        points.extend((cx + rx*math.cos(start + delta*i/400), cy + rx*math.sin(start + delta*i/400))
-                      for i in range(1, 401))
-        current = (x, y)
+    segments = []
+    while tokens[0] in ("L", "C"):
+        command = tokens.pop(0)
+        end = (float(tokens.pop(0)), float(tokens.pop(0)))
+        if command == "C":
+            control2 = (float(tokens.pop(0)), float(tokens.pop(0)))
+            last = (float(tokens.pop(0)), float(tokens.pop(0)))
+            segments.append((current, end, control2, last))
+            end = last
+        current = end
     assert tokens == ["Z"]
-    return points
+    return segments
+
+
+def sample_cubic(segment):
+    return [tuple(sum(math.comb(3, j) * (1-t)**(3-j) * t**j * p[axis]
+                      for j, p in enumerate(segment)) for axis in (0, 1))
+            for t in (i/100 for i in range(101))]
+
+
+def moon_contour(path):
+    return [p for segment in cubic_segments(path) for p in sample_cubic(segment)]
 
 
 def inside(points, x, y):
@@ -64,6 +64,32 @@ class StatusbarSetTest(unittest.TestCase):
             self.assertEqual(first, builder.OUTPUT.read_bytes())
             self.assertNotIn(b"\r", first)
 
+    def test_wifi_uses_explicit_fine_cubics(self):
+        for layer in self.icons["wifi.3"]["layers"]:
+            self.assertNotIn("A", layer["d"])
+            self.assertGreaterEqual(layer["d"].count("C"), 6)
+
+    def test_emitted_arcs_stay_on_circles_within_001_point(self):
+        cases = []
+        for layer, outer, inner in zip(self.icons["wifi.3"]["layers"],
+                                       (3.4, 7.4, 11.2), (0, 4.8, 8.6)):
+            segments = cubic_segments(layer["d"])
+            self.assertEqual(len(segments), 6 if inner == 0 else 12)
+            cases.extend((segment, 8.5, 5.6, outer if i < 6 else inner)
+                         for i, segment in enumerate(segments))
+        for segment in cubic_segments(self.icons["moon"]["layers"][0]["d"]):
+            # Identify which reference circle owns this segment from its midpoint.
+            mx, my = sample_cubic(segment)[50]
+            cx, cy, radius = min(((0, 0, 6.2), (3.41, -2.79, 5.27)),
+                                key=lambda c: abs(math.hypot(mx-c[0], my-c[1])-c[2]))
+            cases.append((segment, cx, cy, radius))
+        for segment, cx, cy, radius in cases:
+            start, end = segment[0], segment[-1]
+            angle = math.atan2(end[1]-cy, end[0]-cx) - math.atan2(start[1]-cy, start[0]-cx)
+            self.assertLessEqual(abs((angle + math.pi) % math.tau - math.pi), math.radians(15) + 1e-6)
+            for x, y in sample_cubic(segment):
+                self.assertLess(abs(math.hypot(x-cx, y-cy) - radius), .01)
+
     def test_schema_names_sources_and_boxes(self):
         self.assertEqual(set(self.data), {"name", "listed", "icons"})
         self.assertIs(self.data["listed"], False)
@@ -79,7 +105,7 @@ class StatusbarSetTest(unittest.TestCase):
             for layer in icon["layers"]:
                 self.assertEqual(set(layer), {"d", "a"})
                 self.assertTrue(layer["d"].startswith("M") and layer["d"].endswith("Z"))
-                self.assertFalse(re.search(r"[^MLAZ0-9 .-]", layer["d"]))
+                self.assertFalse(re.search(r"[^MLACZ0-9 .-]", layer["d"]))
                 self.assertIn(layer["a"], (1, 77/255))
 
     def test_levels_change_only_alpha_and_in_order(self):
@@ -90,8 +116,8 @@ class StatusbarSetTest(unittest.TestCase):
                 self.assertEqual(len(layers), count)
                 self.assertEqual([p["d"] for p in layers], [p["d"] for p in base])
                 self.assertEqual([p["a"] for p in layers], [1]*level + [77/255]*(count-level))
-        self.assertEqual(self.icons["wifi.0"]["layers"][0]["d"].count("A"), 1)  # inner wedge
-        self.assertEqual(self.icons["wifi.0"]["layers"][1]["d"].count("A"), 2)
+        self.assertEqual(self.icons["wifi.0"]["layers"][0]["d"].count("C"), 6)  # inner wedge
+        self.assertEqual(self.icons["wifi.0"]["layers"][1]["d"].count("C"), 12)
 
     def test_polygon_coordinates_and_bolt_slot_offset(self):
         bolt = self.icons["bolt"]
