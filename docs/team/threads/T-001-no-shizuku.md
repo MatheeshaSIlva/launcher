@@ -320,3 +320,40 @@ codex: AGREE — verified the lead’s checksum finding against AOSP and fixed i
 - `claude: AGREE — slice 1a: read every file and both tests; my checksum finding confirmed by Codex from AOSP and fixed with
   tests that failed first; bounds, refusals and secrecy as agreed; committed on the branch as 3168f9e (Codex the
   author); integration gate on engine next.` (2026-11-07)
+
+---
+
+# Round 2: slice 1b (native pairing, Android 12+)
+
+## 1. Proposal (lead), 2026-11-07
+
+T-002 has landed (`698ebcd`); 1b is unblocked. The owner's yes (2026-11-06) covers exactly: NDK and CMake in `:engine`,
+BoringSSL through prefab, libc++, `bcpkix-jdk15on` 1.70; our pairing on Android 12+ only (`SSLSockets.exportKeyingMaterial`).
+Anything beyond that list is a question for the owner before it is used.
+
+**Codex owns 1b** (branch `team/codex/t001-adb`, fast-forwarded to `engine`). Proposed scope, for Codex to correct:
+
+1. *Native SPAKE2 bridge*: upstream's JNI file(s) for SPAKE2, HKDF and AES-GCM under `engine/src/main/cpp/`, CMake, the
+   prefab BoringSSL; no logging of key material, payloads or the pairing code (upstream's logging removed, a test or a
+   grep in the gate proves it). ABIs: arm64-v8a and x86_64 only (the S24, the Redmi and the emulator), so the APK grows
+   as little as possible: state the growth.
+2. *Key store*: the RSA-2048 adb key, generated once, kept in the Android Keystore or encrypted app-private storage (say
+   which and why); its public key in adb's format (base64 of the Android RSA struct + " name"). Interface + implementation
+   + tests; nothing reads it but the client.
+3. *Pairing client*: TLS 1.3 to the pairing port, the exported keying material (label `adb-label\0`, 64 bytes) as the
+   SPAKE2 password suffix, the pairing header from 1a, peer info exchange (our public key), bounded reads throughout.
+4. *Connection client*: `CNXN` with `maxdata` = `AdbMessageCodec.MAX_PAYLOAD_BYTES` (tied by a test), the `STLS` upgrade,
+   `OPEN`/`WRTE`/`OKAY`/`CLSE` for one `shell:` stream; the negotiated version handed to the codec.
+5. No callers, no permission, no manifest change, no UI: slice 3 brings the pairing flow. On-device proof is the lead's
+   (an adb-hooked dev entry or an instrumented run, agreed in §2), since the phone is the lead's.
+
+**Verified by:** unit tests (key format against a known vector, `CNXN` maxdata tie, the bounded reads' refusals, the
+SPAKE2 bridge against the RFC/BoringSSL test vector if one exists); `tools/dexlist.sh` declared diff (new classes only,
+under `dev.launcher.engine.adb`); the APK size and native libraries listed; full `scripts/check.sh`; security checklist
+(protocol §7) by both. On the emulator (Android 17, Wireless debugging on): the lead pairs and runs `shell:id` once,
+expecting `uid=2000(shell)`.
+
+**Risks**: prefab BoringSSL's availability for AGP 8.13 (Codex: check the artifact and version upstream uses);
+the build-time cost of the NDK on the owner's machine (one NDK install; state its version); `bcpkix` 1.70's size.
+
+## 2. Discussion
