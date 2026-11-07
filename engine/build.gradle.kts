@@ -77,6 +77,10 @@ dependencies {
     // GoogleFontCatalog's previews and HomeBridge's suspend calls: the version the APK resolves (1.7.3 until T-002; Compose
     // 1.11.4's ui asks 1.9.0, so 1.9.0 since).
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    // ComponentView's lifecycle and saved-state owner on the shade's thread (E2 slice 6, T-004): already in the APK through
+    // Compose ui, declared at the versions it resolves (dependencyInsight, 2026-11-07: lifecycle 2.9.4, savedstate 1.3.2).
+    implementation("androidx.lifecycle:lifecycle-runtime:2.9.4")
+    implementation("androidx.savedstate:savedstate:1.3.2")
     // ShizukuLink (binding the shell service) imports Shizuku's API: already in the APK at this version, through the app,
     // which keeps api and provider (its manifest's ShizukuProvider) (E1 slice M3, D-071).
     implementation("dev.rikka.shizuku:api:13.1.5")
