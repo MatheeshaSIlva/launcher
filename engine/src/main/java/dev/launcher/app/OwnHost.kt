@@ -56,7 +56,8 @@ class OwnHost : ShellHost {
         main.post { if (paired(app)) connect() }
     }
 
-    override fun state(): ShizukuLink.State = if (gate.isStarting) ShizukuLink.State.CONNECTING else ShizukuLink.State.NOT_RUNNING
+    override fun state(): ShizukuLink.State =
+        if (gate.isStarting || discovery != null) ShizukuLink.State.CONNECTING else ShizukuLink.State.NOT_RUNNING
 
     override fun connect() = start(null)
 
@@ -236,6 +237,8 @@ class OwnHost : ShellHost {
         val d = AdbDiscovery(AndroidNsdAdapter(app.getSystemService(android.net.nsd.NsdManager::class.java)))
         discovery = d
         try { d.start(FALLBACK_MS) } catch (t: Throwable) { discovery = null; return AppLog.log("[shell] own host: discovery: ${t.javaClass.simpleName}") }
+        lastFailure = null
+        sink.changed()
         AppLog.log("[shell] own host: looking for Wireless debugging's port")
         val until = SystemClock.elapsedRealtime() + FALLBACK_MS
         fun look() {
@@ -243,7 +246,7 @@ class OwnHost : ShellHost {
             val found = d.snapshot().firstOrNull { it.kind == AdbDiscovery.Kind.CONNECT }?.endpoint?.port
             when {
                 found != null -> { d.close(); discovery = null; start(null, found, fallback = true) }
-                SystemClock.elapsedRealtime() >= until -> { d.close(); discovery = null; AppLog.log("[shell] own host: Wireless debugging's port not found (is it on?)"); sink.changed() }
+                SystemClock.elapsedRealtime() >= until -> { d.close(); discovery = null; lastFailure = "no port"; AppLog.log("[shell] own host: Wireless debugging's port not found (is it on?)"); sink.changed() }
                 else -> main.postDelayed({ look() }, 250)
             }
         }

@@ -61,8 +61,12 @@ object PairingSession {
         if (shizukuRunning()) return Begin.SHIZUKU_RUNNING
         cancel(ctx)
         val session = flow.begin()
+        // Whichever way the deadline was met first (a late reply, a late outcome), this session's token, discovery and
+        // notification go when its time is up. A replaced or cancelled session removed this timer already.
         expiry = Runnable {
-            if (flow.expire(session)) { release(ctx); AppLog.log("[shell] pairing: expired") }
+            flow.expire(session)
+            release(ctx)
+            AppLog.log("[shell] pairing: expired")
         }.also { main.postDelayed(it, PairingFlow.SESSION_MS) }
         discovery = AdbDiscovery(AndroidNsdAdapter(ctx.getSystemService(NsdManager::class.java))).also { it.start() }
         // The session's own token: its id in the data (never an endpoint or identity), a request code of its own.

@@ -35,6 +35,17 @@ class AdbIdentityStoreTest {
         }
     }
 
+    @Test fun inspectingMakesNoIdentityAndReportsWhatIsThere() {
+        val storage = Storage()
+        val store = AdbIdentityStore(storage, Wrapper())
+        org.junit.Assert.assertNull(store.inspect())
+        org.junit.Assert.assertNull(storage.read())                        // nothing was made
+        store.load()
+        org.junit.Assert.assertTrue(store.inspect() is AdbIdentityResult.Ready)
+        storage.write(ByteArray(64))
+        org.junit.Assert.assertTrue(store.inspect() is AdbIdentityResult.IdentityLost)
+    }
+
     @Test fun missingStorageCreatesPersistedIdentityAndReloadsSamePublicKey() {
         val storage = Storage()
         val wrapper = Wrapper()

@@ -30,6 +30,12 @@ class AdbWrappingKeyUnavailable : java.security.GeneralSecurityException()
 class AdbIdentityStore(private val storage: AdbIdentityStorage, private val wrapper: AdbIdentityWrapper) {
     fun load(name: String = "not-a-launcher"): AdbIdentityResult = synchronized(loadLock) { loadLocked(name) }
 
+    /** What is stored, never making anything: null when no identity is stored (a status check must not recreate one). */
+    fun inspect(name: String = "not-a-launcher"): AdbIdentityResult? = synchronized(loadLock) {
+        val saved = try { storage.read() } catch (_: Exception) { return@synchronized AdbIdentityResult.StorageFailure() }
+        if (saved == null) null else loadLocked(name)
+    }
+
     private fun loadLocked(name: String): AdbIdentityResult {
         val saved = try { storage.read() } catch (_: Exception) { return AdbIdentityResult.StorageFailure() }
         var plaintext: ByteArray? = null

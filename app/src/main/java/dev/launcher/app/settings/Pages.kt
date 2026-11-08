@@ -3067,7 +3067,7 @@ private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
     val now by androidx.compose.runtime.produceState("", tick.intValue) {
         while (true) {
             val keyOk = !dev.launcher.app.OwnHost.paired(ctx) || kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                dev.launcher.engine.adb.AndroidAdbIdentity.store(ctx).load() is dev.launcher.engine.adb.AdbIdentityResult.Ready
+                dev.launcher.engine.adb.AndroidAdbIdentity.store(ctx).inspect() is dev.launcher.engine.adb.AdbIdentityResult.Ready
             }
             value = shellHostNow(ctx, keyOk)
             kotlinx.coroutines.delay(1000)
@@ -3104,11 +3104,11 @@ private fun shellHostNow(ctx: android.content.Context, keyOk: Boolean): String {
     val link = dev.launcher.app.ShizukuLink
     val own = link.ownHostSelected()
     return when {
-        link.state() == dev.launcher.app.ShizukuLink.State.CONNECTED -> if (own) "The launcher's own is running" else "Shizuku is running"
-        !own -> "Shizuku is not running"
         dev.launcher.app.PairingSession.state == dev.launcher.engine.shell.PairingFlow.State.WAITING -> "Waiting for the code"
         dev.launcher.app.PairingSession.state == dev.launcher.engine.shell.PairingFlow.State.PAIRING -> "Pairing"
+        link.state() == dev.launcher.app.ShizukuLink.State.CONNECTED -> if (own) "The launcher's own is running" else "Shizuku is running"
         !keyOk -> "The key is lost or unreadable: pair again"
+        !own -> if (dev.launcher.app.OwnHost.paired(ctx) && dev.launcher.app.OwnHost.selected(ctx)) "Paired: starts from the launcher's next start" else "Shizuku is not running"
         link.state() == dev.launcher.app.ShizukuLink.State.CONNECTING -> "Connecting"
         dev.launcher.app.OwnHost.failure != null -> "Could not connect (is Wireless debugging on?)"
         dev.launcher.app.OwnHost.paired(ctx) -> "Paired, not running"
