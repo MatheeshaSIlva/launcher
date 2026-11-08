@@ -1046,3 +1046,7 @@ added with it; any foreground service or further permission the slice turns out 
 
 T-001 slice 4. When the launcher turns Wireless debugging on to start its helper, it keeps a note so it can turn it off again, across a crash. Finding that note at a later start, it cannot tell its own "on" from one the user made since. Asked, the owner chose "Turn it off": a debugging port left open by accident is the worse mistake; the cost is one toggle, in a rare case, said in the log. Wireless debugging the user had on before the launcher began is never touched.
 
+## D-089: Our own host needs USB debugging on (2026-11-08, owner)
+
+T-001 slice 4. Measured on the S24: turning USB debugging off stops adbd at once, and everything under it dies, Wireless debugging on or not; with it on, the helper survives Wireless debugging going off. Asked, the owner chose to ask users to leave it on: pairing refuses while it is off and says why, the settings page says so if it goes off later, and the launcher never changes that setting itself. This narrows the spec's sequence ("disables wireless debugging") to what works, and adds one step to onboarding for the alpha to explain. Rejected: the launcher turning it on (a security setting changed without asking), keeping Wireless debugging on instead (unmeasured, a port open on every network).
+

@@ -1594,6 +1594,14 @@ Two consequences:
 2. **New requirement:** the owner toggling USB debugging at any time kills the helper and leaves him on stock bars until the launcher restarts. A dead helper with Wireless debugging available should start again by itself (bounded, under the restart guard).
 Which way for USB debugging off is the owner's: asked.
 
+### claude — the owner's answer, the plan's final shape, 2026-11-08
+
+**Owner:** with USB debugging off, "Ask them to turn it on" (D-089). So:
+- **USB debugging is a requirement of our host.** Pair is refused while `adb_enabled` is 0, with a message; the page's line says so if it is off later. The launcher never writes `adb_enabled`.
+- **The start, when `adb_enabled` is 1:** as agreed: wait for Wi-Fi, record with `commit()`, write `adb_wifi_enabled` 1 if it was 0, cached port, one discovery, fresh attempt, restore. With `adb_enabled` 0 no automatic start touches anything: state "USB debugging is off", the start waits for it (a `ContentObserver` on the setting while the launcher lives).
+- **A helper that dies** (USB debugging toggled, adbd restarted) starts again by the same path, once per death, under the restart guard: the guard's 60 s rule now covers any death soon after our off write, and USB debugging going off is told apart by `adb_enabled` (no start until it is back).
+- Survival with USB debugging on is measured on the S24 (part 1). Reboot, cold receiver and watchdog kill test remain to measure after the code.
+
 ## 3. Agreed approach
 
 ## 4. Split
