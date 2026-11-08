@@ -1400,3 +1400,19 @@ No files changed, builds run or devices used. Full gate, dex/manifest comparison
   ff943b7: classes changed only in OwnHost, PairingSession, PairingReplyReceiver, ShizukuLink, settings, engine adb and
   shell; the manifest adds only the unexported PairingReplyReceiver; no permission. Emulator journeys as reported.
   Waiting: the owner's S24 go and sign-off before integration.` (2026-11-08)
+
+### claude — the S24 journey, 2026-11-08
+
+**Measured on the S24 (One UI 9, Android 17), the owner driving, Shizuku stopped:** `pairing: paired` through the
+notification in Android's own shade; after a restart (a reinstall, never force-stop) `host: OwnHost`, discovery found the
+port, `service connected`, `ready in 55 ms`, `[watchdog] armed`, flags `status bar and shade ours`, gesture strip on.
+
+**A failure the owner hit, the lead's error:** with Shizuku's server stopped, our user service `dev.launcher.app:shell`
+(uid 2000) kept running and kept holding `disable(0x5a30000)` and `disable2(0x7)`, so Android's shade and gesture bar did not
+come back and the owner was stuck on the pairing step. The thread's claim "re-pairing is needed exactly when ours is not
+running" and "Stop Shizuku first" assumed the service dies with the server; it does not. `PairingSession.shizukuRunning` only
+pings Shizuku's binder, so it said all clear. Recovered from adb: `kill` of that pid; `mDisabled1=0x0`, `mDisabled2=0x0`.
+**To fix before merging:** `begin` must also see a running service of ours, and stop it (dropping the flags) as part of
+pairing, or the journey dead-ends for every user coming from Shizuku.
+
+**Not measured on the S24:** no wrong code was logged in this run.
