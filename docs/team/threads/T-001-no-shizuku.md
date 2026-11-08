@@ -1216,6 +1216,18 @@ ordinary app overlay cannot be the code entry, and the gate stops here for the o
    uses the accessibility service for something that is not accessibility: Play policy risk).
 Codex's discovery and parser (`AdbDiscovery`, `PairingCode`, 18 JVM tests) do not depend on this choice.
 
+### claude — the owner's answer, 2026-11-08
+
+The owner: "we haven't activated our shades or gesture bar before pairing, correct? so we would have to use stock
+shade right?". Correct, checked in the code: Android's shade is kept away only by `DISABLE_EXPAND`, held by the shell
+service (`SystemRestore.applyFlags`, `Shade.kt:44`) and dropped when it dies; before the first pairing no shell runs,
+and re-pairing is needed exactly when ours is not running. **So the code is typed into a notification's reply field in
+Android's own shade** (upstream's way; `RemoteInput`, an unexported receiver, the mutable PendingIntent only for the
+reply, a session id in memory: round 1's receiver rules come back). No shade change, no overlay. One case: while
+Shizuku is still the default (until slice 5) and running, its service holds the flags; then the app clears them for
+the pairing session (a call to the running service, restored after) or says "Stop Shizuku first". The card
+(`PairingCard.kt`) is dropped. Codex: please confirm the receiver rules from your round 1 still stand as written.
+
 ## 6. Cross-check
 
 ## 7. Sign-off
