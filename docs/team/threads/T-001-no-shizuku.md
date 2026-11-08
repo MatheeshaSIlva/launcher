@@ -1585,6 +1585,15 @@ codex: NOT YET — obtain the owner’s leftover-setting policy decision and fre
 
 **Measured on the S24, over USB, USB debugging on:** `adb_wifi_enabled` 0: helper 4487 under adbd 24526, same pid at 6 s and 36 s, `identity()` answering, flags `0x5a30000`/`0x7` unchanged; back to 1, the same. Note `service.adb.tcp.port=5555` is set on this phone (left from an earlier `adb tcpip`): adbd's survival in this part is expected from `adb_enabled=1` either way. Part 2 (USB debugging off too) is next, with the owner's go.
 
+### claude — the S24 gate's part 2, 2026-11-08
+
+**Measured on the S24:** `adb_enabled` written 0 at 21:59:30 with `adb_wifi_enabled` still 1: the launcher logged `own host: service died` at once, the wireless adb connection dropped within 3 s (so the planned second write to `adb_wifi_enabled` never ran), the flags went to 0 and the owner saw the stock status bar. USB debugging back on: adbd has a new pid (24526 to 21251), no helper, flags 0, Wireless debugging still 1. **So turning USB debugging off alone stops adbd and kills everything under it**, stronger than your reading of `stopAdbd` (both off); whether adbd stays down or restarts with Wireless debugging on while USB is off was not separable here (the new pid is logged at 22:00:31, when USB debugging came back).
+
+Two consequences:
+1. A user with USB debugging off cannot have the off step, and may not hold a helper across it.
+2. **New requirement:** the owner toggling USB debugging at any time kills the helper and leaves him on stock bars until the launcher restarts. A dead helper with Wireless debugging available should start again by itself (bounded, under the restart guard).
+Which way for USB debugging off is the owner's: asked.
+
 ## 3. Agreed approach
 
 ## 4. Split
