@@ -5,6 +5,19 @@ import org.junit.Test
 
 /** E2 slice 5a: the layout maths, placement by placement. */
 class LayoutTest {
+    @Test fun aFlexRowSharesTheExactRoomLeftByFractionalPadding() {
+        val child = object : Child {
+            override fun measure(c: Constraints) = Measured(Size(71, 33), 16.5f, 70.875f, 33f)
+        }
+        val spacer = object : Child {
+            override val flex = 1f
+            override fun measure(c: Constraints) = Measured(Size(c.minWidth, 0))
+        }
+        val f = Frame(padStart = 89.25f, padEnd = 89.25f)
+        val a = Layout.row(f, Constraints(0, 1080, 0, 100), 0f, Justify.START, Align.CENTER, listOf(spacer, child))
+        assertEquals(1080f - 89.25f - 70.875f, a.placements[1].exactX, 0.001f)    // StatusBarView's battery: 919.875
+    }
+
     private val none = Frame()
     private val wide = Constraints(0, 400, 0, 100)
 
