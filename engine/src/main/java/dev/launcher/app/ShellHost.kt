@@ -9,15 +9,16 @@ package dev.launcher.app
 interface ShellHost {
     companion object {
         /**
-         * Stops [service], off this thread, so the system drops the flags it holds. Its reply never comes (the process exits
-         * inside the call): a dead binder is the success; anything else is logged, for it did not stop.
+         * Stops [service] off this thread, so the system drops the flags it holds; what happened is logged within
+         * [dev.launcher.engine.shell.BoundedStop]'s deadline. If it did not stop, the flags stay: the log says what clears them.
          */
         fun stop(service: IShellService, why: String) {
             Thread({
-                val outcome = try { service.destroy(); "stopped" }
-                catch (_: android.os.DeadObjectException) { "stopped" }
-                catch (t: Throwable) { "NOT stopped: ${t.javaClass.simpleName}" }
-                AppLog.log("[shell] $why: our shell service $outcome")
+                val outcome = dev.launcher.engine.shell.BoundedStop.run({ service.destroy() }, { it is android.os.DeadObjectException })
+                AppLog.log("[shell] $why: our shell service " + when (outcome) {
+                    dev.launcher.engine.shell.BoundedStop.Outcome.STOPPED -> "stopped"
+                    else -> "did NOT stop ($outcome): tap Restore system in the launcher's notification, or restart the phone"
+                })
             }, "shell-stop").apply { isDaemon = true; start() }
         }
     }
