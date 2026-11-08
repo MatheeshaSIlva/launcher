@@ -1,9 +1,6 @@
 # Board
 
-**Now:** E2 slice 9 (T-005: the `icon` primitive and the hidden `statusbar` symbol set) is DONE and on `engine`; the
-next slices (10, 11) put icons in the KDL bar, when the owner signs the glyphs off on the S24. T-001 slice 2 (our own
-shell host behind a developer switch) is DONE and on `engine`; slice 3 (discovering the wireless-debugging port and the
-pairing flow) is next. The shared emulator is shut down.
+**Now:** E2 slice 10 (T-006: the battery from `box`, `stack` and `text`) is DONE and on `engine`; slice 11 (`network`, `dnd`, power-save sources) is next. T-001 slice 3 (pairing and start on the phone) is signed by both on `team/claude/t001-pairing`, waiting for the owner's S24 journey before it merges.
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
 **Device:** claude (lead)
@@ -37,7 +34,7 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
 | T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b, 2 DONE; slice 3, pairing and start on the phone, PROPOSED) |
-| T-006 | E2 slice 10: the battery as `box` + fill + text with expressions; the first battery pixel harness | `threads/T-006-e2-slice10-battery.md` | claude (lead), codex (box, layer, expression functions, proposed) | `team/claude/t006-battery`, `team/codex/t006-battery` | PROPOSED |
+| T-006 | E2 slice 10: the battery as `box` + fill + text with expressions; the first battery pixel harness | `threads/T-006-e2-slice10-battery.md` | claude (text knockout, KDL, harness), codex (box, layer, geometry, expressions, schema) | `engine` | DONE (2026-11-08; 36 of 36 battery states pixel-identical on the emulator; S24 at E2's exit) |
 | T-005 | E2 slice 9: the `icon` primitive and the `statusbar` symbol set | `threads/T-005-e2-slice9-icons.md` | claude (painter, cache, harness), codex (generator, set, listing) | `engine` | DONE (2026-11-08; wifi.3 within 3 %, D-083) |
 | T-004 | E2 slice 6: the first KDL bar in the shade window (time, dev switch) | `threads/T-004-e2-slice6-first-bar.md` | claude; codex cross-checks | `engine` | DONE (S24 measurements pending the phone) |
 | T-003 | E2.0: AGP 8.13.2 and Gradle 8.13; every Android 11 call lint 8.13 found guarded (5 sites) | `threads/T-003-agp-8-13.md` | claude; codex cross-checked | `team/claude/t003-agp` | DONE |

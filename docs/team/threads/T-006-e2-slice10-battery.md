@@ -1,6 +1,6 @@
 # T-006: E2 slice 10, the battery as `box` + fill + text with expressions
 
-- **Step:** E2 · **Lead:** claude · **Opened:** 2026-11-08 · **Status:** PROPOSED
+- **Step:** E2 · **Lead:** claude · **Opened:** 2026-11-08 · **Status:** DONE
 - **Read first:** `docs/E2_PLAN.md` §a (the battery row) and §e (slice 10); D-074 (decision 8, the pixel targets); D-081
   (one expression syntax); `app/src/main/java/dev/launcher/app/statusbar/StatusBarView.kt` `drawBattery` (:1116) and the
   right slots' layout (:870-895); `engine/src/main/java/dev/launcher/engine/ui/` (Host, ComposeHost, ComponentView,
@@ -202,17 +202,47 @@ All three accepted.
 
 Split as round 2 with `ui/Host.kt` and `layout/Measured` added to codex's row.
 
+### codex — discuss, 2026-11-08T11:03Z
+
+**Judged from the thread; no code changed, tests run or device used.** All three round-2 gaps are resolved by §2, “claude — round 3”:
+
+- **Fractional placement:** exact extents drive row advances and stack centring; residuals add to Motion; unrounded centre lines and assembled-subtree tests cover the body, nub and number.
+- **Invalid inputs:** static diagnostics and runtime `Value.Null` define safe refusal, with finite/unit checks, alpha integer bounds and guarded `Long` arithmetic. Refusal tests are required.
+- **Ownership:** `ui/Host.kt` and `layout/Measured` are explicitly Codex’s. The outer-enabled-layer/intermediate-false validator test remains required.
+
+Nothing further is missing from the approach; implementation and verification remain to establish correctness.
+
+codex: AGREE approach — round 3 resolves fractional row placement, invalid function inputs and Host.kt ownership.
+
 ## 3. Agreed approach
 
-What was agreed, what changed from the proposal and why.
+Agreed 2026-11-08 (`codex: AGREE approach`, 11:03Z): §1 as amended by the lead's answers in §2 (rounds 1 to 3).
 
-- `codex: AGREE approach — <one line>`
+- **`box`:** `fill`, `radius`, `stroke`, `stroke-color`; `reveal` (0..1): box and children drawn at full size, clipped by
+  a plain rectangle to the first `reveal` of its width.
+- **Exact geometry:** `Measured` carries the exact float extent beside the integer allocation; `row` and `stack` advance
+  and centre by exact extents; each child's residual is a translation of its own frame node, added to `Motion`; centre
+  lines read unrounded (`HostNode.centre`). `stack align="centre-line"`.
+- **Knockout:** `text blend="knockout"` erases at full strength whatever the colour's alpha (only `opacity` scales it).
+  `layer` and `blend` are literal-only; the validator requires an enabled `layer` ancestor (`knockout-needs-layer`:
+  root, `layer=#false`, none are refused; an outer `layer=#true` over an intermediate `layer=#false` is accepted). The
+  layer encloses painter and children on both paths (compositing frame node on hardware, `saveLayer` on software).
+- **Expressions:** call syntax (AST, parser, compiler, dependencies through every argument); six whitelisted functions:
+  `mix` (StatusBarView's `blend` exactly), `opaque`, `withAlpha`, `alphaOf`, `scaleAlpha` (integer division, `Long`),
+  `clamp`. Known invalid calls are diagnostics; invalid at run time gives `Value.Null`, never a throw or NaN; a `Null`
+  colour draws no `fill`, and the painter's default for `color`. `battery.power-save` kept, with a regression.
+- **Harness:** 12 states x 3 tones = 36 pairs; the software path applies `Motion`; it waits for attachment, layout and a
+  committed frame, asserts non-blank, removes and disposes each fixture; a hardware `PixelCopy` proof of layer isolation
+  and clipping in `ProofActivity`. **Target: pixel identity** for body, fill, nub and number (D-074); each failure named.
+- Both complete §7 for the evaluation changes. `scripts/check.sh`, a dex and manifest comparison.
+- `codex: AGREE approach — round 3 resolves fractional row placement, invalid function inputs and Host.kt ownership.`
 
 ## 4. Split
 
 | Sub-task | Owner | Files owned | Branch | Verified by |
 | --- | --- | --- | --- | --- |
-| | | | | |
+| Box, layer, geometry, expressions, schema | codex | `ui/BoxPainter.kt` + `BoxPainterTest`; `ui/ComposeHost.kt` (`reveal`, `layer`, motion on software) + tests; `ui/Host.kt`; `layout/Layout.kt`, `Measured` (exact extents, `stack align="centre-line"`) + `LayoutTest`; `expr/` (call syntax, six functions) + tests; `model/Primitives.kt` and the validator (`blend`, `layer`, `reveal`, `knockout-needs-layer`) + tests | `team/codex/t006-battery` | JVM tests, including the assembled battery subtree's positions at unit 2.625 |
+| Text knockout, KDL, harness | claude | `ui/TextPainter.kt` (knockout, exact centring) + test; `ComponentView`'s `defaultPainter`; `assets/kdl/components/status-bar.kdl` + `StatusBarKdlTest`; `StatusBarView`'s battery entry; the software harness and the `PixelCopy` proof; the emulator diff | `team/claude/t006-battery` | 36 pairs with `diff.py`; the hardware proof |
 
 ## 5. Reports
 
@@ -228,13 +258,89 @@ What was agreed, what changed from the proposal and why.
 
 (appended by `scripts/team/codex.sh … work`)
 
+### codex — work, 2026-11-08T11:20Z
+
+- **Commits:** None. `git add` cannot create `D:/Launcher/.git/worktrees/launcher-codex/index.lock` under sandbox permissions. Changes remain unstaged; no push. Suggested slices: expressions; geometry/Host; box/drawing/schema.
+- **What changed:** Assigned BoxPainter, reveal/clipping, hardware/software layers, software Motion, exact row/stack geometry, centre-line alignment, six expression functions, schemas and knockout validation, with tests.
+- **Verified (measured):** Targeted Kotlin 2.2.21/Compose compilation; **83 JUnit tests passed**, including **338/338 KDL cases**. Battery at unit 2.625: body **64.575 px**, nub **66.675 px**, baseline within **0.00001 px**. Tested all 256 alphas and 1,000 colour blends. `git diff --check` clean.
+- **Verified (judged), §7:** No new IPC requiring caller authentication; expressions bounded to 16,384 characters, 512 nodes and parser depth 64. Fixed function allowlist; no shell, reflection, file or component access added. Source capability checks retained and refusal-tested. Captures and secrets untouched.
+- **Not verified:** `CHECK_FAST=1 bash scripts/check.sh` failed before compilation on the unwritable wrapper lock. Installed Gradle with a writable offline cache failed resolving AGP 8.13.2. No full gate, APK/lint, device, pixel or dex verification; no Gradle daemons remain.
+- **Surprises:** Tight 71 px allocation needed fractional room preserved for the nub. Please log the expression limits. TextPainter should use the new Float `paint` overload and exact measured extents during integration; Android rasterisation and hardware isolation still need the lead’s harness.
+
 ## 6. Cross-check
 
 Each agent reviews the other's diff and report. Findings as `fix`, `question` or `note`, with file:line. The owner of a
 finding replies inline when it is resolved. Security checklist (protocol §7) answered here when it applies.
 
+### codex — review, 2026-11-08T12:57Z
+
+**Judged:** reviewed `engine..23fa37e`, including the lead’s share and both edits in Codex-owned files. No files changed; no tests or device runs performed. `git diff --check` passed.
+
+- **fix — `engine/src/main/java/dev/launcher/engine/layout/Layout.kt:134`:** `room` uses raw `f.width` even when parent constraints shrink it. With `Frame(width=200f)`, maximum width 100, a flex spacer and a 10 px child, the child starts at x=190 outside the allocated 100 px row. Derive room from the constrained outer width while retaining permitted fractions; add this regression test.
+- **fix — `app/src/main/java/dev/launcher/app/statusbar/BatteryDump.kt:76`:** blank output only logs, then increments `pairs` and eventually writes a successful `.done`. Fail the run on either blank picture; ensure fixture removal/disposal also happens when drawing fails.
+- **note — `engine/src/main/java/dev/launcher/engine/ui/ComposeHost.kt:174`:** naming `reveal` now clips at 1 on both drawing paths, as requested. Add a regression exercising this condition: the current operation-order test supplies its own clip callback, and `LayerProof.kt:39` exercises only 0.5.
+- **note — `engine/src/main/java/dev/launcher/engine/ui/TextPainter.kt:53`:** opaque knockout and exact centring match the agreed contract. `StatusBarView.kt:1167` matches RollingText’s resting draw at `:1609`. The reported 36 identical pairs remain the lead’s emulator measurement; GPU battery identity, S24 appearance and smoothness remain unverified.
+
+**Protocol §7 — judged from source:**
+
+- [x] Caller checks: the battery route retains the DUMP-gated receiver; expression functions add no IPC entry point.
+- [x] Bounds/reflection: expression limits are 16,384 characters, 512 counted nodes and nesting 64; calls use six fixed names without reflection.
+- [x] No new route to shell, execution, external paths or another app’s components.
+- [x] Capabilities: calls traverse every argument’s dependencies; source declaration checks remain, including the nested-call refusal test. No new capability is introduced.
+- [x] Captures: BatteryDump renders fixtures; LayerProof captures its own test window. Neither captures another app.
+- [x] Secrets: pairing keys and tokens are untouched; no secret logging added.
+- [x] Refusal tests cover unknown calls, arity/types/units, excessive input, non-finite values and integer overflow; inspected, not rerun.
+
+**codex: OBJECT — resolve the constrained-row overflow and harness false-success path before sign-off.**
+
 ## 7. Sign-off
 
-- `claude: AGREE / OBJECT — <what was checked>`
-- `codex: AGREE / OBJECT — <what was checked>`
+- `claude: AGREE — slice 10: read all of codex's diff and wrote the rest; JVM 178+ engine tests including the battery's colour at 240 resting states against StatusBarView.blend and the exact geometry; 36 of 36 pairs pixel-identical on the emulator; component-layer PASS on the GPU; final gate CHECK PASSED on 8129d1f; dex and manifest against ff943b7: classes only in engine expr, layout, model, ui and the app's statusbar and GestureNav; manifest unchanged.` (2026-11-08)
+- `codex: AGREE — judged from source review of 8129d1f: both fixes and the note are answered (13:04Z).`
 - `owner: <for on-screen work: signed off on the S24, date>`
+
+### claude — first pixel run, two findings for codex, 2026-11-08
+
+Lead's share on `team/claude/t006-battery`. **Measured (JVM):** your tests through Gradle, engine 178/178;
+`theBatterysColourIsStatusBarViewsAtEveryRestingState` (240 combinations against `blend`). **Measured (emulator,
+GPU):** `component-layer` PASS (holes on both sides of the reveal, green only before half, white only after, sibling and
+outside untouched). **The 36 pairs: 0 within the defaults** (`tools/shots/battery*` in `D:/launcher-claude-t006`):
+centroid +0.42 to +0.47 px in x. Two causes, both in your files:
+
+- **fix — `layout/Layout.kt:99-101,132-136`:** `framed` rounds padding (`px(89.25) = 89` twice), so `inner.maxWidth` is 902
+  where the exact room is 1080 - 178.5 = 901.5, and `row`'s `leftover` shares out the extra 0.5 px: the battery lands at
+  920.375, StatusBarView's at 919.875. A row's flex leftover and `exactWidth` must use the exact room (`c.maxWidth` minus
+  the float paddings, or `f.width` minus them), integer allocation apart. Test: root row with fractional padding, a flex
+  spacer and a fractional child: the child's exact x.
+- **fix — `ui/ComposeHost.kt` `clipFrame`:** StatusBarView always draws the level through `clipRect(left, top, left + w * lvl,
+  bottom)`, also at 100 %, and that antialiased clip on a fractional bottom edge thins it (the rounded rect's coverage
+  times the clip's). `reveal` skips the clip at 1, so the KDL fill's bottom row is heavier (+0.11 px centroid in y at
+  level 100, coverage +1 %). A box that names `reveal` clips whatever its value (a test on the operation order through
+  `softwareFrame`, and the hardware path alike).
+
+Nothing else is running on the machine.
+
+### claude — 36 pairs identical, 2026-11-08
+
+Your run on the two findings hung (exit 124, no changes), with nothing else running. As lead I made those two fixes in your
+files on `team/claude/t006-battery` (the tip; please review them as yours): `Layout.row` shares the exact room;
+`clipFrame` clips any box naming `reveal`; `aFlexRowSharesTheExactRoomLeftByFractionalPadding`.
+
+**Measured (emulator, Android 17, unit 2.625):** `TEST_STATUS --es do battery`: 12 states (100, 50, 25, 21, 17, 5, 0;
+charging at 50 and 5; Low Power at 50 and 15; charging plus Low Power at 50) x 3 tones: **36 of 36 pixel-identical** (diff.py
+mean 0.00; `l100`, `l50`, `l0` white: max channel difference 0, same centroid and coverage), the D-074 target. Not blank
+(coverage 675 to 1648; the same harness showed +0.45 px before the fix). `component-layer` PASS on the GPU.
+**Not measured:** the software harness and the GPU proof use different pictures, so GPU pixel identity with the bar's
+own window is not shown; the bolt is not placed (slices 11-13); light and dark use the bar's real tokens; nothing on the S24.
+
+### claude — review fixes, 2026-11-08
+
+`8129d1f`. Both fixes and the note taken: `room` is limited by what the parent allows (`aFlexRowNarrowerThanItsWidthStaysInsideItsParent`: your 200-in-100 case, the child at 90); a blank picture or a failed draw ends the run with no `.done`, and the fixture is removed and disposed in a `finally`; `revealFraction` is the one place that decides the clip, tested at 1, 0.5, past 1 and not named (`aBoxNamingRevealClipsAtFullToo`). **Measured (emulator):** the 36 pairs again pixel-identical, `.done` written.
+
+### codex — signoff, 2026-11-08T13:04Z
+
+codex: AGREE — judged from source review of `8129d1f`: both fixes and the note are answered.
+- Constrained-row room preserves fractions and places the 200-in-100 regression’s child at x=90.
+- Blank pictures and drawing exceptions stop without `.done`; fixture removal/disposal is in `finally`.
+- Both drawing paths use the shared reveal rule; regression covers 1, 0.5, above 1 and absent.
+- Measured: `git diff --check` passed. Tests/device checks not rerun; full gate and dex/manifest comparison remain pending. No files changed.
