@@ -62,6 +62,8 @@ class BootStartFlow(private val nowMillis: () -> Long) {
     fun observe(value: Observation): List<Command> = collect {
         val old = observed
         observeInternal(value)
+        // Turned off by the user meanwhile: the failure is over, the note goes (a read-back still judges it).
+        if (state == State.RESTORE_FAILED && pending == null && note && !value.wirelessOn) { restore(); return@collect }
         if (pending == null && !note &&
             ((old?.usbOn == false && value.usbOn) || (old?.wifiConnected == false && value.wifiConnected))) {
             if (state != State.RUNNING) begin()

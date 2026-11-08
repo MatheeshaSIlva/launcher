@@ -3094,7 +3094,7 @@ private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
                 dev.launcher.app.PairingSession.Begin.SHIZUKU_RUNNING -> said = "Stop Shizuku first: while it runs, it keeps Android's shade away, and the code is typed there."
             }
         }
-        if (dev.launcher.app.ShizukuLink.ownHostSelected() && dev.launcher.app.OwnHost.paired(ctx) && dev.launcher.app.ShizukuLink.state() != dev.launcher.app.ShizukuLink.State.CONNECTED)
+        if (dev.launcher.app.ShizukuLink.ownHostSelected() && dev.launcher.engine.shell.OwnHostStatus.offerStart(dev.launcher.app.OwnHost.paired(ctx), dev.launcher.app.OwnHost.startState))
             ActionRow("Start now", "Turns Wireless debugging on for a moment if it is off") { dev.launcher.app.OwnHost.startNow(); tick.intValue++ }
         ConfirmRow("Forget pairing", "Deletes the launcher's key and stops its shell. Android keeps its entry under Paired devices until you remove it there.", "Tap again to forget") {
             dev.launcher.app.PairingSession.forget(ctx)
@@ -3110,18 +3110,25 @@ private fun shellHostNow(ctx: android.content.Context, keyOk: Boolean): String {
     return when {
         dev.launcher.app.PairingSession.state == dev.launcher.engine.shell.PairingFlow.State.WAITING -> "Waiting for the code"
         dev.launcher.app.PairingSession.state == dev.launcher.engine.shell.PairingFlow.State.PAIRING -> "Pairing"
-        link.state() == dev.launcher.app.ShizukuLink.State.CONNECTED -> if (own) "The launcher's own is running" else "Shizuku is running"
-        !keyOk -> "The key is lost or unreadable: pair again"
-        own && !dev.launcher.app.OwnHost.usbDebuggingOn(ctx) -> "USB debugging is off: turn it on to start"
+        !own && dev.launcher.app.OwnHost.leftoverOn(ctx) -> "Could not turn Wireless debugging off: turn it off in Developer options"
+        !own && link.state() == dev.launcher.app.ShizukuLink.State.CONNECTED -> "Shizuku is running"
+        !own && !keyOk -> "The key is lost or unreadable: pair again"
         !own -> if (dev.launcher.app.OwnHost.paired(ctx) && dev.launcher.app.OwnHost.selected(ctx)) "Paired: starts from the launcher's next start" else "Shizuku is not running"
-        dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.WAITING_WIFI -> "Waiting for Wi-Fi"
-        dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.RESTORING -> "Turning Wireless debugging off"
-        dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.RESTORE_FAILED -> "Could not turn Wireless debugging off: turn it off in Developer options"
-        dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.SUPPRESSED -> "It keeps stopping: tap Start now to try again"
-        link.state() == dev.launcher.app.ShizukuLink.State.CONNECTING || dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.STARTING -> "Starting"
-        dev.launcher.app.OwnHost.failure != null -> "Could not connect (is Wireless debugging on?)"
-        dev.launcher.app.OwnHost.paired(ctx) -> "Paired, not running"
-        else -> "Not paired"
+        else -> when (dev.launcher.engine.shell.OwnHostStatus.line(link.state() == dev.launcher.app.ShizukuLink.State.CONNECTED, link.state() == dev.launcher.app.ShizukuLink.State.CONNECTING,
+            dev.launcher.app.OwnHost.startState, keyOk, dev.launcher.app.OwnHost.usbDebuggingOn(ctx), dev.launcher.app.OwnHost.paired(ctx), dev.launcher.app.OwnHost.failure != null)) {
+            dev.launcher.engine.shell.OwnHostStatus.Line.RESTORE_FAILED -> "Could not turn Wireless debugging off: turn it off in Developer options"
+            dev.launcher.engine.shell.OwnHostStatus.Line.TURNING_OFF -> "Turning Wireless debugging off"
+            dev.launcher.engine.shell.OwnHostStatus.Line.RUNNING -> "The launcher's own is running"
+            dev.launcher.engine.shell.OwnHostStatus.Line.NOT_ANSWERING -> "Its shell is not answering: tap Start now to try again"
+            dev.launcher.engine.shell.OwnHostStatus.Line.KEY_LOST -> "The key is lost or unreadable: pair again"
+            dev.launcher.engine.shell.OwnHostStatus.Line.USB_OFF -> "USB debugging is off: turn it on to start"
+            dev.launcher.engine.shell.OwnHostStatus.Line.WAITING_WIFI -> "Waiting for Wi-Fi"
+            dev.launcher.engine.shell.OwnHostStatus.Line.KEEPS_STOPPING -> "It keeps stopping: tap Start now to try again"
+            dev.launcher.engine.shell.OwnHostStatus.Line.STARTING -> "Starting"
+            dev.launcher.engine.shell.OwnHostStatus.Line.COULD_NOT_CONNECT -> "Could not connect (is Wireless debugging on?)"
+            dev.launcher.engine.shell.OwnHostStatus.Line.PAIRED -> "Paired, not running"
+            dev.launcher.engine.shell.OwnHostStatus.Line.NOT_PAIRED -> "Not paired"
+        }
     }
 }
 

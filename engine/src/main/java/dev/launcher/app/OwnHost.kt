@@ -84,7 +84,7 @@ class OwnHost : ShellHost {
     /** Every automatic entry: settles a leftover note, and starts once paired. */
     override fun connect() {
         val note = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(OwnHostStarter.NOTE, false)
-        if (paired(app) || note) starter.trigger()
+        if (dev.launcher.engine.shell.OwnHostStatus.entry(paired(app), note) != dev.launcher.engine.shell.OwnHostStatus.Entry.NOTHING) starter.trigger()
     }
 
     /** Ports an attempt was started with that are not cached yet: written once that attempt is ready (main thread). */
@@ -299,15 +299,21 @@ class OwnHost : ShellHost {
         /** This process's host is our own (the switch applies at a process's start). */
         val active: Boolean get() = current != null
 
-        /** A note left under our own host, the switch since moved to Shizuku: D-088 still holds. */
+        /**
+         * A note left under our own host, the switch since moved to Shizuku: D-088 still holds. A failure keeps the note: it
+         * is tried again at each start of the launcher, and the settings page says so until then ([leftoverOn]).
+         */
         fun settleLeftover(ctx: Context) {
             val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             if (!p.getBoolean(OwnHostStarter.NOTE, false)) return
-            try {
-                android.provider.Settings.Global.putInt(ctx.contentResolver, OwnHostStarter.ADB_WIFI, 0)
-                if (android.provider.Settings.Global.getInt(ctx.contentResolver, OwnHostStarter.ADB_WIFI, 0) == 0) p.edit().remove(OwnHostStarter.NOTE).commit()
-            } catch (t: Throwable) { AppLog.log("[shell] a note of ours is left: ${t.javaClass.simpleName}") }
+            val cr = ctx.contentResolver
+            val done = dev.launcher.engine.shell.OwnHostStatus.restored(OwnHostStarter.write(cr, 0), OwnHostStarter.read(cr, OwnHostStarter.ADB_WIFI)) && p.edit().remove(OwnHostStarter.NOTE).commit()
+            if (!done) AppLog.log("[shell] a note of ours is left: Wireless debugging could not be turned off")
         }
+
+        /** We turned Wireless debugging on, and it could not be turned off again since. */
+        fun leftoverOn(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(OwnHostStarter.NOTE, false) &&
+            OwnHostStarter.read(ctx.contentResolver, OwnHostStarter.ADB_WIFI) != 0
 
         /** USB debugging is on: our helper needs adbd up (D-089). */
         fun usbDebuggingOn(ctx: Context) = try { android.provider.Settings.Global.getInt(ctx.contentResolver, android.provider.Settings.Global.ADB_ENABLED, 0) == 1 } catch (_: Throwable) { false }
@@ -333,7 +339,7 @@ class OwnHost : ShellHost {
 
         /** "Forget pairing": the cached port goes with the identity. */
         fun forgetEndpoint(ctx: Context) {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("connect_port").remove("host").remove("paired").apply()
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("connect_port").remove("host").remove("paired").commit()      // on disk before the key goes: a process killed here must not start again
             val h = current ?: return
             h.starter.cancel()      // a note of ours is settled, whatever else happens
             h.discovery?.close(); h.discovery = null

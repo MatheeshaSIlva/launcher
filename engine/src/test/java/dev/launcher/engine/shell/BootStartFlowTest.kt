@@ -95,6 +95,35 @@ class BootStartFlowTest {
         val next = done(only(done(r), Kind.CLEAR_NOTE))
         assertEquals(Kind.RECORD_NOTE, next.single().kind)
     }
+    @Test fun forgottenThenKilledBeforeRestoreCleansAndStartsNothing() {
+        // Forget removed "paired", the process died with the note written: the adapter observes, then cancels.
+        value = value.copy(note = true, wirelessOn = true)
+        assertTrue(flow.observe(value).isEmpty())
+        val clear = only(done(only(flow.cancel(), Kind.RESTORE)), Kind.CLEAR_NOTE)
+        assertTrue(done(clear).isEmpty())
+        assertEquals(State.CANCELLED, flow.state)
+        assertFalse(value.note)
+        assertFalse(value.wirelessOn)
+    }
+    @Test fun failedWriteAndFailedReadKeepTheNote() {
+        value = value.copy(note = true, wirelessOn = true)
+        val r = only(flow.trigger(value), Kind.RESTORE)
+        val next = flow.complete(r, OwnHostStatus.restored(written = false, readBack = null), value.copy(wirelessOn = false))
+        assertTrue(next.isEmpty())
+        assertEquals(State.RESTORE_FAILED, flow.state)
+        assertTrue(value.note)
+    }
+    @Test fun restoreFailedEndsWhenTheUserTurnsItOffAndStartsNothing() {
+        value = value.copy(note = true, wirelessOn = true)
+        flow.complete(only(flow.trigger(value), Kind.RESTORE), false, value)
+        assertEquals(State.RESTORE_FAILED, flow.state)
+        assertTrue(flow.observe(value).isEmpty())       // still on: nothing changes
+        value = value.copy(wirelessOn = false)
+        val clear = only(done(only(flow.observe(value), Kind.RESTORE)), Kind.CLEAR_NOTE)
+        done(clear)
+        assertFalse(value.note)
+        assertFalse(writes.contains(Kind.ENABLE))
+    }
     @Test fun cleanupFailureWithUsbOffKeepsNoteAndBlocksUntilRetry() {
         value = value.copy(note = true, wirelessOn = true, usbOn = false)
         val r = only(flow.trigger(value), Kind.RESTORE)

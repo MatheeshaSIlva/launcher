@@ -11,6 +11,7 @@ import android.os.SystemClock
 import android.provider.Settings
 import dev.launcher.engine.shell.BootStartFlow
 import dev.launcher.engine.shell.BootStartFlow.Kind
+import dev.launcher.engine.shell.OwnHostStatus
 
 /**
  * Carries out [BootStartFlow]'s commands on Android (T-001 slice 4): the settings, the note, what the phone's state is, and
@@ -34,6 +35,7 @@ internal class OwnHostStarter(private val app: Context, private val main: Handle
     private val cr = app.contentResolver
     private val cm = app.getSystemService(ConnectivityManager::class.java)
     private var ticking = false
+    private var logged = flow.state
 
     val state: BootStartFlow.State get() = flow.state
 
@@ -50,27 +52,34 @@ internal class OwnHostStarter(private val app: Context, private val main: Handle
         } catch (t: Throwable) { AppLog.log("[shell] own host: no Wi-Fi callback: ${t.javaClass.simpleName}") }
     }
 
-    fun trigger(userAction: Boolean = false) = run(flow.trigger(observation(), userAction))
+    /** A start, once paired. Not paired (forgotten, the process gone before the note was settled): the note is settled, nothing starts. */
+    fun trigger(userAction: Boolean = false) {
+        if (OwnHostStatus.entry(paired(), prefs.getBoolean(NOTE, false)) == OwnHostStatus.Entry.SETTLE_ONLY) settleOnly()
+        else run(flow.trigger(observation(), userAction))
+    }
+
+    private fun settleOnly() {
+        run(flow.observe(observation()))
+        run(flow.cancel())
+    }
 
     /** What the phone's state does for a host with something to do: not paired and no note, an observation starts nothing. */
     private fun observed() {
         if (paired() || prefs.getBoolean(NOTE, false)) run(flow.observe(observation()))
     }
-    fun helperDied() = run(flow.helperDied(observation()))
+    fun helperDied() { if (paired()) run(flow.helperDied(observation())) else settleOnly() }
     fun cancel() = run(flow.cancel())
 
     private fun observation() = BootStartFlow.Observation(
-        usbOn = global(Settings.Global.ADB_ENABLED) == 1,
+        usbOn = read(cr, Settings.Global.ADB_ENABLED) == 1,
         wifiConnected = wifi(),
-        wirelessOn = global(ADB_WIFI) == 1,
-        bootCount = global(Settings.Global.BOOT_COUNT),
+        wirelessOn = read(cr, ADB_WIFI) != 0,      // unreadable counts as on: nothing is taken as restored on a failed read
+        bootCount = read(cr, Settings.Global.BOOT_COUNT) ?: 0,
         note = prefs.getBoolean(NOTE, false),
         suppressedBoot = prefs.getInt(SUPPRESSED_BOOT, -1).takeIf { it >= 0 },
         offBoot = prefs.getInt(OFF_BOOT, -1).takeIf { it >= 0 },
         offAtMillis = prefs.getLong(OFF_AT, -1).takeIf { it >= 0 },
     )
-
-    private fun global(name: String) = try { Settings.Global.getInt(cr, name, 0) } catch (_: Throwable) { 0 }
 
     @Suppress("DEPRECATION")
     private fun wifi() = try {
@@ -78,10 +87,9 @@ internal class OwnHostStarter(private val app: Context, private val main: Handle
     } catch (_: Throwable) { false }
 
     private fun run(commands: List<BootStartFlow.Command>) {
-        var state = flow.state
         for (c in commands) execute(c)
         ops.changed()
-        if (state != flow.state) { state = flow.state; AppLog.log("[shell] own host: $state") }
+        if (logged != flow.state) { logged = flow.state; AppLog.log("[shell] own host: $logged") }
         if (!ticking && flow.state in ACTIVE) { ticking = true; main.postDelayed(::tick, 1000) }
     }
 
@@ -96,14 +104,14 @@ internal class OwnHostStarter(private val app: Context, private val main: Handle
             Kind.RECORD_NOTE -> done(prefs.edit().putBoolean(NOTE, true).commit() && prefs.getBoolean(NOTE, false))
             Kind.ENABLE -> {
                 AppLog.log("[shell] own host: turning Wireless debugging on")
-                write(1)
+                val written = write(cr, 1)
                 // Android takes it back on a network it has not been told to trust: read it after that has had its time.
-                main.postDelayed({ done(global(ADB_WIFI) == 1) }, ENABLE_SETTLE_MS)
+                main.postDelayed({ done(written && read(cr, ADB_WIFI) == 1) }, ENABLE_SETTLE_MS)
             }
             Kind.RESTORE -> {
                 AppLog.log("[shell] own host: turning Wireless debugging off again")
-                write(0)
-                main.postDelayed({ done(global(ADB_WIFI) == 0) }, RESTORE_SETTLE_MS)
+                val written = write(cr, 0)
+                main.postDelayed({ done(OwnHostStatus.restored(written, read(cr, ADB_WIFI))) }, RESTORE_SETTLE_MS)
             }
             Kind.CLEAR_NOTE -> done(prefs.edit().remove(NOTE).putLong(OFF_AT, c.offAtMillis ?: SystemClock.elapsedRealtime()).putInt(OFF_BOOT, c.bootCount).commit())
             Kind.SUPPRESS -> {
@@ -118,11 +126,6 @@ internal class OwnHostStarter(private val app: Context, private val main: Handle
         }
     }
 
-    private fun write(value: Int) {
-        try { Settings.Global.putInt(cr, ADB_WIFI, value) }
-        catch (t: Throwable) { AppLog.log("[shell] own host: cannot write Wireless debugging's setting: ${t.javaClass.simpleName}") }
-    }
-
     companion object {
         const val ADB_WIFI = "adb_wifi_enabled"
         const val NOTE = "wifi_note"
@@ -132,5 +135,11 @@ internal class OwnHostStarter(private val app: Context, private val main: Handle
         private const val ENABLE_SETTLE_MS = 1_500L
         private const val RESTORE_SETTLE_MS = 500L
         private val ACTIVE = setOf(BootStartFlow.State.STARTING, BootStartFlow.State.WAITING_WIFI, BootStartFlow.State.RESTORING)
+
+        /** A setting's value; null when it could not be read (never taken for 0). */
+        fun read(cr: android.content.ContentResolver, name: String): Int? = try { Settings.Global.getInt(cr, name, 0) } catch (_: Throwable) { null }
+
+        fun write(cr: android.content.ContentResolver, value: Int): Boolean = try { Settings.Global.putInt(cr, ADB_WIFI, value) }
+        catch (t: Throwable) { AppLog.log("[shell] own host: cannot write Wireless debugging's setting: ${t.javaClass.simpleName}"); false }
     }
 }
