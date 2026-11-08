@@ -35,6 +35,22 @@ class AdbIdentityStoreTest {
         }
     }
 
+    @Test fun inspectingReadsOnceSoADeleteMeanwhileMakesNoKey() {      // Forget in the instant of a status check
+        val made = Storage()
+        val wrapper = Wrapper()
+        AdbIdentityStore(made, wrapper).load()
+        val saved = made.read()!!
+        var reads = 0
+        var writes = 0
+        val deleted = object : AdbIdentityStorage {
+            override fun read(): ByteArray? = if (reads++ == 0) saved else null    // gone after the first read
+            override fun write(bytes: ByteArray) { writes++ }
+        }
+        org.junit.Assert.assertTrue(AdbIdentityStore(deleted, wrapper).inspect() is AdbIdentityResult.Ready)
+        org.junit.Assert.assertEquals(1, reads)
+        org.junit.Assert.assertEquals(0, writes)
+    }
+
     @Test fun inspectingMakesNoIdentityAndReportsWhatIsThere() {
         val storage = Storage()
         val store = AdbIdentityStore(storage, Wrapper())

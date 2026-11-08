@@ -32,8 +32,19 @@ class AdbIdentityStore(private val storage: AdbIdentityStorage, private val wrap
 
     /** What is stored, never making anything: null when no identity is stored (a status check must not recreate one). */
     fun inspect(name: String = "not-a-launcher"): AdbIdentityResult? = synchronized(loadLock) {
+        // One read, decoded here: no path from this function makes a key, whatever deletes the file meanwhile.
         val saved = try { storage.read() } catch (_: Exception) { return@synchronized AdbIdentityResult.StorageFailure() }
-        if (saved == null) null else loadLocked(name)
+            ?: return@synchronized null
+        var plaintext: ByteArray? = null
+        try {
+            require(saved.size in 29..MAX_STORED_BYTES)
+            plaintext = wrapper.decrypt(saved)
+            AdbIdentityResult.Ready(AdbKey(KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(plaintext)) as RSAPrivateCrtKey, name), false)
+        } catch (_: AdbWrappingKeyUnavailable) {
+            AdbIdentityResult.IdentityLost(AdbIdentityResult.Reason.WRAPPING_KEY_UNAVAILABLE)
+        } catch (_: Exception) {
+            AdbIdentityResult.IdentityLost(AdbIdentityResult.Reason.CORRUPT_IDENTITY)
+        } finally { plaintext?.fill(0) }
     }
 
     private fun loadLocked(name: String): AdbIdentityResult {
