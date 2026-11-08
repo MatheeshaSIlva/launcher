@@ -1602,9 +1602,46 @@ Which way for USB debugging off is the owner's: asked.
 - **A helper that dies** (USB debugging toggled, adbd restarted) starts again by the same path, once per death, under the restart guard: the guard's 60 s rule now covers any death soon after our off write, and USB debugging going off is told apart by `adb_enabled` (no start until it is back).
 - Survival with USB debugging on is measured on the S24 (part 1). Reboot, cold receiver and watchdog kill test remain to measure after the code.
 
+### codex — discuss, 2026-11-08T16:36Z
+
+**Judged from the full lead-side thread, current source and D-087–D-089:** the owner decisions resolve my previous approval objection. I accept USB debugging as a prerequisite, the cleanup barrier, the split and the retained verification gates. Three details still need correction:
+
+- **Cleanup precedes the USB prerequisite.** “With `adb_enabled` 0 no automatic start touches anything” (`T-001:1601`) must exempt recovery of our existing note. D-088 still requires turning Wireless debugging off. Likewise, USB debugging going off during an attempt must cancel startup and complete restoration; it must not strand the note behind the USB wait. Test both cases, including failed restoration.
+- **Suppression must survive launcher-process death.** The guard resets only on explicit Developer-page action or reboot (`T-001:1580`). An in-memory flag alone resets on process recreation, allowing `OwnHost.init()` to restart the loop (`OwnHost.kt:56`). Preserve suppression across process restarts within the same boot, and test process recreation plus a queued trigger.
+- **Resolve USB recovery versus suppression.** “Any death” within 60 s of our off write (`T-001:1602`) includes the owner switching USB debugging off, potentially blocking recovery when it returns. Define precedence: I propose an observed USB-off death enters “USB debugging is off” and permits one attempt when it returns; other deaths inside the window suppress automatic restart. Test off → death → on inside 60 s, duplicate observer notifications, and death while USB remains on.
+
+**Evidence limits:** the lead measured survival with USB debugging on and death during its off transition. Part 2 did not establish steady operation with USB off. Five reboots, cold receiver-only lifetime, watchdog recovery, both security reviews, full gate, dex/manifest comparison and the polish-pass S24 handover remain required.
+
+No files changed, builds run or devices used.
+
+codex: NOT YET — freeze cleanup precedence, suppression across process restarts and USB-toggle recovery before implementation.
+
 ## 3. Agreed approach
 
+Closed by the lead after three rounds, 2026-11-08, with all of codex's points accepted (no dissent recorded; codex signs the work). Owner: D-087, D-088, D-089.
+
+**A start, whenever our host needs one** (launcher start, `BOOT_COMPLETED`, a dead helper, USB debugging or Wi-Fi coming back), one operation at a time, under one generation that spans the cached attempt and its fallback:
+0. **Cleanup first, always:** a note from before is settled before anything else, whatever `adb_enabled` says (D-088: `adb_wifi_enabled` written 0, verified, then the note cleared). While a note exists no new operation starts and its leftover 1 is never read as the user's. A failed restore keeps the note, shows restore-failed, blocks starts until a later trigger's retry succeeds.
+1. `adb_enabled` 0: nothing else; state "USB debugging is off"; wait for it (a `ContentObserver` while the launcher lives). USB debugging going off during an attempt cancels it and completes its restore.
+2. Wi-Fi is waited for (120 s) before anything is recorded; another attempt on the next Wi-Fi connection or the next launcher start, one per trigger.
+3. If `adb_wifi_enabled` was 1 the user's on stays: no note, never touched. If 0: note with `commit()`, checked; write 1. A refusal (back to 0 within its window: an untrusted network) ends the attempt: no second write, no second prompt.
+4. Cached port, one discovery (20 s), fresh attempt (15 s handover), 60 s overall from step 3.
+5. Final success, final failure, cancel or Forget: restore if we wrote it, verified, then clear the note. An obsolete callback restores nothing. "Running" only after cleanup and a working `identity()`.
+
+**Restart suppression**, consulted by every automatic entry (`OwnHost.init`, `connect`, the receiver, network and setting observers), **persisted with the boot count** so a launcher restart in the same boot cannot undo it: set when a helper dies within 60 s of our off write while USB debugging stays on. A queued trigger cannot clear it; a user's action on the Developer page or a reboot does. **USB precedence:** a death with USB debugging observed off is not suppression: it enters "USB debugging is off" and permits one attempt when it returns. Outside the window a death gets one automatic start.
+
+**Pair** is refused while `adb_enabled` is 0, with a message. `BootReceiver`: manifest, `exported=false`, `BOOT_COMPLETED` only, joins the operation. States: USB debugging is off, waiting for Wi-Fi, starting, restoring, restore failed, restart suppressed, as well as slice 3's. Root start: its own slice.
+
+**Regressions (JVM, in the flow):** every path restores once; the user's on untouched; crash between the writes; cleanup with USB off; USB off mid-attempt and failed restore; cancel, new start, late cleanup; failed restore, retry trigger; refused enable, no second write; suppression across process recreation with a queued trigger; off, death, on inside 60 s; duplicate observer notifications; death with USB on.
+
+**Device (mine):** the cold receiver-only journey with no activity opened (if it needs another mechanism or permission, back to the owner under D-087); a real emulator reboot; Wi-Fi off and on. S24 with the owner: five reboots (boot-to-running and unlock-to-running apart), USB toggled off and on, the watchdog's kill test, the stock-to-ours handover under polish pass. Gate, dex and manifest comparison, both §7.
+
 ## 4. Split
+
+| Sub-task | Owner | Files owned | Branch | Verified by |
+| --- | --- | --- | --- | --- |
+| The decisions | codex | `engine/src/main/java/dev/launcher/engine/shell/BootStartFlow.kt`, `engine/src/test/java/dev/launcher/engine/shell/BootStartFlowTest.kt`: pure, over injected setting reads and writes, note store, boot count, clock and observed events; it says what to do next, never does it | `team/codex/t001-bootflow` | the JVM regressions above |
+| Everything Android | claude | `OwnHost.kt`, `BootReceiver.kt` (new), `PairingSession.kt`, `AndroidManifest.xml`, settings, device proofs | `team/claude/t001-boot` | device list above |
 
 ## 5. Reports
 
