@@ -1380,3 +1380,23 @@ No files changed, builds run or devices used. Full gate and S24/owner sign-off r
 `inspectingReadsOnceSoADeleteMeanwhileMakesNoKey` (storage gone after the first read: Ready, one read, no write).
 **Expiry, measured on the emulator:** `pair-begin`, notification posted; discovery's listeners unregistered at 60 s;
 `pairing: expired` at 5 min; 0 notifications left. `AdbIdentityStoreTest` 8/8.
+
+### codex — signoff, 2026-11-08T10:57Z
+
+codex: AGREE — `c8f75ce` answers the identity race: `inspect()` decodes one read without creating or writing a key. The regression test catches the former second-read bug; the lead reports 8/8 identity tests passing.
+Expiry cleanup is answered by inspection and the lead’s emulator measurement: discovery listeners removed at 60 s, expired at 5 min, zero notifications remaining. The late-reply/completion-before-timer ordering remains judged from unconditional `release()`, not separately measured.
+**Protocol §7 — PASS for this slice, judged unless attributed above:**
+- Caller checks: PASS; session-scoped reply authority remains.
+- Bounded inputs/time: PASS; parsing, transport bounds and expiry cleanup remain.
+- No new package/KDL/Lua route to shell: PASS.
+- Capabilities: PASS; authenticated handover and `uses` derivation unchanged.
+- Other-app captures: PASS; no capture path added.
+- Secrets: PASS; private wrapped storage, no secret logging, no identity recreation from inspection.
+- Refusal tests: PASS; inspected malformed/stale/expired/cancelled-flow tests and identity-race regression.
+No files changed, builds run or devices used. Full gate, dex/manifest comparison and S24/owner sign-off remain separate.
+
+- `claude: AGREE — slice 3: read every changed file; codex's findings over four rounds fixed, each with a test or a
+  measurement; final gate CHECK PASSED on e613bf3 (the capture suite's 746 checks); dex and manifest against engine's
+  ff943b7: classes changed only in OwnHost, PairingSession, PairingReplyReceiver, ShizukuLink, settings, engine adb and
+  shell; the manifest adds only the unexported PairingReplyReceiver; no permission. Emulator journeys as reported.
+  Waiting: the owner's S24 go and sign-off before integration.` (2026-11-08)
