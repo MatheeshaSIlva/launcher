@@ -131,7 +131,8 @@ object Layout {
         val bounded = inner.maxWidth != Constraints.INF
         // The exact room: padding is rounded for the whole-pixel allocation, never for what the flex children share (a
         // 0.5 px surplus moved the status bar's battery by half a pixel, T-006).
-        val room = if (!bounded) 0f else (f.width ?: (inner.maxWidth + px(f.padStart) + px(f.padEnd)).toFloat()) - f.padStart - f.padEnd
+        val allowed = (inner.maxWidth + px(f.padStart) + px(f.padEnd)).toFloat()     // what the parent's constraints leave
+        val room = if (!bounded) 0f else minOf(f.width ?: allowed, allowed) - f.padStart - f.padEnd
         val leftover = if (bounded) max(0f, room - used) else 0f
         val exact = FloatArray(n) { k -> measured[k]?.exactWidth ?: if (flex > 0f) leftover * children[k].flex / flex else 0f }
         val content = exact.sum() + gap * max(0, n - 1)

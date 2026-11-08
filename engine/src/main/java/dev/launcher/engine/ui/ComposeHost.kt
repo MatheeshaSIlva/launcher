@@ -167,14 +167,15 @@ internal fun softwareFrame(canvas: FrameCanvas, motion: Motion, measured: Measur
     } finally { canvas.restore(save) }
 }
 
+/** The share of its width a box that names `reveal` clips to, 1 included; null for a box that does not name it. */
+internal fun revealFraction(n: HostNode): Float? =
+    if ("reveal" !in n.bindings) null else n.number("reveal")?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
+
 private fun clipFrame(canvas: android.graphics.Canvas, n: HostNode) {
     if (n.view.primitive != "box") return
     // A box that names `reveal` clips whatever its value: at 1 too, as StatusBarView's level does (its antialiased clip on
     // a fractional edge is part of how the edge looks, T-006).
-    if ("reveal" in n.bindings) {
-        val reveal = n.number("reveal")?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
-        canvas.clipRect(0f, 0f, n.exactWidth * reveal, n.exactHeight)
-    }
+    revealFraction(n)?.let { canvas.clipRect(0f, 0f, n.exactWidth * it, n.exactHeight) }
     if (n.value("clip") == Value.Bool.TRUE) {
         val radius = (n.length("radius") ?: 0f).coerceAtLeast(0f)
         if (radius == 0f) canvas.clipRect(0f, 0f, n.exactWidth, n.exactHeight)

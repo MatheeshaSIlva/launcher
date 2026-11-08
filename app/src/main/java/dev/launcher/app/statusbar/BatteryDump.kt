@@ -25,7 +25,8 @@ import kotlin.math.floor
  * battery in 12 states and 3 tones drawn by [StatusBarView.drawBatteryAt] (the bar's own code) and by the KDL bar's file over
  * fixture sources, in the shade's window (attached unseen, drawn onto a bitmap once a frame has committed, then removed
  * and disposed), both at the bar's unit and centre line, into `files/dev-out/battery/{view,kdl}/<state>_<tone>.png`, cropped
- * to the battery, for `tools/fidelity/diff.py`. A blank picture fails the run.
+ * to the battery, for `tools/fidelity/diff.py`. A blank picture or a failed draw ends the run: [render]'s `done` gets -1, and
+ * no `.done` is written for it, so a failure can never read as a pass.
  */
 object BatteryDump {
     private class State(val name: String, val level: Int, val saver: Boolean = false, val charging: Boolean = false)
@@ -38,7 +39,7 @@ object BatteryDump {
     private const val BATTERY_PT = 27f
     private const val MARGIN_PX = 4
 
-    /** On [handler]'s thread (the shade's); [done] with how many pairs, once all are written. */
+    /** On [handler]'s thread (the shade's); [done] with how many pairs once all are written, -1 if the run failed. */
     fun render(ctx: Context, handler: Handler, bar: StatusBarView, dir: File, done: (Int) -> Unit) {
         dir.deleteRecursively()
         File(dir, "view").mkdirs(); File(dir, "kdl").mkdirs()
@@ -67,13 +68,25 @@ object BatteryDump {
             view.whenPrepared {
                 view.view.viewTreeObserver.registerFrameCommitCallback {
                     handler.post {
-                        val kdl = picture(width, height, bg) { c -> view.view.draw(c) }
-                        val own = picture(width, height, bg) { c -> bar.drawBatteryAt(c, left, cy, fg, s.level, s.saver, s.charging) }
-                        parent.removeView(view.view)
-                        view.dispose()
+                        val pictures = try {
+                            picture(width, height, bg) { c -> view.view.draw(c) } to
+                                picture(width, height, bg) { c -> bar.drawBatteryAt(c, left, cy, fg, s.level, s.saver, s.charging) }
+                        } catch (t: Throwable) {
+                            AppLog.log("[statusbar] test: battery draw failed at ${s.name}_$toneName: ${t.javaClass.simpleName}")
+                            null
+                        } finally {
+                            parent.removeView(view.view)
+                            view.dispose()
+                        }
+                        if (pictures == null) { done(-1); return@post }
+                        val (kdl, own) = pictures
                         val a = Bitmap.createBitmap(own, cropX, 0, cropW, height)
                         val b = Bitmap.createBitmap(kdl, cropX, 0, cropW, height)
-                        if (blank(a, bg) || blank(b, bg)) AppLog.log("[statusbar] test: BLANK battery picture ${s.name}_$toneName (view ${blank(a, bg)}, kdl ${blank(b, bg)})")
+                        if (blank(a, bg) || blank(b, bg)) {
+                            AppLog.log("[statusbar] test: BLANK battery picture ${s.name}_$toneName (view ${blank(a, bg)}, kdl ${blank(b, bg)})")
+                            done(-1)
+                            return@post
+                        }
                         File(dir, "view/${s.name}_$toneName.png").outputStream().use { a.compress(Bitmap.CompressFormat.PNG, 100, it) }
                         File(dir, "kdl/${s.name}_$toneName.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
                         own.recycle(); kdl.recycle(); a.recycle(); b.recycle()

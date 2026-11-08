@@ -5,6 +5,18 @@ import org.junit.Test
 
 /** E2 slice 5a: the layout maths, placement by placement. */
 class LayoutTest {
+    @Test fun aFlexRowNarrowerThanItsWidthStaysInsideItsParent() {
+        val child = object : Child {
+            override fun measure(c: Constraints) = Measured(Size(10, 10))
+        }
+        val spacer = object : Child {
+            override val flex = 1f
+            override fun measure(c: Constraints) = Measured(Size(c.minWidth, 0))
+        }
+        val a = Layout.row(Frame(width = 200f), Constraints(0, 100, 0, 100), 0f, Justify.START, Align.CENTER, listOf(spacer, child))
+        assertEquals(90f, a.placements[1].exactX, 0.001f)
+    }
+
     @Test fun aFlexRowSharesTheExactRoomLeftByFractionalPadding() {
         val child = object : Child {
             override fun measure(c: Constraints) = Measured(Size(71, 33), 16.5f, 70.875f, 33f)

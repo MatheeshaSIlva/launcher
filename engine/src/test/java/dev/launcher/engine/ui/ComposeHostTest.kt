@@ -54,4 +54,28 @@ class ComposeHostTest {
         softwareFrame(c, m, Measured(Size(10, 8)), false, {}) {}
         assertFalse(c.calls.any { it.startsWith("layer") })
     }
+
+    private fun revealOf(attr: String): Float? {
+        val env = object : dev.launcher.engine.expr.Env {
+            override fun state(name: String) = dev.launcher.engine.expr.Value.Null
+            override fun prop(name: String) = dev.launcher.engine.expr.Value.Null
+            override fun token(key: String) = dev.launcher.engine.expr.Value.Null
+            override fun source(path: String) = dev.launcher.engine.expr.Value.Null
+            override fun now() = 0L
+        }
+        val def = (dev.launcher.engine.model.ComponentReader.read(dev.launcher.engine.kdl.KdlParser.parse("component \"r\" {\n  view { box $attr }\n}"))
+            as dev.launcher.engine.model.ReadResult.Ok).component
+        val none = object : Painter {
+            override fun key(node: HostNode) = null
+            override fun paint(canvas: android.graphics.Canvas, node: HostNode, width: Int, height: Int) {}
+        }
+        return revealFraction(ComponentHost(def, env, dev.launcher.engine.layout.Units(1f, 1f), { none }).root)
+    }
+
+    @org.junit.Test fun aBoxNamingRevealClipsAtFullToo() {
+        org.junit.Assert.assertEquals(1f, revealOf("reveal=1")!!, 0f)      // StatusBarView's level goes through its clip at 100 % too
+        org.junit.Assert.assertEquals(0.5f, revealOf("reveal=0.5")!!, 0f)
+        org.junit.Assert.assertEquals(1f, revealOf("reveal=7")!!, 0f)
+        org.junit.Assert.assertEquals(null, revealOf("width=10"))          // not named: no clip
+    }
 }
