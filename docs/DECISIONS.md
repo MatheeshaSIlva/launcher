@@ -1050,3 +1050,8 @@ T-001 slice 4. When the launcher turns Wireless debugging on to start its helper
 
 T-001 slice 4. Measured on the S24: turning USB debugging off stops adbd at once, and everything under it dies, Wireless debugging on or not; with it on, the helper survives Wireless debugging going off. Asked, the owner chose to ask users to leave it on: pairing refuses while it is off and says why, the settings page says so if it goes off later, and the launcher never changes that setting itself. This narrows the spec's sequence ("disables wireless debugging") to what works, and adds one step to onboarding for the alpha to explain. Rejected: the launcher turning it on (a security setting changed without asking), keeping Wireless debugging on instead (unmeasured, a port open on every network).
 
+## D-090: Slice 4 merged with its handover still a static change (2026-11-09, owner)
+
+T-001 slice 4. Every recovery journey was measured (thread, "device results"), and the owner judged the change from the stock bar to ours "just a static transition ... we could make it a bit more smooth if we tried". Asked, the owner chose to merge and take the smoother handover as its own next slice ("Yes, merge it"). It stays behind the developer switch, so the default setup does not change. Open with it: a process started by the boot receiver alone is not proved (Android started it for a bound service first), and unlock-to-running was captured for one reboot only.
+
+Found on the way, not a choice: the Shizuku fork's own start-on-boot turns Wireless debugging on and restarts adbd about a minute after boot, which kills our helper and leaves port 5555 open. The restart guard held. The owner turned that option off on the S24; a clear message for anyone else goes with slice 5.

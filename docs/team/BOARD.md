@@ -1,6 +1,6 @@
 # Board
 
-**Now:** T-001 slice 4 (the helper comes back by itself) is agreed and in work. E2 next: slice 12 (`notifications.icons`, `each`, overflow), which also wires the bar's Wi-Fi, cell, moon and bolt from slice 9 over slice 11's sources, not yet in the KDL.
+**Now:** T-001 slice 4 is merged (the helper comes back by itself, behind the developer switch; D-090). Next on T-001: the smoother handover from the stock bar to ours, its own slice (owner). E2 next: slice 12 (`notifications.icons`, `each`, overflow), which also wires the bar's Wi-Fi, cell, moon and bolt from slice 9 over slice 11's sources, not yet in the KDL.
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
 **Device:** claude (lead)
@@ -33,7 +33,7 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
-| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b, 2, 3 DONE: pairing and start on the phone, behind the developer switch; slice 4, the helper coming back by itself, AGREED on `team/claude/t001-boot` and `team/codex/t001-bootflow`) |
+| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b, 2, 3, 4 DONE: pairing, start and coming back by itself on the phone, behind the developer switch; next the handover's polish, then slice 5, the flip) |
 | T-006 | E2 slice 10: the battery as `box` + fill + text with expressions; the first battery pixel harness | `threads/T-006-e2-slice10-battery.md` | claude (text knockout, KDL, harness), codex (box, layer, geometry, expressions, schema) | `engine` | DONE (2026-11-08; 36 of 36 battery states pixel-identical on the emulator; S24 at E2's exit) |
 | T-005 | E2 slice 9: the `icon` primitive and the `statusbar` symbol set | `threads/T-005-e2-slice9-icons.md` | claude (painter, cache, harness), codex (generator, set, listing) | `engine` | DONE (2026-11-08; wifi.3 within 3 %, D-083) |
 | T-004 | E2 slice 6: the first KDL bar in the shade window (time, dev switch) | `threads/T-004-e2-slice6-first-bar.md` | claude; codex cross-checks | `engine` | DONE (S24 measurements pending the phone) |

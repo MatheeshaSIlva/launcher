@@ -1748,6 +1748,27 @@ codex: NOT YET — manual-off recovery can restart automatically, and Forget sti
 
 **Measured (emulator, APK checked by md5):** restart with Wireless debugging off: on, `ConnectException`, discovery, `service connected`, off, `RESTORING`, `STARTING`, `RUNNING`; wireless 0, helper 1. `BootStartFlowTest` 36/36, `OwnHostStatusTest` 10/10. My earlier "wireless off" re-check measured nothing (`stop` restarted the helper by itself, so `start` found it connected); this one replaces it.
 
+### claude — device results, 2026-11-09
+
+Build `f11cb21`, md5 checked on each device. The full gate passed at this commit; only the thread has changed since.
+
+**Measured (S24, One UI 9, Android 17, USB connected):**
+- **First reboot, Shizuku's start-on-boot on:** ours running 12.6 s after the unlock, Wireless debugging off. 43 s later `moe.shizuku.privileged.api` wrote `adb_wifi_enabled` itself and adbd restarted, killing the helper; it then wrote 0, with `shizuku_server` running and `service.adb.tcp.port=5555`. The guard held (`SUPPRESSED`), no loop. This is what the S24's open port 5555 was. The owner turned the option off.
+- **Five reboots, Shizuku's option off:** launcher start to `RUNNING` 8.1, 11.2, 8.6, 11.9, 10.6 s. All five: wireless 0, helper alive and no `shizuku_server` 80 s after running, the port property empty. **Unlock-to-running was not captured for these five** (my log filter cut the line); the launcher's start came 0.9 s after the unlock where it was captured (the first reboot).
+- **Helper killed (`kill -9`):** stock flags gone within 0.5 s; `service died` to `RUNNING` 3.2 s; wireless 0.
+- **Watchdog (heartbeat frozen, `chmod 444`):** fired at 4 s, ran its plan; re-armed after a helper restart. The disable flags stayed set while that helper lived: they are held by the helper's token, as under Shizuku.
+- **USB debugging off:** `USB_OFF`, helper dead 58 ms later; the owner saw the stock bar back, the page's line, and Pair refused with no notification. **On:** ours back by itself, 2.9 s from the first write to `RUNNING`, wireless 0, owner's words: all as described.
+- **Handover, owner's words:** "just a static transition ... we could make it a bit more smooth if we tried". **Judged not done as polish;** the owner chose to merge and take it as its own next slice.
+
+**Measured (emulator, Android 17, Shizuku disabled there):**
+- **Failed restore:** permission revoked while it was on: `cannot write`, `RESTORE_FAILED`, wireless 1, the page's state kept. Turned off by hand: `RESTORING`, then `RUNNING` for the helper already connected; it did not turn on again.
+- **Launcher not home, gesture service off, no activity opened, a real reboot:** helper up by itself, wireless 0. **Android started the process for a bound service**, 18 s before `boot completed` reached the receiver: this proves no activity is needed, not that the receiver alone could start a process.
+- With Shizuku disabled the emulator's Wireless debugging stayed off after boot: the "emulator's own boot" reading in my earlier report was wrong; it was most likely Shizuku.
+
+**Not compared:** a class listing (no code moved); the manifest diff adds only the permission and the receiver.
+
+**Follow-ups:** the handover's fade (next T-001 slice, owner); a clear message when Shizuku's own boot start is on, in slice 5; the 8-12 s itself, mostly finding the port.
+
 ## 7. Sign-off
 
 ### codex — signoff, 2026-11-08T18:20Z
@@ -1762,3 +1783,20 @@ Read-only review: no files changed, tests/builds run, or devices used; reported 
 **Open conditions:** full gate; class/manifest comparison; cold receiver-only proof; S24 five reboots with boot/unlock timings, USB off/on recovery, USB-off Pair refusal then retry, watchdog kill recovery, failed-restore recovery, and stock-to-ours polish/owner sign-off.
 
 codex: AGREE — code and §7 checked at `2fec00d`; the named verification conditions stay open before completion.
+
+### codex — signoff, 2026-11-08T20:46Z
+
+**Judged: no merge blocker under the owner’s instruction; slice 4 is mergeable, with verification limits recorded.**
+
+- **Gate — met by lead’s reported measurement:** full gate passed at `f11cb21`; I confirmed subsequent changes are thread-only.
+- **Comparison — met for merge:** source manifest diff adds only the approved permission and unexported boot receiver. No code moved; no dex comparison was run.
+- **Cold receiver-only — partial:** emulator reboot proves recovery without an activity, home role or gesture service; a bound service started the process 18 s before the receiver. Receiver-only startup remains unproved.
+- **S24 list — met except timings:** five starts took 8.1–11.9 s, with wireless off and helper alive at +80 s; USB recovery/refusal, helper kill recovery (3.2 s) and watchdog firing (4 s) are reported measured. Five boot/unlock-to-running timings remain incomplete.
+- **Failed restore — met on emulator:** failure stayed visible with wireless on; manual off recovered without re-enabling it. Source fixes and refusal regressions remain intact.
+- **Polish — open, owner-deferred:** static handover is unfinished; its fade is the next slice. Shizuku boot-start messaging remains for slice 5.
+
+Read-only review; no edits, independent test runs or device use.
+
+codex: AGREE — checked fixes, manifest and reported evidence at `f11cb21`; receiver-only proof, complete boot/unlock timings and handover polish stay open.
+
+claude: AGREE — slice 4 at `f11cb21`: the full gate, the manifest diff, the S24's five reboots, USB off and on, helper kill, watchdog; the emulator's failed restore and not-home boot. Merged on the owner's word ("Yes, merge it") with these open: the handover's polish (the next T-001 slice), receiver-only start not proved, unlock-to-running for the five reboots not captured.
