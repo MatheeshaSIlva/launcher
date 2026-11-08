@@ -76,6 +76,69 @@ class PairingFlowTest {
         assertTrue(flow.claim(second.id, "654321") is Claim)
     }
 
+    private class Socket : java.io.Closeable {
+        var closed = 0
+        override fun close() { closed++ }
+    }
+
+    @Test fun aCancelBeforeAdmissionMakesNoConnection() {
+        val s = flow.begin()
+        val c = flow.claim(s.id, "123456") as Claim
+        flow.cancel()
+        var made = 0
+        assertEquals(null, flow.admit(c) { made++; Socket() })
+        assertEquals(0, made)
+    }
+
+    @Test fun aCancelAfterAdmissionClosesTheConnection() {
+        val s = flow.begin()
+        val c = flow.claim(s.id, "123456") as Claim
+        val socket = flow.admit(c) { Socket() }!!
+        flow.cancel()
+        assertEquals(1, socket.closed)
+    }
+
+    @Test fun aNewSessionClosesTheOldConnection() {
+        val c = flow.claim(flow.begin().id, "123456") as Claim
+        val socket = flow.admit(c) { Socket() }!!
+        flow.begin()
+        assertEquals(1, socket.closed)
+    }
+
+    @Test fun aSessionsTimerEndsItAndClosesItsConnection() {
+        val s = flow.begin()
+        val c = flow.claim(s.id, "123456") as Claim
+        val socket = flow.admit(c) { Socket() }!!
+        assertTrue(flow.expire(s))
+        assertEquals(State.EXPIRED, flow.state)
+        assertEquals(1, socket.closed)
+        assertFalse(flow.expire(s))                                // once
+    }
+
+    @Test fun anOlderSessionsTimerLeavesTheNewOne() {
+        val old = flow.begin()
+        val new = flow.begin()
+        assertFalse(flow.expire(old))
+        assertEquals(State.WAITING, flow.state)
+        assertTrue(flow.claim(new.id, "123456") is Claim)
+    }
+
+    @Test fun aCompletionPastTheDeadlineDoesNotCount() {
+        val s = flow.begin()
+        val c = flow.claim(s.id, "123456") as Claim
+        now += PairingFlow.SESSION_MS
+        assertFalse(flow.isCurrent(c.generation))
+        assertFalse(flow.finish(c, paired = true))
+        assertEquals(State.EXPIRED, flow.state)
+    }
+
+    @Test fun aCancelAfterPairingEndsThePostPairingWork() {
+        val c = flow.claim(flow.begin().id, "123456") as Claim
+        assertTrue(flow.finish(c, paired = true))
+        flow.cancel()
+        assertEquals(State.CANCELLED, flow.state)
+    }
+
     @Test fun nothingPrintsTheCodeOrTheSessionId() {
         val s = flow.begin()
         val c = flow.claim(s.id, "123456") as Claim

@@ -51,6 +51,9 @@ class OwnHost : ShellHost {
         this.sink = sink
         this.generation = generation
         current = this
+        // Shizuku's path binds by itself when its binder comes; ours starts here once paired (the service dies with the
+        // launcher, so each start of the launcher starts it again). Not after a reboot by itself: slice 4.
+        main.post { if (paired(app)) connect() }
     }
 
     override fun state(): ShizukuLink.State = if (gate.isStarting) ShizukuLink.State.CONNECTING else ShizukuLink.State.NOT_RUNNING
@@ -60,6 +63,8 @@ class OwnHost : ShellHost {
     /** Ports an attempt was started with that are not cached yet: written once that attempt is ready (main thread). */
     private val trying = HashMap<Long, Int>()
     private var discovery: AdbDiscovery? = null
+    /** Why the last start ended without a service (null: it has not failed since the last try). */
+    @Volatile private var lastFailure: String? = null
 
     /**
      * A start on this phone's adbd (`127.0.0.1`): the cached connect port, or [port] (just discovered, cached once the
@@ -69,19 +74,34 @@ class OwnHost : ShellHost {
      */
     private fun start(test: String?, port: Int? = null, fallback: Boolean = false) {
         if (gate.connectedGeneration != 0L || gate.isStarting) return
-        val endpoint = endpoint(port) ?: return AppLog.log("[shell] own host: no connect port (pair first)")
+        val endpoint = endpoint(port)
+        if (endpoint == null) {
+            // Paired but no port yet (paired under Shizuku, or its port forgotten): find it, as for a port that changed.
+            if (paired(app) && !fallback && test == null) rediscover() else AppLog.log("[shell] own host: no connect port (pair first)")
+            return
+        }
+        lastFailure = null
         val ticket = gate.begin()
         val gen = ticket.generation
         if (port != null) trying[gen] = port
         sink.changed()
-        main.postDelayed({ if (gate.expire(gen)) end(gen, "start timed out") }, StartAttempt.TIMEOUT_MS)
+        main.postDelayed({
+            if (gate.expire(gen)) {
+                end(gen, "start timed out")
+                if (test == null && !fallback) rediscover()
+            }
+        }, StartAttempt.TIMEOUT_MS)
         val apk = app.applicationInfo.sourceDir
         io.execute {
+            // Forgotten or replaced before this ran: no key is made, no connection opened.
+            if (gate.startingGeneration != gen) return@execute
             val identity = AndroidAdbIdentity.store(app).load()
             val key = (identity as? AdbIdentityResult.Ready)?.key
             if (key == null) { main.post { if (gate.expire(gen)) end(gen, "identity: ${identity.javaClass.simpleName}") }; return@execute }
             val c = AdbClient(endpoint, key)
             clients[gen] = c
+            // (An end between the check above and this line could not close it.)
+            if (gate.startingGeneration != gen) { clients.remove(gen, c); c.close(); return@execute }
             try {
                 c.connect()
                 c.shell("trap '' HUP; exec app_process -Djava.class.path=${quoted(apk)} /system/bin --nice-name=launcher-shell ${Starter::class.java.name}" + (test?.let { " --test=$it" } ?: ""),
@@ -194,7 +214,9 @@ class OwnHost : ShellHost {
     /** [gen]'s start is over (the gate already said so): its connection closed, nobody else's. */
     private fun end(gen: Long, why: String) {
         claimed.remove(gen)
+        trying.remove(gen)
         clients.remove(gen)?.close()
+        lastFailure = why
         AppLog.log("[shell] own host: $why")
         sink.changed()
     }
@@ -214,7 +236,7 @@ class OwnHost : ShellHost {
         val d = AdbDiscovery(AndroidNsdAdapter(app.getSystemService(android.net.nsd.NsdManager::class.java)))
         discovery = d
         try { d.start(FALLBACK_MS) } catch (t: Throwable) { discovery = null; return AppLog.log("[shell] own host: discovery: ${t.javaClass.simpleName}") }
-        AppLog.log("[shell] own host: the cached port did not answer; looking for Wireless debugging's port")
+        AppLog.log("[shell] own host: looking for Wireless debugging's port")
         val until = SystemClock.elapsedRealtime() + FALLBACK_MS
         fun look() {
             if (discovery !== d) return
@@ -239,7 +261,19 @@ class OwnHost : ShellHost {
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("host_kind", if (own) "own" else "shizuku").apply()
 
         /** A connect port is cached: a start has worked since the last Forget (Android may still have dropped the key). */
-        fun paired(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("connect_port", 0) in 1..65535
+        fun paired(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("paired", false)
+
+        /** A pairing succeeded: kept, so a start can find the port even if the host was not yet the launcher's own. */
+        fun markPaired(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean("paired", true).apply()
+
+        /** This process's host is our own (the switch applies at a process's start). */
+        val active: Boolean get() = current != null
+
+        /** Why the last start failed, if it did. */
+        val failure: String? get() = current?.lastFailure
+
+        /** [f] after whatever the host's worker is doing ("Forget pairing": nothing can make the key again behind it). */
+        fun onWorker(f: () -> Unit) { current?.io?.execute(f) ?: f() }
 
         /** Just paired ([PairingSession]): start on the connect port discovery found; cached once the service is ready. */
         fun startPaired(ctx: Context, port: Int) {
@@ -249,8 +283,14 @@ class OwnHost : ShellHost {
 
         /** "Forget pairing": the cached port goes with the identity. */
         fun forgetEndpoint(ctx: Context) {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("connect_port").remove("host").apply()
-            current?.discovery?.close()
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("connect_port").remove("host").remove("paired").apply()
+            val h = current ?: return
+            h.discovery?.close(); h.discovery = null
+            // The start in flight ends here: it cannot publish, nor write the port back (a publication already posted
+            // finds no port to cache). A service already running stays until the launcher's next start.
+            h.trying.clear()
+            val gen = h.gate.startingGeneration
+            if (gen != 0L && h.gate.expire(gen)) h.end(gen, "forgotten")
         }
         const val LEND_METHOD = "test-lend"
         private val TEST_MODES = setOf("hold", "block", "late", "nolink", "double", "replay")

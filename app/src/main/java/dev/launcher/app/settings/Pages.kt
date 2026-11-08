@@ -3062,19 +3062,28 @@ private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
     val ctx = LocalContext.current
     var own by remember { mutableStateOf(dev.launcher.app.OwnHost.selected(ctx)) }
     var said by remember { mutableStateOf<String?>(null) }
-    val running = remember(tick.intValue) { dev.launcher.app.ShizukuLink.state() } == dev.launcher.app.ShizukuLink.State.CONNECTED
+    // What is really so, read again while the page shows; the key is read off this thread, and only once paired (a
+    // load makes a key when there is none).
+    val now by androidx.compose.runtime.produceState("", tick.intValue) {
+        while (true) {
+            val keyOk = !dev.launcher.app.OwnHost.paired(ctx) || kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                dev.launcher.engine.adb.AndroidAdbIdentity.store(ctx).load() is dev.launcher.engine.adb.AdbIdentityResult.Ready
+            }
+            value = shellHostNow(ctx, keyOk)
+            kotlinx.coroutines.delay(1000)
+        }
+    }
     Group("Shell host", "What gives the launcher its shell rights. A change applies from the launcher's next start.") {
         ToggleRow("The launcher's own", "Instead of Shizuku; paired once with Wireless debugging", own) { on ->
             own = on
             dev.launcher.app.OwnHost.select(ctx, on)
         }
-        InfoRow("Now", when {
-            running -> if (dev.launcher.app.OwnHost.selected(ctx)) "Running" else "Running on Shizuku"
-            dev.launcher.app.OwnHost.paired(ctx) -> "Paired, not running"
-            else -> "Not paired"
-        })
-        ActionRow("Pair with Wireless debugging", said ?: "Opens Developer options: Wireless debugging, Pair device with pairing code. A notification asks for its code.") {
+        InfoRow("Now", now)
+        if (!dev.launcher.app.PairingSession.supported) InfoRow("Pairing", "Needs Android 12")
+        else ActionRow("Pair with Wireless debugging", said ?: "Opens Developer options: Wireless debugging, Pair device with pairing code. A notification asks for its code.") {
             when (dev.launcher.app.PairingSession.begin(ctx)) {
+                dev.launcher.app.PairingSession.Begin.UNSUPPORTED -> said = "Pairing needs Android 12."
+                dev.launcher.app.PairingSession.Begin.BUSY -> said = "Still forgetting the last pairing. Try again."
                 dev.launcher.app.PairingSession.Begin.STARTED -> {
                     said = null
                     openSystemSettings(ctx, android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
@@ -3087,6 +3096,23 @@ private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
             dev.launcher.app.PairingSession.forget(ctx)
             tick.intValue++
         }
+    }
+}
+
+/** The Shell host group's state line: what runs now, what is under way, what failed. */
+private fun shellHostNow(ctx: android.content.Context, keyOk: Boolean): String {
+    val link = dev.launcher.app.ShizukuLink
+    val own = link.ownHostSelected()
+    return when {
+        link.state() == dev.launcher.app.ShizukuLink.State.CONNECTED -> if (own) "The launcher's own is running" else "Shizuku is running"
+        !own -> "Shizuku is not running"
+        dev.launcher.app.PairingSession.state == dev.launcher.engine.shell.PairingFlow.State.WAITING -> "Waiting for the code"
+        dev.launcher.app.PairingSession.state == dev.launcher.engine.shell.PairingFlow.State.PAIRING -> "Pairing"
+        !keyOk -> "The key is lost or unreadable: pair again"
+        link.state() == dev.launcher.app.ShizukuLink.State.CONNECTING -> "Connecting"
+        dev.launcher.app.OwnHost.failure != null -> "Could not connect (is Wireless debugging on?)"
+        dev.launcher.app.OwnHost.paired(ctx) -> "Paired, not running"
+        else -> "Not paired"
     }
 }
 

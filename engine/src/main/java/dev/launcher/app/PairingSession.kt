@@ -43,9 +43,11 @@ object PairingSession {
     private val flow = PairingFlow({ android.os.SystemClock.elapsedRealtime() })
     private var discovery: AdbDiscovery? = null
     private var replyIntent: PendingIntent? = null
-    @Volatile private var client: AdbPairingClient? = null
+    private var expiry: Runnable? = null
+    /** "Forget pairing" is deleting the key: no pairing begins until it has. */
+    private var forgetting = false
 
-    enum class Begin { STARTED, NOTIFICATIONS_OFF, SHIZUKU_RUNNING }
+    enum class Begin { STARTED, NOTIFICATIONS_OFF, SHIZUKU_RUNNING, UNSUPPORTED, BUSY }
 
     /** Pairing as the settings page shows it. */
     val state: PairingFlow.State get() = flow.state
@@ -53,10 +55,15 @@ object PairingSession {
     /** A new pairing (replacing one in flight): checks what it needs, starts discovery, posts the notification. */
     fun begin(app: Context): Begin {
         val ctx = app.applicationContext
+        if (!supported) return Begin.UNSUPPORTED
+        if (forgetting) return Begin.BUSY
         if (!notificationsOn(ctx)) return Begin.NOTIFICATIONS_OFF
         if (shizukuRunning()) return Begin.SHIZUKU_RUNNING
         cancel(ctx)
         val session = flow.begin()
+        expiry = Runnable {
+            if (flow.expire(session)) { release(ctx); AppLog.log("[shell] pairing: expired") }
+        }.also { main.postDelayed(it, PairingFlow.SESSION_MS) }
         discovery = AdbDiscovery(AndroidNsdAdapter(ctx.getSystemService(NsdManager::class.java))).also { it.start() }
         // The session's own token: its id in the data (never an endpoint or identity), a request code of its own.
         replyIntent = PendingIntent.getBroadcast(ctx, session.id.hashCode(),
@@ -78,19 +85,23 @@ object PairingSession {
                 find(ctx, AdbDiscovery.Kind.PAIRING, wanted = { flow.isCurrent(o.generation) }) { endpoint ->
                     if (endpoint == null) {
                         if (flow.finish(o, paired = false)) notify(ctx, "Open Pair device with pairing code first, then reply with its code.", reply = true)
-                    } else pair(ctx, o, endpoint)
+                    } else if (supported) pair(ctx, o, endpoint)
                 }
             }
         }
     }
 
+    @androidx.annotation.RequiresApi(31)
     private fun pair(ctx: Context, o: PairingFlow.Claim, endpoint: AdbEndpoint) = io.execute {
+        // Nothing starts for a claim already cancelled: no key is made, no connection opened (Forget's delete runs after
+        // this task on this same worker).
+        if (!flow.isCurrent(o.generation)) return@execute
         val outcome = try {
             val key = (AndroidAdbIdentity.store(ctx).load() as? AdbIdentityResult.Ready)?.key ?: error("identity")
-            AdbPairingClient(endpoint, key).also { client = it }.use { it.pair(o.code) }
+            val client = flow.admit(o) { AdbPairingClient(endpoint, key) } ?: return@execute
+            client.use { it.pair(o.code) }
             "paired"
         } catch (_: AdbPairingRejectedException) { "wrong" } catch (t: Throwable) { "failed: ${t.javaClass.simpleName}" }
-        client = null
         main.post {
             if (!flow.finish(o, paired = outcome == "paired")) return@post   // cancelled or replaced meanwhile
             AppLog.log("[shell] pairing: $outcome")
@@ -130,6 +141,14 @@ object PairingSession {
     /** Paired: the connect port from discovery, then our host's start (its port cached only once it is ready). */
     private fun afterPairing(ctx: Context) {
         replyIntent?.cancel(); replyIntent = null
+        expiry?.let { main.removeCallbacks(it) }; expiry = null
+        OwnHost.markPaired(ctx)
+        if (!OwnHost.active) {
+            discovery?.close(); discovery = null
+            notify(ctx, "Paired. The launcher's own shell starts from the launcher's next start.", reply = false)
+            dismissLater(ctx)
+            return
+        }
         notify(ctx, "Paired. Starting the launcher's shell…", reply = false)
         find(ctx, AdbDiscovery.Kind.CONNECT, wanted = { flow.state == PairingFlow.State.PAIRED }) { endpoint ->
             discovery?.close(); discovery = null
@@ -141,16 +160,27 @@ object PairingSession {
     /** Ends the pairing in flight: its token, discovery and socket go; late outcomes change nothing. */
     fun cancel(ctx: Context) {
         flow.cancel()
+        release(ctx)
+    }
+
+    private fun release(ctx: Context) {
+        expiry?.let { main.removeCallbacks(it) }; expiry = null
         replyIntent?.cancel(); replyIntent = null
         discovery?.close(); discovery = null
-        try { client?.close() } catch (_: Throwable) {}
         ctx.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION)
     }
+
+    /** Pairing needs Android 12's keying-material export ([AdbPairingClient]); below it Shizuku stays (D-075). */
+    val supported: Boolean get() = android.os.Build.VERSION.SDK_INT >= 31
 
     /** "Forget pairing": the pairing in flight ends and the launcher's identity is deleted (Android keeps its entry). */
     fun forget(ctx: Context) {
         cancel(ctx)
-        io.execute { AndroidAdbIdentity.forget(ctx.applicationContext); main.post { OwnHost.forgetEndpoint(ctx) } }
+        OwnHost.forgetEndpoint(ctx)   // its start in flight ends now, before the key goes
+        forgetting = true
+        val app = ctx.applicationContext
+        // After whatever either worker is in the middle of, so neither can make the key again behind the delete.
+        io.execute { OwnHost.onWorker { AndroidAdbIdentity.forget(app); main.post { forgetting = false } } }
         AppLog.log("[shell] pairing: forgotten (Android's paired-device entry stays until removed in Settings)")
     }
 

@@ -78,6 +78,9 @@ object ShizukuLink {
 
     fun state(): State = if (service != null) State.CONNECTED else host.state()
 
+    /** The launcher's own process is this start's host (the switch applies at a start). */
+    fun ownHostSelected(): Boolean = host is OwnHost
+
     /** Asks for permission if needed, then binds. Safe to call repeatedly. */
     fun connect() { if (service == null) host.connect() }
 

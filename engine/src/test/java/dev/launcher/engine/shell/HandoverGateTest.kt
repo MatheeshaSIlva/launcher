@@ -99,6 +99,16 @@ class HandoverGateTest {
         assertEquals(t.generation, gate.ready(SHELL_UID, ready, a.ack))
     }
 
+    @Test fun endingTheStartInFlightRefusesItsLaterSteps() {   // Forget pairing: nothing can publish after it
+        val t = gate.begin()
+        assertEquals(t.generation, gate.startingGeneration)
+        val a = claim(t)!!
+        assertTrue(gate.expire(gate.startingGeneration))
+        assertEquals(0L, gate.startingGeneration)
+        assertNull(gate.ready(SHELL_UID, ready, a.ack))
+        assertEquals(0L, gate.connectedGeneration)
+    }
+
     @Test fun ticketsAndAcceptancesNeverPrintTheirSecrets() {
         val t = gate.begin()
         val a = claim(t)!!

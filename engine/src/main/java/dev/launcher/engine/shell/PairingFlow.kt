@@ -38,12 +38,14 @@ class PairingFlow(private val nowMillis: () -> Long, private val random: SecureR
     private var session: Session? = null
     private var generation = 0L
     private var busy = false
+    private var open: java.io.Closeable? = null
     private var current: State = State.IDLE
     val state: State get() = synchronized(this) { current }
 
     @Synchronized fun begin(): Session {
         generation++
         busy = false
+        closeOpen()
         val id = buildString(32) { for (b in ByteArray(16).also(random::nextBytes)) append("%02x".format(b.toInt() and 0xff)) }
         current = State.WAITING
         return Session(id, nowMillis() + SESSION_MS).also { session = it }
@@ -64,24 +66,48 @@ class PairingFlow(private val nowMillis: () -> Long, private val random: SecureR
     /** [claim]'s pairing ended: true when it still counts (its session is current). A wrong code reopens the session. */
     @Synchronized fun finish(claim: Claim, paired: Boolean): Boolean {
         if (claim.generation != generation || session == null) return false
+        if (nowMillis() >= session!!.expiresAtMillis) { expire(); return false }
         busy = false
+        open = null
         if (paired) { session = null; current = State.PAIRED } else current = State.WAITING
         return true
     }
 
     /** Ends the session in flight, if any: its later replies and outcomes change nothing. */
     @Synchronized fun cancel() {
-        if (session == null && !busy) return
+        if (session == null && !busy && current != State.PAIRED) return
         generation++
         session = null
         busy = false
+        closeOpen()
         current = State.CANCELLED
     }
 
-    /** True while [generation] is the current claim's (work started under it may still write its results). */
-    @Synchronized fun isCurrent(generation: Long) = generation == this.generation && session != null
+    /**
+     * The claim's connection, made only while it is current and registered in one step with [cancel]: a cancel before this
+     * makes nothing ([make] is not called), a cancel after it closes what was made. Null: the claim is obsolete.
+     */
+    @Synchronized fun <T : java.io.Closeable> admit(claim: Claim, make: () -> T): T? {
+        if (!isCurrent(claim.generation)) return null
+        return make().also { open = it }
+    }
 
-    private fun expire() { generation++; session = null; busy = false; current = State.EXPIRED }
+    /** [session]'s time is up (its timer): ends it if it is still the current one. True when it did. */
+    @Synchronized fun expire(session: Session): Boolean {
+        if (this.session !== session) return false
+        expire()
+        return true
+    }
+
+    /** True while [generation] is the current claim's (work started under it may still write its results). */
+    @Synchronized fun isCurrent(generation: Long): Boolean {
+        val s = session ?: return false
+        return generation == this.generation && nowMillis() < s.expiresAtMillis
+    }
+
+    private fun expire() { generation++; session = null; busy = false; closeOpen(); current = State.EXPIRED }
+
+    private fun closeOpen() { try { open?.close() } catch (_: Throwable) {}; open = null }
 
     companion object {
         /** How long a pairing notification's reply is taken: Settings' dialog stays up about as long as the user needs. */

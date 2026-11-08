@@ -28,6 +28,9 @@ class HandoverGate(private val nowMillis: () -> Long, private val random: Secure
     /** The generation whose service is published (0: none). */
     val connectedGeneration: Long @Synchronized get() = connected
 
+    /** The start in flight, if any (0: none). */
+    val startingGeneration: Long @Synchronized get() = starting?.generation ?: 0L
+
     /** A new attempt; it replaces one in flight (whose later steps are then refused). */
     @Synchronized fun begin(): StartAttempt.Ticket = attempt.begin().also { starting = it; acking = null }
 
