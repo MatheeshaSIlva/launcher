@@ -3097,7 +3097,7 @@ private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
         if (dev.launcher.app.ShizukuLink.ownHostSelected() && dev.launcher.engine.shell.OwnHostStatus.offerStart(dev.launcher.app.OwnHost.paired(ctx), dev.launcher.app.OwnHost.startState))
             ActionRow("Start now", "Turns Wireless debugging on for a moment if it is off") { dev.launcher.app.OwnHost.startNow(); tick.intValue++ }
         ConfirmRow("Forget pairing", "Deletes the launcher's key and stops its shell. Android keeps its entry under Paired devices until you remove it there.", "Tap again to forget") {
-            dev.launcher.app.PairingSession.forget(ctx)
+            said = if (dev.launcher.app.PairingSession.forget(ctx)) null else "Could not forget the pairing: nothing changed. Try again."
             tick.intValue++
         }
     }

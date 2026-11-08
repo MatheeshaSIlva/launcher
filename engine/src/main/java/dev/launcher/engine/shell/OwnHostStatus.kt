@@ -15,6 +15,17 @@ object OwnHostStatus {
     /** Wireless debugging counts as off only after a write that worked and a read-back of 0. */
     fun restored(written: Boolean, readBack: Int?) = written && readBack == 0
 
+    /**
+     * Forget's order: the pairing is off the disk first ([removePairing], checked), or nothing else happens: a key deleted
+     * under a pairing still on disk would have the next process start an unpaired host. False: nothing changed.
+     */
+    inline fun forgetInOrder(removePairing: () -> Boolean, stopHost: () -> Unit, deleteKey: () -> Unit): Boolean {
+        if (!removePairing()) return false
+        stopHost()
+        deleteKey()
+        return true
+    }
+
     fun offerStart(paired: Boolean, state: BootStartFlow.State?) = paired && state != BootStartFlow.State.RUNNING
 
     /** What the page says: a debugging port we could not close first, and "running" only once the flow has finished. */

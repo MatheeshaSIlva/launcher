@@ -337,9 +337,11 @@ class OwnHost : ShellHost {
             h.starter.trigger(userAction = true)
         }
 
-        /** "Forget pairing": the cached port goes with the identity. */
-        fun forgetEndpoint(ctx: Context) {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("connect_port").remove("host").remove("paired").commit()      // on disk before the key goes: a process killed here must not start again
+        /** "Forget pairing", first: on disk before anything else goes; a process killed after this must not start again. */
+        fun removePairing(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("connect_port").remove("host").remove("paired").commit()
+
+        /** "Forget pairing", then: what runs or is starting stops. */
+        fun forgetEndpoint() {
             val h = current ?: return
             h.starter.cancel()      // a note of ours is settled, whatever else happens
             h.discovery?.close(); h.discovery = null

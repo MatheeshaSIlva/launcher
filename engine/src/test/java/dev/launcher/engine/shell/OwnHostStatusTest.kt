@@ -30,6 +30,16 @@ class OwnHostStatusTest {
         assertFalse(OwnHostStatus.restored(false, null))
         assertFalse(OwnHostStatus.restored(true, 1))
     }
+    @Test fun forgetDoesNothingElseWhenThePairingCannotBeRemoved() {
+        val did = mutableListOf<String>()
+        assertFalse(OwnHostStatus.forgetInOrder({ did.add("remove"); false }, { did.add("stop") }, { did.add("key") }))
+        assertEquals(listOf("remove"), did)
+    }
+    @Test fun forgetRemovesThePairingBeforeTheHostAndTheKey() {
+        val did = mutableListOf<String>()
+        assertTrue(OwnHostStatus.forgetInOrder({ did.add("remove"); true }, { did.add("stop") }, { did.add("key") }))
+        assertEquals(listOf("remove", "stop", "key"), did)
+    }
     @Test fun onlyAPairedHostStarts() {
         assertEquals(OwnHostStatus.Entry.START, OwnHostStatus.entry(true, false))
         assertEquals(OwnHostStatus.Entry.START, OwnHostStatus.entry(true, true))

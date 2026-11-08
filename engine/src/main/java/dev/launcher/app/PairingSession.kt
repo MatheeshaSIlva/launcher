@@ -181,14 +181,17 @@ object PairingSession {
     val supported: Boolean get() = android.os.Build.VERSION.SDK_INT >= 31
 
     /** "Forget pairing": the pairing in flight ends and the launcher's identity is deleted (Android keeps its entry). */
-    fun forget(ctx: Context) {
-        cancel(ctx)
-        OwnHost.forgetEndpoint(ctx)   // its start in flight ends now, before the key goes
-        forgetting = true
+    /** False: the pairing could not be removed, and nothing changed. */
+    fun forget(ctx: Context): Boolean {
         val app = ctx.applicationContext
-        // After whatever either worker is in the middle of, so neither can make the key again behind the delete.
-        io.execute { OwnHost.onWorker { AndroidAdbIdentity.forget(app); main.post { forgetting = false } } }
-        AppLog.log("[shell] pairing: forgotten (Android's paired-device entry stays until removed in Settings)")
+        val ok = dev.launcher.engine.shell.OwnHostStatus.forgetInOrder({ OwnHost.removePairing(ctx) },
+            { cancel(ctx); OwnHost.forgetEndpoint() }) {     // its start in flight ends now, before the key goes
+            forgetting = true
+            // After whatever either worker is in the middle of, so neither can make the key again behind the delete.
+            io.execute { OwnHost.onWorker { AndroidAdbIdentity.forget(app); main.post { forgetting = false } } }
+        }
+        AppLog.log(if (ok) "[shell] pairing: forgotten (Android's paired-device entry stays until removed in Settings)" else "[shell] pairing: could not forget: the pairing could not be removed")
+        return ok
     }
 
     private fun dismissLater(ctx: Context) = main.postDelayed({

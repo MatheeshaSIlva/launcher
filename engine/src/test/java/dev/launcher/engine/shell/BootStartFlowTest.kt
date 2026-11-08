@@ -120,7 +120,8 @@ class BootStartFlowTest {
         assertTrue(flow.observe(value).isEmpty())       // still on: nothing changes
         value = value.copy(wirelessOn = false)
         val clear = only(done(only(flow.observe(value), Kind.RESTORE)), Kind.CLEAR_NOTE)
-        done(clear)
+        assertTrue(done(clear).isEmpty())       // no RECORD_NOTE, no ENABLE: trigger's resume ended with the failure
+        assertEquals(State.IDLE, flow.state)
         assertFalse(value.note)
         assertFalse(writes.contains(Kind.ENABLE))
     }
