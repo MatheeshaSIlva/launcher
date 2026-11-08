@@ -5,6 +5,31 @@ import org.junit.Test
 
 /** E2 slice 5a: the layout maths, placement by placement. */
 class LayoutTest {
+    @Test fun aFlexRowNarrowerThanItsWidthStaysInsideItsParent() {
+        val child = object : Child {
+            override fun measure(c: Constraints) = Measured(Size(10, 10))
+        }
+        val spacer = object : Child {
+            override val flex = 1f
+            override fun measure(c: Constraints) = Measured(Size(c.minWidth, 0))
+        }
+        val a = Layout.row(Frame(width = 200f), Constraints(0, 100, 0, 100), 0f, Justify.START, Align.CENTER, listOf(spacer, child))
+        assertEquals(90f, a.placements[1].exactX, 0.001f)
+    }
+
+    @Test fun aFlexRowSharesTheExactRoomLeftByFractionalPadding() {
+        val child = object : Child {
+            override fun measure(c: Constraints) = Measured(Size(71, 33), 16.5f, 70.875f, 33f)
+        }
+        val spacer = object : Child {
+            override val flex = 1f
+            override fun measure(c: Constraints) = Measured(Size(c.minWidth, 0))
+        }
+        val f = Frame(padStart = 89.25f, padEnd = 89.25f)
+        val a = Layout.row(f, Constraints(0, 1080, 0, 100), 0f, Justify.START, Align.CENTER, listOf(spacer, child))
+        assertEquals(1080f - 89.25f - 70.875f, a.placements[1].exactX, 0.001f)    // StatusBarView's battery: 919.875
+    }
+
     private val none = Frame()
     private val wide = Constraints(0, 400, 0, 100)
 
@@ -96,7 +121,7 @@ class LayoutTest {
         assertEquals(Placement(2, 3), padded.placements.single())
         assertEquals(Size(16, 18), padded.measured.size)
         assertEquals(Size(30, 18), Layout.box(Frame(minWidth = 30f, maxHeight = 18f), wide, listOf(Fixed(10, 25))).measured.size)
-        assertEquals(Size(27, 11), Layout.box(Frame(width = 27.2f, height = 10.6f), wide, emptyList()).measured.size)
+        assertEquals(Size(28, 11), Layout.box(Frame(width = 27.2f, height = 10.6f), wide, emptyList()).measured.size)
         assertEquals(Size(400, 0), Layout.box(Frame(width = 1000f), wide, emptyList()).measured.size)   // the parent's bound wins
     }
 
@@ -115,4 +140,42 @@ class LayoutTest {
         assertEquals(12f, u.px(4.0, "dp"), 1e-4f)
         assertEquals(7f, u.px(7.0, "px"), 1e-4f)
     }
+    @Test fun batterySubtreePreservesExtentsPositionsAndBaseline() {
+        val u = 2.625f
+        val bounds = Constraints(0, 71, 0, 100)
+        val bodyFrame = Frame(width = 24.6f * u, height = 12.6f * u)
+        val baseline = 21.3f
+        val text = Measured(Size(30, 27), baseline - 0.727f * 9.6f * u / 2f)
+        fun child(measure: (Constraints) -> Measured) = object : Child {
+            override fun measure(c: Constraints) = measure(c)
+        }
+        lateinit var stack: Arranged
+        val body = child { c ->
+            Layout.stack(bodyFrame, c, 0.5f, 0.5f, listOf(
+                child { Layout.box(bodyFrame, it, emptyList()).measured }, child { text }), centreLine = true)
+                .also { stack = it }.measured
+        }
+        val nub = child { Layout.box(Frame(width = 1.6f * u, height = 4.4f * u), it, emptyList()).measured }
+        val row = Layout.row(Frame(), bounds, 0.8f * u, Justify.START, Align.CENTRE_LINE, listOf(body, nub))
+        assertEquals(65, row.children[0].size.width)
+        assertEquals(64.575f, row.children[0].exactWidth, 1e-5f)
+        assertEquals(0f, row.placements[0].exactX, 1e-5f)
+        assertEquals(66.675f, row.placements[1].exactX, 1e-5f)
+        assertEquals(70.875f, row.measured.exactWidth, 1e-5f)
+        assertEquals(64.575f / 2f, stack.placements[1].exactX + text.exactWidth / 2f, 1e-5f)
+        assertEquals(row.measured.centre + 0.727f * 9.6f * u / 2f,
+            row.placements[0].exactY + stack.placements[1].exactY + baseline, 1e-5f)
+    }
+
+    @Test fun exactBoxIsClampedByParentAndItsPaddingIsCountedOnce() {
+        val a = Layout.box(Frame(width = 24.6f * 2.625f, height = 12.6f * 2.625f), wide, emptyList())
+        assertEquals(64.575f, a.measured.exactWidth, 1e-5f)
+        assertEquals(33.075f / 2, a.measured.centre, 1e-5f)
+        val clamped = Layout.box(Frame(width = 1000f), wide, emptyList())
+        assertEquals(400f, clamped.measured.exactWidth, 0f)
+        val padded = Layout.stack(Frame(width = 50f, height = 30f, padStart = 2f, padEnd = 4f), wide,
+            0.5f, 0.5f, listOf(Fixed(10, 10)))
+        assertEquals(19f, padded.placements.single().exactX, 0f)
+    }
+
 }

@@ -39,7 +39,7 @@ class ComponentProof(private val context: Context) {
         val handler = Handler(thread.looper)
         try {
             val def = context.assets.open("kdl/components/status-bar.kdl").bufferedReader().use { r ->
-                (Validator(TokenCheck { false }).load(KdlParser.parse(r.readText())) as ReadResult.Ok).component
+                (Validator(TokenCheck { true }).load(KdlParser.parse(r.readText())) as ReadResult.Ok).component
             }
             val tokens = CountingTokens()
             val sources = Sources.fixture(mapOf("time" to Time(13L * 3_600_000, "UTC")))
@@ -133,7 +133,7 @@ class ComponentProof(private val context: Context) {
             onThread(handler) { a.dispose() }
             // 3. No icon: prepared at once, not late.
             val barDef = context.assets.open("kdl/components/status-bar.kdl").bufferedReader().use { r ->
-                (Validator(TokenCheck { false }).load(KdlParser.parse(r.readText())) as ReadResult.Ok).component
+                (Validator(TokenCheck { true }).load(KdlParser.parse(r.readText())) as ReadResult.Ok).component
             }
             val noIcon = onThread(handler) {
                 var at: Boolean? = null

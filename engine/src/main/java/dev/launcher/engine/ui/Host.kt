@@ -30,6 +30,9 @@ interface Painter {
     /** What the drawing depends on, read from [node]'s values: the content is recorded again only when it changes. */
     fun key(node: HostNode): Any?
     fun paint(canvas: Canvas, node: HostNode, width: Int, height: Int)
+    /** Exact drawing bounds; legacy painters still receive the allocation through the Int overload. */
+    fun paint(canvas: Canvas, node: HostNode, width: Float, height: Float) =
+        paint(canvas, node, kotlin.math.ceil(width).toInt(), kotlin.math.ceil(height).toInt())
     /** A leaf's own size (text, icon), or null for a container, which its layout sizes. */
     fun measure(node: HostNode, maxWidth: Int, maxHeight: Int): Measured? = null
 }
@@ -48,11 +51,17 @@ class Binding internal constructor(val compiled: Compiled?, initial: Value) {
  * Moves a primitive and everything in it by its own RenderNode's properties, never Compose state: a change asks
  * [frame] for a frame and records nothing.
  */
-class Motion internal constructor(private val node: () -> RenderNode, private val frame: () -> Unit) {
-    var translationX: Float get() = node().translationX; set(v) { node().translationX = v; frame() }
-    var translationY: Float get() = node().translationY; set(v) { node().translationY = v; frame() }
-    var alpha: Float get() = node().alpha; set(v) { node().alpha = v; frame() }
-    var scale: Float get() = node().scaleX; set(v) { node().scaleX = v; node().scaleY = v; frame() }
+class Motion internal constructor(private val apply: (Motion) -> Unit, private val frame: () -> Unit) {
+    private var offsetX = 0f
+    private var offsetY = 0f
+    var translationX = 0f; set(v) { field = v; applyTranslation(); frame() }
+    var translationY = 0f; set(v) { field = v; applyTranslation(); frame() }
+    var alpha = 1f; set(v) { field = v; apply(this); frame() }
+    var scale = 1f; set(v) { field = v; apply(this); frame() }
+    internal fun place(x: Float, y: Float) { offsetX = x; offsetY = y; applyTranslation() }
+    internal val drawX get() = translationX + offsetX
+    internal val drawY get() = translationY + offsetY
+    private fun applyTranslation() { apply(this) }
 }
 
 /** A primitive of the hosted tree: its bindings, children and painter, and the two RenderNodes it draws through. */
@@ -75,8 +84,14 @@ class HostNode internal constructor(
     var ownRecords = 0; internal set
     /** Its centre line at its last measure, in px from its top, unrounded (layout's alignment lines are whole pixels). */
     var centre = 0f; internal set
+    var measured = Measured(dev.launcher.engine.layout.Size(0, 0)); internal set
+    val exactWidth get() = measured.exactWidth
+    val exactHeight get() = measured.exactHeight
     var frameRecords = 0; internal set
-    val motion = Motion({ frame }, requestFrame)
+    val motion = Motion({ m ->
+        frame.translationX = m.drawX; frame.translationY = m.drawY
+        frame.alpha = m.alpha; frame.scaleX = m.scale; frame.scaleY = m.scale
+    }, requestFrame)
 
     /** An attribute's current value (an argument under its schema name: text's `content`, icon's `symbol`). */
     fun value(name: String): Value = bindings[name]?.state?.value ?: Value.Null
@@ -95,7 +110,7 @@ class HostNode internal constructor(
     fun arrange(c: Constraints, kids: List<Child>): Arranged = when (view.primitive) {
         "row" -> Layout.row(frame(), c, length("gap") ?: 0f, Justify.valueOf(word("justify").enumName("START")),
             Align.valueOf(word("align").enumName("CENTER")), kids)
-        "stack" -> Layout.stackAlign(word("align") ?: "center").let { (x, y) -> Layout.stack(frame(), c, x, y, kids) }
+        "stack" -> Layout.stackAlign(word("align") ?: "center").let { (x, y) -> Layout.stack(frame(), c, x, y, kids, word("align") == "centre-line") }
         "box" -> Layout.box(frame(), c, kids)
         "spacer" -> Arranged(Layout.spacer(length("size") ?: 0f, c), emptyList(), emptyList())
         else -> Layout.leaf(frame(), c, Measurer { w, h -> painter.measure(this, w, h) ?: Measured(dev.launcher.engine.layout.Size(0, 0)) })

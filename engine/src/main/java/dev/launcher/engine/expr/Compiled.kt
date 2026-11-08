@@ -132,6 +132,7 @@ private fun fn(n: Node, props: Set<String>): Fn = when (n) {
             override fun bool(env: Env) = if (t.bool(env)) a.bool(env) else b.bool(env)
         }
     }
+    is Node.Call -> call(n, n.args.map { fn(it, props) })
     is Node.Pipe -> Formatter(fn(n.value, props), n.formatter, n.arg)
 }
 

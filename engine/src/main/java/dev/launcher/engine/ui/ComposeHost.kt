@@ -5,7 +5,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.HorizontalAlignmentLine
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.Measurable
@@ -54,16 +53,19 @@ private class Policy(val n: HostNode) : MeasurePolicy {
                 override val flex = n.children[k].flex
                 override fun measure(c: EngineConstraints): Measured {
                     val p = m.measure(ComposeConstraints(c.minWidth, c.maxWidth, c.minHeight, c.maxHeight)).also { placeables[k] = it }
-                    val centre = p[CentreLine]
-                    return Measured(Size(p.width, p.height), if (centre == AlignmentLine.Unspecified) p.height / 2f else centre.toFloat())
+                    return n.children[k].measured.copy(size = Size(p.width, p.height))
                 }
             }
         }
         val c = constraints
         val a = n.arrange(EngineConstraints(c.minWidth, c.maxWidth, c.minHeight, c.maxHeight), kids)
         n.centre = a.measured.centre
+        n.measured = a.measured
         return layout(a.measured.size.width, a.measured.size.height, mapOf(CentreLine to a.measured.centre.roundToInt())) {
-            a.placements.forEachIndexed { k, p -> placeables[k]?.place(p.x, p.y) }
+            a.placements.forEachIndexed { k, p ->
+                n.children[k].motion.place(p.residualX, p.residualY)
+                placeables[k]?.place(p.x, p.y)
+            }
         }
     }
 }
@@ -81,6 +83,7 @@ private class DrawElement(val n: HostNode) : ModifierNodeElement<DrawNode>() {
  * GPU's (a software picture) the same drawing goes straight onto it.
  */
 private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
+    private val software = AndroidFrameCanvas()
     override fun ContentDrawScope.draw() {
         n.epoch.intValue
         val w = size.width.roundToInt()
@@ -88,22 +91,32 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
         val key = n.painter.key(n)
         val target = drawContext.canvas
         if (!target.nativeCanvas.isHardwareAccelerated) {
-            n.painter.paint(target.nativeCanvas, n, w, h)
-            return drawContent()
+            software.target = target.nativeCanvas
+            try {
+                softwareFrame(software, n) {
+                    n.painter.paint(target.nativeCanvas, n, n.exactWidth, n.exactHeight)
+                    drawContent()
+                }
+            } finally { software.target = null }
+            return
         }
         val own = n.own
-        if (key != n.ownKey || own.width != w || own.height != h) {
+        if (listOf(key, n.exactWidth, n.exactHeight) != n.ownKey || own.width != w || own.height != h) {
             own.setPosition(0, 0, w, h)
-            n.painter.paint(own.beginRecording(), n, w, h)
+            n.painter.paint(own.beginRecording(), n, n.exactWidth, n.exactHeight)
             own.endRecording()
             n.ownRecords++
-            n.ownKey = key
+            n.ownKey = listOf(key, n.exactWidth, n.exactHeight)
         }
         val frame = n.frame
         frame.setPosition(0, 0, w, h)
+        frame.setUseCompositingLayer(n.value("layer") == Value.Bool.TRUE, null)
+        frame.clipToBounds = false
+        own.clipToBounds = false
         val recording = frame.beginRecording()
         n.frameRecords++
         try {
+            clipFrame(recording, n)
             recording.drawRenderNode(own)
             drawContext.canvas = ComposeCanvas(recording)
             drawContent()
@@ -112,5 +125,62 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
             frame.endRecording()
         }
         drawIntoCanvas { it.nativeCanvas.drawRenderNode(frame) }
+    }
+}
+
+/** A narrow canvas boundary lets JVM tests prove operation order without pretending to rasterise Android pixels. */
+internal interface FrameCanvas {
+    fun save(): Int
+    fun translate(x: Float, y: Float)
+    fun scale(scale: Float, cx: Float, cy: Float)
+    fun layer(width: Float, height: Float, alpha: Int)
+    fun clip(n: HostNode)
+    fun restore(count: Int)
+}
+
+private class AndroidFrameCanvas : FrameCanvas {
+    var target: android.graphics.Canvas? = null
+    private val canvas get() = checkNotNull(target)
+    override fun save() = canvas.save()
+    override fun translate(x: Float, y: Float) = canvas.translate(x, y)
+    override fun scale(scale: Float, cx: Float, cy: Float) = canvas.scale(scale, scale, cx, cy)
+    override fun layer(width: Float, height: Float, alpha: Int) { canvas.saveLayerAlpha(0f, 0f, width, height, alpha) }
+    override fun clip(n: HostNode) = clipFrame(canvas, n)
+    override fun restore(count: Int) = canvas.restoreToCount(count)
+}
+
+/** Transform and isolation enclose the painter AND descendants, including exceptions during drawing. */
+internal fun softwareFrame(canvas: FrameCanvas, n: HostNode, draw: () -> Unit) {
+    softwareFrame(canvas, n.motion, n.measured, n.value("layer") == Value.Bool.TRUE, { canvas.clip(n) }, draw)
+}
+
+internal fun softwareFrame(canvas: FrameCanvas, motion: Motion, measured: Measured, layered: Boolean,
+    clip: () -> Unit, draw: () -> Unit) {
+    val save = canvas.save()
+    try {
+        canvas.translate(motion.drawX, motion.drawY)
+        canvas.scale(motion.scale, measured.size.width / 2f, measured.size.height / 2f)
+        if (layered || motion.alpha != 1f)
+            canvas.layer(measured.exactWidth, measured.exactHeight, (motion.alpha * 255).toInt().coerceIn(0, 255))
+        clip()
+        draw()
+    } finally { canvas.restore(save) }
+}
+
+/** The share of its width a box that names `reveal` clips to, 1 included; null for a box that does not name it. */
+internal fun revealFraction(n: HostNode): Float? =
+    if ("reveal" !in n.bindings) null else n.number("reveal")?.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 1f
+
+private fun clipFrame(canvas: android.graphics.Canvas, n: HostNode) {
+    if (n.view.primitive != "box") return
+    // A box that names `reveal` clips whatever its value: at 1 too, as StatusBarView's level does (its antialiased clip on
+    // a fractional edge is part of how the edge looks, T-006).
+    revealFraction(n)?.let { canvas.clipRect(0f, 0f, n.exactWidth * it, n.exactHeight) }
+    if (n.value("clip") == Value.Bool.TRUE) {
+        val radius = (n.length("radius") ?: 0f).coerceAtLeast(0f)
+        if (radius == 0f) canvas.clipRect(0f, 0f, n.exactWidth, n.exactHeight)
+        else canvas.clipPath(android.graphics.Path().apply {
+            addRoundRect(0f, 0f, n.exactWidth, n.exactHeight, radius, radius, android.graphics.Path.Direction.CW)
+        })
     }
 }

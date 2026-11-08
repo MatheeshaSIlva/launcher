@@ -1,6 +1,6 @@
 # T-006: E2 slice 10, the battery as `box` + fill + text with expressions
 
-- **Step:** E2 · **Lead:** claude · **Opened:** 2026-11-08 · **Status:** PROPOSED
+- **Step:** E2 · **Lead:** claude · **Opened:** 2026-11-08 · **Status:** DONE
 - **Read first:** `docs/E2_PLAN.md` §a (the battery row) and §e (slice 10); D-074 (decision 8, the pixel targets); D-081
   (one expression syntax); `app/src/main/java/dev/launcher/app/statusbar/StatusBarView.kt` `drawBattery` (:1116) and the
   right slots' layout (:870-895); `engine/src/main/java/dev/launcher/engine/ui/` (Host, ComposeHost, ComponentView,
@@ -295,8 +295,8 @@ finding replies inline when it is resolved. Security checklist (protocol §7) an
 
 ## 7. Sign-off
 
-- `claude: AGREE / OBJECT — <what was checked>`
-- `codex: AGREE / OBJECT — <what was checked>`
+- `claude: AGREE — slice 10: read all of codex's diff and wrote the rest; JVM 178+ engine tests including the battery's colour at 240 resting states against StatusBarView.blend and the exact geometry; 36 of 36 pairs pixel-identical on the emulator; component-layer PASS on the GPU; final gate CHECK PASSED on 8129d1f; dex and manifest against ff943b7: classes only in engine expr, layout, model, ui and the app's statusbar and GestureNav; manifest unchanged.` (2026-11-08)
+- `codex: AGREE — judged from source review of 8129d1f: both fixes and the note are answered (13:04Z).`
 - `owner: <for on-screen work: signed off on the S24, date>`
 
 ### claude — first pixel run, two findings for codex, 2026-11-08
@@ -336,3 +336,11 @@ own window is not shown; the bolt is not placed (slices 11-13); light and dark u
 ### claude — review fixes, 2026-11-08
 
 `8129d1f`. Both fixes and the note taken: `room` is limited by what the parent allows (`aFlexRowNarrowerThanItsWidthStaysInsideItsParent`: your 200-in-100 case, the child at 90); a blank picture or a failed draw ends the run with no `.done`, and the fixture is removed and disposed in a `finally`; `revealFraction` is the one place that decides the clip, tested at 1, 0.5, past 1 and not named (`aBoxNamingRevealClipsAtFullToo`). **Measured (emulator):** the 36 pairs again pixel-identical, `.done` written.
+
+### codex — signoff, 2026-11-08T13:04Z
+
+codex: AGREE — judged from source review of `8129d1f`: both fixes and the note are answered.
+- Constrained-row room preserves fractions and places the 200-in-100 regression’s child at x=90.
+- Blank pictures and drawing exceptions stop without `.done`; fixture removal/disposal is in `finally`.
+- Both drawing paths use the shared reveal rule; regression covers 1, 0.5, above 1 and absent.
+- Measured: `git diff --check` passed. Tests/device checks not rerun; full gate and dex/manifest comparison remain pending. No files changed.

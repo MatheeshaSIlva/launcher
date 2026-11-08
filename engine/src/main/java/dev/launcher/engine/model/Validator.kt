@@ -43,11 +43,11 @@ class Validator(private val tokens: TokenCheck) {
         val states = c.state.map { it.name }
         val sources = c.uses.sources.map { it.name }
 
-        fun node(n: ViewNode, parent: PrimitiveDef?, scope: Set<String>, place: Boolean) {
+        fun node(n: ViewNode, parent: PrimitiveDef?, scope: Set<String>, place: Boolean, layered: Boolean = false) {
             val def = Primitives.ALL[n.primitive]
             if (def == null) {   // its children are still checked, for every finding at once
                 d += unknown(n.nameSpan, "unknown-primitive", "primitive", n.primitive, Primitives.ALL.keys)
-                return n.children.forEach { node(it, null, scope, place = false) }
+                return n.children.forEach { node(it, null, scope, place = false, layered = layered) }
             }
             if (place && parent != null && !parent.container)
                 d += Diagnostic(n.nameSpan, "misplaced", "'${parent.name}' cannot hold children: put '${n.primitive}' beside it in a row or a stack")
@@ -65,11 +65,16 @@ class Validator(private val tokens: TokenCheck) {
                 if (ad == null) d += unknown(a.keySpan, "unknown-attribute", "attribute of '${def.name}'", a.name, def.attrs.keys)
                 else value(ad, a.value, inner)
             }
-            n.children.forEach { node(it, def, inner, place = true) }
+            val blend = ((n.attrs["blend"]?.value as? AttrValue.Literal)?.value as? KdlValue.Str)?.value
+            if (blend == "knockout" && !layered)
+                d += Diagnostic(n.attrs.getValue("blend").value.span, "knockout-needs-layer",
+                    "Knockout text needs an ancestor with layer=#true")
+            val enabled = ((n.attrs["layer"]?.value as? AttrValue.Literal)?.value as? KdlValue.Bool)?.value == true
+            n.children.forEach { node(it, def, inner, place = true, layered = layered || enabled) }
         }
 
         fun value(ad: AttrDef, v: AttrValue, scope: Set<String>) {
-            if (!ad.bindable && (v is AttrValue.State || v is AttrValue.Expr))
+            if (!ad.bindable && (v !is AttrValue.Literal))
                 d += Diagnostic(v.span, "not-bindable", "'${ad.name}' is fixed when the component loads: it takes ${ad.type.name}, not a binding")
             when (v) {
                 is AttrValue.Literal -> literal(ad, v.value)

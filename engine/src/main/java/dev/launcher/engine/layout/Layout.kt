@@ -18,9 +18,16 @@ data class Constraints(val minWidth: Int, val maxWidth: Int, val minHeight: Int,
 data class Size(val width: Int, val height: Int)
 
 /** A measured size, and its centre line in pixels from its top (text: the middle of its capitals; else the middle). */
-data class Measured(val size: Size, val centre: Float = size.height / 2f)
+data class Measured(val size: Size, val centre: Float = size.height / 2f,
+    val exactWidth: Float = size.width.toFloat(), val exactHeight: Float = size.height.toFloat())
 
-data class Placement(val x: Int, val y: Int)
+data class Placement(val x: Int, val y: Int, val residualX: Float = 0f, val residualY: Float = 0f) {
+    val exactX get() = x + residualX
+    val exactY get() = y + residualY
+    companion object {
+        fun exact(x: Float, y: Float) = Placement(x.roundToInt(), y.roundToInt(), x - x.roundToInt(), y - y.roundToInt())
+    }
+}
 
 /** What a policy decided: its own measure, and each child's place and measure, in the order the children came. */
 data class Arranged(val measured: Measured, val placements: List<Placement>, val children: List<Measured>)
@@ -77,7 +84,7 @@ object Layout {
     /** [c] narrowed by the frame's fixed size and bounds. */
     fun bound(f: Frame, c: Constraints): Constraints {
         fun side(lo: Int, hi: Int, fixed: Float?, fMin: Float, fMax: Float): Pair<Int, Int> {
-            fixed?.let { val v = px(it).coerceIn(lo, hi); return v to v }
+            fixed?.let { val v = ceil(it).toInt().coerceIn(lo, hi); return v to v }
             val mn = px(fMin).coerceIn(lo, hi)
             return mn to max(mn, min(hi, px(fMax)))
         }
@@ -94,13 +101,18 @@ object Layout {
         val a = content(Constraints(max(0, outer.minWidth - ph), minus(outer.maxWidth, ph), max(0, outer.minHeight - pv), minus(outer.maxHeight, pv)))
         val w = (a.measured.size.width + ph).coerceIn(outer.minWidth, outer.maxWidth)
         val h = (a.measured.size.height + pv).coerceIn(outer.minHeight, outer.maxHeight)
-        return Arranged(Measured(Size(w, h), a.measured.centre + pt), a.placements.map { Placement(it.x + ps, it.y + pt) }, a.children)
+        val ew = (f.width ?: (a.measured.exactWidth + f.padStart + f.padEnd)).coerceIn(c.minWidth.toFloat(), c.maxWidth.toFloat())
+        val eh = (f.height ?: (a.measured.exactHeight + f.padTop + f.padBottom)).coerceIn(c.minHeight.toFloat(), c.maxHeight.toFloat())
+        return Arranged(Measured(Size(w, h), a.measured.centre + f.padTop, ew, eh),
+            a.placements.map { Placement.exact(it.exactX + f.padStart, it.exactY + f.padTop) }, a.children)
     }
 
     fun leaf(f: Frame, c: Constraints, measurer: Measurer): Arranged = framed(f, c) { inner ->
         val m = measurer.measure(inner.maxWidth, inner.maxHeight)
         val size = Size(m.size.width.coerceIn(inner.minWidth, inner.maxWidth), m.size.height.coerceIn(inner.minHeight, inner.maxHeight))
-        Arranged(Measured(size, m.centre + (size.height - m.size.height) / 2f), emptyList(), emptyList())
+        val ew = m.exactWidth.coerceIn(inner.minWidth.toFloat(), inner.maxWidth.toFloat())
+        val eh = m.exactHeight.coerceIn(inner.minHeight.toFloat(), inner.maxHeight.toFloat())
+        Arranged(Measured(size, m.centre + (eh - m.exactHeight) / 2f, ew, eh), emptyList(), emptyList())
     }
 
     /** A spacer's own measure: its [size] along the row, as wide as its constraints allow (a flex spacer's are fixed). */
@@ -111,52 +123,64 @@ object Layout {
         val measured = arrayOfNulls<Measured>(n)
         var used = gap * max(0, n - 1)
         for (k in 0 until n) if (children[k].flex <= 0f) {
-            val m = children[k].measure(Constraints(0, minus(inner.maxWidth, ceil(used).toInt()), 0, inner.maxHeight))
+            val m = children[k].measure(Constraints(0, minus(inner.maxWidth, floor(used).toInt()), 0, inner.maxHeight))
             measured[k] = m
-            used += m.size.width
+            used += m.exactWidth
         }
         val flex = children.sumOf { it.flex.toDouble() }.toFloat()
         val bounded = inner.maxWidth != Constraints.INF
-        val leftover = if (bounded) max(0f, inner.maxWidth - used) else 0f
-        val exact = FloatArray(n) { k -> measured[k]?.size?.width?.toFloat() ?: if (flex > 0f) leftover * children[k].flex / flex else 0f }
+        // The exact room: padding is rounded for the whole-pixel allocation, never for what the flex children share (a
+        // 0.5 px surplus moved the status bar's battery by half a pixel, T-006).
+        val allowed = (inner.maxWidth + px(f.padStart) + px(f.padEnd)).toFloat()     // what the parent's constraints leave
+        val room = if (!bounded) 0f else minOf(f.width ?: allowed, allowed) - f.padStart - f.padEnd
+        val leftover = if (bounded) max(0f, room - used) else 0f
+        val exact = FloatArray(n) { k -> measured[k]?.exactWidth ?: if (flex > 0f) leftover * children[k].flex / flex else 0f }
         val content = exact.sum() + gap * max(0, n - 1)
         val width = max(inner.minWidth, if (flex > 0f && bounded) inner.maxWidth else ceil(content).toInt()).coerceAtMost(inner.maxWidth)
-        val free = max(0f, width - content)
+        val exactWidth = (f.width?.let { it - f.padStart - f.padEnd } ?: max(inner.minWidth.toFloat(), content)).coerceIn(0f, width.toFloat())
+        val free = max(0f, exactWidth - content)
         var at = when (justify) { Justify.CENTER -> free / 2; Justify.END -> free; else -> 0f }
         val between = if (justify == Justify.SPACE_BETWEEN && n > 1) free / (n - 1) else 0f
-        val xs = IntArray(n)
+        val xs = FloatArray(n)
         for (k in 0 until n) {
-            xs[k] = at.roundToInt()
+            xs[k] = at
             val end = (at + exact[k]).roundToInt()
-            if (measured[k] == null) measured[k] = children[k].measure(Constraints(end - xs[k], end - xs[k], 0, inner.maxHeight))
+            if (measured[k] == null) measured[k] = children[k].measure(Constraints(end - xs[k].roundToInt(), end - xs[k].roundToInt(), 0, inner.maxHeight))
             at += exact[k] + gap + between
         }
         val ms = measured.map { it!! }
         val above = ms.maxOfOrNull { it.centre } ?: 0f
-        val below = ms.maxOfOrNull { it.size.height - it.centre } ?: 0f
-        val tallest = ms.maxOfOrNull { it.size.height } ?: 0
-        val natural = if (align == Align.CENTRE_LINE) ceil(above + below).toInt() else tallest
+        val below = ms.maxOfOrNull { it.exactHeight - it.centre } ?: 0f
+        val tallest = ms.maxOfOrNull { it.exactHeight } ?: 0f
+        val naturalExact = if (align == Align.CENTRE_LINE) above + below else tallest
+        val natural = ceil(naturalExact).toInt()
         val height = natural.coerceIn(inner.minHeight, inner.maxHeight)
-        // Whole pixels of slack above, so the line reported is where the child reaching highest really sits (children
-        // are placed at whole pixels; half a pixel of slack moved a baseline by one: E2 slice 6).
-        val line = above + floor((height - (above + below)) / 2)
+        // Alignment uses exact extents; the residual follows the child through its frame node.
+        val exactHeight = (f.height?.let { it - f.padTop - f.padBottom } ?: max(inner.minHeight.toFloat(), naturalExact)).coerceIn(0f, inner.maxHeight.toFloat())
+        val line = above + (exactHeight - (above + below)) / 2
         val ys = ms.map { m ->
             when (align) {
-                Align.TOP -> 0
-                Align.CENTER -> ((height - m.size.height) / 2f).roundToInt()
-                Align.BOTTOM -> height - m.size.height
-                Align.CENTRE_LINE -> (line - m.centre).roundToInt()
+                Align.TOP -> 0f
+                Align.CENTER -> (exactHeight - m.exactHeight) / 2f
+                Align.BOTTOM -> exactHeight - m.exactHeight
+                Align.CENTRE_LINE -> line - m.centre
             }
         }
-        Arranged(Measured(Size(width, height), if (align == Align.CENTRE_LINE) line else height / 2f), xs.indices.map { Placement(xs[it], ys[it]) }, ms)
+        Arranged(Measured(Size(width, height), if (align == Align.CENTRE_LINE) line else exactHeight / 2f,
+            exactWidth, exactHeight),
+            xs.indices.map { Placement.exact(xs[it], ys[it]) }, ms)
     }
 
     /** Children over each other, each placed at the fractions [ax], [ay] of the room left (0 start, 0.5 middle, 1 end). */
-    fun stack(f: Frame, c: Constraints, ax: Float, ay: Float, children: List<Child>): Arranged = framed(f, c) { inner ->
+    fun stack(f: Frame, c: Constraints, ax: Float, ay: Float, children: List<Child>, centreLine: Boolean = false): Arranged = framed(f, c) { inner ->
         val ms = children.map { it.measure(inner.loose()) }
         val w = max(inner.minWidth, ms.maxOfOrNull { it.size.width } ?: 0).coerceAtMost(inner.maxWidth)
         val h = max(inner.minHeight, ms.maxOfOrNull { it.size.height } ?: 0).coerceAtMost(inner.maxHeight)
-        Arranged(Measured(Size(w, h)), ms.map { Placement(((w - it.size.width) * ax).roundToInt(), ((h - it.size.height) * ay).roundToInt()) }, ms)
+        val ew = (f.width?.let { max(0f, it - f.padStart - f.padEnd) } ?: max(inner.minWidth.toFloat(), ms.maxOfOrNull { it.exactWidth } ?: 0f)).coerceAtMost(inner.maxWidth.toFloat())
+        val eh = (f.height?.let { max(0f, it - f.padTop - f.padBottom) } ?: max(inner.minHeight.toFloat(), ms.maxOfOrNull { it.exactHeight } ?: 0f)).coerceAtMost(inner.maxHeight.toFloat())
+        Arranged(Measured(Size(w, h), eh / 2f, ew, eh), ms.map {
+            Placement.exact((ew - it.exactWidth) * ax, if (centreLine) eh / 2f - it.centre else (eh - it.exactHeight) * ay)
+        }, ms)
     }
 
     /** A box holds its children at its top start, inside its padding. */

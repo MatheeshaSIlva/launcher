@@ -17,6 +17,7 @@ sealed class Node {
     data class Ref(val name: String, override val at: Int) : Node()
     /** A source path (`battery.level`, `network.wifi.level`); `now` alone is the clock. */
     data class Path(val path: String, override val at: Int) : Node()
+    data class Call(val name: String, val args: List<Node>, override val at: Int) : Node()
     data class Unary(val op: String, val operand: Node, override val at: Int) : Node()
     data class Binary(val op: String, val left: Node, val right: Node, override val at: Int) : Node()
     data class Cond(val test: Node, val then: Node, val otherwise: Node, override val at: Int) : Node()

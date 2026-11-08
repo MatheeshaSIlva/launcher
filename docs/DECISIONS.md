@@ -1012,3 +1012,15 @@ check compatibility, not authenticate anyone; the one-use capability and the one
 Kept: only a service the current attempt published may be destroyed by the host. Also measured and decided in 2b:
 `shell,raw:` keeps a PTY on Android 17 but in raw mode, and a disposable stdin line did not come back (no echo); the
 starter's refusal-proof modes (`--test=...`) are passed only by the DUMP-gated `TEST_SHELL` route.
+
+## D-085: Knockout, `layer` and `reveal` in the format; six expression functions (2026-11-08, lead and codex)
+
+T-006 (E2 slice 10). The spec is silent on blend modes; the battery needs its number cut out of its body. Added, as narrow
+as that needs: `text blend="knockout"` (erases at full strength whatever the colour's alpha), `layer` on every primitive
+(the text cuts only within its nearest enabled ancestor), both literal-only so the validator can prove it
+(`knockout-needs-layer`); `box reveal` (0..1: box and children drawn at full size, clipped to that share of the width,
+at 1 too, as the bar's level goes through its clip); `stack align="centre-line"`. Expressions gain call syntax with a fixed
+list of six: `mix` (StatusBarView's `blend` exactly), `opaque`, `withAlpha`, `alphaOf`, `scaleAlpha` (integer division),
+`clamp`; known invalid calls are diagnostics, invalid at run time gives `Null`, never a throw or NaN. Limits on an
+expression: 16,384 characters, 512 nodes, nesting 64. Exact float extents now run through `row` and `stack` beside the
+whole-pixel allocation. `blend` on `box` and `icon` waits for a consumer.

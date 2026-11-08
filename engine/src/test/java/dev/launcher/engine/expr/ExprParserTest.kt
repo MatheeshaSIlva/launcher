@@ -9,6 +9,7 @@ import org.junit.Test
 class ExprParserTest {
     /** The tree, fully bracketed, so precedence shows. */
     private fun show(n: Node): String = when (n) {
+        is Node.Call -> "${n.name}(${n.args.joinToString { show(it) }})"
         is Node.Num -> (if (n.value % 1.0 == 0.0) n.value.toLong().toString() else n.value.toString()) + (n.unit ?: "")
         is Node.Str -> "'${n.value}'"
         is Node.Bool -> "#${n.value}"

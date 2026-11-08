@@ -8,10 +8,25 @@ component "status-bar" version="0.1.0" {
     hour24 type=bool default=#true
     color type=color default="#FFFFFF"
   }
-  uses { source time }
+  uses {
+    source time
+    source battery
+  }
   view {
-    row padding-start=34 align="centre-line" label="Status bar" {
+    row padding-start=34 padding-end=34 align="centre-line" label="Status bar" {
       text "{@hour24 ? (now | date:'H:mm') : (now | date:'h:mm')}" size=15 weight=600 tnum=#true color="@color"
+      spacer flex=1
+      // StatusBarView's drawBattery at rest: the faint body, the same body filled to the level, the number cut out of both,
+      // the faint nub. The level's colour: the content's, toward low from 25 % to 17 %, then Low Power, then charging,
+      // with the content's alpha. (Their glides are motion: slice 13.)
+      row gap=0.8 align="centre-line" label="Battery" {
+        stack width=24.6 height=12.6 align="centre-line" layer=#true {
+          box width=24.6 height=12.6 radius=4.2 fill="{scaleAlpha(@color, 89, 255)}"
+          box width=24.6 height=12.6 radius=4.2 reveal="{clamp(battery.level / 100, 0, 1)}" fill="{withAlpha(mix(mix(mix(opaque(@color), @comp.statusbar.battery-low-color, clamp((25 - battery.level) / 8, 0, 1)), @comp.statusbar.battery-saver-color, battery.power-save ? 1 : 0), @comp.statusbar.battery-charging-color, battery.charging ? 1 : 0), alphaOf(@color))}"
+          text "{battery.level}" width=24.6 size=9.6 weight=700 tnum=#true align="center" blend="knockout"
+        }
+        box width=1.6 height=4.4 radius=1.6 fill="{scaleAlpha(@color, 102, 255)}"
+      }
     }
   }
 }

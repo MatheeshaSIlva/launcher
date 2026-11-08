@@ -22,6 +22,7 @@ data class Deps(
                     is Node.State -> states.putIfAbsent(n.name, n.at)
                     is Node.Ref -> (if (n.name in props) ps else tokens).putIfAbsent(n.name, n.at)
                     is Node.Path -> if (n.path == "now") clock = true else sources.putIfAbsent(n.path, n.at)
+                    is Node.Call -> n.args.forEach(::walk)
                     is Node.Unary -> walk(n.operand)
                     is Node.Binary -> { walk(n.left); walk(n.right) }
                     is Node.Cond -> { walk(n.test); walk(n.then); walk(n.otherwise) }

@@ -17,10 +17,20 @@ class ExprParser private constructor(private val s: String) {
         private val BINARY = mapOf("||" to 3, "&&" to 4, "==" to 5, "!=" to 5, "<" to 6, "<=" to 6, ">" to 6, ">=" to 6,
             "+" to 7, "-" to 7, "*" to 8, "/" to 8, "%" to 8)
 
-        fun template(text: String): Template = ExprParser(text).template()
+        fun template(text: String): Template {
+            if (text.length > 16_384) throw ExprException("Expression text exceeds 16384 characters", 0)
+            return ExprParser(text).template()
+        }
     }
 
     private var i = 0
+    private var depth = 0
+    private var nodes = 0
+    private fun count() { if (++nodes > 512) fail("Expression exceeds 512 nodes") }
+    private inline fun nested(block: () -> Node): Node {
+        if (++depth > 64) fail("Expression nesting exceeds 64")
+        return try { block() } finally { depth-- }
+    }
 
     private fun fail(message: String, at: Int = i, hint: String? = null): Nothing = throw ExprException(message, at, hint)
     private fun here() = if (i >= s.length) "the end" else "'${s[i]}'"
@@ -51,6 +61,7 @@ class ExprParser private constructor(private val s: String) {
         while (true) {
             skip()
             if (!at("|") || at("||")) return node
+            count()
             val bar = i++
             skip()
             val nameAt = i
@@ -67,11 +78,14 @@ class ExprParser private constructor(private val s: String) {
         }
     }
 
-    private fun expr(min: Int): Node {
+    private fun expr(min: Int): Node = nested { expression(min) }
+
+    private fun expression(min: Int): Node {
         var left = unary()
         while (true) {
             skip()
             if (min <= 2 && at("?")) {
+                count()
                 val q = i++
                 val then = expr(2)
                 skip()
@@ -83,13 +97,16 @@ class ExprParser private constructor(private val s: String) {
             val op = listOf(s.substring(i, minOf(i + 2, s.length)), s.substring(i, minOf(i + 1, s.length))).firstOrNull { it in BINARY }
             val prec = op?.let { BINARY.getValue(it) } ?: return left
             if (prec < min) return left
+            count()
             val opAt = i
             i += op.length
             left = Node.Binary(op, left, expr(prec + 1), opAt)
         }
     }
 
-    private fun unary(): Node {
+    private fun unary(): Node = nested { operand() }
+
+    private fun operand(): Node {
         skip()
         val opAt = i
         return when {
@@ -101,6 +118,7 @@ class ExprParser private constructor(private val s: String) {
 
     private fun primary(): Node {
         skip()
+        count()
         val start = i
         val c = s.getOrNull(i) ?: fail("Expected a value, found the end")
         return when {
@@ -121,7 +139,26 @@ class ExprParser private constructor(private val s: String) {
                 Node.Str(s.substring(start + 1, close), start)
             }
             c.isDigit() -> number(start)
-            letter(i) -> Node.Path(name(dots = true)!!, start)
+            letter(i) -> {
+                val name = name(dots = true)!!
+                skip()
+                if (!at("(")) Node.Path(name, start) else {
+                    val arity = Functions.arities[name] ?: throw ExprException("Unknown function '$name'", start, code = "bad-call")
+                    i++
+                    val args = ArrayList<Node>()
+                    skip()
+                    if (!at(")")) while (true) {
+                        if (args.size >= arity) throw ExprException("'$name' takes $arity arguments", start, code = "bad-call")
+                        args += pipes()
+                        skip()
+                        if (!at(",")) break
+                        i++
+                    }
+                    if (!at(")")) fail("Expected ')' after function arguments", start)
+                    i++
+                    Node.Call(name, args, start)
+                }
+            }
             else -> fail("Expected a value, found ${here()}")
         }
     }

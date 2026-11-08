@@ -53,7 +53,7 @@ object Primitives {
     val COMMON: List<AttrDef> = lengths("width", "height", "min-width", "min-height", "max-width", "max-height", "padding",
         "padding-start", "padding-end", "padding-top", "padding-bottom", "radius", "translate-x", "translate-y") +
         fixed("transition", "enter", "exit", "spring", "as") + listOf(
-        AttrDef("background", AttrType.COLOR), AttrDef("opacity", AttrType.NUMBER, 1.0),
+        AttrDef("layer", AttrType.BOOL, false, bindable = false), AttrDef("background", AttrType.COLOR), AttrDef("opacity", AttrType.NUMBER, 1.0),
         AttrDef("scale", AttrType.NUMBER, 1.0), AttrDef("rotate", AttrType.NUMBER, 0.0),
         AttrDef("visible", AttrType.BOOL, true), AttrDef("each", AttrType.LIST), AttrDef("label", AttrType.STRING))
 
@@ -61,10 +61,11 @@ object Primitives {
         PrimitiveDef("row", lengths("gap") + AttrDef("align", AttrType.oneOf("top", "center", "bottom", "centre-line"), "center") +
             AttrDef("justify", AttrType.oneOf("start", "center", "end", "space-between"), "start"), container = true),
         PrimitiveDef("stack", listOf(AttrDef("align", AttrType.oneOf("top-start", "top", "top-end", "start", "center", "end",
-            "bottom-start", "bottom", "bottom-end"), "center")), container = true),
+            "bottom-start", "bottom", "bottom-end", "centre-line"), "center")), container = true),
         PrimitiveDef("box", lengths("stroke") + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("fill", AttrType.COLOR) +
-            AttrDef("clip", AttrType.BOOL, false), container = true),
+            AttrDef("reveal", AttrType.NUMBER, 1.0) + AttrDef("clip", AttrType.BOOL, false), container = true),
         PrimitiveDef("text", lengths("size") + listOf(AttrDef("font", AttrType.STRING), AttrDef("weight", AttrType.INT, 400),
+            AttrDef("blend", AttrType.oneOf("normal", "knockout"), "normal", bindable = false),
             AttrDef("color", AttrType.COLOR), AttrDef("tnum", AttrType.BOOL, false), AttrDef("roll", AttrType.BOOL, false),
             AttrDef("align", AttrType.oneOf("start", "center", "end"), "start"), AttrDef("max-lines", AttrType.INT, 1)),
             arg = AttrDef("content", AttrType.STRING)),
