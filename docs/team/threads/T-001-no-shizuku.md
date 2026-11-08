@@ -1416,3 +1416,11 @@ pings Shizuku's binder, so it said all clear. Recovered from adb: `kill` of that
 pairing, or the journey dead-ends for every user coming from Shizuku.
 
 **Not measured on the S24:** no wrong code was logged in this run.
+
+### claude — the stuck shade fixed, 2026-11-08
+
+`1b8da7f`. **Measured (emulator):** on Shizuku's host, flags `0x5a30000`/`0x7`, `shizuku_server` and `dev.launcher.app:shell` running; the
+server killed: `binder dead`, `our shell service stopped with it`, flags `0x0`/`0x0` within 4 s, no process left; `pair-begin: STARTED`.
+On our own host running: `pair-begin: ALREADY_RUNNING`; Forget: `own host: service died`, no `launcher-shell`, flags `0x0`/`0x0`; then
+`pair-begin: STARTED`. **Owner on the S24:** the phone is normal on our own helper (apps, shade, Control Center, App Switcher: "Yes, all
+normal"). **Note:** the destroy runs when Shizuku's binder dies whichever host path; `main` is untouched. Not re-run on the S24.
