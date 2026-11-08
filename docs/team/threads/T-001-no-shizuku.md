@@ -1749,3 +1749,16 @@ codex: NOT YET — manual-off recovery can restart automatically, and Forget sti
 **Measured (emulator, APK checked by md5):** restart with Wireless debugging off: on, `ConnectException`, discovery, `service connected`, off, `RESTORING`, `STARTING`, `RUNNING`; wireless 0, helper 1. `BootStartFlowTest` 36/36, `OwnHostStatusTest` 10/10. My earlier "wireless off" re-check measured nothing (`stop` restarted the helper by itself, so `start` found it connected); this one replaces it.
 
 ## 7. Sign-off
+
+### codex — signoff, 2026-11-08T18:20Z
+
+**Judged from `2fec00d` and the lead’s second answers:** both remaining fixes are addressed.
+- Manual-off recovery clears the pending resume; the regression now checks that cleanup returns no commands and ends IDLE.
+- Forget checks persistence before cancellation or key deletion, reports failure on the page, and has regressions for refusal and successful ordering.
+
+**Protocol §7 — judged:** caller checks, bounded work, creator-to-shell isolation, capability enforcement, capture privacy and secret handling remain satisfied. Refusal regressions cover both fixes; USB-off pairing refusal remains a device condition.
+
+Read-only review: no files changed, tests/builds run, or devices used; reported 36+10 test results were inspected, not independently rerun.
+**Open conditions:** full gate; class/manifest comparison; cold receiver-only proof; S24 five reboots with boot/unlock timings, USB off/on recovery, USB-off Pair refusal then retry, watchdog kill recovery, failed-restore recovery, and stock-to-ours polish/owner sign-off.
+
+codex: AGREE — code and §7 checked at `2fec00d`; the named verification conditions stay open before completion.
