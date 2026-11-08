@@ -290,7 +290,12 @@ class OwnHost : ShellHost {
             val h = current ?: return
             h.discovery?.close(); h.discovery = null
             // The start in flight ends here: it cannot publish, nor write the port back (a publication already posted
-            // finds no port to cache). A service already running stays until the launcher's next start.
+            // finds no port to cache). A service already running stops: pairing again needs Android's shade, which it
+            // keeps away.
+            h.published?.let { b ->
+                h.published = null
+                Thread({ try { IShellService.Stub.asInterface(b).destroy() } catch (_: Throwable) { } }, "shell-stop").start()
+            }
             h.trying.clear()
             val gen = h.gate.startingGeneration
             if (gen != 0L && h.gate.expire(gen)) h.end(gen, "forgotten")

@@ -3084,6 +3084,7 @@ private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
             when (dev.launcher.app.PairingSession.begin(ctx)) {
                 dev.launcher.app.PairingSession.Begin.UNSUPPORTED -> said = "Pairing needs Android 12."
                 dev.launcher.app.PairingSession.Begin.BUSY -> said = "Still forgetting the last pairing. Try again."
+                dev.launcher.app.PairingSession.Begin.ALREADY_RUNNING -> said = "The launcher's own is already running: there is nothing to pair. Forget pairing first to pair again."
                 dev.launcher.app.PairingSession.Begin.STARTED -> {
                     said = null
                     openSystemSettings(ctx, android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
@@ -3092,7 +3093,7 @@ private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
                 dev.launcher.app.PairingSession.Begin.SHIZUKU_RUNNING -> said = "Stop Shizuku first: while it runs, it keeps Android's shade away, and the code is typed there."
             }
         }
-        ConfirmRow("Forget pairing", "Deletes the launcher's key. Android keeps its entry under Paired devices until you remove it there.", "Tap again to forget") {
+        ConfirmRow("Forget pairing", "Deletes the launcher's key and stops its shell. Android keeps its entry under Paired devices until you remove it there.", "Tap again to forget") {
             dev.launcher.app.PairingSession.forget(ctx)
             tick.intValue++
         }

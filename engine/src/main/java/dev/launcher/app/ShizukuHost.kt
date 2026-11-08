@@ -18,6 +18,8 @@ class ShizukuHost : ShellHost {
     private var generation = 0
     private var binding = false
     private var bound = false
+    /** The service Shizuku started for us: it outlives Shizuku's server, holding the status bar's flags (below). */
+    private var live: IShellService? = null
 
     private val args by lazy {
         Shizuku.UserServiceArgs(ComponentName(app.packageName, ShellService::class.java.name))
@@ -33,6 +35,7 @@ class ShizukuHost : ShellHost {
             val service = if (binder != null && binder.pingBinder()) IShellService.Stub.asInterface(binder) else null
             binding = false
             bound = service != null
+            live = service
             AppLog.log("[shizuku] service connected: ${service != null}")
             if (service != null) sink.connected(generation, service) else sink.changed()
         }
@@ -40,6 +43,7 @@ class ShizukuHost : ShellHost {
         override fun onServiceDisconnected(name: ComponentName?) {
             binding = false
             bound = false
+            live = null
             AppLog.log("[shizuku] service disconnected")
             sink.lost(generation)
             // If only our service died (Shizuku still up), bring it back. If Shizuku died, binder-received rebinds later.
@@ -60,6 +64,14 @@ class ShizukuHost : ShellHost {
             binding = false
             bound = false
             AppLog.log("[shizuku] binder dead (Shizuku stopped)")
+            // Our service does not die with Shizuku's server, and it holds the flags that keep Android's shade and gesture
+            // bar away: left running, the phone had neither ours (the link is gone) nor Android's (the owner, S24, T-001).
+            // Its binder still answers: stop it, so the system drops the flags at once.
+            live?.let { s ->
+                live = null
+                Thread({ try { s.destroy() } catch (_: Throwable) { } }, "shell-stop").start()
+                AppLog.log("[shizuku] our shell service stopped with it")
+            }
             sink.lost(generation)
         }
         Shizuku.addRequestPermissionResultListener { _, result ->
