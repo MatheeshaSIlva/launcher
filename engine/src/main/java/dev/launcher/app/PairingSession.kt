@@ -161,7 +161,7 @@ object PairingSession {
     private fun notify(ctx: Context, text: String, reply: Boolean) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
         val b = Notification.Builder(ctx, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_sys_data_bluetooth)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Pair the launcher")
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))

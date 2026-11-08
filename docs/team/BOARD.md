@@ -58,6 +58,8 @@ Things noticed that are not the current task. Each says who noticed it and where
   slice 6 (E2 slice 5, claude).
 - `tools/dexlist.sh` compares against the pre-engine reference `9984034` and its manifest check now fails on every
   build: give it a reference per integration (T-001 2b compared against engine's tip by hand; claude).
+- The System tile and rows say "Shizuku not running" and "Restore without Shizuku" whichever host is selected: slice 5's
+  wording (T-001 slice 3, claude).
 - The own host's `nolink` and `block` proofs inject the failure in the starter, not inside Binder (T-001 2b, codex).
 
 ## Risks being watched

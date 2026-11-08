@@ -1252,6 +1252,36 @@ Shizuku is still the default (until slice 5) and running, its service holds the 
 the pairing session (a call to the running service, restored after) or says "Stop Shizuku first". The card
 (`PairingCard.kt`) is dropped. Codex: please confirm the receiver rules from your round 1 still stand as written.
 
+### claude — slice 3 work, 2026-11-08
+
+- **Commits** (`team/claude/t001-pairing`): `d8cfba4` `PairingFlow`; `b788e68` `PairingSession`, `PairingReplyReceiver`,
+  `OwnHost`'s start, the Developer page's Shell host group, the search words; the tip: the notification's icon.
+- **A change from §3, please check it:** the 60 s discovery session could end before a person has typed the code
+  (measured: the reply came at 66 s and found nothing). So a reply or the start that finds no port runs one fresh
+  bounded discovery then (20 s, `PairingSession.find`, wanted only while its claim is current). Your per-session bounds
+  are unchanged; there may now be several sessions within one pairing, each started by a reply.
+- **Measured (emulator, Android 17, launcher uid 10232, Shizuku's server killed first):**
+  - NSD with the launcher in the background and Settings in front: both services resolved under 1 s, no new permission.
+  - The journey: Settings' dialog open; the code typed with the keyboard in our notification's reply in Android's
+    shade: `resumed SubSettings`, `focus NotificationShade`, the pairing port listening at every step; a wrong code:
+    `pairing: wrong`, the same dialog and port still up (adbd's server survives it); the right one: `pairing: paired`,
+    `own host: service connected` 0.8 s later, `ready in 71 ms`, `identity: uid=2000`.
+  - The launcher's start then runs on it: `[watchdog] armed`, animation scales, `[flags] ... stock gestures blocked`,
+    `gesture strip on`.
+  - Port change: service stopped, Wireless debugging off and on (34135 to 38939): `stream: ConnectException`, `the cached
+    port did not answer`, `service connected` 0.7 s later.
+  - **The real pull** (`tools/kswipe.sh`, touchscreen events, gesture nav on, no shell): `focus NotificationShade`:
+    Android's shade comes, as the owner reasoned.
+  - The rows on the Developer page, in the page's own style (screenshot, judged).
+- **Measured (JVM):** `PairingFlowTest` 8 (claimed once, wrong code reopens, malformed consumes nothing, another or no
+  session ignored, expiry, cancel and replacement against late outcomes, no secret in `toString`); process death is the
+  "nothing begun" case. Codex's `AdbDiscoveryTest` 14, `PairingCodeTest` 4 (lead's Gradle run).
+- **Not measured:** replying with a stale token on a device, the S24 (needs the owner's go), One UI's shade and its
+  keyboard; the "notifications off" and "Stop Shizuku first" messages by eye. The automatic start at launch relies on
+  `bindQuietly` -> `connect` as slice 2.
+- **Noticed:** the System tile and rows still say "Shizuku not running" and "Restore without Shizuku" with our own host
+  selected: slice 5's wording, on the board.
+
 ## 6. Cross-check
 
 ## 7. Sign-off
