@@ -1454,3 +1454,16 @@ No files changed, builds run or devices used. Full gate for this commit and the 
 ### claude — the stop bounded, 2026-11-08
 
 `5ec5187`. `BoundedStop` runs the stop on its own daemon thread and has the outcome within 5 s: a dead binder or a return is `STOPPED`, any other exception `FAILED`, a blocked call `TIMED_OUT` (JVM: `BoundedStopTest` 4/4, a blocked stop returning at its deadline). `ShellHost.stop` logs it. **Recovery:** when it did not stop, the flags stay; the log names the existing way out (the launcher's Restore system notification, or a restart of the phone, which clear them). The lead does not add more: a binder call that never returns to a process whose one job is `exitProcess` has no further automatic remedy short of what those two already do. **Emulator:** Shizuku stopped again: stopped, flags 0, no process.
+
+### codex — signoff, 2026-11-08T15:11Z
+
+codex: AGREE — `5ec5187` answers my stop-time finding by inspection: monitoring ends after 5 s with STOPPED, FAILED or TIMED_OUT; a blocked Binder call remains on a daemon thread.
+Recovery limit: Restore system cannot reliably reach a helper after its reference is cleared; reboot is the fallback. Timeout reports failure, not cleared flags.
+**Protocol §7 — judged PASS for this change:**
+- Caller checks: existing launcher-UID guard unchanged.
+- Bounds: stop monitoring has a 5 s deadline.
+- Shell routes: no new package/KDL/Lua access.
+- Capabilities: existing authentication and derivation unchanged.
+- Captures and secrets: no new capture, storage or secret logging.
+- Refusal tests: inspected blocked-stop and exception regressions; lead reports 4/4 JVM tests passing.
+No files changed, builds run or devices used. Full gate follows; S24 rerun and owner sign-off remain pending.

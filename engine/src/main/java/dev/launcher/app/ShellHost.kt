@@ -17,7 +17,7 @@ interface ShellHost {
                 val outcome = dev.launcher.engine.shell.BoundedStop.run({ service.destroy() }, { it is android.os.DeadObjectException })
                 AppLog.log("[shell] $why: our shell service " + when (outcome) {
                     dev.launcher.engine.shell.BoundedStop.Outcome.STOPPED -> "stopped"
-                    else -> "did NOT stop ($outcome): tap Restore system in the launcher's notification, or restart the phone"
+                    else -> "did NOT stop ($outcome): restart the phone to clear what it holds"
                 })
             }, "shell-stop").apply { isDaemon = true; start() }
         }
