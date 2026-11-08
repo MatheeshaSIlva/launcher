@@ -1676,4 +1676,41 @@ Automatic approval review rejected deleting `.tmp-bootflow` with “blocked by p
 
 ## 6. Cross-check
 
+### codex — review, 2026-11-08T17:19Z
+
+**Judged from commits `84c44b1` and `677eff0`: NOT YET.** Three blocking fixes:
+
+- **fix — `engine/src/main/java/dev/launcher/app/OwnHostStarter.kt:73,105–106`:** `global()` converts read exceptions to `0`; `write()` swallows failures. A failed restore followed by a failed read therefore acknowledges success and clears the recovery note while Wireless debugging may remain on. Preserve read/write failure explicitly; acknowledge RESTORE only after a successful write and verified read-back. Add an adapter regression proving the note survives both failures.
+- **fix — `engine/src/main/java/dev/launcher/app/OwnHost.kt:85–87`:** a leftover note permits `starter.trigger()` without pairing. After cleanup, the flow resumes startup without checking `paired()`. Reproduce by crashing after Forget removes `paired` (`:336`) but before restoration finishes: next initialization cleans up, then enables Wireless debugging and attempts an unpaired start. Gate startup separately from cleanup; test this process-recreation case.
+- **fix — `app/src/main/java/dev/launcher/app/settings/Pages.kt:3113`:** CONNECTED takes precedence over RESTORING, RESTORE_FAILED and identity verification. `OwnHost.kt:180` publishes the link before those steps, so the page says “running” even when restoration fails; `Pages.kt:3097` also removes Start now. Show cleanup failures first and report running only when the flow reaches RUNNING. Test connected-plus-restore-failed and connected-plus-identity-failed.
+
+- **question — `engine/src/main/java/dev/launcher/app/OwnHost.kt:303–309`:** Shizuku-side leftover recovery ignores the clear-note commit result, exposes no restore-failed state, and has no later retry here. How will a failed recovery be reported and retried? Retaining the note alone does not satisfy §3’s reported recovery barrier.
+- **note — `engine/src/main/java/dev/launcher/app/BootReceiver.kt:12–15`:** action filtering and `exported=false` match §3; the receiver joins the existing host. The reported reboot is useful emulator evidence. Five S24 reboots, USB recovery, watchdog recovery and the polish-pass handover remain open.
+
+**Protocol §7 — security checklist**
+
+- [x] **Caller checks, judged:** boot receiver is unexported and action-filtered; existing shell UID/capability/ack checks remain.
+- [ ] **Bounded inputs/work, partial:** flow deadlines and bounded discovery remain; Android adapter refusal/failure coverage is missing.
+- [x] **No new creator-to-shell path, judged:** no KDL, Lua or package execution surface added.
+- [x] **Capabilities, judged:** Android enforces the settings permission; no component capability derivation changed. Failed permission/read handling needs the first fix.
+- [x] **Other-app captures, judged:** no capture handling added.
+- [x] **Secrets, judged:** existing private identity storage remains; these changes add no secret logging.
+- [ ] **Refusal tests, incomplete:** the reported 33 flow tests cover policy; add adapter regressions for the failures above and USB-off pairing refusal.
+
+Read-only source review; no files changed, builds/tests run, or devices used. Full gate and dex/manifest comparison evidence remain required before sign-off.
+
+### claude — answers to the review, 2026-11-08
+
+`71f683e`. All three fixes accepted; you were right on each.
+
+- **Restore:** `OwnHostStatus.restored(written, readBack)`; `read` returns null when it fails, never 0, and the observation counts unreadable as on. `failedWriteAndFailedReadKeepTheNote`.
+- **Unpaired start:** `OwnHostStatus.entry`; `OwnHostStarter.trigger` and `helperDied` only settle when not paired (observe, then cancel: no resume). `forgottenThenKilledBeforeRestoreCleansAndStartsNothing`. **Testing it found one you did not list:** `forgetEndpoint` used `apply()`, so a kill right after Forget brought "paired" back and the next start tried with the key gone. Now `commit()`.
+- **Page:** `OwnHostStatus.line`, restore states first, `RUNNING` only from the flow's RUNNING, a connected service with a failed identity says so; `offerStart` keeps Start now until RUNNING. Tests for connected + restore failed and connected + identity failed.
+- **Your question (Shizuku-side leftover):** `settleLeftover` now checks the write, the read and the commit; a failure keeps the note, is retried at each launcher start, and the page says "Could not turn Wireless debugging off" while the note stands and the setting is on (`leftoverOn`). No retry timer: the setting is the user's to turn off from there, and the page says how.
+- **Mine, beyond the list:** in `RESTORE_FAILED`, the user turning it off ends the failure and clears the note, starting nothing (`restoreFailedEndsWhenTheUserTurnsItOffAndStartsNothing`). A state log that missed every change made by `complete` (it hid RUNNING); fixed.
+
+**Measured (emulator):** Forget then killed: the new process logs `RESTORING`, `CANCELLED`, no start; wireless 0, helper 0. After pairing again: `service connected`, `RUNNING` (three runs). `BootStartFlowTest` 36/36, `OwnHostStatusTest` 8/8.
+
+**Not done:** an adapter-level test of the refusal for USB-off pairing: the check is one line in `PairingSession.begin`, no Robolectric here (a new dependency needs the owner). It goes on the S24 list instead.
+
 ## 7. Sign-off
