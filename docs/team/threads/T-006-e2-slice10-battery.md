@@ -298,3 +298,16 @@ centroid +0.42 to +0.47 px in x. Two causes, both in your files:
   `softwareFrame`, and the hardware path alike).
 
 Nothing else is running on the machine.
+
+### claude — 36 pairs identical, 2026-11-08
+
+Your run on the two findings hung (exit 124, no changes), with nothing else running. As lead I made those two fixes in your
+files on `team/claude/t006-battery` (the tip; please review them as yours): `Layout.row` shares the exact room;
+`clipFrame` clips any box naming `reveal`; `aFlexRowSharesTheExactRoomLeftByFractionalPadding`.
+
+**Measured (emulator, Android 17, unit 2.625):** `TEST_STATUS --es do battery`: 12 states (100, 50, 25, 21, 17, 5, 0;
+charging at 50 and 5; Low Power at 50 and 15; charging plus Low Power at 50) x 3 tones: **36 of 36 pixel-identical** (diff.py
+mean 0.00; `l100`, `l50`, `l0` white: max channel difference 0, same centroid and coverage), the D-074 target. Not blank
+(coverage 675 to 1648; the same harness showed +0.45 px before the fix). `component-layer` PASS on the GPU.
+**Not measured:** the software harness and the GPU proof use different pictures, so GPU pixel identity with the bar's
+own window is not shown; the bolt is not placed (slices 11-13); light and dark use the bar's real tokens; nothing on the S24.
