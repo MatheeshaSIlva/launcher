@@ -1471,3 +1471,66 @@ No files changed, builds run or devices used. Full gate follows; S24 rerun and o
 - `claude: AGREE — slice 3 as a whole: final gate CHECK PASSED on a4e5057 (the capture suite's 746 checks); dex and manifest against engine's 40080d6: classes only in OwnHost, PairingSession, PairingReplyReceiver, ShellHost, ShizukuHost, ShizukuLink, settings, engine adb and shell; the manifest adds only the unexported receiver; no permission.` (2026-11-08)
 - `owner: paired on the S24 and ran on our own helper with Shizuku stopped: "Yes, all normal" (2026-11-08). The fix for the stuck shade is measured on the emulator only; the wrong code on the S24 not run.`
 
+
+
+---
+
+# Round 5: slice 4 (the helper comes back by itself)
+
+## 1. Proposal (lead), 2026-11-08
+
+**Goal.** With our own host selected and paired, the helper is running again after a reboot and after any launcher restart,
+with nobody at the phone, Wireless debugging off again afterwards unless the user had it on. Still behind the developer switch.
+
+**Measured first (emulator, Android 17, launcher uid, helper parent adbd 541):** with the helper running, `adb_wifi_enabled` 0:
+the connect port closed, the helper stayed (same pid) and `identity()` answered at once and 30 s later. `adb_wifi_enabled` 1 from the
+setting, nobody at the screen: a new port (37975), no dialog, `Registered service`. The start then: `stream: ConnectException`,
+discovery, `service connected` in 0.8 s.
+**The caveat:** the emulator's adbd stays up for port 5555. CLAUDE.md: adbd's restart SIGKILLs its cgroup (no escaping it). If adbd exits
+on a phone when Wireless debugging goes off with USB debugging off, turning it off kills the helper. **So the first gate is the S24
+(owner's go):** does the helper survive it there, in both USB-debugging states? If not, the off step is dropped for that case and the
+owner decides between leaving Wireless debugging on (a port open on the network) or something else.
+
+**Approach.** The sequence is not boot-specific; it is how our host starts whenever Wireless debugging is off:
+1. `OwnHost.start`: when paired, and `adb_wifi_enabled` is 0, and `WRITE_SECURE_SETTINGS` is held: remember "we turned it on" in a
+   preference **before** writing the setting, write 1, then the existing path (cached port, one bounded discovery, fresh attempt).
+2. Wi-Fi: Wireless debugging needs a Wi-Fi network. With none, wait (a `NetworkCallback` while the launcher lives; `ACCESS_NETWORK_STATE`
+   is declared), bounded per attempt, state "Waiting for Wi-Fi". No polling, no wake locks.
+3. When the service is ready, **or the attempt fails**: if we turned it on, write 0 and clear the preference, in a `finally`-like single
+   path. At every launcher start a leftover preference is settled first (a crash must not leave a debugging port open).
+   A user who had it on keeps it on.
+4. `BootReceiver` (manifest, `exported=false`, `BOOT_COMPLETED` only; D-087): does nothing but make sure the process runs and call
+   `ShizukuLink.connect()` if our host is selected and paired. `OwnHost.init`'s start covers every other restart.
+5. **State** on the Developer page: "Waiting for Wi-Fi", "Starting", and how long the last start took (the spec's visible state).
+6. Root start (`su`) from the spec's sequence: **not here**, a slice of its own: it needs no ADB at all and has its own refusals.
+
+**Split (proposed).** **codex:** `engine/.../shell/BootStartFlow.kt` + test: the pure decisions (when to turn on, who restores, leftover
+preference, Wi-Fi wait, deadlines, obsolete attempts) over injected setting/clock/network. **claude:** the Android side (`OwnHost`, the
+receiver, manifest, settings state), emulator and S24 runs.
+
+**Verification.** JVM: every path restores what it changed exactly once; a user's own "on" is never turned off; a crash between the two
+writes is settled at the next start; an attempt with no Wi-Fi changes nothing; Forget and cancellation win. Emulator: a real reboot of the
+emulator with the switch on; Wi-Fi off then on. S24 (owner's go): the survival gate; five reboots, time from boot to "running", from the
+log; the watchdog's kill test on this host (freeze the heartbeat, E1's risk 10). `scripts/check.sh`, dex and manifest comparison (the
+manifest adds the one permission and the one receiver). Security checklist: this writes a setting that opens a debugging port.
+
+**Risks.**
+- **`WRITE_SECURE_SETTINGS`** is granted by the shell at first connect (`grantSelf`) and stays until uninstall; a fresh install that paired but
+  never ran the helper has it only after its first start, which pairing itself does.
+- **Before the first unlock** nothing runs (credential-encrypted identity, `BOOT_COMPLETED` after unlock). Until the helper is up the stock
+  bars show, then ours appear: a visible change at every boot; how it should look is the owner's to see on the S24.
+- **Android may refuse** the setting on a network it has not been told to trust (`AdbWifiNetworkMonitor`): measured allowed on the emulator's
+  own network; S24 on a new network not measured. Codex: please check `AdbDebuggingManager` for this.
+- **Security:** the port is open for the seconds the start takes, authenticated by the paired key (TLS), as it is whenever a user has it on.
+
+## 2. Discussion
+
+## 3. Agreed approach
+
+## 4. Split
+
+## 5. Reports
+
+## 6. Cross-check
+
+## 7. Sign-off

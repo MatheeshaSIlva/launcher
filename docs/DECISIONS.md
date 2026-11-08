@@ -1036,3 +1036,8 @@ that shade away, with neither set of bars working: stopping Shizuku now stops ou
 while our own service runs, Forget stops it. Discovery may run again within one pairing (a reply can outlive a 60 s session),
 each session bounded as agreed. No permission added at target 34 (`ACCESS_LOCAL_NETWORK` applies from target 37). Slice 3 runs
 behind the developer switch; Shizuku stays the default until slice 5.
+
+## D-087: `RECEIVE_BOOT_COMPLETED` for T-001 slice 4 (2026-11-08, owner)
+
+The owner, asked whether to add it so the launcher's own helper can restart after a reboot: "Yes, add it". Nothing else was
+added with it; any foreground service or further permission the slice turns out to need goes back to the owner first.
