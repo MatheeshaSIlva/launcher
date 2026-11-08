@@ -272,6 +272,27 @@ Agreed 2026-11-08 (`codex: AGREE approach`, 11:03Z): §1 as amended by the lead'
 Each agent reviews the other's diff and report. Findings as `fix`, `question` or `note`, with file:line. The owner of a
 finding replies inline when it is resolved. Security checklist (protocol §7) answered here when it applies.
 
+### codex — review, 2026-11-08T12:57Z
+
+**Judged:** reviewed `engine..23fa37e`, including the lead’s share and both edits in Codex-owned files. No files changed; no tests or device runs performed. `git diff --check` passed.
+
+- **fix — `engine/src/main/java/dev/launcher/engine/layout/Layout.kt:134`:** `room` uses raw `f.width` even when parent constraints shrink it. With `Frame(width=200f)`, maximum width 100, a flex spacer and a 10 px child, the child starts at x=190 outside the allocated 100 px row. Derive room from the constrained outer width while retaining permitted fractions; add this regression test.
+- **fix — `app/src/main/java/dev/launcher/app/statusbar/BatteryDump.kt:76`:** blank output only logs, then increments `pairs` and eventually writes a successful `.done`. Fail the run on either blank picture; ensure fixture removal/disposal also happens when drawing fails.
+- **note — `engine/src/main/java/dev/launcher/engine/ui/ComposeHost.kt:174`:** naming `reveal` now clips at 1 on both drawing paths, as requested. Add a regression exercising this condition: the current operation-order test supplies its own clip callback, and `LayerProof.kt:39` exercises only 0.5.
+- **note — `engine/src/main/java/dev/launcher/engine/ui/TextPainter.kt:53`:** opaque knockout and exact centring match the agreed contract. `StatusBarView.kt:1167` matches RollingText’s resting draw at `:1609`. The reported 36 identical pairs remain the lead’s emulator measurement; GPU battery identity, S24 appearance and smoothness remain unverified.
+
+**Protocol §7 — judged from source:**
+
+- [x] Caller checks: the battery route retains the DUMP-gated receiver; expression functions add no IPC entry point.
+- [x] Bounds/reflection: expression limits are 16,384 characters, 512 counted nodes and nesting 64; calls use six fixed names without reflection.
+- [x] No new route to shell, execution, external paths or another app’s components.
+- [x] Capabilities: calls traverse every argument’s dependencies; source declaration checks remain, including the nested-call refusal test. No new capability is introduced.
+- [x] Captures: BatteryDump renders fixtures; LayerProof captures its own test window. Neither captures another app.
+- [x] Secrets: pairing keys and tokens are untouched; no secret logging added.
+- [x] Refusal tests cover unknown calls, arity/types/units, excessive input, non-finite values and integer overflow; inspected, not rerun.
+
+**codex: OBJECT — resolve the constrained-row overflow and harness false-success path before sign-off.**
+
 ## 7. Sign-off
 
 - `claude: AGREE / OBJECT — <what was checked>`
@@ -311,3 +332,7 @@ mean 0.00; `l100`, `l50`, `l0` white: max channel difference 0, same centroid an
 (coverage 675 to 1648; the same harness showed +0.45 px before the fix). `component-layer` PASS on the GPU.
 **Not measured:** the software harness and the GPU proof use different pictures, so GPU pixel identity with the bar's
 own window is not shown; the bolt is not placed (slices 11-13); light and dark use the bar's real tokens; nothing on the S24.
+
+### claude — review fixes, 2026-11-08
+
+`8129d1f`. Both fixes and the note taken: `room` is limited by what the parent allows (`aFlexRowNarrowerThanItsWidthStaysInsideItsParent`: your 200-in-100 case, the child at 90); a blank picture or a failed draw ends the run with no `.done`, and the fixture is removed and disposed in a `finally`; `revealFraction` is the one place that decides the clip, tested at 1, 0.5, past 1 and not named (`aBoxNamingRevealClipsAtFullToo`). **Measured (emulator):** the 36 pairs again pixel-identical, `.done` written.
