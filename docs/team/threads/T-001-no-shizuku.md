@@ -1645,6 +1645,35 @@ Closed by the lead after three rounds, 2026-11-08, with all of codex's points ac
 
 ## 5. Reports
 
+### codex — work, 2026-11-08T16:45Z
+
+- **Commits:** none; staging/commit denied access to `D:/Launcher/.git/worktrees/launcher-codex/index.lock`. Two assigned files remain untracked; nothing pushed.
+- **Changed:** pure `BootStartFlow` and 33 regression tests covering §3’s cleanup, refusal, cancellation, deadlines, USB recovery and persisted suppression.
+- **API:** injected clock; `trigger`, `observe`, `helperDied`, `tick`, `cancel` return commands; Android executes them and calls `complete`. `isCurrent` rejects obsolete work.
+- **Verified — measured:** cached Kotlin 2.2.21 compiler + JUnitCore: **33/33 passed**, 0.038 s.
+- **Not verified:** `CHECK_FAST=1 bash scripts/check.sh` and `./gradlew --stop` failed before compilation creating the wrapper lock under `C:\.gradle`. No full gate or device use.
+- **Security — judged:** no external entry point, parser, execution path, capability change, capture or secret handling added; refusal paths tested. Android caller/storage enforcement awaits integration review.
+- **Surprises:** added coverage for helper death between restoration and note removal, and failed suppression persistence.
+
+Automatic approval review rejected deleting `.tmp-bootflow` with “blocked by policy”; its test artifacts remain.
+
+### claude — slice 4 work, 2026-11-08
+
+`84c44b1`, `677eff0` on `team/claude/t001-boot`: `OwnHostStarter` carries out `BootStartFlow`'s commands; `BootReceiver`; the permission; `Begin.USB_DEBUGGING_OFF`; the page's states and Start now; `OwnHost.settleLeftover` when the switch has moved to Shizuku.
+
+**Measured (emulator, Android 17):**
+- **Launcher restart, Wireless debugging off:** on, `ConnectException`, discovery, `service connected` in about 3 s, off again; wireless 0, helper running, flags ours.
+- **A real reboot, nobody touching it, no activity opened by us:** `host: OwnHost`, on, discovery, `ready in 645 ms`, off. Then the setting was 1 again at 22:38:24 with no line of ours: the emulator's own boot; the S24's reboot decides.
+- **The user's own on:** left on, no note.
+- **No Wi-Fi:** nothing touched, helper none; Wi-Fi back: starts by itself, off again.
+- **Killed with the note written and the setting on** (wireless=1 at the kill): the next start settles it and starts.
+- **Guard:** a helper stopped within 60 s of our off: `not starting it again by itself`, also across a launcher restart in the same boot; the user's start lifts it.
+- `BootStartFlowTest` 33/33 through Gradle.
+
+**Found by these runs, fixed:** a Wi-Fi event started an unpaired host; the flow's identity step ran before the link had the service (`FAILED` right after `service connected`); the shell quoting.
+
+**Not measured:** the S24 at all (five reboots, USB toggled, watchdog kill test, the stock-to-ours handover); `BOOT_COMPLETED` fires on the emulator also after a force-stop, harmless; the cold receiver-only journey is the reboot above, not separately proved without the launcher being home; the note's failed-restore path on a device (JVM only).
+
 ## 6. Cross-check
 
 ## 7. Sign-off
