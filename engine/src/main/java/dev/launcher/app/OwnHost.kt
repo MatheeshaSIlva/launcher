@@ -50,7 +50,7 @@ class OwnHost : ShellHost {
         this.sink = sink
         this.generation = generation
         current = this
-        starter = OwnHostStarter(app, main, app.getSharedPreferences(PREFS, Context.MODE_PRIVATE), object : OwnHostStarter.Ops {
+        starter = OwnHostStarter(app, main, app.getSharedPreferences(PREFS, Context.MODE_PRIVATE), { paired(app) }, object : OwnHostStarter.Ops {
             override fun attempt(done: (Boolean) -> Unit) { val p = found; found = null; start(null, p, done) }
             override fun discover(done: (Boolean) -> Unit) = rediscover(done)
             override fun identityAnswers(done: (Boolean) -> Unit) {
@@ -177,8 +177,8 @@ class OwnHost : ShellHost {
             AppLog.log("[shell] own host: service connected")
             trying.remove(gen)?.let { cache(it) }
             published = binder
-            outcomes.remove(gen)?.invoke(true)
             sink.connected(generation, IShellService.Stub.asInterface(binder))
+            outcomes.remove(gen)?.invoke(true)      // after the link has it: the flow's next step asks it who it is
         }
         return Bundle()
     }
@@ -280,7 +280,7 @@ class OwnHost : ShellHost {
         look()
     }
 
-    private fun quoted(s: String) = "'" + s.replace("'", "'\''") + "'"
+    private fun quoted(s: String) = "'" + s.replace("'", "'\\''") + "'"
 
     companion object {
         private const val PREFS = "shell_host"
@@ -414,7 +414,7 @@ class OwnHost : ShellHost {
             val identity = AndroidAdbIdentity.store(app).load() as? AdbIdentityResult.Ready ?: return "identity unavailable"
             return try {
                 AdbPairingClient(AdbEndpoint(InetAddress.getByName(host), pairPort, null), identity.key).use { it.pair(code) }
-                app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("host", host).putInt("connect_port", connectPort).apply()
+                app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("host", host).putInt("connect_port", connectPort).putBoolean("paired", true).apply()
                 "paired (identity ${if (identity.created) "new" else "kept"})"
             } catch (t: Throwable) { "failed: ${t.javaClass.simpleName}" }
         }

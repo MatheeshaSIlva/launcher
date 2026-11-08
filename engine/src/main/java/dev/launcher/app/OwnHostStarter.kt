@@ -18,7 +18,7 @@ import dev.launcher.engine.shell.BootStartFlow.Kind
  * on) is written with `commit()` before the setting, and read at every start, so a crash cannot leave a debugging port open
  * unnoticed (D-088). USB debugging is never written (D-089).
  */
-internal class OwnHostStarter(private val app: Context, private val main: Handler, private val prefs: android.content.SharedPreferences, private val ops: Ops) {
+internal class OwnHostStarter(private val app: Context, private val main: Handler, private val prefs: android.content.SharedPreferences, private val paired: () -> Boolean, private val ops: Ops) {
     interface Ops {
         /** A start on the cached port, or the one last discovered; [done] once: true when the service is up. */
         fun attempt(done: (Boolean) -> Unit)
@@ -38,19 +38,24 @@ internal class OwnHostStarter(private val app: Context, private val main: Handle
     val state: BootStartFlow.State get() = flow.state
 
     init {
-        val watch = object : ContentObserver(main) { override fun onChange(self: Boolean) = run(flow.observe(observation())) }
+        val watch = object : ContentObserver(main) { override fun onChange(self: Boolean) = observed() }
         cr.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ADB_ENABLED), false, watch)
         cr.registerContentObserver(Settings.Global.getUriFor(ADB_WIFI), false, watch)
         try {
             cm.registerNetworkCallback(NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(),
                 object : ConnectivityManager.NetworkCallback() {
-                    override fun onAvailable(network: Network) { main.post { run(flow.observe(observation())) } }
-                    override fun onLost(network: Network) { main.post { run(flow.observe(observation())) } }
+                    override fun onAvailable(network: Network) { main.post { observed() } }
+                    override fun onLost(network: Network) { main.post { observed() } }
                 })
         } catch (t: Throwable) { AppLog.log("[shell] own host: no Wi-Fi callback: ${t.javaClass.simpleName}") }
     }
 
     fun trigger(userAction: Boolean = false) = run(flow.trigger(observation(), userAction))
+
+    /** What the phone's state does for a host with something to do: not paired and no note, an observation starts nothing. */
+    private fun observed() {
+        if (paired() || prefs.getBoolean(NOTE, false)) run(flow.observe(observation()))
+    }
     fun helperDied() = run(flow.helperDied(observation()))
     fun cancel() = run(flow.cancel())
 
