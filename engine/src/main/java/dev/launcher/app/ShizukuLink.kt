@@ -54,6 +54,7 @@ object ShizukuLink {
         host = if (OwnHost.selected(app)) OwnHost() else ShizukuHost()
         AppLog.log("[shell] host: ${host.javaClass.simpleName}")
         host.init(app, sink, ++generation)
+        if (host !is OwnHost) OwnHost.settleLeftover(app)
         OwnHost.registerTestRoute(app)
     }
 

@@ -30,8 +30,7 @@ import java.util.concurrent.Executors
  * and identity) it runs [Starter] with `exec app_process`, writes the attempt's capability to the stream's stdin, and
  * takes the binder [ShellBinderProvider] hands it once [StartAttempt.claim] accepts the call. Then it closes the
  * connection itself (adbd keeps the stream open while its child lives; the child survives the close: measured, thread
- * T-001 round 3). Behind a developer switch; Shizuku stays the default until slice 5. The connect endpoint is set by the
- * test route until slice 3 discovers it.
+ * T-001 round 3). Behind a developer switch; Shizuku stays the default until slice 5. When to start is [OwnHostStarter]'s.
  */
 class OwnHost : ShellHost {
     private val main = Handler(Looper.getMainLooper())
@@ -51,15 +50,42 @@ class OwnHost : ShellHost {
         this.sink = sink
         this.generation = generation
         current = this
+        starter = OwnHostStarter(app, main, app.getSharedPreferences(PREFS, Context.MODE_PRIVATE), object : OwnHostStarter.Ops {
+            override fun attempt(done: (Boolean) -> Unit) { val p = found; found = null; start(null, p, done) }
+            override fun discover(done: (Boolean) -> Unit) = rediscover(done)
+            override fun identityAnswers(done: (Boolean) -> Unit) {
+                val s = ShizukuLink.service ?: return done(false)
+                io.execute {
+                    val ok = try { s.identity().isNotEmpty() } catch (_: Throwable) { false }
+                    main.post { done(ok) }
+                }
+            }
+            override fun cancelWork() {
+                discovery?.close(); discovery = null
+                val gen = gate.startingGeneration
+                if (gen != 0L && gate.expire(gen)) end(gen, "cancelled")
+            }
+            override fun changed() = sink.changed()
+        })
         // Shizuku's path binds by itself when its binder comes; ours starts here once paired (the service dies with the
-        // launcher, so each start of the launcher starts it again). Not after a reboot by itself: slice 4.
-        main.post { if (paired(app)) connect() }
+        // launcher, so each start of the launcher starts it again; a note left by a crash is settled first).
+        main.post { connect() }
     }
 
     override fun state(): ShizukuLink.State =
         if (gate.isStarting || discovery != null) ShizukuLink.State.CONNECTING else ShizukuLink.State.NOT_RUNNING
 
-    override fun connect() = start(null)
+    private lateinit var starter: OwnHostStarter
+    /** The port discovery last found: the next attempt's. */
+    private var found: Int? = null
+    /** Each attempt's outcome goes to its starter step, once. */
+    private val outcomes = HashMap<Long, (Boolean) -> Unit>()
+
+    /** Every automatic entry: settles a leftover note, and starts once paired. */
+    override fun connect() {
+        val note = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(OwnHostStarter.NOTE, false)
+        if (paired(app) || note) starter.trigger()
+    }
 
     /** Ports an attempt was started with that are not cached yet: written once that attempt is ready (main thread). */
     private val trying = HashMap<Long, Int>()
@@ -68,30 +94,21 @@ class OwnHost : ShellHost {
     @Volatile private var lastFailure: String? = null
 
     /**
-     * A start on this phone's adbd (`127.0.0.1`): the cached connect port, or [port] (just discovered, cached once the
-     * service is ready). When a cached port does not answer (it changes each time Wireless debugging is turned on), one
-     * bounded discovery (20 s) finds the new one and a fresh attempt follows ([fallback]: no second discovery).
+     * One attempt on this phone's adbd (`127.0.0.1`): the cached connect port, or [port] (just discovered, cached once the
+     * service is ready). What to do when it fails is [OwnHostStarter]'s. [done]: its outcome, once.
      * [test]: a refusal proof's mode for the starter (only from the DUMP-gated route), else null.
      */
-    private fun start(test: String?, port: Int? = null, fallback: Boolean = false) {
-        if (gate.connectedGeneration != 0L || gate.isStarting) return
-        val endpoint = endpoint(port)
-        if (endpoint == null) {
-            // Paired but no port yet (paired under Shizuku, or its port forgotten): find it, as for a port that changed.
-            if (paired(app) && !fallback && test == null) rediscover() else AppLog.log("[shell] own host: no connect port (pair first)")
-            return
-        }
+    private fun start(test: String?, port: Int? = null, done: (Boolean) -> Unit = {}) {
+        if (gate.connectedGeneration != 0L) return done(true)
+        if (gate.isStarting) return done(false)
+        val endpoint = endpoint(port) ?: return done(false)
         lastFailure = null
         val ticket = gate.begin()
         val gen = ticket.generation
+        outcomes[gen] = done
         if (port != null) trying[gen] = port
         sink.changed()
-        main.postDelayed({
-            if (gate.expire(gen)) {
-                end(gen, "start timed out")
-                if (test == null && !fallback) rediscover()
-            }
-        }, StartAttempt.TIMEOUT_MS)
+        main.postDelayed({ if (gate.expire(gen)) end(gen, "start timed out") }, StartAttempt.TIMEOUT_MS)
         val apk = app.applicationInfo.sourceDir
         io.execute {
             // Forgotten or replaced before this ran: no key is made, no connection opened.
@@ -109,12 +126,7 @@ class OwnHost : ShellHost {
                     (ticket.capability + "\n").toByteArray(Charsets.US_ASCII))
             } catch (t: Throwable) {
                 // Closed by us once the start is acknowledged; anything else ends this attempt (and only this one).
-                main.post {
-                    if (gate.expire(gen)) {
-                        end(gen, "stream: ${t.javaClass.simpleName}")
-                        if (test == null && !fallback && t !is SecurityException) rediscover()
-                    }
-                }
+                main.post { if (gate.expire(gen)) end(gen, "stream: ${t.javaClass.simpleName}") }
             } finally {
                 c.close()
                 clients.remove(gen, c)
@@ -165,6 +177,7 @@ class OwnHost : ShellHost {
             AppLog.log("[shell] own host: service connected")
             trying.remove(gen)?.let { cache(it) }
             published = binder
+            outcomes.remove(gen)?.invoke(true)
             sink.connected(generation, IShellService.Stub.asInterface(binder))
         }
         return Bundle()
@@ -173,7 +186,12 @@ class OwnHost : ShellHost {
     private fun died(gen: Long) {
         claimed.remove(gen)
         when (gate.lost(gen)) {
-            HandoverGate.Ended.CONNECTION -> { AppLog.log("[shell] own host: service died"); sink.lost(generation) }
+            HandoverGate.Ended.CONNECTION -> {
+                AppLog.log("[shell] own host: service died")
+                published = null
+                sink.lost(generation)
+                starter.helperDied()
+            }
             HandoverGate.Ended.START -> end(gen, "the service died before it was ready")
             HandoverGate.Ended.NOTHING -> {}
         }
@@ -224,6 +242,7 @@ class OwnHost : ShellHost {
         lastFailure = why
         AppLog.log("[shell] own host: $why")
         sink.changed()
+        outcomes.remove(gen)?.invoke(false)
     }
 
     /** Always this phone's own adbd, numeric loopback, no network binding; [port] or the cached one. */
@@ -235,29 +254,33 @@ class OwnHost : ShellHost {
 
     private fun cache(port: Int) = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt("connect_port", port).apply()
 
-    /** The cached port did not answer: Wireless debugging's connect port found again (at most 20 s), then one fresh start. */
-    private fun rediscover() {
+    /** Wireless debugging's connect port found again (it changes each time it is turned on), at most 20 s. */
+    private fun rediscover(done: (Boolean) -> Unit) {
         discovery?.close()
         val d = AdbDiscovery(AndroidNsdAdapter(app.getSystemService(android.net.nsd.NsdManager::class.java)))
         discovery = d
-        try { d.start(FALLBACK_MS) } catch (t: Throwable) { discovery = null; return AppLog.log("[shell] own host: discovery: ${t.javaClass.simpleName}") }
+        try { d.start(FALLBACK_MS) } catch (t: Throwable) { discovery = null; AppLog.log("[shell] own host: discovery: ${t.javaClass.simpleName}"); return done(false) }
+        AppLog.log("[shell] own host: looking for Wireless debugging's port")
         lastFailure = null
         sink.changed()
-        AppLog.log("[shell] own host: looking for Wireless debugging's port")
         val until = SystemClock.elapsedRealtime() + FALLBACK_MS
         fun look() {
             if (discovery !== d) return
-            val found = d.snapshot().firstOrNull { it.kind == AdbDiscovery.Kind.CONNECT }?.endpoint?.port
+            val port = d.snapshot().firstOrNull { it.kind == AdbDiscovery.Kind.CONNECT }?.endpoint?.port
             when {
-                found != null -> { d.close(); discovery = null; start(null, found, fallback = true) }
-                SystemClock.elapsedRealtime() >= until -> { d.close(); discovery = null; lastFailure = "no port"; AppLog.log("[shell] own host: Wireless debugging's port not found (is it on?)"); sink.changed() }
+                port != null -> { d.close(); discovery = null; found = port; done(true) }
+                SystemClock.elapsedRealtime() >= until -> {
+                    d.close(); discovery = null; lastFailure = "no port"
+                    AppLog.log("[shell] own host: Wireless debugging's port not found")
+                    done(false)
+                }
                 else -> main.postDelayed({ look() }, 250)
             }
         }
         look()
     }
 
-    private fun quoted(s: String) = "'" + s.replace("'", "'\\''") + "'"
+    private fun quoted(s: String) = "'" + s.replace("'", "'\''") + "'"
 
     companion object {
         private const val PREFS = "shell_host"
@@ -276,6 +299,25 @@ class OwnHost : ShellHost {
         /** This process's host is our own (the switch applies at a process's start). */
         val active: Boolean get() = current != null
 
+        /** A note left under our own host, the switch since moved to Shizuku: D-088 still holds. */
+        fun settleLeftover(ctx: Context) {
+            val p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            if (!p.getBoolean(OwnHostStarter.NOTE, false)) return
+            try {
+                android.provider.Settings.Global.putInt(ctx.contentResolver, OwnHostStarter.ADB_WIFI, 0)
+                if (android.provider.Settings.Global.getInt(ctx.contentResolver, OwnHostStarter.ADB_WIFI, 0) == 0) p.edit().remove(OwnHostStarter.NOTE).commit()
+            } catch (t: Throwable) { AppLog.log("[shell] a note of ours is left: ${t.javaClass.simpleName}") }
+        }
+
+        /** USB debugging is on: our helper needs adbd up (D-089). */
+        fun usbDebuggingOn(ctx: Context) = try { android.provider.Settings.Global.getInt(ctx.contentResolver, android.provider.Settings.Global.ADB_ENABLED, 0) == 1 } catch (_: Throwable) { false }
+
+        /** What the start is doing, for the settings page. */
+        val startState: dev.launcher.engine.shell.BootStartFlow.State? get() = current?.starter?.state
+
+        /** Start now, from the Developer page: a user's action, which also lifts the restart guard. */
+        fun startNow() { current?.starter?.trigger(userAction = true) }
+
         /** Why the last start failed, if it did. */
         val failure: String? get() = current?.lastFailure
 
@@ -285,13 +327,15 @@ class OwnHost : ShellHost {
         /** Just paired ([PairingSession]): start on the connect port discovery found; cached once the service is ready. */
         fun startPaired(ctx: Context, port: Int) {
             val h = current ?: return AppLog.log("[shell] own host: not selected (the developer switch picks Shizuku)")
-            h.start(null, port, fallback = true)
+            h.found = port
+            h.starter.trigger(userAction = true)
         }
 
         /** "Forget pairing": the cached port goes with the identity. */
         fun forgetEndpoint(ctx: Context) {
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("connect_port").remove("host").remove("paired").apply()
             val h = current ?: return
+            h.starter.cancel()      // a note of ours is settled, whatever else happens
             h.discovery?.close(); h.discovery = null
             // The start in flight ends here: it cannot publish, nor write the port back (a publication already posted
             // finds no port to cache). A service already running stops: pairing again needs Android's shade, which it
@@ -332,7 +376,7 @@ class OwnHost : ShellHost {
                         "start" -> {
                             val test = i.getStringExtra("test")?.takeIf { it in TEST_MODES }
                             AppLog.log("[shell] test start${test?.let { " ($it)" } ?: ""}: ${ShizukuLink.state()}")
-                            if (ShizukuLink.service == null) current?.start(test)
+                            if (ShizukuLink.service == null) { if (test != null) current?.start(test) else startNow() }
                         }
                         "stop" -> Thread({ AppLog.log("[shell] test stop: ${try { ShizukuLink.service?.destroy(); "sent" } catch (t: Throwable) { t.javaClass.simpleName }}") }).start()
                         "lend" -> current?.let { it.lendUntil = SystemClock.elapsedRealtime() + 10_000; AppLog.log("[shell] test: lend armed for 10 s") }

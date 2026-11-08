@@ -7,6 +7,7 @@
     <!-- Our status bar: Wi-Fi state (normal permission) and the mobile network type (granted through Shizuku). -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Only the adb test hook sets the wallpaper (Wallpaper.testHook); home opens the system picker. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
@@ -240,6 +241,10 @@
              answers one method, only to uid 2000 holding the live start attempt's capability; everything else refuses. -->
         <!-- T-001 slice 3: the pairing notification's reply (its own PendingIntent only; not exported). -->
         <receiver android:name="dev.launcher.app.PairingReplyReceiver" android:exported="false" />
+        <!-- T-001 slice 4 (D-087): the launcher's helper comes back after a reboot. -->
+        <receiver android:name="dev.launcher.app.BootReceiver" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.BOOT_COMPLETED" /></intent-filter>
+        </receiver>
         <provider
             android:name="dev.launcher.app.ShellBinderProvider"
             android:authorities="${applicationId}.shell"

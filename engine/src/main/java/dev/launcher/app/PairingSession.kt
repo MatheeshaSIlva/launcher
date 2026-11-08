@@ -47,7 +47,7 @@ object PairingSession {
     /** "Forget pairing" is deleting the key: no pairing begins until it has. */
     private var forgetting = false
 
-    enum class Begin { STARTED, NOTIFICATIONS_OFF, SHIZUKU_RUNNING, ALREADY_RUNNING, UNSUPPORTED, BUSY }
+    enum class Begin { STARTED, NOTIFICATIONS_OFF, SHIZUKU_RUNNING, ALREADY_RUNNING, USB_DEBUGGING_OFF, UNSUPPORTED, BUSY }
 
     /** Pairing as the settings page shows it. */
     val state: PairingFlow.State get() = flow.state
@@ -58,6 +58,7 @@ object PairingSession {
         if (!supported) return Begin.UNSUPPORTED
         if (forgetting) return Begin.BUSY
         if (!notificationsOn(ctx)) return Begin.NOTIFICATIONS_OFF
+        if (!OwnHost.usbDebuggingOn(ctx)) return Begin.USB_DEBUGGING_OFF
         if (shizukuRunning()) return Begin.SHIZUKU_RUNNING
         // Our running service keeps Android's shade away, and the code is typed there: nothing to pair, and no way to.
         if (ShizukuLink.ownHostSelected() && ShizukuLink.state() == ShizukuLink.State.CONNECTED) return Begin.ALREADY_RUNNING

@@ -3083,6 +3083,7 @@ private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
         else ActionRow("Pair with Wireless debugging", said ?: "Opens Developer options: Wireless debugging, Pair device with pairing code. A notification asks for its code.") {
             when (dev.launcher.app.PairingSession.begin(ctx)) {
                 dev.launcher.app.PairingSession.Begin.UNSUPPORTED -> said = "Pairing needs Android 12."
+                dev.launcher.app.PairingSession.Begin.USB_DEBUGGING_OFF -> said = "Turn on USB debugging in Developer options first: the launcher's shell stops whenever it is off. It stays off the network; no computer needs plugging in."
                 dev.launcher.app.PairingSession.Begin.BUSY -> said = "Still forgetting the last pairing. Try again."
                 dev.launcher.app.PairingSession.Begin.ALREADY_RUNNING -> said = "The launcher's own is already running: there is nothing to pair. Forget pairing first to pair again."
                 dev.launcher.app.PairingSession.Begin.STARTED -> {
@@ -3093,6 +3094,8 @@ private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
                 dev.launcher.app.PairingSession.Begin.SHIZUKU_RUNNING -> said = "Stop Shizuku first: while it runs, it keeps Android's shade away, and the code is typed there."
             }
         }
+        if (dev.launcher.app.ShizukuLink.ownHostSelected() && dev.launcher.app.OwnHost.paired(ctx) && dev.launcher.app.ShizukuLink.state() != dev.launcher.app.ShizukuLink.State.CONNECTED)
+            ActionRow("Start now", "Turns Wireless debugging on for a moment if it is off") { dev.launcher.app.OwnHost.startNow(); tick.intValue++ }
         ConfirmRow("Forget pairing", "Deletes the launcher's key and stops its shell. Android keeps its entry under Paired devices until you remove it there.", "Tap again to forget") {
             dev.launcher.app.PairingSession.forget(ctx)
             tick.intValue++
@@ -3109,8 +3112,13 @@ private fun shellHostNow(ctx: android.content.Context, keyOk: Boolean): String {
         dev.launcher.app.PairingSession.state == dev.launcher.engine.shell.PairingFlow.State.PAIRING -> "Pairing"
         link.state() == dev.launcher.app.ShizukuLink.State.CONNECTED -> if (own) "The launcher's own is running" else "Shizuku is running"
         !keyOk -> "The key is lost or unreadable: pair again"
+        own && !dev.launcher.app.OwnHost.usbDebuggingOn(ctx) -> "USB debugging is off: turn it on to start"
         !own -> if (dev.launcher.app.OwnHost.paired(ctx) && dev.launcher.app.OwnHost.selected(ctx)) "Paired: starts from the launcher's next start" else "Shizuku is not running"
-        link.state() == dev.launcher.app.ShizukuLink.State.CONNECTING -> "Connecting"
+        dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.WAITING_WIFI -> "Waiting for Wi-Fi"
+        dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.RESTORING -> "Turning Wireless debugging off"
+        dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.RESTORE_FAILED -> "Could not turn Wireless debugging off: turn it off in Developer options"
+        dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.SUPPRESSED -> "It keeps stopping: tap Start now to try again"
+        link.state() == dev.launcher.app.ShizukuLink.State.CONNECTING || dev.launcher.app.OwnHost.startState == dev.launcher.engine.shell.BootStartFlow.State.STARTING -> "Starting"
         dev.launcher.app.OwnHost.failure != null -> "Could not connect (is Wireless debugging on?)"
         dev.launcher.app.OwnHost.paired(ctx) -> "Paired, not running"
         else -> "Not paired"
