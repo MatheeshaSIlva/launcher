@@ -202,17 +202,47 @@ All three accepted.
 
 Split as round 2 with `ui/Host.kt` and `layout/Measured` added to codex's row.
 
+### codex — discuss, 2026-11-08T11:03Z
+
+**Judged from the thread; no code changed, tests run or device used.** All three round-2 gaps are resolved by §2, “claude — round 3”:
+
+- **Fractional placement:** exact extents drive row advances and stack centring; residuals add to Motion; unrounded centre lines and assembled-subtree tests cover the body, nub and number.
+- **Invalid inputs:** static diagnostics and runtime `Value.Null` define safe refusal, with finite/unit checks, alpha integer bounds and guarded `Long` arithmetic. Refusal tests are required.
+- **Ownership:** `ui/Host.kt` and `layout/Measured` are explicitly Codex’s. The outer-enabled-layer/intermediate-false validator test remains required.
+
+Nothing further is missing from the approach; implementation and verification remain to establish correctness.
+
+codex: AGREE approach — round 3 resolves fractional row placement, invalid function inputs and Host.kt ownership.
+
 ## 3. Agreed approach
 
-What was agreed, what changed from the proposal and why.
+Agreed 2026-11-08 (`codex: AGREE approach`, 11:03Z): §1 as amended by the lead's answers in §2 (rounds 1 to 3).
 
-- `codex: AGREE approach — <one line>`
+- **`box`:** `fill`, `radius`, `stroke`, `stroke-color`; `reveal` (0..1): box and children drawn at full size, clipped by
+  a plain rectangle to the first `reveal` of its width.
+- **Exact geometry:** `Measured` carries the exact float extent beside the integer allocation; `row` and `stack` advance
+  and centre by exact extents; each child's residual is a translation of its own frame node, added to `Motion`; centre
+  lines read unrounded (`HostNode.centre`). `stack align="centre-line"`.
+- **Knockout:** `text blend="knockout"` erases at full strength whatever the colour's alpha (only `opacity` scales it).
+  `layer` and `blend` are literal-only; the validator requires an enabled `layer` ancestor (`knockout-needs-layer`:
+  root, `layer=#false`, none are refused; an outer `layer=#true` over an intermediate `layer=#false` is accepted). The
+  layer encloses painter and children on both paths (compositing frame node on hardware, `saveLayer` on software).
+- **Expressions:** call syntax (AST, parser, compiler, dependencies through every argument); six whitelisted functions:
+  `mix` (StatusBarView's `blend` exactly), `opaque`, `withAlpha`, `alphaOf`, `scaleAlpha` (integer division, `Long`),
+  `clamp`. Known invalid calls are diagnostics; invalid at run time gives `Value.Null`, never a throw or NaN; a `Null`
+  colour draws no `fill`, and the painter's default for `color`. `battery.power-save` kept, with a regression.
+- **Harness:** 12 states x 3 tones = 36 pairs; the software path applies `Motion`; it waits for attachment, layout and a
+  committed frame, asserts non-blank, removes and disposes each fixture; a hardware `PixelCopy` proof of layer isolation
+  and clipping in `ProofActivity`. **Target: pixel identity** for body, fill, nub and number (D-074); each failure named.
+- Both complete §7 for the evaluation changes. `scripts/check.sh`, a dex and manifest comparison.
+- `codex: AGREE approach — round 3 resolves fractional row placement, invalid function inputs and Host.kt ownership.`
 
 ## 4. Split
 
 | Sub-task | Owner | Files owned | Branch | Verified by |
 | --- | --- | --- | --- | --- |
-| | | | | |
+| Box, layer, geometry, expressions, schema | codex | `ui/BoxPainter.kt` + `BoxPainterTest`; `ui/ComposeHost.kt` (`reveal`, `layer`, motion on software) + tests; `ui/Host.kt`; `layout/Layout.kt`, `Measured` (exact extents, `stack align="centre-line"`) + `LayoutTest`; `expr/` (call syntax, six functions) + tests; `model/Primitives.kt` and the validator (`blend`, `layer`, `reveal`, `knockout-needs-layer`) + tests | `team/codex/t006-battery` | JVM tests, including the assembled battery subtree's positions at unit 2.625 |
+| Text knockout, KDL, harness | claude | `ui/TextPainter.kt` (knockout, exact centring) + test; `ComponentView`'s `defaultPainter`; `assets/kdl/components/status-bar.kdl` + `StatusBarKdlTest`; `StatusBarView`'s battery entry; the software harness and the `PixelCopy` proof; the emulator diff | `team/claude/t006-battery` | 36 pairs with `diff.py`; the hardware proof |
 
 ## 5. Reports
 
