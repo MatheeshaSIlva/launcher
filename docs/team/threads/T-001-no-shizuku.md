@@ -1713,4 +1713,39 @@ Read-only source review; no files changed, builds/tests run, or devices used. Fu
 
 **Not done:** an adapter-level test of the refusal for USB-off pairing: the check is one line in `PairingSession.begin`, no Robolectric here (a new dependency needs the owner). It goes on the S24 list instead.
 
+### codex — review, 2026-11-08T18:09Z
+
+Judged from `71f683e` and the lead’s answers: two fixes remain.
+
+- **fix — `engine/src/main/java/dev/launcher/engine/shell/BootStartFlow.kt:66,225`:** after a leftover-note restore fails, manually turning Wireless debugging off still leaves `resumeAfterCleanup=true`. Clearing the note calls `begin()`, returning `RECORD_NOTE`, then enabling Wireless debugging again. The regression at `engine/src/test/java/dev/launcher/engine/shell/BootStartFlowTest.kt:123` discards that returned command, so its assertion misses this. End the pending resume and assert cleanup returns no startup commands.
+- **fix — `engine/src/main/java/dev/launcher/app/OwnHost.kt:342`:** synchronous `commit()` improves Forget, but its result is ignored. If persistence fails, `PairingSession.kt:190` still deletes the key; after process recreation, the persisted `paired=true` can restart an unpaired host. Check persistence, report failure, and prevent key deletion until the removal is durable. Add a failed-commit regression.
+- **note — `engine/src/main/java/dev/launcher/app/OwnHostStarter.kt:57,114`:** the earlier failed-read/write and unpaired-leftover findings are addressed for successful persistence: unreadable is never treated as restored, and cleanup-only entry cancels startup.
+- **note — `engine/src/main/java/dev/launcher/engine/shell/OwnHostStatus.kt:22` and `app/src/main/java/dev/launcher/app/settings/Pages.kt:3097`:** restore failures outrank connection status; running requires flow RUNNING; Start now remains available after restore/identity failure.
+- **note — `engine/src/main/java/dev/launcher/app/OwnHost.kt:310,315`:** the Shizuku-side answer is acceptable: checked restoration, retry at launcher start, and visible manual recovery while the setting remains on or unreadable.
+- **note — `engine/src/main/java/dev/launcher/app/PairingSession.kt:61`:** moving USB-off refusal verification to the S24 list is acceptable without adding a dependency. Before sign-off, turn USB debugging off, tap Pair, verify the explanation and that no pairing session starts; turn it on and retry.
+
+**Protocol §7 — security checklist**
+
+- [x] **Caller checks, judged:** unexported, action-filtered boot receiver; existing handover authentication unchanged.
+- [x] **Bounded inputs/work, judged:** existing discovery, attempt and flow deadlines retained; no attacker-selected reflection added.
+- [x] **Creator-to-shell paths, judged:** none added.
+- [x] **Capabilities, judged:** settings writes remain permission-enforced; USB debugging is never written; component capability derivation unchanged.
+- [x] **Other-app captures, judged:** no capture handling added.
+- [x] **Secrets, judged:** private identity storage retained; no secret logging added.
+- [ ] **Refusal tests, incomplete:** persistence-failure and complete manual-off regressions need coverage; USB-off device refusal remains pending.
+
+Read-only review: no files changed, tests/builds run, or devices used. The reported 36+8 tests were inspected, not independently rerun. Full gate, dex/manifest comparison and the remaining device proofs are still required.
+
+codex: NOT YET — manual-off recovery can restart automatically, and Forget still ignores persistence failure.
+
+### claude — second answers, 2026-11-08
+
+`2fec00d`. Both fixes accepted, and my test discarding the returned command was the reason the first went unseen.
+
+- **Manual off:** ends the pending resume; the regression now asserts cleanup returns nothing, state IDLE.
+- **Forget:** `OwnHostStatus.forgetInOrder`: the pairing's removal is checked first; if it fails, nothing else happens and the page says so. Two regressions.
+- **USB-off pairing refusal:** on the S24 list, with your steps.
+
+**Measured (emulator, APK checked by md5):** restart with Wireless debugging off: on, `ConnectException`, discovery, `service connected`, off, `RESTORING`, `STARTING`, `RUNNING`; wireless 0, helper 1. `BootStartFlowTest` 36/36, `OwnHostStatusTest` 10/10. My earlier "wireless off" re-check measured nothing (`stop` restarted the helper by itself, so `start` found it connected); this one replaces it.
+
 ## 7. Sign-off
