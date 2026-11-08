@@ -258,6 +258,15 @@ Agreed 2026-11-08 (`codex: AGREE approach`, 11:03Z): §1 as amended by the lead'
 
 (appended by `scripts/team/codex.sh … work`)
 
+### codex — work, 2026-11-08T11:20Z
+
+- **Commits:** None. `git add` cannot create `D:/Launcher/.git/worktrees/launcher-codex/index.lock` under sandbox permissions. Changes remain unstaged; no push. Suggested slices: expressions; geometry/Host; box/drawing/schema.
+- **What changed:** Assigned BoxPainter, reveal/clipping, hardware/software layers, software Motion, exact row/stack geometry, centre-line alignment, six expression functions, schemas and knockout validation, with tests.
+- **Verified (measured):** Targeted Kotlin 2.2.21/Compose compilation; **83 JUnit tests passed**, including **338/338 KDL cases**. Battery at unit 2.625: body **64.575 px**, nub **66.675 px**, baseline within **0.00001 px**. Tested all 256 alphas and 1,000 colour blends. `git diff --check` clean.
+- **Verified (judged), §7:** No new IPC requiring caller authentication; expressions bounded to 16,384 characters, 512 nodes and parser depth 64. Fixed function allowlist; no shell, reflection, file or component access added. Source capability checks retained and refusal-tested. Captures and secrets untouched.
+- **Not verified:** `CHECK_FAST=1 bash scripts/check.sh` failed before compilation on the unwritable wrapper lock. Installed Gradle with a writable offline cache failed resolving AGP 8.13.2. No full gate, APK/lint, device, pixel or dex verification; no Gradle daemons remain.
+- **Surprises:** Tight 71 px allocation needed fractional room preserved for the nub. Please log the expression limits. TextPainter should use the new Float `paint` overload and exact measured extents during integration; Android rasterisation and hardware isolation still need the lead’s harness.
+
 ## 6. Cross-check
 
 Each agent reviews the other's diff and report. Findings as `fix`, `question` or `note`, with file:line. The owner of a
@@ -268,3 +277,24 @@ finding replies inline when it is resolved. Security checklist (protocol §7) an
 - `claude: AGREE / OBJECT — <what was checked>`
 - `codex: AGREE / OBJECT — <what was checked>`
 - `owner: <for on-screen work: signed off on the S24, date>`
+
+### claude — first pixel run, two findings for codex, 2026-11-08
+
+Lead's share on `team/claude/t006-battery`. **Measured (JVM):** your tests through Gradle, engine 178/178;
+`theBatterysColourIsStatusBarViewsAtEveryRestingState` (240 combinations against `blend`). **Measured (emulator,
+GPU):** `component-layer` PASS (holes on both sides of the reveal, green only before half, white only after, sibling and
+outside untouched). **The 36 pairs: 0 within the defaults** (`tools/shots/battery*` in `D:/launcher-claude-t006`):
+centroid +0.42 to +0.47 px in x. Two causes, both in your files:
+
+- **fix — `layout/Layout.kt:99-101,132-136`:** `framed` rounds padding (`px(89.25) = 89` twice), so `inner.maxWidth` is 902
+  where the exact room is 1080 - 178.5 = 901.5, and `row`'s `leftover` shares out the extra 0.5 px: the battery lands at
+  920.375, StatusBarView's at 919.875. A row's flex leftover and `exactWidth` must use the exact room (`c.maxWidth` minus
+  the float paddings, or `f.width` minus them), integer allocation apart. Test: root row with fractional padding, a flex
+  spacer and a fractional child: the child's exact x.
+- **fix — `ui/ComposeHost.kt` `clipFrame`:** StatusBarView always draws the level through `clipRect(left, top, left + w * lvl,
+  bottom)`, also at 100 %, and that antialiased clip on a fractional bottom edge thins it (the rounded rect's coverage
+  times the clip's). `reveal` skips the clip at 1, so the KDL fill's bottom row is heavier (+0.11 px centroid in y at
+  level 100, coverage +1 %). A box that names `reveal` clips whatever its value (a test on the operation order through
+  `softwareFrame`, and the hardware path alike).
+
+Nothing else is running on the machine.
