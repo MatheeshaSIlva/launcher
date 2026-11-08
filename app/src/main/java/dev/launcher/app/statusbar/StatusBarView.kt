@@ -1114,7 +1114,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
      * fraction of the body's width), [shineK] how strong (0: none); it shows on the charge only.
      */
     private fun drawBattery(c: Canvas, left: Float, cy: Float, content: Int, numberK: Float = 1f - cc,
-                            numCx: Float = Float.NaN, numSize: Float = NUMBER_PT * u, shineAt: Float = 0f, shineK: Float = 0f) {
+                            numCx: Float = Float.NaN, numSize: Float = NUMBER_PT * u, shineAt: Float = 0f, shineK: Float = 0f,
+                            level: Float = batteryAnim.value, saver: Float = saveAnim.value, charge: Float = chargeAnim.value,
+                            restingNumber: String? = null) {
         val u = u
         val a = (content ushr 24) and 0xFF
         val nubW = 1.6f * u
@@ -1123,15 +1125,15 @@ class StatusBarView(ctx: Context) : View(ctx) {
         r.set(left, cy - bodyH / 2f, left + bodyW, cy + bodyH / 2f)
         val rad = 4.2f * u
         val k = Color.red(content)
-        val low = ((25f - batteryAnim.value) / 8f).coerceIn(0f, 1f)   // turns red below ~20 %
+        val low = ((25f - level) / 8f).coerceIn(0f, 1f)   // turns red below ~20 %
         var levelColor = blend(content or (0xFF shl 24), dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_LOW), low)
-        levelColor = blend(levelColor, dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_SAVER), saveAnim.value.coerceIn(0f, 1f))
-        levelColor = blend(levelColor, dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_CHARGING), chargeAnim.value.coerceIn(0f, 1f))
+        levelColor = blend(levelColor, dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_SAVER), saver.coerceIn(0f, 1f))
+        levelColor = blend(levelColor, dev.launcher.app.design.Design.color(StatusBarTokens.BATTERY_CHARGING), charge.coerceIn(0f, 1f))
         levelColor = (a shl 24) or (levelColor and 0xFFFFFF)
         // Nub.
         fill.color = Color.argb(102 * a / 255, k, k, k)
         c.drawRoundRect(r.right + 0.8f * u, cy - 2.2f * u, r.right + 0.8f * u + nubW, cy + 2.2f * u, nubW, nubW, fill)
-        val lvl = (batteryAnim.value / 100f).coerceIn(0f, 1f)
+        val lvl = (level / 100f).coerceIn(0f, 1f)
         // iOS 16+: the body is the gauge (filled to the level, the rest faint), the number knocked out of it. In Control
         // Center's row the number is beside the battery instead: it fades out of the body.
         val layer = c.saveLayer(r.left - u, r.top - u, r.right + u, r.bottom + u, null)
@@ -1156,7 +1158,18 @@ class StatusBarView(ctx: Context) : View(ctx) {
         c.restore()
         cut.textSize = numSize
         cut.alpha = (255 * numberK).toInt().coerceIn(0, 255)
-        if (cut.alpha > 0) pctInside.drawCentered(c, if (numCx.isNaN()) r.centerX() else numCx, cy + 0.727f * cut.textSize / 2f, cut, batteryLevel.toString())
+        if (cut.alpha > 0) {
+            val cx = if (numCx.isNaN()) r.centerX() else numCx
+            val baseline = cy + 0.727f * cut.textSize / 2f
+            if (restingNumber == null) pctInside.drawCentered(c, cx, baseline, cut, batteryLevel.toString())
+            else {
+                // The number at rest, as the rolling text draws it when nothing rolls.
+                val align = cut.textAlign
+                cut.textAlign = Paint.Align.LEFT
+                c.drawText(restingNumber, cx - cut.measureText(restingNumber) / 2f, baseline, cut)
+                cut.textAlign = align
+            }
+        }
         c.restoreToCount(layer)
     }
 
@@ -1357,6 +1370,13 @@ class StatusBarView(ctx: Context) : View(ctx) {
             x += barW + gap
         }
     }
+
+    internal fun barHeightForTest() = barHeight
+
+    /** T-006's pixel check (`TEST_STATUS --es do battery`): the battery as this bar draws it at rest in this state. */
+    internal fun drawBatteryAt(c: Canvas, left: Float, cy: Float, color: Int, level: Int, saver: Boolean, charging: Boolean) =
+        drawBattery(c, left, cy, color, 1f, level = level.toFloat(), saver = if (saver) 1f else 0f,
+            charge = if (charging) 1f else 0f, restingNumber = level.toString())
 
     /**
      * T-005's pixel check (`TEST_STATUS --es do glyphs`): glyph [name], as the `statusbar` icon set names it, drawn as this

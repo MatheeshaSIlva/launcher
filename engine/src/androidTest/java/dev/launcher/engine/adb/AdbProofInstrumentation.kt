@@ -57,6 +57,8 @@ class AdbProofInstrumentation : Instrumentation() {
                 // T-005: glyph preparation on a real icon-bearing component (Codex's review).
                 "component-icons" -> dev.launcher.engine.ui.ComponentProof(context).preparation(result)
                 "component-icon-reveal" -> dev.launcher.engine.ui.IconRevealProof(this).run(result)
+                // T-006: knockout and reveal on the GPU.
+                "component-layer" -> dev.launcher.engine.ui.LayerProof(this).run(result)
                 else -> error("Unknown proof mode")
             }
             result.putString("result", "PASS (test APK UID; no launcher UID claim)")

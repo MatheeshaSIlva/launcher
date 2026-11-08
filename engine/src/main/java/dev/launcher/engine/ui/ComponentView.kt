@@ -206,6 +206,7 @@ class ComponentView(
         fun defaultPainter(v: ViewNode, tokens: Tokens, glyphs: GlyphCache<Symbol>): Painter = when (v.primitive) {
             "text" -> TextPainter(tokens)
             "icon" -> IconPainter(tokens, glyphs)
+            "box" -> BoxPainter()
             else -> Nothing
         }
 
