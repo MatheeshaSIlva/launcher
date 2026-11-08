@@ -1467,3 +1467,7 @@ Recovery limit: Restore system cannot reliably reach a helper after its referenc
 - Captures and secrets: no new capture, storage or secret logging.
 - Refusal tests: inspected blocked-stop and exception regressions; lead reports 4/4 JVM tests passing.
 No files changed, builds run or devices used. Full gate follows; S24 rerun and owner sign-off remain pending.
+
+- `claude: AGREE — slice 3 as a whole: final gate CHECK PASSED on a4e5057 (the capture suite's 746 checks); dex and manifest against engine's 40080d6: classes only in OwnHost, PairingSession, PairingReplyReceiver, ShellHost, ShizukuHost, ShizukuLink, settings, engine adb and shell; the manifest adds only the unexported receiver; no permission.` (2026-11-08)
+- `owner: paired on the S24 and ran on our own helper with Shizuku stopped: "Yes, all normal" (2026-11-08). The fix for the stuck shade is measured on the emulator only; the wrong code on the S24 not run.`
+

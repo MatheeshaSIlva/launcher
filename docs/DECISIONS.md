@@ -1024,3 +1024,15 @@ list of six: `mix` (StatusBarView's `blend` exactly), `opaque`, `withAlpha`, `al
 `clamp`; known invalid calls are diagnostics, invalid at run time gives `Null`, never a throw or NaN. Limits on an
 expression: 16,384 characters, 512 nodes, nesting 64. Exact float extents now run through `row` and `stack` beside the
 whole-pixel allocation. `blend` on `box` and `icon` waits for a consumer.
+
+## D-086: On-phone pairing: the code in Android's own shade; our service stops with Shizuku (2026-11-08, owner and lead)
+
+T-001 slice 3. Settings' pairing screen hides every app overlay and its pairing server ends when Settings pauses
+(measured), so neither a card of ours nor a page of ours can take the code. The owner: "we haven't activated our shades or
+gesture bar before pairing, correct? so we would have to use stock shade right?": the code is typed into a notification's
+reply field in Android's own shade, there whenever our shell is not running. An accessibility-overlay card was
+refused: it would defeat a platform safeguard. On the S24 the owner found the service outliving Shizuku's server and keeping
+that shade away, with neither set of bars working: stopping Shizuku now stops our service (`ShizukuHost`), Pair is refused
+while our own service runs, Forget stops it. Discovery may run again within one pairing (a reply can outlive a 60 s session),
+each session bounded as agreed. No permission added at target 34 (`ACCESS_LOCAL_NETWORK` applies from target 37). Slice 3 runs
+behind the developer switch; Shizuku stays the default until slice 5.

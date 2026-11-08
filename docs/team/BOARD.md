@@ -1,6 +1,6 @@
 # Board
 
-**Now:** E2 slice 10 (T-006: the battery from `box`, `stack` and `text`) is DONE and on `engine`; slice 11 (`network`, `dnd`, power-save sources) is next. T-001 slice 3 (pairing and start on the phone) is signed by both on `team/claude/t001-pairing`, waiting for the owner's S24 journey before it merges.
+**Now:** E2 slice 10 (T-006) and T-001 slice 3 are DONE and on `engine`. Next: E2 slice 11 (`network`, `dnd`, power-save sources) and T-001 slice 4 (boot restart; it needs `RECEIVE_BOOT_COMPLETED`, the owner's yes first).
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
 **Device:** claude (lead)
@@ -33,7 +33,7 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
-| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b, 2 DONE; slice 3, pairing and start on the phone, signed by both on `team/claude/t001-pairing`, waiting for the owner's S24 journey) |
+| T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b, 2, 3 DONE: pairing and start on the phone, behind the developer switch; slice 4, boot restart, next) |
 | T-006 | E2 slice 10: the battery as `box` + fill + text with expressions; the first battery pixel harness | `threads/T-006-e2-slice10-battery.md` | claude (text knockout, KDL, harness), codex (box, layer, geometry, expressions, schema) | `engine` | DONE (2026-11-08; 36 of 36 battery states pixel-identical on the emulator; S24 at E2's exit) |
 | T-005 | E2 slice 9: the `icon` primitive and the `statusbar` symbol set | `threads/T-005-e2-slice9-icons.md` | claude (painter, cache, harness), codex (generator, set, listing) | `engine` | DONE (2026-11-08; wifi.3 within 3 %, D-083) |
 | T-004 | E2 slice 6: the first KDL bar in the shade window (time, dev switch) | `threads/T-004-e2-slice6-first-bar.md` | claude; codex cross-checks | `engine` | DONE (S24 measurements pending the phone) |
