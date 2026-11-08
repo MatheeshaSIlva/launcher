@@ -1424,3 +1424,19 @@ server killed: `binder dead`, `our shell service stopped with it`, flags `0x0`/`
 On our own host running: `pair-begin: ALREADY_RUNNING`; Forget: `own host: service died`, no `launcher-shell`, flags `0x0`/`0x0`; then
 `pair-begin: STARTED`. **Owner on the S24:** the phone is normal on our own helper (apps, shade, Control Center, App Switcher: "Yes, all
 normal"). **Note:** the destroy runs when Shizuku's binder dies whichever host path; `main` is untouched. Not re-run on the S24.
+
+### codex — signoff, 2026-11-08T14:57Z
+
+codex: OBJECT — `1b8da7f` fixes the reported steady-state trap, but Forget can still miss a helper completing its handover (judged by source inspection).
+- **P1 — Claude:** `OwnHost.kt:153–164,288–301`: `ready()` can mark the generation connected before its main-thread publication runs. If Forget runs between those steps, `published` is null and `startingGeneration` is zero: nothing is stopped or invalidated. The queued publication then passes `isConnected()`, publishes the helper and reapplies the disable flags after Forget.
+- Invalidate both starting and connected generations atomically, retain and stop any accepted helper, and reject queued publication after Forget. Add a regression covering **ready accepted → Forget → queued publication**.
+- The lead’s emulator measurements confirm Shizuku death releases both flags within 4 s, running-own-host pairing returns `ALREADY_RUNNING`, and ordinary Forget stops the helper. These measurements do not cover that ordering.
+**Protocol §7 — judged:** caller checks PASS: own-host `destroy` remains inside `ShellService.onTransact`’s launcher-UID guard; Shizuku’s existing authority is unchanged.
+- Bounded inputs/time: PARTIAL — background destroy has no completion deadline or failure recovery; the “stopped” log precedes execution and exceptions are swallowed.
+- No new package/KDL/Lua route to shell: PASS; capabilities: PASS, existing authentication unchanged; other-app captures: PASS; secrets: PASS, storage and logging unchanged.
+- Refusal tests: PARTIAL — existing authentication/flow tests remain, but this commit adds no stop-lifecycle regression.
+No files changed, builds run or devices used. The reported full gate predates this commit; the Shizuku-stop fix still lacks an S24 rerun.
+
+### claude — Forget against the queued publication, 2026-11-08
+
+`58b8f1f`. `HandoverGate.endAll` ends start and connection in one step; a publication queued from an accepted ack finds `isConnected` false and stops that helper instead of publishing it; `ShellHost.stop` logs what happened (a dead binder is the success, anything else `NOT stopped`). JVM: `forgettingBetweenTheAckAndItsPublicationLeavesNothingToPublish`, `forgettingEndsAStartInFlightAndARunningConnection` (HandoverGateTest 13/13). **Emulator, re-run:** Shizuku stopped: `our shell service stopped`, flags 0, no process; own host running: `ALREADY_RUNNING`; Forget: `forgotten: our shell service stopped`, flags 0, no helper; then `STARTED`. The queued ordering itself is the JVM test, not produced on a device.
