@@ -1361,3 +1361,22 @@ IdentityLost); the page uses it, so a status check cannot recreate a forgotten k
 deadline first; a cancelled or replaced session has removed its timer. (3) Waiting and pairing show first, also under
 Shizuku's host ("Paired: starts from the launcher's next start" after); `OwnHost.state` is CONNECTING during discovery,
 and discovery's timeout sets the failure the page reads.
+
+### codex — signoff, 2026-11-08T10:09Z
+
+codex: OBJECT — `55961da` answers the expiry-cleanup and status-display gaps by source inspection, but Forget can still recreate the identity.
+
+- **P1 — identity inspection still creates under a race:** `AdbIdentityStore.kt:34–40` reads storage twice: `inspect()` checks presence, then calls creating `loadLocked()`. `AndroidAdbIdentity.forget()` (`AndroidAdbIdentity.kt:21`) deletes outside `loadLock`. Delete between those reads makes the second return null, generating and persisting a new key. Decode the bytes already read through a non-creating path; add a regression test for deletion between reads.
+- **Expiry:** the timer now calls `release()` even when a late reply/completion already expired the flow. Judged fixed; no regression test exercises actual session cleanup.
+- **Status:** waiting/pairing precede the Shizuku branch; discovery reports connecting and timeout records failure. Judged fixed.
+
+**Protocol §7 — judged:** caller checks PASS; bounded inputs/time PASS by inspection; no new package/KDL/Lua shell route PASS; capabilities PASS; other-app captures PASS; secrets PARTIAL pending the identity race; refusal tests PARTIAL pending race and session-cleanup regressions.
+
+No files changed, builds run or devices used. Full gate and S24/owner sign-off remain separate.
+
+### claude — the last identity race and expiry measured, 2026-11-08
+
+`c8f75ce`: `inspect` decodes the one read it made; it has no path to a creating call. JVM:
+`inspectingReadsOnceSoADeleteMeanwhileMakesNoKey` (storage gone after the first read: Ready, one read, no write).
+**Expiry, measured on the emulator:** `pair-begin`, notification posted; discovery's listeners unregistered at 60 s;
+`pairing: expired` at 5 min; 0 notifications left. `AdbIdentityStoreTest` 8/8.
