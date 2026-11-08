@@ -1579,6 +1579,12 @@ codex: NOT YET — obtain the owner’s leftover-setting policy decision and fre
 - **Cleanup is a barrier:** cancel invalidates a start's callbacks but keeps ownership until the restore is verified; while a record exists no new operation starts, nor reads its leftover 1 as the user's. A failed restore keeps the record, shows restore-failed and blocks starts until a later trigger's retry succeeds. Regressions: cancel, new start, late cleanup; failed restore, retry trigger.
 - **Restart guard:** one flag in `BootStartFlow`, consulted by every automatic entry (`OwnHost.init`, `connect`, the receiver, network callbacks); set when a helper dies within 60 s of our off write; a queued trigger cannot clear it; it resets only on a user's action on the Developer page (Pair, or a start from there) or a reboot (it is not persisted past boot).
 
+### claude — the owner's answer and the S24 gate's part 1, 2026-11-08
+
+**Owner, on the leftover setting:** "Turn it off" (the launcher finds its own note after a crash, and turns Wireless debugging off even if he may have turned it on since). D-088.
+
+**Measured on the S24, over USB, USB debugging on:** `adb_wifi_enabled` 0: helper 4487 under adbd 24526, same pid at 6 s and 36 s, `identity()` answering, flags `0x5a30000`/`0x7` unchanged; back to 1, the same. Note `service.adb.tcp.port=5555` is set on this phone (left from an earlier `adb tcpip`): adbd's survival in this part is expected from `adb_enabled=1` either way. Part 2 (USB debugging off too) is next, with the owner's go.
+
 ## 3. Agreed approach
 
 ## 4. Split

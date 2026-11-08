@@ -1041,3 +1041,8 @@ behind the developer switch; Shizuku stays the default until slice 5.
 
 The owner, asked whether to add it so the launcher's own helper can restart after a reboot: "Yes, add it". Nothing else was
 added with it; any foreground service or further permission the slice turns out to need goes back to the owner first.
+
+## D-088: A leftover note turns Wireless debugging off (2026-11-08, owner)
+
+T-001 slice 4. When the launcher turns Wireless debugging on to start its helper, it keeps a note so it can turn it off again, across a crash. Finding that note at a later start, it cannot tell its own "on" from one the user made since. Asked, the owner chose "Turn it off": a debugging port left open by accident is the worse mistake; the cost is one toggle, in a rare case, said in the log. Wireless debugging the user had on before the launcher began is never touched.
+
