@@ -69,8 +69,7 @@ class ShizukuHost : ShellHost {
             // Its binder still answers: stop it, so the system drops the flags at once.
             live?.let { s ->
                 live = null
-                Thread({ try { s.destroy() } catch (_: Throwable) { } }, "shell-stop").start()
-                AppLog.log("[shizuku] our shell service stopped with it")
+                ShellHost.stop(s, "Shizuku stopped")
             }
             sink.lost(generation)
         }

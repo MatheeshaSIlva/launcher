@@ -62,6 +62,19 @@ class HandoverGate(private val nowMillis: () -> Long, private val random: Secure
         return true
     }
 
+    /**
+     * "Forget pairing": in one step, whatever is in flight or connected is over. Returns the start it ended (0: none); a
+     * helper whose acknowledgement was already taken is no longer connected, so its queued publication finds that.
+     */
+    @Synchronized fun endAll(): Long {
+        val gen = starting?.generation ?: 0L
+        if (gen != 0L) attempt.clear(gen)
+        starting = null
+        acking = null
+        connected = 0
+        return gen
+    }
+
     /** A binder of [generation] died: what that ended (nothing for an obsolete generation). */
     @Synchronized fun lost(generation: Long): Ended = when {
         connected == generation && generation != 0L -> { connected = 0; Ended.CONNECTION }

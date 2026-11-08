@@ -109,6 +109,27 @@ class HandoverGateTest {
         assertEquals(0L, gate.connectedGeneration)
     }
 
+    @Test fun forgettingBetweenTheAckAndItsPublicationLeavesNothingToPublish() {
+        val t = gate.begin()
+        val a = claim(t)!!
+        assertEquals(t.generation, gate.ready(SHELL_UID, ready, a.ack))   // accepted; its publication is queued on the main thread
+        assertEquals(0L, gate.endAll())                                   // Forget runs first
+        assertFalse(gate.isConnected(t.generation))                       // the queued publication sees this and stops the helper
+        assertEquals(0L, gate.connectedGeneration)
+    }
+
+    @Test fun forgettingEndsAStartInFlightAndARunningConnection() {
+        val t = gate.begin()
+        val a = claim(t)!!
+        assertEquals(t.generation, gate.endAll())
+        assertNull(gate.ready(SHELL_UID, ready, a.ack))
+        val u = gate.begin()
+        gate.ready(SHELL_UID, ready, claim(u)!!.ack)
+        assertEquals(0L, gate.endAll())
+        assertFalse(gate.isConnected(u.generation))
+        assertEquals(Ended.NOTHING, gate.lost(u.generation))              // its death afterwards ends nothing more
+    }
+
     @Test fun ticketsAndAcceptancesNeverPrintTheirSecrets() {
         val t = gate.begin()
         val a = claim(t)!!

@@ -7,6 +7,21 @@ package dev.launcher.app
  * the service and reports it through [Sink].
  */
 interface ShellHost {
+    companion object {
+        /**
+         * Stops [service], off this thread, so the system drops the flags it holds. Its reply never comes (the process exits
+         * inside the call): a dead binder is the success; anything else is logged, for it did not stop.
+         */
+        fun stop(service: IShellService, why: String) {
+            Thread({
+                val outcome = try { service.destroy(); "stopped" }
+                catch (_: android.os.DeadObjectException) { "stopped" }
+                catch (t: Throwable) { "NOT stopped: ${t.javaClass.simpleName}" }
+                AppLog.log("[shell] $why: our shell service $outcome")
+            }, "shell-stop").apply { isDaemon = true; start() }
+        }
+    }
+
     /** What a host reports to [ShizukuLink]. [generation] is the host's when it was selected: stale reports are ignored. */
     interface Sink {
         fun connected(generation: Int, service: IShellService)

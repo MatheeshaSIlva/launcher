@@ -155,8 +155,12 @@ class OwnHost : ShellHost {
         val gen = gate.ready(uid, method, ack) ?: return refused()
         val binder = claimed.remove(gen) ?: return refused()
         main.post {
-            // Its death may have been handled first (both posted from binder threads): publish only what is still live.
-            if (!gate.isConnected(gen)) return@post
+            // Its death may have been handled first (both posted from binder threads), or Forget ran since the ack: publish
+            // only what is still live, and a helper accepted but no longer wanted stops here.
+            if (!gate.isConnected(gen)) {
+                ShellHost.stop(IShellService.Stub.asInterface(binder), "not wanted any more")
+                return@post
+            }
             clients.remove(gen)?.close()
             AppLog.log("[shell] own host: service connected")
             trying.remove(gen)?.let { cache(it) }
@@ -292,13 +296,14 @@ class OwnHost : ShellHost {
             // The start in flight ends here: it cannot publish, nor write the port back (a publication already posted
             // finds no port to cache). A service already running stops: pairing again needs Android's shade, which it
             // keeps away.
+            h.trying.clear()
+            val gen = h.gate.endAll()
+            if (gen != 0L) h.end(gen, "forgotten")
             h.published?.let { b ->
                 h.published = null
-                Thread({ try { IShellService.Stub.asInterface(b).destroy() } catch (_: Throwable) { } }, "shell-stop").start()
+                ShellHost.stop(IShellService.Stub.asInterface(b), "forgotten")
+                h.sink.lost(h.generation)
             }
-            h.trying.clear()
-            val gen = h.gate.startingGeneration
-            if (gen != 0L && h.gate.expire(gen)) h.end(gen, "forgotten")
         }
         const val LEND_METHOD = "test-lend"
         private val TEST_MODES = setOf("hold", "block", "late", "nolink", "double", "replay")
