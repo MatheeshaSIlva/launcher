@@ -163,6 +163,9 @@ private fun settingsEntries(draft: Draft, developer: Boolean): List<SearchEntry>
             "Test: stop the shell service" to "stop shell service", "Reset home layout" to "reset home layout pages",
             "Animation scales" to "animation scales developer options", "Install the newest again" to "install update again",
             "Copy log" to "copy log clipboard",
+            "The launcher's own" to "shell host shizuku own wireless debugging",
+            "Pair with Wireless debugging" to "pair pairing code wireless debugging adb shell",
+            "Forget pairing" to "forget pairing key wireless debugging shell",
         )) add(t, "System › Developer", w, Part.PHONE, dev)
     }
 }

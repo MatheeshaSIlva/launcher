@@ -11,6 +11,8 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
 import dev.launcher.engine.adb.AdbClient
+import dev.launcher.engine.adb.AdbDiscovery
+import dev.launcher.engine.adb.AndroidNsdAdapter
 import dev.launcher.engine.adb.AdbEndpoint
 import dev.launcher.engine.adb.AdbIdentityResult
 import dev.launcher.engine.adb.AdbPairingClient
@@ -55,12 +57,22 @@ class OwnHost : ShellHost {
 
     override fun connect() = start(null)
 
-    /** [test]: a refusal proof's mode for the starter (only from the DUMP-gated route), else null. */
-    private fun start(test: String?) {
+    /** Ports an attempt was started with that are not cached yet: written once that attempt is ready (main thread). */
+    private val trying = HashMap<Long, Int>()
+    private var discovery: AdbDiscovery? = null
+
+    /**
+     * A start on this phone's adbd (`127.0.0.1`): the cached connect port, or [port] (just discovered, cached once the
+     * service is ready). When a cached port does not answer (it changes each time Wireless debugging is turned on), one
+     * bounded discovery (20 s) finds the new one and a fresh attempt follows ([fallback]: no second discovery).
+     * [test]: a refusal proof's mode for the starter (only from the DUMP-gated route), else null.
+     */
+    private fun start(test: String?, port: Int? = null, fallback: Boolean = false) {
         if (gate.connectedGeneration != 0L || gate.isStarting) return
-        val endpoint = endpoint() ?: return AppLog.log("[shell] own host: no connect endpoint (pair first)")
+        val endpoint = endpoint(port) ?: return AppLog.log("[shell] own host: no connect port (pair first)")
         val ticket = gate.begin()
         val gen = ticket.generation
+        if (port != null) trying[gen] = port
         sink.changed()
         main.postDelayed({ if (gate.expire(gen)) end(gen, "start timed out") }, StartAttempt.TIMEOUT_MS)
         val apk = app.applicationInfo.sourceDir
@@ -76,7 +88,12 @@ class OwnHost : ShellHost {
                     (ticket.capability + "\n").toByteArray(Charsets.US_ASCII))
             } catch (t: Throwable) {
                 // Closed by us once the start is acknowledged; anything else ends this attempt (and only this one).
-                main.post { if (gate.expire(gen)) end(gen, "stream: ${t.javaClass.simpleName}") }
+                main.post {
+                    if (gate.expire(gen)) {
+                        end(gen, "stream: ${t.javaClass.simpleName}")
+                        if (test == null && !fallback && t !is SecurityException) rediscover()
+                    }
+                }
             } finally {
                 c.close()
                 clients.remove(gen, c)
@@ -121,6 +138,7 @@ class OwnHost : ShellHost {
             if (!gate.isConnected(gen)) return@post
             clients.remove(gen)?.close()
             AppLog.log("[shell] own host: service connected")
+            trying.remove(gen)?.let { cache(it) }
             published = binder
             sink.connected(generation, IShellService.Stub.asInterface(binder))
         }
@@ -181,17 +199,59 @@ class OwnHost : ShellHost {
         sink.changed()
     }
 
-    private fun endpoint(): AdbEndpoint? {
-        val p = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val host = p.getString("host", null) ?: return null
-        val port = p.getInt("connect_port", 0).takeIf { it in 1..65535 } ?: return null
-        return try { AdbEndpoint(InetAddress.getByName(host), port, null) } catch (_: Throwable) { null }
+    /** Always this phone's own adbd, numeric loopback, no network binding; [port] or the cached one. */
+    private fun endpoint(port: Int? = null): AdbEndpoint? {
+        val p = port ?: app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("connect_port", 0)
+        if (p !in 1..65535) return null
+        return AdbEndpoint(InetAddress.getByAddress(byteArrayOf(127, 0, 0, 1)), p, null)
+    }
+
+    private fun cache(port: Int) = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putInt("connect_port", port).apply()
+
+    /** The cached port did not answer: Wireless debugging's connect port found again (at most 20 s), then one fresh start. */
+    private fun rediscover() {
+        discovery?.close()
+        val d = AdbDiscovery(AndroidNsdAdapter(app.getSystemService(android.net.nsd.NsdManager::class.java)))
+        discovery = d
+        try { d.start(FALLBACK_MS) } catch (t: Throwable) { discovery = null; return AppLog.log("[shell] own host: discovery: ${t.javaClass.simpleName}") }
+        AppLog.log("[shell] own host: the cached port did not answer; looking for Wireless debugging's port")
+        val until = SystemClock.elapsedRealtime() + FALLBACK_MS
+        fun look() {
+            if (discovery !== d) return
+            val found = d.snapshot().firstOrNull { it.kind == AdbDiscovery.Kind.CONNECT }?.endpoint?.port
+            when {
+                found != null -> { d.close(); discovery = null; start(null, found, fallback = true) }
+                SystemClock.elapsedRealtime() >= until -> { d.close(); discovery = null; AppLog.log("[shell] own host: Wireless debugging's port not found (is it on?)"); sink.changed() }
+                else -> main.postDelayed({ look() }, 250)
+            }
+        }
+        look()
     }
 
     private fun quoted(s: String) = "'" + s.replace("'", "'\\''") + "'"
 
     companion object {
         private const val PREFS = "shell_host"
+        private const val FALLBACK_MS = 20_000L
+
+        /** The developer switch: which host the next start of the launcher selects. */
+        fun select(ctx: Context, own: Boolean) =
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("host_kind", if (own) "own" else "shizuku").apply()
+
+        /** A connect port is cached: a start has worked since the last Forget (Android may still have dropped the key). */
+        fun paired(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("connect_port", 0) in 1..65535
+
+        /** Just paired ([PairingSession]): start on the connect port discovery found; cached once the service is ready. */
+        fun startPaired(ctx: Context, port: Int) {
+            val h = current ?: return AppLog.log("[shell] own host: not selected (the developer switch picks Shizuku)")
+            h.start(null, port, fallback = true)
+        }
+
+        /** "Forget pairing": the cached port goes with the identity. */
+        fun forgetEndpoint(ctx: Context) {
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove("connect_port").remove("host").apply()
+            current?.discovery?.close()
+        }
         const val LEND_METHOD = "test-lend"
         private val TEST_MODES = setOf("hold", "block", "late", "nolink", "double", "replay")
         @Volatile var current: OwnHost? = null; private set
@@ -224,8 +284,11 @@ class OwnHost : ShellHost {
                         "stop" -> Thread({ AppLog.log("[shell] test stop: ${try { ShizukuLink.service?.destroy(); "sent" } catch (t: Throwable) { t.javaClass.simpleName }}") }).start()
                         "lend" -> current?.let { it.lendUntil = SystemClock.elapsedRealtime() + 10_000; AppLog.log("[shell] test: lend armed for 10 s") }
                         "echo-check" -> Thread({ AppLog.log("[shell] echo-check: ${current?.echoCheck()}") }, "own-shell-echo").start()
+                        // T-001 slice 3's journey, as the settings page's rows do it.
+                        "pair-begin" -> AppLog.log("[shell] pair-begin: ${PairingSession.begin(app)}")
+                        "forget" -> PairingSession.forget(app)
                         "identity" -> Thread({ AppLog.log("[shell] identity: ${try { ShizukuLink.service?.identity() } catch (t: Throwable) { t.javaClass.simpleName }}") }).start()
-                        else -> AppLog.log("[shell] test: do pair|use-own|use-shizuku|start [test MODE]|stop|lend|echo-check|identity")
+                        else -> AppLog.log("[shell] test: do pair|use-own|use-shizuku|start [test MODE]|stop|lend|echo-check|pair-begin|forget|identity")
                     }
                 }
             }

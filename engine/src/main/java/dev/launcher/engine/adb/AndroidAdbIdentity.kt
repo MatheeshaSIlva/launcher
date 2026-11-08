@@ -16,6 +16,9 @@ object AndroidAdbIdentity {
     fun store(context: Context): AdbIdentityStore = AdbIdentityStore(
         AtomicIdentityStorage(File(context.noBackupFilesDir, "adb-identity")), KeystoreIdentityWrapper(),
     )
+
+    /** Deletes the identity ("Forget pairing", T-001 slice 3); the next pairing makes a new one. */
+    fun forget(context: Context) { AtomicFile(File(context.noBackupFilesDir, "adb-identity")).delete() }
 }
 
 internal class AtomicIdentityStorage(file: File) : AdbIdentityStorage {

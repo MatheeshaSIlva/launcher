@@ -238,6 +238,8 @@
 
         <!-- Our own shell process hands its binder back here (T-001 slice 2b). Exported with no permission on purpose: it
              answers one method, only to uid 2000 holding the live start attempt's capability; everything else refuses. -->
+        <!-- T-001 slice 3: the pairing notification's reply (its own PendingIntent only; not exported). -->
+        <receiver android:name="dev.launcher.app.PairingReplyReceiver" android:exported="false" />
         <provider
             android:name="dev.launcher.app.ShellBinderProvider"
             android:authorities="${applicationId}.shell"

@@ -3038,6 +3038,7 @@ private fun DeveloperPage(tick: androidx.compose.runtime.MutableIntState, feed: 
         ActionRow("Test: stop the shell service", "The phone's status bar should come back at once") { dev.launcher.app.DevTools.killService() }
         ConfirmRow("Reset home layout", "Forgets your home pages; the launcher restarts", "Tap again to reset home") { dev.launcher.app.DevTools.resetHomeLayout(ctx) }
     }
+    ShellHostGroup(tick)
     Group("The phone now") {
         InfoRow("Status bar", if (remember(tick.intValue) { dev.launcher.app.SystemRestore.statusBarHidden(ctx) }) "Ours (stock one hidden)" else "The phone's own")
         InfoRow("Animations", remember(tick.intValue) { dev.launcher.app.SystemRestore.currentScales(ctx) })
@@ -3049,6 +3050,43 @@ private fun DeveloperPage(tick: androidx.compose.runtime.MutableIntState, feed: 
             .copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = androidx.compose.ui.unit.TextUnit(11f, androidx.compose.ui.unit.TextUnitType.Sp)),
             modifier = Modifier.fillMaxWidth().padding(LocalLook.current.dp(SettingsTokens.ROW_PADDING)))
         ActionRow("Copy log", null) { dev.launcher.app.DevTools.copyLog(ctx) }
+    }
+}
+
+/**
+ * Which process gives the launcher its shell rights (T-001 slice 3): Shizuku, or the launcher's own, paired once with
+ * Wireless debugging on the phone. Which one takes effect at the launcher's next start.
+ */
+@Composable
+private fun ShellHostGroup(tick: androidx.compose.runtime.MutableIntState) {
+    val ctx = LocalContext.current
+    var own by remember { mutableStateOf(dev.launcher.app.OwnHost.selected(ctx)) }
+    var said by remember { mutableStateOf<String?>(null) }
+    val running = remember(tick.intValue) { dev.launcher.app.ShizukuLink.state() } == dev.launcher.app.ShizukuLink.State.CONNECTED
+    Group("Shell host", "What gives the launcher its shell rights. A change applies from the launcher's next start.") {
+        ToggleRow("The launcher's own", "Instead of Shizuku; paired once with Wireless debugging", own) { on ->
+            own = on
+            dev.launcher.app.OwnHost.select(ctx, on)
+        }
+        InfoRow("Now", when {
+            running -> if (dev.launcher.app.OwnHost.selected(ctx)) "Running" else "Running on Shizuku"
+            dev.launcher.app.OwnHost.paired(ctx) -> "Paired, not running"
+            else -> "Not paired"
+        })
+        ActionRow("Pair with Wireless debugging", said ?: "Opens Developer options: Wireless debugging, Pair device with pairing code. A notification asks for its code.") {
+            when (dev.launcher.app.PairingSession.begin(ctx)) {
+                dev.launcher.app.PairingSession.Begin.STARTED -> {
+                    said = null
+                    openSystemSettings(ctx, android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                }
+                dev.launcher.app.PairingSession.Begin.NOTIFICATIONS_OFF -> said = "Notifications are off for the launcher: the code is typed into one. Turn them on first."
+                dev.launcher.app.PairingSession.Begin.SHIZUKU_RUNNING -> said = "Stop Shizuku first: while it runs, it keeps Android's shade away, and the code is typed there."
+            }
+        }
+        ConfirmRow("Forget pairing", "Deletes the launcher's key. Android keeps its entry under Paired devices until you remove it there.", "Tap again to forget") {
+            dev.launcher.app.PairingSession.forget(ctx)
+            tick.intValue++
+        }
     }
 }
 
