@@ -1149,39 +1149,63 @@ No edits, builds or device use this round. Overlay behavior remains an implement
 
 codex: AGREE approach — slice 3 is ready with the explicit bounds and lifecycle requirements above, gated first on our own overlay’s emulator and S24 measurements.
 
+### codex — discuss, 2026-11-08T09:09Z
+
+**Judged from the full lead-worktree thread and source:** yes—my Round 4, first-response receiver rules stand unchanged for Android’s own shade. The failed overlay measurement justifies dropping `PairingCard.kt`. `SystemRestore.kt:151-158,173-176` supports the shell-held flags explanation; the complete RemoteInput journey still needs emulator and S24 proof.
+
+Carry these requirements into §3/§4:
+
+- **Receiver:** manifest `exported=false`; explicit broadcast PendingIntent, mutable only for RemoteInput. Treat it as delegated authority, without requiring SystemUI’s UID. Keep endpoint and identity selection in memory. Require a live, expiring session; bound input before conversion/trimming; accept six ASCII digits, preserving leading zeroes; reject malformed, stale and duplicate submissions before starting work. [Android PendingIntent reference](https://developer.android.com/reference/android/app/PendingIntent).
+- **PendingIntent identity:** give each session a distinct action/data or request code; changing extras alone must not reuse the old token through `FLAG_UPDATE_CURRENT`. Cancel old tokens on replacement, cancellation, expiry and Forget. After process death, a reply must refuse because its in-memory session no longer exists. [Android PendingIntent reference](https://developer.android.com/reference/android/app/PendingIntent).
+- **Retry and lifetime:** atomically allow one pairing operation at a time; a wrong code releases that submission for retry while the session remains valid. Keep network work outside `onReceive` with explicit lifetime ownership. Cancellation closes sockets and prevents obsolete state/cache writes. Update the notification without echoing the code or retaining RemoteInput history.
+- **Notification availability:** check the existing `POST_NOTIFICATIONS` grant and channel availability before sending the user into Settings; declaration alone does not establish availability (`app/src/main/AndroidManifest.xml:10`). Explain blocked notifications on the settings page. [Android notification requirements](https://developer.android.com/develop/ui/compose/notifications/create-notification).
+- **Running Shizuku case:** choose the proposed **“Stop Shizuku first”** prerequisite for this slice. Automatic flag clearing introduces restoration races: `applyFlags()` sets both disable masks and runs gesture/One UI side effects (`SystemRestore.kt:151-169`). That exception need not expand this pairing change.
+- **Verification and ownership:** Claude owns the notification, receiver, manifest and orchestration tests; replace the overlay paths in §4. Prove Settings remains resumed and its pairing port alive during keyboard input, wrong-code recovery and successful pairing on emulator and S24. Test stale tokens, process death, duplicate replies and cancellation. Existing discovery bounds, authentication limits, both §7 reviews and integration gates remain.
+
+No edits, builds or device use this round; the overlay results are the lead’s reported emulator measurements.
+
+codex: AGREE approach — use stock-shade RemoteInput with the original receiver rules and additions above; require Shizuku stopped for the transitional running-host case.
+
 ## 3. Agreed approach
 
-Agreed 2026-11-08 (`codex: AGREE approach`, round 2): the lead's two entries as amended by codex's requirements.
+Agreed 2026-11-08 (`codex: AGREE approach`, 09:09Z), after the overlay gate failed and the owner's answer: the code
+is typed into a notification's reply field in **Android's own shade**, which is there whenever pairing is needed (our
+shell, which holds `DISABLE_EXPAND`, is not running then).
 
-- **Gate first:** our own focusable overlay card (a separate application-overlay window of the launcher's process; the
-  shade's window stays non-focusable) over Settings' "Pair with device" dialog: Settings still resumed, the pairing
-  port still listening, the keyboard typing into the card, a wrong code then the right one pairing through our client,
-  on the emulator and the S24 (owner's go). Cancel removes the card and releases focus. Fails anywhere: stop, ask.
-- **Discovery bounds (frozen):** 5 s per resolution, one resolution at a time, at most 8 queued-or-active service
-  identities and 8 retained results, 60 s per pairing/discovery session; the start's fallback discovery has its own
-  20 s; expired or lost results never give an endpoint; nothing restarts after cancel. Own-interface address bytes
-  only; numeric `127.0.0.1`, `network=null`; ports 1..65535. The loopback filter restricts destinations only: slice 2's
-  uid, capability and ack authenticate the local handover, not adbd's certificate on the connect port.
-- **Code:** in-process from the card's field; at most 16 characters read; six ASCII digits; a session id in memory;
-  stale or duplicate submits refused before work; the field cleared on completion or cancel; no saved state.
-- **Cancellation, replacement and Forget** close pairing and start sockets, and no obsolete work updates the pairing
+- **Notification and receiver:** a manifest receiver, `exported=false`; an explicit broadcast PendingIntent, mutable
+  only for the RemoteInput, distinct per session (its own request code and data), cancelled on replacement, cancel,
+  expiry and Forget; possession of it is delegated authority (no sender uid required). Endpoint and identity stay in
+  memory, never in the reply. A live, expiring session id (`PairingFlow`, 5 min); input bounded before conversion; six
+  ASCII digits with leading zeroes; malformed, stale and duplicate replies refused before any work; after process
+  death a reply is refused (no session in memory). One pairing at a time; a wrong code reopens the session. Network
+  work outside `onReceive`, owned and cancellable; the notification is updated without echoing the code and without
+  RemoteInput history. `POST_NOTIFICATIONS` and the channel are checked before the user is sent to Settings; blocked
+  notifications are explained on the settings page.
+- **Shizuku running** (until slice 5): "Stop Shizuku first" (no automatic flag clearing).
+- **Discovery bounds (frozen):** 5 s per resolution, one at a time, at most 8 queued-or-active identities and 8
+  results, 60 s per pairing session, 20 s for the start's fallback; expired or lost results never give an endpoint;
+  nothing restarts after cancel; own-interface address bytes only; numeric `127.0.0.1`, `network=null`; ports 1..65535.
+  The loopback filter restricts destinations only; slice 2's uid, capability and ack authenticate the local handover,
+  not adbd's certificate.
+- **Cancellation, replacement and Forget** close pairing and start sockets; no obsolete work updates the pairing
   state, recreates a deleted identity or writes the port cache.
 - **Start:** cached loopback endpoint, then one bounded discovery, then a fresh attempt with its own handover deadline;
-  the cache is written only after authenticated readiness.
+  the cache written only after authenticated readiness.
 - **States:** identity lost or unreadable, not paired, pairing, paired, connecting, connection failed, running (after
   readiness and `identity()`); Forget explains Android's paired-device entry remains.
-- No permission, receiver or PendingIntent added. Both: §7, full gate, dex and manifest comparison, polish pass, the
-  owner's S24 sign-off.
+- **Proof:** Settings stays resumed and its pairing port alive during keyboard input, a wrong code and the right one,
+  on the emulator and the S24; stale tokens, process death, duplicate replies and cancellation tested. No permission.
+  Both: §7, full gate, dex and manifest comparison, polish pass, the owner's S24 sign-off.
 
-- `codex: AGREE approach — slice 3 is ready with the explicit bounds and lifecycle requirements, gated first on our own
-  overlay's emulator and S24 measurements.`
+- `codex: AGREE approach — use stock-shade RemoteInput with the original receiver rules and additions above; require
+  Shizuku stopped for the transitional running-host case.`
 
 ## 4. Split
 
 | Sub-task | Owner | Files owned | Branch | Verified by |
 | --- | --- | --- | --- | --- |
-| Discovery policy and NSD adapter; the code parser | codex | `engine/src/main/java/dev/launcher/engine/adb/AdbDiscovery.kt`, `engine/src/test/java/dev/launcher/engine/adb/AdbDiscoveryTest.kt`, `engine/src/main/java/dev/launcher/engine/shell/PairingCode.kt`, `engine/src/test/java/dev/launcher/engine/shell/PairingCodeTest.kt` | `team/codex/t001-discovery` | JVM tests (bounds, generations, loss, flooding, cancellation, foreign hosts, ports; the parser) |
-| Overlay gate, pairing session, start orchestration, settings, identity | claude | `engine/src/main/java/dev/launcher/app/PairingSession.kt` (new), `engine/src/main/java/dev/launcher/app/OwnHost.kt`, `app/src/main/java/dev/launcher/app/shell/PairingCard.kt` (new), the Developer page's group in `app/src/main/java/dev/launcher/app/settings/`, `engine/src/test/.../PairingSessionTest.kt` (new) | `team/claude/t001-pairing` | the gate's measurements; orchestration tests (races, duplicates, fallback, Forget); emulator and S24 journeys |
+| Discovery policy and NSD adapter; the code parser | codex | `engine/.../adb/AdbDiscovery.kt` + test, `engine/.../shell/PairingCode.kt` + test | `team/codex/t001-discovery` (`71d973a`, done) | JVM 18/18 (lead's Gradle run: 14 + 4) |
+| Pairing rules, notification, receiver, start orchestration, settings | claude | `engine/.../shell/PairingFlow.kt` + test (done, 8/8), `engine/.../app/PairingSession.kt` (notification, discovery, pairing, start), `engine/.../app/PairingReplyReceiver.kt`, `app/src/main/AndroidManifest.xml` (the receiver), `engine/.../app/OwnHost.kt`, the Developer page's group in `app/.../settings/` | `team/claude/t001-pairing` | JVM; emulator and S24 journeys |
 
 ## 5. Reports
 
