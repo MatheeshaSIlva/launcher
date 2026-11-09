@@ -175,4 +175,30 @@ codex: AGREE approach — §3 includes the coherent list/measurement/fit-count c
 
 ## 6. Cross-check
 
+### codex — review, 2026-11-09T12:44Z
+
+**Judged from review of `f7bba6a` and `aca2bb9` against §3. No files changed or device used.** Measured: `git diff --check` passed. Existing test XML records 42/42 passing across NotificationIcons, Sources, Host, IconPainter and BarFit; I did not rerun builds in this read-only session.
+
+- **fix — `engine/.../source/NotificationIcons.kt:59`, `app/.../statusbar/KdlNotifIcons.kt:50`:** `MAX_APPS` bounds one update, not outstanding work. Repeated revisions enqueue unlimited loads in the single-thread executor; obsolete and disposed requests still execute `load`. Picture bytes and load time also have no explicit bounds. Add bounded, coalesced preparation, cancellation checks before loading, and picture-memory limits. Test revision churn and disposal with pending work.
+- **fix — `engine/.../ui/IconPainter.kt:45`:** A successful lookup is cached indefinitely for that handle. A literal `picture`/`rev` node survives notification removal, keeps returning its cached drawable, and keeps `PictureKey.available=true`; the recorded pixels therefore survive membership loss. Revalidate availability through an observable revision/generation and clear the cached drawable and recording. Test removal while the consumer node remains.
+- **fix — `engine/.../ui/ComponentView.kt:90`:** Token changes call `host.refresh`, bypassing `settle`. A font/theme change can alter the measured time width while `max-icons` remains stale. Route this through the same measurement/derivation snapshot. `HostTest.kt:27` proves abstract snapshot publication, but does not cover the agreed arrival/removal during time-width or layout changes; add those cases through the actual bar derivation.
+- **fix — `app/.../statusbar/KdlNotifIcons.kt:33`:** The `constantState == null` fallback returns the shared drawable. Multiple consumers can overwrite one another’s bounds, tint and alpha. Supply independent drawable state or an independently drawable prepared representation; test two consumers with different sizes and colours.
+- **fix — `app/.../statusbar/KdlBar.kt:50`:** Preparation starts before declaration/grant checks: constructing `KdlNotifIcons` immediately subscribes and loads. `SourceBinder` guards reads/subscriptions and `ComponentView` guards resolver installation, but neither guards preparation. Apply the agreed access check before adapter creation and add denied-component counters for reads, subscriptions, loads and lookups.
+- **fix — `engine/.../ui/Host.kt:211`:** `shown` is checked only for children. A root with `visible=#false` still renders. Preserve the single-root contract while suppressing its pixels/subtree, and test root visibility changes.
+- **fix — `app/.../statusbar/BarDump.kt:89`:** Whole-band `diff.py` defaults do not establish D-074’s exact-pixel requirement for shared text/solid drawing, and can conceal local placement errors. Add focused comparisons for those regions and notification bounds; retain only the named path-symbol tolerances.
+- **question — `app/.../statusbar/KdlNotifIcons.kt:35`:** URI refusal changes reference behaviour. Keep the restriction pending the owner’s decision, but obtain and record that decision before sign-off; the lead’s report correctly identifies it as unapproved.
+- **note — `engine/.../ui/Host.kt:167`, `engine/src/main/assets/kdl/components/status-bar.kdl:21`:** `settled` correctly encloses source refresh and derived-prop reconciliation. Child visibility uses the repeat’s inner scope; removed nodes release recordings and leave the text-painter list. KDL order, service precedence, Wi-Fi suppression, text forms, bolt geometry, and `BarFit`’s unconditional dot reservation match the agreed structure. Combining 12c/12d exceeded the agreed slice bound; keep corrective commits separate.
+
+**PROTOCOL §7 — all four slices, judged:**
+
+- [x] **Caller checks:** 12a/12b add in-process evaluation only; 12c/12d add no IPC caller boundary. The new test action retains the existing DUMP-protected receiver (`GestureNav.kt:620`).
+- [ ] **Bounded inputs:** expression/member/repeat limits exist in 12a/12b; 12c preparation queue, picture memory and load time remain unbounded as above.
+- [x] **Execution/path isolation:** no new shell, exec, reflection or component-launch route. Picture loading is the intended resource boundary; URI icons are refused.
+- [ ] **Capabilities:** source declaration/grant checks and teardown clearing are present; preparation and stale cached-picture access remain unresolved.
+- [x] **Captured data:** no changed production path persists, logs or sends another app’s captured frames; the pixel harness writes synthetic fixtures.
+- [x] **Secrets:** no pairing-key or token-storage changes in these four slices.
+- [ ] **Refusal tests:** collection/repeat and source-grant refusals are covered; denied preparation, retained-consumer removal, queue exhaustion and independent drawable ownership are not.
+
+codex: NOT YET — resolve preparation bounds/access, stale recordings, drawable ownership and theme-fit coherence; complete the missing tests and focused pixel evidence. Full gate, real notification/cutout/minute checks, S24 and owner approval remain open.
+
 ## 7. Sign-off
