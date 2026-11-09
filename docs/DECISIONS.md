@@ -1093,3 +1093,13 @@ The owner, on draft 2 (https://www.figma.com/design/7E43AzlCpFNqhUkApcstZA, page
 ## D-095: Notification icons given as a link stay refused (2026-11-09, owner) [owner]
 
 T-007. The KDL bar's notification icons load an app's small icon only from its resources or a bitmap; an icon given as a URI is refused, because loading it would make the launcher open another app's link with the launcher's own rights. StatusBarView loads them, so a refused app shows no icon on the KDL bar. The owner: "okay then keep them blocked", with the lead's proposal: each refusal is logged with the app's name only, so the phone shows whether it ever happens; if it does, they are loaded with a size bound that applies before the load.
+
+## D-096: The default layout's permissions and services; settings after E3 (2026-11-09, owner) [owner]
+
+T-008, the plan's section 4, asked of the owner:
+- **Weather:** Open-Meteo (no account, no key) with the phone's location. A location permission is added for it, asked when the Today section first needs it; denied, the section says so and offers the city setting instead.
+- **Calendar:** `READ_CALENDAR` is added, asked when Today first needs it; denied, a row says so.
+- **Music bars:** open. The owner asked whether the output can be read instead of the microphone. Android's Visualizer does read the output mix, not the microphone, but Android still requires `RECORD_AUDIO` for it; the other routes are a capture consent each session (MediaProjection) or a privileged permission the shell may or may not hold (to check on the S24, read-only). Until answered, the bars move with playback only.
+- **Settings app:** after E3, keeping one element at a time.
+Still open from section 4: volume key interception (measured on the S24 first) and power actions from the shell (verified on the S24 first).
+
