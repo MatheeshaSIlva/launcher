@@ -1072,3 +1072,17 @@ The owner: "scrap the current ios and pixel designs. we'll keep the blur and col
 - **Settings:** the app has its own identity. What a user can change is what the active themes, layouts and plugins offer. The engine's own settings (permissions, the shell host, packages, updates, safety) are its only fixed content; exactly what those are is proposed with the settings design.
 
 Open, for the owner: whether the alpha needs a second complete theme (the audit's store gate says two; the spec's shade step asked for two to prove mixing). The spec now asks only for a second fill to prove panels mix. `docs/LAUNCHER_AUDIT.md` and Part 2 of `CLAUDE.md` still describe the old designs as built; they are the manual, not the plan.
+
+## D-093: The default layout's direction: Caelestia as a phone, in our design language (2026-11-09, owner) [owner]
+
+The owner: "we will basically design a mobile version for these dotfiles: https://github.com/caelestia-dots/shell ... blending the dotfiles theme with our design language." The design language is the owner's Design System artifact (https://claude.ai/artifact/EKCiKtmh9RY4ApW5T2TPEc), used for the app, settings and the default layout. Drafts in Figma: https://www.figma.com/design/7E43AzlCpFNqhUkApcstZA (draft 2 is current).
+
+Settled with the owner:
+- No side rail ("as soon as you open an app it gets covered"). One island around the camera, the only part of our frame that stays over apps; tap it or pull down and one panel grows out of it with every other panel collapsed inside, one section open at a time.
+- Recents exist (Caelestia has none): swipe up and hold in an app.
+- One home, the launcher is where apps live: no home pages.
+- Configurable by the layout in settings: what the island shows at rest (default time and battery), and whether long panels scroll inside (default) or grow to full screen.
+- Motion as drafted in draft 2 ("Looks right"): a finger moves things exactly, overshoot only on the island's tap, nothing pops, everything catchable, decode only for what just happened. Caelestia's stretching drawers only as a setting, off by default (lead's proposal, not yet answered).
+
+Kept from Caelestia: the frame on home with drawers joined to it by concave flares, the dashboard contents, launcher search with `>` commands. Overruled by the design language: wallpaper colours (monochrome, signal for state), Material shapes, the type, the mascots (Tess). Engine gaps it exposed are listed in the Figma notes: island and live activities, shape unions for the flares, edge drawers beyond the shade, accordion sections, recents as a surface, text rotation, new sources (lyrics, visualiser, temperatures, the app in front), a command registry. The lock screen stays Android's.
+
