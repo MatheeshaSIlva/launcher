@@ -54,6 +54,107 @@ class HostTest {
     private fun host() = ComponentHost((ComponentReader.read(KdlParser.parse(kdl.trimIndent())) as ReadResult.Ok).component,
         env, Units(unitPx = 2f, density = 3f), { v -> painted += v.primitive; painter })
 
+    private fun item(id: String, rev: Int = 0, children: Value = Value.List(emptyList())) = Value.Record(mapOf(
+        "id" to Value.Str(id), "rev" to Value.Num(rev.toDouble()), "children" to children))
+    private fun repeatHost(body: String = """text "{n.id}:{n.rev}" each="{battery.icons}" as=n""",
+                           removed: (HostNode) -> Unit = {}) = ComponentHost(
+        (ComponentReader.read(KdlParser.parse("""component "repeat" {
+            view { row { $body } }
+        }""")) as ReadResult.Ok).component, env, Units(1f, 1f), { painter }, onRemoved = removed)
+
+    @Test fun repeatsRetainIdentityAcrossReorderAndRefreshLocalPathsWithFilteredSources() {
+        sources["battery.icons"] = Value.List(listOf(item("a"), item("b")))
+        val removed = ArrayList<HostNode>()
+        val h = repeatHost(removed = { removed += it })
+        val (a, b) = h.root.children
+        val binding = a.bindings.getValue("content")
+        assertEquals(Value.Str("a:0"), a.value("content"))
+        sources["battery.icons"] = Value.List(listOf(item("b"), item("a", 2)))
+        h.refresh { "battery.icons" in it.sources }
+        assertSame(b, h.root.children[0]); assertSame(a, h.root.children[1])
+        assertSame(binding, a.bindings.getValue("content"))
+        assertEquals(Value.Str("a:2"), a.value("content"))
+        assertSame(a.motion, h.root.children[1].motion)
+        sources["battery.icons"] = Value.List(listOf(item("a", 2)))
+        h.refresh()
+        assertEquals(listOf(b), removed)
+        val value = a.value("content")
+        h.refresh()
+        assertSame(value, a.value("content"))
+        h.dispose(); h.dispose()
+        assertEquals(3, removed.size) // a, b and the root, each once
+        sources["battery.icons"] = Value.List(emptyList()); h.refresh()
+        assertEquals(3, removed.size)
+    }
+
+    @Test fun repeatFailuresRemoveTheWholeExpansionAndRecoverWithoutBindingGrowth() {
+        val removed = ArrayList<HostNode>()
+        sources["battery.icons"] = Value.List(listOf(item("a")))
+        val h = repeatHost(removed = { removed += it })
+        val bad = listOf(Value.Null, Value.Num(1.0), Value.List(listOf(item("a"), item("a"))),
+            Value.List(listOf(Value.Record(emptyMap()))), Value.List(listOf(Value.Str("a"))),
+            Value.List(List(257) { item("$it") }))
+        for (value in bad) {
+            sources["battery.icons"] = value; h.refresh()
+            assertEquals(0, h.root.children.size); assertEquals(1, h.diagnostics.size)
+            sources["battery.icons"] = Value.List(listOf(item("a"))); h.refresh()
+            assertEquals(1, h.root.children.size); assertEquals(emptyList<String>(), h.diagnostics)
+        }
+        repeat(100) {
+            sources["battery.icons"] = Value.List(emptyList()); h.refresh()
+            sources["battery.icons"] = Value.List(listOf(item("a"))); h.refresh()
+        }
+        val gone = removed.last()
+        val old = gone.value("content")
+        sources["battery.icons"] = Value.List(listOf(item("a", 3))); h.refresh()
+        assertSame(old, gone.value("content")) // removed bindings are never visited again
+        assertEquals(106, removed.size)
+    }
+
+    @Test fun nestedKeysIncludeTemplateAndOuterItemAndLimitsPreflightBeforePainters() {
+        val kids = Value.List(listOf(item("same")))
+        sources["battery.icons"] = Value.List(listOf(item("a", children = kids), item("b", children = kids)))
+        val h = repeatHost("""row each="{battery.icons}" as=n {
+            text "{n.id}:{c.id}" each="{n.children}" as=c
+            text "{c.id}" each="{n.children}" as=c
+        }""")
+        val a = h.root.children[0]; val b = h.root.children[1]
+        org.junit.Assert.assertNotSame(a.children[0], b.children[0])
+        org.junit.Assert.assertNotSame(a.children[0], a.children[1])
+        assertEquals(Value.Str("a:same"), a.children[0].value("content"))
+        sources["battery.icons"] = Value.List(listOf(item("b", children = kids), item("a", children = kids)))
+        h.refresh { "battery.icons" in it.sources }
+        assertSame(a, h.root.children[1]); assertSame(a.children[0], h.root.children[1].children[0])
+        val manyKids = Value.List(List(16) { item("$it") })
+        sources["battery.icons"] = Value.List(List(256) { item("$it", children = manyKids) })
+        var made = 0
+        val def = h.def
+        val bounded = ComponentHost(def, env, Units(1f, 1f), { made++; painter })
+        assertEquals(1, made); assertEquals(0, bounded.root.children.size)
+        assertEquals(1, bounded.diagnostics.size)
+        sources["battery.icons"] = Value.List(listOf(item("a", children = kids))); bounded.refresh()
+        assertEquals(1, bounded.root.children.size); assertEquals(4, made)
+    }
+
+    @Test fun exactLimitsAreAcceptedAndOneMoreNodeTearsDownTheRepeat() {
+        sources["battery.icons"] = Value.List(List(256) { item("$it") })
+        assertEquals(256, repeatHost().root.children.size)
+        // 1 root + 256 repeated rows + (256 * 14) text children + 255 extra rows = 4096.
+        val inner = (1..14).joinToString("\n") { "text x" }
+        val fixed = (1..255).joinToString("\n") { "row" }
+        val h = repeatHost("""$fixed
+            row each="{battery.icons}" as=n { $inner }
+        """)
+        assertEquals(511, h.root.children.size)
+        assertEquals(emptyList<String>(), h.diagnostics)
+        val tooMany = repeatHost("""$fixed
+            row
+            row each="{battery.icons}" as=n { $inner }
+        """)
+        assertEquals(256, tooMany.root.children.size)
+        assertEquals(1, tooMany.diagnostics.size)
+    }
+
     @Test fun theTreeAndItsBindings() {
         val h = host()
         assertEquals(listOf("box", "row", "spacer", "text"), painted.sorted())   // one painter per primitive

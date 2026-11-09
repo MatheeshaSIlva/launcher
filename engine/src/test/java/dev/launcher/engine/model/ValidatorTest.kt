@@ -10,6 +10,22 @@ import org.junit.Test
 
 /** E2 slice 3b: the validator against the primitives' schemas; every code with its place and hint. */
 class ValidatorTest {
+    @Test fun repeatsCheckOuterInputAndInnerArgumentsAndRefuseAmbiguousAliases() {
+        assertEquals(emptyList<Diagnostic>(), findings(view("""
+            row { text "{n.title}" each="{battery.icons}" as=n { }
+            }
+        """)))
+        for ((body, code) in listOf(
+            """row each="{battery.icons}" as=n""" to "root-each",
+            """row { text "x" as=n }""" to "each-alias",
+            """row { text "x" each="{battery.icons}" }""" to "each-alias",
+            """row { text "x" each="{battery.icons}" as="bad.name" }""" to "invalid-alias",
+            """row { text "x" each="{battery.icons}" as=battery }""" to "invalid-alias",
+            """row { text "x" each="{battery.icons}" as=level }""" to "invalid-alias",
+            """row { text "{n.title}" each="{n.items}" as=n }""" to "source-not-in-uses",
+            """row { row each="{battery.icons}" as=n { text "x" each="{n.items}" as=n } }""" to "invalid-alias"
+        )) assertTrue("$body needs $code", findings(view(body)).any { it.code == code })
+    }
     private val tokens = TokenCheck { it in setOf("ink", "signal", "comp.statusbar.time-size", "comp.statusbar.label") }
     private fun findings(kdl: String) = Validator(tokens).check(component(kdl))
 
@@ -103,12 +119,12 @@ class ValidatorTest {
         val escaped = view("text \"\\\"{1 +}\"")   // an escape before it: the finding points at the whole value
         only(findings(escaped), "bad-expression", escaped, "\"\\\"{1 +}\"")
         assertEquals(emptyList<Diagnostic>(), findings(view("text \"{battery.level | percent} of {'a.b'}\"")))
-        val loop = view("row each=\"^level\" as=n { text \"{n.title}\" }")
+        val loop = view("row { text \"{n.title}\" each=\"^level\" as=n }")
         assertEquals(emptyList<Diagnostic>(), findings(loop))
         val old = view("text \"^level%\"")
         only(findings(old), "expression-syntax", old, "\"^level%\"",
             "a reference alone is \$name or @name; anything more goes in braces: \"{\$level}%\", \"{@size * 3}\"")
-        val each = view("row each=3")
+        val each = view("row { text each=3 as=n }")
         only(findings(each), "wrong-type", each, "3")
     }
 
