@@ -49,7 +49,10 @@ class ComponentView(
     symbols: (set: String, symbol: String) -> Symbol? = { set, symbol -> loadSymbol(context, set, symbol) },
     /** The capabilities this component has been given; default none, so a source needing one reads as absent. */
     granted: Set<String> = emptySet(),
+    /** Pictures for `icon picture`, given only to a component that declares `notifications` and was granted its capability. */
+    pictures: ((id: String, rev: String) -> android.graphics.drawable.Drawable?)? = null,
 ) {
+    private val allowedPictures = pictures?.takeIf { "notifications.read" in granted && def.uses.sources.any { it.name == "notifications" } }
     private val handler = Handler(Looper.myLooper() ?: error("ComponentView needs a Looper thread"))
     private val owner = ThreadOwner()
     /**
@@ -92,8 +95,8 @@ class ComponentView(
         // The binder first: the host's first values read what the sources hold now (SourcesTest's order).
         val env = binder.env(base)
         var built: ComponentHost? = null
-        binder.start(def.uses.sources.map { it.name }) { reads -> built?.let { it.refresh(reads); applied() } }
-        host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it } }, { view.invalidate() })
+        binder.start(def.uses.sources.map { it.name }) { reads -> built?.let { h -> h.settled(reads, ::settle); applied() } }
+        host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it; if (it is IconPainter) it.pictures = allowedPictures } }, { view.invalidate() }, { n -> textPainters.remove(n.painter) })
         built = host
         prepareGlyphs()
         constructing = false
@@ -128,8 +131,43 @@ class ComponentView(
     fun setProp(name: String, value: Value) {
         if (disposed || props[name] == value) return
         props[name] = value
-        host.refresh { name in it.props }
+        host.settled({ name in it.props }, ::settle)
         applied()
+    }
+
+    /**
+     * Works out a prop from what the component shows now ([textWidth], [read]) and gives it with [setDerived]. It runs inside
+     * every refresh's snapshot, so no frame shows new values with an old derived prop.
+     */
+    var derive: (() -> Unit)? = null
+    private var settling = false
+    private fun settle(): Boolean {
+        val f = derive ?: return false
+        settling = false
+        f()
+        return settling
+    }
+
+    /** From [derive] only. */
+    fun setDerived(name: String, value: Value) {
+        if (props[name] != value) { props[name] = value; settling = true }
+    }
+
+    /** Runs [derive] again for what no source tells (a layout, a font, the camera). */
+    fun deriveAgain() {
+        if (disposed) return
+        host.settled({ false }, ::settle)
+        applied()
+    }
+
+    /** A source's value now, for [derive]. */
+    fun read(path: String): Value = binder.env(base).source(path)
+
+    /** The exact width in px of the text node labelled [label] as it reads now, or null. */
+    fun textWidth(label: String): Float? {
+        val node = generateSequence(listOf(host.root)) { level -> level.flatMap { it.children }.takeIf { it.isNotEmpty() } }.flatten()
+            .firstOrNull { it.view.primitive == "text" && (it.value("label") as? Value.Str)?.value == label } ?: return null
+        return (node.painter as? TextPainter)?.measure(node, Int.MAX_VALUE, Int.MAX_VALUE)?.exactWidth
     }
 
     /** The unit (px a point) now: every primitive measured and drawn again when it changed. */
@@ -150,7 +188,7 @@ class ComponentView(
     /** The glyphs its icons name now (their bindings' current values). */
     private fun iconKeys(): Set<GlyphCache.Key> =
         generateSequence(listOf(host.root)) { level -> level.flatMap { it.children }.takeIf { it.isNotEmpty() } }
-            .flatten().filter { it.view.primitive == "icon" }.map { GlyphCache.Key(IconPainter.set(it), IconPainter.symbol(it)) }.toSet()
+            .flatten().filter { it.view.primitive == "icon" && it.value("picture") == dev.launcher.engine.expr.Value.Null }.map { GlyphCache.Key(IconPainter.set(it), IconPainter.symbol(it)) }.toSet()
 
     /** Every glyph its icons name now is loaded, found or absent for good (none still pending). This thread. */
     fun glyphsReady(): Boolean = iconKeys().none { glyphs.resolve(it) == GlyphCache.Pending }
@@ -195,6 +233,7 @@ class ComponentView(
         onDispose.forEach { it() }
         onDispose.clear()
         tokens.removeOnChange(tokensChanged)
+        host.dispose()
         glyphs.dispose()
         whenPrepared.clear()
         binder.stop()

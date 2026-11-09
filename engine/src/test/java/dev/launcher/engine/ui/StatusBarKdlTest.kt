@@ -43,7 +43,7 @@ class StatusBarKdlTest {
     @Test fun validAsShipped() {
         val c = component()
         assertEquals("status-bar", c.name)
-        assertEquals(listOf("time", "battery"), c.uses.sources.map { it.name })
+        assertEquals(listOf("time", "battery", "network", "dnd", "notifications"), c.uses.sources.map { it.name })
     }
 
     @Test fun theTimeIn24And12Hours() {
@@ -90,7 +90,7 @@ class StatusBarKdlTest {
             override val zone: TimeZone = TimeZone.getTimeZone("UTC")
         }
         val root = ComponentHost(component(), env, Units(1f, 1f), { ComponentView.defaultPainter(it, FakeTokens, noGlyphs) }).root
-        val body = root.children.last().children.first()      // the battery's row, its stack
+        val body = root.children.last().children.last().children.first().children.first()      // the right side, battery and bolt, the battery's row, its stack
         return (body.children[1].value("fill") as Value.Color).argb
     }
 

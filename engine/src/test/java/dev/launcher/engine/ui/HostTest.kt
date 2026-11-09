@@ -23,6 +23,53 @@ import org.junit.Test
  * is slice 6's to check there.
  */
 class HostTest {
+    /** T-007: a notification arriving and a prop worked out from it reach readers together, or neither. */
+    @org.junit.Test fun aSettledPropArrivesInOneSnapshotWithWhatCausedIt() {
+        var max = 1.0
+        val list = { n: Int -> Value.List(List(n) { Value.Record(mapOf("id" to Value.Str("a$it"))) }) }
+        var icons = list(1)
+        val e = object : Env by env {
+            override fun prop(name: String) = if (name == "max") Value.Num(max) else Value.Null
+            override fun source(path: String) = if (path == "n.icons") icons else Value.Null
+        }
+        val d = (ComponentReader.read(KdlParser.parse("""
+            component "c" version="0.1.0" {
+              props { max type=number default=1 }
+              uses { source n }
+              view { row { spacer each="{take(n.icons, @max)}" as="i" size=1
+                           spacer size=2 visible="{length(n.icons) > @max}" } }
+            }""".trimIndent())) as ReadResult.Ok).component
+        val h = ComponentHost(d, e, dev.launcher.engine.layout.Units(1f, 1f), { painter })
+        assertEquals(1, h.root.children.size)
+        icons = list(3)
+        val seen = ArrayList<Int>()
+        h.settled({ true }) {
+            max = 3.0
+            seen += androidx.compose.runtime.snapshots.Snapshot.global { h.root.children.size }
+            true
+        }
+        assertEquals(listOf(1), seen)                   // nothing published while it settled
+        assertEquals(3, h.root.children.size)           // three icons, no dot: never four, never two and a dot
+        icons = list(4)
+        h.settled({ true }) { false }
+        assertEquals(4, h.root.children.size)           // three icons and the dot
+    }
+    @org.junit.Test fun aNodeNotVisibleIsNotThereAndComesBack() {
+        var on = false
+        val e = object : Env by env { override fun source(path: String) = Value.Bool.of(on) }
+        val d = (ComponentReader.read(KdlParser.parse("""
+            component "c" version="0.1.0" {
+              uses { source s }
+              view { row { spacer size=1 visible="{s.on}" } }
+            }""".trimIndent())) as ReadResult.Ok).component
+        val h = ComponentHost(d, e, dev.launcher.engine.layout.Units(1f, 1f), { painter })
+        assertEquals(0, h.root.children.size)
+        on = true; h.refresh()
+        assertEquals(1, h.root.children.size)
+        on = false; h.refresh()
+        assertEquals(0, h.root.children.size)
+    }
+
     private val sources = mutableMapOf<String, Value>("battery.level" to Value.Num(50.0))
     private val env = object : Env {
         override fun state(name: String) = if (name == "level") Value.Num(7.0) else Value.Null

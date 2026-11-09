@@ -38,6 +38,8 @@ object BatteryDump {
     private const val SIDE_PT = 34f
     private const val BATTERY_PT = 27f
     private const val MARGIN_PX = 4
+    private const val BOLT_PT = 7.6f
+    private const val BOLT_GAP_PT = 2.6f
 
     /** On [handler]'s thread (the shade's); [done] with how many pairs once all are written, -1 if the run failed. */
     fun render(ctx: Context, handler: Handler, bar: StatusBarView, dir: File, done: (Int) -> Unit) {
@@ -50,8 +52,7 @@ object BatteryDump {
         val width = parent.width
         val height = bar.barHeightForTest()
         val cy = bar.timeBaseline - dev.launcher.engine.ui.TextPainter.CAP * bar.timeSize / 2f
-        val left = width - SIDE_PT * unit - BATTERY_PT * unit
-        val cropX = floor(left).toInt() - MARGIN_PX
+        fun left(charging: Boolean) = width - SIDE_PT * unit - BATTERY_PT * unit - if (charging) (BOLT_PT + BOLT_GAP_PT) * unit else 0f
         val cropW = ceil(BATTERY_PT * unit).toInt() + 2 * MARGIN_PX + 1
         val jobs = STATES.flatMap { s -> TONES.map { t -> s to t } }.iterator()
         var pairs = 0
@@ -59,6 +60,8 @@ object BatteryDump {
             if (!jobs.hasNext()) return done(pairs)
             val (s, tone) = jobs.next()
             val (toneName, fg, bg) = tone
+            val left = left(s.charging)
+            val cropX = floor(left).toInt() - MARGIN_PX
             val sources = Sources.fixture(mapOf("time" to Time(13L * 3_600_000, "UTC"), "battery" to Battery(s.level, s.charging, s.saver)))
             val view = ComponentView(ctx, def, tokens, sources, Units(unit, ctx.resources.displayMetrics.density))
             view.setProp("hour24", Value.Bool.TRUE)

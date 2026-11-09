@@ -28,6 +28,7 @@ class Sources(all: List<Source<*>>) {
     private val byName = all.associateBy { it.name }
     operator fun get(name: String): Source<*>? = byName[name]
     val names: Set<String> get() = byName.keys
+    operator fun plus(more: Source<*>) = Sources(byName.values + more)
 
     companion object {
         /** Fixed values (tests, and later the pixel harness's states): each source holds its one value. */

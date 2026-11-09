@@ -47,7 +47,16 @@ object KdlBar {
             is ReadResult.Invalid -> { r.diagnostics.forEach { AppLog.log("[kdl] $FILE:${it.span.line}:${it.span.col} ${it.message}") }; return null }
         }
         val units = Units(dev.launcher.app.design.Scale.unitPx(ctx), ctx.resources.displayMetrics.density)
-        val view = ComponentView(ctx, def, tokens, SystemSources.all(ctx, handler), units, granted = GRANTED)
+        val icons = KdlNotifIcons(ctx, handler)
+        val view = ComponentView(ctx, def, tokens, SystemSources.all(ctx, handler) + dev.launcher.engine.source.NotificationSource.of(icons.feed), units,
+            granted = GRANTED, pictures = icons::picture)
+        view.addOnDispose { icons.dispose() }
+        view.derive = {
+            view.textWidth("Time")?.let { w ->
+                val moon = view.read("dnd.on") == Value.Bool.TRUE
+                view.setDerived("max-icons", Value.Num(BarFit.count(bar.cameraLeftForFit(), w, moon, dev.launcher.app.design.Scale.unitPx(ctx)).toDouble()))
+            }
+        }
         fun hour24() { if (!view.isDisposed) view.setProp("hour24", Value.Bool.of(DateFormat.is24HourFormat(ctx))) }
         hour24()
         // The 12/24-hour setting, however it changes (the Settings app also sends TIME_CHANGED; adb and others do not).
@@ -60,6 +69,7 @@ object KdlBar {
             if (view.isDisposed) return
             view.setUnit(dev.launcher.app.design.Scale.unitPx(ctx))
             view.centreY = bar.timeBaseline - TextPainter.CAP * bar.timeSize / 2f
+            view.deriveAgain()
         }
         val layout = View.OnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
         bar.addOnLayoutChangeListener(layout)

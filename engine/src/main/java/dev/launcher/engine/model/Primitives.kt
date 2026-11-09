@@ -62,14 +62,15 @@ object Primitives {
             AttrDef("justify", AttrType.oneOf("start", "center", "end", "space-between"), "start"), container = true),
         PrimitiveDef("stack", listOf(AttrDef("align", AttrType.oneOf("top-start", "top", "top-end", "start", "center", "end",
             "bottom-start", "bottom", "bottom-end", "centre-line"), "center")), container = true),
-        PrimitiveDef("box", lengths("stroke") + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("fill", AttrType.COLOR) +
+        PrimitiveDef("box", lengths("stroke") + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("stroke-align", AttrType.oneOf("inside", "center"), "inside") + AttrDef("fill", AttrType.COLOR) +
             AttrDef("reveal", AttrType.NUMBER, 1.0) + AttrDef("clip", AttrType.BOOL, false), container = true),
         PrimitiveDef("text", lengths("size") + listOf(AttrDef("font", AttrType.STRING), AttrDef("weight", AttrType.INT, 400),
             AttrDef("blend", AttrType.oneOf("normal", "knockout"), "normal", bindable = false),
             AttrDef("color", AttrType.COLOR), AttrDef("tnum", AttrType.BOOL, false), AttrDef("roll", AttrType.BOOL, false),
             AttrDef("align", AttrType.oneOf("start", "center", "end"), "start"), AttrDef("max-lines", AttrType.INT, 1)),
             arg = AttrDef("content", AttrType.STRING)),
-        PrimitiveDef("icon", lengths("size") + AttrDef("color", AttrType.COLOR) + AttrDef("set", AttrType.STRING),
+        PrimitiveDef("icon", lengths("size") + AttrDef("color", AttrType.COLOR) + AttrDef("set", AttrType.STRING) +
+            AttrDef("picture", AttrType.STRING) + AttrDef("rev", AttrType.STRING),
             arg = AttrDef("symbol", AttrType.STRING)),
         PrimitiveDef("spacer", lengths("size") + AttrDef("flex", AttrType.NUMBER, 0.0), parents = setOf("row", "column")),
     ).associateBy { it.name }

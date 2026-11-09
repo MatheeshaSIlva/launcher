@@ -929,6 +929,11 @@ class StatusBarView(ctx: Context) : View(ctx) {
     }
 
     /** The left edge of the camera's cut-out on the bar's line (px), or the middle of the screen without one. */
+    internal fun cameraLeftForFit() = cameraLeft()
+
+    /** T-007's pixel check: this bar's content in [c] without a window's light or dark. */
+    internal fun setContentColorForTest(c: Int) { dark = if (c == 0xFF000000.toInt()) 1f else 0f }
+
     private fun cameraLeft(): Float {
         val cutout = if (Build.VERSION.SDK_INT >= 29) try { display?.cutout?.boundingRectTop } catch (_: Throwable) { null } else null
         if (cutout != null && !cutout.isEmpty) {

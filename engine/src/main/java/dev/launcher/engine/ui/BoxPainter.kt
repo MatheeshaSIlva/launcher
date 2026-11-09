@@ -9,7 +9,7 @@ import dev.launcher.engine.expr.Value
 class BoxPainter : Painter {
     private var paint: Paint? = null
     override fun key(node: HostNode): Any = listOf(node.value("fill"), node.length("radius"),
-        node.length("stroke"), node.value("stroke-color"), node.value("reveal"), node.value("clip"))
+        node.length("stroke"), node.value("stroke-color"), node.value("stroke-align"), node.value("reveal"), node.value("clip"))
     override fun paint(canvas: Canvas, node: HostNode, width: Int, height: Int) =
         paint(canvas, node, width.toFloat(), height.toFloat())
     override fun paint(canvas: Canvas, node: HostNode, width: Float, height: Float) {
@@ -25,7 +25,7 @@ class BoxPainter : Painter {
             p.style = Paint.Style.STROKE
             p.strokeWidth = stroke
             p.color = it
-            val inset = stroke / 2f
+            val inset = if ((node.value("stroke-align") as? Value.Str)?.value == "center") 0f else stroke / 2f
             val r = (radius - inset).coerceAtLeast(0f)
             canvas.drawRoundRect(inset, inset, width - inset, height - inset, r, r, p)
         }

@@ -161,8 +161,15 @@ class ComponentHost(
 
     fun invalidateAll() { epoch.intValue++ }
 
-    fun refresh(reads: (Deps) -> Boolean = { true }) {
-        if (!disposed) Snapshot.withMutableSnapshot { reconcile(plan(), reads) }
+    fun refresh(reads: (Deps) -> Boolean = { true }) = settled(reads, null)
+
+    /** [refresh], then [settle] in the same snapshot; true from it: a prop it worked out changed, and those reading props are evaluated again. */
+    fun settled(reads: (Deps) -> Boolean, settle: (() -> Boolean)?) {
+        if (!disposed) Snapshot.withMutableSnapshot {
+            reconcile(plan(), reads)
+            // In one snapshot with the change that caused it: no frame sees the new values with an old derived prop (T-007).
+            if (settle?.invoke() == true) reconcile(plan()) { it.props.isNotEmpty() }
+        }
     }
 
     /** Releases every removed node exactly once, including the root on component teardown. */
@@ -212,7 +219,7 @@ class ComponentHost(
         val children = v.children.flatMapIndexed { index, child ->
             val childKey = key + index.toString()
             val each = child.attrs["each"]?.value
-            if (each == null) listOf(planNode(child, childKey, scope)) else {
+            if (each == null) { if (shown(child, scope)) listOf(planNode(child, childKey, scope)) else emptyList() } else {
                 val before = count
                 try {
                     val alias = ((child.attrs["as"]?.value as? AttrValue.Literal)?.value as? KdlValue.Str)?.value
@@ -220,10 +227,11 @@ class ComponentHost(
                     val items = (evaluate(each, scope) as? Value.List)?.items ?: throw InvalidRepeat()
                     if (items.size > 256) throw InvalidRepeat(limit = true)
                     val ids = HashSet<String>()
-                    items.map { item ->
+                    items.mapNotNull { item ->
                         val id = (item.member("id") as? Value.Str)?.value ?: throw InvalidRepeat()
                         if (id.isEmpty() || id.length > 256 || !ids.add(id)) throw InvalidRepeat()
-                        planNode(child, childKey + id, scope + (alias to item))
+                        val inner = scope + (alias to item)
+                        if (shown(child, inner)) planNode(child, childKey + id, inner) else null
                     }
                 } catch (e: InvalidRepeat) {
                     count = before
@@ -234,6 +242,10 @@ class ComponentHost(
         }
         return Plan(v, key, scope, children)
     }
+
+    /** `visible`: a node that is not shown is not there (its slot's arrival and leaving are motion: slice 13). */
+    private fun shown(v: ViewNode, scope: Map<String, Value>): Boolean =
+        v.attrs["visible"]?.value?.let { evaluate(it, scope) != Value.Bool.FALSE } ?: true
 
     private fun reconcile(plan: Plan, reads: (Deps) -> Boolean): HostNode {
         val next = LinkedHashMap<List<String>, Instance>()

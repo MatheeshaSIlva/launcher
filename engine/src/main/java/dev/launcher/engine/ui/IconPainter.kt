@@ -2,6 +2,7 @@ package dev.launcher.engine.ui
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.drawable.Drawable
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.snapshots.Snapshot
 import dev.launcher.engine.expr.Value
@@ -27,6 +28,30 @@ class Symbol(val boxWidth: Float, val boxHeight: Float, val draw: (Canvas, cx: F
  * at an unchanged key.
  */
 class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Symbol>) : Painter {
+    /**
+     * `picture` + `rev`: another source of pixels, a picture the component was given, in a `size` square, tinted as a
+     * notification's small icon is (`StatusBarView.drawIcon`). Null when the component may not read pictures: nothing draws.
+     */
+    internal var pictures: ((id: String, rev: String) -> Drawable?)? = null
+    private var drawable: Drawable? = null
+    private var drawableFor: Pair<String, String>? = null
+
+    private fun picture(n: HostNode): Pair<String, String>? {
+        val id = (n.value("picture") as? Value.Str)?.value?.takeIf { it.isNotEmpty() } ?: return null
+        return id to ((n.value("rev") as? Value.Str)?.value ?: "")
+    }
+
+    /** The drawable of [k], this painter's own; looked up again for each new revision, and whenever it had none. */
+    private fun drawableOf(k: Pair<String, String>): Drawable? {
+        if (drawableFor != k || drawable == null) {
+            drawableFor = k
+            drawable = pictures?.invoke(k.first, k.second)
+        }
+        return drawable
+    }
+
+    override fun release(node: HostNode) { drawable = null; drawableFor = null }
+
     private var paint: Paint? = null
     /** Bumped when a requested glyph arrives: read in [key] and [measure], so both run again (the content's key moves too). */
     private val arrived = mutableIntStateOf(0)
@@ -38,18 +63,29 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
     private var asked: GlyphCache.Key? = null
 
     override fun key(node: HostNode): Any {
+        picture(node)?.let { k -> return PictureKey(k, size(node), color(node), drawableOf(k) != null) }
         arrived.intValue
         val k = cacheKey(node)
         return Key(k, size(node), color(node), tokens.version, glyphs.resolve(k).tag())
     }
 
     override fun measure(node: HostNode, maxWidth: Int, maxHeight: Int): Measured {
+        if (picture(node) != null) return metrics(null, size(node)).measured()
         arrived.intValue
-        val m = metrics(found(node)?.let { it.boxWidth to it.boxHeight }, size(node))
-        return Measured(Size(m.width, m.height), m.centre)
+        return metrics(found(node)?.let { it.boxWidth to it.boxHeight }, size(node)).measured()
     }
 
     override fun paint(canvas: Canvas, node: HostNode, width: Int, height: Int) {
+        picture(node)?.let { k ->
+            val d = drawableOf(k) ?: return
+            val side = size(node).toInt()
+            val col = color(node)
+            d.setBounds(0, 0, side, side)
+            d.setTint(col or (0xFF shl 24))
+            d.alpha = (col ushr 24) and 0xFF
+            d.draw(canvas)
+            return
+        }
         val s = found(node) ?: return
         val size = size(node)
         val m = metrics(s.boxWidth to s.boxHeight, size)
@@ -83,9 +119,13 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
     }
 
     private data class Key(val glyph: GlyphCache.Key, val size: Float, val color: Int, val tokens: Int, val state: Any)
+    private data class PictureKey(val picture: Pair<String, String>, val size: Float, val color: Int, val available: Boolean)
 
     /** What an icon measures, in px: the cell (whole pixels) and the box drawn in it (exact). */
-    data class Metrics(val width: Int, val height: Int, val centre: Float, val boxWidth: Float, val boxHeight: Float)
+    data class Metrics(val width: Int, val height: Int, val centre: Float, val boxWidth: Float, val boxHeight: Float) {
+        /** Whole-pixel cell, exact extent: a row of icons adds up their exact widths, as StatusBarView's slots do. */
+        fun measured() = Measured(Size(width, height), centre, boxWidth, boxHeight)
+    }
 
     companion object {
         /** `icon` with no `size` (components should always give one). */

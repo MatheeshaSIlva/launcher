@@ -590,6 +590,17 @@ object GestureNav : NavHost {
                             java.io.File(dir, ".done").writeText("$n" + "\n")
                             AppLog.log("[statusbar] test: $n glyph pairs in ${dir.path}")
                         }
+                        // T-007: the whole bar in what preview() forces, by the bar and by the KDL bar, in files/dev-out/bar/ (.done).
+                        "bar" -> {
+                            val dir = java.io.File(app.getExternalFilesDir(null), "dev-out/bar")
+                            dev.launcher.app.statusbar.BarDump.render(app, nav, bar, dir) { n ->
+                                if (n < 0) AppLog.log("[statusbar] test: the bar run FAILED")
+                                else {
+                                    java.io.File(dir, ".done").writeText("$n" + "\n")
+                                    AppLog.log("[statusbar] test: $n bar pairs in ${dir.path}")
+                                }
+                            }
+                        }
                         // T-006: the battery in every state, by the bar and by the KDL bar, in files/dev-out/battery/ (.done).
                         "battery" -> {
                             val dir = java.io.File(app.getExternalFilesDir(null), "dev-out/battery")
