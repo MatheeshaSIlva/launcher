@@ -53,17 +53,28 @@ class Validator(private val tokens: TokenCheck) {
                 d += Diagnostic(n.nameSpan, "misplaced", "'${parent.name}' cannot hold children: put '${n.primitive}' beside it in a row or a stack")
             else if (place && def.parents != null && parent?.name !in def.parents)
                 d += Diagnostic(n.nameSpan, "misplaced", "'${def.name}' goes only in ${def.parents.joinToString(" or ")}, not in ${parent?.name ?: "the root"}")
+            val each = n.attrs["each"]
+            val aliasAttr = n.attrs["as"]
+            val alias = ((aliasAttr?.value as? AttrValue.Literal)?.value as? KdlValue.Str)?.value
+            if (each != null && parent == null && place)
+                d += Diagnostic(each.value.span, "root-each", "The component must have one root; repeat a child instead")
+            if (each != null && alias == null || each == null && aliasAttr != null)
+                d += Diagnostic(n.nameSpan, "each-alias", "'each' and a literal 'as' alias must be given together")
+            val validAlias = alias != null && Regex("[A-Za-z_][A-Za-z0-9_]*").matches(alias) &&
+                alias !in scope && alias !in states && alias !in sources && alias !in props && alias != "now"
+            if (alias != null && !validAlias)
+                d += Diagnostic(aliasAttr!!.value.span, "invalid-alias", "Alias must be an identifier and must not shadow an existing name")
+            val inner = if (each != null && validAlias) scope + alias!! else scope
             n.args.forEachIndexed { k, a ->
                 val arg = def.arg
-                if (arg != null && k == 0) value(arg, a, scope)
+                if (arg != null && k == 0) value(arg, a, inner)
                 else d += Diagnostic(a.span, "unexpected-argument", if (arg == null) "'${def.name}' takes no argument: name its attributes (key=value)"
                     else "'${def.name}' takes one argument, its ${arg.name}")
             }
-            val inner = scope + listOfNotNull(((n.attrs["as"]?.value as? AttrValue.Literal)?.value as? KdlValue.Str)?.value)
             for (a in n.attrs.values) {
                 val ad = def.attrs[a.name]
                 if (ad == null) d += unknown(a.keySpan, "unknown-attribute", "attribute of '${def.name}'", a.name, def.attrs.keys)
-                else value(ad, a.value, inner)
+                else value(ad, a.value, if (a.name == "each") scope else inner)
             }
             val blend = ((n.attrs["blend"]?.value as? AttrValue.Literal)?.value as? KdlValue.Str)?.value
             if (blend == "knockout" && !layered)
@@ -114,7 +125,7 @@ class Validator(private val tokens: TokenCheck) {
         }
 
         fun state(name: String, span: Span, scope: Set<String>) {
-            if (name !in states && name !in scope) d += unknown(span, "unknown-state", "state", name, states)
+            if (name !in states) d += unknown(span, "unknown-state", "state", name, states)
         }
 
         fun ref(name: String, span: Span) {

@@ -5,6 +5,49 @@ import org.junit.Test
 import kotlin.random.Random
 
 class FunctionsTest {
+    @Test fun listCallsAreTypedBoundedAndReadDynamicArguments() {
+        val fields = mutableMapOf<String, Value>("id" to Value.Str("a"))
+        val record = Value.Record(fields)
+        val items = mutableListOf<Value>(record, Value.Record(mapOf("id" to Value.Str("b"))))
+        input = Value.List(items)
+        fields.clear(); items.clear()
+        assertEquals(Value.Str("a"), record.member("id"))
+        assertSame(Value.Null, record.member("id.missing"))
+        assertSame(Value.Null, record.member("x.".repeat(65)))
+        assertEquals(Value.Num(2.0), eval("length(@c)"))
+        assertEquals(Value.List(listOf(record)), eval("take(@c, 1)"))
+        assertEquals(input, eval("take(@c, 999999)"))
+        assertEquals(Value.Num(0.0), eval("length(take(@c, 0))"))
+        for (count in listOf("-1", "1.5", "1pt", "1 / 0")) refused("take(@c, $count)")
+        refused("length(1)"); refused("take(@c)")
+        for (v in listOf(Value.Null, Value.Str("x"), Value.Num(-1.0), Value.Num(0.5),
+            Value.Num(Double.NaN), Value.Num(2.0, "pt"))) {
+            input = v
+            assertSame(Value.Null, eval("length(@c)"))
+            assertSame(Value.Null, eval("take(@c, 1)"))
+            assertSame(Value.Null, eval("take(take(@c, 1), @c)"))
+        }
+        val deps = Compiled.of("{take(notifications.icons, @max-icons)}", setOf("max-icons")).deps
+        assertEquals(setOf("notifications.icons"), deps.sources.keys)
+        assertEquals(setOf("max-icons"), deps.props.keys)
+        val list = Value.List(listOf(record))
+        val take = Compiled.of("{take(@list, @count)}", setOf("list", "count"))
+        val counted = object : Env by env {
+            override fun prop(name: String) = if (name == "list") list else input
+        }
+        for (bad in listOf(Value.Null, Value.Str("1"), Value.Num(-1.0), Value.Num(1.5),
+            Value.Num(Double.POSITIVE_INFINITY), Value.Num(1.0, "pt"))) {
+            input = bad
+            assertSame(Value.Null, take.value(counted))
+        }
+        input = Value.Num(1.0)
+        assertEquals(list, take.value(counted))
+        try { Value.List(List(4097) { Value.Null }); fail("unbounded list") } catch (_: IllegalArgumentException) { }
+        try { Value.Record((0..256).associate { "$it" to Value.Null }); fail("unbounded record") } catch (_: IllegalArgumentException) { }
+        var nested: Value = Value.Null
+        repeat(64) { nested = Value.List(listOf(nested)) }
+        try { Value.List(listOf(nested)); fail("unbounded depth") } catch (_: IllegalArgumentException) { }
+    }
     private var input: Value = Value.Null
     private val env = object : Env {
         override fun state(name: String) = input

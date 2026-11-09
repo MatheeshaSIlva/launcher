@@ -1,6 +1,7 @@
 package dev.launcher.engine.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -40,7 +41,7 @@ fun ComponentHost.Content(modifier: Modifier = Modifier) {
 
 @Composable
 private fun Primitive(n: HostNode, modifier: Modifier = Modifier) {
-    Layout(content = { n.children.forEach { Primitive(it) } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n))
+    Layout(content = { n.children.forEach { key(it) { Primitive(it) } } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n))
 }
 
 /** Measures through 5a's maths; the bound values it reads make Compose measure again, never compose. */

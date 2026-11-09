@@ -2,12 +2,19 @@ package dev.launcher.engine.expr
 
 /** Fixed allowlist: calls never resolve methods or names from a package. Invalid dynamic input is Null. */
 internal object Functions {
-    val arities = mapOf("mix" to 3, "opaque" to 1, "withAlpha" to 2, "alphaOf" to 1, "scaleAlpha" to 3, "clamp" to 3)
+    val arities = mapOf("mix" to 3, "opaque" to 1, "withAlpha" to 2, "alphaOf" to 1, "scaleAlpha" to 3, "clamp" to 3,
+        "take" to 2, "length" to 1)
 
     fun apply(name: String, a: List<Value>): Value {
         fun number(k: Int): Double? = (a[k] as? Value.Num)?.takeIf { it.unit == null && it.value.isFinite() }?.value
         // Reject values outside Long before conversion; multiply only after checking overflow.
         fun integer(k: Int): Long? = number(k)?.takeIf { it >= 0 && it < Long.MAX_VALUE.toDouble() && it % 1.0 == 0.0 }?.toLong()
+        if (name == "length" || name == "take") {
+            val list = a[0] as? Value.List ?: return Value.Null
+            if (name == "length") return Value.Num(list.items.size.toDouble())
+            val count = integer(1) ?: return Value.Null
+            return Value.List(list.items.take(count.coerceAtMost(list.items.size.toLong()).toInt()))
+        }
         if (name == "clamp") {
             val ns = a.map { it as? Value.Num ?: return Value.Null }
             if (ns.any { !it.value.isFinite() } || ns.map { it.unit }.distinct().size != 1 ||
@@ -58,7 +65,7 @@ internal fun call(n: Node.Call, args: List<Fn>): Fn {
         is Node.Null -> "null"
         is Node.Pipe -> "string"
         is Node.Cond -> kind(x.then)?.takeIf { it == kind(x.otherwise) }
-        is Node.Call -> if (x.name in setOf("clamp", "alphaOf")) "number" else "color"
+        is Node.Call -> when (x.name) { "take" -> "list"; "clamp", "alphaOf", "length" -> "number"; else -> "color" }
         is Node.Binary -> if (x.op in setOf("+", "-", "*", "/", "%")) "number" else "bool"
         else -> null
     }
@@ -68,12 +75,13 @@ internal fun call(n: Node.Call, args: List<Fn>): Fn {
             args[k].value(EmptyEnv) else null
     }
     n.args.forEachIndexed { k, x ->
-        val expected = if (n.name == "clamp" || k > 0 && !(n.name == "mix" && k == 1)) "number" else "color"
+        val expected = if (n.name in setOf("take", "length") && k == 0) "list"
+            else if (n.name == "clamp" || k > 0 && !(n.name == "mix" && k == 1)) "number" else "color"
         if (kind(x)?.let { it != expected } == true) bad("'${n.name}' argument ${k + 1} takes $expected")
         val v = constants[k]
         if (v is Value.Num) {
             if (!v.value.isFinite() || n.name != "clamp" && v.unit != null) bad("'${n.name}' needs finite unitless factors")
-            if (n.name in setOf("withAlpha", "scaleAlpha") &&
+            if (n.name in setOf("withAlpha", "scaleAlpha", "take") &&
                 (v.value % 1.0 != 0.0 || v.value < 0 || v.value >= Long.MAX_VALUE.toDouble() ||
                     n.name == "withAlpha" && v.value > 255 || n.name == "scaleAlpha" && k == 2 && v.value == 0.0))
                 bad("'${n.name}' has an invalid integer argument")

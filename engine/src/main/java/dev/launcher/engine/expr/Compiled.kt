@@ -8,6 +8,31 @@ import java.util.TimeZone
 
 /** A value an expression reads or makes. */
 sealed class Value {
+    /** Defensive copies: callers cannot change a published value through their input collections. */
+    class List(items: kotlin.collections.List<Value>) : Value() {
+        val items: kotlin.collections.List<Value> = java.util.Collections.unmodifiableList(ArrayList(items))
+        init { require(items.size <= 4096 && items.all { it.depth < 64 }) }
+        override val depth = 1 + (items.maxOfOrNull { it.depth } ?: 0)
+        override fun equals(other: Any?) = other is List && items == other.items
+        override fun hashCode() = items.hashCode()
+    }
+    class Record(fields: Map<String, Value>) : Value() {
+        val fields: Map<String, Value> = java.util.Collections.unmodifiableMap(LinkedHashMap(fields))
+        init { require(fields.size <= 256 && fields.keys.all { it.length <= 256 } && fields.values.all { it.depth < 64 }) }
+        override val depth = 1 + (fields.values.maxOfOrNull { it.depth } ?: 0)
+        override fun equals(other: Any?) = other is Record && fields == other.fields
+        override fun hashCode() = fields.hashCode()
+    }
+    internal open val depth: Int = 0
+    /** Bounded, data-only traversal; absent or non-record members are Null. */
+    fun member(path: String): Value {
+        if (path.length > 16384) return Null
+        val parts = path.split('.')
+        if (parts.size > 64) return Null
+        var value: Value = this
+        for (part in parts) value = (value as? Record)?.fields?.get(part) ?: return Null
+        return value
+    }
     data class Num(val value: Double, val unit: String? = null) : Value()
     data class Str(val value: String) : Value()
     class Bool private constructor(val value: Boolean) : Value() {
@@ -65,6 +90,7 @@ internal fun show(v: Value): String = when (v) {
     is Value.Str -> v.value
     is Value.Bool -> v.value.toString()
     is Value.Color -> "#%08X".format(v.argb)
+    is Value.List, is Value.Record -> ""
     Value.Null -> ""
 }
 
@@ -73,6 +99,8 @@ internal fun truthy(v: Value): Boolean = when (v) {
     is Value.Str -> v.value.isNotEmpty()
     is Value.Bool -> v.value
     is Value.Color -> true
+    is Value.List -> v.items.isNotEmpty()
+    is Value.Record -> v.fields.isNotEmpty()
     Value.Null -> false
 }
 

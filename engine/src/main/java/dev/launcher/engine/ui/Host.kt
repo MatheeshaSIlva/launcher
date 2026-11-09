@@ -6,6 +6,7 @@ import androidx.compose.runtime.MutableIntState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.snapshots.Snapshot
 import dev.launcher.engine.expr.Compiled
 import dev.launcher.engine.expr.Deps
 import dev.launcher.engine.expr.Env
@@ -28,6 +29,7 @@ import dev.launcher.engine.model.ViewNode
 /** Draws one primitive's own content (fill, text, symbol) with Android's canvas; its children draw themselves. */
 interface Painter {
     /** What the drawing depends on, read from [node]'s values: the content is recorded again only when it changes. */
+    fun release(node: HostNode) {}
     fun key(node: HostNode): Any?
     fun paint(canvas: Canvas, node: HostNode, width: Int, height: Int)
     /** Exact drawing bounds; legacy painters still receive the allocation through the Int overload. */
@@ -68,7 +70,7 @@ class Motion internal constructor(private val apply: (Motion) -> Unit, private v
 class HostNode internal constructor(
     val view: ViewNode,
     val bindings: Map<String, Binding>,
-    val children: List<HostNode>,
+    children: List<HostNode>,
     val painter: Painter,
     private val units: Units,
     requestFrame: () -> Unit,
@@ -76,9 +78,19 @@ class HostNode internal constructor(
     internal val epoch: MutableIntState,
 ) {
     /** The painter's recording, kept until its key changes. */
-    internal val own by lazy { RenderNode("${view.primitive}-own") }
+    private val ownLazy = lazy { RenderNode("${view.primitive}-own") }
+    internal val own by ownLazy
     /** The primitive with its children: what [motion] moves. */
-    internal val frame by lazy { RenderNode(view.primitive) }
+    private val frameLazy = lazy { RenderNode(view.primitive) }
+    internal val frame by frameLazy
+    private val childState = mutableStateOf(children)
+    val children: List<HostNode> get() = childState.value
+    internal fun children(value: List<HostNode>) { childState.value = value }
+    internal fun release() {
+        painter.release(this)
+        if (ownLazy.isInitialized()) own.discardDisplayList()
+        if (frameLazy.isInitialized()) frame.discardDisplayList()
+    }
     internal var ownKey: Any? = Unrecorded
     /** How often the painter's content and the frame were recorded (E2 slice 6's measure of the draw node's cost). */
     var ownRecords = 0; internal set
@@ -131,35 +143,129 @@ class ComponentHost(
     private val units: Units,
     private val painters: (ViewNode) -> Painter,
     private val requestFrame: () -> Unit = {},
+    private val onRemoved: (HostNode) -> Unit = {},
 ) {
     private val props = def.props.map { it.name }.toSet()
-    private val all = ArrayList<Binding>()
     private val epoch = mutableIntStateOf(0)
-    val root: HostNode = build(def.view)
+    private val compiled = HashMap<AttrValue, Compiled>()
+    private data class Plan(val view: ViewNode, val key: List<String>, val scope: Map<String, Value>, val children: List<Plan>)
+    private data class Instance(val node: HostNode, var scope: Map<String, Value>)
+    private var instances = LinkedHashMap<List<String>, Instance>()
+    private var count = 0
+    private var disposed = false
+    /** At most one data-only error per refresh; invalid repeats disappear whole and may recover. */
+    var diagnostics: List<String> = emptyList(); private set
+    val root: HostNode
 
-    /** Every primitive measured and drawn again (the tokens changed under them: a font, a theme, light or dark). */
+    init { root = reconcile(plan(), { true }) }
+
     fun invalidateAll() { epoch.intValue++ }
 
-    /** Bindings whose dependencies [reads] picks are evaluated again; a state is written only when its value changed. */
     fun refresh(reads: (Deps) -> Boolean = { true }) {
-        for (b in all) if (b.compiled != null && reads(b.deps!!)) b.compiled.value(env).let { if (it != b.state.value) b.state.value = it }
+        if (!disposed) Snapshot.withMutableSnapshot { reconcile(plan(), reads) }
     }
 
-    private fun build(v: ViewNode): HostNode {
-        val arg = dev.launcher.engine.model.Primitives.ALL[v.primitive]?.arg?.name
-        val named = v.attrs.mapValues { it.value.value } + listOfNotNull(arg?.let { a -> v.args.firstOrNull()?.let { a to it } })
-        val bindings = named.mapValues { (_, a) -> bind(a).also { all += it } }
-        return HostNode(v, bindings, v.children.map(::build), painters(v), units, requestFrame, epoch)
+    /** Releases every removed node exactly once, including the root on component teardown. */
+    fun dispose() {
+        if (disposed) return
+        disposed = true
+        instances.values.forEach { release(it.node) }
+        instances.clear()
+        compiled.clear()
     }
 
-    private fun bind(a: AttrValue): Binding = when (a) {
-        is AttrValue.Literal -> Binding(null, literal(a.value))
-        is AttrValue.State -> compiled("{\$${a.name}}")
-        is AttrValue.Ref -> compiled("{@${a.name}}")
-        is AttrValue.Expr -> compiled(a.text)
+    private fun release(node: HostNode) { node.release(); onRemoved(node) }
+    private class InvalidRepeat(val limit: Boolean = false) : RuntimeException()
+    private fun error() { diagnostics = listOf("Invalid repeat or component expansion limit (256 items, 4096 nodes)") }
+    private fun scoped(scope: Map<String, Value>) = object : Env by env {
+        override fun source(path: String): Value {
+            val name = path.substringBefore('.')
+            val item = scope[name] ?: return env.source(path)
+            return if (path == name) item else item.member(path.substringAfter('.'))
+        }
     }
 
-    private fun compiled(text: String) = Compiled.of(text, props).let { Binding(it, it.value(env)) }
+    private fun expression(a: AttrValue): Compiled = compiled.getOrPut(a) {
+        Compiled.of(when (a) {
+            is AttrValue.Expr -> a.text
+            is AttrValue.State -> "{\$${a.name}}"
+            is AttrValue.Ref -> "{@${a.name}}"
+            is AttrValue.Literal -> error("literal is not an expression")
+        }, props)
+    }
+    private fun evaluate(a: AttrValue, scope: Map<String, Value>): Value =
+        if (a is AttrValue.Literal) literal(a.value) else expression(a).value(scoped(scope))
+
+    /** Preflight plain plans before allocating any HostNode or painter, including nested products. */
+    private fun plan(): Plan {
+        count = 0; diagnostics = emptyList()
+        return try {
+            if ("each" in def.view.attrs) throw InvalidRepeat()
+            planNode(def.view, emptyList(), emptyMap())
+        } catch (_: InvalidRepeat) {
+            error()
+            Plan(def.view, emptyList(), emptyMap(), emptyList())
+        }
+    }
+    private fun planNode(v: ViewNode, key: List<String>, scope: Map<String, Value>): Plan {
+        if (++count > 4096 || key.size > 128) throw InvalidRepeat(limit = true)
+        val children = v.children.flatMapIndexed { index, child ->
+            val childKey = key + index.toString()
+            val each = child.attrs["each"]?.value
+            if (each == null) listOf(planNode(child, childKey, scope)) else {
+                val before = count
+                try {
+                    val alias = ((child.attrs["as"]?.value as? AttrValue.Literal)?.value as? KdlValue.Str)?.value
+                        ?: throw InvalidRepeat()
+                    val items = (evaluate(each, scope) as? Value.List)?.items ?: throw InvalidRepeat()
+                    if (items.size > 256) throw InvalidRepeat(limit = true)
+                    val ids = HashSet<String>()
+                    items.map { item ->
+                        val id = (item.member("id") as? Value.Str)?.value ?: throw InvalidRepeat()
+                        if (id.isEmpty() || id.length > 256 || !ids.add(id)) throw InvalidRepeat()
+                        planNode(child, childKey + id, scope + (alias to item))
+                    }
+                } catch (e: InvalidRepeat) {
+                    count = before
+                    if (e.limit && scope.isNotEmpty()) throw e
+                    error(); emptyList()
+                }
+            }
+        }
+        return Plan(v, key, scope, children)
+    }
+
+    private fun reconcile(plan: Plan, reads: (Deps) -> Boolean): HostNode {
+        val next = LinkedHashMap<List<String>, Instance>()
+        fun visit(p: Plan): HostNode {
+            val old = instances[p.key]
+            val instance = old ?: run {
+                val arg = dev.launcher.engine.model.Primitives.ALL[p.view.primitive]?.arg?.name
+                val named = p.view.attrs.filterKeys { it != "each" && it != "as" }.mapValues { it.value.value } +
+                    listOfNotNull(arg?.let { a -> p.view.args.firstOrNull()?.let { a to it } })
+                val bindings = named.mapValues { (_, a) ->
+                    Binding(if (a is AttrValue.Literal) null else expression(a), evaluate(a, p.scope))
+                }
+                Instance(HostNode(p.view, bindings, emptyList(), painters(p.view), units, requestFrame, epoch), p.scope)
+            }
+            val changed = instance.scope != p.scope
+            instance.scope = p.scope
+            if (old != null) for (b in instance.node.bindings.values) {
+                val c = b.compiled ?: continue
+                if (changed || reads(c.deps)) {
+                    val value = c.value(scoped(p.scope))
+                    if (value != b.state.value) b.state.value = value
+                }
+            }
+            next[p.key] = instance
+            instance.node.children(p.children.map(::visit))
+            return instance.node
+        }
+        val node = visit(plan)
+        instances.filterKeys { it !in next }.values.forEach { release(it.node) }
+        instances = next
+        return node
+    }
 
     private fun literal(v: KdlValue): Value = when (v) {
         is KdlValue.Str -> Value.Str(v.value)
