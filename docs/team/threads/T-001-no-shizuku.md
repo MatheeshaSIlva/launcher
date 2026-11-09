@@ -1769,6 +1769,18 @@ Build `f11cb21`, md5 checked on each device. The full gate passed at this commit
 
 **Follow-ups:** the handover's fade (next T-001 slice, owner); a clear message when Shizuku's own boot start is on, in slice 5; the 8-12 s itself, mostly finding the port.
 
+### codex — review, 2026-11-09T09:44Z
+
+**Judged from `9da3c7e` and the lead’s report: two fixes remain.**
+- **fix — `app/src/main/java/dev/launcher/app/statusbar/StatusBarView.kt:202`, `app/src/main/java/dev/launcher/app/shade/Shade.kt:2344`:** waiting makes `showing=false`, removing the top touch region. A normal pull therefore cannot reach our shade during the wait; once flags land, stock expansion is blocked too. Preserve pull input while holding back the pixels, and test a pull before release. The pure test named “aPanelPulled…” calls `cancel()` directly and misses this integration failure.
+- **fix — `app/src/main/java/dev/launcher/app/statusbar/KdlBar.kt:75`, `app/src/main/java/dev/launcher/app/GestureNav.kt:462`:** the KDL sibling reveals independently after its prepared frame; waiting hides only `StatusBarView`. With the existing developer switch enabled, KDL can appear before the stock exit finishes. Apply the hold to whichever bar renders, with a regression covering KDL preparation before handover release.
+- **question — `app/src/main/java/dev/launcher/app/GestureNav.kt:465`:** `SystemRestore.applyFlags` returns `"ERROR..."` for failures (`engine/src/main/java/dev/launcher/app/SystemRestore.kt:159`), but this adapter calls every normal return successful. Check that result explicitly; the existing removal triggered by `gestureFlagsActive=false` currently supplies failure handling instead of the advertised immediate release.
+- **note — `app/src/main/java/dev/launcher/app/GestureNav.kt:460,466`, `engine/src/main/java/dev/launcher/engine/shell/StockHandover.kt:17`:** state and view mutations run on nav UI; blocking flags work runs on `tasksIo`, with completion posted back. No permanent hold found while nav runs: its independent two-second timer releases even if the worker stalls. That fallback can show both bars when flags have not yet landed.
+- **note — `app/src/main/java/dev/launcher/app/GestureNav.kt:407,640`:** removal/restack does not cancel the hold. The same shade/bar is reused, so a restack during the wait retains it until the old release; a replacement handover cancels the old one before hiding again. No permanent-hidden path found here. Attach reads `showing` for touchability; no attach-time alpha reset found. Add lifecycle coverage beyond the six pure timer tests.
+**Protocol §7 — judged:** caller checks unchanged; no new external inputs or creator-to-shell path; capabilities unchanged; no capture persistence or secret handling added. Refusal coverage is partial: pure failed-call/timeout tests exist, but the returned-error adapter path needs coverage.
+Read-only review; no edits, builds/tests or device use. `git diff --check` passed. Loaded-phone/reboot recordings, current full gate and owner acceptance remain open.
+codex: NOT YET — pull input is disabled during the wait, and the KDL bar bypasses the hold.
+
 ## 7. Sign-off
 
 ### codex — signoff, 2026-11-08T18:20Z
