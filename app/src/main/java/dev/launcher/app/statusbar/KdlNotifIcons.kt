@@ -4,6 +4,7 @@ import android.content.Context
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.Icon
 import android.os.Handler
+import dev.launcher.app.AppLog
 import dev.launcher.app.shade.Notifs
 import dev.launcher.engine.source.NotifIconFeed
 import dev.launcher.engine.source.PreparedPictures
@@ -44,7 +45,11 @@ class KdlNotifIcons(private val ctx: Context, private val handler: Handler) : Pi
     override fun picture(id: String, rev: String): Drawable? = table.picture(id, rev)?.let { ownCopy(ctx, it) }
 
     private fun load(icon: Icon): Drawable? {
-        if (icon.type == Icon.TYPE_URI || icon.type == Icon.TYPE_URI_ADAPTIVE_BITMAP) return null
+        if (icon.type == Icon.TYPE_URI || icon.type == Icon.TYPE_URI_ADAPTIVE_BITMAP) {
+            // Owner, 2026-11-09: refused, and said, so the phone shows whether this ever happens. The app's name only, never the link.
+            AppLog.log("[kdl] a notification icon given as a link was refused: ${try { icon.resPackage } catch (_: Throwable) { "an app" }}")
+            return null
+        }
         return bounded(ctx, icon.loadDrawable(ctx) ?: return null)
     }
 
