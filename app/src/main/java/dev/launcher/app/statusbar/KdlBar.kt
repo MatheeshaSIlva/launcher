@@ -28,6 +28,9 @@ object KdlBar {
     /** One per process: its listeners outlive any one bar (each removes its own on detach). */
     private val tokens by lazy { DesignTokens() }
 
+    /** What the bar we ship may read; a grant model for other components is the store's step (T-007). */
+    private val GRANTED = setOf("network.read", "notifications.read")
+
     fun on(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
     fun set(ctx: Context, on: Boolean) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY, on).apply()
 
@@ -44,7 +47,7 @@ object KdlBar {
             is ReadResult.Invalid -> { r.diagnostics.forEach { AppLog.log("[kdl] $FILE:${it.span.line}:${it.span.col} ${it.message}") }; return null }
         }
         val units = Units(dev.launcher.app.design.Scale.unitPx(ctx), ctx.resources.displayMetrics.density)
-        val view = ComponentView(ctx, def, tokens, SystemSources.all(ctx, handler), units)
+        val view = ComponentView(ctx, def, tokens, SystemSources.all(ctx, handler), units, granted = GRANTED)
         fun hour24() { if (!view.isDisposed) view.setProp("hour24", Value.Bool.of(DateFormat.is24HourFormat(ctx))) }
         hour24()
         // The 12/24-hour setting, however it changes (the Settings app also sends TIME_CHANGED; adb and others do not).

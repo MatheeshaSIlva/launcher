@@ -28,12 +28,16 @@ object ChoreographerClock : FrameClock {
 /**
  * Feeds a component's sources into its bindings: collects each source in `uses` on [dispatcher], keeps the latest
  * values (read by [env]), and coalesces deliveries to one refresh per frame of [clock], naming only the sources that
- * changed, so only the bindings that read them are evaluated again.
+ * changed, so only the bindings that read them are evaluated again. This is the one way a component reaches a source: what
+ * a component reads is what it declares ([start]'s names) and has been [granted]; a source needing another capability is
+ * neither read nor subscribed to ([denied] says so), and reads as if absent.
  */
 class SourceBinder(
     private val sources: Sources,
     private val clock: FrameClock,
     private val dispatcher: CoroutineDispatcher,
+    private val granted: Set<String> = emptySet(),
+    private val denied: (source: String, capability: String) -> Unit = { _, _ -> },
 ) {
     private val latest = HashMap<String, SourceValue>()
     private val changed = HashSet<String>()
@@ -43,7 +47,8 @@ class SourceBinder(
 
     companion object {
         /** A binder collecting on [looper]'s thread, framed by its Choreographer. */
-        fun onLooper(sources: Sources, looper: Looper) = SourceBinder(sources, ChoreographerClock, Handler(looper).asCoroutineDispatcher())
+        fun onLooper(sources: Sources, looper: Looper, granted: Set<String> = emptySet(), denied: (String, String) -> Unit = { _, _ -> }) =
+            SourceBinder(sources, ChoreographerClock, Handler(looper).asCoroutineDispatcher(), granted, denied)
     }
 
     /** [base] with sources, `now` and the zone read from the latest values (`battery.level`: source `battery`, `level`). */
@@ -62,13 +67,15 @@ class SourceBinder(
         scope = CoroutineScope(dispatcher + job)
         for (name in names) {
             val source = sources[name] ?: continue
+            if (source.capability != "none" && source.capability !in granted) { denied(name, source.capability); continue }
             latest[name] = source.current()
             scope!!.launch { source.values.collect { v -> deliver(name, v, refresh) } }
         }
         return job
     }
 
-    fun stop() { scope?.cancel(); scope = null; changed.clear(); scheduled = false }
+    /** Nothing it read stays behind: what a source gave is held only while the component reads it. */
+    fun stop() { scope?.cancel(); scope = null; changed.clear(); latest.clear(); scheduled = false }
 
     private fun deliver(name: String, v: SourceValue, refresh: ((Deps) -> Boolean) -> Unit) {
         if (latest[name] == v) return

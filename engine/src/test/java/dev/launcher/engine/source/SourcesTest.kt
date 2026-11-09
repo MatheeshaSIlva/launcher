@@ -26,6 +26,63 @@ import org.junit.Test
 
 /** E2 slice 7: sources over fake broadcasts, the registry, and the binder's one refresh per frame. */
 class SourcesTest {
+    private data class Plain(val n: Int) : SourceValue { override fun member(name: String): Value = Value.Num(n.toDouble()) }
+
+    /** T-007: a source needing a capability, counting every read and every subscription. */
+    private class Guarded {
+        var reads = 0
+        var subscribed = 0
+        val source = Source("secret", "notifications.read", { reads++; Plain(1) },
+            kotlinx.coroutines.flow.flow { subscribed++; emit(Plain(2)) })
+    }
+    private fun binderOver(g: Guarded, granted: Set<String>, denied: (String, String) -> Unit = { _, _ -> }) =
+        SourceBinder(Sources(listOf(g.source)), { }, Dispatchers.Unconfined, granted, denied)
+
+    @Test fun aSourceNotGrantedIsNeitherReadNorSubscribedTo() {
+        val g = Guarded()
+        val refused = ArrayList<String>()
+        val binder = binderOver(g, emptySet()) { s, c -> refused += "$s:$c" }
+        binder.start(listOf("secret")) { }
+        assertEquals(0, g.reads)
+        assertEquals(0, g.subscribed)
+        assertEquals(listOf("secret:notifications.read"), refused)
+        binder.stop()
+    }
+    @Test fun aSourceGrantedAndDeclaredIsRead() {
+        val g = Guarded()
+        val binder = binderOver(g, setOf("notifications.read"))
+        binder.start(listOf("secret")) { }
+        assertEquals(1, g.reads)
+        assertEquals(1, g.subscribed)
+        binder.stop()
+    }
+    @Test fun aGrantWithoutADeclarationReadsNothing() {
+        val g = Guarded()
+        val binder = binderOver(g, setOf("notifications.read"))
+        binder.start(emptyList()) { }
+        assertEquals(0, g.reads)
+        assertEquals(0, g.subscribed)
+        binder.stop()
+    }
+    @Test fun stopLeavesNothingItRead() {
+        val g = Guarded()
+        val binder = binderOver(g, setOf("notifications.read"))
+        val base = object : Env {
+            override fun prop(name: String): Value = Value.Null
+            override fun source(path: String): Value = Value.Null
+            override fun state(name: String): Value = Value.Null
+            override fun token(key: String): Value = Value.Null
+            override fun now() = 0L
+            override val zone: TimeZone = TimeZone.getTimeZone("UTC")
+            override val locale: Locale = Locale.ROOT
+        }
+        val env = binder.env(base)
+        binder.start(listOf("secret")) { }
+        assertEquals(Value.Num(2.0), env.source("secret.x"))
+        binder.stop()
+        assertEquals(Value.Null, env.source("secret.x"))
+    }
+
     /** Broadcasts by hand: [send] delivers to every registration of its action. */
     private class FakeReceivers : Receivers {
         val registered = ArrayList<Pair<List<String>, (Broadcast) -> Unit>>()

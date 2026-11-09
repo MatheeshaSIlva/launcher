@@ -47,6 +47,8 @@ class ComponentView(
     painters: (ViewNode, Tokens, GlyphCache<Symbol>) -> Painter = ::defaultPainter,
     /** On a worker: a symbol of a set, or null (no such set or symbol). Default: the app's icon sets ([loadSymbol]). */
     symbols: (set: String, symbol: String) -> Symbol? = { set, symbol -> loadSymbol(context, set, symbol) },
+    /** The capabilities this component has been given; default none, so a source needing one reads as absent. */
+    granted: Set<String> = emptySet(),
 ) {
     private val handler = Handler(Looper.myLooper() ?: error("ComponentView needs a Looper thread"))
     private val owner = ThreadOwner()
@@ -56,7 +58,9 @@ class ComponentView(
      */
     private val recomposeScope = CoroutineScope(AndroidUiDispatcher.CurrentThread)
     private val recomposer = Recomposer(recomposeScope.coroutineContext)
-    private val binder = SourceBinder.onLooper(sources, handler.looper)
+    private val binder = SourceBinder.onLooper(sources, handler.looper, granted) { source, capability ->
+        android.util.Log.w("Launcher", "[kdl] ${def.name}: source '$source' refused: it needs $capability")
+    }
     private val props = HashMap<String, Value>()
     private val centre = mutableFloatStateOf(0f)
     private var disposed = false
