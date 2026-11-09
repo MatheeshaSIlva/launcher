@@ -404,7 +404,7 @@ object GestureNav : NavHost {
             if (restack) removeStatusBar()
             ensureCardWindow()
             addStrip()
-            if (restack) addStatusBar()
+            if (restack) addStatusBar(stockShowing = false)
             pollFloating()
         }
         // On the lock screen only the strip goes: the card window stays (empty, untouchable) where it is, under the shade.
@@ -433,7 +433,10 @@ object GestureNav : NavHost {
     private var stripHeight = 0
     private var shadeLogs = 0
 
-    private fun addStatusBar() {
+    /** Ours comes once the stock bar has gone: both on screen for a moment was the seam (StockHandover). */
+    private var stockHandover: dev.launcher.engine.shell.StockHandover? = null
+
+    private fun addStatusBar(stockShowing: Boolean = true) {
         val ctx = a11y ?: return
         val wm = wm ?: return
         val h = max(systemDimen("status_bar_height"), dp(24).toInt())
@@ -450,7 +453,19 @@ object GestureNav : NavHost {
             s.bar.onChargeMoment = { stockCover.chargeMoment(ShizukuLink.service) }
             s.bar.keepCoverOnUnplug = { stockCover.oneUiActive }
             stockCover.push()
-            reapplyFlags()   // now the stock clock and icons can go, and the stock shade
+            val service = ShizukuLink.service
+            if (stockShowing && service != null) {
+                val bar = s.bar
+                stockHandover?.cancel()     // an earlier one's timers must not end this wait
+                val handover = dev.launcher.engine.shell.StockHandover({ ms, run -> nav.postDelayed(run, ms) }) { bar.waitForStockBar(false) }
+                stockHandover = handover
+                bar.waitForStockBar(true)
+                handover.begin()
+                tasksIo.execute {   // now the stock clock and icons can go, and the stock shade
+                    val ok = try { SystemRestore.applyFlags(app, service); true } catch (t: Throwable) { AppLog.log("[statusbar] flags: ${t.javaClass.simpleName}"); false }
+                    nav.post { handover.flagsSent(ok) }
+                }
+            } else reapplyFlags()
             refreshAppearance()
             main.post { barWatch.attach() }
         }

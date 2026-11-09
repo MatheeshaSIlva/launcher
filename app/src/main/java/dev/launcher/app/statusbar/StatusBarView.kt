@@ -180,8 +180,26 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     private var suppressed = false
 
+    /**
+     * Waits for the stock bar to leave (GestureNav's handover): out of sight from its first frame, then in on the show role.
+     * A panel pulled meanwhile brings it at once.
+     */
+    fun waitForStockBar(on: Boolean) {
+        waitingForStock = on
+        if (on && !panelOpen) {
+            animate().cancel()
+            shownNow = false
+            alpha = 0f
+            translationY = -barHeight * 0.25f
+            visibility = INVISIBLE
+            onHiddenChanged?.invoke(true)
+        } else sync()
+    }
+
+    private var waitingForStock = false
+
     /** Whether the bar shows now (and the shade takes touches on it). */
-    val showing get() = !suppressed && (!hiddenByApp || transient || panelOpen)
+    val showing get() = !suppressed && (panelOpen || (!waitingForStock && (!hiddenByApp || transient)))
 
     private var shownNow = true
 
