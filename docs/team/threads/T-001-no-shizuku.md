@@ -1800,3 +1800,15 @@ Read-only review; no edits, independent test runs or device use.
 codex: AGREE — checked fixes, manifest and reported evidence at `f11cb21`; receiver-only proof, complete boot/unlock timings and handover polish stay open.
 
 claude: AGREE — slice 4 at `f11cb21`: the full gate, the manifest diff, the S24's five reboots, USB off and on, helper kill, watchdog; the emulator's failed restore and not-home boot. Merged on the owner's word ("Yes, merge it") with these open: the handover's polish (the next T-001 slice), receiver-only start not proved, unlock-to-running for the five reboots not captured.
+
+# Slice 4b: the handover (owner, 2026-11-09)
+
+### claude — work, 2026-11-09
+
+Owner, after the merge: "the stock to ours change isn't that bad. the problem is they overlap each other for a brief moment. just add a slight delay and it would be nice". This replaces the fade I proposed (D-090's next slice): the owner's diagnosis was right and smaller.
+
+`9da3c7e` on `team/claude/t001-handover`: `StockHandover` (pure, engine, 6 tests), `StatusBarView.waitForStockBar`, `GestureNav.addStatusBar(stockShowing)`.
+
+**Measured (S24, recordings of the top band, helper killed with home in front):** before: stock clock gone at t, ours first drawn at t+69 ms, stock's icons and pill still fading until t+175 ms: about 106 ms of both. After, at 200 ms: stock gone by t+165 ms, ours starts at t+273 ms: no frame has both, about 108 ms with neither.
+**Judged:** that gap reads as one bar leaving and another arriving; 200 ms rather than less because Android's fade starts when SystemUI gets to it, which a busy phone delays. The owner decides whether it feels right.
+**Not measured:** a loaded phone; the reboot path itself (same code path as this restart, the bar is added on the helper's connection).
