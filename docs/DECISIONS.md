@@ -1103,3 +1103,7 @@ T-008, the plan's section 4, asked of the owner:
 - **Settings app:** after E3, keeping one element at a time.
 Still open from section 4: volume key interception (measured on the S24 first) and power actions from the shell (verified on the S24 first).
 
+## D-097: The island's music bars move with playback only (2026-11-09, owner) [owner]
+
+D-096's open point. The owner: "Playback only". No audio is read: the bars animate while media plays and rest when it pauses, from the media session's state. No `RECORD_AUDIO`, no capture consent. Real levels may come later only through a route with no prompt, if the shell is found to hold one.
+
