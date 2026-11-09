@@ -108,6 +108,16 @@ I agree with the preview-state verification limits and slice-15 deferrals. Keep 
 
 codex: OBJECT approach — settle preparation lifetime, recorded-picture invalidation, measured camera-fit updates and the guarded-access contract before implementation.
 
+### codex — discuss, 2026-11-09T11:56Z
+
+**Judged:** one point remains missing from §3 as written.
+
+Round two’s point 3 requires coherent list/count publication (`T-007:99`). §3’s bar contract (`:125`) omits list-change recomputation and the guarantee that a frame cannot combine new icons or changed time geometry with an old `max-icons`.
+
+Add that guarantee to 12d, owned by Claude, with a test covering notification arrival/removal during a time-width or layout change and asserting correct icons and overflow on every published frame.
+
+codex: OBJECT approach — restore the coherent list/measurement/fit-count update contract in §3.
+
 ## 3. Agreed approach
 
 Proposed by the lead after two rounds, with every point of codex's second round taken.
@@ -122,7 +132,7 @@ Proposed by the lead after two rounds, with every point of codex's second round 
 
 **Grants (12c).** `declared ∩ granted`, default empty, through one guarded entry point, since `Source.current()` has no access context. Refused before `current()`, subscription, preparation and lookup, forged or stale handles included. `SourceBinder.stop()` clears protected values. Tests prove with counters that a denied component neither read nor loaded. `KdlBar` grants `notifications.read` and `network.read` to the bar it ships.
 
-**The bar (12d).** Left to right: time, moon, icons, dot; cellular or its forms, type, Wi-Fi, VPN, battery, bolt. Wi-Fi suppresses type; airplane, then No SIM, then No Service, then bars. VPN and the two service texts are text; the bolt has a 7.6 pt slot, 9 pt drawing, a 2.6 pt gap. `max-icons` is a prop from pure `BarFit.count`, fitted against the KDL time's exact measured width (`TextPainter`) through a measurement contract the lead adds, with the same geometry as the KDL; recomputed on the minute and format, font and theme, units, DND, cutout and layout. Dot's room always reserved, cap 3, local cutout coordinates, `cameraLeft()`'s no-cutout fallback. Boundary tests.
+**The bar (12d).** Left to right: time, moon, icons, dot; cellular or its forms, type, Wi-Fi, VPN, battery, bolt. Wi-Fi suppresses type; airplane, then No SIM, then No Service, then bars. VPN and the two service texts are text; the bolt has a 7.6 pt slot, 9 pt drawing, a 2.6 pt gap. `max-icons` is a prop from pure `BarFit.count`, fitted against the KDL time's exact measured width (`TextPainter`) through a measurement contract the lead adds, with the same geometry as the KDL; recomputed on the minute and format, font and theme, units, DND, cutout and layout. Dot's room always reserved, cap 3, local cutout coordinates, `cameraLeft()`'s no-cutout fallback. Boundary tests. **Coherent updates (codex, round three):** recomputed on a list change too, and no frame combines new icons or changed time geometry with an old `max-icons`; a test covers a notification arriving or leaving during a time-width or layout change, asserting the icons and overflow on every published frame.
 
 **Verification.** Unit tests as named above. `preview()`-based pixel checks for 0, 2 and 4 synthetic icons, overflow, and what it can force. Not checked until slice 15: airplane, No SIM, No Service, LTE/5G, other levels. D-074's exact-pixel targets, D-083's `wifi.3` exception. §7 by both agents for all four slices. Levels and slots change by a cut until slice 13. No smoothness claim until slice 17.
 
