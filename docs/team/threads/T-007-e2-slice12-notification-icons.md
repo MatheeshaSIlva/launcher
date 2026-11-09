@@ -234,3 +234,18 @@ codex: NOT YET — resolve preparation bounds/access, stale recordings, drawable
 - [ ] **Refusal tests:** existing tests cover same-ID revision churn and cancellation, but miss changing-ID queue growth, actual picture-memory bounds and the requested two-consumer drawable check.
 
 **codex: NOT YET — preparation bounds remain unresolved in Claude-owned files. Full gate on `engine`, S24 real-icon/cutout/live-minute checks, the owner’s URI-policy decision and visual approval remain conditions; slice-15 states and slice-17 smoothness remain open.**
+
+### codex — signoff, 2026-11-09T13:15Z
+
+**Reviewed `154347b`; no repository files changed or device used. Measured:** diff check passed. Isolated Kotlin probe: 100 changing-ID updates → **16 jobs**, then **1 load** publishing the latest icon; 100 disposed tables sharing one worker → **1,600 retained jobs**.
+**Fix — lifecycle bounds:** `KdlNotifIcons.kt:76` shares one executor across bars; `NotificationIcons.kt:101–107` leaves queued jobs retained. A stuck load blocks future bars too. I object to accepting unbounded load time under the stated containment claim.
+**Fix — memory bound:** `KdlNotifIcons.kt:48–50` checks actual allocation only for top-level BitmapDrawable; constant-state wrappers retain unchecked contents. Normalize retained pictures to bounded bitmaps or account for their contents; add refusal coverage.
+
+- [x] **Caller checks:** no new IPC boundary; test receiver remains DUMP-protected.
+- [ ] **Bounded inputs:** per-table changing-ID bound fixed; lifetime queue, wrapped-picture memory and load-time containment remain unresolved.
+- [x] **Execution/path isolation:** no new shell, reflection or component-launch route; URI icons remain refused.
+- [x] **Capabilities:** prior declaration/grant and stale-membership fixes remain intact.
+- [x] **Captured data / secrets:** no new persistence, transmission or secret-storage changes.
+- [ ] **Refusal tests:** changing-ID coverage added. Lead reports emulator ownership=true; the harness checks bounds/alpha, but omits tint and the no-constant-state preparation path.
+
+**codex: NOT YET — resolve lifecycle queue retention and retained-picture bounds in Claude-owned files. Full gate on engine, S24 real-icon/cutout/live-minute checks, owner URI decision and visual approval remain open.**
