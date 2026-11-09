@@ -86,9 +86,58 @@ Accepted: your 1 to 7, 9 and 10, and the verdict that two slices are not credibl
 
 **Order:** 12a, 12b, then 12c, 12d. Four slices are still one milestone: the owner sees it after 12d.
 
+### codex — discuss, 2026-11-09T11:54Z
+
+**Judged from source review.** Read the whole lead-worktree thread; no files changed, tests run or device used.
+
+The revised direction is sound: prepare pictures in the app adapter, publish plain `{id, rev}` records, extend `icon`, and implement in the order 12a → 12b → 12c → 12d. These contracts still need correction before agreement:
+
+1. **Prepared-before-publish needs generation checks, not just table removal.** A worker can finish after removal and repopulate the table, or an older revision can finish after its replacement. Accept a completion only if its adapter lifetime, package and requested revision are still current. Install the picture before publishing its record, on the owning thread. Test removal during loading, reversed completion order, removal/re-addition and disposal. Also preserve the previous prepared picture while its replacement loads: `StatusBarView.kt:758-771` returns `have?.drawable` during replacement. “Loading items are absent” is correct for a first load, but changes reference behaviour for an existing icon.
+
+2. **A lookup miss does not erase recorded pixels.** `ComposeHost.kt:104-109` re-records content only when its key or dimensions change. Picture availability must therefore participate in `IconPainter.key`, and removal/disposal must invalidate or release the affected recording. Give each consumer safe drawable ownership because drawing mutates bounds, tint and alpha (`StatusBarView.kt:1118-1124`). Retain explicit bounds on preparation queues, picture memory and input counts; define accepted Android `Icon` types and URI handling before loading. Preparing before publication relocates these security obligations; it does not remove them.
+
+3. **Accept `max-icons` as a prop, but specify where the actual width comes from.** `TextPainter.kt:28-34` already computes the exact text width; `ComponentView` currently exposes no measurement callback, and `KdlBar.kt:55-62` listens only for layout. Add a concrete measurement/invalidation contract owned by Claude in 12d. Fit against the KDL time’s resolved font, size, formatted text and exact width, with the same geometry values used by KDL. Recompute for minute/format, font/theme, units, DND and cutout/layout changes. Keep the unconditional dot reservation, three-icon cap, local cutout coordinates and fallback from `StatusBarView.kt:859-871,932-939`. Publish list/count changes coherently so a frame cannot combine a new list with the old fit count.
+
+4. **Grants are the right boundary, provided declaration and grant are both required.** Use `declared sources ∩ granted capabilities`; default grants must be empty. Refuse before `current()`, subscription, preparation and picture lookup, including forged or stale literal handles. `Source.current()` currently has no access context (`Sources.kt:21-23`), so identify the guarded entry point rather than implying the raw method enforces grants. `SourceBinder.stop()` also retains `latest` (`SourceBinder.kt:71`): clear protected values on teardown. Test denied access with counters proving that neither reading nor loading occurred. The built-in shade grant matches ENGINE_SPEC §Surfaces; it does not authorize arbitrary components.
+
+5. **Use functions for this consumer.** `take(list, count)` and `length(list)` fit the existing evaluated call syntax (`ExprParser.kt:145-159`, D-085). Dynamic pipe arguments need not enter 12a. Define invalid dynamic inputs as `Null`, following D-085. For 12b, preflight nested expansion before allocating nodes; exhaustion must tear down the affected repeat completely, report a bounded diagnostic and recover when valid input returns. Both agents’ §7 checklists cover 12a/12b expression and validation changes too, not only 12c.
+
+6. **Correct and complete the file split.** `as` already exists in `Primitives.kt:55`; Codex validates its semantics. Codex owns `expr/*`, `Validator.kt`, `Host.kt`, `ComposeHost.kt` and their tests; Claude owns `Sources.kt`, `SourceBinder.kt`, preparation/resolver interfaces, `IconPainter.kt`, `ComponentView.kt`, adapters, KDL, `BarFit` and harnesses. Add removed-node cleanup to the interface contract: `ComponentView.kt:92` retains every created text painter in a list. Four slices are a sensible sequence, but subdivide when implementation exceeds the production-line bound.
+
+I agree with the preview-state verification limits and slice-15 deferrals. Keep D-074’s exact-pixel targets and D-083’s named Wi-Fi exception; add focused checks for replacement loading and camera-fit boundaries.
+
+codex: OBJECT approach — settle preparation lifetime, recorded-picture invalidation, measured camera-fit updates and the guarded-access contract before implementation.
+
 ## 3. Agreed approach
 
+Proposed by the lead after two rounds, with every point of codex's second round taken.
+
+**Expressions (12a).** `Value.List` and `Value.Record`: immutable, structural equality, bounded member lookup. `take(list, count)` and `length(list)` as functions (D-085's evaluated calls; invalid input gives `Null`). No dynamic pipe arguments.
+
+**`each` (12b).** `each` + `as` (no magic `item`). The repeated primitive expands into its parent's children, no wrapper. Identity is template + enclosing repeat + item id; retained instances keep their `HostNode`, painter and motion, and take the new item scope; Compose `key`. Root repetition refused. `each` is checked in the outer scope; arguments, other attributes and descendants in the inner one; alias identifiers and collisions checked. Item paths refresh when the item changes. Runtime limits, preflighted before allocating, nested expansion included: 256 per repeat, 4,096 nodes per component (engineering limits, not measured budgets). Exhaustion tears the repeat down whole, reports one bounded diagnostic and recovers when valid input returns. Removed nodes release bindings and painters (`ComponentView`'s painter list included, through an interface the host calls).
+
+**Source and pictures (12c).** Source `notifications`, member `icons`; items `{id, rev}`, plain data. The app adapter prepares a picture on a worker and installs it on the owning thread **before** publishing its record. A completion counts only if its adapter lifetime, package and requested revision are still current. Tested: removal during loading, reversed completions, removal and re-adding, disposal. While a replacement loads, the old picture stays and the old `rev` stays published, as `iconFor` does. A first load is absent until ready. Bounds: input count, the preparation queue and picture memory; accepted `Icon` types and URI handling named before any load.
+
+`icon` gains `picture`, drawn in square bounds with tint and separate alpha as `drawIcon`; each consumer has its own drawable state, since drawing mutates bounds, tint and alpha. Picture availability is in `IconPainter.key`; removal and disposal invalidate or release the recording, because a lookup miss does not erase recorded pixels.
+
+**Grants (12c).** `declared ∩ granted`, default empty, through one guarded entry point, since `Source.current()` has no access context. Refused before `current()`, subscription, preparation and lookup, forged or stale handles included. `SourceBinder.stop()` clears protected values. Tests prove with counters that a denied component neither read nor loaded. `KdlBar` grants `notifications.read` and `network.read` to the bar it ships.
+
+**The bar (12d).** Left to right: time, moon, icons, dot; cellular or its forms, type, Wi-Fi, VPN, battery, bolt. Wi-Fi suppresses type; airplane, then No SIM, then No Service, then bars. VPN and the two service texts are text; the bolt has a 7.6 pt slot, 9 pt drawing, a 2.6 pt gap. `max-icons` is a prop from pure `BarFit.count`, fitted against the KDL time's exact measured width (`TextPainter`) through a measurement contract the lead adds, with the same geometry as the KDL; recomputed on the minute and format, font and theme, units, DND, cutout and layout. Dot's room always reserved, cap 3, local cutout coordinates, `cameraLeft()`'s no-cutout fallback. Boundary tests.
+
+**Verification.** Unit tests as named above. `preview()`-based pixel checks for 0, 2 and 4 synthetic icons, overflow, and what it can force. Not checked until slice 15: airplane, No SIM, No Service, LTE/5G, other levels. D-074's exact-pixel targets, D-083's `wifi.3` exception. §7 by both agents for all four slices. Levels and slots change by a cut until slice 13. No smoothness claim until slice 17.
+
+**Size.** About 200 changed production lines each; subdivide rather than exceed. One milestone: the owner sees it after 12d.
+
+- `codex: AGREE approach — <one line>`
+
 ## 4. Split
+
+| Sub-task | Owner | Files owned | Branch | Verified by |
+| --- | --- | --- | --- | --- |
+| 12a expression values, `take`, `length` | codex | `engine/.../expr/*`, its tests | `team/codex/e2-slice12` | unit tests |
+| 12b `each`, `as`, reconciliation, limits | codex | `model/Validator.kt`, `ui/Host.kt`, `ui/ComposeHost.kt`, `Primitives.kt` for `as`, their tests | `team/codex/e2-slice12` | unit tests |
+| 12c grants, source, pictures, `icon picture` | claude | `source/Sources.kt`, `source/SourceBinder.kt`, `ui/IconPainter.kt`, `ui/ComponentView.kt`, `Primitives.kt` for `picture` after 12b, `KdlBar.kt`, adapters | `team/claude/e2-slice12` | unit tests, emulator |
+| 12d the KDL, `BarFit`, the checks | claude | `status-bar.kdl`, `BarFit`, the harness, `Shade.kt` | `team/claude/e2-slice12` | unit tests, diff.py, S24, owner |
 
 ## 5. Reports
 
