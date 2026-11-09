@@ -1,6 +1,6 @@
 # The default layout: build plan
 
-Draft, 2026-11-09, lead. The design is draft 2 in Figma (https://www.figma.com/design/7E43AzlCpFNqhUkApcstZA, page "Draft 2"),
+Draft 2 of this plan, 2026-11-09, lead, after Codex's first review (T-008). The design is draft 2 in Figma (https://www.figma.com/design/7E43AzlCpFNqhUkApcstZA, page "Draft 2"),
 approved by the owner (D-093, D-094); the language is the owner's design system (D-092). This plan says what the engine must
 gain to ship it, in what order, and what needs the owner first. It does not change the spec's build order: it fills steps 2
 to 5 with this layout's parts.
@@ -10,11 +10,11 @@ to 5 with this layout's parts.
 | Screen | Surface | Engine needs | Launcher code to reuse |
 | --- | --- | --- | --- |
 | Island, at rest and live (states, volume) | `shade`, its `status` slot | cutout-aware placement; docked (home) or floating (apps) shape; width and height springs; states from sources; decode text | the KDL bar (slices 6-12), `StatusBarView`'s cutout maths, charging and sharing watchers |
-| Panel grown from the island (2, 3, 8, 9, 16) | `shade` | the island and panel as one shape; finger-driven progress (`sheet` preset); accordion sections, one open; a slider; toggles | `ControlState`, `Controls`, `Notifs`, `Media`, `LiveBlur` (not used: the panel is matte) |
+| Panel grown from the island (2, 3, 8, 9, 16) | `shade` | the island and panel as one shape; finger-driven progress (`sheet` preset); sections composed from header and body with a reusable expand-and-group behaviour; a slider; toggles; input and action dispatch | `ControlState`, `Controls` (torch, timer, media volume), `Notifs` (open, cancel, send), `Media` (controls) |
 | Power sheet (10) | `shade` | sheet; hold-to-confirm; actions `power.lock`, `power.restart`, `power.off` | the shell service (verify `svc power` as shell uid) |
-| Volume on the island (11, 12) | `shade` | volume key filter; per-stream volume source and action; output device | none: new (the accessibility service can filter keys) |
+| Volume on the island (11, 12) | `shade` | global volume key interception; per-stream volume and output device (`audio`, `media.volume`) | `Controls` reads and sets media volume; `Shade` forwards volume keys while its focus holder is active. New: global interception, other streams, output devices |
 | Home with the docked island (1, 15) | `home` | the frame (6 dp) and the wallpaper window; a clock widget; a dock of pinned apps; the island's dock shape flared into the frame | `home/`, `Wallpaper`, `apps/` |
-| Launcher (6, 13, 14) | `drawer` | grows out of the dock with the finger; most-used; A to Z with a fast index; search above the keyboard; `>` commands | `drawer/`, the app index and usage order, IME insets handling |
+| Launcher (6, 13, 14) | `drawer` | grows out of the dock with the finger; most-used; A to Z with a fast index; search above the keyboard; `>` commands | `drawer/`, the app index, `LaunchStats` (the launcher's own frequency and recency, not device-wide usage), IME insets handling |
 | Recents (5) and app swipes | `recents` | the deck: cards, neighbours, clear all; up = home, hold = recents, along the bottom = switch | `GestureNav`, the card window, `switcher/` (all proven; reskinned, not rewritten) |
 | Settings (7) | the app itself, not a surface | the settings app in the design language; rows from the active packages' props | `settings/` is scrapped (D-092); `SettingsActivity` shell only |
 | Apply moment (17) | all | an engine-owned transition between layouts | `motion/transition` |
@@ -22,40 +22,56 @@ to 5 with this layout's parts.
 
 ## 2. New engine pieces
 
-- **Shape union.** Rounded boxes merged with a circular smooth minimum (Caelestia's method, `docs` of T-007's Figma notes): the
-  frame, the docked island, the panel and the launcher drawer are one shape at their joins. An AGSL shader on a RenderNode the
-  engine owns, drawn under the components; components only say which boxes exist. Risk: cost per frame on a pull (the S24
-  measures it, slice by slice).
-- **Cutout placement.** `env.display.cutout` (the camera's rect) and a placement that centres a component on it.
-- **Accordion state.** A `section` primitive (header, body, `open`), with a group rule of one open at a time, and its motion.
-- **Decode text.** Typographic motion as an engine motion: per-character scramble, number ticks, stagger (the design language's
-  motion section).
-- **Design-language motion.** The language's durations and cubic beziers as motion presets beside the springs the engine has.
-- **Sources.** `media` (exists in the launcher), `volume` (per stream, output device), `calendar` (events), `weather`, `system`
-  (cpu, memory, temperature, storage, network rate, uptime), `apps.usage` (most used), `island` (what is live and ranked).
-- **Actions.** `notifications.open/dismiss/reply` (spec), `media.*`, `volume.set`, `power.*`, `commands.*` (the `>` registry:
-  calc, wallpaper, scheme, timer, flashlight, lock), `surface.show/hide`.
-- **Prop types for settings.** `enum`, `color`, `font`, `token`, `duration`, `bool` with labels (the design system's settings
-  section asks for them).
+Names follow the spec's Sources and Actions; nothing here creates a competing name.
+
+- **Shapes.** Rounded boxes with concave joins, as engine geometry: drawn first (paths, reusable by any component), an AGSL
+  smooth union only if measurement shows the drawn joins cannot match during expansion, reversal and separation. Bounded shape
+  count and drawing area, GPU path warmed, clipping and hit regions defined, behaviour below Android 13 defined. The default
+  layout owns the arrangement; the engine owns the drawing.
+- **Motion for size and presence.** The host animates translation, alpha and scale today and removes a hidden node outright; the
+  island needs size springs and presence (arrive, leave) on the existing `motion/Curves` machinery (springs and beziers), not a
+  new timing engine. The design language's beziers become presets there. Also E2's generic place springs and rolling text.
+- **Cutout.** From the `device` source (cutout insets, as the spec names them), with a placement that centres on it, and a
+  no-cutout fallback.
+- **Decode text.** Typographic motion: per-character scramble, number ticks, stagger. Its clock stops when nothing decodes.
+- **Sources (spec names).** `media`, `audio` (streams, output device), `device`, `apps` (usage order), `storage`; new and needing
+  a capability and availability contract: `calendar`, `weather`, CPU and temperature telemetry. Island ranking (what is live
+  first) stays in the default component's policy, not the engine: call, alarm, volume (transient), notification arrival,
+  charging, media, in that order, a higher one interrupting a lower and the lower returning after.
+- **Actions (spec names).** `notifications.open/dismiss/action/reply`, `media.*`, `media.volume`, power actions (capability and
+  availability defined), `commands.*` (the `>` registry), `surface.show/hide`. Inline reply stays withheld until the keyboard-
+  under-the-overlay problem the spec names is solved.
+- **Input and action dispatch.** Buttons, sliders and holds calling actions from KDL, before Lua (E6).
+- **Prop metadata for settings.** `PropDef` has name, type, default and span today; settings need label, doc, min, max, step,
+  enum values, group, validation and persisted user values. Built-in packages first, without the package manager (E8).
 
 ## 3. Order
 
-E2's remaining slices are re-aimed at the island (owner, 2026-11-09): the same engine work, on the bar that ships. The old bar
-keeps the pixel proof it has already passed (slices 9, 10, 12).
+E2's remaining slices are re-aimed at the island (owner, 2026-11-09), and E2 keeps both proofs: the KDL bar against
+StatusBarView as the engine's parity test (D-092), and the island against goldens the owner accepted as the product's.
 
 | Slice | What | Exit |
 | --- | --- | --- |
-| E2.13 | Island geometry: cutout placement; floating and docked shapes; size springs on the language's curves | emulator and S24 screenshots of both shapes; unit tests of the placement |
-| E2.14 | Island states: at rest (the layout's "Island at rest" prop), live media, charging, notification arrival with decode | state fixtures; the owner on the S24 |
-| E2.15 | Fixtures and goldens for every island state, light and dark | `diff.py` against the goldens the owner accepted |
-| E2.16 | Hot reload keeping state | reload test on the emulator |
-| E2.17 | Exit on the S24: the island over apps and home, docked and floating, pulls and idle | ≤ 1 dropped frame in 100 at 120 Hz, idle < 1 ms |
-| E3 | The panel: shape union, the `sheet` pull from the island, accordion sections, toggles, brightness, media, notifications with actions, Today, System; power sheet; volume on the island; banners as island arrivals (calls and alarms must ring through it) | the shade's inventory as a checklist of functions, all present; the owner on the S24 |
-| Settings track (alongside E3) | the settings app in the design language; prop types; rows from active packages; engine pages | the owner on the S24 |
-| E4 | Home frame, clock, dock, launcher from the dock, A to Z, search over the keyboard, `>` commands; the apply moment | the owner on the S24; frame budget on the launcher rise |
-| E5 | Recents and app swipes on the existing deck, reskinned | frame stats as the launcher's switcher today |
+| E2.13a | Size and presence motion on the existing curves; place springs; rolling text | motion unit tests; frames at exact steps, reversal included |
+| E2.13b | `device` cutout and the centring placement, no-cutout fallback | placement tests; emulator and S24 |
+| E2.13c | Shape geometry: rounded boxes, concave joins, a minimal home frame fixture for the docked island | pixel checks of the joins at rest and in motion |
+| E2.14a | The island floating and docked, at rest (the layout's "Island at rest" prop) | screenshots, both themes |
+| E2.14b | `media` adapter and the live media state | state fixtures |
+| E2.14c | Arrivals and the ranking policy: notification, charging; Samsung's charging and cast chips still covered (`StockBarCover`), privacy indicators visible | fixtures; S24 with a real charge and a cast |
+| E2.14d | Decode text | frames at exact steps; its clock idles |
+| E2.15 | Fixtures and goldens: the old bar's parity suite and the island's | `diff.py` on both |
+| E2.16 | Hot reload keeping state | reload test |
+| E2.17 | Exit on the S24: the island over apps and home, pulls and idle | at most 1 dropped frame in 100 at 120 Hz, idle under 1 ms |
+| E3 | The panel: shapes joined, the `sheet` pull from the island, summon and presentation config, sections, toggles, brightness, media, notifications with open, dismiss and actions, Today, System; power sheet; volume on the island; a second fill of one panel proving mixing; banners kept until the island carries calls and alarms | the shade's inventory as a checklist of functions; S24 frame bound; the owner |
+| Settings track | the settings app in the design language; prop metadata and persistence; built-in packages' rows; engine pages | the owner on the S24 (alongside E3 only with the owner's exception to one element at a time; otherwise after E3) |
+| E4 | Home frame, clock, dock, launcher from the dock, A to Z, search over the keyboard, `>` commands; the apply moment | the owner; frame bound on the launcher rise |
+| E5 | Recents and app swipes on the existing deck, reskinned | the S24 frame bound, as the launcher's switcher today |
 
-Each slice about 200 changed production lines, as now; each step gets its own thread and split with Codex.
+Each slice about 200 changed production lines; a slice that grows is split, not stretched.
+
+**Verification for every step,** beyond resting screenshots: frames at exact intermediate steps and on reversal, content
+changing during a pull, the home-to-app handover, rotation and a phone without a cutout, large text, denied permissions and
+missing services, the shell host lost, privacy on the lock screen, reduced motion, idle clocks stopped.
 
 ## 4. Needs the owner first
 
@@ -67,6 +83,7 @@ Each slice about 200 changed production lines, as now; each step gets its own th
 4. **The island's live media bars**: real audio levels need `RECORD_AUDIO` (Android's Visualizer). Without it, the bars move
    with playback only, not the sound. Which?
 5. **Power actions** from the shell: restart and power off as shell uid, verified on the S24 before E3 promises them.
+6. **Settings alongside E3**: an exception to one element at a time, or after E3.
 
 ## 5. Risks
 
@@ -76,3 +93,5 @@ Each slice about 200 changed production lines, as now; each step gets its own th
   from day one of E3, or the stock shade stays.
 - The island over apps sits where the status bar was: an app that hides the status bar (video) hides the island too (as the bar
   today), unless the owner wants otherwise.
+- Samsung's charging and cast chips sit at the bar's edges, not at the camera: the island does not cover them. The existing
+  covers (`StockBarCover`) stay until a replacement is proved; Android's privacy indicators always show.
