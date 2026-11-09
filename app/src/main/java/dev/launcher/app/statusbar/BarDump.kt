@@ -55,8 +55,30 @@ object BarDump {
         val shared = android.graphics.drawable.BitmapDrawable(ctx.resources, Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))
         val one = KdlNotifIcons.ownCopy(ctx, shared)!!
         val two = KdlNotifIcons.ownCopy(ctx, shared)!!
+        shared.bitmap.eraseColor(Color.WHITE)
         one.setBounds(0, 0, 3, 3); one.alpha = 10; two.setBounds(0, 0, 7, 7); two.alpha = 200
-        val own = one !== two && one.bounds.width() == 3 && two.bounds.width() == 7 && one.alpha == 10 && two.alpha == 200
+        one.setTint(Color.RED); two.setTint(Color.BLUE)
+        fun colourOf(d: Drawable): Int {
+            val a = d.alpha; d.alpha = 255
+            val b = Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888); d.draw(Canvas(b)); d.alpha = a
+            return b.getPixel(1, 1)
+        }
+        val tints = colourOf(one) == Color.RED && colourOf(two) == Color.BLUE
+        // What cannot be measured is kept as a small bitmap: a wrapper round a large picture, and a drawable with no state to copy.
+        val huge = Bitmap.createBitmap(2000, 2000, Bitmap.Config.ARGB_8888)
+        val wrapped = KdlNotifIcons.bounded(ctx, android.graphics.drawable.LayerDrawable(arrayOf(android.graphics.drawable.BitmapDrawable(ctx.resources, huge))))
+        val stateless = KdlNotifIcons.bounded(ctx, object : Drawable() {
+            override fun draw(canvas: Canvas) {}
+            override fun setAlpha(alpha: Int) {}
+            override fun setColorFilter(colorFilter: android.graphics.ColorFilter?) {}
+            @Suppress("OVERRIDE_DEPRECATION") override fun getOpacity() = android.graphics.PixelFormat.TRANSLUCENT
+        })
+        val tooBig = KdlNotifIcons.bounded(ctx, android.graphics.drawable.BitmapDrawable(ctx.resources, huge))
+        val limits = ((wrapped as? android.graphics.drawable.BitmapDrawable)?.bitmap?.allocationByteCount ?: Int.MAX_VALUE) <= 1024 * 1024 &&
+            stateless?.constantState != null && tooBig == null
+        huge.recycle()
+        AppLog.log("[statusbar] test: tints each their own: $tints; what is kept is bounded: $limits")
+        val own = one !== two && one.bounds.width() == 3 && two.bounds.width() == 7 && one.alpha == 10 && two.alpha == 200 && tints && limits
         AppLog.log("[statusbar] test: drawables are each caller's own: $own")
         if (!own) return done(-1)
         val jobs = STATES.flatMap { s -> TONES.map { t -> s to t } }.iterator()
