@@ -10,6 +10,7 @@ import dev.launcher.engine.layout.Measured
 import dev.launcher.engine.layout.Size
 import dev.launcher.engine.token.Tokens
 import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.max
 
 /**
@@ -64,6 +65,8 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
 
     override fun release(node: HostNode) { drawable = null; drawableFor = null }
 
+    override fun wholePixels(node: HostNode) = picture(node) != null
+
     private var paint: Paint? = null
     /** Bumped when a requested glyph arrives: read in [key] and [measure], so both run again (the content's key moves too). */
     private val arrived = mutableIntStateOf(0)
@@ -90,9 +93,10 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
     override fun paint(canvas: Canvas, node: HostNode, width: Int, height: Int) {
         picture(node)?.let { k ->
             val d = drawableOf(k) ?: return
-            val side = size(node).toInt()
+            val side = size(node)
             val col = color(node)
-            d.setBounds(0, 0, side, side)
+            // StatusBarView.drawIcon's bounds: each edge cut to a whole pixel from its exact place.
+            d.setBounds(0, 0, floor(node.residualX + side).toInt(), floor(node.residualY + side).toInt())
             d.setTint(col or (0xFF shl 24))
             d.alpha = (col ushr 24) and 0xFF
             d.draw(canvas)

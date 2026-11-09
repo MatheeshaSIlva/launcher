@@ -62,7 +62,7 @@ object Primitives {
             AttrDef("justify", AttrType.oneOf("start", "center", "end", "space-between"), "start"), container = true),
         PrimitiveDef("stack", listOf(AttrDef("align", AttrType.oneOf("top-start", "top", "top-end", "start", "center", "end",
             "bottom-start", "bottom", "bottom-end", "centre-line"), "center")), container = true),
-        PrimitiveDef("box", lengths("stroke") + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("stroke-align", AttrType.oneOf("inside", "center"), "inside") + AttrDef("fill", AttrType.COLOR) +
+        PrimitiveDef("box", lengths("stroke") + AttrDef("stroke-color", AttrType.COLOR) + AttrDef("stroke-align", AttrType.oneOf("inside", "center"), "inside") + AttrDef("align", AttrType.oneOf("top-start", "centre-line"), "top-start") + AttrDef("fill", AttrType.COLOR) +
             AttrDef("reveal", AttrType.NUMBER, 1.0) + AttrDef("clip", AttrType.BOOL, false), container = true),
         PrimitiveDef("text", lengths("size") + listOf(AttrDef("font", AttrType.STRING), AttrDef("weight", AttrType.INT, 400),
             AttrDef("blend", AttrType.oneOf("normal", "knockout"), "normal", bindable = false),

@@ -35,7 +35,7 @@ component "status-bar" version="0.1.0" {
         icon "cell.{network.cell.level}" set="statusbar" size=18.6 color="@color" visible="{network.service == 'in-service'}"
         text "{network.type}" size=12.5 weight=600 color="@color" visible="{!network.wifi.connected && network.type != '' && network.service == 'in-service'}"
         icon "wifi.{network.wifi.level}" set="statusbar" size=17 color="@color" visible="{network.wifi.connected}"
-        box height=12 radius=3 padding-start=2.5 padding-end=2.5 stroke=1.2 stroke-color="@color" stroke-align="center" visible="{network.vpn}" label="VPN" {
+        box height=12 radius=3 padding-start=2.5 padding-end=2.5 stroke=1.2 stroke-color="@color" stroke-align="center" align="centre-line" visible="{network.vpn}" label="VPN" {
           text "VPN" size=9.5 weight=600 color="@color"
         }
         // StatusBarView's drawBattery at rest: the faint body, the same body filled to the level, the number cut out of both,

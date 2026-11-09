@@ -54,6 +54,11 @@ class HostTest {
         h.settled({ true }) { false }
         assertEquals(4, h.root.children.size)           // three icons and the dot
     }
+    @org.junit.Test fun aFixedSpacerCountsItsExactSize() {
+        val m = dev.launcher.engine.layout.Layout.spacer(18.375f, dev.launcher.engine.layout.Constraints(0, 100, 0, 100))
+        assertEquals(18.375f, m.exactWidth)
+        assertEquals(18.375f, m.exactHeight)
+    }
     @org.junit.Test fun aRootNotVisibleHasNothingUnderItAndComesBack() {
         var on = false
         val e = object : Env by env { override fun source(path: String) = Value.Bool.of(on) }

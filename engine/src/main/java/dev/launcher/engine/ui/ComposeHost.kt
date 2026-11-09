@@ -21,6 +21,7 @@ import dev.launcher.engine.expr.Value
 import dev.launcher.engine.layout.Child
 import dev.launcher.engine.layout.Measured
 import dev.launcher.engine.layout.Size
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import androidx.compose.ui.graphics.Canvas as ComposeCanvas
 import androidx.compose.ui.unit.Constraints as ComposeConstraints
@@ -63,8 +64,21 @@ private class Policy(val n: HostNode) : MeasurePolicy {
         n.centre = a.measured.centre
         n.measured = a.measured
         return layout(a.measured.size.width, a.measured.size.height, mapOf(CentreLine to a.measured.centre.roundToInt())) {
+            // Placed top-down: this node's own place is known by now.
+            val fx = n.parentFractionX + n.motion.drawX
+            val fy = n.parentFractionY + n.motion.drawY
             a.placements.forEachIndexed { k, p ->
-                n.children[k].motion.place(p.residualX, p.residualY)
+                val child = n.children[k]
+                child.parentFractionX = fx
+                child.parentFractionY = fy
+                if (child.painter.wholePixels(child)) {
+                    // On a whole pixel of the screen, not of its parent: the parent's fraction taken back, the rest for the painter.
+                    val x = fx + p.residualX
+                    val y = fy + p.residualY
+                    child.residualX = x - floor(x)
+                    child.residualY = y - floor(y)
+                    child.motion.place(floor(x) - fx, floor(y) - fy)
+                } else child.motion.place(p.residualX, p.residualY)
                 placeables[k]?.place(p.x, p.y)
             }
         }
@@ -103,12 +117,12 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
             return
         }
         val own = n.own
-        if (listOf(key, n.exactWidth, n.exactHeight) != n.ownKey || own.width != w || own.height != h) {
+        if (listOf(key, n.exactWidth, n.exactHeight, n.residualX, n.residualY) != n.ownKey || own.width != w || own.height != h) {
             own.setPosition(0, 0, w, h)
             n.painter.paint(own.beginRecording(), n, n.exactWidth, n.exactHeight)
             own.endRecording()
             n.ownRecords++
-            n.ownKey = listOf(key, n.exactWidth, n.exactHeight)
+            n.ownKey = listOf(key, n.exactWidth, n.exactHeight, n.residualX, n.residualY)
         }
         val frame = n.frame
         frame.setPosition(0, 0, w, h)

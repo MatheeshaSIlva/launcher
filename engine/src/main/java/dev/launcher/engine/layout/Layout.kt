@@ -116,7 +116,8 @@ object Layout {
     }
 
     /** A spacer's own measure: its [size] along the row, as wide as its constraints allow (a flex spacer's are fixed). */
-    fun spacer(size: Float, c: Constraints) = Measured(Size(px(size).coerceIn(c.minWidth, c.maxWidth), c.minHeight))
+    /** Its exact size counts, as a row of icons' does: a whole-pixel gap moved everything after it by a fraction (T-007). */
+    fun spacer(size: Float, c: Constraints) = (Measured(Size(px(size).coerceIn(c.minWidth, c.maxWidth), c.minHeight))).let { it.copy(exactWidth = size.coerceIn(c.minWidth.toFloat(), c.maxWidth.toFloat()), exactHeight = size.coerceIn(c.minHeight.toFloat(), c.maxHeight.toFloat())) }
 
     fun row(f: Frame, c: Constraints, gap: Float, justify: Justify, align: Align, children: List<Child>): Arranged = framed(f, c) { inner ->
         val n = children.size

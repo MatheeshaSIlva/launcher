@@ -30,6 +30,8 @@ import dev.launcher.engine.model.ViewNode
 interface Painter {
     /** What the drawing depends on, read from [node]'s values: the content is recorded again only when it changes. */
     fun release(node: HostNode) {}
+    /** Drawn on whole pixels, as a drawable with whole bounds is: the fraction of its place reaches the painter ([HostNode.residualX]), not its node. */
+    fun wholePixels(node: HostNode): Boolean = false
     fun key(node: HostNode): Any?
     fun paint(canvas: Canvas, node: HostNode, width: Int, height: Int)
     /** Exact drawing bounds; legacy painters still receive the allocation through the Int overload. */
@@ -85,6 +87,12 @@ class HostNode internal constructor(
     internal val frame by frameLazy
     /** The root's `visible` (a root cannot be planned out: a component has one): it and all under it draw nothing. */
     internal val hidden = mutableStateOf(false)
+    /** Where its parent's frame is, as a fraction of a pixel, all the way up: what [Painter.wholePixels] has to undo. */
+    internal var parentFractionX = 0f
+    internal var parentFractionY = 0f
+    /** For a [Painter.wholePixels] node: the fraction of a pixel its exact place had over its whole one. */
+    var residualX = 0f; internal set
+    var residualY = 0f; internal set
     private val childState = mutableStateOf(children)
     val children: List<HostNode> get() = childState.value
     internal fun children(value: List<HostNode>) { childState.value = value }
@@ -125,7 +133,7 @@ class HostNode internal constructor(
         "row" -> Layout.row(frame(), c, length("gap") ?: 0f, Justify.valueOf(word("justify").enumName("START")),
             Align.valueOf(word("align").enumName("CENTER")), kids)
         "stack" -> Layout.stackAlign(word("align") ?: "center").let { (x, y) -> Layout.stack(frame(), c, x, y, kids, word("align") == "centre-line") }
-        "box" -> Layout.box(frame(), c, kids)
+        "box" -> if (word("align") == "centre-line") Layout.stack(frame(), c, 0f, 0.5f, kids, centreLine = true) else Layout.box(frame(), c, kids)
         "spacer" -> Arranged(Layout.spacer(length("size") ?: 0f, c), emptyList(), emptyList())
         else -> Layout.leaf(frame(), c, Measurer { w, h -> painter.measure(this, w, h) ?: Measured(dev.launcher.engine.layout.Size(0, 0)) })
     }
