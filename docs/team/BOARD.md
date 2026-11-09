@@ -1,6 +1,6 @@
 # Board
 
-**Now:** T-001's slice 4 and the handover are merged, behind the developer switch (D-090, D-091). T-001 next: slice 5, the flip and removing Shizuku. E2 next: slice 12 (`notifications.icons`, `each`, overflow), which also wires the bar's Wi-Fi, cell, moon and bolt from slice 9 over slice 11's sources, not yet in the KDL.
+**Now:** direction changed (D-092): iOS and Pixel scrapped, a default theme of our own, settings are what creators offer. The owner leads the identity; the lead proposes concepts next, nothing built until chosen. T-007 (E2 slice 12) waits on `team/claude/e2-slice12`: gate passed, Codex agreed, owner's look open; then live pills are proposed (after slice 13, before T-001 slice 5; not yet agreed). T-001's slice 4 and the handover are merged, behind the developer switch (D-090, D-091). T-001 next: slice 5, the flip and removing Shizuku. E2 next: slice 12 (`notifications.icons`, `each`, overflow), which also wires the bar's Wi-Fi, cell, moon and bolt from slice 9 over slice 11's sources, not yet in the KDL.
 
 **Step:** E2 — KDL loader and interpreter core (`docs/ENGINE_SPEC.md`, build order step 2; plan `docs/E2_PLAN.md`)
 **Device:** claude (lead)

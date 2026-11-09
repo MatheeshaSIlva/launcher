@@ -157,15 +157,23 @@ How a surface follows the finger is an engine `presentation` type with knobs, no
 
 | Preset | Progress | Commit | Knobs |
 | --- | --- | --- | --- |
-| `sheet` (iOS notification centre) | y / height, rubber-banded past 1 | from a standstill opens past 0.625 | rubber-band strength, open threshold |
-| `presence` (iOS control centre) | dy / `open-travel`, clamped; offset spring `100u·(1−e^(−d/270u))` with velocity hand-off | fling or past 0.4 | `open-travel`, spring curve constant, hand-off gain |
-| `two-stage` (Pixel shade) | dy / `first-travel` from touch slop; second stage on a second pull | 56 dp or 125 dp/s; two fingers go straight to full | both travels, commit distance, commit velocity |
+| `sheet` | y / height, rubber-banded past 1 | from a standstill opens past 0.625 | rubber-band strength, open threshold |
+| `presence` | dy / `open-travel`, clamped; offset spring `100u·(1−e^(−d/270u))` with velocity hand-off | fling or past 0.4 | `open-travel`, spring curve constant, hand-off gain |
+| `two-stage` | dy / `first-travel` from touch slop; second stage on a second pull | 56 dp or 125 dp/s; two fingers go straight to full | both travels, commit distance, commit velocity |
 
 Shared rules, also knobs: a fling is 900 px/s; a release opens past 0.4; a drag on an open surface closes below 0.75; swipe up from the bottom always closes; a surface on its way out can be caught and moved on. Placements are part of the summon config: which zone of the top edge (`top`, `left-of-camera`, `right-of-camera`, measured from the display cutout) opens which surface.
 
 ### Banners are mandatory
 
 Hiding the stock shade (disable flags on a binder token) also suppresses heads-up notifications and full-screen intents, including incoming calls. A shade fill therefore either supplies a `banner` component or inherits the engine default; the validator refuses a shade package that does neither. The default carries the launcher's banner policy: 7 s show time, ringing persists until answered, replies are not offered (the keyboard would sit under the overlay). The status bar, banners, panels and the app-opens-from-notification card share one window; the engine hosts all four in the shade surface so their z-order is fixed.
+
+## The default theme and settings (D-092)
+
+The launcher has a default theme completely its own: not iOS, not Pixel, not One UI. It is what a phone shows before anything is installed, so it is the product's face, and it is made from the same components, tokens and capabilities a creator has.
+
+The settings app carries its own identity, whatever the active theme looks like. Its contents are not a fixed list: a user can change what the active themes, layouts and plugins offer, each package's `props` shown as controls, grouped by what offers them, and what is installed but not active offers nothing. Only the engine's own concerns (permissions, the shell host, packages, updates, safety) are fixed.
+
+The blur and colour presets, motion presets, transition styles and panel-pull models the launcher already has stay as neutral presets creators may use. The iOS 27 and Pixel looks do not ship.
 
 ## Theme and tokens
 
@@ -369,7 +377,7 @@ Build order, each step usable on its own:
 
 1. **Platform layer.** Lift the launcher's proven code into an engine module with no behaviour change: the shell service and AIDL, safety net, window plumbing, motion and transitions, token resolver, glass renderer, fonts, apps, widgets, notifications, controls, media. The capability registry wraps the AIDL; the callback watches become flows. In the same step, replace Shizuku with our own host: starter, ADB pairing and connect client, mDNS, binder handover, root start, boot restart (Decisions, "no Shizuku"). Exit: the existing launcher runs on the module with no Shizuku installed, and comes back by itself after a reboot on the S24 and the Redmi.
 2. **Interpreter core.** KDL parser, props/uses/state validation with reasons, token binding, the first twelve primitives (`box`, `row`, `column`, `stack`, `text`, `icon`, `image`, `glass`, `list`, `grid`, `slider`, `toggle`), transitions bound to surface progress. Exit: a KDL status bar renders inside the existing shade window, pixel-matched against the hand-drawn one, inside the frame budget on the reference device. This is the step that decides whether the Compose split holds.
-3. **Shade from KDL.** Summon config and placements, the three presentation presets, banners, the iOS notification and control centres, then the Pixel shade as a second theme. Exit: parity with the launcher's shade inventory, both shades mixable per panel.
+3. **Shade from KDL.** Summon config and placements, the three presentation presets, banners, the default theme's panels (D-092), and a second fill for one panel to prove panels mix. Exit: the shade's functions all present (the launcher's inventory as a checklist of what it does, not how it looks), and panels mixable.
 4. **Home and drawer from KDL.** `pager`, `sheet`, `search`, `menu`, `widget`, free-placement `grid` with the edit-mode state machine extracted. Folders and the seed layout, never finished in the launcher, land here.
 5. **Switcher.** The `deck` primitive on the nav thread, `SurfaceControlViewHost` kept; the thread question answered by measurement.
 6. **Scripting and media.** The Lua worker, state sync, event delivery, budgets, the developer panel; the plain-value projection of notification items and action handles; then `web`, `video`, `map`, `lottie`.
@@ -405,7 +413,7 @@ Deliberately not taken: native plugins (Rainmeter) and arbitrary JS on the canva
 
 **Budget, 2026-11-03.** Until revenue: the Claude subscription, the Play developer account and the domain only. Trademarks, a lawyer's reading, a second test phone and a paid security review are deferred, each with a stand-in: evidence of first use; policies drafted from Google's requirements and standard templates and marked as not yet lawyer-read; the Android 17 Pixel emulator plus a volunteer tester from the community; the public sandbox test suite, static analysis and open-source review.
 
-**Public alpha gate: after step 4.** Shades (iOS and Pixel), home, drawer and switcher as text packages; onboarding without adb; zero P0 bugs; the three rules held on the S24 for every shipped package. Labelled 0.x, format unstable, said plainly. Ships with the VS Code extension (KDL grammar, `nal check` as a language server, snippets, fixture preview) and the AI skill (spec, primitive reference, fixtures, a lint loop). The desktop editor and the store come after.
+**Public alpha gate: after step 4.** The default theme's shade, home, drawer and switcher as text packages; onboarding without adb; zero P0 bugs; the three rules held on the S24 for every shipped package. Labelled 0.x, format unstable, said plainly. Ships with the VS Code extension (KDL grammar, `nal check` as a language server, snippets, fixture preview) and the AI skill (spec, primitive reference, fixtures, a lint loop). The desktop editor and the store come after.
 
 **Shizuku after reboot.** Solved, and not the way first assumed. Shizuku's privileged service grants the manager app `WRITE_SECURE_SETTINGS` once; the `thedjchi/Shizuku` fork (Apache-2.0, v13.7.0, reviewed 2026-11-03 against upstream) uses it at boot to turn wireless debugging on itself (`adb_wifi_enabled = 1`), waits for Wi-Fi and adbd, connects with the stored pairing key over mDNS, starts the service, then turns wireless debugging off again. It therefore works on any Android 11+ phone whatever the OEM does with the toggle; the delay is Wi-Fi plus adbd plus mDNS. Review findings: the privileged server differs from upstream only by Android 17 shims; the accessibility service is scoped to the TV settings app and never runs on a phone; the self-updater pulls from the author's GitHub releases with a SHA-256 check (Android enforces the signing key); stealth mode re-signs a renamed copy locally; the Tasker start/stop receivers are token-gated; TCP mode leaves classic ADB on port 5555 open on the LAN until reboot. Maintenance is paused by its author.
 
