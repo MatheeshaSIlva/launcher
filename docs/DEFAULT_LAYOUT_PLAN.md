@@ -15,7 +15,7 @@ to 5 with this layout's parts.
 | Volume on the island (11, 12) | `shade` | global volume key interception; per-stream volume and output device (`audio`, `media.volume`) | `Controls` reads and sets media volume; `Shade` forwards volume keys while its focus holder is active. New: global interception, other streams, output devices |
 | Home with the docked island (1, 15) | `home` | the frame (6 dp) and the wallpaper window; a clock widget; a dock of pinned apps; the island's dock shape flared into the frame | `home/`, `Wallpaper`, `apps/` |
 | Launcher (6, 13, 14) | `drawer` | grows out of the dock with the finger; most-used; A to Z with a fast index; search above the keyboard; `>` commands | `drawer/`, the app index, `LaunchStats` (the launcher's own frequency and recency, not device-wide usage), IME insets handling |
-| Recents (5) and app swipes | `recents` | the deck: cards, neighbours, clear all; up = home, hold = recents, along the bottom = switch | `GestureNav`, the card window, `switcher/` (all proven; reskinned, not rewritten) |
+| Recents (5) and app swipes | `recents` | the deck: cards, neighbours, clear all; up = home, hold = recents, along the bottom = switch | `GestureNav`, the card window, `switcher/` (host, input and physics kept; the drawing rewritten as a KDL `deck`) |
 | Settings (7) | the app itself, not a surface | the settings app in the design language; rows from the active packages' props | `settings/` is scrapped (D-092); `SettingsActivity` shell only |
 | Apply moment (17) | all | an engine-owned transition between layouts | `motion/transition` |
 | Lock (draft 1) | not available | none | Android owns it |
@@ -59,13 +59,14 @@ StatusBarView as the engine's parity test (D-092), and the island against golden
 | E2.14b | `media` adapter and the live media state | state fixtures |
 | E2.14c | Arrivals and the ranking policy: notification, charging; Samsung's charging and cast chips still covered (`StockBarCover`), privacy indicators visible | fixtures; S24 with a real charge and a cast |
 | E2.14d | Decode text | frames at exact steps; its clock idles |
+| E2.14e | Surface progress: transition tracks bound to the shade's progress (the island following a pull), hidden-by-app and transient show, `BarHost` routing the shade's calls to the KDL component | frames at intermediate progress and on reversal; emulator pulls; S24 frame stats |
 | E2.15 | Fixtures and goldens: the old bar's parity suite and the island's | `diff.py` on both |
 | E2.16 | Hot reload keeping state | reload test |
 | E2.17 | Exit on the S24: the island over apps and home, pulls and idle | at most 1 dropped frame in 100 at 120 Hz, idle under 1 ms |
 | E3 | The panel: shapes joined, the `sheet` pull from the island, summon and presentation config, sections, toggles, brightness, media, notifications with open, dismiss and actions, Today, System; power sheet; volume on the island; a second fill of one panel proving mixing; banners kept until the island carries calls and alarms | the shade's inventory as a checklist of functions; S24 frame bound; the owner |
 | Settings track | the settings app in the design language; prop metadata and persistence; built-in packages' rows; engine pages | the owner on the S24 (alongside E3 only with the owner's exception to one element at a time; otherwise after E3) |
 | E4 | Home frame, clock, dock, launcher from the dock, A to Z, search over the keyboard, `>` commands; the apply moment | the owner; frame bound on the launcher rise |
-| E5 | Recents and app swipes on the existing deck, reskinned | the S24 frame bound, as the launcher's switcher today |
+| E5 | Recents and app swipes: the proven host, input and physics kept; a KDL `deck` primitive replacing `DeckView`'s drawing, on the nav thread, the thread question answered by measurement (spec step 5) | the S24 frame bound, as the launcher's switcher today |
 
 Each slice about 200 changed production lines; a slice that grows is split, not stretched.
 
@@ -89,8 +90,8 @@ missing services, the shell host lost, privacy on the lock screen, reduced motio
 
 - The shape union's cost on a 120 Hz pull is unknown until measured; the fallback is separate shapes with drawn flares (as the
   Figma draft does), which look the same at rest.
-- Banners: hiding the stock shade suppresses heads-up and full-screen intents. The island must carry incoming calls and alarms
-  from day one of E3, or the stock shade stays.
+- Banners: hiding the stock shade suppresses heads-up and full-screen intents. The existing banners stay active, for every shade
+  fill, until the island proves equivalent handling of calls and alarms; only then does the island replace them.
 - The island over apps sits where the status bar was: an app that hides the status bar (video) hides the island too (as the bar
   today), unless the owner wants otherwise.
 - Samsung's charging and cast chips sit at the bar's edges, not at the camera: the island does not cover them. The existing
