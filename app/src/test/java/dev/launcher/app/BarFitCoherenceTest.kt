@@ -74,7 +74,8 @@ class BarFitCoherenceTest {
         val want = minOf(icons, maxIcons) to (icons > maxIcons)
         assertEquals(want, shown())
     }
-    private val room2At40 = 34f + 40f + 7f + 2 * 14.5f + 4.5f + 4.5f + 3.4f + 4.5f + 8f
+    /** Just room for two icons with a 40-wide time: side, time, gap, two icons and the gap between, the dot's room, the camera's clearance. */
+    private val room2At40 = 34f + 40f + 7f + 2 * 14.5f + 4.5f + 3.4f + 4.5f + 8f + 0.01f
 
     @Test fun aNotificationArrivingAsTheTimeWidens() {
         camera = room2At40
