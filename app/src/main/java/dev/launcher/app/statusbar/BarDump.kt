@@ -51,6 +51,14 @@ object BarDump {
         val unit = dev.launcher.app.design.Scale.unitPx(ctx)
         val width = parent.width
         val height = bar.barHeightForTest()
+        // Two users of one picture, on the phone's real drawables: neither's bounds, tint or alpha reaches the other.
+        val shared = android.graphics.drawable.BitmapDrawable(ctx.resources, Bitmap.createBitmap(8, 8, Bitmap.Config.ARGB_8888))
+        val one = KdlNotifIcons.ownCopy(ctx, shared)!!
+        val two = KdlNotifIcons.ownCopy(ctx, shared)!!
+        one.setBounds(0, 0, 3, 3); one.alpha = 10; two.setBounds(0, 0, 7, 7); two.alpha = 200
+        val own = one !== two && one.bounds.width() == 3 && two.bounds.width() == 7 && one.alpha == 10 && two.alpha == 200
+        AppLog.log("[statusbar] test: drawables are each caller's own: $own")
+        if (!own) return done(-1)
         val jobs = STATES.flatMap { s -> TONES.map { t -> s to t } }.iterator()
         var pairs = 0
         fun next() {

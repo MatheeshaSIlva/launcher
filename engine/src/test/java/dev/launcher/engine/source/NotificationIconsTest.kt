@@ -104,6 +104,13 @@ class NotificationIconsTest {
         assertEquals(1, loads)                  // the first turn found its revision gone: only the newest loaded
         assertEquals(listOf(NotifIcon("a", "100")), table.icons())
     }
+    @Test fun appsComingAndGoingCannotQueueMoreThanTheBound() {
+        for (i in 1..100) table.update(listOf(want("app$i")))
+        assertEquals(PreparedPictures.MAX_APPS, jobs.size)
+        runAll()
+        assertEquals(listOf(NotifIcon("app100", "1")), table.icons())   // what is wanted now is still loaded
+        assertEquals(1, loads)
+    }
     @Test fun aLoadNoLongerWantedNeverRuns() {
         table.update(listOf(want("a")))
         table.update(emptyList())

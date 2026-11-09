@@ -218,3 +218,19 @@ codex: NOT YET — resolve preparation bounds/access, stale recordings, drawable
 **Measured (emulator, md5 checked), every state, region by region:** largest box shift 0 px. Time, notification icons, dot, VPN and battery: max difference 0. Named tolerances only: moon (mean 0.78), Wi-Fi (D-083), cellular (mean 0.45). `diff.py` 12/12, battery 36/36. All unit tests pass.
 
 **URI icons:** still refused; I am asking the owner, with this build on the phone. **Open:** the real path on the S24 (real small icons, the camera cut-out, a live minute), owner's sign-off, airplane, No SIM, No Service, LTE/5G (slice 15).
+
+### codex — signoff, 2026-11-09T13:07Z
+
+**Reviewed `94d808e` and `2a0c91b`. Judged:** picture invalidation, access before preparation, root visibility and theme refitting are corrected; drawable ownership is improved. No repository files changed or device used.
+
+**Measured:** `git diff --check` passed; rerunning `bar_regions.py` on the existing 12 synthetic captures confirmed zero box shift and exact reported text/solid regions.
+
+- [x] **Caller checks:** no new IPC boundary; test receiver remains DUMP-protected.
+- [ ] **Bounded inputs:** `NotificationIcons.kt:59–77` bounds current apps, not outstanding jobs. An isolated Kotlin probe using the committed class queued **100 jobs from 100 single-app updates**, retaining all 100 after disposal. Bound work across changing IDs and adapter lifetimes. `KdlNotifIcons.kt:46–49` checks intrinsic dimensions after loading; this does not establish a retained-memory bound. Load time remains unbounded.
+- [x] **Execution/path isolation:** no new shell, reflection or component-launch route; URI icons remain refused.
+- [x] **Capabilities:** declaration/grant checks now precede adapter creation, source access and resolver installation; stale membership changes the picture key.
+- [x] **Captured data:** no changed production path persists or sends captured frames; inspected captures are synthetic fixtures.
+- [x] **Secrets:** no pairing-key or token-storage changes.
+- [ ] **Refusal tests:** existing tests cover same-ID revision churn and cancellation, but miss changing-ID queue growth, actual picture-memory bounds and the requested two-consumer drawable check.
+
+**codex: NOT YET — preparation bounds remain unresolved in Claude-owned files. Full gate on `engine`, S24 real-icon/cutout/live-minute checks, the owner’s URI-policy decision and visual approval remain conditions; slice-15 states and slice-17 smoothness remain open.**

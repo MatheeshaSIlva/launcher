@@ -33,9 +33,9 @@ object NotificationSource {
  * owner's thread ([post]) before its record is published, so a painter only ever looks up, and never touches another
  * package's resources. A completion counts only while this table lives and that app still wants that revision. While a
  * replacement loads the old picture stays published; a first load is absent until ready, and one that fails is absent
- * until the app's revision changes. Bounded: at most [MAX_APPS] apps, and at most one load per app waits or runs however
- * often its revision changes (the newest is loaded when that one is done); a load no longer wanted when its turn comes
- * never runs. A load itself cannot be interrupted. Owner's thread only, apart from [load].
+ * until the app's revision changes. Bounded: at most [MAX_APPS] apps, and at most [MAX_APPS] jobs wait or run over the
+ * table's whole life, whatever comes and goes, at most one an app (the next wanted one starts when one ends); a load no
+ * longer wanted when its turn comes never runs. A load itself cannot be interrupted. Owner's thread only, apart from [load].
  */
 class PreparedPictures<H, P : Any>(
     private val load: (H) -> P?,
@@ -65,7 +65,8 @@ class PreparedPictures<H, P : Any>(
     }
 
     private fun request(w: Want<H>) {
-        if (!running.add(w.id)) return      // one per app: what it wants then is looked at when this one is done
+        if (w.id in running || running.size >= MAX_APPS) return     // what is wanted then is looked at when one is done
+        running += w.id
         worker(Runnable {
             val current = !disposed && (w.id to w.rev) in wantedNow
             val picture = if (current) try { load(w.handle) } catch (_: Throwable) { null } else null
@@ -76,9 +77,8 @@ class PreparedPictures<H, P : Any>(
     private fun finished(w: Want<H>, loaded: Boolean, picture: P?) {
         running -= w.id
         if (disposed) return
-        val now = wants.firstOrNull { it.id == w.id } ?: return
-        if (loaded && now.rev == w.rev) { installed[w.id] = Installed(w.rev, picture); publish() }
-        else if (installed[now.id]?.rev != now.rev) request(now)
+        if (loaded && wants.any { it.id == w.id && it.rev == w.rev }) { installed[w.id] = Installed(w.rev, picture); publish() }
+        for (next in wants) if (installed[next.id]?.rev != next.rev) request(next)
     }
 
     private fun publish() {

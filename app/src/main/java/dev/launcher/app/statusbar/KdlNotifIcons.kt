@@ -39,13 +39,14 @@ class KdlNotifIcons(private val ctx: Context, private val handler: Handler) : Pi
     override fun has(id: String, rev: String) = table.picture(id, rev) != null
 
     /** A drawable of its own for each caller: drawing changes a drawable's bounds, tint and alpha. [load] saw to a constant state. */
-    override fun picture(id: String, rev: String): Drawable? = table.picture(id, rev)?.constantState?.newDrawable(ctx.resources)?.mutate()
+    override fun picture(id: String, rev: String): Drawable? = table.picture(id, rev)?.let { ownCopy(ctx, it) }
 
     private fun load(icon: Icon): Drawable? {
         if (icon.type == Icon.TYPE_URI || icon.type == Icon.TYPE_URI_ADAPTIVE_BITMAP) return null
         val d = icon.loadDrawable(ctx) ?: return null
         // At most 16 apps of at most this: what a bar's icons may hold in memory, whatever an app hands us.
-        if (d.intrinsicWidth.toLong() * d.intrinsicHeight * 4 > MAX_PICTURE_BYTES) return null
+        val held = (d as? android.graphics.drawable.BitmapDrawable)?.bitmap?.allocationByteCount?.toLong() ?: 0L
+        if (held > MAX_PICTURE_BYTES || d.intrinsicWidth.toLong() * d.intrinsicHeight * 4 > MAX_PICTURE_BYTES) return null
         if (d.constantState != null) return d
         // No state to copy: drawn once, so each caller can still have its own.
         val w = d.intrinsicWidth.coerceAtLeast(1)
@@ -66,8 +67,12 @@ class KdlNotifIcons(private val ctx: Context, private val handler: Handler) : Pi
         table.dispose()
     }
 
-    private companion object {
-        const val MAX_PICTURE_BYTES = 1024L * 1024L
-        val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "kdl-notif-icons").apply { isDaemon = true } }
+    companion object {
+        private const val MAX_PICTURE_BYTES = 1024L * 1024L
+
+        /** A drawable no other caller's bounds, tint or alpha can reach; null if [d] has no state to copy. */
+        fun ownCopy(ctx: Context, d: Drawable): Drawable? = d.constantState?.newDrawable(ctx.resources)?.mutate()
+
+        private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "kdl-notif-icons").apply { isDaemon = true } }
     }
 }
