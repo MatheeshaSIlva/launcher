@@ -36,7 +36,7 @@ object KdlBar {
      * screen; null (and StatusBarView as before) if the file does not load. One per attachment of the shade's window: the
      * caller disposes it ([ComponentView.dispose]) when the window goes or fails to come.
      */
-    fun make(ctx: Context, handler: Handler, bar: StatusBarView): ComponentView? {
+    fun make(ctx: Context, handler: Handler, bar: StatusBarView, reveal: () -> Unit): ComponentView? {
         val doc = try { ctx.assets.open(FILE).bufferedReader().use { KdlParser.parse(it.readText()) } }
             catch (t: Throwable) { AppLog.log("[kdl] $FILE: ${t.message}"); return null }
         val def = when (val r = Validator(tokens).load(doc)) {
@@ -67,20 +67,20 @@ object KdlBar {
                 if (committing) return
                 committing = true
                 // Seen once its first frame is on screen (not counted from before it: CLAUDE.md, first frames).
-                fun reveal() {
+                fun revealed() {
                     if (view.isDisposed) return
                     AppLog.log("[kdl] warm: ${view.counters()}")
                     // StatusBarView gives way in the same frame the KDL bar shows (its colour from then on).
                     bar.kdlInPlace = { c -> view.setProp("color", Value.Color(c)) }
-                    view.show(true)
+                    reveal()
                 }
                 v.viewTreeObserver.registerFrameCommitCallback {
                     handler.post {
                         if (view.isDisposed) return@post
                         // Its icons' glyphs loaded first; if they came after that frame, one more frame draws them.
                         view.whenPrepared { late ->
-                            if (!late) reveal()
-                            else { v.viewTreeObserver.registerFrameCommitCallback { handler.post { reveal() } }; v.invalidate() }
+                            if (!late) revealed()
+                            else { v.viewTreeObserver.registerFrameCommitCallback { handler.post { revealed() } }; v.invalidate() }
                         }
                     }
                 }

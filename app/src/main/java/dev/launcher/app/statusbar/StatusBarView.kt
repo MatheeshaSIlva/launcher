@@ -182,7 +182,9 @@ class StatusBarView(ctx: Context) : View(ctx) {
 
     /**
      * Waits for the stock bar to leave (GestureNav's handover): out of sight from its first frame, then in on the show role.
-     * A panel pulled meanwhile brings it at once.
+     * Only its pixels wait: [showing] stays true, so a pull from the top is taken from the first frame (the stock shade is
+     * blocked by then), and a panel pulled meanwhile brings it at once. It does not move: the centre line it works out from
+     * its place on screen would stay off by the translation (13 px until the next layout, measured on the S24).
      */
     fun waitForStockBar(on: Boolean) {
         waitingForStock = on
@@ -190,22 +192,19 @@ class StatusBarView(ctx: Context) : View(ctx) {
             animate().cancel()
             shownNow = false
             alpha = 0f
-            translationY = -barHeight * 0.25f
-            visibility = INVISIBLE
-            onHiddenChanged?.invoke(true)
         } else sync()
     }
 
     private var waitingForStock = false
 
     /** Whether the bar shows now (and the shade takes touches on it). */
-    val showing get() = !suppressed && (panelOpen || (!waitingForStock && (!hiddenByApp || transient)))
+    val showing get() = !suppressed && (!hiddenByApp || transient || panelOpen)
 
     private var shownNow = true
 
     /** Fades (and slides a touch upward) like the stock bar does, instead of vanishing or appearing in one frame. */
     private fun sync() {
-        val want = showing
+        val want = dev.launcher.engine.shell.StockHandover.drawn(showing, waitingForStock, panelOpen)
         if (want == shownNow) return
         shownNow = want
         animate().cancel()

@@ -54,6 +54,12 @@ class StockHandoverTest {
         assertEquals(1, released)
         assertTrue(handover.holding)
     }
+    @Test fun aWaitHoldsOnlyThePixels() {
+        assertFalse(StockHandover.drawn(showing = true, waiting = true, panelOpen = false))
+        assertTrue(StockHandover.drawn(showing = true, waiting = true, panelOpen = true))
+        assertTrue(StockHandover.drawn(showing = true, waiting = false, panelOpen = false))
+        assertFalse(StockHandover.drawn(showing = false, waiting = false, panelOpen = false))
+    }
     @Test fun nothingHeldNothingReleased() {
         handover.flagsSent(true)
         handover.cancel()

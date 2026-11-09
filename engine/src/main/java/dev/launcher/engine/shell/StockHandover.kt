@@ -34,6 +34,9 @@ class StockHandover(private val post: (delayMs: Long, run: () -> Unit) -> Unit, 
     }
 
     companion object {
+        /** The bar's pixels: a wait holds back only them, never what [showing] gives the shade (the touches on the bar). */
+        fun drawn(showing: Boolean, waiting: Boolean, panelOpen: Boolean) = showing && (!waiting || panelOpen)
+
         /** The stock bar's whole exit took 175 ms on the S24 (recording, 2026-11-09); not a theme's motion: it is Android's. */
         const val STOCK_EXIT_MS = 200L
         const val GIVE_UP_MS = 2_000L

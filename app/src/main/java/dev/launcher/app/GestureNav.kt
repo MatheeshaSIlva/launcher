@@ -455,14 +455,13 @@ object GestureNav : NavHost {
             stockCover.push()
             val service = ShizukuLink.service
             if (stockShowing && service != null) {
-                val bar = s.bar
                 stockHandover?.cancel()     // an earlier one's timers must not end this wait
-                val handover = dev.launcher.engine.shell.StockHandover({ ms, run -> nav.postDelayed(run, ms) }) { bar.waitForStockBar(false) }
+                val handover = dev.launcher.engine.shell.StockHandover({ ms, run -> nav.postDelayed(run, ms) }) { s.waitForStockBar(false) }
                 stockHandover = handover
-                bar.waitForStockBar(true)
+                s.waitForStockBar(true)
                 handover.begin()
                 tasksIo.execute {   // now the stock clock and icons can go, and the stock shade
-                    val ok = try { SystemRestore.applyFlags(app, service); true } catch (t: Throwable) { AppLog.log("[statusbar] flags: ${t.javaClass.simpleName}"); false }
+                    val ok = try { !SystemRestore.applyFlags(app, service).contains("ERROR") } catch (t: Throwable) { AppLog.log("[statusbar] flags: ${t.javaClass.simpleName}"); false }
                     nav.post { handover.flagsSent(ok) }
                 }
             } else reapplyFlags()

@@ -148,10 +148,28 @@ class Shade(private val ctx: Context, private val wm: WindowManager, private val
      */
     private var kdlBar: dev.launcher.engine.ui.ComponentView? = null
 
+    /** The handover's wait, for whichever bar draws: StatusBarView, and the engine's in its place. */
+    fun waitForStockBar(on: Boolean) {
+        bar.waitForStockBar(on)
+        kdlWaiting = on
+        val k = kdlBar ?: return
+        k.view.animate().cancel()
+        if (on) k.show(false)
+        else if (kdlReady) k.view.animate().alpha(1f).timed(dev.launcher.app.motion.Motion.role(dev.launcher.app.motion.MotionTokens.STATUSBAR_SHOW)).start()
+    }
+
+    /** It shows itself once its first frame is ready, unless the handover still waits (then the wait's end shows it). */
+    private var kdlWaiting = false
+    private var kdlReady = false
+
     private fun makeKdlBar() {
         if (!dev.launcher.app.statusbar.KdlBar.on(ctx)) return
         // Held before it is added: if adding throws, dropKdlBar still disposes what it started.
-        val k = dev.launcher.app.statusbar.KdlBar.make(ctx, handler, bar) ?: return
+        kdlReady = false
+        val k = dev.launcher.app.statusbar.KdlBar.make(ctx, handler, bar) {
+            kdlReady = true
+            if (!kdlWaiting) kdlBar?.show(true)
+        } ?: return
         kdlBar = k
         try {
             root.addView(k.view, root.indexOfChild(bar) + 1, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
