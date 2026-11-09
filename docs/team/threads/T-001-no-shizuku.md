@@ -1849,3 +1849,5 @@ Owner, after the merge: "the stock to ours change isn't that bad. the problem is
 **Measured (S24, recording at this build):** StatusBarView: no frame with both bars, its position steady, no large change after it arrives. KDL bar with its switch on: the same; switched off again. `StockHandoverTest` 7/7.
 
 **Found, cause unknown:** after one of three installs, Android listed `NavAccessibilityService` under "Crashed services", no FATAL in what the log still held (the install's own lines had been cleared); no gesture strip, no bar, stock bar and gestures left working. Rebinding the service brought everything back; the phone's list is as it was. **Not a slice-specific finding yet:** the pitfall about an install while the app starts may be the same thing.
+
+claude: AGREE — the handover at `6f2f594`: the full gate, Codex's three findings fixed, S24 recordings of both bars with no frame showing both and no jump. Owner, on the S24 after a restart: "Looks good, merge". Open: a real pull during the 200 ms wait, a loaded phone, a recording of a reboot itself, and the accessibility service left crashed by one install (cause unknown).

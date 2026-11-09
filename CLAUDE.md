@@ -921,6 +921,8 @@ copy it wholesale — port the working pieces cleanly. File map:
   (`HomeActivity.recordNow` keys on `wallpaperView.wallpaper`). And the key holds everything that shapes the result:
   Notification Center's glass numerals were keyed by time, wallpaper and fonts but not the panel's size, and after a
   landscape app the portrait panel drew the landscape numerals, a sliver of the time at its edge.
+- **The Shizuku fork's own start-on-boot fights our helper** (thedjchi's, S24, 2026-11-09): about a minute after boot it turns Wireless debugging on, restarts adbd on TCP 5555 (which kills everything under adbd, our helper too) and turns it off, with `shizuku_server` running and the port left open until the next reboot. `dumpsys`-free proof: `SettingsProvider: PUT_ret(/global/adb_wifi_enabled), callingPackage:` in the log. It also explains the emulator's Wireless debugging coming back after boot.
+- **A view that works out where to draw from its place on screen (`getLocationOnScreen`) includes its translation**: `StatusBarView.centreLine`, read while the bar waited with a translation, drew the bar 13 px low until the next layout, then it jumped. Fade such a view without moving it, or read its place at rest.
 - **CI is the build machine**: the cloud sandbox cannot reach Google Maven. If a local Android setup exists, prefer local builds; keep CI as a backup.
 - **Our own code is compiled at install only through `app/src/main/baseline-prof.txt`** (`HSPLdev/launcher/app/**;->**(**)**`
   and the class rule): the install profile held only the libraries' rules before (2026-10-19), and everything of ours ran
