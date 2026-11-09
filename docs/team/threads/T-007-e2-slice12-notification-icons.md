@@ -249,3 +249,18 @@ codex: NOT YET — resolve preparation bounds/access, stale recordings, drawable
 - [ ] **Refusal tests:** changing-ID coverage added. Lead reports emulator ownership=true; the harness checks bounds/alpha, but omits tint and the no-constant-state preparation path.
 
 **codex: NOT YET — resolve lifecycle queue retention and retained-picture bounds in Claude-owned files. Full gate on engine, S24 real-icon/cutout/live-minute checks, owner URI decision and visual approval remain open.**
+
+### codex — signoff, 2026-11-09T13:21Z
+
+**Reviewed `e30a224`; no repository files changed or device used. Judged:** worker isolation, queue disposal and retained-picture normalization address my findings.
+**Measured:** diff check passed; isolated JVM probe dropped 15 queued jobs, ran none, and confirmed a second worker progresses while the first is stuck. Emulator tint/bounds results are lead-reported.
+
+**§7:**
+- [x] Caller checks: no new IPC boundary.
+- [x] Count/retained-raster bounds; **accepted exception:** load time remains unbounded. Repeated stuck bars can retain workers; this is not a process-wide resource bound.
+- [x] Path isolation: URI icons remain refused; no new execution route.
+- [x] Capabilities: prior access and stale-membership fixes remain intact.
+- [x] Captured data and secrets: no new persistence, transmission or storage changes.
+- [x] Refusal coverage: changing-ID limits, oversized bitmap refusal, wrapper/stateless preparation and independent tint are covered; Android results were not rerun here.
+
+codex: AGREE — checked the lifecycle and picture fixes; full gate on engine, S24 real icons/cutout/live minute, owner URI decision and visual approval remain open.
