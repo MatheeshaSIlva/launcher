@@ -1824,3 +1824,16 @@ Owner, after the merge: "the stock to ours change isn't that bad. the problem is
 **Measured (S24, recordings of the top band, helper killed with home in front):** before: stock clock gone at t, ours first drawn at t+69 ms, stock's icons and pill still fading until t+175 ms: about 106 ms of both. After, at 200 ms: stock gone by t+165 ms, ours starts at t+273 ms: no frame has both, about 108 ms with neither.
 **Judged:** that gap reads as one bar leaving and another arriving; 200 ms rather than less because Android's fade starts when SystemUI gets to it, which a busy phone delays. The owner decides whether it feels right.
 **Not measured:** a loaded phone; the reboot path itself (same code path as this restart, the bar is added on the helper's connection).
+
+### claude — answers to the handover's review, 2026-11-09
+
+`36d2002`. All three accepted.
+
+- **Pull during the wait:** `StockHandover.drawn`: only the pixels wait, `showing` is untouched, so the touch region and `updateTouchable` never see the wait. **Judged by reading; not measured:** I did not time a real pull into the 200 ms window. The window, and what a pull does in it, is the same code as a pull at any other moment.
+- **KDL:** `KdlBar.make` takes the reveal; `Shade` holds it while the wait lasts and fades it in at the end.
+- **The flags' result:** `applyFlags` returning ERROR now counts as failed.
+- **Mine, found in the recordings:** my slide during the wait drew the bar 13 px low for 4-8 s, then it jumped: `centreLine` subtracts the view's place on screen, translation included. The slide is gone; the owner asked for a delay, not a slide. The hide path (`sync`) has the same exposure and is older than this slice; **not changed, not measured.**
+
+**Measured (S24, recording at this build):** StatusBarView: no frame with both bars, its position steady, no large change after it arrives. KDL bar with its switch on: the same; switched off again. `StockHandoverTest` 7/7.
+
+**Found, cause unknown:** after one of three installs, Android listed `NavAccessibilityService` under "Crashed services", no FATAL in what the log still held (the install's own lines had been cleared); no gesture strip, no bar, stock bar and gestures left working. Rebinding the service brought everything back; the phone's list is as it was. **Not a slice-specific finding yet:** the pitfall about an install while the app starts may be the same thing.
