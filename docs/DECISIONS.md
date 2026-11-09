@@ -1059,3 +1059,16 @@ Found on the way, not a choice: the Shizuku fork's own start-on-boot turns Wirel
 ## D-091: Our status bar waits 200 ms for the stock one (2026-11-09, owner)
 
 T-001, replacing the fade D-090 named as the next slice. The owner's words: "the problem is they overlap each other for a brief moment. just add a slight delay and it would be nice". Measured on the S24: the stock bar's exit takes about 175 ms, and ours came 69 ms into it. Ours now waits 200 ms from the flags' call returning, then comes in on `motion.statusbar.show` (the lead kept that fade rather than a snap, and told the owner). About 108 ms show neither bar: chosen over a tighter wait because a busy phone starts Android's fade late. The delay is a constant, not a motion role: it is Android's time, not a theme's. Signed off by the owner on the S24: "Looks good, merge".
+
+## D-092: The iOS and Pixel designs are scrapped; a default theme of our own; settings are what creators offer (2026-11-09, owner) [owner]
+
+The owner: "scrap the current ios and pixel designs. we'll keep the blur and colour presets that we can offer to creators that we already made but the current launcher settings is nowhere near our final goal that we have now. the new direction for our launcher requires us to have a completely unique to us default theme, and the settings app carries its own identity. the settings that the users can change is whatever the creators offer them to change based on the themes, layouts, plugins etc. that they have installed and is active."
+
+- **Scrapped as products and as targets:** the iOS 27 and Pixel looks, and the current settings app. No more work or polish on them, and no plan may aim at them. This replaces every "iOS" and "Pixel" target in the build order and the alpha gate.
+- **Removal:** each is deleted when its replacement works, so the phone keeps working throughout (owner, asked).
+- **E2's exit stands as an engine proof:** the KDL bar still pixel-matches `StatusBarView`, purely to prove the engine draws exactly what it is told. That look does not ship (owner, asked: "Keep it as a test only").
+- **Kept, as neutral presets creators may use:** "anything that can be kept" (owner, asked): blur and colour presets, motion presets, transition styles, the panel-pull models, the material renderer, palettes from the wallpaper. iOS and Pixel names come off them. The default theme is not bound to them.
+- **Identity:** the owner leads, the lead proposes options; nothing of the new look is built until the owner has chosen.
+- **Settings:** the app has its own identity. What a user can change is what the active themes, layouts and plugins offer. The engine's own settings (permissions, the shell host, packages, updates, safety) are its only fixed content; exactly what those are is proposed with the settings design.
+
+Open, for the owner: whether the alpha needs a second complete theme (the audit's store gate says two; the spec's shade step asked for two to prove mixing). The spec now asks only for a second fill to prove panels mix. `docs/LAUNCHER_AUDIT.md` and Part 2 of `CLAUDE.md` still describe the old designs as built; they are the manual, not the plan.

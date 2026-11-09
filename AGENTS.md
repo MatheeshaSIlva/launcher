@@ -22,7 +22,7 @@ Matheesha's Android launcher (Kotlin, ~72k lines, Shizuku, no root) is becoming 
 where home, drawer, shade, recents and status bar are KDL components drawn by ~40 engine primitives, with themes, a
 creator store (creators sell their own data-only APKs on Play; we sell one Pro tier, subscription or lifetime) and later a
 desktop editor. Compose owns the tree; the engine owns the pixels. The launcher as built is the reference implementation:
-every hand-drawn view is the acceptance test for the component that replaces it.
+every hand-drawn view is a checklist of what its replacement must do, and proves the engine can draw it, but its look does not ship: the iOS and Pixel designs are scrapped for a default theme of our own, and settings are what active packages offer (D-092).
 
 Branches: `main` is frozen as the last working launcher (CI and the in-app updater ship from it). All work is on
 `engine`. Agent task branches are `team/<agent>/<slug>`, merged into `engine` by the lead.

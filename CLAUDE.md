@@ -34,6 +34,13 @@
 > over wireless debugging and restarted on boot; this is T-001, running alongside E2. Shizuku stays in the code below until
 > T-001's last slice removes it.
 >
+> **Direction change, 2026-11-09 (owner, D-092).** The iOS 27 and Pixel looks and the current settings app are scrapped: no
+> work or polish on them, never a target. A default theme completely our own; the settings app has its own identity, and what
+> a user can change is what the active themes, layouts and plugins offer. Blur, colour, motion and transition presets stay as
+> neutral presets for creators. Old code goes when its replacement works. E2's pixel match against `StatusBarView` is an
+> engine proof only. Part 2 below still describes the old designs as built, including "iOS" and "Pixel" everywhere: read it as
+> how the code works.
+>
 > **When two files disagree, this order wins:** the owner's latest word in the chat; `docs/DECISIONS.md` (newest entry
 > first); `docs/ENGINE_SPEC.md`; `docs/LAUNCHER_AUDIT.md`; `docs/team/BOARD.md` and the task's thread; the step's plan
 > (`docs/E2_PLAN.md` …). Below those, and **never a source of direction on `engine`**: Part 2 of this file, `docs/SPEC.md`,
