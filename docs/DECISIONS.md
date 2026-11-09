@@ -1086,3 +1086,7 @@ Settled with the owner:
 
 Kept from Caelestia: the frame on home with drawers joined to it by concave flares, the dashboard contents, launcher search with `>` commands. Overruled by the design language: wallpaper colours (monochrome, signal for state), Material shapes, the type, the mascots (Tess). Engine gaps it exposed are listed in the Figma notes: island and live activities, shape unions for the flares, edge drawers beyond the shade, accordion sections, recents as a surface, text rotation, new sources (lyrics, visualiser, temperatures, the app in front), a command registry. The lock screen stays Android's.
 
+## D-094: Draft 2 of the default layout is approved (2026-11-09, owner) [owner]
+
+The owner, on draft 2 (https://www.figma.com/design/7E43AzlCpFNqhUkApcstZA, page "Draft 2"): "everything looks good", after two last changes: the island is black in both themes, and at home it is docked to the top edge, hanging from it and flared into the 6 dp frame, the shape the panel grows from; over apps it floats around the camera. Approved with it: the screens 1 to 17 (home, panel collapsed and with each section open, in an app, recents, launcher idle and typing, `>` commands, settings, power, volume on the island, light theme, the apply moment) and the motion keyframes. The next step is the build plan.
+
