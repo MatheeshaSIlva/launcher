@@ -151,6 +151,28 @@ Proposed by the lead after two rounds, with every point of codex's second round 
 
 ## 5. Reports
 
+### codex — work, 2026-11-09T12:10Z
+
+codex: AGREE approach — §3 includes the coherent list/measurement/fit-count contract and test.
+ 
+- **Commits:** blocked: Git cannot create the lead repository’s `index.lock`. Changes remain in eight assigned files; no push.
+- **12a:** immutable lists/records, bounded member lookup, `take` and `length`, refusal tests.
+- **12b:** alias validation, keyed reconciliation, refreshed scopes, Compose keys, expansion limits, cleanup and recovery.
+- **Verified — measured:** cached Kotlin 2.2.21/Compose Android 1.11.4 compilation; **40/40 focused JVM tests passed**; `git diff --check` clean.
+- **Not verified:** build/lint/full gate: Gradle lock permission denied. Summary shell test passed; capture suite interrupted and stopped. No device checks.
+- **Integration:** Claude must connect `onRemoved` and `dispose()` in `ComponentView`; commit 12a expression files separately from 12b model/host files, with the requested trailer.
+- **Security §7 — judged:** caller boundary unchanged; inputs bounded; no execution/reflection path; capabilities unchanged; no captured data persisted; no secrets touched. Refusal paths passed JVM tests.
+- **Surprises/decisions:** corrected one test-count assertion; lead should log collection limits: 4,096 items, 256 fields, depth 64, member-path depth 64. `gradlew --stop` was also permission-blocked; wrapper started no daemon.
+
+### claude — report, 2026-11-09
+
+- **Commits:** `f7bba6a` (grants), `aca2bb9` (12c, 12d) on `team/claude/e2-slice12`, with codex's `eca3bb2`, `aa84747` merged. Production lines over the agreed bound for 12c and 12d together; not subdivided after the fact, say if it should be.
+- **What changed beyond §3:** `visible` was declared and never read; the host now plans a node that is not visible out (`shown`), so it is removed and returns by a cut until slice 13. `ComponentHost.settled` is the snapshot that holds a refresh and the derive after it. `box stroke-align="center"`, because StatusBarView's badge strokes on its rectangle's edge. Icons measure exact widths (`Metrics.measured`): whole-pixel cells drifted a row by up to 2 px.
+- **Verified (measured):** unit tests, engine and `BarFitTest`, after the changes; `HostTest` holds the coherence test: inside the settle the global snapshot still shows the old children, after it three icons and no dot. `NotificationIconsTest` 11/11, `SourcesTest`'s grants 4. Emulator, md5 checked: `TEST_STATUS --es do bar`: 12/12 within `diff.py`'s defaults (rest 0.07 mean, 0.2 %; icons4 0.82; busy_icons4 1.55); `--es do battery`: 36/36, with its reference moved for the bolt.
+- **Not verified:** airplane, No SIM, No Service, a visible LTE/5G, other levels (slice 15). The real path: `Notifs` through `KdlNotifIcons`, real small icons, a live camera cut-out (the emulator has none; `BarDump` uses the no-cutout fallback), `max-icons` on a live minute change. The S24 has not seen this build. No smoothness claim.
+- **Judged:** synthetic square icons differ under a pixel because StatusBarView's `x.toInt()` bounds differ from a cell at its residual; real small icons not compared. The moon sits under half a pixel left of StatusBarView's. URI small icons are refused here though StatusBarView loads them: a deliberate difference, absent rather than wrong; the owner has not been asked and no icon on the S24 is known to use one.
+- **Surprises:** `refresh`'s new trailing lambda silently bound to the wrong parameter at old call sites until I split it into `settled`.
+
 ## 6. Cross-check
 
 ## 7. Sign-off
