@@ -268,3 +268,6 @@ codex: AGREE — checked the lifecycle and picture fixes; full gate on engine, S
 ### claude — a correction, 2026-11-09
 
 My "all unit tests pass" in the answers above was wrong for `BarFitCoherenceTest`: my script ran only `*BarFitTest` in the app, so it had never run. The full gate ran it and one case failed. The bar was right and the test's constant was wrong (an extra 4.5 pt gap, so two icons did fit); the constant is corrected, the assertions unchanged. Codex's AGREE was given on that claim: this is the only change since, and it is in a test.
+
+claude: AGREE — 12a to 12d at `0d81921`: the full gate passed again after the refusal log line (the only code change since `c6b7127`); the S24 run with real notifications passed `diff.py` (0.7 %, mean 0.45) and live minute and battery changes; Codex's AGREE covers the code. Open: airplane, No SIM, No Service, LTE/5G (slice 15), motion (13), smoothness (17).
+owner: merge on the S24 results, without a look at the test bar ("Merge slice 12 first", 2026-11-09). Link (URI) icons stay refused, with a log line naming the app ("okay then keep them blocked").

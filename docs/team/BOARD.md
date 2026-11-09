@@ -33,7 +33,7 @@ Status: PROPOSED · DISCUSSING · AGREED · IN PROGRESS · REPORTED · SIGNED ·
 
 | ID | Task | Thread | Owners | Branches | Status |
 | --- | --- | --- | --- | --- | --- |
-| T-007 | E2 slice 12: notification icons, `each`, the bar's remaining symbols | `threads/T-007-e2-slice12-notification-icons.md` | claude (lead), codex | `team/claude/e2-slice12` | PROPOSED |
+| T-007 | E2 slice 12: notification icons, `each`, the bar's remaining symbols | `threads/T-007-e2-slice12-notification-icons.md` | claude (lead), codex | merged | DONE (D-095) |
 | T-001 | Our own shell host replacing Shizuku, alongside E2; 1a by Codex now, 1b (native pairing, Android 12+) after T-002 | `threads/T-001-no-shizuku.md` | claude (lead), codex (1a, 1b) | `team/codex/t001-adb` | IN PROGRESS (1a, 1b, 2, 3, 4 DONE: pairing, start and coming back by itself on the phone, behind the developer switch; and the handover to the stock bar; next slice 5, the flip) |
 | T-006 | E2 slice 10: the battery as `box` + fill + text with expressions; the first battery pixel harness | `threads/T-006-e2-slice10-battery.md` | claude (text knockout, KDL, harness), codex (box, layer, geometry, expressions, schema) | `engine` | DONE (2026-11-08; 36 of 36 battery states pixel-identical on the emulator; S24 at E2's exit) |
 | T-005 | E2 slice 9: the `icon` primitive and the `statusbar` symbol set | `threads/T-005-e2-slice9-icons.md` | claude (painter, cache, harness), codex (generator, set, listing) | `engine` | DONE (2026-11-08; wifi.3 within 3 %, D-083) |

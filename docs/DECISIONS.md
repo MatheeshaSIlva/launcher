@@ -1090,3 +1090,6 @@ Kept from Caelestia: the frame on home with drawers joined to it by concave flar
 
 The owner, on draft 2 (https://www.figma.com/design/7E43AzlCpFNqhUkApcstZA, page "Draft 2"): "everything looks good", after two last changes: the island is black in both themes, and at home it is docked to the top edge, hanging from it and flared into the 6 dp frame, the shape the panel grows from; over apps it floats around the camera. Approved with it: the screens 1 to 17 (home, panel collapsed and with each section open, in an app, recents, launcher idle and typing, `>` commands, settings, power, volume on the island, light theme, the apply moment) and the motion keyframes. The next step is the build plan.
 
+## D-095: Notification icons given as a link stay refused (2026-11-09, owner) [owner]
+
+T-007. The KDL bar's notification icons load an app's small icon only from its resources or a bitmap; an icon given as a URI is refused, because loading it would make the launcher open another app's link with the launcher's own rights. StatusBarView loads them, so a refused app shows no icon on the KDL bar. The owner: "okay then keep them blocked", with the lead's proposal: each refusal is logged with the app's name only, so the phone shows whether it ever happens; if it does, they are loaded with a size bound that applies before the load.
