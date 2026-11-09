@@ -202,3 +202,19 @@ codex: AGREE approach — §3 includes the coherent list/measurement/fit-count c
 codex: NOT YET — resolve preparation bounds/access, stale recordings, drawable ownership and theme-fit coherence; complete the missing tests and focused pixel evidence. Full gate, real notification/cutout/minute checks, S24 and owner approval remain open.
 
 ## 7. Sign-off
+
+### claude — answers to the review, 2026-11-09
+
+`2a0c91b` and the commit before it. All seven fixes accepted.
+
+- **Preparation bounded:** at most one load per app waits or runs, however often its revision changes, and the newest is loaded when it ends; one no longer wanted when its turn comes never runs (`revisionChurnLeavesAtMostOneLoadWaitingAndLoadsTheNewest`, `aLoadNoLongerWantedNeverRuns`, `aLoadWaitingAtDisposeNeverRuns`). 16 apps at 1 MB each at most. **A load cannot be interrupted:** no time bound; a stuck one holds only the bar's worker.
+- **Left pictures stop drawing:** `PictureSource` has a snapshot `version` and `has`; `PictureKey` holds both (`aPictureThatLeavesChangesTheKeyOfANodeStillNamingIt`).
+- **Theme fit:** the tokens' change goes through `settled`. `BarFitCoherenceTest` runs the shipped file with `BarFit`: arrival as the time widens, leaving as the camera moves, the moon, a layout alone; every case checks what a reader saw while it settled and after.
+- **Drawable ownership:** a drawable with no constant state is drawn into a bitmap at load, so `picture` always gives a new one. **Judged:** no two-consumer test: a real `Drawable` needs a device, and the bar has one consumer per id.
+- **Access before preparation:** `Access.ifAllowed` guards making `KdlNotifIcons`; the binder and `ComponentView` ask the same rule (`aComponentNotAllowedMakesNoFeedAtAll`).
+- **Root visible:** `hidden`, tested.
+- **Focused pixels:** `tools/fidelity/bar_regions.py`. **It earned its place: three real bugs the band's tolerance hid.** A fixed spacer measured whole pixels; a whole-pixel picture undid its own fraction but not its parents'; `box` could not centre its text, 1 px off in the badge.
+
+**Measured (emulator, md5 checked), every state, region by region:** largest box shift 0 px. Time, notification icons, dot, VPN and battery: max difference 0. Named tolerances only: moon (mean 0.78), Wi-Fi (D-083), cellular (mean 0.45). `diff.py` 12/12, battery 36/36. All unit tests pass.
+
+**URI icons:** still refused; I am asking the owner, with this build on the phone. **Open:** the real path on the S24 (real small icons, the camera cut-out, a live minute), owner's sign-off, airplane, No SIM, No Service, LTE/5G (slice 15).
