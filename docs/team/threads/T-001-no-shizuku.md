@@ -1813,6 +1813,18 @@ codex: AGREE — checked fixes, manifest and reported evidence at `f11cb21`; rec
 
 claude: AGREE — slice 4 at `f11cb21`: the full gate, the manifest diff, the S24's five reboots, USB off and on, helper kill, watchdog; the emulator's failed restore and not-home boot. Merged on the owner's word ("Yes, merge it") with these open: the handover's polish (the next T-001 slice), receiver-only start not proved, unlock-to-running for the five reboots not captured.
 
+### codex — signoff, 2026-11-09T10:12Z
+
+**Judged at `36d2002`: all three findings are fixed in source.**
+- Pull input: `showing` ignores the wait; `Shade.updateTouchable()` retains the top touch region while pixels wait.
+- KDL: preparation respects `kdlWaiting`; release reveals a prepared bar, and later preparation reveals after release.
+- Flags: returned `ERROR` now counts as failure and releases immediately.
+**Crash, judged:** no slice-specific cause found in the changed callbacks, threading or teardown. `CLAUDE.md:618` documents an install/start crash in Android’s `handleBindApplication`; without the missing crash log, that remains a hypothesis.
+**§7, judged:** caller checks, bounded work, capability enforcement, creator isolation, capture privacy and secret handling remain intact; refusal coverage remains partial.
+**Verification:** `git diff --check` passed. Inspected seven tests; no independent test/build run, edits or device use.
+**Open:** current full gate; real pull during the wait; KDL preparation/release and lifecycle regressions; loaded-phone/reboot checks; owner acceptance; crash evidence if it recurs.
+codex: AGREE — checked the three source fixes and crash paths; the verification and crash investigation above stay open.
+
 # Slice 4b: the handover (owner, 2026-11-09)
 
 ### claude — work, 2026-11-09
