@@ -46,6 +46,29 @@ class IconPainterTest {
           view { $icon }
         }""".trimIndent())) as ReadResult.Ok).component, env, Units(1f, 1f), { v -> ComponentView.defaultPainter(v, tokens, cache) })
 
+    /** T-007: a node still naming a picture that has left redraws (its key moves) and has nothing to draw. */
+    @Test fun aPictureThatLeavesChangesTheKeyOfANodeStillNamingIt() {
+        val version = androidx.compose.runtime.mutableIntStateOf(0)
+        var present = true
+        val source = object : PictureSource {
+            override val version = version
+            override fun has(id: String, rev: String) = present && id == "a" && rev == "1"
+            override fun picture(id: String, rev: String) = null
+        }
+        val painter = IconPainter(tokens, cache).also { it.pictures = source }
+        val h = ComponentHost((ComponentReader.read(KdlParser.parse("""
+            component "i" { view { icon picture="a" rev="1" size=10 } }""".trimIndent())) as ReadResult.Ok).component, env, Units(1f, 1f), { painter })
+        val before = painter.key(h.root)
+        assertEquals(before, painter.key(h.root))
+        present = false; version.intValue++
+        assertNotEquals(before, painter.key(h.root))
+    }
+    @Test fun withoutASourceAPictureHasNothingToDraw() {
+        val painter = IconPainter(tokens, cache)
+        val h = ComponentHost((ComponentReader.read(KdlParser.parse("""
+            component "i" { view { icon picture="a" rev="1" size=10 } }""".trimIndent())) as ReadResult.Ok).component, env, Units(1f, 1f), { painter })
+        assertEquals(painter.key(h.root), painter.key(h.root))
+    }
     @Test fun aBoxMeasuresAtItsLargerSideRoundedUpWithAnExactCentre() {
         val wifi = IconPainter.metrics(17f to 11.2f, 17f)
         assertEquals(IconPainter.Metrics(17, 12, 5.6f, 17f, 11.2f), wifi)

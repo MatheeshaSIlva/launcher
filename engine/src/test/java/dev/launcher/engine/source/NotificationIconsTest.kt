@@ -97,6 +97,33 @@ class NotificationIconsTest {
         table.update(listOf(want("b")))
         assertEquals(0, jobs.size)
     }
+    @Test fun revisionChurnLeavesAtMostOneLoadWaitingAndLoadsTheNewest() {
+        for (r in 1..100) table.update(listOf(want("a", "$r")))
+        assertEquals(1, jobs.size)
+        runAll()
+        assertEquals(1, loads)                  // the first turn found its revision gone: only the newest loaded
+        assertEquals(listOf(NotifIcon("a", "100")), table.icons())
+    }
+    @Test fun aLoadNoLongerWantedNeverRuns() {
+        table.update(listOf(want("a")))
+        table.update(emptyList())
+        runAll()
+        assertEquals(0, loads)
+    }
+    @Test fun aLoadWaitingAtDisposeNeverRuns() {
+        table.update(listOf(want("a")))
+        table.dispose()
+        runAll()
+        assertEquals(0, loads)
+    }
+    @Test fun aComponentNotAllowedMakesNoFeedAtAll() {
+        var made = 0
+        assertNull(Access.ifAllowed(listOf("time"), "notifications", "notifications.read", setOf("notifications.read")) { made++ })
+        assertNull(Access.ifAllowed(listOf("notifications"), "notifications", "notifications.read", emptySet()) { made++ })
+        assertEquals(0, made)
+        assertNotNull(Access.ifAllowed(listOf("notifications"), "notifications", "notifications.read", setOf("notifications.read")) { made++ })
+        assertEquals(1, made)
+    }
     @Test fun forgedOrStaleLookupsFindNothing() {
         table.update(listOf(want("a", "1")))
         runAll()

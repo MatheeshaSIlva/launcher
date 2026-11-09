@@ -67,7 +67,7 @@ class SourceBinder(
         scope = CoroutineScope(dispatcher + job)
         for (name in names) {
             val source = sources[name] ?: continue
-            if (source.capability != "none" && source.capability !in granted) { denied(name, source.capability); continue }
+            if (!Access.allowed(names, name, source.capability, granted)) { denied(name, source.capability); continue }
             latest[name] = source.current()
             scope!!.launch { source.values.collect { v -> deliver(name, v, refresh) } }
         }

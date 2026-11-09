@@ -54,6 +54,24 @@ class HostTest {
         h.settled({ true }) { false }
         assertEquals(4, h.root.children.size)           // three icons and the dot
     }
+    @org.junit.Test fun aRootNotVisibleHasNothingUnderItAndComesBack() {
+        var on = false
+        val e = object : Env by env { override fun source(path: String) = Value.Bool.of(on) }
+        val d = (ComponentReader.read(KdlParser.parse("""
+            component "c" version="0.1.0" {
+              uses { source s }
+              view { row visible="{s.on}" { spacer size=1 } }
+            }""".trimIndent())) as ReadResult.Ok).component
+        val h = ComponentHost(d, e, dev.launcher.engine.layout.Units(1f, 1f), { painter })
+        assertEquals(true, h.root.hidden.value)
+        assertEquals(0, h.root.children.size)
+        on = true; h.refresh()
+        assertEquals(false, h.root.hidden.value)
+        assertEquals(1, h.root.children.size)
+        on = false; h.refresh()
+        assertEquals(true, h.root.hidden.value)
+        assertEquals(0, h.root.children.size)
+    }
     @org.junit.Test fun aNodeNotVisibleIsNotThereAndComesBack() {
         var on = false
         val e = object : Env by env { override fun source(path: String) = Value.Bool.of(on) }

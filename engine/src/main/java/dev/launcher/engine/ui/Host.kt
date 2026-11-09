@@ -83,6 +83,8 @@ class HostNode internal constructor(
     /** The primitive with its children: what [motion] moves. */
     private val frameLazy = lazy { RenderNode(view.primitive) }
     internal val frame by frameLazy
+    /** The root's `visible` (a root cannot be planned out: a component has one): it and all under it draw nothing. */
+    internal val hidden = mutableStateOf(false)
     private val childState = mutableStateOf(children)
     val children: List<HostNode> get() = childState.value
     internal fun children(value: List<HostNode>) { childState.value = value }
@@ -152,6 +154,7 @@ class ComponentHost(
     private data class Instance(val node: HostNode, var scope: Map<String, Value>)
     private var instances = LinkedHashMap<List<String>, Instance>()
     private var count = 0
+    private var rootShown = true
     private var disposed = false
     /** At most one data-only error per refresh; invalid repeats disappear whole and may recover. */
     var diagnostics: List<String> = emptyList(); private set
@@ -208,7 +211,8 @@ class ComponentHost(
         count = 0; diagnostics = emptyList()
         return try {
             if ("each" in def.view.attrs) throw InvalidRepeat()
-            planNode(def.view, emptyList(), emptyMap())
+            rootShown = shown(def.view, emptyMap())
+            if (rootShown) planNode(def.view, emptyList(), emptyMap()) else Plan(def.view, emptyList(), emptyMap(), emptyList())
         } catch (_: InvalidRepeat) {
             error()
             Plan(def.view, emptyList(), emptyMap(), emptyList())
@@ -274,6 +278,7 @@ class ComponentHost(
             return instance.node
         }
         val node = visit(plan)
+        if (node.hidden.value == rootShown) node.hidden.value = !rootShown
         instances.filterKeys { it !in next }.values.forEach { release(it.node) }
         instances = next
         return node

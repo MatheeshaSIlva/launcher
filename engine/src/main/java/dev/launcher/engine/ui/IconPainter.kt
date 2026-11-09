@@ -18,6 +18,14 @@ import kotlin.math.max
  */
 class Symbol(val boxWidth: Float, val boxHeight: Float, val draw: (Canvas, cx: Float, cy: Float, size: Float, color: Int, Paint) -> Unit)
 
+/** Pictures for `icon picture`: only what is published now. [version] (snapshot state) moves when that changes. */
+interface PictureSource {
+    val version: androidx.compose.runtime.IntState
+    fun has(id: String, rev: String): Boolean
+    /** A drawable of the caller's own, or null. */
+    fun picture(id: String, rev: String): Drawable?
+}
+
 /**
  * `icon`'s painter (T-005, slice 9), one per node: symbol (the argument, often a template such as `"wifi.{…}"`) from
  * `set` (default [GlyphCache.FALLBACK]), `size` in points as the larger side of the symbol's box, `color`. It reads only
@@ -31,21 +39,25 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
     /**
      * `picture` + `rev`: another source of pixels, a picture the component was given, in a `size` square, tinted as a
      * notification's small icon is (`StatusBarView.drawIcon`). Null when the component may not read pictures: nothing draws.
+     * Asked again at each of its versions, so a picture that has left stops drawing even if a node still names it.
      */
-    internal var pictures: ((id: String, rev: String) -> Drawable?)? = null
+    internal var pictures: PictureSource? = null
     private var drawable: Drawable? = null
-    private var drawableFor: Pair<String, String>? = null
+    private var drawableFor: Triple<String, String, Int>? = null
 
     private fun picture(n: HostNode): Pair<String, String>? {
         val id = (n.value("picture") as? Value.Str)?.value?.takeIf { it.isNotEmpty() } ?: return null
         return id to ((n.value("rev") as? Value.Str)?.value ?: "")
     }
 
-    /** The drawable of [k], this painter's own; looked up again for each new revision, and whenever it had none. */
+    /** This painter's own drawable of [k] (drawing changes bounds, tint and alpha), kept while the source's version stands. */
     private fun drawableOf(k: Pair<String, String>): Drawable? {
-        if (drawableFor != k || drawable == null) {
-            drawableFor = k
-            drawable = pictures?.invoke(k.first, k.second)
+        val source = pictures ?: return null
+        if (!source.has(k.first, k.second)) { drawable = null; drawableFor = null; return null }
+        val mine = Triple(k.first, k.second, source.version.intValue)
+        if (drawableFor != mine || drawable == null) {
+            drawableFor = mine
+            drawable = source.picture(k.first, k.second)
         }
         return drawable
     }
@@ -63,7 +75,7 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
     private var asked: GlyphCache.Key? = null
 
     override fun key(node: HostNode): Any {
-        picture(node)?.let { k -> return PictureKey(k, size(node), color(node), drawableOf(k) != null) }
+        picture(node)?.let { k -> return PictureKey(k, size(node), color(node), pictures?.version?.intValue ?: 0, pictures?.has(k.first, k.second) == true) }
         arrived.intValue
         val k = cacheKey(node)
         return Key(k, size(node), color(node), tokens.version, glyphs.resolve(k).tag())
@@ -119,7 +131,7 @@ class IconPainter(private val tokens: Tokens, private val glyphs: GlyphCache<Sym
     }
 
     private data class Key(val glyph: GlyphCache.Key, val size: Float, val color: Int, val tokens: Int, val state: Any)
-    private data class PictureKey(val picture: Pair<String, String>, val size: Float, val color: Int, val available: Boolean)
+    private data class PictureKey(val picture: Pair<String, String>, val size: Float, val color: Int, val version: Int, val available: Boolean)
 
     /** What an icon measures, in px: the cell (whole pixels) and the box drawn in it (exact). */
     data class Metrics(val width: Int, val height: Int, val centre: Float, val boxWidth: Float, val boxHeight: Float) {

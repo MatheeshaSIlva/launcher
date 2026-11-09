@@ -71,7 +71,11 @@ object BarDump {
                 "network" to NetworkState(wifiLevel = 3, cellLevel = 3, type = "5G", vpn = s.busy),
                 "dnd" to Dnd(s.busy), "notifications" to NotifIcons(ids)))
             val view = ComponentView(ctx, def, tokens, sources, Units(unit, ctx.resources.displayMetrics.density),
-                granted = setOf("notifications.read"), pictures = { _, _ -> square() })
+                granted = setOf("notifications.read"), pictures = object : dev.launcher.engine.ui.PictureSource {
+                    override val version = androidx.compose.runtime.mutableIntStateOf(0)
+                    override fun has(id: String, rev: String) = true
+                    override fun picture(id: String, rev: String) = square()
+                })
             view.derive = {
                 val w = view.textWidth("Time")
                 if (w != null) view.setDerived("max-icons", Value.Num(BarFit.count(own.cameraLeftForFit(), w, s.busy, unit).toDouble()))

@@ -47,10 +47,12 @@ object KdlBar {
             is ReadResult.Invalid -> { r.diagnostics.forEach { AppLog.log("[kdl] $FILE:${it.span.line}:${it.span.col} ${it.message}") }; return null }
         }
         val units = Units(dev.launcher.app.design.Scale.unitPx(ctx), ctx.resources.displayMetrics.density)
-        val icons = KdlNotifIcons(ctx, handler)
-        val view = ComponentView(ctx, def, tokens, SystemSources.all(ctx, handler) + dev.launcher.engine.source.NotificationSource.of(icons.feed), units,
-            granted = GRANTED, pictures = icons::picture)
-        view.addOnDispose { icons.dispose() }
+        // Made, and so subscribed and loading, only for a component that may read it.
+        val icons = dev.launcher.engine.source.Access.ifAllowed(def.uses.sources.map { it.name }, "notifications", "notifications.read", GRANTED) { KdlNotifIcons(ctx, handler) }
+        val system = SystemSources.all(ctx, handler)
+        val view = ComponentView(ctx, def, tokens, icons?.let { system + dev.launcher.engine.source.NotificationSource.of(it.feed) } ?: system, units,
+            granted = GRANTED, pictures = icons)
+        view.addOnDispose { icons?.dispose() }
         view.derive = {
             view.textWidth("Time")?.let { w ->
                 val moon = view.read("dnd.on") == Value.Bool.TRUE

@@ -50,9 +50,9 @@ class ComponentView(
     /** The capabilities this component has been given; default none, so a source needing one reads as absent. */
     granted: Set<String> = emptySet(),
     /** Pictures for `icon picture`, given only to a component that declares `notifications` and was granted its capability. */
-    pictures: ((id: String, rev: String) -> android.graphics.drawable.Drawable?)? = null,
+    pictures: PictureSource? = null,
 ) {
-    private val allowedPictures = pictures?.takeIf { "notifications.read" in granted && def.uses.sources.any { it.name == "notifications" } }
+    private val allowedPictures = pictures?.takeIf { dev.launcher.engine.source.Access.allowed(def.uses.sources.map { it.name }, "notifications", "notifications.read", granted) }
     private val handler = Handler(Looper.myLooper() ?: error("ComponentView needs a Looper thread"))
     private val owner = ThreadOwner()
     /**
@@ -87,7 +87,7 @@ class ComponentView(
     }
 
     private val host: ComponentHost
-    private val tokensChanged: () -> Unit = { handler.post { if (!disposed) { host.refresh { it.tokens.isNotEmpty() }; host.invalidateAll(); applied() } } }
+    private val tokensChanged: () -> Unit = { handler.post { if (!disposed) { host.settled({ it.tokens.isNotEmpty() }, ::settle); host.invalidateAll(); applied() } } }
 
     val view = ComposeView(context)
 

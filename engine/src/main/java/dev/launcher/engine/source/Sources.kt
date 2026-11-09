@@ -23,6 +23,16 @@ class Source<T : SourceValue>(val name: String, val capability: String, private 
     fun current(): T = now()
 }
 
+/** What a component may reach: declared and granted. The one rule, asked before anything is read, made or loaded. */
+object Access {
+    fun allowed(declared: Collection<String>, source: String, capability: String, granted: Set<String>) =
+        source in declared && (capability == "none" || capability in granted)
+
+    /** [make], only if [allowed]; otherwise null, and nothing is made. */
+    inline fun <T> ifAllowed(declared: Collection<String>, source: String, capability: String, granted: Set<String>, make: () -> T): T? =
+        if (allowed(declared, source, capability, granted)) make() else null
+}
+
 /** The sources by name. */
 class Sources(all: List<Source<*>>) {
     private val byName = all.associateBy { it.name }

@@ -33,7 +33,9 @@ object NotificationSource {
  * owner's thread ([post]) before its record is published, so a painter only ever looks up, and never touches another
  * package's resources. A completion counts only while this table lives and that app still wants that revision. While a
  * replacement loads the old picture stays published; a first load is absent until ready, and one that fails is absent
- * until the app's revision changes. At most [MAX_APPS] apps are looked at. Owner's thread only, apart from [load].
+ * until the app's revision changes. Bounded: at most [MAX_APPS] apps, and at most one load per app waits or runs however
+ * often its revision changes (the newest is loaded when that one is done); a load no longer wanted when its turn comes
+ * never runs. A load itself cannot be interrupted. Owner's thread only, apart from [load].
  */
 class PreparedPictures<H, P : Any>(
     private val load: (H) -> P?,
@@ -45,29 +47,38 @@ class PreparedPictures<H, P : Any>(
 
     private var wants: List<Want<H>> = emptyList()
     private val installed = HashMap<String, Installed<P>>()
-    private val loading = HashSet<Pair<String, String>>()
+    private val running = HashSet<String>()
+    @Volatile private var wantedNow: Set<Pair<String, String>> = emptySet()
     private val listeners = ArrayList<() -> Unit>()
     private var published: List<NotifIcon> = emptyList()
-    private var disposed = false
+    @Volatile private var disposed = false
 
     /** What the apps want now, most important first. */
     fun update(next: List<Want<H>>) {
         if (disposed) return
         wants = next.take(MAX_APPS)
+        wantedNow = wants.mapTo(HashSet()) { it.id to it.rev }
         val ids = wants.mapTo(HashSet()) { it.id }
         installed.keys.retainAll(ids)
-        for (w in wants) if (installed[w.id]?.rev != w.rev && loading.add(w.id to w.rev)) worker(Runnable { finish(w) })
+        for (w in wants) if (installed[w.id]?.rev != w.rev) request(w)
         publish()
     }
 
-    private fun finish(w: Want<H>) {
-        val picture = try { load(w.handle) } catch (_: Throwable) { null }
-        post(Runnable {
-            loading.remove(w.id to w.rev)
-            if (disposed || wants.none { it.id == w.id && it.rev == w.rev }) return@Runnable
-            installed[w.id] = Installed(w.rev, picture)
-            publish()
+    private fun request(w: Want<H>) {
+        if (!running.add(w.id)) return      // one per app: what it wants then is looked at when this one is done
+        worker(Runnable {
+            val current = !disposed && (w.id to w.rev) in wantedNow
+            val picture = if (current) try { load(w.handle) } catch (_: Throwable) { null } else null
+            post(Runnable { finished(w, current, picture) })
         })
+    }
+
+    private fun finished(w: Want<H>, loaded: Boolean, picture: P?) {
+        running -= w.id
+        if (disposed) return
+        val now = wants.firstOrNull { it.id == w.id } ?: return
+        if (loaded && now.rev == w.rev) { installed[w.id] = Installed(w.rev, picture); publish() }
+        else if (installed[now.id]?.rev != now.rev) request(now)
     }
 
     private fun publish() {
@@ -90,6 +101,7 @@ class PreparedPictures<H, P : Any>(
     fun dispose() {
         disposed = true
         wants = emptyList()
+        wantedNow = emptySet()
         installed.clear()
         listeners.clear()
         published = emptyList()

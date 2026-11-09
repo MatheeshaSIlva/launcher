@@ -86,6 +86,7 @@ private class DrawElement(val n: HostNode) : ModifierNodeElement<DrawNode>() {
 private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
     private val software = AndroidFrameCanvas()
     override fun ContentDrawScope.draw() {
+        if (n.hidden.value) return
         n.epoch.intValue
         val w = size.width.roundToInt()
         val h = size.height.roundToInt()
