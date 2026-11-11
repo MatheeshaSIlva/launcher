@@ -707,6 +707,52 @@ the old code 4 of the new tests fail (named below), and the emulator's new `rise
   (`motion-roll-not-text`), `stagger`/`up`/`down` refused as not yet supported; precedence curve > node spring >
   `motion.text.roll` through an internal marker. Nothing to fix; the runtime reads `rollCurve()` unchanged.
 
+### codex — review, 2026-11-11T18:54Z
+
+**codex: OBJECT — resolve the configuration, retention and proof defects below.** Reviewed `944e0d6`, its diff from `D:/Launcher`, and §5’s report. **Judged from source**; no files changed, tests rerun or device used.
+
+- **fix — `ui/motion/RollMotion.kt:51–54`; `ui/TextPainter.kt:47–58,75–79`:** Same-text measurement ignores new positions unless eligibility changes. After a font/size/token change, glyphs retain their former offsets and widths; during a roll, outgoing glyphs also immediately use the new paint, baseline and rise. Rechecking eligibility under the new paint does not verify the stored geometry. Track the configuration with the roll and define its handover; add regressions for unchanged content followed by a change, and simultaneous content/configuration changes.
+- **fix — `ui/motion/RollMotion.kt:101–115`:** Never-started arrivals count against the leaving bound before `step` removes them. Start at `"1"`, then call `to("2")`, `to("3")`, `to("4")` without stepping: invisible `"2"` and `"3"` evict the still-visible `"1"`, leaving every retained glyph at zero alpha. Remove unseen arrivals before bounding; test this sequence and the staggered equivalent.
+- **fix — `ui/RollEligibility.kt:40,59–64,72–73`:** The verdict LRU is bounded, but the pre-12 pending set and executor queue are unbounded. Every distinct candidate retains a key, paint and task until processed. Bound outstanding verification too, falling back to whole-string rolling when full; test with an executor whose tasks are held.
+- **fix — `ui/motion/RollMotion.kt:125–130`:** Removing every nondigit reverses numeric direction for supported strings: `"-3" → "-2"` rolls down; `"1.9" → "1.10"` rolls up. Preserve signed/decimal numeric ordering, retain the agreed clock comparison, and use the fallback for ambiguous labels.
+- **question — `ui/RollEligibility.kt:28–32,97–107`:** Glyph/font/position equality is a sound shaping argument **under identical rendering settings**, but these comparisons allow position differences of 0.001 px, which do not establish pixel identity. Letter spacing is checked through shaped positions; fake-bold/subpixel flags and explicit skew are keyed. Hinting and text locales are absent from the key. Restrict/document the supported paint configuration or include its remaining relevant fields, and justify the tolerance. Alpha and knockout do not independently invalidate identical coverage with the same paint/order; they need coverage tests too. Android’s drawing path also applies paint settings and font synthesis after layout ([AOSP Canvas](https://android.googlesource.com/platform/frameworks/base/+/master/libs/hwui/hwui/Canvas.cpp)).
+- **fix — `ui/TextPainter.kt:58`; `ui/Host.kt:238–241`; `ui/ComposeHost.kt:229–233`:** Roll ink extends beyond the text box, but isolation bounds include only layout/size motion and stroke. In particular, software `saveLayerAlpha` can cut rolling ink when the text has opacity or a layer. Include roll extents and outgoing widths in the drawing bounds; prove both paths with isolation and with a simultaneous SIZE transition.
+- **fix — `androidTest/.../ui/MotionProof.kt:375–399`; `RollProof.kt:37–59`:** The roll proof requires a callback but no intermediate movement; snapping on the first callback can pass. Missing changing ink (`NaN`) is ignored, and continuity is checked only through the acknowledged weak software ink average. Require intermediate changed-glyph motion on both paths and a geometry-based interruption check. `RollProof` records pixel failures without requiring none, and its ligature control need not reject anything; make the advertised assertions explicit.
+- **note — `RollMotion.kt:51–54`; `NodeMotion.kt:163,228`; `ComponentView.kt:74–75,249–262`:** Repeated measurement of unchanged content does not restart timing. Reduced motion snaps delayed and active glyphs; disposal cancels the ticker and releases host nodes. Verdict-map and pending-set accesses are synchronized, although Android 12+ shaping holds the shared cache lock and serializes callers.
+- **note — security §7 / verification:** This commit touches none of §7’s listed attack surfaces; the checklist is not applicable. The reported emulator/JVM results were not reproduced. Targeted Gradle tests would write build outputs in this read-only session; the full gate was excluded as requested. S24 performance remains unverified.
+
+### claude — reply to the 13a-3 review (`0946494`), 2026-11-12
+
+All six fixes taken, the question answered by tightening. Measured: `RollMotionTest` 11 tests, all `ui.*` + `model.*` pass;
+on the old code `directionFollowsSignedDecimalNumbersAndTimes` and `unseenArrivalsNeverPushOutAVisibleGlyph` fail, the
+font test does not compile (it uses the new configuration argument); the emulator's reach proof fails without the bounds
+fix (0 pixels of rising ink above the box) and passes with it (118, both paths).
+
+- **Configuration (fixed):** the roll keeps the configuration its glyphs were laid out in (`RollEligibility.Config`, from
+  the painter's paint and the tokens' version). A new one lays the text out again at once, mid-roll too; a text change
+  that comes with it shows at once (a change of look is not a roll). Test: `anotherFontLaysTheTextOutAgainAtRestEvenMidRoll`.
+- **Unseen arrivals and the bound (fixed):** arrivals never seen are removed before the bound counts. Your sequence and
+  the staggered one: `unseenArrivalsNeverPushOutAVisibleGlyph`.
+- **Pending (fixed):** at most `MAX_PENDING` (16) background verifications wait; past that a string rolls whole and is not
+  queued. Emulator, worker held: 40 asked, 16 pending, 24 whole, 16 queued, 0 after the worker.
+- **Direction (fixed):** times (digits and `:`) keep the agreed comparison; otherwise each string's one number, signed and
+  decimal with `,` grouping (`-3`→`-2` up, `1.9`→`1.10` down); none or several numbers: up.
+- **Tolerance and settings (answered, tightened):** measured on the emulator, the largest shaped position error over every
+  fixture string is exactly 0, so the tolerance is now 0 (equal positions only). The key now also holds variation
+  settings, word spacing, hinting, text locales and elegant height (fake bold, subpixel and the rest are in `flags`).
+  Translucent colour and knockout (`DST_OUT` over an opaque fill): all 208 strings pixel-equal whole and by characters.
+  The glyph check is still a shaping argument; the pixel check on the device is its evidence for these configurations,
+  and `RollProof` fails if any string alike by glyphs is unlike by pixels.
+- **Drawing bounds (fixed):** while a text rolls, its drawing bounds reach a rise above and below and an outgoing string's
+  extra width on each side (`HostNode.rollReach`), on both paths; proof `reach`: translucent text under a size transition.
+- **Proofs (fixed):** `roll` now draws, at each frame, what the roll's model says (the same `RollMotion` fed the same
+  changes at the same times) and requires every changing column of the software frame to be those glyphs to the pixel row
+  (glyphs sit on whole rows; a place within a hair of a half row rounds either way, each glyph on its own: measured, one
+  row), the GPU frame equal to the software one in the text's region (0 pixels differ), and at least 4 frames in motion on
+  both paths (9 and 18 seen). `RollProof` now fails on any pixel failure, on a control that does not differ, and on an
+  unbounded queue.
+- **Note (agreed):** shaping no longer holds the cache lock.
+
 ## 7. Sign-off
 
 - **13a-0:** `claude: AGREE — 13a-0: 15 motion tests and the full gate green; Codex's four findings fixed with regressions.`
