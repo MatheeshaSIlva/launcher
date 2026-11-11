@@ -411,6 +411,40 @@ could not take git's index lock)
 - **Surprises:** existing primitive definitions needed no changes. Added a 4,096-character declaration bound; propose recording that limit in the lead’s decision log.
 - **Security §7 (judged):** caller checks—no new IPC entry point; inputs—bounded, nonrecursive parsing without reflection; privileged paths—none added; capabilities—unchanged; captures—none; secrets—none. **Refusal paths (measured):** tested bindings, unsupported features, malformed/out-of-range numbers, duplicate channels, empty clauses, limits, codes and spans.
 
+### codex — work, 2026-11-11T16:05Z
+
+- **Commits:** none, per sandbox instruction; four assigned files left modified. Lead to add `Co-Authored-By: Codex <noreply@openai.com>`.
+- **Changed:** enter/exit models and grammar, fade-up expansion, curve precedence, refusal diagnostics with spans, tests and documentation.
+- **Verified (measured):** 29 model tests, including 10 motion grammar tests; full suites: 355 engine + 437 app tests passed. All six shell scripts passed, including 746 capture checks. `git diff --check` passed.
+- **Full gate:** failed only on four native configurations: sandbox denied execution of NDK `clang++.exe`. Log: `build/codex-13a-2-check.log`.
+- **Not verified:** complete build/lint, runtime presence rendering or S24 behavior. No phone used.
+- **Security §7 (judged):** caller checks N/A—no IPC entry added; inputs bounded to 4096 characters, no reflection; no execution escape added; capabilities unchanged; no captures persisted; secrets untouched.
+- **Security §7 (measured):** refusal tests cover codes, reasons and spans.
+- **Surprises/next:** existing reader/validator paths needed no edits. Gradle daemon stopped. Lead reviews, commits and reruns the gate outside the sandbox.
+
+### claude — 13a-2 report (`39cf77d`, `2d5d20d`; Codex's grammar `afeb1dd`)
+
+- **Runtime.** A node with `enter` arrives from its effects' values at its first placement (not on the component's first
+  build): fade 0, scale 0.85, rise 8 pt below, grow 0 along its parent's axis. A node removed from the plan with `exit`
+  stays drawn at its last place and old index, out of layout (`HostNode.drawn` vs `children`), until its tracks settle;
+  then its subtree is released once. A node planned again before then is the same node turning back from where it is, at
+  its speed (`revive`, on the enter curve). An ancestor's exit carries its subtree (inner exits do not start). The root
+  leaves on its exit and is hidden after. Bounded: at most 64 exits (the oldest ends at once); active plus retained nodes
+  never pass 4096. Reduced motion, or a role the preset lacks (`motion.enter`/`motion.exit` are in no preset yet), goes
+  at once. `snapMotion` ends running exits; `dispose` releases retained nodes once.
+- **Measured, JVM:** `PresenceTest` 9 tests (exit timing ~120 ms, release once, revival same node and continuous,
+  ancestor subtree, reduced motion before and mid-exit, disposal, the 64 bound, arrival from fade 0, root exit then
+  hidden); all 116 `ui.*` and `model.*` tests pass.
+- **Measured, emulator (`component-motion`, both paths):** `presence`: leave 25 frames, arrive 25, leave and called back
+  at frame 10 in 35; red's alpha within 0.004 of the movers, the green sibling's edge within 0.00 px; the clock stops
+  after each. `motion` and `root` unchanged (0.01 px, 0.00 px).
+- **Bug the proof found:** a leaving child was drawn over its later siblings (Compose draws in placement order; leaving
+  children were placed last). Fixed: placed in drawing order. Before the fix the proof failed (green's edge 0.4-0.8 px
+  off: green under the fading red); after it, 0.00 px.
+- **Decisions (judged, to log):** scale arrives from 0.85; rise is 8 pt; revival turns back on the enter curve (else
+  exit's). Test clock: `now` reads the last stepped frame, as `ComponentView`'s clock does.
+- **Not verified:** the S24 (no component declares presence yet, nothing on screen changes).
+
 ## 6. Cross-check
 
 Each agent reviews the other's diff and report. Findings as `fix`, `question` or `note`, with file:line. The owner of a
@@ -572,6 +606,12 @@ record counts) stays the merge condition into `engine`, as you put it.
 - Results (measured, emulator, `3dfbd34`): `motion` 77 frames within 0.01 px on both paths; `root` 60.5 px in 25 frames and
   −0.65 px in 25 frames, within 0.00 px on both paths. Full gate: `scripts/check.sh` PASSED on `80876d2`; run again on
   `3dfbd34` before the merge.
+
+### claude — review of 13a-2's grammar (`afeb1dd`), 2026-11-11
+
+- note: `enter`/`exit` stay data-only (bindings refused, `@` only for `@motion.` roles, 4096-char cap), one clause, effects
+  before the curve, `fade-up` = fade + rise, duplicates and channel words refused with spans. Precedence matches the
+  agreed API. Nothing to fix; the runtime compiles and runs against it unchanged.
 
 ## 7. Sign-off
 
