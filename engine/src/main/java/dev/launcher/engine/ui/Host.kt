@@ -156,7 +156,7 @@ class HostNode internal constructor(
             motion.placeX = tx; motion.placeY = ty; motion.alphaOf(opacity); motion.scaleOf(scale)
             return
         }
-        if (m.update(x, y, tx, ty, exactWidth, exactHeight, opacity, scale)) onMoving(this)
+        if (m.update(x, y, tx, ty, exactWidth, exactHeight, opacity, scale, anchorX = anchorX, anchorY = anchorY)) onMoving(this)
         shown()
     }
 
@@ -177,10 +177,29 @@ class HostNode internal constructor(
         val sized = m.width.moving || m.height.moving
         motion.drawnWidth = if (sized) m.width.value.coerceAtLeast(0f) else Float.NaN
         motion.drawnHeight = if (sized) m.height.value.coerceAtLeast(0f) else Float.NaN
+        // One envelope for the whole size motion: each track's own goes back to its target when it settles, so the node's
+        // is kept and only grown until both have (Codex, 13a-1 review: width settling first shrank a layer mid-motion).
+        val old = motion.envelope
         motion.envelope = if (!sized) null else floatArrayOf(
             minOf(0f, (exactWidth - m.width.high) * motion.anchorX), minOf(0f, (exactHeight - m.height.high) * motion.anchorY),
             maxOf(exactWidth, exactWidth * motion.anchorX + m.width.high * (1 - motion.anchorX)),
-            maxOf(exactHeight, exactHeight * motion.anchorY + m.height.high * (1 - motion.anchorY)))
+            maxOf(exactHeight, exactHeight * motion.anchorY + m.height.high * (1 - motion.anchorY))).also { e ->
+            if (old != null) { e[0] = minOf(e[0], old[0]); e[1] = minOf(e[1], old[1]); e[2] = maxOf(e[2], old[2]); e[3] = maxOf(e[3], old[3]) }
+        }
+    }
+
+    /** How far its own surface draws outside its drawn bounds: a box's centred stroke, half of it. */
+    internal fun outset(): Float =
+        if (view.primitive == "box" && (value("stroke-align") as? Value.Str)?.value == "center") ((length("stroke") ?: 0f) / 2f).coerceAtLeast(0f) else 0f
+
+    /**
+     * The bounds it draws over, in its own px (left, top, right, bottom): its layout box, or a moving size's envelope, out
+     * by its stroke's outer half, at rest and in motion alike, so a layer never cuts what the surface draws.
+     */
+    internal fun drawBounds(): FloatArray {
+        val e = motion.envelope ?: floatArrayOf(0f, 0f, exactWidth, exactHeight)
+        val o = outset()
+        return if (o == 0f) e else floatArrayOf(e[0] - o, e[1] - o, e[2] + o, e[3] + o)
     }
     val motion = Motion({ m ->
         frame.translationX = m.drawX; frame.translationY = m.drawY

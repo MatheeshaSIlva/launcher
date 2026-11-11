@@ -38,16 +38,16 @@ internal val CentreLine = HorizontalAlignmentLine(::minOf)
 @Composable
 fun ComponentHost.Content(modifier: Modifier = Modifier) {
     val label = (root.value("label") as? Value.Str)?.value ?: def.name
-    Primitive(root, modifier.clearAndSetSemantics { contentDescription = label }, isRoot = true)
+    Primitive(root, modifier.clearAndSetSemantics { contentDescription = label })
 }
 
 @Composable
-private fun Primitive(n: HostNode, modifier: Modifier = Modifier, isRoot: Boolean = false) {
-    Layout(content = { n.children.forEach { key(it) { Primitive(it) } } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n, isRoot))
+private fun Primitive(n: HostNode, modifier: Modifier = Modifier) {
+    Layout(content = { n.children.forEach { key(it) { Primitive(it) } } }, modifier = modifier.then(DrawElement(n)), measurePolicy = Policy(n))
 }
 
 /** Measures through 5a's maths; the bound values it reads make Compose measure again, never compose. */
-private class Policy(val n: HostNode, val isRoot: Boolean) : MeasurePolicy {
+private class Policy(val n: HostNode) : MeasurePolicy {
     override fun MeasureScope.measure(measurables: List<Measurable>, constraints: ComposeConstraints): MeasureResult {
         n.epoch.intValue
         val placeables = arrayOfNulls<Placeable>(measurables.size)
@@ -65,8 +65,7 @@ private class Policy(val n: HostNode, val isRoot: Boolean) : MeasurePolicy {
         n.centre = a.measured.centre
         n.measured = a.measured
         return layout(a.measured.size.width, a.measured.size.height, mapOf(CentreLine to a.measured.centre.roundToInt())) {
-            // Placed top-down: this node's own place is known by now (the root's: its window's, centred if its size moves).
-            if (isRoot) n.placed(0f, 0f, 0.5f, 0.5f)
+            // Placed top-down: this node's own place is known by now (the root's from its window: ComponentView).
             // Whole pixels are worked out from where it rests, not where its motion has it this frame.
             val fx = n.parentFractionX + n.motion.restDrawX
             val fy = n.parentFractionY + n.motion.restDrawY
@@ -77,12 +76,13 @@ private class Policy(val n: HostNode, val isRoot: Boolean) : MeasurePolicy {
                 child.parentFractionX = fx
                 child.parentFractionY = fy
                 if (child.painter.wholePixels(child)) {
-                    // On a whole pixel of the screen, not of its parent: the parent's fraction taken back, the rest for the painter.
-                    val x = fx + p.residualX
-                    val y = fy + p.residualY
-                    child.residualX = x - floor(x)
-                    child.residualY = y - floor(y)
-                    child.motion.place(floor(x) - fx, floor(y) - fy)
+                    // On a whole pixel of the screen, not of its parent: the parent's fraction and its own rest translation
+                    // taken back, the rest for the painter (Codex, 13a-1 review: a fractional translate-x was left out).
+                    val (ox, rx) = wholePixel(fx, p.residualX, child.motion.restX)
+                    val (oy, ry) = wholePixel(fy, p.residualY, child.motion.restY)
+                    child.residualX = rx
+                    child.residualY = ry
+                    child.motion.place(ox, oy)
                 } else child.motion.place(p.residualX, p.residualY)
                 placeables[k]?.place(p.x, p.y)
             }
@@ -138,7 +138,7 @@ private class DrawNode(var n: HostNode) : Modifier.Node(), DrawModifierNode {
         val frame = n.frame
         val m = n.motion
         // The envelope of a moving size: one size for the whole motion (grown only at an interruption), never cut.
-        val e = m.envelope
+        val e = if (m.envelope == null && n.outset() == 0f) null else n.drawBounds()
         val left = e?.let { floor(it[0]).toInt() } ?: 0
         val top = e?.let { floor(it[1]).toInt() } ?: 0
         if (e == null) frame.setPosition(0, 0, w, h) else frame.setPosition(left, top, ceil(e[2]).toInt(), ceil(e[3]).toInt())
@@ -190,22 +190,35 @@ private class AndroidFrameCanvas : FrameCanvas {
 
 /** Transform and isolation enclose the painter AND descendants, including exceptions during drawing. */
 internal fun softwareFrame(canvas: FrameCanvas, n: HostNode, draw: () -> Unit) {
-    softwareFrame(canvas, n.motion, n.measured, n.value("layer") == Value.Bool.TRUE, { canvas.clip(n) }, draw)
+    softwareFrame(canvas, n.motion, n.measured, n.value("layer") == Value.Bool.TRUE, n.drawBounds(), { canvas.clip(n) }, draw)
 }
 
 internal fun softwareFrame(canvas: FrameCanvas, motion: Motion, measured: Measured, layered: Boolean,
+    clip: () -> Unit, draw: () -> Unit) =
+    softwareFrame(canvas, motion, measured, layered, motion.envelope ?: floatArrayOf(0f, 0f, measured.exactWidth, measured.exactHeight), clip, draw)
+
+/** [bounds]: what a layer of it covers (its layout box, a moving size's envelope, its stroke's outer half). */
+internal fun softwareFrame(canvas: FrameCanvas, motion: Motion, measured: Measured, layered: Boolean, bounds: FloatArray,
     clip: () -> Unit, draw: () -> Unit) {
     val save = canvas.save()
     try {
         canvas.translate(motion.drawX, motion.drawY)
         canvas.scale(motion.scale, measured.size.width / 2f, measured.size.height / 2f)
         if (layered || motion.alpha != 1f) {
-            val e = motion.envelope ?: floatArrayOf(0f, 0f, measured.exactWidth, measured.exactHeight)
-            canvas.layer(e[0], e[1], e[2], e[3], (motion.alpha * 255).toInt().coerceIn(0, 255))
+            canvas.layer(bounds[0], bounds[1], bounds[2], bounds[3], (motion.alpha * 255).toInt().coerceIn(0, 255))
         }
         clip()
         draw()
     } finally { canvas.restore(save) }
+}
+
+/**
+ * A whole-pixel node's offset in its parent and the fraction its painter draws at: the screen position is [parent]'s
+ * fraction + [residual] + its own [rest] translation; the offset puts its origin on a whole pixel of the screen.
+ */
+internal fun wholePixel(parent: Float, residual: Float, rest: Float): Pair<Float, Float> {
+    val x = parent + residual + rest
+    return floor(x) - parent - rest to x - floor(x)
 }
 
 /** The share of its width a box that names `reveal` clips to, 1 included; null for a box that does not name it. */

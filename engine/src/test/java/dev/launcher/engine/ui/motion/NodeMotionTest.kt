@@ -141,4 +141,19 @@ class NodeMotionTest {
                 range.endInclusive - range.start < 400f)
         }
     }
+
+    /** Codex, 13a-1 review: a centred box growing in a centred slot keeps its left edge continuous (no double shift). */
+    @Test fun aCentredGrowthIsNotCompensatedTwice() {
+        val m = motion(ease, MotionChannel.PLACE, MotionChannel.SIZE)
+        fun left(layoutX: Float, layoutW: Float) = layoutX + m.x.value + (layoutW - m.width.value) * 0.5f
+        m.update(100f, 0f, 0f, 0f, 100f, 10f, 1f, 1f, 0, anchorX = 0.5f)
+        m.update(50f, 0f, 0f, 0f, 200f, 10f, 1f, 1f, 0, anchorX = 0.5f)     // a 300 px stack: grows 100 → 200, x 100 → 50
+        assertEquals("drawn where it was", 100f, left(50f, 200f), 1e-3f)
+        m.step(80 * ms)
+        val mid = left(50f, 200f)
+        m.update(100f, 0f, 0f, 0f, 100f, 10f, 1f, 1f, 80 * ms, anchorX = 0.5f)  // reversed: back to 100 wide
+        assertEquals("no jump at the reversal", mid, left(100f, 100f), 1e-3f)
+        m.run(m.width, 80 * ms)
+        assertEquals(100f, left(100f, 100f), 1e-3f)
+    }
 }

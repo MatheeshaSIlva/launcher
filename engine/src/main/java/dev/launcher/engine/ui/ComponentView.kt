@@ -127,7 +127,12 @@ class ComponentView(
                 val top = centre.floatValue - host.root.centre
                 val whole = floor(top)
                 if (host.root.motion.translationY != top - whole) host.root.motion.translationY = top - whole
-                layout(constraints.maxWidth, constraints.maxHeight) { p.place(0, whole.toInt()) }
+                layout(constraints.maxWidth, constraints.maxHeight) {
+                    // Its real place in the window (the baseline's fraction apart, on the root's own translation): a
+                    // centre-line change moves it on its place transition if it declares one (Codex, 13a-1 review).
+                    host.root.placed(0f, whole, 0.5f, 0.5f)
+                    p.place(0, whole.toInt())
+                }
             }
         }
     }

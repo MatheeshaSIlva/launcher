@@ -15,6 +15,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.launcher.engine.layout.Measured
+import dev.launcher.engine.layout.Size
 
 /** T-009 13a-1: a component's moving nodes, its frame clock's registrations, and bound transforms as targets. */
 class HostMotionTest {
@@ -90,5 +92,46 @@ class HostMotionTest {
         assertFalse(h.isMoving)
         box.placed(90f, 0f, 0f, 0.5f)
         assertFalse("a disposed component asks for nothing", h.isMoving)
+    }
+
+    /** Codex, 13a-1 review: width settling before height kept the layer's bounds; one envelope until both have. */
+    @Test fun theEnvelopeHoldsUntilEverySizeTrackSettles() {
+        val h = host("box width=10 height=10 transition=\"size spring(0.4, 0.6)\"")
+        val n = h.root
+        n.measured = Measured(Size(20, 10)); n.placed(0f, 0f, 0.5f, 0.5f)
+        n.measured = Measured(Size(120, 12)); n.placed(0f, 0f, 0.5f, 0.5f)
+        val m = n.nodeMotion!!
+        val first = n.motion.envelope!!.copyOf()
+        var t = 0L
+        var checked = false
+        while (h.step(t)) {
+            val e = n.motion.envelope!!
+            assertTrue("never smaller: ${e.toList()} vs ${first.toList()}", e[0] <= first[0] && e[1] <= first[1] && e[2] >= first[2] && e[3] >= first[3])
+            if (!m.height.moving && m.width.moving) checked = true
+            t += 8_333_333
+        }
+        assertTrue("height settled first, while width still moved", checked)
+        assertNull("dropped at rest", n.motion.envelope)
+    }
+
+    /** Codex, 13a-1 review: a centred stroke's outer half is inside the drawn bounds at rest and in motion alike. */
+    @Test fun aCentredStrokeIsInsideTheBoundsAtRestAndInMotion() {
+        val h = host("box width=10 height=10 stroke=2 stroke-color=\"#ffffff\" stroke-align=\"center\" transition=\"size 200ms\"")
+        val n = h.root
+        n.measured = Measured(Size(40, 10)); n.placed(0f, 0f, 0.5f, 0.5f)
+        assertEquals(listOf(-1f, -1f, 41f, 11f), n.drawBounds().toList())
+        n.measured = Measured(Size(20, 10)); n.placed(0f, 0f, 0.5f, 0.5f)
+        val b = n.drawBounds()
+        assertTrue("the shrinking surface and its stroke: ${b.toList()}", b[0] <= -11f && b[2] >= 31f)   // 40 wide centred in its new 20 px box, out by the stroke
+    }
+
+    /** Codex, 13a-1 review: the root's real place in its window goes through its place transition. */
+    @Test fun theRootsWindowPlaceMovesOnItsTransition() {
+        val h = host("box width=10 height=10 transition=\"place 200ms\"")
+        val n = h.root
+        n.placed(0f, 12f, 0.5f, 0.5f)
+        n.placed(0f, 15f, 0.5f, 0.5f)
+        assertTrue(h.isMoving)
+        assertEquals("shown where it was", -3f, n.motion.drawY, 1e-4f)
     }
 }

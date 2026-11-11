@@ -90,4 +90,13 @@ class ComposeHostTest {
         org.junit.Assert.assertEquals(1f, revealOf("reveal=7")!!, 0f)
         org.junit.Assert.assertEquals(null, revealOf("width=10"))          // not named: no clip
     }
+
+    /** Codex, 13a-1 review: a whole-pixel node's own fractional translate counts in where its origin lands. */
+    @Test fun wholePixelsIncludeTheNodesOwnRestTranslation() {
+        val (offset, residual) = wholePixel(0f, 0.3f, 0.5f)
+        assertEquals("origin on a whole pixel of the screen", 0f, 0f + offset + 0.5f, 1e-6f)
+        assertEquals("the painter draws the rest", 0.8f, residual, 1e-6f)
+        val (o2, r2) = wholePixel(0.25f, 0.5f, 0f)
+        assertEquals(0f, 0.25f + o2, 1e-6f); assertEquals(0.75f, r2, 1e-6f)
+    }
 }

@@ -78,6 +78,8 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     private val tracks = listOf(x, y, width, height, alpha, scale)
     private var layoutX = Float.NaN
     private var layoutY = Float.NaN
+    private var layoutW = 0f
+    private var layoutH = 0f
 
     val moving get() = tracks.any { it.moving }
 
@@ -90,13 +92,18 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
 
     /**
      * Where layout placed it in its parent and what its bindings ask now, at [now]; true while anything moves. A new layout
-     * place starts the place tracks from where it was shown: old place minus new, carried on to the declared translate.
+     * place starts the place tracks from where it was shown, measured at its anchor ([anchorX], [anchorY]: where a moving
+     * size is held in its box, which already keeps the surface there): a centred box growing in a centred slot does not
+     * move, its left edge going out by its size alone (Codex, 13a-1 review).
      */
     fun update(placeX: Float, placeY: Float, translateX: Float, translateY: Float, w: Float, h: Float, opacity: Float,
-        scale: Float, now: Long = context.now()): Boolean {
+        scale: Float, now: Long = context.now(), anchorX: Float = 0f, anchorY: Float = 0f): Boolean {
         val place = curve(MotionChannel.PLACE)
-        if (!layoutX.isNaN()) { x.shift(layoutX - placeX, place, now); y.shift(layoutY - placeY, place, now) }
-        layoutX = placeX; layoutY = placeY
+        if (!layoutX.isNaN()) {
+            x.shift(layoutX + layoutW * anchorX - (placeX + w * anchorX), place, now)
+            y.shift(layoutY + layoutH * anchorY - (placeY + h * anchorY), place, now)
+        }
+        layoutX = placeX; layoutY = placeY; layoutW = w; layoutH = h
         x.to(translateX, place, now); y.to(translateY, place, now)
         val size = curve(MotionChannel.SIZE)
         width.to(w, size, now); height.to(h, size, now)
