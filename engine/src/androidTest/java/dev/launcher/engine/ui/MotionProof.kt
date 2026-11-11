@@ -43,6 +43,9 @@ import kotlin.math.abs
  *   left edge within a quarter pixel of the movers, both paths; every step records a frame; the clock stops after each.
  * - `rise` (13a-2, Codex's review): a box 100.4 px wide holding a 40.3 px child leaves on `rise` (a blue sibling before it keeps the row's height and its edges off the screen's): its width, its child's
  *   width (nested, out of layout) and its top on the ease, within a quarter pixel on both paths; gone after.
+ * - `roll` (13a-3b): a time `09:58` rolls to `09:59` (one character), then `09:59` to `10:00` turned to `10:01` at frame 6
+ *   (retargeted mid-roll). Characters that did not change are the rest frame's pixels at every frame; a changing character's
+ *   ink moves without a jump; the clock stops after each; the last frame is the new text drawn at rest by a fresh view.
  * Afterwards the frame source holds no callback (the clock stopped). Frames 0, 6, 12, 13 and the last go to
  * `files/motion/` of the test APK's external folder for a look.
  *   adb shell am instrument -w -e mode component-motion dev.launcher.engine.test/dev.launcher.engine.adb.AdbProofInstrumentation
@@ -69,7 +72,7 @@ class MotionProof(private val instrumentation: Instrumentation) {
     /** Its findings are its own geometry (no peer input): reported in the result, then failed as the runner does. */
     fun run(result: Bundle) {
         var failed: Throwable? = null
-        for ((name, proof) in listOf("motion" to ::motion, "root" to ::root, "presence" to ::presence, "rise" to ::rise)) try { result.putString(name, proof()) }
+        for ((name, proof) in listOf("motion" to ::motion, "root" to ::root, "presence" to ::presence, "rise" to ::rise, "roll" to ::roll)) try { result.putString(name, proof()) }
         catch (e: IllegalStateException) { result.putString(name, "FAIL: ${e.message}"); failed = failed ?: e }
         failed?.let { throw it }
     }
@@ -343,6 +346,88 @@ class MotionProof(private val instrumentation: Instrumentation) {
         }
     }
 
+    private fun rollDef(t: String) = def("""
+        component "roll" {
+          props { t type=string default="$t" }
+          view { row align="top" { text "{@t}" size=(px)40 tnum=#true color="#FFFFFF" roll="160ms" } }
+        }""")
+
+    private fun roll(): String {
+        // Where each character is: the painter's paint (the default typeface at 40 px, tabular).
+        val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { textSize = 40f; fontFeatureSettings = "'tnum'" }
+        val errors = ArrayList<String>()
+        val report = ArrayList<String>()
+        var finalShot: Pair<Bitmap, Bitmap>? = null
+        session(rollDef("09:58"), centreY = 300f) { v, frames, capture ->
+            for ((n, phase) in listOf(listOf("09:59"), listOf("10:00", "10:01")).withIndex()) {
+                val from = if (n == 0) "09:58" else "09:59"
+                val at = RollEligibility.positions(from, paint)
+                // Unchanged characters: those equal in every text this phase shows.
+                val still = from.indices.filter { i -> phase.all { it[i] == from[i] } }
+                val changing = from.indices.filter { it !in still && from[it] != ' ' }
+                val (rest0, restSw) = capture(700 + n * 100)
+                var lastY = FloatArray(from.length) { Float.NaN }
+                var lastStep = FloatArray(from.length)
+                var frame = 0
+                var worstJump = 0f
+                instrumentation.runOnMainSync { v.setProp("t", Value.Str(phase[0])) }
+                drawn(v)
+                check(frames.held != null) { "phase $n: no roll started" }
+                while (frames.held != null && frame < 80) {
+                    frame++
+                    now += step
+                    instrumentation.runOnMainSync { frames.run(now) }
+                    if (frame == 6 && phase.size > 1) { instrumentation.runOnMainSync { v.setProp("t", Value.Str(phase[1])) }; drawn(v) }
+                    val (hw, sw) = capture(700 + n * 100 + frame)
+                    for ((path, shot, rest) in listOf(Triple("gpu", hw, rest0), Triple("software", sw, restSw))) {
+                        for (i in still) {
+                            val d = differs(shot, rest, at[i].toInt() + 1, at[i + 1].toInt() - 1)
+                            if (d > 0) errors += "phase $n frame $frame $path: still character $i changed in $d pixels"
+                        }
+                    }
+                    for (i in changing) {
+                        val y = inkY(sw, at[i].toInt() + 1, at[i + 1].toInt() - 1)
+                        if (!y.isNaN() && !lastY[i].isNaN()) {
+                            val step = abs(y - lastY[i])
+                            // A swap of glyphs jumps the ink by a rise (22 px); motion moves it a few px a frame.
+                            if (step > 2f * lastStep[i] + 6f) errors += "phase $n frame $frame: character $i jumped $step px"
+                            worstJump = maxOf(worstJump, step); lastStep[i] = step
+                        }
+                        lastY[i] = y
+                    }
+                }
+                check(frames.held == null) { "phase $n: the clock never stopped" }
+                report += "${from} to ${phase.joinToString(" then ")} in $frame frames (largest ink step ${"%.1f".format(worstJump)} px)"
+                finalShot = capture(799 + n * 100)
+            }
+            ""
+        }
+        // The last frame against the final text drawn at rest by a fresh view (its first build does not roll).
+        var restDiff = 0
+        session(rollDef("10:01"), centreY = 300f) { _, _, capture ->
+            val (hw, sw) = capture(899)
+            restDiff = differs(hw, finalShot!!.first, 0, 400) + differs(sw, finalShot!!.second, 0, 400)
+            ""
+        }
+        if (restDiff > 0) errors += "the rolled text at rest differs from a fresh one in $restDiff pixels"
+        check(errors.isEmpty()) { errors.take(8).joinToString("; ") }
+        return "${report.joinToString("; ")}; still characters unchanged on both paths at every frame; the end equals a fresh view"
+    }
+
+    /** Pixels that differ between [a] and [b] in columns [x0]..[x1] (all rows). */
+    private fun differs(a: Bitmap, b: Bitmap, x0: Int, x1: Int): Int {
+        var n = 0
+        for (x in maxOf(0, x0)..minOf(x1, a.width - 1)) for (y in 0 until a.height) if (a.getPixel(x, y) != b.getPixel(x, y)) n++
+        return n
+    }
+
+    /** The ink's vertical centre (white over blue, by its red share) in columns [x0]..[x1], away from the bars. */
+    private fun inkY(b: Bitmap, x0: Int, x1: Int): Float {
+        var sum = 0.0; var weight = 0.0
+        for (y in 200 until 400) for (x in x0..x1) { val r = coverage(b.getPixel(x, y), 16).toDouble(); sum += r * y; weight += r }
+        return if (weight < 1.0) Float.NaN else (sum / weight).toFloat()
+    }
+
     /** Green's coverage summed along row [y] from [x] (the yellow child over red): its width. */
     private fun greenRun(b: Bitmap, x: Int, y: Int): Float {
         var sum = 0f; var i = x
@@ -375,7 +460,7 @@ class MotionProof(private val instrumentation: Instrumentation) {
                 val hw = window(activity)
                 val sw = Bitmap.createBitmap(made!!.view.width, made!!.view.height, Bitmap.Config.ARGB_8888)
                 instrumentation.runOnMainSync { Canvas(sw).apply { drawColor(Color.BLUE); made!!.view.draw(this) } }
-                if (k in setOf(-1, 0, 6, 12, 13, 100, 106, 112, 206, 306, 409, 411, 506, 599)) for ((name, b) in listOf("gpu" to hw, "software" to sw))
+                if (k in setOf(-1, 0, 6, 12, 13, 100, 106, 112, 206, 306, 409, 411, 506, 599, 703, 706, 805, 808, 812)) for ((name, b) in listOf("gpu" to hw, "software" to sw))
                     File(out, "${d.name}_${name}_$k.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 hw to sw
             }

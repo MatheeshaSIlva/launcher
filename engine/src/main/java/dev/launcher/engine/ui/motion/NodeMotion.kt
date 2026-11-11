@@ -108,7 +108,12 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     /** The tracks its exit drives while it leaves. */
     private var exiting: Set<Track> = emptySet()
 
-    val moving get() = tracks.any { it.moving }
+    /** Its text's roll (`roll`, 13a-3b), stepped with its tracks; drawn by the text painter. */
+    val roll: RollMotion? = if (spec.roll != null) RollMotion() else null
+    /** Half a pixel in the roll's units (rises), set by the text painter from its size. */
+    var rollEpsilon = 0.01f
+
+    val moving get() = tracks.any { it.moving } || roll?.moving == true
     /** Placed at least once (its first placement shows it where layout put it). */
     val placedOnce get() = !layoutX.isNaN()
 
@@ -155,8 +160,19 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
         for (t in listOf(x, y, width, height)) busy = t.step(now, PIXEL) or busy
         busy = alpha.step(now, 1f / 255) or busy
         busy = scale.step(now, PIXEL / max(1f, max(width.target, height.target))) or busy
+        roll?.let { busy = it.step(now, rollEpsilon) or busy }
         return busy
     }
+
+    /** The roll's curve now; null: the text changes at once. */
+    fun rollCurve(): Curve? = resolve(spec.rollCurve())
+
+    /** How far apart changed characters start: the preset's `motion.text.stagger` (its duration); none without it. */
+    fun stagger(): Long = if (context.reduced()) 0L else
+        ((context.resolver.curve("motion.text.stagger") as? Curve.Ease)?.ms ?: 0f).let { (it * 1_000_000L).toLong() }
+
+    /** The clock now (what a roll started from a measure counts from). */
+    fun now() = context.now()
 
     /** Its presence curves (`enter`, `exit`), resolved now; null: it arrives or leaves at once. */
     fun enterCurve(): Curve? = resolve(spec.enterCurve())
@@ -210,7 +226,7 @@ class NodeMotion(private val spec: NodeMotionSpec, private val context: MotionCo
     }
 
     /** Every track on its target at once (reduced motion turned on mid-motion). */
-    fun snap() = tracks.forEach { it.snap() }
+    fun snap() { tracks.forEach { it.snap() }; roll?.snap() }
 
     companion object {
         const val PIXEL = 0.5f
