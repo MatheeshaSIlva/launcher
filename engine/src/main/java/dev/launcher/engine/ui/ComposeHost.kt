@@ -95,10 +95,10 @@ private class Policy(val n: HostNode) : MeasurePolicy {
                     child.residualY = ry
                     child.motion.place(ox, oy)
                 } else child.motion.place(p.residualX, p.residualY)
-                placeables[k]?.place(p.x, p.y)
             }
-            // Leaving children stay where they were last placed, their motion and fractions as they were.
-            for (k in drawn.indices) if (drawn[k].isLeaving) placeables[k]?.place(drawn[k].placedX, drawn[k].placedY)
+            // Placed in drawing order (Compose draws children as they are placed): a leaving child stays at its old index
+            // and where it was last placed, its motion and fractions as they were.
+            for (k in drawn.indices) placeables[k]?.place(drawn[k].placedX, drawn[k].placedY)
         }
     }
 }

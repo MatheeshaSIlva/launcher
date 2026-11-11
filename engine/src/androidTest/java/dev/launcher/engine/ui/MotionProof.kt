@@ -37,6 +37,10 @@ import kotlin.math.abs
  *   the movers; content and frame recordings counted (each step must draw every node: the nested one too).
  * - `root`: the root with a place transition, its centre line moved 400.25 → 460.75 px (across whole pixels): its top edge
  *   within 1 px of the ease from where it was.
+ * - `presence` (13a-2): a red box with `enter`/`exit` fades out at its old place, out of layout, while its green sibling
+ *   slides into the room it leaves; it comes back from alpha 0 while green makes room again; then it leaves and is called
+ *   back at frame 10, turning back from the alpha and speed it had. Red's alpha (its colour over blue) within 0.02, green's
+ *   left edge within a quarter pixel of the movers, both paths; every step records a frame; the clock stops after each.
  * Afterwards the frame source holds no callback (the clock stopped). Frames 0, 6, 12, 13 and the last go to
  * `files/motion/` of the test APK's external folder for a look.
  *   adb shell am instrument -w -e mode component-motion dev.launcher.engine.test/dev.launcher.engine.adb.AdbProofInstrumentation
@@ -63,7 +67,7 @@ class MotionProof(private val instrumentation: Instrumentation) {
     /** Its findings are its own geometry (no peer input): reported in the result, then failed as the runner does. */
     fun run(result: Bundle) {
         var failed: Throwable? = null
-        for ((name, proof) in listOf("motion" to ::motion, "root" to ::root)) try { result.putString(name, proof()) }
+        for ((name, proof) in listOf("motion" to ::motion, "root" to ::root, "presence" to ::presence)) try { result.putString(name, proof()) }
         catch (e: IllegalStateException) { result.putString(name, "FAIL: ${e.message}"); failed = failed ?: e }
         failed?.let { throw it }
     }
@@ -203,6 +207,82 @@ class MotionProof(private val instrumentation: Instrumentation) {
         }
     }
 
+    private fun presence(): String {
+        val d = def("""
+            component "presence" {
+              props { on type=bool default=#true }
+              view {
+                row align="top" {
+                  box visible="{@on}" width=(px)100 height=(px)100 fill="#FF0000" enter="fade 200ms" exit="fade 160ms"
+                  box width=(px)80 height=(px)100 fill="#00FF00" transition="place 200ms"
+                }
+              }
+            }""")
+        val enter = Curve.Ease(0f, 0f, 0.58f, 1f, 200f)
+        val exit = Curve.Ease(0f, 0f, 0.58f, 1f, 160f)
+        val place = Curve.Ease(0f, 0f, 0.58f, 1f, 200f)
+        val errors = ArrayList<String>()
+        var worstAlpha = 0f; var worstEdge = 0f
+        val report = ArrayList<String>()
+        return session(d, centreY = 300f) { v, frames, capture ->
+            val (hw0, sw0) = capture(0)
+            val origins = listOf(origin(hw0), origin(sw0))
+            // (on, call back at frame): leave; arrive; leave and come back at frame 10.
+            for ((n, phase) in listOf(false to -1, true to -1, false to 10).withIndex()) {
+                val (on, back) = phase
+                var red: Mover = if (on) Continuation.fresh(enter, 0f, 1f) else Continuation.fresh(exit, 1f, 0f)
+                // Green's offset from its layout place, which moves 100 px the other way.
+                var green: Mover = if (on) Continuation.fresh(place, -100f, 0f) else Continuation.fresh(place, 100f, 0f)
+                var greenLayout = if (on) 100f else 0f
+                var redFrom = now; var greenFrom = now
+                instrumentation.runOnMainSync { v.setProp("on", Value.Bool.of(on)) }
+                // An arrival starts at its first placement: one real layout pass before the stepped frames (the clock still).
+                drawn(v)
+                var frame = 0
+                var last = records(v)
+                var midway = false
+                while (frames.held != null && frame < 120) {
+                    frame++
+                    now += step
+                    instrumentation.runOnMainSync { frames.run(now) }
+                    if (frame == back) {
+                        val t = (now - redFrom) / 1e9; val g = (now - greenFrom) / 1e9
+                        red = Continuation.continued(enter, red.value(t), red.velocity(t), 1f).also { redFrom = now }
+                        green = Continuation.continued(place, green.value(g) + greenLayout - 100f, green.velocity(g), 0f)
+                            .also { greenFrom = now }
+                        greenLayout = 100f
+                        instrumentation.runOnMainSync { v.setProp("on", Value.Bool.of(true)) }
+                    }
+                    val (hw, sw) = capture(200 + 100 * n + frame)
+                    val r = records(v)
+                    if (r.second <= last.second) errors += "phase $n frame $frame: no frame recorded"
+                    last = r
+                    val t = (now - redFrom) / 1e9; val g = (now - greenFrom) / 1e9
+                    val alpha = red.value(t); val edge = green.value(g) + greenLayout
+                    for ((path, shot) in listOf("gpu" to hw, "software" to sw)) {
+                        val (ox, oy) = origins[if (path == "gpu") 0 else 1]
+                        val gl = greenLeft(shot, ox, oy + 50)
+                        if (!gl.isFinite()) { errors += "phase $n frame $frame $path: no green"; continue }
+                        val e = abs(gl - edge); worstEdge = maxOf(worstEdge, e)
+                        if (e > TOLERANCE) errors += "phase $n frame $frame $path green left: $gl vs $edge"
+                        // Red's alpha where green has not reached: its colour over the blue background.
+                        if (edge > 15f) {
+                            val a = coverage(shot.getPixel(ox + 5, oy + 50), 16)
+                            val ea = abs(a - alpha); worstAlpha = maxOf(worstAlpha, ea)
+                            if (ea > 0.02f) errors += "phase $n frame $frame $path red alpha: $a vs $alpha"
+                            if (path == "gpu" && a in 0.2f..0.8f) midway = true
+                        }
+                    }
+                }
+                check(frames.held == null) { "phase $n: the clock never stopped" }
+                check(midway) { "phase $n: no fade seen ($frame frames)" }
+                report += "${listOf("leave", "arrive", "leave, back at 10")[n]} in $frame frames"
+            }
+            check(errors.isEmpty()) { errors.take(8).joinToString("; ") }
+            "${report.joinToString("; ")}; red alpha within ${"%.3f".format(worstAlpha)}, green within ${"%.2f".format(worstEdge)} px on both paths"
+        }
+    }
+
     /** Shows [d] in the proof activity at [centreY], runs [body] with a capture of the window and of a software draw. */
     private fun session(d: ComponentDef, centreY: Float,
         body: (ComponentView, Frames, (Int) -> Pair<Bitmap, Bitmap>) -> String): String {
@@ -228,7 +308,7 @@ class MotionProof(private val instrumentation: Instrumentation) {
                 val hw = window(activity)
                 val sw = Bitmap.createBitmap(made!!.view.width, made!!.view.height, Bitmap.Config.ARGB_8888)
                 instrumentation.runOnMainSync { Canvas(sw).apply { drawColor(Color.BLUE); made!!.view.draw(this) } }
-                if (k in setOf(-1, 0, 6, 12, 13, 100, 106, 112)) for ((name, b) in listOf("gpu" to hw, "software" to sw))
+                if (k in setOf(-1, 0, 6, 12, 13, 100, 106, 112, 206, 306, 409, 411)) for ((name, b) in listOf("gpu" to hw, "software" to sw))
                     File(out, "${d.name}_${name}_$k.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) }
                 hw to sw
             }
