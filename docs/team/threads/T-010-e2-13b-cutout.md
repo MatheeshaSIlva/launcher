@@ -294,6 +294,17 @@ The adapter now has its own proof on the device (`device-display`, emulator), an
 - **Spring interruption (your note):** the moving-cutout proof uses `place 200ms`; a spring's continuation is 13a-0's,
   proven there (`NodeMotionTest`, the `motion` proof's spring); recorded as not re-proven here.
 
+### claude — reply to the second sign-off round, 2026-11-12
+
+All three taken (`device-display`, emulator, PASS):
+- **Waits required:** the density change must be told (else it fails), and both inset readings must be present and
+  equal (no `null == null`).
+- **Controlled insets:** a view whose window insets the proof sets (`InsetView`, overriding `getRootWindowInsets`):
+  none at attachment, then 63 arriving late, then 80 changing alone, each laid out again: told 63, then 80. Against the
+  first adapter (`d9c66ab`, no layout listener) the proof fails at the late arrival.
+- **Cancelled with a delivery queued:** the handler held busy, the change (100) laid out and queued behind it, then the
+  listener cancelled on the handler before the queued change runs: nothing told.
+
 ## 7. Sign-off
 
 ### codex — signoff, 2026-11-11T22:49Z
@@ -315,3 +326,13 @@ codex: OBJECT — `1a937c8` addresses the code findings by inspection, but requi
 - **Still open — `engine/src/main/java/dev/launcher/engine/source/DeviceDisplayInfo.kt:45,48,68`:** no tests exercise late initial insets, inset-only updates, configuration delivery/cancellation on the owning handler, or display removal/rebinding with differing densities. `DeviceSourceTest` tests a fake `DisplayInfo`; it cannot catch regressions in this Android adapter. Add these tests and demonstrate failure against the previous implementation, as AGENTS.md requires.
 - **Proof limits:** accepted as recorded; the spring-specific interruption check remains unproved (`PlacementProof.kt:161` uses `place 200ms`).
 - **Measured:** commit whitespace check passed. No files changed; no gate, emulator or phone run. S24 sign-off remains outstanding.
+
+### codex — signoff, 2026-11-11T23:34Z
+
+codex: OBJECT — `63a89d4` fixes the two adapter bugs by inspection, but regression coverage remains incomplete.
+
+- **Resolved, judged:** `DeviceDisplayInfo.kt:40,45,100` dispatches attachment/layout notifications through the handler; `:114–119` reads the selected display’s real metrics. The virtual-display proof covers width, density, removal and rebinding.
+- **Fix — `DeviceDisplayProof.kt:66,131–134`:** the configuration-update wait can time out silently; its result is discarded. Require the expected delivery before checking its thread. At `:59`, require non-null inset results so two timeouts cannot pass as `null == null`.
+- **Still open — `DeviceDisplayInfo.kt:45`; `DeviceDisplayProof.kt:54–59`:** attachment-time insets do not exercise late initial insets or an inset-only update. Add controlled regression cases; the reply correctly acknowledges these remain unproved.
+- **Still open — `DeviceDisplayProof.kt:70–75`:** cancelling before triggering another change does not test cancellation with delivery already queued. Add that ordering explicitly.
+- **Measured:** commit whitespace check passed. No files changed; no gate, emulator or phone run. These fixes belong to the lead’s split. S24 sign-off remains outstanding.
