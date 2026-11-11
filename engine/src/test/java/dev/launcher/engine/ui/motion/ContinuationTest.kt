@@ -68,7 +68,9 @@ class ContinuationTest {
         var t = 0.0
         while (!m.settled(t) && t < 5) t += 0.004
         assertEquals("settles on the target", 80f, m.value(t), 0.5f)
-        assertTrue("the fit is kept, not searched again", Continuation.continued(vertical, 0f, 0f, 1f).let { true })
+        val fits = Continuation.fitCount
+        repeat(3) { Continuation.continued(vertical, 5f, 100f, 1f) }
+        assertEquals("the fit is kept, not searched again", fits, Continuation.fitCount)
     }
 
     @Test fun aSpringInterruptedAtItsTurningPointCarriesOn() {
@@ -103,6 +105,23 @@ class ContinuationTest {
         val ours = Continuation.continued(c, 40f, 350f, 160f)
         assertTrue("the launcher's starts faster than it was moving", launchers.velocity(0.0) > 350f * 1.5f)
         assertEquals(350f, ours.velocity(0.0), 0.5f)
+    }
+
+    /** Codex, 13a-0 review: x flat inside the curve is a vertical instant, not the end's slope. */
+    @Test fun aVerticalInstantInsideTheCurveIsSteep() {
+        val c = Curve.Ease(1f, 0f, 0f, 1f, 220f)
+        val m = Continuation.continued(c, 0f, 0f, 120f)
+        assertTrue("steepest at its middle", m.velocity(0.11) > 10_000f)
+    }
+
+    /** Codex, 13a-0 review: no early snap for a curve that ends vertically. */
+    @Test fun aVerticalEndLandsWithoutAJump() {
+        for (c in listOf(Curve.Ease(0f, 0f, 1f, 0f, 220f), Curve.Ease(0.5f, 0f, 1f, 1f, 220f))) {
+            val m = Continuation.fresh(c, 0f, 1000f)
+            val d = c.ms / 1000.0
+            assertEquals("$c just before its end", 1000f, m.value(d - 1e-9), 0.5f)
+            assertTrue(!m.settled(d - 1e-9) && m.settled(d))
+        }
     }
 
     @Test fun aFreshStartIsTheAuthoredCurve() {

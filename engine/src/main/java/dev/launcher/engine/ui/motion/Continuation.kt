@@ -17,6 +17,10 @@ import kotlin.math.abs
  */
 object Continuation {
     private val fits = ConcurrentHashMap<Curve.Ease, Curve.Spring>()
+    private val fitted = java.util.concurrent.atomic.AtomicInteger()
+
+    /** Spring fits searched so far (tests: one per curve, however often it is continued). */
+    internal val fitCount get() = fitted.get()
 
     /** A channel at rest at [from] starting towards [to]: the authored curve from rest. */
     fun fresh(curve: Curve, from: Float, to: Float): Mover = when (curve) {
@@ -31,7 +35,7 @@ object Continuation {
             val slope = EngineEase.initialSlope(curve)
             if (slope == null) {
                 // A vertical initial tangent cannot be met by a finite correction: the spring that runs most like it.
-                val s = fits.getOrPut(curve) { CurveFit.springLike(curve) }
+                val s = fits.computeIfAbsent(curve) { fitted.incrementAndGet(); CurveFit.springLike(it) }
                 Spring(s.response, s.damping).apply { start(from, velocity, to) }
             } else EngineEase(curve).apply { continueFrom(from, velocity, to, slope) }
         }
@@ -52,7 +56,6 @@ class EngineEase(curve: Curve.Ease) : Mover {
     private val end0 = endSlope(curve)
     /** The duration, s (slow motion included). */
     val duration = (curve.ms / 1000.0 * Motion.slow()).coerceAtLeast(0.001)
-    private val end = duration - 1e-6
     private var from = 0.0
     private var carried = 0.0
     override var target = 0f
@@ -75,7 +78,8 @@ class EngineEase(curve: Curve.Ease) : Mover {
     }
 
     override fun value(t: Double): Float {
-        if (t >= end) return target
+        // The exact end: a curve with a vertical end tangent still moves visibly in its last microsecond.
+        if (t >= duration) return target
         val u = (t / duration).coerceAtLeast(0.0)
         val k = 1 - u
         val p = BezierMath.y(BezierMath.solveS(u, x1, x2), y1, y2)
@@ -83,20 +87,29 @@ class EngineEase(curve: Curve.Ease) : Mover {
     }
 
     override fun velocity(t: Double): Float {
-        if (t >= end) return 0f
+        if (t >= duration) return 0f
         val u = (t / duration).coerceAtLeast(0.0)
         return ((target - from) * slope(u) / duration + carried * (1 - u) * (1 - 3 * u)).toFloat()
     }
 
-    override fun settled(t: Double, epsilon: Float): Boolean = t >= end
+    override fun settled(t: Double, epsilon: Float): Boolean = t >= duration
 
-    /** dp/du at [u]: dy/ds over dx/ds, the tangent's limit where both vanish (degenerate controls at an end). */
+    /**
+     * dp/du at [u]: dy/ds over dx/ds. Where dx vanishes at an end, the end tangent's limit (degenerate controls); where it
+     * vanishes inside the curve (x flat for an instant, as in `cubic-bezier(1, 0, 0, 1)` at its middle), the curve is
+     * vertical there.
+     */
     private fun slope(u: Double): Double {
         val s = BezierMath.solveS(u, x1, x2)
         val dx = BezierMath.dx(s, x1, x2)
-        if (abs(dx) > 1e-9) return BezierMath.dy(s, y1, y2) / dx
-        val limit = if (s < 0.5) start0 else end0
-        return limit ?: (VERTICAL * Math.signum(BezierMath.dy(s, y1, y2)))
+        val dy = BezierMath.dy(s, y1, y2)
+        if (abs(dx) > 1e-9) return dy / dx
+        val limit = when {
+            s < 1e-6 -> start0
+            s > 1 - 1e-6 -> end0
+            else -> null
+        }
+        return limit ?: (VERTICAL * Math.signum(dy))
     }
 
     companion object {
