@@ -67,6 +67,8 @@ class ComponentView(
     private val props = HashMap<String, Value>()
     private val centre = mutableFloatStateOf(0f)
     private var disposed = false
+    /** Whether motion is reduced, followed on this thread; the node motion reads it through [Env.reducedMotion]. */
+    private val reduced = dev.launcher.engine.ui.motion.ReducedMotion.Watch(context.contentResolver, handler) { }
     private val textPainters = ArrayList<TextPainter>()
     /** Its icons' glyphs, prepared on [GLYPHS]' worker and published to this thread ([GlyphCache]). */
     private val glyphs = GlyphCache(symbols, { r -> GLYPHS.execute(r) }, { r -> handler.post(r) })
@@ -84,6 +86,7 @@ class ComponentView(
         override fun token(key: String) = tokens.token(key)
         override fun source(path: String) = Value.Null
         override fun now() = System.currentTimeMillis()
+        override val reducedMotion get() = reduced.on
     }
 
     private val host: ComponentHost
@@ -230,6 +233,7 @@ class ComponentView(
     fun dispose() {
         if (disposed) return
         disposed = true
+        reduced.close()
         onDispose.forEach { it() }
         onDispose.clear()
         tokens.removeOnChange(tokensChanged)

@@ -58,6 +58,8 @@ interface Env {
     fun now(): Long
     val locale: Locale get() = Locale.getDefault()
     val zone: TimeZone get() = TimeZone.getDefault()
+    /** Motion reduced (Android's animator scale at 0): every node's motion lands on its target at once (T-009). */
+    val reducedMotion: Boolean get() = false
 }
 
 /**
