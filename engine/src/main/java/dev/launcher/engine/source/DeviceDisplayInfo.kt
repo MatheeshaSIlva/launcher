@@ -37,12 +37,12 @@ class DeviceDisplayInfo(private val context: Context, private val handler: Handl
         override fun onViewAttachedToWindow(v: View) {
             display = v.display; removed = false
             v.viewTreeObserver.addOnGlobalLayoutListener(laidOut)
-            changed()
+            tell()
         }
         override fun onViewDetachedFromWindow(v: View) { v.viewTreeObserver.removeOnGlobalLayoutListener(laidOut) }
     }
     /** Insets arriving or changing lay the window out: the status bar's height is read again then. */
-    private val laidOut = android.view.ViewTreeObserver.OnGlobalLayoutListener { changed() }
+    private val laidOut = android.view.ViewTreeObserver.OnGlobalLayoutListener { tell() }
     private val config = object : android.content.ComponentCallbacks {
         // Delivered on the context's main thread; this adapter lives on [handler]'s (Codex, T-010).
         override fun onConfigurationChanged(c: Configuration) { handler.post { changed() } }
@@ -96,6 +96,9 @@ class DeviceDisplayInfo(private val context: Context, private val handler: Handl
         }
     }
 
+    /** From the view's thread (its attachment, its layouts): on [handler]'s, where everything it tells is told. */
+    private fun tell() { if (android.os.Looper.myLooper() == handler.looper) changed() else handler.post { changed() } }
+
     private fun changed() {
         val now = current()
         if (now == last) return
@@ -103,16 +106,16 @@ class DeviceDisplayInfo(private val context: Context, private val handler: Handl
         listeners.toList().forEach { it() }
     }
 
-    /** The display's size in its own logical space (what its cutout is given in). */
+    /**
+     * The display's size in its own logical space (what its cutout is given in): its real metrics. The window manager's
+     * maximum window metrics of a display context gave the main display's size for a second display (measured on the
+     * emulator, a private virtual display: 1080 x 2400 for 320 x 240).
+     */
     private fun size(d: Display?): Pair<Float, Float> {
         if (d == null) return 0f to 0f
-        if (Build.VERSION.SDK_INT >= 30) {
-            val b = context.createDisplayContext(d).getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds
-            return b.width().toFloat() to b.height().toFloat()
-        }
-        val p = android.graphics.Point()
-        @Suppress("DEPRECATION") d.getRealSize(p)
-        return p.x.toFloat() to p.y.toFloat()
+        val m = android.util.DisplayMetrics()
+        @Suppress("DEPRECATION") d.getRealMetrics(m)
+        return m.widthPixels.toFloat() to m.heightPixels.toFloat()
     }
 
     private fun statusOf(insets: WindowInsets): Float =

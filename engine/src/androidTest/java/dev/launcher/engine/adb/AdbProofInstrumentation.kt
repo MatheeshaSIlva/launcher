@@ -63,6 +63,7 @@ class AdbProofInstrumentation : Instrumentation() {
                 "component-motion" -> dev.launcher.engine.ui.MotionProof(this).run(result)
                 "component-roll" -> dev.launcher.engine.ui.RollProof(this).run(result)
                 "component-placement" -> dev.launcher.engine.ui.PlacementProof(this).run(result)
+                "device-display" -> dev.launcher.engine.ui.DeviceDisplayProof(this).run(result)
                 else -> error("Unknown proof mode")
             }
             result.putString("result", "PASS (test APK UID; no launcher UID claim)")
