@@ -30,6 +30,14 @@ import java.util.concurrent.TimeUnit
  *   adb shell am instrument -w -e mode device-display dev.launcher.engine.test/dev.launcher.engine.adb.AdbProofInstrumentation
  */
 class DeviceDisplayProof(private val instrumentation: Instrumentation) {
+    /** A view whose window insets the proof sets: a status bar [status] px high, or none (null) before it is set. */
+    private class InsetView(context: android.content.Context) : View(context) {
+        @Volatile var status: Int? = null
+        override fun getRootWindowInsets(): WindowInsets? = status?.let {
+            WindowInsets.Builder().setInsetsIgnoringVisibility(WindowInsets.Type.statusBars(), android.graphics.Insets.of(0, it, 0, 0)).build()
+        }
+    }
+
     private fun sh(cmd: String): String =
         android.os.ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(cmd)).bufferedReader().readText()
 
@@ -49,21 +57,56 @@ class DeviceDisplayProof(private val instrumentation: Instrumentation) {
                 info = DeviceDisplayInfo(activity, handler)
                 cancel = info.listen { delivered += info.current() to (Looper.myLooper() == thread.looper) }
             }
-            instrumentation.runOnMainSync { view = View(activity) }
+            lateinit var controlled: InsetView
+            instrumentation.runOnMainSync { view = View(activity); controlled = InsetView(activity) }
             onThread(handler) { info.bind(view) }
             val before = onThread(handler) { info.current().statusHeight }
-            instrumentation.runOnMainSync { activity.setContentView(view) }
+            instrumentation.runOnMainSync {
+                activity.setContentView(android.widget.FrameLayout(activity).apply { addView(view); addView(controlled) })
+            }
             val want = waitFor { view.rootWindowInsets?.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars())?.top }
             val got = waitFor { delivered.lastOrNull()?.first?.statusHeight?.takeIf { it > 0f } }
             result.putString("insets", "status height before attachment $before, told after the window's layout $got (window: $want)")
-            check(got == want?.toFloat()) { "status height told $got, the window's $want" }
+            check(want != null && got != null && got == want.toFloat()) { "status height told $got, the window's $want" }
+
+            // Controlled insets (a view whose window insets the proof sets): none at attachment, then arriving late, then
+            // changing alone; each told once the window is laid out again.
+            val told = Collections.synchronizedList(ArrayList<Float>())
+            val controlledInfo = onThread(handler) { DeviceDisplayInfo(activity, handler) }
+            var cancelControlled: () -> Unit = {}
+            onThread(handler) {
+                cancelControlled = controlledInfo.listen { told += controlledInfo.current().statusHeight }
+                controlledInfo.bind(controlled)
+            }
+            val steps = ArrayList<String>()
+            for (h in listOf(63, 80)) {
+                instrumentation.runOnMainSync { controlled.status = h; controlled.requestLayout() }
+                val heard = waitFor { told.lastOrNull()?.takeIf { it == h.toFloat() } }
+                steps += "${if (h == 63) "late" else "changed alone"} $h: told ${heard ?: "nothing"}"
+                check(heard == h.toFloat()) { "controlled insets $h: told ${told.toList()}" }
+            }
+            // Cancelled with a delivery already queued: the handler busy, a change queued behind it, then cancelled there.
+            val queued = CountDownLatch(1)
+            val cancelled = CountDownLatch(1)
+            handler.post { queued.await(5, TimeUnit.SECONDS); cancelControlled(); cancelled.countDown() }
+            instrumentation.runOnMainSync { controlled.status = 100; controlled.requestLayout() }
+            instrumentation.waitForIdleSync()
+            SystemClock.sleep(200)          // its layout ran: the change is queued on the busy handler
+            queued.countDown()
+            check(cancelled.await(5, TimeUnit.SECONDS)) { "the handler never cancelled" }
+            onThread(handler) { }            // the queued change has run by now
+            steps += "queued then cancelled: ${if (100f in told) "told" else "nothing told"}"
+            result.putString("controlled", steps.joinToString("; "))
+            check(100f !in told) { "told after cancelling with a delivery queued" }
+            onThread(handler) { controlledInfo.unbind() }
 
             // A configuration change (density): told on the adapter's thread; nothing after cancelling.
             val density = sh("wm density").trim()
             val count = delivered.size
             try {
                 sh("wm density 380")
-                waitFor { delivered.drop(count).firstOrNull { abs(it.first.density - 380f / 160f) < 0.01f } }
+                val heard = waitFor { delivered.drop(count).firstOrNull { abs(it.first.density - 380f / 160f) < 0.01f } }
+                check(heard != null) { "the density change was never told" }
                 val offThread = delivered.count { !it.second }
                 result.putString("threads", "${delivered.size} deliveries, $offThread off the adapter's thread")
                 check(offThread == 0) { "$offThread deliveries off the adapter's thread" }
