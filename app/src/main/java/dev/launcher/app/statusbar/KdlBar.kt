@@ -49,9 +49,12 @@ object KdlBar {
         val units = Units(dev.launcher.app.design.Scale.unitPx(ctx), ctx.resources.displayMetrics.density)
         // Made, and so subscribed and loading, only for a component that may read it.
         val icons = dev.launcher.engine.source.Access.ifAllowed(def.uses.sources.map { it.name }, "notifications", "notifications.read", GRANTED) { KdlNotifIcons(ctx, handler) }
-        val system = SystemSources.all(ctx, handler)
+        // The `device` source (T-010) follows the display of the bar's own view, bound once the view exists.
+        val display = dev.launcher.engine.source.DeviceDisplayInfo(ctx, handler)
+        val system = SystemSources.all(ctx, handler, display)
         val view = ComponentView(ctx, def, tokens, icons?.let { system + dev.launcher.engine.source.NotificationSource.of(it.feed) } ?: system, units,
             granted = GRANTED, pictures = icons)
+        display.bind(view.view)
         view.addOnDispose { icons?.dispose() }
         view.derive = {
             view.textWidth("Time")?.let { w ->

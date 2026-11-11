@@ -6,8 +6,8 @@ package dev.launcher.engine.ui
  * - horizontally on a top cutout's centre whatever its band; without one, the window's centre;
  * - its line on the cutout's centre when that lies strictly between 20 % and 80 % of the status bar's height (the bar's,
  *   not the window's), else at 52 % of it.
- * Screen coordinates become the window's by the view's resting place on screen ([originX], [originY]: its place less its
- * own translation, never where a motion has it this frame).
+ * Worked out on the screen (the status band is the screen's), then given in the view's px: less the view's resting place
+ * on screen ([originX], [originY]: never where a motion has it this frame).
  */
 object CutoutPlacement {
     /** A top cutout's bounding rectangle in screen px. */
@@ -22,10 +22,11 @@ object CutoutPlacement {
     const val BAND_HIGH = 0.8f
     const val FALLBACK_LINE = 0.52f
 
-    fun of(cutout: Cutout?, statusHeight: Float, originX: Float, originY: Float, windowWidth: Float): Place {
-        val x = if (cutout != null) cutout.centreX - originX else windowWidth / 2f
-        val cy = cutout?.let { it.centreY - originY }
+    /** [windowCentreX]: the window's horizontal centre on screen (the fallback's centre). */
+    fun of(cutout: Cutout?, statusHeight: Float, originX: Float, originY: Float, windowCentreX: Float): Place {
+        val x = cutout?.centreX ?: windowCentreX
+        val cy = cutout?.centreY
         val y = if (cy != null && cy > BAND_LOW * statusHeight && cy < BAND_HIGH * statusHeight) cy else FALLBACK_LINE * statusHeight
-        return Place(x, y)
+        return Place(x - originX, y - originY)
     }
 }

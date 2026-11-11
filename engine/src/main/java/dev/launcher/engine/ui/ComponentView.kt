@@ -69,6 +69,14 @@ class ComponentView(
     }
     private val props = HashMap<String, Value>()
     private val centre = mutableFloatStateOf(0f)
+    /** `place="cutout"` on its root (T-010): placed on the camera from the `device` source, not on [centreY]. */
+    private val onCutout = ((def.view.attrs["place"]?.value as? dev.launcher.engine.model.AttrValue.Literal)?.value as? KdlValue.Str)?.value == "cutout"
+    /** Read in layout when [onCutout]: a change of the device or of the view's place lays the root out again. */
+    private val placeTick = androidx.compose.runtime.mutableIntStateOf(0)
+    private lateinit var env: Env
+    /** The resting origin the root was last placed from: a new one (the window laid out, moved) places it at once. */
+    private var lastOrigin: List<Float>? = null
+    private var originMoved = false
     private var disposed = false
     /** Whether motion is reduced, followed on this thread; the node motion reads it through [Env.reducedMotion]. */
     private val reduced = dev.launcher.engine.ui.motion.ReducedMotion.Watch(context.contentResolver, handler) { on ->
@@ -105,9 +113,13 @@ class ComponentView(
 
     init {
         // The binder first: the host's first values read what the sources hold now (SourcesTest's order).
-        val env = binder.env(base)
+        env = binder.env(base)
         var built: ComponentHost? = null
-        binder.start(def.uses.sources.map { it.name }) { reads -> built?.let { h -> h.settled(reads, ::settle); applied() } }
+        binder.start(def.uses.sources.map { it.name }) { reads ->
+            // Only the device changed: no binding need read it for the root to be placed again (Codex, T-010).
+            if (onCutout && reads(DEVICE)) placeTick.intValue++
+            built?.let { h -> h.settled(reads, ::settle); applied() }
+        }
         host = ComponentHost(def, env, units, { v -> painters(v, tokens, glyphs).also { if (it is TextPainter) textPainters += it; if (it is IconPainter) it.pictures = allowedPictures } }, { view.invalidate() }, { n -> textPainters.remove(n.painter) },
             dev.launcher.engine.ui.motion.MotionContext(dev.launcher.engine.ui.motion.PresetMotion, { reduced.on }, clock), { ticker.wake() })
         built = host
@@ -121,24 +133,74 @@ class ComponentView(
         view.setViewTreeLifecycleOwner(owner)
         view.setViewTreeSavedStateRegistryOwner(owner)
         view.setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+        // Placed on the camera: a move of this view in its window places the root again.
+        if (onCutout) view.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or, ob -> if (l != ol || t != ot || r != or || b != ob) placeTick.intValue++ }
         view.setContent {
             Layout(content = { host.Content() }) { measurables, constraints ->
                 val p = measurables.first().measure(constraints.copy(minWidth = 0, minHeight = 0))
                 // The centre line exactly on [centreY]: placed at whole pixels, the rest moved by the root's own node (a
                 // baseline rounded differently from StatusBarView's moved a glyph by a pixel in a font whose ascent is
                 // not whole, measured on the emulator).
-                val top = centre.floatValue - host.root.centre
+                var left = 0f
+                val top: Float
+                if (onCutout) {
+                    placeTick.intValue
+                    val at = onCamera()
+                    left = at.centreX - host.root.exactWidth / 2f
+                    top = at.centreY - host.root.centre
+                } else top = centre.floatValue - host.root.centre
                 val whole = floor(top)
+                val wholeX = floor(left)
                 if (host.root.motion.translationY != top - whole) host.root.motion.translationY = top - whole
+                if (host.root.motion.translationX != left - wholeX) host.root.motion.translationX = left - wholeX
                 layout(constraints.maxWidth, constraints.maxHeight) {
                     // Its real place in the window, the baseline's fraction included (that fraction is applied apart, on
                     // the root's own translation, and its change too is carried by the place transition): a centre-line
                     // change moves it on its place transition if it declares one (Codex, 13a-1 review and sign-off).
-                    host.root.placed(0f, top, 0.5f, 0.5f)
-                    p.place(0, whole.toInt())
+                    host.root.placed(left, top, 0.5f, 0.5f)
+                    // Placed on the camera from a host that moved (its first layout included): there at once, never
+                    // sliding from where the window was before (measured: a first frame placed it 273 px up).
+                    if (onCutout && (originMoved || !view.isAttachedToWindow)) { originMoved = false; host.root.snapPlace() }
+                    p.place(wholeX.toInt(), whole.toInt())
                 }
             }
         }
+    }
+
+    /** Its root's horizontal centre and centre line on the camera, in this view's px ([CutoutPlacement]). */
+    private fun onCamera(): CutoutPlacement.Place {
+        fun px(name: String) = (env.source("device.$name") as? Value.Num)?.value?.toFloat()
+        val cutout = if (env.source("device.cutout") == Value.Bool.TRUE) {
+            val l = px("cutout-rect-left"); val t = px("cutout-rect-top"); val r = px("cutout-rect-right"); val b = px("cutout-rect-bottom")
+            if (l != null && t != null && r != null && b != null) CutoutPlacement.Cutout(l, t, r, b) else null
+        } else null
+        val (ox, oy, windowX, windowWidth) = restingOrigin()
+        val origin = listOf(ox, oy, windowX, windowWidth)
+        originMoved = lastOrigin != null && origin != lastOrigin
+        lastOrigin = origin
+        return CutoutPlacement.of(cutout, px("status-height") ?: 0f, ox, oy, windowX + windowWidth / 2f)
+    }
+
+    /**
+     * Where this view rests on screen, in whole px, and its window's left and width: the window's place on screen plus the
+     * view's layout place in it, every view's translation and scale left out (Codex, T-010: `getLocationOnScreen` rounds a
+     * place already moved, and a motion's fraction would be taken for a rest).
+     */
+    private fun restingOrigin(): FloatArray {
+        val root = view.rootView
+        val loc = IntArray(2)
+        root.getLocationOnScreen(loc)
+        val wx = loc[0] - Math.round(root.translationX).toFloat()
+        val wy = loc[1] - Math.round(root.translationY).toFloat()
+        var x = wx; var y = wy
+        var v: android.view.View = view
+        while (v !== root) {
+            val parent = v.parent as? android.view.View ?: break
+            x += v.left - parent.scrollX
+            y += v.top - parent.scrollY
+            v = parent
+        }
+        return floatArrayOf(x, y, wx, root.width.toFloat())
     }
 
     /** Where the component's centre line sits, in px from the window's top (read in layout: a change places it again). */
@@ -267,6 +329,9 @@ class ComponentView(
     private fun applied() = Snapshot.sendApplyNotifications()
 
     companion object {
+        /** What reading any of the `device` source's members looks like to the binder's refresh. */
+        private val DEVICE = dev.launcher.engine.expr.Deps(emptyMap(), emptyMap(), emptyMap(), mapOf("device.width" to 0), false)
+
         fun defaultPainter(v: ViewNode, tokens: Tokens, glyphs: GlyphCache<Symbol>): Painter = when (v.primitive) {
             "text" -> TextPainter(tokens)
             "icon" -> IconPainter(tokens, glyphs)

@@ -8,7 +8,7 @@ import org.junit.Test
 /** T-010: the placement on the camera, StatusBarView's rule (`centreLine`, `cameraLeft`). */
 class CutoutPlacementTest {
     private val bar = 100f
-    private fun at(c: Cutout?, ox: Float = 0f, oy: Float = 0f, w: Float = 1080f) = CutoutPlacement.of(c, bar, ox, oy, w)
+    private fun at(c: Cutout?, ox: Float = 0f, oy: Float = 0f, w: Float = 1080f) = CutoutPlacement.of(c, bar, ox, oy, w / 2f)
 
     @Test fun withoutACutoutTheWindowsCentreAndFiftyTwoPercent() = assertEquals(Place(540f, 52f), at(null))
 
@@ -30,9 +30,9 @@ class CutoutPlacementTest {
     }
 
     @Test fun aViewNotAtTheScreensOriginTakesItsPlaceOff() {
-        // A window 100 px in and 40 down: the cutout's centre (540, 50) is (440, 10) in it; 10 is under 20 % of the bar.
-        assertEquals(Place(440f, 52f), at(Cutout(520f, 30f, 560f, 70f), ox = 100f, oy = 40f))
-        assertEquals(Place(440f, 30f), at(Cutout(520f, 50f, 560f, 90f), ox = 100f, oy = 40f))
+        // A view 100 px in and 40 down: the band is the screen's; the cutout's centre (540, 50) is (440, 10) in the view.
+        assertEquals(Place(440f, 10f), at(Cutout(520f, 30f, 560f, 70f), ox = 100f, oy = 40f))
+        assertEquals("the fallback line too", Place(440f, 12f), at(null, ox = 100f, oy = 40f))
     }
 
     @Test fun aSideCutoutIsNoTopCutoutForTheCaller() =

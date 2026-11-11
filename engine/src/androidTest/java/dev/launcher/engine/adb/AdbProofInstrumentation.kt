@@ -62,6 +62,7 @@ class AdbProofInstrumentation : Instrumentation() {
                 // T-009 13a-1b: node motion on both drawing paths against its movers.
                 "component-motion" -> dev.launcher.engine.ui.MotionProof(this).run(result)
                 "component-roll" -> dev.launcher.engine.ui.RollProof(this).run(result)
+                "component-placement" -> dev.launcher.engine.ui.PlacementProof(this).run(result)
                 else -> error("Unknown proof mode")
             }
             result.putString("result", "PASS (test APK UID; no launcher UID claim)")

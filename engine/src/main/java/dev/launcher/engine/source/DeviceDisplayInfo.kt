@@ -1,0 +1,104 @@
+package dev.launcher.engine.source
+
+import android.content.Context
+import android.content.res.Configuration
+import android.hardware.display.DisplayManager
+import android.os.Build
+import android.os.Handler
+import android.view.Display
+import android.view.View
+import android.view.WindowInsets
+import android.view.WindowManager
+
+/**
+ * The `device` source's view of the screen (T-010), following the display of the view it is bound to ([bind]): its size
+ * in its own logical space, the cutout on its top edge (`DisplayCutout.boundingRectTop`), its safe insets, rotation and
+ * density, and the status bar's height whether the bar shows or not (read from the view's window insets, ignoring the
+ * bar's visibility: an insets listener of ours on the view is replaced by Compose's own, measured on the emulator). Told
+ * of changes by the display listener, configuration changes and the view's attachment. All on [handler]'s thread.
+ */
+class DeviceDisplayInfo(private val context: Context, private val handler: Handler) : DisplayInfo {
+    private var view: View? = null
+    private var display: Display? = null
+    private val listeners = ArrayList<() -> Unit>()
+    private var last: DisplayState? = null
+
+    private val displays = context.getSystemService(DisplayManager::class.java)
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(id: Int) {}
+        override fun onDisplayRemoved(id: Int) { if (id == display?.displayId) { display = null; changed() } }
+        override fun onDisplayChanged(id: Int) { if (id == display?.displayId) changed() }
+    }
+    private val attach = object : View.OnAttachStateChangeListener {
+        override fun onViewAttachedToWindow(v: View) { display = v.display; changed() }
+        override fun onViewDetachedFromWindow(v: View) {}
+    }
+    private val config = object : android.content.ComponentCallbacks {
+        override fun onConfigurationChanged(c: Configuration) { changed() }
+        @Deprecated("Deprecated in Java") override fun onLowMemory() {}
+    }
+
+    /** Follows [v]'s display from now on (and each time it is attached again). */
+    fun bind(v: View) {
+        view?.removeOnAttachStateChangeListener(attach)
+        view = v
+        v.addOnAttachStateChangeListener(attach)
+        if (v.isAttachedToWindow) display = v.display
+        changed()
+    }
+
+    override fun current(): DisplayState {
+        val d = display ?: view?.display ?: context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY)
+        val (w, h) = size(d)
+        val cut = d?.cutout
+        val top = cut?.boundingRectTop?.takeIf { !it.isEmpty }
+        return DisplayState(
+            width = w, height = h,
+            density = context.resources.displayMetrics.density,
+            rotation = when (d?.rotation) { 1 -> 90; 2 -> 180; 3 -> 270; else -> 0 },
+            statusHeight = view?.rootWindowInsets?.let(::statusOf) ?: 0f,
+            safeLeft = (cut?.safeInsetLeft ?: 0).toFloat(), safeTop = (cut?.safeInsetTop ?: 0).toFloat(),
+            safeRight = (cut?.safeInsetRight ?: 0).toFloat(), safeBottom = (cut?.safeInsetBottom ?: 0).toFloat(),
+            cutout = top?.let { floatArrayOf(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat()) },
+            model = Build.MODEL ?: "",
+        )
+    }
+
+    override fun listen(changed: () -> Unit): () -> Unit {
+        if (listeners.isEmpty()) {
+            displays.registerDisplayListener(displayListener, handler)
+            context.registerComponentCallbacks(config)
+        }
+        listeners += changed
+        return {
+            listeners -= changed
+            if (listeners.isEmpty()) {
+                displays.unregisterDisplayListener(displayListener)
+                context.unregisterComponentCallbacks(config)
+            }
+        }
+    }
+
+    private fun changed() {
+        val now = current()
+        if (now == last) return
+        last = now
+        listeners.toList().forEach { it() }
+    }
+
+    /** The display's size in its own logical space (what its cutout is given in). */
+    private fun size(d: Display?): Pair<Float, Float> {
+        if (d == null) return 0f to 0f
+        if (Build.VERSION.SDK_INT >= 30) {
+            val b = context.createDisplayContext(d).getSystemService(WindowManager::class.java).maximumWindowMetrics.bounds
+            return b.width().toFloat() to b.height().toFloat()
+        }
+        val p = android.graphics.Point()
+        @Suppress("DEPRECATION") d.getRealSize(p)
+        return p.x.toFloat() to p.y.toFloat()
+    }
+
+    private fun statusOf(insets: WindowInsets): Float =
+        if (Build.VERSION.SDK_INT >= 30) insets.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top.toFloat()
+        else @Suppress("DEPRECATION") insets.stableInsetTop.toFloat()
+}
